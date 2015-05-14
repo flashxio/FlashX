@@ -29,36 +29,194 @@ namespace detail
 namespace
 {
 
-class lmapply_col_matrix_store: public lvirtual_col_matrix_store
+size_t SUB_CHUNK_SIZE = 4 * 1024;
+
+class mapply_store
 {
 	std::vector<local_matrix_store::const_ptr> ins;
 	const portion_mapply_op &op;
-	raw_data_array data;
-
-	void materialize() const {
-		local_buf_col_matrix_store res(get_global_start_row(),
-				get_global_start_col(), get_num_rows(), get_num_cols(),
-				get_type(), -1);
-		op.run(ins, res);
-		lmapply_col_matrix_store *mutable_this
-			= const_cast<lmapply_col_matrix_store *>(this);
-		mutable_this->data = res.get_data();
+	raw_data_array buf;
+	bool materialized;
+	local_matrix_store *lstore;
+public:
+	mapply_store(const std::vector<local_matrix_store::const_ptr> &ins,
+			const portion_mapply_op &_op, local_matrix_store *lstore): op(_op) {
+		this->lstore = lstore;
+		this->ins = ins;
+		materialized = false;
 	}
+
+	const char *get_raw_arr() const {
+		return buf.get_raw();
+	}
+
+	bool is_materialized() const {
+		return materialized;
+	}
+	void materialize() const;
+	void materialize_whole();
+
+	void resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols);
+	void reset_size();
+};
+
+void mapply_store::reset_size()
+{
+	// When the matrix store is resized, we should drop the materialized data.
+	materialized = false;
+	buf = raw_data_array();
+	for (size_t i = 0; i < ins.size(); i++)
+		const_cast<local_matrix_store *>(ins[i].get())->reset_size();
+}
+
+void mapply_store::resize(off_t local_start_row, off_t local_start_col,
+		size_t local_num_rows, size_t local_num_cols)
+{
+	// When the matrix store is resized, we should drop the materialized data.
+	materialized = false;
+	// To avoid unnecessary memory allocation, if the new exposed part isn't
+	// larger than the buffer size, we can keep the buffer.
+	if (local_num_rows * local_num_cols * lstore->get_entry_size()
+			> buf.get_num_bytes())
+		buf = raw_data_array();
+
+	if (lstore->is_wide()) {
+		assert(local_start_row == 0 && local_num_rows == lstore->get_num_rows());
+		for (size_t i = 0; i < ins.size(); i++)
+			const_cast<local_matrix_store *>(ins[i].get())->resize(0,
+					local_start_col, ins[i]->get_num_rows(), local_num_cols);
+	}
+	else {
+		assert(local_start_col == 0 && local_num_cols == lstore->get_num_cols());
+		for (size_t i = 0; i < ins.size(); i++)
+			const_cast<local_matrix_store *>(ins[i].get())->resize(
+					local_start_row, 0, local_num_rows, ins[i]->get_num_cols());
+	}
+}
+
+void mapply_store::materialize_whole()
+{
+	local_matrix_store::ptr res;
+	if (lstore->store_layout() == matrix_layout_t::L_COL) {
+		local_buf_col_matrix_store *tmp = new local_buf_col_matrix_store(
+				lstore->get_global_start_row(),
+				lstore->get_global_start_col(), lstore->get_num_rows(),
+				lstore->get_num_cols(), lstore->get_type(), -1);
+		res = local_matrix_store::ptr(tmp);
+		this->buf = tmp->get_data();
+	}
+	else {
+		local_buf_row_matrix_store *tmp = new local_buf_row_matrix_store(
+				lstore->get_global_start_row(),
+				lstore->get_global_start_col(), lstore->get_num_rows(),
+				lstore->get_num_cols(), lstore->get_type(), -1);
+		res = local_matrix_store::ptr(tmp);
+		this->buf = tmp->get_data();
+	}
+
+	std::vector<local_matrix_store *> mutable_ins(ins.size());
+	for (size_t i = 0; i < ins.size(); i++)
+		mutable_ins[i] = const_cast<local_matrix_store *>(ins[i].get());
+
+	if (lstore->is_wide()) {
+		for (size_t local_start_col = 0; local_start_col < lstore->get_num_cols();
+				local_start_col += SUB_CHUNK_SIZE) {
+			size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
+					lstore->get_num_cols() - local_start_col);
+			for (size_t i = 0; i < mutable_ins.size(); i++) {
+				mutable_ins[i]->resize(0, local_start_col,
+						mutable_ins[i]->get_num_rows(), local_num_cols);
+			}
+			res->resize(0, local_start_col, res->get_num_rows(), local_num_cols);
+			op.run(ins, *res);
+		}
+	}
+	else {
+		// If this is a tall matrix.
+		for (size_t local_start_row = 0; local_start_row < lstore->get_num_rows();
+				local_start_row += SUB_CHUNK_SIZE) {
+			size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
+					lstore->get_num_rows() - local_start_row);
+			for (size_t i = 0; i < mutable_ins.size(); i++) {
+				mutable_ins[i]->resize(local_start_row, 0, local_num_rows,
+						mutable_ins[i]->get_num_cols());
+			}
+			res->resize(local_start_row, 0, local_num_rows, res->get_num_cols());
+			op.run(ins, *res);
+		}
+	}
+	for (size_t i = 0; i < mutable_ins.size(); i++)
+		mutable_ins[i]->reset_size();
+}
+
+void mapply_store::materialize() const
+{
+	mapply_store *mutable_this = const_cast<mapply_store *>(this);
+	if (lstore->is_whole())
+		mutable_this->materialize_whole();
+	else if (lstore->store_layout() == matrix_layout_t::L_COL
+			&& this->buf.is_empty()) {
+		local_buf_col_matrix_store res(lstore->get_global_start_row(),
+				lstore->get_global_start_col(), lstore->get_num_rows(),
+				lstore->get_num_cols(), lstore->get_type(), -1);
+		op.run(ins, res);
+		mutable_this->buf = res.get_data();
+	}
+	else if (lstore->store_layout() == matrix_layout_t::L_COL) {
+		local_ref_contig_col_matrix_store res(mutable_this->buf.get_raw(),
+				lstore->get_global_start_row(), lstore->get_global_start_col(),
+				lstore->get_num_rows(), lstore->get_num_cols(),
+				lstore->get_type(), -1);
+		op.run(ins, res);
+	}
+	else if (this->buf.is_empty()) {
+		local_buf_row_matrix_store res(lstore->get_global_start_row(),
+				lstore->get_global_start_col(), lstore->get_num_rows(),
+				lstore->get_num_cols(), lstore->get_type(), -1);
+		op.run(ins, res);
+		mutable_this->buf = res.get_data();
+	}
+	else {
+		local_ref_contig_row_matrix_store res(mutable_this->buf.get_raw(),
+				lstore->get_global_start_row(), lstore->get_global_start_col(),
+				lstore->get_num_rows(), lstore->get_num_cols(),
+				lstore->get_type(), -1);
+		op.run(ins, res);
+	}
+	mutable_this->materialized = true;
+}
+
+class lmapply_col_matrix_store: public lvirtual_col_matrix_store
+{
+	mapply_store store;
 public:
 	lmapply_col_matrix_store(
 			const std::vector<local_matrix_store::const_ptr> &ins,
-			const portion_mapply_op &_op,
+			const portion_mapply_op &op,
 			off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_col_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type, node_id), op(_op) {
-		this->ins = ins;
+				global_start_col, nrow, ncol, type, node_id),
+			store(ins, op, this) {
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		store.resize(local_start_row, local_start_col, local_num_rows,
+				local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		store.reset_size();
+		local_matrix_store::reset_size();
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (data.is_empty())
-			materialize();
-		return data.get_raw();
+		if (!store.is_materialized())
+			store.materialize();
+		return store.get_raw_arr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const {
@@ -68,42 +226,42 @@ public:
 	}
 
 	virtual const char *get_col(size_t col) const {
-		if (data.is_empty())
-			materialize();
-		return data.get_raw() + get_num_rows() * col * get_type().get_size();
+		if (!store.is_materialized())
+			store.materialize();
+		return store.get_raw_arr() + get_num_rows() * col * get_type().get_size();
 	}
 };
 
 class lmapply_row_matrix_store: public lvirtual_row_matrix_store
 {
-	std::vector<local_matrix_store::const_ptr> ins;
-	const portion_mapply_op &op;
-	raw_data_array data;
-
-	void materialize() const {
-		local_buf_row_matrix_store res(get_global_start_row(),
-				get_global_start_col(), get_num_rows(), get_num_cols(),
-				get_type(), -1);
-		op.run(ins, res);
-		lmapply_row_matrix_store *mutable_this
-			= const_cast<lmapply_row_matrix_store *>(this);
-		mutable_this->data = res.get_data();
-	}
+	mapply_store store;
 public:
 	lmapply_row_matrix_store(
 			const std::vector<local_matrix_store::const_ptr> &ins,
-			const portion_mapply_op &_op,
+			const portion_mapply_op &op,
 			off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_row_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type, node_id), op(_op) {
-		this->ins = ins;
+				global_start_col, nrow, ncol, type, node_id),
+			store(ins, op, this) {
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		store.resize(local_start_row, local_start_col, local_num_rows,
+				local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		store.reset_size();
+		local_matrix_store::reset_size();
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (data.is_empty())
-			materialize();
-		return data.get_raw();
+		if (!store.is_materialized())
+			store.materialize();
+		return store.get_raw_arr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const {
@@ -113,9 +271,9 @@ public:
 	}
 
 	virtual const char *get_row(size_t row) const {
-		if (data.is_empty())
-			materialize();
-		return data.get_raw() + get_num_cols() * row * get_type().get_size();
+		if (!store.is_materialized())
+			store.materialize();
+		return store.get_raw_arr() + get_num_cols() * row * get_type().get_size();
 	}
 
 	virtual const char *get_rows(size_t row_start, size_t row_end) const {
