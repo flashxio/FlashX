@@ -338,17 +338,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0)
+		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
 			return NULL;
 		else
-			return data.get_raw();
+			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_row() > 0)
+		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
 			return NULL;
 		else
-			return data.get_raw();
+			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual const char *get_col(size_t col) const {
@@ -393,17 +393,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0)
+		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
 			return NULL;
 		else
-			return data.get_raw();
+			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_col() > 0)
+		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
 			return NULL;
 		else
-			return data.get_raw();
+			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual const char *get_row(size_t row) const {
@@ -459,17 +459,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0)
+		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_row() > 0)
+		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual const char *get_col(size_t col) const {
@@ -511,17 +511,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0)
+		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_col() > 0)
+		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual const char *get_rows(size_t row_start, size_t row_end) const {
@@ -681,10 +681,10 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0)
+		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 	virtual const char *get_col(size_t col) const {
 		return data + get_orig_offset(0, col) * get_entry_size();
@@ -727,10 +727,10 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0)
+		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
 			return NULL;
 		else
-			return data;
+			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 	virtual const char *get_row(size_t row) const {
 		return data + get_orig_offset(row, 0) * get_entry_size();
