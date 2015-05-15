@@ -56,10 +56,6 @@ protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
 	}
-	detail::matrix_store::const_ptr get_raw_store() const {
-		return store;
-	}
-
 	virtual bool verify_aggregate(const bulk_operate &op) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
@@ -78,6 +74,10 @@ public:
 
 	const detail::matrix_store &get_data() const {
 		return *store;
+	}
+
+	detail::matrix_store::const_ptr get_raw_store() const {
+		return store;
 	}
 
 	size_t get_entry_size() const {

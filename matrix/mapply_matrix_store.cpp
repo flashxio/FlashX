@@ -286,7 +286,7 @@ public:
 }
 
 mapply_matrix_store::mapply_matrix_store(
-		const std::vector<mem_dense_matrix::const_ptr> &in_mats,
+		const std::vector<mem_matrix_store::const_ptr> &in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
 		size_t nrow, size_t ncol): virtual_matrix_store(nrow, ncol,
 			op->get_output_type())
@@ -296,46 +296,55 @@ mapply_matrix_store::mapply_matrix_store(
 	this->op = op;
 }
 
+void mapply_matrix_store::materialize_self() const
+{
+	mapply_matrix_store *mutable_this = const_cast<mapply_matrix_store *>(this);
+	mutable_this->res = mem_matrix_store::cast(materialize());
+}
+
 matrix_store::ptr mapply_matrix_store::materialize() const
 {
-	return _mapply_portion(in_mats, op, layout);
+	return __mapply_portion(in_mats, op, layout);
 }
 
 matrix_store::const_ptr mapply_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	// TODO
-	assert(0);
-	return matrix_store::const_ptr();
+	if (res == NULL)
+		materialize_self();
+	return res->get_cols(idxs);
 }
 
 matrix_store::const_ptr mapply_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	// TODO
-	assert(0);
-	return matrix_store::const_ptr();
+	if (res == NULL)
+		materialize_self();
+	return res->get_rows(idxs);
 }
 
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const
 {
+	// If the virtual matrix store has been materialized, we should return
+	// the portion from the materialized store directly.
+	if (res)
+		return res->get_portion(start_row, start_col, num_rows, num_cols);
+
 	std::vector<local_matrix_store::const_ptr> parts(in_mats.size());
 	if (is_wide()) {
 		assert(start_row == 0);
 		assert(num_rows == get_num_rows());
 		for (size_t i = 0; i < in_mats.size(); i++)
-			parts[i] = static_cast<const mem_matrix_store &>(
-					in_mats[i]->get_data()).get_portion(start_row, start_col,
+			parts[i] = in_mats[i]->get_portion(start_row, start_col,
 					in_mats[i]->get_num_rows(), num_cols);
 	}
 	else {
 		assert(start_col == 0);
 		assert(num_cols == get_num_cols());
 		for (size_t i = 0; i < in_mats.size(); i++)
-			parts[i] = static_cast<const mem_matrix_store &>(
-					in_mats[i]->get_data()).get_portion(start_row, start_col,
+			parts[i] = in_mats[i]->get_portion(start_row, start_col,
 					num_rows, in_mats[i]->get_num_cols());
 	}
 
@@ -352,6 +361,11 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 			size_t id) const
 {
+	// If the virtual matrix store has been materialized, we should return
+	// the portion from the materialized store directly.
+	if (res)
+		return res->get_portion(id);
+
 	size_t start_row;
 	size_t start_col;
 	size_t num_rows;

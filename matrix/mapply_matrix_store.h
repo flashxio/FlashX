@@ -26,8 +26,6 @@
 namespace fm
 {
 
-class mem_dense_matrix;
-
 namespace detail
 {
 
@@ -36,20 +34,26 @@ class portion_mapply_op;
 class mapply_matrix_store: public virtual_matrix_store
 {
 	matrix_layout_t layout;
-	std::vector<mem_dense_matrix::const_ptr> in_mats;
+	std::vector<mem_matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
+	// The materialized result matrix.
+	mem_matrix_store::const_ptr res;
+
+	void materialize_self() const;
 public:
 	typedef std::shared_ptr<mapply_matrix_store> ptr;
 
 	mapply_matrix_store(
-			const std::vector<mem_dense_matrix::const_ptr> &in_mats,
+			const std::vector<mem_matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
 			size_t nrow, size_t ncol);
 
 	virtual matrix_store::ptr materialize() const;
 
 	virtual const char *get(size_t row, size_t col) const {
-		return NULL;
+		if (res == NULL)
+			materialize_self();
+		return res->get(row, col);
 	}
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
@@ -61,11 +65,10 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
 	virtual std::pair<size_t, size_t> get_portion_size() const {
-		return in_mats.front()->get_data().get_portion_size();
+		return in_mats.front()->get_portion_size();
 	}
 	virtual int get_num_nodes() const {
-		return static_cast<const mem_matrix_store &>(
-				in_mats.front()->get_data()).get_num_nodes();
+		return in_mats.front()->get_num_nodes();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
