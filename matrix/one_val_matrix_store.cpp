@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "common.h"
 #include "one_val_matrix_store.h"
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
@@ -31,6 +32,8 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout,
 		int num_nodes): virtual_matrix_store(nrow, ncol, val->get_type())
 {
+	if (num_nodes > 0)
+		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes));
 	this->val = val;
 	this->layout = layout;
 	this->num_nodes = num_nodes;
@@ -44,9 +47,19 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t part_num_rows = std::min(CHUNK_SIZE, get_num_rows());
 		buf_size = get_num_cols() * part_num_rows * get_entry_size();
 	}
-	this->portion_buf = std::unique_ptr<char[]>(new char[buf_size]);
 	const set_operate &set = get_type().get_set_const(*val);
-	set.set(portion_buf.get(), buf_size / get_entry_size(), 0, 0);
+	if (num_nodes < 0) {
+		this->portion_bufs.resize(1);
+		this->portion_bufs[0] = raw_data_array(buf_size, -1);
+		set.set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
+	}
+	else {
+		this->portion_bufs.resize(num_nodes);
+		for (int i = 0; i < num_nodes; i++) {
+			this->portion_bufs[i] = raw_data_array(buf_size, i);
+			set.set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
+		}
+	}
 }
 
 matrix_store::ptr one_val_matrix_store::materialize() const
@@ -77,16 +90,35 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const
 {
+	int node_id = -1;
+	const char *buf;
+	if (get_num_nodes() > 0) {
+		size_t range_size = mapper->get_range_size();
+		if (is_wide()) {
+			node_id = mapper->map2physical(start_col).first;
+			assert(ROUND(start_col, range_size)
+					== ROUND(start_col + num_cols - 1, range_size));
+		}
+		else {
+			node_id = mapper->map2physical(start_row).first;
+			assert(ROUND(start_row, range_size)
+					== ROUND(start_row + num_rows - 1, range_size));
+		}
+		buf = portion_bufs[node_id].get_raw();
+	}
+	else
+		buf = portion_bufs[0].get_raw();
+
 	local_matrix_store::ptr ret;
 	if (layout == matrix_layout_t::L_ROW) {
 		ret = local_matrix_store::ptr(new local_cref_contig_row_matrix_store(
-					portion_buf.get(), start_row, start_col,
-					num_rows, num_cols, get_type(), -1));
+					buf, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 	else if (layout == matrix_layout_t::L_COL) {
 		ret = local_matrix_store::ptr(new local_cref_contig_col_matrix_store(
-					portion_buf.get(), start_row, start_col,
-					num_rows, num_cols, get_type(), -1));
+					buf, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 	return ret;
 }

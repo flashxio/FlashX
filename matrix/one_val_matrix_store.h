@@ -21,6 +21,7 @@
  */
 
 #include "virtual_matrix_store.h"
+#include "NUMA_mapper.h"
 
 namespace fm
 {
@@ -32,8 +33,9 @@ class one_val_matrix_store: public virtual_matrix_store
 {
 	scalar_variable::ptr val;
 	matrix_layout_t layout;
-	std::unique_ptr<char[]> portion_buf;
+	std::vector<raw_data_array> portion_bufs;
 	int num_nodes;
+	std::shared_ptr<NUMA_mapper> mapper;
 public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
