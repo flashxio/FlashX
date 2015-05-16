@@ -61,37 +61,22 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 			-1, 1, num_rows, num_cols, layout, -1);
 	mem_dense_matrix::ptr mat2 = mem_dense_matrix::create_rand<double>(
 			-1, 1, num_rows, num_cols, layout, -1);
-	std::vector<dense_matrix::const_ptr> in_mats(2);
-	in_mats[0] = mat1;
-	in_mats[1] = mat2;
-	detail::portion_mapply_op::const_ptr op(new mapply_add_op(
-				mat1->get_num_rows(), mat1->get_num_cols(), mat1->get_type()));
-
-	// Compute mapply in the usual way.
-	dense_matrix::ptr tmp = detail::mapply_portion(in_mats, op,
-			mat1->store_layout());
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(tmp);
 
 	// Create mapply matrix store.
 	std::vector<detail::mem_matrix_store::const_ptr> in_stores(2);
 	in_stores[0] = detail::mem_matrix_store::cast(mat1->get_raw_store());
 	in_stores[1] = detail::mem_matrix_store::cast(mat2->get_raw_store());
+	detail::portion_mapply_op::const_ptr op(new mapply_add_op(
+				mat1->get_num_rows(), mat1->get_num_cols(), mat1->get_type()));
 	detail::mapply_matrix_store::ptr mapply_store(new detail::mapply_matrix_store(
 				in_stores, op, mat1->store_layout(),
 				mat1->get_num_rows(), mat1->get_num_cols()));
 	mem_dense_matrix::ptr res2 = mem_dense_matrix::create(
 			detail::mem_matrix_store::cast(mapply_store->materialize()));
-	verify_result(res1, res2);
-
-	for (size_t k = 0; k < mapply_store->get_num_portions(); k++) {
-		detail::local_matrix_store::const_ptr part = mapply_store->get_portion(k);
-		size_t start_row = part->get_global_start_row();
-		size_t start_col = part->get_global_start_col();
-		for (size_t i = 0; i < part->get_num_rows(); i++)
-			for (size_t j = 0; j < part->get_num_cols(); j++)
-				assert(part->get<double>(i, j) == res1->get<double>(
-							i + start_row, j + start_col));
-	}
+	for (size_t i = 0; i < res2->get_num_rows(); i++)
+		for (size_t j = 0; j < res2->get_num_cols(); j++)
+			assert(res2->get<double>(i, j) == mat1->get<double>(i,
+						j) + mat2->get<double>(i, j));
 
 	// Input of matrix multiplication.
 	mem_dense_matrix::ptr small_mat = mem_dense_matrix::create_rand<double>(
@@ -102,17 +87,15 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 				small_mat->get_data()).get_portion(0);
 
 	// Matrix multiplication in a normal way.
-	mem_dense_matrix::ptr large_mat = res1;
-	in_mats.resize(1);
-	in_mats[0] = large_mat;
-	op = detail::portion_mapply_op::const_ptr(new multiply_op(
-				*local_mat, large_mat->get_num_rows(), large_mat->get_type()));
-	tmp = detail::mapply_portion(in_mats, op, large_mat->store_layout());
-	res1 = mem_dense_matrix::cast(tmp);
+	mem_dense_matrix::ptr large_mat = res2;
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(
+			large_mat->multiply(*small_mat, large_mat->store_layout()));
 
 	large_mat = mem_dense_matrix::create(mapply_store);
 	in_stores.resize(1);
 	in_stores[0] = detail::mem_matrix_store::cast(large_mat->get_raw_store());
+	op = detail::portion_mapply_op::const_ptr(new multiply_op(
+				*local_mat, large_mat->get_num_rows(), large_mat->get_type()));
 	mapply_store = detail::mapply_matrix_store::ptr(new detail::mapply_matrix_store(
 				in_stores, op, large_mat->store_layout(),
 				large_mat->get_num_rows(), large_mat->get_num_cols()));
