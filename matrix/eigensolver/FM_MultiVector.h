@@ -334,9 +334,15 @@ public:
 		const FM_MultiVector &fm_B = dynamic_cast<const FM_MultiVector &>(B);
 		printf("this(%s) = %g * A(%s) + %g *  B(%s)\n", name.c_str(), alpha,
 				fm_A.name.c_str(), beta, fm_B.name.c_str());
-		block_multi_vector::ptr aA = fm_A.mat->multiply_scalar(alpha);
-		block_multi_vector::ptr bB = fm_B.mat->multiply_scalar(beta);
-		this->mat->assign(*aA->add(*bB));
+		if (alpha == 1 && beta == 0)
+			this->mat->assign(*fm_A.mat);
+		else if (alpha == 0 && beta == 1)
+			this->mat->assign(*fm_B.mat);
+		else {
+			block_multi_vector::ptr aA = fm_A.mat->multiply_scalar(alpha);
+			block_multi_vector::ptr bB = fm_B.mat->multiply_scalar(beta);
+			this->mat->assign(*aA->add(*bB));
+		}
 #ifdef FM_VERIFY
 		this->ep_mat->MvAddMv(alpha, *fm_A.ep_mat, beta, *fm_B.ep_mat);
 #endif
