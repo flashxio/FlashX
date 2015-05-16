@@ -955,6 +955,8 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store &res);
 void scale_cols(const local_matrix_store &m1, const mem_vector &vals,
 		local_matrix_store &m2);
+void scale_rows(const local_matrix_store &m1, const mem_vector &vals,
+		local_matrix_store &m2);
 
 }
 

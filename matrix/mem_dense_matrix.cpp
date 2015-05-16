@@ -500,6 +500,20 @@ public:
 			detail::local_matrix_store &out) const;
 };
 
+class scale_row_op: public detail::portion_mapply_op
+{
+	mem_vector::const_ptr vals;
+public:
+	scale_row_op(mem_vector::const_ptr vals, size_t out_num_rows,
+			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, type) {
+		this->vals = vals;
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+};
+
 void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
@@ -507,6 +521,16 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	detail::scale_cols(*ins[0], *vals, out);
+}
+
+void scale_row_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 1);
+	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
+	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
+	detail::scale_rows(*ins[0], *vals, out);
 }
 
 }
@@ -519,6 +543,20 @@ dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	scale_col_op::const_ptr mapply_op(new scale_col_op(vals, get_num_rows(),
+						get_num_cols(), get_type()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, this->store_layout());
+	return dense_matrix::create(ret);
+}
+
+dense_matrix::ptr mem_dense_matrix::scale_rows(mem_vector::const_ptr vals) const
+{
+	assert(is_wide());
+	assert(get_num_rows() == vals->get_length());
+	assert(get_type() == vals->get_type());
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
+	scale_row_op::const_ptr mapply_op(new scale_row_op(vals, get_num_rows(),
 						get_num_cols(), get_type()));
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 			mapply_op, this->store_layout());

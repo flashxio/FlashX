@@ -223,6 +223,8 @@ public:
 			arr_apply_operate::const_ptr op) const = 0;
 	virtual dense_matrix::ptr scale_cols(
 			std::shared_ptr<const mem_vector> vals) const = 0;
+	virtual dense_matrix::ptr scale_rows(
+			std::shared_ptr<const mem_vector> vals) const = 0;
 
 	dense_matrix::ptr multiply(const dense_matrix &mat,
 			matrix_layout_t out_layout) const {

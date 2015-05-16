@@ -523,6 +523,43 @@ void test_scale_cols(int num_nodes)
 					== orig_store2.get<int>(i, j) * vals->get<int>(j));
 }
 
+void test_scale_rows(int num_nodes)
+{
+	printf("Test scale rows\n");
+	mem_dense_matrix::ptr orig = create_matrix(10, long_dim,
+			matrix_layout_t::L_ROW, num_nodes);
+	mem_vector::ptr vals = mem_vector::create(orig->get_num_rows(),
+			orig->get_type());
+	for (size_t i = 0; i < vals->get_length(); i++)
+		vals->set<int>(i, i);
+	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_rows(vals));
+	detail::mem_matrix_store &orig_store1
+		= (detail::mem_matrix_store &) orig->get_data();
+	detail::mem_matrix_store &res_store1
+		= (detail::mem_matrix_store &) res->get_data();
+	res_store1.materialize_self();
+	orig_store1.materialize_self();
+#pragma omp parallel for
+	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
+		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
+			assert(res_store1.get<int>(i, j)
+					== orig_store1.get<int>(i, j) * vals->get<int>(i));
+
+	orig = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
+	res = mem_dense_matrix::cast(orig->scale_rows(vals));
+	detail::mem_matrix_store &orig_store2
+		= (detail::mem_matrix_store &) orig->get_data();
+	detail::mem_matrix_store &res_store2
+		= (detail::mem_matrix_store &) res->get_data();
+	res_store2.materialize_self();
+	orig_store2.materialize_self();
+#pragma omp parallel for
+	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
+		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
+			assert(res_store2.get<int>(i, j)
+					== orig_store2.get<int>(i, j) * vals->get<int>(i));
+}
+
 void test_create_const()
 {
 	printf("test create const matrix\n");
@@ -558,6 +595,8 @@ int main(int argc, char *argv[])
 
 		test_scale_cols(-1);
 		test_scale_cols(num_nodes);
+		test_scale_rows(-1);
+		test_scale_rows(num_nodes);
 		test_multiply_scalar(-1);
 		test_multiply_scalar(num_nodes);
 		test_ele_wise(-1);

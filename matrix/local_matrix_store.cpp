@@ -695,8 +695,9 @@ void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store
-			= (const local_row_matrix_store &) store;
-		local_row_matrix_store &row_res = (local_row_matrix_store &) res;
+			= static_cast<const local_row_matrix_store &>(store);
+		local_row_matrix_store &row_res
+			= static_cast<local_row_matrix_store &>(res);
 		for (size_t i = 0; i < nrow; i++)
 			op->runAA(ncol, row_store.get_row(i), vals.get_raw_arr(),
 					row_res.get_row(i));
@@ -704,10 +705,41 @@ void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 	else {
 		assert(store.store_layout() == matrix_layout_t::L_COL);
 		const local_col_matrix_store &col_store
-			= (const local_col_matrix_store &) store;
-		local_col_matrix_store &col_res = (local_col_matrix_store &) res;
+			= static_cast<const local_col_matrix_store &>(store);
+		local_col_matrix_store &col_res
+			= static_cast<local_col_matrix_store &>(res);
 		for (size_t i = 0; i < ncol; i++)
 			op->runAE(nrow, col_store.get_col(i), vals.get(i),
+					col_res.get_col(i));
+	}
+}
+
+void scale_rows(const local_matrix_store &store, const mem_vector &vals,
+		local_matrix_store &res)
+{
+	assert(res.store_layout() == store.store_layout());
+	size_t ncol = store.get_num_cols();
+	size_t nrow = store.get_num_rows();
+	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
+	if (store.get_type() == get_scalar_type<double>())
+		op = &dm_op;
+	if (store.store_layout() == matrix_layout_t::L_ROW) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		local_row_matrix_store &row_res
+			= static_cast<local_row_matrix_store &>(res);
+		for (size_t i = 0; i < nrow; i++)
+			op->runAE(ncol, row_store.get_row(i), vals.get(i),
+					row_res.get_row(i));
+	}
+	else {
+		assert(store.store_layout() == matrix_layout_t::L_COL);
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		local_col_matrix_store &col_res
+			= static_cast<local_col_matrix_store &>(res);
+		for (size_t i = 0; i < ncol; i++)
+			op->runAA(nrow, col_store.get_col(i), vals.get_raw_arr(),
 					col_res.get_col(i));
 	}
 }

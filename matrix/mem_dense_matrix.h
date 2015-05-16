@@ -118,7 +118,10 @@ public:
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			arr_apply_operate::const_ptr op) const;
-	virtual dense_matrix::ptr scale_cols(std::shared_ptr<const mem_vector> vals) const;
+	virtual dense_matrix::ptr scale_cols(
+			std::shared_ptr<const mem_vector> vals) const;
+	virtual dense_matrix::ptr scale_rows(
+			std::shared_ptr<const mem_vector> vals) const;
 
 	template<class T>
 	T get(size_t row, size_t col) const {
