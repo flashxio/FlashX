@@ -161,9 +161,6 @@ public:
 		return row + col_idx * get_entry_size();
 	}
 
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		return std::pair<size_t, size_t>(mapper.get_range_size(), get_num_cols());
-	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
@@ -236,11 +233,6 @@ public:
 		return data[col_idx]->get(row_idx);
 	}
 
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		assert(!data.empty());
-		return std::pair<size_t, size_t>(data.front()->get_portion_size(),
-				get_num_cols());
-	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
@@ -304,11 +296,6 @@ public:
 
 	const char *get(size_t row_idx, size_t col_idx) const {
 		return store.get(col_idx, row_idx);
-	}
-
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		std::pair<size_t, size_t> size = store.get_portion_size();
-		return std::pair<size_t, size_t>(size.second, size.first);
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
@@ -383,11 +370,6 @@ public:
 
 	char *get(size_t row_idx, size_t col_idx) {
 		return store.get(col_idx, row_idx);
-	}
-
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		std::pair<size_t, size_t> size = store.get_portion_size();
-		return std::pair<size_t, size_t>(size.second, size.first);
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
