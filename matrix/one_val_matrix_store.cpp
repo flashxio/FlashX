@@ -28,11 +28,12 @@ namespace detail
 {
 
 one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
-		size_t nrow, size_t ncol, matrix_layout_t layout): virtual_matrix_store(
-			nrow, ncol, val->get_type())
+		size_t nrow, size_t ncol, matrix_layout_t layout,
+		int num_nodes): virtual_matrix_store(nrow, ncol, val->get_type())
 {
 	this->val = val;
 	this->layout = layout;
+	this->num_nodes = num_nodes;
 
 	size_t buf_size;
 	if (is_wide()) {
@@ -48,18 +49,28 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 	set.set(portion_buf.get(), buf_size / get_entry_size(), 0, 0);
 }
 
+matrix_store::ptr one_val_matrix_store::materialize() const
+{
+	detail::matrix_store::ptr store = detail::mem_matrix_store::create(
+			get_num_rows(), get_num_cols(), store_layout(), get_type(),
+			get_num_nodes());
+	const set_operate &op = get_type().get_set_const(*val);
+	store->set_data(op);
+	return store;
+}
+
 matrix_store::const_ptr one_val_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
 	return matrix_store::const_ptr(new one_val_matrix_store(val,
-				get_num_rows(), idxs.size(), layout));
+				get_num_rows(), idxs.size(), layout, get_num_nodes()));
 }
 
 matrix_store::const_ptr one_val_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
 	return matrix_store::const_ptr(new one_val_matrix_store(val,
-				idxs.size(), get_num_cols(), layout));
+				idxs.size(), get_num_cols(), layout, get_num_nodes()));
 }
 
 local_matrix_store::const_ptr one_val_matrix_store::get_portion(
@@ -111,7 +122,7 @@ matrix_store::const_ptr one_val_matrix_store::transpose() const
 	else
 		assert(0);
 	return matrix_store::const_ptr(new one_val_matrix_store(val,
-				get_num_cols(), get_num_rows(), new_layout));
+				get_num_cols(), get_num_rows(), new_layout, get_num_nodes()));
 }
 
 }

@@ -635,6 +635,14 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 
 			// Get all columns in the block.
 			fm::dense_matrix::ptr block = get_block(block_idx);
+			// The block might be a one-value matrix, so we have to materialize
+			// the matrix to change its columns. This rarely happens.
+			// TODO We might want the uninitialized columns to be virtualized.
+			if (block->is_virtual()) {
+				printf("materialize1 %ld cols\n", block->get_num_cols());
+				num_col_writes += block->get_num_cols();
+				block->materialize_self();
+			}
 			detail::NUMA_col_tall_matrix_store &numa_mat
 				= const_cast<detail::NUMA_col_tall_matrix_store &>(
 						dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(

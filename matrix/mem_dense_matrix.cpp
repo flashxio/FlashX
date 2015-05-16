@@ -46,7 +46,7 @@ mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
 {
 	// If nothing is specified, it creates a zero matrix.
 	detail::mem_matrix_store::ptr store(new detail::one_val_matrix_store(
-				type.create_scalar(), nrow, ncol, layout));
+				type.create_scalar(), nrow, ncol, layout, num_nodes));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 

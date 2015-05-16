@@ -33,14 +33,12 @@ class one_val_matrix_store: public virtual_matrix_store
 	scalar_variable::ptr val;
 	matrix_layout_t layout;
 	std::unique_ptr<char[]> portion_buf;
+	int num_nodes;
 public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
-			matrix_layout_t layout);
+			matrix_layout_t layout, int num_nodes);
 
-	virtual matrix_store::ptr materialize() const {
-		assert(0);
-		return matrix_store::ptr();
-	}
+	virtual matrix_store::ptr materialize() const;
 
 	virtual const char *get(size_t row, size_t col) const {
 		return val->get_raw();
@@ -59,6 +57,9 @@ public:
 
 	virtual matrix_layout_t store_layout() const {
 		return layout;
+	}
+	virtual int get_num_nodes() const {
+		return num_nodes;
 	}
 };
 

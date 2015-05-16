@@ -260,7 +260,7 @@ mem_dense_matrix::ptr mem_dense_matrix::_create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes)
 {
 	detail::mem_matrix_store::ptr store(new detail::one_val_matrix_store(
-				val, nrow, ncol, layout));
+				val, nrow, ncol, layout, num_nodes));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
