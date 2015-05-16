@@ -298,13 +298,18 @@ mapply_matrix_store::mapply_matrix_store(
 
 void mapply_matrix_store::materialize_self() const
 {
+	// Materialize the matrix store if it hasn't.
+	if (res)
+		return;
+
 	mapply_matrix_store *mutable_this = const_cast<mapply_matrix_store *>(this);
 	mutable_this->res = mem_matrix_store::cast(materialize());
 }
 
 matrix_store::ptr mapply_matrix_store::materialize() const
 {
-	return __mapply_portion(in_mats, op, layout);
+	std::vector<matrix_store::const_ptr> tmp(in_mats.begin(), in_mats.end());
+	return __mapply_portion(tmp, op, layout);
 }
 
 matrix_store::const_ptr mapply_matrix_store::get_cols(

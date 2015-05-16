@@ -79,59 +79,6 @@ public:
 	virtual const scalar_type &get_output_type() const;
 };
 
-/*
- * These following classes turn the binary operators into unary operators.
- */
-template<class T>
-struct multiply_uop
-{
-	T val;
-	multiply_uop(T val) {
-		this->val = val;
-	}
-	T operator()(const T &e) const {
-		return e * val;
-	}
-};
-
-template<class T>
-struct add_uop
-{
-	T val;
-	add_uop(T val) {
-		this->val = val;
-	}
-	T operator()(const T &e) const {
-		return e + val;
-	}
-};
-
-template<class T>
-struct sub_uop
-{
-	T val;
-	sub_uop(T val) {
-		this->val = val;
-	}
-	T operator()(const T &e) const {
-		return e - val;
-	}
-};
-
-template<class T>
-struct divide_uop
-{
-	T val;
-	divide_uop(T val) {
-		this->val = val;
-	}
-	double operator()(const T &e) const {
-		double d1 = e;
-		double d2 = val;
-		return d1 / d2;
-	}
-};
-
 /**
  * This is a bulk version of a binary operator that takes two inputs and
  * generates an output. The bulk version is to amortize the overhead of
@@ -628,6 +575,8 @@ class arr_apply_operate
 {
 	size_t num_out_eles;
 public:
+	typedef std::shared_ptr<const arr_apply_operate> const_ptr;
+
 	arr_apply_operate(size_t num_out_eles) {
 		this->num_out_eles = num_out_eles;
 	}

@@ -27,9 +27,44 @@
 #include "generic_type.h"
 #include "rand_gen.h"
 #include "one_val_matrix_store.h"
+#include "local_matrix_store.h"
 
 namespace fm
 {
+
+void dense_matrix::multiply_scalar_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == out.store_layout());
+	assert(ins[0]->get_num_rows() == out.get_num_rows());
+	assert(ins[0]->get_num_cols() == out.get_num_cols());
+	if (out.store_layout() == matrix_layout_t::L_COL) {
+		const detail::local_col_matrix_store &col_in
+			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		for (size_t i = 0; i < out.get_num_cols(); i++)
+			op.runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
+					col_out.get_col(i));
+	}
+	else {
+		const detail::local_row_matrix_store &row_in
+			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		for (size_t i = 0; i < out.get_num_rows(); i++)
+			op.runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
+					row_out.get_row(i));
+	}
+}
+
+dense_matrix::ptr dense_matrix::create(detail::matrix_store::const_ptr store)
+{
+	assert(store->is_in_mem());
+	return mem_dense_matrix::create(detail::mem_matrix_store::cast(store));
+}
 
 bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const

@@ -44,6 +44,8 @@ void verify_result(mem_dense_matrix::ptr res1, mem_dense_matrix::ptr res2)
 {
 	assert(res1->get_num_rows() == res2->get_num_rows());
 	assert(res1->get_num_cols() == res2->get_num_cols());
+	res1->materialize_self();
+	res2->materialize_self();
 	for (size_t i = 0; i < res1->get_num_rows(); i++)
 		for (size_t j = 0; j < res1->get_num_cols(); j++)
 			assert(res1->get<double>(i, j) == res2->get<double>(i, j));
@@ -59,7 +61,7 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 			-1, 1, num_rows, num_cols, layout, -1);
 	mem_dense_matrix::ptr mat2 = mem_dense_matrix::create_rand<double>(
 			-1, 1, num_rows, num_cols, layout, -1);
-	std::vector<mem_dense_matrix::const_ptr> in_mats(2);
+	std::vector<dense_matrix::const_ptr> in_mats(2);
 	in_mats[0] = mat1;
 	in_mats[1] = mat2;
 	detail::portion_mapply_op::const_ptr op(new mapply_add_op(

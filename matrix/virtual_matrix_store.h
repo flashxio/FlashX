@@ -40,6 +40,10 @@ public:
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 	}
 
+	virtual bool is_virtual() const {
+		return true;
+	}
+
 	virtual matrix_store::ptr materialize() const = 0;
 
 	virtual void reset_data() {

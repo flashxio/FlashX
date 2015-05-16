@@ -38,8 +38,6 @@ class mapply_matrix_store: public virtual_matrix_store
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
 	mem_matrix_store::const_ptr res;
-
-	void materialize_self() const;
 public:
 	typedef std::shared_ptr<mapply_matrix_store> ptr;
 
@@ -48,11 +46,12 @@ public:
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
 			size_t nrow, size_t ncol);
 
+	virtual void materialize_self() const;
+
 	virtual matrix_store::ptr materialize() const;
 
 	virtual const char *get(size_t row, size_t col) const {
-		if (res == NULL)
-			materialize_self();
+		assert(res);
 		return res->get(row, col);
 	}
 

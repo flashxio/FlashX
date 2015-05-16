@@ -113,6 +113,12 @@ public:
 	 */
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
+
+	virtual bool is_virtual() const {
+		return false;
+	}
+	virtual void materialize_self() const {
+	}
 };
 
 }

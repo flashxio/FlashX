@@ -39,51 +39,6 @@ namespace fm
 class mem_vector;
 class mem_dense_matrix;
 
-namespace detail
-{
-
-class local_matrix_store;
-
-class portion_mapply_op
-{
-	size_t out_num_rows;
-	size_t out_num_cols;
-	const scalar_type &type;
-public:
-	typedef std::shared_ptr<const portion_mapply_op> const_ptr;
-
-	portion_mapply_op(size_t out_num_rows, size_t out_num_cols,
-			const scalar_type &_type): type(_type) {
-		this->out_num_rows = out_num_rows;
-		this->out_num_cols = out_num_cols;
-	}
-
-	virtual void run(
-			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
-			local_matrix_store &out) const = 0;
-
-	size_t get_out_num_rows() const {
-		return out_num_rows;
-	}
-	size_t get_out_num_cols() const {
-		return out_num_cols;
-	}
-	const scalar_type &get_output_type() const {
-		return type;
-	}
-};
-
-std::shared_ptr<mem_dense_matrix> mapply_portion(
-		const std::vector<std::shared_ptr<const mem_dense_matrix> > &mats,
-		// A user can specify the layout of the output dense matrix.
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
-
-detail::mem_matrix_store::ptr __mapply_portion(
-		const std::vector<detail::mem_matrix_store::const_ptr> &mats,
-		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
-
-}
-
 class mem_dense_matrix: public dense_matrix
 {
 public:
@@ -162,9 +117,8 @@ public:
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 	virtual dense_matrix::ptr apply(apply_margin margin,
-			const arr_apply_operate &op) const;
-
-	dense_matrix::ptr scale_cols(const mem_vector &vals) const;
+			arr_apply_operate::const_ptr op) const;
+	virtual dense_matrix::ptr scale_cols(std::shared_ptr<const mem_vector> vals) const;
 
 	template<class T>
 	T get(size_t row, size_t col) const {
@@ -172,10 +126,6 @@ public:
 			= (const detail::mem_matrix_store &) get_data();
 		return store.get<T>(row, col);
 	}
-
-	friend mem_dense_matrix::ptr detail::mapply_portion(
-		const std::vector<mem_dense_matrix::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
 };
 
 }

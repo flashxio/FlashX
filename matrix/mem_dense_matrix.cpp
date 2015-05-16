@@ -36,6 +36,7 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "one_val_matrix_store.h"
+#include "mapply_matrix_store.h"
 
 namespace fm
 {
@@ -361,14 +362,13 @@ dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
 	if (!verify_mapply2(m, op))
 		return dense_matrix::ptr();
 
-	std::vector<detail::mem_matrix_store::const_ptr> ins(2);
-	ins[0] = detail::mem_matrix_store::cast(this->get_raw_store());
-	ins[1] = detail::mem_matrix_store::cast(
-			static_cast<const mem_dense_matrix &>(m).get_raw_store());
+	std::vector<detail::matrix_store::const_ptr> ins(2);
+	ins[0] = this->get_raw_store();
+	ins[1] = static_cast<const mem_dense_matrix &>(m).get_raw_store();
 	mapply2_op::const_ptr mapply_op(new mapply2_op(op, get_num_rows(),
 				get_num_cols()));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(
-				__mapply_portion(ins, mapply_op, this->store_layout())));
+				__mapply_portion_virtual(ins, mapply_op, this->store_layout())));
 }
 
 namespace
@@ -400,16 +400,17 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 
 dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
 {
-	std::vector<detail::mem_matrix_store::const_ptr> ins(1);
-	ins[0] = detail::mem_matrix_store::cast(this->get_raw_store());
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
 	sapply_op::const_ptr mapply_op(new sapply_op(op, get_num_rows(),
 				get_num_cols()));
-	return mem_dense_matrix::ptr(new mem_dense_matrix(
-				__mapply_portion(ins, mapply_op, this->store_layout())));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, this->store_layout());
+	return dense_matrix::create(ret);
 }
 
 dense_matrix::ptr mem_dense_matrix::apply(apply_margin margin,
-		const arr_apply_operate &op) const
+		arr_apply_operate::const_ptr op) const
 {
 	return dense_matrix::ptr();
 #if 0
@@ -487,11 +488,12 @@ namespace
 
 class scale_col_op: public detail::portion_mapply_op
 {
-	const mem_vector &vals;
+	mem_vector::const_ptr vals;
 public:
-	scale_col_op(const mem_vector &_vals, size_t out_num_rows,
+	scale_col_op(mem_vector::const_ptr vals, size_t out_num_rows,
 			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, type), vals(_vals) {
+				out_num_rows, out_num_cols, type) {
+		this->vals = vals;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -504,22 +506,23 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::scale_cols(*ins[0], vals, out);
+	detail::scale_cols(*ins[0], *vals, out);
 }
 
 }
 
-dense_matrix::ptr mem_dense_matrix::scale_cols(const mem_vector &vals) const
+dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
 {
 	assert(!is_wide());
-	assert(get_num_cols() == vals.get_length());
-	assert(get_type() == vals.get_type());
-	std::vector<detail::mem_matrix_store::const_ptr> ins(1);
-	ins[0] = detail::mem_matrix_store::cast(this->get_raw_store());
+	assert(get_num_cols() == vals->get_length());
+	assert(get_type() == vals->get_type());
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
 	scale_col_op::const_ptr mapply_op(new scale_col_op(vals, get_num_rows(),
 						get_num_cols(), get_type()));
-	return mem_dense_matrix::ptr(new mem_dense_matrix(
-				__mapply_portion(ins, mapply_op, this->store_layout())));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, this->store_layout());
+	return dense_matrix::create(ret);
 }
 
 namespace detail
@@ -549,10 +552,14 @@ public:
 
 }
 
-mem_matrix_store::ptr __mapply_portion(
-		const std::vector<mem_matrix_store::const_ptr> &mats,
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
+	std::vector<mem_matrix_store::const_ptr> mem_mats(mats.size());
+	for (size_t i = 0; i < mats.size(); i++)
+		mem_mats[i] = mem_matrix_store::cast(mats[i]);
+
 	assert(mats.size() >= 1);
 	size_t num_chunks = mats.front()->get_num_portions();
 	std::pair<size_t, size_t> first_size = mats.front()->get_portion_size();
@@ -562,12 +569,12 @@ mem_matrix_store::ptr __mapply_portion(
 	for (size_t i = 1; i < mats.size(); i++) {
 		assert(first_size.first == mats[i]->get_portion_size().first);
 		assert(mats[i]->store_layout() == mats.front()->store_layout());
-		assert(mats[i]->get_num_nodes() == mats.front()->get_num_nodes());
+		assert(mem_mats[i]->get_num_nodes() == mem_mats.front()->get_num_nodes());
 		assert(mats[i]->get_num_rows() == mats.front()->get_num_rows());
 	}
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			op->get_out_num_rows(), op->get_out_num_cols(),
-			out_layout, op->get_output_type(), mats.front()->get_num_nodes());
+			out_layout, op->get_output_type(), mem_mats.front()->get_num_nodes());
 
 	std::vector<detail::local_matrix_store::const_ptr> local_stores(mats.size());
 	detail::mem_thread_pool::ptr mem_threads
@@ -575,7 +582,7 @@ mem_matrix_store::ptr __mapply_portion(
 	for (size_t i = 0; i < num_chunks; i++) {
 		detail::local_matrix_store::ptr local_res = res->get_portion(i);
 		for (size_t j = 0; j < local_stores.size(); j++) {
-			local_stores[j] = mats[j]->get_portion(i);
+			local_stores[j] = mem_mats[j]->get_portion(i);
 			assert(local_res->get_node_id() == local_stores[j]->get_node_id());
 		}
 
@@ -591,14 +598,27 @@ mem_matrix_store::ptr __mapply_portion(
 	return res;
 }
 
-mem_dense_matrix::ptr mapply_portion(
-		const std::vector<mem_dense_matrix::const_ptr> &mats,
+matrix_store::ptr __mapply_portion_virtual(
+		const std::vector<matrix_store::const_ptr> &stores,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
-	std::vector<mem_matrix_store::const_ptr> mem_stores(mats.size());
-	for (size_t i = 0; i < mem_stores.size(); i++)
-		mem_stores[i] = detail::mem_matrix_store::cast(mats[i]->get_raw_store());
-	return mem_dense_matrix::create(__mapply_portion(mem_stores, op, out_layout));
+	std::vector<mem_matrix_store::const_ptr> mem_stores(stores.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		mem_stores[i] = mem_matrix_store::cast(stores[i]);
+	return mem_matrix_store::ptr(new mapply_matrix_store(mem_stores, op,
+				out_layout, op->get_out_num_rows(), op->get_out_num_cols()));
+}
+
+dense_matrix::ptr mapply_portion(
+		const std::vector<dense_matrix::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
+{
+	std::vector<mem_matrix_store::const_ptr> stores(mats.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mem_matrix_store::cast(mats[i]->get_raw_store());
+	matrix_store::const_ptr ret(new mapply_matrix_store(stores, op,
+				out_layout, op->get_out_num_rows(), op->get_out_num_cols()));
+	return dense_matrix::create(ret);
 }
 
 }

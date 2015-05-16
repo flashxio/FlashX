@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 
+#include <vector>
 #include <memory>
 
 #include "generic_type.h"
@@ -43,6 +44,57 @@ enum apply_margin
 	MAR_COL = 2,
 };
 
+class dense_matrix;
+
+namespace detail
+{
+
+class local_matrix_store;
+
+class portion_mapply_op
+{
+	size_t out_num_rows;
+	size_t out_num_cols;
+	const scalar_type &type;
+public:
+	typedef std::shared_ptr<const portion_mapply_op> const_ptr;
+
+	portion_mapply_op(size_t out_num_rows, size_t out_num_cols,
+			const scalar_type &_type): type(_type) {
+		this->out_num_rows = out_num_rows;
+		this->out_num_cols = out_num_cols;
+	}
+
+	virtual void run(
+			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+			local_matrix_store &out) const = 0;
+
+	size_t get_out_num_rows() const {
+		return out_num_rows;
+	}
+	size_t get_out_num_cols() const {
+		return out_num_cols;
+	}
+	const scalar_type &get_output_type() const {
+		return type;
+	}
+};
+
+std::shared_ptr<dense_matrix> mapply_portion(
+		const std::vector<std::shared_ptr<const dense_matrix> > &mats,
+		// A user can specify the layout of the output dense matrix.
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+
+matrix_store::ptr __mapply_portion_virtual(
+		const std::vector<matrix_store::const_ptr> &store,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+
+}
+
 /*
  * This class represents a dense matrix and is able to perform computation
  * on the matrix. However, this class can't modify the matrix data. The only
@@ -51,6 +103,20 @@ enum apply_margin
 class dense_matrix
 {
 	detail::matrix_store::const_ptr store;
+
+	class multiply_scalar_op: public detail::portion_mapply_op {
+		scalar_variable::ptr var;
+		const bulk_operate &op;
+	public:
+		multiply_scalar_op(scalar_variable::ptr var, size_t out_num_rows,
+				size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
+					out_num_cols, var->get_type()),
+				op(var->get_type().get_basic_ops().get_multiply()) {
+			this->var = var;
+		}
+		void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
+				detail::local_matrix_store &out) const;
+	};
 
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
@@ -68,6 +134,7 @@ public:
 
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
 			matrix_layout_t layout, bool in_mem);
+	static ptr create(detail::matrix_store::const_ptr store);
 
 	virtual ~dense_matrix() {
 	}
@@ -106,6 +173,14 @@ public:
 
 	bool is_wide() const {
 		return store->is_wide();
+	}
+
+	bool is_virtual() const {
+		return store->is_virtual();
+	}
+
+	void materialize_self() const {
+		return store->materialize_self();
 	}
 
 	template<class T>
@@ -147,8 +222,9 @@ public:
 			const bulk_operate &op) const = 0;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const = 0;
 	virtual dense_matrix::ptr apply(apply_margin margin,
-			const arr_apply_operate &op) const = 0;
-	virtual dense_matrix::ptr scale_cols(const mem_vector &vals) const = 0;
+			arr_apply_operate::const_ptr op) const = 0;
+	virtual dense_matrix::ptr scale_cols(
+			std::shared_ptr<const mem_vector> vals) const = 0;
 
 	dense_matrix::ptr multiply(const dense_matrix &mat,
 			matrix_layout_t out_layout) const {
@@ -163,8 +239,14 @@ public:
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		assert(get_type() == get_scalar_type<T>());
-		return this->sapply(bulk_uoperate_impl<multiply_uop<T>, T, T>(
-					multiply_uop<T>(val)));
+		scalar_variable::ptr scal_var(new scalar_variable_impl<T>(val));
+		std::vector<detail::matrix_store::const_ptr> stores(1);
+		stores[0] = store;
+		detail::portion_mapply_op::const_ptr op(new multiply_scalar_op(
+					scal_var, get_num_rows(), get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(stores, op,
+				store_layout());
+		return dense_matrix::create(ret);
 	}
 
 	double norm2() const;
