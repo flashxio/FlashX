@@ -179,9 +179,7 @@ public:
 		return store->is_virtual();
 	}
 
-	void materialize_self() const {
-		return store->materialize_self();
-	}
+	void materialize_self() const;
 
 	template<class T>
 	bool is_type() const {

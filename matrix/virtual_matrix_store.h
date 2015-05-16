@@ -36,6 +36,13 @@ namespace detail
 class virtual_matrix_store: public mem_matrix_store
 {
 public:
+	typedef std::shared_ptr<const virtual_matrix_store> const_ptr;
+
+	static const_ptr cast(matrix_store::const_ptr mat) {
+		assert(mat->is_virtual());
+		return std::static_pointer_cast<const virtual_matrix_store>(mat);
+	}
+
 	virtual_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 	}

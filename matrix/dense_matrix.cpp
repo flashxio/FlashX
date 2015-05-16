@@ -28,6 +28,7 @@
 #include "rand_gen.h"
 #include "one_val_matrix_store.h"
 #include "local_matrix_store.h"
+#include "virtual_matrix_store.h"
 
 namespace fm
 {
@@ -261,6 +262,14 @@ mem_dense_matrix::ptr mem_dense_matrix::_create_const(scalar_variable::ptr val,
 	detail::mem_matrix_store::ptr store(new detail::one_val_matrix_store(
 				val, nrow, ncol, layout));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
+}
+
+void dense_matrix::materialize_self() const
+{
+	if (!store->is_virtual())
+		return;
+	const_cast<dense_matrix *>(this)->store
+		= detail::virtual_matrix_store::cast(store)->materialize();
 }
 
 }
