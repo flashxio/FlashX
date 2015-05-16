@@ -22,6 +22,7 @@
 #include "block_dense_matrix.h"
 
 using namespace fm;
+size_t num_col_writes = 0;
 
 class mirror_block_multi_vector: public block_multi_vector
 {
@@ -72,6 +73,16 @@ public:
 		assert(block_idx == 0);
 		assert(mat->get_num_cols() == get_block_size());
 		mats[block_idx]->assign(*mat);
+		if (mirrored_mat->is_virtual()) {
+			printf("materialize %ld cols\n", mirrored_mat->get_num_cols());
+			num_col_writes += mirrored_mat->get_num_cols();
+		}
+		if (mat->is_virtual()) {
+			printf("materialize %ld cols\n", mat->get_num_cols());
+			num_col_writes += mat->get_num_cols();
+		}
+		mirrored_mat->materialize_self();
+		mat->materialize_self();
 
 		detail::NUMA_col_tall_matrix_store &mirrored_numa_mat
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
@@ -124,6 +135,11 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	std::vector<off_t> offs(1);
 	offs[0] = local_col_idx;
 	fm::dense_matrix::const_ptr block = get_block(block_idx);
+	if (block->is_virtual()) {
+		printf("materialize %ld cols\n", block->get_num_cols());
+		num_col_writes += block->get_num_cols();
+	}
+	block->materialize_self();
 	return block->get_cols(offs);
 }
 
@@ -161,7 +177,13 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
 				index.size(), index.size(), get_type());
-		ret->set_block(0, get_block(block_start)->get_cols(local_offs));
+		dense_matrix::ptr block = get_block(block_start);
+		if (block->is_virtual()) {
+			printf("materialize %ld cols\n", block->get_num_cols());
+			num_col_writes += block->get_num_cols();
+		}
+		block->materialize_self();
+		ret->set_block(0, block->get_cols(local_offs));
 		printf("get block [%ld]\n", block_start);
 		return ret;
 	}
@@ -177,6 +199,7 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 
 bool block_multi_vector::resize_block(size_t new_block_size)
 {
+	assert(0);
 	for (size_t i = 0; i < mats.size(); i++)
 		assert(mats[i].use_count() == 1);
 	assert(get_block_size() % new_block_size == 0);
@@ -232,6 +255,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 
 		// Get the columns in the block.
 		fm::dense_matrix::ptr block = get_block(block_start);
+		assert(!block->is_virtual());
 		detail::NUMA_col_tall_matrix_store &numa_block
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
@@ -277,6 +301,12 @@ void block_multi_vector::sparse_matrix_multiply(const sp_multiply &multiply,
 	assert(X.get_type() == Y.get_type());
 	size_t num_blocks = X.get_num_blocks();
 	for (size_t i = 0; i < num_blocks; i++) {
+		dense_matrix::const_ptr block = X.get_block(i);
+		if (block->is_virtual()) {
+			printf("materialize %ld cols\n", block->get_num_cols());
+			num_col_writes += block->get_num_cols();
+		}
+		block->materialize_self();
 		const detail::mem_matrix_store &in
 			= dynamic_cast<const detail::mem_matrix_store &>(X.get_block(i)->get_data());
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
@@ -310,16 +340,17 @@ class gemm_op: public fm::detail::portion_mapply_op
 	T beta;
 	size_t A_num_blocks;
 	size_t C_num_blocks;
-	const detail::mem_col_matrix_store &Bstore;
+	detail::mem_col_matrix_store::const_ptr Bstore;
 public:
-	gemm_op(const detail::mem_col_matrix_store &B, size_t A_num_blocks,
+	gemm_op(detail::mem_col_matrix_store::const_ptr B, size_t A_num_blocks,
 			size_t C_num_blocks, T alpha, T beta, size_t out_num_rows,
 			size_t out_num_cols): fm::detail::portion_mapply_op(
-				out_num_rows, out_num_cols, get_scalar_type<T>()), Bstore(B) {
+				out_num_rows, out_num_cols, get_scalar_type<T>()) {
 		this->alpha = alpha;
 		this->beta = beta;
 		this->A_num_blocks = A_num_blocks;
 		this->C_num_blocks = C_num_blocks;
+		this->Bstore = B;
 	}
 
 	virtual void run(
@@ -400,7 +431,7 @@ void gemm_op<T>::run(
 		size_t block_size = ins.front()->get_num_cols();
 		size_t num_rows = ins.front()->get_num_rows();
 		size_t num_cols = block_size * A_num_blocks;
-		assert(num_cols == Bstore.get_num_rows());
+		assert(num_cols == Bstore->get_num_rows());
 		// TODO we don't need to allocate this every time.
 		fm::detail::local_col_matrix_store::ptr in_buf(
 				new fm::detail::local_buf_col_matrix_store(
@@ -425,30 +456,30 @@ void gemm_op<T>::run(
 		Astore = fm::detail::local_col_matrix_store::cast(ins[0]);
 
 	const T *Amat = (const T *) Astore->get_raw_arr();
-	assert(Bstore.get_data().get_num_bytes()
-			== Bstore.get_num_rows() * Bstore.get_num_cols() *
-			Bstore.get_entry_size());
-	const T *Bmat = (const T *) Bstore.get_data().get_raw();
+	assert(Bstore->get_data().get_num_bytes()
+			== Bstore->get_num_rows() * Bstore->get_num_cols() *
+			Bstore->get_entry_size());
+	const T *Bmat = (const T *) Bstore->get_data().get_raw();
 	assert(Amat);
 	assert(Bmat);
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore->get_num_rows(), Bstore.get_num_cols(),
+			Astore->get_num_rows(), Bstore->get_num_cols(),
 			Astore->get_num_cols(), alpha, Amat,
-			Astore->get_num_rows(), Bmat, Bstore.get_num_rows(),
+			Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
 			beta, res_mat, out.get_num_rows());
 	if (tmp_res)
 		out.copy_from(*tmp_res);
 }
 
 block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
-		const detail::mem_col_matrix_store &B, const scalar_variable &alpha,
+		detail::mem_col_matrix_store::const_ptr B, const scalar_variable &alpha,
 		const scalar_variable &beta) const
 {
 	// The product can only have one block.
 	block_multi_vector::ptr vecs= block_multi_vector::create(
 			// mapply_portion can only output one matrix, so `vecs' can
 			// only have one block.
-			get_num_rows(), B.get_num_cols(), B.get_num_cols(), type);
+			get_num_rows(), B->get_num_cols(), B->get_num_cols(), type);
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -456,16 +487,16 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	double d_beta
 		= dynamic_cast<const scalar_variable_impl<double> &>(beta).get();
 
-	std::vector<mem_dense_matrix::const_ptr> mats;
+	std::vector<dense_matrix::const_ptr> mats;
 	if (d_beta) {
 		mats.resize(A.get_num_blocks() + this->get_num_blocks());
 		for (size_t i = A.get_num_blocks(); i < mats.size(); i++)
-			mats[i] = mem_dense_matrix::cast(this->get_block(i - A.get_num_blocks()));
+			mats[i] = this->get_block(i - A.get_num_blocks());
 	}
 	else
 		mats.resize(A.get_num_blocks());
 	for (size_t i = 0; i < A.get_num_blocks(); i++)
-		mats[i] = mem_dense_matrix::cast(A.get_block(i));
+		mats[i] = A.get_block(i);
 
 	// This works for double float points.
 	assert(type == fm::get_scalar_type<double>());
@@ -517,6 +548,18 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 	size_t block_num_cols = get_block_size();
 	for (size_t i = 0; i < get_num_blocks(); i++) {
 		for (size_t j = 0; j < mv.get_num_blocks(); j++) {
+			dense_matrix::const_ptr mv_block = mv.get_block(j);
+			if (mv_block->is_virtual()) {
+				printf("materialize %ld cols\n", mv_block->get_num_cols());
+				num_col_writes += mv_block->get_num_cols();
+			}
+			mv_block->materialize_self();
+			dense_matrix::const_ptr block = get_block(i);
+			if (block->is_virtual()) {
+				printf("materialize %ld cols\n", block->get_num_cols());
+				num_col_writes += block->get_num_cols();
+			}
+			block->materialize_self();
 			fm::mem_dense_matrix::ptr tA = fm::mem_dense_matrix::cast(
 					mv.get_block(j)->transpose());
 			fm::mem_dense_matrix::ptr res1 = fm::mem_dense_matrix::cast(
@@ -591,10 +634,11 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			}
 
 			// Get all columns in the block.
+			fm::dense_matrix::ptr block = get_block(block_idx);
 			detail::NUMA_col_tall_matrix_store &numa_mat
 				= const_cast<detail::NUMA_col_tall_matrix_store &>(
 						dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-							get_block(block_idx)->get_data()));
+							block->get_data()));
 			std::vector<NUMA_vector::ptr> cols(numa_mat.get_num_cols());
 			for (size_t i = 0; i < cols.size(); i++)
 				cols[i] = numa_mat.get_col_vec(i);

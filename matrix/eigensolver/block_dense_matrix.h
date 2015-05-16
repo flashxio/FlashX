@@ -25,6 +25,8 @@
 #include "mem_vector.h"
 #include "sparse_matrix.h"
 
+extern size_t num_col_writes;
+
 class sp_multiply
 {
 public:
@@ -138,7 +140,7 @@ public:
 	block_multi_vector::ptr clone() const;
 
 	block_multi_vector::ptr gemm(const block_multi_vector &A,
-			const fm::detail::mem_col_matrix_store &B,
+			fm::detail::mem_col_matrix_store::const_ptr B,
 			const fm::scalar_variable &alpha,
 			const fm::scalar_variable &beta) const;
 
@@ -150,6 +152,7 @@ public:
 	template<class Type>
 	void init_rand(Type min, Type max) {
 		size_t num_blocks = get_num_blocks();
+		num_col_writes += this->get_num_cols();
 		for (size_t i = 0; i < num_blocks; i++)
 			set_block(i, fm::mem_dense_matrix::create_rand<Type>(min, max,
 						get_num_rows(), block_size, fm::matrix_layout_t::L_COL,
@@ -176,7 +179,7 @@ public:
 					fm::get_scalar_type<Type>());
 			for (size_t k = 0; k < block_size; k++)
 				sub_vec->set<Type>(k, vec[i * block_size + k]);
-			ret_vecs->set_block(i, get_block(i)->scale_cols(*sub_vec));
+			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec));
 		}
 		return ret_vecs;
 	}

@@ -39,8 +39,6 @@
 
 static int MV_id;
 
-static size_t num_col_writes;
-
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
@@ -126,7 +124,6 @@ public:
 
 	void Random () {
 		mat->init_rand<ScalarType>(-1, 1);
-		num_col_writes += mat->get_num_cols();
 		sync_fm2ep();
 		verify();
 	}
@@ -313,7 +310,6 @@ public:
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		printf("this(%s) = %g * A(%s) * B(%dx%d) + %g * this\n", name.c_str(), alpha,
 				fm_A.name.c_str(), B.numRows(), B.numCols(), beta);
-		num_col_writes += this->GetNumberVecs();
 		fm::detail::mem_col_matrix_store::ptr Bstore
 			= fm::detail::mem_col_matrix_store::create(
 					B.numRows(), B.numCols(), fm::get_scalar_type<ScalarType>());
@@ -323,7 +319,7 @@ public:
 		}
 		fm::scalar_variable_impl<ScalarType> alpha_var(alpha);
 		fm::scalar_variable_impl<ScalarType> beta_var(beta);
-		this->mat->assign(*this->mat->gemm(*fm_A.mat, *Bstore, alpha_var, beta_var));
+		this->mat->assign(*this->mat->gemm(*fm_A.mat, Bstore, alpha_var, beta_var));
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
@@ -338,7 +334,6 @@ public:
 		const FM_MultiVector &fm_B = dynamic_cast<const FM_MultiVector &>(B);
 		printf("this(%s) = %g * A(%s) + %g *  B(%s)\n", name.c_str(), alpha,
 				fm_A.name.c_str(), beta, fm_B.name.c_str());
-		num_col_writes += this->GetNumberVecs();
 		block_multi_vector::ptr aA = fm_A.mat->multiply_scalar(alpha);
 		block_multi_vector::ptr bB = fm_B.mat->multiply_scalar(beta);
 		this->mat->assign(*aA->add(*bB));
@@ -353,7 +348,6 @@ public:
 	//! Scale each element of the vectors in \c *this with \c alpha.
 	virtual void MvScale ( ScalarType alpha ) {
 		printf("this(%s) *= %g\n", name.c_str(), alpha);
-		num_col_writes += this->GetNumberVecs();
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -364,7 +358,6 @@ public:
 	//! Scale each element of the <tt>i</tt>-th vector in \c *this with <tt>alpha[i]</tt>.
 	virtual void MvScale ( const std::vector<ScalarType>& alpha ) {
 		printf("this(%s) *= vec\n", name.c_str());
-		num_col_writes += this->GetNumberVecs();
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -438,7 +431,6 @@ public:
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		printf("this(%s)[%ld vecs] = A(%s)\n", name.c_str(), index.size(), fm_A.name.c_str());
-		num_col_writes += index.size();
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
@@ -450,7 +442,6 @@ public:
 	//! Fill all the vectors in \c *this with random numbers.
 	virtual void MvRandom () {
 		printf("this(%s) = random\n", name.c_str());
-		num_col_writes += this->GetNumberVecs();
 		mat->init_rand<ScalarType>(-1, 1);
 //		ep_mat->MvRandom();
 		sync_fm2ep();
