@@ -356,7 +356,41 @@ public:
 	virtual void run(
 			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
 			fm::detail::local_matrix_store &out) const;
+	virtual fm::detail::portion_mapply_op::const_ptr transpose() const;
 };
+
+template<class T>
+class t_gemm_op: public fm::detail::portion_mapply_op
+{
+	gemm_op<T> op;
+public:
+	t_gemm_op(const gemm_op<T> &_op): fm::detail::portion_mapply_op(
+			_op.get_out_num_cols(), _op.get_out_num_rows(),
+			_op.get_output_type()), op(_op) {
+	}
+
+	virtual void run(
+			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
+			fm::detail::local_matrix_store &out) const {
+		std::vector<fm::detail::local_matrix_store::const_ptr> t_ins(ins.size());
+		for (size_t i = 0; i < ins.size(); i++)
+			t_ins[i] = std::static_pointer_cast<const fm::detail::local_matrix_store>(
+					ins[i]->transpose());
+		fm::detail::local_matrix_store::ptr t_out
+			= std::static_pointer_cast<fm::detail::local_matrix_store>(
+					out.transpose());
+		op.run(t_ins, *t_out);
+	}
+	virtual fm::detail::portion_mapply_op::const_ptr transpose() const {
+		return fm::detail::portion_mapply_op::const_ptr(new gemm_op<T>(op));
+	}
+};
+
+template<class T>
+fm::detail::portion_mapply_op::const_ptr gemm_op<T>::transpose() const
+{
+	return fm::detail::portion_mapply_op::const_ptr(new t_gemm_op<T>(*this));
+}
 
 typedef std::vector<fm::detail::local_matrix_store::const_ptr>::const_iterator block_iterator;
 

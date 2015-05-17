@@ -220,9 +220,14 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const {
-		// TODO
-		assert(0);
-		return matrix_store::const_ptr();
+		if (!store.is_materialized())
+			store.materialize();
+		// TODO we somehow need to make sure the current matrix store isn't
+		// destroy when the reference matrix store exists.
+		return matrix_store::const_ptr(
+				new local_cref_contig_row_matrix_store(store.get_raw_arr(),
+					get_global_start_col(), get_global_start_row(),
+					get_num_cols(), get_num_rows(), get_type(), get_node_id()));
 	}
 
 	virtual const char *get_col(size_t col) const {
@@ -265,9 +270,14 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const {
-		// TODO
-		assert(0);
-		return matrix_store::const_ptr();
+		if (!store.is_materialized())
+			store.materialize();
+		// TODO we somehow need to make sure the current matrix store isn't
+		// destroy when the reference matrix store exists.
+		return matrix_store::const_ptr(
+				new local_cref_contig_col_matrix_store(store.get_raw_arr(),
+					get_global_start_col(), get_global_start_row(),
+					get_num_cols(), get_num_rows(), get_type(), get_node_id()));
 	}
 
 	virtual const char *get_row(size_t row) const {
@@ -393,9 +403,19 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 
 matrix_store::const_ptr mapply_matrix_store::transpose() const
 {
-	// TODO
-	assert(0);
-	return matrix_store::const_ptr();
+	std::vector<mem_matrix_store::const_ptr> t_in_mats(in_mats.size());
+	for (size_t i = 0; i < in_mats.size(); i++)
+		t_in_mats[i] = mem_matrix_store::cast(in_mats[i]->transpose());
+	matrix_layout_t t_layout;
+	if (layout == matrix_layout_t::L_COL)
+		t_layout = matrix_layout_t::L_ROW;
+	else
+		t_layout = matrix_layout_t::L_COL;
+	mapply_matrix_store *ret = new mapply_matrix_store(t_in_mats,
+			op->transpose(), t_layout, get_num_cols(), get_num_rows());
+	if (this->res)
+		ret->res = mem_matrix_store::cast(this->res->transpose());
+	return matrix_store::const_ptr(ret);
 }
 
 }

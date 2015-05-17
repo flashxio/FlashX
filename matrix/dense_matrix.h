@@ -65,6 +65,8 @@ public:
 		this->out_num_cols = out_num_cols;
 	}
 
+	virtual portion_mapply_op::const_ptr transpose() const = 0;
+
 	virtual void run(
 			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
 			local_matrix_store &out) const = 0;
@@ -116,6 +118,10 @@ class dense_matrix
 		}
 		void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
 				detail::local_matrix_store &out) const;
+		detail::portion_mapply_op::const_ptr transpose() const {
+			return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
+						var, get_out_num_cols(), get_out_num_rows()));
+		}
 	};
 
 protected:

@@ -339,6 +339,10 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr(new mapply2_op(op,
+					get_out_num_cols(), get_out_num_rows()));
+	}
 };
 
 void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -385,6 +389,10 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr(new sapply_op(op, get_out_num_cols(),
+					get_out_num_rows()));
+	}
 };
 
 void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -498,6 +506,7 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
+	virtual portion_mapply_op::const_ptr transpose() const;
 };
 
 class scale_row_op: public detail::portion_mapply_op
@@ -512,7 +521,14 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
+	virtual portion_mapply_op::const_ptr transpose() const;
 };
+
+detail::portion_mapply_op::const_ptr scale_col_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new scale_row_op(vals,
+				get_out_num_cols(), get_out_num_rows(), get_output_type()));
+}
 
 void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
@@ -531,6 +547,12 @@ void scale_row_op::run(
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	detail::scale_rows(*ins[0], *vals, out);
+}
+
+detail::portion_mapply_op::const_ptr scale_row_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new scale_col_op(vals,
+				get_out_num_cols(), get_out_num_rows(), get_output_type()));
 }
 
 }
