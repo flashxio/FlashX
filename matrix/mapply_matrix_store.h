@@ -39,7 +39,7 @@ class mapply_matrix_store: public virtual_matrix_store
 	// The materialized result matrix.
 	mem_matrix_store::const_ptr res;
 public:
-	typedef std::shared_ptr<mapply_matrix_store> ptr;
+	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
 	mapply_matrix_store(
 			const std::vector<mem_matrix_store::const_ptr> &in_mats,
