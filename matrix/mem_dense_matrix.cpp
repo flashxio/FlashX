@@ -623,15 +623,27 @@ matrix_store::ptr __mapply_portion(
 	assert(mats.size() >= 1);
 	size_t num_chunks = mats.front()->get_num_portions();
 	std::pair<size_t, size_t> first_size = mats.front()->get_portion_size();
-	// It works for tall matrices.
-	assert(!mats.front()->is_wide());
-	assert(op->get_out_num_rows() == mats.front()->get_num_rows());
-	for (size_t i = 1; i < mats.size(); i++) {
-		assert(first_size.first == mats[i]->get_portion_size().first);
-		assert(mats[i]->store_layout() == mats.front()->store_layout());
-		assert(mem_mats[i]->get_num_nodes() == mem_mats.front()->get_num_nodes());
-		assert(mats[i]->get_num_rows() == mats.front()->get_num_rows());
+	if (mats.front()->is_wide()) {
+		assert(op->get_out_num_cols() == mats.front()->get_num_cols());
+		for (size_t i = 1; i < mats.size(); i++) {
+			assert(first_size.second == mats[i]->get_portion_size().second);
+			assert(mats[i]->store_layout() == mats.front()->store_layout());
+			assert(mem_mats[i]->get_num_nodes()
+					== mem_mats.front()->get_num_nodes());
+			assert(mats[i]->get_num_cols() == mats.front()->get_num_cols());
+		}
 	}
+	else {
+		assert(op->get_out_num_rows() == mats.front()->get_num_rows());
+		for (size_t i = 1; i < mats.size(); i++) {
+			assert(first_size.first == mats[i]->get_portion_size().first);
+			assert(mats[i]->store_layout() == mats.front()->store_layout());
+			assert(mem_mats[i]->get_num_nodes()
+					== mem_mats.front()->get_num_nodes());
+			assert(mats[i]->get_num_rows() == mats.front()->get_num_rows());
+		}
+	}
+
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			op->get_out_num_rows(), op->get_out_num_cols(),
 			out_layout, op->get_output_type(), mem_mats.front()->get_num_nodes());
