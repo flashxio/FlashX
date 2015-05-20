@@ -322,6 +322,34 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 }
 
 local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols) const
+{
+	return local_matrix_store::cast(store.get_portion(start_col, start_row,
+				num_cols, num_rows)->transpose());
+}
+
+local_matrix_store::ptr NUMA_row_wide_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols)
+{
+	return local_matrix_store::cast(store.get_portion(start_col, start_row,
+				num_cols, num_rows)->transpose());
+}
+
+local_matrix_store::const_ptr NUMA_col_wide_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols) const
+{
+	return local_matrix_store::cast(store.get_portion(start_col, start_row,
+				num_cols, num_rows)->transpose());
+}
+
+local_matrix_store::ptr NUMA_col_wide_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols)
+{
+	return local_matrix_store::cast(store.get_portion(start_col, start_row,
+				num_cols, num_rows)->transpose());
+}
+
+local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(
 		size_t id) const
 {
 	return local_matrix_store::cast(store.get_portion(id)->transpose());
