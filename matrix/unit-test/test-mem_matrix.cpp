@@ -491,10 +491,8 @@ void test_scale_cols(int num_nodes)
 	printf("Test scale cols\n");
 	mem_dense_matrix::ptr orig = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_vector::ptr vals = mem_vector::create(orig->get_num_cols(),
-			orig->get_type());
-	for (size_t i = 0; i < vals->get_length(); i++)
-		vals->set<int>(i, i);
+	mem_vector::ptr vals = mem_vector::cast(
+			create_vector<int>(0, orig->get_num_cols() - 1, 1));
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_cols(vals));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();
@@ -528,10 +526,8 @@ void test_scale_rows(int num_nodes)
 	printf("Test scale rows\n");
 	mem_dense_matrix::ptr orig = create_matrix(10, long_dim,
 			matrix_layout_t::L_ROW, num_nodes);
-	mem_vector::ptr vals = mem_vector::create(orig->get_num_rows(),
-			orig->get_type());
-	for (size_t i = 0; i < vals->get_length(); i++)
-		vals->set<int>(i, i);
+	mem_vector::ptr vals = mem_vector::cast(
+			create_vector<int>(0, orig->get_num_rows() - 1, 1));
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_rows(vals));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();

@@ -181,10 +181,10 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 		line_parser &parser)
 {
 	mem_data_frame::ptr df = mem_data_frame::create();
-	mem_vector::ptr vec0 = parser.get_col_type(0).create_mem_vec(0);
-	mem_vector::ptr vec1 = parser.get_col_type(1).create_mem_vec(0);
-	df->add_vec(parser.get_col_name(0), std::static_pointer_cast<vector>(vec0));
-	df->add_vec(parser.get_col_name(1), std::static_pointer_cast<vector>(vec1));
+	df->add_vec(parser.get_col_name(0),
+			detail::mem_vec_store::create(0, parser.get_col_type(0)));
+	df->add_vec(parser.get_col_name(1),
+			detail::mem_vec_store::create(0, parser.get_col_type(1)));
 	BOOST_FOREACH(std::string file, files) {
 		bool ret = read_lines(file, parser, *df);
 		if (!ret)

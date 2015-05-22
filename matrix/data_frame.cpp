@@ -30,11 +30,11 @@ namespace fm
 bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 		std::vector<data_frame::ptr>::const_iterator end)
 {
-	std::unordered_map<std::string, std::vector<vector::ptr> > vecs;
+	std::unordered_map<std::string, std::vector<detail::vec_store::const_ptr> > vecs;
 	for (size_t i = 0; i < named_vecs.size(); i++) {
-		std::vector<vector::ptr> _vecs;
+		std::vector<detail::vec_store::const_ptr> _vecs;
 		_vecs.push_back(get_vec(named_vecs[i].first));
-		vecs.insert(std::pair<std::string, std::vector<vector::ptr> >(
+		vecs.insert(std::pair<std::string, std::vector<detail::vec_store::const_ptr> >(
 					named_vecs[i].first, _vecs));
 	}
 
@@ -46,7 +46,7 @@ bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 			return false;
 		}
 		for (auto vec_it = vecs.begin(); vec_it != vecs.end(); vec_it++) {
-			vector::ptr vec = df->get_vec(vec_it->first);
+			detail::vec_store::const_ptr vec = df->get_vec(vec_it->first);
 			if (vec == NULL) {
 				BOOST_LOG_TRIVIAL(error)
 					<< "The data frames have different names on the vectors";
@@ -61,8 +61,10 @@ bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 		}
 	}
 
-	for (auto it = vecs.begin(); it != vecs.end(); it++)
-		it->second.front()->append(it->second.begin() + 1, it->second.end());
+	for (auto it = vecs.begin(); it != vecs.end(); it++) {
+		detail::vec_store::ptr vec = get_vec(it->first);
+		vec->append(it->second.begin() + 1, it->second.end());
+	}
 	return true;
 }
 
@@ -79,16 +81,6 @@ bool data_frame::append(data_frame::ptr df)
 
 	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
 		it->second->append(*df->get_vec(it->first));
-	return true;
-}
-
-bool data_frame::expose_portion(off_t loc, size_t length)
-{
-	for (size_t i = 0; i < named_vecs.size(); i++) {
-		bool ret = named_vecs[i].second->expose_sub_vec(loc, length);
-		if (!ret)
-			return false;
-	}
 	return true;
 }
 

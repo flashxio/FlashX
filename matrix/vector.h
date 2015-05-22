@@ -23,6 +23,7 @@
 
 #include "generic_type.h"
 #include "bulk_operate.h"
+#include "vec_store.h"
 
 namespace fm
 {
@@ -33,93 +34,70 @@ class agg_operate;
 
 class vector
 {
-	size_t length;
-	const scalar_type &type;
-	bool in_mem;
-	// This is used to avoid virtual function call.
-	int entry_size;
-
+	detail::vec_store::const_ptr store;
 protected:
-	vector(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
-		this->length = length;
-		this->entry_size = type.get_size();
-		this->in_mem = in_mem;
-	}
-
-	/*
-	 * This is used for vector vector because its entry size isn't fixed.
-	 */
-	vector(size_t length, size_t entry_size, const scalar_type &_type,
-			bool in_mem): type(_type) {
-		this->length = length;
-		this->entry_size = entry_size;
-		this->in_mem = in_mem;
+	vector(detail::vec_store::const_ptr store) {
+		this->store = store;
 	}
 public:
 	typedef std::shared_ptr<vector> ptr;
+	typedef std::shared_ptr<const vector> const_ptr;
 
 	virtual ~vector() {
 	}
 
+	const detail::vec_store &get_data() const {
+		return *store;
+	}
+
+	detail::vec_store::const_ptr get_raw_store() const {
+		return store;
+	}
+
 	bool is_in_mem() const {
-		return in_mem;
-	}
-
-	size_t get_length() const {
-		return length;
-	}
-
-	template<class T>
-	bool is_type() const {
-		return this->get_type().get_type() == fm::get_type<T>();
+		return store->is_in_mem();
 	}
 
 	// Normally the entry size is the type size. But a vector may also
 	// contains vectors, and the entry size is 0, which is no longer
 	// the type size.
-	size_t get_entry_size() const {
-		return entry_size;
+	virtual size_t get_entry_size() const {
+		return store->get_entry_size();
 	}
+	virtual size_t get_length() const {
+		return store->get_length();
+	}
+
+	template<class T>
+	bool is_type() const {
+		return store->get_type().get_type() == fm::get_type<T>();
+	}
+
 	const scalar_type &get_type() const {
-		return type;
+		return store->get_type();
 	}
 
-	virtual bool resize(size_t new_length) {
-		this->length = new_length;
-		return true;
+	bool is_sorted() const {
+		return store->is_sorted();
 	}
+	virtual vector::ptr sort() const = 0;
+	virtual std::shared_ptr<data_frame> sort_with_index() const = 0;
 
-	virtual vector::ptr get_sub_vec(off_t start, size_t length) const = 0;
-	virtual void reset_data() = 0;
-	/*
-	 * This method exposes a portition of the vector to users.
-	 * It's similar to get_sub_vec, expect that this method changes it
-	 * on the local vector. `start' is the absolute location of
-	 * the starting point on the original array.
-	 */
-	virtual bool expose_sub_vec(off_t start, size_t length) = 0;
-	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end) = 0;
-	virtual bool append(const vector &vec) = 0;
-
-	virtual void sort() = 0;
-	virtual vector::ptr sort_with_index() = 0;
-	virtual bool is_sorted() const = 0;
 	// It should return data frame instead of vector.
 	virtual std::shared_ptr<data_frame> groupby(
-			const gr_apply_operate<mem_vector> &op, bool with_val) const = 0;
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &op,
-			bool with_val) const;
+			const gr_apply_operate<local_vec_store> &op,
+			bool with_val) const = 0;
 
-	/**
-	 * This method copies all members of the vector object as well as
-	 * the data in the vector;
-	 */
-	virtual vector::ptr deep_copy() const = 0;
-	/**
-	 * This only copies all members of the vector object.
-	 */
-	virtual vector::ptr shallow_copy() const = 0;
+	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const = 0;
+	virtual scalar_variable::ptr dot_prod(const vector &vec) const = 0;
+
+	template<class T>
+	T max() const {
+		const bulk_operate &max_op = *get_type().get_basic_ops().get_op(
+				basic_ops::op_idx::MAX);
+		scalar_variable::ptr res = aggregate(max_op);
+		return *(T *) res->get_raw();
+	}
 };
 
 }

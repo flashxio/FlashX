@@ -22,11 +22,12 @@ public:
 void test_sort()
 {
 	size_t len = (random() % num_eles) + num_eles;
-	mem_vector::ptr mem_vec = mem_vector::create(len, get_scalar_type<long>());
-	mem_vec->set_data(rand_set());
-	NUMA_vector::ptr numa_vec = NUMA_vector::create(len, num_nodes,
-			get_scalar_type<long>());
-	numa_vec->copy_from(mem_vec->get_raw_arr(), mem_vec->get_length() * sizeof(long));
+	mem_vector::ptr mem_vec = mem_vector::create(len, get_scalar_type<long>(),
+			rand_set());
+	detail::NUMA_vec_store::ptr numa_vec = detail::NUMA_vec_store::create(len,
+			num_nodes, get_scalar_type<long>());
+	numa_vec->copy_from(mem_vec->get_raw_arr(),
+			mem_vec->get_length() * sizeof(long));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);

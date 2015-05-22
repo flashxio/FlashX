@@ -130,7 +130,7 @@ NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
 {
 	data.resize(ncol);
 	for (size_t i = 0; i < ncol; i++)
-		data[i] = NUMA_vector::create(nrow, num_nodes, type);
+		data[i] = NUMA_vec_store::create(nrow, num_nodes, type);
 }
 
 matrix_store::const_ptr NUMA_row_tall_matrix_store::transpose() const
@@ -374,7 +374,7 @@ local_matrix_store::ptr NUMA_col_wide_matrix_store::get_portion(size_t id)
 matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	std::vector<NUMA_vector::ptr> wanted(idxs.size());
+	std::vector<NUMA_vec_store::ptr> wanted(idxs.size());
 	for (size_t i = 0; i < wanted.size(); i++)
 		wanted[i] = data[idxs[i]];
 	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(wanted));

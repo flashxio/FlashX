@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "bulk_operate.h"
-#include "vector.h"
+#include "vec_store.h"
 #include "matrix_config.h"
 #include "raw_data_array.h"
 #include "NUMA_mapper.h"
@@ -35,57 +35,65 @@ namespace fm
 {
 
 class scalar_type;
+class local_vec_store;
+
+namespace detail
+{
 
 /*
  * This is another implementation of in-memory vector. In this implementation,
  * the data in the vector is split and stored on multiple NUMA nodes. All
  * operations on the vector are optimized accordingly.
  */
-class NUMA_vector: public vector
+class NUMA_vec_store: public vec_store
 {
-	detail::NUMA_mapper mapper;
+	NUMA_mapper mapper;
 
-	std::vector<detail::raw_data_array> data;
+	std::vector<raw_data_array> data;
 
 	// The copy constructor performs shallow copy.
-	NUMA_vector(const NUMA_vector &vec): vector(vec.get_length(),
+	NUMA_vec_store(const NUMA_vec_store &vec): vec_store(vec.get_length(),
 			vec.get_type(), true), mapper(vec.mapper) {
 		data = vec.data;
 	}
 
-	NUMA_vector(size_t length, size_t num_nodes, const scalar_type &type);
+	NUMA_vec_store(size_t length, size_t num_nodes, const scalar_type &type);
 public:
-	typedef std::shared_ptr<NUMA_vector> ptr;
-	typedef std::shared_ptr<const NUMA_vector> const_ptr;
-
-	static ptr create(size_t length, const scalar_type &type) {
-		return ptr(new NUMA_vector(length, matrix_conf.get_num_nodes(), type));
-	}
+	typedef std::shared_ptr<NUMA_vec_store> ptr;
+	typedef std::shared_ptr<const NUMA_vec_store> const_ptr;
 
 	static ptr create(size_t length, size_t num_nodes, const scalar_type &type) {
-		return ptr(new NUMA_vector(length, num_nodes, type));
+		return ptr(new NUMA_vec_store(length, num_nodes, type));
 	}
 
-	static ptr cast(vector::ptr vec);
+	static ptr cast(vec_store::ptr vec);
 
-	virtual vector::ptr get_sub_vec(off_t start, size_t length) const;
-	virtual bool expose_sub_vec(off_t start, size_t length);
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+	virtual const char *get_raw_arr() const {
+		return NULL;
+	}
 
-	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end);
-	virtual bool append(const vector &vec);
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t start,
+			size_t length) const;
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t start, size_t length);
+
+	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
+			std::vector<vec_store::const_ptr>::const_iterator vec_end);
+	virtual bool append(const vec_store &vec);
+
+	virtual vec_store::ptr deep_copy() const;
+	virtual vec_store::ptr shallow_copy() {
+		return vec_store::ptr(new NUMA_vec_store(*this));
+	}
+	virtual vec_store::const_ptr shallow_copy() const {
+		return vec_store::ptr(new NUMA_vec_store(*this));
+	}
 
 	virtual void sort();
-	virtual vector::ptr sort_with_index();
+	virtual vec_store::ptr sort_with_index();
 	virtual bool is_sorted() const;
-
-	// It should return data frame instead of vector.
-	virtual std::shared_ptr<data_frame> groupby(
-			const gr_apply_operate<mem_vector> &op, bool with_val) const;
-	virtual bool dot_prod(const NUMA_vector &vec, scalar_variable &res) const;
-
-	virtual vector::ptr deep_copy() const;
-	virtual vector::ptr shallow_copy() const;
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);
@@ -110,7 +118,7 @@ public:
 	 * This copies a piece of contiguous memory to the NUMA vector.
 	 */
 	void copy_from(const char *buf, size_t num_bytes);
-	bool copy_from(const NUMA_vector &vec);
+	bool copy_from(const NUMA_vec_store &vec);
 
 	size_t get_num_nodes() const {
 		return data.size();
@@ -138,14 +146,26 @@ public:
 		*(T*) get(idx) = v;
 	}
 
-	const detail::NUMA_mapper &get_mapper() const {
+	const NUMA_mapper &get_mapper() const {
 		return mapper;
 	}
 
 	size_t get_portion_size() const {
 		return mapper.get_range_size();
 	}
+
+	virtual bool resize(size_t new_length) {
+		assert(0);
+		return false;
+	}
+
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		assert(0);
+		return false;
+	}
 };
+
+}
 
 }
 

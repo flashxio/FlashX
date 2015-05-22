@@ -17,33 +17,22 @@
  * limitations under the License.
  */
 
+#include <string.h>
+
 #include "log.h"
+#include "comm_exception.h"
 
 #include "generic_type.h"
-#include "mem_vector.h"
-#include "mem_vector_vector.h"
 #include "rand_gen.h"
+#include "bulk_operate.h"
 
 namespace fm
 {
 
 template<class T>
-mem_vector::ptr scalar_type_impl<T>::create_mem_vec(
-		size_t length) const
-{
-	return mem_vector::create(length, get_scalar_type<T>());
-}
-
-template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 {
 	return scalar_variable::ptr(new scalar_variable_impl<T>());
-}
-
-template<class T>
-mem_vector_vector::ptr scalar_type_impl<T>::create_mem_vec_vec() const
-{
-	return mem_vector_vector::create(get_scalar_type<T>());
 }
 
 template<class T>
@@ -63,6 +52,44 @@ rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
 	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
 	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
 	return rand_gen::create<T>(t_min.get(), t_max.get(), t_seed.get());
+}
+
+template<class T>
+const scatter_gather &scalar_type_impl<T>::get_sg() const
+{
+	static type_scatter_gather<T> sg;
+	return sg;
+}
+
+template<class T>
+const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
+{
+	assert(val.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_val
+		= static_cast<const scalar_variable_impl<T> &>(val);
+	static const_set_operate<T> op(t_val.get());
+	return op;
+}
+
+template<class T>
+const basic_uops &scalar_type_impl<T>::get_basic_uops() const
+{
+	static basic_uops_impl<T, T> uops;
+	return uops;
+}
+
+template<class T>
+const basic_ops &scalar_type_impl<T>::get_basic_ops() const
+{
+	static basic_ops_impl<T, T, T> ops;
+	return ops;
+}
+
+template<class T>
+const agg_ops &scalar_type_impl<T>::get_agg_ops() const
+{
+	static agg_ops_impl<T, T> aops;
+	return aops;
 }
 
 const scalar_type &get_scalar_type(prim_type type)

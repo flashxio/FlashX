@@ -4,13 +4,15 @@
 #include "bulk_operate.h"
 #include "mem_vector.h"
 #include "vector_vector.h"
+#include "local_vec_store.h"
 
 using namespace fm;
 
-class sum_apply_operate: public gr_apply_operate<data_frame>
+class sum_apply_operate: public gr_apply_operate<sub_data_frame>
 {
 public:
-	void run(const void *key, const data_frame &val, mem_vector &out) const;
+	void run(const void *key, const sub_data_frame &val,
+			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
 		return get_scalar_type<int>();
@@ -25,12 +27,12 @@ public:
 	}
 };
 
-void sum_apply_operate::run(const void *key, const data_frame &val,
-		mem_vector &out) const
+void sum_apply_operate::run(const void *key, const sub_data_frame &val,
+		local_vec_store &out) const
 {
-	assert(val.get_num_vecs() == 2);
+	assert(val.size() == 2);
 	assert(out.is_type<long>());
-	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
+	const local_vec_store &vec = *val[1];
 	long sum = 0;
 	for (size_t i = 0; i < vec.get_length(); i++)
 		sum += vec.get<int>(i);
@@ -38,10 +40,11 @@ void sum_apply_operate::run(const void *key, const data_frame &val,
 	out.set<long>(0, sum);
 }
 
-class copy_apply_operate: public gr_apply_operate<data_frame>
+class copy_apply_operate: public gr_apply_operate<sub_data_frame>
 {
 public:
-	void run(const void *key, const data_frame &val, mem_vector &out) const;
+	void run(const void *key, const sub_data_frame &val,
+			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
 		return get_scalar_type<int>();
@@ -56,12 +59,12 @@ public:
 	}
 };
 
-void copy_apply_operate::run(const void *key, const data_frame &val,
-		mem_vector &out) const
+void copy_apply_operate::run(const void *key, const sub_data_frame &val,
+		local_vec_store &out) const
 {
-	assert(val.get_num_vecs() == 2);
+	assert(val.size() == 2);
 	assert(out.is_type<int>());
-	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
+	const local_vec_store &vec = *val[1];
 	out.resize(vec.get_length());
 	for (size_t i = 0; i < vec.get_length(); i++)
 		out.set<int>(i, vec.get<int>(i));
@@ -71,10 +74,12 @@ void test_groupby()
 {
 	mem_data_frame::ptr df = mem_data_frame::create();
 	size_t length = 1000000;
-	mem_vector::ptr vec1 = mem_vector::create(length, get_scalar_type<int>());
+	detail::mem_vec_store::ptr vec1 = detail::mem_vec_store::create(length,
+			get_scalar_type<int>());
 	for (size_t i = 0; i < vec1->get_length(); i++)
 		vec1->set<int>(i, random() % 1000);
-	mem_vector::ptr vec2 = mem_vector::create(length, get_scalar_type<int>());
+	detail::mem_vec_store::ptr vec2 = detail::mem_vec_store::create(length,
+			get_scalar_type<int>());
 	for (size_t i = 0; i < vec2->get_length(); i++)
 		vec2->set<int>(i, random() % 1000);
 

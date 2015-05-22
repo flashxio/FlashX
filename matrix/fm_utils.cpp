@@ -20,6 +20,7 @@
 #include "fm_utils.h"
 #include "factor.h"
 #include "generic_type.h"
+#include "local_vec_store.h"
 
 namespace fm
 {
@@ -28,10 +29,11 @@ namespace fm
  * This applies to a vector of values corresponding to the same key,
  * and generates an adjacency list.
  */
-class adj_apply_operate: public gr_apply_operate<data_frame>
+class adj_apply_operate: public gr_apply_operate<sub_data_frame>
 {
 public:
-	void run(const void *key, const data_frame &val, mem_vector &out) const;
+	void run(const void *key, const sub_data_frame &val,
+			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
 		return get_scalar_type<fg::vertex_id_t>();
@@ -46,8 +48,8 @@ public:
 	}
 };
 
-void adj_apply_operate::run(const void *key, const data_frame &val,
-		mem_vector &out) const
+void adj_apply_operate::run(const void *key, const sub_data_frame &val,
+		local_vec_store &out) const
 {
 	fg::vertex_id_t vid = *(const fg::vertex_id_t *) key;
 	if (vid == fg::INVALID_VERTEX_ID) {
@@ -57,12 +59,12 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 
 	// Right now, we just assume there aren't attributes.
 	size_t edge_data_size = 0;
-	assert(val.get_num_vecs() == 2);
+	assert(val.size() == 2);
 
 	assert(out.is_type<char>());
 	// The data frame is sorted based on the first vector and now we need
 	// to access the entries in the second vector.
-	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
+	const local_vec_store &vec = *val[1];
 	assert(vec.get_type() == get_scalar_type<fg::vertex_id_t>());
 
 	// I added an invalid edge for each vertex.
@@ -153,7 +155,7 @@ public:
 	}
 
 	void run(const void *key, const sub_vector_vector &val,
-			mem_vector &out) const;
+			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
 		return get_scalar_type<factor_value_t>();
@@ -169,7 +171,7 @@ public:
 };
 
 void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
-		mem_vector &out) const
+		local_vec_store &out) const
 {
 	size_t block_height = block_size.get_num_rows();
 	size_t block_width = block_size.get_num_cols();
@@ -255,8 +257,8 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows);
-	labels->set_data(set_2d_label_operate(block_size));
+	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+			set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
 
@@ -292,8 +294,8 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows);
-	labels->set_data(set_2d_label_operate(block_size));
+	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+			set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
 

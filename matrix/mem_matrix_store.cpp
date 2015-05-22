@@ -38,38 +38,46 @@ const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
 
 mem_vector::ptr mem_col_matrix_store::get_col_vec(size_t col)
 {
-	mem_vector::ptr ret = mem_vector::create(data,
-			get_num_rows() * get_num_cols() * get_entry_size(), get_type());
+	assert(data.get_num_bytes()
+			== get_num_rows() * get_num_cols() * get_entry_size());
+	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(data,
+			get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
-	return ret;
+	return mem_vector::create(ret);
 }
 
 mem_vector::const_ptr mem_col_matrix_store::get_col_vec(size_t col) const
 {
-	mem_vector::ptr ret = mem_vector::create(data,
-			get_num_rows() * get_num_cols() * get_entry_size(), get_type());
+	assert(data.get_num_bytes()
+			== get_num_rows() * get_num_cols() * get_entry_size());
+	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(data,
+			get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
-	return ret;
+	return mem_vector::create(ret);
 }
 
 mem_vector::ptr mem_sub_col_matrix_store::get_col_vec(size_t col)
 {
 	// The original column matrix has at least this many columns.
 	size_t orig_num_cols = orig_col_idxs[col] + 1;
-	mem_vector::ptr ret = mem_vector::create(get_data(),
-			get_num_rows() * orig_num_cols * get_entry_size(), get_type());
+	assert(get_data().get_num_bytes()
+			== get_num_rows() * orig_num_cols * get_entry_size());
+	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(get_data(),
+			get_type());
 	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
-	return ret;
+	return mem_vector::create(ret);
 }
 
 mem_vector::const_ptr mem_sub_col_matrix_store::get_col_vec(size_t col) const
 {
 	// The original column matrix has at least this many columns.
 	size_t orig_num_cols = orig_col_idxs[col] + 1;
-	mem_vector::ptr ret = mem_vector::create(get_data(),
-			get_num_rows() * orig_num_cols * get_entry_size(), get_type());
+	assert(get_data().get_num_bytes()
+			== get_num_rows() * orig_num_cols * get_entry_size());
+	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(get_data(),
+			get_type());
 	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
-	return ret;
+	return mem_vector::create(ret);
 }
 
 mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,

@@ -63,11 +63,13 @@ int main(int argc, char *argv[])
 			in->sum(), fg_out->sum(), time_diff(start, end));
 
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
-	NUMA_vector::ptr in_vec = NUMA_vector::create(m->get_num_cols(),
+	detail::NUMA_vec_store::ptr in_vec = detail::NUMA_vec_store::create(
+			m->get_num_cols(), matrix_conf.get_num_nodes(),
 			get_scalar_type<double>());
 	for (size_t i = 0; i < m->get_num_cols(); i++)
 		in_vec->set<double>(i, i);
-	NUMA_vector::ptr out = NUMA_vector::create(m->get_num_rows(),
+	detail::NUMA_vec_store::ptr out = detail::NUMA_vec_store::create(
+			m->get_num_rows(), matrix_conf.get_num_nodes(),
 			get_scalar_type<double>());
 
 #ifdef PROFILER

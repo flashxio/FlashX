@@ -25,6 +25,7 @@
 #include "comm_exception.h"
 #include "log.h"
 
+#include "vec_store.h"
 #include "vector.h"
 
 namespace fm
@@ -34,6 +35,7 @@ class mem_vector;
 class scalar_type;
 class sub_vector_vector;
 class factor_vector;
+class data_frame;
 
 /*
  * This stores a vector of vectors. It's similar to the row-wise matrix,
@@ -42,8 +44,7 @@ class factor_vector;
 class vector_vector: public vector
 {
 public:
-	vector_vector(size_t length, const scalar_type &type,
-			bool in_mem): vector(length, 0, type, in_mem) {
+	vector_vector(detail::vec_store::const_ptr store): vector(store) {
 	}
 
 	typedef std::shared_ptr<vector_vector> ptr;
@@ -60,10 +61,18 @@ public:
 		return std::static_pointer_cast<vector_vector>(vec);
 	}
 
-	size_t get_num_vecs() const {
-		return vector::get_length();
+	virtual size_t get_entry_size() const {
+		return 0;
 	}
 
+	size_t get_num_vecs() const {
+		return get_length();
+	}
+
+	/*
+	 * This return the number of vectors in the vector vector.
+	 */
+	virtual size_t get_length() const = 0;
 	virtual size_t get_tot_num_entries() const = 0;
 	virtual size_t get_length(off_t idx) const = 0;
 	virtual const char*get_raw_arr(off_t idx) const = 0;
@@ -73,48 +82,26 @@ public:
 	 */
 	virtual std::shared_ptr<vector> cat() const = 0;
 
-	virtual bool resize(size_t new_length) {
-		throw unsupported_exception("resize");
-	}
-
-	virtual vector::ptr get_sub_vec(off_t start, size_t length) const {
-		throw unsupported_exception("get_sub_vec");
-	}
-	virtual bool expose_sub_vec(off_t start, size_t length) {
-		throw unsupported_exception("expose_sub_vec");
-	}
-
-	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end) = 0;
-	// We can assume each vector can be stored in memory.
-	virtual bool append(const vector &vec) = 0;
-
-	virtual void sort() {
-		throw unsupported_exception("sort");
-	}
-	virtual vector::ptr sort_with_index() {
-		throw unsupported_exception("sort_with_index");
-	}
-	virtual bool is_sorted() const {
-		throw unsupported_exception("is_sorted");
-	}
-
-	virtual std::shared_ptr<data_frame> groupby(
-			const gr_apply_operate<mem_vector> &op, bool with_val) const {
-		throw unsupported_exception("groupby");
-	}
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
 			const gr_apply_operate<sub_vector_vector> &op) const = 0;
 	virtual vector_vector::ptr apply(const arr_apply_operate &op) const = 0;
-	virtual vector::ptr flatten() const = 0;
 
-	virtual vector::ptr deep_copy() const {
-		// TODO
-		throw unsupported_exception("deep_copy");
+	virtual vector::ptr sort() const {
+		return vector::ptr();
 	}
-	virtual vector::ptr shallow_copy() const {
-		// TODO
-		throw unsupported_exception("shallow_copy");
+	virtual std::shared_ptr<data_frame> sort_with_index() const {
+		return std::shared_ptr<data_frame>();
+	}
+	virtual std::shared_ptr<data_frame> groupby(
+			const gr_apply_operate<local_vec_store> &op,
+			bool with_val) const {
+		return std::shared_ptr<data_frame>();
+	}
+	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const {
+		return scalar_variable::ptr();
+	}
+	virtual scalar_variable::ptr dot_prod(const vector &vec) const {
+		return scalar_variable::ptr();
 	}
 };
 

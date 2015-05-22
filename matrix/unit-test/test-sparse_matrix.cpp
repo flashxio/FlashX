@@ -39,19 +39,16 @@ data_frame::ptr create_rand_el()
 		edges.insert(e);
 	}
 	printf("There are %ld edges\n", edges.size());
-	mem_vector::ptr sources = mem_vector::create(edges.size(),
-			get_scalar_type<fg::vertex_id_t>());
-	mem_vector::ptr dests = mem_vector::create(edges.size(),
-			get_scalar_type<fg::vertex_id_t>());
+	detail::mem_vec_store::ptr sources = detail::mem_vec_store::create(
+			edges.size(), get_scalar_type<fg::vertex_id_t>());
+	detail::mem_vec_store::ptr dests = detail::mem_vec_store::create(
+			edges.size(), get_scalar_type<fg::vertex_id_t>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
 		sources->set(idx, e.first);
 		dests->set(idx, e.second);
 		idx++;
 	}
-	mem_data_frame::ptr df = mem_data_frame::create();
-	df->add_vec("source", sources);
-	df->add_vec("dest", dests);
 
 	vector::ptr seq_vec = create_vector<fg::vertex_id_t>(0, max_vid, 1);
 	vector::ptr rep_vec = create_vector<fg::vertex_id_t>(max_vid + 1,
@@ -59,10 +56,12 @@ data_frame::ptr create_rand_el()
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
-	mem_data_frame::ptr new_df = mem_data_frame::create();
-	new_df->add_vec("source", seq_vec);
-	new_df->add_vec("dest", rep_vec);
-	df->append(new_df);
+	sources->append(seq_vec->get_data());
+	dests->append(rep_vec->get_data());
+
+	mem_data_frame::ptr df = mem_data_frame::create();
+	df->add_vec("source", sources);
+	df->add_vec("dest", dests);
 	return df;
 }
 
@@ -74,10 +73,12 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	size_t num_rows = spm->get_num_rows();
 	printf("test_spmv: the sparse matrix has %ld rows and %ld cols\n",
 			num_rows, num_cols);
-	NUMA_vector::ptr in = NUMA_vector::create(num_cols, get_scalar_type<int>());
+	detail::NUMA_vec_store::ptr in = detail::NUMA_vec_store::create(num_cols,
+			num_nodes, get_scalar_type<int>());
 	for (size_t i = 0; i < num_cols; i++)
 		in->set(i, 1);
-	NUMA_vector::ptr out = NUMA_vector::create(num_rows, get_scalar_type<int>());
+	detail::NUMA_vec_store::ptr out = detail::NUMA_vec_store::create(num_rows,
+			num_nodes, get_scalar_type<int>());
 	spm->multiply<int>(*in, *out);
 	assert(out->get_length() == num_rows);
 	assert(degrees.size() == num_rows);
@@ -91,12 +92,12 @@ void verify_spmm(sparse_matrix::ptr spm, detail::mem_matrix_store::ptr in_mat,
 	size_t num_cols = spm->get_num_cols();
 	size_t num_rows = spm->get_num_rows();
 	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
-		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
-				get_scalar_type<int>());
+		detail::NUMA_vec_store::ptr in_vec = detail::NUMA_vec_store::create(
+				num_cols, num_nodes, get_scalar_type<int>());
 		for (size_t j = 0; j < num_rows; j++)
 			in_vec->set<int>(j, in_mat->get<int>(j, i));
-		NUMA_vector::ptr out_vec = NUMA_vector::create(num_rows, num_nodes,
-				get_scalar_type<int>());
+		detail::NUMA_vec_store::ptr out_vec = detail::NUMA_vec_store::create(
+				num_rows, num_nodes, get_scalar_type<int>());
 		spm->multiply<int>(*in_vec, *out_vec);
 		for (size_t j = 0; j < num_rows; j++)
 			assert(out_vec->get<int>(j) == out->get<int>(j, i));

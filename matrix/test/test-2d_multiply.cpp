@@ -25,14 +25,16 @@ void test_SpMV(sparse_matrix::ptr mat)
 {
 	printf("test sparse matrix vector multiplication\n");
 	struct timeval start, end;
-	NUMA_vector::ptr in_vec = NUMA_vector::create(mat->get_num_cols(),
+	detail::NUMA_vec_store::ptr in_vec = detail::NUMA_vec_store::create(
+			mat->get_num_cols(), matrix_conf.get_num_nodes(),
 			get_scalar_type<double>());
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
 		in_vec->set<double>(i, i);
 
 	// Initialize the output vector and allocate pages for it.
 	gettimeofday(&start, NULL);
-	NUMA_vector::ptr out = NUMA_vector::create(mat->get_num_rows(),
+	detail::NUMA_vec_store::ptr out = detail::NUMA_vec_store::create(
+			mat->get_num_rows(), matrix_conf.get_num_nodes(),
 			get_scalar_type<double>());
 	out->reset_data();
 	gettimeofday(&end, NULL);

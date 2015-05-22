@@ -1,10 +1,17 @@
+#include <boost/format.hpp>
+
+#include "log.h"
+
+#include "mem_vec_store.h"
 #include "mem_vector.h"
 
 using namespace fm;
 
-mem_vector::ptr get(const mem_vector &vec, mem_vector &idxs)
+detail::mem_vec_store::ptr get(const detail::mem_vec_store &vec,
+		detail::mem_vec_store &idxs)
 {
-	mem_vector::ptr ret = mem_vector::create(idxs.get_length(), vec.get_type());
+	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(idxs.get_length(),
+			vec.get_type());
 #pragma omp parallel for
 	for (size_t i = 0; i < idxs.get_length(); i++) {
 		off_t idx = idxs.get<off_t>(i);
@@ -17,7 +24,7 @@ mem_vector::ptr get(const mem_vector &vec, mem_vector &idxs)
 
 		ret->set(i, vec.get<int>(idx));
 	}
-	return std::static_pointer_cast<mem_vector>(ret);
+	return ret;
 }
 
 /*
@@ -27,30 +34,36 @@ mem_vector::ptr get(const mem_vector &vec, mem_vector &idxs)
 void test_permute()
 {
 	printf("test permutation\n");
-	mem_vector::ptr vec = mem_vector::create(1000000000, get_scalar_type<int>());
+	detail::mem_vec_store::ptr vec = detail::mem_vec_store::create(1000000000,
+			get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random());
-	mem_vector::ptr clone = mem_vector::cast(vec->deep_copy());
-	assert(clone->equals(*vec));
+	detail::mem_vec_store::ptr clone = detail::mem_vec_store::cast(vec->deep_copy());
+	mem_vector::ptr vec1 = mem_vector::create(clone);
+	mem_vector::ptr vec2 = mem_vector::create(vec);
+	assert(vec1->equals(*vec2));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	mem_vector::ptr idxs = mem_vector::cast(vec->sort_with_index());
+	detail::mem_vec_store::ptr idxs = detail::mem_vec_store::cast(
+			vec->sort_with_index());
 	gettimeofday(&end, NULL);
 	printf("sort takes %fseconds\n", time_diff(start, end));
 
 	gettimeofday(&start, NULL);
 	// This has compile-time type.
-	mem_vector::ptr sorted1 = get(*clone, *idxs);
+	detail::mem_vec_store::ptr sorted1 = get(*clone, *idxs);
 	gettimeofday(&end, NULL);
 	printf("permute with type takes %fseconds\n", time_diff(start, end));
 
 	gettimeofday(&start, NULL);
 	// This doesn't have compile-time type.
-	mem_vector::ptr sorted2 = clone->mem_vector::get(*idxs);
+	detail::mem_vec_store::ptr sorted2 = clone->detail::mem_vec_store::get(*idxs);
 	gettimeofday(&end, NULL);
 	printf("permute without type takes %fseconds\n", time_diff(start, end));
-	assert(sorted1->equals(*sorted2));
+	vec1 = mem_vector::create(sorted1);
+	vec2 = mem_vector::create(sorted2);
+	assert(vec1->equals(*vec2));
 }
 
 int main()

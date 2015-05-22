@@ -65,9 +65,9 @@ public:
 size_t edge_parser::parse(const std::vector<std::string> &lines,
 		data_frame &df) const
 {
-	mem_vector::ptr froms = mem_vector::create(lines.size(),
+	detail::mem_vec_store::ptr froms = detail::mem_vec_store::create(lines.size(),
 			get_scalar_type<fg::vertex_id_t>());
-	mem_vector::ptr tos = mem_vector::create(lines.size(),
+	detail::mem_vec_store::ptr tos = detail::mem_vec_store::create(lines.size(),
 			get_scalar_type<fg::vertex_id_t>());
 	for (size_t i = 0; i < lines.size(); i++) {
 		const char *line = lines[i].c_str();
@@ -131,14 +131,16 @@ int main(int argc, char *argv[])
 	printf("There are %ld edges\n", num_edges);
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::cast(df->get_vec(i));
+		mem_vector::ptr vec = mem_vector::create(
+				detail::mem_vec_store::cast(df->get_vec(i)));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	printf("max id: %d\n", max_vid);
 
-	vector::ptr seq_vec = create_vector<fg::vertex_id_t>(0, max_vid, 1);
-	vector::ptr rep_vec = create_vector<fg::vertex_id_t>(max_vid + 1,
-			fg::INVALID_VERTEX_ID);
+	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
+			0, max_vid, 1);
+	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
+			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
@@ -175,10 +177,10 @@ int main(int argc, char *argv[])
 
 	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
 	size_t num_vertices = out_adjs->get_num_vecs();
-	mem_vector::ptr num_in_edges = mem_vector::create(num_vertices,
-			get_scalar_type<fg::vsize_t>());
-	mem_vector::ptr num_out_edges = mem_vector::create(num_vertices,
-			get_scalar_type<fg::vsize_t>());
+	detail::mem_vec_store::ptr num_in_edges = detail::mem_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
+	detail::mem_vec_store::ptr num_out_edges = detail::mem_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
 		num_in_edges->set(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(

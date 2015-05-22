@@ -546,26 +546,7 @@ const scalar_type &find_next_impl<T>::get_output_type() const
 	return get_scalar_type<size_t>();
 }
 
-template<class T>
-const basic_uops &scalar_type_impl<T>::get_basic_uops() const
-{
-	static basic_uops_impl<T, T> uops;
-	return uops;
-}
-
-template<class T>
-const basic_ops &scalar_type_impl<T>::get_basic_ops() const
-{
-	static basic_ops_impl<T, T, T> ops;
-	return ops;
-}
-
-template<class T>
-const agg_ops &scalar_type_impl<T>::get_agg_ops() const
-{
-	static agg_ops_impl<T, T> aops;
-	return aops;
-}
+class local_vec_store;
 
 /*
  * This operator is different from bulk_uoperate. It treats an array
@@ -584,7 +565,8 @@ public:
 	 * This virtual method accepts an input array and stores the result
 	 * in an output array.
 	 */
-	virtual void run(const mem_vector &in, mem_vector &out) const = 0;
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const = 0;
 
 	virtual const scalar_type &get_input_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
@@ -611,7 +593,8 @@ template<class T>
 class gr_apply_operate
 {
 public:
-	virtual void run(const void *key, const T &val, mem_vector &vec) const = 0;
+	virtual void run(const void *key, const T &val,
+			local_vec_store &vec) const = 0;
 
 	virtual const scalar_type &get_key_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
@@ -645,23 +628,6 @@ public:
 			t_arr[i] = *(const T *) arrs[i];
 	}
 };
-
-template<class T>
-const scatter_gather &scalar_type_impl<T>::get_sg() const
-{
-	static type_scatter_gather<T> sg;
-	return sg;
-}
-
-template<class T>
-const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
-{
-	assert(val.get_type() == get_scalar_type<T>());
-	const scalar_variable_impl<T> &t_val
-		= static_cast<const scalar_variable_impl<T> &>(val);
-	static const_set_operate<T> op(t_val.get());
-	return op;
-}
 
 }
 

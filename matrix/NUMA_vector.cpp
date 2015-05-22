@@ -26,8 +26,12 @@
 #include "NUMA_vector.h"
 #include "data_frame.h"
 #include "mem_worker_thread.h"
+#include "local_vec_store.h"
 
 namespace fm
+{
+
+namespace detail
 {
 
 template<class T>
@@ -36,18 +40,18 @@ T ceil_divide(T v1, T v2)
 	return ceil(((double) v1) / v2);
 }
 
-NUMA_vector::ptr NUMA_vector::cast(vector::ptr vec)
+NUMA_vec_store::ptr NUMA_vec_store::cast(vec_store::ptr vec)
 {
 	if (!vec->is_in_mem()) {
 		BOOST_LOG_TRIVIAL(error) << "The vector isn't in memory";
-		return NUMA_vector::ptr();
+		return NUMA_vec_store::ptr();
 	}
 	// TODO How do I tell it's a NUMA vector?
-	return std::static_pointer_cast<NUMA_vector>(vec);
+	return std::static_pointer_cast<NUMA_vec_store>(vec);
 }
 
-NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
-		const scalar_type &type): vector(length, type, true), mapper(num_nodes)
+NUMA_vec_store::NUMA_vec_store(size_t length, size_t num_nodes,
+		const scalar_type &type): vec_store(length, type, true), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	size_t num_eles_per_node = ceil_divide(length, num_nodes);
@@ -57,7 +61,7 @@ NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 		data[node_id] = detail::raw_data_array(size_per_node, node_id);
 }
 
-void NUMA_vector::reset_data()
+void NUMA_vec_store::reset_data()
 {
 	reset_arrays(data);
 }
@@ -88,13 +92,13 @@ public:
 
 }
 
-void NUMA_vector::set_data(const set_operate &op)
+void NUMA_vec_store::set_data(const set_operate &op)
 {
 	set_ele_operate set_ele(op, mapper, get_entry_size());
 	set_array_ranges(mapper, get_length(), get_entry_size(), set_ele, data);
 }
 
-const char *NUMA_vector::get_sub_arr(off_t start, off_t end) const
+const char *NUMA_vec_store::get_sub_arr(off_t start, off_t end) const
 {
 	// The start and end needs to fall into the same range.
 	if (mapper.get_logical_range_id(start)
@@ -109,37 +113,25 @@ const char *NUMA_vector::get_sub_arr(off_t start, off_t end) const
 	return data[loc.first].get_raw() + off;
 }
 
-char *NUMA_vector::get_sub_arr(off_t start, off_t end)
+char *NUMA_vec_store::get_sub_arr(off_t start, off_t end)
 {
-	const NUMA_vector *const_this = this;
+	const NUMA_vec_store *const_this = this;
 	return (char *) const_this->get_sub_arr(start, end);
 }
 
-bool NUMA_vector::is_sub_vec() const
+bool NUMA_vec_store::is_sub_vec() const
 {
 	return false;
 }
 
-vector::ptr NUMA_vector::get_sub_vec(off_t start, size_t length) const
+bool NUMA_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
+		std::vector<vec_store::const_ptr>::const_iterator vec_end)
 {
 	// TODO
 	assert(0);
 }
 
-bool NUMA_vector::expose_sub_vec(off_t start, size_t length)
-{
-	// TODO
-	assert(0);
-}
-
-bool NUMA_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
-		std::vector<vector::ptr>::const_iterator vec_end)
-{
-	// TODO
-	assert(0);
-}
-
-bool NUMA_vector::append(const vector &vec)
+bool NUMA_vec_store::append(const vec_store &vec)
 {
 	// TODO
 	assert(0);
@@ -191,7 +183,7 @@ public:
 
 }
 
-void NUMA_vector::sort()
+void NUMA_vec_store::sort()
 {
 	assert(!is_sub_vec());
 	// The number of threads per NUMA node.
@@ -231,7 +223,7 @@ void NUMA_vector::sort()
 	copy_from(tmp.get(), tot_num_bytes);
 }
 
-void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
+void NUMA_vec_store::copy_from(const char *buf, size_t num_bytes)
 {
 	assert(num_bytes % get_entry_size() == 0);
 	assert(num_bytes / get_entry_size() == get_length());
@@ -240,7 +232,7 @@ void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
 	set_array_ranges(mapper, get_length(), get_entry_size(), cp, data);
 }
 
-bool NUMA_vector::copy_from(const NUMA_vector &vec)
+bool NUMA_vec_store::copy_from(const NUMA_vec_store &vec)
 {
 	if (get_type() != vec.get_type()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -260,76 +252,38 @@ bool NUMA_vector::copy_from(const NUMA_vector &vec)
 	return true;
 }
 
-vector::ptr NUMA_vector::sort_with_index()
+vec_store::ptr NUMA_vec_store::sort_with_index()
 {
 	assert(!is_sub_vec());
 	// TODO
 	assert(0);
 }
 
-bool NUMA_vector::is_sorted() const
+bool NUMA_vec_store::is_sorted() const
 {
 	// TODO
 	assert(0);
 }
 
-// It should return data frame instead of vector.
-data_frame::ptr NUMA_vector::groupby(const gr_apply_operate<mem_vector> &op,
-		bool with_val) const
+vec_store::ptr NUMA_vec_store::deep_copy() const
 {
-	// TODO
-	assert(0);
-}
-
-vector::ptr NUMA_vector::deep_copy() const
-{
-	NUMA_vector *ret = new NUMA_vector(*this);
+	NUMA_vec_store *ret = new NUMA_vec_store(*this);
 	for (size_t i = 0; i < data.size(); i++)
 		ret->data[i] = data[i].deep_copy();
-	return vector::ptr(ret);
+	return vec_store::ptr(ret);
 }
 
-vector::ptr NUMA_vector::shallow_copy() const
+local_vec_store::const_ptr NUMA_vec_store::get_portion(off_t start,
+		size_t length) const
 {
-	// TODO
-	assert(0);
+	return local_vec_store::const_ptr();
 }
 
-bool NUMA_vector::dot_prod(const NUMA_vector &vec, scalar_variable &res) const
+local_vec_store::ptr NUMA_vec_store::get_portion(off_t start, size_t length)
 {
-	if (get_type() != vec.get_type() || get_type() != res.get_type()) {
-		BOOST_LOG_TRIVIAL(error) << "The type isn't compatible";
-		return false;
-	}
+	return local_vec_store::ptr();
+}
 
-	if (mapper != vec.mapper) {
-		BOOST_LOG_TRIVIAL(error) << "The two vectors have different NUMA mappers";
-		return false;
-	}
-
-	if (get_length() != vec.get_length()) {
-		BOOST_LOG_TRIVIAL(error) << "The two vectors have different lengths";
-		return false;
-	}
-
-	const bulk_operate &multiply = get_type().get_basic_ops().get_multiply();
-	const bulk_operate &add = get_type().get_basic_ops().get_add();
-	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
-	std::unique_ptr<char[]> agg_buf(new char[data.size() * get_entry_size()]);
-	// TODO this is a very inefficient implementation.
-	for (size_t i = 0; i < data.size(); i++) {
-		std::unique_ptr<char[]> multiply_buf(
-				new char[local_lens[i] * get_entry_size()]);
-		multiply.runAA(local_lens[i], data[i].get_raw(), vec.data[i].get_raw(),
-				multiply_buf.get());
-		add.runA(local_lens[i], multiply_buf.get(),
-				agg_buf.get() + get_entry_size() * i);
-	}
-	char final_agg[get_entry_size()];
-	add.runA(data.size(), agg_buf.get(), final_agg);
-	res.set_raw(final_agg, get_entry_size());
-
-	return true;
 }
 
 }

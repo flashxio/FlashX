@@ -23,6 +23,7 @@
 #include "fm_utils.h"
 #include "fg_utils.h"
 #include "crs_header.h"
+#include "local_vec_store.h"
 
 using namespace fm;
 
@@ -39,7 +40,8 @@ class adj2crs_apply_operate: public arr_apply_operate
 public:
 	adj2crs_apply_operate(): arr_apply_operate(0) {
 	}
-	virtual void run(const mem_vector &in, mem_vector &out) const;
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const;
 
 	virtual const scalar_type &get_input_type() const {
 		return get_scalar_type<char>();
@@ -49,7 +51,8 @@ public:
 	}
 };
 
-void adj2crs_apply_operate::run(const mem_vector &in, mem_vector &out) const
+void adj2crs_apply_operate::run(const local_vec_store &in,
+		local_vec_store &out) const
 {
 	const fg::ext_mem_undirected_vertex *v
 		= (const fg::ext_mem_undirected_vertex *) in.get_raw_arr();
@@ -63,7 +66,7 @@ void export_crs(mem_vector_vector::ptr adjs, const std::string &output_file)
 {
 	mem_vector_vector::ptr col_idxs = mem_vector_vector::cast(
 			adjs->apply(adj2crs_apply_operate()));
-	mem_vector::ptr col_vec = mem_vector::cast(col_idxs->flatten());
+	mem_vector::ptr col_vec = mem_vector::cast(col_idxs->cat());
 	std::vector<crs_idx_t> offs(adjs->get_num_vecs() + 1);
 	for (size_t i = 0; i < adjs->get_num_vecs(); i++) {
 		offs[i + 1] = offs[i] + col_idxs->get_length(i);

@@ -82,8 +82,8 @@ public:
 		return matrix_layout_t::L_ROW;
 	}
 
-	virtual NUMA_vector::ptr get_row_vec(size_t row) = 0;
-	virtual NUMA_vector::const_ptr get_row_vec(size_t row) const = 0;
+	virtual NUMA_vec_store::ptr get_row_vec(size_t row) = 0;
+	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const = 0;
 };
 
 class NUMA_col_matrix_store: public NUMA_matrix_store
@@ -104,8 +104,8 @@ public:
 		return matrix_layout_t::L_COL;
 	}
 
-	virtual NUMA_vector::ptr get_col_vec(size_t col) = 0;
-	virtual NUMA_vector::const_ptr get_col_vec(size_t col) const = 0;
+	virtual NUMA_vec_store::ptr get_col_vec(size_t col) = 0;
+	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const = 0;
 };
 
 class NUMA_col_wide_matrix_store;
@@ -171,11 +171,11 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vector::ptr get_row_vec(size_t row) {
-		return NUMA_vector::ptr();
+	virtual NUMA_vec_store::ptr get_row_vec(size_t row) {
+		return NUMA_vec_store::ptr();
 	}
-	virtual NUMA_vector::const_ptr get_row_vec(size_t row) const {
-		return NUMA_vector::const_ptr();
+	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const {
+		return NUMA_vec_store::const_ptr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
@@ -191,10 +191,10 @@ public:
  */
 class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 {
-	std::vector<NUMA_vector::ptr> data;
+	std::vector<NUMA_vec_store::ptr> data;
 
 	NUMA_col_tall_matrix_store(
-			const std::vector<NUMA_vector::ptr> &cols): NUMA_col_matrix_store(
+			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_col_matrix_store(
 				cols.front()->get_length(), cols.size(),
 				cols.front()->get_type()) {
 		this->data = cols;
@@ -212,7 +212,7 @@ class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 public:
 	typedef std::shared_ptr<NUMA_col_tall_matrix_store> ptr;
 
-	static ptr create(const std::vector<NUMA_vector::ptr> &cols) {
+	static ptr create(const std::vector<NUMA_vec_store::ptr> &cols) {
 		return ptr(new NUMA_col_tall_matrix_store(cols));
 	}
 
@@ -243,10 +243,10 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vector::ptr get_col_vec(size_t col) {
+	virtual NUMA_vec_store::ptr get_col_vec(size_t col) {
 		return data[col];
 	}
-	virtual NUMA_vector::const_ptr get_col_vec(size_t col) const {
+	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const {
 		return data[col];
 	}
 
@@ -307,10 +307,10 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vector::ptr get_row_vec(size_t row) {
+	virtual NUMA_vec_store::ptr get_row_vec(size_t row) {
 		return store.get_col_vec(row);
 	}
-	virtual NUMA_vector::const_ptr get_row_vec(size_t row) const {
+	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const {
 		return store.get_col_vec(row);
 	}
 	virtual matrix_store::const_ptr get_rows(
@@ -387,11 +387,11 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vector::ptr get_col_vec(size_t col) {
-		return NUMA_vector::ptr();
+	virtual NUMA_vec_store::ptr get_col_vec(size_t col) {
+		return NUMA_vec_store::ptr();
 	}
-	virtual NUMA_vector::const_ptr get_col_vec(size_t col) const {
-		return NUMA_vector::const_ptr();
+	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const {
+		return NUMA_vec_store::const_ptr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

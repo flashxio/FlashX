@@ -47,7 +47,7 @@ public:
 	}
 
 	virtual std::shared_ptr<vector_vector> groupby(const std::string &col_name,
-			gr_apply_operate<data_frame> &op) const;
+			gr_apply_operate<sub_data_frame> &op) const;
 	virtual bool sort(const std::string &col_name);
 	virtual bool is_sorted(const std::string &col_name) const;
 };
