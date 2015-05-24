@@ -90,13 +90,6 @@ public:
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end) = 0;
 	virtual bool append(const vec_store &vec) = 0;
-	/*
-	 * This method exposes a portition of the vector to users.
-	 * It's similar to get_sub_vec, expect that this method changes it
-	 * on the local vector. `start' is the absolute location of
-	 * the starting point on the original array.
-	 */
-	virtual bool expose_sub_vec(off_t start, size_t length) = 0;
 	virtual vec_store::ptr deep_copy() const = 0;
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;

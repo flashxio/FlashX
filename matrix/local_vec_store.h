@@ -91,13 +91,6 @@ public:
 		op.set(get_raw_arr(), get_length(), global_start, 0);
 	}
 
-	/*
-	 * Expose part of the local vector store.
-	 * @start is the start location relative to the start of the original
-	 * local vector store.
-	 */
-	virtual bool expose_sub_vec(off_t start, size_t length);
-
 	virtual detail::vec_store::ptr sort_with_index();
 	virtual void sort();
 	virtual bool is_sorted() const;

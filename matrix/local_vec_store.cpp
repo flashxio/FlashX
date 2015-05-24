@@ -108,20 +108,6 @@ data_frame::ptr local_vec_store::groupby(
 	return ret;
 }
 
-bool local_vec_store::expose_sub_vec(off_t start, size_t length)
-{
-	if (start + length > orig_length)
-		return false;
-	off_t new_global_start = orig_global_start + start;
-	off_t rel_off = new_global_start - global_start;
-	global_start = new_global_start;
-	detail::vec_store::resize(length);
-	if (data)
-		data += rel_off * get_entry_size();
-	const_data += rel_off * get_entry_size();
-	return true;
-}
-
 bool local_ref_vec_store::resize(size_t new_length)
 {
 	BOOST_LOG_TRIVIAL(error)

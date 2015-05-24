@@ -158,11 +158,6 @@ public:
 		assert(0);
 		return false;
 	}
-
-	virtual bool expose_sub_vec(off_t start, size_t length) {
-		assert(0);
-		return false;
-	}
 };
 
 }

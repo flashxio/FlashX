@@ -74,13 +74,14 @@ public:
 		return (arr - data.get_raw()) / get_entry_size();
 	}
 
+	bool expose_sub_vec(off_t start, size_t length);
+
 	virtual mem_vec_store::ptr get(const mem_vec_store &idxs) const;
 
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);
 	virtual bool append(const vec_store &vec);
 	virtual bool resize(size_t new_length);
-	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vec_store::ptr deep_copy() const;
 	virtual vec_store::ptr shallow_copy() {
 		return vec_store::ptr(new mem_vec_store(*this));
