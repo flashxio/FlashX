@@ -74,11 +74,11 @@ void test_groupby()
 {
 	mem_data_frame::ptr df = mem_data_frame::create();
 	size_t length = 1000000;
-	detail::mem_vec_store::ptr vec1 = detail::mem_vec_store::create(length,
+	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(length,
 			get_scalar_type<int>());
 	for (size_t i = 0; i < vec1->get_length(); i++)
 		vec1->set<int>(i, random() % 1000);
-	detail::mem_vec_store::ptr vec2 = detail::mem_vec_store::create(length,
+	detail::smp_vec_store::ptr vec2 = detail::smp_vec_store::create(length,
 			get_scalar_type<int>());
 	for (size_t i = 0; i < vec2->get_length(); i++)
 		vec2->set<int>(i, random() % 1000);

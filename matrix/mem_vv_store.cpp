@@ -28,23 +28,23 @@ namespace fm
 namespace detail
 {
 
-mem_vv_store::mem_vv_store(const scalar_type &type): vec_store(0, 0, type, true)
+mem_vv_store::mem_vv_store(const scalar_type &type): mem_vec_store(0, 0, type)
 {
-	store = mem_vec_store::create(0, type);
+	store = smp_vec_store::create(0, type);
 	// The offset of the first vector in the vector vector is 0.
 	vec_offs.push_back(0);
 }
 
 mem_vv_store::mem_vv_store(const detail::raw_data_array &data,
-		const std::vector<off_t> &offs, const scalar_type &type): vec_store(
-			vec_offs.size() - 1, 0, type, true)
+		const std::vector<off_t> &offs, const scalar_type &type): mem_vec_store(
+			vec_offs.size() - 1, 0, type)
 {
 	// There must be at least two locations to identify the vectors
 	// in the data array.
 	assert(offs.size() > 1);
 	assert((size_t) offs.back() <= data.get_num_bytes());
 	this->vec_offs = offs;
-	store = mem_vec_store::create(data, type);
+	store = smp_vec_store::create(data, type);
 }
 
 mem_vv_store::ptr mem_vv_store::cast(vec_store::ptr store)
@@ -146,7 +146,7 @@ mem_vv_store::const_ptr mem_vv_store::get_sub_vec_vec(off_t start,
 
 vec_store::const_ptr mem_vv_store::cat() const
 {
-	mem_vec_store::ptr ret = mem_vec_store::cast(store->shallow_copy());
+	smp_vec_store::ptr ret = smp_vec_store::cast(store->shallow_copy());
 	off_t start = vec_offs.front() / get_type().get_size();
 	size_t len = (vec_offs.back() - vec_offs.front()) / get_type().get_size();
 	ret->expose_sub_vec(start, len);

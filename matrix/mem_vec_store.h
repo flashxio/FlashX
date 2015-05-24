@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include "log.h"
+
 #include "vec_store.h"
 #include "raw_data_array.h"
 #include "bulk_operate.h"
@@ -34,24 +36,16 @@ namespace detail
 
 class mem_vec_store: public vec_store
 {
-	char *arr;
-	detail::raw_data_array data;
-
-	mem_vec_store(const detail::raw_data_array &data, const scalar_type &type);
-	mem_vec_store(size_t length, const scalar_type &type);
-
-	char *get(off_t idx) {
-		return arr + idx * get_entry_size();
-	}
 public:
+	mem_vec_store(size_t length, const scalar_type &type): vec_store(
+			length, type, true) {
+	}
+	mem_vec_store(size_t length, size_t entry_size,
+			const scalar_type &type): vec_store(length, entry_size, type, true) {
+	}
+
 	typedef std::shared_ptr<mem_vec_store> ptr;
 	typedef std::shared_ptr<const mem_vec_store> const_ptr;
-
-	static ptr create(size_t length, const scalar_type &type) {
-		return ptr(new mem_vec_store(length, type));
-	}
-	static ptr create(const detail::raw_data_array &data,
-			const scalar_type &type);
 
 	static ptr cast(vec_store::ptr store) {
 		assert(store->is_in_mem());
@@ -63,11 +57,62 @@ public:
 		return std::static_pointer_cast<const mem_vec_store>(store);
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
+	virtual char *get_raw_arr() = 0;
+	virtual const char *get_raw_arr() const = 0;
+	virtual const char *get_sub_arr(off_t start, off_t end) const = 0;
+	virtual char *get_sub_arr(off_t start, off_t end) = 0;
+
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
+			size_t size) = 0;
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
+			size_t size) const = 0;
+};
+
+class smp_vec_store: public mem_vec_store
+{
+	char *arr;
+	detail::raw_data_array data;
+
+	smp_vec_store(const detail::raw_data_array &data, const scalar_type &type);
+	smp_vec_store(size_t length, const scalar_type &type);
+public:
+	typedef std::shared_ptr<smp_vec_store> ptr;
+	typedef std::shared_ptr<const smp_vec_store> const_ptr;
+
+	static ptr create(size_t length, const scalar_type &type) {
+		return ptr(new smp_vec_store(length, type));
+	}
+	static ptr create(const detail::raw_data_array &data,
+			const scalar_type &type);
+
+	static ptr cast(vec_store::ptr store) {
+		assert(store->is_in_mem() && std::static_pointer_cast<mem_vec_store>(
+					store)->get_num_nodes() < 0);
+		return std::static_pointer_cast<smp_vec_store>(store);
+	}
+
+	static const_ptr cast(vec_store::const_ptr store) {
+		assert(store->is_in_mem());
+		return std::static_pointer_cast<const smp_vec_store>(store);
+	}
+
 	virtual char *get_raw_arr() {
 		return arr;
 	}
 	virtual const char *get_raw_arr() const {
 		return arr;
+	}
+	virtual const char *get_sub_arr(off_t start, off_t end) const {
+		assert(start < end && (size_t) end <= get_length());
+		return arr + start * get_type().get_size();
+	}
+	virtual char *get_sub_arr(off_t start, off_t end) {
+		assert(start < end && (size_t) end <= get_length());
+		return arr + start * get_type().get_size();
 	}
 
 	size_t get_sub_start() const {
@@ -76,7 +121,7 @@ public:
 
 	bool expose_sub_vec(off_t start, size_t length);
 
-	virtual mem_vec_store::ptr get(const mem_vec_store &idxs) const;
+	virtual smp_vec_store::ptr get(const smp_vec_store &idxs) const;
 
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);
@@ -84,10 +129,10 @@ public:
 	virtual bool resize(size_t new_length);
 	virtual vec_store::ptr deep_copy() const;
 	virtual vec_store::ptr shallow_copy() {
-		return vec_store::ptr(new mem_vec_store(*this));
+		return vec_store::ptr(new smp_vec_store(*this));
 	}
 	virtual vec_store::const_ptr shallow_copy() const {
-		return vec_store::ptr(new mem_vec_store(*this));
+		return vec_store::ptr(new smp_vec_store(*this));
 	}
 
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc, size_t size);
@@ -110,6 +155,10 @@ public:
 	virtual bool is_sorted() const {
 		return get_type().get_sorter().is_sorted(get_raw_arr(),
 				get_length(), false);
+	}
+
+	char *get(off_t idx) {
+		return arr + idx * get_entry_size();
 	}
 
 	const char *get(off_t idx) const {
@@ -182,7 +231,7 @@ vec_store::ptr create_vec_store(EntryType start, EntryType end, EntryType stride
 	long n = (end - start) / stride;
 	// We need to count the start element.
 	n++;
-	detail::mem_vec_store::ptr v = detail::mem_vec_store::create(n,
+	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
 			get_scalar_type<EntryType>());
 	v->set_data(seq_set_operate<EntryType>(n, start, stride));
 	return v;
@@ -195,7 +244,7 @@ template<class EntryType>
 vec_store::ptr create_vec_store(size_t length, EntryType initv)
 {
 	// TODO let's just use in-memory dense matrix first.
-	detail::mem_vec_store::ptr v = detail::mem_vec_store::create(length,
+	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(length,
 			get_scalar_type<EntryType>());
 	v->set_data(set_const_operate<EntryType>(initv));
 	return v;

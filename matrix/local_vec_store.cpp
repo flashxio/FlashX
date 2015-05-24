@@ -65,12 +65,12 @@ data_frame::ptr local_vec_store::groupby(
 	detail::vec_store::ptr agg;
 	// TODO it might not be a good idea to create a mem_vector
 	if (op.get_num_out_eles() == 1)
-		agg = detail::mem_vec_store::create(0, output_type);
+		agg = detail::smp_vec_store::create(0, output_type);
 	else
 		agg = detail::mem_vv_store::create(output_type);
-	detail::mem_vec_store::ptr val;
+	detail::smp_vec_store::ptr val;
 	if (with_val)
-		val = detail::mem_vec_store::create(0, get_type());
+		val = detail::smp_vec_store::create(0, get_type());
 
 	size_t out_size;
 	// If the user can predict the number of output elements, we can create

@@ -39,7 +39,7 @@ public:
 void test_groupby()
 {
 	printf("test groupby\n");
-	mem_vec_store::ptr store = mem_vec_store::create(1000000,
+	smp_vec_store::ptr store = smp_vec_store::create(1000000,
 			get_scalar_type<int>());
 	for (size_t i = 0; i < store->get_length(); i++)
 		store->set<int>(i, random() % 1000);
@@ -58,8 +58,8 @@ void test_groupby()
 			it->second++;
 	}
 
-	mem_vec_store::ptr vals = mem_vec_store::cast(res->get_vec("val"));
-	mem_vec_store::ptr aggs = mem_vec_store::cast(res->get_vec("agg"));
+	smp_vec_store::ptr vals = smp_vec_store::cast(res->get_vec("val"));
+	smp_vec_store::ptr aggs = smp_vec_store::cast(res->get_vec("agg"));
 	for (size_t i = 0; i < vals->get_length(); i++) {
 		int val = vals->get<int>(i);
 		size_t count = aggs->get<size_t>(i);
@@ -72,11 +72,11 @@ void test_groupby()
 void test_append()
 {
 	printf("test append\n");
-	mem_vec_store::ptr res = mem_vec_store::create(16, get_scalar_type<int>());
+	smp_vec_store::ptr res = smp_vec_store::create(16, get_scalar_type<int>());
 	size_t tot_len = res->get_length();
 	std::vector<vec_store::const_ptr> vecs(16);
 	for (size_t i = 0; i < vecs.size(); i++) {
-		vecs[i] = mem_vec_store::create(32, get_scalar_type<int>());
+		vecs[i] = smp_vec_store::create(32, get_scalar_type<int>());
 		tot_len += vecs[i]->get_length();
 	}
 	res->append(vecs.begin(), vecs.end());
@@ -86,16 +86,16 @@ void test_append()
 void test_sort()
 {
 	printf("test sort\n");
-	mem_vec_store::ptr vec = mem_vec_store::create(1000000, get_scalar_type<int>());
+	smp_vec_store::ptr vec = smp_vec_store::create(1000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set<int>(i, random() % 1000);
-	mem_vec_store::ptr clone = mem_vec_store::cast(vec->deep_copy());
+	smp_vec_store::ptr clone = smp_vec_store::cast(vec->deep_copy());
 	mem_vector::ptr vec1 = mem_vector::create(clone);
 	mem_vector::ptr vec2 = mem_vector::create(vec);
 	assert(vec1->equals(*vec2));
 
-	mem_vec_store::ptr idxs = mem_vec_store::cast(vec->sort_with_index());
-	mem_vec_store::ptr sorted = clone->mem_vec_store::get(*idxs);
+	smp_vec_store::ptr idxs = smp_vec_store::cast(vec->sort_with_index());
+	smp_vec_store::ptr sorted = clone->smp_vec_store::get(*idxs);
 	vec1 = mem_vector::create(sorted);
 	vec2 = mem_vector::create(vec);
 	assert(vec1->equals(*vec2));
@@ -104,7 +104,7 @@ void test_sort()
 void test_max()
 {
 	printf("test max\n");
-	mem_vec_store::ptr vec = mem_vec_store::create(1000000, get_scalar_type<int>());
+	smp_vec_store::ptr vec = smp_vec_store::create(1000000, get_scalar_type<int>());
 	int max = 0;
 	for (size_t i = 0; i < vec->get_length(); i++) {
 		int v = random() % 1000;
@@ -119,7 +119,7 @@ void test_resize()
 {
 	printf("test resize\n");
 	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
-	mem_vec_store::ptr copy = mem_vec_store::cast(vec->get_data().deep_copy());
+	smp_vec_store::ptr copy = smp_vec_store::cast(vec->get_data().deep_copy());
 	copy->resize(100);
 	size_t min_len = std::min(copy->get_length(), vec->get_length());
 	for (size_t i = 0; i < min_len; i++)
@@ -141,10 +141,10 @@ void test_get_sub()
 {
 	printf("test get sub\n");
 	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
-	mem_vec_store::ptr idxs = mem_vec_store::create(1000, get_scalar_type<off_t>());
+	smp_vec_store::ptr idxs = smp_vec_store::create(1000, get_scalar_type<off_t>());
 	for (size_t i = 0; i < idxs->get_length(); i++)
 		idxs->set<off_t>(i, random() % idxs->get_length());
-	mem_vec_store::ptr res = mem_vec_store::cast(vec->get_raw_store())->get(*idxs);
+	smp_vec_store::ptr res = smp_vec_store::cast(vec->get_raw_store())->get(*idxs);
 	for (size_t i = 0; i < res->get_length(); i++)
 		assert(res->get<int>(i) == vec->get<int>(idxs->get<off_t>(i)));
 }

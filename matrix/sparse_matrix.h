@@ -25,8 +25,7 @@
 #include "FGlib.h"
 #include "matrix_io.h"
 #include "io_interface.h"
-#include "mem_vector.h"
-#include "NUMA_vector.h"
+#include "mem_vec_store.h"
 #include "NUMA_dense_matrix.h"
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
@@ -257,8 +256,8 @@ public:
 template<class T>
 class block_spmv_task: public block_compute_task
 {
-	const detail::NUMA_vec_store &input;
-	detail::NUMA_vec_store &output;
+	const detail::mem_vec_store &input;
+	detail::mem_vec_store &output;
 
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
 			const T *in_arr, T *out_arr) {
@@ -271,8 +270,8 @@ class block_spmv_task: public block_compute_task
 		return it;
 	}
 public:
-	block_spmv_task(const detail::NUMA_vec_store &_input,
-			detail::NUMA_vec_store &_output, const matrix_io &_io,
+	block_spmv_task(const detail::mem_vec_store &_input,
+			detail::mem_vec_store &_output, const matrix_io &_io,
 			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
 				_io, mat, order), input(_input), output(_output) {
 	}
@@ -329,16 +328,16 @@ public:
 template<class T>
 class b2d_spmv_creator: public task_creator
 {
-	const detail::NUMA_vec_store &input;
-	detail::NUMA_vec_store &output;
+	const detail::mem_vec_store &input;
+	detail::mem_vec_store &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmv_creator(const detail::NUMA_vec_store &_input,
-			detail::NUMA_vec_store &_output, const sparse_matrix &_mat);
+	b2d_spmv_creator(const detail::mem_vec_store &_input,
+			detail::mem_vec_store &_output, const sparse_matrix &_mat);
 public:
-	static task_creator::ptr create(const detail::NUMA_vec_store &_input,
-			detail::NUMA_vec_store &_output, const sparse_matrix &mat) {
+	static task_creator::ptr create(const detail::mem_vec_store &_input,
+			detail::mem_vec_store &_output, const sparse_matrix &mat) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
@@ -426,8 +425,8 @@ class sparse_matrix
 	}
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(const detail::NUMA_vec_store &in,
-			detail::NUMA_vec_store &out) const {
+	task_creator::ptr get_multiply_creator(const detail::mem_vec_store &in,
+			detail::mem_vec_store &out) const {
 		return b2d_spmv_creator<T>::create(in, out, *this);
 	}
 
@@ -549,24 +548,6 @@ public:
 	 * It requires users to initialize the output vector.
 	 */
 	template<class T>
-	bool multiply(const detail::NUMA_vec_store &in,
-			detail::NUMA_vec_store &out) const {
-		if (in.get_length() != ncols) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"the input vector has wrong length %1%. matrix ncols: %2%")
-				% in.get_length() % ncols;
-			return false;
-		}
-		if (is_fg)
-			compute(get_fg_multiply_creator<T, detail::NUMA_vec_store>(in, out),
-					cal_super_block_size(get_block_size(), sizeof(T)));
-		else
-			compute(get_multiply_creator<T>(in, out),
-					cal_super_block_size(get_block_size(), sizeof(T)));
-		return true;
-	}
-
-	template<class T>
 	bool multiply(const detail::mem_vec_store &in,
 			detail::mem_vec_store &out) const {
 		if (in.get_length() != ncols) {
@@ -575,11 +556,19 @@ public:
 				% in.get_length() % ncols;
 			return false;
 		}
-		// We currently only support FG sparse matrix for mem_vector.
-		// The code is mainly for testing.
-		assert(is_fg);
-		compute(get_fg_multiply_creator<T, detail::mem_vec_store>(in, out),
-				cal_super_block_size(get_block_size(), sizeof(T)));
+		if (is_fg && in.get_num_nodes() >= 0)
+			compute(get_fg_multiply_creator<T, detail::NUMA_vec_store>(
+						dynamic_cast<const detail::NUMA_vec_store &>(in),
+						dynamic_cast<detail::NUMA_vec_store &>(out)),
+					cal_super_block_size(get_block_size(), sizeof(T)));
+		else if (is_fg && in.get_num_nodes() < 0)
+			compute(get_fg_multiply_creator<T, detail::smp_vec_store>(
+						dynamic_cast<const detail::smp_vec_store &>(in),
+						dynamic_cast<detail::smp_vec_store &>(out)),
+					cal_super_block_size(get_block_size(), sizeof(T)));
+		else
+			compute(get_multiply_creator<T>(in, out),
+					cal_super_block_size(get_block_size(), sizeof(T)));
 		return true;
 	}
 
@@ -617,8 +606,8 @@ public:
 };
 
 template<class T>
-b2d_spmv_creator<T>::b2d_spmv_creator(const detail::NUMA_vec_store &_input,
-		detail::NUMA_vec_store &_output, const sparse_matrix &_mat): input(
+b2d_spmv_creator<T>::b2d_spmv_creator(const detail::mem_vec_store &_input,
+		detail::mem_vec_store &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
 	// We only handle the case the element size is 2^n.

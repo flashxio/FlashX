@@ -67,7 +67,7 @@ public:
 void test_groupby()
 {
 	printf("test groupby\n");
-	detail::mem_vec_store::ptr store = detail::mem_vec_store::create(1000000,
+	detail::smp_vec_store::ptr store = detail::smp_vec_store::create(1000000,
 			get_scalar_type<int>());
 #pragma omp parallel for
 	for (size_t i = 0; i < store->get_length(); i++)
@@ -90,7 +90,7 @@ void test_groupby()
 
 detail::vec_store::ptr create_mem_vec(size_t len)
 {
-	detail::mem_vec_store::ptr v = detail::mem_vec_store::create(
+	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(
 			len, get_scalar_type<int>());
 	for (size_t i = 0; i < len; i++)
 		v->set<int>(i, random() % 10000);

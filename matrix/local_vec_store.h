@@ -22,7 +22,7 @@
 
 #include <string.h>
 
-#include "vec_store.h"
+#include "mem_vec_store.h"
 #include "bulk_operate.h"
 #include "raw_data_array.h"
 
@@ -31,7 +31,7 @@ namespace fm
 
 class data_frame;
 
-class local_vec_store: public detail::vec_store
+class local_vec_store: public detail::mem_vec_store
 {
 	const off_t orig_global_start;
 	const size_t orig_length;
@@ -52,7 +52,7 @@ protected:
 public:
 	local_vec_store(const char *const_data, char *data, off_t _global_start,
 			size_t length, const scalar_type &type,
-			int node_id): detail::vec_store(length, type, true), orig_global_start(
+			int node_id): detail::mem_vec_store(length, type), orig_global_start(
 				_global_start), orig_length(length) {
 		this->data = data;
 		this->const_data = const_data;
@@ -71,12 +71,19 @@ public:
 	typedef std::shared_ptr<local_vec_store> ptr;
 	typedef std::shared_ptr<const local_vec_store> const_ptr;
 
-	using detail::vec_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
 		return const_data;
 	}
 	virtual char *get_raw_arr() {
 		return data;
+	}
+	virtual const char *get_sub_arr(off_t start, off_t end) const {
+		assert(start < end && (size_t) end <= get_length());
+		return const_data + start * get_type().get_size();
+	}
+	virtual char *get_sub_arr(off_t start, off_t end) {
+		assert(start < end && (size_t) end <= get_length());
+		return data + start * get_type().get_size();
 	}
 
 	std::shared_ptr<data_frame> groupby(

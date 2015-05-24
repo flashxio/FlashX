@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "bulk_operate.h"
-#include "vec_store.h"
+#include "mem_vec_store.h"
 #include "matrix_config.h"
 #include "raw_data_array.h"
 #include "NUMA_mapper.h"
@@ -45,15 +45,15 @@ namespace detail
  * the data in the vector is split and stored on multiple NUMA nodes. All
  * operations on the vector are optimized accordingly.
  */
-class NUMA_vec_store: public vec_store
+class NUMA_vec_store: public mem_vec_store
 {
 	NUMA_mapper mapper;
 
 	std::vector<raw_data_array> data;
 
 	// The copy constructor performs shallow copy.
-	NUMA_vec_store(const NUMA_vec_store &vec): vec_store(vec.get_length(),
-			vec.get_type(), true), mapper(vec.mapper) {
+	NUMA_vec_store(const NUMA_vec_store &vec): mem_vec_store(vec.get_length(),
+			vec.get_type()), mapper(vec.mapper) {
 		data = vec.data;
 	}
 
@@ -120,7 +120,7 @@ public:
 	void copy_from(const char *buf, size_t num_bytes);
 	bool copy_from(const NUMA_vec_store &vec);
 
-	size_t get_num_nodes() const {
+	virtual int get_num_nodes() const {
 		return data.size();
 	}
 

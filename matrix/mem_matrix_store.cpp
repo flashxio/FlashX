@@ -40,7 +40,7 @@ mem_vector::ptr mem_col_matrix_store::get_col_vec(size_t col)
 {
 	assert(data.get_num_bytes()
 			== get_num_rows() * get_num_cols() * get_entry_size());
-	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(data,
+	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
 			get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
 	return mem_vector::create(ret);
@@ -50,7 +50,7 @@ mem_vector::const_ptr mem_col_matrix_store::get_col_vec(size_t col) const
 {
 	assert(data.get_num_bytes()
 			== get_num_rows() * get_num_cols() * get_entry_size());
-	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(data,
+	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
 			get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
 	return mem_vector::create(ret);
@@ -62,7 +62,7 @@ mem_vector::ptr mem_sub_col_matrix_store::get_col_vec(size_t col)
 	size_t orig_num_cols = orig_col_idxs[col] + 1;
 	assert(get_data().get_num_bytes()
 			== get_num_rows() * orig_num_cols * get_entry_size());
-	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(get_data(),
+	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
 			get_type());
 	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
 	return mem_vector::create(ret);
@@ -74,7 +74,7 @@ mem_vector::const_ptr mem_sub_col_matrix_store::get_col_vec(size_t col) const
 	size_t orig_num_cols = orig_col_idxs[col] + 1;
 	assert(get_data().get_num_bytes()
 			== get_num_rows() * orig_num_cols * get_entry_size());
-	detail::mem_vec_store::ptr ret = detail::mem_vec_store::create(get_data(),
+	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
 			get_type());
 	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
 	return mem_vector::create(ret);

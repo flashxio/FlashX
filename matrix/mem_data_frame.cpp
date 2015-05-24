@@ -35,7 +35,8 @@ void expose_portion(const mem_data_frame &sorted_df, off_t loc, size_t length,
 	// TODO This is an very inefficient implementation.
 	sub_df.resize(sorted_df.get_num_vecs());
 	for (size_t i = 0; i < sub_df.size(); i++)
-		sub_df[i] = sorted_df.get_vec_ref(i).get_portion(loc, length);
+		sub_df[i] = static_cast<const detail::mem_vec_store &>(
+				sorted_df.get_vec_ref(i)).get_portion(loc, length);
 }
 
 vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
@@ -48,7 +49,7 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 		// If the column where we group by isn't sorted, we'll create a copy
 		// of this data frame and sort on the replicated data frame.
 		sorted_col = detail::mem_vec_store::cast(col.deep_copy());
-		detail::mem_vec_store::ptr idxs = detail::mem_vec_store::cast(
+		detail::smp_vec_store::ptr idxs = detail::smp_vec_store::cast(
 				sorted_col->sort_with_index());
 
 		sorted_df = mem_data_frame::create();
@@ -56,8 +57,8 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 		for (size_t i = 0; i < get_num_vecs(); i++) {
 			if (get_vec_name(i) == col_name)
 				continue;
-			const detail::mem_vec_store &mem_vec
-				= static_cast<const detail::mem_vec_store &>(get_vec_ref(i));
+			const detail::smp_vec_store &mem_vec
+				= dynamic_cast<const detail::smp_vec_store &>(get_vec_ref(i));
 			sorted_df->add_vec(get_vec_name(i), mem_vec.get(*idxs));
 		}
 	}
@@ -128,10 +129,10 @@ bool mem_data_frame::sort(const std::string &col_name)
 	if (sorted_col->is_sorted())
 		return true;
 
-	detail::mem_vec_store::ptr idxs = detail::mem_vec_store::cast(
+	detail::smp_vec_store::ptr idxs = detail::smp_vec_store::cast(
 			sorted_col->sort_with_index());
 	for (size_t i = 0; i < get_num_vecs(); i++) {
-		detail::mem_vec_store::ptr mem_vec = detail::mem_vec_store::cast(get_vec(i));
+		detail::smp_vec_store::ptr mem_vec = detail::smp_vec_store::cast(get_vec(i));
 		if (mem_vec == sorted_col)
 			continue;
 		detail::mem_vec_store::ptr tmp = mem_vec->get(*idxs);

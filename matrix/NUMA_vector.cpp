@@ -42,16 +42,16 @@ T ceil_divide(T v1, T v2)
 
 NUMA_vec_store::ptr NUMA_vec_store::cast(vec_store::ptr vec)
 {
-	if (!vec->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error) << "The vector isn't in memory";
+	if (!vec->is_in_mem()
+			|| std::static_pointer_cast<mem_vec_store>(vec)->get_num_nodes() < 0) {
+		BOOST_LOG_TRIVIAL(error) << "The vector isn't a NUMA vector";
 		return NUMA_vec_store::ptr();
 	}
-	// TODO How do I tell it's a NUMA vector?
 	return std::static_pointer_cast<NUMA_vec_store>(vec);
 }
 
 NUMA_vec_store::NUMA_vec_store(size_t length, size_t num_nodes,
-		const scalar_type &type): vec_store(length, type, true), mapper(num_nodes)
+		const scalar_type &type): mem_vec_store(length, type), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	size_t num_eles_per_node = ceil_divide(length, num_nodes);

@@ -32,7 +32,8 @@ namespace fm
 mem_vector::ptr mem_vector::create(size_t length, const scalar_type &type,
 		const set_operate &op)
 {
-	detail::mem_vec_store::ptr vec = detail::mem_vec_store::create(length, type);
+	// TODO I should allow users to create a NUMA vector store as well.
+	detail::mem_vec_store::ptr vec = detail::smp_vec_store::create(length, type);
 	vec->set_data(op);
 	return ptr(new mem_vector(vec));
 }
@@ -199,8 +200,9 @@ scalar_variable::ptr mem_vector::aggregate(const bulk_operate &op) const
 	for (size_t i = 0; i < num_portions; i++) {
 		off_t start = i * portion_size;
 		size_t length = std::min(portion_size, get_length() - start);
-		local_vec_store::const_ptr sub_vec = get_data().get_portion(start,
-				length);
+		local_vec_store::const_ptr sub_vec
+			= static_cast<const detail::mem_vec_store &>(
+					get_data()).get_portion(start, length);
 
 		int node_id = sub_vec->get_node_id();
 		if (node_id < 0)

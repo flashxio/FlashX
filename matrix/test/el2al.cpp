@@ -65,9 +65,9 @@ public:
 size_t edge_parser::parse(const std::vector<std::string> &lines,
 		data_frame &df) const
 {
-	detail::mem_vec_store::ptr froms = detail::mem_vec_store::create(lines.size(),
+	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
 			get_scalar_type<fg::vertex_id_t>());
-	detail::mem_vec_store::ptr tos = detail::mem_vec_store::create(lines.size(),
+	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
 			get_scalar_type<fg::vertex_id_t>());
 	for (size_t i = 0; i < lines.size(); i++) {
 		const char *line = lines[i].c_str();
@@ -177,9 +177,9 @@ int main(int argc, char *argv[])
 
 	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
 	size_t num_vertices = out_adjs->get_num_vecs();
-	detail::mem_vec_store::ptr num_in_edges = detail::mem_vec_store::create(
+	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
-	detail::mem_vec_store::ptr num_out_edges = detail::mem_vec_store::create(
+	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
 		num_in_edges->set(i,

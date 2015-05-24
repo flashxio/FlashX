@@ -31,39 +31,39 @@ namespace fm
 namespace detail
 {
 
-mem_vec_store::mem_vec_store(size_t length, const scalar_type &type): vec_store(
-		length, type, true), data(length * type.get_size())
+smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_store(
+		length, type), data(length * type.get_size())
 {
 	this->arr = data.get_raw();
 }
 
-mem_vec_store::mem_vec_store(const detail::raw_data_array &data,
-		const scalar_type &type): vec_store(
-			data.get_num_bytes() / type.get_size(), type, true)
+smp_vec_store::smp_vec_store(const detail::raw_data_array &data,
+		const scalar_type &type): mem_vec_store(
+			data.get_num_bytes() / type.get_size(), type)
 {
 	this->data = data;
 	this->arr = this->data.get_raw();
 }
 
-mem_vec_store::ptr mem_vec_store::create(const detail::raw_data_array &data,
+smp_vec_store::ptr smp_vec_store::create(const detail::raw_data_array &data,
 			const scalar_type &type)
 {
 	if (data.get_num_bytes() % type.get_size() != 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The data array has a wrong number of bytes";
-		return mem_vec_store::ptr();
+		return smp_vec_store::ptr();
 	}
-	return ptr(new mem_vec_store(data, type));
+	return ptr(new smp_vec_store(data, type));
 }
 
-mem_vec_store::ptr mem_vec_store::get(const mem_vec_store &idxs) const
+smp_vec_store::ptr smp_vec_store::get(const smp_vec_store &idxs) const
 {
 	if (idxs.get_type() != get_scalar_type<off_t>()) {
 		BOOST_LOG_TRIVIAL(error) << "The index vector isn't of the off_t type";
-		return mem_vec_store::ptr();
+		return smp_vec_store::ptr();
 	}
 
-	mem_vec_store::ptr ret = mem_vec_store::create(idxs.get_length(), get_type());
+	smp_vec_store::ptr ret = smp_vec_store::create(idxs.get_length(), get_type());
 	int num_threads = get_num_omp_threads();
 	size_t part_len = ceil(((double) idxs.get_length()) / num_threads);
 #pragma omp parallel for
@@ -92,7 +92,7 @@ mem_vec_store::ptr mem_vec_store::get(const mem_vec_store &idxs) const
 	return ret;
 }
 
-bool mem_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
+bool smp_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 		std::vector<vec_store::const_ptr>::const_iterator vec_end)
 {
 	// Get the total size of the result vector.
@@ -125,8 +125,12 @@ bool mem_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator vec
 	return true;
 }
 
-bool mem_vec_store::append(const vec_store &vec)
+bool smp_vec_store::append(const vec_store &vec)
 {
+	if (!vec.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error) << "The input vector isn't in memory";
+		return false;
+	}
 	if (get_type() != vec.get_type()) {
 		BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
 		return false;
@@ -138,12 +142,13 @@ bool mem_vec_store::append(const vec_store &vec)
 	off_t loc = this->get_length() + get_sub_start();
 	this->resize(vec.get_length() + get_length());
 	assert(loc + vec.get_length() <= this->get_length());
-	assert(vec.get_raw_arr());
-	return data.set_sub_arr(loc * get_entry_size(), vec.get_raw_arr(),
-			vec.get_length() * get_entry_size());
+	const mem_vec_store &mem_vec = static_cast<const mem_vec_store &>(vec);
+	assert(mem_vec.get_raw_arr());
+	return data.set_sub_arr(loc * get_entry_size(), mem_vec.get_raw_arr(),
+			mem_vec.get_length() * get_entry_size());
 }
 
-bool mem_vec_store::resize(size_t new_length)
+bool smp_vec_store::resize(size_t new_length)
 {
 	if (new_length == get_length())
 		return true;
@@ -165,7 +170,7 @@ bool mem_vec_store::resize(size_t new_length)
 	return vec_store::resize(new_length);
 }
 
-bool mem_vec_store::expose_sub_vec(off_t start, size_t length)
+bool smp_vec_store::expose_sub_vec(off_t start, size_t length)
 {
 	size_t tot_len = data.get_num_bytes() / get_type().get_size();
 	if (start + length > tot_len) {
@@ -179,36 +184,36 @@ bool mem_vec_store::expose_sub_vec(off_t start, size_t length)
 	return true;
 }
 
-vec_store::ptr mem_vec_store::deep_copy() const
+vec_store::ptr smp_vec_store::deep_copy() const
 {
 	assert(get_raw_arr() == data.get_raw());
 	detail::raw_data_array data = this->data.deep_copy();
-	return mem_vec_store::create(data, get_type());
+	return smp_vec_store::create(data, get_type());
 }
 
-vec_store::ptr mem_vec_store::sort_with_index()
+vec_store::ptr smp_vec_store::sort_with_index()
 {
-	mem_vec_store::ptr indexes = mem_vec_store::create(get_length(),
+	smp_vec_store::ptr indexes = smp_vec_store::create(get_length(),
 			get_scalar_type<off_t>());
 	get_type().get_sorter().sort_with_index(arr,
 			(off_t *) indexes->arr, get_length(), false);
 	return indexes;
 }
 
-void mem_vec_store::set_data(const set_operate &op)
+void smp_vec_store::set_data(const set_operate &op)
 {
 	// I assume this is column-wise matrix.
 	// TODO parallel.
 	op.set(arr, get_length(), 0, 0);
 }
 
-void mem_vec_store::set(const std::vector<const char *> &locs)
+void smp_vec_store::set(const std::vector<const char *> &locs)
 {
 	assert(locs.size() <= get_length());
 	get_type().get_sg().gather(locs, arr);
 }
 
-local_vec_store::ptr mem_vec_store::get_portion(off_t loc, size_t size)
+local_vec_store::ptr smp_vec_store::get_portion(off_t loc, size_t size)
 {
 	if (loc + size > get_length()) {
 		BOOST_LOG_TRIVIAL(error) << "the portion is out of boundary";
@@ -219,7 +224,7 @@ local_vec_store::ptr mem_vec_store::get_portion(off_t loc, size_t size)
 				loc, size, get_type(), -1));
 }
 
-local_vec_store::const_ptr mem_vec_store::get_portion(off_t loc,
+local_vec_store::const_ptr smp_vec_store::get_portion(off_t loc,
 			size_t size) const
 {
 	if (loc + size > get_length()) {
@@ -231,7 +236,7 @@ local_vec_store::const_ptr mem_vec_store::get_portion(off_t loc,
 				loc, size, get_type(), -1));
 }
 
-size_t mem_vec_store::get_portion_size() const
+size_t smp_vec_store::get_portion_size() const
 {
 	return 64 * 1024;
 }
@@ -254,7 +259,7 @@ vec_store::ptr create_vec_store<double>(double start, double end,
 	// We need to count the start element.
 	n++;
 
-	detail::mem_vec_store::ptr v = detail::mem_vec_store::create(n,
+	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
 			get_scalar_type<double>());
 	v->set_data(seq_set_operate<double>(n, start, stride));
 	return v;

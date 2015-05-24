@@ -39,9 +39,9 @@ data_frame::ptr create_rand_el()
 		edges.insert(e);
 	}
 	printf("There are %ld edges\n", edges.size());
-	detail::mem_vec_store::ptr sources = detail::mem_vec_store::create(
+	detail::smp_vec_store::ptr sources = detail::smp_vec_store::create(
 			edges.size(), get_scalar_type<fg::vertex_id_t>());
-	detail::mem_vec_store::ptr dests = detail::mem_vec_store::create(
+	detail::smp_vec_store::ptr dests = detail::smp_vec_store::create(
 			edges.size(), get_scalar_type<fg::vertex_id_t>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {

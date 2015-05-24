@@ -61,7 +61,7 @@ class factor_vector: public mem_vector
 	factor f;
 
 	factor_vector(const factor &_f, size_t len, const set_operate &op): mem_vector(
-			detail::mem_vec_store::create(len,
+			detail::smp_vec_store::create(len,
 				get_scalar_type<factor_value_t>())), f(_f) {
 		const_cast<detail::vec_store &>(get_data()).set_data(op);
 	}

@@ -28,7 +28,7 @@ namespace fm
 namespace detail
 {
 
-class mem_vv_store: public vec_store
+class mem_vv_store: public mem_vec_store
 {
 	// The offsets (in #bytes) of the vectors in the data array.
 	// The last offset is the end of the last vector.
@@ -111,6 +111,14 @@ public:
 	 * The following methods aren't supported in the vv_store.
 	 */
 
+	virtual const char *get_sub_arr(off_t start, off_t end) const {
+		assert(0);
+		return NULL;
+	}
+	virtual char *get_sub_arr(off_t start, off_t end) {
+		assert(0);
+		return NULL;
+	}
 	virtual bool resize(size_t new_length) {
 		assert(0);
 		return false;
