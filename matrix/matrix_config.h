@@ -51,6 +51,16 @@ class matrix_config
 	bool hilbert_order;
 	// The number of NUMA nodes.
 	int num_nodes;
+	// The buffer size used for external-memory sorting.
+	// The number of bytes.
+	size_t sort_buf_size;
+	// Each sort buffer has multiple anchors to get some sense of data value
+	// distribution.
+	// The number of bytes.
+	size_t anchor_gap_size;
+	// The I/O buffer size for writing merge results in sorting a vector.
+	// The number of bytes.
+	size_t write_io_buf_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -65,6 +75,9 @@ public:
 		cpu_cache_size = 1024 * 1024;
 		hilbert_order = true;
 		num_nodes = 1;
+		sort_buf_size = 128 * 1024 * 1024;
+		anchor_gap_size = 8 * 1024 * 1024;
+		write_io_buf_size = 128 * 1024 * 1024;
 	}
 
 	/**
@@ -156,6 +169,30 @@ public:
 	int get_num_nodes() const {
 		return num_nodes;
 	}
+
+	void set_sort_buf_size(size_t sort_buf_size) {
+		this->sort_buf_size = sort_buf_size;
+	}
+
+	void set_anchor_gap_size(size_t anchor_gap_size) {
+		this->anchor_gap_size = anchor_gap_size;
+	}
+
+	void set_write_io_buf_size(size_t write_io_buf_size) {
+		this->write_io_buf_size = write_io_buf_size;
+	}
+
+	size_t get_sort_buf_size() const {
+		return sort_buf_size;
+	}
+
+	size_t get_anchor_gap_size() const {
+		return anchor_gap_size;
+	}
+
+	size_t get_write_io_buf_size() const {
+		return write_io_buf_size;
+	}
 };
 
 inline void matrix_config::print_help()
@@ -170,6 +207,9 @@ inline void matrix_config::print_help()
 	printf("\tcpu_cache_size: the cpu cache size that can be used by a thread\n");
 	printf("\thilbert_order: use the hilbert order\n");
 	printf("\tnum_nodes: The number of NUMA nodes\n");
+	printf("\tsort_buf_size: the buffer size for sorting\n");
+	printf("\tanchor_gap_size: the gap size of the anchors in the sort buffer\n");
+	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
 }
 
 inline void matrix_config::print()
@@ -184,21 +224,48 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size" << cpu_cache_size;
 	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
 	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
+	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tanchor_gap_size" << anchor_gap_size;
+	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
 }
 
 inline void matrix_config::init(config_map::ptr map)
 {
-	map->read_option_int("threads", num_threads);
+	if (map->has_option("threads"))
+		map->read_option_int("threads", num_threads);
 	if (!power2(num_threads))
 		throw fg::conf_exception("The number of worker threads has to be 2^n");
-	map->read_option("FM_prof_file", prof_file);
-	map->read_option_bool("in_mem_matrix", _in_mem_matrix);
-	map->read_option_int("row_block_size", row_block_size);
-	map->read_option_int("rb_io_size", rb_io_size);
-	map->read_option_int("rb_steal_io_size", rb_steal_io_size);
-	map->read_option_int("cpu_cache_size", cpu_cache_size);
-	map->read_option_bool("hilbert_order", hilbert_order);
-	map->read_option_int("num_nodes", num_nodes);
+	if (map->has_option("FM_prof_file"))
+		map->read_option("FM_prof_file", prof_file);
+	if (map->has_option("in_mem_matrix"))
+		map->read_option_bool("in_mem_matrix", _in_mem_matrix);
+	if (map->has_option("row_block_size"))
+		map->read_option_int("row_block_size", row_block_size);
+	if (map->has_option("rb_io_size"))
+		map->read_option_int("rb_io_size", rb_io_size);
+	if (map->has_option("rb_steal_io_size"))
+		map->read_option_int("rb_steal_io_size", rb_steal_io_size);
+	if (map->has_option("cpu_cache_size"))
+		map->read_option_int("cpu_cache_size", cpu_cache_size);
+	if (map->has_option("hilbert_order"))
+		map->read_option_bool("hilbert_order", hilbert_order);
+	if (map->has_option("num_nodes"))
+		map->read_option_int("num_nodes", num_nodes);
+	if (map->has_option("sort_buf_size")) {
+		long tmp = 0;
+		map->read_option_long("sort_buf_size", tmp);
+		sort_buf_size = tmp;
+	}
+	if (map->has_option("anchor_gap_size")) {
+		long tmp = 0;
+		map->read_option_long("anchor_gap_size", tmp);
+		anchor_gap_size = tmp;
+	}
+	if (map->has_option("write_io_buf_size")) {
+		long tmp = 0;
+		map->read_option_long("write_io_buf_size", tmp);
+		write_io_buf_size = tmp;
+	}
 }
 
 extern matrix_config matrix_conf;

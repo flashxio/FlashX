@@ -24,6 +24,15 @@
 
 #include "thread.h"
 
+#include "local_vec_store.h"
+
+namespace safs
+{
+class file_io_factory;
+class io_interface;
+class io_request;
+}
+
 namespace fm
 {
 
@@ -75,6 +84,134 @@ public:
 	void process_task(int node_id, thread_task *task);
 
 	void wait4complete();
+};
+
+class io_worker_task;
+
+/*
+ * This runs on the portion of the data in a data container when the portion
+ * of data is available in memory.
+ */
+class portion_compute
+{
+	// This object doesn't own the worker task. We have to make sure
+	// the worker task is alive when this object is alive.
+	io_worker_task *worker_task;
+public:
+	typedef std::shared_ptr<portion_compute> ptr;
+
+	virtual ~portion_compute() {
+	}
+
+	io_worker_task &get_worker_task() {
+		return *worker_task;
+	}
+
+	void set_worker(io_worker_task *task) {
+		worker_task = task;
+	}
+
+	bool register_portion_compute(const safs::io_request &req,
+			portion_compute::ptr compute);
+
+	virtual void run(char *buf, size_t size) = 0;
+};
+
+/*
+ * When we write data to disks, we need to have something to hold the buffer.
+ * This holds the local buffer until the write completes.
+ */
+class portion_write_complete: public portion_compute
+{
+	local_buf_vec_store::ptr store;
+public:
+	portion_write_complete(local_buf_vec_store::ptr store) {
+		this->store = store;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		assert(store->get_raw_arr() == buf);
+		assert(store->get_length() * store->get_entry_size() == size);
+	}
+};
+
+/*
+ * This is an I/O task that defines computation on the portion of data
+ * in an external-memory data container.
+ */
+class portion_io_task
+{
+	// This object doesn't own the worker task. We have to make sure
+	// the worker task is alive when this object is alive.
+	io_worker_task *worker_task;
+public:
+	typedef std::shared_ptr<portion_io_task> ptr;
+
+	virtual ~portion_io_task() {
+	}
+
+	io_worker_task &get_worker_task() {
+		return *worker_task;
+	}
+
+	void set_worker(io_worker_task *task) {
+		worker_task = task;
+	}
+
+	bool register_portion_compute(const safs::io_request &req,
+			portion_compute::ptr compute);
+
+	virtual void run(std::shared_ptr<safs::io_interface> read_io,
+			std::shared_ptr<safs::io_interface> write_io) = 0;
+};
+
+/*
+ * This defines a set of I/O tasks that process an entire data container.
+ */
+class task_dispatcher
+{
+public:
+	typedef std::shared_ptr<task_dispatcher> ptr;
+
+	virtual ~task_dispatcher() {
+	}
+	/*
+	 * Return a task to the invoker.
+	 * This method must be thread-safe.
+	 */
+	virtual portion_io_task::ptr get_task() = 0;
+};
+
+class portion_callback;
+
+class io_worker_task: public thread_task
+{
+	std::shared_ptr<safs::file_io_factory> read_factory;
+	std::shared_ptr<safs::file_io_factory> write_factory;
+	std::shared_ptr<portion_callback> cb;
+	task_dispatcher::ptr dispatch;
+	int max_pending_ios;
+public:
+	/*
+	 * If the read and write I/O factories are the same, only one I/O instance
+	 * is created and is used for both read and write. If only the read
+	 * I/O factory is created, only a read I/O instance is created.
+	 * If only the write I/O factory is created, only a write I/O instance
+	 * is created.
+	 */
+	io_worker_task(std::shared_ptr<safs::file_io_factory> read_factory,
+			std::shared_ptr<safs::file_io_factory> write_factory,
+			task_dispatcher::ptr dispatch, int max_pending_ios = 16) {
+		this->read_factory = read_factory;
+		this->write_factory = write_factory;
+		this->dispatch = dispatch;
+		this->max_pending_ios = max_pending_ios;
+	}
+
+	bool register_portion_compute(const safs::io_request &req,
+			portion_compute::ptr compute);
+
+	virtual void run();
 };
 
 }

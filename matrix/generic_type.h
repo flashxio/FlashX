@@ -216,6 +216,7 @@ public:
 	 * Get the raw representation of the type.
 	 */
 	virtual const char *get_raw() const = 0;
+	virtual char *get_raw() = 0;
 	/**
 	 * The type.
 	 */
@@ -245,6 +246,9 @@ public:
 
 	virtual const char *get_raw() const {
 		return (const char *) &v;
+	}
+	virtual char *get_raw() {
+		return (char *) &v;
 	}
 
 	virtual const scalar_type &get_type() const {

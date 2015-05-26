@@ -108,6 +108,16 @@ data_frame::ptr local_vec_store::groupby(
 	return ret;
 }
 
+local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs)
+{
+	local_vec_store::ptr ret(new local_buf_vec_store(0, idxs.size(), get_type(), -1));
+	std::vector<const char *> ptrs(idxs.size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		ptrs[i] = this->get(idxs[i]);
+	get_type().get_sg().gather(ptrs, ret->get_raw_arr());
+	return ret;
+}
+
 bool local_ref_vec_store::resize(size_t new_length)
 {
 	BOOST_LOG_TRIVIAL(error)

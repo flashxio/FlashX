@@ -102,6 +102,22 @@ public:
 	virtual void sort();
 	virtual bool is_sorted() const;
 
+	local_vec_store::ptr get(std::vector<off_t> &idxs);
+
+	const char *get(off_t idx) const {
+		return const_data + idx * get_entry_size();
+	}
+
+	char *get(off_t idx) {
+		return data + idx * get_entry_size();
+	}
+
+	void set_raw(off_t idx, const char *val) {
+		assert(const_data == data);
+		char *dst = data + idx * get_entry_size();
+		memcpy(dst, val, get_entry_size());
+	}
+
 	template<class T>
 	T get(off_t idx) const {
 		return *(const T *) (const_data + idx * sizeof(T));

@@ -3,10 +3,12 @@
 #include "EM_vector.h"
 #include "sparse_matrix.h"
 #include "matrix_config.h"
+#include "mem_worker_thread.h"
 
 using namespace fm;
+using namespace detail;
 
-class write_double_compute: public subvec_compute
+class write_double_compute: public portion_compute
 {
 	double *buf;
 public:
@@ -22,7 +24,7 @@ public:
 	}
 };
 
-class read_double_compute: public subvec_compute
+class read_double_compute: public portion_compute
 {
 	double *buf;
 	off_t idx;
@@ -43,10 +45,107 @@ public:
 	}
 };
 
-void init_buf(double *buf, off_t idx, size_t num)
+template<class T>
+class set_seq_operate: public set_operate
 {
-	for (size_t i = 0; i < num; i++)
-		buf[i] = idx + i;
+public:
+	virtual void set(void *tmp, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		T *arr = (T *) tmp;
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = row_idx + i;
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+class set_rand_operate: public set_operate
+{
+	T max_val;
+public:
+	set_rand_operate(T max_val) {
+		this->max_val = max_val;
+	}
+
+	virtual void set(void *tmp, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		T *arr = (T *) tmp;
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = random() % max_val;
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+void test_setdata()
+{
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+			get_scalar_type<int>());
+	vec->set_data(set_seq_operate<int>());
+	assert(vec->is_sorted());
+}
+
+void test_sort_summary()
+{
+	const scalar_type &type = get_scalar_type<int>();
+	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
+	size_t num_bufs = 10;
+	std::vector<local_buf_vec_store::ptr> bufs(num_bufs);
+	EM_sort_detail::sort_portion_summary summary(type, num_bufs);
+	for (size_t i = 0; i < num_bufs; i++) {
+		local_buf_vec_store::ptr buf(new local_buf_vec_store(i * sort_buf_size,
+					sort_buf_size, type, -1));
+		buf->set_data(set_rand_operate<int>(1000));
+		buf->sort();
+		summary.add_portion(buf);
+	}
+
+	std::vector<int> anchor_vals;
+	std::vector<local_vec_store::const_ptr> anchor_bufs(num_bufs);
+	assert(summary.get_num_bufs() == num_bufs);
+	for (size_t i = 0; i < num_bufs; i++) {
+		local_vec_store::const_ptr buf = summary.get_anchor_vals(i);
+		assert(buf->is_sorted());
+		anchor_bufs[i] = buf;
+
+		int *start = (int *) buf->get_raw_arr();
+		anchor_vals.insert(anchor_vals.end(), start, start + buf->get_length());
+	}
+	std::sort(anchor_vals.begin(), anchor_vals.end());
+
+	EM_sort_detail::anchor_prio_queue::ptr queue = summary.get_prio_queue();
+	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / type.get_size();
+	size_t max_fetch_size = anchor_gap_size * 8;
+	size_t fetch_size = random() % max_fetch_size;
+	size_t min_loc = 0;
+	std::vector<off_t> anchor_locs = queue->pop(fetch_size);
+	while (!anchor_locs.empty()) {
+		scalar_variable::ptr min_val = queue->get_min_frontier();
+		if (min_val == NULL)
+			break;
+
+		assert(anchor_locs.size() * anchor_gap_size == ROUNDUP(fetch_size,
+					anchor_gap_size));
+		min_loc += anchor_locs.size();
+		assert(*(int *) min_val->get_raw() == anchor_vals[min_loc]);
+
+		fetch_size = random() % max_fetch_size;
+		anchor_locs = queue->pop(fetch_size);
+	}
+}
+
+void test_sort()
+{
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+			get_scalar_type<int>());
+	vec->set_data(set_rand_operate<int>(1000));
+	assert(!vec->is_sorted());
+	printf("sort vec\n");
+	vec->sort();
+	assert(vec->is_sorted());
 }
 
 int main(int argc, char *argv[])
@@ -59,27 +158,13 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
+	matrix_conf.set_anchor_gap_size(1024 * 128);
+	matrix_conf.set_sort_buf_size(1024 * 1024 * 8);
+	matrix_conf.set_write_io_buf_size(1024 * 1024);
 
-	EM_vector::ptr vec = EM_vector::create(1024 * 1024, sizeof(double));
-	EM_vector_accessor::ptr accessor = vec->create_accessor();
-	size_t num_eles = 1024 * 8;
-	for (size_t i = 0; i < vec->get_size(); i += num_eles) {
-		double *buf = (double *) memalign(PAGE_SIZE, num_eles * sizeof(double));
-		init_buf(buf, i, num_eles);
-		accessor->set_subvec((char *) buf, i, num_eles, subvec_compute::ptr(
-				new write_double_compute(buf)));
-	}
-	accessor->wait4all();
-
-	for (size_t i = 0; i < vec->get_size(); i += num_eles) {
-		double *buf = (double *) memalign(PAGE_SIZE, num_eles * sizeof(double));
-		accessor->fetch_subvec((char *) buf, i, num_eles, subvec_compute::ptr(
-				new read_double_compute(buf, i, num_eles)));
-	}
-	accessor->wait4all();
-	// TODO I have destroy them before I can destroy FlashMatrix.
-	accessor = NULL;
-	vec = NULL;
+	test_setdata();
+	test_sort_summary();
+	test_sort();
 
 	destroy_flash_matrix();
 }
