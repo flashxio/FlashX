@@ -189,7 +189,7 @@ void NUMA_vec_store::sort()
 	// The number of threads per NUMA node.
 	size_t nthreads_per_node
 		= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
-	typedef std::pair<char *, char *> arr_pair;
+	typedef std::pair<const char *, const char *> arr_pair;
 	std::vector<arr_pair> arrs;
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
@@ -205,8 +205,7 @@ void NUMA_vec_store::sort()
 			// The number of elements processed in this thread.
 			size_t local_len = std::min(len_per_thread,
 					local_lens[i] - len_per_thread * j);
-			arrs.push_back(std::pair<char *, char *>(start,
-						start + local_len * get_entry_size()));
+			arrs.push_back(arr_pair(start, start + local_len * get_entry_size()));
 			mem_threads->process_task(data[i].get_node_id(),
 					new sort_task(start, local_len, get_type()));
 		}

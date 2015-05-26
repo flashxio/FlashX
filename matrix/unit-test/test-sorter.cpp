@@ -18,11 +18,11 @@ void test_sort()
 				vals[i].size(), false);
 		assert(std::is_sorted(vals[i].begin(), vals[i].end()));
 	}
-	std::vector<std::pair<char *, char *> > pairs(vals.size());
+	std::vector<std::pair<const char *, const char *> > pairs(vals.size());
 	size_t tot_vals = 0;
 	for (size_t i = 0; i < vals.size(); i++) {
 		tot_vals += vals[i].size();
-		pairs[i] = std::pair<char *, char *>((char *) vals[i].data(),
+		pairs[i] = std::pair<const char *, const char *>((char *) vals[i].data(),
 				(char *) (vals[i].data() + vals[i].size()));
 	}
 	std::vector<long> res(tot_vals);

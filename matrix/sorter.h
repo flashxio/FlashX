@@ -38,7 +38,7 @@ public:
 			bool decreasing) const = 0;
 	virtual void sort(char *data, size_t num, bool decreasing) const = 0;
 	virtual void serial_sort(char *data, size_t num, bool decreasing) const = 0;
-	virtual void merge(std::vector<std::pair<char *, char *> > &arrs,
+	virtual void merge(std::vector<std::pair<const char *, const char *> > &arrs,
 			char *output, size_t out_num) const = 0;
 };
 
@@ -62,7 +62,7 @@ public:
 			bool decreasing) const;
 	virtual void sort(char *data, size_t num, bool decreasing) const;
 	virtual void serial_sort(char *data, size_t num, bool decreasing) const;
-	virtual void merge(std::vector<std::pair<char *, char *> > &arrs,
+	virtual void merge(std::vector<std::pair<const char *, const char *> > &arrs,
 			char *output, size_t out_num) const;
 };
 
@@ -155,7 +155,8 @@ void type_sorter<T>::serial_sort(char *data1, size_t num, bool decreasing) const
 }
 
 template<class T>
-void type_sorter<T>::merge(std::vector<std::pair<char *, char *> > &raw_arrs,
+void type_sorter<T>::merge(
+		std::vector<std::pair<const char *, const char *> > &raw_arrs,
 		char *output, size_t out_num) const
 {
 	std::vector<std::pair<T *, T *> > arrs(raw_arrs.size());
