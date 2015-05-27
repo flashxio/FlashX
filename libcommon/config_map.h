@@ -81,6 +81,15 @@ public:
 			return false;
 	}
 
+	bool read_option_long(const std::string &name, long &value) const {
+		if (has_option(name)) {
+			value = atol(get_option(name).c_str());
+			return true;
+		}
+		else
+			return false;
+	}
+
 	bool read_option_bool(const std::string &name, bool &value) const {
 		if (has_option(name)) {
 			value = true;
