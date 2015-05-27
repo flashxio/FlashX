@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "sorter.h"
+#include "stl_algs.h"
 
 namespace fm
 {
@@ -139,6 +140,7 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
@@ -178,6 +180,10 @@ public:
 	}
 
 	virtual const scatter_gather &get_sg() const;
+	virtual const stl_algs &get_stl_algs() const {
+		static stl_algs_impl<T> algs;
+		return algs;
+	}
 	virtual const set_operate &get_set_const(const scalar_variable &val) const;
 
 	virtual prim_type get_type() const {
