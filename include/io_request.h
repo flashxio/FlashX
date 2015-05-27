@@ -578,7 +578,7 @@ public:
 	}
 
 	// By default, a request is initialized as a flush request.
-	io_request(bool sync = false) {
+	explicit io_request(bool sync = false) {
 		memset(this, 0, sizeof(*this));
 		payload_type = BASIC_REQ;
 		use_default_flags();
