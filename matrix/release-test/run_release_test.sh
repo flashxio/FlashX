@@ -6,8 +6,12 @@ echo "unit test on external-memory matrix"
 ../unit-test/test-EM_matrix
 echo "unit test on external-memory vector"
 ../unit-test/test-EM_vector
+echo "unit test on local matrix store"
+../unit-test/test-local_matrix_store
 echo "unit test on in-memory matrix"
 ../unit-test/test-mem_matrix
+echo "unit test on in-memory matrix store"
+../unit-test/test-mem_matrix_store
 echo "unit test on in-memory vector"
 ../unit-test/test-mem_vector
 echo "unit test on in-memory vector of vectors"
