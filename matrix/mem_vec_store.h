@@ -34,6 +34,8 @@ class local_vec_store;
 namespace detail
 {
 
+class matrix_store;
+
 class mem_vec_store: public vec_store
 {
 public:
@@ -156,6 +158,9 @@ public:
 		return get_type().get_sorter().is_sorted(get_raw_arr(),
 				get_length(), false);
 	}
+
+	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) const;
 
 	char *get(off_t idx) {
 		return arr + idx * get_entry_size();

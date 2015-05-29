@@ -24,6 +24,8 @@
 #include "mem_vec_store.h"
 #include "bulk_operate.h"
 #include "local_vec_store.h"
+#include "mem_matrix_store.h"
+#include "NUMA_vector.h"
 
 namespace fm
 {
@@ -239,6 +241,21 @@ local_vec_store::const_ptr smp_vec_store::get_portion(off_t loc,
 size_t smp_vec_store::get_portion_size() const
 {
 	return 64 * 1024;
+}
+
+matrix_store::const_ptr smp_vec_store::conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const
+{
+	assert(arr == data.get_raw());
+	if (get_length() < nrow * ncol) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector doesn't have enough elements";
+		return matrix_store::ptr();
+	}
+	if (byrow)
+		return mem_row_matrix_store::create(data, nrow, ncol, get_type());
+	else
+		return mem_col_matrix_store::create(data, nrow, ncol, get_type());
 }
 
 template<>

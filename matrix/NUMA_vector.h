@@ -40,6 +40,8 @@ class local_vec_store;
 namespace detail
 {
 
+class matrix_store;
+
 /*
  * This is another implementation of in-memory vector. In this implementation,
  * the data in the vector is split and stored on multiple NUMA nodes. All
@@ -123,6 +125,9 @@ public:
 	virtual int get_num_nodes() const {
 		return data.size();
 	}
+
+	virtual std::shared_ptr<const matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow) const;
 
 	char *get(off_t idx) {
 		std::pair<int, size_t> loc = mapper.map2physical(idx);

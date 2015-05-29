@@ -22,6 +22,7 @@
 #include "mem_data_frame.h"
 #include "mem_vv_store.h"
 #include "mem_vec_store.h"
+#include "matrix_store.h"
 
 namespace fm
 {
@@ -116,6 +117,14 @@ local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs)
 		ptrs[i] = this->get(idxs[i]);
 	get_type().get_sg().gather(ptrs, ret->get_raw_arr());
 	return ret;
+}
+
+detail::matrix_store::const_ptr local_vec_store::conv2mat(size_t nrow,
+		size_t ncol, bool byrow) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "can't convert a local vector to a matrix";
+	return detail::matrix_store::ptr();
 }
 
 bool local_ref_vec_store::resize(size_t new_length)

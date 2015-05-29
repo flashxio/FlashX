@@ -35,6 +35,8 @@ namespace fm
 namespace detail
 {
 
+class matrix_store;
+
 class EM_vec_store: public vec_store
 {
 	safs::file_io_factory::shared_ptr factory;
@@ -70,6 +72,9 @@ public:
 	virtual vec_store::ptr sort_with_index();
 	virtual void sort();
 	virtual bool is_sorted() const;
+
+	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) const;
 };
 
 namespace EM_sort_detail

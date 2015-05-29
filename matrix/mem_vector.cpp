@@ -25,6 +25,7 @@
 #include "mem_vector_vector.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
+#include "mem_dense_matrix.h"
 
 namespace fm
 {
@@ -271,6 +272,14 @@ data_frame::ptr mem_vector::sort_with_index() const
 	df->add_vec("idx", idx);
 	df->add_vec("val", vec);
 	return df;
+}
+
+dense_matrix::ptr mem_vector::conv2mat(size_t nrow, size_t ncol,
+		bool byrow) const
+{
+	detail::mem_matrix_store::const_ptr mat = detail::mem_matrix_store::cast(
+			get_data().conv2mat(nrow, ncol, byrow));
+	return mem_dense_matrix::create(mat);
 }
 
 bool mem_vector::export2(FILE *f) const

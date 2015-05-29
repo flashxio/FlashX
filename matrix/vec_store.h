@@ -30,6 +30,8 @@ class local_vec_store;
 namespace detail
 {
 
+class matrix_store;
+
 class vec_store
 {
 	size_t length;
@@ -103,6 +105,8 @@ public:
 	virtual vec_store::ptr sort_with_index() = 0;
 	virtual void sort() = 0;
 	virtual bool is_sorted() const = 0;
+	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) const = 0;
 };
 
 }

@@ -27,6 +27,7 @@
 #include "data_frame.h"
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
+#include "matrix_store.h"
 
 namespace fm
 {
@@ -281,6 +282,14 @@ local_vec_store::const_ptr NUMA_vec_store::get_portion(off_t start,
 local_vec_store::ptr NUMA_vec_store::get_portion(off_t start, size_t length)
 {
 	return local_vec_store::ptr();
+}
+
+matrix_store::const_ptr NUMA_vec_store::conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "can't convert a NUMA vector to a matrix";
+	return matrix_store::ptr();
 }
 
 }

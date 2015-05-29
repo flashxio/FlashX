@@ -31,6 +31,7 @@
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
+#include "matrix_store.h"
 
 namespace fm
 {
@@ -800,6 +801,14 @@ void EM_vec_store::set_data(const set_operate &op)
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
+}
+
+matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "can't convert a NUMA vector to a matrix";
+	return matrix_store::ptr();
 }
 
 }

@@ -35,6 +35,7 @@ namespace fm
 
 class data_frame;
 class scalar_type;
+class dense_matrix;
 
 class mem_vector: public vector
 {
@@ -82,6 +83,8 @@ public:
 
 	virtual vector::ptr sort() const;
 	virtual std::shared_ptr<data_frame> sort_with_index() const;
+	virtual std::shared_ptr<dense_matrix> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) const;
 
 	bool export2(FILE *f) const;
 };

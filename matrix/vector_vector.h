@@ -103,6 +103,10 @@ public:
 	virtual scalar_variable::ptr dot_prod(const vector &vec) const {
 		return scalar_variable::ptr();
 	}
+	virtual std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const {
+		return std::shared_ptr<dense_matrix>();
+	}
 };
 
 /*

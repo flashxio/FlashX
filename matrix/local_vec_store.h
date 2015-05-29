@@ -31,6 +31,13 @@ namespace fm
 
 class data_frame;
 
+namespace detail
+{
+
+class matrix_store;
+
+}
+
 class local_vec_store: public detail::mem_vec_store
 {
 	const off_t orig_global_start;
@@ -101,6 +108,8 @@ public:
 	virtual detail::vec_store::ptr sort_with_index();
 	virtual void sort();
 	virtual bool is_sorted() const;
+	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow) const;
 
 	local_vec_store::ptr get(std::vector<off_t> &idxs);
 

@@ -31,6 +31,7 @@ namespace fm
 class bulk_operate;
 class data_frame;
 class agg_operate;
+class dense_matrix;
 
 class vector
 {
@@ -82,6 +83,8 @@ public:
 	}
 	virtual vector::ptr sort() const = 0;
 	virtual std::shared_ptr<data_frame> sort_with_index() const = 0;
+	virtual std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const = 0;
 
 	// It should return data frame instead of vector.
 	virtual std::shared_ptr<data_frame> groupby(
