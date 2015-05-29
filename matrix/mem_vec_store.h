@@ -72,6 +72,7 @@ public:
 			size_t size) = 0;
 	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
 			size_t size) const = 0;
+	virtual bool copy_from(const char *buf, size_t num_bytes);
 };
 
 class smp_vec_store: public mem_vec_store

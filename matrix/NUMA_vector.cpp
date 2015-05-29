@@ -223,13 +223,15 @@ void NUMA_vec_store::sort()
 	copy_from(tmp.get(), tot_num_bytes);
 }
 
-void NUMA_vec_store::copy_from(const char *buf, size_t num_bytes)
+bool NUMA_vec_store::copy_from(const char *buf, size_t num_bytes)
 {
-	assert(num_bytes % get_entry_size() == 0);
-	assert(num_bytes / get_entry_size() == get_length());
+	if (num_bytes % get_entry_size() != 0
+			|| num_bytes / get_entry_size() != get_length())
+		return false;
 
 	copy_operate cp(mapper, get_entry_size(), buf);
 	set_array_ranges(mapper, get_length(), get_entry_size(), cp, data);
+	return true;
 }
 
 bool NUMA_vec_store::copy_from(const NUMA_vec_store &vec)

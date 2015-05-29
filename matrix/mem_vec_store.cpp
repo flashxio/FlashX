@@ -33,6 +33,18 @@ namespace fm
 namespace detail
 {
 
+bool mem_vec_store::copy_from(const char *buf, size_t num_bytes)
+{
+	if (get_raw_arr() == NULL)
+		return false;
+
+	if (num_bytes % get_entry_size() != 0
+			|| num_bytes / get_entry_size() != get_length())
+		return false;
+	memcpy(get_raw_arr(), buf, num_bytes);
+	return true;
+}
+
 smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_store(
 		length, type), data(length * type.get_size())
 {

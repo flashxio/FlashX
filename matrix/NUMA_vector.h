@@ -119,7 +119,7 @@ public:
 	/*
 	 * This copies a piece of contiguous memory to the NUMA vector.
 	 */
-	void copy_from(const char *buf, size_t num_bytes);
+	virtual bool copy_from(const char *buf, size_t num_bytes);
 	bool copy_from(const NUMA_vec_store &vec);
 
 	virtual int get_num_nodes() const {
