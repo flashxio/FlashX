@@ -37,6 +37,7 @@ class bulk_operate;
 class bulk_uoperate;
 class set_operate;
 class arr_apply_operate;
+class vector;
 
 enum apply_margin
 {
@@ -200,6 +201,8 @@ public:
 		store = mat.store;
 	}
 
+	virtual std::shared_ptr<vector> get_col(off_t idx) const = 0;
+	virtual std::shared_ptr<vector> get_row(off_t idx) const = 0;
 	virtual dense_matrix::ptr get_cols(
 			const std::vector<off_t> &idxs) const = 0;
 	virtual dense_matrix::ptr get_rows(

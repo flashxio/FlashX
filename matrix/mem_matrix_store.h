@@ -26,12 +26,11 @@
 namespace fm
 {
 
-class mem_vector;
-
 namespace detail
 {
 
 class local_matrix_store;
+class vec_store;
 
 /*
  * This is the base class that represents an in-memory complete matrix.
@@ -76,6 +75,8 @@ public:
 			const std::vector<off_t> &idxs) const = 0;
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const = 0;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const = 0;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const = 0;
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
@@ -183,8 +184,8 @@ public:
 		return matrix_store::const_ptr();
 	}
 
-	virtual std::shared_ptr<mem_vector> get_col_vec(size_t col);
-	virtual std::shared_ptr<const mem_vector> get_col_vec(size_t col) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
@@ -262,6 +263,8 @@ public:
 		return matrix_store::const_ptr();
 	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -337,8 +340,8 @@ public:
 		return matrix_store::const_ptr();
 	}
 
-	virtual std::shared_ptr<mem_vector> get_col_vec(size_t col);
-	virtual std::shared_ptr<const mem_vector> get_col_vec(size_t col) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };
 
 /*
@@ -407,6 +410,8 @@ public:
 		return matrix_store::const_ptr();
 	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };
 
 }

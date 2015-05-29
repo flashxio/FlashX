@@ -81,9 +81,6 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
 	}
-
-	virtual NUMA_vec_store::ptr get_row_vec(size_t row) = 0;
-	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const = 0;
 };
 
 class NUMA_col_matrix_store: public NUMA_matrix_store
@@ -103,9 +100,6 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
-
-	virtual NUMA_vec_store::ptr get_col_vec(size_t col) = 0;
-	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const = 0;
 };
 
 class NUMA_col_wide_matrix_store;
@@ -171,11 +165,15 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vec_store::ptr get_row_vec(size_t row) {
-		return NUMA_vec_store::ptr();
+	virtual vec_store::const_ptr get_row_vec(off_t row) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a row from a NUMA tall row matrix";
+		return vec_store::const_ptr();
 	}
-	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const {
-		return NUMA_vec_store::const_ptr();
+	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a column from a NUMA tall row matrix";
+		return vec_store::const_ptr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
@@ -243,11 +241,13 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vec_store::ptr get_col_vec(size_t col) {
+	virtual vec_store::const_ptr get_col_vec(off_t col) const {
 		return data[col];
 	}
-	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const {
-		return data[col];
+	virtual vec_store::const_ptr get_row_vec(off_t idx) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a row from a NUMA tall column matrix";
+		return vec_store::const_ptr();
 	}
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
@@ -307,11 +307,13 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vec_store::ptr get_row_vec(size_t row) {
+	virtual vec_store::const_ptr get_row_vec(off_t row) const {
 		return store.get_col_vec(row);
 	}
-	virtual NUMA_vec_store::const_ptr get_row_vec(size_t row) const {
-		return store.get_col_vec(row);
+	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a column from a NUMA wide row matrix";
+		return vec_store::const_ptr();
 	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
@@ -387,11 +389,15 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
-	virtual NUMA_vec_store::ptr get_col_vec(size_t col) {
-		return NUMA_vec_store::ptr();
+	virtual vec_store::const_ptr get_col_vec(off_t col) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a column from a NUMA wide col matrix";
+		return vec_store::const_ptr();
 	}
-	virtual NUMA_vec_store::const_ptr get_col_vec(size_t col) const {
-		return NUMA_vec_store::const_ptr();
+	virtual vec_store::const_ptr get_row_vec(off_t row) const {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a row from a NUMA wide col matrix";
+		return vec_store::const_ptr();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

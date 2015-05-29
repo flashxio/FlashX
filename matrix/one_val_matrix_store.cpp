@@ -21,6 +21,7 @@
 #include "one_val_matrix_store.h"
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
+#include "vec_store.h"
 
 namespace fm
 {
@@ -70,6 +71,18 @@ matrix_store::ptr one_val_matrix_store::materialize() const
 	const set_operate &op = get_type().get_set_const(*val);
 	store->set_data(op);
 	return store;
+}
+
+vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
+{
+	// TODO we'll implement this when we have one-value vector.
+	return vec_store::const_ptr();
+}
+
+vec_store::const_ptr one_val_matrix_store::get_row_vec(off_t idx) const
+{
+	// TODO we'll implement this when we have one-value vector.
+	return vec_store::const_ptr();
 }
 
 matrix_store::const_ptr one_val_matrix_store::get_cols(

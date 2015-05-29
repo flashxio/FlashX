@@ -36,48 +36,88 @@ namespace detail
 
 const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
 
-mem_vector::ptr mem_col_matrix_store::get_col_vec(size_t col)
+vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
+{
+	assert(data.get_num_bytes()
+			== get_num_rows() * get_num_cols() * get_entry_size());
+	if (get_num_rows() == 1)
+		return detail::smp_vec_store::create(data, get_type());
+	else {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a row from a column matrix with multiple rows";
+		return vec_store::const_ptr();
+	}
+}
+
+vec_store::const_ptr mem_col_matrix_store::get_col_vec(off_t col) const
 {
 	assert(data.get_num_bytes()
 			== get_num_rows() * get_num_cols() * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
 			get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
-	return mem_vector::create(ret);
+	return ret;
 }
 
-mem_vector::const_ptr mem_col_matrix_store::get_col_vec(size_t col) const
+vec_store::const_ptr mem_sub_col_matrix_store::get_row_vec(off_t row) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "Can't get a row from a column sub matrix";
+	return vec_store::const_ptr();
+}
+
+vec_store::const_ptr mem_sub_col_matrix_store::get_col_vec(off_t col) const
+{
+	// The original column matrix has at least this many columns.
+	size_t orig_num_cols = orig_col_idxs[col] + 1;
+	assert(get_data().get_num_bytes()
+			>= get_num_rows() * orig_num_cols * get_entry_size());
+	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
+			get_type());
+	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
+	return ret;
+}
+
+vec_store::const_ptr mem_row_matrix_store::get_row_vec(off_t row) const
 {
 	assert(data.get_num_bytes()
 			== get_num_rows() * get_num_cols() * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
 			get_type());
-	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
-	return mem_vector::create(ret);
+	ret->expose_sub_vec(row * get_num_cols(), get_num_cols());
+	return ret;
 }
 
-mem_vector::ptr mem_sub_col_matrix_store::get_col_vec(size_t col)
+vec_store::const_ptr mem_row_matrix_store::get_col_vec(off_t col) const
 {
-	// The original column matrix has at least this many columns.
-	size_t orig_num_cols = orig_col_idxs[col] + 1;
-	assert(get_data().get_num_bytes()
-			== get_num_rows() * orig_num_cols * get_entry_size());
-	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
-			get_type());
-	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
-	return mem_vector::create(ret);
+	assert(data.get_num_bytes()
+			== get_num_rows() * get_num_cols() * get_entry_size());
+	if (get_num_cols() == 1)
+		return detail::smp_vec_store::create(data, get_type());
+	else {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't get a column from a row matrix with multiple columns";
+		return vec_store::const_ptr();
+	}
 }
 
-mem_vector::const_ptr mem_sub_col_matrix_store::get_col_vec(size_t col) const
+vec_store::const_ptr mem_sub_row_matrix_store::get_row_vec(off_t row) const
 {
-	// The original column matrix has at least this many columns.
-	size_t orig_num_cols = orig_col_idxs[col] + 1;
+	// The original row matrix has at least this many rows.
+	size_t orig_num_rows = orig_row_idxs[row] + 1;
 	assert(get_data().get_num_bytes()
-			== get_num_rows() * orig_num_cols * get_entry_size());
+			>= get_num_cols() * orig_num_rows * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
 			get_type());
-	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
-	return mem_vector::create(ret);
+	ret->expose_sub_vec(orig_row_idxs[row] * get_num_cols(), get_num_cols());
+	return ret;
+}
+
+vec_store::const_ptr mem_sub_row_matrix_store::get_col_vec(off_t row) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "Can't get a column from a row sub matrix";
+	return vec_store::const_ptr();
 }
 
 mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,

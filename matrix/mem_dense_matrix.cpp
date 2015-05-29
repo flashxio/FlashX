@@ -60,6 +60,28 @@ mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
+vector::ptr mem_dense_matrix::get_col(off_t idx) const
+{
+	detail::vec_store::const_ptr vec
+		= static_cast<const detail::mem_matrix_store &>(
+				get_data()).get_col_vec(idx);
+	if (vec)
+		return mem_vector::create(detail::mem_vec_store::cast(vec));
+	else
+		return vector::ptr();
+}
+
+vector::ptr mem_dense_matrix::get_row(off_t idx) const
+{
+	detail::vec_store::const_ptr vec
+		= static_cast<const detail::mem_matrix_store &>(
+				get_data()).get_row_vec(idx);
+	if (vec)
+		return mem_vector::create(detail::mem_vec_store::cast(vec));
+	else
+		return vector::ptr();
+}
+
 dense_matrix::ptr mem_dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	if (store_layout() == matrix_layout_t::L_COL) {

@@ -19,6 +19,7 @@
 
 #include "mapply_matrix_store.h"
 #include "local_matrix_store.h"
+#include "vec_store.h"
 
 namespace fm
 {
@@ -320,6 +321,20 @@ matrix_store::ptr mapply_matrix_store::materialize() const
 {
 	std::vector<matrix_store::const_ptr> tmp(in_mats.begin(), in_mats.end());
 	return __mapply_portion(tmp, op, layout);
+}
+
+vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
+{
+	if (res == NULL)
+		materialize_self();
+	return res->get_col_vec(idx);
+}
+
+vec_store::const_ptr mapply_matrix_store::get_row_vec(off_t idx) const
+{
+	if (res == NULL)
+		materialize_self();
+	return res->get_row_vec(idx);
 }
 
 matrix_store::const_ptr mapply_matrix_store::get_cols(
