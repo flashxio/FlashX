@@ -59,6 +59,8 @@ public:
 		return std::static_pointer_cast<const mem_vec_store>(store);
 	}
 
+	static ptr create(size_t length, int num_nodes, const scalar_type &type);
+
 	virtual int get_num_nodes() const {
 		return -1;
 	}

@@ -33,6 +33,15 @@ namespace fm
 namespace detail
 {
 
+mem_vec_store::ptr mem_vec_store::create(size_t length, int num_nodes,
+		const scalar_type &type)
+{
+	if (num_nodes < 0)
+		return smp_vec_store::create(length, type);
+	else
+		return NUMA_vec_store::create(length, num_nodes, type);
+}
+
 bool mem_vec_store::copy_from(const char *buf, size_t num_bytes)
 {
 	if (get_raw_arr() == NULL)
