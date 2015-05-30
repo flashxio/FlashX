@@ -29,7 +29,7 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/config.h"
 )
 
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -fPIC" )
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -g -fPIC" )
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
