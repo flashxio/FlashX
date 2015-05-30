@@ -241,6 +241,9 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
+	virtual vec_store::ptr get_col_vec(off_t col) {
+		return data[col];
+	}
 	virtual vec_store::const_ptr get_col_vec(off_t col) const {
 		return data[col];
 	}

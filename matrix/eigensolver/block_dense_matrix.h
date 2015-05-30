@@ -30,10 +30,8 @@ extern size_t num_col_writes;
 class sp_multiply
 {
 public:
-	virtual void run(const fm::sparse_matrix &A, const fm::mem_vector &in,
-			fm::mem_vector &out) const = 0;
-	virtual void run(const fm::sparse_matrix &A, const fm::NUMA_vector &in,
-			fm::NUMA_vector &out) const = 0;
+	virtual void run(const fm::sparse_matrix &A, const fm::detail::mem_vec_store &in,
+			fm::detail::mem_vec_store &out) const = 0;
 	virtual void run(const fm::sparse_matrix &A, const fm::detail::matrix_store &in,
 			fm::detail::matrix_store &out) const = 0;
 };
@@ -42,12 +40,8 @@ template<class T>
 class sp_multiply_impl: public sp_multiply
 {
 public:
-	virtual void run(const fm::sparse_matrix &A, const fm::mem_vector &in,
-			fm::mem_vector &out) const {
-		A.multiply<T>(in, out);
-	}
-	virtual void run(const fm::sparse_matrix &A, const fm::NUMA_vector &in,
-			fm::NUMA_vector &out) const {
+	virtual void run(const fm::sparse_matrix &A, const fm::detail::mem_vec_store &in,
+			fm::detail::mem_vec_store &out) const {
 		A.multiply<T>(in, out);
 	}
 	virtual void run(const fm::sparse_matrix &A, const fm::detail::matrix_store &in,
@@ -175,11 +169,13 @@ public:
 		block_multi_vector::ptr ret_vecs = block_multi_vector::create(
 				get_num_rows(), get_num_cols(), block_size, type);
 		for (size_t i = 0; i < num_blocks; i++) {
-			fm::mem_vector::ptr sub_vec = fm::mem_vector::create(block_size,
-					fm::get_scalar_type<Type>());
+			fm::detail::smp_vec_store::ptr sub_vec
+				= fm::detail::smp_vec_store::create(block_size,
+						fm::get_scalar_type<Type>());
 			for (size_t k = 0; k < block_size; k++)
 				sub_vec->set<Type>(k, vec[i * block_size + k]);
-			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec));
+			fm::mem_vector::ptr sub_vec1 = fm::mem_vector::create(sub_vec);
+			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec1));
 		}
 		return ret_vecs;
 	}

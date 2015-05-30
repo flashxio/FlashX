@@ -59,7 +59,7 @@ class mirror_cols_block_multi_vector: public block_multi_vector
 		this->offs_in_mirror = offs_in_mirror;
 	}
 public:
-	static ptr create(const std::vector<NUMA_vector::ptr> &vecs,
+	static ptr create(const std::vector<detail::NUMA_vec_store::ptr> &vecs,
 			const std::vector<off_t> &offs_in_mirror,
 			fm::dense_matrix::ptr mirrored_mat) {
 		std::vector<fm::dense_matrix::ptr> mats(1);
@@ -88,16 +88,17 @@ public:
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
 						mirrored_mat->get_data()));
-		std::vector<NUMA_vector::ptr> cols(mirrored_mat->get_num_cols());
+		std::vector<detail::NUMA_vec_store::ptr> cols(mirrored_mat->get_num_cols());
 		for (size_t i = 0; i < cols.size(); i++)
-			cols[i] = mirrored_numa_mat.get_col_vec(i);
+			cols[i] = detail::NUMA_vec_store::cast(mirrored_numa_mat.get_col_vec(i));
 
 		detail::NUMA_col_tall_matrix_store &numa_in_mat
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
 						mat->get_data()));
 		for (size_t i = 0; i < mat->get_num_cols(); i++)
-			cols[offs_in_mirror[i]] = numa_in_mat.get_col_vec(i);
+			cols[offs_in_mirror[i]]
+				= detail::NUMA_vec_store::cast(numa_in_mat.get_col_vec(i));
 
 		fm::dense_matrix::ptr new_mat = fm::mem_dense_matrix::create(
 				fm::detail::NUMA_col_tall_matrix_store::create(cols));
@@ -260,9 +261,10 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
 						block->get_data()));
-		std::vector<NUMA_vector::ptr> cols(index.size());
+		std::vector<detail::NUMA_vec_store::ptr> cols(index.size());
 		for (size_t i = 0; i < cols.size(); i++)
-			cols[i] = numa_block.get_col_vec(idxs_in_block[i]);
+			cols[i] = detail::NUMA_vec_store::cast(
+					numa_block.get_col_vec(idxs_in_block[i]));
 
 		mirror_cols_block_multi_vector::ptr ret
 			= mirror_cols_block_multi_vector::create(cols, idxs_in_block, block);
@@ -611,7 +613,7 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 	return mem_dense_matrix::create(res);
 }
 
-typedef std::vector<std::pair<int, NUMA_vector::ptr> > block_col_set_t;
+typedef std::vector<std::pair<int, detail::NUMA_vec_store::ptr> > block_col_set_t;
 
 std::vector<block_col_set_t> get_col_index_blocks(const block_multi_vector &mv,
 		const std::vector<int>& index, size_t block_size)
@@ -624,20 +626,21 @@ std::vector<block_col_set_t> get_col_index_blocks(const block_multi_vector &mv,
 		size_t block_idx = col_idx / block_size;
 		block_set.insert(block_idx);
 
-		NUMA_vector::ptr col = const_cast<detail::NUMA_col_tall_matrix_store &>(
+		detail::vec_store::ptr col = const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
 						mv.get_col(i)->get_data())).get_col_vec(0);
 		// Not in the same block
 		if (col_blocks.empty() || col_blocks.back()[0].first / block_size
 				!= block_idx) {
 			block_col_set_t set(1);
-			set[0] = std::pair<int, NUMA_vector::ptr>(col_idx, col);
+			set[0] = std::pair<int, detail::NUMA_vec_store::ptr>(col_idx,
+					detail::NUMA_vec_store::cast(col));
 			col_blocks.push_back(set);
 		}
 		else
 			// In the same block.
-			col_blocks.back().push_back(std::pair<int, NUMA_vector::ptr>(
-						col_idx, col));
+			col_blocks.back().push_back(std::pair<int, detail::NUMA_vec_store::ptr>(
+						col_idx, detail::NUMA_vec_store::cast(col)));
 	}
 	assert(block_set.size() == col_blocks.size());
 
@@ -681,9 +684,9 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 				= const_cast<detail::NUMA_col_tall_matrix_store &>(
 						dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
 							block->get_data()));
-			std::vector<NUMA_vector::ptr> cols(numa_mat.get_num_cols());
+			std::vector<detail::NUMA_vec_store::ptr> cols(numa_mat.get_num_cols());
 			for (size_t i = 0; i < cols.size(); i++)
-				cols[i] = numa_mat.get_col_vec(i);
+				cols[i] = detail::NUMA_vec_store::cast(numa_mat.get_col_vec(i));
 
 			// changes some of the columns accordingly.
 			for (size_t i = 0; i < block_cols.size(); i++)
