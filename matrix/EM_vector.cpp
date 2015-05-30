@@ -754,16 +754,17 @@ class EM_vec_setdata_task: public portion_io_task
 {
 	off_t off_in_bytes;
 	local_buf_vec_store::ptr buf;
+	const set_vec_operate &op;
 public:
 	EM_vec_setdata_task(off_t global_start, size_t length,
-			const EM_vec_store &vec, const set_vec_operate &op) {
+			const EM_vec_store &vec, const set_vec_operate &_op): op(_op) {
 		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
 					global_start, length, vec.get_type(), -1));
 		off_in_bytes = vec.get_byte_off(buf->get_global_start());
-		buf->set_data(op);
 	}
 
 	virtual void run(safs::io_interface::ptr, safs::io_interface::ptr write_io) {
+		buf->set_data(op);
 		safs::data_loc_t loc(write_io->get_file_id(), off_in_bytes);
 		safs::io_request req(buf->get_raw_arr(), loc,
 				buf->get_length() * buf->get_entry_size(), WRITE);
