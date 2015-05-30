@@ -445,14 +445,14 @@ print("Transpose a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 test.t.matrix(fm.mat)
 
-print("Set columns of a column-wise matrix")
-fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
-mat <- fm.conv.FM2R(fm.mat)
-fm.mat2 <- fm.matrix(fm.seq.int(1001, 1200, 1), 100, 2)
-mat2 <- fm.conv.FM2R(fm.mat2)
-fm.set.cols(fm.mat, 1:2, fm.mat2)
-mat[,1:2] <- mat2
-stopifnot(sum(mat == fm.conv.FM2R(fm.mat)) == length(mat))
+#print("Set columns of a column-wise matrix")
+#fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
+#mat <- fm.conv.FM2R(fm.mat)
+#fm.mat2 <- fm.matrix(fm.seq.int(1001, 1200, 1), 100, 2)
+#mat2 <- fm.conv.FM2R(fm.mat2)
+#fm.set.cols(fm.mat, 1:2, fm.mat2)
+#mat[,1:2] <- mat2
+#stopifnot(sum(mat == fm.conv.FM2R(fm.mat)) == length(mat))
 
 print("Get a submatrix from a column-wise matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
@@ -562,7 +562,7 @@ stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
 
 # Test SpMM
 print("SpMM")
-fm.mat <- fm.matrix(fm.rep.int(1, fm.ncol(fm) * 20), fm.ncol(fm), 20)
+fm.mat <- fm.matrix(fm.rep.int(1, fm.ncol(fm) * 20), fm.ncol(fm), 20, TRUE)
 fm.res <- fm.multiply(fm, fm.mat)
 mat <- fm.conv.FM2R(fm.mat)
 res <- adj.m %*% mat
