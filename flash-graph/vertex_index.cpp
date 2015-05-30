@@ -33,6 +33,8 @@ namespace fg
 {
 
 const size_t compressed_vertex_entry::ENTRY_SIZE;
+const size_t cundirected_vertex_index::ENTRY_SIZE;
+const size_t cdirected_vertex_index::ENTRY_SIZE;
 
 static void verify_index(vertex_index::ptr idx)
 {
