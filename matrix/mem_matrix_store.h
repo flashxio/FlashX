@@ -317,18 +317,10 @@ public:
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const {
-		// TODO
-		assert(0);
-		return std::shared_ptr<const local_matrix_store>();
-	}
+			size_t num_cols) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		// TODO
-		assert(0);
-		return std::shared_ptr<local_matrix_store>();
-	}
+			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
@@ -388,18 +380,10 @@ public:
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const {
-		// TODO
-		assert(0);
-		return std::shared_ptr<const local_matrix_store>();
-	}
+			size_t num_cols) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		// TODO
-		assert(0);
-		return std::shared_ptr<local_matrix_store>();
-	}
+			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
