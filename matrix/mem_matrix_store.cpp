@@ -140,7 +140,7 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
 	int node_id = -1;
@@ -164,7 +164,7 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 	int node_id = -1;
@@ -244,7 +244,7 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
 	int node_id = -1;
@@ -268,7 +268,7 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 	int node_id = -1;
@@ -348,7 +348,7 @@ local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 
@@ -366,7 +366,7 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 
@@ -425,7 +425,7 @@ local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 
@@ -444,7 +444,7 @@ local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::ptr();
 	}
 
@@ -540,7 +540,7 @@ matrix_store::const_ptr mem_sub_col_matrix_store::get_cols(
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_cols()) {
 			BOOST_LOG_TRIVIAL(error)
-				<< "a column index is out of bounds\n";
+				<< "a column index is out of bounds";
 			return matrix_store::ptr();
 		}
 		direct_idxs[i] = orig_col_idxs[idxs[i]];
@@ -556,7 +556,7 @@ matrix_store::const_ptr mem_sub_row_matrix_store::get_rows(
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_rows()) {
 			BOOST_LOG_TRIVIAL(error)
-				<< "a row index is out of bounds\n";
+				<< "a row index is out of bounds";
 			return matrix_store::ptr();
 		}
 		direct_idxs[i] = orig_row_idxs[idxs[i]];
