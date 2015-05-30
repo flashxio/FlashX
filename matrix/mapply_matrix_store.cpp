@@ -353,6 +353,13 @@ matrix_store::const_ptr mapply_matrix_store::get_rows(
 	return res->get_rows(idxs);
 }
 
+const char *mapply_matrix_store::get(size_t row, size_t col) const
+{
+	if (res == NULL)
+		materialize_self();
+	return res->get(row, col);
+}
+
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const
