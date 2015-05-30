@@ -203,17 +203,17 @@ fm.conv.FM2R <- function(obj)
 #'
 #' The given set has to be a FlashGraphR matrix or FlashGraphR vector.
 #'
-#' @param data the given set of values.
+#' @param vec a given vector.
 #' @param nrow the number of rows in the output matrix.
 #' @param ncol the number of columns in the output matrix.
 #' @param byrow logical. If FALSE (the default) the matrix is filly
 #'				columns, otherwise the matrix is filled by rows.
 #' @return a FlashMatrixR matrix
-fm.matrix <- function(data, nrow, ncol, byrow=FALSE)
+fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 {
-	stopifnot(!is.null(data))
-	stopifnot(class(data) == "fm" || class(data) == "fmV")
-	ret <- .Call("R_FM_conv_matrix", data, as.numeric(nrow), as.numeric(ncol),
+	stopifnot(!is.null(vec))
+	stopifnot(class(vec) == "fmV")
+	ret <- .Call("R_FM_conv_matrix", vec, as.numeric(nrow), as.numeric(ncol),
 				 as.logical(byrow), PACKAGE="FlashGraphR")
 	if (!is.null(ret))
 		structure(ret, class="fm")
