@@ -46,14 +46,13 @@ public:
 };
 
 template<class T>
-class set_seq_operate: public set_operate
+class set_seq_operate: public set_vec_operate
 {
 public:
-	virtual void set(void *tmp, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(void *tmp, size_t num_eles, off_t start_idx) const {
 		T *arr = (T *) tmp;
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = row_idx + i;
+			arr[i] = start_idx + i;
 	}
 	virtual const scalar_type &get_type() const {
 		return get_scalar_type<T>();
@@ -61,7 +60,7 @@ public:
 };
 
 template<class T>
-class set_rand_operate: public set_operate
+class set_rand_operate: public set_vec_operate
 {
 	T max_val;
 public:
@@ -69,8 +68,7 @@ public:
 		this->max_val = max_val;
 	}
 
-	virtual void set(void *tmp, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(void *tmp, size_t num_eles, off_t start_idx) const {
 		T *arr = (T *) tmp;
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = random() % max_val;

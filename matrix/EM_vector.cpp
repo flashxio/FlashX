@@ -756,7 +756,7 @@ class EM_vec_setdata_task: public portion_io_task
 	local_buf_vec_store::ptr buf;
 public:
 	EM_vec_setdata_task(off_t global_start, size_t length,
-			const EM_vec_store &vec, const set_operate &op) {
+			const EM_vec_store &vec, const set_vec_operate &op) {
 		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
 					global_start, length, vec.get_type(), -1));
 		off_in_bytes = vec.get_byte_off(buf->get_global_start());
@@ -776,10 +776,10 @@ public:
 
 class EM_vec_setdata_dispatcher: public EM_vec_dispatcher
 {
-	const set_operate &op;
+	const set_vec_operate &op;
 public:
 	EM_vec_setdata_dispatcher(const EM_vec_store &store,
-			const set_operate &_op): EM_vec_dispatcher(store), op(_op) {
+			const set_vec_operate &_op): EM_vec_dispatcher(store), op(_op) {
 	}
 
 	virtual portion_io_task::ptr create_vec_task(off_t global_start,
@@ -791,7 +791,7 @@ public:
 
 }
 
-void EM_vec_store::set_data(const set_operate &op)
+void EM_vec_store::set_data(const set_vec_operate &op)
 {
 	mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 	EM_vec_setdata_dispatcher::ptr dispatcher(

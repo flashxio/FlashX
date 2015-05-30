@@ -26,6 +26,7 @@ namespace fm
 {
 
 class local_vec_store;
+class set_vec_operate;
 
 namespace detail
 {
@@ -100,7 +101,7 @@ public:
 	}
 
 	virtual void reset_data() = 0;
-	virtual void set_data(const set_operate &op) = 0;
+	virtual void set_data(const set_vec_operate &op) = 0;
 
 	virtual vec_store::ptr sort_with_index() = 0;
 	virtual void sort() = 0;

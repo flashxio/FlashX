@@ -60,7 +60,8 @@ class factor_vector: public mem_vector
 {
 	factor f;
 
-	factor_vector(const factor &_f, size_t len, const set_operate &op): mem_vector(
+	factor_vector(const factor &_f, size_t len,
+			const set_vec_operate &op): mem_vector(
 			detail::smp_vec_store::create(len,
 				get_scalar_type<factor_value_t>())), f(_f) {
 		const_cast<detail::vec_store &>(get_data()).set_data(op);
@@ -68,7 +69,7 @@ class factor_vector: public mem_vector
 public:
 	typedef std::shared_ptr<factor_vector> ptr;
 
-	static ptr create(const factor &f, size_t length, const set_operate &op) {
+	static ptr create(const factor &f, size_t length, const set_vec_operate &op) {
 		return ptr(new factor_vector(f, length, op));
 	}
 

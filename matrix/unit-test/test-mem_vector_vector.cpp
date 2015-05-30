@@ -30,7 +30,7 @@ public:
 	}
 };
 
-class set_label_operate: public type_set_operate<factor_value_t>
+class set_label_operate: public type_set_vec_operate<factor_value_t>
 {
 	factor f;
 	size_t num_same_label;
@@ -39,11 +39,9 @@ public:
 		num_same_label = tot_num_eles / f.get_num_levels();
 	}
 
-	virtual void set(factor_value_t *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		assert(col_idx == 0);
+	virtual void set(factor_value_t *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = (row_idx + i) / num_same_label;
+			arr[i] = (start_idx + i) / num_same_label;
 	}
 };
 

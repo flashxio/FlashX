@@ -9,21 +9,19 @@ size_t nthreads = 8;
 using namespace fm;
 using namespace detail;
 
-class set_seq_vec: public type_set_operate<long>
+class set_seq_vec: public type_set_vec_operate<long>
 {
 public:
-	virtual void set(long *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(long *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = row_idx + i;
+			arr[i] = start_idx + i;
 	}
 };
 
-class set_rand_vec: public type_set_operate<long>
+class set_rand_vec: public type_set_vec_operate<long>
 {
 public:
-	virtual void set(long *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(long *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = random();
 	}

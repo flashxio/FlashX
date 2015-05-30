@@ -149,7 +149,7 @@ public:
 		data.reset_data();
 	}
 
-	void set_data(const set_operate &op);
+	void set_data(const set_vec_operate &op);
 
 	void set(const std::vector<const char *> &locs);
 
@@ -185,42 +185,25 @@ public:
 };
 
 template<class T>
-class seq_set_operate: public type_set_operate<T>
+class seq_set_vec_operate: public type_set_vec_operate<T>
 {
 	long n;
 	T from;
 	T by;
 public:
-	seq_set_operate(long n, T from, T by) {
+	seq_set_vec_operate(long n, T from, T by) {
 		this->n = n;
 		this->from = from;
 		this->by = by;
 	}
 
-	virtual void set(T *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
 		// We are initializing a single-column matrix.
-		T v = from + row_idx * by;
+		T v = from + start_idx * by;
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = v;
 			v += by;
 		}
-	}
-};
-
-template<class EntryType>
-class set_const_operate: public type_set_operate<EntryType>
-{
-	EntryType v;
-public:
-	set_const_operate(EntryType v) {
-		this->v = v;
-	}
-
-	virtual void set(EntryType *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = v;
 	}
 };
 
@@ -241,7 +224,7 @@ vec_store::ptr create_vec_store(EntryType start, EntryType end, EntryType stride
 	n++;
 	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
 			get_scalar_type<EntryType>());
-	v->set_data(seq_set_operate<EntryType>(n, start, stride));
+	v->set_data(seq_set_vec_operate<EntryType>(n, start, stride));
 	return v;
 }
 
@@ -254,7 +237,7 @@ vec_store::ptr create_vec_store(size_t length, EntryType initv)
 	// TODO let's just use in-memory dense matrix first.
 	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(length,
 			get_scalar_type<EntryType>());
-	v->set_data(set_const_operate<EntryType>(initv));
+	v->set_data(const_set_vec_operate<EntryType>(initv));
 	return v;
 }
 

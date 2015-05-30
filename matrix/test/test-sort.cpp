@@ -10,10 +10,10 @@ using namespace fm;
 int num_nodes = 1;
 int nthreads = 8;
 
-class rand_set: public type_set_operate<long>
+class rand_set: public type_set_vec_operate<long>
 {
 public:
-	void set(long *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+	void set(long *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = random();
 	}

@@ -31,7 +31,7 @@ namespace fm
 {
 
 mem_vector::ptr mem_vector::create(size_t length, const scalar_type &type,
-		const set_operate &op)
+		const set_vec_operate &op)
 {
 	// TODO I should allow users to create a NUMA vector store as well.
 	detail::mem_vec_store::ptr vec = detail::smp_vec_store::create(length, type);

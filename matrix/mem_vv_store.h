@@ -156,7 +156,7 @@ public:
 	virtual void reset_data() {
 		assert(0);
 	}
-	virtual void set_data(const set_operate &op) {
+	virtual void set_data(const set_vec_operate &op) {
 		assert(0);
 	}
 

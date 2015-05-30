@@ -67,7 +67,7 @@ public:
 	virtual size_t get_portion_size() const;
 
 	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
+	virtual void set_data(const set_vec_operate &op);
 
 	virtual vec_store::ptr sort_with_index();
 	virtual void sort();

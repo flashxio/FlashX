@@ -72,11 +72,11 @@ namespace
 
 class set_ele_operate: public detail::set_range_operate
 {
-	const set_operate &op;
+	const set_vec_operate &op;
 	const detail::NUMA_mapper &mapper;
 	size_t entry_size;
 public:
-	set_ele_operate(const set_operate &_op, const detail::NUMA_mapper &_mapper,
+	set_ele_operate(const set_vec_operate &_op, const detail::NUMA_mapper &_mapper,
 			size_t entry_size): op(_op), mapper(_mapper) {
 		this->entry_size = entry_size;
 	}
@@ -87,13 +87,13 @@ public:
 		size_t num_eles = size / entry_size;
 		size_t local_ele_idx = local_off / entry_size;
 		size_t global_ele_idx = mapper.map2logical(node_id, local_ele_idx);
-		op.set(buf, num_eles, global_ele_idx, 0);
+		op.set(buf, num_eles, global_ele_idx);
 	}
 };
 
 }
 
-void NUMA_vec_store::set_data(const set_operate &op)
+void NUMA_vec_store::set_data(const set_vec_operate &op)
 {
 	set_ele_operate set_ele(op, mapper, get_entry_size());
 	set_array_ranges(mapper, get_length(), get_entry_size(), set_ele, data);

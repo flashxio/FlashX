@@ -55,7 +55,7 @@ public:
 	}
 
 	static ptr create(size_t length, const scalar_type &type,
-			const set_operate &op);
+			const set_vec_operate &op);
 
 	const char *get_raw_arr() const {
 		return static_cast<const detail::mem_vec_store &>(

@@ -223,11 +223,11 @@ vec_store::ptr smp_vec_store::sort_with_index()
 	return indexes;
 }
 
-void smp_vec_store::set_data(const set_operate &op)
+void smp_vec_store::set_data(const set_vec_operate &op)
 {
 	// I assume this is column-wise matrix.
 	// TODO parallel.
-	op.set(arr, get_length(), 0, 0);
+	op.set(arr, get_length(), 0);
 }
 
 void smp_vec_store::set(const std::vector<const char *> &locs)
@@ -299,7 +299,7 @@ vec_store::ptr create_vec_store<double>(double start, double end,
 
 	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
 			get_scalar_type<double>());
-	v->set_data(seq_set_operate<double>(n, start, stride));
+	v->set_data(seq_set_vec_operate<double>(n, start, stride));
 	return v;
 }
 

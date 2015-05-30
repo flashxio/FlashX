@@ -100,9 +100,9 @@ public:
 		memset(get_raw_arr(), 0, get_length() * get_entry_size());
 	}
 
-	virtual void set_data(const set_operate &op) {
+	virtual void set_data(const set_vec_operate &op) {
 		// We always view a vector as a single-column matrix.
-		op.set(get_raw_arr(), get_length(), global_start, 0);
+		op.set(get_raw_arr(), get_length(), global_start);
 	}
 
 	virtual detail::vec_store::ptr sort_with_index();

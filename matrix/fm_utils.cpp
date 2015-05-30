@@ -128,18 +128,16 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	return df->groupby(sort_vec_name, adj_op);
 }
 
-class set_2d_label_operate: public type_set_operate<factor_value_t>
+class set_2d_label_operate: public type_set_vec_operate<factor_value_t>
 {
 	block_2d_size block_size;
 public:
 	set_2d_label_operate(const block_2d_size &_size): block_size(_size) {
 	}
 
-	virtual void set(factor_value_t *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		assert(col_idx == 0);
+	virtual void set(factor_value_t *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = (row_idx + i) / block_size.get_num_rows();
+			arr[i] = (start_idx + i) / block_size.get_num_rows();
 	}
 };
 

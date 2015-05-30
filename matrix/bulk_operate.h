@@ -524,6 +524,46 @@ public:
 	}
 };
 
+/*
+ * This operate set values in a vector.
+ */
+
+class set_vec_operate
+{
+public:
+	typedef std::shared_ptr<const set_vec_operate> const_ptr;
+
+	virtual void set(void *arr, size_t num_eles, off_t start_idx) const = 0;
+	virtual const scalar_type &get_type() const = 0;
+};
+
+template<class T>
+class type_set_vec_operate: public set_vec_operate
+{
+	virtual void set(void *arr, size_t num_eles, off_t start_idx) const {
+		set((T *) arr, num_eles, start_idx);
+	}
+public:
+	virtual void set(T *arr, size_t num_eles, off_t start_idx) const = 0;
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+class const_set_vec_operate: public type_set_vec_operate<T>
+{
+	T val;
+public:
+	const_set_vec_operate(T val) {
+		this->val = val;
+	}
+	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = val;
+	}
+};
+
 template<class OpType, class InType, class OutType>
 const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_input_type() const
 {
