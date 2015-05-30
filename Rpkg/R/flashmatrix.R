@@ -582,10 +582,12 @@ fm.t <- function(m)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.set.cols <- function(fm, idxs, m2)
 {
-	stopifnot(!is.null(fm) && !is.null(idxs) && !is.null(m2))
-	stopifnot(class(fm) == "fm")
-	stopifnot(class(m2) == "fmV" || class(m2) == "fm")
-	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashGraphR")
+	print("fm.set.cols isn't supported right now.")
+	stopifnot(FALSE)
+#	stopifnot(!is.null(fm) && !is.null(idxs) && !is.null(m2))
+#	stopifnot(class(fm) == "fm")
+#	stopifnot(class(m2) == "fmV" || class(m2) == "fm")
+#	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashGraphR")
 }
 
 #' Get a submatrix composed of some columns from a FlashMatrixR matrix
