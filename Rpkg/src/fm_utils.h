@@ -25,8 +25,14 @@
 
 namespace fm
 {
+	class vector;
 	class dense_matrix;
 	class sparse_matrix;
+
+namespace detail
+{
+	class vec_store;
+}
 }
 
 template<class ObjectType>
@@ -44,13 +50,16 @@ public:
 };
 
 template<class MatrixType>
-static typename MatrixType::ptr get_matrix(const Rcpp::List &matrix)
+typename MatrixType::ptr get_matrix(const Rcpp::List &matrix)
 {
 	object_ref<MatrixType> *ref
 		= (object_ref<MatrixType> *) R_ExternalPtrAddr(matrix["pointer"]);
 	return ref->get_object();
 }
 
+std::shared_ptr<fm::vector> get_vector(const Rcpp::List &vec);
+
+SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const std::string &name);
 SEXP create_FMR_vector(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m, const std::string &name);

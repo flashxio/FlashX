@@ -19,10 +19,13 @@
 
 #include <stdio.h>
 
-#include "dense_matrix.h"
+#include "mem_dense_matrix.h"
+#include "mem_matrix_store.h"
 #include "sparse_matrix.h"
+#include "mem_vector.h"
 
 #include "fm_utils.h"
+#include "rutils.h"
 
 using namespace fm;
 
@@ -94,6 +97,14 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
+SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name)
+{
+	detail::matrix_store::const_ptr mat = vec->conv2mat(vec->get_length(),
+			1, false);
+	return create_FMR_vector(mem_dense_matrix::create(
+				detail::mem_matrix_store::cast(mat)), name);
+}
+
 SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
 	Rcpp::List ret;
@@ -112,4 +123,20 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 		len[0] = m->get_num_cols();
 	ret["len"] = len;
 	return ret;
+}
+
+vector::ptr get_vector(const Rcpp::List &vec)
+{
+	assert(is_vector(vec));
+	object_ref<dense_matrix> *ref
+		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec["pointer"]);
+	dense_matrix::ptr mat = ref->get_object();
+	// This should be a column matrix.
+	assert(mat->store_layout == matrix_layout_t::L_COL
+			&& mat->get_num_cols() == 1);
+	const detail::mem_col_matrix_store &col_mat
+		= dynamic_cast<const detail::mem_col_matrix_store &>(mat->get_data());
+	detail::vec_store::const_ptr store = col_mat.get_col_vec(0);
+	assert(store);
+	return mem_vector::create(detail::mem_vec_store::cast(store));
 }

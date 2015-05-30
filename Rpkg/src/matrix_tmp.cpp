@@ -26,6 +26,7 @@
 #include "fm_utils.h"
 #include "dense_matrix.h"
 #include "bulk_operate.h"
+#include "local_vec_store.h"
 
 using namespace fm;
 
@@ -37,9 +38,11 @@ public:
 	norm2(size_t num_in_eles): arr_apply_operate(num_in_eles) {
 	}
 
-	virtual void run(const void *input, size_t num_in_eles, void *output) const {
-		const T *t_in = (const T *) input;
-		double *d_out = (double *) output;
+	virtual void run(const local_vec_store &input,
+			local_vec_store &output) const {
+		size_t num_in_eles = input.get_length();
+		const T *t_in = (const T *) input.get_raw_arr();
+		double *d_out = (double *) output.get_raw_arr();
 
 		T sum = 0;
 		for (size_t i = 0; i < num_in_eles; i++) {
@@ -95,9 +98,11 @@ RcppExport SEXP R_FM_norm_matrix(SEXP pmat, SEXP pmargin, SEXP ptype)
 		num_in_eles = mat->get_num_rows();
 
 	if (mat->is_type<double>())
-		ret = mat->apply(margin, norm2<double>(num_in_eles));
+		ret = mat->apply(margin,
+				arr_apply_operate::const_ptr(new norm2<double>(num_in_eles)));
 	else if (mat->is_type<int>())
-		ret = mat->apply(margin, norm2<int>(num_in_eles));
+		ret = mat->apply(margin,
+				arr_apply_operate::const_ptr(new norm2<int>(num_in_eles)));
 	else {
 		fprintf(stderr, "unsupported data type\n");
 		return R_NilValue;
@@ -117,9 +122,11 @@ public:
 	sd(): arr_apply_operate(1) {
 	}
 
-	virtual void run(const void *input, size_t num_in_eles, void *output) const {
-		const T *t_in = (const T *) input;
-		double *d_out = (double *) output;
+	virtual void run(const local_vec_store &input,
+			local_vec_store &output) const {
+		size_t num_in_eles = input.get_length();
+		const T *t_in = (const T *) input.get_raw_arr();
+		double *d_out = (double *) output.get_raw_arr();
 
 		T sum = 0;
 		for (size_t i = 0; i < num_in_eles; i++)
@@ -165,9 +172,11 @@ RcppExport SEXP R_FM_sd_matrix(SEXP pmat, SEXP pmargin)
 
 	dense_matrix::ptr ret;
 	if (mat->is_type<double>())
-		ret = mat->apply(margin, sd<double>());
+		ret = mat->apply(margin,
+				arr_apply_operate::const_ptr(new sd<double>()));
 	else if (mat->is_type<int>())
-		ret = mat->apply(margin, sd<int>());
+		ret = mat->apply(margin,
+				arr_apply_operate::const_ptr(new sd<int>()));
 	else {
 		fprintf(stderr, "unsupported data type\n");
 		return R_NilValue;
