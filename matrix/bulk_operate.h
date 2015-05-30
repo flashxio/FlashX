@@ -38,7 +38,17 @@ namespace fm
  */
 class bulk_uoperate
 {
+	struct empty_deleter {
+		void operator()(const bulk_uoperate *addr) {
+		}
+	};
 public:
+	typedef std::shared_ptr<const bulk_uoperate> const_ptr;
+
+	static const_ptr conv2ptr(const bulk_uoperate &op) {
+		return const_ptr(&op, empty_deleter());
+	}
+
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const = 0;
 	virtual const scalar_type &get_input_type() const = 0;
@@ -88,7 +98,17 @@ public:
  */
 class bulk_operate
 {
+	struct empty_deleter {
+		void operator()(const bulk_operate *addr) {
+		}
+	};
 public:
+	typedef std::shared_ptr<const bulk_operate> const_ptr;
+
+	static const_ptr conv2ptr(const bulk_operate &op) {
+		return const_ptr(&op, empty_deleter());
+	}
+
 	/*
 	 * This performs element-wise operation on two input arrays, and stores
 	 * the result on the output array.

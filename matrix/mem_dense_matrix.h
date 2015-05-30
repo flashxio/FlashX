@@ -116,8 +116,8 @@ public:
 	 * A subclass should define this method for element-wise operations.
 	 */
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
-			const bulk_operate &op) const;
-	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+			bulk_operate::const_ptr op) const;
+	virtual dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			arr_apply_operate::const_ptr op) const;
 	virtual dense_matrix::ptr scale_cols(

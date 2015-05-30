@@ -226,8 +226,8 @@ public:
 	 * A subclass should define this method for element-wise operations.
 	 */
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
-			const bulk_operate &op) const = 0;
-	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const = 0;
+			bulk_operate::const_ptr op) const = 0;
+	virtual dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const = 0;
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			arr_apply_operate::const_ptr op) const = 0;
 	virtual dense_matrix::ptr scale_cols(
@@ -242,7 +242,8 @@ public:
 	}
 
 	dense_matrix::ptr add(const dense_matrix &mat) const {
-		return this->mapply2(mat, get_type().get_basic_ops().get_add());
+		const bulk_operate &op = get_type().get_basic_ops().get_add();
+		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
 
 	template<class T>

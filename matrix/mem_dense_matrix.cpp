@@ -352,11 +352,12 @@ namespace
 
 class mapply2_op: public detail::portion_mapply_op
 {
-	const bulk_operate &op;
+	bulk_operate::const_ptr op;
 public:
-	mapply2_op(const bulk_operate &_op, size_t out_num_rows,
+	mapply2_op(bulk_operate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
-				out_num_cols, _op.get_output_type()), op(_op) {
+				out_num_cols, op->get_output_type()) {
+		this->op = op;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -375,17 +376,17 @@ void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &i
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == ins[1]->get_global_start_row());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::mapply2(*ins[0], *ins[1], op, out);
+	detail::mapply2(*ins[0], *ins[1], *op, out);
 }
 
 }
 
 dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
-		const bulk_operate &op) const
+		bulk_operate::const_ptr op) const
 {
 	assert(m.is_in_mem());
 	// The same shape and the same data layout.
-	if (!verify_mapply2(m, op))
+	if (!verify_mapply2(m, *op))
 		return dense_matrix::ptr();
 
 	std::vector<detail::matrix_store::const_ptr> ins(2);
@@ -402,11 +403,12 @@ namespace
 
 class sapply_op: public detail::portion_mapply_op
 {
-	const bulk_uoperate &op;
+	bulk_uoperate::const_ptr op;
 public:
-	sapply_op(const bulk_uoperate &_op, size_t out_num_rows,
+	sapply_op(bulk_uoperate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
-				out_num_cols, _op.get_output_type()), op(_op) {
+				out_num_cols, op->get_output_type()) {
+		this->op = op;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -423,12 +425,12 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::sapply(*ins[0], op, out);
+	detail::sapply(*ins[0], *op, out);
 }
 
 }
 
-dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
+dense_matrix::ptr mem_dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 {
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();

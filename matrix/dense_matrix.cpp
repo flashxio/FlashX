@@ -172,8 +172,9 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 double dense_matrix::norm2() const
 {
 	// TODO this is an inefficient implementation.
+	const bulk_operate &op = get_type().get_basic_ops().get_multiply();
 	dense_matrix::ptr sq_mat = this->mapply2(
-			*this, get_type().get_basic_ops().get_multiply());
+			*this, bulk_operate::conv2ptr(op));
 	scalar_variable::ptr res = sq_mat->aggregate(
 			sq_mat->get_type().get_basic_ops().get_add());
 	double ret = 0;
