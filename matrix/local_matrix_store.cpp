@@ -22,12 +22,29 @@
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
 #include "mem_vector.h"
+#include "dense_matrix.h"
+#include "local_vec_store.h"
 
 namespace fm
 {
 
 namespace detail
 {
+
+local_matrix_store::ptr local_matrix_store::conv2(matrix_layout_t layout) const
+{
+	local_matrix_store::ptr ret;
+	if (layout == matrix_layout_t::L_ROW)
+		ret = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					get_global_start_row(), get_global_start_col(),
+					get_num_rows(), get_num_cols(), get_type(), get_node_id()));
+	else
+		ret = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					get_global_start_row(), get_global_start_col(),
+					get_num_rows(), get_num_cols(), get_type(), get_node_id()));
+	ret->copy_from(*this);
+	return ret;
+}
 
 bool local_matrix_store::resize(off_t local_start_row,
 		off_t local_start_col, size_t local_num_rows, size_t local_num_cols)
@@ -594,6 +611,62 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_col_matrix_store &col_res = (local_col_matrix_store &) res;
 		for (size_t i = 0; i < ncol; i++)
 			op.runA(nrow, col_store.get_col(i), col_res.get_col(i));
+	}
+}
+
+void apply(int margin, const arr_apply_operate &op,
+		const local_matrix_store &in_mat, local_matrix_store &out_mat)
+{
+	assert(margin == apply_margin::MAR_ROW || margin == apply_margin::MAR_COL);
+	// In these two cases, we need to convert the matrix store layout
+	// before we can apply the function to the matrix.
+	local_matrix_store::const_ptr buf_mat;
+	if (in_mat.store_layout() == matrix_layout_t::L_COL
+			&& margin == apply_margin::MAR_ROW) {
+		buf_mat = in_mat.conv2(matrix_layout_t::L_ROW);
+		assert(buf_mat);
+	}
+	else if (in_mat.store_layout() == matrix_layout_t::L_ROW
+			&& margin == apply_margin::MAR_COL) {
+		buf_mat = in_mat.conv2(matrix_layout_t::L_COL);
+		assert(buf_mat);
+	}
+
+	const local_matrix_store *this_mat;
+	if (buf_mat)
+		this_mat = buf_mat.get();
+	else
+		this_mat = &in_mat;
+
+	if (margin == apply_margin::MAR_ROW) {
+		assert(this_mat->store_layout() == matrix_layout_t::L_ROW);
+		assert(out_mat.store_layout() == matrix_layout_t::L_ROW);
+		const local_row_matrix_store &row_mat
+			= static_cast<const local_row_matrix_store &>(*this_mat);
+		local_row_matrix_store &ret_row_mat
+			= static_cast<local_row_matrix_store &>(out_mat);
+		for (size_t i = 0; i < row_mat.get_num_rows(); i++) {
+			local_cref_vec_store in_vec(row_mat.get_row(i), 0,
+					row_mat.get_num_cols(), row_mat.get_type(), -1);
+			local_ref_vec_store out_vec(ret_row_mat.get_row(i), 0,
+					ret_row_mat.get_num_cols(), ret_row_mat.get_type(), -1);
+			op.run(in_vec, out_vec);
+		}
+	}
+	else {
+		assert(this_mat->store_layout() == matrix_layout_t::L_COL);
+		assert(out_mat.store_layout() == matrix_layout_t::L_COL);
+		const local_col_matrix_store &col_mat
+			= static_cast<const local_col_matrix_store &>(*this_mat);
+		local_col_matrix_store &ret_col_mat
+			= static_cast<local_col_matrix_store &>(out_mat);
+		for (size_t i = 0; i < col_mat.get_num_cols(); i++) {
+			local_cref_vec_store in_vec(col_mat.get_col(i), 0,
+					col_mat.get_num_rows(), col_mat.get_type(), -1);
+			local_ref_vec_store out_vec(ret_col_mat.get_col(i), 0,
+					ret_col_mat.get_num_rows(), ret_col_mat.get_type(), -1);
+			op.run(in_vec, out_vec);
+		}
 	}
 }
 

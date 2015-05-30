@@ -441,48 +441,111 @@ dense_matrix::ptr mem_dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 	return dense_matrix::create(ret);
 }
 
+class matrix_margin_apply_op: public detail::portion_mapply_op
+{
+	apply_margin margin;
+	arr_apply_operate::const_ptr op;
+public:
+	matrix_margin_apply_op(apply_margin margin, arr_apply_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
+		this->margin = margin;
+		this->op = op;
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		detail::apply(margin, *op, *ins[0], out);
+	}
+	virtual portion_mapply_op::const_ptr transpose() const {
+		apply_margin new_margin = this->margin == apply_margin::MAR_ROW ?
+			apply_margin::MAR_COL : apply_margin::MAR_ROW;
+		return portion_mapply_op::const_ptr(new matrix_margin_apply_op(
+					new_margin, op, get_out_num_cols(), get_out_num_rows()));
+	}
+};
+
 dense_matrix::ptr mem_dense_matrix::apply(apply_margin margin,
 		arr_apply_operate::const_ptr op) const
 {
-	return dense_matrix::ptr();
-#if 0
-	// Each operation runs on a row
-	if (margin == apply_margin::MAR_ROW) {
-		size_t out_nrow = nrow;
-		size_t out_ncol = op.get_num_out_eles();
-		mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(out_nrow,
-				out_ncol, op.get_output_type());
-		// We view this row-major matrix as a vector and each row is a subvector.
-		mem_vector::ptr res_vec = res->flatten(true);
-		// TODO this might be a very large array.
-		mem_vector::ptr tmp_vec = mem_vector::create(ncol, get_type());
-		for (size_t i = 0; i < nrow; i++) {
-			get_row(i, tmp_vec->get_raw_arr());
-			bool ret = res_vec->expose_sub_vec(i * res->get_num_cols(),
-					res->get_num_cols());
-			assert(ret);
-			op.run(*tmp_vec, *res_vec);
+	assert(op->get_num_out_eles() > 0);
+	// In these two cases, we need to convert the matrix store layout
+	// before we can apply the function to the matrix.
+	detail::matrix_store::const_ptr this_mat;
+	if (is_wide() && store_layout() == matrix_layout_t::L_COL
+			&& margin == apply_margin::MAR_ROW)
+		this_mat = static_cast<const detail::mem_matrix_store &>(get_data()).conv2(
+				matrix_layout_t::L_ROW);
+	else if (!is_wide() && store_layout() == matrix_layout_t::L_ROW
+			&& margin == apply_margin::MAR_COL)
+		this_mat = static_cast<const detail::mem_matrix_store &>(get_data()).conv2(
+				matrix_layout_t::L_COL);
+	else
+		this_mat = get_raw_store();
+	assert(this_mat);
+
+	// In these two cases, apply the function on the rows/columns in the long
+	// dimension. The previous two cases are handled as one of the two cases
+	// after the matrix layout conversion from the previous cases.
+	if (is_wide() && this_mat->store_layout() == matrix_layout_t::L_ROW
+			&& margin == apply_margin::MAR_ROW) {
+		// In this case, it's very difficult to make it work for NUMA matrix.
+		assert(get_num_nodes() == -1);
+		detail::mem_row_matrix_store::const_ptr row_mat
+			= detail::mem_row_matrix_store::cast(this_mat);
+		detail::mem_row_matrix_store::ptr ret_mat
+			= detail::mem_row_matrix_store::create(get_num_rows(),
+					op->get_num_out_eles(), op->get_output_type());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			local_cref_vec_store in_vec(row_mat->get_row(i), 0,
+					this_mat->get_num_cols(), get_type(), -1);
+			local_ref_vec_store out_vec(ret_mat->get_row(i), 0,
+					ret_mat->get_num_cols(), ret_mat->get_type(), -1);
+			op->run(in_vec, out_vec);
 		}
-		return res;
+		return mem_dense_matrix::create(ret_mat);
 	}
-	// Each operation runs on a column
+	else if (!is_wide() && this_mat->store_layout() == matrix_layout_t::L_COL
+			&& margin == apply_margin::MAR_COL) {
+		assert(get_num_nodes() == -1);
+		detail::mem_col_matrix_store::const_ptr col_mat
+			= detail::mem_col_matrix_store::cast(this_mat);
+		detail::mem_col_matrix_store::ptr ret_mat
+			= detail::mem_col_matrix_store::create(op->get_num_out_eles(),
+					get_num_cols(), op->get_output_type());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			local_cref_vec_store in_vec(col_mat->get_col(i), 0,
+					this_mat->get_num_rows(), get_type(), -1);
+			local_ref_vec_store out_vec(ret_mat->get_col(i), 0,
+					ret_mat->get_num_rows(), ret_mat->get_type(), -1);
+			op->run(in_vec, out_vec);
+		}
+		return mem_dense_matrix::create(ret_mat);
+	}
+	// There are four cases left. In these four cases, apply the function
+	// on the rows/columns in the short dimension. We can use mapply to
+	// parallelize the computation here.
 	else {
-		size_t out_nrow = op.get_num_out_eles();
-		size_t out_ncol = ncol;
-		mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(out_nrow,
-				out_ncol, op.get_output_type());
-		// We view the input and output matrices as vectors and each column
-		// is a subvector.
-		mem_vector::ptr in_vec = flatten(false);
-		mem_vector::ptr res_vec = res->flatten(false);
-		for (size_t i = 0; i < ncol; i++) {
-			in_vec->expose_sub_vec(i * get_num_rows(), get_num_rows());
-			res_vec->expose_sub_vec(i * res->get_num_rows(), res->get_num_rows());
-			op.run(*in_vec, *res_vec);
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = this->get_raw_store();
+		size_t out_num_rows;
+		size_t out_num_cols;
+		if (margin == apply_margin::MAR_ROW) {
+			out_num_rows = this->get_num_rows();
+			out_num_cols = op->get_num_out_eles();
 		}
-		return res;
+		else {
+			out_num_rows = op->get_num_out_eles();
+			out_num_cols = this->get_num_cols();
+		}
+		matrix_margin_apply_op::const_ptr apply_op(new matrix_margin_apply_op(
+					margin, op, out_num_rows, out_num_cols));
+		matrix_layout_t output_layout = (margin == apply_margin::MAR_ROW
+				? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+				apply_op, output_layout);
+		return dense_matrix::create(ret);
 	}
-#endif
 }
 
 bool mem_dense_matrix::verify_inner_prod(const dense_matrix &m,

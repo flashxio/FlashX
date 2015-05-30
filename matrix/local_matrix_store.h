@@ -32,6 +32,7 @@ namespace fm
 
 class bulk_operate;
 class bulk_uoperate;
+class arr_apply_operate;
 
 namespace detail
 {
@@ -172,6 +173,7 @@ public:
 		local_start_col = 0;
 		matrix_store::resize(num_rows, num_cols);
 	}
+	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	virtual bool read_only() const = 0;
 	virtual const char *get_raw_arr() const = 0;
@@ -950,6 +952,8 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res);
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_matrix_store &res);
+void apply(int margin, const arr_apply_operate &op,
+		const local_matrix_store &in_mat, local_matrix_store &out_mat);
 void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		local_matrix_store &res);

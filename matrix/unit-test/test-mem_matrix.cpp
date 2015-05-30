@@ -414,76 +414,6 @@ void test_flatten()
 	}
 }
 
-class time2_apply_operate: public arr_apply_operate
-{
-public:
-	time2_apply_operate(size_t num_out_eles): arr_apply_operate(num_out_eles) {
-	}
-	virtual void run(const mem_vector &in, mem_vector &out) const {
-		assert(out.get_length() == get_num_out_eles());
-		for (size_t i = 0; i < get_num_out_eles(); i++)
-			out.set<int>(i, in.get<int>(i) * 2);
-	}
-	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<int>();
-	}
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<int>();
-	}
-};
-
-void test_apply()
-{
-	printf("test applying to a matrix\n");
-	I_mem_dense_matrix::ptr m = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
-	size_t out_num_cols = m->get_num_cols() / 2;
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(
-			m->get_matrix()->apply(apply_margin::MAR_ROW,
-			time2_apply_operate(out_num_cols)));
-	assert(res->get_num_rows() == m->get_num_rows());
-	assert(res->get_num_cols() == out_num_cols);
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		for (size_t j = 0; j < res->get_num_cols(); j++)
-			assert(m->get(i, j) * 2 == res->get<int>(i, j));
-	}
-
-	m = I_mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
-			set_row_operate(10));
-	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_ROW,
-				time2_apply_operate(out_num_cols)));
-	printf("output matrix: %ld, %ld\n", res->get_num_rows(), res->get_num_cols());
-	assert(res->get_num_rows() == m->get_num_rows());
-	assert(res->get_num_cols() == out_num_cols);
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		for (size_t j = 0; j < res->get_num_cols(); j++)
-			assert(m->get(i, j) * 2 == res->get<int>(i, j));
-	}
-
-	m = I_mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_COL,
-			set_col_operate(10));
-	size_t out_num_rows = m->get_num_rows() / 2;
-	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_COL,
-			time2_apply_operate(out_num_rows)));
-	assert(res->get_num_rows() == out_num_rows);
-	assert(res->get_num_cols() == m->get_num_cols());
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		for (size_t j = 0; j < res->get_num_cols(); j++)
-			assert(m->get(i, j) * 2 == res->get<int>(i, j));
-	}
-
-	m = I_mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
-			set_row_operate(10));
-	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_COL,
-				time2_apply_operate(out_num_rows)));
-	assert(res->get_num_rows() == out_num_rows);
-	assert(res->get_num_cols() == m->get_num_cols());
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		for (size_t j = 0; j < res->get_num_cols(); j++)
-			assert(m->get(i, j) * 2 == res->get<int>(i, j));
-	}
-}
-
 #endif
 
 void test_scale_cols(int num_nodes)
@@ -572,6 +502,96 @@ void test_create_const()
 			assert(mat->get<int>(i, j) == 1);
 }
 
+class sum_apply_op: public arr_apply_operate
+{
+public:
+	sum_apply_op(): arr_apply_operate(1) {
+	}
+
+	void run(const local_vec_store &in, local_vec_store &out) const {
+		assert(in.get_type() == get_scalar_type<int>());
+		assert(out.get_type() == get_scalar_type<long>());
+		long res = 0;
+		for (size_t i = 0; i < in.get_length(); i++)
+			res += in.get<int>(i);
+		out.set<long>(0, res);
+	}
+
+	const scalar_type &get_input_type() const {
+		return get_scalar_type<int>();
+	}
+
+	const scalar_type &get_output_type() const {
+		return get_scalar_type<long>();
+	}
+};
+
+void test_apply1(mem_dense_matrix::ptr mat)
+{
+	size_t num_rows = mat->get_num_rows();
+	size_t num_cols = mat->get_num_cols();
+	dense_matrix::ptr res;
+	mem_vector::ptr res_vec;
+
+	printf("Test apply on rows of a %s %s-wise matrix\n",
+			mat->is_wide() ? "wide" : "tall",
+			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
+	res = mat->apply(apply_margin::MAR_ROW,
+			arr_apply_operate::const_ptr(new sum_apply_op()));
+	assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
+	assert(res->is_type<long>());
+	res_vec = mem_vector::cast(res->get_col(0));
+	for (size_t i = 0; i < res_vec->get_length(); i++)
+		assert(res_vec->get<long>(i)
+				== i * num_cols * num_cols + (num_cols - 1) * num_cols / 2);
+
+	printf("Test apply on columns of a %s %s-wise matrix\n",
+			mat->is_wide() ? "wide" : "tall",
+			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
+	res = mat->apply(apply_margin::MAR_COL,
+			arr_apply_operate::const_ptr(new sum_apply_op()));
+	assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());
+	assert(res->is_type<long>());
+	res_vec = mem_vector::cast(res->get_row(0));
+	for (size_t i = 0; i < res_vec->get_length(); i++)
+		assert(res_vec->get<long>(i)
+				== (num_rows - 1) * num_rows / 2 * num_cols + num_rows * i);
+}
+
+void test_apply()
+{
+	detail::mem_matrix_store::ptr store;
+	mem_dense_matrix::ptr mat;
+
+	// Tall row-wise matrix
+	store = detail::mem_matrix_store::create(long_dim, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
+	store->set_data(set_row_operate(store->get_num_cols()));
+	mat = mem_dense_matrix::create(store);
+	test_apply1(mat);
+
+	// Tall col-wise matrix
+	store = detail::mem_matrix_store::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
+	store->set_data(set_col_operate(store->get_num_cols()));
+	mat = mem_dense_matrix::create(store);
+	test_apply1(mat);
+
+	// Wide row-wise matrix
+	store = detail::mem_matrix_store::create(10, long_dim,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
+	store->set_data(set_row_operate(store->get_num_cols()));
+	mat = mem_dense_matrix::create(store);
+	test_apply1(mat);
+
+	// wide col-wise matrix
+	store = detail::mem_matrix_store::create(10, long_dim,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
+	store->set_data(set_col_operate(store->get_num_cols()));
+	mat = mem_dense_matrix::create(store);
+	test_apply1(mat);
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -584,6 +604,7 @@ int main(int argc, char *argv[])
 			num_threads / num_nodes);
 
 	test_create_const();
+	test_apply();
 
 	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
 		matrix_val = (matrix_val_t) i;
@@ -613,7 +634,6 @@ int main(int argc, char *argv[])
 #if 0
 		test_conv_row_col();
 		test_flatten();
-		test_apply();
 #endif
 	}
 }
