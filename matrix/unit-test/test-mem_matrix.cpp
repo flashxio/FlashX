@@ -592,6 +592,21 @@ void test_apply()
 	test_apply1(mat);
 }
 
+void test_conv_vec2mat()
+{
+	printf("convert a vector to a matrix\n");
+	size_t len = 10000;
+	size_t num_rows = 1000;
+	vector::ptr vec = create_vector<int>(0, len, 1);
+	dense_matrix::ptr mat = vec->conv2mat(num_rows, len / num_rows, true);
+	assert(mat);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+
+	mat = vec->conv2mat(num_rows, len / num_rows, false);
+	assert(mat);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -605,6 +620,7 @@ int main(int argc, char *argv[])
 
 	test_create_const();
 	test_apply();
+	test_conv_vec2mat();
 
 	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
 		matrix_val = (matrix_val_t) i;
