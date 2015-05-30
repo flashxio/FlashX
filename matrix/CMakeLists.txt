@@ -21,7 +21,6 @@ add_library(FMatrix STATIC
 	generic_type.cpp
 	mem_data_frame.cpp
 	mem_vector_vector.cpp
-	vector.cpp
 	matrix_header.cpp
 	sparse_matrix_format.cpp
 	hilbert_curve.cpp
@@ -30,4 +29,15 @@ add_library(FMatrix STATIC
 	NUMA_mapper.cpp
 	raw_data_array.cpp
 	mem_worker_thread.cpp
+	local_matrix_store.cpp
+	data_io.cpp
+	local_vec_store.cpp
+	mem_matrix_store.cpp
+	mapply_matrix_store.cpp
+	mem_vec_store.cpp
+	one_val_matrix_store.cpp
+	rand_gen.cpp
+	fm_utils.cpp
+	matrix_store.cpp
+	mem_vv_store.cpp
 )
