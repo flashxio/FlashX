@@ -4,6 +4,7 @@
 #include "bulk_operate.h"
 #include "data_frame.h"
 #include "local_vec_store.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 using namespace detail;
@@ -149,6 +150,20 @@ void test_get_sub()
 		assert(res->get<int>(i) == vec->get<int>(idxs->get<off_t>(i)));
 }
 
+void test_copy_from()
+{
+	printf("test copy vector\n");
+	smp_vec_store::ptr vec = smp_vec_store::create(1000000,
+			get_scalar_type<int>());
+	std::vector<int> stl_vec(vec->get_length());
+	for (size_t i = 0; i < stl_vec.size(); i++)
+		stl_vec[i] = i;
+	vec->copy_from((const char *) stl_vec.data(),
+			vec->get_length() * vec->get_entry_size());
+	for (size_t i = 0; i < stl_vec.size(); i++)
+		assert(stl_vec[i] == vec->get<int>(i));
+}
+
 int main()
 {
 	test_sort();
@@ -157,4 +172,5 @@ int main()
 	test_max();
 	test_resize();
 	test_get_sub();
+	test_copy_from();
 }
