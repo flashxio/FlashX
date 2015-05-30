@@ -32,5 +32,7 @@ sed '/^#/d' wiki-Vote.txt > wiki-Vote1.txt
 rm wiki-Vote.txt
 
 R --no-save < verify.R
+#R -d valgrind --vanilla < verify.R
+#R -d gdb --vanilla
 
 rm wiki-Vote1.txt
