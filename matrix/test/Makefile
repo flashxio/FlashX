@@ -20,10 +20,11 @@ include ../../Makefile.common
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
-LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas
+LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-mkl_multiply test-tpetra_multiply test-mkl_dgemm
+	el2al al22d al2crs test-sort test-mkl_multiply test-tpetra_multiply test-mkl_dgemm	\
+	test-eigen
 
 test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
 	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
@@ -70,6 +71,18 @@ test-mkl_dgemm.o: test-mkl_dgemm.cpp
 test-mkl_dgemm: test-mkl_dgemm.o
 	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
 
+TRILINOS_LDFLAGS := -lepetra -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics 	\
+		 -lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lblas -llapack -lkokkoscore	\
+		 -lkokkoscontainers -lteuchoskokkoscompat
+
+BlockDavidsonTpetra: BlockDavidsonTpetra.o
+	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(TRILINOS_LDFLAGS) $(LDFLAGS)
+
+CXXFLAGS += -I../eigensolver
+
+test-eigen: test-eigen.o ../libFMatrix.a ../eigensolver/libeigen.a
+	$(CXX) test-eigen.o -o test-eigen -L../eigensolver -leigen $(TRILINOS_LDFLAGS) $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -85,5 +98,7 @@ clean:
 	rm test-sort
 	rm test-tpetra_multiply
 	rm test-mkl_multiply
+	rm test-eigen
+	rm BlockDavidsonTpetra
 
 -include $(DEPS) 
