@@ -22,6 +22,7 @@
 
 #include <memory>
 
+#include "comm_exception.h"
 #include "log.h"
 
 #include "matrix_store.h"
@@ -189,6 +190,11 @@ public:
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(0);
 		return std::pair<size_t, size_t>(0, 0);
+	}
+	virtual matrix_store::const_ptr append_cols(
+			const std::vector<matrix_store::const_ptr> &mats) const {
+		throw unsupported_exception(
+				"can't add columns to a local matrix for now");
 	}
 
 	template<class Type>

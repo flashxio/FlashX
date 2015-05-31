@@ -246,6 +246,8 @@ public:
 		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
 
+	dense_matrix::ptr append_cols(const std::vector<dense_matrix::ptr> &mats);
+
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		assert(get_type() == get_scalar_type<T>());

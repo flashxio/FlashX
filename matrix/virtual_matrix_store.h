@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include "comm_exception.h"
+
 #include "mem_matrix_store.h"
 
 namespace fm
@@ -74,6 +76,11 @@ public:
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;
+	}
+	virtual matrix_store::const_ptr append_cols(
+			const std::vector<matrix_store::const_ptr> &mats) const {
+		throw unsupported_exception(
+				"can't add columns to a virtual matrix");
 	}
 };
 
