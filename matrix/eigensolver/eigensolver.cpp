@@ -13,6 +13,7 @@
 #include "sparse_matrix.h"
 
 #include "eigensolver.h"
+#include "block_dense_matrix.h"
 
 // ****************************************************************************
 // BEGIN MAIN ROUTINE
@@ -37,7 +38,7 @@ public:
 	static void Apply ( const spm_function& Op,
 			const FM_MultiVector<double>& x, FM_MultiVector<double>& y ) {
 		printf("SpMM: y(%s) = A * x(%s)\n", y.get_name().c_str(), x.get_name().c_str());
-		Op.Apply(*x.get_data(), *y.get_data());
+		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data());
 		y.sync_fm2ep();
 	}
 
@@ -203,7 +204,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		for (int i=0; i<sol.numVecs; ++i) {
 			T(i,i) = evals[i].realpart;
 		}
-		A->Apply (*evecs->get_data(), *tempAevec.get_data());
+		block_multi_vector::sparse_matrix_multiply(*A, *evecs->get_data(),
+				*tempAevec.get_data());
 		MVT::MvTimesMatAddMv (-1.0, *evecs, T, 1.0, tempAevec);
 		MVT::MvNorm (tempAevec, normR);
 	}
@@ -219,7 +221,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		<< "------------------------------------------------------" << endl;
 
 	struct eigen_res res;
-	res.vecs = evecs->get_data();
+	res.vecs = evecs->get_data()->conv2matrix();
 	res.vals.resize(sol.numVecs);
 	for (int i=0; i<sol.numVecs; ++i) {
 		res.vals[i] = evals[i].realpart;

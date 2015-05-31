@@ -20,6 +20,7 @@
 #include "safs_file.h"
 
 #include "sparse_matrix.h"
+#include "mem_dense_matrix.h"
 
 #include "eigensolver.h"
 
@@ -33,9 +34,16 @@ public:
 		this->mat = mat;
 	}
 
-	virtual void Apply(const block_multi_vector& x,
-			block_multi_vector& y) const {
-		block_multi_vector::sparse_matrix_multiply<double>(*mat, x, y);
+	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+		assert(x->get_type() == get_scalar_type<double>());
+		assert(x->is_in_mem());
+		const detail::mem_matrix_store &mem_in
+			= static_cast<const detail::mem_matrix_store &>(x->get_data());
+		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+				mat->get_num_rows(), mem_in.get_num_cols(),
+				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
+		mat->multiply<double>(mem_in, *res);
+		return mem_dense_matrix::create(res);
 
 #if 0
 		assert((size_t) x.GetGlobalLength() == mat->get_num_cols());

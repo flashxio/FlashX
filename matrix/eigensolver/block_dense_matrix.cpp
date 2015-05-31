@@ -291,12 +291,11 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 #endif
 }
 
-void block_multi_vector::sparse_matrix_multiply(const sp_multiply &multiply,
-		const sparse_matrix &A, const block_multi_vector &X,
-		block_multi_vector &Y)
+void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
+		const block_multi_vector &X, block_multi_vector &Y)
 {
-	assert(A.get_num_cols() == X.get_num_rows());
-	assert(A.get_num_rows() == Y.get_num_rows());
+	assert(multiply.get_num_cols() == X.get_num_rows());
+	assert(multiply.get_num_rows() == Y.get_num_rows());
 	assert(Y.get_num_cols() == X.get_num_cols());
 	assert(Y.get_num_blocks() == X.get_num_blocks());
 	assert(X.get_block_size() == Y.get_block_size());
@@ -309,19 +308,15 @@ void block_multi_vector::sparse_matrix_multiply(const sp_multiply &multiply,
 			num_col_writes += block->get_num_cols();
 		}
 		block->materialize_self();
-		const detail::mem_matrix_store &in
-			= dynamic_cast<const detail::mem_matrix_store &>(X.get_block(i)->get_data());
-		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-				Y.get_num_rows(), X.get_block_size(), matrix_layout_t::L_COL,
-				X.get_type(), in.get_num_nodes());
-		if (in.store_layout() == matrix_layout_t::L_COL) {
-			detail::matrix_store::const_ptr tmp
-				= in.conv2(matrix_layout_t::L_ROW);
-			multiply.run(A, *tmp, *res);
-		}
+		dense_matrix::ptr in = X.get_block(i);
+		dense_matrix::ptr res;
+		if (in->store_layout() == matrix_layout_t::L_COL)
+			res = multiply.run(in->conv2(matrix_layout_t::L_ROW));
 		else
-			multiply.run(A, in, *res);
-		Y.set_block(i, mem_dense_matrix::create(res));
+			res = multiply.run(in);
+		assert(in->store_layout() == matrix_layout_t::L_COL);
+		assert(res->store_layout() == matrix_layout_t::L_COL);
+		Y.set_block(i, res);
 	}
 }
 
@@ -698,5 +693,15 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 					fm::detail::NUMA_col_tall_matrix_store::create(cols));
 			set_block(block_idx, new_mat);
 		}
+	}
+}
+
+fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
+{
+	if (mats.size() == 1)
+		return mats[0];
+	else {
+		std::vector<fm::dense_matrix::ptr> remains(mats.begin() + 1, mats.end());
+		return mats.front()->append_cols(remains);
 	}
 }

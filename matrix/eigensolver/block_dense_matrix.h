@@ -25,30 +25,9 @@
 #include "mem_vector.h"
 #include "sparse_matrix.h"
 
+#include "eigensolver.h"
+
 extern size_t num_col_writes;
-
-class sp_multiply
-{
-public:
-	virtual void run(const fm::sparse_matrix &A, const fm::detail::mem_vec_store &in,
-			fm::detail::mem_vec_store &out) const = 0;
-	virtual void run(const fm::sparse_matrix &A, const fm::detail::matrix_store &in,
-			fm::detail::matrix_store &out) const = 0;
-};
-
-template<class T>
-class sp_multiply_impl: public sp_multiply
-{
-public:
-	virtual void run(const fm::sparse_matrix &A, const fm::detail::mem_vec_store &in,
-			fm::detail::mem_vec_store &out) const {
-		A.multiply<T>(in, out);
-	}
-	virtual void run(const fm::sparse_matrix &A, const fm::detail::matrix_store &in,
-			fm::detail::matrix_store &out) const {
-		A.multiply<T>(in, out);
-	}
-};
 
 class block_multi_vector
 {
@@ -56,10 +35,6 @@ class block_multi_vector
 	size_t num_rows;
 	size_t num_cols;
 	const fm::scalar_type &type;
-
-	static void sparse_matrix_multiply(const sp_multiply &multiply,
-			const fm::sparse_matrix &A, const block_multi_vector &X,
-			block_multi_vector &Y);
 protected:
 	std::vector<fm::dense_matrix::ptr> mats;
 
@@ -68,6 +43,9 @@ protected:
 	block_multi_vector(const std::vector<fm::dense_matrix::ptr> &mats);
 public:
 	typedef std::shared_ptr<block_multi_vector> ptr;
+
+	static void sparse_matrix_multiply(const spm_function &multiply,
+			const block_multi_vector &X, block_multi_vector &Y);
 
 	static ptr create(size_t nrow, size_t ncol, size_t block_size,
 			const fm::scalar_type &type) {
@@ -105,11 +83,7 @@ public:
 		return type;
 	}
 
-	fm::dense_matrix::const_ptr get_block(off_t block_idx) const {
-		return mats[block_idx];
-	}
-
-	fm::dense_matrix::ptr get_block(off_t block_idx) {
+	fm::dense_matrix::ptr get_block(off_t block_idx) const {
 		return mats[block_idx];
 	}
 
@@ -142,6 +116,8 @@ public:
 
 	block_multi_vector::ptr add(const block_multi_vector &vecs) const;
 	fm::mem_dense_matrix::ptr MvTransMv(const block_multi_vector &mv) const;
+
+	fm::dense_matrix::ptr conv2matrix() const;
 
 	template<class Type>
 	void init_rand(Type min, Type max) {
@@ -178,12 +154,6 @@ public:
 			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec1));
 		}
 		return ret_vecs;
-	}
-
-	template<class Type>
-	static void sparse_matrix_multiply(const fm::sparse_matrix &A,
-			const block_multi_vector &X, block_multi_vector &Y) {
-		sparse_matrix_multiply(sp_multiply_impl<Type>(), A, X, Y);
 	}
 };
 

@@ -23,15 +23,15 @@
 #include <string>
 #include <memory>
 
-#include "block_dense_matrix.h"
+#include "dense_matrix.h"
+#include "matrix_store.h"
 
 class spm_function
 {
 public:
 	typedef std::shared_ptr<const spm_function> const_ptr;
 
-	virtual void Apply(const block_multi_vector& x,
-			block_multi_vector& y) const = 0;
+	virtual fm::dense_matrix::ptr run(fm::dense_matrix::ptr x) const = 0;
 	virtual size_t get_num_cols() const = 0;
 	virtual size_t get_num_rows() const = 0;
 };
@@ -39,7 +39,7 @@ public:
 struct eigen_res
 {
 	std::vector<double> vals;
-	block_multi_vector::ptr vecs;
+	fm::dense_matrix::ptr vecs;
 };
 
 struct eigen_options
@@ -56,6 +56,9 @@ struct eigen_options
 	eigen_options();
 };
 
+/*
+ * `func' will be destroyed by this function.
+ */
 eigen_res compute_eigen(spm_function *func, bool sym,
 		struct eigen_options &opts);
 
