@@ -314,6 +314,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			res = multiply.run(in->conv2(matrix_layout_t::L_ROW));
 		else
 			res = multiply.run(in);
+		if (res->store_layout() == matrix_layout_t::L_ROW)
+			res = res->conv2(matrix_layout_t::L_COL);
 		assert(in->store_layout() == matrix_layout_t::L_COL);
 		assert(res->store_layout() == matrix_layout_t::L_COL);
 		Y.set_block(i, res);
