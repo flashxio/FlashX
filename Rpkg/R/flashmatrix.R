@@ -58,7 +58,12 @@ fm.get.params <- function(name)
 #' `fm.get.matrix' gets a FlashMatrixR matrix that references a matrix
 #' represented by a FlashGraphR object.
 #'
+#' `fm.load.matrix' loads a FlashMatrixR matrix from files.
+#' The matrix in the file is in the FlashMatrix format.
+#'
 #' @param fg A FlashGraphR object.
+#' @param mat.file The file that stores the sparse matrix.
+#' @param index.file The file that stores the index of the sparse matrix.
 #' @return a FlashMatrixR matrix.
 #' @name fm.get.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -71,6 +76,12 @@ fm.get.matrix <- function(fg)
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
 	.Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashGraphR")
+}
+
+#' @rdname fm.get.matrix
+fm.load.matrix <- function(mat.file, index.file)
+{
+	.Call("R_FM_load_matrix", mat.file, index.file, PACKAGE="FlashGraphR")
 }
 
 #' Create a FlashMatrixR vector with replicated elements.

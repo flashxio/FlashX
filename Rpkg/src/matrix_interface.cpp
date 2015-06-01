@@ -134,6 +134,21 @@ RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 	return create_FMR_matrix(m, name);
 }
 
+RcppExport SEXP R_FM_load_matrix(SEXP pmat_file, SEXP pindex_file)
+{
+	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
+	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+
+	SpM_2d_index::ptr index = SpM_2d_index::load(index_file);
+	if (index == NULL) {
+		fprintf(stderr, "can't load index\n");
+		return R_NilValue;
+	}
+	sparse_matrix::ptr mat = sparse_matrix::create(index,
+			SpM_2d_storage::load(mat_file, index));
+	return create_FMR_matrix(mat, "mat_file");
+}
+
 /*
  * R has only two data types in matrix multiplication: integer and numeric.
  * So we only need to predefine a small number of basic operations with
