@@ -70,6 +70,18 @@ public:
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
+	virtual const char *get_row(size_t row) const {
+		return NULL;
+	}
+	virtual char *get_row(size_t row) {
+		return NULL;
+	}
+	virtual const char *get_col(size_t col) const {
+		return NULL;
+	}
+	virtual char *get_col(size_t col) {
+		return NULL;
+	}
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const = 0;

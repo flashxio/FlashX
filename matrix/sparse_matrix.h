@@ -114,18 +114,19 @@ void fg_row_spmv_task<T, VectorType>::run_on_row(
 /*
  * This task performs sparse matrix dense matrix multiplication
  * in the FlashGraph format.
+ * We implement this method for the sake of compatibility. It doesn't
+ * run very fast.
  */
 template<class T>
 class fg_row_spmm_task: public fg_row_compute_task
 {
-	const detail::mem_row_matrix_store &input;
-	detail::mem_row_matrix_store &output;
+	const detail::mem_matrix_store &input;
+	detail::mem_matrix_store &output;
 public:
 	fg_row_spmm_task(const detail::mem_matrix_store &_input,
 			detail::mem_matrix_store &_output,
 			const matrix_io &_io): fg_row_compute_task(_io),
-				input(dynamic_cast<const detail::mem_row_matrix_store &>(_input)),
-				output(dynamic_cast<detail::mem_row_matrix_store &>(_output)) {
+				input(_input), output(_output) {
 		assert(input.get_type() == get_scalar_type<T>());
 		assert(output.get_type() == get_scalar_type<T>());
 		assert(input.get_num_cols() == output.get_num_cols());
@@ -143,6 +144,8 @@ void fg_row_spmm_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
 		fg::vertex_id_t id = v.get_neighbor(i);
+		// It's fairly expensive to get a row because it requires a function
+		// call on a virtual method.
 		const T *row = (const T *) input.get_row(id);
 		for (size_t j = 0; j < input.get_num_cols(); j++)
 			res[j] += row[j];
@@ -416,10 +419,8 @@ public:
 		if (order)
 			return compute_task::ptr(new block_spmm_task_impl<T>(input, output,
 						io, mat, order));
-		else {
-			printf("create a task for SpMM on FG graph\n");
+		else
 			return compute_task::ptr(new fg_row_spmm_task<T>(input, output, io));
-		}
 	}
 };
 
