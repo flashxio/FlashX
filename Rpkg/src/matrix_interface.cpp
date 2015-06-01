@@ -228,16 +228,22 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 	}
 
 	if (right_mat->is_type<double>()) {
+		const detail::mem_matrix_store &in_mat
+			= static_cast<const detail::mem_matrix_store &>(right_mat->get_data());
 		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
-				matrix_layout_t::L_ROW, right_mat->get_type(), -1);
+				matrix_layout_t::L_ROW, right_mat->get_type(),
+				in_mat.get_num_nodes());
 		matrix->multiply<double>(right_mat->get_data(), *out_mat);
 		return create_FMR_matrix(mem_dense_matrix::create(out_mat), "");
 	}
 	else if (right_mat->is_type<int>()) {
+		const detail::mem_matrix_store &in_mat
+			= static_cast<const detail::mem_matrix_store &>(right_mat->get_data());
 		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
-				matrix_layout_t::L_ROW, right_mat->get_type(), -1);
+				matrix_layout_t::L_ROW, right_mat->get_type(),
+				in_mat.get_num_nodes());
 		matrix->multiply<int>(right_mat->get_data(), *out_mat);
 		return create_FMR_matrix(mem_dense_matrix::create(out_mat), "");
 	}
