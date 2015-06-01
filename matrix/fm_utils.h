@@ -19,6 +19,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "vertex_index.h"
+#include "in_mem_storage.h"
 
 #include "sparse_matrix_format.h"
 #include "data_frame.h"
@@ -37,6 +39,14 @@ namespace fm
  * We can easily convert this to the FlashGraph format.
  */
 vector_vector::ptr create_1d_matrix(data_frame::ptr df);
+
+/*
+ * This function creates an edge list stored in the data frame and converts
+ * it into the FlashGraph format stored in memory.
+ */
+std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
+		const std::string &graph_name, data_frame::ptr df, bool directed);
+
 /*
  * This function creates a 2D-partitioned matrix from a data frame that
  * contains the locations of the non-zero entries in the matrix.

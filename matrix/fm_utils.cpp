@@ -21,6 +21,8 @@
 #include "factor.h"
 #include "generic_type.h"
 #include "local_vec_store.h"
+#include "mem_data_frame.h"
+#include "mem_vector_vector.h"
 
 namespace fm
 {
@@ -126,6 +128,87 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	assert(df->is_sorted(sort_vec_name));
 	adj_apply_operate adj_op;
 	return df->groupby(sort_vec_name, adj_op);
+}
+
+std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
+		const std::string &graph_name, data_frame::ptr df, bool directed)
+{
+	assert(directed);
+
+	// For in-edge adjacency lists, all edges share the same destination vertex
+	// should be stored together.
+	mem_data_frame::ptr tmp = mem_data_frame::create();
+	tmp->add_vec("dest", df->get_vec("dest"));
+	tmp->add_vec("source", df->get_vec("source"));
+	df = tmp;
+	mem_vector_vector::ptr in_adjs = mem_vector_vector::cast(
+			fm::create_1d_matrix(df));
+	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
+			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
+
+	// For out-edge adjacency lists, all edges share the same source vertex
+	// should be stored together.
+	tmp = mem_data_frame::create();
+	tmp->add_vec("source", df->get_vec("source"));
+	tmp->add_vec("dest", df->get_vec("dest"));
+	df = tmp;
+	mem_vector_vector::ptr out_adjs = mem_vector_vector::cast(
+			create_1d_matrix(df));
+	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
+			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
+
+	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
+	size_t num_vertices = out_adjs->get_num_vecs();
+	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
+	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
+	size_t num_edges = 0;
+	for (size_t i = 0; i < num_vertices; i++) {
+		const fg::ext_mem_undirected_vertex *v
+			= (const fg::ext_mem_undirected_vertex *) in_adjs->get_raw_arr(i);
+		num_edges += v->get_num_edges();
+		num_in_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					in_adjs->get_length(i), 0));
+		num_out_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					out_adjs->get_length(i), 0));
+	}
+	printf("There are %ld edges\n", num_edges);
+	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
+
+	struct deleter {
+		void operator()(char *buf) {
+			delete [] buf;
+		}
+	};
+	size_t tot_graph_size = fg::graph_header::get_header_size()
+		+ in_adjs->get_tot_num_entries() + out_adjs->get_tot_num_entries();
+	std::shared_ptr<char> graph_data(new char[tot_graph_size], deleter());
+	off_t copy_start = 0;
+	memcpy(graph_data.get() + copy_start, &header,
+			fg::graph_header::get_header_size());
+	copy_start += fg::graph_header::get_header_size();
+	memcpy(graph_data.get() + copy_start, in_adjs->get_raw_data(),
+			in_adjs->get_tot_num_entries());
+	copy_start += in_adjs->get_tot_num_entries();
+	memcpy(graph_data.get() + copy_start, out_adjs->get_raw_data(),
+			out_adjs->get_tot_num_entries());
+	copy_start += out_adjs->get_tot_num_entries();
+	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
+			graph_data, copy_start);
+
+	// Construct the vertex index.
+	// The vectors that contains the numbers of edges have the length of #V + 1
+	// because we add -1 to the edge lists artificially and the last entries
+	// are the number of vertices.
+	fg::cdirected_vertex_index::ptr vindex
+		= fg::cdirected_vertex_index::construct(num_vertices,
+				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
+				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
+				header);
+	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
 }
 
 class set_2d_label_operate: public type_set_vec_operate<factor_value_t>

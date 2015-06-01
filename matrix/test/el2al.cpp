@@ -115,20 +115,20 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
-		fprintf(stderr, "el2al edge_file graph_file\n");
+		fprintf(stderr, "el2al edge_file graph_name\n");
 		return -1;
 	}
 
 	std::string file_name = argv[1];
-	std::string adj_file = std::string(argv[2]) + ".adj";
-	std::string index_file = std::string(argv[2]) + ".index";
+	std::string graph_name = argv[2];
+	std::string adj_file = graph_name + ".adj";
+	std::string index_file = graph_name + ".index";
 	std::vector<std::string> files;
 	files.push_back(file_name);
 
 	edge_parser parser;
 	data_frame::ptr df = read_lines(files, parser);
-	size_t num_edges = df->get_num_entries();
-	printf("There are %ld edges\n", num_edges);
+
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
 		mem_vector::ptr vec = mem_vector::create(
@@ -136,85 +136,29 @@ int main(int argc, char *argv[])
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	printf("max id: %d\n", max_vid);
-
 	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
 			0, max_vid, 1);
 	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
+
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
 	mem_data_frame::ptr new_df = mem_data_frame::create();
-	new_df->add_vec(parser.get_col_name(0), seq_vec);
-	new_df->add_vec(parser.get_col_name(1), rep_vec);
+	new_df->add_vec(df->get_vec_name(0), seq_vec);
+	new_df->add_vec(df->get_vec_name(1), rep_vec);
 	df->append(new_df);
 
 	// I artificially add an invalid in-edge for each vertex.
 	new_df = mem_data_frame::create();
-	new_df->add_vec(parser.get_col_name(1), seq_vec);
-	new_df->add_vec(parser.get_col_name(0), rep_vec);
+	new_df->add_vec(df->get_vec_name(1), seq_vec);
+	new_df->add_vec(df->get_vec_name(0), rep_vec);
 	df->append(new_df);
 
-	// For in-edge adjacency lists, all edges share the same destination vertex
-	// should be stored together.
-	mem_data_frame::ptr tmp = mem_data_frame::create();
-	tmp->add_vec("dest", df->get_vec("dest"));
-	tmp->add_vec("source", df->get_vec("source"));
-	df = tmp;
-	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
-	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
-			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
-
-	// For out-edge adjacency lists, all edges share the same source vertex
-	// should be stored together.
-	tmp = mem_data_frame::create();
-	tmp->add_vec("source", df->get_vec("source"));
-	tmp->add_vec("dest", df->get_vec("dest"));
-	df = tmp;
-	vector_vector::ptr out_adjs = create_1d_matrix(df);
-	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
-			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
-
-	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
-	size_t num_vertices = out_adjs->get_num_vecs();
-	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
-			num_vertices, get_scalar_type<fg::vsize_t>());
-	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
-			num_vertices, get_scalar_type<fg::vsize_t>());
-	for (size_t i = 0; i < num_vertices; i++) {
-		num_in_edges->set(i,
-				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					in_adjs->get_length(i), 0));
-		num_out_edges->set(i,
-				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					out_adjs->get_length(i), 0));
-	}
-	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
-
-	// Construct the vertex index.
-	// The vectors that contains the numbers of edges have the length of #V + 1
-	// because we add -1 to the edge lists artificially and the last entries
-	// are the number of vertices.
-	fg::cdirected_vertex_index::ptr vindex
-		= fg::cdirected_vertex_index::construct(num_vertices,
-				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
-				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
-				header);
-	vindex->dump(index_file);
-
-	// Construct the file for the adjacency list file.
-	FILE *f_graph = fopen(adj_file.c_str(), "w");
-	if (f_graph == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
-			% adj_file % strerror(errno);
-		return -1;
-	}
-	fwrite(&header, sizeof(header), 1, f_graph);
-	bool ret = mem_vector::cast(in_adjs->cat())->export2(f_graph);
-	assert(ret);
-	ret = mem_vector::cast(out_adjs->cat())->export2(f_graph);
-	assert(ret);
-	fclose(f_graph);
+	std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
+		= create_fg_mem_graph(graph_name, df, true);
+	graph.first->dump(index_file);
+	graph.second->dump(adj_file);
 
 	return 0;
 }

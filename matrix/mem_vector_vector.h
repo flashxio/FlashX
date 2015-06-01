@@ -40,10 +40,6 @@ protected:
 	mem_vector_vector(detail::mem_vv_store::const_ptr store): vector_vector(store) {
 		this->store = store;
 	}
-
-	const char *get_raw_data() const {
-		return store->get_raw_arr();
-	}
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
 	typedef std::shared_ptr<const mem_vector_vector> const_ptr;
@@ -69,6 +65,10 @@ public:
 		detail::mem_vv_store::ptr vec = detail::mem_vv_store::create(data,
 				offs, type);
 		return ptr(new mem_vector_vector(vec));
+	}
+
+	const char *get_raw_data() const {
+		return store->get_raw_arr();
 	}
 
 	virtual size_t get_length() const {
