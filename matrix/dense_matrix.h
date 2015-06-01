@@ -216,6 +216,7 @@ public:
 	virtual dense_matrix::ptr clone() const = 0;
 
 	virtual dense_matrix::ptr transpose() const = 0;
+	virtual dense_matrix::ptr conv2(matrix_layout_t layout) const = 0;
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,

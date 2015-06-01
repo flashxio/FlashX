@@ -106,6 +106,7 @@ public:
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 
 	virtual dense_matrix::ptr transpose() const;
+	virtual dense_matrix::ptr conv2(matrix_layout_t layout) const;
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,

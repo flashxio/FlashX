@@ -672,6 +672,15 @@ dense_matrix::ptr mem_dense_matrix::scale_rows(mem_vector::const_ptr vals) const
 	return dense_matrix::create(ret);
 }
 
+dense_matrix::ptr mem_dense_matrix::conv2(matrix_layout_t layout) const
+{
+	const detail::mem_matrix_store &in_store
+		= static_cast<const detail::mem_matrix_store &>(get_data());
+	detail::matrix_store::ptr tmp = in_store.conv2(layout);
+	return mem_dense_matrix::create(detail::mem_matrix_store::cast(tmp));
+
+}
+
 namespace detail
 {
 
