@@ -16,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <Rcpp.h>
@@ -531,6 +530,7 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	r_info[1] = 2;
 	ret["info"] = r_info;
 	ret["name"] = pname;
+	ret.attr("class") = "fm.bo";
 	return ret;
 }
 
@@ -560,6 +560,7 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	r_info[1] = 1;
 	ret["info"] = r_info;
 	ret["name"] = pname;
+	ret.attr("class") = "fm.bo";
 	return ret;
 }
 

@@ -72,6 +72,8 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
 
+	ret.attr("class") = "fm";
+
 	return ret;
 }
 
@@ -93,6 +95,8 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	Rcpp::NumericVector ncol(1);
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
+
+	ret.attr("class") = "fm";
 
 	return ret;
 }
@@ -122,6 +126,9 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	else
 		len[0] = m->get_num_cols();
 	ret["len"] = len;
+
+	ret.attr("class") = "fmV";
+
 	return ret;
 }
 
