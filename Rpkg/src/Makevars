@@ -19,6 +19,10 @@ PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem
 ifdef FG_EIGEN
 PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 endif
+PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
+PKG_LIBS += -lepetra -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics 	\
+			-lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lblas	\
+			-llapack -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif

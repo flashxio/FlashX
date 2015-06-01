@@ -28,6 +28,7 @@
 #include "mem_dense_matrix.h"
 #include "bulk_operate.h"
 #include "generic_type.h"
+#include "eigensolver/eigensolver.h"
 
 #include "rutils.h"
 #include "fm_utils.h"
@@ -1027,4 +1028,59 @@ RcppExport SEXP R_FM_read_obj(SEXP pfile)
 		return R_NilValue;
 	else
 		return create_FMR_matrix(mem_dense_matrix::create(mat), "");
+}
+
+class R_spm_function: public spm_function
+{
+	SEXP pfun;
+	SEXP pextra;
+	SEXP penv;
+	size_t n;
+public:
+	R_spm_function(SEXP pfun, SEXP pextra, SEXP penv, size_t n) {
+		this->pfun = pfun;
+		this->pextra = pextra;
+		this->penv = penv;
+		this->n = n;
+	}
+
+	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+		SEXP r_mat = create_FMR_matrix(x, "x");
+		Rcpp::Function f(pfun);
+		SEXP pret = f(r_mat, pextra);
+		return get_matrix<dense_matrix>(pret);
+	}
+
+	virtual size_t get_num_cols() const {
+		return n;
+	}
+	virtual size_t get_num_rows() const {
+		return n;
+	}
+};
+
+RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
+		SEXP penv)
+{
+	Rcpp::LogicalVector sym(psym);
+	Rcpp::List options(poptions);
+
+	eigen_options opts;
+	opts.tol = REAL(options["tol"])[0];
+	opts.num_blocks = INTEGER(options["num_blocks"])[0];
+	opts.max_restarts = INTEGER(options["max_restarts"])[0];
+	opts.max_iters = INTEGER(options["max_iters"])[0];
+	opts.block_size = INTEGER(options["block_size"])[0];
+	opts.nev = INTEGER(options["nev"])[0];
+	opts.solver = CHAR(STRING_ELT(options["solver"], 0));
+	opts.which = CHAR(STRING_ELT(options["which"], 0));
+	size_t n = INTEGER(options["n"])[0];
+	eigen_res res = compute_eigen(new R_spm_function(pfunc, pextra, penv, n),
+			sym[0], opts);
+
+	Rcpp::List ret;
+	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
+	ret["vals"] = vals;
+	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
+	return ret;
 }

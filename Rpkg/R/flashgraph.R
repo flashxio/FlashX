@@ -614,61 +614,6 @@ fg.multiply.matrix <- function(graph, m, transpose=FALSE)
 	apply(m, 2, col.multiply)
 }
 
-#' Eigensolver
-#'
-#' Compute eigenvalues/vectors of the adjacency matrix of an undirected graph.
-#'
-#' This implements Implicitly Restart Lanczos method described in the paper
-#'
-#' D. Calvetti and L. Reichel and D. C. Sorensen: An Implicitly Restarted
-#' Lanczos method for Large Symmetric Eigenvalue problems, Jounral of ETNA,
-#' 1994.
-#'
-#' @param graph The FlashGraphR object
-#' @param which Specify which eigenvalues/vectors to compute, character
-#'              constant with exactly two characters.
-#' Possible values for symmetric input matrices:
-#' "LA' Compute 'nev' largest (algebraic) eigenvalues.
-#' "SA" Compute "nev" smallest (algebraic) eigenvalues.
-#' "LM" Compute `nev' largest (in magnitude) eigenvalues.
-#' "SM" Compute `nev' smallest (in magnitude) eigenvalues.
-#' @param nev Numeric scalar. The number of eigenvalues to be computed.
-#' @param ncv Number of Lanczos vectors to be generated.
-#' @return A named list with the following members:
-#'         values: Numeric vector, the desired eigenvalues.
-#'         vectors: Numeric matrix, the desired eigenvectors as columns.
-#' @name fg.eigen
-#' @author Da Zheng <dzheng5@@jhu.edu>
-#' @references
-#' D. Calvetti and L. Reichel and D. C. Sorensen: An Implicitly Restarted
-#' Lanczos method for Large Symmetric Eigenvalue problems, Jounral of ETNA,
-#' 1994.
-fg.eigen <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
-{
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fg")
-	stopifnot(!graph$directed)
-	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  as.double(tol), PACKAGE="FlashGraphR")
-}
-
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
-{
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fg")
-
-	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  "LS", as.double(tol), PACKAGE="FlashGraphR")
-
-	norm.col <- function(x)
-	{
-		x / sqrt(sum(x * x))
-	}
-	list(values=ret$values, left=ret$vectors,
-		 right=apply(fg.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
-		 options=ret$options)
-}
-
 #' Spectral embedding
 #'
 #' This computes spectral embedding of a given graph.

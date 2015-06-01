@@ -546,6 +546,60 @@ fm.read.obj <- function(file)
 	.Call("R_FM_read_obj", file, PACKAGE="FlashGraphR")
 }
 
+#' Eigensolver
+#'
+#' Compute eigenvalues/vectors of the adjacency matrix of an undirected graph.
+#'
+#' This eigensolver is powered by Anasazi package of Trilinos.
+#'
+#' @param func The function to perform the matrix-vector multiplication.
+#' @param extra Extra argument to supply to `func'.
+#' @param sym Logical scalar, whether the input matrix is symmetric.
+#' @param options Options to Anasazi.
+#'
+#' The `options' argument specifies what kind of computation to perform.
+#' It is a list with the following members, which correspond directly to
+#' Anasazi parameters:
+#'
+#' which Specify which eigenvalues/vectors to compute, character
+#'              constant with exactly two characters.
+#' Possible values for symmetric input matrices:
+#' "LA' Compute 'nev' largest (algebraic) eigenvalues.
+#' "SA" Compute "nev" smallest (algebraic) eigenvalues.
+#' "LM" Compute `nev' largest (in magnitude) eigenvalues.
+#' "SM" Compute `nev' smallest (in magnitude) eigenvalues.
+#' nev Numeric scalar. The number of eigenvalues to be computed.
+#' ncv Number of Lanczos vectors to be generated.
+#'
+#' @return A named list with the following members:
+#'         values: Numeric vector, the desired eigenvalues.
+#'         vectors: Numeric matrix, the desired eigenvectors as columns.
+#' @name fm.eigen
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.eigen <- function(func, extra=NULL, sym=FALSE, options=fm.eigen.default,
+					 env = parent.frame())
+{
+	.Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
+		  as.list(options), PACKAGE="FlashGraphR")
+}
+
+fm.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
+{
+	stopifnot(!is.null(graph))
+	stopifnot(class(graph) == "fm")
+
+	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  "LS", as.double(tol), PACKAGE="FlashGraphR")
+
+	norm.col <- function(x)
+	{
+		x / sqrt(sum(x * x))
+	}
+	list(values=ret$values, left=ret$vectors,
+		 right=apply(fm.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
+		 options=ret$options)
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
