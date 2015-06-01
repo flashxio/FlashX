@@ -21,17 +21,20 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libmatrix test unit-test
+all: libmatrix test unit-test eigensolver
 
 libmatrix: $(OBJS)
 	rm -f libFMatrix.a
 	ar -cvq libFMatrix.a $(OBJS)
 
-test: libmatrix
+test: libmatrix eigensolver
 	$(MAKE) -C test
 
 unit-test: libmatrix
 	$(MAKE) -C unit-test
+
+eigensolver: libmatrix
+	$(MAKE) -C eigensolver
 
 clean:
 	rm -f *.d
@@ -41,5 +44,6 @@ clean:
 	find -name core -delete
 	$(MAKE) -C test clean
 	$(MAKE) -C unit-test clean
+	$(MAKE) -C eigensolver clean
 
 -include $(DEPS) 
