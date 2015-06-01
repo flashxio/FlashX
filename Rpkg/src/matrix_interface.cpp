@@ -224,10 +224,10 @@ static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 {
 	if (right_mat->store_layout() != matrix_layout_t::L_ROW) {
-		fprintf(stderr, "The input dense matrix for SpMM isn't row major\n");
-		return R_NilValue;
+		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
 	}
-	else if (right_mat->is_type<double>()) {
+
+	if (right_mat->is_type<double>()) {
 		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(), -1);
