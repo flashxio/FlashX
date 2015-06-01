@@ -111,6 +111,45 @@ void fg_row_spmv_task<T, VectorType>::run_on_row(
 	*(T *) output.get(v.get_id()) = res;
 }
 
+/*
+ * This task performs sparse matrix dense matrix multiplication
+ * in the FlashGraph format.
+ */
+template<class T>
+class fg_row_spmm_task: public fg_row_compute_task
+{
+	const detail::mem_row_matrix_store &input;
+	detail::mem_row_matrix_store &output;
+public:
+	fg_row_spmm_task(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output,
+			const matrix_io &_io): fg_row_compute_task(_io),
+				input(dynamic_cast<const detail::mem_row_matrix_store &>(_input)),
+				output(dynamic_cast<detail::mem_row_matrix_store &>(_output)) {
+		assert(input.get_type() == get_scalar_type<T>());
+		assert(output.get_type() == get_scalar_type<T>());
+		assert(input.get_num_cols() == output.get_num_cols());
+	}
+
+	void run_on_row(const fg::ext_mem_undirected_vertex &v);
+};
+
+template<class T>
+void fg_row_spmm_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
+{
+	T res[input.get_num_cols()];
+	for (size_t i = 0; i < input.get_num_cols(); i++)
+		res[i] = 0;
+
+	for (size_t i = 0; i < v.get_num_edges(); i++) {
+		fg::vertex_id_t id = v.get_neighbor(i);
+		const T *row = (const T *) input.get_row(id);
+		for (size_t j = 0; j < input.get_num_cols(); j++)
+			res[j] += row[j];
+	}
+	memcpy(output.get_row(v.get_id()), res, sizeof(T) * input.get_num_cols());
+}
+
 class block_compute_task;
 
 /*
@@ -353,14 +392,14 @@ public:
 };
 
 template<class T>
-class b2d_spmm_creator: public task_creator
+class spmm_creator: public task_creator
 {
 	const detail::mem_matrix_store &input;
 	detail::mem_matrix_store &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmm_creator(const detail::mem_matrix_store &_input,
+	spmm_creator(const detail::mem_matrix_store &_input,
 			detail::mem_matrix_store &_output, const sparse_matrix &_mat);
 public:
 	static task_creator::ptr create(const detail::mem_matrix_store &_input,
@@ -370,12 +409,17 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
 			return task_creator::ptr();
 		}
-		return task_creator::ptr(new b2d_spmm_creator<T>(_input, _output, mat));
+		return task_creator::ptr(new spmm_creator<T>(_input, _output, mat));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new block_spmm_task_impl<T>(input, output,
-					io, mat, order));
+		if (order)
+			return compute_task::ptr(new block_spmm_task_impl<T>(input, output,
+						io, mat, order));
+		else {
+			printf("create a task for SpMM on FG graph\n");
+			return compute_task::ptr(new fg_row_spmm_task<T>(input, output, io));
+		}
 	}
 };
 
@@ -433,8 +477,7 @@ class sparse_matrix
 	template<class T>
 	task_creator::ptr get_multiply_creator(const detail::mem_matrix_store &in,
 			detail::mem_matrix_store &out) const {
-		assert(!is_fg);
-		return b2d_spmm_creator<T>::create(in, out, *this);
+		return spmm_creator<T>::create(in, out, *this);
 	}
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -484,6 +527,10 @@ public:
 			safs::file_io_factory::shared_ptr mat_io_fac,
 			SpM_2d_index::ptr t_index,
 			safs::file_io_factory::shared_ptr t_mat_io_fac);
+
+	bool is_fg_matrix() const {
+		return is_fg;
+	}
 
 	/*
 	 * When customizing computatin on a sparse matrix (regardless of
@@ -617,23 +664,26 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const detail::mem_vec_store &_input,
 }
 
 template<class T>
-b2d_spmm_creator<T>::b2d_spmm_creator(const detail::mem_matrix_store &_input,
+spmm_creator<T>::spmm_creator(const detail::mem_matrix_store &_input,
 		detail::mem_matrix_store &_output,
 		const sparse_matrix &_mat): input(_input), output(_output), mat(_mat)
 {
-	// We only handle the case the element size is 2^n.
-	assert(1 << ((size_t) log2(sizeof(T))) == sizeof(T));
-	// Hilbert curve requires that there are 2^n block rows and block columns.
-	// If the input matrix doesn't have 2^n columns, we have to find a number
-	// of 2^n that is close to the number of columns in the input matrix
-	// to calculate the super block size, so that the super block has 2^n
-	// block rows and columns.
-	size_t num_cols = input.get_num_cols();
-	num_cols = 1 << ((size_t) log2(num_cols));
-	size_t sb_size = cal_super_block_size(mat.get_block_size(),
-			sizeof(T) * num_cols);
-	assert(input.get_num_cols() == output.get_num_cols());
-	order = mat.get_multiply_order(sb_size, sb_size);
+	// This initialization only for 2D partitioned sparse matrix.
+	if (!mat.is_fg_matrix()) {
+		// We only handle the case the element size is 2^n.
+		assert(1 << ((size_t) log2(sizeof(T))) == sizeof(T));
+		// Hilbert curve requires that there are 2^n block rows and block columns.
+		// If the input matrix doesn't have 2^n columns, we have to find a number
+		// of 2^n that is close to the number of columns in the input matrix
+		// to calculate the super block size, so that the super block has 2^n
+		// block rows and columns.
+		size_t num_cols = input.get_num_cols();
+		num_cols = 1 << ((size_t) log2(num_cols));
+		size_t sb_size = cal_super_block_size(mat.get_block_size(),
+				sizeof(T) * num_cols);
+		assert(input.get_num_cols() == output.get_num_cols());
+		order = mat.get_multiply_order(sb_size, sb_size);
+	}
 }
 
 void init_flash_matrix(config_map::ptr configs);
