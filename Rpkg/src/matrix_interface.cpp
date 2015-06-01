@@ -65,7 +65,7 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 }
 
 template<class T>
-class rand_set_operate: public type_set_operate<T>
+class rand_set_operate: public type_set_vec_operate<T>
 {
 	const T min;
 	const T max;
@@ -78,8 +78,7 @@ public:
 	rand_set_operate(T _min, T _max): min(_min), max(_max) {
 	}
 
-	virtual void set(T *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
+	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = gen_rand();
 		}
