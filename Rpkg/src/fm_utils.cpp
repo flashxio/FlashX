@@ -141,8 +141,8 @@ vector::ptr get_vector(const Rcpp::List &vec)
 	// This should be a column matrix.
 	assert(mat->store_layout == matrix_layout_t::L_COL
 			&& mat->get_num_cols() == 1);
-	const detail::mem_col_matrix_store &col_mat
-		= dynamic_cast<const detail::mem_col_matrix_store &>(mat->get_data());
+	const detail::mem_matrix_store &col_mat
+		= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
 	detail::vec_store::const_ptr store = col_mat.get_col_vec(0);
 	assert(store);
 	return mem_vector::create(detail::mem_vec_store::cast(store));
