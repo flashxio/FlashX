@@ -35,3 +35,10 @@ bool R_is_integer(SEXP v)
 {
 	return isInteger(v);
 }
+
+void R_gc()
+{
+	SEXP call = PROTECT(lang1(install("gc")));
+	PROTECT(eval(call, R_GlobalEnv));
+	UNPROTECT(2);
+}

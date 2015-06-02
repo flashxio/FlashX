@@ -1052,22 +1052,24 @@ RcppExport SEXP R_FM_read_obj(SEXP pfile)
 
 class R_spm_function: public spm_function
 {
-	SEXP pfun;
+	Rcpp::Function fun;
 	SEXP pextra;
 	SEXP penv;
 	size_t n;
 public:
-	R_spm_function(SEXP pfun, SEXP pextra, SEXP penv, size_t n) {
-		this->pfun = pfun;
+	R_spm_function(SEXP pfun, SEXP pextra, SEXP penv, size_t n): fun(pfun) {
 		this->pextra = pextra;
 		this->penv = penv;
 		this->n = n;
 	}
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+		// Force R to perform garbage collection. The R garbage collector
+		// doesn't work frequently, so it won't clean up the existing
+		// dense matrices and use a lot of memory.
+		R_gc();
 		SEXP r_mat = create_FMR_matrix(x, "x");
-		Rcpp::Function f(pfun);
-		SEXP pret = f(r_mat, pextra);
+		SEXP pret = fun(r_mat, pextra);
 		return get_matrix<dense_matrix>(pret);
 	}
 

@@ -56,4 +56,6 @@ static inline bool is_vector(const Rcpp::List &matrix)
 	return type == "vector";
 }
 
+void R_gc();
+
 #endif
