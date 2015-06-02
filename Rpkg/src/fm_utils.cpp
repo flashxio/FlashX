@@ -85,7 +85,7 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
-	R_RegisterCFinalizerEx(pointer, fm_clean_SpM, TRUE);
+	R_RegisterCFinalizerEx(pointer, fm_clean_DM, TRUE);
 	ret["pointer"] = pointer;
 
 	Rcpp::NumericVector nrow(1);
