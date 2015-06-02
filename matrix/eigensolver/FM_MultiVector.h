@@ -22,6 +22,10 @@
 
 #include <stdlib.h>
 
+#include <boost/format.hpp>
+
+#include "log.h"
+
 #include "AnasaziMultiVec.hpp"
 
 #include "NUMA_vector.h"
@@ -177,14 +181,16 @@ public:
 		else
 			ret = new FM_MultiVector<ScalarType>(
 					mat->get_num_rows(), numvecs, numvecs);
-		printf("create new %s(#cols: %d)\n", ret->get_name().c_str(), numvecs);
+		BOOST_LOG_TRIVIAL(info) << boost::format("create new %1% (#cols: %2%)")
+			% ret->get_name() % numvecs;
 		return ret;
 	}
 
 	/// \brief Create a new MultiVec and copy contents of \c *this into it (deep copy).
 	/// \return Pointer to the new multivector	
 	virtual Anasazi::MultiVec<ScalarType> * CloneCopy () const {
-		printf("deep copy %s(#cols: %ld)\n", name.c_str(), mat->get_num_cols());
+		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy %1% (#cols: %2%)")
+			% name % mat->get_num_cols();
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		ret->mat = this->mat->clone();
@@ -205,7 +211,8 @@ public:
 	  */
 	virtual Anasazi::MultiVec<ScalarType> * CloneCopy (
 			const std::vector<int>& index) const {
-		printf("deep copy sub %s (#cols: %ld)\n", name.c_str(), index.size());
+		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy sub %1% (#cols: %2%)")
+			% name % index.size();
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		ret->mat = mat->get_cols(index);
@@ -228,7 +235,8 @@ public:
 			const std::vector<int>& index) {
 		std::string extra = std::string("(") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
-		printf("view %s(#cols: %ld)\n", ret->name.c_str(), index.size());
+		BOOST_LOG_TRIVIAL(info) << boost::format("view %1% (#cols: %2%)")
+			% ret->name % index.size();
 		ret->mat = mat->get_cols_mirror(index);
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -272,7 +280,8 @@ public:
 			const std::vector<int>& index) const {
 		std::string extra = std::string("(const ") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
-		printf("const view %s(#cols: %ld)\n", ret->name.c_str(), index.size());
+		BOOST_LOG_TRIVIAL(info) << boost::format("const view %1% (#cols: %2%)")
+			% ret->name % index.size();
 		ret->mat = mat->get_cols(index);
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -308,8 +317,9 @@ public:
 			const Anasazi::MultiVec<ScalarType>& A, 
 			const Teuchos::SerialDenseMatrix<int,ScalarType>& B, ScalarType beta) {
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		printf("this(%s) = %g * A(%s) * B(%dx%d) + %g * this\n", name.c_str(), alpha,
-				fm_A.name.c_str(), B.numRows(), B.numCols(), beta);
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"this(%1%) = %2% * A(%3%) * B(%4%x%5%) + %6% * this")
+			% name % alpha % fm_A.name % B.numRows() % B.numCols() % beta;
 		fm::detail::mem_col_matrix_store::ptr Bstore
 			= fm::detail::mem_col_matrix_store::create(
 					B.numRows(), B.numCols(), fm::get_scalar_type<ScalarType>());
@@ -332,8 +342,9 @@ public:
 			ScalarType beta, const Anasazi::MultiVec<ScalarType>& B ) {
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		const FM_MultiVector &fm_B = dynamic_cast<const FM_MultiVector &>(B);
-		printf("this(%s) = %g * A(%s) + %g *  B(%s)\n", name.c_str(), alpha,
-				fm_A.name.c_str(), beta, fm_B.name.c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"this(%1%) = %2% * A(%3%) + %4% *  B(%5%)")
+			% name % alpha % fm_A.name % beta % fm_B.name;
 		if (alpha == 1 && beta == 0)
 			this->mat->assign(*fm_A.mat);
 		else if (alpha == 0 && beta == 1)
@@ -353,7 +364,7 @@ public:
 
 	//! Scale each element of the vectors in \c *this with \c alpha.
 	virtual void MvScale ( ScalarType alpha ) {
-		printf("this(%s) *= %g\n", name.c_str(), alpha);
+		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) *= %2%") % name % alpha;
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -363,7 +374,7 @@ public:
 
 	//! Scale each element of the <tt>i</tt>-th vector in \c *this with <tt>alpha[i]</tt>.
 	virtual void MvScale ( const std::vector<ScalarType>& alpha ) {
-		printf("this(%s) *= vec\n", name.c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s) *= vec") % name;
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -381,8 +392,9 @@ public:
 #endif				 
 			) const {
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		printf("B(%dx%d) = %g * A(%s)^T * this(%s)\n", B.numRows(), B.numCols(),
-				alpha, fm_A.name.c_str(), name.c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"B(%1%x%2%) = %3% * A(%4%)^T * this(%5%)")
+			% B.numRows() % B.numCols() % alpha % fm_A.name % name;
 		assert((size_t) B.numRows() == fm_A.mat->get_num_cols());
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
 		assert(fm_A.mat->get_num_rows() == this->mat->get_num_rows());
@@ -419,7 +431,8 @@ public:
 	///   \c i-th vector of \c *this.
 	virtual void MvNorm (
 			std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> & normvec) const {
-		printf("norm(%s)(#cols: %ld)\n", name.c_str(), normvec.size());
+		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
+			% name % normvec.size();
 		verify();
 //		ep_mat->MvNorm(normvec);
 		for (size_t i = 0; i < mat->get_num_cols(); i++)
@@ -436,7 +449,8 @@ public:
 			const std::vector<int>& index) {
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		printf("this(%s)[%ld vecs] = A(%s)\n", name.c_str(), index.size(), fm_A.name.c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s)[%ld vecs] = A(%s)")
+			% name % index.size() % fm_A.name;
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
@@ -447,7 +461,7 @@ public:
 
 	//! Fill all the vectors in \c *this with random numbers.
 	virtual void MvRandom () {
-		printf("this(%s) = random\n", name.c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) = random") % name;
 		mat->init_rand<ScalarType>(-1, 1);
 //		ep_mat->MvRandom();
 		sync_fm2ep();

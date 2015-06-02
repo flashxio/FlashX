@@ -74,11 +74,9 @@ public:
 		assert(mat->get_num_cols() == get_block_size());
 		mats[block_idx]->assign(*mat);
 		if (mirrored_mat->is_virtual()) {
-			printf("materialize %ld cols\n", mirrored_mat->get_num_cols());
 			num_col_writes += mirrored_mat->get_num_cols();
 		}
 		if (mat->is_virtual()) {
-			printf("materialize %ld cols\n", mat->get_num_cols());
 			num_col_writes += mat->get_num_cols();
 		}
 		mirrored_mat->materialize_self();
@@ -137,7 +135,6 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	offs[0] = local_col_idx;
 	fm::dense_matrix::const_ptr block = get_block(block_idx);
 	if (block->is_virtual()) {
-		printf("materialize %ld cols\n", block->get_num_cols());
 		num_col_writes += block->get_num_cols();
 	}
 	block->materialize_self();
@@ -166,7 +163,6 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		size_t block_start = index[0] / get_block_size();
 		for (size_t i = 0; i < num_blocks; i++)
 			ret->set_block(i, get_block(i + block_start));
-		printf("get block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
 		return ret;
 	}
 	else if (is_same_block(index, block_size)) {
@@ -180,12 +176,10 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 				index.size(), index.size(), get_type());
 		dense_matrix::ptr block = get_block(block_start);
 		if (block->is_virtual()) {
-			printf("materialize %ld cols\n", block->get_num_cols());
 			num_col_writes += block->get_num_cols();
 		}
 		block->materialize_self();
 		ret->set_block(0, block->get_cols(local_offs));
-		printf("get block [%ld]\n", block_start);
 		return ret;
 	}
 	else {
@@ -193,7 +187,6 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 				index.size(), 1, get_type());
 		for (size_t i = 0; i < index.size(); i++)
 			ret->set_block(i, get_col(index[i]));
-		printf("get column [%d-%d]\n", index.front(), index.back());
 		return ret;
 	}
 }
@@ -239,7 +232,6 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 			mats[i] = get_block(i + block_start);
 		mirror_block_multi_vector::ptr ret
 			= mirror_block_multi_vector::create(mats);
-		printf("mirror block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
 		return ret;
 	}
 	else if (is_same_block(index, get_block_size())) {
@@ -304,7 +296,6 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::const_ptr block = X.get_block(i);
 		if (block->is_virtual()) {
-			printf("materialize %ld cols\n", block->get_num_cols());
 			num_col_writes += block->get_num_cols();
 		}
 		block->materialize_self();
@@ -583,13 +574,11 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 		for (size_t j = 0; j < mv.get_num_blocks(); j++) {
 			dense_matrix::const_ptr mv_block = mv.get_block(j);
 			if (mv_block->is_virtual()) {
-				printf("materialize %ld cols\n", mv_block->get_num_cols());
 				num_col_writes += mv_block->get_num_cols();
 			}
 			mv_block->materialize_self();
 			dense_matrix::const_ptr block = get_block(i);
 			if (block->is_virtual()) {
-				printf("materialize %ld cols\n", block->get_num_cols());
 				num_col_writes += block->get_num_cols();
 			}
 			block->materialize_self();
@@ -673,7 +662,6 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			// the matrix to change its columns. This rarely happens.
 			// TODO We might want the uninitialized columns to be virtualized.
 			if (block->is_virtual()) {
-				printf("materialize1 %ld cols\n", block->get_num_cols());
 				num_col_writes += block->get_num_cols();
 				block->materialize_self();
 			}

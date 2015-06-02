@@ -37,7 +37,8 @@ public:
 	 */
 	static void Apply ( const spm_function& Op,
 			const FM_MultiVector<double>& x, FM_MultiVector<double>& y ) {
-		printf("SpMM: y(%s) = A * x(%s)\n", y.get_name().c_str(), x.get_name().c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format("SpMM: y(%1%) = A * x(%2%)")
+			% y.get_name() % x.get_name();
 		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data());
 		y.sync_fm2ep();
 	}
@@ -116,7 +117,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	// Tell the eigenproblem that you are finishing passing it information.
 	const bool boolret = problem->setProblem();
 	if (boolret != true) {
-		cerr << "Anasazi::BasicEigenproblem::setProblem() returned an error." << endl;
+		BOOST_LOG_TRIVIAL(error)
+			<< "Anasazi::BasicEigenproblem::setProblem() returned an error.";
 		return eigen_res();
 	}
 
@@ -177,12 +179,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		returnCode = anasaziSolver.solve ();
 	}
 	else {
-		cerr << "a wrong solver: " << solver << endl;
+		BOOST_LOG_TRIVIAL(error) << "a wrong solver: " << solver;
 		return eigen_res();
 	}
 
 	if (returnCode != Anasazi::Converged) {
-		cout << "Anasazi eigensolver did not converge." << endl;
+		BOOST_LOG_TRIVIAL(error) << "Anasazi eigensolver did not converge.";
 	}
 
 	// Get the eigenvalues and eigenvectors from the eigenproblem.
