@@ -26,7 +26,6 @@
 #include "io_interface.h"
 
 #include "matrix/FG_sparse_matrix.h"
-#include "matrix/matrix_eigensolver.h"
 #include "matrix/kmeans.h"
 
 #include "FGlib.h"
@@ -1081,77 +1080,6 @@ RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
 	return ret;
 }
 
-#ifdef USE_EIGEN
-
-SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
-{
-	int nev = eigen_pairs.size();
-	size_t length = eigen_pairs[0].second->get_size();
-	Rcpp::NumericVector eigen_values(nev);
-	Rcpp::NumericMatrix eigen_matrix(length, nev);
-	for (int i = 0; i < nev; i++) {
-		eigen_values[i] = eigen_pairs[i].first;
-		for (size_t j = 0; j < length; j++)
-			eigen_matrix(j, i) = eigen_pairs[i].second->get(j);
-	}
-	Rcpp::List ret;
-	ret["values"] = eigen_values;
-	ret["vectors"] = eigen_matrix;
-	return ret;
-}
-
-/*
- * Compute eigen value/vector on an unweighted adjacency matrix.
- */
-RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP ptol)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	if (fg->get_graph_header().is_directed_graph())
-		return R_NilValue;
-
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	std::string which = CHAR(STRING_ELT(pwhich, 0));
-	int nev = INTEGER(pnev)[0];
-	int ncv = INTEGER(pncv)[0];
-	double tol = REAL(ptol)[0];
-
-	std::vector<eigen_pair_t> eigen_pairs;
-	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, tol, eigen_pairs);
-	if (eigen_pairs.empty())
-		return R_NilValue;
-	return output_eigen_pairs(eigen_pairs);
-}
-
-RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP ptype, SEXP ptol)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	std::string which = CHAR(STRING_ELT(pwhich, 0));
-	std::string type = CHAR(STRING_ELT(ptype, 0));
-	int nev = INTEGER(pnev)[0];
-	int ncv = INTEGER(pncv)[0];
-	double tol = REAL(ptol)[0];
-	std::vector<eigen_pair_t> eigen_pairs;
-	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, tol, eigen_pairs);
-	if (eigen_pairs.empty())
-		return R_NilValue;
-
-	size_t length = eigen_pairs[0].second->get_size();
-	Rcpp::NumericVector eigen_values(nev);
-	Rcpp::NumericMatrix eigen_matrix(length, nev);
-	for (int i = 0; i < nev; i++) {
-		eigen_values[i] = eigen_pairs[i].first;
-		for (size_t j = 0; j < length; j++)
-			eigen_matrix(j, i) = eigen_pairs[i].second->get(j);
-	}
-	Rcpp::List ret;
-	ret["values"] = eigen_values;
-	ret["vectors"] = eigen_matrix;
-	return ret;
-}
-
 RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 {
 	Rcpp::IntegerVector Rvids(_vids);
@@ -1163,4 +1091,3 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
-#endif
