@@ -57,10 +57,13 @@ test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
 LDTRILINOS = -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
-		-lteuchoscore -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
+		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
 test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
 	$(CXX) -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+
+BlockDavidsonTpetra: BlockDavidsonTpetra.o
+	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(LDTRILINOS) $(LDFLAGS)
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
@@ -74,13 +77,7 @@ test-mkl_dgemm.o: test-mkl_dgemm.cpp
 test-mkl_dgemm: test-mkl_dgemm.o
 	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
 
-TRILINOS_LDFLAGS := -lepetra -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics 	\
-		 -lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lblas -llapack -lkokkoscore	\
-		 -lkokkoscontainers -lteuchoskokkoscompat
-
-BlockDavidsonTpetra: BlockDavidsonTpetra.o
-	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(TRILINOS_LDFLAGS) $(LDFLAGS)
-
+TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
 CXXFLAGS += -I../eigensolver
 
 test-eigen: test-eigen.o ../libFMatrix.a ../eigensolver/libeigen.a
