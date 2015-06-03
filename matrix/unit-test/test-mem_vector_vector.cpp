@@ -69,7 +69,7 @@ void test_groupby()
 			get_scalar_type<int>());
 #pragma omp parallel for
 	for (size_t i = 0; i < store->get_length(); i++)
-		store->set(i, random() % 1000);
+		store->set<int>(i, random() % 1000);
 	printf("set the vector store\n");
 	mem_vector::ptr vec = mem_vector::create(store);
 	data_frame::ptr res = vec->groupby(adj_apply(), false);
@@ -106,7 +106,7 @@ detail::mem_vv_store::ptr create_mem_vv(size_t num_vecs, size_t max_vec_len)
 	return vv;
 }
 
-void verify_data(const char *buf1, const char *buf2, size_t len)
+void verify_data(const int *buf1, const int *buf2, size_t len)
 {
 	for (size_t i = 0; i < len; i++)
 		assert(buf1[i] == buf2[i]);
@@ -125,8 +125,9 @@ void test_append_vecs()
 	assert(vv1->get_num_vecs() == vecs.size());
 	for (size_t i = 0; i < vecs.size(); i++) {
 		assert(vv1->get_length(i) == vecs[i]->get_length());
-		verify_data(vv1->get_raw_arr(i), detail::mem_vec_store::cast(vecs[i])->get_raw_arr(),
-				vecs[i]->get_length() * vecs[i]->get_entry_size());
+		verify_data((const int *) vv1->get_raw_arr(i),
+				(const int *) detail::mem_vec_store::cast(vecs[i])->get_raw_arr(),
+				vecs[i]->get_length());
 	}
 
 	detail::mem_vv_store::ptr vv2 = detail::mem_vv_store::create(get_scalar_type<int>());
@@ -134,19 +135,20 @@ void test_append_vecs()
 	assert(vv2->get_num_vecs() == vecs.size());
 	for (size_t i = 0; i < vecs.size(); i++) {
 		assert(vv2->get_length(i) == vecs[i]->get_length());
-		verify_data(vv2->get_raw_arr(i), detail::mem_vec_store::cast(vecs[i])->get_raw_arr(),
-				vecs[i]->get_length() * vecs[i]->get_entry_size());
+		verify_data((const int *) vv2->get_raw_arr(i),
+				(const int *) detail::mem_vec_store::cast(vecs[i])->get_raw_arr(),
+				vecs[i]->get_length());
 	}
 }
 
 void test_append_vvs()
 {
 	printf("test append vector vectors\n");
-	std::vector<detail::vec_store::const_ptr> vvs(1000);
+	std::vector<detail::vec_store::const_ptr> vvs(100);
 	std::vector<size_t> vec_lens;
 	std::vector<const char *> vec_data;
 	for (size_t i = 0; i <vvs.size(); i++) {
-		detail::mem_vv_store::ptr vv = create_mem_vv(100, 1000);
+		detail::mem_vv_store::ptr vv = create_mem_vv(10, 1000);
 		vvs[i] = vv;
 		for (size_t j = 0; j < vv->get_num_vecs(); j++) {
 			vec_lens.push_back(vv->get_length(j));
@@ -160,8 +162,8 @@ void test_append_vvs()
 	assert(vv1->get_num_vecs() == vec_lens.size());
 	for (size_t i = 0; i < vec_lens.size(); i++) {
 		assert(vv1->get_length(i) == vec_lens[i]);
-		verify_data(vv1->get_raw_arr(i), vec_data[i],
-				vv1->get_length(i) * vv1->get_entry_size());
+		verify_data((const int *) vv1->get_raw_arr(i),
+				(const int *) vec_data[i], vv1->get_length(i));
 	}
 
 	detail::mem_vv_store::ptr vv2 = detail::mem_vv_store::create(get_scalar_type<int>());
@@ -169,8 +171,8 @@ void test_append_vvs()
 	assert(vv2->get_num_vecs() == vec_lens.size());
 	for (size_t i = 0; i < vec_lens.size(); i++) {
 		assert(vv2->get_length(i) == vec_lens[i]);
-		verify_data(vv2->get_raw_arr(i), vec_data[i],
-				vv2->get_length(i) * vv2->get_entry_size());
+		verify_data((const int *) vv2->get_raw_arr(i),
+				(const int *) vec_data[i], vv2->get_length(i));
 	}
 }
 
