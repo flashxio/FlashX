@@ -88,10 +88,36 @@ public:
 
 }
 
+/*
+ * Partition the vector into multiple partitions of relatively equal size.
+ * It is guaranteed that the same values are all split into the same partition.
+ * It returns a vector with `num_parts' + 1 elements. Each element except
+ * the last indicates the start location of a partition in the vector.
+ * The last element indicates the end of the vector.
+ */
+std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
+		int num_parts)
+{
+	const agg_operate &find_next
+		= sorted_vec.get_type().get_agg_ops().get_find_next();
+	std::vector<off_t> par_starts(num_parts + 1);
+	for (int i = 0; i < num_parts; i++) {
+		off_t start = sorted_vec.get_length() / num_parts * i;
+		// This returns the relative start location of the next value.
+		find_next.run(sorted_vec.get_length() - start,
+				sorted_vec.get_raw_arr() + sorted_vec.get_entry_size() * start,
+				&par_starts[i]);
+		// This is the absolute start location of this partition.
+		par_starts[i] += start;
+	}
+	par_starts[0] = 0;
+	par_starts[num_parts] = sorted_vec.get_length();
+	return par_starts;
+}
+
 data_frame::ptr mem_vector::groupby(
 		const gr_apply_operate<local_vec_store> &op, bool with_val) const
 {
-	const agg_operate &find_next = get_type().get_agg_ops().get_find_next();
 	if (!verify_groupby(op))
 		return data_frame::ptr();
 
@@ -114,24 +140,13 @@ data_frame::ptr mem_vector::groupby(
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_threads = mem_threads->get_num_threads();
-	off_t par_starts[num_threads + 1];
-	for (int i = 0; i < num_threads; i++) {
-		off_t start = sorted_vec->get_length() / num_threads * i;
-		// This returns the relative start location of the next value.
-		find_next.run(sorted_vec->get_length() - start,
-				sorted_vec->get_raw_arr() + get_entry_size() * start,
-				par_starts + i);
-		// This is the absolute start location of this partition.
-		par_starts[i] += start;
-	}
-	par_starts[0] = 0;
-	par_starts[num_threads] = sorted_vec->get_length();
+	std::vector<off_t> par_starts = partition_vector(*sorted_vec, num_threads);
 
 	// It's possible that two partitions end up having the same start location
 	// because the vector is small or a partition has only one value.
-	assert(std::is_sorted(par_starts, par_starts + num_threads + 1));
-	off_t *end_par_starts = std::unique(par_starts, par_starts + num_threads + 1);
-	int num_parts = end_par_starts - par_starts - 1;
+	assert(std::is_sorted(par_starts.begin(), par_starts.end()));
+	auto end_par_starts = std::unique(par_starts.begin(), par_starts.end());
+	int num_parts = end_par_starts - par_starts.begin() - 1;
 	std::vector<data_frame::ptr> sub_results(num_parts);
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
