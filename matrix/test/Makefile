@@ -87,18 +87,18 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm test-fg_SpMV
-	rm test-2d_multiply
-	rm test-mem_matrix
-	rm test-mem_vector
-	rm test-EM_matrix
-	rm el2al
-	rm al22d
-	rm al2crs
-	rm test-sort
-	rm test-tpetra_multiply
-	rm test-mkl_multiply
-	rm test-eigen
-	rm BlockDavidsonTpetra
+	rm -f test-fg_SpMV
+	rm -f test-2d_multiply
+	rm -f test-mem_matrix
+	rm -f test-mem_vector
+	rm -f test-EM_matrix
+	rm -f el2al
+	rm -f al22d
+	rm -f al2crs
+	rm -f test-sort
+	rm -f test-tpetra_multiply
+	rm -f test-mkl_multiply
+	rm -f test-eigen
+	rm -f BlockDavidsonTpetra
 
 -include $(DEPS) 
