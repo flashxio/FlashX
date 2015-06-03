@@ -73,15 +73,35 @@ void test_groupby()
 void test_append()
 {
 	printf("test append\n");
-	smp_vec_store::ptr res = smp_vec_store::create(16, get_scalar_type<int>());
-	size_t tot_len = res->get_length();
+	size_t tot_len = 0;
 	std::vector<vec_store::const_ptr> vecs(16);
 	for (size_t i = 0; i < vecs.size(); i++) {
 		vecs[i] = smp_vec_store::create(32, get_scalar_type<int>());
 		tot_len += vecs[i]->get_length();
 	}
-	res->append(vecs.begin(), vecs.end());
-	assert(tot_len == res->get_length());
+
+	smp_vec_store::ptr res1 = smp_vec_store::create(0, get_scalar_type<int>());
+	for (size_t i = 0; i < vecs.size(); i++) {
+		off_t off = res1->get_length();
+		res1->append(*vecs[i]);
+
+		const char *sub_vec = res1->get(off);
+		smp_vec_store::const_ptr orig = smp_vec_store::cast(vecs[i]);
+		assert(memcmp(sub_vec, orig->get_raw_arr(),
+					orig->get_length() * orig->get_entry_size()) == 0);
+	}
+
+	smp_vec_store::ptr res2 = smp_vec_store::create(0, get_scalar_type<int>());
+	res2->append(vecs.begin(), vecs.end());
+	assert(tot_len == res2->get_length());
+	off_t off2 = 0;
+	for (size_t i = 0; i < vecs.size(); i++) {
+		const char *sub_vec = res2->get(off2);
+		smp_vec_store::const_ptr orig = smp_vec_store::cast(vecs[i]);
+		assert(memcmp(sub_vec, orig->get_raw_arr(),
+					orig->get_length() * res2->get_entry_size()) == 0);
+		off2 += orig->get_length();
+	}
 }
 
 void test_sort()
