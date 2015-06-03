@@ -20,9 +20,7 @@ ifdef FG_EIGEN
 PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 endif
 PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
-PKG_LIBS += -lepetra -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics 	\
-			-lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lblas	\
-			-llapack -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
+PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
