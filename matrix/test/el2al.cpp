@@ -81,7 +81,7 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 				<< std::string("the first entry isn't a number: ") + first;
 			continue;
 		}
-		long from = atol(first);
+		fg::vertex_id_t from = atol(first);
 		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
 
 		const char *second = first;
@@ -100,7 +100,7 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 				<< std::string("the second entry isn't a number: ") + second;
 			continue;
 		}
-		long to = atol(second);
+		fg::vertex_id_t to = atol(second);
 		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
 
 		froms->set(i, from);
