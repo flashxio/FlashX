@@ -64,7 +64,8 @@ bool mem_vv_store::append(
 		return true;
 
 	bool is_vv = is_vector_vector(**vec_it);
-	std::vector<mem_vv_store::const_ptr> vvs;
+	// This contains the real vector store (not vv store).
+	std::vector<vec_store::const_ptr> vecs(vec_end - vec_it);
 	for (auto it = vec_it; it != vec_end; it++) {
 		if (!(*it)->is_in_mem()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -81,6 +82,7 @@ bool mem_vv_store::append(
 		}
 		if (is_vector_vector(**it)) {
 			const mem_vv_store &vv = static_cast<const mem_vv_store &>(**it);
+			vecs[it - vec_it] = vv.store;
 			off_t off_end = vec_offs.back();
 			size_t num_vecs = vv.get_num_vecs();
 			for (size_t i = 0; i < num_vecs; i++) {
@@ -92,10 +94,12 @@ bool mem_vv_store::append(
 			off_t off_end = vec_offs.back()
 				+ (*it)->get_length() * (*it)->get_type().get_size();
 			vec_offs.push_back(off_end);
+			vecs[it - vec_it] = *it;
 		}
 	}
 
-	store->append(vec_it, vec_end);
+	// We have to append real vector store.
+	store->append(vecs.begin(), vecs.end());
 	vec_store::resize(vec_offs.size() - 1);
 
 	return true;
@@ -115,7 +119,7 @@ bool mem_vv_store::append(const vec_store &vec)
 			vec_offs.push_back(off_end);
 		}
 
-		ret = store->append(vv);
+		ret = store->append(*vv.store);
 		assert(ret);
 		vec_store::resize(vec_offs.size() - 1);
 	}
