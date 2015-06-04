@@ -233,6 +233,20 @@ compressed_undirected_vertex_entry::compressed_undirected_vertex_entry(
 	}
 }
 
+compressed_undirected_vertex_entry::compressed_undirected_vertex_entry(
+		const vertex_offset off, const vsize_t num_edges[], size_t num_vertices)
+{
+	start_offs = off;
+	for (size_t i = 0; i < num_vertices; i++) {
+		if (num_edges[i] < LARGE_VERTEX_SIZE)
+			edges[i] = num_edges[i];
+		else
+			edges[i] = LARGE_VERTEX_SIZE;
+	}
+	for (size_t i = num_vertices; i < ENTRY_SIZE; i++)
+		edges[i] = 0;
+}
+
 void in_mem_cundirected_vertex_index::init(const undirected_vertex_index &index)
 {
 	BOOST_LOG_TRIVIAL(info) << "init from a regular vertex index";
@@ -617,6 +631,53 @@ cundirected_vertex_index::ptr cundirected_vertex_index::construct(
 	memcpy(cindex->get_large_vertices(), large_vertices.data(),
 			sizeof(large_vertices[0]) * large_vertices.size());
 	return ptr(cindex, destroy_index());
+}
+
+cundirected_vertex_index::ptr cundirected_vertex_index::construct(
+		size_t num_vertices, const vsize_t num_edges[],
+		const graph_header &header)
+{
+	// Get all the large vertices.
+	std::vector<large_vertex_t> large_vertices;
+	for (size_t i = 0; i < num_vertices; i++) {
+		if (num_edges[i] >= compressed_vertex_entry::LARGE_VERTEX_SIZE)
+			large_vertices.push_back(large_vertex_t(i, num_edges[i]));
+	}
+
+	size_t num_entries = ROUNDUP(num_vertices, ENTRY_SIZE) / ENTRY_SIZE;
+	size_t tot_size = sizeof(cundirected_vertex_index)
+		+ sizeof(entry_type) * num_entries
+		+ sizeof(large_vertices[0]) * large_vertices.size();
+	char *buf = (char *) malloc(tot_size);
+	memcpy(buf, &header, vertex_index::get_header_size());
+	cundirected_vertex_index *cindex = (cundirected_vertex_index *) buf;
+
+	// Initialize the entries.
+	int edge_data_size = header.get_edge_data_size();
+	size_t size = graph_header::get_header_size();
+	for (size_t vid = 0; vid < num_vertices; vid += ENTRY_SIZE) {
+		off_t entry_idx = vid / ENTRY_SIZE;
+		vertex_offset dentry(size);
+		size_t num_entry_vertices = std::min(ENTRY_SIZE, num_vertices - vid);
+		cindex->entries[entry_idx] = entry_type(dentry, num_edges + vid,
+				num_entry_vertices);
+		for (size_t j = 0; j < num_entry_vertices; j++) {
+			size += ext_mem_undirected_vertex::num_edges2vsize(
+					num_edges[vid + j], edge_data_size);
+		}
+	}
+
+	// Initialize the remaining part of the header.
+	cindex->h.data.entry_size = sizeof(entry_type);
+	cindex->h.data.num_entries = num_entries;
+	cindex->h.data.compressed = true;
+	cindex->h.data.num_large_in_vertices = large_vertices.size();
+	cindex->h.data.num_large_out_vertices = 0;
+	assert(num_entries * ENTRY_SIZE >= header.get_num_vertices());
+
+	memcpy(cindex->get_large_vertices(), large_vertices.data(),
+			sizeof(large_vertices[0]) * large_vertices.size());
+	return cundirected_vertex_index::ptr(cindex, destroy_index());
 }
 
 /*

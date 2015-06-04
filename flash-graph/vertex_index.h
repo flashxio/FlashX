@@ -469,6 +469,8 @@ public:
 
 	compressed_undirected_vertex_entry(const vertex_offset offs[],
 			size_t edge_data_size, size_t num);
+	compressed_undirected_vertex_entry(const vertex_offset off,
+			const vsize_t num_edges[], size_t num);
 
 	vsize_t get_num_edges(int idx) const {
 		return edges[idx];
@@ -520,6 +522,8 @@ public:
 	static ptr construct(undirected_vertex_index &index);
 	static ptr construct(const std::vector<entry_type> &entries,
 			const std::vector<large_vertex_t> &large_vertices,
+			const graph_header &header);
+	static ptr construct(size_t num_vertices, const vsize_t num_out_edges[],
 			const graph_header &header);
 
 	const entry_type *get_entries() const {
