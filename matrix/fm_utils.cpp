@@ -245,9 +245,12 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	printf("create vertex index\n");
 	size_t num_edges = 0;
-	for (size_t i = 0; i < num_vertices; i++)
-		num_out_edges->set(i, fg::ext_mem_undirected_vertex::vsize2num_edges(
-					adjs->get_length(i), 0));
+	for (size_t i = 0; i < num_vertices; i++) {
+		size_t local_num_edges = fg::ext_mem_undirected_vertex::vsize2num_edges(
+					adjs->get_length(i), 0);
+		num_out_edges->set(i, local_num_edges);
+		num_edges += local_num_edges;
+	}
 	printf("There are %ld edges\n", num_edges);
 	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
 
@@ -278,6 +281,8 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 	fg::cundirected_vertex_index::ptr vindex
 		= fg::cundirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
+	printf("The graph has %ld vertices and %ld edges\n",
+			vindex->get_num_vertices(), vindex->get_graph_header().get_num_edges());
 	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
 }
 
@@ -378,6 +383,7 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
 			const fg::ext_mem_undirected_vertex *v
 				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
+			assert(val.get_length(row_idx) == v->get_size());
 			// If the vertex has no more edges left.
 			if (neigh_idxs[row_idx] >= v->get_num_edges())
 				continue;
