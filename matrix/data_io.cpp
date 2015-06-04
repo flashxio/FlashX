@@ -22,6 +22,7 @@
 
 #include "log.h"
 #include "native_file.h"
+#include "thread.h"
 
 #include "data_io.h"
 #include "generic_type.h"
@@ -29,6 +30,7 @@
 #include "data_frame.h"
 #include "mem_data_frame.h"
 #include "mem_vector.h"
+#include "mem_worker_thread.h"
 
 namespace fm
 {
@@ -140,7 +142,7 @@ std::unique_ptr<char[]> text_file_io::read_lines(
  * `size' doesn't include '\0'.
  */
 static size_t parse_lines(std::unique_ptr<char[]> line_buf, size_t size,
-		line_parser &parser, data_frame &df)
+		const line_parser &parser, data_frame &df)
 {
 	char *line_end;
 	char *line = line_buf.get();
@@ -162,23 +164,86 @@ static size_t parse_lines(std::unique_ptr<char[]> line_buf, size_t size,
 	return parser.parse(lines, df);
 }
 
-static bool read_lines(const std::string &file, line_parser &parser,
+namespace
+{
+
+class data_frame_set
+{
+	std::vector<data_frame::ptr> dfs;
+	pthread_spinlock_t lock;
+public:
+	data_frame_set() {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void add(data_frame::ptr df) {
+		pthread_spin_lock(&lock);
+		dfs.push_back(df);
+		pthread_spin_unlock(&lock);
+	}
+
+	const std::vector<data_frame::ptr> &get_data_frames() const {
+		return dfs;
+	}
+};
+
+class parse_task: public thread_task
+{
+	std::unique_ptr<char[]> lines;
+	size_t size;
+	const line_parser &parser;
+	data_frame_set &dfs;
+public:
+	parse_task(std::unique_ptr<char[]> _lines, size_t size,
+			const line_parser &_parser, data_frame_set &_dfs): parser(
+				_parser), dfs(_dfs) {
+		this->lines = std::move(_lines);
+		this->size = size;
+	}
+
+	void run() {
+		mem_data_frame::ptr df = mem_data_frame::create();
+		df->add_vec(parser.get_col_name(0),
+				detail::smp_vec_store::create(0, parser.get_col_type(0)));
+		df->add_vec(parser.get_col_name(1),
+				detail::smp_vec_store::create(0, parser.get_col_type(1)));
+		parse_lines(std::move(lines), size, parser, *df);
+		dfs.add(df);
+	}
+};
+
+}
+
+static bool read_lines(const std::string &file, const line_parser &parser,
 		data_frame &df)
 {
 	file_io::ptr io = text_file_io::create(file);
 	if (io == NULL)
 		return false;
 
+	printf("parse edge list\n");
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	data_frame_set dfs;
+	size_t i = 0;
 	while (!io->eof()) {
 		size_t size = 0;
 		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
-		parse_lines(std::move(lines), size, parser, df);
+
+		int node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new parse_task(std::move(lines), size, parser, dfs));
+		i++;
 	}
+	mem_threads->wait4complete();
+
+	printf("merge parse results\n");
+	df.append(dfs.get_data_frames().begin(), dfs.get_data_frames().end());
 	return true;
 }
 
 data_frame::ptr read_lines(const std::vector<std::string> &files,
-		line_parser &parser)
+		const line_parser &parser)
 {
 	mem_data_frame::ptr df = mem_data_frame::create();
 	df->add_vec(parser.get_col_name(0),
