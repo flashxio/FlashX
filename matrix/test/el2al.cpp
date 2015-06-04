@@ -36,6 +36,8 @@
 #include "mem_vector.h"
 #include "vector_vector.h"
 #include "fm_utils.h"
+#include "matrix_config.h"
+#include "sparse_matrix.h"
 
 using namespace fm;
 
@@ -118,7 +120,7 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
-	fprintf(stderr, "el2al [options] edge_file graph_name\n");
+	fprintf(stderr, "el2al [options] conf_file edge_file graph_name\n");
 	fprintf(stderr, "-u: undirected graph\n");
 }
 
@@ -146,12 +148,16 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	std::string file_name = argv[0];
-	std::string graph_name = argv[1];
+	std::string conf_file = argv[0];
+	std::string file_name = argv[1];
+	std::string graph_name = argv[2];
 	std::string adj_file = graph_name + ".adj";
 	std::string index_file = graph_name + ".index";
 	std::vector<std::string> files;
 	files.push_back(file_name);
+
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
 
 	edge_parser parser;
 	data_frame::ptr df = read_lines(files, parser);
@@ -218,6 +224,8 @@ int main(int argc, char *argv[])
 		graph.first->dump(index_file);
 		graph.second->dump(adj_file);
 	}
+
+	destroy_flash_matrix();
 
 	return 0;
 }
