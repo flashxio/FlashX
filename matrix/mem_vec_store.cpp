@@ -187,7 +187,11 @@ bool smp_vec_store::resize(size_t new_length)
 	char *old_arr = arr;
 	size_t old_length = get_length();
 
-	this->data = detail::raw_data_array(new_length * get_type().get_size());
+	size_t real_length = old_length;
+	if (real_length == 0)
+		real_length = 1;
+	for (; real_length < new_length; real_length *= 2);
+	this->data = detail::raw_data_array(real_length * get_type().get_size());
 	this->arr = this->data.get_raw();
 	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
 	return vec_store::resize(new_length);
