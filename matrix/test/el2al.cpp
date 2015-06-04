@@ -112,15 +112,39 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 	return froms->get_length();
 }
 
+void print_usage()
+{
+	fprintf(stderr, "convert an edge list to adjacency lists\n");
+	fprintf(stderr, "el2al [options] edge_file graph_name\n");
+	fprintf(stderr, "-u: undirected graph\n");
+}
+
 int main(int argc, char *argv[])
 {
-	if (argc < 3) {
-		fprintf(stderr, "el2al edge_file graph_name\n");
-		return -1;
+	bool directed = true;
+	int opt;
+	int num_opts = 0;
+	while ((opt = getopt(argc, argv, "u")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'u':
+				directed = false;
+				break;
+			default:
+				print_usage();
+				exit(1);
+		}
 	}
 
-	std::string file_name = argv[1];
-	std::string graph_name = argv[2];
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 2) {
+		print_usage();
+		exit(1);
+	}
+
+	std::string file_name = argv[0];
+	std::string graph_name = argv[1];
 	std::string adj_file = graph_name + ".adj";
 	std::string index_file = graph_name + ".index";
 	std::vector<std::string> files;
@@ -142,23 +166,55 @@ int main(int argc, char *argv[])
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 
-	// I artificially add an invalid out-edge for each vertex, so it's
-	// guaranteed that each vertex exists in the adjacency lists.
-	mem_data_frame::ptr new_df = mem_data_frame::create();
-	new_df->add_vec(df->get_vec_name(0), seq_vec);
-	new_df->add_vec(df->get_vec_name(1), rep_vec);
-	df->append(new_df);
+	if (directed) {
+		// I artificially add an invalid out-edge for each vertex, so it's
+		// guaranteed that each vertex exists in the adjacency lists.
+		mem_data_frame::ptr new_df = mem_data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), seq_vec);
+		new_df->add_vec(df->get_vec_name(1), rep_vec);
+		df->append(new_df);
 
-	// I artificially add an invalid in-edge for each vertex.
-	new_df = mem_data_frame::create();
-	new_df->add_vec(df->get_vec_name(1), seq_vec);
-	new_df->add_vec(df->get_vec_name(0), rep_vec);
-	df->append(new_df);
+		// I artificially add an invalid in-edge for each vertex.
+		new_df = mem_data_frame::create();
+		new_df->add_vec(df->get_vec_name(1), seq_vec);
+		new_df->add_vec(df->get_vec_name(0), rep_vec);
+		df->append(new_df);
 
-	std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
-		= create_fg_mem_graph(graph_name, df, true);
-	graph.first->dump(index_file);
-	graph.second->dump(adj_file);
+		std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
+			= create_fg_mem_graph(graph_name, df, true);
+		graph.first->dump(index_file);
+		graph.second->dump(adj_file);
+	}
+	else {
+		// I artificially add an invalid out-edge for each vertex, so it's
+		// guaranteed that each vertex exists in the adjacency lists.
+		mem_data_frame::ptr new_df = mem_data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), seq_vec);
+		new_df->add_vec(df->get_vec_name(1), rep_vec);
+		df->append(new_df);
+
+		printf("There are %ld entries in the %s col\n",
+				df->get_vec(0)->get_length(), df->get_vec_name(0).c_str());
+		printf("There are %ld entries in the %s col\n",
+				df->get_vec(1)->get_length(), df->get_vec_name(1).c_str());
+		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
+		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
+		vec0->append(df->get_vec_ref(1));
+		vec1->append(df->get_vec_ref(0));
+		new_df = mem_data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), vec0);
+		new_df->add_vec(df->get_vec_name(1), vec1);
+		df = new_df;
+		printf("There are %ld entries in the %s col\n",
+				df->get_vec(0)->get_length(), df->get_vec_name(0).c_str());
+		printf("There are %ld entries in the %s col\n",
+				df->get_vec(1)->get_length(), df->get_vec_name(1).c_str());
+
+		std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
+			= create_fg_mem_graph(graph_name, df, false);
+		graph.first->dump(index_file);
+		graph.second->dump(adj_file);
+	}
 
 	return 0;
 }

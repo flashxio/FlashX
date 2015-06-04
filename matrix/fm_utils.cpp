@@ -130,11 +130,9 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	return df->groupby(sort_vec_name, adj_op);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
-		const std::string &graph_name, data_frame::ptr df, bool directed)
+std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_graph(
+		const std::string &graph_name, data_frame::ptr df)
 {
-	assert(directed);
-
 	// For in-edge adjacency lists, all edges share the same destination vertex
 	// should be stored together.
 	mem_data_frame::ptr tmp = mem_data_frame::create();
@@ -166,6 +164,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
+	printf("create vertex index\n");
 	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
 		if (i < in_adjs->get_num_vecs()) {
@@ -194,6 +193,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
 			delete [] buf;
 		}
 	};
+	printf("create the graph image\n");
 	size_t tot_graph_size = fg::graph_header::get_header_size()
 		+ in_adjs->get_tot_num_entries() + out_adjs->get_tot_num_entries();
 	std::shared_ptr<char> graph_data(new char[tot_graph_size], deleter());
@@ -214,12 +214,80 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
+	printf("create the vertex index image\n");
 	fg::cdirected_vertex_index::ptr vindex
 		= fg::cdirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
 				header);
 	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+}
+
+std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected_graph(
+		const std::string &graph_name, data_frame::ptr df)
+{
+	// For out-edge adjacency lists, all edges share the same source vertex
+	// should be stored together.
+	mem_data_frame::ptr tmp = mem_data_frame::create();
+	tmp->add_vec("source", df->get_vec("source"));
+	tmp->add_vec("dest", df->get_vec("dest"));
+	df = tmp;
+	printf("there are %ld vecs in data frame\n", tmp->get_num_vecs());
+	mem_vector_vector::ptr adjs = mem_vector_vector::cast(
+			create_1d_matrix(df));
+	printf("There are %ld vertices and they use %ld bytes in total\n",
+			adjs->get_num_vecs(), adjs->get_tot_num_entries());
+
+	// There might be different numbers of in-adjacency list and out-adjacency
+	// list.
+	size_t num_vertices = adjs->get_num_vecs();
+	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
+	printf("create vertex index\n");
+	size_t num_edges = 0;
+	for (size_t i = 0; i < num_vertices; i++)
+		num_out_edges->set(i, fg::ext_mem_undirected_vertex::vsize2num_edges(
+					adjs->get_length(i), 0));
+	printf("There are %ld edges\n", num_edges);
+	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
+
+	struct deleter {
+		void operator()(char *buf) {
+			delete [] buf;
+		}
+	};
+	printf("create the graph image\n");
+	size_t tot_graph_size = fg::graph_header::get_header_size()
+		+ adjs->get_tot_num_entries();
+	std::shared_ptr<char> graph_data(new char[tot_graph_size], deleter());
+	off_t copy_start = 0;
+	memcpy(graph_data.get() + copy_start, &header,
+			fg::graph_header::get_header_size());
+	copy_start += fg::graph_header::get_header_size();
+	memcpy(graph_data.get() + copy_start, adjs->get_raw_data(),
+			adjs->get_tot_num_entries());
+	copy_start += adjs->get_tot_num_entries();
+	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
+			graph_data, copy_start);
+
+	// Construct the vertex index.
+	// The vectors that contains the numbers of edges have the length of #V + 1
+	// because we add -1 to the edge lists artificially and the last entries
+	// are the number of vertices.
+	printf("create the vertex index image\n");
+	fg::cundirected_vertex_index::ptr vindex
+		= fg::cundirected_vertex_index::construct(num_vertices,
+				(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
+	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+}
+
+std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
+		const std::string &graph_name, data_frame::ptr df, bool directed)
+{
+	if (directed)
+		return create_fg_mem_directed_graph(graph_name, df);
+	else
+		return create_fg_mem_undirected_graph(graph_name, df);
 }
 
 class set_2d_label_operate: public type_set_vec_operate<factor_value_t>
@@ -351,6 +419,7 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
 			set_2d_label_operate(block_size));
+	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
 
