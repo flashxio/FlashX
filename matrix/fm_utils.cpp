@@ -158,22 +158,33 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
 
 	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
-	size_t num_vertices = out_adjs->get_num_vecs();
+	// There might be different numbers of in-adjacency list and out-adjacency
+	// list.
+	size_t num_vertices = std::max(out_adjs->get_num_vecs(),
+			in_adjs->get_num_vecs());
 	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
-		const fg::ext_mem_undirected_vertex *v
-			= (const fg::ext_mem_undirected_vertex *) in_adjs->get_raw_arr(i);
-		num_edges += v->get_num_edges();
-		num_in_edges->set(i,
-				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					in_adjs->get_length(i), 0));
-		num_out_edges->set(i,
-				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					out_adjs->get_length(i), 0));
+		if (i < in_adjs->get_num_vecs()) {
+			const fg::ext_mem_undirected_vertex *v
+				= (const fg::ext_mem_undirected_vertex *) in_adjs->get_raw_arr(i);
+			num_edges += v->get_num_edges();
+			num_in_edges->set(i,
+					fg::ext_mem_undirected_vertex::vsize2num_edges(
+						in_adjs->get_length(i), 0));
+		}
+		else
+			num_in_edges->set(i, 0);
+
+		if (i < out_adjs->get_num_vecs())
+			num_out_edges->set(i,
+					fg::ext_mem_undirected_vertex::vsize2num_edges(
+						out_adjs->get_length(i), 0));
+		else
+			num_out_edges->set(i, 0);
 	}
 	printf("There are %ld edges\n", num_edges);
 	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
