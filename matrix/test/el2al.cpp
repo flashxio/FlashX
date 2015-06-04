@@ -75,6 +75,9 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 		const char *first = line;
 		// Skip space
 		for (; isspace(*first); first++);
+		if (*first == '#')
+			continue;
+
 		// Make sure we get a number.
 		if (!isdigit(*first)) {
 			BOOST_LOG_TRIVIAL(error)
