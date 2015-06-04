@@ -56,12 +56,15 @@ int main(int argc, char *argv[])
 		block_width = block_height = std::atoi(argv[4]);
 	if (argc >= 6)
 		block_width = std::atoi(argv[5]);
+	block_2d_size block_size(block_height, block_width);
 
 	std::string mat_file = mat_name + ".mat";
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
-	block_2d_size block_size(block_height, block_width);
+	printf("load vertex index\n");
 	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
+	printf("The graph has %ld vertices and %ld edges\n",
+			vindex->get_num_vertices(), vindex->get_graph_header().get_num_edges());
 
 	FILE *f = fopen(graph_file.c_str(), "r");
 	if (f == NULL) {
@@ -69,18 +72,22 @@ int main(int argc, char *argv[])
 				strerror(errno));
 		return -1;
 	}
-
 	size_t out_size = get_out_size(vindex);
 	off_t out_off = get_out_off(vindex);
 	detail::raw_data_array out_data(out_size);
+	printf("load out-adjancy lists of the graph data.\n");
 	read_data(out_data.get_raw(), out_size, 1, out_off, f);
+
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
+	printf("find the location of out-adjacency lists\n");
 	init_out_offs(vindex, out_offs);
 	mem_vector_vector::ptr out_adjs = mem_vector_vector::create(
 			out_data, out_offs, get_scalar_type<char>());
 
 	// Construct 2D partitioning of the adjacency matrix.
+	printf("export 2d matrix for the out-adjacency lists\n");
 	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
+	printf("verify 2d matrix for the out-adjacency lists\n");
 	verify_2d_matrix(mat_file, mat_idx_file);
 	out_adjs = NULL;
 
@@ -91,14 +98,18 @@ int main(int argc, char *argv[])
 		size_t in_size = get_in_size(vindex);
 		off_t in_off = get_in_off(vindex);
 		detail::raw_data_array in_data(in_size);
+		printf("load in-adjancy lists of the graph data\n");
 		read_data(in_data.get_raw(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
+		printf("find the location of in-adjacency lists\n");
 		init_in_offs(vindex, in_offs);
 		mem_vector_vector::ptr in_adjs = mem_vector_vector::create(
 				in_data, in_offs, get_scalar_type<char>());
 
 		// Construct 2D partitioning of the adjacency matrix.
+		printf("export 2d matrix for the in-adjacency lists\n");
 		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
+		printf("verify 2d matrix for the in-adjacency lists\n");
 		verify_2d_matrix(t_mat_file, t_mat_idx_file);
 	}
 

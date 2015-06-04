@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
 
 	edge_parser parser;
 	data_frame::ptr df = read_lines(files, parser);
+	printf("There are %ld edges\n", df->get_num_entries());
 
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
@@ -202,10 +203,6 @@ int main(int argc, char *argv[])
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
 		df->append(new_df);
 
-		printf("There are %ld entries in the %s col\n",
-				df->get_vec(0)->get_length(), df->get_vec_name(0).c_str());
-		printf("There are %ld entries in the %s col\n",
-				df->get_vec(1)->get_length(), df->get_vec_name(1).c_str());
 		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
 		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
 		vec0->append(df->get_vec_ref(1));
@@ -214,10 +211,6 @@ int main(int argc, char *argv[])
 		new_df->add_vec(df->get_vec_name(0), vec0);
 		new_df->add_vec(df->get_vec_name(1), vec1);
 		df = new_df;
-		printf("There are %ld entries in the %s col\n",
-				df->get_vec(0)->get_length(), df->get_vec_name(0).c_str());
-		printf("There are %ld entries in the %s col\n",
-				df->get_vec(1)->get_length(), df->get_vec_name(1).c_str());
 
 		std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
 			= create_fg_mem_graph(graph_name, df, false);
