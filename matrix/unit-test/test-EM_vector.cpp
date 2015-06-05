@@ -80,6 +80,7 @@ public:
 
 void test_setdata()
 {
+	printf("test set data in EM vector\n");
 	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
 			get_scalar_type<int>());
 	vec->set_data(set_seq_operate<int>());
@@ -88,6 +89,7 @@ void test_setdata()
 
 void test_sort_summary()
 {
+	printf("test sort summary\n");
 	const scalar_type &type = get_scalar_type<int>();
 	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
 	size_t num_bufs = 10;
@@ -137,6 +139,7 @@ void test_sort_summary()
 
 void test_sort()
 {
+	printf("test sort\n");
 	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));

@@ -20,6 +20,7 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
 #include <memory>
 #include <atomic>
 
@@ -28,6 +29,7 @@
 #include "vec_store.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
+#include "EM_object.h"
 
 namespace fm
 {
@@ -37,11 +39,19 @@ namespace detail
 
 class matrix_store;
 
-class EM_vec_store: public vec_store
+class EM_vec_store: public vec_store, public EM_object
 {
 	safs::file_io_factory::shared_ptr factory;
+	// This keeps an I/O instance for each thread.
+	std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
+	pthread_key_t io_key;
+	pthread_spinlock_t io_lock;
 
 	EM_vec_store(size_t length, const scalar_type &type);
+
+	// This returns the I/O instance for the curr thread.
+	safs::io_interface &get_curr_io() const;
+	void destroy_ios();
 public:
 	typedef std::shared_ptr<EM_vec_store> ptr;
 
@@ -65,6 +75,21 @@ public:
 	virtual vec_store::const_ptr shallow_copy() const;
 
 	virtual size_t get_portion_size() const;
+	/*
+	 * This is different from the one used in the memory data container.
+	 * This interface accepts a portion compute object, which is invoked
+	 * when the data of the portion is ready in memory. The returned
+	 * local vector store doesn't have invalid data right after it's
+	 * returned.
+	 */
+	virtual local_vec_store::const_ptr get_portion_async(off_t start,
+			size_t size, portion_compute::ptr compute) const;
+	/*
+	 * Write the data in the local buffer to some portion in the vector.
+	 * The location is indicated in the local buffer. However, a user
+	 * can redirect the location by providing `off' as a parameter.
+	 */
+	virtual void write_portion(local_vec_store::const_ptr portion, off_t off = -1);
 
 	virtual void reset_data();
 	virtual void set_data(const set_vec_operate &op);
@@ -75,6 +100,8 @@ public:
 
 	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
 			size_t ncol, bool byrow) const;
+
+	virtual safs::io_interface::ptr create_io();
 };
 
 namespace EM_sort_detail
@@ -131,7 +158,7 @@ class sort_portion_summary
 	std::vector<local_buf_vec_store::ptr> anchor_vals;
 public:
 	sort_portion_summary(const scalar_type &type, size_t num_sort_bufs);
-	void add_portion(local_buf_vec_store::ptr sorted_buf);
+	void add_portion(local_buf_vec_store::const_ptr sorted_buf);
 	anchor_prio_queue::ptr get_prio_queue() const;
 
 	local_vec_store::const_ptr get_anchor_vals(off_t idx) const {
@@ -148,56 +175,21 @@ public:
  */
 class EM_vec_sort_compute: public portion_compute
 {
-	off_t off_in_bytes;
-	local_buf_vec_store::ptr store;
-	// We have to make sure that the I/O is alive before all subvec
-	// computation is destroyed.
-	safs::io_interface &io;
-	const EM_vec_store &vec;
+	local_buf_vec_store::const_ptr store;
+	// Where the sorted portion written to.
+	EM_vec_store &vec;
 	sort_portion_summary &summary;
 public:
-	EM_vec_sort_compute(local_buf_vec_store::ptr store,
-			safs::io_interface &_io, const EM_vec_store &_vec,
-			sort_portion_summary &_summary);
+	EM_vec_sort_compute(EM_vec_store &_vec,
+			sort_portion_summary &_summary): vec(_vec), summary(_summary) {
+	}
 	virtual void run(char *buf, size_t size);
-};
-
-/*
- * This I/O task is to issue an I/O request to read the portion from
- * disks for sorting.
- */
-class EM_vec_sort_issue_task: public portion_io_task
-{
-	local_buf_vec_store::ptr store;
-	const EM_vec_store &vec;
-	sort_portion_summary &summary;
-public:
-	EM_vec_sort_issue_task(off_t global_start, size_t length,
-			const EM_vec_store &_vec,
-			sort_portion_summary &_summary);
-	virtual void run(safs::io_interface::ptr io1, safs::io_interface::ptr io2);
+	void set_buf(local_buf_vec_store::const_ptr buf) {
+		this->store = buf;
+	}
 };
 
 class EM_vec_merge_dispatcher;
-
-/*
- * This I/O task is to issue an I/O request to read portions from
- * disks for merging.
- */
-class EM_vec_merge_issue_task: public portion_io_task
-{
-	std::vector<local_buf_vec_store::ptr> stores;
-	local_buf_vec_store::ptr prev_leftover;
-	const EM_vec_store &vec;
-	EM_vec_merge_dispatcher &dispatcher;
-public:
-	EM_vec_merge_issue_task(const std::vector<off_t> &_anchor_locs,
-			local_buf_vec_store::ptr prev_leftover, const EM_vec_store &_vec,
-			EM_vec_merge_dispatcher &dispatcher);
-
-	virtual void run(safs::io_interface::ptr read_io,
-			safs::io_interface::ptr write_io);
-};
 
 /*
  * This class merges data read from disks and writes it back to disks.
@@ -206,19 +198,20 @@ class EM_vec_merge_compute: public portion_compute
 {
 	// The last buffer may be the leftover from the previous merge.
 	std::vector<local_buf_vec_store::const_ptr> stores;
-	// We have to make sure that the I/O is alive before all subvec
-	// computation is destroyed.
-	safs::io_interface &write_io;
-	const EM_vec_store &vec;
 	EM_vec_merge_dispatcher &dispatcher;
 	size_t num_completed;
-	size_t expected_ios;
+	// It's not the same as the number of local buffers in `stores' because
+	// `stores' may contain the buffer with the leftdata from the previous
+	// merge.
+	size_t num_expected;
 public:
-	EM_vec_merge_compute(const std::vector<local_buf_vec_store::ptr> &_stores,
-			local_buf_vec_store::const_ptr prev_leftover,
-			safs::io_interface &_io, const EM_vec_store &_vec,
+	EM_vec_merge_compute(local_buf_vec_store::const_ptr prev_leftover,
 			EM_vec_merge_dispatcher &_dispatcher);
 	virtual void run(char *buf, size_t size);
+	void set_bufs(const std::vector<local_buf_vec_store::const_ptr> &bufs) {
+		num_expected = bufs.size();
+		this->stores.insert(this->stores.end(), bufs.begin(), bufs.end());
+	}
 };
 
 }

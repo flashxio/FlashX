@@ -57,13 +57,23 @@ EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 		length, type, false)
 {
 	factory = create_temp_file(length * type.get_size());
+	int ret = pthread_key_create(&io_key, NULL);
+	assert(ret == 0);
+	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 EM_vec_store::~EM_vec_store()
 {
-	safs::safs_file f(safs::get_sys_RAID_conf(), factory->get_name());
-	assert(f.exist());
-	f.delete_file();
+	pthread_spin_destroy(&io_lock);
+	pthread_key_delete(io_key);
+	thread_ios.clear();
+	if (factory) {
+		std::string file_name = factory->get_name();
+		factory = NULL;
+		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
+		assert(f.exist());
+		f.delete_file();
+	}
 }
 
 bool EM_vec_store::resize(size_t length)
@@ -105,6 +115,42 @@ size_t EM_vec_store::get_portion_size() const
 	return matrix_conf.get_anchor_gap_size() / get_entry_size();
 }
 
+local_vec_store::const_ptr EM_vec_store::get_portion_async(off_t start,
+		size_t size, portion_compute::ptr compute) const
+{
+	safs::io_interface &io = get_curr_io();
+	local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
+				get_type(), -1));
+	off_t off = get_byte_off(start);
+	safs::data_loc_t loc(io.get_file_id(), off);
+	safs::io_request req(buf->get_raw_arr(), loc,
+			buf->get_length() * buf->get_entry_size(), READ);
+	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
+	io.access(&req, 1);
+	// TODO I might want to flush requests later.
+	io.flush_requests();
+	return buf;
+}
+
+void EM_vec_store::write_portion(local_vec_store::const_ptr store, off_t off)
+{
+	off_t start = off;
+	if (start < 0)
+		start = store->get_global_start();
+	assert(start >= 0);
+
+	safs::io_interface &io = get_curr_io();
+	off_t off_in_bytes = get_byte_off(start);
+	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
+	safs::io_request req(const_cast<char *>(store->get_raw_arr()), loc,
+			store->get_length() * store->get_entry_size(), WRITE);
+	portion_compute::ptr compute(new portion_write_complete(store));
+	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
+	io.access(&req, 1);
+	// TODO I might want to flush requests later.
+	io.flush_requests();
+}
+
 void EM_vec_store::reset_data()
 {
 	assert(0);
@@ -113,6 +159,42 @@ void EM_vec_store::reset_data()
 vec_store::ptr EM_vec_store::sort_with_index()
 {
 	assert(0);
+}
+
+safs::io_interface::ptr EM_vec_store::create_io()
+{
+	thread *t = thread::get_curr_thread();
+	assert(t);
+	pthread_spin_lock(&io_lock);
+	auto it = thread_ios.find(t);
+	if (it == thread_ios.end()) {
+		safs::io_interface::ptr io = safs::create_io(factory, t);
+		io->set_callback(portion_callback::ptr(new portion_callback()));
+		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
+		pthread_setspecific(io_key, io.get());
+		pthread_spin_unlock(&io_lock);
+		return io;
+	}
+	else {
+		safs::io_interface::ptr io = it->second;
+		pthread_spin_unlock(&io_lock);
+		return io;
+	}
+}
+
+void EM_vec_store::destroy_ios()
+{
+	pthread_key_delete(io_key);
+	int ret = pthread_key_create(&io_key, NULL);
+	assert(ret == 0);
+	thread_ios.clear();
+}
+
+safs::io_interface &EM_vec_store::get_curr_io() const
+{
+	void *io_addr = pthread_getspecific(io_key);
+	assert(io_addr);
+	return *(safs::io_interface *) io_addr;
 }
 
 class EM_vec_dispatcher: public task_dispatcher
@@ -132,21 +214,22 @@ public:
 			this->portion_size = portion_size;
 	}
 
-	virtual portion_io_task::ptr get_task() {
+	virtual bool issue_task() {
 		pthread_spin_lock(&lock);
 		off_t global_start = portion_idx * portion_size;
 		if ((size_t) global_start >= store.get_length()) {
 			pthread_spin_unlock(&lock);
-			return portion_io_task::ptr();
+			return false;
 		}
 		size_t length = std::min(portion_size, store.get_length() - global_start);
 		portion_idx++;
 		pthread_spin_unlock(&lock);
-		return create_vec_task(global_start, length, store);
+		create_vec_task(global_start, length, store);
+		return true;
 	}
 
-	virtual portion_io_task::ptr create_vec_task(off_t global_start, size_t length,
-			const EM_vec_store &store) = 0;
+	virtual void create_vec_task(off_t global_start, size_t length,
+			const EM_vec_store &from_vec) = 0;
 };
 
 ///////////////////////////// Sort the vector /////////////////////////////////
@@ -223,7 +306,7 @@ sort_portion_summary::sort_portion_summary(const scalar_type &type,
 	anchor_vals.resize(num_sort_bufs);
 }
 
-void sort_portion_summary::add_portion(local_buf_vec_store::ptr sorted_buf)
+void sort_portion_summary::add_portion(local_buf_vec_store::const_ptr sorted_buf)
 {
 	std::vector<off_t> idxs;
 	for (size_t i = 0; i < sorted_buf->get_length(); i += anchor_gap_size)
@@ -246,84 +329,51 @@ anchor_prio_queue::ptr sort_portion_summary::get_prio_queue() const
 	return anchor_prio_queue::ptr(new anchor_prio_queue(anchor_vals));
 }
 
-EM_vec_sort_compute::EM_vec_sort_compute(local_buf_vec_store::ptr store,
-			safs::io_interface &_io, const EM_vec_store &_vec,
-			sort_portion_summary &_summary): io(_io), vec(_vec), summary(
-				_summary)
-{
-	this->store = store;
-	off_in_bytes = vec.get_byte_off(store->get_global_start());
-}
-
 void EM_vec_sort_compute::run(char *buf, size_t size)
 {
+	assert(store);
 	assert(store->get_raw_arr() == buf);
 	assert(store->get_length() * store->get_entry_size() == size);
 	// Sort each portion in parallel.
 	// Here we rely on OpenMP to sort the data in the buffer in parallel.
+	// When we sort the data in the buffer, we actually also change
+	// the data in the local vector store. The behavior is expected.
 	store->get_type().get_sorter().sort(buf, store->get_length(), false);
 	summary.add_portion(store);
 
 	// Write the sorting result to disks.
-	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
-	safs::io_request req(store->get_raw_arr(), loc,
-			store->get_length() * store->get_entry_size(), WRITE);
-	portion_compute::ptr compute(new portion_write_complete(store));
-	register_portion_compute(req, compute);
-	io.access(&req, 1);
-	io.flush_requests();
-}
-
-EM_vec_sort_issue_task::EM_vec_sort_issue_task(off_t global_start, size_t length,
-		const EM_vec_store &_vec,
-		sort_portion_summary &_summary): vec(_vec), summary(_summary)
-{
-	store = local_buf_vec_store::ptr(new local_buf_vec_store(
-				global_start, length, vec.get_type(), -1));
-}
-
-void EM_vec_sort_issue_task::run(safs::io_interface::ptr io1,
-		safs::io_interface::ptr io2)
-{
-	// In this case, we read data from a file and write it back to
-	// the same file.
-	assert(io1 == io2);
-	off_t off = vec.get_byte_off(store->get_global_start());
-	safs::data_loc_t loc(io1->get_file_id(), off);
-	safs::io_request req(store->get_raw_arr(), loc,
-			store->get_length() * store->get_entry_size(), READ);
-	portion_compute::ptr compute(new EM_vec_sort_compute(store, *io1, vec,
-				summary));
-	register_portion_compute(req, compute);
-	io1->access(&req, 1);
-	io1->flush_requests();
+	vec.write_portion(store);
 }
 
 class EM_vec_sort_dispatcher: public EM_vec_dispatcher
 {
 	std::shared_ptr<sort_portion_summary> summary;
+	EM_vec_store &to_vec;
 public:
 	typedef std::shared_ptr<EM_vec_sort_dispatcher> ptr;
 
-	EM_vec_sort_dispatcher(const EM_vec_store &store): EM_vec_dispatcher(store,
+	EM_vec_sort_dispatcher(EM_vec_store &vec): EM_vec_dispatcher(vec,
 			// We want to have a larger buffer for sorting.
-			matrix_conf.get_sort_buf_size() / store.get_entry_size()) {
+			matrix_conf.get_sort_buf_size() / vec.get_entry_size()), to_vec(vec) {
 		size_t sort_buf_size
-			= matrix_conf.get_sort_buf_size() / store.get_entry_size();
+			= matrix_conf.get_sort_buf_size() / vec.get_entry_size();
 		size_t num_sort_bufs
-			= ceil(((double) store.get_length()) / sort_buf_size);
+			= ceil(((double) vec.get_length()) / sort_buf_size);
 		summary = std::shared_ptr<sort_portion_summary>(
-				new sort_portion_summary(store.get_type(), num_sort_bufs));
+				new sort_portion_summary(vec.get_type(), num_sort_bufs));
 	}
 
 	const sort_portion_summary &get_sort_summary() const {
 		return *summary;
 	}
 
-	virtual portion_io_task::ptr create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &store) {
-		return portion_io_task::ptr(new EM_vec_sort_issue_task(global_start,
-					length, store, *summary));
+	virtual void create_vec_task(off_t global_start,
+			size_t length, const EM_vec_store &from_vec) {
+		EM_vec_sort_compute *sort_compute = new EM_vec_sort_compute(to_vec,
+				*summary);
+		local_vec_store::const_ptr portion = from_vec.get_portion_async(
+				global_start, length, portion_compute::ptr(sort_compute));
+		sort_compute->set_buf(portion);
 	}
 };
 
@@ -335,36 +385,30 @@ class merge_writer
 	off_t merge_end;		// In the number of bytes
 	local_buf_vec_store::ptr buf;
 	size_t data_size_in_buf;		// In the number of elements
+	EM_vec_store &to_vec;
 public:
-	merge_writer(const scalar_type &type): local_buf_size(
-			matrix_conf.get_write_io_buf_size() / type.get_size()) {
+	merge_writer(EM_vec_store &vec): local_buf_size(
+			matrix_conf.get_write_io_buf_size() / vec.get_type().get_size()), to_vec(vec) {
 		merge_end = 0;
 		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					0, local_buf_size, type, -1));
+					-1, local_buf_size, to_vec.get_type(), -1));
 		data_size_in_buf = 0;
 	}
 
-	void flush_buffer_data(safs::io_interface &write_io,
-			io_worker_task &worker_task) {
+	void flush_buffer_data() {
 		buf->resize(data_size_in_buf);
 		const scalar_type &type = buf->get_type();
-		safs::data_loc_t loc(write_io.get_file_id(), merge_end);
-		safs::io_request req(buf->get_raw_arr(), loc,
-				data_size_in_buf * buf->get_entry_size(), WRITE);
-		portion_compute::ptr compute(new portion_write_complete(buf));
-		worker_task.register_portion_compute(req, compute);
-		write_io.access(&req, 1);
-		write_io.flush_requests();
-		merge_end += req.get_size();
+		assert(merge_end % type.get_size() == 0);
+		to_vec.write_portion(buf, merge_end / type.get_size());
+		merge_end += data_size_in_buf * type.get_size();
 
 		// The data is written asynchronously, we need to allocate a new buffer.
 		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					0, local_buf_size, type, -1));
+					-1, local_buf_size, type, -1));
 		data_size_in_buf = 0;
 	}
 
-	void append(safs::io_interface &write_io, local_vec_store::ptr data,
-			io_worker_task &worker_task) {
+	void append(local_vec_store::ptr data) {
 		// In the number of elements.
 		off_t off_in_new_data = 0;
 		size_t new_data_size = data->get_length();
@@ -387,21 +431,21 @@ public:
 
 			// If the buffer is full, we need to write it out first.
 			if (data_size_in_buf == buf->get_length())
-				flush_buffer_data(write_io, worker_task);
+				flush_buffer_data();
 		}
 	}
 };
 
 class EM_vec_merge_dispatcher: public task_dispatcher
 {
-	const EM_vec_store &store;
+	const EM_vec_store &from_vec;
 	anchor_prio_queue::ptr anchors;
 	local_buf_vec_store::ptr prev_leftover;
 	size_t sort_buf_size;
 	merge_writer writer;
 public:
-	EM_vec_merge_dispatcher(const EM_vec_store &_store,
-			anchor_prio_queue::ptr anchors);
+	EM_vec_merge_dispatcher(const EM_vec_store &_from_vec,
+			EM_vec_store &_to_vec, anchor_prio_queue::ptr anchors);
 	void set_prev_leftover(local_buf_vec_store::ptr prev_leftover) {
 		this->prev_leftover = prev_leftover;
 	}
@@ -414,114 +458,95 @@ public:
 		return *anchors;
 	}
 
-	virtual portion_io_task::ptr get_task();
+	virtual bool issue_task();
 };
 
 EM_vec_merge_compute::EM_vec_merge_compute(
-		const std::vector<local_buf_vec_store::ptr> &_stores,
 		local_buf_vec_store::const_ptr prev_leftover,
-		safs::io_interface &_io, const EM_vec_store &_vec,
-		EM_vec_merge_dispatcher &_dispatcher): stores(_stores.begin(),
-			_stores.end()), write_io(_io), vec(_vec), dispatcher(_dispatcher)
+		EM_vec_merge_dispatcher &_dispatcher): dispatcher(_dispatcher)
 {
-	expected_ios = this->stores.size();
 	if (prev_leftover)
 		this->stores.push_back(prev_leftover);
 	num_completed = 0;
 }
 
-EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(const EM_vec_store &_store,
-		anchor_prio_queue::ptr anchors): store(_store), writer(store.get_type())
+EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(const EM_vec_store &_from_vec,
+		EM_vec_store &_to_vec, anchor_prio_queue::ptr anchors): from_vec(
+			_from_vec), writer(_to_vec)
 {
+	assert(_from_vec.get_type() == _to_vec.get_type());
 	this->anchors = anchors;
-	sort_buf_size = matrix_conf.get_sort_buf_size() / store.get_entry_size();
+	sort_buf_size = matrix_conf.get_sort_buf_size() / from_vec.get_entry_size();
 }
 
-portion_io_task::ptr EM_vec_merge_dispatcher::get_task()
+bool EM_vec_merge_dispatcher::issue_task()
 {
 	size_t leftover = 0;
 	if (prev_leftover)
 		leftover = prev_leftover->get_length();
 	assert(sort_buf_size > leftover);
-	const std::vector<off_t> anchor_locs = anchors->pop(
-			sort_buf_size - leftover);
+	std::vector<off_t> anchor_locs = anchors->pop(sort_buf_size - leftover);
 	if (anchor_locs.empty() && prev_leftover == NULL) {
 		assert(anchors->get_min_frontier() == NULL);
 		assert(leftover == 0);
-		return portion_io_task::ptr();
+		// If there is nothing left to merge and there isn't leftover, we still
+		// need to flush the buffered data.
+		get_merge_writer().flush_buffer_data();
+		return false;
 	}
 	else {
-		return portion_io_task::ptr(new EM_vec_merge_issue_task(anchor_locs,
-					prev_leftover, store, *this));
-	}
-}
-
-EM_vec_merge_issue_task::EM_vec_merge_issue_task(
-		const std::vector<off_t> &_anchor_locs,
-		local_buf_vec_store::ptr prev_leftover,
-		const EM_vec_store &_vec, EM_vec_merge_dispatcher &_dispatcher): vec(
-			_vec), dispatcher(_dispatcher)
-{
-	this->prev_leftover = prev_leftover;
-	std::vector<size_t> anchor_locs(_anchor_locs.begin(), _anchor_locs.end());
-	std::sort(anchor_locs.begin(), anchor_locs.end());
-	size_t anchor_gap_size
-		= matrix_conf.get_anchor_gap_size() / vec.get_type().get_size();
-	for (size_t i = 0; i < anchor_locs.size(); i++) {
-		size_t num_eles = std::min(anchor_gap_size,
-				vec.get_length() - anchor_locs[i]);
-		size_t off = anchor_locs[i];
-		// If the anchors are contiguous, we merge them.
-		while (i + 1 < anchor_locs.size()
-				&& anchor_locs[i + 1] == anchor_locs[i] + anchor_gap_size) {
-			i++;
-			num_eles += std::min(anchor_gap_size,
-					vec.get_length() - anchor_locs[i]);
+		size_t anchor_gap_size
+			= matrix_conf.get_anchor_gap_size() / from_vec.get_type().get_size();
+		// Merge the anchors.
+		std::vector<std::pair<off_t, size_t> > data_locs;
+		std::sort(anchor_locs.begin(), anchor_locs.end());
+		for (size_t i = 0; i < anchor_locs.size(); i++) {
+			size_t num_eles = std::min(anchor_gap_size,
+					from_vec.get_length() - anchor_locs[i]);
+			size_t off = anchor_locs[i];
+			// If the anchors are contiguous, we merge them.
+			while (i + 1 < anchor_locs.size()
+					&& (size_t) anchor_locs[i + 1] == anchor_locs[i] + anchor_gap_size) {
+				i++;
+				num_eles += std::min(anchor_gap_size,
+						from_vec.get_length() - anchor_locs[i]);
+			}
+			data_locs.push_back(std::pair<off_t, size_t>(off, num_eles));
 		}
-		stores.push_back(local_buf_vec_store::ptr(new local_buf_vec_store(
-						off, num_eles, vec.get_type(), -1)));
-	}
-}
 
-void EM_vec_merge_issue_task::run(safs::io_interface::ptr read_io,
-		safs::io_interface::ptr write_io)
-{
-	// In this case, we need to read some data from the disks first and then
-	// merge with the data left from the previous merge.
-	if (!stores.empty()) {
-		portion_compute::ptr compute(new EM_vec_merge_compute(stores,
-					prev_leftover, *write_io, vec, dispatcher));
-		safs::io_request reqs[stores.size()];
-		for (size_t i = 0; i < stores.size(); i++) {
-			off_t off = vec.get_byte_off(stores[i]->get_global_start());
-			safs::data_loc_t loc(read_io->get_file_id(), off);
-			reqs[i] = safs::io_request(stores[i]->get_raw_arr(), loc,
-					stores[i]->get_length() * stores[i]->get_entry_size(), READ);
-			register_portion_compute(reqs[i], compute);
+		// In this case, we need to read some data from the disks first and then
+		// merge with the data left from the previous merge.
+		if (!data_locs.empty()) {
+			EM_vec_merge_compute *_compute = new EM_vec_merge_compute(
+					prev_leftover, *this);
+			portion_compute::ptr compute(_compute);
+			std::vector<local_vec_store::const_ptr> portions(data_locs.size());
+			for (size_t i = 0; i < data_locs.size(); i++)
+				portions[i] = from_vec.get_portion_async(data_locs[i].first,
+						data_locs[i].second, compute);
+			_compute->set_bufs(portions);
 		}
-		read_io->access(reqs, stores.size());
-		read_io->flush_requests();
-	}
-	// In this case, we don't need to read data from disks any more.
-	// We only need to write the data left from the previous merge.
-	else {
-		dispatcher.get_merge_writer().append(*write_io, prev_leftover,
-				get_worker_task());
-		// This is the last write. we should flush everything to disks.
-		dispatcher.get_merge_writer().flush_buffer_data(*write_io,
-				get_worker_task());
-		// No more leftover.
-		dispatcher.set_prev_leftover(NULL);
+		// In this case, we don't need to read data from disks any more.
+		// We only need to write the data left from the previous merge.
+		else {
+			get_merge_writer().append(prev_leftover);
+			// This is the last write. we should flush everything to disks.
+			get_merge_writer().flush_buffer_data();
+			// No more leftover.
+			set_prev_leftover(NULL);
+		}
+		return true;
 	}
 }
 
 void EM_vec_merge_compute::run(char *buf, size_t size)
 {
+	assert(stores.size() > 0);
 	num_completed++;
 	// If all data in the buffers is ready, we should merge all the buffers.
-	if (num_completed == expected_ios) {
+	if (num_completed == num_expected) {
 		// Find the min values among the last elements in the buffers.
-		const scalar_type &type = vec.get_type();
+		const scalar_type &type = stores.front()->get_type();
 		scalar_variable::ptr min_val
 			= dispatcher.get_anchors().get_min_frontier();
 
@@ -554,20 +579,23 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		}
 
 		// Here we rely on OpenMP to merge the data in the buffer in parallel.
-		local_buf_vec_store::ptr merge_res(new local_buf_vec_store(0,
+		local_buf_vec_store::ptr merge_res(new local_buf_vec_store(-1,
 					merge_size, type, -1));
 		type.get_sorter().merge(merge_data, merge_res->get_raw_arr(),
 				merge_size);
 
 		// Write the merge result to disks.
-		dispatcher.get_merge_writer().append(write_io, merge_res,
-				get_worker_task());
-		// Keep the leftover and merge them into a single buffer.
-		local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
-				new local_buf_vec_store(0, leftover_size, type, -1));
-		type.get_sorter().merge(leftovers, leftover_buf->get_raw_arr(),
-				leftover_size);
-		dispatcher.set_prev_leftover(leftover_buf);
+		dispatcher.get_merge_writer().append(merge_res);
+		if (leftover_size > 0) {
+			// Keep the leftover and merge them into a single buffer.
+			local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
+					new local_buf_vec_store(-1, leftover_size, type, -1));
+			type.get_sorter().merge(leftovers, leftover_buf->get_raw_arr(),
+					leftover_size);
+			dispatcher.set_prev_leftover(leftover_buf);
+		}
+		else
+			dispatcher.set_prev_leftover(NULL);
 	}
 }
 
@@ -590,24 +618,30 @@ void EM_vec_store::sort()
 	 */
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
 			new EM_sort_detail::EM_vec_sort_dispatcher(*this));
-	io_worker_task sort_worker(factory, factory, sort_dispatcher, 2);
+	io_worker_task sort_worker(sort_dispatcher, 1);
+	sort_worker.register_EM_obj(this);
 	sort_worker.run();
+	this->destroy_ios();
 
 	/* Merge all parts.
 	 * Here we assume that one level of merging is enough and we rely on
 	 * OpenMP to parallelize merging.
 	 */
+	EM_vec_store::ptr tmp = EM_vec_store::create(get_length(), get_type());
 	EM_sort_detail::EM_vec_merge_dispatcher::ptr merge_dispatcher(
-			new EM_sort_detail::EM_vec_merge_dispatcher(*this,
+			new EM_sort_detail::EM_vec_merge_dispatcher(*this, *tmp,
 				sort_dispatcher->get_sort_summary().get_prio_queue()));
-	safs::file_io_factory::shared_ptr new_factory = create_temp_file(
-			get_length() * get_entry_size());
 	// TODO let's not use asynchornous I/O for now.
-	io_worker_task merge_worker(factory, new_factory, merge_dispatcher, 0);
+	io_worker_task merge_worker(merge_dispatcher, 0);
+	merge_worker.register_EM_obj(this);
+	merge_worker.register_EM_obj(tmp.get());
 	merge_worker.run();
+	this->destroy_ios();
+	tmp->destroy_ios();
 
 	// In the end, we points to the new file.
-	factory = new_factory;
+	factory = tmp->factory;
+	tmp->factory = NULL;
 }
 
 ////////////////////////// Set data of the vector ////////////////////////////
@@ -636,13 +670,13 @@ class issorted_summary
 public:
 	issorted_summary(const EM_vec_store &vec) {
 		size_t num_portions = vec.get_num_portions();
-		ends = local_vec_store::ptr(new local_buf_vec_store(0,
+		ends = local_vec_store::ptr(new local_buf_vec_store(-1,
 					num_portions * 2, vec.get_type(), -1));
 		issorted.resize(num_portions);
 		portion_size = vec.get_portion_size();
 	}
 
-	void set_portion_result(local_buf_vec_store::ptr store) {
+	void set_portion_result(local_buf_vec_store::const_ptr store) {
 		bool sorted = store->get_type().get_sorter().is_sorted(
 				store->get_raw_arr(), store->get_length(), false);
 		off_t portion_idx = store->get_global_start() / portion_size;
@@ -666,11 +700,13 @@ public:
 
 class EM_vec_issorted_compute: public portion_compute
 {
-	local_buf_vec_store::ptr store;
+	local_buf_vec_store::const_ptr store;
 	issorted_summary &summary;
 public:
-	EM_vec_issorted_compute(local_buf_vec_store::ptr store,
-			issorted_summary &_summary): summary(_summary) {
+	EM_vec_issorted_compute(issorted_summary &_summary): summary(_summary) {
+	}
+
+	void set_buf(local_buf_vec_store::const_ptr store) {
 		this->store = store;
 	}
 
@@ -678,34 +714,6 @@ public:
 		assert(store->get_raw_arr() == buf);
 		assert(store->get_length() * store->get_entry_size() == size);
 		summary.set_portion_result(store);
-	}
-};
-
-/*
- * This I/O task is to issue an I/O request to read the portion from
- * disks for testing if the array is sorted.
- */
-class EM_vec_issorted_issue_task: public portion_io_task
-{
-	off_t off_in_bytes;
-	local_buf_vec_store::ptr store;
-	issorted_summary &summary;
-public:
-	EM_vec_issorted_issue_task(off_t global_start, size_t length,
-			const EM_vec_store &vec,
-			issorted_summary &_summary): summary(_summary) {
-		store = local_buf_vec_store::ptr(new local_buf_vec_store(
-					global_start, length, vec.get_type(), -1));
-		off_in_bytes = vec.get_byte_off(store->get_global_start());
-	}
-	virtual void run(safs::io_interface::ptr read_io, safs::io_interface::ptr) {
-		safs::data_loc_t loc(read_io->get_file_id(), off_in_bytes);
-		safs::io_request req(store->get_raw_arr(), loc,
-				store->get_length() * store->get_entry_size(), READ);
-		portion_compute::ptr compute(new EM_vec_issorted_compute(store, summary));
-		register_portion_compute(req, compute);
-		read_io->access(&req, 1);
-		read_io->flush_requests();
 	}
 };
 
@@ -725,10 +733,12 @@ public:
 		return summary;
 	}
 
-	virtual portion_io_task::ptr create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &store) {
-		return portion_io_task::ptr(new EM_vec_issorted_issue_task(global_start,
-					length, store, summary));
+	virtual void create_vec_task(off_t global_start,
+			size_t length, const EM_vec_store &from_vec) {
+		EM_vec_issorted_compute *compute = new EM_vec_issorted_compute(summary);
+		local_vec_store::const_ptr portion = from_vec.get_portion_async(global_start,
+				length, portion_compute::ptr(compute));
+		compute->set_buf(portion);
 	}
 };
 
@@ -738,10 +748,12 @@ bool EM_vec_store::is_sorted() const
 	EM_vec_issorted_dispatcher::ptr dispatcher(
 			new EM_vec_issorted_dispatcher(*this));
 	for (size_t i = 0; i < threads->get_num_threads(); i++) {
-		io_worker_task *task = new io_worker_task(factory, NULL, dispatcher);
+		io_worker_task *task = new io_worker_task(dispatcher);
+		task->register_EM_obj(const_cast<EM_vec_store *>(this));
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
+	const_cast<EM_vec_store *>(this)->destroy_ios();
 	return dispatcher->get_summary().is_sorted();
 }
 
@@ -750,43 +762,22 @@ bool EM_vec_store::is_sorted() const
 namespace
 {
 
-class EM_vec_setdata_task: public portion_io_task
-{
-	off_t off_in_bytes;
-	local_buf_vec_store::ptr buf;
-	const set_vec_operate &op;
-public:
-	EM_vec_setdata_task(off_t global_start, size_t length,
-			const EM_vec_store &vec, const set_vec_operate &_op): op(_op) {
-		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					global_start, length, vec.get_type(), -1));
-		off_in_bytes = vec.get_byte_off(buf->get_global_start());
-	}
-
-	virtual void run(safs::io_interface::ptr, safs::io_interface::ptr write_io) {
-		buf->set_data(op);
-		safs::data_loc_t loc(write_io->get_file_id(), off_in_bytes);
-		safs::io_request req(buf->get_raw_arr(), loc,
-				buf->get_length() * buf->get_entry_size(), WRITE);
-		portion_compute::ptr compute(new portion_write_complete(buf));
-		register_portion_compute(req, compute);
-		write_io->access(&req, 1);
-		write_io->flush_requests();
-	}
-};
-
 class EM_vec_setdata_dispatcher: public EM_vec_dispatcher
 {
 	const set_vec_operate &op;
+	EM_vec_store &to_vec;
 public:
-	EM_vec_setdata_dispatcher(const EM_vec_store &store,
-			const set_vec_operate &_op): EM_vec_dispatcher(store), op(_op) {
+	EM_vec_setdata_dispatcher(EM_vec_store &store,
+			const set_vec_operate &_op): EM_vec_dispatcher(store), op(
+				_op), to_vec(store) {
 	}
 
-	virtual portion_io_task::ptr create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &store) {
-		return portion_io_task::ptr(new EM_vec_setdata_task(global_start,
-					length, store, op));
+	virtual void create_vec_task(off_t global_start,
+			size_t length, const EM_vec_store &from_vec) {
+		local_buf_vec_store::ptr buf(new local_buf_vec_store(
+					global_start, length, to_vec.get_type(), -1));
+		buf->set_data(op);
+		to_vec.write_portion(buf);
 	}
 };
 
@@ -798,10 +789,12 @@ void EM_vec_store::set_data(const set_vec_operate &op)
 	EM_vec_setdata_dispatcher::ptr dispatcher(
 			new EM_vec_setdata_dispatcher(*this, op));
 	for (size_t i = 0; i < threads->get_num_threads(); i++) {
-		io_worker_task *task = new io_worker_task(NULL, factory, dispatcher);
+		io_worker_task *task = new io_worker_task(dispatcher);
+		task->register_EM_obj(this);
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
+	destroy_ios();
 }
 
 matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,

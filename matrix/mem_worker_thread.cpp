@@ -23,6 +23,7 @@
 
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
+#include "EM_object.h"
 
 namespace fm
 {
@@ -86,95 +87,39 @@ void mem_thread_pool::init_global_mem_threads(int num_nodes,
 	global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
 }
 
-class portion_callback: public safs::callback
-{
-	std::unordered_map<char *, portion_compute::ptr> computes;
-public:
-	typedef std::shared_ptr<portion_callback> ptr;
-
-	virtual ~portion_callback() {
-		assert(computes.empty());
-	}
-
-	void add(const safs::io_request &req, portion_compute::ptr compute) {
-		auto ret = computes.insert(std::pair<char *, portion_compute::ptr>(
-					req.get_buf(), compute));
-		assert(ret.second);
-	}
-
-	virtual int invoke(safs::io_request *reqs[], int num) {
-		for (int i = 0; i < num; i++) {
-			auto it = computes.find(reqs[i]->get_buf());
-			assert(it != computes.end());
-			portion_compute::ptr compute = it->second;
-			computes.erase(it);
-			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
-		}
-		return 0;
-	}
-};
-
-bool io_worker_task::register_portion_compute(const safs::io_request &req,
-		portion_compute::ptr compute)
-{
-	if (cb) {
-		cb->add(req, compute);
-		return true;
-	}
-	else
-		return false;
-}
-
 void io_worker_task::run()
 {
-	safs::io_interface::ptr read_io, write_io;
-	if (read_factory == write_factory)
-		read_io = write_io = create_io(read_factory, thread::get_curr_thread());
-	else if (read_factory == NULL)
-		write_io = create_io(write_factory, thread::get_curr_thread());
-	else if (write_factory == NULL)
-		read_io = create_io(read_factory, thread::get_curr_thread());
-	else {
-		write_io = create_io(write_factory, thread::get_curr_thread());
-		read_io = create_io(read_factory, thread::get_curr_thread());
+	std::vector<safs::io_interface::ptr> ios;
+	pthread_spin_lock(&lock);
+	for (auto it = EM_objs.begin(); it != EM_objs.end(); it++) {
+		ios.push_back((*it)->create_io());
 	}
-	cb = portion_callback::ptr(new portion_callback());
-	if (read_io)
-		read_io->set_callback(cb);
-	if (write_io)
-		write_io->set_callback(cb);
+	pthread_spin_unlock(&lock);
 
-	portion_io_task::ptr task;
 	// The task runs until there are no tasks left in the queue.
-	while ((task = dispatch->get_task()) != NULL) {
-		task->set_worker(this);
-		task->run(read_io, write_io);
+	while (dispatch->issue_task()) {
 		// TODO we need to make this a parameter.
-		while (read_io && read_io->num_pending_ios() > max_pending_ios)
-			read_io->wait4complete(1);
-		while (write_io && write_io->num_pending_ios() > max_pending_ios)
-			write_io->wait4complete(1);
+		for (size_t i = 0; i < ios.size(); i++) {
+			ios[i]->wait4complete(0);
+			while (ios[i]->num_pending_ios() > max_pending_ios)
+				ios[i]->wait4complete(1);
+		}
 	}
-	if (read_io)
-		while (read_io->num_pending_ios() > 0)
-			read_io->wait4complete(read_io->num_pending_ios());
-	if (write_io)
-		while (write_io->num_pending_ios() > 0)
-			write_io->wait4complete(write_io->num_pending_ios());
-}
-
-bool portion_compute::register_portion_compute(const safs::io_request &req,
-		portion_compute::ptr compute)
-{
-	compute->set_worker(worker_task);
-	return worker_task->register_portion_compute(req, compute);
-}
-
-bool portion_io_task::register_portion_compute(const safs::io_request &req,
-		portion_compute::ptr compute)
-{
-	compute->set_worker(worker_task);
-	return worker_task->register_portion_compute(req, compute);
+	// Test if all I/O instances have processed all requests.
+	bool complete;
+	do {
+		complete = true;
+		for (size_t i = 0; i < ios.size(); i++) {
+			ios[i]->wait4complete(0);
+			// If there is still an I/O instance has pending requests,
+			// we need to start over and test all I/O instances again.
+			if (ios[i]->num_pending_ios() > 0) {
+				complete = false;
+				ios[i]->wait4complete(1);
+			}
+		}
+		// If all I/O instances have no pending I/O requests left.
+	} while (!complete);
 }
 
 }

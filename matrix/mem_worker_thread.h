@@ -21,8 +21,11 @@
  */
 
 #include <memory>
+#include <set>
+#include <unordered_map>
 
 #include "thread.h"
+#include "io_interface.h"
 
 #include "local_vec_store.h"
 
@@ -94,27 +97,41 @@ class io_worker_task;
  */
 class portion_compute
 {
-	// This object doesn't own the worker task. We have to make sure
-	// the worker task is alive when this object is alive.
-	io_worker_task *worker_task;
 public:
 	typedef std::shared_ptr<portion_compute> ptr;
 
 	virtual ~portion_compute() {
 	}
 
-	io_worker_task &get_worker_task() {
-		return *worker_task;
-	}
-
-	void set_worker(io_worker_task *task) {
-		worker_task = task;
-	}
-
-	bool register_portion_compute(const safs::io_request &req,
-			portion_compute::ptr compute);
-
 	virtual void run(char *buf, size_t size) = 0;
+};
+
+class portion_callback: public safs::callback
+{
+	std::unordered_map<char *, portion_compute::ptr> computes;
+public:
+	typedef std::shared_ptr<portion_callback> ptr;
+
+	virtual ~portion_callback() {
+		assert(computes.empty());
+	}
+
+	void add(const safs::io_request &req, portion_compute::ptr compute) {
+		auto ret = computes.insert(std::pair<char *, portion_compute::ptr>(
+					req.get_buf(), compute));
+		assert(ret.second);
+	}
+
+	virtual int invoke(safs::io_request *reqs[], int num) {
+		for (int i = 0; i < num; i++) {
+			auto it = computes.find(reqs[i]->get_buf());
+			assert(it != computes.end());
+			portion_compute::ptr compute = it->second;
+			computes.erase(it);
+			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
+		}
+		return 0;
+	}
 };
 
 /*
@@ -123,9 +140,9 @@ public:
  */
 class portion_write_complete: public portion_compute
 {
-	local_buf_vec_store::ptr store;
+	local_buf_vec_store::const_ptr store;
 public:
-	portion_write_complete(local_buf_vec_store::ptr store) {
+	portion_write_complete(local_buf_vec_store::const_ptr store) {
 		this->store = store;
 	}
 
@@ -133,36 +150,6 @@ public:
 		assert(store->get_raw_arr() == buf);
 		assert(store->get_length() * store->get_entry_size() == size);
 	}
-};
-
-/*
- * This is an I/O task that defines computation on the portion of data
- * in an external-memory data container.
- */
-class portion_io_task
-{
-	// This object doesn't own the worker task. We have to make sure
-	// the worker task is alive when this object is alive.
-	io_worker_task *worker_task;
-public:
-	typedef std::shared_ptr<portion_io_task> ptr;
-
-	virtual ~portion_io_task() {
-	}
-
-	io_worker_task &get_worker_task() {
-		return *worker_task;
-	}
-
-	void set_worker(io_worker_task *task) {
-		worker_task = task;
-	}
-
-	bool register_portion_compute(const safs::io_request &req,
-			portion_compute::ptr compute);
-
-	virtual void run(std::shared_ptr<safs::io_interface> read_io,
-			std::shared_ptr<safs::io_interface> write_io) = 0;
 };
 
 /*
@@ -176,40 +163,40 @@ public:
 	virtual ~task_dispatcher() {
 	}
 	/*
-	 * Return a task to the invoker.
+	 * Issue a task.
 	 * This method must be thread-safe.
 	 */
-	virtual portion_io_task::ptr get_task() = 0;
+	virtual bool issue_task() = 0;
 };
 
-class portion_callback;
+class EM_object;
 
 class io_worker_task: public thread_task
 {
-	std::shared_ptr<safs::file_io_factory> read_factory;
-	std::shared_ptr<safs::file_io_factory> write_factory;
+	pthread_spinlock_t lock;
+	std::set<EM_object *> EM_objs;
+
 	std::shared_ptr<portion_callback> cb;
 	task_dispatcher::ptr dispatch;
 	int max_pending_ios;
 public:
-	/*
-	 * If the read and write I/O factories are the same, only one I/O instance
-	 * is created and is used for both read and write. If only the read
-	 * I/O factory is created, only a read I/O instance is created.
-	 * If only the write I/O factory is created, only a write I/O instance
-	 * is created.
-	 */
-	io_worker_task(std::shared_ptr<safs::file_io_factory> read_factory,
-			std::shared_ptr<safs::file_io_factory> write_factory,
-			task_dispatcher::ptr dispatch, int max_pending_ios = 16) {
-		this->read_factory = read_factory;
-		this->write_factory = write_factory;
+	io_worker_task(task_dispatcher::ptr dispatch, int max_pending_ios = 16) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->dispatch = dispatch;
 		this->max_pending_ios = max_pending_ios;
 	}
 
-	bool register_portion_compute(const safs::io_request &req,
-			portion_compute::ptr compute);
+	~io_worker_task() {
+		pthread_spin_destroy(&lock);
+	}
+
+	void register_EM_obj(EM_object *obj) {
+		pthread_spin_lock(&lock);
+		auto it = EM_objs.find(obj);
+		assert(it == EM_objs.end());
+		EM_objs.insert(obj);
+		pthread_spin_unlock(&lock);
+	}
 
 	virtual void run();
 };

@@ -111,7 +111,7 @@ public:
 	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
 			size_t nrow, size_t ncol, bool byrow) const;
 
-	local_vec_store::ptr get(std::vector<off_t> &idxs);
+	local_vec_store::ptr get(std::vector<off_t> &idxs) const;
 
 	const char *get(off_t idx) const {
 		return const_data + idx * get_entry_size();
