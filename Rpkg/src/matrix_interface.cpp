@@ -270,6 +270,8 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 			fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
 			return R_NilValue;
 		}
+		// We need to make sure the dense matrix is materialized before SpMM.
+		right_mat->materialize_self();
 		return SpMM(matrix, right_mat);
 	}
 }
