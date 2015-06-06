@@ -25,6 +25,7 @@
 #include "comm_exception.h"
 #include "log.h"
 
+#include "local_vec_store.h"
 #include "matrix_store.h"
 #include "raw_data_array.h"
 
@@ -963,9 +964,9 @@ void apply(int margin, const arr_apply_operate &op,
 void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		local_matrix_store &res);
-void scale_cols(const local_matrix_store &m1, const mem_vector &vals,
+void scale_cols(const local_matrix_store &m1, const local_vec_store &vals,
 		local_matrix_store &m2);
-void scale_rows(const local_matrix_store &m1, const mem_vector &vals,
+void scale_rows(const local_matrix_store &m1, const local_vec_store &vals,
 		local_matrix_store &m2);
 
 }

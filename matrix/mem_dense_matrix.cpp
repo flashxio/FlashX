@@ -623,7 +623,27 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::scale_cols(*ins[0], *vals, out);
+	const detail::mem_vec_store &store
+		= static_cast<const detail::mem_vec_store &>(vals->get_data());
+	// This is a tall matrix. We divide the matrix horizontally.
+	if (ins[0]->get_num_cols() == get_out_num_cols()) {
+		// If we use get_raw_arr, it may not work with NUMA vector.
+		const char *arr = store.get_sub_arr(0, vals->get_length());
+		assert(arr);
+		local_cref_vec_store lvals(arr, 0, vals->get_length(),
+				vals->get_type(), -1);
+		detail::scale_cols(*ins[0], lvals, out);
+	}
+	// We divide the matrix vertically.
+	else {
+		assert(vals->get_length() == get_out_num_cols());
+		off_t global_start = ins[0]->get_global_start_col();
+		size_t len = ins[0]->get_num_cols();
+		local_vec_store::const_ptr portion = store.get_portion(global_start,
+				len);
+		assert(portion);
+		detail::scale_cols(*ins[0], *portion, out);
+	}
 }
 
 void scale_row_op::run(
@@ -633,7 +653,27 @@ void scale_row_op::run(
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::scale_rows(*ins[0], *vals, out);
+	const detail::mem_vec_store &store
+		= static_cast<const detail::mem_vec_store &>(vals->get_data());
+	// This is a wide matrix. We divide the matrix vertically.
+	if (ins[0]->get_num_rows() == get_out_num_rows()) {
+		// If we use get_raw_arr, it may not work with NUMA vector.
+		const char *arr = store.get_sub_arr(0, vals->get_length());
+		assert(arr);
+		local_cref_vec_store lvals(arr, 0, vals->get_length(),
+				vals->get_type(), -1);
+		detail::scale_rows(*ins[0], lvals, out);
+	}
+	// We divide the tall matrix horizontally.
+	else {
+		assert(vals->get_length() == get_out_num_rows());
+		off_t global_start = ins[0]->get_global_start_row();
+		size_t len = ins[0]->get_num_rows();
+		local_vec_store::const_ptr portion = store.get_portion(global_start,
+				len);
+		assert(portion);
+		detail::scale_rows(*ins[0], *portion, out);
+	}
 }
 
 detail::portion_mapply_op::const_ptr scale_row_op::transpose() const
@@ -646,7 +686,6 @@ detail::portion_mapply_op::const_ptr scale_row_op::transpose() const
 
 dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
 {
-	assert(!is_wide());
 	assert(get_num_cols() == vals->get_length());
 	assert(get_type() == vals->get_type());
 	std::vector<detail::matrix_store::const_ptr> ins(1);
@@ -660,7 +699,6 @@ dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
 
 dense_matrix::ptr mem_dense_matrix::scale_rows(mem_vector::const_ptr vals) const
 {
-	assert(is_wide());
 	assert(get_num_rows() == vals->get_length());
 	assert(get_type() == vals->get_type());
 	std::vector<detail::matrix_store::const_ptr> ins(1);

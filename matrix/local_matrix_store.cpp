@@ -757,7 +757,7 @@ double_multiply_operate dm_op;
 
 }
 
-void scale_cols(const local_matrix_store &store, const mem_vector &vals,
+void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
@@ -787,7 +787,7 @@ void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 	}
 }
 
-void scale_rows(const local_matrix_store &store, const mem_vector &vals,
+void scale_rows(const local_matrix_store &store, const local_vec_store &vals,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());

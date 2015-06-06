@@ -416,11 +416,8 @@ void test_flatten()
 
 #endif
 
-void test_scale_cols(int num_nodes)
+void test_scale_cols1(mem_dense_matrix::ptr orig)
 {
-	printf("Test scale cols\n");
-	mem_dense_matrix::ptr orig = create_matrix(long_dim, 10,
-			matrix_layout_t::L_COL, num_nodes);
 	mem_vector::ptr vals = mem_vector::cast(
 			create_vector<int>(0, orig->get_num_cols() - 1, 1));
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_cols(vals));
@@ -435,27 +432,30 @@ void test_scale_cols(int num_nodes)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j)
 					== orig_store1.get<int>(i, j) * vals->get<int>(j));
-
-	orig = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
-	res = mem_dense_matrix::cast(orig->scale_cols(vals));
-	detail::mem_matrix_store &orig_store2
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store2
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store2.materialize_self();
-	orig_store2.materialize_self();
-#pragma omp parallel for
-	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
-		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
-			assert(res_store2.get<int>(i, j)
-					== orig_store2.get<int>(i, j) * vals->get<int>(j));
 }
 
-void test_scale_rows(int num_nodes)
+void test_scale_cols(int num_nodes)
 {
-	printf("Test scale rows\n");
-	mem_dense_matrix::ptr orig = create_matrix(10, long_dim,
-			matrix_layout_t::L_ROW, num_nodes);
+	printf("Test scale cols of tall column matrix\n");
+	mem_dense_matrix::ptr orig = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes);
+	test_scale_cols1(orig);
+
+	printf("Test scale cols of tall row matrix\n");
+	orig = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
+	test_scale_cols1(orig);
+
+	printf("Test scale cols of wide column matrix\n");
+	orig = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
+	test_scale_cols1(orig);
+
+	printf("Test scale cols of wide row matrix\n");
+	orig = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
+	test_scale_cols1(orig);
+}
+
+void test_scale_rows1(mem_dense_matrix::ptr orig)
+{
 	mem_vector::ptr vals = mem_vector::cast(
 			create_vector<int>(0, orig->get_num_rows() - 1, 1));
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_rows(vals));
@@ -470,20 +470,26 @@ void test_scale_rows(int num_nodes)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j)
 					== orig_store1.get<int>(i, j) * vals->get<int>(i));
+}
 
+void test_scale_rows(int num_nodes)
+{
+	printf("Test scale rows of wide row matrix\n");
+	mem_dense_matrix::ptr orig = create_matrix(10, long_dim,
+			matrix_layout_t::L_ROW, num_nodes);
+	test_scale_rows1(orig);
+
+	printf("Test scale rows of wide column matrix\n");
 	orig = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
-	res = mem_dense_matrix::cast(orig->scale_rows(vals));
-	detail::mem_matrix_store &orig_store2
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store2
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store2.materialize_self();
-	orig_store2.materialize_self();
-#pragma omp parallel for
-	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
-		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
-			assert(res_store2.get<int>(i, j)
-					== orig_store2.get<int>(i, j) * vals->get<int>(i));
+	test_scale_rows1(orig);
+
+	printf("Test scale rows of tall row matrix\n");
+	orig = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
+	test_scale_rows1(orig);
+
+	printf("Test scale rows of tall column matrix\n");
+	orig = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes);
+	test_scale_rows1(orig);
 }
 
 void test_create_const()
