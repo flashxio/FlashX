@@ -1,4 +1,4 @@
-There are two main components in the repository: FlashGraph and SAFS. NOTE: FlashGraph is still under heavy development.
+There are two main components in the repository: FlashGraph and SAFS.
 
 FlashGraph
 ===========
@@ -38,18 +38,21 @@ Documentation
 
 [FlashGraphR Quick Start](https://github.com/icoming/FlashGraph/wiki/FlashGraphR-Quick-Start-Guide)
 
-[FlashGraph performance](https://github.com/icoming/FlashGraph/wiki/Performance-of-FlashGraph)
+[FlashGraph performance and scalability](https://github.com/icoming/FlashGraph/wiki/FlashGraph-performance)
 
 [SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
 
 Publications
 ========
+Heng Wang, Da Zheng, Randal Burns, Carey Priebe, Active Community Detection in Massive Graphs, SDM-Networks 2015 [[pdf](http://arxiv.org/pdf/1412.8576v3.pdf)]
 
-Da Zheng, Disa Mhembere, Randal Burns, Alexander S. Szalay, FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs, arXiv:1408.0500
+Da Zheng, Disa Mhembere, Randal Burns, Joshua Vogelstein, Carey E. Priebe, Alexander S. Szalay, FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs, FAST'15, [[pdf](https://www.usenix.org/system/files/conference/fast15/fast15-paper-zheng.pdf)][[bib](https://www.usenix.org/biblio/export/bibtex/188418)]
 
-Da Zheng, Randal Burns, Alexander S. Szalay, Toward Millions of File System IOPS on Low-Cost, Commodity Hardware, in Proceeding SC '13 Proceedings of the International Conference on High Performance Computing, Networking, Storage and Analysis
+Da Zheng, Randal Burns, Alexander S. Szalay, Toward Millions of File System IOPS on Low-Cost, Commodity Hardware, in Proceeding SC '13 Proceedings of the International Conference on High Performance Computing, Networking, Storage and Analysis, [[pdf](http://www.cs.jhu.edu/~zhengda/sc13.pdf)][[bib](http://dl.acm.org/downformats.cfm?id=2503225&parent_id=2503210&expformat=bibtex&CFID=445591569&CFTOKEN=95321450)]
 
 Contact
 ========
 
-Mailing list: flashgraph-dev@googlegroups.com
+Mailing list: flashgraph-user@googlegroups.com
+
+[![Join the chat at https://gitter.im/icoming/FlashGraph](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/icoming/FlashGraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
