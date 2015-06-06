@@ -611,6 +611,11 @@ fm.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 		 options=ret$options)
 }
 
+fm.scale <- function(mat, vec, byrow)
+{
+	.Call("R_FM_scale", mat, vec, as.logical(byrow), PACKAGE="FlashGraphR")
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
