@@ -1,0 +1,31 @@
+Vertex betweenness centrality.
+
+Description:
+
+     The vertex betweenness centrality can be defined as the number of
+     geodesics (shortest paths) going through a vertex.
+
+Usage:
+
+     fg.betweenness(fg, vids = 0:(fg$vcount - 1))
+     
+Arguments:
+
+      fg: The FlashGraphR object.
+
+    vids: A vector of vertex IDs. Default runs it on the entire graph.
+
+Value:
+
+     A vector with betweenness centrality values for all vertices with
+     respect to `vids`.
+
+Author(s):
+
+     Disa Mhembere <disa@jhu.edu>
+
+Examples:
+
+     fg <- fg.load.graph("edge_list.txt")
+     res <- fg.betweenness(fg, c(1,10))
+     

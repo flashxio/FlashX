@@ -1,0 +1,43 @@
+Perform k-means clustering on a data matrix.
+
+Description:
+
+     Assign each row of a matrix to a cluster denoted by a numeric. The
+     clusters are based on the euclidean distance of each row to one
+     another. The assigned cluster will have the smallest distance from
+     the cluster center mean.
+
+Usage:
+
+     fg.kmeans(mat, k, max.iters = 10, init = c("random", "forgy", "kmeanspp"))
+     
+Arguments:
+
+     mat: A numeric matrix of data.
+
+       k: The number of clusters.
+
+max.iters: The maximum number of iterations allowed.
+
+    init: The form of initialization to use when the algorithm begins.
+          The default is "random". For a desciption of each see:
+          http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+
+Value:
+
+     A named list with the following members: iters: The number of
+     (outer) iterations performed.  centers: A matrix of cluster
+     centers.  cluster: A vector of integers (from 1:k) indicating the
+     cluster to which each point is allocated.  sizes: The number of
+     points in each cluster.
+
+Author(s):
+
+     Disa Mhembere <disa@jhu.edu>
+
+Examples:
+
+     num.clusts <- 3
+     mat <- replicate(5, rnorm(10))
+     kms <- fg.kmeans(mat, num.clusts)
+     

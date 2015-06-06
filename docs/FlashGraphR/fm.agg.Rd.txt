@@ -1,0 +1,21 @@
+Aggregation on a FlashMatrixR object.
+
+Description:
+
+     This function accepts a basic operator and perform aggregation on
+     the FlashMatrixR object with the basic operator.
+
+Usage:
+
+     fm.agg(bop, fm)
+     
+Arguments:
+
+     bop: a basic operator
+
+      fm: a FlashMatrixR object
+
+Value:
+
+     a scalar
+

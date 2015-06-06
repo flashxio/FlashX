@@ -1,0 +1,26 @@
+Get a submatrix composed of some columns from a FlashMatrixR matrix
+
+Description:
+
+     This only works on a column-wise matrix. The submatrix is also
+     organized column-wise. The submatrix shares the same data as the
+     input matrix, so there is no memory copy.
+
+Usage:
+
+     fm.get.cols(fm, idxs)
+     
+Arguments:
+
+      fm: A FlashMatrixR matrix
+
+    idxs: an array of column indices in fm.
+
+Value:
+
+     a submatrix
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

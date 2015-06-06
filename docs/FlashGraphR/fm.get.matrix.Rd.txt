@@ -1,0 +1,41 @@
+Load a sparse matrix to FlashMatrixR.
+
+Description:
+
+     Load a sparse matrix to FlashMatrixR from difference sources.
+
+Usage:
+
+     fm.get.matrix(fg)
+     
+     fm.load.matrix(mat.file, index.file)
+     
+Arguments:
+
+      fg: A FlashGraphR object.
+
+mat.file: The file that stores the sparse matrix.
+
+index.file: The file that stores the index of the sparse matrix.
+
+Details:
+
+     `fm.get.matrix' gets a FlashMatrixR matrix that references a
+     matrix represented by a FlashGraphR object.
+
+     `fm.load.matrix' loads a FlashMatrixR matrix from files. The
+     matrix in the file is in the FlashMatrix format.
+
+Value:
+
+     a FlashMatrixR matrix.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
+Examples:
+
+     fg <- fg.load.graph("graph.adj", "graph.index")
+     fm <- fm.get.matrix(fg)
+     
