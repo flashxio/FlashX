@@ -612,6 +612,7 @@ bool mem_row_matrix_store::write2file(const std::string &file_name) const
 			BOOST_LOG_TRIVIAL(error)
 				<< boost::format("can't write to %1%: %2%")
 				% file_name % strerror(errno);
+			fclose(f);
 			return false;
 		}
 	}

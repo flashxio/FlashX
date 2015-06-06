@@ -607,6 +607,43 @@ void test_conv_vec2mat()
 	assert(mat->store_layout() == matrix_layout_t::L_COL);
 }
 
+void test_write2file1(detail::mem_matrix_store::ptr mat)
+{
+	char *tmp_file_name = tempnam(".", "tmp.mat");
+	if (mat->store_layout() == matrix_layout_t::L_ROW)
+		mat->set_data(set_row_operate(mat->get_num_cols()));
+	else
+		mat->set_data(set_col_operate(mat->get_num_cols()));
+	bool ret = mat->write2file(tmp_file_name);
+	assert(ret);
+
+	detail::mem_matrix_store::ptr read_mat = detail::mem_matrix_store::load(tmp_file_name);
+	assert(read_mat);
+	assert(read_mat->get_num_rows() == mat->get_num_rows());
+	assert(read_mat->get_num_cols() == mat->get_num_cols());
+	assert(read_mat->get_type() == mat->get_type());
+	assert(read_mat->store_layout() == mat->store_layout());
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			assert(mat->get<long>(i, j) == read_mat->get<long>(i, j));
+	}
+
+	unlink(tmp_file_name);
+}
+
+void test_write2file()
+{
+	detail::mem_matrix_store::ptr mat;
+	printf("write a tall row matrix\n");
+	mat = detail::mem_matrix_store::create(1000000, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
+	test_write2file1(mat);
+	printf("write a tall column matrix\n");
+	mat = detail::mem_matrix_store::create(1000000, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
+	test_write2file1(mat);
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -618,6 +655,7 @@ int main(int argc, char *argv[])
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
 
+	test_write2file();
 	test_create_const();
 	test_apply();
 	test_conv_vec2mat();

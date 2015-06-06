@@ -59,7 +59,6 @@ public:
 		assert(0);
 		return matrix_store::const_ptr();
 	}
-
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;
@@ -184,6 +183,7 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
+	virtual bool write2file(const std::string &file_name) const;
 
 	friend class NUMA_col_wide_matrix_store;
 };
@@ -265,6 +265,7 @@ public:
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 
 	virtual matrix_store::const_ptr transpose() const;
+	virtual bool write2file(const std::string &file_name) const;
 
 	friend class NUMA_row_wide_matrix_store;
 };

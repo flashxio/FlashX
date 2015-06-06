@@ -417,6 +417,84 @@ matrix_store::const_ptr NUMA_col_tall_matrix_store::append_cols(
 	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(data));
 }
 
+bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	if (!write_header(f))
+		return false;
+
+	size_t num_portions = get_num_portions();
+	size_t tot_size = 0;
+	for (size_t i = 0; i < num_portions; i++) {
+		local_matrix_store::const_ptr portion = get_portion(i);
+		const char *data = portion->get_raw_arr();
+		assert(data);
+		size_t data_size = portion->get_num_rows() * portion->get_num_cols(
+				) * portion->get_entry_size();
+		tot_size += data_size;
+		size_t ret = fwrite(data, data_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			fclose(f);
+			return false;
+		}
+	}
+	printf("write %ld bytes\n", tot_size);
+	fclose(f);
+	return true;
+}
+
+static void copy_vec(const NUMA_vec_store &vec, char *buf)
+{
+	size_t portion_size = vec.get_portion_size();
+	for (size_t idx = 0; idx < vec.get_length(); idx += portion_size) {
+		size_t local_len = std::min(portion_size, vec.get_length() - idx);
+		const char *portion = vec.get_sub_arr(idx, idx + local_len);
+		assert(portion);
+		memcpy(buf + idx * vec.get_entry_size(), portion,
+				local_len * vec.get_entry_size());
+	}
+}
+
+bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	if (!write_header(f))
+		return false;
+
+	size_t tot_size = 0;
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		NUMA_vec_store::const_ptr col = data[i];
+		size_t col_size = col->get_length() * col->get_entry_size();
+		tot_size += col_size;
+		std::unique_ptr<char[]> tmp(new char[col_size]);
+		copy_vec(*col, tmp.get());
+		size_t ret = fwrite(tmp.get(), col_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			fclose(f);
+			return false;
+		}
+	}
+	printf("write %ld bytes\n", tot_size);
+	fclose(f);
+	return true;
+}
+
 }
 
 }
