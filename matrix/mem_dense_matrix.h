@@ -110,7 +110,7 @@ public:
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
-			matrix_layout_t out_layout) const;
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 	virtual std::shared_ptr<scalar_variable> aggregate(
 			const bulk_operate &op) const;
 	/*

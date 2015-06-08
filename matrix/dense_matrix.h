@@ -220,7 +220,7 @@ public:
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
-			matrix_layout_t out_layout) const = 0;
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const = 0;
 	virtual std::shared_ptr<scalar_variable> aggregate(
 			const bulk_operate &op) const = 0;
 	/*
@@ -237,7 +237,7 @@ public:
 			std::shared_ptr<const mem_vector> vals) const = 0;
 
 	dense_matrix::ptr multiply(const dense_matrix &mat,
-			matrix_layout_t out_layout) const {
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const {
 		return inner_prod(mat, get_type().get_basic_ops().get_multiply(),
 				get_type().get_basic_ops().get_add(), out_layout);
 	}

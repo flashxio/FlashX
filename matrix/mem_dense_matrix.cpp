@@ -116,6 +116,15 @@ dense_matrix::ptr mem_dense_matrix::inner_prod(const dense_matrix &m,
 	if (!verify_inner_prod(m, left_op, right_op))
 		return dense_matrix::ptr();
 
+	if (out_layout == matrix_layout_t::L_NONE) {
+		if (this->store_layout() == matrix_layout_t::L_ROW)
+			out_layout = matrix_layout_t::L_ROW;
+		else if (this->is_wide())
+			out_layout = matrix_layout_t::L_ROW;
+		else
+			out_layout = matrix_layout_t::L_COL;
+	}
+
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			get_num_rows(), m.get_num_cols(), out_layout,
 			right_op.get_output_type(), get_num_nodes());
@@ -166,6 +175,12 @@ void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 	detail::local_matrix_store::const_ptr local_right = m.get_portion(0);
 	assert(local_right->get_num_rows() == m.get_num_rows()
 			&& local_right->get_num_cols() == m.get_num_cols());
+	// If the left matrix is row-major, the right matrix should be
+	// column-major. When the left matrix is tall, the right matrix should
+	// be small. It makes sense to convert the right matrix to column major
+	// before we break up the left matrix for parallel processing.
+	if (!is_wide() && this->store_layout() == matrix_layout_t::L_ROW)
+		local_right = local_right->conv2(matrix_layout_t::L_COL);
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();

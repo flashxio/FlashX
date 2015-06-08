@@ -217,8 +217,7 @@ void test_multiply_col(int num_nodes)
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on col_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
-				m1->store_layout()));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
 	verify_result(*res1, *correct);
 }
 
@@ -240,34 +239,65 @@ void test_agg_col(int num_nodes)
 		assert(sum == (num_eles - 1) * num_eles / 2);
 }
 
-void test_multiply_wide_row(int num_nodes)
+void test_multiply_matrix(int num_nodes)
 {
-	printf("Test multiplication on wide matrix stored row wise\n");
-	mem_dense_matrix::ptr m1 = create_matrix(10, long_dim,
-			matrix_layout_t::L_ROW, num_nodes);
-	mem_dense_matrix::ptr m2 = create_matrix(long_dim, 9,
-			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	mem_dense_matrix::ptr m1, m2, correct, res;
 
-	printf("Test multiply on row_matrix X col_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
-				m1->store_layout()));
-	verify_result(*res1, *correct);
-}
+	printf("Test multiplication on wide row matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
 
-void test_multiply_tall_row(int num_nodes)
-{
-	printf("Test multiplication on tall matrix stored row wise\n");
-	mem_dense_matrix::ptr m1 = create_matrix(long_dim, 10,
-			matrix_layout_t::L_ROW, num_nodes);
-	mem_dense_matrix::ptr m2 = create_matrix(10, 9,
-			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	printf("Test multiplication on wide row matrix X tall row matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
 
-	printf("Test multiply on row_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
-				m1->store_layout()));
-	verify_result(*res1, *correct);
+	printf("Test multiplication on wide column matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
+
+	printf("Test multiplication on wide column matrix X tall row matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
+
+	printf("Test multiplication on tall row matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
+
+	printf("Test multiplication on tall row matrix X small column matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
+	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
+
+	printf("Test multiplication on tall column matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes);
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
+
+	printf("Test multiplication on tall column matrix X small column matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes);
+	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes);
+	correct = naive_multiply(*m1, *m2);
+	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	verify_result(*res, *correct);
 }
 
 void test_agg_row(int num_nodes)
@@ -682,10 +712,8 @@ int main(int argc, char *argv[])
 		test_multiply_col(num_nodes);
 		test_agg_col(-1);
 		test_agg_col(num_nodes);
-		test_multiply_wide_row(-1);
-		test_multiply_wide_row(num_nodes);
-		test_multiply_tall_row(-1);
-		test_multiply_tall_row(num_nodes);
+		test_multiply_matrix(-1);
+		test_multiply_matrix(num_nodes);
 		test_agg_row(-1);
 		test_agg_row(num_nodes);
 		test_agg_sub_col(-1);

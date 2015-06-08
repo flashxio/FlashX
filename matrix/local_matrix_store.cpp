@@ -675,23 +675,38 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store &res)
 {
 	if (m1.store_layout() == matrix_layout_t::L_ROW) {
-		assert(m2.store_layout() == matrix_layout_t::L_COL);
+		local_matrix_store::ptr new_m2;
+		const local_matrix_store *col_m2 = &m2;
+		if (m2.store_layout() == matrix_layout_t::L_ROW) {
+			new_m2 = m2.conv2(matrix_layout_t::L_COL);
+			col_m2 = new_m2.get();
+		}
+		assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 		assert(res.store_layout() == matrix_layout_t::L_ROW);
 		if (m1.is_wide())
 			inner_prod_row_wide(static_cast<const local_row_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 		else
 			inner_prod_row_tall(static_cast<const local_row_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 	}
 	else {
 		if (m1.is_wide()) {
-			assert(m2.store_layout() == matrix_layout_t::L_COL);
+			local_matrix_store::ptr new_m2;
+			const local_matrix_store *col_m2 = &m2;
+			// TODO we can handle the case of left wide col-major matrix and
+			// right tall row-major matrix more efficiently, so we don't need
+			// to convert the right matrix.
+			if (m2.store_layout() == matrix_layout_t::L_ROW) {
+				new_m2 = m2.conv2(matrix_layout_t::L_COL);
+				col_m2 = new_m2.get();
+			}
+			assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 			assert(res.store_layout() == matrix_layout_t::L_ROW);
 			inner_prod_col_wide(static_cast<const local_col_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 		}
 		else {
