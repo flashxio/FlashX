@@ -53,6 +53,24 @@ static safs::file_io_factory::shared_ptr create_temp_file(size_t num_bytes)
 	return factory;
 }
 
+EM_vec_store::ptr EM_vec_store::cast(vec_store::ptr vec)
+{
+	if (vec->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error) << "Can't cast an in-mem vector to EM_vec_store";
+		return EM_vec_store::ptr();
+	}
+	return std::static_pointer_cast<EM_vec_store>(vec);
+}
+
+EM_vec_store::const_ptr EM_vec_store::cast(vec_store::const_ptr vec)
+{
+	if (vec->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error) << "Can't cast an in-mem vector to EM_vec_store";
+		return EM_vec_store::const_ptr();
+	}
+	return std::static_pointer_cast<const EM_vec_store>(vec);
+}
+
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 		length, type, false)
 {
@@ -115,7 +133,7 @@ size_t EM_vec_store::get_portion_size() const
 	return matrix_conf.get_anchor_gap_size() / get_entry_size();
 }
 
-local_vec_store::const_ptr EM_vec_store::get_portion_async(off_t start,
+local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
 		size_t size, portion_compute::ptr compute) const
 {
 	safs::io_interface &io = get_curr_io();
@@ -331,67 +349,95 @@ anchor_prio_queue::ptr sort_portion_summary::get_prio_queue() const
 
 void EM_vec_sort_compute::run(char *buf, size_t size)
 {
-	assert(store);
-	assert(store->get_raw_arr() == buf);
-	assert(store->get_length() * store->get_entry_size() == size);
-	// Sort each portion in parallel.
-	// Here we rely on OpenMP to sort the data in the buffer in parallel.
-	// When we sort the data in the buffer, we actually also change
-	// the data in the local vector store. The behavior is expected.
-	store->get_type().get_sorter().sort(buf, store->get_length(), false);
-	summary.add_portion(store);
+	num_completed++;
+	if (num_completed == portions.size()) {
+		// Sort each portion in parallel.
+		// Here we rely on OpenMP to sort the data in the buffer in parallel.
+		local_buf_vec_store::ptr sort_buf = portions.front();
+		std::vector<off_t> orig_offs(sort_buf->get_length());
+		sort_buf->get_type().get_sorter().sort_with_index(
+				sort_buf->get_raw_arr(), orig_offs.data(),
+				sort_buf->get_length(), false);
+		summary.add_portion(sort_buf);
 
-	// Write the sorting result to disks.
-	vec.write_portion(store);
+		// Write the sorting result to disks.
+		to_vecs.front()->write_portion(sort_buf);
+		for (size_t i = 1; i < portions.size(); i++) {
+			local_vec_store::ptr shuffle_buf = portions[i]->get(orig_offs);
+			assert(shuffle_buf->is_sorted());
+			to_vecs[i]->write_portion(shuffle_buf,
+					portions[i]->get_global_start());
+		}
+	}
 }
 
 class EM_vec_sort_dispatcher: public EM_vec_dispatcher
 {
 	std::shared_ptr<sort_portion_summary> summary;
-	EM_vec_store &to_vec;
+	std::vector<EM_vec_store::const_ptr> from_vecs;
+	std::vector<EM_vec_store::ptr> to_vecs;
 public:
 	typedef std::shared_ptr<EM_vec_sort_dispatcher> ptr;
 
-	EM_vec_sort_dispatcher(EM_vec_store &vec): EM_vec_dispatcher(vec,
-			// We want to have a larger buffer for sorting.
-			matrix_conf.get_sort_buf_size() / vec.get_entry_size()), to_vec(vec) {
-		size_t sort_buf_size
-			= matrix_conf.get_sort_buf_size() / vec.get_entry_size();
-		size_t num_sort_bufs
-			= ceil(((double) vec.get_length()) / sort_buf_size);
-		summary = std::shared_ptr<sort_portion_summary>(
-				new sort_portion_summary(vec.get_type(), num_sort_bufs));
-	}
+	EM_vec_sort_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
+			const std::vector<EM_vec_store::ptr> &to_vecs);
 
 	const sort_portion_summary &get_sort_summary() const {
 		return *summary;
 	}
 
 	virtual void create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &from_vec) {
-		EM_vec_sort_compute *sort_compute = new EM_vec_sort_compute(to_vec,
-				*summary);
-		local_vec_store::const_ptr portion = from_vec.get_portion_async(
-				global_start, length, portion_compute::ptr(sort_compute));
-		sort_compute->set_buf(portion);
-	}
+			size_t length, const EM_vec_store &from_vec);
 };
+
+EM_vec_sort_dispatcher::EM_vec_sort_dispatcher(
+		const std::vector<EM_vec_store::const_ptr> &from_vecs,
+		const std::vector<EM_vec_store::ptr> &to_vecs): EM_vec_dispatcher(
+			*from_vecs.front(),
+			// We want to have a larger buffer for sorting.
+			matrix_conf.get_sort_buf_size() / from_vecs.front()->get_entry_size())
+{
+	EM_vec_store::const_ptr sort_vec = from_vecs.front();
+	size_t sort_buf_size
+		= matrix_conf.get_sort_buf_size() / sort_vec->get_entry_size();
+	size_t num_sort_bufs
+		= ceil(((double) sort_vec->get_length()) / sort_buf_size);
+	summary = std::shared_ptr<sort_portion_summary>(
+			new sort_portion_summary(sort_vec->get_type(), num_sort_bufs));
+	this->from_vecs = from_vecs;
+	this->to_vecs = to_vecs;
+}
+
+void EM_vec_sort_dispatcher::create_vec_task(off_t global_start,
+			size_t length, const EM_vec_store &from_vec)
+{
+	EM_vec_sort_compute *sort_compute = new EM_vec_sort_compute(to_vecs,
+			*summary);
+	portion_compute::ptr compute(sort_compute);
+	std::vector<local_vec_store::ptr> from_portions(from_vecs.size());
+	for (size_t i = 0; i < from_portions.size(); i++)
+		from_portions[i] = from_vecs[i]->get_portion_async(
+				global_start, length, compute);
+	sort_compute->set_bufs(from_portions);
+}
 
 /////////////////// Merge portions ///////////////////////
 
 class merge_writer
 {
-	const size_t local_buf_size;	// In the number of elements
+	size_t local_buf_size;	// In the number of elements
 	off_t merge_end;		// In the number of bytes
 	local_buf_vec_store::ptr buf;
 	size_t data_size_in_buf;		// In the number of elements
-	EM_vec_store &to_vec;
+	EM_vec_store::ptr to_vec;
 public:
-	merge_writer(EM_vec_store &vec): local_buf_size(
-			matrix_conf.get_write_io_buf_size() / vec.get_type().get_size()), to_vec(vec) {
+	merge_writer(EM_vec_store::ptr vec) {
+		this->local_buf_size
+			= matrix_conf.get_write_io_buf_size() / vec->get_type().get_size();
+		this->to_vec = vec;
 		merge_end = 0;
 		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					-1, local_buf_size, to_vec.get_type(), -1));
+					-1, local_buf_size, to_vec->get_type(), -1));
 		data_size_in_buf = 0;
 	}
 
@@ -399,7 +445,7 @@ public:
 		buf->resize(data_size_in_buf);
 		const scalar_type &type = buf->get_type();
 		assert(merge_end % type.get_size() == 0);
-		to_vec.write_portion(buf, merge_end / type.get_size());
+		to_vec->write_portion(buf, merge_end / type.get_size());
 		merge_end += data_size_in_buf * type.get_size();
 
 		// The data is written asynchronously, we need to allocate a new buffer.
@@ -438,20 +484,22 @@ public:
 
 class EM_vec_merge_dispatcher: public task_dispatcher
 {
-	const EM_vec_store &from_vec;
+	std::vector<EM_vec_store::const_ptr> from_vecs;
+	std::vector<local_buf_vec_store::ptr> prev_leftovers;
 	anchor_prio_queue::ptr anchors;
-	local_buf_vec_store::ptr prev_leftover;
 	size_t sort_buf_size;
-	merge_writer writer;
+	std::vector<merge_writer> writers;
 public:
-	EM_vec_merge_dispatcher(const EM_vec_store &_from_vec,
-			EM_vec_store &_to_vec, anchor_prio_queue::ptr anchors);
-	void set_prev_leftover(local_buf_vec_store::ptr prev_leftover) {
-		this->prev_leftover = prev_leftover;
+	EM_vec_merge_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
+			const std::vector<EM_vec_store::ptr> &to_vecs,
+			anchor_prio_queue::ptr anchors);
+	void set_prev_leftovers(
+			const std::vector<local_buf_vec_store::ptr> &prev_leftovers) {
+		this->prev_leftovers = prev_leftovers;
 	}
 
-	merge_writer &get_merge_writer() {
-		return writer;
+	merge_writer &get_merge_writer(int idx) {
+		return writers[idx];
 	}
 
 	const anchor_prio_queue &get_anchors() const {
@@ -462,54 +510,90 @@ public:
 };
 
 EM_vec_merge_compute::EM_vec_merge_compute(
-		local_buf_vec_store::const_ptr prev_leftover,
+		const std::vector<local_buf_vec_store::ptr> &prev_leftovers,
 		EM_vec_merge_dispatcher &_dispatcher): dispatcher(_dispatcher)
 {
-	if (prev_leftover)
-		this->stores.push_back(prev_leftover);
+	stores.resize(prev_leftovers.size());
+	for (size_t i = 0; i < prev_leftovers.size(); i++) {
+		// If there is a leftover for a vector from the previous merge,
+		// all vectors should have the same number of leftover elements.
+		if (prev_leftovers[0]) {
+			assert(prev_leftovers[i]);
+			assert(prev_leftovers[0]->get_length()
+					== prev_leftovers[i]->get_length());
+		}
+		if (prev_leftovers[i])
+			this->stores[i].push_back(prev_leftovers[i]);
+	}
 	num_completed = 0;
 }
 
-EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(const EM_vec_store &_from_vec,
-		EM_vec_store &_to_vec, anchor_prio_queue::ptr anchors): from_vec(
-			_from_vec), writer(_to_vec)
+void EM_vec_merge_compute::set_bufs(const std::vector<merge_set_t> &bufs)
 {
-	assert(_from_vec.get_type() == _to_vec.get_type());
+	assert(bufs.size() == stores.size());
+	num_expected = 0;
+	for (size_t i = 0; i < bufs.size(); i++) {
+		// If all vectors should have the same number of buffers to merge.
+		assert(bufs[0].size() == bufs[i].size());
+		num_expected += bufs[i].size();
+		this->stores[i].insert(this->stores[i].end(), bufs[i].begin(),
+				bufs[i].end());
+	}
+}
+
+EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(
+		const std::vector<EM_vec_store::const_ptr> &from_vecs,
+		const std::vector<EM_vec_store::ptr> &to_vecs,
+		anchor_prio_queue::ptr anchors)
+{
+	this->from_vecs = from_vecs;
+	assert(from_vecs.size() == to_vecs.size());
+	for (size_t i = 0; i < from_vecs.size(); i++)
+		assert(from_vecs[i]->get_type() == to_vecs[i]->get_type());
 	this->anchors = anchors;
-	sort_buf_size = matrix_conf.get_sort_buf_size() / from_vec.get_entry_size();
+	for (size_t i = 0; i < to_vecs.size(); i++)
+		writers.emplace_back(to_vecs[i]);
+	sort_buf_size
+		= matrix_conf.get_sort_buf_size() / from_vecs[0]->get_entry_size();
+	prev_leftovers.resize(from_vecs.size());
 }
 
 bool EM_vec_merge_dispatcher::issue_task()
 {
+	typedef std::vector<local_buf_vec_store::const_ptr> merge_set_t;
 	size_t leftover = 0;
-	if (prev_leftover)
-		leftover = prev_leftover->get_length();
+	assert(!prev_leftovers.empty());
+	if (prev_leftovers[0])
+		leftover = prev_leftovers[0]->get_length();
 	assert(sort_buf_size > leftover);
 	std::vector<off_t> anchor_locs = anchors->pop(sort_buf_size - leftover);
-	if (anchor_locs.empty() && prev_leftover == NULL) {
+	// If there isn't any data to merge and there isn't leftover from
+	// the previous merge.
+	if (anchor_locs.empty() && prev_leftovers[0] == NULL) {
 		assert(anchors->get_min_frontier() == NULL);
 		assert(leftover == 0);
 		// If there is nothing left to merge and there isn't leftover, we still
 		// need to flush the buffered data.
-		get_merge_writer().flush_buffer_data();
+		for (size_t i = 0; i < writers.size(); i++)
+			writers[i].flush_buffer_data();
 		return false;
 	}
 	else {
 		size_t anchor_gap_size
-			= matrix_conf.get_anchor_gap_size() / from_vec.get_type().get_size();
+			= matrix_conf.get_anchor_gap_size() / from_vecs[0]->get_type().get_size();
 		// Merge the anchors.
 		std::vector<std::pair<off_t, size_t> > data_locs;
 		std::sort(anchor_locs.begin(), anchor_locs.end());
 		for (size_t i = 0; i < anchor_locs.size(); i++) {
 			size_t num_eles = std::min(anchor_gap_size,
-					from_vec.get_length() - anchor_locs[i]);
+					from_vecs[0]->get_length() - anchor_locs[i]);
 			size_t off = anchor_locs[i];
 			// If the anchors are contiguous, we merge them.
 			while (i + 1 < anchor_locs.size()
 					&& (size_t) anchor_locs[i + 1] == anchor_locs[i] + anchor_gap_size) {
 				i++;
 				num_eles += std::min(anchor_gap_size,
-						from_vec.get_length() - anchor_locs[i]);
+						from_vecs[0]->get_length() - anchor_locs[i]);
 			}
 			data_locs.push_back(std::pair<off_t, size_t>(off, num_eles));
 		}
@@ -518,22 +602,29 @@ bool EM_vec_merge_dispatcher::issue_task()
 		// merge with the data left from the previous merge.
 		if (!data_locs.empty()) {
 			EM_vec_merge_compute *_compute = new EM_vec_merge_compute(
-					prev_leftover, *this);
+					prev_leftovers, *this);
 			portion_compute::ptr compute(_compute);
-			std::vector<local_vec_store::const_ptr> portions(data_locs.size());
-			for (size_t i = 0; i < data_locs.size(); i++)
-				portions[i] = from_vec.get_portion_async(data_locs[i].first,
-						data_locs[i].second, compute);
-			_compute->set_bufs(portions);
+			std::vector<merge_set_t> merge_sets(from_vecs.size());
+			for (size_t j = 0; j < from_vecs.size(); j++) {
+				merge_set_t portions(data_locs.size());
+				for (size_t i = 0; i < data_locs.size(); i++)
+					portions[i] = from_vecs[j]->get_portion_async(
+							data_locs[i].first, data_locs[i].second, compute);
+				merge_sets[j] = portions;
+			}
+			_compute->set_bufs(merge_sets);
 		}
 		// In this case, we don't need to read data from disks any more.
 		// We only need to write the data left from the previous merge.
 		else {
-			get_merge_writer().append(prev_leftover);
-			// This is the last write. we should flush everything to disks.
-			get_merge_writer().flush_buffer_data();
-			// No more leftover.
-			set_prev_leftover(NULL);
+			for (size_t i = 0; i < writers.size(); i++) {
+				if (prev_leftovers[i])
+					writers[i].append(prev_leftovers[i]);
+				// This is the last write. we should flush everything to disks.
+				writers[i].flush_buffer_data();
+				// No more leftover.
+				prev_leftovers[i] = NULL;
+			}
 		}
 		return true;
 	}
@@ -541,12 +632,13 @@ bool EM_vec_merge_dispatcher::issue_task()
 
 void EM_vec_merge_compute::run(char *buf, size_t size)
 {
-	assert(stores.size() > 0);
 	num_completed++;
 	// If all data in the buffers is ready, we should merge all the buffers.
 	if (num_completed == num_expected) {
+		assert(stores.size() > 0);
+		merge_set_t &merge_bufs = stores[0];
 		// Find the min values among the last elements in the buffers.
-		const scalar_type &type = stores.front()->get_type();
+		const scalar_type &type = merge_bufs.front()->get_type();
 		scalar_variable::ptr min_val
 			= dispatcher.get_anchors().get_min_frontier();
 
@@ -554,55 +646,105 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		// merge with others; we have to keep the second part for further
 		// merging.
 		std::vector<std::pair<const char *, const char *> > merge_data(
-				stores.size());
+				merge_bufs.size());
 		std::vector<std::pair<const char *, const char *> > leftovers(
-				stores.size());
+				merge_bufs.size());
+		std::vector<size_t> merge_sizes(merge_bufs.size());
 		size_t leftover_size = 0;
 		size_t merge_size = 0;
-		for (size_t i = 0; i < stores.size(); i++) {
-			const char *start = stores[i]->get_raw_arr();
-			const char *end = stores[i]->get_raw_arr()
-				+ stores[i]->get_length() * stores[i]->get_entry_size();
+		for (size_t i = 0; i < merge_bufs.size(); i++) {
+			const char *start = merge_bufs[i]->get_raw_arr();
+			const char *end = merge_bufs[i]->get_raw_arr()
+				+ merge_bufs[i]->get_length() * merge_bufs[i]->get_entry_size();
 			off_t leftover_start;
 			if (min_val != NULL)
 				leftover_start = type.get_stl_algs().lower_bound(
 						start, end, min_val->get_raw());
 			else
-				leftover_start = stores[i]->get_length();
+				leftover_start = merge_bufs[i]->get_length();
+			merge_sizes[i] = leftover_start;
 			merge_size += leftover_start;
-			leftover_size += (stores[i]->get_length() - leftover_start);
+			leftover_size += (merge_bufs[i]->get_length() - leftover_start);
 			merge_data[i] = std::pair<const char *, const char *>(
-					stores[i]->get(0), stores[i]->get(leftover_start));
+					merge_bufs[i]->get(0), merge_bufs[i]->get(leftover_start));
 			leftovers[i] = std::pair<const char *, const char *>(
-					stores[i]->get(leftover_start),
-					stores[i]->get(stores[i]->get_length()));
+					merge_bufs[i]->get(leftover_start),
+					merge_bufs[i]->get(merge_bufs[i]->get_length()));
 		}
 
 		// Here we rely on OpenMP to merge the data in the buffer in parallel.
 		local_buf_vec_store::ptr merge_res(new local_buf_vec_store(-1,
 					merge_size, type, -1));
-		type.get_sorter().merge(merge_data, merge_res->get_raw_arr(),
-				merge_size);
-
+		std::vector<std::pair<int, off_t> > merge_index(merge_size);
+		type.get_sorter().merge_with_index(merge_data,
+				merge_res->get_raw_arr(), merge_size, merge_index);
 		// Write the merge result to disks.
-		dispatcher.get_merge_writer().append(merge_res);
+		dispatcher.get_merge_writer(0).append(merge_res);
+		merge_res = NULL;
+
+		std::vector<std::pair<int, off_t> > leftover_merge_index(leftover_size);
+		std::vector<local_buf_vec_store::ptr> leftover_bufs(stores.size());
 		if (leftover_size > 0) {
 			// Keep the leftover and merge them into a single buffer.
 			local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
 					new local_buf_vec_store(-1, leftover_size, type, -1));
-			type.get_sorter().merge(leftovers, leftover_buf->get_raw_arr(),
-					leftover_size);
-			dispatcher.set_prev_leftover(leftover_buf);
+			type.get_sorter().merge_with_index(leftovers,
+					leftover_buf->get_raw_arr(), leftover_size,
+					leftover_merge_index);
+			leftover_bufs[0] = leftover_buf;
 		}
-		else
-			dispatcher.set_prev_leftover(NULL);
+
+		// Merge the remaining vectors accordingly.
+		for (size_t i = 1; i < stores.size(); i++) {
+			std::vector<std::pair<const char *, const char *> > merge_data(
+					merge_sizes.size());
+			std::vector<std::pair<const char *, const char *> > leftovers(
+					merge_sizes.size());
+
+			merge_set_t &set = stores[i];
+			for (size_t i = 0; i < set.size(); i++) {
+				off_t leftover_start = merge_sizes[i];
+				merge_data[i] = std::pair<const char *, const char *>(
+						set[i]->get(0), set[i]->get(leftover_start));
+				leftovers[i] = std::pair<const char *, const char *>(
+						set[i]->get(leftover_start),
+						set[i]->get(set[i]->get_length()));
+			}
+
+			// Merge the part that can be merged.
+			const scalar_type &type = set.front()->get_type();
+			merge_res = local_buf_vec_store::ptr(new local_buf_vec_store(-1,
+						merge_size, type, -1));
+			type.get_sorter().merge(merge_data, merge_index,
+					merge_res->get_raw_arr(), merge_size);
+			dispatcher.get_merge_writer(i).append(merge_res);
+
+			// Keep the leftover and merge them into a single buffer.
+			local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
+					new local_buf_vec_store(-1, leftover_size, type, -1));
+			type.get_sorter().merge(leftovers, leftover_merge_index,
+					leftover_buf->get_raw_arr(), leftover_size);
+			leftover_bufs[i] = leftover_buf;
+		}
+
+		dispatcher.set_prev_leftovers(leftover_bufs);
 	}
 }
 
 }
 
-void EM_vec_store::sort()
+std::vector<EM_vec_store::ptr> sort(
+		const std::vector<EM_vec_store::const_ptr> &vecs)
 {
+	assert(vecs.size() > 0);
+	for (size_t i = 1; i < vecs.size(); i++) {
+		if (vecs[i]->get_length() != vecs[0]->get_length()) {
+			BOOST_LOG_TRIVIAL(error) << "Not all vectors have the same length";
+			return std::vector<EM_vec_store::ptr>();
+		}
+	}
+
+#if 0
 	assert(matrix_conf.get_sort_buf_size() % get_entry_size() == 0);
 	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / get_entry_size();
 	size_t portion_size = get_portion_size();
@@ -612,12 +754,82 @@ void EM_vec_store::sort()
 	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / get_entry_size();
 	assert(anchor_gap_size >= portion_size);
 	assert(anchor_gap_size % portion_size == 0);
+#endif
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
 	 */
+	std::vector<EM_vec_store::ptr> tmp_vecs(vecs.size());
+	for (size_t i = 0; i < vecs.size(); i++)
+		tmp_vecs[i] = EM_vec_store::create(vecs[i]->get_length(),
+				vecs[i]->get_type());
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
-			new EM_sort_detail::EM_vec_sort_dispatcher(*this));
+			new EM_sort_detail::EM_vec_sort_dispatcher(vecs, tmp_vecs));
+	io_worker_task sort_worker(sort_dispatcher, 1);
+	for (size_t i = 0; i < vecs.size(); i++) {
+		sort_worker.register_EM_obj(const_cast<EM_vec_store *>(vecs[i].get()));
+		sort_worker.register_EM_obj(tmp_vecs[i].get());
+	}
+	sort_worker.run();
+	for (size_t i = 0; i < vecs.size(); i++) {
+		const_cast<EM_vec_store &>(*vecs[i]).destroy_ios();
+		tmp_vecs[i]->destroy_ios();
+	}
+
+	/* Merge all parts.
+	 * Here we assume that one level of merging is enough and we rely on
+	 * OpenMP to parallelize merging.
+	 */
+	std::vector<EM_vec_store::ptr> out_vecs(vecs.size());
+	for (size_t i = 0; i < vecs.size(); i++)
+		out_vecs[i] = EM_vec_store::create(vecs[i]->get_length(),
+				vecs[i]->get_type());
+	std::vector<EM_vec_store::const_ptr> tmp_vecs1(tmp_vecs.begin(),
+			tmp_vecs.end());
+	EM_sort_detail::EM_vec_merge_dispatcher::ptr merge_dispatcher(
+			new EM_sort_detail::EM_vec_merge_dispatcher(tmp_vecs1, out_vecs,
+				sort_dispatcher->get_sort_summary().get_prio_queue()));
+	// TODO let's not use asynchornous I/O for now.
+	io_worker_task merge_worker(merge_dispatcher, 0);
+	for (size_t i = 0; i < vecs.size(); i++) {
+		merge_worker.register_EM_obj(tmp_vecs[i].get());
+		merge_worker.register_EM_obj(out_vecs[i].get());
+	}
+	merge_worker.run();
+	for (size_t i = 0; i < vecs.size(); i++) {
+		tmp_vecs[i]->destroy_ios();
+		out_vecs[i]->destroy_ios();
+	}
+	return out_vecs;
+}
+
+void EM_vec_store::sort()
+{
+#if 0
+	assert(matrix_conf.get_sort_buf_size() % get_entry_size() == 0);
+	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / get_entry_size();
+	size_t portion_size = get_portion_size();
+	assert(sort_buf_size >= portion_size);
+	assert(sort_buf_size % portion_size == 0);
+	assert(matrix_conf.get_anchor_gap_size() % get_entry_size() == 0);
+	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / get_entry_size();
+	assert(anchor_gap_size >= portion_size);
+	assert(anchor_gap_size % portion_size == 0);
+#endif
+
+	/*
+	 * Divide the vector into multiple large parts and sort each part in parallel.
+	 */
+	struct empty_free {
+		void operator()(EM_vec_store *) {
+		}
+	};
+	std::vector<EM_vec_store::const_ptr> in_vecs(1);
+	std::vector<EM_vec_store::ptr> out_vecs(1);
+	in_vecs[0] = EM_vec_store::const_ptr(this, empty_free());
+	out_vecs[0] = EM_vec_store::ptr(this, empty_free());
+	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
+			new EM_sort_detail::EM_vec_sort_dispatcher(in_vecs, out_vecs));
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	sort_worker.register_EM_obj(this);
 	sort_worker.run();
@@ -628,8 +840,10 @@ void EM_vec_store::sort()
 	 * OpenMP to parallelize merging.
 	 */
 	EM_vec_store::ptr tmp = EM_vec_store::create(get_length(), get_type());
+	in_vecs[0] = EM_vec_store::const_ptr(this, empty_free());
+	out_vecs[0] = tmp;
 	EM_sort_detail::EM_vec_merge_dispatcher::ptr merge_dispatcher(
-			new EM_sort_detail::EM_vec_merge_dispatcher(*this, *tmp,
+			new EM_sort_detail::EM_vec_merge_dispatcher(in_vecs, out_vecs,
 				sort_dispatcher->get_sort_summary().get_prio_queue()));
 	// TODO let's not use asynchornous I/O for now.
 	io_worker_task merge_worker(merge_dispatcher, 0);

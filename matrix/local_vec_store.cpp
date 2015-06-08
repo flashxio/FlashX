@@ -111,7 +111,7 @@ data_frame::ptr local_vec_store::groupby(
 
 local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs) const
 {
-	local_vec_store::ptr ret(new local_buf_vec_store(0, idxs.size(), get_type(), -1));
+	local_vec_store::ptr ret(new local_buf_vec_store(-1, idxs.size(), get_type(), -1));
 	std::vector<const char *> ptrs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++)
 		ptrs[i] = this->get(idxs[i]);

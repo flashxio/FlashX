@@ -38,6 +38,14 @@ namespace detail
 {
 
 class matrix_store;
+class EM_vec_store;
+
+/*
+ * This sorts the first external-memory vector in `vecs' and shuffles
+ * the remaining vectors accordingly.
+ */
+std::vector<std::shared_ptr<EM_vec_store> > sort(
+		const std::vector<std::shared_ptr<const EM_vec_store> > &vecs);
 
 class EM_vec_store: public vec_store, public EM_object
 {
@@ -54,6 +62,10 @@ class EM_vec_store: public vec_store, public EM_object
 	void destroy_ios();
 public:
 	typedef std::shared_ptr<EM_vec_store> ptr;
+	typedef std::shared_ptr<const EM_vec_store> const_ptr;
+
+	static ptr cast(vec_store::ptr vec);
+	static const_ptr cast(vec_store::const_ptr vec);
 
 	static ptr create(size_t length, const scalar_type &type) {
 		return ptr(new EM_vec_store(length, type));
@@ -82,7 +94,7 @@ public:
 	 * local vector store doesn't have invalid data right after it's
 	 * returned.
 	 */
-	virtual local_vec_store::const_ptr get_portion_async(off_t start,
+	virtual local_vec_store::ptr get_portion_async(off_t start,
 			size_t size, portion_compute::ptr compute) const;
 	/*
 	 * Write the data in the local buffer to some portion in the vector.
@@ -102,6 +114,9 @@ public:
 			size_t ncol, bool byrow) const;
 
 	virtual safs::io_interface::ptr create_io();
+
+	friend std::vector<EM_vec_store::ptr> sort(
+			const std::vector<EM_vec_store::const_ptr> &vecs);
 };
 
 namespace EM_sort_detail
@@ -175,17 +190,23 @@ public:
  */
 class EM_vec_sort_compute: public portion_compute
 {
-	local_buf_vec_store::const_ptr store;
+	// The portions are from different vectors.
+	// Each portion has to be read from the disks.
+	std::vector<local_buf_vec_store::ptr> portions;
 	// Where the sorted portion written to.
-	EM_vec_store &vec;
+	std::vector<EM_vec_store::ptr> to_vecs;
 	sort_portion_summary &summary;
+	// The number of portions that have been read from the disks.
+	size_t num_completed;
 public:
-	EM_vec_sort_compute(EM_vec_store &_vec,
-			sort_portion_summary &_summary): vec(_vec), summary(_summary) {
+	EM_vec_sort_compute(const std::vector<EM_vec_store::ptr> &vecs,
+			sort_portion_summary &_summary): summary(_summary) {
+		this->to_vecs = vecs;
+		num_completed = 0;
 	}
 	virtual void run(char *buf, size_t size);
-	void set_buf(local_buf_vec_store::const_ptr buf) {
-		this->store = buf;
+	void set_bufs(std::vector<local_buf_vec_store::ptr> portions) {
+		this->portions = portions;
 	}
 };
 
@@ -196,8 +217,11 @@ class EM_vec_merge_dispatcher;
  */
 class EM_vec_merge_compute: public portion_compute
 {
-	// The last buffer may be the leftover from the previous merge.
-	std::vector<local_buf_vec_store::const_ptr> stores;
+	// This defines the container with all the portions used for merging
+	// a vector. The last buffer in the set may be the leftover from
+	// the previous merge.
+	typedef std::vector<local_buf_vec_store::const_ptr> merge_set_t;
+	std::vector<merge_set_t> stores;
 	EM_vec_merge_dispatcher &dispatcher;
 	size_t num_completed;
 	// It's not the same as the number of local buffers in `stores' because
@@ -205,13 +229,11 @@ class EM_vec_merge_compute: public portion_compute
 	// merge.
 	size_t num_expected;
 public:
-	EM_vec_merge_compute(local_buf_vec_store::const_ptr prev_leftover,
+	EM_vec_merge_compute(
+			const std::vector<local_buf_vec_store::ptr> &prev_leftovers,
 			EM_vec_merge_dispatcher &_dispatcher);
 	virtual void run(char *buf, size_t size);
-	void set_bufs(const std::vector<local_buf_vec_store::const_ptr> &bufs) {
-		num_expected = bufs.size();
-		this->stores.insert(this->stores.end(), bufs.begin(), bufs.end());
-	}
+	void set_bufs(const std::vector<merge_set_t> &bufs);
 };
 
 }

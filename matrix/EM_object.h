@@ -31,6 +31,7 @@ namespace detail
 class EM_object
 {
 public:
+	typedef std::shared_ptr<EM_object> ptr;
 	/*
 	 * This creates an I/O instance for the current thread.
 	 */
