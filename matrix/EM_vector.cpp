@@ -310,7 +310,9 @@ safs::io_interface &EM_vec_store::get_curr_io() const
 namespace EM_sort_detail
 {
 
-anchor_prio_queue::anchor_prio_queue(const std::vector<local_buf_vec_store::ptr> &anchor_vals)
+anchor_prio_queue::anchor_prio_queue(
+		const std::vector<local_buf_vec_store::ptr> &anchor_vals,
+		size_t _sort_buf_size): sort_buf_size(_sort_buf_size)
 {
 	for (size_t i = 0; i < anchor_vals.size(); i++) {
 		anchor_struct anchor;
@@ -323,7 +325,6 @@ anchor_prio_queue::anchor_prio_queue(const std::vector<local_buf_vec_store::ptr>
 	}
 	const scalar_type &type = anchor_vals.front()->get_type();
 	anchor_gap_size = matrix_conf.get_anchor_gap_size() / type.get_size();
-	sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
 }
 
 off_t anchor_prio_queue::get_anchor_off(const anchor_struct &anchor) const
@@ -371,11 +372,11 @@ std::vector<off_t> anchor_prio_queue::pop(size_t size)
 }
 
 sort_portion_summary::sort_portion_summary(const scalar_type &type,
-		size_t num_sort_bufs)
+		size_t num_sort_bufs, size_t _sort_buf_size): sort_buf_size(
+			_sort_buf_size)
 {
 	size_t entry_size = type.get_size();
 	anchor_gap_size = matrix_conf.get_anchor_gap_size() / entry_size;
-	sort_buf_size = matrix_conf.get_sort_buf_size() / entry_size;
 	anchor_vals.resize(num_sort_bufs);
 }
 
@@ -399,7 +400,8 @@ void sort_portion_summary::add_portion(local_buf_vec_store::const_ptr sorted_buf
 
 anchor_prio_queue::ptr sort_portion_summary::get_prio_queue() const
 {
-	return anchor_prio_queue::ptr(new anchor_prio_queue(anchor_vals));
+	return anchor_prio_queue::ptr(new anchor_prio_queue(anchor_vals,
+				sort_buf_size));
 }
 
 void EM_vec_sort_compute::run(char *buf, size_t size)
@@ -435,7 +437,8 @@ public:
 	typedef std::shared_ptr<EM_vec_sort_dispatcher> ptr;
 
 	EM_vec_sort_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
-			const std::vector<EM_vec_store::ptr> &to_vecs);
+			const std::vector<EM_vec_store::ptr> &to_vecs,
+			size_t sort_buf_size);
 
 	const sort_portion_summary &get_sort_summary() const {
 		return *summary;
@@ -447,18 +450,16 @@ public:
 
 EM_vec_sort_dispatcher::EM_vec_sort_dispatcher(
 		const std::vector<EM_vec_store::const_ptr> &from_vecs,
-		const std::vector<EM_vec_store::ptr> &to_vecs): EM_vec_dispatcher(
-			*from_vecs.front(),
-			// We want to have a larger buffer for sorting.
-			matrix_conf.get_sort_buf_size() / from_vecs.front()->get_entry_size())
+		const std::vector<EM_vec_store::ptr> &to_vecs,
+		size_t sort_buf_size): EM_vec_dispatcher(
+			*from_vecs.front(), sort_buf_size)
 {
 	EM_vec_store::const_ptr sort_vec = from_vecs.front();
-	size_t sort_buf_size
-		= matrix_conf.get_sort_buf_size() / sort_vec->get_entry_size();
 	size_t num_sort_bufs
 		= ceil(((double) sort_vec->get_length()) / sort_buf_size);
 	summary = std::shared_ptr<sort_portion_summary>(
-			new sort_portion_summary(sort_vec->get_type(), num_sort_bufs));
+			new sort_portion_summary(sort_vec->get_type(), num_sort_bufs,
+				sort_buf_size));
 	this->from_vecs = from_vecs;
 	this->to_vecs = to_vecs;
 }
@@ -547,7 +548,7 @@ class EM_vec_merge_dispatcher: public task_dispatcher
 public:
 	EM_vec_merge_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
 			const std::vector<EM_vec_store::ptr> &to_vecs,
-			anchor_prio_queue::ptr anchors);
+			anchor_prio_queue::ptr anchors, size_t sort_buf_size);
 	void set_prev_leftovers(
 			const std::vector<local_buf_vec_store::ptr> &prev_leftovers) {
 		this->prev_leftovers = prev_leftovers;
@@ -599,7 +600,8 @@ void EM_vec_merge_compute::set_bufs(const std::vector<merge_set_t> &bufs)
 EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(
 		const std::vector<EM_vec_store::const_ptr> &from_vecs,
 		const std::vector<EM_vec_store::ptr> &to_vecs,
-		anchor_prio_queue::ptr anchors)
+		anchor_prio_queue::ptr anchors, size_t _sort_buf_size): sort_buf_size(
+			_sort_buf_size)
 {
 	this->from_vecs = from_vecs;
 	assert(from_vecs.size() == to_vecs.size());
@@ -608,8 +610,6 @@ EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(
 	this->anchors = anchors;
 	for (size_t i = 0; i < to_vecs.size(); i++)
 		writers.emplace_back(to_vecs[i]);
-	sort_buf_size
-		= matrix_conf.get_sort_buf_size() / from_vecs[0]->get_entry_size();
 	prev_leftovers.resize(from_vecs.size());
 }
 
@@ -801,7 +801,6 @@ std::vector<EM_vec_store::ptr> sort(
 
 #if 0
 	assert(matrix_conf.get_sort_buf_size() % get_entry_size() == 0);
-	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / get_entry_size();
 	size_t portion_size = get_portion_size();
 	assert(sort_buf_size >= portion_size);
 	assert(sort_buf_size % portion_size == 0);
@@ -810,6 +809,11 @@ std::vector<EM_vec_store::ptr> sort(
 	assert(anchor_gap_size >= portion_size);
 	assert(anchor_gap_size % portion_size == 0);
 #endif
+	size_t tot_entry_size = 0;
+	for (size_t i = 0; i < vecs.size(); i++)
+		tot_entry_size += vecs[i]->get_type().get_size();
+	size_t sort_buf_size = ROUNDUP(
+			matrix_conf.get_sort_buf_size() / tot_entry_size, PAGE_SIZE);
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -819,7 +823,8 @@ std::vector<EM_vec_store::ptr> sort(
 		tmp_vecs[i] = EM_vec_store::create(vecs[i]->get_length(),
 				vecs[i]->get_type());
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
-			new EM_sort_detail::EM_vec_sort_dispatcher(vecs, tmp_vecs));
+			new EM_sort_detail::EM_vec_sort_dispatcher(vecs, tmp_vecs,
+				sort_buf_size));
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	for (size_t i = 0; i < vecs.size(); i++) {
 		sort_worker.register_EM_obj(const_cast<EM_vec_store *>(vecs[i].get()));
@@ -843,7 +848,8 @@ std::vector<EM_vec_store::ptr> sort(
 			tmp_vecs.end());
 	EM_sort_detail::EM_vec_merge_dispatcher::ptr merge_dispatcher(
 			new EM_sort_detail::EM_vec_merge_dispatcher(tmp_vecs1, out_vecs,
-				sort_dispatcher->get_sort_summary().get_prio_queue()));
+				sort_dispatcher->get_sort_summary().get_prio_queue(),
+				sort_buf_size));
 	// TODO let's not use asynchornous I/O for now.
 	io_worker_task merge_worker(merge_dispatcher, 0);
 	for (size_t i = 0; i < vecs.size(); i++) {
@@ -871,6 +877,8 @@ void EM_vec_store::sort()
 	assert(anchor_gap_size >= portion_size);
 	assert(anchor_gap_size % portion_size == 0);
 #endif
+	size_t sort_buf_size = ROUNDUP(
+			matrix_conf.get_sort_buf_size() / get_entry_size(), PAGE_SIZE);
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -884,7 +892,8 @@ void EM_vec_store::sort()
 	in_vecs[0] = EM_vec_store::const_ptr(this, empty_free());
 	out_vecs[0] = EM_vec_store::ptr(this, empty_free());
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
-			new EM_sort_detail::EM_vec_sort_dispatcher(in_vecs, out_vecs));
+			new EM_sort_detail::EM_vec_sort_dispatcher(in_vecs, out_vecs,
+				sort_buf_size));
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	sort_worker.register_EM_obj(this);
 	sort_worker.run();
@@ -899,7 +908,8 @@ void EM_vec_store::sort()
 	out_vecs[0] = tmp;
 	EM_sort_detail::EM_vec_merge_dispatcher::ptr merge_dispatcher(
 			new EM_sort_detail::EM_vec_merge_dispatcher(in_vecs, out_vecs,
-				sort_dispatcher->get_sort_summary().get_prio_queue()));
+				sort_dispatcher->get_sort_summary().get_prio_queue(),
+				sort_buf_size));
 	// TODO let's not use asynchornous I/O for now.
 	io_worker_task merge_worker(merge_dispatcher, 0);
 	merge_worker.register_EM_obj(this);

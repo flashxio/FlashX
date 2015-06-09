@@ -144,13 +144,14 @@ class anchor_prio_queue
 
 	std::priority_queue<anchor_struct> queue;
 	size_t anchor_gap_size;
-	size_t sort_buf_size;
+	const size_t sort_buf_size;
 
 	off_t get_anchor_off(const anchor_struct &anchor) const;
 public:
 	typedef std::shared_ptr<anchor_prio_queue> ptr;
 
-	anchor_prio_queue(const std::vector<local_buf_vec_store::ptr> &anchor_vals);
+	anchor_prio_queue(const std::vector<local_buf_vec_store::ptr> &anchor_vals,
+			size_t sort_buf_size);
 	scalar_variable::ptr get_min_frontier() const;
 
 	/*
@@ -169,10 +170,11 @@ public:
 class sort_portion_summary
 {
 	size_t anchor_gap_size;
-	size_t sort_buf_size;
+	const size_t sort_buf_size;
 	std::vector<local_buf_vec_store::ptr> anchor_vals;
 public:
-	sort_portion_summary(const scalar_type &type, size_t num_sort_bufs);
+	sort_portion_summary(const scalar_type &type, size_t num_sort_bufs,
+			size_t sort_buf_size);
 	void add_portion(local_buf_vec_store::const_ptr sorted_buf);
 	anchor_prio_queue::ptr get_prio_queue() const;
 

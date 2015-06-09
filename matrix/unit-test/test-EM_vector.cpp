@@ -94,7 +94,7 @@ void test_sort_summary()
 	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
 	size_t num_bufs = 10;
 	std::vector<local_buf_vec_store::ptr> bufs(num_bufs);
-	EM_sort_detail::sort_portion_summary summary(type, num_bufs);
+	EM_sort_detail::sort_portion_summary summary(type, num_bufs, sort_buf_size);
 	for (size_t i = 0; i < num_bufs; i++) {
 		local_buf_vec_store::ptr buf(new local_buf_vec_store(i * sort_buf_size,
 					sort_buf_size, type, -1));
