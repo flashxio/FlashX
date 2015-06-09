@@ -149,6 +149,40 @@ void test_sort()
 	assert(vec->is_sorted());
 }
 
+void test_sort_mult1()
+{
+	printf("test sort a single vector\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+			get_scalar_type<int>());
+	vec->set_data(set_rand_operate<int>(1000));
+
+	std::vector<EM_vec_store::const_ptr> vecs(1);
+	vecs[0] = vec;
+	assert(!vec->is_sorted());
+	printf("sort vec\n");
+	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
+	assert(sorted_vecs[0]->is_sorted());
+}
+
+void test_sort_mult()
+{
+	printf("test sort multiple vectors\n");
+	EM_vec_store::ptr vec1 = EM_vec_store::create(10000000,
+			get_scalar_type<int>());
+	vec1->set_data(set_rand_operate<int>(1000));
+	EM_vec_store::ptr vec2 = EM_vec_store::cast(vec1->deep_copy());
+
+	std::vector<EM_vec_store::const_ptr> vecs(2);
+	vecs[0] = vec1;
+	vecs[1] = vec2;
+	assert(!vec1->is_sorted());
+	assert(!vec2->is_sorted());
+	printf("sort vec\n");
+	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
+	assert(sorted_vecs[0]->is_sorted());
+	assert(sorted_vecs[1]->is_sorted());
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -163,6 +197,8 @@ int main(int argc, char *argv[])
 	matrix_conf.set_sort_buf_size(1024 * 1024 * 8);
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
 
+	test_sort_mult();
+	test_sort_mult1();
 	test_setdata();
 	test_sort_summary();
 	test_sort();
