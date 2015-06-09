@@ -39,6 +39,41 @@ namespace fm
 namespace detail
 {
 
+class EM_vec_dispatcher: public task_dispatcher
+{
+	const EM_vec_store &store;
+	off_t portion_idx;
+	pthread_spinlock_t lock;
+	size_t portion_size;
+public:
+	EM_vec_dispatcher(const EM_vec_store &_store,
+			size_t portion_size = 0): store(_store) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		portion_idx = 0;
+		if (portion_size == 0)
+			this->portion_size = store.get_portion_size();
+		else
+			this->portion_size = portion_size;
+	}
+
+	virtual bool issue_task() {
+		pthread_spin_lock(&lock);
+		off_t global_start = portion_idx * portion_size;
+		if ((size_t) global_start >= store.get_length()) {
+			pthread_spin_unlock(&lock);
+			return false;
+		}
+		size_t length = std::min(portion_size, store.get_length() - global_start);
+		portion_idx++;
+		pthread_spin_unlock(&lock);
+		create_vec_task(global_start, length, store);
+		return true;
+	}
+
+	virtual void create_vec_task(off_t global_start, size_t length,
+			const EM_vec_store &from_vec) = 0;
+};
+
 static safs::file_io_factory::shared_ptr create_temp_file(size_t num_bytes)
 {
 	char *tmp = tempnam(".", "vec");
@@ -113,9 +148,64 @@ bool EM_vec_store::append(const vec_store &vec)
 	assert(0);
 }
 
+namespace
+{
+
+class EM_vec_copy_write: public portion_compute
+{
+	local_buf_vec_store::const_ptr store;
+	EM_vec_store &to_vec;
+public:
+	EM_vec_copy_write(EM_vec_store &_to_vec): to_vec(_to_vec) {
+	}
+
+	void set_buf(local_buf_vec_store::const_ptr store) {
+		this->store = store;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		assert(store);
+		assert(store->get_raw_arr() == buf);
+		assert(store->get_length() * store->get_entry_size() == size);
+		to_vec.write_portion(store);
+	}
+};
+
+class EM_vec_copy_dispatcher: public EM_vec_dispatcher
+{
+	EM_vec_store &to_vec;
+public:
+	EM_vec_copy_dispatcher(const EM_vec_store &from_store,
+			EM_vec_store &_to_vec, size_t portion_size): EM_vec_dispatcher(
+				from_store, portion_size), to_vec(_to_vec) {
+	}
+
+	virtual void create_vec_task(off_t global_start, size_t length,
+			const EM_vec_store &from_vec) {
+		EM_vec_copy_write *compute = new EM_vec_copy_write(to_vec);
+		local_buf_vec_store::ptr buf = from_vec.get_portion_async(
+				global_start, length, portion_compute::ptr(compute));
+		compute->set_buf(buf);
+	}
+};
+
+}
+
 vec_store::ptr EM_vec_store::deep_copy() const
 {
-	assert(0);
+	// TODO we might need to give users the optional to config it.
+	const size_t copy_portion_size = 128 * 1024 * 1024;
+	EM_vec_store::ptr new_vec = EM_vec_store::create(get_length(), get_type());
+	EM_vec_copy_dispatcher::ptr copy_dispatcher(
+			new EM_vec_copy_dispatcher(*this, *new_vec, copy_portion_size));
+	// The buffer size is large, we don't need some many async I/Os.
+	io_worker_task sort_worker(copy_dispatcher, 1);
+	sort_worker.register_EM_obj(const_cast<EM_vec_store *>(this));
+	sort_worker.register_EM_obj(new_vec.get());
+	sort_worker.run();
+	const_cast<EM_vec_store *>(this)->destroy_ios();
+	new_vec->destroy_ios();
+	return new_vec;
 }
 
 vec_store::ptr EM_vec_store::shallow_copy()
@@ -214,41 +304,6 @@ safs::io_interface &EM_vec_store::get_curr_io() const
 	assert(io_addr);
 	return *(safs::io_interface *) io_addr;
 }
-
-class EM_vec_dispatcher: public task_dispatcher
-{
-	const EM_vec_store &store;
-	off_t portion_idx;
-	pthread_spinlock_t lock;
-	size_t portion_size;
-public:
-	EM_vec_dispatcher(const EM_vec_store &_store,
-			size_t portion_size = 0): store(_store) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-		portion_idx = 0;
-		if (portion_size == 0)
-			this->portion_size = store.get_portion_size();
-		else
-			this->portion_size = portion_size;
-	}
-
-	virtual bool issue_task() {
-		pthread_spin_lock(&lock);
-		off_t global_start = portion_idx * portion_size;
-		if ((size_t) global_start >= store.get_length()) {
-			pthread_spin_unlock(&lock);
-			return false;
-		}
-		size_t length = std::min(portion_size, store.get_length() - global_start);
-		portion_idx++;
-		pthread_spin_unlock(&lock);
-		create_vec_task(global_start, length, store);
-		return true;
-	}
-
-	virtual void create_vec_task(off_t global_start, size_t length,
-			const EM_vec_store &from_vec) = 0;
-};
 
 ///////////////////////////// Sort the vector /////////////////////////////////
 
