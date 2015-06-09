@@ -120,6 +120,10 @@ void io_worker_task::run()
 		}
 		// If all I/O instances have no pending I/O requests left.
 	} while (!complete);
+
+	pthread_spin_lock(&lock);
+	EM_objs.clear();
+	pthread_spin_unlock(&lock);
 }
 
 }
