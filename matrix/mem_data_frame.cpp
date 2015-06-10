@@ -203,7 +203,7 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 	}
 }
 
-data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> dfs)
+data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> &dfs)
 {
 	assert(!dfs.empty());
 	size_t num_vecs = dfs[0]->get_num_vecs();

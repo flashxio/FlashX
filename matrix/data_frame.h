@@ -42,7 +42,7 @@ class vector_vector;
 class data_frame;
 
 std::shared_ptr<data_frame> merge_data_frame(
-		const std::vector<std::shared_ptr<const data_frame> > dfs);
+		const std::vector<std::shared_ptr<const data_frame> > &dfs);
 
 /**
  * This implements the data frame in R.
@@ -152,7 +152,7 @@ public:
 	data_frame::const_ptr shallow_copy() const;
 
 	friend data_frame::ptr merge_data_frame(
-			const std::vector<data_frame::const_ptr> dfs);
+			const std::vector<data_frame::const_ptr> &dfs);
 };
 
 }
