@@ -23,6 +23,8 @@
 
 #include "data_frame.h"
 #include "bulk_operate.h"
+#include "mem_vec_store.h"
+#include "EM_vector.h"
 
 namespace fm
 {
@@ -82,6 +84,72 @@ bool data_frame::append(data_frame::ptr df)
 	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
 		it->second->append(*df->get_vec(it->first));
 	return true;
+}
+
+data_frame::const_ptr data_frame::sort(const std::string &col_name) const
+{
+	detail::vec_store::const_ptr sorted_col = get_vec(col_name);
+	if (sorted_col == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"The column %1% doesn't exist") % col_name;
+		return data_frame::const_ptr();
+	}
+	if (sorted_col->is_sorted())
+		return this->shallow_copy();
+
+	data_frame::ptr ret(new data_frame());
+	if (sorted_col->is_in_mem()) {
+		detail::vec_store::ptr copy_col = sorted_col->deep_copy();
+		detail::smp_vec_store::ptr idxs = detail::smp_vec_store::cast(
+				copy_col->sort_with_index());
+		for (size_t i = 0; i < get_num_vecs(); i++) {
+			detail::smp_vec_store::const_ptr mem_vec
+				= detail::smp_vec_store::cast(get_vec(i));
+			if (mem_vec == sorted_col) {
+				ret->add_vec(col_name, copy_col);
+			}
+			else {
+				detail::mem_vec_store::ptr tmp = mem_vec->get(*idxs);
+				ret->add_vec(get_vec_name(i), tmp);
+			}
+		}
+	}
+	else {
+		std::vector<std::string> names;
+		std::vector<detail::EM_vec_store::const_ptr> vecs;
+		names.push_back(col_name);
+		vecs.push_back(detail::EM_vec_store::cast(sorted_col));
+		for (size_t i = 0; i < named_vecs.size(); i++) {
+			if (named_vecs[i].second != sorted_col) {
+				vecs.push_back(detail::EM_vec_store::cast(named_vecs[i].second));
+				names.push_back(named_vecs[i].first);
+			}
+		}
+		std::vector<detail::EM_vec_store::ptr> sorted = detail::sort(vecs);
+		// We should reshuffle the columns so that the columns in the returned
+		// data frame have the same order as the current data frame.
+		size_t j = 1;
+		for (size_t i = 0; i < named_vecs.size(); i++) {
+			if (named_vecs[i].first == col_name)
+				ret->add_vec(col_name, sorted[0]);
+			else {
+				assert(names[j] == named_vecs[i].first);
+				ret->add_vec(names[j], sorted[j]);
+				j++;
+			}
+		}
+	}
+	return ret;
+}
+
+bool data_frame::is_sorted(const std::string &col_name) const
+{
+	return get_vec_ref(col_name).is_sorted();
+}
+
+data_frame::const_ptr data_frame::shallow_copy() const
+{
+	return data_frame::const_ptr(new data_frame(*this));
 }
 
 }

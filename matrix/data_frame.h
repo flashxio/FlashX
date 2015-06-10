@@ -104,6 +104,18 @@ public:
 		return *it->second;
 	}
 
+	detail::vec_store::const_ptr get_vec(size_t off) const {
+		return named_vecs[off].second;
+	}
+
+	detail::vec_store::const_ptr get_vec(const std::string &name) const {
+		auto it = vec_map.find(name);
+		if (it == vec_map.end())
+			return detail::vec_store::const_ptr();
+		else
+			return it->second;
+	}
+
 	detail::vec_store::ptr get_vec(size_t off) {
 		return named_vecs[off].second;
 	}
@@ -128,9 +140,16 @@ public:
 	 * We group the rows of the data frame by the values in the specified column.
 	 */
 	virtual std::shared_ptr<vector_vector> groupby(const std::string &col_name,
-			gr_apply_operate<sub_data_frame> &op) const = 0;
-	virtual bool sort(const std::string &col_name) = 0;
-	virtual bool is_sorted(const std::string &col_name) const = 0;
+			gr_apply_operate<sub_data_frame> &op) const {
+		assert(0);
+	}
+	/*
+	 * This method sorts all rows in the data frame according to the give column.
+	 */
+	data_frame::const_ptr sort(const std::string &col_name) const;
+	bool is_sorted(const std::string &col_name) const;
+
+	data_frame::const_ptr shallow_copy() const;
 
 	friend data_frame::ptr merge_data_frame(
 			const std::vector<data_frame::const_ptr> dfs);

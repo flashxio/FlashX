@@ -203,30 +203,6 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 	}
 }
 
-bool mem_data_frame::sort(const std::string &col_name)
-{
-	detail::vec_store::ptr sorted_col = get_vec(col_name);
-	if (sorted_col == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"The column %1% doesn't exist") % col_name;
-		return false;
-	}
-	if (sorted_col->is_sorted())
-		return true;
-
-	detail::smp_vec_store::ptr idxs = detail::smp_vec_store::cast(
-			sorted_col->sort_with_index());
-	for (size_t i = 0; i < get_num_vecs(); i++) {
-		detail::smp_vec_store::ptr mem_vec = detail::smp_vec_store::cast(get_vec(i));
-		if (mem_vec == sorted_col)
-			continue;
-		detail::mem_vec_store::ptr tmp = mem_vec->get(*idxs);
-		assert(!tmp->is_sorted());
-		set_vec(i, tmp);
-	}
-	return true;
-}
-
 data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> dfs)
 {
 	assert(!dfs.empty());
@@ -263,11 +239,6 @@ data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> dfs)
 		df->add_vec(vec_name, vec);
 	}
 	return df;
-}
-
-bool mem_data_frame::is_sorted(const std::string &col_name) const
-{
-	return get_vec_ref(col_name).is_sorted();
 }
 
 }
