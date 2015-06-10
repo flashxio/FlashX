@@ -5,8 +5,19 @@
 #include "mem_vector.h"
 #include "vector_vector.h"
 #include "local_vec_store.h"
+#include "EM_vector.h"
+#include "sparse_matrix.h"
 
 using namespace fm;
+
+class rand_set_vec: public type_set_vec_operate<int>
+{
+public:
+	virtual void set(int *arr, size_t num_eles, off_t start_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = random() % 1000;
+	}
+};
 
 class sum_apply_operate: public gr_apply_operate<sub_data_frame>
 {
@@ -76,12 +87,10 @@ void test_groupby()
 	size_t length = 1000000;
 	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(length,
 			get_scalar_type<int>());
-	for (size_t i = 0; i < vec1->get_length(); i++)
-		vec1->set<int>(i, random() % 1000);
+	vec1->set_data(rand_set_vec());
 	detail::smp_vec_store::ptr vec2 = detail::smp_vec_store::create(length,
 			get_scalar_type<int>());
-	for (size_t i = 0; i < vec2->get_length(); i++)
-		vec2->set<int>(i, random() % 1000);
+	vec2->set_data(rand_set_vec());
 
 	std::map<int, long> map;
 	for (size_t i = 0; i < length; i++) {
@@ -112,7 +121,61 @@ void test_groupby()
 	assert(vec1->get_length() == v1->get_length());
 }
 
-int main()
+void test_in_mem_sort()
 {
+	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(10000,
+			get_scalar_type<int>());
+	vec1->set_data(rand_set_vec());
+	detail::smp_vec_store::ptr vec2 = detail::smp_vec_store::cast(vec1->deep_copy());
+	for (size_t i = 0; i < vec2->get_length(); i++)
+		vec2->set<int>(i, vec2->get<int>(i) * 2);
+	std::vector<named_vec_t> vecs(2);
+	vecs[0].first = "1";
+	vecs[0].second = vec1;
+	vecs[1].first = "2";
+	vecs[1].second = vec2;
+	mem_data_frame::ptr df = mem_data_frame::create(vecs);
+	data_frame::const_ptr sorted = df->sort("2");
+	assert(sorted->get_vec_name(0) == "1");
+	assert(sorted->get_vec_name(1) == "2");
+	assert(sorted->get_vec(0)->is_sorted());
+	assert(sorted->get_vec(1)->is_sorted());
+}
+
+void test_EM_sort()
+{
+	detail::vec_store::ptr vec1 = detail::EM_vec_store::create(1024 * 1024,
+			get_scalar_type<int>());
+	vec1->set_data(rand_set_vec());
+	// TODO we should use a vector with different values to test it.
+	detail::vec_store::ptr vec2 = vec1->deep_copy();
+	std::vector<named_vec_t> vecs(2);
+	vecs[0].first = "1";
+	vecs[0].second = vec1;
+	vecs[1].first = "2";
+	vecs[1].second = vec2;
+	data_frame::ptr df = data_frame::create(vecs);
+	data_frame::const_ptr sorted = df->sort("2");
+	assert(sorted->get_vec_name(0) == "1");
+	assert(sorted->get_vec_name(1) == "2");
+	assert(sorted->get_vec(0)->is_sorted());
+	assert(sorted->get_vec(1)->is_sorted());
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
+	}
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
 	test_groupby();
+	test_in_mem_sort();
+	test_EM_sort();
+
+	destroy_flash_matrix();
 }
