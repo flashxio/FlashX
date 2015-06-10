@@ -91,10 +91,13 @@ void test_sort_summary()
 {
 	printf("test sort summary\n");
 	const scalar_type &type = get_scalar_type<int>();
-	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
+	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(type);
+	size_t sort_buf_size = sizes.first;
+	size_t anchor_gap_size = sizes.second;
 	size_t num_bufs = 10;
 	std::vector<local_buf_vec_store::ptr> bufs(num_bufs);
-	EM_sort_detail::sort_portion_summary summary(type, num_bufs, sort_buf_size);
+	EM_sort_detail::sort_portion_summary summary(num_bufs, sort_buf_size,
+			anchor_gap_size);
 	for (size_t i = 0; i < num_bufs; i++) {
 		local_buf_vec_store::ptr buf(new local_buf_vec_store(i * sort_buf_size,
 					sort_buf_size, type, -1));
@@ -117,7 +120,6 @@ void test_sort_summary()
 	std::sort(anchor_vals.begin(), anchor_vals.end());
 
 	EM_sort_detail::anchor_prio_queue::ptr queue = summary.get_prio_queue();
-	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / type.get_size();
 	size_t max_fetch_size = anchor_gap_size * 8;
 	size_t fetch_size = random() % max_fetch_size;
 	size_t min_loc = 0;
@@ -193,9 +195,9 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
-	matrix_conf.set_anchor_gap_size(1024 * 128);
 	matrix_conf.set_sort_buf_size(1024 * 1024 * 8);
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
+	matrix_conf.set_min_io_size(1024 * 256);
 
 	test_sort_mult();
 	test_sort_mult1();

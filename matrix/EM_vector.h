@@ -132,33 +132,51 @@ class anchor_prio_queue
 		local_buf_vec_store::const_ptr local_anchors;
 		int id;
 		off_t curr_off;
-		const bulk_operate *gt;
+	};
 
-		bool operator<(const anchor_struct &anchor) const {
+	class anchor_ptr_less {
+		const bulk_operate *gt;
+	public:
+		anchor_ptr_less(const scalar_type &type) {
+			gt = type.get_basic_ops().get_op(basic_ops::op_idx::GT);;
+		}
+
+		bool operator()(const anchor_struct *anchor1,
+				const anchor_struct *anchor2) const {
 			bool ret;
-			gt->runAA(1, local_anchors->get(curr_off),
-					anchor.local_anchors->get(anchor.curr_off), &ret);
+			gt->runAA(1, anchor1->local_anchors->get(anchor1->curr_off),
+					anchor2->local_anchors->get(anchor2->curr_off), &ret);
 			return ret;
 		}
 	};
 
-	std::priority_queue<anchor_struct> queue;
-	size_t anchor_gap_size;
 	const size_t sort_buf_size;
+	const size_t anchor_gap_size;
+	std::vector<anchor_struct> anchor_bufs;
+	typedef std::priority_queue<anchor_struct *, std::vector<anchor_struct *>,
+			anchor_ptr_less> anchor_queue_t;
+	anchor_queue_t queue;
 
 	off_t get_anchor_off(const anchor_struct &anchor) const;
 public:
 	typedef std::shared_ptr<anchor_prio_queue> ptr;
 
 	anchor_prio_queue(const std::vector<local_buf_vec_store::ptr> &anchor_vals,
-			size_t sort_buf_size);
+			size_t sort_buf_size, size_t anchor_gap_size);
 	scalar_variable::ptr get_min_frontier() const;
+	size_t get_anchor_gap_size() const {
+		return anchor_gap_size;
+	}
 
 	/*
 	 * Here we pop a set of chunks of data whose values are the potentially
 	 * the smallest.
 	 */
 	std::vector<off_t> pop(size_t size);
+	/*
+	 * Fetch the first anchors from all queues.
+	 */
+	std::vector<off_t> fetch_all_first();
 };
 
 /*
@@ -169,12 +187,12 @@ public:
  */
 class sort_portion_summary
 {
-	size_t anchor_gap_size;
 	const size_t sort_buf_size;
+	const size_t anchor_gap_size;
 	std::vector<local_buf_vec_store::ptr> anchor_vals;
 public:
-	sort_portion_summary(const scalar_type &type, size_t num_sort_bufs,
-			size_t sort_buf_size);
+	sort_portion_summary(size_t num_sort_bufs, size_t sort_buf_size,
+			size_t anchor_gap_size);
 	void add_portion(local_buf_vec_store::const_ptr sorted_buf);
 	anchor_prio_queue::ptr get_prio_queue() const;
 
@@ -220,7 +238,7 @@ class EM_vec_merge_dispatcher;
 class EM_vec_merge_compute: public portion_compute
 {
 	// This defines the container with all the portions used for merging
-	// a vector. The last buffer in the set may be the leftover from
+	// a vector. The first buffer in the set may be the leftover from
 	// the previous merge.
 	typedef std::vector<local_buf_vec_store::const_ptr> merge_set_t;
 	std::vector<merge_set_t> stores;
@@ -237,6 +255,13 @@ public:
 	virtual void run(char *buf, size_t size);
 	void set_bufs(const std::vector<merge_set_t> &bufs);
 };
+
+/*
+ * The two functions compute the sort buffer size and anchor gap size.
+ */
+std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type);
+std::pair<size_t, size_t> cal_sort_buf_size(
+		const std::vector<const scalar_type *> &types);
 
 }
 

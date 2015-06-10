@@ -21,6 +21,7 @@
 #include <malloc.h>
 
 #include <unordered_map>
+#include <boost/math/common_factor.hpp>
 
 #include "safs_file.h"
 #include "io_request.h"
@@ -220,7 +221,8 @@ vec_store::const_ptr EM_vec_store::shallow_copy() const
 
 size_t EM_vec_store::get_portion_size() const
 {
-	return matrix_conf.get_anchor_gap_size() / get_entry_size();
+	// TODO
+	return 1024 * 1024;
 }
 
 local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
@@ -312,19 +314,19 @@ namespace EM_sort_detail
 
 anchor_prio_queue::anchor_prio_queue(
 		const std::vector<local_buf_vec_store::ptr> &anchor_vals,
-		size_t _sort_buf_size): sort_buf_size(_sort_buf_size)
+		size_t _sort_buf_size, size_t _anchor_gap_size): sort_buf_size(
+			_sort_buf_size), anchor_gap_size(_anchor_gap_size), queue(
+			anchor_ptr_less(anchor_vals.front()->get_type()))
 {
+	anchor_bufs.resize(anchor_vals.size());
 	for (size_t i = 0; i < anchor_vals.size(); i++) {
 		anchor_struct anchor;
 		anchor.local_anchors = anchor_vals[i];
 		anchor.id = i;
 		anchor.curr_off = 0;
-		const scalar_type &type = anchor_vals.front()->get_type();
-		anchor.gt = type.get_basic_ops().get_op(basic_ops::op_idx::GT);;
-		queue.push(anchor);
+		anchor_bufs[i] = anchor;
+		queue.push(&anchor_bufs[i]);
 	}
-	const scalar_type &type = anchor_vals.front()->get_type();
-	anchor_gap_size = matrix_conf.get_anchor_gap_size() / type.get_size();
 }
 
 off_t anchor_prio_queue::get_anchor_off(const anchor_struct &anchor) const
@@ -332,16 +334,20 @@ off_t anchor_prio_queue::get_anchor_off(const anchor_struct &anchor) const
 	return anchor.id * sort_buf_size + anchor.curr_off * anchor_gap_size;
 }
 
+/*
+ * By looking into the values in the anchor locations, we can know immediately
+ * the minimal value among the data that hasn't been read.
+ */
 scalar_variable::ptr anchor_prio_queue::get_min_frontier() const
 {
 	if (queue.empty())
 		return scalar_variable::ptr();
 	else {
-		local_buf_vec_store::const_ptr local_anchors = queue.top().local_anchors;
+		local_buf_vec_store::const_ptr local_anchors = queue.top()->local_anchors;
 		const scalar_type &type = local_anchors->get_type();
 		scalar_variable::ptr var = type.create_scalar();
-		assert((size_t) queue.top().curr_off < local_anchors->get_length());
-		var->set_raw(local_anchors->get(queue.top().curr_off),
+		assert((size_t) queue.top()->curr_off < local_anchors->get_length());
+		var->set_raw(local_anchors->get(queue.top()->curr_off),
 				type.get_size());
 		return var;
 	}
@@ -356,27 +362,52 @@ std::vector<off_t> anchor_prio_queue::pop(size_t size)
 	std::vector<off_t> chunks;
 	long remaining_size = size;
 	while (remaining_size > 0 && !queue.empty()) {
-		anchor_struct anchor = queue.top();
-		off_t off = get_anchor_off(anchor);
+		anchor_struct *anchor = queue.top();
+		assert((size_t) anchor->curr_off < anchor->local_anchors->get_length());
+		off_t off = get_anchor_off(*anchor);
 		chunks.push_back(off);
 		remaining_size -= anchor_gap_size;
 		queue.pop();
 
 		// If there are still anchors left in the partition, we should
 		// update it and put it back to the priority.
-		anchor.curr_off++;
-		if (anchor.local_anchors->get_length() > (size_t) anchor.curr_off)
+		anchor->curr_off++;
+		if (anchor->local_anchors->get_length() > (size_t) anchor->curr_off)
 			queue.push(anchor);
 	}
 	return chunks;
 }
 
-sort_portion_summary::sort_portion_summary(const scalar_type &type,
-		size_t num_sort_bufs, size_t _sort_buf_size): sort_buf_size(
-			_sort_buf_size)
+std::vector<off_t> anchor_prio_queue::fetch_all_first()
 {
-	size_t entry_size = type.get_size();
-	anchor_gap_size = matrix_conf.get_anchor_gap_size() / entry_size;
+	std::vector<off_t> chunks;
+	for (size_t i = 0; i < anchor_bufs.size(); i++) {
+		anchor_struct &anchor = anchor_bufs[i];
+		if (anchor.local_anchors->get_length() > (size_t) anchor.curr_off) {
+			off_t off = get_anchor_off(anchor);
+			chunks.push_back(off);
+			anchor.curr_off++;
+		}
+	}
+
+	// We have change the anchor structs, now we have reconstruct
+	// the priority queue again.
+	queue = anchor_queue_t(anchor_ptr_less(
+				anchor_bufs.front().local_anchors->get_type()));
+	assert(queue.empty());
+	for (size_t i = 0; i < anchor_bufs.size(); i++) {
+		anchor_struct *anchor = &anchor_bufs[i];
+		if (anchor->local_anchors->get_length() > (size_t) anchor->curr_off)
+			queue.push(anchor);
+	}
+
+	return chunks;
+}
+
+sort_portion_summary::sort_portion_summary(size_t num_sort_bufs,
+		size_t _sort_buf_size, size_t _anchor_gap_size): sort_buf_size(
+			_sort_buf_size), anchor_gap_size(_anchor_gap_size)
+{
 	anchor_vals.resize(num_sort_bufs);
 }
 
@@ -401,7 +432,7 @@ void sort_portion_summary::add_portion(local_buf_vec_store::const_ptr sorted_buf
 anchor_prio_queue::ptr sort_portion_summary::get_prio_queue() const
 {
 	return anchor_prio_queue::ptr(new anchor_prio_queue(anchor_vals,
-				sort_buf_size));
+				sort_buf_size, anchor_gap_size));
 }
 
 void EM_vec_sort_compute::run(char *buf, size_t size)
@@ -421,7 +452,6 @@ void EM_vec_sort_compute::run(char *buf, size_t size)
 		to_vecs.front()->write_portion(sort_buf);
 		for (size_t i = 1; i < portions.size(); i++) {
 			local_vec_store::ptr shuffle_buf = portions[i]->get(orig_offs);
-			assert(shuffle_buf->is_sorted());
 			to_vecs[i]->write_portion(shuffle_buf,
 					portions[i]->get_global_start());
 		}
@@ -438,7 +468,7 @@ public:
 
 	EM_vec_sort_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
 			const std::vector<EM_vec_store::ptr> &to_vecs,
-			size_t sort_buf_size);
+			size_t sort_buf_size, size_t anchor_gap_size);
 
 	const sort_portion_summary &get_sort_summary() const {
 		return *summary;
@@ -451,15 +481,15 @@ public:
 EM_vec_sort_dispatcher::EM_vec_sort_dispatcher(
 		const std::vector<EM_vec_store::const_ptr> &from_vecs,
 		const std::vector<EM_vec_store::ptr> &to_vecs,
-		size_t sort_buf_size): EM_vec_dispatcher(
+		size_t sort_buf_size, size_t anchor_gap_size): EM_vec_dispatcher(
 			*from_vecs.front(), sort_buf_size)
 {
 	EM_vec_store::const_ptr sort_vec = from_vecs.front();
 	size_t num_sort_bufs
 		= ceil(((double) sort_vec->get_length()) / sort_buf_size);
 	summary = std::shared_ptr<sort_portion_summary>(
-			new sort_portion_summary(sort_vec->get_type(), num_sort_bufs,
-				sort_buf_size));
+			new sort_portion_summary(num_sort_bufs, sort_buf_size,
+				anchor_gap_size));
 	this->from_vecs = from_vecs;
 	this->to_vecs = to_vecs;
 }
@@ -554,6 +584,10 @@ public:
 		this->prev_leftovers = prev_leftovers;
 	}
 
+	local_buf_vec_store::const_ptr get_prev_leftover(off_t idx) const {
+		return prev_leftovers[idx];
+	}
+
 	merge_writer &get_merge_writer(int idx) {
 		return writers[idx];
 	}
@@ -618,10 +652,23 @@ bool EM_vec_merge_dispatcher::issue_task()
 	typedef std::vector<local_buf_vec_store::const_ptr> merge_set_t;
 	size_t leftover = 0;
 	assert(!prev_leftovers.empty());
-	if (prev_leftovers[0])
+	std::vector<off_t> anchor_locs;
+	size_t anchor_gap_size = anchors->get_anchor_gap_size();
+	if (prev_leftovers[0]) {
 		leftover = prev_leftovers[0]->get_length();
-	assert(sort_buf_size > leftover);
-	std::vector<off_t> anchor_locs = anchors->pop(sort_buf_size - leftover);
+		assert(sort_buf_size > leftover);
+		anchor_locs = anchors->pop(sort_buf_size - leftover);
+	}
+	else {
+		anchor_locs = anchors->fetch_all_first();
+		size_t fetch_size = anchor_locs.size() * anchor_gap_size;
+		if (fetch_size < sort_buf_size) {
+			std::vector<off_t> more_locs = anchors->pop(
+					sort_buf_size - fetch_size);
+			anchor_locs.insert(anchor_locs.end(), more_locs.begin(),
+					more_locs.end());
+		}
+	}
 	// If there isn't any data to merge and there isn't leftover from
 	// the previous merge.
 	if (anchor_locs.empty() && prev_leftovers[0] == NULL) {
@@ -634,8 +681,6 @@ bool EM_vec_merge_dispatcher::issue_task()
 		return false;
 	}
 	else {
-		size_t anchor_gap_size
-			= matrix_conf.get_anchor_gap_size() / from_vecs[0]->get_type().get_size();
 		// Merge the anchors.
 		std::vector<std::pair<off_t, size_t> > data_locs;
 		std::sort(anchor_locs.begin(), anchor_locs.end());
@@ -707,6 +752,12 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		std::vector<size_t> merge_sizes(merge_bufs.size());
 		size_t leftover_size = 0;
 		size_t merge_size = 0;
+		local_buf_vec_store::const_ptr prev_leftover
+			= dispatcher.get_prev_leftover(0);
+		// We go through all the buffers to be merged and merge elements
+		// that are smaller than `min_val' and keep all elements in the `leftover'
+		// buffer, which have been read from the disks but are larger than
+		// `min_val'.
 		for (size_t i = 0; i < merge_bufs.size(); i++) {
 			const char *start = merge_bufs[i]->get_raw_arr();
 			const char *end = merge_bufs[i]->get_raw_arr()
@@ -786,6 +837,64 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 	}
 }
 
+/*
+ * The two functions compute the sort buffer size and the anchor gap size
+ * based on the sort buffer size and min I/O size provided by the user.
+ * One version works for a single vector and the other version works for
+ * multiple vectors.
+ *
+ * The anchor gap size should be multiple of the entry sizes of all
+ * vectors as well as multiple of the min I/O size.
+ * The sort buffer size should be multiple of the anchor gap size.
+ */
+
+std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type)
+{
+	size_t anchor_gap_bytes = 1;		// in the number of bytes.
+	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes, type.get_size());
+	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
+			matrix_conf.get_min_io_size());
+	assert(anchor_gap_bytes % type.get_size() == 0);
+	assert(anchor_gap_bytes % matrix_conf.get_min_io_size() == 0);
+
+	// The number of elements between two anchors.
+	size_t anchor_gap_size = anchor_gap_bytes / type.get_size();
+	size_t num_anchors
+		= matrix_conf.get_sort_buf_size() / type.get_size() / anchor_gap_size;
+	size_t sort_buf_size = num_anchors * anchor_gap_size;
+	assert((sort_buf_size * type.get_size())
+			% matrix_conf.get_min_io_size() == 0);
+	return std::pair<size_t, size_t>(sort_buf_size, anchor_gap_size);
+}
+
+std::pair<size_t, size_t> cal_sort_buf_size(
+		const std::vector<const scalar_type *> &types)
+{
+	size_t tot_entry_size = 0;
+	size_t anchor_gap_bytes = 1;		// in the number of bytes.
+	for (size_t i = 0; i < types.size(); i++) {
+		tot_entry_size += types[i]->get_size();
+		anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
+				types[i]->get_size());
+	}
+	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
+			matrix_conf.get_min_io_size());
+	for (size_t i = 0; i < types.size(); i++) {
+		assert(anchor_gap_bytes % types[i]->get_size() == 0);
+	}
+	assert(anchor_gap_bytes % matrix_conf.get_min_io_size() == 0);
+
+	// The number of elements between two anchors.
+	size_t anchor_gap_size = anchor_gap_bytes / types[0]->get_size();
+	size_t num_anchors
+		= matrix_conf.get_sort_buf_size() / tot_entry_size / anchor_gap_size;
+	size_t sort_buf_size = num_anchors * anchor_gap_size;
+	for (size_t i = 0; i < types.size(); i++)
+		assert((sort_buf_size * types[i]->get_size())
+				% matrix_conf.get_min_io_size() == 0);
+	return std::pair<size_t, size_t>(sort_buf_size, anchor_gap_size);
+}
+
 }
 
 std::vector<EM_vec_store::ptr> sort(
@@ -799,21 +908,21 @@ std::vector<EM_vec_store::ptr> sort(
 		}
 	}
 
-#if 0
-	assert(matrix_conf.get_sort_buf_size() % get_entry_size() == 0);
-	size_t portion_size = get_portion_size();
-	assert(sort_buf_size >= portion_size);
-	assert(sort_buf_size % portion_size == 0);
-	assert(matrix_conf.get_anchor_gap_size() % get_entry_size() == 0);
-	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / get_entry_size();
-	assert(anchor_gap_size >= portion_size);
-	assert(anchor_gap_size % portion_size == 0);
-#endif
-	size_t tot_entry_size = 0;
+	std::vector<const scalar_type *> types(vecs.size());
 	for (size_t i = 0; i < vecs.size(); i++)
-		tot_entry_size += vecs[i]->get_type().get_size();
-	size_t sort_buf_size = ROUNDUP(
-			matrix_conf.get_sort_buf_size() / tot_entry_size, PAGE_SIZE);
+		types[i] = &vecs[i]->get_type();
+	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(types);
+	size_t sort_buf_size = sizes.first;
+	size_t anchor_gap_size = sizes.second;
+	printf("sort buf size: %ld, anchor gap size: %ld\n", sort_buf_size,
+			anchor_gap_size);
+	for (size_t i = 0; i < vecs.size(); i++) {
+		size_t num_sort_bufs
+			= ceil(((double) vecs[i]->get_length()) / sort_buf_size);
+		// We have to make sure the sort buffer can contain a anchor portion
+		// from each partially sorted buffer.
+		assert(num_sort_bufs * anchor_gap_size <= sort_buf_size);
+	}
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -824,7 +933,7 @@ std::vector<EM_vec_store::ptr> sort(
 				vecs[i]->get_type());
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
 			new EM_sort_detail::EM_vec_sort_dispatcher(vecs, tmp_vecs,
-				sort_buf_size));
+				sort_buf_size, anchor_gap_size));
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	for (size_t i = 0; i < vecs.size(); i++) {
 		sort_worker.register_EM_obj(const_cast<EM_vec_store *>(vecs[i].get()));
@@ -866,19 +975,16 @@ std::vector<EM_vec_store::ptr> sort(
 
 void EM_vec_store::sort()
 {
-#if 0
-	assert(matrix_conf.get_sort_buf_size() % get_entry_size() == 0);
-	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / get_entry_size();
-	size_t portion_size = get_portion_size();
-	assert(sort_buf_size >= portion_size);
-	assert(sort_buf_size % portion_size == 0);
-	assert(matrix_conf.get_anchor_gap_size() % get_entry_size() == 0);
-	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / get_entry_size();
-	assert(anchor_gap_size >= portion_size);
-	assert(anchor_gap_size % portion_size == 0);
-#endif
-	size_t sort_buf_size = ROUNDUP(
-			matrix_conf.get_sort_buf_size() / get_entry_size(), PAGE_SIZE);
+	std::pair<size_t, size_t> sizes
+		= EM_sort_detail::cal_sort_buf_size(get_type());
+	size_t sort_buf_size = sizes.first;
+	size_t anchor_gap_size = sizes.second;
+	size_t num_sort_bufs = ceil(((double) get_length()) / sort_buf_size);
+	printf("sort buf size: %ld, anchor gap size: %ld\n", sort_buf_size,
+			anchor_gap_size);
+	// We have to make sure the sort buffer can contain a anchor portion
+	// from each partially sorted buffer.
+	assert(num_sort_bufs * anchor_gap_size <= sort_buf_size);
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -893,7 +999,7 @@ void EM_vec_store::sort()
 	out_vecs[0] = EM_vec_store::ptr(this, empty_free());
 	EM_sort_detail::EM_vec_sort_dispatcher::ptr sort_dispatcher(
 			new EM_sort_detail::EM_vec_sort_dispatcher(in_vecs, out_vecs,
-				sort_buf_size));
+				sort_buf_size, anchor_gap_size));
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	sort_worker.register_EM_obj(this);
 	sort_worker.run();

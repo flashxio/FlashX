@@ -54,13 +54,11 @@ class matrix_config
 	// The buffer size used for external-memory sorting.
 	// The number of bytes.
 	size_t sort_buf_size;
-	// Each sort buffer has multiple anchors to get some sense of data value
-	// distribution.
-	// The number of bytes.
-	size_t anchor_gap_size;
 	// The I/O buffer size for writing merge results in sorting a vector.
 	// The number of bytes.
 	size_t write_io_buf_size;
+	// The minimum I/O size that can achieve decent I/O performance from disks.
+	size_t min_io_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -76,8 +74,8 @@ public:
 		hilbert_order = true;
 		num_nodes = 1;
 		sort_buf_size = 128 * 1024 * 1024;
-		anchor_gap_size = 8 * 1024 * 1024;
 		write_io_buf_size = 128 * 1024 * 1024;
+		min_io_size = 1024 * 1024;
 	}
 
 	/**
@@ -174,24 +172,24 @@ public:
 		this->sort_buf_size = sort_buf_size;
 	}
 
-	void set_anchor_gap_size(size_t anchor_gap_size) {
-		this->anchor_gap_size = anchor_gap_size;
-	}
-
 	void set_write_io_buf_size(size_t write_io_buf_size) {
 		this->write_io_buf_size = write_io_buf_size;
+	}
+
+	void set_min_io_size(size_t min_io_size) {
+		this->min_io_size = min_io_size;
 	}
 
 	size_t get_sort_buf_size() const {
 		return sort_buf_size;
 	}
 
-	size_t get_anchor_gap_size() const {
-		return anchor_gap_size;
-	}
-
 	size_t get_write_io_buf_size() const {
 		return write_io_buf_size;
+	}
+
+	size_t get_min_io_size() const {
+		return min_io_size;
 	}
 };
 
@@ -208,8 +206,8 @@ inline void matrix_config::print_help()
 	printf("\thilbert_order: use the hilbert order\n");
 	printf("\tnum_nodes: The number of NUMA nodes\n");
 	printf("\tsort_buf_size: the buffer size for sorting\n");
-	printf("\tanchor_gap_size: the gap size of the anchors in the sort buffer\n");
 	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
+	printf("\tmin_io_size: the min I/O size\n");
 }
 
 inline void matrix_config::print()
@@ -225,8 +223,8 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
 	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
 	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tanchor_gap_size" << anchor_gap_size;
 	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tmin_io_size" << min_io_size;
 }
 
 inline void matrix_config::init(config_map::ptr map)
@@ -256,15 +254,15 @@ inline void matrix_config::init(config_map::ptr map)
 		map->read_option_long("sort_buf_size", tmp);
 		sort_buf_size = tmp;
 	}
-	if (map->has_option("anchor_gap_size")) {
-		long tmp = 0;
-		map->read_option_long("anchor_gap_size", tmp);
-		anchor_gap_size = tmp;
-	}
 	if (map->has_option("write_io_buf_size")) {
 		long tmp = 0;
 		map->read_option_long("write_io_buf_size", tmp);
 		write_io_buf_size = tmp;
+	}
+	if (map->has_option("min_io_size")) {
+		long tmp = 0;
+		map->read_option_long("min_io_size", tmp);
+		min_io_size = tmp;
 	}
 }
 
