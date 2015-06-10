@@ -96,6 +96,9 @@ public:
 	 */
 	virtual local_vec_store::ptr get_portion_async(off_t start,
 			size_t size, portion_compute::ptr compute) const;
+	virtual std::vector<local_vec_store::ptr> get_portion_async(
+			const std::vector<std::pair<off_t, size_t> > &locs,
+			portion_compute::ptr compute) const;
 	/*
 	 * Write the data in the local buffer to some portion in the vector.
 	 * The location is indicated in the local buffer. However, a user

@@ -237,9 +237,32 @@ local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
 			buf->get_length() * buf->get_entry_size(), READ);
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
-	// TODO I might want to flush requests later.
 	io.flush_requests();
 	return buf;
+}
+
+std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
+		const std::vector<std::pair<off_t, size_t> > &locs,
+		portion_compute::ptr compute) const
+{
+	safs::io_interface &io = get_curr_io();
+	std::vector<safs::io_request> reqs(locs.size());
+	std::vector<local_vec_store::ptr> ret_bufs(locs.size());
+	for (size_t i = 0; i < locs.size(); i++) {
+		off_t start = locs[i].first;
+		size_t size = locs[i].second;
+		local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
+					get_type(), -1));
+		off_t off = get_byte_off(start);
+		safs::data_loc_t loc(io.get_file_id(), off);
+		reqs[i] = safs::io_request(buf->get_raw_arr(), loc,
+				buf->get_length() * buf->get_entry_size(), READ);
+		ret_bufs[i] = buf;
+		static_cast<portion_callback &>(io.get_callback()).add(reqs[i], compute);
+	}
+	io.access(reqs.data(), reqs.size());
+	io.flush_requests();
+	return ret_bufs;
 }
 
 void EM_vec_store::write_portion(local_vec_store::const_ptr store, off_t off)
@@ -706,11 +729,10 @@ bool EM_vec_merge_dispatcher::issue_task()
 			portion_compute::ptr compute(_compute);
 			std::vector<merge_set_t> merge_sets(from_vecs.size());
 			for (size_t j = 0; j < from_vecs.size(); j++) {
-				merge_set_t portions(data_locs.size());
-				for (size_t i = 0; i < data_locs.size(); i++)
-					portions[i] = from_vecs[j]->get_portion_async(
-							data_locs[i].first, data_locs[i].second, compute);
-				merge_sets[j] = portions;
+				std::vector<local_vec_store::ptr> portions
+					= from_vecs[j]->get_portion_async(data_locs, compute);
+				merge_sets[j].insert(merge_sets[j].end(), portions.begin(),
+						portions.end());
 			}
 			_compute->set_bufs(merge_sets);
 		}
