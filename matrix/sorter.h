@@ -248,6 +248,7 @@ void type_sorter<T>::merge_with_index(
 		size_t curr_arr_idx = 0;
 		size_t i = 0;
 		while (true) {
+			// If the array is empty, it works fine.
 			size_t num_eles = get_length<T>(arrs[curr_arr_idx]);
 			if (i + num_eles > start)
 				break;
@@ -267,6 +268,10 @@ void type_sorter<T>::merge_with_index(
 			// switch to the next array.
 			if (curr_ptr == ((const T *) arrs[curr_arr_idx].second) - 1) {
 				curr_arr_idx++;
+				// We need to skip the empty arrays.
+				while (curr_arr_idx < arrs.size()
+						&& get_length<T>(arrs[curr_arr_idx]) == 0)
+					curr_arr_idx++;
 				curr_off_in_arr = 0;
 				if (i + 1 < part_len)
 					assert(curr_arr_idx < arrs.size());
