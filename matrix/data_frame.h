@@ -64,22 +64,16 @@ protected:
 	data_frame() {
 	}
 
-	data_frame(const std::vector<named_vec_t> &named_vecs) {
-		this->named_vecs = named_vecs;
-		for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
-			vec_map.insert(*it);
-	}
+	data_frame(const std::vector<named_vec_t> &named_vecs);
 public:
 	typedef std::shared_ptr<data_frame> ptr;
 	typedef std::shared_ptr<const data_frame> const_ptr;
 
-	bool add_vec(const std::string &name, detail::vec_store::ptr vec) {
-		if (get_num_vecs() > 0 && vec->get_length() != get_num_entries())
-			return false;
-		named_vecs.push_back(named_vec_t(name, vec));
-		vec_map.insert(named_vec_t(name, vec));
-		return true;
+	static ptr create(const std::vector<named_vec_t> &named_vecs) {
+		return ptr(new data_frame(named_vecs));
 	}
+
+	bool add_vec(const std::string &name, detail::vec_store::ptr vec);
 
 	/*
 	 * This method appends multiple data frames to this data frame.

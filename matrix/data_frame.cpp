@@ -29,6 +29,17 @@
 namespace fm
 {
 
+data_frame::data_frame(const std::vector<named_vec_t> &named_vecs)
+{
+	assert(!named_vecs.empty());
+	this->named_vecs = named_vecs;
+	bool in_mem = named_vecs.front().second->is_in_mem();
+	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++) {
+		assert(in_mem == it->second->is_in_mem());
+		vec_map.insert(*it);
+	}
+}
+
 bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 		std::vector<data_frame::ptr>::const_iterator end)
 {
@@ -150,6 +161,25 @@ bool data_frame::is_sorted(const std::string &col_name) const
 data_frame::const_ptr data_frame::shallow_copy() const
 {
 	return data_frame::const_ptr(new data_frame(*this));
+}
+
+bool data_frame::add_vec(const std::string &name, detail::vec_store::ptr vec)
+{
+	if (get_num_vecs() > 0) {
+		if (vec->get_length() != get_num_entries()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Add a vector with different number of entries from the data frame";
+			return false;
+		}
+		if (vec->is_in_mem() != named_vecs.front().second->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Add a vector in different storage from the data frame.";
+			return false;
+		}
+	}
+	named_vecs.push_back(named_vec_t(name, vec));
+	vec_map.insert(named_vec_t(name, vec));
+	return true;
 }
 
 }
