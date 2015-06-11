@@ -21,7 +21,7 @@
 #include "factor.h"
 #include "generic_type.h"
 #include "local_vec_store.h"
-#include "mem_data_frame.h"
+#include "data_frame.h"
 #include "mem_vector_vector.h"
 
 namespace fm
@@ -135,7 +135,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 {
 	// For in-edge adjacency lists, all edges share the same destination vertex
 	// should be stored together.
-	mem_data_frame::ptr tmp = mem_data_frame::create();
+	data_frame::ptr tmp = data_frame::create();
 	tmp->add_vec("dest", df->get_vec("dest"));
 	tmp->add_vec("source", df->get_vec("source"));
 	df = tmp;
@@ -146,7 +146,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 
 	// For out-edge adjacency lists, all edges share the same source vertex
 	// should be stored together.
-	tmp = mem_data_frame::create();
+	tmp = data_frame::create();
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
@@ -228,7 +228,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 {
 	// For out-edge adjacency lists, all edges share the same source vertex
 	// should be stored together.
-	mem_data_frame::ptr tmp = mem_data_frame::create();
+	data_frame::ptr tmp = data_frame::create();
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;

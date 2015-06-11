@@ -28,7 +28,6 @@
 #include "generic_type.h"
 #include "matrix_config.h"
 #include "data_frame.h"
-#include "mem_data_frame.h"
 #include "mem_vector.h"
 #include "mem_worker_thread.h"
 
@@ -202,7 +201,7 @@ public:
 	}
 
 	void run() {
-		mem_data_frame::ptr df = mem_data_frame::create();
+		data_frame::ptr df = data_frame::create();
 		df->add_vec(parser.get_col_name(0),
 				detail::smp_vec_store::create(0, parser.get_col_type(0)));
 		df->add_vec(parser.get_col_name(1),
@@ -245,7 +244,7 @@ static bool read_lines(const std::string &file, const line_parser &parser,
 data_frame::ptr read_lines(const std::vector<std::string> &files,
 		const line_parser &parser)
 {
-	mem_data_frame::ptr df = mem_data_frame::create();
+	data_frame::ptr df = data_frame::create();
 	df->add_vec(parser.get_col_name(0),
 			detail::smp_vec_store::create(0, parser.get_col_type(0)));
 	df->add_vec(parser.get_col_name(1),

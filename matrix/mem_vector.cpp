@@ -21,7 +21,7 @@
 #include "thread.h"
 
 #include "mem_vector.h"
-#include "mem_data_frame.h"
+#include "data_frame.h"
 #include "mem_vector_vector.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
@@ -283,7 +283,7 @@ data_frame::ptr mem_vector::sort_with_index() const
 {
 	detail::vec_store::ptr vec = get_data().deep_copy();
 	detail::vec_store::ptr idx = vec->sort_with_index();
-	mem_data_frame::ptr df = mem_data_frame::create();
+	data_frame::ptr df = data_frame::create();
 	df->add_vec("idx", idx);
 	df->add_vec("val", vec);
 	return df;

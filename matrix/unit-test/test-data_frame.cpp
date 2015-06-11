@@ -1,6 +1,6 @@
 #include <map>
 
-#include "mem_data_frame.h"
+#include "data_frame.h"
 #include "bulk_operate.h"
 #include "mem_vector.h"
 #include "vector_vector.h"
@@ -84,7 +84,7 @@ void copy_apply_operate::run(const void *key, const sub_data_frame &val,
 void test_groupby()
 {
 	printf("test groupby\n");
-	mem_data_frame::ptr df = mem_data_frame::create();
+	data_frame::ptr df = data_frame::create();
 	size_t length = 1000000;
 	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(length,
 			get_scalar_type<int>());
@@ -136,7 +136,7 @@ void test_in_mem_sort()
 	vecs[0].second = vec1;
 	vecs[1].first = "2";
 	vecs[1].second = vec2;
-	mem_data_frame::ptr df = mem_data_frame::create(vecs);
+	data_frame::ptr df = data_frame::create(vecs);
 	data_frame::const_ptr sorted = df->sort("2");
 	assert(sorted->get_vec_name(0) == "1");
 	assert(sorted->get_vec_name(1) == "2");

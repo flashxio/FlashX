@@ -19,7 +19,7 @@
 
 #include "log.h"
 #include "local_vec_store.h"
-#include "mem_data_frame.h"
+#include "data_frame.h"
 #include "mem_vv_store.h"
 #include "mem_vec_store.h"
 #include "matrix_store.h"
@@ -102,7 +102,7 @@ data_frame::ptr local_vec_store::groupby(
 		val->resize(val_locs.size());
 		val->set(val_locs);
 	}
-	mem_data_frame::ptr ret = mem_data_frame::create();
+	data_frame::ptr ret = data_frame::create();
 	if (with_val)
 		ret->add_vec("val", val);
 	ret->add_vec("agg", agg);

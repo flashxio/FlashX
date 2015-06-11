@@ -25,6 +25,8 @@
 #include "bulk_operate.h"
 #include "mem_vec_store.h"
 #include "EM_vector.h"
+#include "mem_vv_store.h"
+#include "mem_vector_vector.h"
 
 namespace fm
 {
@@ -218,6 +220,144 @@ data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> &dfs,
 		df->add_vec(vec_name, vec);
 	}
 	return df;
+}
+
+namespace
+{
+
+void expose_portion(const std::vector<detail::mem_vec_store::const_ptr> &sorted_df,
+		off_t loc, size_t length, sub_data_frame &sub_df)
+{
+	// TODO This is an very inefficient implementation.
+	sub_df.resize(sorted_df.size());
+	for (size_t i = 0; i < sub_df.size(); i++)
+		sub_df[i] = sorted_df[i]->get_portion(loc, length);
+}
+
+class local_groupby_task: public thread_task
+{
+	detail::mem_vec_store::const_ptr sub_sorted_col;
+	std::vector<detail::mem_vec_store::const_ptr> sub_dfs;
+	const gr_apply_operate<sub_data_frame> &op;
+	std::vector<detail::mem_vv_store::ptr> &sub_results;
+	off_t idx;
+public:
+	local_groupby_task(detail::mem_vec_store::const_ptr sub_sorted_col,
+			const std::vector<detail::mem_vec_store::const_ptr> &sub_dfs,
+			const gr_apply_operate<sub_data_frame> &_op,
+			std::vector<detail::mem_vv_store::ptr> &_sub_results,
+			off_t idx): op(_op), sub_results(_sub_results) {
+		this->sub_sorted_col = sub_sorted_col;
+		this->sub_dfs = sub_dfs;
+		this->idx = idx;
+	}
+
+	void run();
+};
+
+void local_groupby_task::run()
+{
+	sub_data_frame sub_df;
+	size_t out_size;
+	// If the user can predict the number of output elements, we can create
+	// a buffer of the expected size.
+	if (op.get_num_out_eles() > 0)
+		out_size = op.get_num_out_eles();
+	else
+		// If the user can't, we create a small buffer.
+		out_size = 16;
+	local_buf_vec_store row(0, out_size, op.get_output_type(), -1);
+
+	detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
+			op.get_output_type());
+	sub_results[idx] = ret;
+	const agg_operate &find_next
+		= sub_sorted_col->get_type().get_agg_ops().get_find_next();
+	size_t loc = 0;
+	size_t col_len = sub_sorted_col->get_length();
+	const char *start = sub_sorted_col->get_raw_arr();
+	size_t entry_size = sub_sorted_col->get_entry_size();
+	while (loc < col_len) {
+		size_t curr_length = col_len - loc;
+		const char *curr_ptr = start + entry_size * loc;
+		size_t rel_end;
+		find_next.run(curr_length, curr_ptr, &rel_end);
+		// This expose a portion of the data frame.
+		expose_portion(sub_dfs, loc, rel_end, sub_df);
+		// The first argument is the key and the second one is the value
+		// (a data frame)
+		op.run(curr_ptr, sub_df, row);
+		if (row.get_length() > 0)
+			ret->append(row);
+		loc += rel_end;
+	}
+}
+
+}
+
+std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
+		int num_parts);
+
+vector_vector::ptr data_frame::groupby(const std::string &col_name,
+		gr_apply_operate<sub_data_frame> &op) const
+{
+	data_frame::const_ptr sorted_df = sort(col_name);
+	detail::mem_vec_store::const_ptr sorted_col
+		= detail::mem_vec_store::cast(sorted_df->get_vec(col_name));
+
+	// We need to find the start location for each thread.
+	// The start location is where the value in the sorted array
+	// first appears.
+	// TODO this only works for vectors stored contiguously in memory.
+	// It doesn't work for NUMA vector.
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_threads = mem_threads->get_num_threads();
+	std::vector<off_t> par_starts = partition_vector(*sorted_col, num_threads);
+
+	// It's possible that two partitions end up having the same start location
+	// because the vector is small or a partition has only one value.
+	assert(std::is_sorted(par_starts.begin(), par_starts.end()));
+	auto end_par_starts = std::unique(par_starts.begin(), par_starts.end());
+	int num_parts = end_par_starts - par_starts.begin() - 1;
+	std::vector<detail::mem_vv_store::ptr> sub_results(num_parts);
+	for (int i = 0; i < num_parts; i++) {
+		off_t start = par_starts[i];
+		off_t end = par_starts[i + 1];
+		std::vector<detail::mem_vec_store::const_ptr> sub_dfs(
+				sorted_df->get_num_vecs());
+		for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
+			detail::smp_vec_store::const_ptr vec = detail::smp_vec_store::cast(
+					sorted_df->get_vec(i));
+			detail::smp_vec_store::ptr sub_vec
+				= detail::smp_vec_store::cast(const_cast<detail::smp_vec_store *>(
+							vec.get())->shallow_copy());
+			bool ret = sub_vec->expose_sub_vec(start, end - start);
+			assert(ret);
+			sub_dfs[i] = sub_vec;
+		}
+		detail::smp_vec_store::ptr sub_sorted_col = detail::smp_vec_store::cast(
+				const_cast<detail::mem_vec_store *>(sorted_col.get())->shallow_copy());
+		sub_sorted_col->expose_sub_vec(start, end - start);
+
+		// It's difficult to localize computation.
+		// TODO can we localize computation?
+		int node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id, new local_groupby_task(
+					sub_sorted_col, sub_dfs, op, sub_results, i));
+	}
+	mem_threads->wait4complete();
+
+	if (num_parts == 1)
+		return mem_vector_vector::create(sub_results[0]);
+	else {
+		detail::mem_vv_store::ptr res_vv = sub_results[0];
+		std::vector<detail::vec_store::const_ptr> remain(
+				sub_results.begin() + 1, sub_results.end());
+		bool ret = res_vv->append(remain.begin(), remain.end());
+		assert(ret);
+		return mem_vector_vector::create(res_vv);
+	}
 }
 
 }

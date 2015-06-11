@@ -32,7 +32,6 @@
 #include "generic_type.h"
 #include "data_io.h"
 #include "data_frame.h"
-#include "mem_data_frame.h"
 #include "mem_vector.h"
 #include "vector_vector.h"
 #include "fm_utils.h"
@@ -179,13 +178,13 @@ int main(int argc, char *argv[])
 	if (directed) {
 		// I artificially add an invalid out-edge for each vertex, so it's
 		// guaranteed that each vertex exists in the adjacency lists.
-		mem_data_frame::ptr new_df = mem_data_frame::create();
+		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
 		df->append(new_df);
 
 		// I artificially add an invalid in-edge for each vertex.
-		new_df = mem_data_frame::create();
+		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(1), seq_vec);
 		new_df->add_vec(df->get_vec_name(0), rep_vec);
 		df->append(new_df);
@@ -198,7 +197,7 @@ int main(int argc, char *argv[])
 	else {
 		// I artificially add an invalid out-edge for each vertex, so it's
 		// guaranteed that each vertex exists in the adjacency lists.
-		mem_data_frame::ptr new_df = mem_data_frame::create();
+		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
 		df->append(new_df);
@@ -207,7 +206,7 @@ int main(int argc, char *argv[])
 		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
 		vec0->append(df->get_vec_ref(1));
 		vec1->append(df->get_vec_ref(0));
-		new_df = mem_data_frame::create();
+		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), vec0);
 		new_df->add_vec(df->get_vec_name(1), vec1);
 		df = new_df;
