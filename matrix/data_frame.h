@@ -42,7 +42,7 @@ class vector_vector;
 class data_frame;
 
 std::shared_ptr<data_frame> merge_data_frame(
-		const std::vector<std::shared_ptr<const data_frame> > &dfs);
+		const std::vector<std::shared_ptr<const data_frame> > &dfs, bool in_mem);
 
 /**
  * This implements the data frame in R.
@@ -68,6 +68,10 @@ protected:
 public:
 	typedef std::shared_ptr<data_frame> ptr;
 	typedef std::shared_ptr<const data_frame> const_ptr;
+
+	static ptr create() {
+		return ptr(new data_frame());
+	}
 
 	static ptr create(const std::vector<named_vec_t> &named_vecs) {
 		return ptr(new data_frame(named_vecs));
@@ -146,7 +150,7 @@ public:
 	data_frame::const_ptr shallow_copy() const;
 
 	friend data_frame::ptr merge_data_frame(
-			const std::vector<data_frame::const_ptr> &dfs);
+			const std::vector<data_frame::const_ptr> &dfs, bool in_mem);
 };
 
 }

@@ -44,6 +44,8 @@ public:
 	typedef std::shared_ptr<vec_store> ptr;
 	typedef std::shared_ptr<const vec_store> const_ptr;
 
+	static ptr create(size_t length, const scalar_type &_type, bool in_mem);
+
 	vec_store(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
 		this->length = length;
 		this->in_mem = in_mem;

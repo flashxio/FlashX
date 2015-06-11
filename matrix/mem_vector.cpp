@@ -167,7 +167,7 @@ data_frame::ptr mem_vector::groupby(
 	else {
 		std::vector<data_frame::const_ptr> const_sub_results(
 				sub_results.begin(), sub_results.end());
-		return merge_data_frame(const_sub_results);
+		return merge_data_frame(const_sub_results, true);
 	}
 }
 

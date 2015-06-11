@@ -203,42 +203,4 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 	}
 }
 
-data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> &dfs)
-{
-	assert(!dfs.empty());
-	size_t num_vecs = dfs[0]->get_num_vecs();
-	for (size_t i = 1; i < dfs.size(); i++) {
-		if (num_vecs != dfs[i]->get_num_vecs()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The data frames have different numbers of vectors";
-			return data_frame::ptr();
-		}
-	}
-
-	mem_data_frame::ptr df = mem_data_frame::create();
-	for (size_t vec_idx = 0; vec_idx < num_vecs; vec_idx++) {
-		std::string vec_name = dfs[0]->named_vecs[vec_idx].first;
-		const scalar_type &vec_type
-			= dfs[0]->named_vecs[vec_idx].second->get_type();
-		detail::vec_store::ptr vec
-			= dfs[0]->named_vecs[vec_idx].second->deep_copy();
-
-		// Here we collect the same column from all the data frame
-		// except the first one.
-		std::vector<detail::vec_store::const_ptr> vecs;
-		for (size_t df_idx = 1; df_idx < dfs.size(); df_idx++) {
-			if (vec_name != dfs[df_idx]->named_vecs[vec_idx].first
-					|| vec_type != dfs[df_idx]->named_vecs[vec_idx].second->get_type()) {
-				BOOST_LOG_TRIVIAL(error)
-					<< "The data frames have different vectors";
-				return data_frame::ptr();
-			}
-			vecs.push_back(dfs[df_idx]->named_vecs[vec_idx].second);
-		}
-		vec->append(vecs.begin(), vecs.end());
-		df->add_vec(vec_name, vec);
-	}
-	return df;
-}
-
 }

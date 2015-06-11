@@ -83,6 +83,7 @@ void copy_apply_operate::run(const void *key, const sub_data_frame &val,
 
 void test_groupby()
 {
+	printf("test groupby\n");
 	mem_data_frame::ptr df = mem_data_frame::create();
 	size_t length = 1000000;
 	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(length,
@@ -123,6 +124,7 @@ void test_groupby()
 
 void test_in_mem_sort()
 {
+	printf("test in-mem sort\n");
 	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(10000,
 			get_scalar_type<int>());
 	vec1->set_data(rand_set_vec());
@@ -144,6 +146,7 @@ void test_in_mem_sort()
 
 void test_EM_sort()
 {
+	printf("test EM sort\n");
 	detail::vec_store::ptr vec1 = detail::EM_vec_store::create(1024 * 1024,
 			get_scalar_type<int>());
 	vec1->set_data(rand_set_vec());
@@ -162,6 +165,41 @@ void test_EM_sort()
 	assert(sorted->get_vec(1)->is_sorted());
 }
 
+data_frame::ptr create_data_frame(bool in_mem)
+{
+	detail::vec_store::ptr vec1 = detail::vec_store::create(1024 * 1024,
+			get_scalar_type<int>(), in_mem);
+	vec1->set_data(rand_set_vec());
+	detail::vec_store::ptr vec2 = detail::vec_store::create(1024 * 1024,
+			get_scalar_type<int>(), in_mem);
+	vec2->set_data(rand_set_vec());
+	std::vector<named_vec_t> vecs(2);
+	vecs[0].first = "1";
+	vecs[0].second = vec1;
+	vecs[1].first = "2";
+	vecs[1].second = vec2;
+	return data_frame::create(vecs);
+}
+
+void test_merge()
+{
+	printf("test merging multiple data frames\n");
+	std::vector<data_frame::const_ptr> dfs;
+	size_t tot_num_entries = 0;
+	for (size_t i = 0; i < 5; i++) {
+		data_frame::ptr df = create_data_frame(true);
+		tot_num_entries += df->get_num_entries();
+		dfs.push_back(df);
+	}
+	data_frame::ptr res = merge_data_frame(dfs, true);
+	assert(res->get_num_vecs() == dfs.front()->get_num_vecs());
+	assert(res->get_num_entries() == tot_num_entries);
+
+	res = merge_data_frame(dfs, false);
+	assert(res->get_num_vecs() == dfs.front()->get_num_vecs());
+	assert(res->get_num_entries() == tot_num_entries);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -173,6 +211,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
+	test_merge();
 	test_groupby();
 	test_in_mem_sort();
 	test_EM_sort();
