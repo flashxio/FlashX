@@ -49,6 +49,11 @@ std::vector<std::shared_ptr<EM_vec_store> > sort(
 
 class EM_vec_store: public vec_store, public EM_object
 {
+	struct empty_free {
+		void operator()(EM_vec_store *) {
+		}
+	};
+
 	safs::file_io_factory::shared_ptr factory;
 	// This keeps an I/O instance for each thread.
 	std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
@@ -87,6 +92,8 @@ public:
 	virtual vec_store::const_ptr shallow_copy() const;
 
 	virtual size_t get_portion_size() const;
+	virtual local_vec_store::const_ptr get_portion(off_t loc, size_t size) const;
+	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
 	/*
 	 * This is different from the one used in the memory data container.
 	 * This interface accepts a portion compute object, which is invoked

@@ -185,6 +185,16 @@ void test_sort_mult()
 	assert(sorted_vecs[1]->is_sorted());
 }
 
+void test_append()
+{
+	printf("test append\n");
+	std::vector<vec_store::const_ptr> vecs(5);
+	for (size_t i = 0; i < vecs.size(); i++)
+		vecs[i] = smp_vec_store::create(1000, get_scalar_type<int>());
+	EM_vec_store::ptr em_vec = EM_vec_store::create(0, get_scalar_type<int>());
+	em_vec->append(vecs.begin(), vecs.end());
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -199,11 +209,12 @@ int main(int argc, char *argv[])
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
 	matrix_conf.set_min_io_size(1024 * 256);
 
-	test_sort_mult();
-	test_sort_mult1();
+	test_append();
 	test_setdata();
 	test_sort_summary();
 	test_sort();
+	test_sort_mult();
+	test_sort_mult1();
 
 	destroy_flash_matrix();
 }

@@ -75,6 +75,84 @@ public:
 			const EM_vec_store &from_vec) = 0;
 };
 
+class seq_writer
+{
+	size_t local_buf_size;	// In the number of elements
+	off_t merge_end;		// In the number of elements
+	local_buf_vec_store::ptr buf;
+	size_t data_size_in_buf;		// In the number of elements
+	EM_vec_store::ptr to_vec;
+public:
+	seq_writer(EM_vec_store::ptr vec, off_t write_start) {
+		this->local_buf_size
+			= matrix_conf.get_write_io_buf_size() / vec->get_type().get_size();
+		this->to_vec = vec;
+		merge_end = write_start;
+		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
+					-1, local_buf_size, to_vec->get_type(), -1));
+		data_size_in_buf = 0;
+	}
+
+	~seq_writer() {
+		if (data_size_in_buf > 0)
+			flush_buffer_data(true);
+	}
+
+	void flush_buffer_data(bool last);
+	void append(local_vec_store::const_ptr data);
+};
+
+void seq_writer::flush_buffer_data(bool last)
+{
+	if (!last)
+		assert((data_size_in_buf * buf->get_length()) % PAGE_SIZE == 0);
+	else
+		data_size_in_buf = ROUNDUP((data_size_in_buf * buf->get_entry_size()),
+				PAGE_SIZE) / buf->get_entry_size();
+	buf->resize(data_size_in_buf);
+	const scalar_type &type = buf->get_type();
+	to_vec->write_portion(buf, merge_end);
+	merge_end += data_size_in_buf;
+
+	if (!last)
+		// The data is written asynchronously, we need to allocate
+		// a new buffer.
+		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
+					-1, local_buf_size, type, -1));
+	else
+		buf = NULL;
+	data_size_in_buf = 0;
+}
+
+void seq_writer::append(local_vec_store::const_ptr data)
+{
+	assert(buf);
+	// In the number of elements.
+	off_t off_in_new_data = 0;
+	size_t new_data_size = data->get_length();
+
+	while (new_data_size > 0) {
+		size_t copy_data_size = std::min(new_data_size,
+				// The size of the available space in the buffer.
+				buf->get_length() - data_size_in_buf);
+		// We always copy the data to the local buffer and write
+		// the local buffer to disks. The reason of doing so is to
+		// make sure the size and offset of data written to disks
+		// are aligned to the I/O block size.
+		// TODO maybe we should remove this extra memory copy.
+		memcpy(buf->get(data_size_in_buf), data->get(off_in_new_data),
+				copy_data_size * buf->get_entry_size());
+		data_size_in_buf += copy_data_size;
+		// Update the amount of data in the incoming data buffer.
+		off_in_new_data += copy_data_size;
+		new_data_size -= copy_data_size;
+
+		// If the buffer is full, we need to write it out first.
+		if (data_size_in_buf == buf->get_length())
+			flush_buffer_data(false);
+	}
+}
+
 static safs::file_io_factory::shared_ptr create_temp_file(size_t num_bytes)
 {
 	char *tmp = tempnam(".", "vec");
@@ -137,11 +215,84 @@ bool EM_vec_store::resize(size_t length)
 	return false;
 }
 
+namespace
+{
+
+class EM_vec_append_dispatcher: public task_dispatcher
+{
+	std::vector<vec_store::const_ptr>::const_iterator vec_it;
+	std::vector<vec_store::const_ptr>::const_iterator vec_end;
+	seq_writer &writer;
+public:
+	EM_vec_append_dispatcher(seq_writer &_writer,
+			std::vector<vec_store::const_ptr>::const_iterator vec_start,
+			std::vector<vec_store::const_ptr>::const_iterator vec_end): writer(
+				_writer) {
+		this->vec_it = vec_start;
+		this->vec_end = vec_end;
+	}
+	virtual bool issue_task() {
+		if (vec_it == vec_end) {
+			writer.flush_buffer_data(true);
+			return false;
+		}
+		mem_vec_store::const_ptr vec = mem_vec_store::cast(*vec_it);
+		assert(vec->get_raw_arr());
+		local_vec_store::ptr lstore(new local_cref_vec_store(
+					vec->get_raw_arr(), -1, vec->get_length(),
+					vec->get_type(), -1));
+		writer.append(lstore);
+		vec_it++;
+		return true;
+	}
+};
+
+}
+
 bool EM_vec_store::append(
-		std::vector<vec_store::const_ptr>::const_iterator vec_it,
+		std::vector<vec_store::const_ptr>::const_iterator vec_start,
 		std::vector<vec_store::const_ptr>::const_iterator vec_end)
 {
-	assert(0);
+	size_t tot_size = 0;
+	for (auto it = vec_start; it != vec_end; it++) {
+		tot_size += (*it)->get_length();
+		if (!(*it)->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't append an EM vector right now";
+			return false;
+		}
+		if (get_type() != (*it)->get_type()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't append a vector with different type";
+			return false;
+		}
+	}
+
+	/*
+	 * If the last page that stores the elements in the vector isn't full,
+	 * we need to read the last page first.
+	 */
+
+	// In the number of bytes.
+	off_t off = ROUND(get_length() * get_entry_size(), PAGE_SIZE);
+	size_t size = get_length() * get_entry_size() - off;
+	assert(off % get_entry_size() == 0);
+	seq_writer writer(EM_vec_store::ptr(this, empty_free()),
+			off / get_entry_size());
+	if (size > 0) {
+		local_vec_store::ptr portion = get_portion(off / get_entry_size(),
+				size / get_entry_size());
+		writer.append(portion);
+	}
+
+	task_dispatcher::ptr dispatcher(new EM_vec_append_dispatcher(writer,
+				vec_start, vec_end));
+	io_worker_task worker(dispatcher, 1);
+	worker.register_EM_obj(this);
+	worker.run();
+	this->destroy_ios();
+
+	return vec_store::resize(get_length() + tot_size);
 }
 
 bool EM_vec_store::append(const vec_store &vec)
@@ -228,6 +379,7 @@ size_t EM_vec_store::get_portion_size() const
 local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
 		size_t size, portion_compute::ptr compute) const
 {
+	// TODO fix the bug if `start' and `size' aren't aligned with PAGE_SIZE.
 	safs::io_interface &io = get_curr_io();
 	local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
 				get_type(), -1));
@@ -245,6 +397,7 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 		const std::vector<std::pair<off_t, size_t> > &locs,
 		portion_compute::ptr compute) const
 {
+	// TODO fix the bug if `locs' aren't aligned with PAGE_SIZE.
 	safs::io_interface &io = get_curr_io();
 	std::vector<safs::io_request> reqs(locs.size());
 	std::vector<local_vec_store::ptr> ret_bufs(locs.size());
@@ -263,6 +416,33 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 	io.access(reqs.data(), reqs.size());
 	io.flush_requests();
 	return ret_bufs;
+}
+
+local_vec_store::const_ptr EM_vec_store::get_portion(off_t loc, size_t size) const
+{
+	return const_cast<EM_vec_store *>(this)->get_portion(loc, size);
+}
+
+class sync_read_compute: public portion_compute
+{
+	bool &ready;
+public:
+	sync_read_compute(bool &_ready): ready(_ready) {
+	}
+	virtual void run(char *buf, size_t size) {
+		ready = true;
+	}
+};
+
+local_vec_store::ptr EM_vec_store::get_portion(off_t loc, size_t size)
+{
+	safs::io_interface &io = get_curr_io();
+	bool ready = false;
+	portion_compute::ptr compute(new sync_read_compute(ready));
+	local_vec_store::ptr ret = get_portion_async(loc, size, compute);
+	while (!ready)
+		io.wait4complete(1);
+	return ret;
 }
 
 void EM_vec_store::write_portion(local_vec_store::const_ptr store, off_t off)
@@ -532,72 +712,13 @@ void EM_vec_sort_dispatcher::create_vec_task(off_t global_start,
 
 /////////////////// Merge portions ///////////////////////
 
-class merge_writer
-{
-	size_t local_buf_size;	// In the number of elements
-	off_t merge_end;		// In the number of bytes
-	local_buf_vec_store::ptr buf;
-	size_t data_size_in_buf;		// In the number of elements
-	EM_vec_store::ptr to_vec;
-public:
-	merge_writer(EM_vec_store::ptr vec) {
-		this->local_buf_size
-			= matrix_conf.get_write_io_buf_size() / vec->get_type().get_size();
-		this->to_vec = vec;
-		merge_end = 0;
-		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					-1, local_buf_size, to_vec->get_type(), -1));
-		data_size_in_buf = 0;
-	}
-
-	void flush_buffer_data() {
-		buf->resize(data_size_in_buf);
-		const scalar_type &type = buf->get_type();
-		assert(merge_end % type.get_size() == 0);
-		to_vec->write_portion(buf, merge_end / type.get_size());
-		merge_end += data_size_in_buf * type.get_size();
-
-		// The data is written asynchronously, we need to allocate a new buffer.
-		buf = local_buf_vec_store::ptr(new local_buf_vec_store(
-					-1, local_buf_size, type, -1));
-		data_size_in_buf = 0;
-	}
-
-	void append(local_vec_store::ptr data) {
-		// In the number of elements.
-		off_t off_in_new_data = 0;
-		size_t new_data_size = data->get_length();
-
-		while (new_data_size > 0) {
-			size_t copy_data_size = std::min(new_data_size,
-					// The size of the available space in the buffer.
-					buf->get_length() - data_size_in_buf);
-			// We always copy the data to the local buffer and write
-			// the local buffer to disks. The reason of doing so is to
-			// make sure the size and offset of data written to disks
-			// are aligned to the I/O block size.
-			// TODO maybe we should remove this extra memory copy.
-			memcpy(buf->get(data_size_in_buf), data->get(off_in_new_data),
-					copy_data_size * buf->get_entry_size());
-			data_size_in_buf += copy_data_size;
-			// Update the amount of data in the incoming data buffer.
-			off_in_new_data += copy_data_size;
-			new_data_size -= copy_data_size;
-
-			// If the buffer is full, we need to write it out first.
-			if (data_size_in_buf == buf->get_length())
-				flush_buffer_data();
-		}
-	}
-};
-
 class EM_vec_merge_dispatcher: public task_dispatcher
 {
 	std::vector<EM_vec_store::const_ptr> from_vecs;
 	std::vector<local_buf_vec_store::ptr> prev_leftovers;
 	anchor_prio_queue::ptr anchors;
 	size_t sort_buf_size;
-	std::vector<merge_writer> writers;
+	std::vector<seq_writer> writers;
 public:
 	EM_vec_merge_dispatcher(const std::vector<EM_vec_store::const_ptr> &from_vecs,
 			const std::vector<EM_vec_store::ptr> &to_vecs,
@@ -611,7 +732,7 @@ public:
 		return prev_leftovers[idx];
 	}
 
-	merge_writer &get_merge_writer(int idx) {
+	seq_writer &get_merge_writer(int idx) {
 		return writers[idx];
 	}
 
@@ -666,7 +787,7 @@ EM_vec_merge_dispatcher::EM_vec_merge_dispatcher(
 		assert(from_vecs[i]->get_type() == to_vecs[i]->get_type());
 	this->anchors = anchors;
 	for (size_t i = 0; i < to_vecs.size(); i++)
-		writers.emplace_back(to_vecs[i]);
+		writers.emplace_back(to_vecs[i], 0);
 	prev_leftovers.resize(from_vecs.size());
 }
 
@@ -700,7 +821,7 @@ bool EM_vec_merge_dispatcher::issue_task()
 		// If there is nothing left to merge and there isn't leftover, we still
 		// need to flush the buffered data.
 		for (size_t i = 0; i < writers.size(); i++)
-			writers[i].flush_buffer_data();
+			writers[i].flush_buffer_data(true);
 		return false;
 	}
 	else {
@@ -743,7 +864,7 @@ bool EM_vec_merge_dispatcher::issue_task()
 				if (prev_leftovers[i])
 					writers[i].append(prev_leftovers[i]);
 				// This is the last write. we should flush everything to disks.
-				writers[i].flush_buffer_data();
+				writers[i].flush_buffer_data(true);
 				// No more leftover.
 				prev_leftovers[i] = NULL;
 			}
@@ -1011,10 +1132,6 @@ void EM_vec_store::sort()
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
 	 */
-	struct empty_free {
-		void operator()(EM_vec_store *) {
-		}
-	};
 	std::vector<EM_vec_store::const_ptr> in_vecs(1);
 	std::vector<EM_vec_store::ptr> out_vecs(1);
 	in_vecs[0] = EM_vec_store::const_ptr(this, empty_free());
