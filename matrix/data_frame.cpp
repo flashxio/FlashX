@@ -225,30 +225,28 @@ data_frame::ptr merge_data_frame(const std::vector<data_frame::const_ptr> &dfs,
 namespace
 {
 
-void expose_portion(const std::vector<detail::mem_vec_store::const_ptr> &sorted_df,
-		off_t loc, size_t length, sub_data_frame &sub_df)
+void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
 {
-	// TODO This is an very inefficient implementation.
-	sub_df.resize(sorted_df.size());
 	for (size_t i = 0; i < sub_df.size(); i++)
-		sub_df[i] = sorted_df[i]->get_portion(loc, length);
+		const_cast<local_vec_store *>(sub_df[i].get())->expose_sub_vec(loc,
+				length);
 }
 
 class local_groupby_task: public thread_task
 {
-	detail::mem_vec_store::const_ptr sub_sorted_col;
-	std::vector<detail::mem_vec_store::const_ptr> sub_dfs;
+	local_vec_store::const_ptr sub_sorted_col;
+	sub_data_frame sub_df;
 	const gr_apply_operate<sub_data_frame> &op;
 	std::vector<detail::mem_vv_store::ptr> &sub_results;
 	off_t idx;
 public:
-	local_groupby_task(detail::mem_vec_store::const_ptr sub_sorted_col,
-			const std::vector<detail::mem_vec_store::const_ptr> &sub_dfs,
+	local_groupby_task(local_vec_store::const_ptr sub_sorted_col,
+			const sub_data_frame &sub_df,
 			const gr_apply_operate<sub_data_frame> &_op,
 			std::vector<detail::mem_vv_store::ptr> &_sub_results,
 			off_t idx): op(_op), sub_results(_sub_results) {
 		this->sub_sorted_col = sub_sorted_col;
-		this->sub_dfs = sub_dfs;
+		this->sub_df = sub_df;
 		this->idx = idx;
 	}
 
@@ -257,7 +255,6 @@ public:
 
 void local_groupby_task::run()
 {
-	sub_data_frame sub_df;
 	size_t out_size;
 	// If the user can predict the number of output elements, we can create
 	// a buffer of the expected size.
@@ -275,15 +272,17 @@ void local_groupby_task::run()
 		= sub_sorted_col->get_type().get_agg_ops().get_find_next();
 	size_t loc = 0;
 	size_t col_len = sub_sorted_col->get_length();
+	// We can't search a vv store.
+	assert(!detail::vv_store::is_vector_vector(*sub_sorted_col));
 	const char *start = sub_sorted_col->get_raw_arr();
-	size_t entry_size = sub_sorted_col->get_entry_size();
+	size_t entry_size = sub_sorted_col->get_type().get_size();
 	while (loc < col_len) {
 		size_t curr_length = col_len - loc;
 		const char *curr_ptr = start + entry_size * loc;
 		size_t rel_end;
 		find_next.run(curr_length, curr_ptr, &rel_end);
 		// This expose a portion of the data frame.
-		expose_portion(sub_dfs, loc, rel_end, sub_df);
+		expose_portion(sub_df, loc, rel_end);
 		// The first argument is the key and the second one is the value
 		// (a data frame)
 		op.run(curr_ptr, sub_df, row);
@@ -299,7 +298,7 @@ std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 		int num_parts);
 
 vector_vector::ptr data_frame::groupby(const std::string &col_name,
-		gr_apply_operate<sub_data_frame> &op) const
+		const gr_apply_operate<sub_data_frame> &op) const
 {
 	data_frame::const_ptr sorted_df = sort(col_name);
 	detail::mem_vec_store::const_ptr sorted_col
@@ -324,21 +323,14 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
-		std::vector<detail::mem_vec_store::const_ptr> sub_dfs(
-				sorted_df->get_num_vecs());
+		sub_data_frame sub_dfs(sorted_df->get_num_vecs());
+		local_vec_store::const_ptr sub_sorted_col;
 		for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
-			detail::smp_vec_store::const_ptr vec = detail::smp_vec_store::cast(
-					sorted_df->get_vec(i));
-			detail::smp_vec_store::ptr sub_vec
-				= detail::smp_vec_store::cast(const_cast<detail::smp_vec_store *>(
-							vec.get())->shallow_copy());
-			bool ret = sub_vec->expose_sub_vec(start, end - start);
-			assert(ret);
-			sub_dfs[i] = sub_vec;
+			sub_dfs[i] = sorted_df->get_vec(i)->get_portion(start, end - start);
+			if (col_name == sorted_df->get_vec_name(i))
+				sub_sorted_col = sub_dfs[i];
 		}
-		detail::smp_vec_store::ptr sub_sorted_col = detail::smp_vec_store::cast(
-				const_cast<detail::mem_vec_store *>(sorted_col.get())->shallow_copy());
-		sub_sorted_col->expose_sub_vec(start, end - start);
+		assert(sub_sorted_col);
 
 		// It's difficult to localize computation.
 		// TODO can we localize computation?
