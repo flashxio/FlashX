@@ -67,6 +67,16 @@ public:
 		this->node_id = node_id;
 	}
 
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		assert(start + length <= orig_length);
+		global_start = orig_global_start + start;
+		return mem_vec_store::resize(length);
+	}
+	virtual void reset_expose() {
+		global_start = orig_global_start;
+		mem_vec_store::resize(orig_length);
+	}
+
 	int get_node_id() const {
 		return node_id;
 	}
@@ -172,10 +182,12 @@ public:
 
 class local_ref_vec_store: public local_vec_store
 {
+	char *orig_data;
 public:
 	local_ref_vec_store(char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				data, global_start, length, type, node_id) {
+		this->orig_data = data;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -185,14 +197,25 @@ public:
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_ref_vec_store(*this));
 	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		char *new_data = orig_data + start * get_type().get_size();
+		set_data(new_data, new_data);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(orig_data, orig_data);
+		local_vec_store::reset_expose();
+	}
 };
 
 class local_cref_vec_store: public local_vec_store
 {
+	const char *orig_data;
 public:
 	local_cref_vec_store(const char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				NULL, global_start, length, type, node_id) {
+		this->orig_data = data;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -201,6 +224,15 @@ public:
 	}
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_cref_vec_store(*this));
+	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		const char *new_data = orig_data + start * get_type().get_size();
+		set_data(new_data, NULL);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(orig_data, NULL);
+		local_vec_store::reset_expose();
 	}
 };
 
@@ -222,6 +254,15 @@ public:
 	}
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_buf_vec_store(*this));
+	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		char *new_data = arr.get_raw() + start * get_type().get_size();
+		set_data(new_data, new_data);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(arr.get_raw(), arr.get_raw());
+		local_vec_store::reset_expose();
 	}
 };
 
