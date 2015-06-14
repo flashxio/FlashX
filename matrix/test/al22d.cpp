@@ -19,7 +19,7 @@
 
 #include "vertex_index.h"
 
-#include "mem_vector_vector.h"
+#include "vector_vector.h"
 #include "fm_utils.h"
 #include "fg_utils.h"
 
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
 	printf("find the location of out-adjacency lists\n");
 	init_out_offs(vindex, out_offs);
-	mem_vector_vector::ptr out_adjs = mem_vector_vector::create(
+	vector_vector::ptr out_adjs = vector_vector::create(
 			out_data, out_offs, get_scalar_type<char>());
 
 	// Construct 2D partitioning of the adjacency matrix.
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
 		printf("find the location of in-adjacency lists\n");
 		init_in_offs(vindex, in_offs);
-		mem_vector_vector::ptr in_adjs = mem_vector_vector::create(
+		vector_vector::ptr in_adjs = vector_vector::create(
 				in_data, in_offs, get_scalar_type<char>());
 
 		// Construct 2D partitioning of the adjacency matrix.

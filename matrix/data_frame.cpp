@@ -26,7 +26,7 @@
 #include "mem_vec_store.h"
 #include "EM_vector.h"
 #include "mem_vv_store.h"
-#include "mem_vector_vector.h"
+#include "vector_vector.h"
 
 namespace fm
 {
@@ -349,14 +349,14 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 	mem_threads->wait4complete();
 
 	if (num_parts == 1)
-		return mem_vector_vector::create(sub_results[0]);
+		return vector_vector::create(sub_results[0]);
 	else {
 		detail::mem_vv_store::ptr res_vv = sub_results[0];
 		std::vector<detail::vec_store::const_ptr> remain(
 				sub_results.begin() + 1, sub_results.end());
 		bool ret = res_vv->append(remain.begin(), remain.end());
 		assert(ret);
-		return mem_vector_vector::create(res_vv);
+		return vector_vector::create(res_vv);
 	}
 }
 

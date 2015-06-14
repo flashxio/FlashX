@@ -66,6 +66,15 @@ public:
 		this->global_start = _global_start;
 		this->node_id = node_id;
 	}
+	local_vec_store(const char *const_data, char *data, off_t _global_start,
+			size_t length, size_t entry_size, const scalar_type &type,
+			int node_id): detail::mem_vec_store(length, entry_size,
+				type), orig_global_start(_global_start), orig_length(length) {
+		this->data = data;
+		this->const_data = const_data;
+		this->global_start = _global_start;
+		this->node_id = node_id;
+	}
 
 	virtual bool expose_sub_vec(off_t start, size_t length) {
 		assert(start + length <= orig_length);

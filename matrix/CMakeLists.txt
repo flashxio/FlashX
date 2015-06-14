@@ -19,7 +19,6 @@ add_library(FMatrix STATIC
 	mem_vector.cpp
 	data_frame.cpp
 	generic_type.cpp
-	mem_vector_vector.cpp
 	matrix_header.cpp
 	sparse_matrix_format.cpp
 	hilbert_curve.cpp

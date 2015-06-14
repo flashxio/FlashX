@@ -22,7 +22,8 @@
 #include "generic_type.h"
 #include "local_vec_store.h"
 #include "data_frame.h"
-#include "mem_vector_vector.h"
+#include "vector_vector.h"
+#include "local_vv_store.h"
 
 namespace fm
 {
@@ -139,8 +140,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 	tmp->add_vec("dest", df->get_vec("dest"));
 	tmp->add_vec("source", df->get_vec("source"));
 	df = tmp;
-	mem_vector_vector::ptr in_adjs = mem_vector_vector::cast(
-			fm::create_1d_matrix(df));
+	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
 	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
 
@@ -150,8 +150,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
-	mem_vector_vector::ptr out_adjs = mem_vector_vector::cast(
-			create_1d_matrix(df));
+	vector_vector::ptr out_adjs = create_1d_matrix(df);
 	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
 
@@ -168,16 +167,14 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
 		if (i < in_adjs->get_num_vecs()) {
-			const fg::ext_mem_undirected_vertex *v
-				= (const fg::ext_mem_undirected_vertex *) in_adjs->get_raw_arr(i);
-			num_edges += v->get_num_edges();
-			num_in_edges->set(i,
-					fg::ext_mem_undirected_vertex::vsize2num_edges(
-						in_adjs->get_length(i), 0));
+			fg::vsize_t local_num_edges
+				= fg::ext_mem_undirected_vertex::vsize2num_edges(
+						in_adjs->get_length(i), 0);
+			num_in_edges->set(i, local_num_edges);
+			num_edges += local_num_edges;
 		}
 		else
 			num_in_edges->set(i, 0);
-
 		if (i < out_adjs->get_num_vecs())
 			num_out_edges->set(i,
 					fg::ext_mem_undirected_vertex::vsize2num_edges(
@@ -201,10 +198,14 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 	memcpy(graph_data.get() + copy_start, &header,
 			fg::graph_header::get_header_size());
 	copy_start += fg::graph_header::get_header_size();
-	memcpy(graph_data.get() + copy_start, in_adjs->get_raw_data(),
+	const detail::mem_vv_store &in_adj_store
+		= dynamic_cast<const detail::mem_vv_store &>(in_adjs->get_data());
+	memcpy(graph_data.get() + copy_start, in_adj_store.get_raw_arr(),
 			in_adjs->get_tot_num_entries());
 	copy_start += in_adjs->get_tot_num_entries();
-	memcpy(graph_data.get() + copy_start, out_adjs->get_raw_data(),
+	const detail::mem_vv_store &out_adj_store
+		= dynamic_cast<const detail::mem_vv_store &>(out_adjs->get_data());
+	memcpy(graph_data.get() + copy_start, out_adj_store.get_raw_arr(),
 			out_adjs->get_tot_num_entries());
 	copy_start += out_adjs->get_tot_num_entries();
 	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
@@ -233,8 +234,7 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
 	printf("there are %ld vecs in data frame\n", tmp->get_num_vecs());
-	mem_vector_vector::ptr adjs = mem_vector_vector::cast(
-			create_1d_matrix(df));
+	vector_vector::ptr adjs = create_1d_matrix(df);
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
 
@@ -267,7 +267,9 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 	memcpy(graph_data.get() + copy_start, &header,
 			fg::graph_header::get_header_size());
 	copy_start += fg::graph_header::get_header_size();
-	memcpy(graph_data.get() + copy_start, adjs->get_raw_data(),
+	const detail::mem_vv_store &adj_store
+		= dynamic_cast<const detail::mem_vv_store &>(adjs->get_data());
+	memcpy(graph_data.get() + copy_start, adj_store.get_raw_arr(),
 			adjs->get_tot_num_entries());
 	copy_start += adjs->get_tot_num_entries();
 	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
@@ -308,7 +310,7 @@ public:
 	}
 };
 
-class part_2d_apply_operate: public gr_apply_operate<sub_vector_vector>
+class part_2d_apply_operate: public gr_apply_operate<local_vv_store>
 {
 	// The row length (aka. the total number of columns) of the matrix.
 	size_t row_len;
@@ -319,7 +321,7 @@ public:
 		this->row_len = row_len;
 	}
 
-	void run(const void *key, const sub_vector_vector &val,
+	void run(const void *key, const local_vv_store &val,
 			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
@@ -335,7 +337,7 @@ public:
 	}
 };
 
-void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
+void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
 	size_t block_height = block_size.get_num_rows();

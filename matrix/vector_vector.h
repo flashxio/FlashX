@@ -27,14 +27,15 @@
 
 #include "vec_store.h"
 #include "vector.h"
+#include "mem_vv_store.h"
 
 namespace fm
 {
 
 class mem_vector;
 class scalar_type;
-class sub_vector_vector;
 class factor_vector;
+class local_vv_store;
 class data_frame;
 
 /*
@@ -43,10 +44,9 @@ class data_frame;
  */
 class vector_vector: public vector
 {
-public:
-	vector_vector(detail::vec_store::const_ptr store): vector(store) {
+	vector_vector(detail::mem_vv_store::const_ptr store): vector(store) {
 	}
-
+public:
 	typedef std::shared_ptr<vector_vector> ptr;
 
 	static bool is_vector_vector(const vector &vec) {
@@ -61,6 +61,17 @@ public:
 		return std::static_pointer_cast<vector_vector>(vec);
 	}
 
+	static ptr create(detail::mem_vv_store::ptr store) {
+		return ptr(new vector_vector(store));
+	}
+
+	static ptr create(const detail::raw_data_array &data,
+			const std::vector<off_t> &offs, const scalar_type &type) {
+		detail::mem_vv_store::ptr vec = detail::mem_vv_store::create(data,
+				offs, type);
+		return ptr(new vector_vector(vec));
+	}
+
 	virtual size_t get_entry_size() const {
 		return 0;
 	}
@@ -72,19 +83,29 @@ public:
 	/*
 	 * This return the number of vectors in the vector vector.
 	 */
-	virtual size_t get_length() const = 0;
-	virtual size_t get_tot_num_entries() const = 0;
-	virtual size_t get_length(off_t idx) const = 0;
-	virtual const char*get_raw_arr(off_t idx) const = 0;
+	virtual size_t get_length() const {
+		return static_cast<const detail::mem_vv_store &>(
+				get_data()).get_num_vecs();
+	}
+
+	virtual size_t get_length(off_t idx) const {
+		return static_cast<const detail::mem_vv_store &>(
+				get_data()).get_length(idx);
+	}
+
+	virtual size_t get_tot_num_entries() const {
+		return static_cast<const detail::mem_vv_store &>(
+				get_data()).get_num_bytes() / get_type().get_size();
+	}
 
 	/*
 	 * Catenate all vectors into a single vector.
 	 */
-	virtual std::shared_ptr<vector> cat() const = 0;
+	virtual std::shared_ptr<vector> cat() const;
 
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
-			const gr_apply_operate<sub_vector_vector> &op) const = 0;
-	virtual vector_vector::ptr apply(const arr_apply_operate &op) const = 0;
+			const gr_apply_operate<local_vv_store> &op) const;
+	virtual vector_vector::ptr apply(const arr_apply_operate &op) const;
 
 	virtual vector::ptr sort() const {
 		return vector::ptr();
@@ -106,37 +127,6 @@ public:
 	virtual std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const {
 		return std::shared_ptr<dense_matrix>();
-	}
-};
-
-/*
- * This is used to access some vectors in vector_vector.
- * It is always in memory.
- */
-class sub_vector_vector
-{
-	const vector_vector &vv;
-	std::vector<off_t> vec_idxs;
-public:
-	sub_vector_vector(const vector_vector &_vv,
-			const std::vector<off_t> &vec_idxs): vv(_vv) {
-		this->vec_idxs = vec_idxs;
-	}
-
-	const scalar_type &get_type() const {
-		return vv.get_type();
-	}
-
-	size_t get_num_vecs() const {
-		return vec_idxs.size();
-	}
-
-	size_t get_length(off_t idx) const {
-		return vv.get_length(vec_idxs[idx]);
-	}
-
-	const char *get_raw_arr(off_t idx) const {
-		return vv.get_raw_arr(vec_idxs[idx]);
 	}
 };
 

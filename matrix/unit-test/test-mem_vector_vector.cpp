@@ -1,11 +1,13 @@
 #include <boost/foreach.hpp>
+#include <map>
 
 #include "mem_vector.h"
 #include "bulk_operate.h"
 #include "data_frame.h"
 #include "factor.h"
-#include "mem_vector_vector.h"
+#include "vector_vector.h"
 #include "local_vec_store.h"
+#include "local_vv_store.h"
 
 using namespace fm;
 
@@ -45,11 +47,18 @@ public:
 	}
 };
 
-class part_apply_operate: public gr_apply_operate<sub_vector_vector>
+class part_apply_operate: public gr_apply_operate<local_vv_store>
 {
 public:
-	virtual void run(const void *key, const sub_vector_vector &val,
+	virtual void run(const void *key, const local_vv_store &val,
 			local_vec_store &vec) const {
+		assert(val.get_type() == get_scalar_type<factor_value_t>());
+		assert(vec.get_type() == get_scalar_type<size_t>());
+		vec.resize(1);
+		size_t num = 0;
+		for (size_t i = 0; i < val.get_length(); i++)
+			num += val.get_length(i);
+		vec.set<size_t>(0, num);
 	}
 	virtual const scalar_type &get_key_type() const {
 		return get_scalar_type<factor_value_t>();
@@ -58,7 +67,7 @@ public:
 		return get_scalar_type<size_t>();
 	}
 	virtual size_t get_num_out_eles() const {
-		return 0;
+		return 1;
 	}
 };
 
@@ -75,7 +84,7 @@ void test_groupby()
 	data_frame::ptr res = vec->groupby(adj_apply(), false);
 	printf("size: %ld\n", res->get_num_entries());
 
-	mem_vector_vector::ptr vv = mem_vector_vector::create(
+	vector_vector::ptr vv = vector_vector::create(
 			detail::mem_vv_store::cast(res->get_vec("agg")));
 
 	factor f(50);
@@ -83,7 +92,35 @@ void test_groupby()
 			set_label_operate(f, res->get_num_entries()));
 	labels->sort();
 	vector_vector::ptr gr_res = vv->groupby(*labels, part_apply_operate());
+	const detail::mem_vv_store &res_store
+		= dynamic_cast<const detail::mem_vv_store &>(gr_res->get_data());
 	printf("There are %ld vectors\n", gr_res->get_num_vecs());
+
+	std::map<factor_value_t, size_t> label_map;
+	for (size_t i = 0; i < labels->get_length(); i++) {
+		factor_value_t label = labels->get<factor_value_t>(i);
+		if (label_map.find(label) == label_map.end())
+			label_map.insert(std::pair<factor_value_t, size_t>(label, 0));
+		label_map[label]++;
+	}
+	assert(gr_res->get_num_vecs() == label_map.size());
+
+	size_t vec_idx = 0;
+	size_t label_idx = 0;
+	for (auto it = label_map.begin(); it != label_map.end(); it++) {
+		factor_value_t label = it->first;
+		size_t num_label_vecs = it->second;
+		size_t num_eles = 0;
+		for (size_t i = 0; i < num_label_vecs; i++) {
+			assert(labels->get<factor_value_t>(vec_idx) == label);
+			num_eles += vv->get_length(vec_idx);
+			vec_idx++;
+		}
+		assert(num_eles == *(size_t *) res_store.get_raw_arr(label_idx));
+		label_idx++;
+	}
+	assert(vec_idx == vv->get_num_vecs());
+	assert(label_idx == gr_res->get_num_vecs());
 }
 
 detail::vec_store::ptr create_mem_vec(size_t len)
@@ -202,59 +239,85 @@ void test_flatten()
 {
 	printf("test flatten a sub vector vector\n");
 	detail::mem_vv_store::ptr vv_store = create_mem_vv(100, 1000);
-	mem_vector_vector::ptr vv = mem_vector_vector::create(vv_store);
+	vector_vector::ptr vv = vector_vector::create(vv_store);
 	mem_vector::ptr vec = mem_vector::cast(vv->cat());
-	assert(memcmp(vec->get_raw_arr(), vv->get_raw_arr(0),
+	assert(memcmp(vec->get_raw_arr(), vv_store->get_raw_arr(0),
 				vec->get_length() * vec->get_entry_size()) == 0);
-
-	detail::mem_vv_store::const_ptr sub_vv = vv_store->get_sub_vec_vec(10, 20);
-	mem_vector::ptr sub_vec = mem_vector::create(
-			detail::mem_vec_store::cast(sub_vv->cat()));
-	off_t sub_off = 0;
-	for (int i = 0; i < 10; i++)
-		sub_off += vv->get_length(i);
-	off_t sub_len = 0;
-	for (int i = 10; i < 30; i++)
-		sub_len += vv->get_length(i);
-	assert(sub_vec->get_length() == sub_len);
-	for (size_t i = 0; i < sub_vec->get_length(); i++)
-		assert(sub_vec->get<int>(i) == vec->get<int>(i + sub_off));
-	assert(memcmp(sub_vec->get_raw_arr(), vv->get_raw_arr(10),
-				sub_vec->get_length() * sub_vec->get_entry_size()) == 0);
 }
 
 void test_apply()
 {
 	printf("test apply to each vector\n");
-	mem_vector_vector::ptr vv = mem_vector_vector::create(create_mem_vv(100, 1000));
-	vector_vector::ptr vv2 = vv->serial_apply(time2_apply_operate());
-	assert(vv2->get_length() == vv->get_length());
+	detail::mem_vv_store::ptr vv_store = create_mem_vv(100, 1000);
+	vector_vector::ptr vv = vector_vector::create(vv_store);
+
+	vector_vector::ptr vv2 = vector_vector::cast(vv->apply(time2_apply_operate()));
 	assert(vv->get_type() == get_scalar_type<int>());
 	assert(vv2->get_type() == get_scalar_type<long>());
 	for (size_t i = 0; i < vv->get_length(); i++) {
 		assert(vv->get_length(i) == vv2->get_length(i));
-		int *vec = (int *) vv->get_raw_arr(i);
-		long *vec2 = (long *) vv2->get_raw_arr(i);
+		int *vec = (int *) vv_store->get_raw_arr(i);
+		long *vec2 = (long *) dynamic_cast<const detail::mem_vv_store &>(
+				vv2->get_data()).get_raw_arr(i);
 		for (size_t k = 0; k < vv->get_length(i); k++)
 			assert(vec[k] * 2 == vec2[k]);
 	}
 
 	mem_vector::ptr vec = mem_vector::cast(vv->cat());
 	mem_vector::ptr vec2 = mem_vector::cast(vv2->cat());
-	assert(vec->get_length() == vec2->get_length());
-	for (size_t i = 0; i < vec->get_length(); i++)
-		assert(vec->get<int>(i) * 2 == vec2->get<long>(i));
-
-	vv2 = vv->apply(time2_apply_operate());
-	vec2 = mem_vector::cast(vv2->cat());
 	printf("vec len: %ld, vec2 len: %ld\n", vec->get_length(), vec2->get_length());
 	assert(vec->get_length() == vec2->get_length());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		assert(vec->get<int>(i) * 2 == vec2->get<long>(i));
 }
 
+void verify_portion(local_vv_store::const_ptr lvv, detail::mem_vv_store::ptr vv_store)
+{
+	size_t global_start = lvv->get_global_start();
+	for (size_t i = 0; i < lvv->get_length(); i++) {
+		const char *lvec = lvv->get_raw_arr(i);
+		const char *vec = vv_store->get_raw_arr(global_start + i);
+		printf("%ld: %ld, %ld: %ld\n", i, lvv->get_length(i), global_start + i,
+				vv_store->get_length(global_start + i));
+		assert(lvv->get_length(i) == vv_store->get_length(global_start + i));
+		assert(memcmp(lvec, vec,
+					lvv->get_length(i) * lvv->get_type().get_size()) == 0);
+		lvec = lvv->get_sub_arr(i, i + 1);
+		assert(memcmp(lvec, vec,
+					lvv->get_length(i) * lvv->get_type().get_size()) == 0);
+	}
+}
+
+void test_portion()
+{
+	printf("test getting portions\n");
+	detail::mem_vv_store::ptr vv_store = create_mem_vv(100, 1000);
+	local_vv_store::ptr lvv = local_vv_store::cast(vv_store->get_portion(9, 7));
+	assert(lvv->get_length() == 7);
+	assert(lvv->get_global_start() == 9);
+	verify_portion(lvv, vv_store);
+
+	printf("test sub vector of a portion\n");
+	lvv->expose_sub_vec(2, 3);
+	assert(lvv->get_global_start() == 9 + 2);
+	assert(lvv->get_length() == 3);
+	verify_portion(lvv, vv_store);
+
+	printf("test reset of a portion\n");
+	lvv->reset_expose();
+	assert(lvv->get_global_start() == 9);
+	assert(lvv->get_length() == 7);
+	verify_portion(lvv, vv_store);
+
+	printf("test a const portion\n");
+	detail::mem_vv_store::const_ptr cvv_store = vv_store;
+	local_vv_store::const_ptr clvv = local_vv_store::cast(cvv_store->get_portion(9, 7));
+	verify_portion(clvv, vv_store);
+}
+
 int main()
 {
+	test_portion();
 	test_groupby();
 	test_append_vecs();
 	test_append_vvs();

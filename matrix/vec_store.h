@@ -96,6 +96,10 @@ public:
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;
 
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
+			size_t size) = 0;
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
+			size_t size) const = 0;
 	virtual size_t get_portion_size() const = 0;
 	virtual size_t get_num_portions() const {
 		double len = get_length();

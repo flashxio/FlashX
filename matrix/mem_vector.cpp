@@ -22,7 +22,6 @@
 
 #include "mem_vector.h"
 #include "data_frame.h"
-#include "mem_vector_vector.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
 #include "mem_dense_matrix.h"

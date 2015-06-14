@@ -19,7 +19,7 @@
 
 #include "vertex_index.h"
 
-#include "mem_vector_vector.h"
+#include "vector_vector.h"
 #include "fm_utils.h"
 #include "fg_utils.h"
 #include "crs_header.h"
@@ -62,9 +62,9 @@ void adj2crs_apply_operate::run(const local_vec_store &in,
 		out.set<crs_idx_t>(i, v->get_neighbor(i));
 }
 
-void export_crs(mem_vector_vector::ptr adjs, const std::string &output_file)
+void export_crs(vector_vector::ptr adjs, const std::string &output_file)
 {
-	mem_vector_vector::ptr col_idxs = mem_vector_vector::cast(
+	vector_vector::ptr col_idxs = vector_vector::cast(
 			adjs->apply(adj2crs_apply_operate()));
 	mem_vector::ptr col_vec = mem_vector::cast(col_idxs->cat());
 	std::vector<crs_idx_t> offs(adjs->get_num_vecs() + 1);
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 	read_data(out_data.get_raw(), out_size, 1, out_off, f);
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
 	init_out_offs(vindex, out_offs);
-	mem_vector_vector::ptr out_adjs = mem_vector_vector::create(
+	vector_vector::ptr out_adjs = vector_vector::create(
 			out_data, out_offs, get_scalar_type<char>());
 
 	export_crs(out_adjs, crs_file);
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		read_data(in_data.get_raw(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
 		init_in_offs(vindex, in_offs);
-		mem_vector_vector::ptr in_adjs = mem_vector_vector::create(
+		vector_vector::ptr in_adjs = vector_vector::create(
 				in_data, in_offs, get_scalar_type<char>());
 
 		export_crs(in_adjs, t_crs_file);
