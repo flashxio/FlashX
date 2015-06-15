@@ -125,10 +125,10 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	}
 
 	std::string sort_vec_name = df->get_vec_name(0);
-	df->sort(sort_vec_name);
-	assert(df->is_sorted(sort_vec_name));
+	data_frame::const_ptr sorted_df = df->sort(sort_vec_name);
+	assert(sorted_df->is_sorted(sort_vec_name));
 	adj_apply_operate adj_op;
-	return df->groupby(sort_vec_name, adj_op);
+	return sorted_df->groupby(sort_vec_name, adj_op);
 }
 
 std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_graph(
