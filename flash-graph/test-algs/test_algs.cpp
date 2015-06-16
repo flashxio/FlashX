@@ -644,6 +644,27 @@ void run_spmv(FG_graph::ptr graph, int argc, char* argv[])
 	printf("SpMV returns %lf\n", out->sum());
 }
 
+void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+	uint32_t levels = 1;
+
+	while ((opt = getopt(argc, argv, "l:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'l':
+				levels = atoi(optarg);
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	compute_louvain(graph, levels);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -802,6 +823,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "spmv") {
 		run_spmv(graph, argc, argv);
+	}
+	else if (alg == "louvain") {
+		run_louvain(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());

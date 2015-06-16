@@ -369,6 +369,12 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  */
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
 
+/**
+ * \brief Compute louvain clustering for a graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param levels The number of levels of the hierarchy to do.
+ */
+void compute_louvain(FG_graph::ptr fg, uint32_t levels);
 }
 
 #endif
