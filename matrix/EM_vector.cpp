@@ -475,6 +475,11 @@ public:
 
 local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 {
+	if (orig_loc + orig_size > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		return local_vec_store::ptr();
+	}
+
 	size_t entry_size = get_type().get_size();
 	off_t loc = round_ele(orig_loc, PAGE_SIZE, entry_size);
 	size_t size = orig_size + (orig_loc - loc);
