@@ -134,6 +134,10 @@ public:
 		return ptr(new local_vv_store(*this));
 	}
 
+	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
+	virtual local_vec_store::const_ptr get_portion(off_t loc,
+			size_t size) const;
+
 	/*
 	 * The methods below aren't used.
 	 */

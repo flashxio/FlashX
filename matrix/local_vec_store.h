@@ -140,6 +140,10 @@ public:
 		return data + idx * get_entry_size();
 	}
 
+	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
+	virtual local_vec_store::const_ptr get_portion(off_t loc,
+			size_t size) const;
+
 	void set_raw(off_t idx, const char *val) {
 		assert(const_data == data);
 		char *dst = data + idx * get_entry_size();
@@ -160,16 +164,6 @@ public:
 	 * The following methods aren't needed by this class and its child classes.
 	 */
 
-	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
-			size_t size) {
-		assert(0);
-		return std::shared_ptr<local_vec_store>();
-	}
-	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
-			size_t size) const {
-		assert(0);
-		return std::shared_ptr<local_vec_store>();
-	}
 	virtual size_t get_portion_size() const {
 		assert(0);
 		return 0;

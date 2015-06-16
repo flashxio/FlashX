@@ -27,6 +27,33 @@
 namespace fm
 {
 
+local_vec_store::ptr local_vec_store::get_portion(off_t loc, size_t size)
+{
+	assert(loc + size <= get_length());
+	size_t entry_size = get_type().get_size();
+	if (get_raw_arr())
+		return local_vec_store::ptr(new local_ref_vec_store(
+					get_raw_arr() + loc * entry_size, get_global_start() + loc,
+					size, get_type(), get_node_id()));
+	else {
+		const local_vec_store *const_this = this;
+		return local_vec_store::ptr(new local_cref_vec_store(
+					const_this->get_raw_arr() + loc * entry_size,
+					get_global_start() + loc, size, get_type(), get_node_id()));
+	}
+}
+
+local_vec_store::const_ptr local_vec_store::get_portion(off_t loc,
+			size_t size) const
+{
+	assert(get_raw_arr());
+	assert(loc + size <= get_length());
+	size_t entry_size = get_type().get_size();
+	return local_vec_store::ptr(new local_cref_vec_store(
+				get_raw_arr() + loc * entry_size, get_global_start() + loc,
+				size, get_type(), get_node_id()));
+}
+
 detail::vec_store::ptr local_vec_store::sort_with_index()
 {
 	char *data_ptr = get_raw_arr();

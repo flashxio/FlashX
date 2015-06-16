@@ -24,6 +24,33 @@
 namespace fm
 {
 
+local_vec_store::ptr local_vv_store::get_portion(off_t loc, size_t size)
+{
+	assert(get_raw_arr());
+	assert(loc + size <= get_length());
+	off_t start = get_global_start() + loc;
+	std::vector<off_t> new_offs(offs.begin() + loc, offs.begin() + loc + size + 1);
+	size_t entry_size = get_type().get_size();
+	off_t rel_vec_start = new_offs.front() / entry_size;
+	off_t rel_vec_len = (new_offs.back() - new_offs.front()) / entry_size;
+	return local_vec_store::ptr(new local_vv_store(start, new_offs,
+				vec->get_portion(rel_vec_start, rel_vec_len)));
+}
+
+local_vec_store::const_ptr local_vv_store::get_portion(off_t loc,
+		size_t size) const
+{
+	assert(get_raw_arr());
+	assert(loc + size <= get_length());
+	off_t start = get_global_start() + loc;
+	std::vector<off_t> new_offs(offs.begin() + loc, offs.begin() + loc + size + 1);
+	size_t entry_size = get_type().get_size();
+	off_t rel_vec_start = new_offs.front() / entry_size;
+	off_t rel_vec_len = (new_offs.back() - new_offs.front()) / entry_size;
+	return local_vec_store::ptr(new local_vv_store(start, new_offs,
+				vec->get_portion(rel_vec_start, rel_vec_len)));
+}
+
 namespace detail
 {
 
