@@ -22,7 +22,6 @@
 
 #include "vertex.h"
 #include "matrix_header.h"
-#include "mem_vector.h"
 #include "vector_vector.h"
 
 namespace safs

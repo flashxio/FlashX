@@ -32,7 +32,7 @@
 #include "generic_type.h"
 #include "data_io.h"
 #include "data_frame.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "vector_vector.h"
 #include "fm_utils.h"
 #include "matrix_config.h"
@@ -164,8 +164,7 @@ int main(int argc, char *argv[])
 
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::create(
-				detail::mem_vec_store::cast(df->get_vec(i)));
+		vector::ptr vec = vector::create(df->get_vec(i));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	printf("max id: %d\n", max_vid);

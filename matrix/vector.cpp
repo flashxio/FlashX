@@ -16,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <boost/format.hpp>
 
 #include "common.h"
 #include "thread.h"
 
-#include "mem_vector.h"
+#include "vector.h"
 #include "data_frame.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
@@ -29,26 +30,16 @@
 namespace fm
 {
 
-mem_vector::ptr mem_vector::create(size_t length, const scalar_type &type,
-		const set_vec_operate &op)
+vector::ptr vector::create(size_t length, const scalar_type &type,
+		bool in_mem, const set_vec_operate &op)
 {
 	// TODO I should allow users to create a NUMA vector store as well.
-	detail::mem_vec_store::ptr vec = detail::smp_vec_store::create(length, type);
+	detail::vec_store::ptr vec = detail::vec_store::create(length, type, in_mem);
 	vec->set_data(op);
-	return ptr(new mem_vector(vec));
+	return ptr(new vector(vec));
 }
 
-mem_vector::ptr mem_vector::cast(vector::ptr vec)
-{
-	if (!vec->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't cast a non-in-mem vector to in-mem vector";
-		return mem_vector::ptr();
-	}
-	return std::static_pointer_cast<mem_vector>(vec);
-}
-
-bool mem_vector::verify_groupby(
+bool vector::verify_groupby(
 		const gr_apply_operate<local_vec_store> &op) const
 {
 	if (op.get_key_type() != get_type()) {
@@ -114,7 +105,7 @@ std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 	return par_starts;
 }
 
-data_frame::ptr mem_vector::groupby(
+data_frame::ptr vector::groupby(
 		const gr_apply_operate<local_vec_store> &op, bool with_val) const
 {
 	if (!verify_groupby(op))
@@ -170,15 +161,19 @@ data_frame::ptr mem_vector::groupby(
 	}
 }
 
-bool mem_vector::equals(const mem_vector &vec) const
+bool vector::equals(const vector &vec) const
 {
 	if (vec.get_length() != this->get_length())
 		return false;
 	else if (vec.get_type() != this->get_type())
 		return false;
-	else
-		return memcmp(this->get_raw_arr(), vec.get_raw_arr(),
+	else {
+		assert(is_in_mem());
+		return memcmp(
+				dynamic_cast<const detail::mem_vec_store &>(get_data()).get_raw_arr(),
+				dynamic_cast<const detail::mem_vec_store &>(vec.get_data()).get_raw_arr(),
 				get_length() * get_entry_size()) == 0;
+	}
 }
 
 namespace
@@ -203,7 +198,7 @@ public:
 
 }
 
-scalar_variable::ptr mem_vector::aggregate(const bulk_operate &op) const
+scalar_variable::ptr vector::aggregate(const bulk_operate &op) const
 {
 	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	size_t num_portions = get_data().get_num_portions();
@@ -232,7 +227,7 @@ scalar_variable::ptr mem_vector::aggregate(const bulk_operate &op) const
 	return res;
 }
 
-scalar_variable::ptr mem_vector::dot_prod(const vector &vec) const
+scalar_variable::ptr vector::dot_prod(const vector &vec) const
 {
 	if (get_type() != vec.get_type()) {
 		BOOST_LOG_TRIVIAL(error) << "The type isn't compatible";
@@ -270,15 +265,15 @@ scalar_variable::ptr mem_vector::dot_prod(const vector &vec) const
 	return res;
 }
 
-vector::ptr mem_vector::sort() const
+vector::ptr vector::sort() const
 {
-	detail::mem_vec_store::ptr vec = detail::mem_vec_store::cast(
-			get_data().deep_copy());
+	// TODO it's unnecessary to copy first and sort.
+	detail::vec_store::ptr vec = get_data().deep_copy();
 	vec->sort();
-	return mem_vector::create(vec);
+	return vector::create(vec);
 }
 
-data_frame::ptr mem_vector::sort_with_index() const
+data_frame::ptr vector::sort_with_index() const
 {
 	detail::vec_store::ptr vec = get_data().deep_copy();
 	detail::vec_store::ptr idx = vec->sort_with_index();
@@ -288,7 +283,7 @@ data_frame::ptr mem_vector::sort_with_index() const
 	return df;
 }
 
-dense_matrix::ptr mem_vector::conv2mat(size_t nrow, size_t ncol,
+dense_matrix::ptr vector::conv2mat(size_t nrow, size_t ncol,
 		bool byrow) const
 {
 	detail::mem_matrix_store::const_ptr mat = detail::mem_matrix_store::cast(
@@ -296,9 +291,16 @@ dense_matrix::ptr mem_vector::conv2mat(size_t nrow, size_t ncol,
 	return mem_dense_matrix::create(mat);
 }
 
-bool mem_vector::export2(FILE *f) const
+bool vector::export2(FILE *f) const
 {
-	size_t ret = fwrite(get_raw_arr(),
+	if (!is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Doesn't support to write an EM vector to a file";
+		return false;
+	}
+
+	size_t ret = fwrite(
+			dynamic_cast<const detail::mem_vec_store &>(get_data()).get_raw_arr(),
 			get_length() * get_type().get_size(), 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(

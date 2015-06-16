@@ -16,7 +16,6 @@ add_library(FMatrix STATIC
 	EM_dense_matrix.cpp
 	matrix_io.cpp
 	mem_dense_matrix.cpp
-	mem_vector.cpp
 	data_frame.cpp
 	generic_type.cpp
 	matrix_header.cpp

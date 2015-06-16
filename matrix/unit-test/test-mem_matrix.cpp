@@ -2,7 +2,7 @@
 #include <cblas.h>
 
 #include "mem_dense_matrix.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "mem_worker_thread.h"
 
 using namespace fm;
@@ -448,8 +448,7 @@ void test_flatten()
 
 void test_scale_cols1(mem_dense_matrix::ptr orig)
 {
-	mem_vector::ptr vals = mem_vector::cast(
-			create_vector<int>(0, orig->get_num_cols() - 1, 1));
+	vector::ptr vals = create_vector<int>(0, orig->get_num_cols() - 1, 1);
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_cols(vals));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();
@@ -457,11 +456,13 @@ void test_scale_cols1(mem_dense_matrix::ptr orig)
 		= (detail::mem_matrix_store &) res->get_data();
 	res_store1.materialize_self();
 	orig_store1.materialize_self();
+	const detail::smp_vec_store &val_store
+		= dynamic_cast<const detail::smp_vec_store &>(vals->get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j)
-					== orig_store1.get<int>(i, j) * vals->get<int>(j));
+					== orig_store1.get<int>(i, j) * val_store.get<int>(j));
 }
 
 void test_scale_cols(int num_nodes)
@@ -486,8 +487,7 @@ void test_scale_cols(int num_nodes)
 
 void test_scale_rows1(mem_dense_matrix::ptr orig)
 {
-	mem_vector::ptr vals = mem_vector::cast(
-			create_vector<int>(0, orig->get_num_rows() - 1, 1));
+	vector::ptr vals = create_vector<int>(0, orig->get_num_rows() - 1, 1);
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_rows(vals));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();
@@ -495,11 +495,13 @@ void test_scale_rows1(mem_dense_matrix::ptr orig)
 		= (detail::mem_matrix_store &) res->get_data();
 	res_store1.materialize_self();
 	orig_store1.materialize_self();
+	const detail::smp_vec_store &val_store
+		= dynamic_cast<const detail::smp_vec_store &>(vals->get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j)
-					== orig_store1.get<int>(i, j) * vals->get<int>(i));
+					== orig_store1.get<int>(i, j) * val_store.get<int>(i));
 }
 
 void test_scale_rows(int num_nodes)
@@ -567,7 +569,7 @@ void test_apply1(mem_dense_matrix::ptr mat)
 	size_t num_rows = mat->get_num_rows();
 	size_t num_cols = mat->get_num_cols();
 	dense_matrix::ptr res;
-	mem_vector::ptr res_vec;
+	vector::ptr res_vec;
 
 	printf("Test apply on rows of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
@@ -576,9 +578,11 @@ void test_apply1(mem_dense_matrix::ptr mat)
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
 	assert(res->is_type<long>());
-	res_vec = mem_vector::cast(res->get_col(0));
+	res_vec = res->get_col(0);
+	const detail::smp_vec_store &vstore1
+		= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
 	for (size_t i = 0; i < res_vec->get_length(); i++)
-		assert(res_vec->get<long>(i)
+		assert(vstore1.get<long>(i)
 				== i * num_cols * num_cols + (num_cols - 1) * num_cols / 2);
 
 	printf("Test apply on columns of a %s %s-wise matrix\n",
@@ -588,9 +592,11 @@ void test_apply1(mem_dense_matrix::ptr mat)
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());
 	assert(res->is_type<long>());
-	res_vec = mem_vector::cast(res->get_row(0));
+	res_vec = res->get_row(0);
+	const detail::smp_vec_store &vstore2
+		= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
 	for (size_t i = 0; i < res_vec->get_length(); i++)
-		assert(res_vec->get<long>(i)
+		assert(vstore2.get<long>(i)
 				== (num_rows - 1) * num_rows / 2 * num_cols + num_rows * i);
 }
 

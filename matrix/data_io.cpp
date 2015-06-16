@@ -28,7 +28,6 @@
 #include "generic_type.h"
 #include "matrix_config.h"
 #include "data_frame.h"
-#include "mem_vector.h"
 #include "mem_worker_thread.h"
 
 namespace fm

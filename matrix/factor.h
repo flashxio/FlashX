@@ -20,7 +20,7 @@
  * limitations under the License.
  */
 
-#include "mem_vector.h"
+#include "vector.h"
 
 /*
  * This factor is the same as the one in R.
@@ -56,12 +56,12 @@ public:
 	}
 };
 
-class factor_vector: public mem_vector
+class factor_vector: public vector
 {
 	factor f;
 
 	factor_vector(const factor &_f, size_t len,
-			const set_vec_operate &op): mem_vector(
+			const set_vec_operate &op): vector(
 			detail::smp_vec_store::create(len,
 				get_scalar_type<factor_value_t>())), f(_f) {
 		const_cast<detail::vec_store &>(get_data()).set_data(op);

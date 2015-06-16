@@ -2,7 +2,7 @@
 
 #include "data_frame.h"
 #include "bulk_operate.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "vector_vector.h"
 #include "local_vec_store.h"
 #include "EM_vector.h"
@@ -109,11 +109,13 @@ void test_in_mem_groupby()
 
 	sum_apply_operate sum_op;
 	vector_vector::ptr vv = df->groupby("vec1", sum_op);
-	mem_vector::ptr v = mem_vector::cast(vv->cat());
+	vector::ptr v = vv->cat();
+	const detail::smp_vec_store &vstore
+		= dynamic_cast<const detail::smp_vec_store &>(v->get_data());
 	assert(map.size() == v->get_length());
 	size_t idx = 0;
 	for (auto it = map.begin(); it != map.end(); it++, idx++) {
-		assert(it->second == v->get<long>(idx));
+		assert(it->second == vstore.get<long>(idx));
 	}
 
 	copy_apply_operate copy_op;

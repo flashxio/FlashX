@@ -24,6 +24,7 @@
 #include "generic_type.h"
 #include "bulk_operate.h"
 #include "vec_store.h"
+#include "mem_vec_store.h"
 
 namespace fm
 {
@@ -36,6 +37,8 @@ class dense_matrix;
 class vector
 {
 	detail::vec_store::const_ptr store;
+
+	bool verify_groupby(const gr_apply_operate<local_vec_store> &op) const;
 protected:
 	vector(detail::vec_store::const_ptr store) {
 		this->store = store;
@@ -44,7 +47,13 @@ public:
 	typedef std::shared_ptr<vector> ptr;
 	typedef std::shared_ptr<const vector> const_ptr;
 
-	virtual ~vector() {
+	static ptr create(detail::vec_store::const_ptr store) {
+		return ptr(new vector(store));
+	}
+	static ptr create(size_t length, const scalar_type &type,
+			bool in_mem, const set_vec_operate &op);
+
+	~vector() {
 	}
 
 	const detail::vec_store &get_data() const {
@@ -62,10 +71,10 @@ public:
 	// Normally the entry size is the type size. But a vector may also
 	// contains vectors, and the entry size is 0, which is no longer
 	// the type size.
-	virtual size_t get_entry_size() const {
+	size_t get_entry_size() const {
 		return store->get_entry_size();
 	}
-	virtual size_t get_length() const {
+	size_t get_length() const {
 		return store->get_length();
 	}
 
@@ -81,18 +90,20 @@ public:
 	bool is_sorted() const {
 		return store->is_sorted();
 	}
-	virtual vector::ptr sort() const = 0;
-	virtual std::shared_ptr<data_frame> sort_with_index() const = 0;
-	virtual std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
-			bool byrow) const = 0;
+
+	bool equals(const vector &vec) const;
+
+	vector::ptr sort() const;
+	std::shared_ptr<data_frame> sort_with_index() const;
+	std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
+			bool byrow) const;
 
 	// It should return data frame instead of vector.
-	virtual std::shared_ptr<data_frame> groupby(
-			const gr_apply_operate<local_vec_store> &op,
-			bool with_val) const = 0;
+	std::shared_ptr<data_frame> groupby(
+			const gr_apply_operate<local_vec_store> &op, bool with_val) const;
 
-	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const = 0;
-	virtual scalar_variable::ptr dot_prod(const vector &vec) const = 0;
+	scalar_variable::ptr aggregate(const bulk_operate &op) const;
+	scalar_variable::ptr dot_prod(const vector &vec) const;
 
 	template<class T>
 	T max() const {
@@ -101,7 +112,33 @@ public:
 		scalar_variable::ptr res = aggregate(max_op);
 		return *(T *) res->get_raw();
 	}
+
+	bool export2(FILE *f) const;
 };
+
+/*
+ * Create a sequence of values in [start, end]. `end' is inclusive.
+ */
+template<class EntryType>
+vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
+{
+	detail::vec_store::ptr store = detail::create_vec_store(start, end, stride);
+	if (store == NULL)
+		return vector::ptr();
+	return vector::create(store);
+}
+
+/*
+ * Create a vector filled with a constant value.
+ */
+template<class EntryType>
+vector::ptr create_vector(size_t length, EntryType initv)
+{
+	detail::vec_store::ptr store = detail::create_vec_store(length, initv);
+	if (store == NULL)
+		return vector::ptr();
+	return vector::create(store);
+}
 
 }
 

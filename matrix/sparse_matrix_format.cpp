@@ -222,7 +222,7 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 			<< "The vector of vectors has to be in memory";
 		return SpM_2d_storage::ptr();
 	}
-	mem_vector::ptr vec = mem_vector::cast(vv.cat());
+	vector::ptr vec = vv.cat();
 	if (vec->get_type().get_type() != get_type<char>()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The vector of vectors contains a wrong type of data";
@@ -238,7 +238,9 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 			ROUNDUP(size, PAGE_SIZE));
 	BOOST_VERIFY(ret == 0);
 	*(matrix_header *) data = header;
-	memcpy(data + sizeof(header), vec->get_raw_arr(), vec->get_length());
+	memcpy(data + sizeof(header),
+			dynamic_cast<const detail::mem_vec_store &>(vec->get_data()).get_raw_arr(),
+			vec->get_length());
 	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
 				index, "anonymous"));
 }

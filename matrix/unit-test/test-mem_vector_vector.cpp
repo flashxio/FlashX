@@ -1,7 +1,7 @@
 #include <boost/foreach.hpp>
 #include <map>
 
-#include "mem_vector.h"
+#include "vector.h"
 #include "bulk_operate.h"
 #include "data_frame.h"
 #include "factor.h"
@@ -81,7 +81,7 @@ void test_groupby()
 	for (size_t i = 0; i < store->get_length(); i++)
 		store->set<int>(i, random() % 1000);
 	printf("set the vector store\n");
-	mem_vector::ptr vec = mem_vector::create(store);
+	vector::ptr vec = vector::create(store);
 	data_frame::ptr res = vec->groupby(adj_apply(), false);
 	printf("size: %ld\n", res->get_num_entries());
 
@@ -98,8 +98,10 @@ void test_groupby()
 	printf("There are %ld vectors\n", gr_res->get_num_vecs());
 
 	std::map<factor_value_t, size_t> label_map;
+	const detail::smp_vec_store &label_store
+		= dynamic_cast<const detail::smp_vec_store &>(labels->get_data());
 	for (size_t i = 0; i < labels->get_length(); i++) {
-		factor_value_t label = labels->get<factor_value_t>(i);
+		factor_value_t label = label_store.get<factor_value_t>(i);
 		if (label_map.find(label) == label_map.end())
 			label_map.insert(std::pair<factor_value_t, size_t>(label, 0));
 		label_map[label]++;
@@ -113,7 +115,7 @@ void test_groupby()
 		size_t num_label_vecs = it->second;
 		size_t num_eles = 0;
 		for (size_t i = 0; i < num_label_vecs; i++) {
-			assert(labels->get<factor_value_t>(vec_idx) == label);
+			assert(label_store.get<factor_value_t>(vec_idx) == label);
 			num_eles += vv->get_length(vec_idx);
 			vec_idx++;
 		}
@@ -241,8 +243,10 @@ void test_flatten()
 	printf("test flatten a sub vector vector\n");
 	detail::mem_vv_store::ptr vv_store = create_mem_vv(100, 1000);
 	vector_vector::ptr vv = vector_vector::create(vv_store);
-	mem_vector::ptr vec = mem_vector::cast(vv->cat());
-	assert(memcmp(vec->get_raw_arr(), vv_store->get_raw_arr(0),
+	vector::ptr vec = vv->cat();
+	assert(memcmp(dynamic_cast<const detail::mem_vec_store &>(
+					vec->get_data()).get_raw_arr(),
+				vv_store->get_raw_arr(0),
 				vec->get_length() * vec->get_entry_size()) == 0);
 }
 
@@ -264,12 +268,16 @@ void test_apply()
 			assert(vec[k] * 2 == vec2[k]);
 	}
 
-	mem_vector::ptr vec = mem_vector::cast(vv->cat());
-	mem_vector::ptr vec2 = mem_vector::cast(vv2->cat());
+	vector::ptr vec = vv->cat();
+	vector::ptr vec2 = vv2->cat();
 	printf("vec len: %ld, vec2 len: %ld\n", vec->get_length(), vec2->get_length());
 	assert(vec->get_length() == vec2->get_length());
+	const detail::smp_vec_store &vstore1
+		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
+	const detail::smp_vec_store &vstore2
+		= dynamic_cast<const detail::smp_vec_store &>(vec2->get_data());
 	for (size_t i = 0; i < vec->get_length(); i++)
-		assert(vec->get<int>(i) * 2 == vec2->get<long>(i));
+		assert(vstore1.get<int>(i) * 2 == vstore2.get<long>(i));
 }
 
 void verify_portion(local_vv_store::const_ptr lvv, detail::mem_vv_store::ptr vv_store)

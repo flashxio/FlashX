@@ -66,7 +66,7 @@ void export_crs(vector_vector::ptr adjs, const std::string &output_file)
 {
 	vector_vector::ptr col_idxs = vector_vector::cast(
 			adjs->apply(adj2crs_apply_operate()));
-	mem_vector::ptr col_vec = mem_vector::cast(col_idxs->cat());
+	vector::ptr col_vec = col_idxs->cat();
 	std::vector<crs_idx_t> offs(adjs->get_num_vecs() + 1);
 	for (size_t i = 0; i < adjs->get_num_vecs(); i++) {
 		offs[i + 1] = offs[i] + col_idxs->get_length(i);
@@ -93,7 +93,7 @@ void export_crs(vector_vector::ptr adjs, const std::string &output_file)
 		fprintf(stderr, "can't write the row pointers: %s\n", strerror(errno));
 		exit(1);
 	}
-	ret = fwrite(col_vec->get_raw_arr(),
+	ret = fwrite(dynamic_cast<const detail::mem_vec_store &>(col_vec->get_data()).get_raw_arr(),
 			col_vec->get_length() * col_vec->get_entry_size(), 1, f);
 	if (ret == 0) {
 		fprintf(stderr, "can't write col idx: %s\n", strerror(errno));

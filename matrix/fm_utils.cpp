@@ -24,6 +24,7 @@
 #include "data_frame.h"
 #include "vector_vector.h"
 #include "local_vv_store.h"
+#include "mem_vv_store.h"
 
 namespace fm
 {
@@ -477,7 +478,7 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 		return;
 	}
 	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	bool ret = mem_vector::cast(res->cat())->export2(f_2d);
+	bool ret = res->cat()->export2(f_2d);
 	assert(ret);
 	fclose(f_2d);
 

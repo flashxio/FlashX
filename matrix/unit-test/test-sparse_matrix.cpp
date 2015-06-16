@@ -128,8 +128,7 @@ void test_multiply_block()
 
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::create(
-				detail::mem_vec_store::cast(df->get_vec(i)));
+		vector::ptr vec = vector::create(df->get_vec(i));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	// I artificially add an invalid out-edge for each vertex, so it's
@@ -205,8 +204,7 @@ void test_multiply_fg()
 	data_frame::ptr df = create_rand_el();
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::create(
-				detail::mem_vec_store::cast(df->get_vec(i)));
+		vector::ptr vec = vector::create(df->get_vec(i));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	// I artificially add an invalid out-edge for each vertex, so it's

@@ -117,8 +117,6 @@ inline prim_type get_type<unsigned long>()
 class basic_uops;
 class basic_ops;
 class agg_ops;
-class mem_vector;
-class mem_vector_vector;
 class scatter_gather;
 class scalar_variable;
 class rand_gen;

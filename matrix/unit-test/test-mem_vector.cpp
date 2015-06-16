@@ -1,6 +1,6 @@
 #include <map>
 
-#include "mem_vector.h"
+#include "vector.h"
 #include "bulk_operate.h"
 #include "data_frame.h"
 #include "local_vec_store.h"
@@ -44,14 +44,16 @@ void test_groupby()
 			get_scalar_type<int>());
 	for (size_t i = 0; i < store->get_length(); i++)
 		store->set<int>(i, random() % 1000);
-	mem_vector::ptr vec = mem_vector::create(store);
+	vector::ptr vec = vector::create(store);
 	count_impl<int> count;
 	data_frame::ptr res = vec->groupby(count, true);
 	printf("size: %ld\n", res->get_num_entries());
 
 	std::map<int, size_t> ele_counts;
+	const detail::smp_vec_store &vstore
+		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
 	for (size_t i = 0; i < vec->get_length(); i++) {
-		int val = vec->get<int>(i);
+		int val = vstore.get<int>(i);
 		auto it = ele_counts.find(val);
 		if (it == ele_counts.end())
 			ele_counts.insert(std::pair<int, size_t>(val, 1));
@@ -111,14 +113,14 @@ void test_sort()
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set<int>(i, random() % 1000);
 	smp_vec_store::ptr clone = smp_vec_store::cast(vec->deep_copy());
-	mem_vector::ptr vec1 = mem_vector::create(clone);
-	mem_vector::ptr vec2 = mem_vector::create(vec);
+	vector::ptr vec1 = vector::create(clone);
+	vector::ptr vec2 = vector::create(vec);
 	assert(vec1->equals(*vec2));
 
 	smp_vec_store::ptr idxs = smp_vec_store::cast(vec->sort_with_index());
 	smp_vec_store::ptr sorted = clone->smp_vec_store::get(*idxs);
-	vec1 = mem_vector::create(sorted);
-	vec2 = mem_vector::create(vec);
+	vec1 = vector::create(sorted);
+	vec2 = vector::create(vec);
 	assert(vec1->equals(*vec2));
 }
 
@@ -132,42 +134,46 @@ void test_max()
 		vec->set<int>(i, v);
 		max = std::max(max, v);
 	}
-	mem_vector::ptr vec1 = mem_vector::create(vec);
+	vector::ptr vec1 = vector::create(vec);
 	assert(vec1->max<int>() == max);
 }
 
 void test_resize()
 {
 	printf("test resize\n");
-	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
+	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	const detail::smp_vec_store &vstore
+		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
 	smp_vec_store::ptr copy = smp_vec_store::cast(vec->get_data().deep_copy());
 	copy->resize(100);
 	size_t min_len = std::min(copy->get_length(), vec->get_length());
 	for (size_t i = 0; i < min_len; i++)
-		assert(vec->get<int>(i) == copy->get<int>(i));
+		assert(vstore.get<int>(i) == copy->get<int>(i));
 
 	copy->resize(200);
 	// The semantics don't guarantee that this works, but it works with
 	// the current implementation
 	min_len = std::min(copy->get_length(), vec->get_length());
 	for (size_t i = 0; i < min_len; i++)
-		assert(vec->get<int>(i) == copy->get<int>(i));
+		assert(vstore.get<int>(i) == copy->get<int>(i));
 
 	copy->resize(20000);
 	for (size_t i = 0; i < min_len; i++)
-		assert(vec->get<int>(i) == copy->get<int>(i));
+		assert(vstore.get<int>(i) == copy->get<int>(i));
 }
 
 void test_get_sub()
 {
 	printf("test get sub\n");
-	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
+	vector::ptr vec = create_vector<int>(1, 10000, 2);
 	smp_vec_store::ptr idxs = smp_vec_store::create(1000, get_scalar_type<off_t>());
 	for (size_t i = 0; i < idxs->get_length(); i++)
 		idxs->set<off_t>(i, random() % idxs->get_length());
-	smp_vec_store::ptr res = smp_vec_store::cast(vec->get_raw_store())->get(*idxs);
+	const detail::smp_vec_store &vstore
+		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
+	smp_vec_store::ptr res = vstore.get(*idxs);
 	for (size_t i = 0; i < res->get_length(); i++)
-		assert(res->get<int>(i) == vec->get<int>(idxs->get<off_t>(i)));
+		assert(res->get<int>(i) == vstore.get<int>(idxs->get<off_t>(i)));
 }
 
 void test_copy_from()

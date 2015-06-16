@@ -22,7 +22,7 @@
 
 #include "common.h"
 
-#include "mem_vector.h"
+#include "vector.h"
 #include "data_frame.h"
 #include "factor.h"
 #include "local_vec_store.h"
@@ -45,7 +45,7 @@ vector::ptr vector_vector::cat() const
 {
 	const detail::vv_store &store
 		= static_cast<const detail::vv_store &>(get_data());
-	return mem_vector::create(detail::mem_vec_store::cast(store.cat()));
+	return vector::create(store.cat());
 }
 
 class vv_gr_label_operate: public gr_apply_operate<sub_data_frame>

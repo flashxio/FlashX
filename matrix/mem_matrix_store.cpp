@@ -25,7 +25,6 @@
 #include "mem_matrix_store.h"
 #include "local_matrix_store.h"
 #include "NUMA_dense_matrix.h"
-#include "mem_vector.h"
 #include "mem_worker_thread.h"
 
 namespace fm

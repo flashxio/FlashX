@@ -21,7 +21,6 @@
 
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
-#include "mem_vector.h"
 #include "dense_matrix.h"
 #include "local_vec_store.h"
 

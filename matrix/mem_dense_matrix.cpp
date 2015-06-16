@@ -30,7 +30,7 @@
 
 #include "mem_dense_matrix.h"
 #include "generic_type.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "local_matrix_store.h"
 #include "mem_matrix_store.h"
 #include "NUMA_dense_matrix.h"
@@ -66,7 +66,7 @@ vector::ptr mem_dense_matrix::get_col(off_t idx) const
 		= static_cast<const detail::mem_matrix_store &>(
 				get_data()).get_col_vec(idx);
 	if (vec)
-		return mem_vector::create(detail::mem_vec_store::cast(vec));
+		return vector::create(vec);
 	else
 		return vector::ptr();
 }
@@ -77,7 +77,7 @@ vector::ptr mem_dense_matrix::get_row(off_t idx) const
 		= static_cast<const detail::mem_matrix_store &>(
 				get_data()).get_row_vec(idx);
 	if (vec)
-		return mem_vector::create(detail::mem_vec_store::cast(vec));
+		return vector::create(vec);
 	else
 		return vector::ptr();
 }
@@ -598,9 +598,9 @@ namespace
 
 class scale_col_op: public detail::portion_mapply_op
 {
-	mem_vector::const_ptr vals;
+	vector::const_ptr vals;
 public:
-	scale_col_op(mem_vector::const_ptr vals, size_t out_num_rows,
+	scale_col_op(vector::const_ptr vals, size_t out_num_rows,
 			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, type) {
 		this->vals = vals;
@@ -613,9 +613,9 @@ public:
 
 class scale_row_op: public detail::portion_mapply_op
 {
-	mem_vector::const_ptr vals;
+	vector::const_ptr vals;
 public:
-	scale_row_op(mem_vector::const_ptr vals, size_t out_num_rows,
+	scale_row_op(vector::const_ptr vals, size_t out_num_rows,
 			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, type) {
 		this->vals = vals;
@@ -639,7 +639,7 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	const detail::mem_vec_store &store
-		= static_cast<const detail::mem_vec_store &>(vals->get_data());
+		= dynamic_cast<const detail::mem_vec_store &>(vals->get_data());
 	// This is a tall matrix. We divide the matrix horizontally.
 	if (ins[0]->get_num_cols() == get_out_num_cols()) {
 		// If we use get_raw_arr, it may not work with NUMA vector.
@@ -669,7 +669,7 @@ void scale_row_op::run(
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	const detail::mem_vec_store &store
-		= static_cast<const detail::mem_vec_store &>(vals->get_data());
+		= dynamic_cast<const detail::mem_vec_store &>(vals->get_data());
 	// This is a wide matrix. We divide the matrix vertically.
 	if (ins[0]->get_num_rows() == get_out_num_rows()) {
 		// If we use get_raw_arr, it may not work with NUMA vector.
@@ -699,7 +699,7 @@ detail::portion_mapply_op::const_ptr scale_row_op::transpose() const
 
 }
 
-dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
+dense_matrix::ptr mem_dense_matrix::scale_cols(vector::const_ptr vals) const
 {
 	assert(get_num_cols() == vals->get_length());
 	assert(get_type() == vals->get_type());
@@ -712,7 +712,7 @@ dense_matrix::ptr mem_dense_matrix::scale_cols(mem_vector::const_ptr vals) const
 	return dense_matrix::create(ret);
 }
 
-dense_matrix::ptr mem_dense_matrix::scale_rows(mem_vector::const_ptr vals) const
+dense_matrix::ptr mem_dense_matrix::scale_rows(vector::const_ptr vals) const
 {
 	assert(get_num_rows() == vals->get_length());
 	assert(get_type() == vals->get_type());

@@ -32,7 +32,6 @@
 namespace fm
 {
 
-class mem_vector;
 class scalar_type;
 class factor_vector;
 class local_vv_store;

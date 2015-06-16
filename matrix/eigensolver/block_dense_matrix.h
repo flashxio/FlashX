@@ -22,7 +22,7 @@
 
 #include "mem_dense_matrix.h"
 #include "generic_type.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "sparse_matrix.h"
 
 #include "eigensolver.h"
@@ -150,7 +150,7 @@ public:
 						fm::get_scalar_type<Type>());
 			for (size_t k = 0; k < block_size; k++)
 				sub_vec->set<Type>(k, vec[i * block_size + k]);
-			fm::mem_vector::ptr sub_vec1 = fm::mem_vector::create(sub_vec);
+			fm::vector::ptr sub_vec1 = fm::vector::create(sub_vec);
 			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec1));
 		}
 		return ret_vecs;
