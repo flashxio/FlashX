@@ -40,6 +40,22 @@ namespace fm
 namespace detail
 {
 
+template<class T>
+T round_ele(T val, size_t alignment, size_t ele_size)
+{
+	assert(alignment % ele_size == 0);
+	alignment = alignment / ele_size;
+	return ROUND(val, alignment);
+}
+
+template<class T>
+T roundup_ele(T val, size_t alignment, size_t ele_size)
+{
+	assert(alignment % ele_size == 0);
+	alignment = alignment / ele_size;
+	return ROUNDUP(val, alignment);
+}
+
 class EM_vec_dispatcher: public task_dispatcher
 {
 	const EM_vec_store &store;
@@ -332,8 +348,13 @@ public:
 				from_store, portion_size), to_vec(_to_vec) {
 	}
 
-	virtual void create_vec_task(off_t global_start, size_t length,
+	virtual void create_vec_task(off_t global_start, size_t orig_length,
 			const EM_vec_store &from_vec) {
+		// If the length of the vector isn't aligned with the page size,
+		// the underlying file is extended a little.
+		size_t entry_size = from_vec.get_type().get_size();
+		assert(round_ele(global_start, PAGE_SIZE, entry_size) == global_start);
+		size_t length = roundup_ele(orig_length, PAGE_SIZE, entry_size);
 		EM_vec_copy_write *compute = new EM_vec_copy_write(to_vec);
 		local_buf_vec_store::ptr buf = from_vec.get_portion_async(
 				global_start, length, portion_compute::ptr(compute));
@@ -376,9 +397,14 @@ size_t EM_vec_store::get_portion_size() const
 	return 1024 * 1024;
 }
 
-local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
-		size_t size, portion_compute::ptr compute) const
+local_vec_store::ptr EM_vec_store::get_portion_async(off_t orig_start,
+		size_t orig_size, portion_compute::ptr compute) const
 {
+	size_t entry_size = get_type().get_size();
+	off_t start = round_ele(orig_start, PAGE_SIZE, entry_size);
+	size_t size = orig_size + (orig_start - start);
+	size = roundup_ele(size, PAGE_SIZE, entry_size);
+
 	// TODO fix the bug if `start' and `size' aren't aligned with PAGE_SIZE.
 	safs::io_interface &io = get_curr_io();
 	local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
@@ -390,6 +416,9 @@ local_vec_store::ptr EM_vec_store::get_portion_async(off_t start,
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
 	io.flush_requests();
+
+	if (orig_start != start || orig_size != size)
+		buf->expose_sub_vec(orig_start - start, orig_size);
 	return buf;
 }
 
@@ -397,21 +426,27 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 		const std::vector<std::pair<off_t, size_t> > &locs,
 		portion_compute::ptr compute) const
 {
+	size_t entry_size = get_type().get_size();
 	// TODO fix the bug if `locs' aren't aligned with PAGE_SIZE.
 	safs::io_interface &io = get_curr_io();
 	std::vector<safs::io_request> reqs(locs.size());
 	std::vector<local_vec_store::ptr> ret_bufs(locs.size());
 	for (size_t i = 0; i < locs.size(); i++) {
-		off_t start = locs[i].first;
-		size_t size = locs[i].second;
+		off_t start = round_ele(locs[i].first, PAGE_SIZE, entry_size);
+		size_t size = locs[i].second + (locs[i].first - start);
+		size = roundup_ele(size, PAGE_SIZE, entry_size);
+
 		local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
 					get_type(), -1));
 		off_t off = get_byte_off(start);
 		safs::data_loc_t loc(io.get_file_id(), off);
 		reqs[i] = safs::io_request(buf->get_raw_arr(), loc,
 				buf->get_length() * buf->get_entry_size(), READ);
-		ret_bufs[i] = buf;
 		static_cast<portion_callback &>(io.get_callback()).add(reqs[i], compute);
+
+		if (locs[i].first != start || locs[i].second != size)
+			buf->expose_sub_vec(locs[i].first - start, locs[i].second);
+		ret_bufs[i] = buf;
 	}
 	io.access(reqs.data(), reqs.size());
 	io.flush_requests();
@@ -434,14 +469,20 @@ public:
 	}
 };
 
-local_vec_store::ptr EM_vec_store::get_portion(off_t loc, size_t size)
+local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 {
+	size_t entry_size = get_type().get_size();
+	off_t loc = round_ele(orig_loc, PAGE_SIZE, entry_size);
+	size_t size = orig_size + (orig_loc - loc);
+	size = roundup_ele(size, PAGE_SIZE, entry_size);
 	safs::io_interface &io = get_curr_io();
 	bool ready = false;
 	portion_compute::ptr compute(new sync_read_compute(ready));
 	local_vec_store::ptr ret = get_portion_async(loc, size, compute);
 	while (!ready)
 		io.wait4complete(1);
+	if (orig_loc != loc || orig_size != size)
+		ret->expose_sub_vec(orig_loc - loc, orig_size);
 	return ret;
 }
 
@@ -651,9 +692,23 @@ void EM_vec_sort_compute::run(char *buf, size_t size)
 				sort_buf->get_length(), false);
 		summary.add_portion(sort_buf);
 
+		// It might be a sub vector, we should reset its exposed part, so
+		// the size of data written to disks is aligned to the page size.
+		sort_buf->reset_expose();
 		// Write the sorting result to disks.
 		to_vecs.front()->write_portion(sort_buf);
 		for (size_t i = 1; i < portions.size(); i++) {
+			portions[i]->reset_expose();
+			// If the element size is different in each array, the padding
+			// size might also be different. We should make the elements
+			// in the padding area are mapped to the same locations.
+			size_t off = orig_offs.size();
+			orig_offs.resize(portions[i]->get_length());
+			if (off < orig_offs.size()) {
+				for (; off < orig_offs.size(); off++)
+					orig_offs[off] = off;
+			}
+
 			local_vec_store::ptr shuffle_buf = portions[i]->get(orig_offs);
 			to_vecs[i]->write_portion(shuffle_buf,
 					portions[i]->get_global_start());
@@ -698,15 +753,21 @@ EM_vec_sort_dispatcher::EM_vec_sort_dispatcher(
 }
 
 void EM_vec_sort_dispatcher::create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &from_vec)
+			size_t orig_length, const EM_vec_store &from_vec)
 {
 	EM_vec_sort_compute *sort_compute = new EM_vec_sort_compute(to_vecs,
 			*summary);
 	portion_compute::ptr compute(sort_compute);
 	std::vector<local_vec_store::ptr> from_portions(from_vecs.size());
-	for (size_t i = 0; i < from_portions.size(); i++)
+	for (size_t i = 0; i < from_portions.size(); i++) {
+		size_t entry_size = from_vecs[i]->get_type().get_size();
+		assert(round_ele(global_start, PAGE_SIZE, entry_size) == global_start);
+		size_t length = roundup_ele(orig_length, PAGE_SIZE, entry_size);
+
 		from_portions[i] = from_vecs[i]->get_portion_async(
 				global_start, length, compute);
+		from_portions[i]->expose_sub_vec(0, orig_length);
+	}
 	sort_compute->set_bufs(from_portions);
 }
 
@@ -1236,7 +1297,6 @@ public:
 
 	virtual void run(char *buf, size_t size) {
 		assert(store->get_raw_arr() == buf);
-		assert(store->get_length() * store->get_entry_size() == size);
 		summary.set_portion_result(store);
 	}
 };
@@ -1258,13 +1318,26 @@ public:
 	}
 
 	virtual void create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &from_vec) {
-		EM_vec_issorted_compute *compute = new EM_vec_issorted_compute(summary);
-		local_vec_store::const_ptr portion = from_vec.get_portion_async(global_start,
-				length, portion_compute::ptr(compute));
-		compute->set_buf(portion);
-	}
+			size_t length, const EM_vec_store &from_vec);
 };
+
+void EM_vec_issorted_dispatcher::create_vec_task(off_t global_start,
+			size_t orig_length, const EM_vec_store &from_vec)
+{
+	// The vector doesn't necessary have the number of elements to make
+	// the end of the vector aligned with the page size. If it's not,
+	// we should align it. We end up writing more data to the underlying
+	// file.
+	size_t entry_size = from_vec.get_type().get_size();
+	assert(round_ele(global_start, PAGE_SIZE, entry_size) == global_start);
+	size_t length = roundup_ele(orig_length, PAGE_SIZE, entry_size);
+	EM_vec_issorted_compute *compute = new EM_vec_issorted_compute(summary);
+	local_vec_store::const_ptr portion = from_vec.get_portion_async(global_start,
+			length, portion_compute::ptr(compute));
+	if (length != orig_length)
+		const_cast<local_vec_store &>(*portion).expose_sub_vec(0, orig_length);
+	compute->set_buf(portion);
+}
 
 bool EM_vec_store::is_sorted() const
 {
@@ -1297,13 +1370,28 @@ public:
 	}
 
 	virtual void create_vec_task(off_t global_start,
-			size_t length, const EM_vec_store &from_vec) {
-		local_buf_vec_store::ptr buf(new local_buf_vec_store(
-					global_start, length, to_vec.get_type(), -1));
-		buf->set_data(op);
-		to_vec.write_portion(buf);
-	}
+			size_t length, const EM_vec_store &from_vec);
 };
+
+void EM_vec_setdata_dispatcher::create_vec_task(off_t global_start,
+		size_t orig_length, const EM_vec_store &from_vec)
+{
+	// The vector doesn't necessary have the number of elements to make
+	// the end of the vector aligned with the page size. If it's not,
+	// we should align it. We end up writing more data to the underlying
+	// file.
+	size_t entry_size = from_vec.get_type().get_size();
+	assert(round_ele(global_start, PAGE_SIZE, entry_size) == global_start);
+	size_t length = roundup_ele(orig_length, PAGE_SIZE, entry_size);
+	local_buf_vec_store::ptr buf(new local_buf_vec_store(
+				global_start, length, to_vec.get_type(), -1));
+	if (length != orig_length)
+		buf->expose_sub_vec(0, orig_length);
+	buf->set_data(op);
+	if (length != orig_length)
+		buf->reset_expose();
+	to_vec.write_portion(buf);
+}
 
 }
 

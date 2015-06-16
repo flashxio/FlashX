@@ -81,7 +81,7 @@ public:
 void test_setdata()
 {
 	printf("test set data in EM vector\n");
-	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_seq_operate<int>());
 	assert(vec->is_sorted());
@@ -142,7 +142,7 @@ void test_sort_summary()
 void test_sort()
 {
 	printf("test sort\n");
-	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));
 	assert(!vec->is_sorted());
@@ -154,7 +154,7 @@ void test_sort()
 void test_sort_mult1()
 {
 	printf("test sort a single vector\n");
-	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));
 
@@ -169,7 +169,7 @@ void test_sort_mult1()
 void test_sort_mult()
 {
 	printf("test sort multiple vectors\n");
-	EM_vec_store::ptr vec1 = EM_vec_store::create(10000000,
+	EM_vec_store::ptr vec1 = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec1->set_data(set_rand_operate<int>(1000));
 	EM_vec_store::ptr vec2 = EM_vec_store::cast(vec1->deep_copy());
