@@ -336,10 +336,20 @@ public:
 	}
 };
 
+/*
+ * Find the first location where its element is different from the first
+ * element in the array.
+ */
 template<class T>
 class find_next_impl: public agg_operate
 {
 public:
+	/*
+	 * The first element in the array is pointed by `left_arr' and there are
+	 * `num_eles' in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
 	virtual void run(size_t num_eles, const void *left_arr,
 			void *output) const {
 		const T *curr = (const T *) left_arr;
@@ -353,21 +363,53 @@ public:
 	virtual const scalar_type &get_output_type() const;
 };
 
+/*
+ * Search backwards and find the first location where its element is different
+ * from the last element in the array.
+ */
+template<class T>
+class find_prev_impl: public agg_operate
+{
+public:
+	/*
+	 * The end of the array is indicated by `arr_end'. The last element
+	 * is right before `arr_end'. There are `num_eles' elements in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
+	virtual void run(size_t num_eles, const void *arr_end,
+			void *output) const {
+		const T *curr = ((const T *) arr_end) - 1;
+		T val = *curr;
+		const T *first = ((const T *) arr_end) - num_eles;
+		for (; curr > first && *curr == val; curr--);
+		*(size_t *) output = ((const T *) arr_end) - curr;
+	}
+
+	virtual const scalar_type &get_input_type() const;
+	virtual const scalar_type &get_output_type() const;
+};
+
 class agg_ops
 {
 public:
 	typedef std::shared_ptr<agg_ops> ptr;
 
 	virtual const agg_operate &get_find_next() const = 0;
+	virtual const agg_operate &get_find_prev() const = 0;
 };
 
 template<class InType, class OutType>
 class agg_ops_impl: public agg_ops
 {
 	find_next_impl<InType> find_next;
+	find_prev_impl<InType> find_prev;
 public:
 	virtual const agg_operate &get_find_next() const {
 		return find_next;
+	}
+	virtual const agg_operate &get_find_prev() const {
+		return find_prev;
 	}
 };
 
@@ -602,6 +644,18 @@ const scalar_type &find_next_impl<T>::get_input_type() const
 
 template<class T>
 const scalar_type &find_next_impl<T>::get_output_type() const
+{
+	return get_scalar_type<size_t>();
+}
+
+template<class T>
+const scalar_type &find_prev_impl<T>::get_input_type() const
+{
+	return get_scalar_type<T>();
+}
+
+template<class T>
+const scalar_type &find_prev_impl<T>::get_output_type() const
 {
 	return get_scalar_type<size_t>();
 }

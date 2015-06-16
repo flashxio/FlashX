@@ -16,15 +16,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <boost/format.hpp>
+
 #include "log.h"
 
 #include "vv_store.h"
+#include "local_vec_store.h"
+#include "local_vv_store.h"
+#include "mem_vv_store.h"
+#include "EM_vv_store.h"
 
 namespace fm
 {
 
 namespace detail
 {
+
+vv_store::ptr vv_store::create(const scalar_type &type, bool in_mem)
+{
+	if (in_mem)
+		return mem_vv_store::create(type);
+	else
+		return EM_vv_store::create(type);
+}
 
 vv_store::vv_store(const scalar_type &type, bool in_mem): vec_store(
 		0, 0, type, in_mem)
@@ -44,7 +58,7 @@ vv_store::vv_store(const std::vector<off_t> &offs,
 
 vec_store::const_ptr vv_store::cat() const
 {
-	return store->shallow_copy();
+	return store;
 }
 
 vec_store::ptr vv_store::deep_copy() const
@@ -145,6 +159,52 @@ bool vv_store::append(const vec_store &vec)
 		vec_offs.resize(orig_num_offs);
 
 	return ret;
+}
+
+std::vector<off_t> vv_store::get_rel_offs(off_t start, size_t len) const
+{
+	// The last entry shows the end of the last vector.
+	std::vector<off_t> offs(len + 1);
+	off_t start_off = get_vec_off(start);
+	for (size_t i = 0; i < offs.size(); i++)
+		offs[i] = get_vec_off(i + start) - start_off;
+	return offs;
+}
+
+local_vec_store::const_ptr vv_store::get_portion(off_t start, size_t len) const
+{
+	if (start + len > get_num_vecs()) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't get the portion [%1%, %2%)") % start % (start + len);
+		return local_vec_store::const_ptr();
+	}
+
+	std::vector<off_t> offs = get_rel_offs(start, len);
+	size_t num_eles = offs.back() / get_type().get_size();
+	off_t start_ele = get_vec_off(start) / get_type().get_size();
+	local_vec_store::const_ptr const_data = get_data().get_portion(
+			start_ele, num_eles);
+	// TODO this isn't a best solution.
+	local_vec_store::ptr data = std::static_pointer_cast<local_vec_store>(
+			const_cast<local_vec_store &>(*const_data).shallow_copy());
+
+	return local_vv_store::ptr(new local_vv_store(start, offs, data));
+}
+
+local_vec_store::ptr vv_store::get_portion(off_t start, size_t len)
+{
+	if (start + len > get_num_vecs()) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't get the portion [%1%, %2%)") % start % (start + len);
+		return local_vec_store::ptr();
+	}
+
+	std::vector<off_t> offs = get_rel_offs(start, len);
+	size_t num_eles = offs.back() / get_type().get_size();
+	off_t start_ele = get_vec_off(start) / get_type().get_size();
+	local_vec_store::ptr data = get_data().get_portion(start_ele, num_eles);
+
+	return local_vv_store::ptr(new local_vv_store(start, offs, data));
 }
 
 }

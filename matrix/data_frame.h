@@ -35,6 +35,7 @@ namespace fm
 class local_vec_store;
 
 typedef std::pair<std::string, detail::vec_store::ptr> named_vec_t;
+typedef std::pair<std::string, detail::vec_store::const_ptr> named_cvec_t;
 typedef std::vector<std::shared_ptr<const local_vec_store> > sub_data_frame;
 
 template<class T> class gr_apply_operate;

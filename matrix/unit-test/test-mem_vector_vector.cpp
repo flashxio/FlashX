@@ -8,6 +8,7 @@
 #include "vector_vector.h"
 #include "local_vec_store.h"
 #include "local_vv_store.h"
+#include "mem_vv_store.h"
 
 using namespace fm;
 

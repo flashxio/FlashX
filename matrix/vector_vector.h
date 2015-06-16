@@ -27,7 +27,7 @@
 
 #include "vec_store.h"
 #include "vector.h"
-#include "mem_vv_store.h"
+#include "vv_store.h"
 
 namespace fm
 {
@@ -38,13 +38,18 @@ class factor_vector;
 class local_vv_store;
 class data_frame;
 
+namespace detail
+{
+class raw_data_array;
+}
+
 /*
  * This stores a vector of vectors. It's similar to the row-wise matrix,
  * but this allows each vector to have different lengths.
  */
 class vector_vector: public vector
 {
-	vector_vector(detail::mem_vv_store::const_ptr store): vector(store) {
+	vector_vector(detail::vv_store::const_ptr store): vector(store) {
 	}
 public:
 	typedef std::shared_ptr<vector_vector> ptr;
@@ -61,16 +66,12 @@ public:
 		return std::static_pointer_cast<vector_vector>(vec);
 	}
 
-	static ptr create(detail::mem_vv_store::ptr store) {
+	static ptr create(detail::vv_store::ptr store) {
 		return ptr(new vector_vector(store));
 	}
 
 	static ptr create(const detail::raw_data_array &data,
-			const std::vector<off_t> &offs, const scalar_type &type) {
-		detail::mem_vv_store::ptr vec = detail::mem_vv_store::create(data,
-				offs, type);
-		return ptr(new vector_vector(vec));
-	}
+			const std::vector<off_t> &offs, const scalar_type &type);
 
 	virtual size_t get_entry_size() const {
 		return 0;
@@ -84,17 +85,17 @@ public:
 	 * This return the number of vectors in the vector vector.
 	 */
 	virtual size_t get_length() const {
-		return static_cast<const detail::mem_vv_store &>(
+		return static_cast<const detail::vv_store &>(
 				get_data()).get_num_vecs();
 	}
 
 	virtual size_t get_length(off_t idx) const {
-		return static_cast<const detail::mem_vv_store &>(
+		return static_cast<const detail::vv_store &>(
 				get_data()).get_length(idx);
 	}
 
 	virtual size_t get_tot_num_entries() const {
-		return static_cast<const detail::mem_vv_store &>(
+		return static_cast<const detail::vv_store &>(
 				get_data()).get_num_bytes() / get_type().get_size();
 	}
 

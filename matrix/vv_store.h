@@ -34,6 +34,8 @@ class vv_store: public vec_store
 	// The last offset is the end of the last vector.
 	std::vector<off_t> vec_offs;
 	vec_store::ptr store;
+
+	std::vector<off_t> get_rel_offs(off_t loc, size_t size) const;
 protected:
 	const vec_store &get_data() const {
 		return *store;
@@ -56,6 +58,8 @@ public:
 		assert(is_vector_vector(*vec));
 		return std::static_pointer_cast<vv_store>(vec);
 	}
+
+	static ptr create(const scalar_type &type, bool in_mem);
 
 	vv_store(const scalar_type &type, bool in_mem);
 	vv_store(const std::vector<off_t> &offs, vec_store::ptr store);
@@ -82,6 +86,46 @@ public:
 	virtual bool append(const vec_store &vec);
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);
+
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t start,
+			size_t len) const;
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
+			size_t size);
+
+	/*
+	 * The following methods aren't supported in the vv_store.
+	 */
+
+	virtual bool resize(size_t new_length) {
+		assert(0);
+		return false;
+	}
+	virtual size_t get_portion_size() const {
+		assert(0);
+		return -1;
+	}
+	virtual vec_store::ptr sort_with_index() {
+		assert(0);
+		return vec_store::ptr();
+	}
+	virtual void sort() {
+		assert(0);
+	}
+	virtual bool is_sorted() const {
+		return false;
+	}
+
+	virtual void reset_data() {
+		assert(0);
+	}
+	virtual void set_data(const set_vec_operate &op) {
+		assert(0);
+	}
+
+	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) const {
+		return std::shared_ptr<const matrix_store>();
+	}
 };
 
 }

@@ -41,7 +41,6 @@ class mem_vv_store: public vv_store
 	smp_vec_store &get_mem_data() {
 		return static_cast<smp_vec_store &>(get_data());
 	}
-	std::vector<off_t> get_rel_offs(off_t loc, size_t size) const;
 protected:
 	mem_vv_store(const scalar_type &type): vv_store(type, true) {
 	}
@@ -76,11 +75,6 @@ public:
 		return get_raw_arr() + get_vec_off(idx);
 	}
 
-	virtual std::shared_ptr<const local_vec_store> get_portion(off_t start,
-			size_t len) const;
-	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
-			size_t size);
-
 	virtual vec_store::ptr shallow_copy() {
 		// TODO the vector offsets may also be very large.
 		return mem_vv_store::ptr(new mem_vv_store(*this));
@@ -88,41 +82,6 @@ public:
 	virtual vec_store::const_ptr shallow_copy() const {
 		// TODO the vector offsets may also be very large.
 		return mem_vv_store::ptr(new mem_vv_store(*this));
-	}
-
-	/*
-	 * The following methods aren't supported in the vv_store.
-	 */
-
-	virtual bool resize(size_t new_length) {
-		assert(0);
-		return false;
-	}
-	virtual size_t get_portion_size() const {
-		assert(0);
-		return -1;
-	}
-	virtual vec_store::ptr sort_with_index() {
-		assert(0);
-		return vec_store::ptr();
-	}
-	virtual void sort() {
-		assert(0);
-	}
-	virtual bool is_sorted() const {
-		return false;
-	}
-
-	virtual void reset_data() {
-		assert(0);
-	}
-	virtual void set_data(const set_vec_operate &op) {
-		assert(0);
-	}
-
-	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
-			size_t ncol, bool byrow) const {
-		return std::shared_ptr<const matrix_store>();
 	}
 };
 

@@ -28,14 +28,23 @@
 #include "local_vec_store.h"
 #include "local_vv_store.h"
 #include "vector_vector.h"
+#include "mem_vv_store.h"
 
 namespace fm
 {
 
+vector_vector::ptr vector_vector::create(const detail::raw_data_array &data,
+		const std::vector<off_t> &offs, const scalar_type &type)
+{
+	detail::mem_vv_store::ptr vec = detail::mem_vv_store::create(data,
+			offs, type);
+	return ptr(new vector_vector(vec));
+}
+
 vector::ptr vector_vector::cat() const
 {
-	const detail::mem_vv_store &store
-		= static_cast<const detail::mem_vv_store &>(get_data());
+	const detail::vv_store &store
+		= static_cast<const detail::vv_store &>(get_data());
 	return mem_vector::create(detail::mem_vec_store::cast(store.cat()));
 }
 
@@ -120,8 +129,8 @@ vector_vector::ptr vector_vector::apply(const arr_apply_operate &op) const
 		vv_stores[i] = detail::apply(*lstore, op);
 	}
 
-	detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
-			op.get_output_type());
+	detail::vv_store::ptr ret = detail::vv_store::create(
+			op.get_output_type(), get_data().is_in_mem());
 	// It's possible that some threads didn't generate results.
 	// It's guaranteed that the non-empty results are in the front.
 	int num_non_empty = 0;

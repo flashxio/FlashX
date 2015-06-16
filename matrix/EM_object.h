@@ -36,6 +36,10 @@ public:
 	 * This creates an I/O instance for the current thread.
 	 */
 	virtual safs::io_interface::ptr create_io() = 0;
+	/*
+	 * Destroy all I/O instances for all threads.
+	 */
+	virtual void destroy_ios() = 0;
 };
 
 }

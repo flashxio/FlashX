@@ -41,51 +41,6 @@ mem_vv_store::ptr mem_vv_store::cast(vec_store::ptr store)
 	return std::static_pointer_cast<mem_vv_store>(store);
 }
 
-std::vector<off_t> mem_vv_store::get_rel_offs(off_t start, size_t len) const
-{
-	// The last entry shows the end of the last vector.
-	std::vector<off_t> offs(len + 1);
-	off_t start_off = get_vec_off(start);
-	for (size_t i = 0; i < offs.size(); i++)
-		offs[i] = get_vec_off(i + start) - start_off;
-	return offs;
-}
-
-local_vec_store::const_ptr mem_vv_store::get_portion(off_t start,
-		size_t len) const
-{
-	if (start + len > get_num_vecs()) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't get the portion [%1%, %2%)") % start % (start + len);
-		return local_vec_store::const_ptr();
-	}
-
-	std::vector<off_t> offs = get_rel_offs(start, len);
-	size_t num_eles = offs.back() / get_type().get_size();
-	off_t start_ele = get_vec_off(start) / get_type().get_size();
-	local_vec_store::ptr data(new local_cref_vec_store(get_mem_data().get(start_ele),
-				start_ele, num_eles, get_type(), -1));
-
-	return local_vv_store::ptr(new local_vv_store(start, offs, data));
-}
-
-local_vec_store::ptr mem_vv_store::get_portion(off_t start, size_t len)
-{
-	if (start + len > get_num_vecs()) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't get the portion [%1%, %2%)") % start % (start + len);
-		return local_vec_store::ptr();
-	}
-
-	std::vector<off_t> offs = get_rel_offs(start, len);
-	size_t num_eles = offs.back() / get_type().get_size();
-	off_t start_ele = get_vec_off(start) / get_type().get_size();
-	local_vec_store::ptr data(new local_ref_vec_store(get_mem_data().get(start_ele),
-				start_ele, num_eles, get_type(), -1));
-
-	return local_vv_store::ptr(new local_vv_store(start, offs, data));
-}
-
 }
 
 }

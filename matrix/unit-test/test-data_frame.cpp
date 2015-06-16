@@ -81,9 +81,9 @@ void copy_apply_operate::run(const void *key, const sub_data_frame &val,
 		out.set<int>(i, vec.get<int>(i));
 }
 
-void test_groupby()
+void test_in_mem_groupby()
 {
-	printf("test groupby\n");
+	printf("test in-mem groupby\n");
 	data_frame::ptr df = data_frame::create();
 	size_t length = 1000000;
 	detail::smp_vec_store::ptr vec1 = detail::smp_vec_store::create(length,
@@ -118,7 +118,30 @@ void test_groupby()
 
 	copy_apply_operate copy_op;
 	vv = df->groupby("vec1", copy_op);
-	mem_vector::ptr v1 = mem_vector::cast(vv->cat());
+	vector::ptr v1 = vv->cat();
+	assert(vec1->get_length() == v1->get_length());
+}
+
+void test_EM_groupby()
+{
+	printf("test EM groupby\n");
+	data_frame::ptr df = data_frame::create();
+	size_t length = 4000000;
+	detail::vec_store::ptr vec1 = detail::vec_store::create(length,
+			get_scalar_type<int>(), false);
+	vec1->set_data(rand_set_vec());
+	detail::vec_store::ptr vec2 = detail::vec_store::create(length,
+			get_scalar_type<int>(), false);
+	vec2->set_data(rand_set_vec());
+	df->add_vec("vec1", vec1);
+	df->add_vec("vec2", vec2);
+
+	sum_apply_operate sum_op;
+	vector_vector::ptr vv = df->groupby("vec1", sum_op);
+
+	copy_apply_operate copy_op;
+	vv = df->groupby("vec1", copy_op);
+	vector::ptr v1 = vv->cat();
 	assert(vec1->get_length() == v1->get_length());
 }
 
@@ -212,7 +235,8 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	test_merge();
-	test_groupby();
+	test_in_mem_groupby();
+	test_EM_groupby();
 	test_in_mem_sort();
 	test_EM_sort();
 

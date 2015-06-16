@@ -27,6 +27,7 @@
 #include "EM_vector.h"
 #include "mem_vv_store.h"
 #include "vector_vector.h"
+#include "EM_vv_store.h"
 
 namespace fm
 {
@@ -297,13 +298,12 @@ void local_groupby_task::run()
 std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 		int num_parts);
 
-vector_vector::ptr data_frame::groupby(const std::string &col_name,
-		const gr_apply_operate<sub_data_frame> &op) const
+static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
+		const std::vector<named_cvec_t> &sorted_df, off_t sorted_col_idx,
+		const gr_apply_operate<sub_data_frame> &op)
 {
-	data_frame::const_ptr sorted_df = sort(col_name);
 	detail::mem_vec_store::const_ptr sorted_col
-		= detail::mem_vec_store::cast(sorted_df->get_vec(col_name));
-
+		= detail::mem_vec_store::cast(sorted_df[sorted_col_idx].second);
 	// We need to find the start location for each thread.
 	// The start location is where the value in the sorted array
 	// first appears.
@@ -323,11 +323,11 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
-		sub_data_frame sub_dfs(sorted_df->get_num_vecs());
+		sub_data_frame sub_dfs(sorted_df.size());
 		local_vec_store::const_ptr sub_sorted_col;
-		for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
-			sub_dfs[i] = sorted_df->get_vec(i)->get_portion(start, end - start);
-			if (col_name == sorted_df->get_vec_name(i))
+		for (size_t i = 0; i < sorted_df.size(); i++) {
+			sub_dfs[i] = sorted_df[i].second->get_portion(start, end - start);
+			if (i == (size_t) sorted_col_idx)
 				sub_sorted_col = sub_dfs[i];
 		}
 		assert(sub_sorted_col);
@@ -339,8 +339,26 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 					sub_sorted_col, sub_dfs, op, sub_results, i));
 	}
 	mem_threads->wait4complete();
+	return sub_results;
+}
 
-	if (num_parts == 1)
+static vector_vector::ptr in_mem_groupby(
+		data_frame::const_ptr sorted_df, const std::string &col_name,
+		const gr_apply_operate<sub_data_frame> &op)
+{
+	std::vector<named_cvec_t> df_vecs(sorted_df->get_num_vecs());
+	off_t sorted_col_idx = -1;
+	for (size_t i = 0; i < df_vecs.size(); i++) {
+		df_vecs[i].first = sorted_df->get_vec_name(i);
+		df_vecs[i].second = sorted_df->get_vec(i);
+		if (df_vecs[i].first == col_name)
+			sorted_col_idx = i;
+	}
+	assert(sorted_col_idx >= 0);
+	std::vector<detail::mem_vv_store::ptr> sub_results = parallel_groupby(
+			df_vecs, sorted_col_idx, op);
+
+	if (sub_results.size() == 1)
 		return vector_vector::create(sub_results[0]);
 	else {
 		detail::mem_vv_store::ptr res_vv = sub_results[0];
@@ -350,6 +368,142 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 		assert(ret);
 		return vector_vector::create(res_vv);
 	}
+}
+
+namespace
+{
+
+class EM_df_groupby_dispatcher: public detail::task_dispatcher
+{
+	off_t ele_idx;
+	size_t portion_size;
+	std::string col_name;
+	detail::vec_store::const_ptr groupby_col;
+	data_frame::const_ptr df;
+	detail::EM_vv_store::ptr out_vv;
+	const gr_apply_operate<sub_data_frame> &op;
+public:
+	EM_df_groupby_dispatcher(data_frame::const_ptr df, const std::string &col_name,
+			detail::EM_vv_store::ptr out_vv, size_t portion_size,
+			const gr_apply_operate<sub_data_frame> &_op): op(_op) {
+		ele_idx = 0;
+		this->portion_size = portion_size;
+		this->col_name = col_name;
+		this->groupby_col = df->get_vec(col_name);
+		this->df = df;
+		this->out_vv = out_vv;
+	}
+
+	virtual bool issue_task();
+};
+
+bool EM_df_groupby_dispatcher::issue_task()
+{
+	if ((size_t) ele_idx >= groupby_col->get_length())
+		return false;
+
+	// Indicate whether this portion is the last portion in the vector.
+	bool last_part;
+	// The number of elements we need to read from the sorted vector.
+	size_t read_len;
+	// The number of elements we need to expose on the vectors.
+	size_t real_len;
+	if (portion_size >= groupby_col->get_length() - ele_idx) {
+		last_part = true;
+		read_len = groupby_col->get_length() - ele_idx;
+	}
+	else {
+		last_part = false;
+		read_len = portion_size;
+	}
+	real_len = read_len;
+
+	local_vec_store::const_ptr vec = groupby_col->get_portion(ele_idx, read_len);
+	// If this isn't the last portion, we should expose the part of
+	// the sorted vector that all elements with the same values in the vector
+	// are guaranteed in the part.
+	if (!last_part) {
+		const agg_operate &find_prev
+			= vec->get_type().get_agg_ops().get_find_prev();
+		size_t off;
+		size_t entry_size = vec->get_type().get_size();
+		find_prev.run(read_len, vec->get_raw_arr() + read_len * entry_size, &off);
+		assert(off < read_len);
+		real_len = read_len - off;
+		// The local buffer may already be a sub vector.
+		const_cast<local_vec_store &>(*vec).expose_sub_vec(vec->get_local_start(),
+				real_len);
+	}
+
+	// TODO it should fetch the rest of columns asynchronously.
+	std::vector<named_cvec_t> df_vecs(df->get_num_vecs());
+	off_t sorted_col_idx = -1;
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		if (df->get_vec_name(i) == col_name) {
+			df_vecs[i].first = col_name;
+			df_vecs[i].second = vec;
+			sorted_col_idx = i;
+		}
+		else {
+			local_vec_store::const_ptr col = df->get_vec(i)->get_portion(
+					ele_idx, real_len);
+			df_vecs[i].first = df->get_vec_name(i);
+			df_vecs[i].second = col;
+		}
+		assert(df_vecs[i].second->get_length() == real_len);
+	}
+
+	assert(sorted_col_idx >= 0);
+	std::vector<detail::mem_vv_store::ptr> sub_vv_results = parallel_groupby(
+			df_vecs, sorted_col_idx, op);
+	std::vector<detail::vec_store::const_ptr> res(sub_vv_results.begin(),
+			sub_vv_results.end());
+	// TODO data should also be written back asynchronously.
+	out_vv->append(res.begin(), res.end());
+
+	ele_idx += real_len;
+	return true;
+}
+
+}
+
+static vector_vector::ptr EM_groupby(
+		data_frame::const_ptr sorted_df, const std::string &col_name,
+		const gr_apply_operate<sub_data_frame> &op)
+{
+	detail::EM_vv_store::ptr out_vv = detail::EM_vv_store::create(
+			op.get_output_type());
+	EM_df_groupby_dispatcher::ptr groupby_dispatcher(
+			new EM_df_groupby_dispatcher(sorted_df, col_name, out_vv,
+				// TODO we need to allow users to configure the block size.
+				1024 * 1024, op));
+	detail::io_worker_task worker(groupby_dispatcher, 1);
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
+		detail::vec_store::const_ptr col = sorted_df->get_vec(i);
+		const detail::EM_object *obj
+			= dynamic_cast<const detail::EM_object *>(col.get());
+		worker.register_EM_obj(const_cast<detail::EM_object *>(obj));
+	}
+	worker.register_EM_obj(out_vv.get());
+	worker.run();
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
+		detail::vec_store::const_ptr col = sorted_df->get_vec(i);
+		const detail::EM_object *obj
+			= dynamic_cast<const detail::EM_object *>(col.get());
+		const_cast<detail::EM_object *>(obj)->destroy_ios();
+	}
+	out_vv->destroy_ios();
+	return vector_vector::create(out_vv);
+}
+
+vector_vector::ptr data_frame::groupby(const std::string &col_name,
+		const gr_apply_operate<sub_data_frame> &op) const
+{
+	data_frame::const_ptr sorted_df = sort(col_name);
+	if (named_vecs.front().second->is_in_mem())
+		return in_mem_groupby(sorted_df, col_name, op);
+	else
+		return EM_groupby(sorted_df, col_name, op);
 }
 
 }

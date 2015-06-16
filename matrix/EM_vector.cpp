@@ -304,9 +304,13 @@ bool EM_vec_store::append(
 	task_dispatcher::ptr dispatcher(new EM_vec_append_dispatcher(writer,
 				vec_start, vec_end));
 	io_worker_task worker(dispatcher, 1);
+	bool has_io = this->has_io();
 	worker.register_EM_obj(this);
 	worker.run();
-	this->destroy_ios();
+	// If the thread doesn't have I/O originally, we can destroy
+	// the I/O instance.
+	if (!has_io)
+		this->destroy_ios();
 
 	return vec_store::resize(get_length() + tot_size);
 }
@@ -542,6 +546,11 @@ void EM_vec_store::destroy_ios()
 	int ret = pthread_key_create(&io_key, NULL);
 	assert(ret == 0);
 	thread_ios.clear();
+}
+
+bool EM_vec_store::has_io() const
+{
+	return pthread_getspecific(io_key) != NULL;
 }
 
 safs::io_interface &EM_vec_store::get_curr_io() const

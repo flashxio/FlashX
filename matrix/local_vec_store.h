@@ -47,10 +47,6 @@ class local_vec_store: public detail::mem_vec_store
 	off_t global_start;
 	int node_id;
 protected:
-	off_t get_local_start() const {
-		return global_start - orig_global_start;
-	}
-
 	void set_data(const char *const_data, char *data) {
 		this->data = data;
 		this->const_data = const_data;
@@ -92,6 +88,10 @@ public:
 
 	off_t get_global_start() const {
 		return global_start;
+	}
+
+	off_t get_local_start() const {
+		return global_start - orig_global_start;
 	}
 
 	typedef std::shared_ptr<local_vec_store> ptr;
