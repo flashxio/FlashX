@@ -426,7 +426,7 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+	factor_vector::ptr labels = factor_vector::create(f, num_rows, true,
 			set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
@@ -464,7 +464,7 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+	factor_vector::ptr labels = factor_vector::create(f, num_rows, true,
 			set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
