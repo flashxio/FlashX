@@ -1,5 +1,7 @@
 #include <malloc.h>
 
+#include "safs_file.h"
+
 #include "EM_vector.h"
 #include "sparse_matrix.h"
 #include "matrix_config.h"
@@ -195,6 +197,19 @@ void test_append()
 	em_vec->append(vecs.begin(), vecs.end());
 }
 
+void test_set_persistent()
+{
+	printf("test set persistent\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(1000000, get_scalar_type<int>());
+	std::string file_name = "test.vec";
+	bool ret = vec->set_persistent(file_name);
+	assert(ret);
+	vec = NULL;
+	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
+	assert(f.exist());
+	f.delete_file();
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -209,6 +224,7 @@ int main(int argc, char *argv[])
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
 	matrix_conf.set_min_io_size(1024 * 256);
 
+	test_set_persistent();
 	test_append();
 	test_setdata();
 	test_sort_summary();

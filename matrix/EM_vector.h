@@ -55,9 +55,11 @@ class EM_vec_store: public vec_store, public EM_object
 	};
 
 	class file_holder {
+		bool persistent;
 		std::string file_name;
 		file_holder(const std::string &name) {
 			this->file_name = name;
+			persistent = false;
 		}
 	public:
 		typedef std::shared_ptr<file_holder> ptr;
@@ -67,6 +69,7 @@ class EM_vec_store: public vec_store, public EM_object
 		std::string get_name() const {
 			return file_name;
 		}
+		bool set_persistent(const std::string &new_name);
 	};
 
 	class io_set {
@@ -108,6 +111,13 @@ public:
 	size_t get_byte_off(size_t entry_off) const {
 		return entry_off * get_entry_size();
 	}
+
+	/*
+	 * This sets the vector persistent.
+	 * Even if this vector object is destroyed, the vector data will still
+	 * exist in SAFS.
+	 */
+	bool set_persistent(const std::string &name);
 
 	virtual bool resize(size_t length);
 

@@ -185,9 +185,21 @@ EM_vec_store::file_holder::ptr EM_vec_store::file_holder::create_temp(
 
 EM_vec_store::file_holder::~file_holder()
 {
+	if (!persistent) {
+		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
+		assert(f.exist());
+		f.delete_file();
+	}
+}
+
+bool EM_vec_store::file_holder::set_persistent(const std::string &new_name)
+{
 	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-	assert(f.exist());
-	f.delete_file();
+	if (!f.rename(new_name))
+		return false;
+	persistent = true;
+	this->file_name = new_name;
+	return true;
 }
 
 EM_vec_store::ptr EM_vec_store::cast(vec_store::ptr vec)
@@ -1448,6 +1460,18 @@ matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
 	BOOST_LOG_TRIVIAL(error)
 		<< "can't convert a NUMA vector to a matrix";
 	return matrix_store::ptr();
+}
+
+bool EM_vec_store::set_persistent(const std::string &name)
+{
+	if (!holder->set_persistent(name))
+		return false;
+	// TODO we have to make sure no other threads are accessing the data
+	// in the vector. How can we do that?
+	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+			holder->get_name(), safs::REMOTE_ACCESS);
+	ios = io_set::ptr(new io_set(factory));
+	return true;
 }
 
 }
