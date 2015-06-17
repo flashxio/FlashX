@@ -69,20 +69,29 @@ class EM_vec_store: public vec_store, public EM_object
 		}
 	};
 
+	class io_set {
+		safs::file_io_factory::shared_ptr factory;
+		// This keeps an I/O instance for each thread.
+		std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
+		pthread_key_t io_key;
+		pthread_spinlock_t io_lock;
+	public:
+		typedef std::shared_ptr<io_set> ptr;
+		io_set(safs::file_io_factory::shared_ptr factory);
+		~io_set();
+
+		safs::io_interface::ptr create_io();
+		// This returns the I/O instance for the curr thread.
+		safs::io_interface &get_curr_io() const;
+		// Test if the current thread has an I/O instance for the vector.
+		bool has_io() const;
+	};
+
 	file_holder::ptr holder;
-	safs::file_io_factory::shared_ptr factory;
-	// This keeps an I/O instance for each thread.
-	std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
-	pthread_key_t io_key;
-	pthread_spinlock_t io_lock;
+	io_set::ptr ios;
 
 	EM_vec_store(size_t length, const scalar_type &type);
 	EM_vec_store(const EM_vec_store &store);
-
-	// This returns the I/O instance for the curr thread.
-	safs::io_interface &get_curr_io() const;
-	// Test if the current thread has an I/O instance for the vector.
-	bool has_io() const;
 public:
 	typedef std::shared_ptr<EM_vec_store> ptr;
 	typedef std::shared_ptr<const EM_vec_store> const_ptr;

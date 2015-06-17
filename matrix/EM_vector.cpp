@@ -212,28 +212,20 @@ EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
 		store.get_length(), store.get_type(), false)
 {
 	holder = store.holder;
-	factory = store.factory;
-	assert(store.thread_ios.empty());
-	int ret = pthread_key_create(&io_key, NULL);
-	assert(ret == 0);
-	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
+	ios = store.ios;
 }
 
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 		length, type, false)
 {
 	holder = file_holder::create_temp(length * type.get_size());
-	factory = safs::create_io_factory(holder->get_name(), safs::REMOTE_ACCESS);
-	int ret = pthread_key_create(&io_key, NULL);
-	assert(ret == 0);
-	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
+	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+			holder->get_name(), safs::REMOTE_ACCESS);
+	ios = io_set::ptr(new io_set(factory));
 }
 
 EM_vec_store::~EM_vec_store()
 {
-	pthread_spin_destroy(&io_lock);
-	pthread_key_delete(io_key);
-	thread_ios.clear();
 }
 
 bool EM_vec_store::resize(size_t length)
@@ -415,7 +407,7 @@ local_vec_store::ptr EM_vec_store::get_portion_async(off_t orig_start,
 	size = roundup_ele(size, PAGE_SIZE, entry_size);
 
 	// TODO fix the bug if `start' and `size' aren't aligned with PAGE_SIZE.
-	safs::io_interface &io = get_curr_io();
+	safs::io_interface &io = ios->get_curr_io();
 	local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
 				get_type(), -1));
 	off_t off = get_byte_off(start);
@@ -437,7 +429,7 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 {
 	size_t entry_size = get_type().get_size();
 	// TODO fix the bug if `locs' aren't aligned with PAGE_SIZE.
-	safs::io_interface &io = get_curr_io();
+	safs::io_interface &io = ios->get_curr_io();
 	std::vector<safs::io_request> reqs(locs.size());
 	std::vector<local_vec_store::ptr> ret_bufs(locs.size());
 	for (size_t i = 0; i < locs.size(); i++) {
@@ -489,7 +481,7 @@ local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 	off_t loc = round_ele(orig_loc, PAGE_SIZE, entry_size);
 	size_t size = orig_size + (orig_loc - loc);
 	size = roundup_ele(size, PAGE_SIZE, entry_size);
-	safs::io_interface &io = get_curr_io();
+	safs::io_interface &io = ios->get_curr_io();
 	bool ready = false;
 	portion_compute::ptr compute(new sync_read_compute(ready));
 	local_vec_store::ptr ret = get_portion_async(loc, size, compute);
@@ -507,7 +499,7 @@ void EM_vec_store::write_portion(local_vec_store::const_ptr store, off_t off)
 		start = store->get_global_start();
 	assert(start >= 0);
 
-	safs::io_interface &io = get_curr_io();
+	safs::io_interface &io = ios->get_curr_io();
 	off_t off_in_bytes = get_byte_off(start);
 	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
 	safs::io_request req(const_cast<char *>(store->get_raw_arr()), loc,
@@ -531,6 +523,11 @@ vec_store::ptr EM_vec_store::sort_with_index()
 
 safs::io_interface::ptr EM_vec_store::create_io()
 {
+	return ios->create_io();
+}
+
+safs::io_interface::ptr EM_vec_store::io_set::create_io()
+{
 	thread *t = thread::get_curr_thread();
 	assert(t);
 	pthread_spin_lock(&io_lock);
@@ -550,18 +547,33 @@ safs::io_interface::ptr EM_vec_store::create_io()
 	}
 }
 
-bool EM_vec_store::has_io() const
+EM_vec_store::io_set::io_set(safs::file_io_factory::shared_ptr factory)
+{
+	this->factory = factory;
+	int ret = pthread_key_create(&io_key, NULL);
+	assert(ret == 0);
+	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
+}
+
+EM_vec_store::io_set::~io_set()
+{
+	pthread_spin_destroy(&io_lock);
+	pthread_key_delete(io_key);
+	thread_ios.clear();
+}
+
+bool EM_vec_store::io_set::has_io() const
 {
 	return pthread_getspecific(io_key) != NULL;
 }
 
-safs::io_interface &EM_vec_store::get_curr_io() const
+safs::io_interface &EM_vec_store::io_set::get_curr_io() const
 {
 	void *io_addr = pthread_getspecific(io_key);
 	if (io_addr)
 		return *(safs::io_interface *) io_addr;
 	else {
-		safs::io_interface::ptr io = const_cast<EM_vec_store *>(this)->create_io();
+		safs::io_interface::ptr io = const_cast<io_set *>(this)->create_io();
 		return *io;
 	}
 }
@@ -1229,9 +1241,8 @@ void EM_vec_store::sort()
 	merge_worker.run();
 
 	// In the end, we points to the new file.
-	factory = tmp->factory;
-	tmp->factory = NULL;
 	holder = tmp->holder;
+	ios = tmp->ios;
 }
 
 ////////////////////////// Set data of the vector ////////////////////////////
