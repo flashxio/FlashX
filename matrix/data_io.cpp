@@ -264,13 +264,14 @@ void file_parse_task::run()
 
 }
 
-data_frame::ptr read_lines(const std::string &file, const line_parser &parser)
+data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
+		bool in_mem)
 {
 	data_frame::ptr df = data_frame::create();
 	df->add_vec(parser.get_col_name(0),
-			detail::smp_vec_store::create(0, parser.get_col_type(0)));
+			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
 	df->add_vec(parser.get_col_name(1),
-			detail::smp_vec_store::create(0, parser.get_col_type(1)));
+			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
 
 	file_io::ptr io = text_file_io::create(file);
 	if (io == NULL)
@@ -306,16 +307,16 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser)
 }
 
 data_frame::ptr read_lines(const std::vector<std::string> &files,
-		const line_parser &parser)
+		const line_parser &parser, bool in_mem)
 {
 	if (files.size() == 1)
-		return read_lines(files[0], parser);
+		return read_lines(files[0], parser, in_mem);
 
 	data_frame::ptr df = data_frame::create();
 	df->add_vec(parser.get_col_name(0),
-			detail::vec_store::create(0, parser.get_col_type(0)));
+			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
 	df->add_vec(parser.get_col_name(1),
-			detail::vec_store::create(0, parser.get_col_type(1)));
+			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
 
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();

@@ -122,18 +122,23 @@ void print_usage()
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
 	fprintf(stderr, "el2al [options] conf_file edge_file graph_name\n");
 	fprintf(stderr, "-u: undirected graph\n");
+	fprintf(stderr, "-e: use external memory\n");
 }
 
 int main(int argc, char *argv[])
 {
 	bool directed = true;
+	bool in_mem = true;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "u")) != -1) {
+	while ((opt = getopt(argc, argv, "ue")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
 				directed = false;
+				break;
+			case 'e':
+				in_mem = false;
 				break;
 			default:
 				print_usage();
@@ -160,7 +165,12 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	edge_parser parser;
-	data_frame::ptr df = read_lines(files, parser);
+	/*
+	 * We only need to indicate here whether we use external memory or not.
+	 * If the columns in the data frame are in external memory, it'll always
+	 * use external data containers for the remaining of processing.
+	 */
+	data_frame::ptr df = read_lines(files, parser, in_mem);
 	printf("There are %ld edges\n", df->get_num_entries());
 
 	fg::vertex_id_t max_vid = 0;
@@ -217,6 +227,7 @@ int main(int argc, char *argv[])
 	if (graph->get_graph_data())
 		graph->get_graph_data()->dump(adj_file);
 
+	df = NULL;
 	destroy_flash_matrix();
 
 	return 0;
