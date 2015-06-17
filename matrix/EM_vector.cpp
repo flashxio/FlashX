@@ -255,29 +255,43 @@ class EM_vec_append_dispatcher: public task_dispatcher
 	std::vector<vec_store::const_ptr>::const_iterator vec_it;
 	std::vector<vec_store::const_ptr>::const_iterator vec_end;
 	seq_writer &writer;
+	size_t portion_size;
+	off_t local_off;
 public:
 	EM_vec_append_dispatcher(seq_writer &_writer,
 			std::vector<vec_store::const_ptr>::const_iterator vec_start,
-			std::vector<vec_store::const_ptr>::const_iterator vec_end): writer(
-				_writer) {
+			std::vector<vec_store::const_ptr>::const_iterator vec_end,
+			size_t portion_size): writer(_writer) {
 		this->vec_it = vec_start;
 		this->vec_end = vec_end;
+		this->portion_size = portion_size;
+		this->local_off = 0;
 	}
-	virtual bool issue_task() {
-		if (vec_it == vec_end) {
-			writer.flush_buffer_data(true);
-			return false;
-		}
-		mem_vec_store::const_ptr vec = mem_vec_store::cast(*vec_it);
-		assert(vec->get_raw_arr());
-		local_vec_store::ptr lstore(new local_cref_vec_store(
-					vec->get_raw_arr(), -1, vec->get_length(),
-					vec->get_type(), -1));
-		writer.append(lstore);
-		vec_it++;
-		return true;
-	}
+	virtual bool issue_task();
 };
+
+bool EM_vec_append_dispatcher::issue_task()
+{
+	if (vec_it == vec_end) {
+		writer.flush_buffer_data(true);
+		return false;
+	}
+	vec_store::const_ptr vec = *vec_it;
+	size_t size;
+	if (portion_size >= vec->get_length() - local_off) {
+		size = vec->get_length() - local_off;
+		vec_it++;
+		local_off = 0;
+	}
+	else {
+		size = portion_size;
+		local_off += portion_size;
+	}
+	// TODO we might want to read portion asynchronously.
+	local_vec_store::const_ptr lstore = vec->get_portion(local_off, size);
+	writer.append(lstore);
+	return true;
+}
 
 }
 
@@ -288,11 +302,6 @@ bool EM_vec_store::append(
 	size_t tot_size = 0;
 	for (auto it = vec_start; it != vec_end; it++) {
 		tot_size += (*it)->get_length();
-		if (!(*it)->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append an EM vector right now";
-			return false;
-		}
 		if (get_type() != (*it)->get_type()) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "can't append a vector with different type";
@@ -317,8 +326,9 @@ bool EM_vec_store::append(
 		writer.append(portion);
 	}
 
+	size_t portion_size = matrix_conf.get_stream_io_size() / get_type().get_size();
 	task_dispatcher::ptr dispatcher(new EM_vec_append_dispatcher(writer,
-				vec_start, vec_end));
+				vec_start, vec_end, portion_size));
 	io_worker_task worker(dispatcher, 1);
 	worker.register_EM_obj(this);
 	worker.run();
@@ -328,7 +338,13 @@ bool EM_vec_store::append(
 
 bool EM_vec_store::append(const vec_store &vec)
 {
-	assert(0);
+	struct deleter {
+		void operator()(const vec_store *) {
+		}
+	};
+	std::vector<vec_store::const_ptr> vecs(1);
+	vecs[0] = vec_store::const_ptr(&vec, deleter());
+	return append(vecs.begin(), vecs.end());
 }
 
 namespace
