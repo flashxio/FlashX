@@ -143,6 +143,8 @@ public:
 	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
 	virtual local_vec_store::const_ptr get_portion(off_t loc,
 			size_t size) const;
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc);
 
 	void set_raw(off_t idx, const char *val) {
 		assert(const_data == data);

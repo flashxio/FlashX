@@ -121,6 +121,8 @@ public:
 	virtual size_t get_portion_size() const;
 	virtual local_vec_store::const_ptr get_portion(off_t loc, size_t size) const;
 	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc);
 	/*
 	 * This is different from the one used in the memory data container.
 	 * This interface accepts a portion compute object, which is invoked
@@ -138,7 +140,8 @@ public:
 	 * The location is indicated in the local buffer. However, a user
 	 * can redirect the location by providing `off' as a parameter.
 	 */
-	virtual void write_portion(local_vec_store::const_ptr portion, off_t off = -1);
+	virtual void write_portion_async(local_vec_store::const_ptr portion,
+			off_t off = -1);
 
 	virtual void reset_data();
 	virtual void set_data(const set_vec_operate &op);

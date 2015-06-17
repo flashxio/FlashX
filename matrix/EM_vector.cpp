@@ -127,7 +127,7 @@ void seq_writer::flush_buffer_data(bool last)
 				PAGE_SIZE) / buf->get_entry_size();
 	buf->resize(data_size_in_buf);
 	const scalar_type &type = buf->get_type();
-	to_vec->write_portion(buf, merge_end);
+	to_vec->write_portion_async(buf, merge_end);
 	merge_end += data_size_in_buf;
 
 	if (!last)
@@ -338,7 +338,7 @@ public:
 		assert(store);
 		assert(store->get_raw_arr() == buf);
 		assert(store->get_length() * store->get_entry_size() == size);
-		to_vec.write_portion(store);
+		to_vec.write_portion_async(store);
 	}
 };
 
@@ -454,6 +454,24 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 	return ret_bufs;
 }
 
+bool EM_vec_store::set_portion(std::shared_ptr<const local_vec_store> store,
+		off_t loc)
+{
+	if (store->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The input store has a different type";
+		return false;
+	}
+	if (loc + store->get_length() > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "out of boundary";
+		return false;
+	}
+
+	write_portion_async(store, loc);
+	safs::io_interface &io = ios->get_curr_io();
+	io.wait4complete(1);
+	return true;
+}
+
 local_vec_store::const_ptr EM_vec_store::get_portion(off_t loc, size_t size) const
 {
 	return const_cast<EM_vec_store *>(this)->get_portion(loc, size);
@@ -492,7 +510,8 @@ local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 	return ret;
 }
 
-void EM_vec_store::write_portion(local_vec_store::const_ptr store, off_t off)
+void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
+		off_t off)
 {
 	off_t start = off;
 	if (start < 0)
@@ -723,7 +742,7 @@ void EM_vec_sort_compute::run(char *buf, size_t size)
 		// the size of data written to disks is aligned to the page size.
 		sort_buf->reset_expose();
 		// Write the sorting result to disks.
-		to_vecs.front()->write_portion(sort_buf);
+		to_vecs.front()->write_portion_async(sort_buf);
 		for (size_t i = 1; i < portions.size(); i++) {
 			portions[i]->reset_expose();
 			// If the element size is different in each array, the padding
@@ -737,7 +756,7 @@ void EM_vec_sort_compute::run(char *buf, size_t size)
 			}
 
 			local_vec_store::ptr shuffle_buf = portions[i]->get(orig_offs);
-			to_vecs[i]->write_portion(shuffle_buf,
+			to_vecs[i]->write_portion_async(shuffle_buf,
 					portions[i]->get_global_start());
 		}
 	}
@@ -1405,7 +1424,7 @@ void EM_vec_setdata_dispatcher::create_vec_task(off_t global_start,
 	buf->set_data(op);
 	if (length != orig_length)
 		buf->reset_expose();
-	to_vec.write_portion(buf);
+	to_vec.write_portion_async(buf);
 }
 
 }

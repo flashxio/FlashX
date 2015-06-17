@@ -54,6 +54,27 @@ local_vec_store::const_ptr local_vec_store::get_portion(off_t loc,
 				size, get_type(), get_node_id()));
 }
 
+bool local_vec_store::set_portion(std::shared_ptr<const local_vec_store> store,
+		off_t loc)
+{
+	if (store->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The input store has a different type";
+		return false;
+	}
+	if (loc + store->get_length() > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "out of boundary";
+		return false;
+	}
+	if (get_raw_arr() == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "This local vector is read-only";
+		return false;
+	}
+	size_t entry_size = get_type().get_size();
+	memcpy(get_raw_arr() + loc * entry_size, store->get_raw_arr(),
+			store->get_length() * entry_size);
+	return true;
+}
+
 detail::vec_store::ptr local_vec_store::sort_with_index()
 {
 	char *data_ptr = get_raw_arr();

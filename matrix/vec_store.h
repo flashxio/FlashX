@@ -96,6 +96,8 @@ public:
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;
 
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc) = 0;
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
 			size_t size) = 0;
 	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,

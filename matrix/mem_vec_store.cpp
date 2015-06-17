@@ -243,6 +243,23 @@ void smp_vec_store::set(const std::vector<const char *> &locs)
 	get_type().get_sg().gather(locs, arr);
 }
 
+bool smp_vec_store::set_portion(std::shared_ptr<const local_vec_store> store,
+		off_t loc)
+{
+	if (store->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The input store has a different type";
+		return false;
+	}
+	if (loc + store->get_length() > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "out of boundary";
+		return false;
+	}
+	size_t entry_size = get_type().get_size();
+	memcpy(arr + loc * entry_size, store->get_raw_arr(),
+			store->get_length() * entry_size);
+	return true;
+}
+
 local_vec_store::ptr smp_vec_store::get_portion(off_t loc, size_t size)
 {
 	if (loc + size > get_length()) {

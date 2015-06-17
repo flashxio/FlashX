@@ -163,6 +163,11 @@ public:
 		assert(0);
 		return false;
 	}
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t off) {
+		assert(0);
+		return false;
+	}
 };
 
 }

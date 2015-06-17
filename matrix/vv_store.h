@@ -121,6 +121,11 @@ public:
 	virtual void set_data(const set_vec_operate &op) {
 		assert(0);
 	}
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t off) {
+		assert(0);
+		return false;
+	}
 
 	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
 			size_t ncol, bool byrow) const {

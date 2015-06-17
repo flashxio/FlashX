@@ -140,6 +140,8 @@ public:
 		return vec_store::ptr(new smp_vec_store(*this));
 	}
 
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc);
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc, size_t size);
 	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
 			size_t size) const;
