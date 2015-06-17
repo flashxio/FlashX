@@ -36,16 +36,6 @@ class vv_store: public vec_store
 	vec_store::ptr store;
 
 	std::vector<off_t> get_rel_offs(off_t loc, size_t size) const;
-protected:
-	const vec_store &get_data() const {
-		return *store;
-	}
-	vec_store &get_data() {
-		return *store;
-	}
-	off_t get_vec_off(off_t idx) const {
-		return vec_offs[idx];
-	}
 public:
 	typedef std::shared_ptr<vv_store> ptr;
 	typedef std::shared_ptr<const vv_store> const_ptr;
@@ -63,6 +53,16 @@ public:
 
 	vv_store(const scalar_type &type, bool in_mem);
 	vv_store(const std::vector<off_t> &offs, vec_store::ptr store);
+
+	const vec_store &get_data() const {
+		return *store;
+	}
+	vec_store &get_data() {
+		return *store;
+	}
+	off_t get_vec_off(off_t idx) const {
+		return vec_offs[idx];
+	}
 
 	size_t get_num_bytes(off_t idx) const {
 		return vec_offs[idx + 1] - vec_offs[idx];

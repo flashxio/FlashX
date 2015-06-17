@@ -112,6 +112,13 @@ public:
 		scalar_variable::ptr res = aggregate(max_op);
 		return *(T *) res->get_raw();
 	}
+	template<class T>
+	T sum() const {
+		const bulk_operate &sum_op = *get_type().get_basic_ops().get_op(
+				basic_ops::op_idx::ADD);
+		scalar_variable::ptr res = aggregate(sum_op);
+		return *(T *) res->get_raw();
+	}
 
 	bool export2(FILE *f) const;
 };
