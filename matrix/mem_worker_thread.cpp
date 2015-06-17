@@ -33,6 +33,7 @@ namespace detail
 
 mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 {
+	tot_num_tasks = 0;
 	threads.resize(num_nodes);
 	for (int i = 0; i < num_nodes; i++) {
 		threads[i].resize(nthreads_per_node);
@@ -52,10 +53,14 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
  */
 void mem_thread_pool::process_task(int node_id, thread_task *task)
 {
+	if (node_id < 0)
+		node_id = tot_num_tasks % get_num_nodes();
+
 	assert((size_t) node_id < threads.size());
 	size_t idx = ntasks_per_node[node_id] % threads[node_id].size();
 	threads[node_id][idx]->add_task(task);
 	ntasks_per_node[node_id]++;
+	tot_num_tasks++;
 }
 
 void mem_thread_pool::wait4complete()
@@ -65,6 +70,17 @@ void mem_thread_pool::wait4complete()
 		for (size_t j = 0; j < nthreads; j++)
 			threads[i][j]->wait4complete();
 	}
+}
+
+size_t mem_thread_pool::get_num_pending() const
+{
+	size_t ret = 0;
+	for (size_t i = 0; i < threads.size(); i++) {
+		size_t nthreads = threads[i].size();
+		for (size_t j = 0; j < nthreads; j++)
+			ret += threads[i][j]->get_num_pending();
+	}
+	return ret;
 }
 
 static mem_thread_pool::ptr global_threads;

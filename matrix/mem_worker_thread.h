@@ -62,6 +62,7 @@ public:
  */
 class mem_thread_pool
 {
+	size_t tot_num_tasks;
 	std::vector<size_t> ntasks_per_node;
 	std::vector<std::vector<std::shared_ptr<pool_task_thread> > > threads;
 
@@ -75,6 +76,8 @@ public:
 	static ptr create(int num_nodes, int nthreads_per_node) {
 		return ptr(new mem_thread_pool(num_nodes, nthreads_per_node));
 	}
+
+	size_t get_num_pending() const;
 
 	size_t get_num_nodes() const {
 		return ntasks_per_node.size();

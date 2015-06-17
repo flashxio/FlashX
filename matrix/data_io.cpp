@@ -167,21 +167,43 @@ namespace
 
 class data_frame_set
 {
+	std::atomic<size_t> num_dfs;
 	std::vector<data_frame::ptr> dfs;
-	pthread_spinlock_t lock;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
 public:
 	data_frame_set() {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		pthread_mutex_init(&lock, NULL);
+		pthread_cond_init(&cond, NULL);
+		num_dfs = 0;
+	}
+	~data_frame_set() {
+		pthread_mutex_destroy(&lock);
+		pthread_cond_destroy(&cond);
 	}
 
 	void add(data_frame::ptr df) {
-		pthread_spin_lock(&lock);
+		pthread_mutex_lock(&lock);
 		dfs.push_back(df);
-		pthread_spin_unlock(&lock);
+		num_dfs++;
+		pthread_mutex_unlock(&lock);
+		pthread_cond_signal(&cond);
 	}
 
-	const std::vector<data_frame::ptr> &get_data_frames() const {
-		return dfs;
+	std::vector<data_frame::ptr> fetch_data_frames() {
+		std::vector<data_frame::ptr> ret;
+		pthread_mutex_lock(&lock);
+		while (dfs.empty())
+			pthread_cond_wait(&cond, &lock);
+		ret = dfs;
+		dfs.clear();
+		num_dfs = 0;
+		pthread_mutex_unlock(&lock);
+		return ret;
+	}
+
+	size_t get_num_dfs() const {
+		return num_dfs;
 	}
 };
 
@@ -210,49 +232,123 @@ public:
 	}
 };
 
-}
-
-static bool read_lines(const std::string &file, const line_parser &parser,
-		data_frame &df)
+class file_parse_task: public thread_task
 {
-	file_io::ptr io = text_file_io::create(file);
-	if (io == NULL)
-		return false;
+	file_io::ptr io;
+	const line_parser &parser;
+	data_frame_set &dfs;
+public:
+	file_parse_task(file_io::ptr io, const line_parser &_parser,
+			data_frame_set &_dfs): parser(_parser), dfs(_dfs) {
+		this->io = io;
+	}
 
-	printf("parse edge list\n");
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	data_frame_set dfs;
-	size_t i = 0;
+	void run();
+};
+
+void file_parse_task::run()
+{
 	while (!io->eof()) {
 		size_t size = 0;
 		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
-
-		int node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id,
-				new parse_task(std::move(lines), size, parser, dfs));
-		i++;
+		assert(size > 0);
+		data_frame::ptr df = data_frame::create();
+		df->add_vec(parser.get_col_name(0),
+				detail::smp_vec_store::create(0, parser.get_col_type(0)));
+		df->add_vec(parser.get_col_name(1),
+				detail::smp_vec_store::create(0, parser.get_col_type(1)));
+		parse_lines(std::move(lines), size, parser, *df);
+		dfs.add(df);
 	}
-	mem_threads->wait4complete();
-
-	printf("merge parse results\n");
-	df.append(dfs.get_data_frames().begin(), dfs.get_data_frames().end());
-	return true;
 }
 
-data_frame::ptr read_lines(const std::vector<std::string> &files,
-		const line_parser &parser)
+}
+
+data_frame::ptr read_lines(const std::string &file, const line_parser &parser)
 {
 	data_frame::ptr df = data_frame::create();
 	df->add_vec(parser.get_col_name(0),
 			detail::smp_vec_store::create(0, parser.get_col_type(0)));
 	df->add_vec(parser.get_col_name(1),
 			detail::smp_vec_store::create(0, parser.get_col_type(1)));
-	BOOST_FOREACH(std::string file, files) {
-		bool ret = read_lines(file, parser, *df);
-		if (!ret)
-			return data_frame::ptr();
+
+	file_io::ptr io = text_file_io::create(file);
+	if (io == NULL)
+		return data_frame::ptr();
+
+	printf("parse edge list\n");
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	data_frame_set dfs;
+	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+
+	while (!io->eof()) {
+		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
+		for (size_t i = 0; i < num_tasks && !io->eof(); i++) {
+			size_t size = 0;
+			std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+
+			mem_threads->process_task(-1,
+					new parse_task(std::move(lines), size, parser, dfs));
+		}
+		if (dfs.get_num_dfs() > 0) {
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			if (!tmp_dfs.empty())
+				df->append(tmp_dfs.begin(), tmp_dfs.end());
+		}
 	}
+	mem_threads->wait4complete();
+	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+	if (!tmp_dfs.empty())
+		df->append(tmp_dfs.begin(), tmp_dfs.end());
+
+	return df;
+}
+
+data_frame::ptr read_lines(const std::vector<std::string> &files,
+		const line_parser &parser)
+{
+	if (files.size() == 1)
+		return read_lines(files[0], parser);
+
+	data_frame::ptr df = data_frame::create();
+	df->add_vec(parser.get_col_name(0),
+			detail::vec_store::create(0, parser.get_col_type(0)));
+	df->add_vec(parser.get_col_name(1),
+			detail::vec_store::create(0, parser.get_col_type(1)));
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	data_frame_set dfs;
+	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+	/*
+	 * We assign a thread to each file. This works better if there are
+	 * many small input files. If the input files are compressed, this
+	 * approach also parallelizes decompression.
+	 *
+	 * TODO it may not work so well if there are a small number of large
+	 * input files.
+	 */
+	auto file_it = files.begin();
+	while (file_it != files.end()) {
+		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
+		for (size_t i = 0; i < num_tasks && file_it != files.end(); i++) {
+			file_io::ptr io = text_file_io::create(*file_it);
+			file_it++;
+			mem_threads->process_task(-1,
+					new file_parse_task(io, parser, dfs));
+		}
+		if (dfs.get_num_dfs() > 0) {
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			if (!tmp_dfs.empty())
+				df->append(tmp_dfs.begin(), tmp_dfs.end());
+		}
+	}
+	mem_threads->wait4complete();
+	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+	if (!tmp_dfs.empty())
+		df->append(tmp_dfs.begin(), tmp_dfs.end());
+
 	return df;
 }
 
