@@ -316,13 +316,8 @@ bool EM_vec_store::append(
 	task_dispatcher::ptr dispatcher(new EM_vec_append_dispatcher(writer,
 				vec_start, vec_end));
 	io_worker_task worker(dispatcher, 1);
-	bool has_io = this->has_io();
 	worker.register_EM_obj(this);
 	worker.run();
-	// If the thread doesn't have I/O originally, we can destroy
-	// the I/O instance.
-	if (!has_io)
-		this->destroy_ios();
 
 	return vec_store::resize(get_length() + tot_size);
 }
@@ -392,8 +387,6 @@ vec_store::ptr EM_vec_store::deep_copy() const
 	sort_worker.register_EM_obj(const_cast<EM_vec_store *>(this));
 	sort_worker.register_EM_obj(new_vec.get());
 	sort_worker.run();
-	const_cast<EM_vec_store *>(this)->destroy_ios();
-	new_vec->destroy_ios();
 	return new_vec;
 }
 
@@ -557,14 +550,6 @@ safs::io_interface::ptr EM_vec_store::create_io()
 	}
 }
 
-void EM_vec_store::destroy_ios()
-{
-	pthread_key_delete(io_key);
-	int ret = pthread_key_create(&io_key, NULL);
-	assert(ret == 0);
-	thread_ios.clear();
-}
-
 bool EM_vec_store::has_io() const
 {
 	return pthread_getspecific(io_key) != NULL;
@@ -573,8 +558,12 @@ bool EM_vec_store::has_io() const
 safs::io_interface &EM_vec_store::get_curr_io() const
 {
 	void *io_addr = pthread_getspecific(io_key);
-	assert(io_addr);
-	return *(safs::io_interface *) io_addr;
+	if (io_addr)
+		return *(safs::io_interface *) io_addr;
+	else {
+		safs::io_interface::ptr io = const_cast<EM_vec_store *>(this)->create_io();
+		return *io;
+	}
 }
 
 ///////////////////////////// Sort the vector /////////////////////////////////
@@ -1170,10 +1159,6 @@ std::vector<EM_vec_store::ptr> sort(
 		sort_worker.register_EM_obj(tmp_vecs[i].get());
 	}
 	sort_worker.run();
-	for (size_t i = 0; i < vecs.size(); i++) {
-		const_cast<EM_vec_store &>(*vecs[i]).destroy_ios();
-		tmp_vecs[i]->destroy_ios();
-	}
 
 	/* Merge all parts.
 	 * Here we assume that one level of merging is enough and we rely on
@@ -1196,10 +1181,6 @@ std::vector<EM_vec_store::ptr> sort(
 		merge_worker.register_EM_obj(out_vecs[i].get());
 	}
 	merge_worker.run();
-	for (size_t i = 0; i < vecs.size(); i++) {
-		tmp_vecs[i]->destroy_ios();
-		out_vecs[i]->destroy_ios();
-	}
 	return out_vecs;
 }
 
@@ -1229,7 +1210,6 @@ void EM_vec_store::sort()
 	io_worker_task sort_worker(sort_dispatcher, 1);
 	sort_worker.register_EM_obj(this);
 	sort_worker.run();
-	this->destroy_ios();
 
 	/* Merge all parts.
 	 * Here we assume that one level of merging is enough and we rely on
@@ -1247,8 +1227,6 @@ void EM_vec_store::sort()
 	merge_worker.register_EM_obj(this);
 	merge_worker.register_EM_obj(tmp.get());
 	merge_worker.run();
-	this->destroy_ios();
-	tmp->destroy_ios();
 
 	// In the end, we points to the new file.
 	factory = tmp->factory;
@@ -1377,7 +1355,6 @@ bool EM_vec_store::is_sorted() const
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
-	const_cast<EM_vec_store *>(this)->destroy_ios();
 	return dispatcher->get_summary().is_sorted();
 }
 
@@ -1433,7 +1410,6 @@ void EM_vec_store::set_data(const set_vec_operate &op)
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
-	destroy_ios();
 }
 
 matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,

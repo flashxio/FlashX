@@ -45,9 +45,6 @@ public:
 		printf("create I/O from %p in vv store\n", &get_data());
 		return dynamic_cast<EM_object &>(get_data()).create_io();
 	}
-	void destroy_ios() {
-		dynamic_cast<EM_object &>(get_data()).destroy_ios();
-	}
 
 	virtual vec_store::ptr shallow_copy() {
 		return ptr(new EM_vv_store(*this));

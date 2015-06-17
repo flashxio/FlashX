@@ -81,7 +81,6 @@ class EM_vec_store: public vec_store, public EM_object
 
 	// This returns the I/O instance for the curr thread.
 	safs::io_interface &get_curr_io() const;
-	void destroy_ios();
 	// Test if the current thread has an I/O instance for the vector.
 	bool has_io() const;
 public:

@@ -486,13 +486,6 @@ static vector_vector::ptr EM_groupby(
 	}
 	worker.register_EM_obj(out_vv.get());
 	worker.run();
-	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
-		detail::vec_store::const_ptr col = sorted_df->get_vec(i);
-		const detail::EM_object *obj
-			= dynamic_cast<const detail::EM_object *>(col.get());
-		const_cast<detail::EM_object *>(obj)->destroy_ios();
-	}
-	out_vv->destroy_ios();
 	return vector_vector::create(out_vv);
 }
 
