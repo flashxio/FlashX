@@ -169,7 +169,8 @@ void seq_writer::append(local_vec_store::const_ptr data)
 	}
 }
 
-static safs::file_io_factory::shared_ptr create_temp_file(size_t num_bytes)
+EM_vec_store::file_holder::ptr EM_vec_store::file_holder::create_temp(
+		size_t num_bytes)
 {
 	char *tmp = tempnam(".", "vec");
 	std::string tmp_name = basename(tmp);
@@ -177,10 +178,16 @@ static safs::file_io_factory::shared_ptr create_temp_file(size_t num_bytes)
 	assert(!f.exist());
 	bool ret = f.create_file(num_bytes);
 	assert(ret);
-	safs::file_io_factory::shared_ptr factory
-		= safs::create_io_factory(tmp_name, safs::REMOTE_ACCESS);
+	EM_vec_store::file_holder::ptr holder(new EM_vec_store::file_holder(tmp_name));
 	free(tmp);
-	return factory;
+	return holder;
+}
+
+EM_vec_store::file_holder::~file_holder()
+{
+	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
+	assert(f.exist());
+	f.delete_file();
 }
 
 EM_vec_store::ptr EM_vec_store::cast(vec_store::ptr vec)
@@ -201,10 +208,22 @@ EM_vec_store::const_ptr EM_vec_store::cast(vec_store::const_ptr vec)
 	return std::static_pointer_cast<const EM_vec_store>(vec);
 }
 
+EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
+		store.get_length(), store.get_type(), false)
+{
+	holder = store.holder;
+	factory = store.factory;
+	assert(store.thread_ios.empty());
+	int ret = pthread_key_create(&io_key, NULL);
+	assert(ret == 0);
+	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
+}
+
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 		length, type, false)
 {
-	factory = create_temp_file(length * type.get_size());
+	holder = file_holder::create_temp(length * type.get_size());
+	factory = safs::create_io_factory(holder->get_name(), safs::REMOTE_ACCESS);
 	int ret = pthread_key_create(&io_key, NULL);
 	assert(ret == 0);
 	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
@@ -215,13 +234,6 @@ EM_vec_store::~EM_vec_store()
 	pthread_spin_destroy(&io_lock);
 	pthread_key_delete(io_key);
 	thread_ios.clear();
-	if (factory) {
-		std::string file_name = factory->get_name();
-		factory = NULL;
-		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-		assert(f.exist());
-		f.delete_file();
-	}
 }
 
 bool EM_vec_store::resize(size_t length)
@@ -387,12 +399,12 @@ vec_store::ptr EM_vec_store::deep_copy() const
 
 vec_store::ptr EM_vec_store::shallow_copy()
 {
-	assert(0);
+	return vec_store::ptr(new EM_vec_store(*this));
 }
 
 vec_store::const_ptr EM_vec_store::shallow_copy() const
 {
-	assert(0);
+	return vec_store::ptr(new EM_vec_store(*this));
 }
 
 size_t EM_vec_store::get_portion_size() const
@@ -1241,6 +1253,7 @@ void EM_vec_store::sort()
 	// In the end, we points to the new file.
 	factory = tmp->factory;
 	tmp->factory = NULL;
+	holder = tmp->holder;
 }
 
 ////////////////////////// Set data of the vector ////////////////////////////

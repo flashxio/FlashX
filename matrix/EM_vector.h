@@ -54,6 +54,22 @@ class EM_vec_store: public vec_store, public EM_object
 		}
 	};
 
+	class file_holder {
+		std::string file_name;
+		file_holder(const std::string &name) {
+			this->file_name = name;
+		}
+	public:
+		typedef std::shared_ptr<file_holder> ptr;
+		static ptr create_temp(size_t num_bytes);
+
+		~file_holder();
+		std::string get_name() const {
+			return file_name;
+		}
+	};
+
+	file_holder::ptr holder;
 	safs::file_io_factory::shared_ptr factory;
 	// This keeps an I/O instance for each thread.
 	std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
@@ -61,6 +77,7 @@ class EM_vec_store: public vec_store, public EM_object
 	pthread_spinlock_t io_lock;
 
 	EM_vec_store(size_t length, const scalar_type &type);
+	EM_vec_store(const EM_vec_store &store);
 
 	// This returns the I/O instance for the curr thread.
 	safs::io_interface &get_curr_io() const;
