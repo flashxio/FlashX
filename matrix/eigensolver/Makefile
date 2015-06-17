@@ -10,8 +10,9 @@ libeigen: $(OBJS)
 	ar -cvq libeigen.a $(OBJS)
 
 clean:
-	rm *~
-	rm *.o
-	rm *.a
+	rm -f *~
+	rm -f *.o
+	rm -f *.a
+	rm -f *.d
 
 -include $(DEPS) 
