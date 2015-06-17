@@ -16,6 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "in_mem_storage.h"
 
 #include "fm_utils.h"
 #include "factor.h"
@@ -25,6 +26,7 @@
 #include "vector_vector.h"
 #include "local_vv_store.h"
 #include "mem_vv_store.h"
+#include "EM_vector.h"
 
 namespace fm
 {
@@ -132,7 +134,7 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	return sorted_df->groupby(sort_vec_name, adj_op);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_graph(
+static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_directed_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
 	// Leave the space for graph header.
@@ -205,11 +207,6 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 			fg::graph_header::get_header_size());
 	graph_data->set_portion(header_store, 0);
 
-	printf("create the graph image\n");
-	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
-			detail::smp_vec_store::cast(graph_data)->get_raw_data(),
-			graph_data->get_length());
-
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
@@ -220,10 +217,11 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_g
 				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
 				header);
-	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
+			graph_data);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected_graph(
+static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undirected_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
 	// Leave the space for graph header.
@@ -265,10 +263,6 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 		= dynamic_cast<const detail::vv_store &>(adjs->get_data());
 	graph_data->append(adj_store.get_data());
 
-	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
-			detail::smp_vec_store::cast(graph_data)->get_raw_data(),
-			graph_data->get_length());
-
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
@@ -277,16 +271,40 @@ std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected
 	fg::cundirected_vertex_index::ptr vindex
 		= fg::cundirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
-	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
+			graph_data);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
-		const std::string &graph_name, data_frame::ptr df, bool directed)
+fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
+		data_frame::ptr df, bool directed)
 {
+	std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> res;
 	if (directed)
-		return create_fg_mem_directed_graph(graph_name, df);
+		res = create_fg_directed_graph(graph_name, df);
 	else
-		return create_fg_mem_undirected_graph(graph_name, df);
+		res = create_fg_undirected_graph(graph_name, df);
+
+	if (res.second->is_in_mem()) {
+		fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
+				detail::smp_vec_store::cast(res.second)->get_raw_data(),
+				res.second->get_length());
+		return fg::FG_graph::create(graph, res.first, graph_name, NULL);
+	}
+	else {
+		detail::EM_vec_store::ptr graph_data = detail::EM_vec_store::cast(res.second);
+		detail::EM_vec_store::ptr index_vec = detail::EM_vec_store::create(0,
+				get_scalar_type<char>());
+		local_cref_vec_store index_store((const char *) res.first.get(), 0,
+					res.first->get_index_size(), get_scalar_type<char>(), -1);
+		index_vec->append(index_store);
+		std::string graph_file_name = graph_name + ".adj";
+		bool ret = graph_data->set_persistent(graph_file_name);
+		assert(ret);
+		std::string index_file_name = graph_name + ".index";
+		ret = index_vec->set_persistent(index_file_name);
+		assert(ret);
+		return fg::FG_graph::create(graph_file_name, index_file_name, NULL);
+	}
 }
 
 class set_2d_label_operate: public type_set_vec_operate<factor_value_t>

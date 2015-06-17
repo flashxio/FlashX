@@ -28,6 +28,7 @@
 #include "vertex.h"
 #include "graph_file_header.h"
 #include "vertex_index.h"
+#include "in_mem_storage.h"
 
 #include "generic_type.h"
 #include "data_io.h"
@@ -174,6 +175,7 @@ int main(int argc, char *argv[])
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 
+	fg::FG_graph::ptr graph;
 	if (directed) {
 		// I artificially add an invalid out-edge for each vertex, so it's
 		// guaranteed that each vertex exists in the adjacency lists.
@@ -188,10 +190,7 @@ int main(int argc, char *argv[])
 		new_df->add_vec(df->get_vec_name(0), rep_vec);
 		df->append(new_df);
 
-		std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
-			= create_fg_mem_graph(graph_name, df, true);
-		graph.first->dump(index_file);
-		graph.second->dump(adj_file);
+		graph = create_fg_graph(graph_name, df, true);
 	}
 	else {
 		// I artificially add an invalid out-edge for each vertex, so it's
@@ -210,11 +209,13 @@ int main(int argc, char *argv[])
 		new_df->add_vec(df->get_vec_name(1), vec1);
 		df = new_df;
 
-		std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
-			= create_fg_mem_graph(graph_name, df, false);
-		graph.first->dump(index_file);
-		graph.second->dump(adj_file);
+		graph = create_fg_graph(graph_name, df, false);
 	}
+
+	if (graph->get_index_data())
+		graph->get_index_data()->dump(index_file);
+	if (graph->get_graph_data())
+		graph->get_graph_data()->dump(adj_file);
 
 	destroy_flash_matrix();
 

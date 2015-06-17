@@ -1,5 +1,7 @@
 #include <unordered_set>
 
+#include "in_mem_storage.h"
+
 #include "fm_utils.h"
 #include "sparse_matrix.h"
 #include "data_frame.h"
@@ -225,10 +227,7 @@ void test_multiply_fg()
 	new_df->add_vec(df->get_vec_name(0), rep_vec);
 	df->append(new_df);
 
-	std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
-		= create_fg_mem_graph("test", df, true);
-	fg::FG_graph::ptr fg = fg::FG_graph::create(graph.second, graph.first,
-			"test", config_map::create());
+	fg::FG_graph::ptr fg = create_fg_graph("test", df, true);
 	test_spmv_fg(fg);
 	test_spmm_fg(fg);
 }
