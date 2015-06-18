@@ -163,6 +163,7 @@ int main(int argc, char *argv[])
 
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
+	matrix_conf.set_sort_buf_size(2UL * 1024 * 1024 * 1024);
 
 	struct timeval start, end;
 	edge_parser parser;
