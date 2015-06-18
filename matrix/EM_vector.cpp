@@ -278,6 +278,7 @@ bool EM_vec_append_dispatcher::issue_task()
 	}
 	vec_store::const_ptr vec = *vec_it;
 	size_t size;
+	off_t local_curr_off = local_off;
 	if (portion_size >= vec->get_length() - local_off) {
 		size = vec->get_length() - local_off;
 		vec_it++;
@@ -288,7 +289,7 @@ bool EM_vec_append_dispatcher::issue_task()
 		local_off += portion_size;
 	}
 	// TODO we might want to read portion asynchronously.
-	local_vec_store::const_ptr lstore = vec->get_portion(local_off, size);
+	local_vec_store::const_ptr lstore = vec->get_portion(local_curr_off, size);
 	writer.append(lstore);
 	return true;
 }
