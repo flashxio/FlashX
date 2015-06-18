@@ -22,6 +22,7 @@
 
 #include <unordered_map>
 #include <boost/math/common_factor.hpp>
+#include <boost/format.hpp>
 
 #include "safs_file.h"
 #include "io_request.h"
@@ -936,8 +937,16 @@ bool EM_vec_merge_dispatcher::issue_task()
 	size_t anchor_gap_size = anchors->get_anchor_gap_size();
 	if (prev_leftovers[0]) {
 		leftover = prev_leftovers[0]->get_length();
-		assert(sort_buf_size > leftover);
-		anchor_locs = anchors->pop(sort_buf_size - leftover);
+		if (sort_buf_size <= leftover)
+			BOOST_LOG_TRIVIAL(info)
+				<< boost::format("leftover (%1%) is larger than sort buf size (%2%)")
+				% leftover % sort_buf_size;
+		size_t pop_size;
+		if (sort_buf_size > leftover)
+			pop_size = sort_buf_size - leftover;
+		else
+			pop_size = anchor_gap_size;
+		anchor_locs = anchors->pop(pop_size);
 	}
 	else {
 		anchor_locs = anchors->fetch_all_first();
