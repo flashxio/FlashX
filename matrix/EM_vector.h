@@ -309,9 +309,10 @@ public:
 /*
  * The two functions compute the sort buffer size and anchor gap size.
  */
-std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type);
+std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type,
+		size_t num_eles);
 std::pair<size_t, size_t> cal_sort_buf_size(
-		const std::vector<const scalar_type *> &types);
+		const std::vector<const scalar_type *> &types, size_t num_eles);
 
 }
 

@@ -1127,51 +1127,74 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
  * The sort buffer size should be multiple of the anchor gap size.
  */
 
-std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type)
+std::pair<size_t, size_t> cal_sort_buf_size(const scalar_type &type,
+		size_t num_eles)
 {
-	size_t anchor_gap_bytes = 1;		// in the number of bytes.
-	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes, type.get_size());
-	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
-			matrix_conf.get_min_io_size());
-	assert(anchor_gap_bytes % type.get_size() == 0);
-	assert(anchor_gap_bytes % matrix_conf.get_min_io_size() == 0);
+	size_t min_anchor_gap_bytes = 1;		// in the number of bytes.
+	min_anchor_gap_bytes = boost::math::lcm(min_anchor_gap_bytes,
+			type.get_size());
+	min_anchor_gap_bytes = boost::math::lcm(min_anchor_gap_bytes,
+			(size_t) PAGE_SIZE);
+	assert(min_anchor_gap_bytes % type.get_size() == 0);
+	assert(min_anchor_gap_bytes % PAGE_SIZE == 0);
 
 	// The number of elements between two anchors.
-	size_t anchor_gap_size = anchor_gap_bytes / type.get_size();
+	size_t min_anchor_gap_size = min_anchor_gap_bytes / type.get_size();
 	size_t num_anchors
-		= matrix_conf.get_sort_buf_size() / type.get_size() / anchor_gap_size;
-	size_t sort_buf_size = num_anchors * anchor_gap_size;
-	assert((sort_buf_size * type.get_size())
-			% matrix_conf.get_min_io_size() == 0);
-	return std::pair<size_t, size_t>(sort_buf_size, anchor_gap_size);
+		= matrix_conf.get_sort_buf_size() / type.get_size() / min_anchor_gap_size;
+	size_t sort_buf_size = num_anchors * min_anchor_gap_size;
+	assert((sort_buf_size * type.get_size()) % PAGE_SIZE == 0);
+
+	// Find the maximal size of anchor gap size allowed for the sort buffer
+	// size and the vector length.
+	assert(sort_buf_size % min_anchor_gap_size == 0);
+	size_t num_sort_bufs = ceil(((double) num_eles) / sort_buf_size);
+	size_t num_min_anchors = sort_buf_size / min_anchor_gap_size;
+	size_t factor = sort_buf_size / num_sort_bufs / min_anchor_gap_size;
+	for (; factor > 0; factor--)
+		if (num_min_anchors % factor == 0)
+			break;
+	assert(factor != 0);
+	return std::pair<size_t, size_t>(sort_buf_size, min_anchor_gap_size * factor);
 }
 
 std::pair<size_t, size_t> cal_sort_buf_size(
-		const std::vector<const scalar_type *> &types)
+		const std::vector<const scalar_type *> &types, size_t num_eles)
 {
 	size_t tot_entry_size = 0;
-	size_t anchor_gap_bytes = 1;		// in the number of bytes.
+	size_t min_anchor_gap_bytes = 1;		// in the number of bytes.
 	for (size_t i = 0; i < types.size(); i++) {
 		tot_entry_size += types[i]->get_size();
-		anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
+		min_anchor_gap_bytes = boost::math::lcm(min_anchor_gap_bytes,
 				types[i]->get_size());
 	}
-	anchor_gap_bytes = boost::math::lcm(anchor_gap_bytes,
-			matrix_conf.get_min_io_size());
+	min_anchor_gap_bytes = boost::math::lcm(min_anchor_gap_bytes,
+			(size_t) PAGE_SIZE);
 	for (size_t i = 0; i < types.size(); i++) {
-		assert(anchor_gap_bytes % types[i]->get_size() == 0);
+		assert(min_anchor_gap_bytes % types[i]->get_size() == 0);
 	}
-	assert(anchor_gap_bytes % matrix_conf.get_min_io_size() == 0);
+	assert(min_anchor_gap_bytes % PAGE_SIZE == 0);
 
 	// The number of elements between two anchors.
-	size_t anchor_gap_size = anchor_gap_bytes / types[0]->get_size();
+	size_t min_anchor_gap_size = min_anchor_gap_bytes / types[0]->get_size();
 	size_t num_anchors
-		= matrix_conf.get_sort_buf_size() / tot_entry_size / anchor_gap_size;
-	size_t sort_buf_size = num_anchors * anchor_gap_size;
+		= matrix_conf.get_sort_buf_size() / tot_entry_size / min_anchor_gap_size;
+	size_t sort_buf_size = num_anchors * min_anchor_gap_size;
 	for (size_t i = 0; i < types.size(); i++)
-		assert((sort_buf_size * types[i]->get_size())
-				% matrix_conf.get_min_io_size() == 0);
-	return std::pair<size_t, size_t>(sort_buf_size, anchor_gap_size);
+		assert((sort_buf_size * types[i]->get_size()) % PAGE_SIZE == 0);
+
+	// Find the maximal size of anchor gap size allowed for the sort buffer
+	// size and the vector length.
+	assert(sort_buf_size % min_anchor_gap_size == 0);
+	size_t num_sort_bufs = ceil(((double) num_eles) / sort_buf_size);
+	size_t num_min_anchors = sort_buf_size / min_anchor_gap_size;
+	size_t factor = sort_buf_size / num_sort_bufs / min_anchor_gap_size;
+	for (; factor > 0; factor--)
+		if (num_min_anchors % factor == 0)
+			break;
+	assert(factor != 0);
+	return std::pair<size_t, size_t>(sort_buf_size,
+			min_anchor_gap_size * factor);
 }
 
 }
@@ -1190,7 +1213,8 @@ std::vector<EM_vec_store::ptr> sort(
 	std::vector<const scalar_type *> types(vecs.size());
 	for (size_t i = 0; i < vecs.size(); i++)
 		types[i] = &vecs[i]->get_type();
-	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(types);
+	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(types,
+			vecs.front()->get_length());
 	size_t sort_buf_size = sizes.first;
 	size_t anchor_gap_size = sizes.second;
 	printf("sort buf size: %ld, anchor gap size: %ld\n", sort_buf_size,
@@ -1247,7 +1271,7 @@ std::vector<EM_vec_store::ptr> sort(
 void EM_vec_store::sort()
 {
 	std::pair<size_t, size_t> sizes
-		= EM_sort_detail::cal_sort_buf_size(get_type());
+		= EM_sort_detail::cal_sort_buf_size(get_type(), get_length());
 	size_t sort_buf_size = sizes.first;
 	size_t anchor_gap_size = sizes.second;
 	size_t num_sort_bufs = ceil(((double) get_length()) / sort_buf_size);

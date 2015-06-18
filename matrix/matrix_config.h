@@ -57,8 +57,6 @@ class matrix_config
 	// The I/O buffer size for writing merge results in sorting a vector.
 	// The number of bytes.
 	size_t write_io_buf_size;
-	// The minimum I/O size that can achieve decent I/O performance from disks.
-	size_t min_io_size;
 	// The I/O size used for streaming.
 	size_t stream_io_size;
 public:
@@ -77,7 +75,6 @@ public:
 		num_nodes = 1;
 		sort_buf_size = 128 * 1024 * 1024;
 		write_io_buf_size = 128 * 1024 * 1024;
-		min_io_size = 1024 * 1024;
 		stream_io_size = 128 * 1024 * 1024;
 	}
 
@@ -179,10 +176,6 @@ public:
 		this->write_io_buf_size = write_io_buf_size;
 	}
 
-	void set_min_io_size(size_t min_io_size) {
-		this->min_io_size = min_io_size;
-	}
-
 	size_t get_sort_buf_size() const {
 		return sort_buf_size;
 	}
@@ -191,9 +184,6 @@ public:
 		return write_io_buf_size;
 	}
 
-	size_t get_min_io_size() const {
-		return min_io_size;
-	}
 	size_t get_stream_io_size() const {
 		return stream_io_size;
 	}
@@ -213,7 +203,6 @@ inline void matrix_config::print_help()
 	printf("\tnum_nodes: The number of NUMA nodes\n");
 	printf("\tsort_buf_size: the buffer size for sorting\n");
 	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
-	printf("\tmin_io_size: the min I/O size\n");
 	printf("\tstream_io_size: the I/O size used for streaming\n");
 }
 
@@ -231,7 +220,6 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
 	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tmin_io_size" << min_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size" << stream_io_size;
 }
 
@@ -266,11 +254,6 @@ inline void matrix_config::init(config_map::ptr map)
 		long tmp = 0;
 		map->read_option_long("write_io_buf_size", tmp);
 		write_io_buf_size = tmp;
-	}
-	if (map->has_option("min_io_size")) {
-		long tmp = 0;
-		map->read_option_long("min_io_size", tmp);
-		min_io_size = tmp;
 	}
 	if (map->has_option("stream_io_size")) {
 		long tmp = 0;

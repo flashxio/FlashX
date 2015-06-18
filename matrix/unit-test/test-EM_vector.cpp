@@ -93,10 +93,11 @@ void test_sort_summary()
 {
 	printf("test sort summary\n");
 	const scalar_type &type = get_scalar_type<int>();
-	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(type);
+	size_t num_bufs = 10;
+	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(type,
+			matrix_conf.get_sort_buf_size() / type.get_size() * num_bufs);
 	size_t sort_buf_size = sizes.first;
 	size_t anchor_gap_size = sizes.second;
-	size_t num_bufs = 10;
 	std::vector<local_buf_vec_store::ptr> bufs(num_bufs);
 	EM_sort_detail::sort_portion_summary summary(num_bufs, sort_buf_size,
 			anchor_gap_size);
@@ -222,7 +223,6 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	matrix_conf.set_sort_buf_size(1024 * 1024 * 8);
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
-	matrix_conf.set_min_io_size(1024 * 256);
 
 	test_set_persistent();
 	test_append();
