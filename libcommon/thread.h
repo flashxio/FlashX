@@ -21,6 +21,7 @@
  */
 
 #include <pthread.h>
+#include <atomic>
 
 #include <string>
 
@@ -198,6 +199,7 @@ public:
 class task_thread: public thread
 {
 	fifo_queue<thread_task *> tasks;
+	std::atomic<size_t> num_pending;
 	bool all_complete;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
@@ -207,6 +209,7 @@ public:
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 		all_complete = false;
+		num_pending = 0;
 	}
 
 	void add_task(thread_task *t) {
@@ -217,6 +220,7 @@ public:
 		tasks.push_back(t);
 		pthread_mutex_unlock(&mutex);
 		activate();
+		num_pending++;
 	}
 
 	void run() {
@@ -229,6 +233,7 @@ public:
 			for (int i = 0; i < num_tasks; i++) {
 				local_tasks[i]->run();
 				delete local_tasks[i];
+				num_pending--;
 			}
 			pthread_mutex_lock(&mutex);
 		}
@@ -243,6 +248,10 @@ public:
 			pthread_cond_wait(&cond, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
+	}
+
+	size_t get_num_pending() const {
+		return num_pending;
 	}
 };
 
