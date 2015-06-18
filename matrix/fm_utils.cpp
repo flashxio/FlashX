@@ -127,16 +127,31 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 		return vector_vector::ptr();
 	}
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	std::string sort_vec_name = df->get_vec_name(0);
 	data_frame::const_ptr sorted_df = df->sort(sort_vec_name);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to sort the edge list\n",
+			time_diff(start, end));
+	gettimeofday(&start, NULL);
 	assert(sorted_df->is_sorted(sort_vec_name));
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to test if the edge list is sorted\n",
+			time_diff(start, end));
 	adj_apply_operate adj_op;
-	return sorted_df->groupby(sort_vec_name, adj_op);
+	gettimeofday(&start, NULL);
+	vector_vector::ptr ret = sorted_df->groupby(sort_vec_name, adj_op);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to groupby the edge list.\n",
+			time_diff(start, end));
+	return ret;
 }
 
 static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_directed_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
+	struct timeval start, end;
 	// Leave the space for graph header.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(
 			fg::graph_header::get_header_size(),
@@ -155,6 +170,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	size_t num_vertices = in_adjs->get_num_vecs();
 	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
+	gettimeofday(&start, NULL);
 	// Get the number of in-edges for each vertex.
 	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
@@ -164,10 +180,16 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 					in_adjs->get_length(i), 0));
 	}
 	size_t num_edges = vector::create(num_in_edges)->sum<fg::vsize_t>();
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #in-edges\n", time_diff(start, end));
 	// Move in-edge adjacency lists to the final image.
 	const detail::vv_store &in_adj_store
 		= dynamic_cast<const detail::vv_store &>(in_adjs->get_data());
+	gettimeofday(&start, NULL);
 	graph_data->append(in_adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append in-edge adjacency list\n",
+			time_diff(start, end));
 	in_adjs = NULL;
 
 	/*
@@ -184,6 +206,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
 	assert(out_adjs->get_num_vecs() == num_vertices);
 	// Get the number of out-edge for each vertex.
+	gettimeofday(&start, NULL);
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
@@ -192,31 +215,45 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 					out_adjs->get_length(i), 0));
 	}
 	assert(vector::create(num_out_edges)->sum<fg::vsize_t>() == num_edges);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #out-edges\n", time_diff(start, end));
 	printf("There are %ld edges\n", num_edges);
 	// Move out-edge adjacency lists to the final image.
 	const detail::vv_store &out_adj_store
 		= dynamic_cast<const detail::vv_store &>(out_adjs->get_data());
+	gettimeofday(&start, NULL);
 	graph_data->append(out_adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append out-edge adjacency list\n",
+			time_diff(start, end));
 	out_adjs = NULL;
 
 	// Construct the graph header.
+	gettimeofday(&start, NULL);
 	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
 	local_vec_store::ptr header_store(new local_buf_vec_store(0,
 			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
 	memcpy(header_store->get_raw_arr(), &header,
 			fg::graph_header::get_header_size());
 	graph_data->set_portion(header_store, 0);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph header\n",
+			time_diff(start, end));
 
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
 	printf("create the vertex index image\n");
+	gettimeofday(&start, NULL);
 	fg::cdirected_vertex_index::ptr vindex
 		= fg::cdirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
 				header);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph index\n",
+			time_diff(start, end));
 	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
 			graph_data);
 }
@@ -224,6 +261,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undirected_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
+	struct timeval start, end;
 	// Leave the space for graph header.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(0,
 			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
@@ -233,15 +271,14 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
-	printf("there are %ld vecs in data frame\n", tmp->get_num_vecs());
 	vector_vector::ptr adjs = create_1d_matrix(df);
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
 
+	gettimeofday(&start, NULL);
 	size_t num_vertices = adjs->get_num_vecs();
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
-	printf("create vertex index\n");
 	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
 		size_t local_num_edges = fg::ext_mem_undirected_vertex::vsize2num_edges(
@@ -249,9 +286,12 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 		num_out_edges->set(i, local_num_edges);
 		num_edges += local_num_edges;
 	}
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #edges\n", time_diff(start, end));
 	printf("There are %ld edges\n", num_edges);
 
 	printf("create the graph image\n");
+	gettimeofday(&start, NULL);
 	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
 	local_vec_store::ptr header_store(new local_buf_vec_store(0,
 			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
@@ -262,15 +302,22 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 	const detail::vv_store &adj_store
 		= dynamic_cast<const detail::vv_store &>(adjs->get_data());
 	graph_data->append(adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append the adjacency list\n",
+			time_diff(start, end));
 
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
 	printf("create the vertex index image\n");
+	gettimeofday(&start, NULL);
 	fg::cundirected_vertex_index::ptr vindex
 		= fg::cundirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph index\n",
+			time_diff(start, end));
 	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
 			graph_data);
 }
