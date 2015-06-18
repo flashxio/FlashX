@@ -383,6 +383,9 @@ public:
 		T val = *curr;
 		const T *first = ((const T *) arr_end) - num_eles;
 		for (; curr > first && *curr == val; curr--);
+		if (*curr != val)
+			curr++;
+		assert(*curr == val);
 		*(size_t *) output = ((const T *) arr_end) - curr;
 	}
 
