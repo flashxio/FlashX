@@ -18,7 +18,7 @@
 include ../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
+CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
 all: libmatrix test unit-test eigensolver

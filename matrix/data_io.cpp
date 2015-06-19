@@ -17,6 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_GZIP
+#include <zlib.h>
+#endif
+
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
 
@@ -39,6 +43,8 @@ class file_io
 {
 public:
 	typedef std::shared_ptr<file_io> ptr;
+
+	static ptr create(const std::string &file_name);
 
 	virtual ~file_io() {
 	}
@@ -75,6 +81,110 @@ public:
 		return file_size - curr_off == 0;
 	}
 };
+
+#ifdef USE_GZIP
+class gz_file_io: public file_io
+{
+	std::vector<char> prev_buf;
+	size_t prev_buf_bytes;
+
+	gzFile f;
+
+	gz_file_io(gzFile f) {
+		this->f = f;
+		prev_buf_bytes = 0;
+		prev_buf.resize(PAGE_SIZE);
+	}
+public:
+	static ptr create(const std::string &file);
+
+	~gz_file_io() {
+		gzclose(f);
+	}
+
+	std::unique_ptr<char[]> read_lines(const size_t wanted_bytes,
+			size_t &read_bytes);
+
+	bool eof() const {
+		return gzeof(f) && prev_buf_bytes == 0;
+	}
+};
+
+std::unique_ptr<char[]> gz_file_io::read_lines(
+		const size_t wanted_bytes1, size_t &read_bytes)
+{
+	read_bytes = 0;
+	size_t wanted_bytes = wanted_bytes1;
+	size_t buf_size = wanted_bytes + PAGE_SIZE;
+	char *buf = new char[buf_size];
+	std::unique_ptr<char[]> ret_buf(buf);
+	if (prev_buf_bytes > 0) {
+		memcpy(buf, prev_buf.data(), prev_buf_bytes);
+		buf += prev_buf_bytes;
+		read_bytes += prev_buf_bytes;
+		wanted_bytes -= prev_buf_bytes;
+		prev_buf_bytes = 0;
+	}
+
+	if (!gzeof(f)) {
+		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
+		if (ret <= 0) {
+			if (ret < 0 || !gzeof(f)) {
+				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
+				exit(1);
+			}
+		}
+
+		if ((size_t) ret > wanted_bytes) {
+			int i = 0;
+			int over_read = ret - wanted_bytes;
+			for (; i < over_read; i++) {
+				if (buf[wanted_bytes + i] == '\n') {
+					i++;
+					break;
+				}
+			}
+			read_bytes += wanted_bytes + i;
+			buf += wanted_bytes + i;
+
+			prev_buf_bytes = over_read - i;
+			assert(prev_buf_bytes <= (size_t) PAGE_SIZE);
+			memcpy(prev_buf.data(), buf, prev_buf_bytes);
+		}
+		else
+			read_bytes += ret;
+	}
+	// The line buffer must end with '\0'.
+	assert(read_bytes < buf_size);
+	ret_buf[read_bytes] = 0;
+	return ret_buf;
+}
+
+file_io::ptr gz_file_io::create(const std::string &file)
+{
+	gzFile f = gzopen(file.c_str(), "rb");
+	if (f == Z_NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("fail to open gz file %1%: %2%")
+			% file % strerror(errno);
+		return ptr();
+	}
+	return ptr(new gz_file_io(f));
+}
+
+#endif
+
+file_io::ptr file_io::create(const std::string &file_name)
+{
+#ifdef USE_GZIP
+	size_t loc = file_name.rfind(".gz");
+	// If the file name ends up with ".gz", we consider it as a gzip file.
+	if (loc != std::string::npos && loc + 3 == file_name.length())
+		return gz_file_io::create(file_name);
+	else
+#endif
+		return text_file_io::create(file_name);
+}
 
 file_io::ptr text_file_io::create(const std::string file)
 {
@@ -273,7 +383,7 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 	df->add_vec(parser.get_col_name(1),
 			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
 
-	file_io::ptr io = text_file_io::create(file);
+	file_io::ptr io = file_io::create(file);
 	if (io == NULL)
 		return data_frame::ptr();
 
@@ -334,7 +444,7 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	while (file_it != files.end()) {
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
 		for (size_t i = 0; i < num_tasks && file_it != files.end(); i++) {
-			file_io::ptr io = text_file_io::create(*file_it);
+			file_io::ptr io = file_io::create(*file_it);
 			file_it++;
 			mem_threads->process_task(-1,
 					new file_parse_task(io, parser, dfs));
