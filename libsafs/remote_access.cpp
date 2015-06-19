@@ -77,11 +77,11 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 
 remote_io::remote_io(const std::vector<disk_io_thread::ptr> &remotes,
 		slab_allocator &_msg_allocator, file_mapper *mapper, thread *t,
-		int max_reqs): io_interface(
-			// TODO I hope the queue size is large enough.
-			t), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
+		int max_reqs): io_interface(t), max_disk_cached_reqs(
+			max_reqs), complete_queue(std::string(
 					"disk_complete_queue-") + itoa(t->get_node_id()), t->get_node_id(),
-				COMPLETE_QUEUE_SIZE), msg_allocator(_msg_allocator)
+				COMPLETE_QUEUE_SIZE, std::numeric_limits<int>::max()),
+			msg_allocator(_msg_allocator)
 {
 	int node_id = t->get_node_id();
 	num_ios.inc(1);
