@@ -23,6 +23,7 @@
 #include <vector>
 #include <string>
 
+#include "native_file.h"
 #include "log.h"
 #include "FG_basic_types.h"
 #include "vertex.h"
@@ -158,8 +159,22 @@ int main(int argc, char *argv[])
 	std::string graph_name = argv[2];
 	std::string adj_file = graph_name + ".adj";
 	std::string index_file = graph_name + ".index";
+
 	std::vector<std::string> files;
-	files.push_back(file_name);
+	safs::native_file f(file_name);
+	if (f.exist() && !f.is_dir())
+		files.push_back(file_name);
+	else if (f.exist() && f.is_dir()) {
+		safs::native_dir d(file_name);
+		d.read_all_files(files);
+		for (size_t i = 0; i < files.size(); i++)
+			files[i] = file_name + "/" + files[i];
+	}
+	else {
+		fprintf(stderr, "The input file %s doesn't exist\n", file_name.c_str());
+		return -1;
+	}
+	printf("read edges from %ld files\n", files.size());
 
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
