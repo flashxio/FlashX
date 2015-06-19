@@ -280,35 +280,43 @@ class data_frame_set
 	std::atomic<size_t> num_dfs;
 	std::vector<data_frame::ptr> dfs;
 	pthread_mutex_t lock;
-	pthread_cond_t cond;
+	pthread_cond_t fetch_cond;
+	pthread_cond_t add_cond;
+	size_t max_queue_size;
 public:
-	data_frame_set() {
+	data_frame_set(size_t max_queue_size) {
+		this->max_queue_size = max_queue_size;
 		pthread_mutex_init(&lock, NULL);
-		pthread_cond_init(&cond, NULL);
+		pthread_cond_init(&fetch_cond, NULL);
+		pthread_cond_init(&add_cond, NULL);
 		num_dfs = 0;
 	}
 	~data_frame_set() {
 		pthread_mutex_destroy(&lock);
-		pthread_cond_destroy(&cond);
+		pthread_cond_destroy(&fetch_cond);
+		pthread_cond_destroy(&add_cond);
 	}
 
 	void add(data_frame::ptr df) {
 		pthread_mutex_lock(&lock);
+		while (dfs.size() >= max_queue_size)
+			pthread_cond_wait(&add_cond, &lock);
 		dfs.push_back(df);
 		num_dfs++;
 		pthread_mutex_unlock(&lock);
-		pthread_cond_signal(&cond);
+		pthread_cond_signal(&fetch_cond);
 	}
 
 	std::vector<data_frame::ptr> fetch_data_frames() {
 		std::vector<data_frame::ptr> ret;
 		pthread_mutex_lock(&lock);
 		while (dfs.empty())
-			pthread_cond_wait(&cond, &lock);
+			pthread_cond_wait(&fetch_cond, &lock);
 		ret = dfs;
 		dfs.clear();
 		num_dfs = 0;
 		pthread_mutex_unlock(&lock);
+		pthread_cond_broadcast(&add_cond);
 		return ret;
 	}
 
@@ -390,8 +398,8 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 	printf("parse edge list\n");
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	data_frame_set dfs;
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+	data_frame_set dfs(MAX_PENDING);
 
 	while (!io->eof()) {
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
@@ -430,8 +438,8 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	data_frame_set dfs;
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+	data_frame_set dfs(MAX_PENDING);
 	/*
 	 * We assign a thread to each file. This works better if there are
 	 * many small input files. If the input files are compressed, this
