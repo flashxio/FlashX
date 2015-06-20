@@ -64,7 +64,8 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
  * lists and stores the matrix and its index in files.
  */
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file);
+		const std::string &mat_file, const std::string &mat_idx_file,
+		bool to_safs);
 };
 
 #endif

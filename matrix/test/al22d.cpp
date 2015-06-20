@@ -32,10 +32,19 @@
 
 using namespace fm;
 
-void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
+void verify_2d_matrix(const std::string &mat_file,
+		const std::string &mat_idx_file, bool from_safs)
 {
-	SpM_2d_index::ptr idx = SpM_2d_index::load(mat_idx_file);
-	SpM_2d_storage::ptr mat = SpM_2d_storage::load(mat_file, idx);
+	SpM_2d_index::ptr idx;
+	SpM_2d_storage::ptr mat;
+	if (from_safs)
+		idx = SpM_2d_index::safs_load(mat_idx_file);
+	else
+		idx = SpM_2d_index::load(mat_idx_file);
+	if (from_safs)
+		mat = SpM_2d_storage::safs_load(mat_file, idx);
+	else
+		mat = SpM_2d_storage::load(mat_file, idx);
 	mat->verify();
 }
 
@@ -176,11 +185,12 @@ int main(int argc, char *argv[])
 			vindex->get_num_vertices(), vindex->get_graph_header().get_num_edges());
 
 	vector_vector::ptr out_adjs = load_graph(graph_file, vindex, true);
+	bool to_safs = !out_adjs->is_in_mem();
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
-	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
+	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file, to_safs);
 	printf("verify 2d matrix for the out-adjacency lists\n");
-	verify_2d_matrix(mat_file, mat_idx_file);
+	verify_2d_matrix(mat_file, mat_idx_file, to_safs);
 	out_adjs = NULL;
 
 	if (vindex->get_graph_header().is_directed_graph()) {
@@ -190,9 +200,9 @@ int main(int argc, char *argv[])
 		vector_vector::ptr in_adjs = load_graph(graph_file, vindex, false);
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
-		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
+		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file, to_safs);
 		printf("verify 2d matrix for the in-adjacency lists\n");
-		verify_2d_matrix(t_mat_file, t_mat_idx_file);
+		verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);
 	}
 
 	destroy_flash_matrix();

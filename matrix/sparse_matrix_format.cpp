@@ -26,6 +26,7 @@
 
 #include "sparse_matrix_format.h"
 #include "matrix_config.h"
+#include "local_vec_store.h"
 
 namespace fm
 {
@@ -104,6 +105,37 @@ void SpM_2d_index::dump(const std::string &file) const
 		return;
 	}
 	fclose(f);
+}
+
+void SpM_2d_index::safs_dump(const std::string &file) const
+{
+	size_t size = get_size(get_num_entries());
+	safs::safs_file f(safs::get_sys_RAID_conf(), file);
+	bool ret = f.create_file(size);
+	assert(ret);
+
+	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
+			file, safs::REMOTE_ACCESS);
+	if (io_fac == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io factory for %1%") % file;
+		return;
+	}
+
+	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
+	if (io == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io instance for %1%") % file;
+		return;
+	}
+
+	local_buf_vec_store buf(0, ROUNDUP(size, PAGE_SIZE),
+			get_scalar_type<char>(), -1);
+	memcpy(buf.get_raw_arr(), this, size);
+	safs::data_loc_t loc(io_fac->get_file_id(), 0);
+	safs::io_request req(buf.get_raw_arr(), loc, buf.get_length(), WRITE);
+	io->access(&req, 1);
+	io->wait4complete(1);
 }
 
 off_t SpM_2d_index::get_block_row_off(size_t idx) const
@@ -186,6 +218,35 @@ void SpM_2d_storage::verify() const
 			num_blocks++;
 		}
 	}
+}
+
+SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
+		SpM_2d_index::ptr index)
+{
+	size_t size = safs::safs_file(safs::get_sys_RAID_conf(), mat_file).get_size();
+	char *data = NULL;
+	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
+	BOOST_VERIFY(mret == 0);
+
+	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
+			mat_file, safs::GLOBAL_CACHE_ACCESS);
+	if (io_fac == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io factory for %1%") % mat_file;
+		return SpM_2d_storage::ptr();
+	}
+	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
+	if (io == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io instance for %1%") % mat_file;
+		return SpM_2d_storage::ptr();
+	}
+
+	io->access(data, 0, size, READ);
+	matrix_header *header = (matrix_header *) data;
+	header->verify();
+	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
+				index, mat_file));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,

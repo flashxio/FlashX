@@ -278,6 +278,7 @@ public:
 
 	size_t get_num_block_rows() const;
 	void dump(const std::string &file) const;
+	void safs_dump(const std::string &file) const;
 	off_t get_block_row_off(size_t idx) const;
 	const matrix_header &get_header() const {
 		return header;
@@ -310,6 +311,8 @@ class SpM_2d_storage
 public:
 	typedef std::shared_ptr<SpM_2d_storage> ptr;
 
+	static ptr safs_load(const std::string &mat_file,
+			SpM_2d_index::ptr index);
 	static ptr load(const std::string &mat_file,
 			SpM_2d_index::ptr index);
 	static ptr create(const matrix_header &header, const vector_vector &vv,

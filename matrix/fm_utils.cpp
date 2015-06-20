@@ -493,8 +493,8 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows, true,
-			set_2d_label_operate(block_size));
+	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
@@ -527,27 +527,40 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 }
 
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file)
+		const std::string &mat_file, const std::string &mat_idx_file,
+		bool to_safs)
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows, true,
-			set_2d_label_operate(block_size));
+	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
 
 	matrix_header mheader(matrix_type::SPARSE, 0, num_rows, num_rows,
 			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
-	FILE *f_2d = fopen(mat_file.c_str(), "w");
-	if (f_2d == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
-			% mat_file % strerror(errno);
-		return;
+	if (!to_safs) {
+		FILE *f_2d = fopen(mat_file.c_str(), "w");
+		if (f_2d == NULL) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
+				% mat_file % strerror(errno);
+			return;
+		}
+		fwrite(&mheader, sizeof(mheader), 1, f_2d);
+		bool ret = res->cat()->export2(f_2d);
+		assert(ret);
+		fclose(f_2d);
 	}
-	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	bool ret = res->cat()->export2(f_2d);
-	assert(ret);
-	fclose(f_2d);
+	else {
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(0,
+				get_scalar_type<char>());
+		local_cref_vec_store header_store((const char *) &mheader,
+				0, sizeof(mheader), get_scalar_type<char>(), -1);
+		vec->append(header_store);
+		vec->append(dynamic_cast<const detail::vv_store &>(
+					res->get_data()).get_data());
+		vec->set_persistent(mat_file);
+	}
 
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
@@ -558,7 +571,10 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 	}
 	offsets[res->get_num_vecs()] = off;
 	SpM_2d_index::ptr mindex = SpM_2d_index::create(mheader, offsets);
-	mindex->dump(mat_idx_file);
+	if (!to_safs)
+		mindex->dump(mat_idx_file);
+	else
+		mindex->safs_dump(mat_idx_file);
 }
 
 }
