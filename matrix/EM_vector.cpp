@@ -179,7 +179,8 @@ EM_vec_store::file_holder::ptr EM_vec_store::file_holder::create_temp(
 	assert(!f.exist());
 	bool ret = f.create_file(num_bytes);
 	assert(ret);
-	EM_vec_store::file_holder::ptr holder(new EM_vec_store::file_holder(tmp_name));
+	EM_vec_store::file_holder::ptr holder(
+			new EM_vec_store::file_holder(tmp_name, false));
 	free(tmp);
 	return holder;
 }
@@ -219,6 +220,14 @@ EM_vec_store::const_ptr EM_vec_store::cast(vec_store::const_ptr vec)
 		return EM_vec_store::const_ptr();
 	}
 	return std::static_pointer_cast<const EM_vec_store>(vec);
+}
+
+EM_vec_store::EM_vec_store(safs::file_io_factory::shared_ptr factory): vec_store(
+		// Without giving any information, we assume this is a byte array.
+		factory->get_file_size(), get_scalar_type<char>(), false)
+{
+	holder = file_holder::create(factory->get_name());
+	ios = io_set::ptr(new io_set(factory));
 }
 
 EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(

@@ -22,6 +22,7 @@
 
 #include "vv_store.h"
 #include "EM_object.h"
+#include "EM_vector.h"
 
 namespace fm
 {
@@ -33,12 +34,18 @@ class EM_vv_store: public vv_store, public EM_object
 {
 	EM_vv_store(const scalar_type &type): vv_store(type, false) {
 	}
+	EM_vv_store(const std::vector<off_t> &offs,
+			EM_vec_store::ptr store): vv_store(offs, store) {
+	}
 public:
 	typedef std::shared_ptr<EM_vv_store> ptr;
 	typedef std::shared_ptr<const EM_vv_store> const_ptr;
 
 	static ptr create(const scalar_type &type) {
 		return ptr(new EM_vv_store(type));
+	}
+	static ptr create(const std::vector<off_t> &offs, EM_vec_store::ptr store) {
+		return ptr(new EM_vv_store(offs, store));
 	}
 
 	virtual safs::io_interface::ptr create_io() {

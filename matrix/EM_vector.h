@@ -57,13 +57,16 @@ class EM_vec_store: public vec_store, public EM_object
 	class file_holder {
 		bool persistent;
 		std::string file_name;
-		file_holder(const std::string &name) {
+		file_holder(const std::string &name, bool persistent) {
 			this->file_name = name;
-			persistent = false;
+			this->persistent = persistent;
 		}
 	public:
 		typedef std::shared_ptr<file_holder> ptr;
 		static ptr create_temp(size_t num_bytes);
+		static ptr create(const std::string &name) {
+			return ptr(new file_holder(name, true));
+		}
 
 		~file_holder();
 		std::string get_name() const {
@@ -94,6 +97,7 @@ class EM_vec_store: public vec_store, public EM_object
 	io_set::ptr ios;
 
 	EM_vec_store(size_t length, const scalar_type &type);
+	EM_vec_store(safs::file_io_factory::shared_ptr factory);
 	EM_vec_store(const EM_vec_store &store);
 public:
 	typedef std::shared_ptr<EM_vec_store> ptr;
@@ -104,6 +108,11 @@ public:
 
 	static ptr create(size_t length, const scalar_type &type) {
 		return ptr(new EM_vec_store(length, type));
+	}
+
+	// This creates a byte array.
+	static ptr create(safs::file_io_factory::shared_ptr factory) {
+		return ptr(new EM_vec_store(factory));
 	}
 
 	~EM_vec_store();

@@ -16,12 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "safs_file.h"
+#include "io_interface.h"
 
 #include "vertex_index.h"
 
 #include "vector_vector.h"
 #include "fm_utils.h"
 #include "fg_utils.h"
+#include "EM_vector.h"
+#include "mem_vec_store.h"
+#include "EM_vv_store.h"
+#include "mem_vv_store.h"
+#include "sparse_matrix.h"
 
 using namespace fm;
 
@@ -40,50 +47,135 @@ void read_data(char *data, size_t size, size_t num, off_t off, FILE *stream)
 	assert(ret == num);
 }
 
-int main(int argc, char *argv[])
+fg::vertex_index::ptr load_vertex_index(const std::string &index_file)
 {
-	if (argc < 4) {
-		fprintf(stderr, "el2al graph_file index_file matrix_name [block_height [block_width]]\n");
-		return -1;
+	fg::vertex_index::ptr vindex;
+	safs::safs_file f(safs::get_sys_RAID_conf(), index_file);
+	if (f.exist())
+		vindex = fg::vertex_index::safs_load(index_file);
+	else {
+		safs::native_file f(index_file);
+		if (!f.exist()) {
+			fprintf(stderr,
+					"The index file %s doesn't exist in either Linux filesystem or SAFS\n",
+					index_file.c_str());
+			return fg::vertex_index::ptr();
+		}
+		vindex = fg::vertex_index::load(index_file);
+	}
+	return vindex;
+}
+
+vector_vector::ptr load_graph(const std::string &graph_file,
+		fg::vertex_index::ptr vindex, bool is_out_edge)
+{
+	std::vector<off_t> offs(vindex->get_num_vertices() + 1);
+	printf("find the location of adjacency lists\n");
+	if (is_out_edge)
+		init_out_offs(vindex, offs);
+	else
+		init_in_offs(vindex, offs);
+
+	size_t size;
+	off_t off;
+	size = offs.back() - offs.front();
+	off = offs.front();
+
+	safs::native_file f(graph_file);
+	detail::vv_store::ptr vv;
+	if (f.exist()) {
+		FILE *f = fopen(graph_file.c_str(), "r");
+		if (f == NULL) {
+			fprintf(stderr, "can't open %s: %s\n", graph_file.c_str(),
+					strerror(errno));
+			return vector_vector::ptr();
+		}
+		detail::raw_data_array data(size);
+		printf("load adjacency lists of the graph data.\n");
+		read_data(data.get_raw(), size, 1, off, f);
+		fclose(f);
+
+		for (size_t i = 0; i < offs.size(); i++)
+			offs[i] -= off;
+		vv = detail::mem_vv_store::create(data, offs, get_scalar_type<char>());
+	}
+	else {
+		safs::safs_file f(safs::get_sys_RAID_conf(), graph_file);
+		if (!f.exist()) {
+			fprintf(stderr, "The graph file %s doesn't exist\n",
+					graph_file.c_str());
+			return vector_vector::ptr();
+		}
+		safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+				graph_file, safs::REMOTE_ACCESS);
+		if (factory == NULL) {
+			fprintf(stderr, "can't access the SAFS file %s\n",
+					graph_file.c_str());
+			return vector_vector::ptr();
+		}
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(factory);
+		vv = detail::EM_vv_store::create(offs, vec);
 	}
 
-	std::string graph_file = std::string(argv[1]);
-	std::string index_file = std::string(argv[2]);
-	std::string mat_name = std::string(argv[3]);
+	return vector_vector::create(vv);
+}
+
+void print_usage()
+{
+	fprintf(stderr,
+			"convert the adjacency list of FlashGraph to 2D-partitioned matrix\n");
+	fprintf(stderr, "al22d [options] conf_file graph_file index_file matrix_name\n");
+	fprintf(stderr, "-h height: the height of a 2D-partitioned matrix block\n");
+	fprintf(stderr, "-w width: the width of a 2D-partitioned matrix block\n");
+}
+
+int main(int argc, char *argv[])
+{
 	size_t block_height = block_max_num_rows;
 	size_t block_width = block_height;
-	if (argc >= 5)
-		block_width = block_height = std::atoi(argv[4]);
-	if (argc >= 6)
-		block_width = std::atoi(argv[5]);
+	int opt;
+	int num_opts = 0;
+	while ((opt = getopt(argc, argv, "h:w:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'w':
+				block_width = atol(optarg);
+				num_opts++;
+				break;
+			case 'h':
+				block_height = atol(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				exit(1);
+		}
+	}
 	block_2d_size block_size(block_height, block_width);
 
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 4) {
+		print_usage();
+		exit(1);
+	}
+
+	std::string conf_file = argv[0];
+	std::string graph_file = argv[1];
+	std::string index_file = argv[2];
+	std::string mat_name = argv[3];
 	std::string mat_file = mat_name + ".mat";
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
 	printf("load vertex index\n");
-	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
+	fg::vertex_index::ptr vindex = load_vertex_index(index_file);
 	printf("The graph has %ld vertices and %ld edges\n",
 			vindex->get_num_vertices(), vindex->get_graph_header().get_num_edges());
 
-	FILE *f = fopen(graph_file.c_str(), "r");
-	if (f == NULL) {
-		fprintf(stderr, "can't open %s: %s\n", graph_file.c_str(),
-				strerror(errno));
-		return -1;
-	}
-	size_t out_size = get_out_size(vindex);
-	off_t out_off = get_out_off(vindex);
-	detail::raw_data_array out_data(out_size);
-	printf("load out-adjancy lists of the graph data.\n");
-	read_data(out_data.get_raw(), out_size, 1, out_off, f);
-
-	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
-	printf("find the location of out-adjacency lists\n");
-	init_out_offs(vindex, out_offs);
-	vector_vector::ptr out_adjs = vector_vector::create(
-			out_data, out_offs, get_scalar_type<char>());
-
+	vector_vector::ptr out_adjs = load_graph(graph_file, vindex, true);
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
 	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
@@ -95,17 +187,7 @@ int main(int argc, char *argv[])
 		std::string t_mat_file = mat_name + "_t.mat";
 		std::string t_mat_idx_file = mat_name + "_t.mat_idx";
 
-		size_t in_size = get_in_size(vindex);
-		off_t in_off = get_in_off(vindex);
-		detail::raw_data_array in_data(in_size);
-		printf("load in-adjancy lists of the graph data\n");
-		read_data(in_data.get_raw(), in_size, 1, in_off, f);
-		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
-		printf("find the location of in-adjacency lists\n");
-		init_in_offs(vindex, in_offs);
-		vector_vector::ptr in_adjs = vector_vector::create(
-				in_data, in_offs, get_scalar_type<char>());
-
+		vector_vector::ptr in_adjs = load_graph(graph_file, vindex, false);
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
 		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
@@ -113,5 +195,5 @@ int main(int argc, char *argv[])
 		verify_2d_matrix(t_mat_file, t_mat_idx_file);
 	}
 
-	fclose(f);
+	destroy_flash_matrix();
 }
