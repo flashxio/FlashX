@@ -117,10 +117,6 @@ public:
 
 	~EM_vec_store();
 
-	size_t get_byte_off(size_t entry_off) const {
-		return entry_off * get_entry_size();
-	}
-
 	/*
 	 * This sets the vector persistent.
 	 * Even if this vector object is destroyed, the vector data will still

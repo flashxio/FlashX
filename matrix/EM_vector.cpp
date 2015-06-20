@@ -449,7 +449,7 @@ local_vec_store::ptr EM_vec_store::get_portion_async(off_t orig_start,
 	safs::io_interface &io = ios->get_curr_io();
 	local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
 				get_type(), -1));
-	off_t off = get_byte_off(start);
+	off_t off = start * entry_size;
 	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(buf->get_raw_arr(), loc,
 			buf->get_length() * buf->get_entry_size(), READ);
@@ -478,7 +478,7 @@ std::vector<local_vec_store::ptr> EM_vec_store::get_portion_async(
 
 		local_buf_vec_store::ptr buf(new local_buf_vec_store(start, size,
 					get_type(), -1));
-		off_t off = get_byte_off(start);
+		off_t off = start * entry_size;
 		safs::data_loc_t loc(io.get_file_id(), off);
 		reqs[i] = safs::io_request(buf->get_raw_arr(), loc,
 				buf->get_length() * buf->get_entry_size(), READ);
@@ -558,7 +558,7 @@ void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
 	assert(start >= 0);
 
 	safs::io_interface &io = ios->get_curr_io();
-	off_t off_in_bytes = get_byte_off(start);
+	off_t off_in_bytes = start * get_type().get_size();
 	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
 	safs::io_request req(const_cast<char *>(store->get_raw_arr()), loc,
 			store->get_length() * store->get_entry_size(), WRITE);
