@@ -283,6 +283,8 @@ class data_frame_set
 	pthread_cond_t fetch_cond;
 	pthread_cond_t add_cond;
 	size_t max_queue_size;
+	bool wait_for_fetch;
+	bool wait_for_add;
 public:
 	data_frame_set(size_t max_queue_size) {
 		this->max_queue_size = max_queue_size;
@@ -290,6 +292,8 @@ public:
 		pthread_cond_init(&fetch_cond, NULL);
 		pthread_cond_init(&add_cond, NULL);
 		num_dfs = 0;
+		wait_for_fetch = false;
+		wait_for_add = false;
 	}
 	~data_frame_set() {
 		pthread_mutex_destroy(&lock);
@@ -299,8 +303,17 @@ public:
 
 	void add(data_frame::ptr df) {
 		pthread_mutex_lock(&lock);
-		while (dfs.size() >= max_queue_size)
+		while (dfs.size() >= max_queue_size) {
+			// If the consumer thread is wait for adding new data frames, we
+			// should wake them up before going to sleep. There is only
+			// one thread waiting for fetching data frames, so we only need
+			// to signal one thread.
+			if (wait_for_fetch)
+				pthread_cond_signal(&fetch_cond);
+			wait_for_add = true;
 			pthread_cond_wait(&add_cond, &lock);
+			wait_for_add = false;
+		}
 		dfs.push_back(df);
 		num_dfs++;
 		pthread_mutex_unlock(&lock);
@@ -310,8 +323,17 @@ public:
 	std::vector<data_frame::ptr> fetch_data_frames() {
 		std::vector<data_frame::ptr> ret;
 		pthread_mutex_lock(&lock);
-		while (dfs.empty())
+		while (dfs.empty()) {
+			// If some threads are wait for adding new data frames, we should
+			// wake them up before going to sleep. Potentially, there are
+			// multiple threads waiting at the same time, we should wake
+			// all of them up.
+			if (wait_for_add)
+				pthread_cond_broadcast(&add_cond);
+			wait_for_fetch = true;
 			pthread_cond_wait(&fetch_cond, &lock);
+			wait_for_fetch = false;
+		}
 		ret = dfs;
 		dfs.clear();
 		num_dfs = 0;
@@ -457,16 +479,30 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 			mem_threads->process_task(-1,
 					new file_parse_task(io, parser, dfs));
 		}
-		if (dfs.get_num_dfs() > 0) {
+		// This is the only thread that can fetch data frames from the queue.
+		// If there are pending tasks in the thread pool, it's guaranteed
+		// that we can fetch data frames from the queue.
+		if (mem_threads->get_num_pending() > 0) {
 			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
 			if (!tmp_dfs.empty())
 				df->append(tmp_dfs.begin(), tmp_dfs.end());
 		}
 	}
+	// TODO It might be expensive to calculate the number of pending
+	// tasks every time.
+	while (mem_threads->get_num_pending() > 0) {
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		if (!tmp_dfs.empty())
+			df->append(tmp_dfs.begin(), tmp_dfs.end());
+	}
 	mem_threads->wait4complete();
-	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
-	if (!tmp_dfs.empty())
-		df->append(tmp_dfs.begin(), tmp_dfs.end());
+	// At this point, all threads have stoped working. If there are
+	// data frames in the queue, they are the very last ones.
+	if (dfs.get_num_dfs() > 0) {
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		if (!tmp_dfs.empty())
+			df->append(tmp_dfs.begin(), tmp_dfs.end());
+	}
 
 	return df;
 }
