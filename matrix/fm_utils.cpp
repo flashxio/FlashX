@@ -403,15 +403,29 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 	factor_value_t block_row_id = *(const factor_value_t *) key;
 	size_t tot_num_non_zeros = 0;
 	size_t max_row_parts = 0;
+	const fg::ext_mem_undirected_vertex *first_v
+		= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(0);
+	fg::vertex_id_t start_vid = first_v->get_id();
+	std::vector<std::vector<const fg::ext_mem_undirected_vertex *> > edge_dist_map(
+			num_blocks);
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
+		assert(val.get_length(i) == v->get_size());
 		assert(v->get_id() / block_height == (size_t) block_row_id);
 		tot_num_non_zeros += v->get_num_edges();
 		// I definitely over estimate the number of row parts.
 		// If a row doesn't have many non-zero entries, I assume that
 		// the non-zero entries distribute evenly across all row parts.
 		max_row_parts += std::min(num_blocks, v->get_num_edges());
+
+		// Fill the edge distribution map.
+		for (size_t i = 0; i < v->get_num_edges(); i++) {
+			size_t vector_idx = v->get_neighbor(i) / block_width;
+			if (edge_dist_map[vector_idx].empty()
+					|| edge_dist_map[vector_idx].back() != v)
+				edge_dist_map[vector_idx].push_back(v);
+		}
 	}
 
 	std::vector<size_t> neigh_idxs(val.get_num_vecs());
@@ -438,18 +452,15 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		sparse_block_2d *block
 			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
 					block_row_id, col_idx / block_width);
+		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
+			= edge_dist_map[col_idx / block_width];
 		// Iterate the vectors in the vector_vector one by one.
-		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
-			const fg::ext_mem_undirected_vertex *v
-				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
-			assert(val.get_length(row_idx) == v->get_size());
-			// If the vertex has no more edges left.
-			if (neigh_idxs[row_idx] >= v->get_num_edges())
-				continue;
-			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx);
-			// If the vertex has no edges that fall in the range.
-			if (v->get_neighbor(neigh_idxs[row_idx]) >= col_idx + block_width)
-				continue;
+		for (size_t i = 0; i < v_ptrs.size(); i++) {
+			const fg::ext_mem_undirected_vertex *v = v_ptrs[i];
+			size_t row_idx = v->get_id() - start_vid;
+			assert(neigh_idxs[row_idx] < v->get_num_edges());
+			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx
+					&& v->get_neighbor(neigh_idxs[row_idx]) < col_idx + block_width);
 
 			sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
 			size_t idx = neigh_idxs[row_idx];
