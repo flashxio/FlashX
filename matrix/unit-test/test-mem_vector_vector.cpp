@@ -318,6 +318,12 @@ void test_portion()
 	assert(lvv->get_length() == 7);
 	verify_portion(lvv, vv_store);
 
+	printf("test get_portion of a portion\n");
+	local_vv_store::ptr llvv = local_vv_store::cast(lvv->get_portion(2, 3));
+	assert(llvv->get_length() == 3);
+	assert(llvv->get_global_start() == 11);
+	verify_portion(llvv, vv_store);
+
 	printf("test a const portion\n");
 	detail::mem_vv_store::const_ptr cvv_store = vv_store;
 	local_vv_store::const_ptr clvv = local_vv_store::cast(cvv_store->get_portion(9, 7));

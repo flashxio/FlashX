@@ -38,6 +38,8 @@ class local_vv_store: public local_vec_store
 	char *get_orig_data() {
 		return vec->get_raw_arr();
 	}
+
+	std::vector<off_t> get_rel_offs(off_t start, size_t len) const;
 public:
 	typedef std::shared_ptr<local_vv_store> ptr;
 	typedef std::shared_ptr<const local_vv_store> const_ptr;
