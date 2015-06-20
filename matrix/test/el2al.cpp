@@ -124,15 +124,17 @@ void print_usage()
 	fprintf(stderr, "el2al [options] conf_file edge_file graph_name\n");
 	fprintf(stderr, "-u: undirected graph\n");
 	fprintf(stderr, "-e: use external memory\n");
+	fprintf(stderr, "-s size: sort buffer size\n");
 }
 
 int main(int argc, char *argv[])
 {
 	bool directed = true;
 	bool in_mem = true;
+	size_t sort_buf_size = 1UL * 1024 * 1024 * 1024;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "ue")) != -1) {
+	while ((opt = getopt(argc, argv, "ues:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -140,6 +142,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'e':
 				in_mem = false;
+				break;
+			case 's':
+				sort_buf_size = atol(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -178,7 +184,7 @@ int main(int argc, char *argv[])
 
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
-	matrix_conf.set_sort_buf_size(2UL * 1024 * 1024 * 1024);
+	matrix_conf.set_sort_buf_size(sort_buf_size);
 
 	struct timeval start, end;
 	edge_parser parser;
