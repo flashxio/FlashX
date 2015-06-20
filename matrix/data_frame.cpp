@@ -473,10 +473,21 @@ static vector_vector::ptr EM_groupby(
 {
 	detail::EM_vv_store::ptr out_vv = detail::EM_vv_store::create(
 			op.get_output_type());
+
+	// TODO we need to allow users to configure the block size.
+	size_t portion_size = 128 * 1024 * 1024;
+	// If one of the columns in the data frame is a vector vector,
+	// we should use a smaller portion size.
+	// TODO maybe there is a better way.
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
+		if (sorted_df->get_vec_ref(i).get_entry_size() == 0) {
+			portion_size = 1024 * 1024;
+			break;
+		}
+
 	EM_df_groupby_dispatcher::ptr groupby_dispatcher(
 			new EM_df_groupby_dispatcher(sorted_df, col_name, out_vv,
-				// TODO we need to allow users to configure the block size.
-				1024 * 1024, op));
+				portion_size, op));
 	detail::io_worker_task worker(groupby_dispatcher, 1);
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
 		detail::vec_store::const_ptr col = sorted_df->get_vec(i);
