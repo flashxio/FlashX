@@ -172,6 +172,7 @@ void SpM_2d_storage::verify() const
 	matrix_header *header = (matrix_header *) data.get();
 	header->verify();
 	block_2d_size block_size = index->get_header().get_2d_block_size();
+#pragma omp parallel for
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
 		block_row_iterator brow_it = get_block_row_it(i);
 		long prev_block_col_idx = -1;
