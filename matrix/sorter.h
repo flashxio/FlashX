@@ -242,42 +242,48 @@ void type_sorter<T>::merge_with_index(
 		size_t avg_part_len = ceil(((double) out_num) / omp_get_num_threads());
 		size_t thread_id = omp_get_thread_num();
 		size_t start = thread_id * avg_part_len;
-		size_t part_len = std::min(out_num - start, avg_part_len);
+		if (out_num > start) {
+			size_t part_len = std::min(out_num - start, avg_part_len);
 
-		// Find the first array for the current thread.
-		size_t curr_arr_idx = 0;
-		size_t i = 0;
-		while (true) {
-			// If the array is empty, it works fine.
-			size_t num_eles = get_length<T>(arrs[curr_arr_idx]);
-			if (i + num_eles > start)
-				break;
-			i += num_eles;
-			curr_arr_idx++;
-		}
-		assert(start >= i);
-		off_t curr_off_in_arr = start - i;
-		for (size_t i = 0; i < part_len; i++) {
-			const T *curr_ptr
-				= ((const T *) arrs[curr_arr_idx].first) + curr_off_in_arr;
-			assert(curr_ptr < (const T *) arrs[curr_arr_idx].second);
-			buf[start + i].val = *curr_ptr;
-			buf[start + i].arr_idx = curr_arr_idx;
-			buf[start + i].off_in_arr = curr_off_in_arr;
-			// If the current pointer points to the last element in the array,
-			// switch to the next array.
-			if (curr_ptr == ((const T *) arrs[curr_arr_idx].second) - 1) {
+			// Find the first array for the current thread.
+			size_t curr_arr_idx = 0;
+			size_t i = 0;
+			while (true) {
+				// If the array is empty, it works fine.
+				size_t num_eles = get_length<T>(arrs[curr_arr_idx]);
+				if (i + num_eles > start)
+					break;
+				i += num_eles;
 				curr_arr_idx++;
-				// We need to skip the empty arrays.
-				while (curr_arr_idx < arrs.size()
-						&& get_length<T>(arrs[curr_arr_idx]) == 0)
-					curr_arr_idx++;
-				curr_off_in_arr = 0;
-				if (i + 1 < part_len)
-					assert(curr_arr_idx < arrs.size());
 			}
-			else
-				curr_off_in_arr++;
+			assert(start >= i);
+			off_t curr_off_in_arr = start - i;
+			assert(get_length<T>(arrs[curr_arr_idx]) > 0);
+			assert(arrs[curr_arr_idx].first <= arrs[curr_arr_idx].second);
+			for (size_t i = 0; i < part_len; i++) {
+				const T *curr_ptr
+					= ((const T *) arrs[curr_arr_idx].first) + curr_off_in_arr;
+				assert(curr_ptr < (const T *) arrs[curr_arr_idx].second);
+				buf[start + i].val = *curr_ptr;
+				buf[start + i].arr_idx = curr_arr_idx;
+				buf[start + i].off_in_arr = curr_off_in_arr;
+				// If the current pointer points to the last element in the array,
+				// switch to the next array.
+				if (curr_ptr == ((const T *) arrs[curr_arr_idx].second) - 1) {
+					curr_arr_idx++;
+					// We need to skip the empty arrays.
+					while (curr_arr_idx < arrs.size()
+							&& get_length<T>(arrs[curr_arr_idx]) == 0)
+						curr_arr_idx++;
+					if (curr_arr_idx < arrs.size())
+						assert(arrs[curr_arr_idx].first <= arrs[curr_arr_idx].second);
+					curr_off_in_arr = 0;
+					if (i + 1 < part_len)
+						assert(curr_arr_idx < arrs.size());
+				}
+				else
+					curr_off_in_arr++;
+			}
 		}
 	}
 
