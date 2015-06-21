@@ -148,10 +148,17 @@ void test_sort()
 	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));
+	local_vec_store::ptr copy = vec->get_portion(0, vec->get_length());
+
 	assert(!vec->is_sorted());
 	printf("sort vec\n");
 	vec->sort();
 	assert(vec->is_sorted());
+	local_vec_store::ptr sorted_copy = vec->get_portion(0, vec->get_length());
+	copy->get_type().get_sorter().sort(copy->get_raw_arr(), copy->get_length(),
+			false);
+	assert(memcmp(copy->get_raw_arr(), sorted_copy->get_raw_arr(),
+				copy->get_length() * copy->get_type().get_size()) == 0);
 }
 
 void test_sort_mult1()
@@ -160,6 +167,7 @@ void test_sort_mult1()
 	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));
+	local_vec_store::ptr copy = vec->get_portion(0, vec->get_length());
 
 	std::vector<EM_vec_store::const_ptr> vecs(1);
 	vecs[0] = vec;
@@ -167,6 +175,12 @@ void test_sort_mult1()
 	printf("sort vec\n");
 	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
 	assert(sorted_vecs[0]->is_sorted());
+
+	local_vec_store::ptr sorted_copy = sorted_vecs[0]->get_portion(0, vec->get_length());
+	copy->get_type().get_sorter().sort(copy->get_raw_arr(), copy->get_length(),
+			false);
+	assert(memcmp(copy->get_raw_arr(), sorted_copy->get_raw_arr(),
+				copy->get_length() * copy->get_type().get_size()) == 0);
 }
 
 void test_sort_mult()
@@ -186,6 +200,13 @@ void test_sort_mult()
 	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
 	assert(sorted_vecs[0]->is_sorted());
 	assert(sorted_vecs[1]->is_sorted());
+
+	local_vec_store::ptr copy1 = sorted_vecs[0]->get_portion(0,
+			sorted_vecs[0]->get_length());
+	local_vec_store::ptr copy2 = sorted_vecs[1]->get_portion(0,
+			sorted_vecs[1]->get_length());
+	assert(memcmp(copy1->get_raw_arr(), copy2->get_raw_arr(),
+			copy1->get_length() * copy1->get_type().get_size()) == 0);
 }
 
 void test_append()
