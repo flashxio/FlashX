@@ -23,6 +23,8 @@
 #include <vector>
 #include <string>
 
+#include "common.h"
+
 #include "native_file.h"
 #include "log.h"
 #include "FG_basic_types.h"
@@ -144,7 +146,7 @@ int main(int argc, char *argv[])
 				in_mem = false;
 				break;
 			case 's':
-				sort_buf_size = atol(optarg);
+				sort_buf_size = str2size(optarg);
 				num_opts++;
 				break;
 			default:
