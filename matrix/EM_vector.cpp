@@ -1042,10 +1042,8 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		// Breaks the local buffers into two parts. The first part is to
 		// merge with others; we have to keep the second part for further
 		// merging.
-		std::vector<std::pair<const char *, const char *> > merge_data(
-				merge_bufs.size());
-		std::vector<std::pair<const char *, const char *> > leftovers(
-				merge_bufs.size());
+		std::vector<std::pair<const char *, const char *> > merge_data;
+		std::vector<std::pair<const char *, const char *> > leftovers;
 		std::vector<size_t> merge_sizes(merge_bufs.size());
 		size_t leftover_size = 0;
 		size_t merge_size = 0;
@@ -1088,12 +1086,14 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 			merge_sizes[i] = leftover_start;
 			merge_size += leftover_start;
 			leftover_size += (tot_len - leftover_start);
-			merge_data[i] = std::pair<const char *, const char *>(
-					merge_bufs[i]->get(0),
-					merge_bufs[i]->get(leftover_start));
-			leftovers[i] = std::pair<const char *, const char *>(
-					merge_bufs[i]->get(leftover_start),
-					merge_bufs[i]->get(tot_len));
+			if (leftover_start > 0)
+				merge_data.push_back(std::pair<const char *, const char *>(
+							merge_bufs[i]->get(0),
+							merge_bufs[i]->get(leftover_start)));
+			if (tot_len - leftover_start)
+				leftovers.push_back(std::pair<const char *, const char *>(
+							merge_bufs[i]->get(leftover_start),
+							merge_bufs[i]->get(tot_len)));
 		}
 
 		// Here we rely on OpenMP to merge the data in the buffer in parallel.
@@ -1120,21 +1120,21 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 
 		// Merge the remaining vectors accordingly.
 		for (size_t i = 1; i < stores.size(); i++) {
-			std::vector<std::pair<const char *, const char *> > merge_data(
-					merge_sizes.size());
-			std::vector<std::pair<const char *, const char *> > leftovers(
-					merge_sizes.size());
+			std::vector<std::pair<const char *, const char *> > merge_data;
+			std::vector<std::pair<const char *, const char *> > leftovers;
 
 			merge_set_t &set = stores[i];
 			assert(set.size() == merge_bufs.size());
 			for (size_t i = 0; i < set.size(); i++) {
 				off_t leftover_start = merge_sizes[i];
 				assert(set[i]->get_length() == merge_bufs[i]->get_length());
-				merge_data[i] = std::pair<const char *, const char *>(
-						set[i]->get(0), set[i]->get(leftover_start));
-				leftovers[i] = std::pair<const char *, const char *>(
-						set[i]->get(leftover_start),
-						set[i]->get(set[i]->get_length()));
+				if (leftover_start > 0)
+					merge_data.push_back(std::pair<const char *, const char *>(
+								set[i]->get(0), set[i]->get(leftover_start)));
+				if (set[i]->get_length() - leftover_start)
+					leftovers.push_back(std::pair<const char *, const char *>(
+								set[i]->get(leftover_start),
+								set[i]->get(set[i]->get_length())));
 			}
 
 			// Merge the part that can be merged.
