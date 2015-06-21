@@ -169,17 +169,92 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 	}
 }
 
+namespace
+{
+
+class double_square: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		long double *t_out_arr = (long double *) out_arr;
+		const double *t_in_arr = (const double *) in_arr;
+		for (size_t i = 0; i < num_eles; i++)
+			t_out_arr[i]
+				= ((long double) t_in_arr[i]) * ((long double) t_in_arr[i]);
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
+class sum_agg: public bulk_operate
+{
+public:
+	virtual void runA(size_t num_eles, const void *left_arr1,
+			void *output) const {
+		const long double *t_input = (const long double *) left_arr1;
+		long double *t_output = (long double *) output;
+		if (num_eles == 0)
+			return;
+		t_output[0] = t_input[0];
+		for (size_t i = 1; i < num_eles; i++)
+			t_output[0] += t_input[i];
+	}
+
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		assert(0);
+	}
+
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		assert(0);
+	}
+
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		assert(0);
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<long double>();
+	}
+
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<long double>();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
+}
+
 double dense_matrix::norm2() const
 {
-	// TODO this is an inefficient implementation.
-	const bulk_operate &op = get_type().get_basic_ops().get_multiply();
-	dense_matrix::ptr sq_mat = this->mapply2(
-			*this, bulk_operate::conv2ptr(op));
-	scalar_variable::ptr res = sq_mat->aggregate(
-			sq_mat->get_type().get_basic_ops().get_add());
 	double ret = 0;
-	res->get_type().get_basic_uops().get_op(
-			basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
+	if (get_type() == get_scalar_type<double>()) {
+		dense_matrix::ptr sq_mat
+			= this->sapply(bulk_uoperate::const_ptr(new double_square()));
+		assert(sq_mat->get_type() == get_scalar_type<long double>());
+		scalar_variable::ptr res = sq_mat->aggregate(sum_agg());
+		assert(res->get_type() == get_scalar_type<long double>());
+		ret = sqrtl(*(long double *) res->get_raw());
+	}
+	else {
+		const bulk_uoperate *op = get_type().get_basic_uops().get_op(
+				basic_uops::op_idx::SQ);
+		dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));
+		scalar_variable::ptr res = sq_mat->aggregate(
+				sq_mat->get_type().get_basic_ops().get_add());
+		res->get_type().get_basic_uops().get_op(
+				basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
+	}
 	return ret;
 }
 

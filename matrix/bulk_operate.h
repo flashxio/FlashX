@@ -239,6 +239,7 @@ public:
 		SQRT,
 		ABS,
 		NOT,
+		SQ,
 		NUM_OPS,
 	};
 
@@ -275,10 +276,17 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct sq {
+		OutType operator()(const InType &e) const {
+			return e * e;
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
 	bulk_uoperate_impl<uop_not, bool, bool> not_op;
+	bulk_uoperate_impl<sq, InType, OutType> sq_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -287,6 +295,7 @@ public:
 		ops.push_back(&sqrt_op);
 		ops.push_back(&abs_op);
 		ops.push_back(&not_op);
+		ops.push_back(&sq_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {
