@@ -136,15 +136,17 @@ void print_usage()
 	fprintf(stderr, "al22d [options] conf_file graph_file index_file matrix_name\n");
 	fprintf(stderr, "-h height: the height of a 2D-partitioned matrix block\n");
 	fprintf(stderr, "-w width: the width of a 2D-partitioned matrix block\n");
+	fprintf(stderr, "-v: verify the generated matrix image\n");
 }
 
 int main(int argc, char *argv[])
 {
 	size_t block_height = block_max_num_rows;
 	size_t block_width = block_height;
+	bool verify = false;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "h:w:")) != -1) {
+	while ((opt = getopt(argc, argv, "h:w:v")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'w':
@@ -154,6 +156,9 @@ int main(int argc, char *argv[])
 			case 'h':
 				block_height = atol(optarg);
 				num_opts++;
+				break;
+			case 'v':
+				verify = true;
 				break;
 			default:
 				print_usage();
@@ -190,7 +195,8 @@ int main(int argc, char *argv[])
 	printf("export 2d matrix for the out-adjacency lists\n");
 	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file, to_safs);
 	printf("verify 2d matrix for the out-adjacency lists\n");
-	verify_2d_matrix(mat_file, mat_idx_file, to_safs);
+	if (verify)
+		verify_2d_matrix(mat_file, mat_idx_file, to_safs);
 	out_adjs = NULL;
 
 	if (vindex->get_graph_header().is_directed_graph()) {
@@ -202,7 +208,8 @@ int main(int argc, char *argv[])
 		printf("export 2d matrix for the in-adjacency lists\n");
 		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file, to_safs);
 		printf("verify 2d matrix for the in-adjacency lists\n");
-		verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);
+		if (verify)
+			verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);
 	}
 
 	destroy_flash_matrix();
