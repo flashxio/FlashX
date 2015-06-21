@@ -141,6 +141,26 @@ public:
 };
 
 template<>
+class rand_gen_impl<long double>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::uniform_real_distribution<double> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	rand_gen_impl(long double min, long double max,
+			long double seed): generator((int64_t) seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
+template<>
 class rand_gen_impl<bool>: public rand_gen
 {
 	typedef std::mt19937 base_generator_type;

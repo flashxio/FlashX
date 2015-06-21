@@ -107,6 +107,8 @@ const scalar_type &get_scalar_type(prim_type type)
 			return get_scalar_type<float>();
 		case P_DOUBLE:
 			return get_scalar_type<double>();
+		case P_LDOUBLE:
+			return get_scalar_type<long double>();
 		case P_BOOL:
 			return get_scalar_type<bool>();
 		case P_USHORT:

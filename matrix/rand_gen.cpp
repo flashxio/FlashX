@@ -49,6 +49,13 @@ void rand_gen_impl<double>::gen(void *buf, size_t len)
 		t_buf[i] = dist(generator);
 }
 
+void rand_gen_impl<long double>::gen(void *buf, size_t len)
+{
+	long double *t_buf = (long double *) buf;
+	for (size_t i = 0; i < len; i++)
+		t_buf[i] = dist(generator);
+}
+
 void rand_gen_impl<bool>::gen(void *buf, size_t len)
 {
 	bool *t_buf = (bool *) buf;

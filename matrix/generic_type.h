@@ -41,6 +41,7 @@ enum prim_type
 	P_LONG,
 	P_FLOAT,
 	P_DOUBLE,
+	P_LDOUBLE,
 	P_BOOL,
 	P_USHORT,
 	P_UINT,
@@ -88,6 +89,12 @@ template<>
 inline prim_type get_type<double>()
 {
 	return prim_type::P_DOUBLE;
+}
+
+template<>
+inline prim_type get_type<long double>()
+{
+	return prim_type::P_LDOUBLE;
 }
 
 template<>
