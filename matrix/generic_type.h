@@ -223,6 +223,10 @@ public:
 	 * Set the value of the scalar variable in the raw representation.
 	 */
 	virtual bool set_raw(const char *v, int size) = 0;
+	/*
+	 * Test if the value is equal to the one stored in the given address.
+	 */
+	virtual bool equals(const char *addr) const = 0;
 
 	virtual size_t get_size() const {
 		return get_type().get_size();
@@ -259,6 +263,10 @@ public:
 
 		memcpy(&this->v, v, size);
 		return true;
+	}
+
+	virtual bool equals(const char *addr) const {
+		return v == *(const T *) addr;
 	}
 
 	T get() const {
