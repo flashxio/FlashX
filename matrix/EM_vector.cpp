@@ -1056,23 +1056,44 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		// buffer, which have been read from the disks but are larger than
 		// `min_val'.
 		for (size_t i = 0; i < merge_bufs.size(); i++) {
+			size_t entry_size = merge_bufs[i]->get_entry_size();
+			const size_t tot_len = merge_bufs[i]->get_length();
 			const char *start = merge_bufs[i]->get_raw_arr();
 			const char *end = merge_bufs[i]->get_raw_arr()
-				+ merge_bufs[i]->get_length() * merge_bufs[i]->get_entry_size();
+				+ tot_len * entry_size;
 			off_t leftover_start;
-			if (min_val != NULL)
+			if (min_val != NULL) {
 				leftover_start = type.get_stl_algs().lower_bound(
 						start, end, min_val->get_raw());
+				// lower_bound finds the location so that all elements before
+				// the location have values smaller than `min_val'. Actually,
+				// we can also merge all elements whose value is equal to
+				// `min_val'.
+				if (leftover_start < tot_len && min_val->equals(start
+							+ leftover_start * entry_size)) {
+					size_t rel_loc;
+					type.get_agg_ops().get_find_next().run(
+							tot_len - leftover_start,
+							start + leftover_start * entry_size, &rel_loc);
+					// There is at least one element with the same value as
+					// `min_val'.
+					assert(rel_loc > 0 && rel_loc <= tot_len - leftover_start);
+					leftover_start += rel_loc;
+				}
+				assert(leftover_start <= tot_len);
+			}
 			else
-				leftover_start = merge_bufs[i]->get_length();
+				leftover_start = tot_len;
+			assert(leftover_start <= tot_len);
 			merge_sizes[i] = leftover_start;
 			merge_size += leftover_start;
-			leftover_size += (merge_bufs[i]->get_length() - leftover_start);
+			leftover_size += (tot_len - leftover_start);
 			merge_data[i] = std::pair<const char *, const char *>(
-					merge_bufs[i]->get(0), merge_bufs[i]->get(leftover_start));
+					merge_bufs[i]->get(0),
+					merge_bufs[i]->get(leftover_start));
 			leftovers[i] = std::pair<const char *, const char *>(
 					merge_bufs[i]->get(leftover_start),
-					merge_bufs[i]->get(merge_bufs[i]->get_length()));
+					merge_bufs[i]->get(tot_len));
 		}
 
 		// Here we rely on OpenMP to merge the data in the buffer in parallel.
@@ -1105,8 +1126,10 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 					merge_sizes.size());
 
 			merge_set_t &set = stores[i];
+			assert(set.size() == merge_bufs.size());
 			for (size_t i = 0; i < set.size(); i++) {
 				off_t leftover_start = merge_sizes[i];
+				assert(set[i]->get_length() == merge_bufs[i]->get_length());
 				merge_data[i] = std::pair<const char *, const char *>(
 						set[i]->get(0), set[i]->get(leftover_start));
 				leftovers[i] = std::pair<const char *, const char *>(
@@ -1122,12 +1145,14 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 					merge_res->get_raw_arr(), merge_size);
 			dispatcher.get_merge_writer(i).append(merge_res);
 
-			// Keep the leftover and merge them into a single buffer.
-			local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
-					new local_buf_vec_store(-1, leftover_size, type, -1));
-			type.get_sorter().merge(leftovers, leftover_merge_index,
-					leftover_buf->get_raw_arr(), leftover_size);
-			leftover_bufs[i] = leftover_buf;
+			if (leftover_size > 0) {
+				// Keep the leftover and merge them into a single buffer.
+				local_buf_vec_store::ptr leftover_buf = local_buf_vec_store::ptr(
+						new local_buf_vec_store(-1, leftover_size, type, -1));
+				type.get_sorter().merge(leftovers, leftover_merge_index,
+						leftover_buf->get_raw_arr(), leftover_size);
+				leftover_bufs[i] = leftover_buf;
+			}
 		}
 
 		dispatcher.set_prev_leftovers(leftover_bufs);
