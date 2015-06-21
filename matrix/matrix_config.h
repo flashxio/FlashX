@@ -54,6 +54,9 @@ class matrix_config
 	// The buffer size used for external-memory sorting.
 	// The number of bytes.
 	size_t sort_buf_size;
+	// The buffer size used for external-memory groupby.
+	// The number of bytes.
+	size_t groupby_buf_size;
 	// The I/O buffer size for writing merge results in sorting a vector.
 	// The number of bytes.
 	size_t write_io_buf_size;
@@ -74,6 +77,7 @@ public:
 		hilbert_order = true;
 		num_nodes = 1;
 		sort_buf_size = 128 * 1024 * 1024;
+		groupby_buf_size = 128 * 1024 * 1024;
 		write_io_buf_size = 128 * 1024 * 1024;
 		stream_io_size = 128 * 1024 * 1024;
 	}
@@ -172,12 +176,20 @@ public:
 		this->sort_buf_size = sort_buf_size;
 	}
 
+	void set_groupby_buf_size(size_t groupby_buf_size) {
+		this->groupby_buf_size = groupby_buf_size;
+	}
+
 	void set_write_io_buf_size(size_t write_io_buf_size) {
 		this->write_io_buf_size = write_io_buf_size;
 	}
 
 	size_t get_sort_buf_size() const {
 		return sort_buf_size;
+	}
+
+	size_t get_groupby_buf_size() const {
+		return groupby_buf_size;
 	}
 
 	size_t get_write_io_buf_size() const {
@@ -201,7 +213,8 @@ inline void matrix_config::print_help()
 	printf("\tcpu_cache_size: the cpu cache size that can be used by a thread\n");
 	printf("\thilbert_order: use the hilbert order\n");
 	printf("\tnum_nodes: The number of NUMA nodes\n");
-	printf("\tsort_buf_size: the buffer size for sorting\n");
+	printf("\tsort_buf_size: the buffer size for EM sorting\n");
+	printf("\tgroupby_buf_size: the buffer size for EM groupby\n");
 	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
 	printf("\tstream_io_size: the I/O size used for streaming\n");
 }
@@ -219,6 +232,7 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
 	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
 	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tgroupby_buf_size" << groupby_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size" << stream_io_size;
 }
@@ -249,6 +263,11 @@ inline void matrix_config::init(config_map::ptr map)
 		long tmp = 0;
 		map->read_option_long("sort_buf_size", tmp);
 		sort_buf_size = tmp;
+	}
+	if (map->has_option("groupby_buf_size")) {
+		long tmp = 0;
+		map->read_option_long("groupby_buf_size", tmp);
+		groupby_buf_size = tmp;
 	}
 	if (map->has_option("write_io_buf_size")) {
 		long tmp = 0;

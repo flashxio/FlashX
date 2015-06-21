@@ -21,6 +21,7 @@
 
 #include "log.h"
 
+#include "matrix_config.h"
 #include "data_frame.h"
 #include "bulk_operate.h"
 #include "mem_vec_store.h"
@@ -474,8 +475,9 @@ static vector_vector::ptr EM_groupby(
 	detail::EM_vv_store::ptr out_vv = detail::EM_vv_store::create(
 			op.get_output_type());
 
-	// TODO we need to allow users to configure the block size.
-	size_t portion_size = 128 * 1024 * 1024;
+	size_t groupby_entry_size
+		= sorted_df->get_vec_ref(col_name).get_type().get_size();
+	size_t portion_size = matrix_conf.get_groupby_buf_size() / groupby_entry_size;
 	// If one of the columns in the data frame is a vector vector,
 	// we should use a smaller portion size.
 	// TODO maybe there is a better way.

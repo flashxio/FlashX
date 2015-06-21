@@ -127,6 +127,7 @@ void print_usage()
 	fprintf(stderr, "-u: undirected graph\n");
 	fprintf(stderr, "-e: use external memory\n");
 	fprintf(stderr, "-s size: sort buffer size\n");
+	fprintf(stderr, "-g size: groupby buffer size\n");
 }
 
 int main(int argc, char *argv[])
@@ -134,9 +135,10 @@ int main(int argc, char *argv[])
 	bool directed = true;
 	bool in_mem = true;
 	size_t sort_buf_size = 1UL * 1024 * 1024 * 1024;
+	size_t groupby_buf_size = 1UL * 1024 * 1024 * 1024;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "ues:")) != -1) {
+	while ((opt = getopt(argc, argv, "ues:g:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -147,6 +149,10 @@ int main(int argc, char *argv[])
 				break;
 			case 's':
 				sort_buf_size = str2size(optarg);
+				num_opts++;
+				break;
+			case 'g':
+				groupby_buf_size = str2size(optarg);
 				num_opts++;
 				break;
 			default:
@@ -187,6 +193,9 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 	matrix_conf.set_sort_buf_size(sort_buf_size);
+	matrix_conf.set_groupby_buf_size(groupby_buf_size);
+	printf("sort buf size: %ld, groupby buf size: %ld\n",
+			matrix_conf.get_sort_buf_size(), matrix_conf.get_groupby_buf_size());
 
 	struct timeval start, end;
 	edge_parser parser;
