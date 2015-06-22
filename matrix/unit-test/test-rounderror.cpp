@@ -255,11 +255,8 @@ void test_vec_scal()
 
 	// FlashMatrix solution.
 	mem_dense_matrix::ptr mat = mem_dense_matrix::create(mat_store);
-	detail::smp_vec_store::ptr scal_vec = detail::smp_vec_store::create(1,
-			get_scalar_type<double>());
-	scal_vec->set<double>(0, scal);
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(
-			mat->scale_cols(vector::create(scal_vec)));
+			mat->multiply_scalar(scal));
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		assert(res->get<double>(i, 0) == copy1[i]);
 }
