@@ -686,6 +686,32 @@ void test_write2file()
 	test_write2file1(mat);
 }
 
+void test_cast()
+{
+	printf("test cast type\n");
+	mem_dense_matrix::ptr mat, mat1;
+
+	mat = mem_dense_matrix::create_rand<int>(
+			0, 1000, 100000, 10, matrix_layout_t::L_ROW);
+	mat1 = mem_dense_matrix::cast(
+			mat->cast_ele_type(get_scalar_type<long>()));
+	mat1->materialize_self();
+#pragma omp parallel for
+	for (size_t i = 0; i < mat->get_num_rows(); i++)
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			assert(mat->get<int>(i, j) == mat1->get<long>(i, j));
+
+	mat = mem_dense_matrix::create_rand<float>(
+			0, 1000, 100000, 10, matrix_layout_t::L_ROW);
+	mat1 = mem_dense_matrix::cast(
+			mat->cast_ele_type(get_scalar_type<double>()));
+	mat1->materialize_self();
+#pragma omp parallel for
+	for (size_t i = 0; i < mat->get_num_rows(); i++)
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			assert((double) mat->get<float>(i, j) == mat1->get<double>(i, j));
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -697,6 +723,7 @@ int main(int argc, char *argv[])
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
 
+	test_cast();
 	test_write2file();
 	test_create_const();
 	test_apply();

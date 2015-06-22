@@ -125,6 +125,7 @@ public:
 			std::shared_ptr<const vector> vals) const;
 	virtual dense_matrix::ptr scale_rows(
 			std::shared_ptr<const vector> vals) const;
+	virtual dense_matrix::ptr cast_ele_type(const scalar_type &type) const;
 
 	template<class T>
 	T get(size_t row, size_t col) const {

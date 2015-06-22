@@ -235,6 +235,7 @@ public:
 			std::shared_ptr<const vector> vals) const = 0;
 	virtual dense_matrix::ptr scale_rows(
 			std::shared_ptr<const vector> vals) const = 0;
+	virtual dense_matrix::ptr cast_ele_type(const scalar_type &type) const = 0;
 
 	dense_matrix::ptr multiply(const dense_matrix &mat,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const {
