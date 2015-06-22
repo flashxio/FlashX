@@ -233,6 +233,49 @@ public:
 	}
 };
 
+class double_multiply_operate: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const double *a = static_cast<const double *>(left_arr);
+		const double *b = static_cast<const double *>(right_arr);
+		long double *c = static_cast<long double *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			c[i] = ((long double) a[i]) * ((long double) b[i]);
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		long double a = *static_cast<const double *>(right);
+		const double *x = static_cast<const double *>(left_arr);
+		long double *c = static_cast<long double *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			c[i] = x[i] * a;
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		long double a = *static_cast<const double *>(left);
+		const double *x = static_cast<const double *>(right_arr);
+		long double *c = static_cast<long double *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			c[i] = x[i] * a;
+	}
+	virtual void runA(size_t num_eles, const void *left_arr,
+			void *output) const {
+		assert(0);
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
 }
 
 double dense_matrix::norm2() const
@@ -256,6 +299,27 @@ double dense_matrix::norm2() const
 				basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
 	}
 	return ret;
+}
+
+dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
+		matrix_layout_t out_layout) const
+{
+	if (get_type() == get_scalar_type<double>()) {
+		const bulk_operate &add
+			= get_scalar_type<long double>().get_basic_ops().get_add();
+		dense_matrix::ptr res;
+		if (is_wide())
+			res = inner_prod(mat, double_multiply_operate(), add);
+		else
+			res = inner_prod(mat, double_multiply_operate(), add);
+		assert(res->get_type() == get_scalar_type<long double>());
+		dense_matrix::ptr ret = res->cast_ele_type(get_scalar_type<double>());
+		ret->materialize_self();
+		return ret;
+	}
+	else
+		return inner_prod(mat, get_type().get_basic_ops().get_multiply(),
+				get_type().get_basic_ops().get_add(), out_layout);
 }
 
 namespace

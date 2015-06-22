@@ -238,10 +238,7 @@ public:
 	virtual dense_matrix::ptr cast_ele_type(const scalar_type &type) const = 0;
 
 	dense_matrix::ptr multiply(const dense_matrix &mat,
-			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const {
-		return inner_prod(mat, get_type().get_basic_ops().get_multiply(),
-				get_type().get_basic_ops().get_add(), out_layout);
-	}
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 
 	dense_matrix::ptr add(const dense_matrix &mat) const {
 		const bulk_operate &op = get_type().get_basic_ops().get_add();
