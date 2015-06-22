@@ -26,6 +26,7 @@
 
 #include "sorter.h"
 #include "stl_algs.h"
+#include "type_cast.h"
 
 namespace fm
 {
@@ -152,6 +153,7 @@ public:
 			const scalar_variable &max) const = 0;
 	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
 			const scalar_variable &max, const scalar_variable &seed) const = 0;
+	virtual const type_cast &get_type_cast(const scalar_type &type) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -190,6 +192,7 @@ public:
 		return algs;
 	}
 	virtual const set_operate &get_set_const(const scalar_variable &val) const;
+	virtual const type_cast &get_type_cast(const scalar_type &type) const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();

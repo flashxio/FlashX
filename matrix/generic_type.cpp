@@ -92,6 +92,37 @@ const agg_ops &scalar_type_impl<T>::get_agg_ops() const
 	return aops;
 }
 
+template<class T>
+const type_cast &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
+{
+	switch(type.get_type()) {
+		case P_CHAR:
+			return fm::get_type_cast<T, char>();
+		case P_SHORT:
+			return fm::get_type_cast<T, short>();
+		case P_INTEGER:
+			return fm::get_type_cast<T, int>();
+		case P_LONG:
+			return fm::get_type_cast<T, long>();
+		case P_FLOAT:
+			return fm::get_type_cast<T, float>();
+		case P_DOUBLE:
+			return fm::get_type_cast<T, double>();
+		case P_LDOUBLE:
+			return fm::get_type_cast<T, long double>();
+		case P_BOOL:
+			return fm::get_type_cast<T, bool>();
+		case P_USHORT:
+			return fm::get_type_cast<T, unsigned short>();
+		case P_UINT:
+			return fm::get_type_cast<T, unsigned int>();
+		case P_ULONG:
+			return fm::get_type_cast<T, unsigned long>();
+		default:
+			throw invalid_arg_exception("invalid prim type");
+	}
+}
+
 const scalar_type &get_scalar_type(prim_type type)
 {
 	switch(type) {
