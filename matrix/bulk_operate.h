@@ -425,18 +425,30 @@ public:
 	}
 };
 
+template<class LeftType1, class RightType1, class ResType1>
+struct multiply
+{
+	ResType1 operator()(const LeftType1 &e1, const RightType1 &e2) const {
+		return e1 * e2;
+	}
+};
+
+template<>
+struct multiply<double, double, double>
+{
+	double operator()(const double &e1, const double &e2) const {
+		long double first = e1;
+		long double second = e2;
+		return first * second;
+	}
+};
+
 /*
  * This template implements all basic binary operators for different types.
  */
 template<class LeftType, class RightType, class ResType>
 class basic_ops_impl: public basic_ops
 {
-	struct multiply {
-		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return e1 * e2;
-		}
-	};
-
 	struct add {
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 + e2;
@@ -503,7 +515,8 @@ class basic_ops_impl: public basic_ops
 
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
-	bulk_operate_impl<multiply, LeftType, RightType, ResType> mul_op;
+	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
+		LeftType, RightType, ResType> mul_op;
 	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
 	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
