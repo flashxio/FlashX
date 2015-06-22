@@ -74,6 +74,7 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 			get_scalar_type<fg::vertex_id_t>());
 	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
 			get_scalar_type<fg::vertex_id_t>());
+	size_t entry_idx = 0;
 	for (size_t i = 0; i < lines.size(); i++) {
 		const char *line = lines[i].c_str();
 		int len = strlen(line);
@@ -111,9 +112,12 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 		fg::vertex_id_t to = atol(second);
 		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
 
-		froms->set(i, from);
-		tos->set(i, to);
+		froms->set(entry_idx, from);
+		tos->set(entry_idx, to);
+		entry_idx++;
 	}
+	froms->resize(entry_idx);
+	tos->resize(entry_idx);
 
 	df.get_vec(0)->append(*froms);
 	df.get_vec(1)->append(*tos);
