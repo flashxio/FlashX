@@ -193,8 +193,9 @@ bool local_cref_vec_store::resize(size_t new_length)
 
 bool local_buf_vec_store::resize(size_t new_length)
 {
-	if (get_length() < new_length) {
-		arr.expand(new_length * get_type().get_size());
+	size_t new_num_bytes = new_length * get_type().get_size();
+	if (arr.get_num_bytes() < new_num_bytes) {
+		arr.expand(new_num_bytes);
 		set_data(arr.get_raw(), arr.get_raw());
 	}
 	detail::vec_store::resize(new_length);
