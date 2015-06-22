@@ -266,7 +266,7 @@ class basic_uops_impl: public basic_uops
 
 	struct uop_abs {
 		OutType operator()(const InType &e) const {
-			return std::abs(e);
+			return (OutType) std::abs(e);
 		}
 	};
 
@@ -479,7 +479,7 @@ class basic_ops_impl: public basic_ops
 
 	struct pow {
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return std::pow(e1, e2);
+			return (ResType) std::pow(e1, e2);
 		}
 	};
 
