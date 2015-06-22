@@ -286,6 +286,8 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 		num_out_edges->set(i, local_num_edges);
 		num_edges += local_num_edges;
 	}
+	assert(num_edges % 2 == 0);
+	num_edges /= 2;
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to get #edges\n", time_diff(start, end));
 	printf("There are %ld edges\n", num_edges);
