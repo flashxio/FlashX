@@ -214,12 +214,14 @@ public:
 		local_matrix_store::reset_size();
 	}
 
+	using lvirtual_col_matrix_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
 		if (!store.is_materialized())
 			store.materialize();
 		return store.get_raw_arr();
 	}
 
+	using lvirtual_col_matrix_store::transpose;
 	virtual matrix_store::const_ptr transpose() const {
 		if (!store.is_materialized())
 			store.materialize();
@@ -231,6 +233,7 @@ public:
 					get_num_cols(), get_num_rows(), get_type(), get_node_id()));
 	}
 
+	using lvirtual_col_matrix_store::get_col;
 	virtual const char *get_col(size_t col) const {
 		if (!store.is_materialized())
 			store.materialize();
@@ -264,12 +267,14 @@ public:
 		local_matrix_store::reset_size();
 	}
 
+	using lvirtual_row_matrix_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
 		if (!store.is_materialized())
 			store.materialize();
 		return store.get_raw_arr();
 	}
 
+	using lvirtual_row_matrix_store::transpose;
 	virtual matrix_store::const_ptr transpose() const {
 		if (!store.is_materialized())
 			store.materialize();
@@ -281,12 +286,14 @@ public:
 					get_num_cols(), get_num_rows(), get_type(), get_node_id()));
 	}
 
+	using lvirtual_row_matrix_store::get_row;
 	virtual const char *get_row(size_t row) const {
 		if (!store.is_materialized())
 			store.materialize();
 		return store.get_raw_arr() + get_num_cols() * row * get_type().get_size();
 	}
 
+	using lvirtual_row_matrix_store::get_rows;
 	virtual const char *get_rows(size_t row_start, size_t row_end) const {
 		// TODO
 		assert(0);

@@ -880,6 +880,7 @@ public:
 		return true;
 	}
 
+	using local_col_matrix_store::get_raw_arr;
 	virtual char *get_raw_arr() {
 		return NULL;
 	}
@@ -898,10 +899,12 @@ public:
 	virtual void set_data(const set_operate &op) {
 	}
 
+	using local_col_matrix_store::transpose;
 	virtual matrix_store::ptr transpose() {
 		return matrix_store::ptr();
 	}
 
+	using local_col_matrix_store::get_col;
 	virtual char *get_col(size_t col) {
 		return NULL;
 	}
@@ -920,6 +923,7 @@ public:
 		return true;
 	}
 
+	using local_row_matrix_store::get_raw_arr;
 	virtual char *get_raw_arr() {
 		return NULL;
 	}
@@ -938,14 +942,15 @@ public:
 	virtual void set_data(const set_operate &op) {
 	}
 
+	using local_row_matrix_store::transpose;
 	virtual matrix_store::ptr transpose() {
 		return matrix_store::ptr();
 	}
 
+	using local_row_matrix_store::get_row;
 	virtual char *get_row(size_t row) {
 		return NULL;
 	}
-
 	virtual char *get_rows(size_t row_start, size_t row_end) {
 		return NULL;
 	}
