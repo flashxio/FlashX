@@ -77,7 +77,7 @@ test-mkl_dgemm.o: test-mkl_dgemm.cpp
 test-mkl_dgemm: test-mkl_dgemm.o
 	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
 
-TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
+TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lepetra
 CXXFLAGS += -I../eigensolver
 
 test-eigen: test-eigen.o ../libFMatrix.a ../eigensolver/libeigen.a

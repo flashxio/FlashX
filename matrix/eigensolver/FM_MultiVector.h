@@ -316,6 +316,7 @@ public:
 	virtual void MvTimesMatAddMv (ScalarType alpha, 
 			const Anasazi::MultiVec<ScalarType>& A, 
 			const Teuchos::SerialDenseMatrix<int,ScalarType>& B, ScalarType beta) {
+		sync_fm2ep();
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"this(%1%) = %2% * A(%3%) * B(%4%x%5%) + %6% * this")
@@ -340,6 +341,7 @@ public:
 	//! Replace \c *this with \c alpha * \c A + \c beta * \c B.
 	virtual void MvAddMv ( ScalarType alpha, const Anasazi::MultiVec<ScalarType>& A,
 			ScalarType beta, const Anasazi::MultiVec<ScalarType>& B ) {
+		sync_fm2ep();
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		const FM_MultiVector &fm_B = dynamic_cast<const FM_MultiVector &>(B);
 		BOOST_LOG_TRIVIAL(info) << boost::format(
@@ -364,6 +366,7 @@ public:
 
 	//! Scale each element of the vectors in \c *this with \c alpha.
 	virtual void MvScale ( ScalarType alpha ) {
+		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) *= %2%") % name % alpha;
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
 #ifdef FM_VERIFY
@@ -374,6 +377,7 @@ public:
 
 	//! Scale each element of the <tt>i</tt>-th vector in \c *this with <tt>alpha[i]</tt>.
 	virtual void MvScale ( const std::vector<ScalarType>& alpha ) {
+		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s) *= vec") % name;
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
 #ifdef FM_VERIFY
@@ -399,11 +403,20 @@ public:
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
 		assert(fm_A.mat->get_num_rows() == this->mat->get_num_rows());
 		this->verify();
-//		ep_mat->MvTransMv(alpha, *fm_A.ep_mat, B);
 		fm::mem_dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
+		long double lalpha = alpha;
+		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
+#ifdef FM_VERIFY
+		ep_mat->MvTransMv(alpha, *fm_A.ep_mat, B);
+		for (int i = 0; i < B.numRows(); i++)
+			for (int j = 0; j < B.numCols(); j++) {
+				printf("%g\n", B(i, j) - (double) (res->get<ScalarType>(i, j) * lalpha));
+				assert(B(i, j) == (double) (res->get<ScalarType>(i, j) * lalpha));
+			}
+#endif
 		for (int i = 0; i < B.numRows(); i++) {
 			for (int j = 0; j < B.numCols(); j++) {
-				B(i, j) = res->get<ScalarType>(i, j) * alpha;
+				B(i, j) = res->get<ScalarType>(i, j) * lalpha;
 			}
 		}
 	}
@@ -434,9 +447,18 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
 			% name % normvec.size();
 		verify();
-//		ep_mat->MvNorm(normvec);
 		for (size_t i = 0; i < mat->get_num_cols(); i++)
 			normvec[i] = mat->get_col(i)->norm2();
+		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
+#ifdef FM_VERIFY
+		std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> normvec1(
+				normvec.size());
+		ep_mat->MvNorm(normvec1);
+		for (size_t i = 0; i < normvec.size(); i++) {
+			printf("%ld: %g\n", i, normvec[i] - normvec1[i]);
+			assert(normvec[i] == normvec1[i]);
+		}
+#endif
 	}
 
 	//! @name Initialization methods
@@ -447,6 +469,7 @@ public:
 	/// in \c *this indicated by the indices given in \c index.
 	virtual void SetBlock (const Anasazi::MultiVec<ScalarType>& A,
 			const std::vector<int>& index) {
+		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s)[%ld vecs] = A(%s)")
