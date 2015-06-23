@@ -97,7 +97,6 @@ class set_data_task: public thread_task
 	size_t to_size;
 	int node_id;
 	const set_range_operate &set_range;
-	size_t entry_size;
 	size_t range_size;
 public:
 	// `to_off', `to_size' and `range_size' are in the number of bytes.
