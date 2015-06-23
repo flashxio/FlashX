@@ -352,6 +352,11 @@ public:
 	bool operator==(const edge_count &count) const {
 		return this->num == count.num;
 	}
+
+	edge_count& operator+=(const edge_count& rhs) {
+		this->num += rhs.get_count();
+		return *this;
+	}
 };
 
 static inline std::ostream& operator<<(std::ostream& cout,
