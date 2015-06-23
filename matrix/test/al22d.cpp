@@ -139,16 +139,18 @@ void print_usage()
 	fprintf(stderr, "-h height: the height of a 2D-partitioned matrix block\n");
 	fprintf(stderr, "-w width: the width of a 2D-partitioned matrix block\n");
 	fprintf(stderr, "-v: verify the generated matrix image\n");
+	fprintf(stderr, "-g size: the groupby buffer size on vector vectors\n");
 }
 
 int main(int argc, char *argv[])
 {
 	size_t block_height = block_max_num_rows;
 	size_t block_width = block_height;
+	size_t vv_groupby_buf_size = 1024 * 1024;
 	bool verify = false;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "h:w:v")) != -1) {
+	while ((opt = getopt(argc, argv, "h:w:vg:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'w':
@@ -161,6 +163,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'v':
 				verify = true;
+				break;
+			case 'g':
+				vv_groupby_buf_size = str2size(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -184,6 +190,7 @@ int main(int argc, char *argv[])
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
 	config_map::ptr configs = config_map::create(conf_file);
+	matrix_conf.set_vv_groupby_buf_size(vv_groupby_buf_size);
 	init_flash_matrix(configs);
 
 	printf("load vertex index\n");

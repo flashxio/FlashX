@@ -483,7 +483,7 @@ static vector_vector::ptr EM_groupby(
 	// TODO maybe there is a better way.
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
 		if (sorted_df->get_vec_ref(i).get_entry_size() == 0) {
-			portion_size = 1024 * 1024;
+			portion_size = matrix_conf.get_vv_groupby_buf_size();
 			break;
 		}
 
