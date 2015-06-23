@@ -22,7 +22,6 @@
 #include "mem_dense_matrix.h"
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
-#include "mem_vector.h"
 
 #include "fm_utils.h"
 #include "rutils.h"
@@ -145,5 +144,5 @@ vector::ptr get_vector(const Rcpp::List &vec)
 		= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
 	detail::vec_store::const_ptr store = col_mat.get_col_vec(0);
 	assert(store);
-	return mem_vector::create(detail::mem_vec_store::cast(store));
+	return vector::create(store);
 }

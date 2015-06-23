@@ -100,7 +100,7 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 
 	// TODO let's just use in-memory dense matrix first.
 	GetRNGstate();
-	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<double>(),
+	vector::ptr v = vector::create(n, get_scalar_type<double>(), true,
 			rand_set_operate<double>(min, max));
 	PutRNGstate();
 	return create_FMR_vector(v->get_raw_store(), "");
@@ -313,7 +313,7 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 }
 
 template<class T, class RType>
-void copy_FM2Rvector(const mem_vector &vec, RType *r_arr)
+void copy_FM2Rvector(const detail::smp_vec_store &vec, RType *r_arr)
 {
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
@@ -337,8 +337,9 @@ template<class T, class RType>
 void copy_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
-		mem_vector::ptr mem_vec = mem_vector::cast(mem_mat->get_col(0));
-		copy_FM2Rvector<T>(*mem_vec, ret);
+		vector::ptr mem_vec = mem_mat->get_col(0);
+		copy_FM2Rvector<T>(dynamic_cast<const detail::smp_vec_store &>(
+					mem_vec->get_data()), ret);
 	}
 	else
 		copy_FM2Rmatrix<T>(*mem_mat, ret);
@@ -1122,7 +1123,7 @@ RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	mem_vector::ptr vec = mem_vector::cast(get_vector(pvec));
+	vector::ptr vec = get_vector(pvec);
 	if (vec == NULL) {
 		return R_NilValue;
 	}
