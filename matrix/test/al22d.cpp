@@ -16,6 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "common.h"
+
 #include "safs_file.h"
 #include "io_interface.h"
 
@@ -150,11 +152,11 @@ int main(int argc, char *argv[])
 		num_opts++;
 		switch (opt) {
 			case 'w':
-				block_width = atol(optarg);
+				block_width = str2size(optarg);
 				num_opts++;
 				break;
 			case 'h':
-				block_height = atol(optarg);
+				block_height = str2size(optarg);
 				num_opts++;
 				break;
 			case 'v':
