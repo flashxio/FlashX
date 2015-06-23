@@ -37,6 +37,12 @@ add_library(FMatrix STATIC
 	fm_utils.cpp
 	matrix_store.cpp
 	mem_vv_store.cpp
+	local_vv_store.cpp
+	type_cast.cpp
+	vec_store.cpp
+	vector.cpp
+	vector_vector.cpp
+	vv_store.cpp
 )
 
 subdirs(eigensolver)
