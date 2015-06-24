@@ -41,20 +41,26 @@ namespace fm
 namespace detail
 {
 
-template<class T>
-T round_ele(T val, size_t alignment, size_t ele_size)
+namespace
 {
-	assert(alignment % ele_size == 0);
-	alignment = alignment / ele_size;
-	return ROUND(val, alignment);
-}
+/*
+ * When we write data to disks, we need to have something to hold the buffer.
+ * This holds the local buffer until the write completes.
+ */
+class portion_write_complete: public portion_compute
+{
+	local_buf_vec_store::const_ptr store;
+public:
+	portion_write_complete(local_buf_vec_store::const_ptr store) {
+		this->store = store;
+	}
 
-template<class T>
-T roundup_ele(T val, size_t alignment, size_t ele_size)
-{
-	assert(alignment % ele_size == 0);
-	alignment = alignment / ele_size;
-	return ROUNDUP(val, alignment);
+	virtual void run(char *buf, size_t size) {
+		assert(store->get_raw_arr() == buf);
+		assert(store->get_length() * store->get_entry_size() == size);
+	}
+};
+
 }
 
 class EM_vec_dispatcher: public task_dispatcher
@@ -168,40 +174,6 @@ void seq_writer::append(local_vec_store::const_ptr data)
 		if (data_size_in_buf == buf->get_length())
 			flush_buffer_data(false);
 	}
-}
-
-EM_vec_store::file_holder::ptr EM_vec_store::file_holder::create_temp(
-		size_t num_bytes)
-{
-	char *tmp = tempnam(".", "vec");
-	std::string tmp_name = basename(tmp);
-	safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
-	assert(!f.exist());
-	bool ret = f.create_file(num_bytes);
-	assert(ret);
-	EM_vec_store::file_holder::ptr holder(
-			new EM_vec_store::file_holder(tmp_name, false));
-	free(tmp);
-	return holder;
-}
-
-EM_vec_store::file_holder::~file_holder()
-{
-	if (!persistent) {
-		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-		assert(f.exist());
-		f.delete_file();
-	}
-}
-
-bool EM_vec_store::file_holder::set_persistent(const std::string &new_name)
-{
-	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-	if (!f.rename(new_name))
-		return false;
-	persistent = true;
-	this->file_name = new_name;
-	return true;
 }
 
 EM_vec_store::ptr EM_vec_store::cast(vec_store::ptr vec)
@@ -516,17 +488,6 @@ local_vec_store::const_ptr EM_vec_store::get_portion(off_t loc, size_t size) con
 	return const_cast<EM_vec_store *>(this)->get_portion(loc, size);
 }
 
-class sync_read_compute: public portion_compute
-{
-	bool &ready;
-public:
-	sync_read_compute(bool &_ready): ready(_ready) {
-	}
-	virtual void run(char *buf, size_t size) {
-		ready = true;
-	}
-};
-
 local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 {
 	if (orig_loc + orig_size > get_length()) {
@@ -582,58 +543,6 @@ vec_store::ptr EM_vec_store::sort_with_index()
 safs::io_interface::ptr EM_vec_store::create_io()
 {
 	return ios->create_io();
-}
-
-safs::io_interface::ptr EM_vec_store::io_set::create_io()
-{
-	thread *t = thread::get_curr_thread();
-	assert(t);
-	pthread_spin_lock(&io_lock);
-	auto it = thread_ios.find(t);
-	if (it == thread_ios.end()) {
-		safs::io_interface::ptr io = safs::create_io(factory, t);
-		io->set_callback(portion_callback::ptr(new portion_callback()));
-		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
-		pthread_setspecific(io_key, io.get());
-		pthread_spin_unlock(&io_lock);
-		return io;
-	}
-	else {
-		safs::io_interface::ptr io = it->second;
-		pthread_spin_unlock(&io_lock);
-		return io;
-	}
-}
-
-EM_vec_store::io_set::io_set(safs::file_io_factory::shared_ptr factory)
-{
-	this->factory = factory;
-	int ret = pthread_key_create(&io_key, NULL);
-	assert(ret == 0);
-	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
-}
-
-EM_vec_store::io_set::~io_set()
-{
-	pthread_spin_destroy(&io_lock);
-	pthread_key_delete(io_key);
-	thread_ios.clear();
-}
-
-bool EM_vec_store::io_set::has_io() const
-{
-	return pthread_getspecific(io_key) != NULL;
-}
-
-safs::io_interface &EM_vec_store::io_set::get_curr_io() const
-{
-	void *io_addr = pthread_getspecific(io_key);
-	if (io_addr)
-		return *(safs::io_interface *) io_addr;
-	else {
-		safs::io_interface::ptr io = const_cast<io_set *>(this)->create_io();
-		return *io;
-	}
 }
 
 ///////////////////////////// Sort the vector /////////////////////////////////

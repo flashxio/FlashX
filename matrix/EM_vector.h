@@ -54,45 +54,6 @@ class EM_vec_store: public vec_store, public EM_object
 		}
 	};
 
-	class file_holder {
-		bool persistent;
-		std::string file_name;
-		file_holder(const std::string &name, bool persistent) {
-			this->file_name = name;
-			this->persistent = persistent;
-		}
-	public:
-		typedef std::shared_ptr<file_holder> ptr;
-		static ptr create_temp(size_t num_bytes);
-		static ptr create(const std::string &name) {
-			return ptr(new file_holder(name, true));
-		}
-
-		~file_holder();
-		std::string get_name() const {
-			return file_name;
-		}
-		bool set_persistent(const std::string &new_name);
-	};
-
-	class io_set {
-		safs::file_io_factory::shared_ptr factory;
-		// This keeps an I/O instance for each thread.
-		std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
-		pthread_key_t io_key;
-		pthread_spinlock_t io_lock;
-	public:
-		typedef std::shared_ptr<io_set> ptr;
-		io_set(safs::file_io_factory::shared_ptr factory);
-		~io_set();
-
-		safs::io_interface::ptr create_io();
-		// This returns the I/O instance for the curr thread.
-		safs::io_interface &get_curr_io() const;
-		// Test if the current thread has an I/O instance for the vector.
-		bool has_io() const;
-	};
-
 	file_holder::ptr holder;
 	io_set::ptr ios;
 

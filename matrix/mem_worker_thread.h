@@ -92,69 +92,6 @@ public:
 	void wait4complete();
 };
 
-class io_worker_task;
-
-/*
- * This runs on the portion of the data in a data container when the portion
- * of data is available in memory.
- */
-class portion_compute
-{
-public:
-	typedef std::shared_ptr<portion_compute> ptr;
-
-	virtual ~portion_compute() {
-	}
-
-	virtual void run(char *buf, size_t size) = 0;
-};
-
-class portion_callback: public safs::callback
-{
-	std::unordered_map<char *, portion_compute::ptr> computes;
-public:
-	typedef std::shared_ptr<portion_callback> ptr;
-
-	virtual ~portion_callback() {
-		assert(computes.empty());
-	}
-
-	void add(const safs::io_request &req, portion_compute::ptr compute) {
-		auto ret = computes.insert(std::pair<char *, portion_compute::ptr>(
-					req.get_buf(), compute));
-		assert(ret.second);
-	}
-
-	virtual int invoke(safs::io_request *reqs[], int num) {
-		for (int i = 0; i < num; i++) {
-			auto it = computes.find(reqs[i]->get_buf());
-			assert(it != computes.end());
-			portion_compute::ptr compute = it->second;
-			computes.erase(it);
-			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
-		}
-		return 0;
-	}
-};
-
-/*
- * When we write data to disks, we need to have something to hold the buffer.
- * This holds the local buffer until the write completes.
- */
-class portion_write_complete: public portion_compute
-{
-	local_buf_vec_store::const_ptr store;
-public:
-	portion_write_complete(local_buf_vec_store::const_ptr store) {
-		this->store = store;
-	}
-
-	virtual void run(char *buf, size_t size) {
-		assert(store->get_raw_arr() == buf);
-		assert(store->get_length() * store->get_entry_size() == size);
-	}
-};
-
 /*
  * This defines a set of I/O tasks that process an entire data container.
  */
@@ -179,7 +116,6 @@ class io_worker_task: public thread_task
 	pthread_spinlock_t lock;
 	std::set<EM_object *> EM_objs;
 
-	std::shared_ptr<portion_callback> cb;
 	task_dispatcher::ptr dispatch;
 	int max_pending_ios;
 public:
