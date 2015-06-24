@@ -487,6 +487,10 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 			block->verify(block_size);
 		}
 	}
+	// If the block row doesn't have any non-zero entries, let's insert an
+	// empty block row, so the matrix index can work correctly.
+	if (curr_size == 0)
+		curr_size = sizeof(sparse_block_2d);
 	out.resize(curr_size);
 }
 
