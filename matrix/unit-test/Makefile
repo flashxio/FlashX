@@ -22,7 +22,7 @@ CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph 
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
-all: test_io_gen test-mem_matrix test-EM_vector	\
+all: test_io_gen test-mem_matrix test-EM_vector	test-EM_matrix \
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
 	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
