@@ -27,9 +27,9 @@ namespace detail
 {
 
 EM_object::file_holder::ptr EM_object::file_holder::create_temp(
-		size_t num_bytes)
+		const std::string &name, size_t num_bytes)
 {
-	char *tmp = tempnam(".", "vec");
+	char *tmp = tempnam(".", name.c_str());
 	std::string tmp_name = basename(tmp);
 	safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
 	assert(!f.exist());

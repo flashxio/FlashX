@@ -93,7 +93,7 @@ EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layou
 		const scalar_type &type): matrix_store(nrow, ncol, false, type)
 {
 	this->layout = layout;
-	holder = file_holder::create_temp(nrow * ncol * type.get_size());
+	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));

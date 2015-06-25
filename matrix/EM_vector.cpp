@@ -212,7 +212,7 @@ EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 		length, type, false)
 {
-	holder = file_holder::create_temp(length * type.get_size());
+	holder = file_holder::create_temp("vec", length * type.get_size());
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
