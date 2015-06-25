@@ -682,6 +682,7 @@ std::string supported_algs[] = {
 	"overlap",
 	"bfs",
 	"spmv",
+	"louvain"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -716,12 +717,12 @@ void print_usage()
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l time: the length of time interval\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "k-core:\n");
+	fprintf(stderr, "k-core\n");
 	fprintf(stderr, "-k k: the minimum k value to compute\n");
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "betweenness:\n");
+	fprintf(stderr, "betweenness\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");
 	fprintf(stderr, "-s vertex id: the vertex where BC starts. (Default runs all)\n");
 	fprintf(stderr, "\n");
@@ -741,6 +742,9 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "spmv\n");
 	fprintf(stderr, "-t: transpose the sparse matrix.\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "louvain\n");
+	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
