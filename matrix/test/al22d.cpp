@@ -203,9 +203,10 @@ int main(int argc, char *argv[])
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
 	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file, to_safs);
-	printf("verify 2d matrix for the out-adjacency lists\n");
-	if (verify)
+	if (verify) {
+		printf("verify 2d matrix for the out-adjacency lists\n");
 		verify_2d_matrix(mat_file, mat_idx_file, to_safs);
+	}
 	out_adjs = NULL;
 
 	if (vindex->get_graph_header().is_directed_graph()) {
@@ -216,9 +217,10 @@ int main(int argc, char *argv[])
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
 		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file, to_safs);
-		printf("verify 2d matrix for the in-adjacency lists\n");
-		if (verify)
+		if (verify) {
+			printf("verify 2d matrix for the in-adjacency lists\n");
 			verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);
+		}
 	}
 
 	destroy_flash_matrix();
