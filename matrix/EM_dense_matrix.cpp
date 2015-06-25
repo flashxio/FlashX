@@ -25,6 +25,7 @@
 #include "matrix_config.h"
 #include "EM_dense_matrix.h"
 #include "local_matrix_store.h"
+#include "raw_data_array.h"
 
 namespace fm
 {
@@ -245,37 +246,23 @@ local_matrix_store::ptr EM_matrix_store::get_portion_async(
 		+ portion_num_rows * portion_start_col) * entry_size;
 
 	// If this is the very last portion (the bottom right portion), the data
-	// size may not be aligned with the page size. We need to align the data
-	// size according to the data layout in the matrix.
-	// TODO I should round up in the longer dimension.
-	if (portion_start_row + CHUNK_SIZE > get_num_rows()
-			&& portion_start_col + CHUNK_SIZE > get_num_cols()) {
-		// if the data layout is row wise, we should align the number of
-		// rows, so the rows are still stored contiguously.
-		if (store_layout() == matrix_layout_t::L_ROW)
-			portion_num_rows = roundup_ele(portion_num_rows, PAGE_SIZE,
-					entry_size);
-		// if the data layout is column wise, we should align the number of
-		// columns, so the columns are still stored contiguously.
-		else
-			portion_num_cols = roundup_ele(portion_num_cols, PAGE_SIZE,
-					entry_size);
-	}
+	// size may not be aligned with the page size.
+	size_t num_bytes
+		= ROUNDUP(portion_num_rows * portion_num_cols * entry_size, PAGE_SIZE);
+	raw_data_array data_arr(num_bytes, -1);
 	// Read the portion in a single I/O request.
 	local_matrix_store::ptr buf;
 	if (store_layout() == matrix_layout_t::L_ROW)
-		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(
+		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(data_arr,
 					portion_start_row, portion_start_col, portion_num_rows,
-					portion_num_cols, get_type(), -1));
+					portion_num_cols, get_type(), data_arr.get_node_id()));
 	else
-		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(
+		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(data_arr,
 					portion_start_row, portion_start_col, portion_num_rows,
-					portion_num_cols, get_type(), -1));
+					portion_num_cols, get_type(), data_arr.get_node_id()));
 
 	safs::data_loc_t loc(io.get_file_id(), off);
-	safs::io_request req(buf->get_raw_arr(), loc,
-			buf->get_num_rows() * buf->get_num_cols() * entry_size,
-			READ);
+	safs::io_request req(buf->get_raw_arr(), loc, num_bytes, READ);
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
 	io.flush_requests();
@@ -321,48 +308,41 @@ void EM_matrix_store::write_portion_async(
 	off_t off = (get_num_cols() * portion->get_global_start_row()
 		+ portion->get_num_rows() * portion->get_global_start_col()) * entry_size;
 
+	size_t num_bytes
+		= portion->get_num_rows() * portion->get_num_cols() * entry_size;
 	// If this is the very last portion (the bottom right portion), the data
-	// size may not be aligned with the page size. We need to use a aligned
-	// data buffer to write this portion.
-	// TODO I should round up in the longer dimension.
-	if (portion->get_global_start_row() + CHUNK_SIZE > get_num_rows()
-			&& portion->get_global_start_col() + CHUNK_SIZE > get_num_cols()) {
+	// size may not be aligned with the page size.
+	if (num_bytes % PAGE_SIZE != 0) {
+		raw_data_array data_arr(ROUNDUP(num_bytes, PAGE_SIZE),
+				portion->get_node_id());
 		// if the data layout is row wise, we should align the number of
 		// rows, so the rows are still stored contiguously.
 		if (store_layout() == matrix_layout_t::L_ROW) {
-			size_t portion_num_rows = roundup_ele(portion->get_num_rows(),
-					PAGE_SIZE, entry_size);
 			local_buf_row_matrix_store::ptr tmp_buf(new local_buf_row_matrix_store(
-						portion->get_global_start_row(),
+						data_arr, portion->get_global_start_row(),
 						portion->get_global_start_col(),
-						portion_num_rows, portion->get_num_cols(),
+						portion->get_num_rows(), portion->get_num_cols(),
 						portion->get_type(), portion->get_node_id()));
-			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(),
-					portion->get_num_rows() * portion->get_num_cols() * entry_size);
+			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(), num_bytes);
 			portion = tmp_buf;
 		}
 		// if the data layout is column wise, we should align the number of
 		// columns, so the columns are still stored contiguously.
 		else {
-			size_t portion_num_cols = roundup_ele(portion->get_num_cols(),
-					PAGE_SIZE, entry_size);
 			local_buf_col_matrix_store::ptr tmp_buf(new local_buf_col_matrix_store(
 						portion->get_global_start_row(),
 						portion->get_global_start_col(),
-						portion->get_num_rows(), portion_num_cols,
+						portion->get_num_rows(), portion->get_num_cols(),
 						portion->get_type(), portion->get_node_id()));
-			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(),
-					portion->get_num_rows() * portion->get_num_cols() * entry_size);
+			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(), num_bytes);
 			portion = tmp_buf;
 		}
+		num_bytes = ROUNDUP(num_bytes, PAGE_SIZE);
 	}
 
-	size_t size
-		= portion->get_num_rows() * portion->get_num_cols() * entry_size;
-	assert(size % PAGE_SIZE == 0);
 	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(const_cast<char *>(portion->get_raw_arr()),
-			loc, size, WRITE);
+			loc, num_bytes, WRITE);
 	portion_compute::ptr compute(new portion_write_complete(portion));
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
