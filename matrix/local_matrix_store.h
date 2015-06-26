@@ -188,9 +188,28 @@ public:
 	virtual matrix_store::const_ptr transpose() const = 0;
 	virtual matrix_store::ptr transpose() = 0;
 
+	////// Unsupported methods.
+
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(0);
 		return std::pair<size_t, size_t>(0, 0);
+	}
+	virtual local_matrix_store::const_ptr get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+	virtual local_matrix_store::ptr get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) {
+		assert(0);
+		return local_matrix_store::ptr();
+	}
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		assert(0);
 	}
 	virtual local_matrix_store::const_ptr get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,

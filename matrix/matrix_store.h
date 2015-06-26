@@ -33,6 +33,7 @@ class set_operate;
 namespace detail
 {
 
+class portion_compute;
 class local_matrix_store;
 class vec_store;
 
@@ -126,12 +127,21 @@ public:
 	 */
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
+	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) = 0;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const = 0;
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) = 0;
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) = 0;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;

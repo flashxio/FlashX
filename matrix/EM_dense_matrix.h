@@ -38,7 +38,7 @@ namespace detail
 
 class local_matrix_store;
 
-class EM_matrix_store: public matrix_store, EM_object
+class EM_matrix_store: public matrix_store, public EM_object
 {
 	matrix_layout_t layout;
 	file_holder::ptr holder;

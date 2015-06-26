@@ -56,40 +56,6 @@ public:
 
 }
 
-/*
- * This task dispatcher issues a task for each portion.
- */
-class EM_portion_dispatcher: public task_dispatcher
-{
-	size_t tot_len;
-	off_t portion_idx;
-	pthread_spinlock_t lock;
-	size_t portion_size;
-public:
-	EM_portion_dispatcher(size_t tot_len, size_t portion_size) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-		portion_idx = 0;
-		this->tot_len = tot_len;
-		this->portion_size = portion_size;
-	}
-
-	virtual bool issue_task() {
-		pthread_spin_lock(&lock);
-		off_t global_start = portion_idx * portion_size;
-		if ((size_t) global_start >= tot_len) {
-			pthread_spin_unlock(&lock);
-			return false;
-		}
-		size_t length = std::min(portion_size, tot_len - global_start);
-		portion_idx++;
-		pthread_spin_unlock(&lock);
-		create_task(global_start, length);
-		return true;
-	}
-
-	virtual void create_task(off_t global_start, size_t length) = 0;
-};
-
 EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
 		const scalar_type &type): matrix_store(nrow, ncol, false, type)
 {
