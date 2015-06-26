@@ -21,7 +21,8 @@
  */
 
 #include "virtual_matrix_store.h"
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {

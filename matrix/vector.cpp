@@ -25,7 +25,7 @@
 #include "data_frame.h"
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -286,9 +286,8 @@ data_frame::ptr vector::sort_with_index() const
 dense_matrix::ptr vector::conv2mat(size_t nrow, size_t ncol,
 		bool byrow) const
 {
-	detail::mem_matrix_store::const_ptr mat = detail::mem_matrix_store::cast(
-			get_data().conv2mat(nrow, ncol, byrow));
-	return mem_dense_matrix::create(mat);
+	detail::matrix_store::const_ptr mat = get_data().conv2mat(nrow, ncol, byrow);
+	return dense_matrix::create(mat);
 }
 
 bool vector::export2(FILE *f) const

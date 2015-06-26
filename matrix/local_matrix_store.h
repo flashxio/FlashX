@@ -175,7 +175,7 @@ public:
 		local_start_col = 0;
 		matrix_store::resize(num_rows, num_cols);
 	}
-	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
+	virtual matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	virtual bool read_only() const = 0;
 	virtual const char *get_raw_arr() const = 0;
@@ -191,6 +191,18 @@ public:
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(0);
 		return std::pair<size_t, size_t>(0, 0);
+	}
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) {
+		assert(0);
+		return local_matrix_store::ptr();
 	}
 	virtual matrix_store::const_ptr append_cols(
 			const std::vector<matrix_store::const_ptr> &mats) const {

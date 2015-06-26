@@ -64,10 +64,6 @@ public:
 	virtual void set_data(const set_operate &op);
 	virtual matrix_store::ptr conv2(matrix_layout_t layout) const;
 
-	virtual int get_num_nodes() const {
-		return -1;
-	}
-
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
 	virtual const char *get_row(size_t row) const {
@@ -82,30 +78,6 @@ public:
 	virtual char *get_col(size_t col) {
 		return NULL;
 	}
-
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const = 0;
-	virtual matrix_store::const_ptr get_rows(
-			const std::vector<off_t> &idxs) const = 0;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const = 0;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const = 0;
-
-	virtual std::shared_ptr<const local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const {
-		assert(0);
-		return std::shared_ptr<const local_matrix_store>();
-	}
-	virtual std::shared_ptr<local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		assert(0);
-		return std::shared_ptr<local_matrix_store>();
-	}
-	virtual std::shared_ptr<const local_matrix_store> get_portion(
-			size_t id) const = 0;
-	virtual std::shared_ptr<local_matrix_store> get_portion(
-			size_t id) = 0;
 
 	virtual bool write2file(const std::string &file_name) const = 0;
 

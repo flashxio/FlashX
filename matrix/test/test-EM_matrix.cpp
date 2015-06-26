@@ -6,7 +6,6 @@
 
 #include "matrix_config.h"
 #include "EM_dense_matrix.h"
-#include "mem_dense_matrix.h"
 #include "sparse_matrix.h"
 
 #if 0

@@ -10,9 +10,9 @@
 #include "rand_gen.h"
 #include "generic_type.h"
 #include "mem_matrix_store.h"
-#include "mem_dense_matrix.h"
 #include "mem_vec_store.h"
 #include "vector.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 
@@ -178,7 +178,7 @@ void test_mm()
 	for (size_t i = 0; i < A_store->get_num_cols(); i++)
 		memcpy(A_store->get_col(i), A.data() + i * A_store->get_num_rows(),
 				A_store->get_num_rows() * sizeof(double));
-	mem_dense_matrix::ptr A_mat = mem_dense_matrix::create(A_store);
+	dense_matrix::ptr A_mat = dense_matrix::create(A_store);
 
 	detail::mem_row_matrix_store::ptr A_tmp_store
 		= detail::mem_row_matrix_store::create(long_dim, 10,
@@ -186,14 +186,14 @@ void test_mm()
 	for (size_t i = 0; i < A_tmp_store->get_num_rows(); i++)
 		memcpy(A_tmp_store->get_row(i), A_tmp.data() + i * A_tmp_store->get_num_cols(),
 				A_tmp_store->get_num_cols() * sizeof(double));
-	mem_dense_matrix::ptr A_tmp_mat = mem_dense_matrix::create(A_tmp_store);
+	dense_matrix::ptr A_tmp_mat = dense_matrix::create(A_tmp_store);
 
 	detail::mem_col_matrix_store::ptr B_store
 		= detail::mem_col_matrix_store::create(10, 10, get_scalar_type<double>());
 	for (size_t i = 0; i < B_store->get_num_cols(); i++)
 		memcpy(B_store->get_col(i), B.data() + i * B_store->get_num_rows(),
 				B_store->get_num_rows() * sizeof(double));
-	mem_dense_matrix::ptr B_mat = mem_dense_matrix::create(B_store);
+	dense_matrix::ptr B_mat = dense_matrix::create(B_store);
 
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 			long_dim, 10, 10, 1, A.data(), long_dim, B.data(), 10, 0, C2.data(),
@@ -207,12 +207,15 @@ void test_mm()
 	mm_cc(A, long_dim, 10, B, 10, 10, C1);
 	mm_rc(A_tmp, long_dim, 10, B, 10, 10, C3);
 
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(A_mat->multiply(*B_mat));
+	dense_matrix::ptr res = A_mat->multiply(*B_mat);
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	assert(res->get_type() == get_scalar_type<double>());
+	res->materialize_self();
+	const detail::mem_matrix_store &mem_res
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 	for (size_t i = 0; i < res->get_num_cols(); i++)
 		for (size_t j = 0; j < res->get_num_rows(); j++)
-			assert(res->get<double>(j, i) == C1[i * res->get_num_rows() + j]);
+			assert(mem_res.get<double>(j, i) == C1[i * res->get_num_rows() + j]);
 
 	printf("There are %ld elements in C3\n", C3.size());
 	for (size_t i = 0; i < C3.size(); i++) {
@@ -254,11 +257,13 @@ void test_vec_scal()
 		assert(copy2[i] == copy1[i]);
 
 	// FlashMatrix solution.
-	mem_dense_matrix::ptr mat = mem_dense_matrix::create(mat_store);
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(
-			mat->multiply_scalar(scal));
+	dense_matrix::ptr mat = dense_matrix::create(mat_store);
+	dense_matrix::ptr res = mat->multiply_scalar(scal);
+	res->materialize_self();
+	const detail::mem_matrix_store &mem_res
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 	for (size_t i = 0; i < res->get_num_rows(); i++)
-		assert(res->get<double>(i, 0) == copy1[i]);
+		assert(mem_res.get<double>(i, 0) == copy1[i]);
 }
 
 void test_vec_dot()
@@ -305,7 +310,7 @@ void test_norm2()
 	assert(((double) res1) == res);
 
 	// FlashMatrix solution.
-	mem_dense_matrix::ptr mat = mem_dense_matrix::create(mat_store);
+	dense_matrix::ptr mat = dense_matrix::create(mat_store);
 	double res2 = mat->norm2();
 	assert(res2 == res);
 }

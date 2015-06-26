@@ -72,6 +72,12 @@ public:
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
 	}
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) {
+		assert(0);
+		return std::shared_ptr<local_matrix_store>();
+	}
 
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);

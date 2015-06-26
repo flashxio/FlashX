@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <cblas.h>
 
-#include "mem_dense_matrix.h"
 #include "vector.h"
 #include "mem_worker_thread.h"
+#include "dense_matrix.h"
+#include "mem_matrix_store.h"
 
 using namespace fm;
 
@@ -73,38 +74,45 @@ size_t long_dim = 10000000;
  * This is a naive implementation of matrix multiplication.
  * It should be correct
  */
-mem_dense_matrix::ptr naive_multiply(const mem_dense_matrix &m1,
-		const mem_dense_matrix &m2)
+dense_matrix::ptr naive_multiply(const dense_matrix &m1, const dense_matrix &m2)
 {
 	m1.materialize_self();
 	m2.materialize_self();
 	detail::mem_matrix_store::ptr res_store = detail::mem_matrix_store::create(
 			m1.get_num_rows(), m2.get_num_cols(), matrix_layout_t::L_ROW,
 			get_scalar_type<int>(), -1);
+	const detail::mem_matrix_store &mem_m1
+		= dynamic_cast<const detail::mem_matrix_store &>(m1.get_data());
+	const detail::mem_matrix_store &mem_m2
+		= dynamic_cast<const detail::mem_matrix_store &>(m2.get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			int sum = 0;
 			for (size_t k = 0; k < m1.get_num_cols(); k++) {
-				sum += m1.get<int>(i, k) * m2.get<int>(k, j);
+				sum += mem_m1.get<int>(i, k) * mem_m2.get<int>(k, j);
 			}
 			res_store->set<int>(i, j, sum);
 		}
 	}
-	return mem_dense_matrix::create(res_store);
+	return dense_matrix::create(res_store);
 }
 
-void verify_result(const mem_dense_matrix &m1, const mem_dense_matrix &m2)
+void verify_result(const dense_matrix &m1, const dense_matrix &m2)
 {
 	assert(m1.get_num_rows() == m2.get_num_rows());
 	assert(m1.get_num_cols() == m2.get_num_cols());
 
 	m1.materialize_self();
 	m2.materialize_self();
+	const detail::mem_matrix_store &mem_m1
+		= dynamic_cast<const detail::mem_matrix_store &>(m1.get_data());
+	const detail::mem_matrix_store &mem_m2
+		= dynamic_cast<const detail::mem_matrix_store &>(m2.get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++)
 		for (size_t j = 0; j < m1.get_num_cols(); j++)
-			assert(m1.get<int>(i, j) == m2.get<int>(i, j));
+			assert(mem_m1.get<int>(i, j) == mem_m2.get<int>(i, j));
 }
 
 enum matrix_val_t
@@ -114,74 +122,74 @@ enum matrix_val_t
 	NUM_TYPES,
 } matrix_val;
 
-mem_dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
+dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes, const scalar_type &type)
 {
 	if (type == get_scalar_type<int>()) {
 		if (layout == matrix_layout_t::L_COL)
-			return mem_dense_matrix::create(nrow, ncol, layout,
-					type, set_col_operate(ncol), num_nodes);
+			return dense_matrix::create(nrow, ncol, layout,
+					type, set_col_operate(ncol), num_nodes, true);
 		else
-			return mem_dense_matrix::create(nrow, ncol, layout,
-					type, set_row_operate(ncol), num_nodes);
+			return dense_matrix::create(nrow, ncol, layout,
+					type, set_row_operate(ncol), num_nodes, true);
 	}
 	else if (type == get_scalar_type<size_t>()) {
 		if (layout == matrix_layout_t::L_COL)
-			return mem_dense_matrix::create(nrow, ncol, layout,
-					type, set_col_long_operate(ncol), num_nodes);
+			return dense_matrix::create(nrow, ncol, layout,
+					type, set_col_long_operate(ncol), num_nodes, true);
 		else
-			return mem_dense_matrix::create(nrow, ncol, layout,
-					type, set_row_long_operate(ncol), num_nodes);
+			return dense_matrix::create(nrow, ncol, layout,
+					type, set_row_long_operate(ncol), num_nodes, true);
 	}
 	else
-		return mem_dense_matrix::ptr();
+		return dense_matrix::ptr();
 }
 
-mem_dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
+dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes,
 		const scalar_type &type = get_scalar_type<int>())
 {
 	switch (matrix_val) {
 		case matrix_val_t::DEFAULT:
 			if (layout == matrix_layout_t::L_COL)
-				return mem_dense_matrix::create(nrow, ncol, layout,
-						type, num_nodes);
+				return dense_matrix::create(nrow, ncol, layout,
+						type, num_nodes, true);
 			else
-				return mem_dense_matrix::create(nrow, ncol, layout,
-						type, num_nodes);
+				return dense_matrix::create(nrow, ncol, layout,
+						type, num_nodes, true);
 		case matrix_val_t::SEQ:
 			return create_seq_matrix(nrow, ncol, layout, num_nodes, type);
 		default:
 			assert(0);
-			return mem_dense_matrix::ptr();
+			return dense_matrix::ptr();
 	}
 }
 
 void test_multiply_scalar(int num_nodes)
 {
 	printf("Test scalar multiplication\n");
-	mem_dense_matrix::ptr orig = create_matrix(long_dim, 10,
+	dense_matrix::ptr orig = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->multiply_scalar(10));
-	detail::mem_matrix_store &orig_store1
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store1
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store1.materialize_self();
-	orig_store1.materialize_self();
+	dense_matrix::ptr res = orig->multiply_scalar(10);
+	res->materialize_self();
+	orig->materialize_self();
+	const detail::mem_matrix_store &orig_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(orig->get_data());
+	const detail::mem_matrix_store &res_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j) == orig_store1.get<int>(i, j) * 10);
 
 	orig = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
-	res = mem_dense_matrix::cast(orig->multiply_scalar(10));
-	detail::mem_matrix_store &orig_store2
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store2
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store2.materialize_self();
-	orig_store2.materialize_self();
+	res = orig->multiply_scalar(10);
+	res->materialize_self();
+	orig->materialize_self();
+	const detail::mem_matrix_store &orig_store2
+		= dynamic_cast<const detail::mem_matrix_store &>(orig->get_data());
+	const detail::mem_matrix_store &res_store2
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
@@ -191,16 +199,17 @@ void test_multiply_scalar(int num_nodes)
 void test_ele_wise(int num_nodes)
 {
 	printf("Test element-wise operations\n");
-	mem_dense_matrix::ptr m1 = create_matrix(long_dim, 10,
+	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr m2 = create_matrix(long_dim, 10,
+	dense_matrix::ptr m2 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(m1->add(*m2));
-	detail::mem_matrix_store &res_store = (detail::mem_matrix_store &) res->get_data();
-	detail::mem_matrix_store &m1_store
-		= (detail::mem_matrix_store &) m1->get_data();
-	res_store.materialize_self();
-	m1_store.materialize_self();
+	dense_matrix::ptr res = m1->add(*m2);
+	res->materialize_self();
+	m1->materialize_self();
+	const detail::mem_matrix_store &res_store
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
+	const detail::mem_matrix_store &m1_store
+		= dynamic_cast<const detail::mem_matrix_store &>(m1->get_data());
 #pragma omp parallel for
 	for (size_t i = 0; i < res_store.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store.get_num_cols(); j++)
@@ -210,21 +219,21 @@ void test_ele_wise(int num_nodes)
 void test_multiply_col(int num_nodes)
 {
 	printf("Test multiplication on tall matrix stored column wise\n");
-	mem_dense_matrix::ptr m1 = create_matrix(long_dim, 10,
+	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr m2 = create_matrix(10, 9,
+	dense_matrix::ptr m2 = create_matrix(10, 9,
 			matrix_layout_t::L_COL, num_nodes);
-	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on col_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
+	dense_matrix::ptr res1 = m1->multiply(*m2);
 	verify_result(*res1, *correct);
 }
 
 void test_agg_col(int num_nodes)
 {
 	printf("Test aggregation on tall matrix stored column wise\n");
-	mem_dense_matrix::ptr m1 = create_matrix(long_dim, 10,
+	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
 	const bulk_operate &op
 		= m1->get_type().get_basic_ops().get_add();
@@ -241,69 +250,69 @@ void test_agg_col(int num_nodes)
 
 void test_multiply_matrix(int num_nodes)
 {
-	mem_dense_matrix::ptr m1, m2, correct, res;
+	dense_matrix::ptr m1, m2, correct, res;
 
 	printf("Test multiplication on wide row matrix X tall column matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on wide row matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on wide column matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on tall row matrix X small row matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on tall row matrix X small column matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on tall column matrix X small row matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 
 	printf("Test multiplication on tall column matrix X small column matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
-	res = mem_dense_matrix::cast(m1->multiply(*m2));
+	res = m1->multiply(*m2);
 	verify_result(*res, *correct);
 }
 
 void test_agg_row(int num_nodes)
 {
 	printf("Test aggregation on tall matrix stored row wise\n");
-	mem_dense_matrix::ptr m1 = create_matrix(long_dim, 10,
+	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_ROW, num_nodes, get_scalar_type<size_t>());
 	const bulk_operate &op
 		= m1->get_type().get_basic_ops().get_add();
@@ -320,13 +329,13 @@ void test_agg_row(int num_nodes)
 void test_agg_sub_col(int num_nodes)
 {
 	printf("Test aggregation on a column-wise submatrix\n");
-	mem_dense_matrix::ptr col_m = create_matrix(long_dim, 10,
+	dense_matrix::ptr col_m = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 5;
 	idxs[2] = 3;
-	mem_dense_matrix::ptr sub_m = mem_dense_matrix::cast(col_m->get_cols(idxs));
+	dense_matrix::ptr sub_m = col_m->get_cols(idxs);
 	assert(sub_m != NULL);
 
 	const bulk_operate &op = sub_m->get_type().get_basic_ops().get_add();
@@ -348,16 +357,14 @@ void test_agg_sub_col(int num_nodes)
 void test_agg_sub_row(int num_nodes)
 {
 	printf("Test aggregation on a row-wise submatrix\n");
-	mem_dense_matrix::ptr col_m = create_matrix(long_dim, 10,
+	dense_matrix::ptr col_m = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 5;
 	idxs[2] = 3;
-	mem_dense_matrix::ptr sub_col_m
-		= mem_dense_matrix::cast(col_m->get_cols(idxs));
-	mem_dense_matrix::ptr sub_row_m
-		= mem_dense_matrix::cast(sub_col_m->transpose());
+	dense_matrix::ptr sub_col_m = col_m->get_cols(idxs);
+	dense_matrix::ptr sub_row_m = sub_col_m->transpose();
 
 	const bulk_operate &op = sub_col_m->get_type().get_basic_ops().get_add();
 	scalar_variable::ptr col_res = sub_col_m->aggregate(op);
@@ -391,24 +398,22 @@ void test_conv_row_col()
 			assert(c1->get(i, j) == c2->get(i, j));
 }
 
-#endif
-
 void test_rand_init()
 {
 	printf("test rand init\n");
-	mem_dense_matrix::ptr m = mem_dense_matrix::create_rand<double>(-1.0, 1.0,
+	dense_matrix::ptr m = dense_matrix::create_rand<double>(-1.0, 1.0,
 			long_dim / 100, 10, matrix_layout_t::L_COL);
 	double sum = 0;
+	const detail::mem_matrix_store &mem_m
+		= dynamic_cast<const detail::mem_matrix_store &>(*m);
 	for (size_t i = 0; i < m->get_num_rows(); i++)
 		for (size_t j = 0; j < m->get_num_cols(); j++) {
-			double v = m->get<double>(i, j);
+			double v = mem_m.get<double>(i, j);
 			assert(v >= -1.0 && v <= 1.0);
 			sum += v;
 		}
 	printf("sum: %f\n", sum);
 }
-
-#if 0
 
 void test_flatten()
 {
@@ -446,16 +451,16 @@ void test_flatten()
 
 #endif
 
-void test_scale_cols1(mem_dense_matrix::ptr orig)
+void test_scale_cols1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_vector<int>(0, orig->get_num_cols() - 1, 1);
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_cols(vals));
-	detail::mem_matrix_store &orig_store1
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store1
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store1.materialize_self();
-	orig_store1.materialize_self();
+	dense_matrix::ptr res = orig->scale_cols(vals);
+	res->materialize_self();
+	orig->materialize_self();
+	const detail::mem_matrix_store &orig_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(orig->get_data());
+	const detail::mem_matrix_store &res_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 	const detail::smp_vec_store &val_store
 		= dynamic_cast<const detail::smp_vec_store &>(vals->get_data());
 #pragma omp parallel for
@@ -468,7 +473,7 @@ void test_scale_cols1(mem_dense_matrix::ptr orig)
 void test_scale_cols(int num_nodes)
 {
 	printf("Test scale cols of tall column matrix\n");
-	mem_dense_matrix::ptr orig = create_matrix(long_dim, 10,
+	dense_matrix::ptr orig = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
 	test_scale_cols1(orig);
 
@@ -485,16 +490,16 @@ void test_scale_cols(int num_nodes)
 	test_scale_cols1(orig);
 }
 
-void test_scale_rows1(mem_dense_matrix::ptr orig)
+void test_scale_rows1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_vector<int>(0, orig->get_num_rows() - 1, 1);
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_rows(vals));
-	detail::mem_matrix_store &orig_store1
-		= (detail::mem_matrix_store &) orig->get_data();
-	detail::mem_matrix_store &res_store1
-		= (detail::mem_matrix_store &) res->get_data();
-	res_store1.materialize_self();
-	orig_store1.materialize_self();
+	dense_matrix::ptr res = orig->scale_rows(vals);
+	res->materialize_self();
+	orig->materialize_self();
+	const detail::mem_matrix_store &orig_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(orig->get_data());
+	const detail::mem_matrix_store &res_store1
+		= dynamic_cast<const detail::mem_matrix_store &>(res->get_data());
 	const detail::smp_vec_store &val_store
 		= dynamic_cast<const detail::smp_vec_store &>(vals->get_data());
 #pragma omp parallel for
@@ -507,7 +512,7 @@ void test_scale_rows1(mem_dense_matrix::ptr orig)
 void test_scale_rows(int num_nodes)
 {
 	printf("Test scale rows of wide row matrix\n");
-	mem_dense_matrix::ptr orig = create_matrix(10, long_dim,
+	dense_matrix::ptr orig = create_matrix(10, long_dim,
 			matrix_layout_t::L_ROW, num_nodes);
 	test_scale_rows1(orig);
 
@@ -524,10 +529,11 @@ void test_scale_rows(int num_nodes)
 	test_scale_rows1(orig);
 }
 
+#if 0
 void test_create_const()
 {
 	printf("test create const matrix\n");
-	mem_dense_matrix::ptr mat = mem_dense_matrix::create(10000, 10,
+	dense_matrix::ptr mat = dense_matrix::create(10000, 10,
 			matrix_layout_t::L_COL, get_scalar_type<int>());
 	for (size_t i = 0; i < mat->get_num_rows(); i++)
 		for (size_t j = 0; j < mat->get_num_cols(); j++)
@@ -539,6 +545,7 @@ void test_create_const()
 		for (size_t j = 0; j < mat->get_num_cols(); j++)
 			assert(mat->get<int>(i, j) == 1);
 }
+#endif
 
 class sum_apply_op: public arr_apply_operate
 {
@@ -564,7 +571,7 @@ public:
 	}
 };
 
-void test_apply1(mem_dense_matrix::ptr mat)
+void test_apply1(dense_matrix::ptr mat)
 {
 	size_t num_rows = mat->get_num_rows();
 	size_t num_cols = mat->get_num_cols();
@@ -578,6 +585,7 @@ void test_apply1(mem_dense_matrix::ptr mat)
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
 	assert(res->is_type<long>());
+	res->materialize_self();
 	res_vec = res->get_col(0);
 	const detail::smp_vec_store &vstore1
 		= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
@@ -592,6 +600,7 @@ void test_apply1(mem_dense_matrix::ptr mat)
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());
 	assert(res->is_type<long>());
+	res->materialize_self();
 	res_vec = res->get_row(0);
 	const detail::smp_vec_store &vstore2
 		= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
@@ -603,34 +612,34 @@ void test_apply1(mem_dense_matrix::ptr mat)
 void test_apply()
 {
 	detail::mem_matrix_store::ptr store;
-	mem_dense_matrix::ptr mat;
+	dense_matrix::ptr mat;
 
 	// Tall row-wise matrix
 	store = detail::mem_matrix_store::create(long_dim, 10,
 			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
 	store->set_data(set_row_operate(store->get_num_cols()));
-	mat = mem_dense_matrix::create(store);
+	mat = dense_matrix::create(store);
 	test_apply1(mat);
 
 	// Tall col-wise matrix
 	store = detail::mem_matrix_store::create(long_dim, 10,
 			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
 	store->set_data(set_col_operate(store->get_num_cols()));
-	mat = mem_dense_matrix::create(store);
+	mat = dense_matrix::create(store);
 	test_apply1(mat);
 
 	// Wide row-wise matrix
 	store = detail::mem_matrix_store::create(10, long_dim,
 			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
 	store->set_data(set_row_operate(store->get_num_cols()));
-	mat = mem_dense_matrix::create(store);
+	mat = dense_matrix::create(store);
 	test_apply1(mat);
 
 	// wide col-wise matrix
 	store = detail::mem_matrix_store::create(10, long_dim,
 			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
 	store->set_data(set_col_operate(store->get_num_cols()));
-	mat = mem_dense_matrix::create(store);
+	mat = dense_matrix::create(store);
 	test_apply1(mat);
 }
 
@@ -667,7 +676,7 @@ void test_write2file1(detail::mem_matrix_store::ptr mat)
 	assert(read_mat->store_layout() == mat->store_layout());
 	for (size_t i = 0; i < mat->get_num_rows(); i++) {
 		for (size_t j = 0; j < mat->get_num_cols(); j++)
-			assert(mat->get<long>(i, j) == read_mat->get<long>(i, j));
+			assert(mat->get<int>(i, j) == read_mat->get<int>(i, j));
 	}
 
 	unlink(tmp_file_name);
@@ -689,27 +698,37 @@ void test_write2file()
 void test_cast()
 {
 	printf("test cast type\n");
-	mem_dense_matrix::ptr mat, mat1;
+	dense_matrix::ptr mat, mat1;
 
-	mat = mem_dense_matrix::create_rand<int>(
-			0, 1000, 100000, 10, matrix_layout_t::L_ROW);
-	mat1 = mem_dense_matrix::cast(
-			mat->cast_ele_type(get_scalar_type<long>()));
-	mat1->materialize_self();
+	{
+		mat = dense_matrix::create_rand<int>(
+				0, 1000, 100000, 10, matrix_layout_t::L_ROW);
+		mat1 = mat->cast_ele_type(get_scalar_type<long>());
+		mat1->materialize_self();
+		const detail::mem_matrix_store &mem_mat
+			= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
+		const detail::mem_matrix_store &mem_mat1
+			= dynamic_cast<const detail::mem_matrix_store &>(mat1->get_data());
 #pragma omp parallel for
-	for (size_t i = 0; i < mat->get_num_rows(); i++)
-		for (size_t j = 0; j < mat->get_num_cols(); j++)
-			assert(mat->get<int>(i, j) == mat1->get<long>(i, j));
+		for (size_t i = 0; i < mat->get_num_rows(); i++)
+			for (size_t j = 0; j < mat->get_num_cols(); j++)
+				assert(mem_mat.get<int>(i, j) == mem_mat1.get<long>(i, j));
+	}
 
-	mat = mem_dense_matrix::create_rand<float>(
-			0, 1000, 100000, 10, matrix_layout_t::L_ROW);
-	mat1 = mem_dense_matrix::cast(
-			mat->cast_ele_type(get_scalar_type<double>()));
-	mat1->materialize_self();
+	{
+		mat = dense_matrix::create_rand<float>(
+				0, 1000, 100000, 10, matrix_layout_t::L_ROW);
+		mat1 = mat->cast_ele_type(get_scalar_type<double>());
+		mat1->materialize_self();
+		const detail::mem_matrix_store &mem_mat
+			= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
+		const detail::mem_matrix_store &mem_mat1
+			= dynamic_cast<const detail::mem_matrix_store &>(mat1->get_data());
 #pragma omp parallel for
-	for (size_t i = 0; i < mat->get_num_rows(); i++)
-		for (size_t j = 0; j < mat->get_num_cols(); j++)
-			assert((double) mat->get<float>(i, j) == mat1->get<double>(i, j));
+		for (size_t i = 0; i < mat->get_num_rows(); i++)
+			for (size_t j = 0; j < mat->get_num_cols(); j++)
+				assert(mem_mat.get<float>(i, j) == mem_mat1.get<double>(i, j));
+	}
 }
 
 int main(int argc, char *argv[])
@@ -725,7 +744,9 @@ int main(int argc, char *argv[])
 
 	test_cast();
 	test_write2file();
+#if 0
 	test_create_const();
+#endif
 	test_apply();
 	test_conv_vec2mat();
 
@@ -751,8 +772,8 @@ int main(int argc, char *argv[])
 		test_agg_row(num_nodes);
 		test_agg_sub_col(-1);
 		test_agg_sub_row(-1);
-		test_rand_init();
 #if 0
+		test_rand_init();
 		test_conv_row_col();
 		test_flatten();
 #endif

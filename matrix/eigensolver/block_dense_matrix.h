@@ -20,7 +20,7 @@
  * limitations under the License.
  */
 
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
 #include "generic_type.h"
 #include "vector.h"
 #include "sparse_matrix.h"
@@ -115,7 +115,7 @@ public:
 	void assign(const block_multi_vector &vecs);
 
 	block_multi_vector::ptr add(const block_multi_vector &vecs) const;
-	fm::mem_dense_matrix::ptr MvTransMv(const block_multi_vector &mv) const;
+	fm::dense_matrix::ptr MvTransMv(const block_multi_vector &mv) const;
 
 	fm::dense_matrix::ptr conv2matrix() const;
 
@@ -124,9 +124,9 @@ public:
 		size_t num_blocks = get_num_blocks();
 		num_col_writes += this->get_num_cols();
 		for (size_t i = 0; i < num_blocks; i++)
-			set_block(i, fm::mem_dense_matrix::create_rand<Type>(min, max,
+			set_block(i, fm::dense_matrix::create_rand<Type>(min, max,
 						get_num_rows(), block_size, fm::matrix_layout_t::L_COL,
-						get_num_nodes()));
+						get_num_nodes(), true));
 	}
 
 	template<class Type>

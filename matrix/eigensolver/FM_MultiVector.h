@@ -29,7 +29,6 @@
 #include "AnasaziMultiVec.hpp"
 
 #include "NUMA_vector.h"
-#include "mem_dense_matrix.h"
 #include "matrix_config.h"
 #include "generic_type.h"
 
@@ -41,6 +40,9 @@
 #endif
 #include "block_dense_matrix.h"
 
+#include "mem_matrix_store.h"
+#include "dense_matrix.h"
+
 static int MV_id;
 
 template<class ScalarType>
@@ -51,15 +53,6 @@ class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 #ifdef FM_VERIFY
 	std::shared_ptr<Anasazi::EpetraMultiVec> ep_mat;
 #endif
-
-	static void verify(const fm::mem_dense_matrix &mat1,
-			const fm::mem_dense_matrix &mat2) {
-		assert(mat1.get_num_cols() == mat1.get_num_cols());
-		assert(mat1.get_num_rows() == mat1.get_num_rows());
-		for (size_t i = 0; i < mat1.get_num_rows(); i++)
-			for (size_t j = 0; j < mat1.get_num_cols(); j++)
-				assert(mat1.get<ScalarType>(i, j) == mat2.get<ScalarType>(i, j));
-	}
 
 	FM_MultiVector(const std::string &extra) {
 		char name_buf[128];
@@ -242,7 +235,6 @@ public:
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				dynamic_cast<Anasazi::EpetraMultiVec *>(ep_mat->CloneViewNonConst(index)));
 #endif
-//		verify((fm::mem_dense_matrix &) *mat->get_cols(offs), *ret->mat);
 //		verify();
 //		ret->verify();
 		return ret;
@@ -403,7 +395,7 @@ public:
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
 		assert(fm_A.mat->get_num_rows() == this->mat->get_num_rows());
 		this->verify();
-		fm::mem_dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
+		fm::dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
 		long double lalpha = alpha;
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
 #ifdef FM_VERIFY
@@ -414,9 +406,11 @@ public:
 				assert(B(i, j) == (double) (res->get<ScalarType>(i, j) * lalpha));
 			}
 #endif
+		const fm::detail::mem_matrix_store &mem_res
+			= dynamic_cast<const fm::detail::mem_matrix_store &>(res->get_data());
 		for (int i = 0; i < B.numRows(); i++) {
 			for (int j = 0; j < B.numCols(); j++) {
-				B(i, j) = res->get<ScalarType>(i, j) * lalpha;
+				B(i, j) = mem_res.get<ScalarType>(i, j) * lalpha;
 			}
 		}
 	}

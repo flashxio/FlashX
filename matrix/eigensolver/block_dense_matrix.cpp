@@ -63,7 +63,7 @@ public:
 			const std::vector<off_t> &offs_in_mirror,
 			fm::dense_matrix::ptr mirrored_mat) {
 		std::vector<fm::dense_matrix::ptr> mats(1);
-		mats[0] = fm::mem_dense_matrix::create(
+		mats[0] = fm::dense_matrix::create(
 				detail::NUMA_col_tall_matrix_store::create(vecs));
 		return ptr(new mirror_cols_block_multi_vector(mats, offs_in_mirror,
 					mirrored_mat));
@@ -98,7 +98,7 @@ public:
 			cols[offs_in_mirror[i]]
 				= detail::NUMA_vec_store::cast(numa_in_mat.get_col_vec(i));
 
-		fm::dense_matrix::ptr new_mat = fm::mem_dense_matrix::create(
+		fm::dense_matrix::ptr new_mat = fm::dense_matrix::create(
 				fm::detail::NUMA_col_tall_matrix_store::create(cols));
 		mirrored_mat->assign(*new_mat);
 	}
@@ -123,8 +123,8 @@ block_multi_vector::block_multi_vector(size_t nrow, size_t ncol,
 	this->block_size = block_size;
 	mats.resize(ncol / block_size);
 	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = mem_dense_matrix::create(nrow, block_size,
-				matrix_layout_t::L_COL, type, get_num_nodes());
+		mats[i] = dense_matrix::create(nrow, block_size,
+				matrix_layout_t::L_COL, type, get_num_nodes(), true);
 }
 
 dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
@@ -212,7 +212,7 @@ bool block_multi_vector::resize_block(size_t new_block_size)
 		fm::detail::mem_matrix_store::const_ptr sub_store
 			= fm::detail::mem_matrix_store::cast(mem_store.get_cols(
 						subblock_offs));
-		new_mats[i] = fm::mem_dense_matrix::create(sub_store);
+		new_mats[i] = fm::dense_matrix::create(sub_store);
 	}
 
 	mats = new_mats;
@@ -562,7 +562,7 @@ block_multi_vector::ptr block_multi_vector::add(
 	return ret;
 }
 
-mem_dense_matrix::ptr block_multi_vector::MvTransMv(
+dense_matrix::ptr block_multi_vector::MvTransMv(
 		const block_multi_vector &mv) const
 {
 	// TODO this isn't an efficient implementation.
@@ -582,10 +582,9 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 				num_col_writes += block->get_num_cols();
 			}
 			block->materialize_self();
-			fm::mem_dense_matrix::ptr tA = fm::mem_dense_matrix::cast(
-					mv.get_block(j)->transpose());
-			fm::mem_dense_matrix::ptr res1 = fm::mem_dense_matrix::cast(
-					tA->multiply(*get_block(i), matrix_layout_t::L_ROW));
+			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
+			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
+					matrix_layout_t::L_ROW);
 			assert(res->store_layout() == res1->store_layout());
 			detail::local_matrix_store::ptr part = res->get_portion(
 					block_num_rows * j, block_num_cols * i,
@@ -596,7 +595,7 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 			part->copy_from(*local_store);
 		}
 	}
-	return mem_dense_matrix::create(res);
+	return dense_matrix::create(res);
 }
 
 typedef std::vector<std::pair<int, detail::NUMA_vec_store::ptr> > block_col_set_t;
@@ -679,7 +678,7 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 
 			// Create a dense matrix for the block and assign it to the original
 			// block.
-			fm::dense_matrix::ptr new_mat = fm::mem_dense_matrix::create(
+			fm::dense_matrix::ptr new_mat = fm::dense_matrix::create(
 					fm::detail::NUMA_col_tall_matrix_store::create(cols));
 			set_block(block_idx, new_mat);
 		}

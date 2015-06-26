@@ -1,8 +1,8 @@
 #include <malloc.h>
 
 #include "EM_dense_matrix.h"
-#include "mem_dense_matrix.h"
 #include "sparse_matrix.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 

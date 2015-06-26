@@ -34,6 +34,7 @@ namespace detail
 {
 
 class local_matrix_store;
+class vec_store;
 
 class matrix_store
 {
@@ -52,6 +53,9 @@ class matrix_store
 public:
 	typedef std::shared_ptr<matrix_store> ptr;
 	typedef std::shared_ptr<const matrix_store> const_ptr;
+
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, int num_nodes, bool in_mem);
 
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &_type): type(_type) {
@@ -89,6 +93,10 @@ public:
 		return in_mem;
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
 	/*
 	 * The shape of a matrix: a tall matrix or a wide matrix.
 	 * We care about the shape of a large matrix. We deal with a tall matrix
@@ -104,6 +112,11 @@ public:
 	virtual void set_data(const set_operate &op) = 0;
 
 	virtual matrix_store::const_ptr transpose() const = 0;
+	virtual matrix_store::ptr conv2(matrix_layout_t layout) const {
+		// TODO
+		assert(0);
+		return matrix_store::ptr();
+	}
 
 	/*
 	 * When matrix data is move to faster memory, data is moved in one chunk
@@ -113,6 +126,36 @@ public:
 	 */
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t id) const;
+
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		// TODO
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		// TODO
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const {
+		assert(0);
+		return std::shared_ptr<const vec_store>();
+	}
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const {
+		assert(0);
+		return std::shared_ptr<const vec_store>();
+	}
 
 	virtual bool is_virtual() const {
 		return false;

@@ -20,7 +20,7 @@
 #include "safs_file.h"
 
 #include "sparse_matrix.h"
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
 
 #include "eigensolver.h"
 
@@ -43,7 +43,7 @@ public:
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
 		mat->multiply<double>(mem_in, *res);
-		return mem_dense_matrix::create(res);
+		return dense_matrix::create(res);
 
 #if 0
 		assert((size_t) x.GetGlobalLength() == mat->get_num_cols());
