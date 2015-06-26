@@ -30,7 +30,7 @@ namespace fm
 namespace detail
 {
 
-matrix_store::ptr local_matrix_store::conv2(matrix_layout_t layout) const
+local_matrix_store::ptr local_matrix_store::conv2(matrix_layout_t layout) const
 {
 	local_matrix_store::ptr ret;
 	if (layout == matrix_layout_t::L_ROW)
@@ -619,7 +619,7 @@ void apply(int margin, const arr_apply_operate &op,
 	assert(margin == apply_margin::MAR_ROW || margin == apply_margin::MAR_COL);
 	// In these two cases, we need to convert the matrix store layout
 	// before we can apply the function to the matrix.
-	matrix_store::const_ptr buf_mat;
+	local_matrix_store::const_ptr buf_mat;
 	if (in_mat.store_layout() == matrix_layout_t::L_COL
 			&& margin == apply_margin::MAR_ROW) {
 		buf_mat = in_mat.conv2(matrix_layout_t::L_ROW);
@@ -633,7 +633,7 @@ void apply(int margin, const arr_apply_operate &op,
 
 	const local_matrix_store *this_mat;
 	if (buf_mat)
-		this_mat = static_cast<const local_matrix_store *>(buf_mat.get());
+		this_mat = buf_mat.get();
 	else
 		this_mat = &in_mat;
 
@@ -674,11 +674,11 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store &res)
 {
 	if (m1.store_layout() == matrix_layout_t::L_ROW) {
-		matrix_store::ptr new_m2;
+		local_matrix_store::ptr new_m2;
 		const local_matrix_store *col_m2 = &m2;
 		if (m2.store_layout() == matrix_layout_t::L_ROW) {
 			new_m2 = m2.conv2(matrix_layout_t::L_COL);
-			col_m2 = static_cast<const local_matrix_store *>(new_m2.get());
+			col_m2 = new_m2.get();
 		}
 		assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 		assert(res.store_layout() == matrix_layout_t::L_ROW);
@@ -693,14 +693,14 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 	}
 	else {
 		if (m1.is_wide()) {
-			matrix_store::ptr new_m2;
+			local_matrix_store::ptr new_m2;
 			const local_matrix_store *col_m2 = &m2;
 			// TODO we can handle the case of left wide col-major matrix and
 			// right tall row-major matrix more efficiently, so we don't need
 			// to convert the right matrix.
 			if (m2.store_layout() == matrix_layout_t::L_ROW) {
 				new_m2 = m2.conv2(matrix_layout_t::L_COL);
-				col_m2 = static_cast<const local_matrix_store *>(new_m2.get());
+				col_m2 = new_m2.get();
 			}
 			assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 			assert(res.store_layout() == matrix_layout_t::L_ROW);

@@ -175,7 +175,7 @@ public:
 		local_start_col = 0;
 		matrix_store::resize(num_rows, num_cols);
 	}
-	virtual matrix_store::ptr conv2(matrix_layout_t layout) const;
+	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	virtual bool read_only() const = 0;
 	virtual const char *get_raw_arr() const = 0;

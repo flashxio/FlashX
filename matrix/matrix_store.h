@@ -113,11 +113,6 @@ public:
 	virtual void set_data(const set_operate &op) = 0;
 
 	virtual matrix_store::const_ptr transpose() const = 0;
-	virtual matrix_store::ptr conv2(matrix_layout_t layout) const {
-		// TODO
-		assert(0);
-		return matrix_store::ptr();
-	}
 
 	/*
 	 * When matrix data is move to faster memory, data is moved in one chunk

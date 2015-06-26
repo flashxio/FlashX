@@ -61,7 +61,6 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
-	virtual matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;

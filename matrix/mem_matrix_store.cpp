@@ -881,32 +881,6 @@ void mem_matrix_store::set_data(const set_operate &op)
 	mem_threads->wait4complete();
 }
 
-matrix_store::ptr mem_matrix_store::conv2(matrix_layout_t layout) const
-{
-	if (store_layout() == layout)
-		return matrix_store::ptr();
-
-	mem_matrix_store::ptr ret = mem_matrix_store::create(get_num_rows(),
-			get_num_cols(), layout, get_type(), get_num_nodes());
-	size_t num_chunks = get_num_portions();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	for (size_t i = 0; i < num_chunks; i++) {
-		detail::local_matrix_store::const_ptr src_store = get_portion(i);
-		detail::local_matrix_store::ptr dest_store = ret->get_portion(i);
-
-		int node_id = src_store->get_node_id();
-		// If the local matrix portion is not assigned to any node, 
-		// assign the tasks in round robin fashion.
-		if (node_id < 0)
-			node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new copy_task(src_store,
-					dest_store));
-	}
-	mem_threads->wait4complete();
-	return ret;
-}
-
 matrix_store::const_ptr mem_col_matrix_store::append_cols(
 		const std::vector<matrix_store::const_ptr> &mats) const
 {

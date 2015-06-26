@@ -1096,8 +1096,7 @@ void dense_matrix::inner_prod_tall(const detail::matrix_store &m,
 	// be small. It makes sense to convert the right matrix to column major
 	// before we break up the left matrix for parallel processing.
 	if (!is_wide() && this->store_layout() == matrix_layout_t::L_ROW)
-		local_right = std::static_pointer_cast<const detail::local_matrix_store>(
-				local_right->conv2(matrix_layout_t::L_COL));
+		local_right = local_right->conv2(matrix_layout_t::L_COL);
 	const detail::matrix_store &this_store = get_data();
 	size_t num_chunks = this_store.get_num_portions();
 	assert(this_store.get_portion_size().first == res.get_portion_size().first);
@@ -1309,11 +1308,17 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 	// before we can apply the function to the matrix.
 	detail::matrix_store::const_ptr this_mat;
 	if (is_wide() && store_layout() == matrix_layout_t::L_COL
-			&& margin == apply_margin::MAR_ROW)
-		this_mat = get_data().conv2(matrix_layout_t::L_ROW);
+			&& margin == apply_margin::MAR_ROW) {
+		dense_matrix::ptr mat = conv2(matrix_layout_t::L_ROW);
+		mat->materialize_self();
+		this_mat = mat->get_raw_store();
+	}
 	else if (!is_wide() && store_layout() == matrix_layout_t::L_ROW
-			&& margin == apply_margin::MAR_COL)
-		this_mat = get_data().conv2(matrix_layout_t::L_COL);
+			&& margin == apply_margin::MAR_COL) {
+		dense_matrix::ptr mat = conv2(matrix_layout_t::L_COL);
+		mat->materialize_self();
+		this_mat = mat->get_raw_store();
+	}
 	else
 		this_mat = get_raw_store();
 	assert(this_mat);
@@ -1392,13 +1397,51 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 	}
 }
 
+////////////////////// Convert the data layout of a matrix ////////////////////
+
+namespace
+{
+
+class conv_layout_op: public detail::portion_mapply_op
+{
+	matrix_layout_t layout;
+public:
+	conv_layout_op(matrix_layout_t layout, size_t num_rows, size_t num_cols,
+			const scalar_type &type): detail::portion_mapply_op(num_rows,
+				num_cols, type) {
+		this->layout = layout;
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		assert(ins[0]->get_global_start_col() == out.get_global_start_col());
+		assert(ins[0]->get_global_start_row() == out.get_global_start_row());
+		out.copy_from(*ins[0]);
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		matrix_layout_t new_layout;
+		if (layout == matrix_layout_t::L_COL)
+			new_layout = matrix_layout_t::L_ROW;
+		else
+			new_layout = matrix_layout_t::L_COL;
+		return detail::portion_mapply_op::const_ptr(new conv_layout_op(new_layout,
+					get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	}
+};
+
+}
+
 dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 {
-	detail::matrix_store::ptr tmp = get_data().conv2(layout);
-	if (tmp)
-		return dense_matrix::create(tmp);
-	else
-		return dense_matrix::ptr();
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
+	conv_layout_op::const_ptr mapply_op(new conv_layout_op(layout,
+				get_num_rows(), get_num_cols(), get_type()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, layout);
+	return dense_matrix::create(ret);
 }
 
 }
