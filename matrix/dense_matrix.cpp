@@ -630,10 +630,7 @@ matrix_store::ptr __mapply_portion_virtual(
 		const std::vector<matrix_store::const_ptr> &stores,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
-	std::vector<mem_matrix_store::const_ptr> mem_stores(stores.size());
-	for (size_t i = 0; i < mem_stores.size(); i++)
-		mem_stores[i] = mem_matrix_store::cast(stores[i]);
-	return matrix_store::ptr(new mapply_matrix_store(mem_stores, op,
+	return matrix_store::ptr(new mapply_matrix_store(stores, op,
 				out_layout, op->get_out_num_rows(), op->get_out_num_cols()));
 }
 
@@ -641,9 +638,9 @@ dense_matrix::ptr mapply_portion(
 		const std::vector<dense_matrix::const_ptr> &mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
-	std::vector<mem_matrix_store::const_ptr> stores(mats.size());
+	std::vector<matrix_store::const_ptr> stores(mats.size());
 	for (size_t i = 0; i < stores.size(); i++)
-		stores[i] = mem_matrix_store::cast(mats[i]->get_raw_store());
+		stores[i] = mats[i]->get_raw_store();
 	matrix_store::const_ptr ret(new mapply_matrix_store(stores, op,
 				out_layout, op->get_out_num_rows(), op->get_out_num_cols()));
 	return dense_matrix::create(ret);

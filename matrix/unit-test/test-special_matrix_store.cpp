@@ -102,9 +102,9 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 			-1, 1, num_rows, num_cols, layout, -1);
 
 	// Create mapply matrix store.
-	std::vector<detail::mem_matrix_store::const_ptr> in_stores(2);
-	in_stores[0] = detail::mem_matrix_store::cast(mat1->get_raw_store());
-	in_stores[1] = detail::mem_matrix_store::cast(mat2->get_raw_store());
+	std::vector<detail::matrix_store::const_ptr> in_stores(2);
+	in_stores[0] = mat1->get_raw_store();
+	in_stores[1] = mat2->get_raw_store();
 	detail::portion_mapply_op::const_ptr op(new mapply_add_op(
 				mat1->get_num_rows(), mat1->get_num_cols(), mat1->get_type()));
 	detail::mapply_matrix_store::const_ptr mapply_store(new detail::mapply_matrix_store(
@@ -154,7 +154,7 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 
 	large_mat = dense_matrix::create(mapply_store);
 	in_stores.resize(1);
-	in_stores[0] = detail::mem_matrix_store::cast(large_mat->get_raw_store());
+	in_stores[0] = large_mat->get_raw_store();
 	op = detail::portion_mapply_op::const_ptr(new multiply_op(
 				local_mat, large_mat->get_num_rows(), large_mat->get_type()));
 	mapply_store = detail::mapply_matrix_store::const_ptr(new detail::mapply_matrix_store(

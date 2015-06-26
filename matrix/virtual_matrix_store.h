@@ -35,7 +35,7 @@ namespace detail
  * physically. The data of these classes materializes data when being
  * requested. All these classes are read-only.
  */
-class virtual_matrix_store: public mem_matrix_store
+class virtual_matrix_store: public matrix_store
 {
 public:
 	typedef std::shared_ptr<const virtual_matrix_store> const_ptr;
@@ -45,8 +45,8 @@ public:
 		return std::static_pointer_cast<const virtual_matrix_store>(mat);
 	}
 
-	virtual_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
+	virtual_matrix_store(size_t nrow, size_t ncol, bool in_mem,
+			const scalar_type &type): matrix_store(nrow, ncol, in_mem, type) {
 	}
 
 	virtual bool is_virtual() const {
@@ -63,11 +63,6 @@ public:
 		assert(0);
 	}
 
-	virtual char *get(size_t row, size_t col) {
-		assert(0);
-		return NULL;
-	}
-
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id) {
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
@@ -77,6 +72,17 @@ public:
 			size_t num_cols) {
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
+	}
+	virtual std::shared_ptr<local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) {
+		assert(0);
+		return std::shared_ptr<local_matrix_store>();
+	}
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		assert(0);
 	}
 
 	virtual bool write2file(const std::string &file_name) const {

@@ -303,11 +303,20 @@ public:
 
 }
 
+static inline bool is_all_in_mem(
+		const std::vector<matrix_store::const_ptr> &in_mats)
+{
+	for (size_t i = 0; i < in_mats.size(); i++)
+		if (!in_mats[i]->is_in_mem())
+			return false;
+	return true;
+}
+
 mapply_matrix_store::mapply_matrix_store(
-		const std::vector<mem_matrix_store::const_ptr> &in_mats,
+		const std::vector<matrix_store::const_ptr> &in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
 		size_t nrow, size_t ncol): virtual_matrix_store(nrow, ncol,
-			op->get_output_type())
+			is_all_in_mem(in_mats), op->get_output_type())
 {
 	this->layout = layout;
 	this->in_mats = in_mats;
@@ -321,13 +330,12 @@ void mapply_matrix_store::materialize_self() const
 		return;
 
 	mapply_matrix_store *mutable_this = const_cast<mapply_matrix_store *>(this);
-	mutable_this->res = mem_matrix_store::cast(materialize());
+	mutable_this->res = materialize();
 }
 
 matrix_store::ptr mapply_matrix_store::materialize() const
 {
-	std::vector<matrix_store::const_ptr> tmp(in_mats.begin(), in_mats.end());
-	return __mapply_portion(tmp, op, layout);
+	return __mapply_portion(in_mats, op, layout);
 }
 
 vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
@@ -358,13 +366,6 @@ matrix_store::const_ptr mapply_matrix_store::get_rows(
 	if (res == NULL)
 		materialize_self();
 	return res->get_rows(idxs);
-}
-
-const char *mapply_matrix_store::get(size_t row, size_t col) const
-{
-	if (res == NULL)
-		materialize_self();
-	return res->get(row, col);
 }
 
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
@@ -405,11 +406,6 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 			size_t id) const
 {
-	// If the virtual matrix store has been materialized, we should return
-	// the portion from the materialized store directly.
-	if (res)
-		return res->get_portion(id);
-
 	size_t start_row;
 	size_t start_col;
 	size_t num_rows;
@@ -430,11 +426,19 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
+local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, std::shared_ptr<portion_compute> compute) const
+{
+	// TODO
+	assert(0);
+}
+
 matrix_store::const_ptr mapply_matrix_store::transpose() const
 {
-	std::vector<mem_matrix_store::const_ptr> t_in_mats(in_mats.size());
+	std::vector<matrix_store::const_ptr> t_in_mats(in_mats.size());
 	for (size_t i = 0; i < in_mats.size(); i++)
-		t_in_mats[i] = mem_matrix_store::cast(in_mats[i]->transpose());
+		t_in_mats[i] = in_mats[i]->transpose();
 	matrix_layout_t t_layout;
 	if (layout == matrix_layout_t::L_COL)
 		t_layout = matrix_layout_t::L_ROW;
@@ -443,7 +447,7 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 	mapply_matrix_store *ret = new mapply_matrix_store(t_in_mats,
 			op->transpose(), t_layout, get_num_cols(), get_num_rows());
 	if (this->res)
-		ret->res = mem_matrix_store::cast(this->res->transpose());
+		ret->res = this->res->transpose();
 	return matrix_store::const_ptr(ret);
 }
 

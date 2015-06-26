@@ -41,21 +41,22 @@ public:
 			matrix_layout_t layout, int num_nodes);
 
 	virtual matrix_store::ptr materialize() const;
-
-	using virtual_matrix_store::get;
-	virtual const char *get(size_t row, size_t col) const {
-		return val->get_raw();
-	}
-
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
+	virtual std::pair<size_t, size_t> get_portion_size() const;
+
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
+	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const {
+		return get_portion(start_row, start_col, num_rows, num_cols);
+	}
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
 

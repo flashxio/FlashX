@@ -35,24 +35,21 @@ class portion_mapply_op;
 class mapply_matrix_store: public virtual_matrix_store
 {
 	matrix_layout_t layout;
-	std::vector<mem_matrix_store::const_ptr> in_mats;
+	std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
-	mem_matrix_store::const_ptr res;
+	matrix_store::const_ptr res;
 public:
 	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
 	mapply_matrix_store(
-			const std::vector<mem_matrix_store::const_ptr> &in_mats,
+			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
 			size_t nrow, size_t ncol);
 
 	virtual void materialize_self() const;
 
 	virtual matrix_store::ptr materialize() const;
-
-	using virtual_matrix_store::get;
-	virtual const char *get(size_t row, size_t col) const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -65,6 +62,9 @@ public:
 			size_t num_cols) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		return in_mats.front()->get_portion_size();
 	}
