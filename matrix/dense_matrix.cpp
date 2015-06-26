@@ -329,8 +329,11 @@ class rand_init: public set_operate
 
 	rand_gen &get_rand_gen() const {
 		void *addr = pthread_getspecific(gen_key);
-		if (addr == NULL)
+		if (addr == NULL) {
 			addr = new rand_gen_wrapper(type.create_rand_gen(min, max));
+			int ret = pthread_setspecific(gen_key, addr);
+			assert(ret == 0);
+		}
 		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) addr;
 		return wrapper->get_gen();
 	}
