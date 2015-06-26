@@ -63,6 +63,14 @@ public:
 		return ptr(new EM_matrix_store(nrow, ncol, layout, type));
 	}
 
+	static ptr cast(matrix_store::ptr store) {
+		return std::dynamic_pointer_cast<EM_matrix_store>(store);
+	}
+
+	static const_ptr cast(matrix_store::const_ptr store) {
+		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
+	}
+
 	/*
 	 * Load the EM matrix to memory.
 	 */
