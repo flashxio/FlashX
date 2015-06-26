@@ -731,6 +731,32 @@ void test_cast()
 	}
 }
 
+void test_conv2(int num_nodes)
+{
+	// Test conv2
+	printf("conv2 layout\n");
+	dense_matrix::ptr mat = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes);
+	dense_matrix::ptr mat1 = mat->conv2(matrix_layout_t::L_ROW);
+	assert(mat->get_num_rows() == mat1->get_num_rows());
+	assert(mat->get_num_cols() == mat1->get_num_cols());
+	assert(mat1->store_layout() == matrix_layout_t::L_ROW);
+	verify_result(*mat, *mat1, equal_func<int>());
+
+	// Test transpose of conv2
+	dense_matrix::ptr t_mat = mat->transpose();
+	dense_matrix::ptr t_mat1 = mat1->transpose();
+	assert(t_mat->get_num_rows() == t_mat1->get_num_rows());
+	assert(t_mat->get_num_cols() == t_mat1->get_num_cols());
+	assert(t_mat1->store_layout() == matrix_layout_t::L_COL);
+	verify_result(*t_mat, *t_mat1, equal_func<int>());
+
+	mat = mat1->conv2(matrix_layout_t::L_COL);
+	assert(mat->get_num_rows() == mat1->get_num_rows());
+	assert(mat->get_num_cols() == mat1->get_num_cols());
+	verify_result(*mat, *mat1, equal_func<int>());
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -754,6 +780,8 @@ int main(int argc, char *argv[])
 		matrix_val = (matrix_val_t) i;
 		printf("matrix val type: %d\n", i);
 
+		test_conv2(-1);
+		test_conv2(num_nodes);
 		test_scale_cols(-1);
 		test_scale_cols(num_nodes);
 		test_scale_rows(-1);
