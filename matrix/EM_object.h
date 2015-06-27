@@ -131,7 +131,10 @@ public:
 	virtual int invoke(safs::io_request *reqs[], int num) {
 		for (int i = 0; i < num; i++) {
 			auto it = computes.find(reqs[i]->get_buf());
-			assert(it != computes.end());
+			// Sometimes we want to use the I/O instance synchronously, and
+			// we don't need to keep a compute here.
+			if (it == computes.end())
+				continue;
 			portion_compute::ptr compute = it->second;
 			computes.erase(it);
 			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());

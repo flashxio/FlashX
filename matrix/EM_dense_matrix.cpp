@@ -327,6 +327,79 @@ safs::io_interface::ptr EM_matrix_store::create_io()
 	return ios->create_io();
 }
 
+vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
+{
+	if ((size_t) idx >= get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		return vec_store::const_ptr();
+	}
+
+	size_t entry_size = get_type().get_size();
+	safs::io_interface &io = ios->get_curr_io();
+	if (get_num_cols() == 1) {
+		size_t len = roundup_ele(get_num_rows(), PAGE_SIZE, entry_size);
+		smp_vec_store::ptr vec = smp_vec_store::create(len, get_type());
+		vec->expose_sub_vec(0, get_num_rows());
+
+		safs::data_loc_t loc(io.get_file_id(), 0);
+		safs::io_request req(vec->get_raw_arr(), loc, len * entry_size, READ);
+		io.access(&req, 1);
+		io.wait4complete(1);
+		return vec;
+	}
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		smp_vec_store::ptr vec = smp_vec_store::create(get_num_rows(),
+				get_type());
+
+		// Read all portions of data with the full length.
+		std::vector<safs::io_request> reqs;
+		off_t row_idx = 0;
+		for (; row_idx + CHUNK_SIZE < get_num_rows(); row_idx += CHUNK_SIZE) {
+			off_t off = (get_num_cols() * row_idx
+					+ CHUNK_SIZE * idx) * entry_size;
+
+			safs::data_loc_t loc(io.get_file_id(), off);
+			safs::io_request req(vec->get_raw_arr() + row_idx * entry_size, loc,
+					CHUNK_SIZE * entry_size, READ);
+			reqs.push_back(req);
+		}
+
+		// Read the data in the last portion. It's possible that the offset
+		// and the length of the data isn't aligned with the page size.
+		size_t last_nrows = get_num_rows() - row_idx;
+		assert(last_nrows <= CHUNK_SIZE);
+		off_t ele_start = (get_num_cols() * row_idx + last_nrows * idx);
+		off_t read_start = round_ele(ele_start, PAGE_SIZE, entry_size);
+		size_t num_read_eles = roundup_ele(last_nrows, PAGE_SIZE, entry_size);
+		assert(read_start <= ele_start
+				&& ele_start + last_nrows <= read_start + num_read_eles);
+		smp_vec_store::ptr tmp = smp_vec_store::create(num_read_eles, get_type());
+		safs::data_loc_t loc(io.get_file_id(), read_start * entry_size);
+		safs::io_request req(tmp->get_raw_arr(), loc,
+				num_read_eles * entry_size, READ);
+		reqs.push_back(req);
+
+		io.access(reqs.data(), reqs.size());
+		io.wait4complete(reqs.size());
+		memcpy(vec->get_raw_arr() + row_idx * entry_size,
+				tmp->get_raw_arr() + (ele_start - read_start) * entry_size,
+				last_nrows * entry_size);
+		return vec;
+	}
+	else {
+		return vec_store::const_ptr();
+	}
+}
+
+vec_store::const_ptr EM_matrix_store::get_row_vec(off_t idx) const
+{
+	if ((size_t) idx >= get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		return vec_store::const_ptr();
+	}
+	return transpose()->get_col_vec(idx);
+}
+
 }
 
 }

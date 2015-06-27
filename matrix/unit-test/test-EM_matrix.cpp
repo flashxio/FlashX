@@ -125,8 +125,38 @@ void test_get_portion()
 	// Test getting unaligned portions.
 }
 
-void test_inner_prod()
+void test_get_row_col()
 {
+	printf("accessing a row/column\n");
+	detail::EM_matrix_store::ptr mat;
+	off_t idx = 1;
+
+	mat = detail::EM_matrix_store::create(9999999, 10, matrix_layout_t::L_COL,
+			get_scalar_type<long>());
+	mat->set_data(set_col_operate(mat->get_num_cols()));
+	detail::smp_vec_store::const_ptr col = detail::smp_vec_store::cast(
+			mat->get_col_vec(idx));
+	assert(col->get_length() == mat->get_num_rows());
+	assert(col->get_type() == mat->get_type());
+	for (size_t i = 0; i < col->get_length(); i++)
+		assert(col->get<long>(i) == i * mat->get_num_cols() + idx);
+
+	mat = detail::EM_matrix_store::create(10, 9999999, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	detail::smp_vec_store::const_ptr row = detail::smp_vec_store::cast(
+			mat->get_row_vec(idx));
+	assert(row->get_length() == mat->get_num_cols());
+	for (size_t i = 0; i < row->get_length(); i++)
+		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
+
+	mat = detail::EM_matrix_store::create(9999, 10, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	row = detail::smp_vec_store::cast(mat->get_row_vec(idx));
+	assert(row->get_length() == mat->get_num_cols());
+	for (size_t i = 0; i < row->get_length(); i++)
+		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
 }
 
 int main(int argc, char *argv[])
@@ -140,9 +170,9 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
+	test_get_row_col();
 	test_set_data();
 	test_get_portion();
-	test_inner_prod();
 
 	destroy_flash_matrix();
 }
