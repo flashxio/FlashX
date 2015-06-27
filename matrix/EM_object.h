@@ -171,6 +171,10 @@ public:
 		this->portion_size = portion_size;
 	}
 
+	size_t get_portion_size() const {
+		return portion_size;
+	}
+
 	virtual bool issue_task() {
 		pthread_spin_lock(&lock);
 		off_t global_start = portion_idx * portion_size;

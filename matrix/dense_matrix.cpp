@@ -1225,6 +1225,8 @@ void dense_matrix::inner_prod_wide(const detail::matrix_store &m,
 	}
 }
 
+////////////////////////////// Aggregation /////////////////////////////
+
 namespace
 {
 
@@ -1245,6 +1247,70 @@ public:
 	}
 };
 
+class EM_mat_agg_dispatcher: public detail::EM_portion_dispatcher
+{
+	detail::matrix_store::const_ptr mat;
+	const bulk_operate &op;
+	char *res;
+public:
+	EM_mat_agg_dispatcher(detail::matrix_store::const_ptr mat, char *res,
+			const bulk_operate &_op, size_t tot_len,
+			size_t portion_size): detail::EM_portion_dispatcher(
+				tot_len, portion_size), op(_op) {
+		this->mat = mat;
+		this->res = res;
+	}
+
+	virtual void create_task(off_t global_start, size_t length);
+};
+
+class agg_portion_compute: public detail::portion_compute
+{
+	detail::local_matrix_store::const_ptr local_store;
+	const bulk_operate &op;
+	char *local_res;
+public:
+	agg_portion_compute(char *local_res, const bulk_operate &_op): op(_op) {
+		this->local_res = local_res;
+	}
+
+	void set_buf(detail::local_matrix_store::const_ptr local_store) {
+		this->local_store = local_store;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		detail::aggregate(*local_store, op, local_res);
+	}
+};
+
+void EM_mat_agg_dispatcher::create_task(off_t global_start, size_t length)
+{
+	assert(global_start % get_portion_size() == 0);
+	off_t res_idx = global_start / get_portion_size();
+	char *local_res = res + res_idx * op.output_entry_size();
+	agg_portion_compute *agg_compute = new agg_portion_compute(local_res, op);
+	agg_portion_compute::ptr compute(agg_compute);
+	size_t global_start_row;
+	size_t global_start_col;
+	size_t num_rows;
+	size_t num_cols;
+	if (mat->is_wide()) {
+		global_start_row = 0;
+		global_start_col = global_start;
+		num_rows = mat->get_num_rows();
+		num_cols = length;
+	}
+	else {
+		global_start_row = global_start;
+		global_start_col = 0;
+		num_rows = length;
+		num_cols = mat->get_num_cols();
+	}
+	detail::local_matrix_store::const_ptr local_store = mat->get_portion_async(
+			global_start_row, global_start_col, num_rows, num_cols, compute);
+	agg_compute->set_buf(local_store);
+}
+
 }
 
 scalar_variable::ptr dense_matrix::aggregate(const bulk_operate &op) const
@@ -1255,23 +1321,48 @@ scalar_variable::ptr dense_matrix::aggregate(const bulk_operate &op) const
 
 	const detail::matrix_store &this_store = get_data();
 	size_t num_chunks = this_store.get_num_portions();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
 	std::unique_ptr<char[]> raw_arr(new char[res->get_size() * num_chunks]);
-	for (size_t i = 0; i < num_chunks; i++) {
-		detail::local_matrix_store::const_ptr local_store
-			= this_store.get_portion(i);
 
-		int node_id = local_store->get_node_id();
-		// If the local matrix portion is not assigned to any node, 
-		// assign the tasks in round robin fashion.
-		if (node_id < 0)
-			node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id,
-				new aggregate_task(local_store, op,
-					raw_arr.get() + i * op.output_entry_size()));
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	if (is_in_mem()) {
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+
+			int node_id = local_store->get_node_id();
+			// If the local matrix portion is not assigned to any node, 
+			// assign the tasks in round robin fashion.
+			if (node_id < 0)
+				node_id = i % threads->get_num_nodes();
+			threads->process_task(node_id,
+					new aggregate_task(local_store, op,
+						raw_arr.get() + i * op.output_entry_size()));
+		}
 	}
-	mem_threads->wait4complete();
+	else {
+		size_t tot_len;
+		size_t portion_size;
+		if (is_wide()) {
+			tot_len = get_num_cols();
+			portion_size = store->get_portion_size().second;
+		}
+		else {
+			tot_len = get_num_rows();
+			portion_size = store->get_portion_size().first;
+		}
+		EM_mat_agg_dispatcher::ptr dispatcher(
+				new EM_mat_agg_dispatcher(store, raw_arr.get(), op,
+					tot_len, portion_size));
+		for (size_t i = 0; i < threads->get_num_threads(); i++) {
+			detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
+			const detail::EM_object *obj
+				= dynamic_cast<const detail::EM_object *>(store.get());
+			task->register_EM_obj(const_cast<detail::EM_object *>(obj));
+			threads->process_task(i % threads->get_num_nodes(), task);
+		}
+	}
+	threads->wait4complete();
 
 	char raw_res[res->get_size()];
 	op.runA(num_chunks, raw_arr.get(), raw_res);
