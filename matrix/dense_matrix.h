@@ -29,6 +29,7 @@
 #include "matrix_header.h"
 #include "bulk_operate.h"
 #include "matrix_store.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -111,24 +112,6 @@ public:
 private:
 	detail::matrix_store::const_ptr store;
 
-	class multiply_scalar_op: public detail::portion_mapply_op {
-		scalar_variable::ptr var;
-		const bulk_operate &op;
-	public:
-		multiply_scalar_op(scalar_variable::ptr var, size_t out_num_rows,
-				size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
-					out_num_cols, var->get_type()),
-				op(var->get_type().get_basic_ops().get_multiply()) {
-			this->var = var;
-		}
-		void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
-				detail::local_matrix_store &out) const;
-		detail::portion_mapply_op::const_ptr transpose() const {
-			return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
-						var, get_out_num_cols(), get_out_num_rows()));
-		}
-	};
-
 	static ptr _create_randu(const scalar_variable &min, const scalar_variable &max,
 			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 			bool in_mem);
@@ -144,6 +127,7 @@ private:
 	detail::matrix_store::ptr inner_prod_wide(const detail::matrix_store &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
+	dense_matrix::ptr _multiply_scalar(scalar_variable::const_ptr var) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
@@ -184,6 +168,9 @@ public:
 			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
 		scalar_variable::ptr val(new scalar_variable_impl<T>(_val));
 		return _create_const(val, nrow, ncol, layout, num_nodes, in_mem);
+	}
+
+	dense_matrix() {
 	}
 
 	virtual ~dense_matrix() {
@@ -284,23 +271,108 @@ public:
 		const bulk_operate &op = get_type().get_basic_ops().get_add();
 		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
+	dense_matrix::ptr minus(const dense_matrix &mat) const {
+		const bulk_operate &op = get_type().get_basic_ops().get_sub();
+		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+	}
 
 	dense_matrix::ptr append_cols(const std::vector<dense_matrix::ptr> &mats);
 
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
-		assert(get_type() == get_scalar_type<T>());
-		scalar_variable::ptr scal_var(new scalar_variable_impl<T>(val));
-		std::vector<detail::matrix_store::const_ptr> stores(1);
-		stores[0] = store;
-		detail::portion_mapply_op::const_ptr op(new multiply_scalar_op(
-					scal_var, get_num_rows(), get_num_cols()));
-		detail::matrix_store::ptr ret = __mapply_portion_virtual(stores, op,
-				store_layout());
-		return dense_matrix::create(ret);
+		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
+		return _multiply_scalar(var);
 	}
 
 	double norm2() const;
+};
+
+template<class T>
+static dense_matrix operator*(const dense_matrix &m, T val)
+{
+	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
+	assert(ret);
+	return *ret;
+}
+
+template<class T>
+static dense_matrix operator*(T val, const dense_matrix &m)
+{
+	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
+	assert(ret);
+	return *ret;
+}
+
+static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr ret = m1.multiply(m2);
+	assert(ret);
+	return *ret;
+}
+
+static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr ret = m1.add(m2);
+	assert(ret);
+	return *ret;
+}
+
+static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr ret = m1.minus(m2);
+	assert(ret);
+	return *ret;
+}
+
+template<class T>
+static T as_scalar(const dense_matrix &m)
+{
+	assert(m.get_type() == get_scalar_type<T>());
+	m.materialize_self();
+	assert(m.is_in_mem());
+	detail::mem_matrix_store::const_ptr mem_m
+		= detail::mem_matrix_store::cast(m.get_raw_store());
+	return mem_m->get<T>(0, 0);
+}
+
+static inline dense_matrix t(const dense_matrix &m)
+{
+	dense_matrix::ptr ret = m.transpose();
+	assert(ret);
+	return *ret;
+}
+
+class col_vec: public dense_matrix
+{
+	col_vec(detail::matrix_store::const_ptr mat): dense_matrix(mat) {
+		assert(mat->get_num_cols() == 1);
+	}
+public:
+	template<class T>
+	static ptr create_randn(size_t len) {
+		dense_matrix::ptr mat = dense_matrix::create_randn<T>(0, 1, len, 1,
+				matrix_layout_t::L_COL);
+		return ptr(new col_vec(mat->store));
+	}
+	template<class T>
+	static ptr create_randu(size_t len) {
+		dense_matrix::ptr mat = dense_matrix::create_randu<T>(0, 1, len, 1,
+				matrix_layout_t::L_COL);
+		return ptr(new col_vec(mat->store));
+	}
+
+	col_vec(): dense_matrix(NULL) {
+	}
+
+	size_t get_length() const {
+		return get_num_rows();
+	}
+
+	col_vec operator=(const dense_matrix &mat) {
+		assert(mat.get_num_cols() == 1);
+		assign(mat);
+		return *this;
+	}
 };
 
 }

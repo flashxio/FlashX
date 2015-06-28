@@ -34,34 +34,6 @@
 namespace fm
 {
 
-void dense_matrix::multiply_scalar_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &out) const
-{
-	assert(ins.size() == 1);
-	assert(ins[0]->store_layout() == out.store_layout());
-	assert(ins[0]->get_num_rows() == out.get_num_rows());
-	assert(ins[0]->get_num_cols() == out.get_num_cols());
-	if (out.store_layout() == matrix_layout_t::L_COL) {
-		const detail::local_col_matrix_store &col_in
-			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
-		detail::local_col_matrix_store &col_out
-			= static_cast<detail::local_col_matrix_store &>(out);
-		for (size_t i = 0; i < out.get_num_cols(); i++)
-			op.runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
-					col_out.get_col(i));
-	}
-	else {
-		const detail::local_row_matrix_store &row_in
-			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
-		detail::local_row_matrix_store &row_out
-			= static_cast<detail::local_row_matrix_store &>(out);
-		for (size_t i = 0; i < out.get_num_rows(); i++)
-			op.runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
-					row_out.get_row(i));
-	}
-}
-
 bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
@@ -302,6 +274,76 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 				get_type().get_basic_ops().get_add());
 		return inner_prod(mat, multiply, add, out_layout);
 	}
+}
+
+namespace
+{
+
+class multiply_scalar_op: public detail::portion_mapply_op
+{
+	scalar_variable::const_ptr var;
+	const bulk_operate &op;
+public:
+	multiply_scalar_op(scalar_variable::const_ptr var, size_t out_num_rows,
+			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
+				out_num_cols, var->get_type()),
+			op(var->get_type().get_basic_ops().get_multiply()) {
+		this->var = var;
+	}
+	void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
+			detail::local_matrix_store &out) const;
+	detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
+					var, get_out_num_cols(), get_out_num_rows()));
+	}
+};
+
+void multiply_scalar_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == out.store_layout());
+	assert(ins[0]->get_num_rows() == out.get_num_rows());
+	assert(ins[0]->get_num_cols() == out.get_num_cols());
+	if (out.store_layout() == matrix_layout_t::L_COL) {
+		const detail::local_col_matrix_store &col_in
+			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		for (size_t i = 0; i < out.get_num_cols(); i++)
+			op.runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
+					col_out.get_col(i));
+	}
+	else {
+		const detail::local_row_matrix_store &row_in
+			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		for (size_t i = 0; i < out.get_num_rows(); i++)
+			op.runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
+					row_out.get_row(i));
+	}
+}
+
+}
+
+dense_matrix::ptr dense_matrix::_multiply_scalar(
+		scalar_variable::const_ptr var) const
+{
+	if (get_type() != var->get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't multiply a scalar of incompatible type";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<detail::matrix_store::const_ptr> stores(1);
+	stores[0] = store;
+	detail::portion_mapply_op::const_ptr op(new multiply_scalar_op(
+				var, get_num_rows(), get_num_cols()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores, op,
+			store_layout());
+	return dense_matrix::create(ret);
 }
 
 namespace
