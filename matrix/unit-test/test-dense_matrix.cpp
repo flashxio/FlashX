@@ -232,6 +232,8 @@ void test_multiply_scalar(int num_nodes)
 
 	orig = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
 	res = orig->multiply_scalar(10);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == orig->is_in_mem());
 	verify_result(*res, *orig, scale_equal_func<int>(1, 10));
 }
 
@@ -243,6 +245,8 @@ void test_ele_wise(int num_nodes)
 	dense_matrix::ptr m2 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
 	dense_matrix::ptr res = m1->add(*m2);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == m1->is_in_mem());
 	verify_result(*res, *m1, scale_equal_func<int>(1, 2));
 }
 
@@ -260,6 +264,8 @@ void test_multiply_col(int num_nodes)
 
 	printf("Test multiply on col_matrix\n");
 	dense_matrix::ptr res1 = m1->multiply(*m2);
+	assert(res1->is_virtual());
+	assert(res1->is_in_mem() == m1->is_in_mem());
 	verify_result(*res1, *correct, equal_func<int>());
 }
 
@@ -318,6 +324,8 @@ void test_multiply_matrix(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == m1->is_in_mem());
 	verify_result(*res, *correct, equal_func<int>());
 
 	printf("Test multiplication on tall row matrix X small column matrix\n");
@@ -488,6 +496,8 @@ void test_scale_cols1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_vector<int>(0, orig->get_num_cols() - 1, 1);
 	dense_matrix::ptr res = orig->scale_cols(vals);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == orig->is_in_mem());
 	res->materialize_self();
 	orig->materialize_self();
 	if (res->is_in_mem()) {
@@ -530,6 +540,8 @@ void test_scale_rows1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_vector<int>(0, orig->get_num_rows() - 1, 1);
 	dense_matrix::ptr res = orig->scale_rows(vals);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == orig->is_in_mem());
 	res->materialize_self();
 	orig->materialize_self();
 	if (res->is_in_mem()) {
@@ -737,6 +749,8 @@ void test_cast()
 	mat = dense_matrix::create_rand<int>(
 			0, 1000, long_dim, 10, matrix_layout_t::L_ROW, -1, in_mem);
 	mat1 = mat->cast_ele_type(get_scalar_type<long>());
+	assert(mat1->is_virtual());
+	assert(mat1->is_in_mem() == mat->is_in_mem());
 	verify_result(*mat, *mat1, equal_func2<int, long>());
 
 	mat = dense_matrix::create_rand<float>(
@@ -752,6 +766,8 @@ void test_conv2(int num_nodes)
 	dense_matrix::ptr mat = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
 	dense_matrix::ptr mat1 = mat->conv2(matrix_layout_t::L_ROW);
+	assert(mat1->is_virtual());
+	assert(mat1->is_in_mem() == mat->is_in_mem());
 	assert(mat->get_num_rows() == mat1->get_num_rows());
 	assert(mat->get_num_cols() == mat1->get_num_cols());
 	assert(mat1->store_layout() == matrix_layout_t::L_ROW);
