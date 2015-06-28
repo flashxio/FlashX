@@ -294,20 +294,17 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	assert(X.get_type() == Y.get_type());
 	size_t num_blocks = X.get_num_blocks();
 	for (size_t i = 0; i < num_blocks; i++) {
-		dense_matrix::const_ptr block = X.get_block(i);
-		if (block->is_virtual()) {
-			num_col_writes += block->get_num_cols();
-		}
-		block->materialize_self();
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
 		if (in->store_layout() == matrix_layout_t::L_COL)
-			res = multiply.run(in->conv2(matrix_layout_t::L_ROW));
-		else
-			res = multiply.run(in);
+			in = in->conv2(matrix_layout_t::L_ROW);
+		if (in->is_virtual()) {
+			num_col_writes += in->get_num_cols();
+			in->materialize_self();
+		}
+		res = multiply.run(in);
 		if (res->store_layout() == matrix_layout_t::L_ROW)
 			res = res->conv2(matrix_layout_t::L_COL);
-		assert(in->store_layout() == matrix_layout_t::L_COL);
 		assert(res->store_layout() == matrix_layout_t::L_COL);
 		Y.set_block(i, res);
 	}
