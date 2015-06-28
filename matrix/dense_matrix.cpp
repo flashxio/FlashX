@@ -315,6 +315,13 @@ namespace
  */
 class rand_init: public set_operate
 {
+public:
+	enum rand_dist_type {
+		NORM,
+		UNIF,
+		MAX_NUM,
+	};
+private:
 	class rand_gen_wrapper {
 		rand_gen::ptr gen;
 	public:
@@ -329,13 +336,19 @@ class rand_init: public set_operate
 
 	pthread_key_t gen_key;
 	const scalar_type &type;
-	const scalar_variable &min;
-	const scalar_variable &max;
+	const scalar_variable &var1;
+	const scalar_variable &var2;
+	rand_dist_type rand_dist;
 
 	rand_gen &get_rand_gen() const {
 		void *addr = pthread_getspecific(gen_key);
 		if (addr == NULL) {
-			addr = new rand_gen_wrapper(type.create_rand_gen(min, max));
+			if (rand_dist == rand_dist_type::NORM)
+				addr = new rand_gen_wrapper(type.create_randn_gen(var1, var2));
+			else if (rand_dist == rand_dist_type::UNIF)
+				addr = new rand_gen_wrapper(type.create_randu_gen(var1, var2));
+			else
+				assert(0);
 			int ret = pthread_setspecific(gen_key, addr);
 			assert(ret == 0);
 		}
@@ -349,9 +362,11 @@ class rand_init: public set_operate
 		printf("destroy rand gen\n");
 	}
 public:
-	rand_init(const scalar_variable &_min, const scalar_variable &_max): type(
-			_min.get_type()), min(_min), max(_max) {
+	rand_init(const scalar_variable &_var1, const scalar_variable &_var2,
+			rand_dist_type rand_dist): type(_var1.get_type()), var1(
+				_var1), var2(_var2) {
 		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
+		this->rand_dist = rand_dist;
 		assert(ret == 0);
 	}
 
@@ -370,14 +385,25 @@ public:
 
 }
 
-dense_matrix::ptr dense_matrix::_create_rand(const scalar_variable &min,
+dense_matrix::ptr dense_matrix::_create_randu(const scalar_variable &min,
 		const scalar_variable &max, size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes, bool in_mem)
 {
 	assert(min.get_type() == max.get_type());
 	detail::matrix_store::ptr store = detail::matrix_store::create(
 			nrow, ncol, layout, min.get_type(), num_nodes, in_mem);
-	store->set_data(rand_init(min, max));
+	store->set_data(rand_init(min, max, rand_init::rand_dist_type::UNIF));
+	return dense_matrix::ptr(new dense_matrix(store));
+}
+
+dense_matrix::ptr dense_matrix::_create_randn(const scalar_variable &mean,
+		const scalar_variable &var, size_t nrow, size_t ncol,
+		matrix_layout_t layout, int num_nodes, bool in_mem)
+{
+	assert(mean.get_type() == var.get_type());
+	detail::matrix_store::ptr store = detail::matrix_store::create(
+			nrow, ncol, layout, mean.get_type(), num_nodes, in_mem);
+	store->set_data(rand_init(mean, var, rand_init::rand_dist_type::NORM));
 	return dense_matrix::ptr(new dense_matrix(store));
 }
 

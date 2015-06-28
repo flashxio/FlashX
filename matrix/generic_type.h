@@ -149,10 +149,16 @@ public:
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	// Create Random generator with the uniform distribution.
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max) const = 0;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max, const scalar_variable &seed) const = 0;
+	// Create Random generator with the normal distribution.
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var) const = 0;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var, const scalar_variable &seed) const = 0;
 	virtual const type_cast &get_type_cast(const scalar_type &type) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
@@ -176,10 +182,14 @@ public:
 	virtual const agg_ops &get_agg_ops() const;
 
 	virtual std::shared_ptr<scalar_variable> create_scalar() const;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max) const;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max, const scalar_variable &seed) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var, const scalar_variable &seed) const;
 
 	virtual const sorter &get_sorter() const {
 		static type_sorter<T> sort;
@@ -220,6 +230,7 @@ class scalar_variable
 {
 public:
 	typedef std::shared_ptr<scalar_variable> ptr;
+	typedef std::shared_ptr<const scalar_variable> const_ptr;
 	/**
 	 * Get the raw representation of the type.
 	 */

@@ -129,7 +129,10 @@ private:
 		}
 	};
 
-	static ptr _create_rand(const scalar_variable &min, const scalar_variable &max,
+	static ptr _create_randu(const scalar_variable &min, const scalar_variable &max,
+			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
+			bool in_mem);
+	static ptr _create_randn(const scalar_variable &mean, const scalar_variable &var,
 			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 			bool in_mem);
 	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
@@ -162,11 +165,18 @@ public:
 	}
 
 	template<class T>
-	static ptr create_rand(T _min, T _max, size_t nrow, size_t ncol,
+	static ptr create_randu(T _min, T _max, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
 		scalar_variable_impl<T> min(_min);
 		scalar_variable_impl<T> max(_max);
-		return _create_rand(min, max, nrow, ncol, layout, num_nodes, in_mem);
+		return _create_randu(min, max, nrow, ncol, layout, num_nodes, in_mem);
+	}
+	template<class T>
+	static ptr create_randn(T _mean, T _var, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
+		scalar_variable_impl<T> mean(_mean);
+		scalar_variable_impl<T> var(_var);
+		return _create_randn(mean, var, nrow, ncol, layout, num_nodes, in_mem);
 	}
 
 	template<class T>

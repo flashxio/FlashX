@@ -35,16 +35,21 @@ protected:
 public:
 	typedef std::shared_ptr<rand_gen> ptr;
 	template<class T>
-	static ptr create(T min, T max);
+	static ptr create_randu(T min, T max);
 	template<class T>
-	static ptr create(T min, T max, T seed);
+	static ptr create_randu(T min, T max, T seed);
+
+	template<class T>
+	static ptr create_randn(T mean, T stddev);
+	template<class T>
+	static ptr create_randn(T mean, T stddev, T seed);
 
 	virtual void gen(void *buf, size_t len) = 0;
 	virtual const scalar_type &get_type() const = 0;
 };
 
 template<class T>
-class rand_gen_impl: public rand_gen
+class urand_gen_impl: public rand_gen
 {
 	// By default, it generates 32-bit integers.
 	typedef std::mt19937 base_generator_type;
@@ -54,7 +59,145 @@ class rand_gen_impl: public rand_gen
 	base_generator_type generator;
 	distribution_type dist;
 public:
-	rand_gen_impl(T min, T max, T seed): generator(seed), dist(min, max) {
+	urand_gen_impl(T min, T max, T seed): generator(seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len) {
+		T *t_buf = (T *) buf;
+		for (size_t i = 0; i < len; i++)
+			t_buf[i] = dist(generator);
+	}
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<>
+class urand_gen_impl<int64_t>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::uniform_int_distribution<int64_t> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	urand_gen_impl(int64_t min, int64_t max,
+			int64_t seed): generator(seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<int64_t>();
+	}
+};
+
+template<>
+class urand_gen_impl<float>: public rand_gen
+{
+	typedef std::mt19937 base_generator_type;
+	typedef std::uniform_real_distribution<float> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	urand_gen_impl(float min, float max,
+			float seed): generator((int32_t) seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<float>();
+	}
+};
+
+template<>
+class urand_gen_impl<double>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::uniform_real_distribution<double> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	urand_gen_impl(double min, double max,
+			double seed): generator((int64_t) seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<double>();
+	}
+};
+
+template<>
+class urand_gen_impl<long double>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::uniform_real_distribution<double> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	urand_gen_impl(long double min, long double max,
+			long double seed): generator((int64_t) seed), dist(min, max) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
+template<>
+class urand_gen_impl<bool>: public rand_gen
+{
+	typedef std::mt19937 base_generator_type;
+	typedef std::uniform_int_distribution<int> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	urand_gen_impl(bool min, bool max,
+			// Use a better seed for the generator.
+			bool seed): generator(gen_rand_seed()), dist(0, 1) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<bool>();
+	}
+};
+
+template<class T>
+rand_gen::ptr rand_gen::create_randu(T min, T max)
+{
+	return rand_gen::ptr(new urand_gen_impl<T>(min, max, gen_rand_seed()));
+}
+
+template<class T>
+rand_gen::ptr rand_gen::create_randu(T min, T max, T seed)
+{
+	return rand_gen::ptr(new urand_gen_impl<T>(min, max, seed));
+}
+
+template<class T>
+class nrand_gen_impl: public rand_gen
+{
+	// By default, it generates 32-bit integers.
+	typedef std::mt19937 base_generator_type;
+	// By default, I assume it generates integers.
+	typedef std::normal_distribution<T> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	nrand_gen_impl(T mean, T stddev, T seed): generator(seed), dist(mean, stddev) {
 	}
 
 	void gen(void *buf, size_t len) {
@@ -69,117 +212,16 @@ public:
 };
 
 template<class T>
-rand_gen::ptr rand_gen::create(T min, T max)
+rand_gen::ptr rand_gen::create_randn(T mean, T stddev)
 {
-	return rand_gen::ptr(new rand_gen_impl<T>(min, max, gen_rand_seed()));
+	return rand_gen::ptr(new nrand_gen_impl<T>(mean, stddev, gen_rand_seed()));
 }
 
 template<class T>
-rand_gen::ptr rand_gen::create(T min, T max, T seed)
+rand_gen::ptr rand_gen::create_randn(T mean, T stddev, T seed)
 {
-	return rand_gen::ptr(new rand_gen_impl<T>(min, max, seed));
+	return rand_gen::ptr(new nrand_gen_impl<T>(mean, stddev, seed));
 }
-
-template<>
-class rand_gen_impl<int64_t>: public rand_gen
-{
-	typedef std::mt19937_64 base_generator_type;
-	typedef std::uniform_int_distribution<int64_t> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	rand_gen_impl(int64_t min, int64_t max,
-			int64_t seed): generator(seed), dist(min, max) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<int64_t>();
-	}
-};
-
-template<>
-class rand_gen_impl<float>: public rand_gen
-{
-	typedef std::mt19937 base_generator_type;
-	typedef std::uniform_real_distribution<float> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	rand_gen_impl(float min, float max,
-			float seed): generator((int32_t) seed), dist(min, max) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<float>();
-	}
-};
-
-template<>
-class rand_gen_impl<double>: public rand_gen
-{
-	typedef std::mt19937_64 base_generator_type;
-	typedef std::uniform_real_distribution<double> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	rand_gen_impl(double min, double max,
-			double seed): generator((int64_t) seed), dist(min, max) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<double>();
-	}
-};
-
-template<>
-class rand_gen_impl<long double>: public rand_gen
-{
-	typedef std::mt19937_64 base_generator_type;
-	typedef std::uniform_real_distribution<double> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	rand_gen_impl(long double min, long double max,
-			long double seed): generator((int64_t) seed), dist(min, max) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<long double>();
-	}
-};
-
-template<>
-class rand_gen_impl<bool>: public rand_gen
-{
-	typedef std::mt19937 base_generator_type;
-	typedef std::uniform_int_distribution<int> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	rand_gen_impl(bool min, bool max,
-			// Use a better seed for the generator.
-			bool seed): generator(gen_rand_seed()), dist(0, 1) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<bool>();
-	}
-};
 
 }
 

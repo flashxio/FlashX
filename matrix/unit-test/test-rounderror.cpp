@@ -166,7 +166,7 @@ void test_mm()
 	std::vector<double> C2(long_dim * 10);
 	// Column-major
 	std::vector<double> C3(long_dim * 10);
-	rand_gen::ptr gen = get_scalar_type<double>().create_rand_gen(
+	rand_gen::ptr gen = get_scalar_type<double>().create_randu_gen(
 			scalar_variable_impl<double>(0), scalar_variable_impl<double>(1));
 	gen->gen(A.data(), A.size());
 	gen->gen(B.data(), B.size());
@@ -237,7 +237,7 @@ void test_vec_scal()
 	detail::mem_col_matrix_store::ptr mat_store
 		= detail::mem_col_matrix_store::create(1000, 1,
 				get_scalar_type<double>());
-	rand_gen::ptr gen = mat_store->get_type().create_rand_gen(
+	rand_gen::ptr gen = mat_store->get_type().create_randu_gen(
 			scalar_variable_impl<double>(0), scalar_variable_impl<double>(1));
 	double *col = (double *) mat_store->get_col(0);
 	gen->gen(mat_store->get_col(0), mat_store->get_num_rows());
@@ -269,7 +269,7 @@ void test_vec_scal()
 void test_vec_dot()
 {
 	printf("test dot product on vectors\n");
-	rand_gen::ptr gen = get_scalar_type<double>().create_rand_gen(
+	rand_gen::ptr gen = get_scalar_type<double>().create_randu_gen(
 			scalar_variable_impl<double>(0), scalar_variable_impl<double>(1));
 	std::vector<double> v1(1000);
 	std::vector<double> v2(1000);
@@ -293,7 +293,7 @@ void test_norm2()
 	detail::mem_col_matrix_store::ptr mat_store
 		= detail::mem_col_matrix_store::create(1000, 1,
 				get_scalar_type<double>());
-	rand_gen::ptr gen = mat_store->get_type().create_rand_gen(
+	rand_gen::ptr gen = mat_store->get_type().create_randu_gen(
 			scalar_variable_impl<double>(0), scalar_variable_impl<double>(1));
 	double *col = (double *) mat_store->get_col(0);
 	gen->gen(col, mat_store->get_num_rows());

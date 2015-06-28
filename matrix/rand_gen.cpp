@@ -28,37 +28,95 @@ unsigned int rand_gen::gen_rand_seed()
 	return rd();
 }
 
-void rand_gen_impl<int64_t>::gen(void *buf, size_t len)
+////////////////////////// Random distribution /////////////////////////////
+
+void urand_gen_impl<int64_t>::gen(void *buf, size_t len)
 {
 	int64_t *t_buf = (int64_t *) buf;
 	for (size_t i = 0; i < len; i++)
 		t_buf[i] = dist(generator);
 }
 
-void rand_gen_impl<float>::gen(void *buf, size_t len)
+void urand_gen_impl<float>::gen(void *buf, size_t len)
 {
 	float *t_buf = (float *) buf;
 	for (size_t i = 0; i < len; i++)
 		t_buf[i] = dist(generator);
 }
 
-void rand_gen_impl<double>::gen(void *buf, size_t len)
+void urand_gen_impl<double>::gen(void *buf, size_t len)
 {
 	double *t_buf = (double *) buf;
 	for (size_t i = 0; i < len; i++)
 		t_buf[i] = dist(generator);
 }
 
-void rand_gen_impl<long double>::gen(void *buf, size_t len)
+void urand_gen_impl<long double>::gen(void *buf, size_t len)
 {
 	long double *t_buf = (long double *) buf;
 	for (size_t i = 0; i < len; i++)
 		t_buf[i] = dist(generator);
 }
 
-void rand_gen_impl<bool>::gen(void *buf, size_t len)
+void urand_gen_impl<bool>::gen(void *buf, size_t len)
 {
 	bool *t_buf = (bool *) buf;
+	for (size_t i = 0; i < len; i++)
+		t_buf[i] = dist(generator);
+}
+
+////////////////////////// Normal distribution /////////////////////////////
+
+template<>
+class nrand_gen_impl<double>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::normal_distribution<double> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	nrand_gen_impl(double mean, double stddev,
+			double seed): generator((int64_t) seed), dist(mean, stddev) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<double>();
+	}
+};
+
+template<>
+class nrand_gen_impl<long double>: public rand_gen
+{
+	typedef std::mt19937_64 base_generator_type;
+	typedef std::normal_distribution<double> distribution_type;
+
+	base_generator_type generator;
+	distribution_type dist;
+public:
+	nrand_gen_impl(long double mean, long double stddev,
+			long double seed): generator((int64_t) seed), dist(mean, stddev) {
+	}
+
+	void gen(void *buf, size_t len);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<long double>();
+	}
+};
+
+void nrand_gen_impl<double>::gen(void *buf, size_t len)
+{
+	double *t_buf = (double *) buf;
+	for (size_t i = 0; i < len; i++)
+		t_buf[i] = dist(generator);
+}
+
+void nrand_gen_impl<long double>::gen(void *buf, size_t len)
+{
+	long double *t_buf = (long double *) buf;
 	for (size_t i = 0; i < len; i++)
 		t_buf[i] = dist(generator);
 }

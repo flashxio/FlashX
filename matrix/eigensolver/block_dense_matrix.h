@@ -124,7 +124,7 @@ public:
 		size_t num_blocks = get_num_blocks();
 		num_col_writes += this->get_num_cols();
 		for (size_t i = 0; i < num_blocks; i++)
-			set_block(i, fm::dense_matrix::create_rand<Type>(min, max,
+			set_block(i, fm::dense_matrix::create_randu<Type>(min, max,
 						get_num_rows(), block_size, fm::matrix_layout_t::L_COL,
 						get_num_nodes(), true));
 	}

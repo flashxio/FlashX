@@ -36,22 +36,169 @@ scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 }
 
 template<class T>
-rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+rand_gen::ptr scalar_type_impl<T>::create_randu_gen(const scalar_variable &min,
 		const scalar_variable &max) const
 {
 	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
 	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
-	return rand_gen::create<T>(t_min.get(), t_max.get());
+	return rand_gen::create_randu<T>(t_min.get(), t_max.get());
 }
 
 template<class T>
-rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+rand_gen::ptr scalar_type_impl<T>::create_randu_gen(const scalar_variable &min,
 		const scalar_variable &max, const scalar_variable &seed) const
 {
 	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
 	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
 	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
-	return rand_gen::create<T>(t_min.get(), t_max.get(), t_seed.get());
+	return rand_gen::create_randu<T>(t_min.get(), t_max.get(), t_seed.get());
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<char>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<char>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<bool>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<bool>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	scalar_variable_impl<T> &t_mean = (scalar_variable_impl<T> &) mean;
+	scalar_variable_impl<T> &t_var = (scalar_variable_impl<T> &) var;
+	return rand_gen::create_randn<T>(t_mean.get(), t_var.get());
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	scalar_variable_impl<T> &t_mean = (scalar_variable_impl<T> &) mean;
+	scalar_variable_impl<T> &t_var = (scalar_variable_impl<T> &) var;
+	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
+	return rand_gen::create_randn<T>(t_mean.get(), t_var.get(), t_seed.get());
 }
 
 template<class T>

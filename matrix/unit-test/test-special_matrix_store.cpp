@@ -96,9 +96,9 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	printf("mapply matrix store for %s %s-major matrix\n",
 			num_rows > num_cols ? "tall" : "wide",
 			layout == matrix_layout_t::L_ROW ? "row" : "col");
-	dense_matrix::ptr mat1 = dense_matrix::create_rand<long>(
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<long>(
 			-1, 1, num_rows, num_cols, layout, -1);
-	dense_matrix::ptr mat2 = dense_matrix::create_rand<long>(
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<long>(
 			-1, 1, num_rows, num_cols, layout, -1);
 
 	// Create mapply matrix store.
@@ -140,7 +140,7 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	}
 
 	// Input of matrix multiplication.
-	dense_matrix::ptr small_mat = dense_matrix::create_rand<long>(
+	dense_matrix::ptr small_mat = dense_matrix::create_randu<long>(
 			-1, 1, num_cols, num_cols, matrix_layout_t::L_COL, -1);
 	assert(small_mat->get_data().get_num_portions() == 1);
 	detail::local_matrix_store::const_ptr local_mat

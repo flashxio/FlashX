@@ -746,14 +746,14 @@ void test_cast()
 	printf("test cast type\n");
 	dense_matrix::ptr mat, mat1;
 
-	mat = dense_matrix::create_rand<int>(
+	mat = dense_matrix::create_randu<int>(
 			0, 1000, long_dim, 10, matrix_layout_t::L_ROW, -1, in_mem);
 	mat1 = mat->cast_ele_type(get_scalar_type<long>());
 	assert(mat1->is_virtual());
 	assert(mat1->is_in_mem() == mat->is_in_mem());
 	verify_result(*mat, *mat1, equal_func2<int, long>());
 
-	mat = dense_matrix::create_rand<float>(
+	mat = dense_matrix::create_randu<float>(
 			0, 1000, long_dim, 10, matrix_layout_t::L_ROW, -1, in_mem);
 	mat1 = mat->cast_ele_type(get_scalar_type<double>());
 	verify_result(*mat, *mat1, equal_func2<float, double>());
