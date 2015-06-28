@@ -135,12 +135,12 @@ private:
 	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes, bool in_mem);
 
-	void inner_prod_tall(const detail::matrix_store &m,
-			const bulk_operate &left_op, const bulk_operate &right_op,
-			detail::matrix_store &res) const;
-	void inner_prod_wide(const detail::matrix_store &m,
-			const bulk_operate &left_op, const bulk_operate &right_op,
-			detail::matrix_store &res) const;
+	detail::matrix_store::ptr inner_prod_tall(const detail::matrix_store &m,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t out_layout) const;
+	detail::matrix_store::ptr inner_prod_wide(const detail::matrix_store &m,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t out_layout) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
@@ -252,7 +252,7 @@ public:
 	dense_matrix::ptr conv2(matrix_layout_t layout) const;
 
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 	std::shared_ptr<scalar_variable> aggregate(
 			const bulk_operate &op) const;
