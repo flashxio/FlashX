@@ -26,6 +26,7 @@
 #include "EM_dense_matrix.h"
 #include "local_matrix_store.h"
 #include "raw_data_array.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -398,6 +399,100 @@ vec_store::const_ptr EM_matrix_store::get_row_vec(off_t idx) const
 		return vec_store::const_ptr();
 	}
 	return transpose()->get_col_vec(idx);
+}
+
+namespace
+{
+
+class EM_mat_load_dispatcher: public detail::EM_portion_dispatcher
+{
+	const detail::EM_matrix_store &from_mat;
+	detail::mem_matrix_store::ptr to_mat;
+public:
+	EM_mat_load_dispatcher(const detail::EM_matrix_store &_from_mat,
+			detail::mem_matrix_store::ptr to_mat, size_t tot_len,
+			size_t portion_size): detail::EM_portion_dispatcher(
+				tot_len, portion_size), from_mat(_from_mat) {
+		this->to_mat = to_mat;
+	}
+
+	virtual void create_task(off_t global_start, size_t length);
+};
+
+class load_portion_compute: public portion_compute
+{
+	local_matrix_store::const_ptr from_store;
+	local_matrix_store::ptr to_store;
+public:
+	void set_buf(local_matrix_store::const_ptr from_store,
+			local_matrix_store::ptr to_store) {
+		this->from_store = from_store;
+		this->to_store = to_store;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		assert(from_store);
+		assert(to_store);
+		to_store->copy_from(*from_store);
+	}
+};
+
+void EM_mat_load_dispatcher::create_task(off_t global_start, size_t length)
+{
+	load_portion_compute *load_compute = new load_portion_compute();
+	load_portion_compute::ptr compute(load_compute);
+	size_t global_start_row;
+	size_t global_start_col;
+	size_t num_rows;
+	size_t num_cols;
+	if (from_mat.is_wide()) {
+		global_start_row = 0;
+		global_start_col = global_start;
+		num_rows = from_mat.get_num_rows();
+		num_cols = length;
+	}
+	else {
+		global_start_row = global_start;
+		global_start_col = 0;
+		num_rows = length;
+		num_cols = from_mat.get_num_cols();
+	}
+	detail::local_matrix_store::const_ptr store1 = from_mat.get_portion_async(
+			global_start_row, global_start_col, num_rows, num_cols, compute);
+	detail::local_matrix_store::ptr store2 = to_mat->get_portion(
+			global_start_row, global_start_col, num_rows, num_cols);
+	load_compute->set_buf(store1, store2);
+}
+
+}
+
+mem_matrix_store::ptr EM_matrix_store::load() const
+{
+	mem_matrix_store::ptr ret = mem_matrix_store::create(get_num_rows(),
+			get_num_cols(), store_layout(), get_type(), -1);
+
+	size_t tot_len;
+	size_t portion_size;
+	if (is_wide()) {
+		tot_len = get_num_cols();
+		portion_size = get_portion_size().second;
+	}
+	else {
+		tot_len = get_num_rows();
+		portion_size = get_portion_size().first;
+	}
+	EM_mat_load_dispatcher::ptr dispatcher(
+			new EM_mat_load_dispatcher(*this, ret, tot_len, portion_size));
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < threads->get_num_threads(); i++) {
+		detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
+		const detail::EM_object *obj = this;
+		task->register_EM_obj(const_cast<detail::EM_object *>(obj));
+		threads->process_task(i % threads->get_num_nodes(), task);
+	}
+	threads->wait4complete();
+	return ret;
 }
 
 }

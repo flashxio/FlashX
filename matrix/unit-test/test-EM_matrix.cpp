@@ -159,6 +159,19 @@ void test_get_row_col()
 		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
 }
 
+void test_load()
+{
+	printf("test loading an EM matrix\n");
+	detail::EM_matrix_store::ptr mat = detail::EM_matrix_store::create(
+			9999999, 10, matrix_layout_t::L_COL, get_scalar_type<long>());
+	mat->set_data(set_col_operate(mat->get_num_cols()));
+
+	detail::mem_matrix_store::ptr mem_mat = mat->load();
+	for (size_t i = 0; i < mem_mat->get_num_rows(); i++)
+		for (size_t j = 0; j < mem_mat->get_num_cols(); j++)
+			assert(mem_mat->get<long>(i, j) == i * mem_mat->get_num_cols() + j);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -170,6 +183,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
+	test_load();
 	test_get_row_col();
 	test_set_data();
 	test_get_portion();

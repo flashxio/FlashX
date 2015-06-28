@@ -37,6 +37,7 @@ namespace detail
 {
 
 class local_matrix_store;
+class mem_matrix_store;
 
 class EM_matrix_store: public matrix_store, public EM_object
 {
@@ -55,11 +56,17 @@ class EM_matrix_store: public matrix_store, public EM_object
 	}
 public:
 	typedef std::shared_ptr<EM_matrix_store> ptr;
+	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type) {
 		return ptr(new EM_matrix_store(nrow, ncol, layout, type));
 	}
+
+	/*
+	 * Load the EM matrix to memory.
+	 */
+	std::shared_ptr<mem_matrix_store> load() const;
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
