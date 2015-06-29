@@ -251,8 +251,7 @@ public:
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
-	std::shared_ptr<scalar_variable> aggregate(
-			const bulk_operate &op) const;
+	std::shared_ptr<scalar_variable> aggregate(const bulk_operate &op) const;
 
 	dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
@@ -275,6 +274,11 @@ public:
 		const bulk_operate &op = get_type().get_basic_ops().get_sub();
 		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
+
+	std::shared_ptr<vector> row_sum() const;
+	std::shared_ptr<vector> col_sum() const;
+	std::shared_ptr<vector> row_norm2() const;
+	std::shared_ptr<vector> col_norm2() const;
 
 	dense_matrix::ptr append_cols(const std::vector<dense_matrix::ptr> &mats);
 

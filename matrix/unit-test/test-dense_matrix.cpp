@@ -173,7 +173,7 @@ enum matrix_val_t
 	SEQ,
 	DEFAULT,
 	NUM_TYPES,
-} matrix_val;
+} matrix_val = matrix_val_t::SEQ;
 
 dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes, const scalar_type &type,
@@ -787,6 +787,58 @@ void test_conv2(int num_nodes)
 	verify_result(*mat, *mat1, equal_func<int>());
 }
 
+void test_sum_row_col1(dense_matrix::ptr mat)
+{
+	printf("test row sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
+			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
+	vector::ptr vec = mat->row_sum();
+	assert(vec->is_in_mem());
+	assert(vec->get_length() == mat->get_num_rows());
+
+	detail::mem_vec_store::const_ptr mem_vec
+		= detail::mem_vec_store::cast(vec->get_raw_store());
+	detail::mem_matrix_store::const_ptr mem_m;
+	if (mat->is_in_mem())
+		mem_m = detail::mem_matrix_store::cast(mat->get_raw_store());
+	else
+		mem_m = detail::EM_matrix_store::cast(mat->get_raw_store())->load();
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		int sum = 0;
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			sum += mem_m->get<int>(i, j);
+		assert(sum == *(int *) mem_vec->get_sub_arr(i, i + 1));
+	}
+
+	printf("test col sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
+			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
+	vec = mat->col_sum();
+	assert(vec->is_in_mem());
+	assert(vec->get_length() == mat->get_num_cols());
+	mem_vec = detail::mem_vec_store::cast(vec->get_raw_store());
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		int sum = 0;
+		for (size_t j = 0; j < mat->get_num_rows(); j++)
+			sum += mem_m->get<int>(j, i);
+		assert(sum == *(int *) mem_vec->get_sub_arr(i, i + 1));
+	}
+}
+
+void test_sum_row_col(int num_nodes)
+{
+	dense_matrix::ptr mat = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes);
+	test_sum_row_col1(mat);
+
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
+	test_sum_row_col1(mat);
+
+	mat = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
+	test_sum_row_col1(mat);
+
+	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
+	test_sum_row_col1(mat);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -818,6 +870,7 @@ void test_EM_matrix(int num_nodes)
 	test_agg_row(num_nodes);
 	test_agg_sub_col(-1);
 	test_agg_sub_row(-1);
+	test_sum_row_col(-1);
 #if 0
 	test_rand_init();
 	test_conv_row_col();
@@ -859,6 +912,8 @@ void test_mem_matrix(int num_nodes)
 		test_agg_row(num_nodes);
 		test_agg_sub_col(-1);
 		test_agg_sub_row(-1);
+		test_sum_row_col(-1);
+		test_sum_row_col(num_nodes);
 #if 0
 		test_rand_init();
 		test_conv_row_col();

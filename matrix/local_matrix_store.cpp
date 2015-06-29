@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include <cblas.h>
 
 #include "local_matrix_store.h"
@@ -531,29 +533,72 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 
 }
 
-void aggregate(const local_matrix_store &store, const bulk_operate &op, char *res)
+void aggregate(const local_matrix_store &store, const bulk_operate &op,
+		agg_margin margin, local_vec_store &res)
 {
 	size_t output_size = op.output_entry_size();
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	// If the store has data stored contiguously.
-	if (store.get_raw_arr())
-		op.runA(ncol * nrow, store.get_raw_arr(), res);
-	// For row-major matrix.
-	else if (store.store_layout() == matrix_layout_t::L_ROW) {
-		const local_row_matrix_store &row_store = (const local_row_matrix_store &) store;
-		std::unique_ptr<char []> raw_arr(new char[output_size * nrow]);
+	if (margin == agg_margin::BOTH) {
+		assert(res.get_length() == 1);
+		// If the store has data stored contiguously.
+		if (store.get_raw_arr())
+			op.runA(ncol * nrow, store.get_raw_arr(), res.get_raw_arr());
+		// For row-major matrix.
+		else if (store.store_layout() == matrix_layout_t::L_ROW) {
+			const local_row_matrix_store &row_store
+				= static_cast<const local_row_matrix_store &>(store);
+			std::unique_ptr<char []> raw_arr(new char[output_size * nrow]);
+			for (size_t i = 0; i < nrow; i++)
+				op.runA(ncol, row_store.get_row(i),
+						raw_arr.get() + output_size * i);
+			op.runA(nrow, raw_arr.get(), res.get_raw_arr());
+		}
+		else {
+			assert(store.store_layout() == matrix_layout_t::L_COL);
+			const local_col_matrix_store &col_store
+				= static_cast<const local_col_matrix_store &>(store);
+			std::unique_ptr<char []> raw_arr(new char[output_size * ncol]);
+			for (size_t i = 0; i < ncol; i++)
+				op.runA(nrow, col_store.get_col(i),
+						raw_arr.get() + output_size * i);
+			op.runA(ncol, raw_arr.get(), res.get_raw_arr());
+		}
+	}
+	else if (margin == agg_margin::MAR_ROW) {
+		local_matrix_store::const_ptr buf_mat;
+		const local_row_matrix_store *row_store;
+		if (store.store_layout() == matrix_layout_t::L_COL) {
+			buf_mat = store.conv2(matrix_layout_t::L_ROW);
+			assert(buf_mat);
+			row_store = static_cast<const local_row_matrix_store *>(
+					buf_mat.get());
+		}
+		else
+			row_store = static_cast<const local_row_matrix_store *>(&store);
+		assert(res.get_length() == store.get_num_rows());
 		for (size_t i = 0; i < nrow; i++)
-			op.runA(ncol, row_store.get_row(i), raw_arr.get() + output_size * i);
-		op.runA(nrow, raw_arr.get(), res);
+			op.runA(ncol, row_store->get_row(i), res.get(i));
+	}
+	else if (margin == agg_margin::MAR_COL) {
+		local_matrix_store::const_ptr buf_mat;
+		const local_col_matrix_store *col_store;
+		if (store.store_layout() == matrix_layout_t::L_ROW) {
+			buf_mat = store.conv2(matrix_layout_t::L_COL);
+			col_store = static_cast<const local_col_matrix_store *>(
+					buf_mat.get());
+		}
+		else
+			col_store = static_cast<const local_col_matrix_store *>(&store);
+		assert(res.get_length() == store.get_num_cols());
+		for (size_t i = 0; i < ncol; i++)
+			op.runA(nrow, col_store->get_col(i), res.get(i));
 	}
 	else {
-		assert(store.store_layout() == matrix_layout_t::L_COL);
-		const local_col_matrix_store &col_store = (const local_col_matrix_store &) store;
-		std::unique_ptr<char []> raw_arr(new char[output_size * ncol]);
-		for (size_t i = 0; i < ncol; i++)
-			op.runA(nrow, col_store.get_col(i), raw_arr.get() + output_size * i);
-		op.runA(ncol, raw_arr.get(), res);
+		// This shouldn't happen.
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"aggregate on an unknown margin %1%") % margin;
+		assert(0);
 	}
 }
 

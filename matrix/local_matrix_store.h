@@ -987,10 +987,18 @@ public:
 	}
 };
 
+enum agg_margin
+{
+	MAR_ROW,
+	MAR_COL,
+	BOTH,
+};
+
 /*
  * These are the general operations on the local matrix store.
  */
-void aggregate(const local_matrix_store &store, const bulk_operate &op, char *res);
+void aggregate(const local_matrix_store &store, const bulk_operate &op,
+		agg_margin margin, local_vec_store &res);
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res);
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
