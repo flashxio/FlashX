@@ -121,10 +121,10 @@ private:
 	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes, bool in_mem);
 
-	detail::matrix_store::ptr inner_prod_tall(const detail::matrix_store &m,
+	detail::matrix_store::ptr inner_prod_tall(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
-	detail::matrix_store::ptr inner_prod_wide(const detail::matrix_store &m,
+	detail::matrix_store::ptr inner_prod_wide(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
 	dense_matrix::ptr _multiply_scalar(scalar_variable::const_ptr var) const;
