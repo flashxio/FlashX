@@ -22,7 +22,7 @@ CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLA
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
-all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
+all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
 	el2al al22d al2crs test-sort test-eigen
 
 trilinos: BlockDavidsonTpetra test-tpetra_multiply
@@ -38,11 +38,8 @@ test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
 
-test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
-	$(CXX) -o test-mem_matrix test-mem_matrix.o $(LDFLAGS)
-
-test-EM_matrix: test-EM_matrix.o ../libFMatrix.a
-	$(CXX) -o test-EM_matrix test-EM_matrix.o $(LDFLAGS)
+test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
+	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
 
 el2al: el2al.o ../libFMatrix.a
 	$(CXX) -o el2al el2al.o $(LDFLAGS)
@@ -89,9 +86,8 @@ clean:
 	rm -f *~
 	rm -f test-fg_SpMV
 	rm -f test-2d_multiply
-	rm -f test-mem_matrix
+	rm -f test-dense_matrix
 	rm -f test-mem_vector
-	rm -f test-EM_matrix
 	rm -f el2al
 	rm -f al22d
 	rm -f al2crs
