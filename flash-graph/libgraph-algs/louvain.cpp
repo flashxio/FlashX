@@ -61,11 +61,13 @@ class louvain_vertex: public compute_vertex
 {
 	vertex_id_t cluster; // current cluster
 	float modularity;
+	uint32_t self_edge_weight;
 
 	public:
 	louvain_vertex(vertex_id_t id): compute_vertex(id) {
 		cluster = id;
-		modularity = 0;
+		modularity = std::numeric_limits<float>::min();
+		self_edge_weight = 0;
 	}
 
 	void run(vertex_program &prog);
@@ -129,26 +131,52 @@ void louvain_vertex::run(vertex_program &prog) {
 	request_vertices(&id, 1);
 }
 
-// NOTE: This will only work for the first level
+// FIXME: This will only work for the first level
 void louvain_vertex::compute_modularity(edge_seq_iterator& id_it, data_seq_iterator& weight_it, 
 		 vertex_id_t& max_cluster, float& max_mod, vertex_id_t my_id) {
 	float delta_mod;
 
+	// Iterate through all vertices in the g_volume_map & if one is my 
+	//	neighbor then I need to modify it's volume to not include me.
+	std::map<vertex_id_t, float>::iterator graph_it = g_volume_map.begin(); // Iterator for all graph vertices
 
-	// TODO: Iterate through all vertices in the g_volume_map & if one is my 
-	// neighbor then I need to modify it's volume to not include me.
-	// FIXME: How can this be done efficiently
-	while (weight_it.has_next()) {
-		vertex_id_t nid = id_it.next();
-		edge_count e = weight_it.next();
+	vertex_id_t nid = INVALID_VERTEX_ID;
+	edge_count e;
+	bool used_neigh = true; // Have I just used one of my neighbors?
 
-		delta_mod = (e.get_count()/g_edge_weight) + 
-			(0.0000 - (0.0000 * g_volume_map[my_id]))/((2*g_edge_weight)^2); // FIXME
+	while (true) {
+		if (graph_it == g_volume_map.end()) {
+			break;
+		} else {
+			if (id_it.has_next() && used_neigh) {
+				nid = id_it.next();	
+				e = weight_it.next();
+				used_neigh = false; // reset this
+			}
 
-		if (delta_mod > max_mod) {
-			max_mod = delta_mod;
-			max_cluster = nid;
+			// We have an edge between the two vertices
+			if (graph_it->first == nid) {
+				delta_mod = ((e.get_count() - 0) / g_edge_weight) + 
+					(((g_volume_map[my_id] - this->self_edge_weight) - 
+					  (g_volume_map[graph_it->first] - e.get_count())) * g_volume_map[my_id])
+					/ (float)(2*(g_edge_weight^2));
+
+				used_neigh = true;
+			} else { /* No edge between the two vertices */
+				delta_mod = ((((g_volume_map[my_id] - this->self_edge_weight) - g_volume_map[graph_it->first]))
+						* g_volume_map[my_id]) / (float)(2*(g_edge_weight^2));
+
+			}
+
+
+			BOOST_LOG_TRIVIAL(info) << "v" << my_id << " delta_mod for v" << graph_it->first << " = " << delta_mod;
+
+			if (delta_mod > max_mod) {
+				max_mod = delta_mod;
+				max_cluster = graph_it->first;
+			}
 		}
+		++graph_it;
 	}
 }
 
@@ -161,7 +189,6 @@ void toggle_changed() {
 void louvain_vertex::compute_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
 		vertex_program &prog) {
 	edge_count local_edge_weight = 0;
-	edge_count self_edge_weight = 0;
 
 	while (weight_it.has_next()) {
 		edge_count e = weight_it.next();
@@ -169,14 +196,14 @@ void louvain_vertex::compute_vol_weight(data_seq_iterator& weight_it, edge_seq_i
 
 		local_edge_weight += e.get_count();
 		if (nid  == prog.get_vertex_id(*this)) {
-			self_edge_weight += e.get_count();
+			this->self_edge_weight += e.get_count();
 		}
 	}
 
 	((louvain_vertex_program&)prog).
 		pp_ec(local_edge_weight);
 	((louvain_vertex_program&)prog).insert_volume(prog.get_vertex_id(*this),
-		local_edge_weight.get_count() + (2*self_edge_weight.get_count()));
+		local_edge_weight.get_count() + (2*this->self_edge_weight));
 
 }
 
@@ -206,7 +233,13 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 				compute_modularity(id_it, weight_it, max_cluster, max_mod, prog.get_vertex_id(*this));
 
 				if (this->cluster != max_cluster) {
+					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " 
+						<< this->modularity << " < " << max_mod <<
+						" ,moved from cluster " << this->cluster << " ==> " << max_cluster << "\n";
 					toggle_changed();
+				} else {
+					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " << this->modularity
+						<< " ,stayed in cluster " << this->cluster << "\n";
 				}
 
 				this->cluster = max_cluster;
@@ -253,18 +286,26 @@ namespace fg
 
 			g_volume_map.insert(lvp->get_vol_map().begin(), lvp->get_vol_map().end());
 		}
+#if 1
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
-
 		for (std::map<vertex_id_t, float>::iterator it = g_volume_map.begin();
 				it != g_volume_map.end(); it++) {
-			BOOST_LOG_TRIVIAL(info) << "Key: " << it->first << ", Value: " << it->second;
+			BOOST_LOG_TRIVIAL(info) << "Vertex: " << it->first << ", Volume: " << it->second;
 		}
-
+		BOOST_LOG_TRIVIAL(info) << "\x1B[31m====================================================\x1B[0m\n";
+#endif
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-#if 0
+#if 1
 		louvain_stage = LEVEL1;
-		graph->start_all();
-		graph->wait4complete();
+
+		do {
+			g_changed = false;
+			graph->start_all();
+			graph->wait4complete();
+		} while (g_changed);
+
+		louvain_stage = RUN;
+		BOOST_LOG_TRIVIAL(info) << "\n Reached running stage\n"; 
 #endif
 
 
