@@ -252,9 +252,6 @@ void test_ele_wise(int num_nodes)
 
 void test_multiply_col(int num_nodes)
 {
-	if (!in_mem)
-		return;
-
 	printf("Test multiplication on tall matrix stored column wise\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
@@ -851,23 +848,14 @@ void test_EM_matrix(int num_nodes)
 	test_conv_vec2mat();
 
 	test_conv2(-1);
-	test_conv2(num_nodes);
 	test_scale_cols(-1);
-	test_scale_cols(num_nodes);
 	test_scale_rows(-1);
-	test_scale_rows(num_nodes);
 	test_multiply_scalar(-1);
-	test_multiply_scalar(num_nodes);
 	test_ele_wise(-1);
-	test_ele_wise(num_nodes);
 	test_multiply_col(-1);
-	test_multiply_col(num_nodes);
 	test_agg_col(-1);
-	test_agg_col(num_nodes);
 	test_multiply_matrix(-1);
-	test_multiply_matrix(num_nodes);
 	test_agg_row(-1);
-	test_agg_row(num_nodes);
 	test_agg_sub_col(-1);
 	test_agg_sub_row(-1);
 	test_sum_row_col(-1);
