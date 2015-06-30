@@ -313,14 +313,17 @@ static inline bool is_all_in_mem(
 }
 
 mapply_matrix_store::mapply_matrix_store(
-		const std::vector<matrix_store::const_ptr> &in_mats,
+		const std::vector<matrix_store::const_ptr> &_in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
 		size_t nrow, size_t ncol): virtual_matrix_store(nrow, ncol,
-			is_all_in_mem(in_mats), op->get_output_type())
+			is_all_in_mem(_in_mats), op->get_output_type()), in_mats(_in_mats)
 {
 	this->layout = layout;
-	this->in_mats = in_mats;
 	this->op = op;
+	this->num_EM_mats = 0;
+	for (size_t i = 0; i < in_mats.size(); i++)
+		if (!in_mats[i]->is_in_mem())
+			num_EM_mats++;
 }
 
 void mapply_matrix_store::materialize_self() const
@@ -426,12 +429,102 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
+namespace
+{
+
+class collect_portion_compute: public portion_compute
+{
+	std::vector<local_matrix_store::const_ptr> parts;
+	portion_compute::ptr orig_compute;
+	local_matrix_store::ptr res;
+	size_t num_reads;
+public:
+	collect_portion_compute(portion_compute::ptr orig_compute) {
+		this->num_reads = 0;
+		this->orig_compute = orig_compute;
+	}
+
+	void add_EM_part(local_matrix_store::const_ptr part) {
+		parts.push_back(part);
+	}
+
+	void set_res_part(local_matrix_store::ptr res) {
+		this->res = res;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		num_reads++;
+		if (num_reads == parts.size()) {
+			size_t num_eles = res->get_num_rows() * res->get_num_cols();
+			orig_compute->run(res->get_raw_arr(),
+					num_eles * res->get_entry_size());
+		}
+	}
+};
+
+}
+
 local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols, std::shared_ptr<portion_compute> compute) const
+		size_t num_cols, portion_compute::ptr orig_compute) const
 {
-	// TODO
-	assert(0);
+	// If the virtual matrix store has been materialized, we should return
+	// the portion from the materialized store directly.
+	if (res)
+		return res->get_portion_async(start_row, start_col, num_rows, num_cols,
+				orig_compute);
+
+	/*
+	 * If the mapply virtual matrix is only on top of one matrix, we can
+	 * invoke the user's computation immediately once the required portion
+	 * of data is ready in memory.
+	 * However, if the mapply virtual matrix requires portions from multiple
+	 * matrices, we need to collect all the portions and invoke user's
+	 * computation only when all portions are ready.
+	 */
+	portion_compute::ptr compute;
+	collect_portion_compute *collect_compute = NULL;
+	if (num_EM_mats <= 1)
+		compute = orig_compute;
+	else {
+		collect_compute = new collect_portion_compute(orig_compute);
+		compute = portion_compute::ptr(collect_compute);
+	}
+
+	std::vector<local_matrix_store::const_ptr> parts(in_mats.size());
+	if (is_wide()) {
+		assert(start_row == 0);
+		assert(num_rows == get_num_rows());
+		for (size_t i = 0; i < in_mats.size(); i++) {
+			parts[i] = in_mats[i]->get_portion_async(start_row, start_col,
+					in_mats[i]->get_num_rows(), num_cols, compute);
+			if (!in_mats[i]->is_in_mem() && collect_compute)
+				collect_compute->add_EM_part(parts[i]);
+		}
+	}
+	else {
+		assert(start_col == 0);
+		assert(num_cols == get_num_cols());
+		for (size_t i = 0; i < in_mats.size(); i++) {
+			parts[i] = in_mats[i]->get_portion_async(start_row, start_col,
+					num_rows, in_mats[i]->get_num_cols(), compute);
+			if (!in_mats[i]->is_in_mem() && collect_compute)
+				collect_compute->add_EM_part(parts[i]);
+		}
+	}
+
+	local_matrix_store::ptr ret;
+	if (store_layout() == matrix_layout_t::L_ROW)
+		ret = local_matrix_store::ptr(new lmapply_row_matrix_store(
+					parts, *op, start_row, start_col, num_rows, num_cols,
+					get_type(), parts.front()->get_node_id()));
+	else
+		ret = local_matrix_store::ptr(new lmapply_col_matrix_store(
+					parts, *op, start_row, start_col, num_rows, num_cols,
+					get_type(), parts.front()->get_node_id()));
+	if (collect_compute)
+		collect_compute->set_res_part(ret);
+	return ret;
 }
 
 matrix_store::const_ptr mapply_matrix_store::transpose() const
@@ -449,6 +542,19 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 	if (this->res)
 		ret->res = this->res->transpose();
 	return matrix_store::const_ptr(ret);
+}
+
+std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
+{
+	std::vector<safs::io_interface::ptr> ret;
+	for (size_t i = 0; i < in_mats.size(); i++) {
+		if (!in_mats[i]->is_in_mem()) {
+			const EM_object *obj = dynamic_cast<const EM_object *>(in_mats[i].get());
+			std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
+			ret.insert(ret.end(), tmp.begin(), tmp.end());
+		}
+	}
+	return ret;
 }
 
 }

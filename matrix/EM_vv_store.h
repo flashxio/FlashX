@@ -48,9 +48,9 @@ public:
 		return ptr(new EM_vv_store(offs, store));
 	}
 
-	virtual safs::io_interface::ptr create_io() {
+	virtual std::vector<safs::io_interface::ptr> create_ios() const {
 		printf("create I/O from %p in vv store\n", &get_data());
-		return dynamic_cast<EM_object &>(get_data()).create_io();
+		return dynamic_cast<const EM_object &>(get_data()).create_ios();
 	}
 
 	virtual vec_store::ptr shallow_copy() {

@@ -23,6 +23,7 @@
 #include "virtual_matrix_store.h"
 #include "dense_matrix.h"
 #include "mem_matrix_store.h"
+#include "EM_object.h"
 
 namespace fm
 {
@@ -32,10 +33,18 @@ namespace detail
 
 class portion_mapply_op;
 
-class mapply_matrix_store: public virtual_matrix_store
+/*
+ * This class represents the result matrix of mapply operations.
+ * It partially materializes a portion of the matrix when the portion
+ * is needed. The underlying matrices that mapply runs on can be both
+ * stored in memory and on disks. Therefore, this matrix should also
+ * expose the EM object interface.
+ */
+class mapply_matrix_store: public virtual_matrix_store, public EM_object
 {
 	matrix_layout_t layout;
-	std::vector<matrix_store::const_ptr> in_mats;
+	size_t num_EM_mats;
+	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
 	matrix_store::const_ptr res;
@@ -77,6 +86,8 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return layout;
 	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 };
 
 }

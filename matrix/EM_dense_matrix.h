@@ -93,7 +93,7 @@ public:
 					get_num_cols(), get_num_rows(), new_layout, get_type()));
 	}
 
-	virtual safs::io_interface::ptr create_io();
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,

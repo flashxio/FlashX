@@ -108,7 +108,8 @@ void io_worker_task::run()
 	std::vector<safs::io_interface::ptr> ios;
 	pthread_spin_lock(&lock);
 	for (auto it = EM_objs.begin(); it != EM_objs.end(); it++) {
-		ios.push_back((*it)->create_io());
+		std::vector<safs::io_interface::ptr> tmp = (*it)->create_ios();
+		ios.insert(ios.end(), tmp.begin(), tmp.end());
 	}
 	pthread_spin_unlock(&lock);
 

@@ -78,7 +78,7 @@ public:
 	/*
 	 * This creates an I/O instance for the current thread.
 	 */
-	virtual safs::io_interface::ptr create_io() = 0;
+	virtual std::vector<safs::io_interface::ptr> create_ios() const = 0;
 };
 
 template<class T>

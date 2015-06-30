@@ -129,7 +129,7 @@ public:
 	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
 			size_t ncol, bool byrow) const;
 
-	virtual safs::io_interface::ptr create_io();
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 
 	friend std::vector<EM_vec_store::ptr> sort(
 			const std::vector<EM_vec_store::const_ptr> &vecs);

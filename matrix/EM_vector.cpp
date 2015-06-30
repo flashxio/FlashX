@@ -540,9 +540,11 @@ vec_store::ptr EM_vec_store::sort_with_index()
 	assert(0);
 }
 
-safs::io_interface::ptr EM_vec_store::create_io()
+std::vector<safs::io_interface::ptr> EM_vec_store::create_ios() const
 {
-	return ios->create_io();
+	std::vector<safs::io_interface::ptr> ret(1);
+	ret[0] = ios->create_io();
+	return ret;
 }
 
 ///////////////////////////// Sort the vector /////////////////////////////////

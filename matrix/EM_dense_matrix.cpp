@@ -323,9 +323,11 @@ matrix_store::const_ptr EM_matrix_store::append_cols(
 	assert(0);
 }
 
-safs::io_interface::ptr EM_matrix_store::create_io()
+std::vector<safs::io_interface::ptr> EM_matrix_store::create_ios() const
 {
-	return ios->create_io();
+	std::vector<safs::io_interface::ptr> ret(1);
+	ret[0] = ios->create_io();
+	return ret;
 }
 
 vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
