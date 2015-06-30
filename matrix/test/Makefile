@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen
+	el2al al22d al2crs test-sort test-eigen test-dgemm test-oblas_dgemm
 
 trilinos: BlockDavidsonTpetra test-tpetra_multiply
 
@@ -68,11 +68,23 @@ test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 test-mkl_multiply: test-mkl_multiply.o
 	$(CXX) -o test-mkl_multiply test-mkl_multiply.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp
 
-test-mkl_dgemm.o: test-mkl_dgemm.cpp
-	$(CXX) -O3 -c test-mkl_dgemm.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
+test-mkl_dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -o test-mkl_dgemm.o -I/home/zhengda/intel/mkl/include/ -I. -fopenmp -DUSE_MKL
 
 test-mkl_dgemm: test-mkl_dgemm.o
 	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
+
+test-dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -I. -fopenmp
+
+test-dgemm: test-dgemm.o
+	$(CXX) -o test-dgemm test-dgemm.o -lcblas -lm -fopenmp -lm
+
+test-oblas_dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -o test-oblas_dgemm.o -I. -I/home/zhengda/local/include -fopenmp
+
+test-oblas_dgemm: test-oblas_dgemm.o
+	$(CXX) -o test-oblas_dgemm test-oblas_dgemm.o -lopenblas -lm -fopenmp -lm
 
 TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lepetra
 CXXFLAGS += -I../eigensolver
