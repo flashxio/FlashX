@@ -122,24 +122,37 @@ public:
 	 */
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
+	/*
+	 * These two versions get a portion of data from the matrix asynchronously.
+	 * When a local matrix store is returned, it's not guaranteed that the
+	 * data in the local matrix store is valid. The computation passed to
+	 * these two methods are invoked when the portion of data is loaded
+	 * in memory. During the time between returning from the methods and
+	 * the portion of data becomes available, it's users' responsibility
+	 * of keep the local matrix store alive.
+	 */
 	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const = 0;
 	virtual std::shared_ptr<local_matrix_store> get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) = 0;
+	/*
+	 * These versions fetches the portion of data. It's guaranteed that
+	 * the data in the returned local matrix store is valid.
+	 */
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const = 0;
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) = 0;
-	virtual void write_portion_async(
-			std::shared_ptr<const local_matrix_store> portion,
-			off_t start_row, off_t start_col) = 0;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) = 0;
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
