@@ -107,6 +107,64 @@ dense_matrix::ptr naive_multiply(const dense_matrix &m1, const dense_matrix &m2)
 	return dense_matrix::create(res_store);
 }
 
+dense_matrix::ptr blas_multiply(const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr tmp1 = m1.conv2(matrix_layout_t::L_COL);
+	dense_matrix::ptr tmp2 = m2.conv2(matrix_layout_t::L_COL);
+	tmp1->materialize_self();
+	tmp2->materialize_self();
+	detail::mem_col_matrix_store::ptr col_res = detail::mem_col_matrix_store::create(
+			tmp1->get_num_rows(), tmp2->get_num_cols(), get_scalar_type<double>());
+	detail::mem_matrix_store::const_ptr mem_m1;
+	detail::mem_matrix_store::const_ptr mem_m2;
+	if (tmp1->is_in_mem())
+		mem_m1 = detail::mem_matrix_store::cast(tmp1->get_raw_store());
+	else
+		mem_m1 = detail::EM_matrix_store::cast(tmp1->get_raw_store())->load();
+	if (tmp2->is_in_mem())
+		mem_m2 = detail::mem_matrix_store::cast(tmp2->get_raw_store());
+	else
+		mem_m2 = detail::EM_matrix_store::cast(tmp2->get_raw_store())->load();
+	assert(mem_m1->get_num_nodes() < 0);
+	assert(mem_m2->get_num_nodes() < 0);
+
+	detail::mem_col_matrix_store::const_ptr col_m1
+		= detail::mem_col_matrix_store::cast(mem_m1);
+	detail::mem_col_matrix_store::const_ptr col_m2
+		= detail::mem_col_matrix_store::cast(mem_m2);
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			mem_m1->get_num_rows(), mem_m2->get_num_cols(),
+			mem_m1->get_num_cols(), 1,
+			(const double *) col_m1->get_data().get_raw(),
+			mem_m1->get_num_rows(),
+			(const double *) col_m2->get_data().get_raw(),
+			mem_m2->get_num_rows(), 0,
+			(double *) col_res->get_data().get_raw(),
+			col_res->get_num_rows());
+	return dense_matrix::create(col_res);
+}
+
+struct approx_equal_func
+{
+public:
+	bool operator()(const char *raw1, const char *raw2) const {
+		double v1 = *(const double *) raw1;
+		double v2 = *(const double *) raw2;
+		double diff = v1 - v2;
+		if (diff == 0)
+			return true;
+
+		if (v1 < 0)
+			v1 = -v1;
+		if (v2 < 0)
+			v2 = -v2;
+		if (diff < 0)
+			diff = -diff;
+		diff /= std::min(v1, v2);
+		return diff < 1e-14;
+	}
+};
+
 template<class T>
 struct equal_func
 {
@@ -195,6 +253,16 @@ dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
 			return dense_matrix::create(nrow, ncol, layout,
 					type, set_row_long_operate(ncol), num_nodes, in_mem);
 	}
+	else if (type == get_scalar_type<double>()) {
+		if (layout == matrix_layout_t::L_COL)
+			return dense_matrix::create(nrow, ncol, layout,
+					get_scalar_type<size_t>(), set_col_long_operate(ncol),
+					num_nodes, in_mem)->cast_ele_type(get_scalar_type<double>());
+		else
+			return dense_matrix::create(nrow, ncol, layout,
+					get_scalar_type<size_t>(), set_row_long_operate(ncol),
+					num_nodes, in_mem)->cast_ele_type(get_scalar_type<double>());
+	}
 	else
 		return dense_matrix::ptr();
 }
@@ -282,6 +350,85 @@ void test_agg_col(int num_nodes)
 		assert(sum == 0);
 	else
 		assert(sum == (num_eles - 1) * num_eles / 2);
+}
+
+void test_multiply_double(int num_nodes)
+{
+	dense_matrix::ptr m1, m2, correct, res;
+
+	printf("Test multiplication on tall row matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == m1->is_in_mem());
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on tall row matrix X small column matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on tall column matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on tall column matrix X small column matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide row matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide row matrix X tall row matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide column matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide column matrix X tall row matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
 }
 
 void test_multiply_matrix(int num_nodes)
@@ -842,6 +989,7 @@ void test_EM_matrix(int num_nodes)
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_multiply_double(-1);
 	test_cast();
 	test_write2file();
 	test_apply();
@@ -871,6 +1019,8 @@ void test_mem_matrix(int num_nodes)
 	printf("test mem matrix\n");
 	in_mem = true;
 
+	matrix_val = matrix_val_t::SEQ;
+	test_multiply_double(-1);
 	test_cast();
 	test_write2file();
 	test_apply();
