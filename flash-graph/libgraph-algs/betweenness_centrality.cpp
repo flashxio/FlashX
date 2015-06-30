@@ -20,7 +20,6 @@
 #include <gperftools/profiler.h>
 #endif
 
-#include <limits>
 #include <vector>
 
 #include "thread.h"
