@@ -267,7 +267,6 @@ public:
 			size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, get_scalar_type<T>()) {
 		this->Bstore = Bstore;
-		assert(Bstore->store_layout() == matrix_layout_t::L_COL);
 		Abufs.resize(num_threads);
 		res_bufs.resize(num_threads);
 	}
@@ -289,28 +288,38 @@ void multiply_tall_op<T>::run(
 {
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const T *Amat = (const T *) Astore->get_raw_arr();
-	if (Amat == NULL || Astore->store_layout() != matrix_layout_t::L_COL) {
+	// Let's make sure all matrices have the same data layout as the result matrix.
+	if (Amat == NULL || Astore->store_layout() != out.store_layout()) {
 		detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
 				thread::get_curr_thread());
 		int thread_id = thread->get_pool_thread_id();
 		if (Abufs[thread_id] == NULL
 				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
-				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols())
-			const_cast<multiply_tall_op<T> *>(this)->Abufs[thread_id]
-				= detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_col_matrix_store(0, 0,
-							Astore->get_num_rows(), Astore->get_num_cols(),
-							Astore->get_type(), -1));
+				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
+			if (out.store_layout() == matrix_layout_t::L_COL)
+				const_cast<multiply_tall_op<T> *>(this)->Abufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_col_matrix_store(0, 0,
+								Astore->get_num_rows(), Astore->get_num_cols(),
+								Astore->get_type(), -1));
+			else
+				const_cast<multiply_tall_op<T> *>(this)->Abufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_row_matrix_store(0, 0,
+								Astore->get_num_rows(), Astore->get_num_cols(),
+								Astore->get_type(), -1));
+		}
 		Abufs[thread_id]->copy_from(*Astore);
 		Amat = (const T *) Abufs[thread_id]->get_raw_arr();
 	}
 	const T *Bmat = (const T *) Bstore->get_raw_arr();
+	assert(Bstore->store_layout() == out.store_layout());
 	assert(Amat);
 	assert(Bmat);
 
 	T *res_mat = (T *) out.get_raw_arr();
 	detail::local_matrix_store::ptr res_buf;
-	if (res_mat == NULL || out.store_layout() != matrix_layout_t::L_COL) {
+	if (res_mat == NULL) {
 		detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
 				thread::get_curr_thread());
 		int thread_id = thread->get_pool_thread_id();
@@ -326,11 +335,18 @@ void multiply_tall_op<T>::run(
 		res_mat = (T *) res_buf->get_raw_arr();
 	}
 
-	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore->get_num_rows(), Bstore->get_num_cols(),
-			Astore->get_num_cols(), 1, Amat,
-			Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
-			0, res_mat, out.get_num_rows());
+	if (out.store_layout() == matrix_layout_t::L_COL)
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_rows(), Bstore->get_num_cols(),
+				Astore->get_num_cols(), 1, Amat,
+				Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
+				0, res_mat, out.get_num_rows());
+	else
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_rows(), Bstore->get_num_cols(),
+				Astore->get_num_cols(), 1, Amat,
+				Astore->get_num_cols(), Bmat, Bstore->get_num_cols(),
+				0, res_mat, out.get_num_cols());
 	if (res_buf)
 		out.copy_from(*res_buf);
 }
@@ -343,15 +359,24 @@ class multiply_wide_op: public detail::portion_mapply_op
 	std::vector<detail::local_matrix_store::ptr> res_bufs;
 	size_t out_num_rows;
 	size_t out_num_cols;
+	matrix_layout_t Alayout;
+	matrix_layout_t Blayout;
 public:
-	multiply_wide_op(size_t num_threads, size_t out_num_rows,
-			size_t out_num_cols): detail::portion_mapply_op(
+	multiply_wide_op(size_t num_threads, size_t out_num_rows, size_t out_num_cols,
+			matrix_layout_t required_layout): detail::portion_mapply_op(
 				0, 0, get_scalar_type<T>()) {
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
 		res_bufs.resize(num_threads);
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
+		// We need to transpose the A matrix, so we want the data in the A matrix
+		// to be organized in the opposite layout to the required.
+		if (required_layout == matrix_layout_t::L_COL)
+			Alayout = matrix_layout_t::L_ROW;
+		else
+			Alayout = matrix_layout_t::L_COL;
+		Blayout = required_layout;
 	}
 
 	const std::vector<detail::local_matrix_store::ptr> &get_partial_results(
@@ -381,17 +406,23 @@ void multiply_wide_op<T>::run(
 
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const T *Amat = (const T *) Astore->get_raw_arr();
-	// We need to transpose the A matrix, so we want the data in the A matrix
-	// to be organized in row major.
-	if (Amat == NULL || Astore->store_layout() != matrix_layout_t::L_ROW) {
+	if (Amat == NULL || Astore->store_layout() != Alayout) {
 		if (Abufs[thread_id] == NULL
 				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
-				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols())
-			const_cast<multiply_wide_op<T> *>(this)->Abufs[thread_id]
-				= detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_row_matrix_store(0, 0,
-							Astore->get_num_rows(), Astore->get_num_cols(),
-							Astore->get_type(), -1));
+				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
+			if (Alayout == matrix_layout_t::L_ROW)
+				const_cast<multiply_wide_op<T> *>(this)->Abufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_row_matrix_store(0, 0,
+								Astore->get_num_rows(), Astore->get_num_cols(),
+								Astore->get_type(), -1));
+			else
+				const_cast<multiply_wide_op<T> *>(this)->Abufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_col_matrix_store(0, 0,
+								Astore->get_num_rows(), Astore->get_num_cols(),
+								Astore->get_type(), -1));
+		}
 		Abufs[thread_id]->copy_from(*Astore);
 		Amat = (const T *) Abufs[thread_id]->get_raw_arr();
 	}
@@ -399,36 +430,58 @@ void multiply_wide_op<T>::run(
 
 	detail::local_matrix_store::const_ptr Bstore = ins[1];
 	const T *Bmat = (const T *) Bstore->get_raw_arr();
-	if (Bmat == NULL || Bstore->store_layout() != matrix_layout_t::L_COL) {
+	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
 		if (Bbufs[thread_id] == NULL
 				|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
-				|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols())
-			const_cast<multiply_wide_op<T> *>(this)->Bbufs[thread_id]
-				= detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_col_matrix_store(0, 0,
-							Bstore->get_num_rows(), Bstore->get_num_cols(),
-							Bstore->get_type(), -1));
+				|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
+			if (Blayout == matrix_layout_t::L_COL)
+				const_cast<multiply_wide_op<T> *>(this)->Bbufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_col_matrix_store(0, 0,
+								Bstore->get_num_rows(), Bstore->get_num_cols(),
+								Bstore->get_type(), -1));
+			else
+				const_cast<multiply_wide_op<T> *>(this)->Bbufs[thread_id]
+					= detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_row_matrix_store(0, 0,
+								Bstore->get_num_rows(), Bstore->get_num_cols(),
+								Bstore->get_type(), -1));
+		}
 		Bbufs[thread_id]->copy_from(*Bstore);
 		Bmat = (const T *) Bbufs[thread_id]->get_raw_arr();
 	}
 	assert(Bmat);
 
 	if (res_bufs[thread_id] == NULL) {
-		const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
-			= detail::local_matrix_store::ptr(
-					new fm::detail::local_buf_col_matrix_store(0, 0,
-						out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+		if (Blayout == matrix_layout_t::L_COL)
+			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+				= detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_col_matrix_store(0, 0,
+							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+		else
+			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+				= detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_row_matrix_store(0, 0,
+							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
 		res_bufs[thread_id]->reset_data();
 	}
+	assert(res_bufs[thread_id]->store_layout() == Blayout);
 	T *res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
 	// The A matrix is the transpose of the matrix we need. Since the A matrix
 	// is stored in contiguous memory and is organized in row major, we can
 	// easily interpret it as its transpose by switching its #rows and #cols.
-	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore->get_num_cols(), Bstore->get_num_cols(),
-			Astore->get_num_rows(), 1, Amat,
-			Astore->get_num_cols(), Bmat, Bstore->get_num_rows(),
-			1, res_mat, out_num_rows);
+	if (Blayout == matrix_layout_t::L_COL)
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_cols(), Bstore->get_num_cols(),
+				Astore->get_num_rows(), 1, Amat,
+				Astore->get_num_cols(), Bmat, Bstore->get_num_rows(),
+				1, res_mat, out_num_rows);
+	else
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_cols(), Bstore->get_num_cols(),
+				Astore->get_num_rows(), 1, Amat,
+				Astore->get_num_rows(), Bmat, Bstore->get_num_cols(),
+				1, res_mat, out_num_cols);
 }
 
 }
@@ -436,6 +489,9 @@ void multiply_wide_op<T>::run(
 static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
+	if (out_layout == matrix_layout_t::L_NONE)
+		out_layout = m1.store_layout();
+
 	assert(m1.get_type() == get_scalar_type<double>());
 	assert(m2.get_type() == get_scalar_type<double>());
 	// We assume the right matrix is small, so we don't need to partition it.
@@ -446,10 +502,17 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 	// Although all data in local_right is stored in contiguous memory,
 	// get_raw_arr() may still return NULL. I have to make sure get_raw_arr()
 	// works in any way.
-	detail::local_buf_col_matrix_store::ptr tmp(
-			new detail::local_buf_col_matrix_store(0, 0,
-				local_right->get_num_rows(), local_right->get_num_cols(),
-				local_right->get_type(), -1));
+	detail::local_matrix_store::ptr tmp;
+	if (out_layout == matrix_layout_t::L_COL)
+		tmp = detail::local_matrix_store::ptr(
+				new detail::local_buf_col_matrix_store(0, 0,
+					local_right->get_num_rows(), local_right->get_num_cols(),
+					local_right->get_type(), -1));
+	else
+		tmp = detail::local_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(0, 0,
+					local_right->get_num_rows(), local_right->get_num_cols(),
+					local_right->get_type(), -1));
 	tmp->copy_from(*local_right);
 	local_right = tmp;
 
@@ -467,12 +530,21 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
+	matrix_layout_t required_layout;
+	// If both input matrices have the same data layout, it's easy.
+	if (m1.store_layout() == m2.store_layout())
+		required_layout = m1.store_layout();
+	// If they are different, we convert the smaller matrix.
+	else if (m1.get_num_rows() * m1.get_num_cols()
+			> m2.get_num_rows() * m2.get_num_cols())
+		required_layout = m1.store_layout();
+	else
+		required_layout = m2.store_layout();
+	if (out_layout == matrix_layout_t::L_NONE)
+		out_layout = required_layout;
+
 	assert(m1.get_type() == get_scalar_type<double>());
 	assert(m2.get_type() == get_scalar_type<double>());
-	// This matrix is small. We can always keep it in memory.
-	detail::matrix_store::ptr res = detail::matrix_store::create(
-			m1.get_num_rows(), m2.get_num_cols(), matrix_layout_t::L_COL,
-			m1.get_type(), -1, true);
 
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
@@ -483,18 +555,27 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 	assert(mats[0]);
 	mats[1] = m2.get_raw_store();
 	assert(mats[1]);
+	size_t out_num_rows = m1.get_num_rows();
+	size_t out_num_cols = m2.get_num_cols();
 	std::shared_ptr<multiply_wide_op<double> > op(new multiply_wide_op<double> (
-				nthreads, res->get_num_rows(), res->get_num_cols()));
-	__mapply_portion(mats, op, out_layout);
+				nthreads, out_num_rows, out_num_cols, required_layout));
+	__mapply_portion(mats, op, required_layout);
 	std::vector<detail::local_matrix_store::ptr> local_ms
 		= op->get_partial_results();
 	assert(local_ms.size() == nthreads);
 
 	// Aggregate the results from omp threads.
-	res->reset_data();
-	detail::local_matrix_store::ptr local_res = res->get_portion(0);
-	assert(local_res->get_num_rows() == res->get_num_rows()
-			&& local_res->get_num_cols() == res->get_num_cols());
+	// This matrix is small. We can always keep it in memory.
+	detail::local_matrix_store::ptr local_res;
+	if (required_layout == matrix_layout_t::L_ROW)
+		local_res = detail::local_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(0, 0,
+					out_num_rows, out_num_cols, m1.get_type(), -1));
+	else
+		local_res = detail::local_matrix_store::ptr(
+				new detail::local_buf_col_matrix_store(0, 0,
+					out_num_rows, out_num_cols, m1.get_type(), -1));
+	local_res->reset_data();
 	const bulk_operate &add = get_scalar_type<double>().get_basic_ops().get_add();
 	for (size_t j = 0; j < local_ms.size(); j++) {
 		// It's possible that the local matrix store doesn't exist
@@ -502,18 +583,22 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 		if (local_ms[j])
 			detail::mapply2(*local_res, *local_ms[j], add, *local_res);
 	}
-	if (res->store_layout() == out_layout)
-		return dense_matrix::create(res);
-	else
-		return dense_matrix::create(res)->conv2(out_layout);
+
+	detail::matrix_store::ptr res = detail::matrix_store::create(out_num_rows,
+			out_num_cols, out_layout, m1.get_type(), -1, true);
+	detail::local_matrix_store::ptr tmp = res->get_portion(0);
+	assert(tmp->get_num_rows() == res->get_num_rows()
+			&& tmp->get_num_cols() == res->get_num_cols());
+	// This works for in-mem matrix. TODO Maybe it's not the best way of
+	// copying data to the output matrix.
+	tmp->copy_from(*local_res);
+	return dense_matrix::create(res);
 }
 
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout, bool use_blas) const
 {
 	if (get_type() == get_scalar_type<double>() && use_blas) {
-		if (out_layout == matrix_layout_t::L_NONE)
-			out_layout = matrix_layout_t::L_COL;
 		if (is_wide())
 			return blas_multiply_wide(*this, mat, out_layout);
 		else

@@ -362,6 +362,19 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
+	assert(res->is_virtual());
+	assert(res->is_in_mem() == m1->is_in_mem());
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on tall row matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == m1->is_in_mem());
 	correct = blas_multiply(*m1, *m2);
@@ -373,6 +386,7 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -382,6 +396,17 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on tall column matrix X small row matrix\n");
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -391,6 +416,7 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -400,6 +426,17 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide row matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -409,6 +446,7 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -418,6 +456,17 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func());
+
+	printf("Test multiplication on wide column matrix X tall column matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<double>());
+	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
+	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 
@@ -427,6 +476,7 @@ void test_multiply_double(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func());
 }
