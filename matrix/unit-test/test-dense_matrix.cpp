@@ -161,7 +161,7 @@ public:
 		if (diff < 0)
 			diff = -diff;
 		diff /= std::min(v1, v2);
-		return diff < 1e-14;
+		return diff < 1e-13;
 	}
 };
 
