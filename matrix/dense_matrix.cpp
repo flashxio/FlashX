@@ -512,6 +512,8 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout, bool use_blas) const
 {
 	if (get_type() == get_scalar_type<double>() && use_blas) {
+		if (out_layout == matrix_layout_t::L_NONE)
+			out_layout = matrix_layout_t::L_COL;
 		if (is_wide())
 			return blas_multiply_wide(*this, mat, out_layout);
 		else
