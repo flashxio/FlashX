@@ -1549,8 +1549,7 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 	// This matrix is small. We can always keep it in memory.
 	detail::matrix_store::ptr res = detail::matrix_store::create(
 			get_num_rows(), m.get_num_cols(), out_layout,
-			right_op->get_output_type(), get_data().get_num_nodes(),
-			true);
+			right_op->get_output_type(), -1, true);
 
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
