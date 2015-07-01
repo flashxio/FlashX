@@ -2012,6 +2012,9 @@ public:
 
 dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 {
+	if (store_layout() == layout)
+		return dense_matrix::create(get_raw_store());
+
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	conv_layout_op::const_ptr mapply_op(new conv_layout_op(layout,
