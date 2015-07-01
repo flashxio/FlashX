@@ -1025,6 +1025,8 @@ void test_mem_matrix(int num_nodes)
 	test_write2file();
 	test_apply();
 	test_conv_vec2mat();
+	test_sum_row_col(-1);
+	test_sum_row_col(num_nodes);
 
 	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
 		matrix_val = (matrix_val_t) i;
@@ -1050,8 +1052,6 @@ void test_mem_matrix(int num_nodes)
 		test_agg_row(num_nodes);
 		test_agg_sub_col(-1);
 		test_agg_sub_row(-1);
-		test_sum_row_col(-1);
-		test_sum_row_col(num_nodes);
 #if 0
 		test_rand_init();
 		test_conv_row_col();
