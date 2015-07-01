@@ -443,8 +443,15 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		= m2.get_data().get_portion(0);
 	assert(local_right->get_num_rows() == m2.get_num_rows()
 			&& local_right->get_num_cols() == m2.get_num_cols());
-	if (local_right->store_layout() == matrix_layout_t::L_ROW)
-		local_right = local_right->conv2(matrix_layout_t::L_COL);
+	// Although all data in local_right is stored in contiguous memory,
+	// get_raw_arr() may still return NULL. I have to make sure get_raw_arr()
+	// works in any way.
+	detail::local_buf_col_matrix_store::ptr tmp(
+			new detail::local_buf_col_matrix_store(0, 0,
+				local_right->get_num_rows(), local_right->get_num_cols(),
+				local_right->get_type(), -1));
+	tmp->copy_from(*local_right);
+	local_right = tmp;
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = m1.get_raw_store();
