@@ -25,6 +25,7 @@
 #include "matrix_io.h"
 #include "matrix_config.h"
 #include "hilbert_curve.h"
+#include "mem_worker_thread.h"
 
 namespace fm
 {
@@ -732,6 +733,10 @@ void init_flash_matrix(config_map::ptr configs)
 			init_count--;
 			throw e;
 		}
+		size_t num_nodes = matrix_conf.get_num_nodes();
+		size_t num_threads = matrix_conf.get_num_threads();
+		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
+				num_threads / num_nodes);
 	}
 }
 

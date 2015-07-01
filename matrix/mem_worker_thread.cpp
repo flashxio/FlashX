@@ -100,7 +100,8 @@ mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		int nthreads_per_node)
 {
-	global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
+	if (global_threads == NULL)
+		global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
 }
 
 void io_worker_task::run()
