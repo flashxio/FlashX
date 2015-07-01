@@ -1,12 +1,15 @@
 #include <stdio.h>
 #include <cblas.h>
 
+#include <boost/format.hpp>
+
 #include "common.h"
 
 #include "dense_matrix.h"
 #include "mem_matrix_store.h"
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
+#include "sparse_matrix.h"
 
 using namespace fm;
 
@@ -42,7 +45,8 @@ public:
 	}
 };
 
-dense_matrix::ptr test_MM_blas(size_t nrow, size_t ncol, size_t right_ncol)
+dense_matrix::ptr test_MM_blas(size_t nrow, size_t ncol, size_t right_ncol,
+		bool in_mem = true)
 {
 	printf("multiply matrix: M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
@@ -51,14 +55,15 @@ dense_matrix::ptr test_MM_blas(size_t nrow, size_t ncol, size_t right_ncol)
 	gettimeofday(&start, NULL);
 	dense_matrix::ptr m1
 		= dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL,
-				get_scalar_type<double>(), set_col_operate(ncol), num_nodes, true);
+				get_scalar_type<double>(), set_col_operate(ncol), num_nodes,
+				in_mem);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input column matrix\n",
 			time_diff(start, end));
 	dense_matrix::ptr m2
 		= dense_matrix::create(ncol, right_ncol, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), set_col_operate(right_ncol), num_nodes,
-				true);
+				in_mem);
 
 	gettimeofday(&start, NULL);
 	dense_matrix::ptr res1 = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -300,8 +305,12 @@ void matrix_mul_tests()
 
 	test_cast_d2ld(long_dim, short_dim);
 
-	printf("Multiplication of a large and wide matrix and a large tall matrix\n");
+	test_MM_blas(short_dim, long_dim, short_dim, false);
+	test_MM_blas(long_dim, short_dim, short_dim, false);
 	test_MM_blas(short_dim, long_dim, short_dim);
+	test_MM_blas(long_dim, short_dim, short_dim);
+
+	printf("Multiplication of a large and wide matrix and a large tall matrix\n");
 	// This multiplies a tall column-wise matrix with a small column-wise matrix.
 	res1 = test_MM1(short_dim, long_dim, short_dim);
 	// This multiplies a tall row-wise matrix with a small column-wise matrix.
@@ -310,7 +319,6 @@ void matrix_mul_tests()
 			detail::mem_matrix_store::cast(res2->get_raw_store()));
 
 	printf("Multiplication of a large and tall matrix and a small square matrix\n");
-	test_MM_blas(long_dim, short_dim, short_dim);
 	// This multiplies a tall column-wise matrix with a small column-wise matrix.
 	res1 = test_MM1(long_dim, short_dim, short_dim);
 	// This multiplies a tall row-wise matrix with a small column-wise matrix.
@@ -334,16 +342,20 @@ void matrix_vec_mul_tests()
 
 int main(int argc, char *argv[])
 {
-	int num_threads = 8;
-	if (argc >= 3) {
-		num_nodes = atoi(argv[1]);
-		num_threads = atoi(argv[2]);
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
 	}
-	int real_num_nodes = num_nodes > 0 ? num_nodes : 1;
-	detail::mem_thread_pool::init_global_mem_threads(real_num_nodes,
-			num_threads / real_num_nodes);
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+	if (matrix_conf.get_num_nodes() > 1)
+		num_nodes = matrix_conf.get_num_nodes();
 
 	matrix_mul_tests();
 	printf("\n\n");
 	matrix_vec_mul_tests();
+
+	destroy_flash_matrix();
 }
