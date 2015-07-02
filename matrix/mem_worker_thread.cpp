@@ -24,6 +24,7 @@
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
 #include "EM_object.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -70,6 +71,10 @@ void mem_thread_pool::wait4complete()
 		for (size_t j = 0; j < nthreads; j++)
 			threads[i][j]->wait4complete();
 	}
+
+	// After all workers complete, we should try to clear the memory buffers
+	// in each worker thread to reduce memory consumption.
+	detail::local_mem_buffer::clear_bufs();
 }
 
 size_t mem_thread_pool::get_num_pending() const

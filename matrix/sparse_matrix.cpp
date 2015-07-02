@@ -26,6 +26,7 @@
 #include "matrix_config.h"
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -735,6 +736,7 @@ void init_flash_matrix(config_map::ptr configs)
 		}
 		size_t num_nodes = matrix_conf.get_num_nodes();
 		size_t num_threads = matrix_conf.get_num_threads();
+		detail::local_mem_buffer::init();
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);
 	}
@@ -742,8 +744,11 @@ void init_flash_matrix(config_map::ptr configs)
 
 void destroy_flash_matrix()
 {
-	if (init_count.fetch_sub(1) == 1)
+	if (init_count.fetch_sub(1) == 1) {
 		safs::destroy_io_system();
+		detail::local_mem_buffer::destroy();
+		// TODO I should also destroy the worker thread here.
+	}
 }
 
 }
