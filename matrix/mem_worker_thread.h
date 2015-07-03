@@ -119,7 +119,7 @@ class io_worker_task: public thread_task
 	task_dispatcher::ptr dispatch;
 	int max_pending_ios;
 public:
-	io_worker_task(task_dispatcher::ptr dispatch, int max_pending_ios = 16) {
+	io_worker_task(task_dispatcher::ptr dispatch, int max_pending_ios = 4) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->dispatch = dispatch;
 		this->max_pending_ios = max_pending_ios;
