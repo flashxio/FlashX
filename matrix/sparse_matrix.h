@@ -273,6 +273,9 @@ public:
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
+		if (block.is_empty())
+			return;
+
 		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
 		size_t num_in_rows = std::min(block_size.get_num_cols(),
 				get_in_matrix().get_num_rows() - in_row_start);
@@ -319,6 +322,9 @@ public:
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
+		if (block.is_empty())
+			return;
+
 		size_t start_col_idx
 			= block.get_block_col_idx() * block_size.get_num_cols();
 		size_t start_row_idx

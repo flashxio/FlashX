@@ -169,6 +169,10 @@ public:
 	}
 
 	bool is_block_end(const rp_edge_iterator &it) const {
+		// If the block doesn't have data, it's always true.
+		if (is_empty())
+			return true;
+
 		size_t off = it.get_curr_addr() - row_parts;
 		return off
 			// There is an empty row in the end of a block to indicate
@@ -177,6 +181,7 @@ public:
 	}
 
 	rp_edge_iterator get_first_edge_iterator() const {
+		assert(!is_empty());
 		// Discard the const qualifier
 		// TODO I should make a const edge iterator
 		sparse_row_part *rp = (sparse_row_part *) row_parts;
