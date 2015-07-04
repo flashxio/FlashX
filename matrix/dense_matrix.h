@@ -172,6 +172,8 @@ public:
 
 	dense_matrix() {
 	}
+	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
 
 	virtual ~dense_matrix() {
 	}
@@ -292,11 +294,50 @@ public:
 	double norm2() const;
 };
 
+class col_vec: public dense_matrix
+{
+	col_vec(detail::matrix_store::const_ptr mat): dense_matrix(mat) {
+		assert(mat->get_num_cols() == 1);
+	}
+public:
+	template<class T>
+	static ptr create_randn(size_t len) {
+		dense_matrix::ptr mat = dense_matrix::create_randn<T>(0, 1, len, 1,
+				matrix_layout_t::L_COL);
+		return ptr(new col_vec(mat->get_raw_store()));
+	}
+	template<class T>
+	static ptr create_randu(size_t len) {
+		dense_matrix::ptr mat = dense_matrix::create_randu<T>(0, 1, len, 1,
+				matrix_layout_t::L_COL);
+		return ptr(new col_vec(mat->get_raw_store()));
+	}
+
+	col_vec(): dense_matrix(NULL) {
+	}
+
+	col_vec(size_t len, const scalar_type &type): dense_matrix(len, 1,
+			matrix_layout_t::L_COL, type) {
+	}
+
+	size_t get_length() const {
+		return get_num_rows();
+	}
+
+	col_vec operator=(const dense_matrix &mat) {
+		assert(mat.get_num_cols() == 1);
+		assign(mat);
+		return *this;
+	}
+};
+
 template<class T>
 static dense_matrix operator*(const dense_matrix &m, T val)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
 	return *ret;
 }
 
@@ -305,6 +346,8 @@ static dense_matrix operator*(T val, const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
 	return *ret;
 }
 
@@ -312,6 +355,17 @@ static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
+	return *ret;
+}
+
+static dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
+{
+	dense_matrix::ptr ret = m1.multiply(m2);
+	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
 	return *ret;
 }
 
@@ -319,6 +373,8 @@ static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.add(m2);
 	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
 	return *ret;
 }
 
@@ -326,6 +382,8 @@ static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.minus(m2);
 	assert(ret);
+	// TODO I shouldn't materialize immediately.
+	ret->materialize_self();
 	return *ret;
 }
 
@@ -346,39 +404,6 @@ static inline dense_matrix t(const dense_matrix &m)
 	assert(ret);
 	return *ret;
 }
-
-class col_vec: public dense_matrix
-{
-	col_vec(detail::matrix_store::const_ptr mat): dense_matrix(mat) {
-		assert(mat->get_num_cols() == 1);
-	}
-public:
-	template<class T>
-	static ptr create_randn(size_t len) {
-		dense_matrix::ptr mat = dense_matrix::create_randn<T>(0, 1, len, 1,
-				matrix_layout_t::L_COL);
-		return ptr(new col_vec(mat->store));
-	}
-	template<class T>
-	static ptr create_randu(size_t len) {
-		dense_matrix::ptr mat = dense_matrix::create_randu<T>(0, 1, len, 1,
-				matrix_layout_t::L_COL);
-		return ptr(new col_vec(mat->store));
-	}
-
-	col_vec(): dense_matrix(NULL) {
-	}
-
-	size_t get_length() const {
-		return get_num_rows();
-	}
-
-	col_vec operator=(const dense_matrix &mat) {
-		assert(mat.get_num_cols() == 1);
-		assign(mat);
-		return *this;
-	}
-};
 
 }
 

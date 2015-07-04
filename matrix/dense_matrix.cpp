@@ -1411,6 +1411,12 @@ dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 	return dense_matrix::create(ret);
 }
 
+dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, int num_nodes, bool in_mem)
+{
+	store = detail::matrix_store::ptr(new detail::one_val_matrix_store(
+				type.create_scalar(), nrow, ncol, layout, num_nodes));
+}
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes,
