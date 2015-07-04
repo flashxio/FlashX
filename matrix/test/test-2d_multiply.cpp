@@ -28,8 +28,10 @@ void test_SpMV(sparse_matrix::ptr mat)
 	detail::NUMA_vec_store::ptr in_vec = detail::NUMA_vec_store::create(
 			mat->get_num_cols(), matrix_conf.get_num_nodes(),
 			get_scalar_type<double>());
+#pragma omp parallel for
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
 		in_vec->set<double>(i, i);
+	printf("initialize the input vector\n");
 
 	// Initialize the output vector and allocate pages for it.
 	gettimeofday(&start, NULL);
@@ -45,9 +47,11 @@ void test_SpMV(sparse_matrix::ptr mat)
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
+	printf("start SpMV\n");
 	gettimeofday(&start, NULL);
 	mat->multiply<double>(*in_vec, *out);
 	gettimeofday(&end, NULL);
+	printf("SpMV completes\n");
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -169,6 +173,7 @@ int main(int argc, char *argv[])
 		index = SpM_2d_index::safs_load(index_file);
 	else
 		index = SpM_2d_index::load(index_file);
+	printf("load the matrix index\n");
 
 	sparse_matrix::ptr mat;
 	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
@@ -178,6 +183,7 @@ int main(int argc, char *argv[])
 	else
 		mat = sparse_matrix::create(index,
 				SpM_2d_storage::load(matrix_file, index));
+	printf("load the matrix image\n");
 
 	if (mat_width == 1)
 		test_SpMV(mat);
