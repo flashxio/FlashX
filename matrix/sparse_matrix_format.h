@@ -281,6 +281,7 @@ public:
 	static ptr load(const std::string &idx_file);
 	static ptr safs_load(const std::string &idx_file);
 
+	void verify() const;
 	size_t get_num_block_rows() const;
 	void dump(const std::string &file) const;
 	void safs_dump(const std::string &file) const;
@@ -322,6 +323,8 @@ public:
 			SpM_2d_index::ptr index);
 	static ptr create(const matrix_header &header, const vector_vector &vv,
 			SpM_2d_index::ptr index);
+
+	static void verify(SpM_2d_index::ptr index, const std::string &mat_file);
 
 	block_row_iterator get_block_row_it(size_t idx) const {
 		char *start = data.get() + index->get_block_row_off(idx);

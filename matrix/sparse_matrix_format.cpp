@@ -62,6 +62,16 @@ void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 	rparts_size += part_size;
 }
 
+void SpM_2d_index::verify() const
+{
+	header.verify();
+	off_t off = offs[0];
+	for (size_t i = 1; i < get_num_entries(); i++) {
+		assert(off < offs[i]);
+		off = offs[i];
+	}
+}
+
 SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,
 		const std::vector<off_t> &offs)
 {
@@ -311,6 +321,51 @@ safs::file_io_factory::shared_ptr SpM_2d_storage::create_io_factory() const
 {
 	return safs::file_io_factory::shared_ptr(new safs::in_mem_io_factory(
 				data, mat_file_id, mat_name));
+}
+
+void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file)
+{
+	index->verify();
+
+	assert(safs::native_file(mat_file).exist());
+	FILE *f = fopen(mat_file.c_str(), "r");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
+			% mat_file % strerror(errno);
+		return;
+	}
+
+	printf("There are %ld block rows\n", index->get_num_block_rows());
+	block_2d_size block_size = index->get_header().get_2d_block_size();
+	printf("block size: %ld, %ld\n", block_size.get_num_rows(),
+			block_size.get_num_cols());
+	for (size_t i = 0; i < index->get_num_block_rows(); i++) {
+		off_t off = index->get_block_row_off(i);
+		size_t size = index->get_block_row_off(i + 1) - index->get_block_row_off(i);
+		void *data = malloc(size);
+		int seek_ret = fseek(f, off, SEEK_SET);
+		assert(seek_ret == 0);
+		size_t ret = fread(data, size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
+				% mat_file % strerror(errno);
+			fclose(f);
+			return;
+		}
+		block_row_iterator it((const sparse_block_2d *) data,
+				(const sparse_block_2d *) (((char *) data) + size));
+		size_t tot_brow_size = 0;
+		while (it.has_next()) {
+			const sparse_block_2d &block = it.next();
+			tot_brow_size += block.get_size();
+			if (block.is_empty())
+				continue;
+			block.verify(block_size);
+		}
+		assert(tot_brow_size == size);
+		free(data);
+	}
+	fclose(f);
 }
 
 }
