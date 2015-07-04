@@ -32,8 +32,7 @@ local_mem_buffer::~local_mem_buffer()
 	size_t num_bufs = 0;
 	for (auto it = bufs.begin(); it != bufs.end(); it++)
 		num_bufs += it->second.size();
-	printf("There are %ld bufs, %ld allocs\n", num_bufs, num_allocs);
-	assert(num_bufs == num_allocs);
+	assert(num_bufs + num_frees == num_allocs);
 }
 
 namespace
