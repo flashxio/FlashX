@@ -174,6 +174,14 @@ void block_compute_task::run(char *buf, size_t size)
 	off_t orig_off = io.get_loc().get_offset();
 	off_t local_off = orig_off - ROUND_PAGE(orig_off);
 	assert(local_off + io.get_size() <= size);
+	size_t block_row_start
+		= io.get_top_left().get_row_idx() / block_size.get_num_rows();
+	size_t num_block_rows
+		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
+	assert(io.get_top_left().get_col_idx() == 0);
+	size_t block_col_start = 0;
+	size_t num_block_cols
+		= ceil(((double) io.get_num_cols()) / block_size.get_num_cols());
 
 	// We access data in super blocks.
 	// A super block is a set of blocks organized in a square or
@@ -201,6 +209,10 @@ void block_compute_task::run(char *buf, size_t size)
 					continue;
 				}
 				const sparse_block_2d &b = its[i].get_curr();
+				assert(b.get_block_row_idx() >= block_row_start
+						&& b.get_block_row_idx() < block_row_start + num_block_rows);
+				assert(b.get_block_col_idx() >= block_col_start
+						&& b.get_block_col_idx() < block_col_start + num_block_cols);
 				assert(b.get_block_col_idx() >= sb_col_idx + j);
 				if (b.get_block_col_idx() == sb_col_idx + j) {
 					blocks[idx] = &b;
