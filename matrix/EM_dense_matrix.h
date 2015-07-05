@@ -75,6 +75,7 @@ public:
 	 * Load the EM matrix to memory.
 	 */
 	std::shared_ptr<mem_matrix_store> load() const;
+	bool copy_from(matrix_store::const_ptr mat);
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
