@@ -94,6 +94,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 				mat_width, matrix_conf.get_num_nodes(),
 				get_scalar_type<double>());
 	in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
+	printf("set input data\n");
 
 	// Initialize the output matrix and allocate pages for it.
 	detail::NUMA_row_tall_matrix_store::ptr out
@@ -101,14 +102,17 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 				mat_width, matrix_conf.get_num_nodes(),
 				get_scalar_type<double>());
 	out->reset_data();
+	printf("reset output data\n");
 
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
+	printf("Start SpMM\n");
 	gettimeofday(&start, NULL);
 	mat->multiply<double>(*in, *out);
 	gettimeofday(&end, NULL);
+	printf("SpMM completes\n");
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
