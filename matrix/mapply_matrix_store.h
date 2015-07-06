@@ -88,6 +88,8 @@ public:
 	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+
+	virtual std::string get_name() const;
 };
 
 }

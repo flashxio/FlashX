@@ -73,7 +73,8 @@ public:
 }
 
 EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
-		const scalar_type &type): matrix_store(nrow, ncol, false, type)
+		const scalar_type &type): matrix_store(nrow, ncol, false,
+			type), mat_id(mat_counter++)
 {
 	this->layout = layout;
 	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());

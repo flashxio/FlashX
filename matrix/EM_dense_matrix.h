@@ -41,6 +41,8 @@ class mem_matrix_store;
 
 class EM_matrix_store: public matrix_store, public EM_object
 {
+	const size_t mat_id;
+
 	matrix_layout_t layout;
 	file_holder::ptr holder;
 	io_set::ptr ios;
@@ -49,7 +51,8 @@ class EM_matrix_store: public matrix_store, public EM_object
 			const scalar_type &type);
 	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 			size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type): matrix_store(nrow, ncol, false, type) {
+			const scalar_type &type): matrix_store(nrow, ncol, false,
+				type), mat_id(mat_counter++) {
 		this->layout = layout;
 		this->holder = holder;
 		this->ios = ios;
@@ -76,6 +79,11 @@ public:
 	 */
 	std::shared_ptr<mem_matrix_store> load() const;
 	bool copy_from(matrix_store::const_ptr mat);
+
+	virtual std::string get_name() const {
+		return (boost::format("EM_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
+			% get_num_cols()).str();
+	}
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);

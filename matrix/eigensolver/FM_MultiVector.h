@@ -442,6 +442,8 @@ public:
 			% name % normvec.size();
 		verify();
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
+			printf("materialize %s on the fly\n",
+					mat->get_block(i)->get_data().get_name().c_str());
 			fm::vector::ptr res = mat->get_block(i)->col_norm2();
 			const fm::detail::smp_vec_store &smp_res
 				= dynamic_cast<const fm::detail::smp_vec_store &>(res->get_data());

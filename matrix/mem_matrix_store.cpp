@@ -35,6 +35,12 @@ namespace detail
 
 const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
 
+mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
+		const scalar_type &type): matrix_store(nrow, ncol, true,
+			type), mat_id(mat_counter++)
+{
+}
+
 vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
 {
 	assert(data.get_num_bytes()

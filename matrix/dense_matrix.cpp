@@ -279,6 +279,11 @@ public:
 		assert(0);
 		return detail::portion_mapply_op::const_ptr();
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return (mats[0]->get_name() + "*") + Bstore->get_name();
+	}
 };
 
 template<class T>
@@ -391,6 +396,12 @@ public:
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		assert(0);
 		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 2);
+		return (mats[0]->get_name() + "*") + mats[1]->get_name();
 	}
 };
 
@@ -645,6 +656,12 @@ public:
 	detail::portion_mapply_op::const_ptr transpose() const {
 		return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
 					var, get_out_num_cols(), get_out_num_rows()));
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return mats[0]->get_name() + " * scalar";
 	}
 };
 
@@ -1123,6 +1140,12 @@ public:
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return mats[0]->get_name() + "* vec";
+	}
 };
 
 class scale_row_op: public detail::portion_mapply_op
@@ -1138,6 +1161,12 @@ public:
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("vec *") + mats[0]->get_name();
+	}
 };
 
 detail::portion_mapply_op::const_ptr scale_col_op::transpose() const
@@ -1268,6 +1297,11 @@ public:
 		return portion_mapply_op::const_ptr(new cast_type_op(get_out_num_rows(),
 					get_out_num_cols(), get_output_type()));
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("cast(") + mats[0]->get_name() + ")";
+	}
 };
 
 void cast_type_op::run(
@@ -1337,6 +1371,11 @@ public:
 		return portion_mapply_op::const_ptr(new mapply2_op(op,
 					get_out_num_cols(), get_out_num_rows()));
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 2);
+		return std::string("op(") + mats[0]->get_name() + ", " + mats[1]->get_name() + ")";
+	}
 };
 
 void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1386,6 +1425,11 @@ public:
 	virtual portion_mapply_op::const_ptr transpose() const {
 		return portion_mapply_op::const_ptr(new sapply_op(op, get_out_num_cols(),
 					get_out_num_rows()));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("uop(") + mats[0]->get_name() + ")";
 	}
 };
 
@@ -1539,6 +1583,12 @@ public:
 		assert(0);
 		return portion_mapply_op::const_ptr();
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("inner_prod(") + mats[0]->get_name() + ","
+			+ local_right->get_name() + ")";
+	}
 };
 
 void inner_prod_tall_op::run(
@@ -1607,6 +1657,12 @@ public:
 		// the output matrix immediately.
 		assert(0);
 		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("inner_prod(") + mats[0]->get_name()
+			+ "," + mats[1]->get_name() + ")";
 	}
 };
 
@@ -1821,6 +1877,11 @@ public:
 		return portion_mapply_op::const_ptr(new matrix_margin_agg_op(
 					new_margin, op, get_out_num_cols(), get_out_num_rows()));
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("agg(") + mats[0]->get_name() + ")";
+	}
 };
 
 }
@@ -1973,6 +2034,11 @@ public:
 		return portion_mapply_op::const_ptr(new matrix_margin_apply_op(
 					new_margin, op, get_out_num_cols(), get_out_num_rows()));
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("apply(") + mats[0]->get_name() + ")";
+	}
 };
 
 }
@@ -2105,6 +2171,11 @@ public:
 			new_layout = matrix_layout_t::L_COL;
 		return detail::portion_mapply_op::const_ptr(new conv_layout_op(new_layout,
 					get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("conv_layout(") + mats[0]->get_name() + ")";
 	}
 };
 

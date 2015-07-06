@@ -72,6 +72,8 @@ public:
 	virtual void run(
 			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
 			local_matrix_store &out) const = 0;
+	virtual std::string to_string(
+			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 
 	size_t get_out_num_rows() const {
 		return out_num_rows;

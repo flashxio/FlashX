@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "matrix_store.h"
 #include "raw_data_array.h"
 
@@ -38,6 +40,7 @@ class vec_store;
  */
 class mem_matrix_store: public matrix_store
 {
+	const size_t mat_id;
 protected:
 	bool write_header(FILE *f) const;
 public:
@@ -55,8 +58,11 @@ public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes);
 
-	mem_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
+	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
+
+	virtual std::string get_name() const {
+		return (boost::format("mem_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
+			% get_num_cols()).str();
 	}
 
 	virtual void reset_data();

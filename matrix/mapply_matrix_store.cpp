@@ -557,6 +557,11 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 	return ret;
 }
 
+std::string mapply_matrix_store::get_name() const
+{
+	return op->to_string(in_mats);
+}
+
 }
 
 }

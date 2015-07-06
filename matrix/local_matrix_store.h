@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <boost/format.hpp>
 
 #include "comm_exception.h"
 #include "log.h"
@@ -168,6 +169,12 @@ public:
 	off_t get_global_start_col() const {
 		return global_start_col + get_local_start_col();
 	}
+
+	virtual std::string get_name() const {
+		return (boost::format("local_mat(%1%,%2%)") % get_num_rows()
+			% get_num_cols()).str();
+	}
+
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols);
 	virtual void reset_size() {

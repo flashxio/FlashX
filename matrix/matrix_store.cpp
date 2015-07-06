@@ -28,6 +28,8 @@ namespace fm
 namespace detail
 {
 
+std::atomic<size_t> matrix_store::mat_counter;
+
 matrix_store::ptr matrix_store::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes,
 		bool in_mem)
@@ -36,6 +38,15 @@ matrix_store::ptr matrix_store::create(size_t nrow, size_t ncol,
 		return mem_matrix_store::create(nrow, ncol, layout, type, num_nodes);
 	else
 		return EM_matrix_store::create(nrow, ncol, layout, type);
+}
+
+matrix_store::matrix_store(size_t nrow, size_t ncol, bool in_mem,
+		const scalar_type &_type): type(_type)
+{
+	this->nrow = nrow;
+	this->ncol = ncol;
+	this->in_mem = in_mem;
+	this->entry_size = type.get_size();
 }
 
 size_t matrix_store::get_num_portions() const

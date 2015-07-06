@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <atomic>
 
 #include "matrix_header.h"
 #include "generic_type.h"
@@ -51,6 +52,8 @@ class matrix_store
 	// The type is a reference. It makes the dense matrix object uncopiable.
 	// Maybe this is what we want.
 	const scalar_type &type;
+protected:
+	static std::atomic<size_t> mat_counter;
 public:
 	typedef std::shared_ptr<matrix_store> ptr;
 	typedef std::shared_ptr<const matrix_store> const_ptr;
@@ -59,12 +62,7 @@ public:
 			const scalar_type &type, int num_nodes, bool in_mem);
 
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
-			const scalar_type &_type): type(_type) {
-		this->nrow = nrow;
-		this->ncol = ncol;
-		this->in_mem = in_mem;
-		this->entry_size = type.get_size();
-	}
+			const scalar_type &_type);
 
 	virtual ~matrix_store() {
 	}
@@ -106,6 +104,8 @@ public:
 	bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
+
+	virtual std::string get_name() const = 0;
 
 	virtual matrix_layout_t store_layout() const = 0;
 

@@ -75,12 +75,14 @@ public:
 		mats[block_idx]->assign(*mat);
 		if (mirrored_mat->is_virtual()) {
 			num_col_writes += mirrored_mat->get_num_cols();
+			printf("materialize %s\n", mirrored_mat->get_data().get_name().c_str());
+			mirrored_mat->materialize_self();
 		}
 		if (mat->is_virtual()) {
 			num_col_writes += mat->get_num_cols();
+			printf("materialize %s\n", mat->get_data().get_name().c_str());
+			mat->materialize_self();
 		}
-		mirrored_mat->materialize_self();
-		mat->materialize_self();
 
 		detail::NUMA_col_tall_matrix_store &mirrored_numa_mat
 			= const_cast<detail::NUMA_col_tall_matrix_store &>(
@@ -136,8 +138,9 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	fm::dense_matrix::const_ptr block = get_block(block_idx);
 	if (block->is_virtual()) {
 		num_col_writes += block->get_num_cols();
+		printf("materialize %s\n", block->get_data().get_name().c_str());
+		block->materialize_self();
 	}
-	block->materialize_self();
 	return block->get_cols(offs);
 }
 
@@ -177,8 +180,9 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		dense_matrix::ptr block = get_block(block_start);
 		if (block->is_virtual()) {
 			num_col_writes += block->get_num_cols();
+			printf("materialize %s\n", block->get_data().get_name().c_str());
+			block->materialize_self();
 		}
-		block->materialize_self();
 		ret->set_block(0, block->get_cols(local_offs));
 		return ret;
 	}
@@ -300,6 +304,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			in = in->conv2(matrix_layout_t::L_ROW);
 		if (in->is_virtual()) {
 			num_col_writes += in->get_num_cols();
+			printf("materialize %s\n", in->get_data().get_name().c_str());
 			in->materialize_self();
 		}
 		res = multiply.run(in);
@@ -344,6 +349,25 @@ public:
 			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
 			fm::detail::local_matrix_store &out) const;
 	virtual fm::detail::portion_mapply_op::const_ptr transpose() const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		std::string str;
+		if (A_num_blocks == 1)
+			str = mats[0]->get_name();
+		else {
+			str = "cat(";
+			for (size_t i = 0; i < A_num_blocks - 1; i++)
+				str += mats[i]->get_name() + ",";
+			str += mats[A_num_blocks - 1]->get_name() + ")";
+		}
+		if (mats.size() == A_num_blocks)
+			return (boost::format("%1% * %2% * %3%") % alpha % str
+					% Bstore->get_name()).str();
+		else
+			return (boost::format("%1% * %2% * %3% + %4% * %5%") % alpha % str
+					% Bstore->get_name() % beta % mats[A_num_blocks]->get_name()).str();
+	}
 };
 
 template<class T>
@@ -370,6 +394,10 @@ public:
 	}
 	virtual fm::detail::portion_mapply_op::const_ptr transpose() const {
 		return fm::detail::portion_mapply_op::const_ptr(new gemm_op<T>(op));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return op.to_string(mats);
 	}
 };
 
@@ -571,13 +599,15 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 			dense_matrix::const_ptr mv_block = mv.get_block(j);
 			if (mv_block->is_virtual()) {
 				num_col_writes += mv_block->get_num_cols();
+				printf("materialize %s\n", mv_block->get_data().get_name().c_str());
+				mv_block->materialize_self();
 			}
-			mv_block->materialize_self();
 			dense_matrix::const_ptr block = get_block(i);
 			if (block->is_virtual()) {
 				num_col_writes += block->get_num_cols();
+				printf("materialize %s\n", block->get_data().get_name().c_str());
+				block->materialize_self();
 			}
-			block->materialize_self();
 			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
 			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
 					matrix_layout_t::L_ROW);
@@ -658,6 +688,7 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			// TODO We might want the uninitialized columns to be virtualized.
 			if (block->is_virtual()) {
 				num_col_writes += block->get_num_cols();
+				printf("materialize %s\n", block->get_data().get_name().c_str());
 				block->materialize_self();
 			}
 			detail::NUMA_col_tall_matrix_store &numa_mat
