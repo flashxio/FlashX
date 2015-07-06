@@ -441,8 +441,13 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
 			% name % normvec.size();
 		verify();
-		for (size_t i = 0; i < mat->get_num_cols(); i++)
-			normvec[i] = mat->get_col(i)->norm2();
+		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
+			fm::vector::ptr res = mat->get_block(i)->col_norm2();
+			const fm::detail::smp_vec_store &smp_res
+				= dynamic_cast<const fm::detail::smp_vec_store &>(res->get_data());
+			for (size_t j = 0; j < smp_res.get_length(); j++)
+				normvec[i * mat->get_block_size() + j] = smp_res.get<ScalarType>(j);
+		}
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
 #ifdef FM_VERIFY
 		std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> normvec1(

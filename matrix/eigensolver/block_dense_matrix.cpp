@@ -397,7 +397,6 @@ static void copy_from_blocks(block_iterator begin, block_iterator end,
 		assert(res_store.get_global_start_col()
 				== col_ins[i]->get_global_start_col());
 		assert(res_store.get_type() == col_ins[i]->get_type());
-		assert(res_store.get_node_id() == col_ins[i]->get_node_id());
 		assert(res_store.get_num_rows() == col_ins[i]->get_num_rows());
 
 		size_t block_size = col_ins[i]->get_num_cols();
