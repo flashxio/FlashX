@@ -582,6 +582,11 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 				A_num_blocks, C_num_blocks, d_alpha, d_beta,
 				this->get_num_rows(), this->get_num_cols()));
 	vecs->mats[0] = mapply_portion(mats, op, matrix_layout_t::L_COL);
+	if (A.get_num_blocks() > 2) {
+		num_col_writes += vecs->mats[0]->get_num_cols();
+		printf("materialize %s\n", vecs->mats[0]->get_data().get_name().c_str());
+		vecs->mats[0]->materialize_self();
+	}
 	return vecs;
 }
 
