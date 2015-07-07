@@ -20,6 +20,7 @@
 #include <cblas.h>
 
 #include "block_dense_matrix.h"
+#include "dotp_matrix_store.h"
 
 using namespace fm;
 size_t num_col_writes = 0;
@@ -136,12 +137,25 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	std::vector<off_t> offs(1);
 	offs[0] = local_col_idx;
 	fm::dense_matrix::const_ptr block = get_block(block_idx);
+	fm::dense_matrix::const_ptr ret;
 	if (block->is_virtual()) {
-		num_col_writes += block->get_num_cols();
-		printf("materialize %s\n", block->get_data().get_name().c_str());
-		block->materialize_self();
+		// We need to handle the special case explicitly.
+		const detail::dotp_matrix_store *dotp
+			= dynamic_cast<const detail::dotp_matrix_store *>(
+					block->get_raw_store().get());
+		if (dotp)
+			ret = dense_matrix::create(dotp->get_cols(offs));
+		else {
+			num_col_writes += block->get_num_cols();
+			printf("materialize %s\n", block->get_data().get_name().c_str());
+			block->materialize_self();
+			ret = block->get_cols(offs);
+		}
 	}
-	return block->get_cols(offs);
+	else
+		ret = block->get_cols(offs);
+	assert(ret);
+	return ret;
 }
 
 bool is_same_block(const std::vector<int> &index, size_t block_size)
@@ -178,12 +192,24 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
 				index.size(), index.size(), get_type());
 		dense_matrix::ptr block = get_block(block_start);
+		dense_matrix::ptr ret1;
 		if (block->is_virtual()) {
-			num_col_writes += block->get_num_cols();
-			printf("materialize %s\n", block->get_data().get_name().c_str());
-			block->materialize_self();
+			// We need to handle the special case explicitly.
+			const detail::dotp_matrix_store *dotp
+				= dynamic_cast<const detail::dotp_matrix_store *>(
+					block->get_raw_store().get());
+			if (dotp)
+				ret1 = dense_matrix::create(dotp->get_cols(local_offs));
+			else {
+				num_col_writes += block->get_num_cols();
+				printf("materialize %s\n", block->get_data().get_name().c_str());
+				block->materialize_self();
+				ret1 = block->get_cols(local_offs);
+			}
 		}
-		ret->set_block(0, block->get_cols(local_offs));
+		else
+			ret1 = block->get_cols(local_offs);
+		ret->set_block(0, ret1);
 		return ret;
 	}
 	else {
@@ -637,9 +663,10 @@ std::vector<block_col_set_t> get_col_index_blocks(const block_multi_vector &mv,
 		size_t block_idx = col_idx / block_size;
 		block_set.insert(block_idx);
 
+		dense_matrix::const_ptr tmp_mat = mv.get_col(i);
 		detail::vec_store::ptr col = const_cast<detail::NUMA_col_tall_matrix_store &>(
 					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-						mv.get_col(i)->get_data())).get_col_vec(0);
+						tmp_mat->get_data())).get_col_vec(0);
 		// Not in the same block
 		if (col_blocks.empty() || col_blocks.back()[0].first / block_size
 				!= block_idx) {

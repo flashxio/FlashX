@@ -42,6 +42,7 @@
 
 #include "mem_matrix_store.h"
 #include "dense_matrix.h"
+#include "dotp_matrix_store.h"
 
 static int MV_id;
 
@@ -395,8 +396,25 @@ public:
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
 		assert(fm_A.mat->get_num_rows() == this->mat->get_num_rows());
 		this->verify();
-		fm::dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
+
 		long double lalpha = alpha;
+		// This is a special case: we compute the dot product of a col vector
+		// with itself.
+		if (fm_A.mat->get_num_cols() == 1 && mat->get_num_cols() == 1) {
+			const fm::detail::sub_dotp_matrix_store *col1
+				= dynamic_cast<const fm::detail::sub_dotp_matrix_store *>(
+						fm_A.mat->get_block(0)->get_raw_store().get());
+			const fm::detail::sub_dotp_matrix_store *col2
+				= dynamic_cast<const fm::detail::sub_dotp_matrix_store *>(
+						mat->get_block(0)->get_raw_store().get());
+			if (col1 && col2
+					&& col1->get_orig_store() == col2->get_orig_store()) {
+				B(0, 0) = col1->get_col_dot(0) * lalpha;
+				return;
+			}
+		}
+
+		fm::dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
 #ifdef FM_VERIFY
 		ep_mat->MvTransMv(alpha, *fm_A.ep_mat, B);
@@ -444,11 +462,13 @@ public:
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			printf("materialize %s on the fly\n",
 					mat->get_block(i)->get_data().get_name().c_str());
-			fm::vector::ptr res = mat->get_block(i)->col_norm2();
-			const fm::detail::smp_vec_store &smp_res
-				= dynamic_cast<const fm::detail::smp_vec_store &>(res->get_data());
-			for (size_t j = 0; j < smp_res.get_length(); j++)
-				normvec[i * mat->get_block_size() + j] = smp_res.get<ScalarType>(j);
+			fm::detail::dotp_matrix_store::ptr dotp
+				= fm::detail::dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
+			mat->set_block(i, fm::dense_matrix::create(dotp));
+			std::vector<ScalarType> col_dots = dotp->get_col_dot_prods();
+			// TODO do I need long double here?
+			for (size_t j = 0; j < col_dots.size(); j++)
+				normvec[i * mat->get_block_size() + j] = std::sqrt(col_dots[j]);
 		}
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
 #ifdef FM_VERIFY
