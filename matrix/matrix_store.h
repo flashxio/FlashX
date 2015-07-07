@@ -156,14 +156,10 @@ public:
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
-		// TODO
-		assert(0);
 		return matrix_store::const_ptr();
 	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
-		// TODO
-		assert(0);
 		return matrix_store::const_ptr();
 	}
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const {
