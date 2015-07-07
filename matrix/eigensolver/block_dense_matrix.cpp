@@ -628,17 +628,9 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	for (size_t i = 0; i < get_num_blocks(); i++) {
 		for (size_t j = 0; j < mv.get_num_blocks(); j++) {
 			dense_matrix::const_ptr mv_block = mv.get_block(j);
-			if (mv_block->is_virtual()) {
-				num_col_writes += mv_block->get_num_cols();
-				printf("materialize %s\n", mv_block->get_data().get_name().c_str());
-				mv_block->materialize_self();
-			}
+			printf("materialize %s on the fly\n", mv_block->get_data().get_name().c_str());
 			dense_matrix::const_ptr block = get_block(i);
-			if (block->is_virtual()) {
-				num_col_writes += block->get_num_cols();
-				printf("materialize %s\n", block->get_data().get_name().c_str());
-				block->materialize_self();
-			}
+			printf("materialize %s on the fly\n", block->get_data().get_name().c_str());
 			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
 			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
 					matrix_layout_t::L_ROW);
