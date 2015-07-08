@@ -282,7 +282,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return (mats[0]->get_name() + "*") + Bstore->get_name();
+		return std::string("(") + (mats[0]->get_name()
+					+ "*") + Bstore->get_name() + std::string(")");
 	}
 };
 
@@ -401,7 +402,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 2);
-		return (mats[0]->get_name() + "*") + mats[1]->get_name();
+		return std::string("(") + (mats[0]->get_name()
+					+ "*") + mats[1]->get_name() + std::string(")");
 	}
 };
 
@@ -661,7 +663,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return mats[0]->get_name() + " * scalar";
+		return std::string("(") + mats[0]->get_name()
+			+ " * scalar" + std::string(")");
 	}
 };
 
@@ -1144,7 +1147,7 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return mats[0]->get_name() + "* vec";
+		return std::string("(") + mats[0]->get_name() + "* vec" + std::string(")");
 	}
 };
 
@@ -1165,7 +1168,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return std::string("vec *") + mats[0]->get_name();
+		return std::string("(") + std::string("vec *")
+			+ mats[0]->get_name() + std::string(")");
 	}
 };
 

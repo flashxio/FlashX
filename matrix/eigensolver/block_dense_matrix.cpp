@@ -388,10 +388,10 @@ public:
 			str += mats[A_num_blocks - 1]->get_name() + ")";
 		}
 		if (mats.size() == A_num_blocks)
-			return (boost::format("%1% * %2% * %3%") % alpha % str
+			return (boost::format("(%1% * %2% * %3%)") % alpha % str
 					% Bstore->get_name()).str();
 		else
-			return (boost::format("%1% * %2% * %3% + %4% * %5%") % alpha % str
+			return (boost::format("(%1% * %2% * %3% + %4% * %5%)") % alpha % str
 					% Bstore->get_name() % beta % mats[A_num_blocks]->get_name()).str();
 	}
 };
