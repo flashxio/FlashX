@@ -181,8 +181,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols);
-	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -263,8 +261,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols);
-	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -333,8 +329,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols);
-	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -396,8 +390,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols);
-	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
