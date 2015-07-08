@@ -60,6 +60,10 @@ public:
 				% orig_store->get_num_rows() % idxs.size()).str();
 	}
 
+	virtual size_t get_underlying_eles() const {
+		return orig_store->get_underlying_eles();
+	}
+
 	matrix_layout_t store_layout() const {
 		return orig_store->store_layout();
 	}
@@ -84,7 +88,6 @@ public:
 	virtual matrix_store::ptr materialize() const {
 		return matrix_store::ptr();
 	}
-
 };
 
 /*
@@ -166,6 +169,9 @@ public:
 
 	virtual int get_num_nodes() const {
 		return orig_store->get_num_nodes();
+	}
+	virtual size_t get_underlying_eles() const {
+		return orig_store->get_underlying_eles();
 	}
 };
 

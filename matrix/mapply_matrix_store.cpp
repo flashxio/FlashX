@@ -562,6 +562,17 @@ std::string mapply_matrix_store::get_name() const
 	return op->to_string(in_mats);
 }
 
+size_t mapply_matrix_store::get_underlying_eles() const
+{
+	// TODO this isn't accurate, because the input matrix stores may also be
+	// virtual matrix stores and they share the underlying physically
+	// materialized matrix stores.
+	size_t num = 0;
+	for (size_t i = 0; i < in_mats.size(); i++)
+		num += in_mats[i]->get_underlying_eles();
+	return num;
+}
+
 }
 
 }

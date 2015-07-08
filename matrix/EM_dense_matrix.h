@@ -80,6 +80,9 @@ public:
 	std::shared_ptr<mem_matrix_store> load() const;
 	bool copy_from(matrix_store::const_ptr mat);
 
+	virtual size_t get_underlying_eles() const {
+		return get_num_rows() * get_num_cols();
+	}
 	virtual std::string get_name() const {
 		return (boost::format("EM_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
 			% get_num_cols()).str();

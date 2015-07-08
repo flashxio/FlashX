@@ -105,6 +105,12 @@ public:
 		return get_num_cols() > get_num_rows();
 	}
 
+	/*
+	 * This method gets the number of underlying elements in the matrix store.
+	 * For a real matrix (its data has been materialized), it's #rows * #cols.
+	 * For a virtual matrix, the number varies.
+	 */
+	virtual size_t get_underlying_eles() const = 0;
 	virtual std::string get_name() const = 0;
 
 	virtual matrix_layout_t store_layout() const = 0;

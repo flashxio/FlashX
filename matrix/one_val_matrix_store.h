@@ -72,6 +72,10 @@ public:
 	virtual int get_num_nodes() const {
 		return num_nodes;
 	}
+
+	virtual size_t get_underlying_eles() const {
+		return 0;
+	}
 };
 
 }
