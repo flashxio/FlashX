@@ -26,6 +26,7 @@
 #include "local_matrix_store.h"
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
@@ -148,6 +149,10 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = -1;
 	// For a wide matrix
 	if (start_row == 0 && num_rows == get_num_rows())
@@ -200,6 +205,10 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = -1;
 	// For a tall matrix
 	if (start_col == 0 && num_cols == get_num_cols())
@@ -271,6 +280,9 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	std::vector<const char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++)
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -290,6 +302,9 @@ local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	std::vector<const char *> rows(num_rows);
 	for (size_t i = 0; i < num_rows; i++)
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();

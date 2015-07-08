@@ -22,6 +22,7 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
@@ -162,6 +163,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	// We have to retrieve the entire rows.
 	if (num_cols != get_num_cols() || start_col != 0)
 		return local_matrix_store::const_ptr();
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
 	size_t chunk_size = get_portion_size().first;
@@ -204,6 +209,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
 				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
@@ -238,6 +247,9 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::const_ptr();
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = data.front()->get_node_id(start_row);
 	std::vector<const char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++) {
@@ -295,6 +307,10 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 				start_row + num_rows);
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
 				cols, start_row, start_col, num_rows, num_cols, get_type(),
 				node_id));

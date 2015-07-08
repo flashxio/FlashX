@@ -21,6 +21,7 @@
 
 #include "block_dense_matrix.h"
 #include "dotp_matrix_store.h"
+#include "matrix_stats.h"
 
 using namespace fm;
 size_t num_col_writes = 0;
@@ -77,12 +78,16 @@ public:
 		if (mirrored_mat->is_virtual()) {
 			num_col_writes += mirrored_mat->get_num_cols();
 			printf("materialize %s\n", mirrored_mat->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			mirrored_mat->materialize_self();
+			detail::matrix_stats.print_diff(orig_stats);
 		}
 		if (mat->is_virtual()) {
 			num_col_writes += mat->get_num_cols();
 			printf("materialize %s\n", mat->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			mat->materialize_self();
+			detail::matrix_stats.print_diff(orig_stats);
 		}
 
 		detail::NUMA_col_tall_matrix_store &mirrored_numa_mat
@@ -148,7 +153,9 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 		else {
 			num_col_writes += block->get_num_cols();
 			printf("materialize %s\n", block->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			block->materialize_self();
+			detail::matrix_stats.print_diff(orig_stats);
 			ret = block->get_cols(offs);
 		}
 	}
@@ -203,7 +210,9 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 			else {
 				num_col_writes += block->get_num_cols();
 				printf("materialize %s\n", block->get_data().get_name().c_str());
+				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				block->materialize_self();
+				detail::matrix_stats.print_diff(orig_stats);
 				ret1 = block->get_cols(local_offs);
 			}
 		}
@@ -331,7 +340,9 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		if (in->is_virtual()) {
 			num_col_writes += in->get_num_cols();
 			printf("materialize %s\n", in->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
+			detail::matrix_stats.print_diff(orig_stats);
 		}
 		res = multiply.run(in);
 		if (res->store_layout() == matrix_layout_t::L_ROW)
@@ -467,6 +478,9 @@ void gemm_op<T>::run(
 		const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
 		fm::detail::local_matrix_store &out) const
 {
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * Bstore->get_num_cols() * Bstore->get_num_cols());
+
 	assert(A_num_blocks + C_num_blocks == ins.size());
 	int node_id = ins.front()->get_node_id();
 	off_t global_start_row = ins.front()->get_global_start_row();
@@ -585,7 +599,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	if (A.get_num_blocks() > 2) {
 		num_col_writes += vecs->mats[0]->get_num_cols();
 		printf("materialize %s\n", vecs->mats[0]->get_data().get_name().c_str());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		vecs->mats[0]->materialize_self();
+		detail::matrix_stats.print_diff(orig_stats);
 	}
 	return vecs;
 }
@@ -628,12 +644,18 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	for (size_t i = 0; i < get_num_blocks(); i++) {
 		for (size_t j = 0; j < mv.get_num_blocks(); j++) {
 			dense_matrix::const_ptr mv_block = mv.get_block(j);
-			printf("materialize %s on the fly\n", mv_block->get_data().get_name().c_str());
+			if (mv_block->is_virtual())
+				printf("materialize %s on the fly\n",
+						mv_block->get_data().get_name().c_str());
 			dense_matrix::const_ptr block = get_block(i);
-			printf("materialize %s on the fly\n", block->get_data().get_name().c_str());
+			if (block->is_virtual())
+				printf("materialize %s on the fly\n",
+						block->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
 			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
 					matrix_layout_t::L_ROW);
+			detail::matrix_stats.print_diff(orig_stats);
 			assert(res->store_layout() == res1->store_layout());
 			detail::local_matrix_store::ptr part = res->get_portion(
 					block_num_rows * j, block_num_cols * i,
@@ -713,7 +735,9 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			if (block->is_virtual()) {
 				num_col_writes += block->get_num_cols();
 				printf("materialize %s\n", block->get_data().get_name().c_str());
+				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				block->materialize_self();
+				detail::matrix_stats.print_diff(orig_stats);
 			}
 			detail::NUMA_col_tall_matrix_store &numa_mat
 				= const_cast<detail::NUMA_col_tall_matrix_store &>(

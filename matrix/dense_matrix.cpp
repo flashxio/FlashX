@@ -32,9 +32,37 @@
 #include "virtual_matrix_store.h"
 #include "mapply_matrix_store.h"
 #include "vector.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
+
+namespace detail
+{
+
+matrix_stats_t matrix_stats;
+
+void matrix_stats_t::print_diff(const matrix_stats_t &orig) const
+{
+	if (this->mem_read_bytes != orig.mem_read_bytes)
+		BOOST_LOG_TRIVIAL(info) << "in-mem read "
+			<< (this->mem_read_bytes - orig.mem_read_bytes) << " bytes";
+	if (this->mem_write_bytes != orig.mem_write_bytes)
+		BOOST_LOG_TRIVIAL(info) << "in-mem write "
+			<< (this->mem_write_bytes - orig.mem_write_bytes) << " bytes";
+	if (this->EM_read_bytes != orig.EM_read_bytes)
+		BOOST_LOG_TRIVIAL(info) << "ext-mem read "
+			<< (this->EM_read_bytes - orig.EM_read_bytes) << " bytes";
+	if (this->EM_write_bytes != orig.EM_write_bytes)
+		BOOST_LOG_TRIVIAL(info) << "ext-mem write "
+			<< (this->EM_write_bytes - orig.EM_write_bytes) << " bytes";
+	if (this->double_multiplies != orig.double_multiplies)
+		BOOST_LOG_TRIVIAL(info) << "multiply "
+			<< (this->double_multiplies - orig.double_multiplies)
+			<< " double float points";
+}
+
+}
 
 bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
@@ -231,6 +259,7 @@ public:
 
 double dense_matrix::norm2() const
 {
+	detail::matrix_stats.inc_multiplies(get_num_rows() * get_num_cols());
 	double ret = 0;
 	if (get_type() == get_scalar_type<double>()) {
 		dense_matrix::ptr sq_mat
@@ -293,6 +322,9 @@ void multiply_tall_op<T>::run(
 		detail::local_matrix_store &out) const
 {
 	detail::local_matrix_store::const_ptr Astore = ins[0];
+	detail::matrix_stats.inc_multiplies(
+			Astore->get_num_rows() * Astore->get_num_cols() * Bstore->get_num_cols());
+
 	const T *Amat = (const T *) Astore->get_raw_arr();
 	// Let's make sure all matrices have the same data layout as the result matrix.
 	if (Amat == NULL || Astore->store_layout() != out.store_layout()) {
@@ -543,6 +575,9 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
+	detail::matrix_stats.inc_multiplies(
+			m1.get_num_rows() * m1.get_num_cols() * m2.get_num_cols());
+
 	matrix_layout_t required_layout;
 	// If both input matrices have the same data layout, it's easy.
 	if (m1.store_layout() == m2.store_layout())
@@ -673,6 +708,9 @@ void multiply_scalar_op::run(
 		detail::local_matrix_store &out) const
 {
 	assert(ins.size() == 1);
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * ins[0]->get_num_cols());
+
 	assert(ins[0]->store_layout() == out.store_layout());
 	assert(ins[0]->get_num_rows() == out.get_num_rows());
 	assert(ins[0]->get_num_cols() == out.get_num_cols());
@@ -1008,11 +1046,15 @@ matrix_store::ptr __mapply_portion(
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
 	assert(mats.size() >= 1);
+	bool in_mem = mats.front()->is_in_mem();
+	detail::matrix_stats.inc_write_bytes(
+			op->get_out_num_rows() * op->get_out_num_cols()
+			* op->get_output_type().get_size(), in_mem);
+
 	size_t num_chunks = mats.front()->get_num_portions();
 	std::pair<size_t, size_t> first_size = mats.front()->get_portion_size();
 	size_t tot_len;
 	size_t portion_size;
-	bool in_mem = mats.front()->is_in_mem();
 	if (mats.front()->is_wide()) {
 		tot_len = mats.front()->get_num_cols();
 		portion_size = first_size.second;
@@ -1183,6 +1225,9 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 		detail::local_matrix_store &out) const
 {
 	assert(ins.size() == 1);
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * ins[0]->get_num_cols());
+
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	// This is a tall matrix. We divide the matrix horizontally.
@@ -1211,6 +1256,9 @@ void scale_row_op::run(
 		detail::local_matrix_store &out) const
 {
 	assert(ins.size() == 1);
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * ins[0]->get_num_cols());
+
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	// This is a wide matrix. We divide the matrix vertically.
@@ -2213,6 +2261,8 @@ vector::ptr dense_matrix::col_sum() const
 
 vector::ptr dense_matrix::row_norm2() const
 {
+	detail::matrix_stats.inc_multiplies(get_num_rows() * get_num_cols());
+
 	const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::SQ);
 	dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));
@@ -2225,6 +2275,8 @@ vector::ptr dense_matrix::row_norm2() const
 
 vector::ptr dense_matrix::col_norm2() const
 {
+	detail::matrix_stats.inc_multiplies(get_num_rows() * get_num_cols());
+
 	const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::SQ);
 	dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));

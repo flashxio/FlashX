@@ -43,6 +43,7 @@
 #include "mem_matrix_store.h"
 #include "dense_matrix.h"
 #include "dotp_matrix_store.h"
+#include "matrix_stats.h"
 
 static int MV_id;
 
@@ -459,6 +460,7 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
 			% name % normvec.size();
 		verify();
+		fm::detail::matrix_stats_t orig_stats = fm::detail::matrix_stats;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			printf("materialize %s on the fly\n",
 					mat->get_block(i)->get_data().get_name().c_str());
@@ -470,6 +472,7 @@ public:
 			for (size_t j = 0; j < col_dots.size(); j++)
 				normvec[i * mat->get_block_size() + j] = std::sqrt(col_dots[j]);
 		}
+		fm::detail::matrix_stats.print_diff(orig_stats);
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
 #ifdef FM_VERIFY
 		std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> normvec1(

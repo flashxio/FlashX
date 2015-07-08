@@ -27,6 +27,7 @@
 #include "local_matrix_store.h"
 #include "raw_data_array.h"
 #include "mem_matrix_store.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
@@ -206,6 +207,8 @@ local_matrix_store::ptr EM_matrix_store::get_portion_async(
 		return local_matrix_store::ptr();
 	}
 
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), false);
 	safs::io_interface &io = ios->get_curr_io();
 	size_t entry_size = get_type().get_size();
 	size_t portion_start_row = start_row - local_start_row;

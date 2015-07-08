@@ -11,6 +11,7 @@
 #include "FM_MultiVector.h"
 
 #include "sparse_matrix.h"
+#include "matrix_stats.h"
 
 #include "eigensolver.h"
 #include "block_dense_matrix.h"
@@ -233,6 +234,16 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	}
 	cout << "------------------------------------------------------" << endl;
 	cout << "#col writes: " << num_col_writes << endl;
+	cout << "#mem read bytes: " << detail::matrix_stats.get_read_bytes(true)
+		<< endl;
+	cout << "#mem write bytes: " << detail::matrix_stats.get_write_bytes(true)
+		<< endl;
+	cout << "#EM read bytes: " << detail::matrix_stats.get_read_bytes(false)
+		<< endl;
+	cout << "#EM write bytes: " << detail::matrix_stats.get_write_bytes(false)
+		<< endl;
+	cout << "#double float-point multiplies: "
+		<< detail::matrix_stats.get_multiplies() << endl;
 
 	return res;
 }
