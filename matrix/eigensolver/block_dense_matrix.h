@@ -28,6 +28,8 @@
 #include "eigensolver.h"
 
 extern size_t num_col_writes;
+extern size_t num_col_writes_concept;
+extern size_t num_col_reads_concept;
 
 class block_multi_vector
 {

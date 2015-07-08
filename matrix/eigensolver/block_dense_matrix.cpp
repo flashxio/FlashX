@@ -25,6 +25,8 @@
 
 using namespace fm;
 size_t num_col_writes = 0;
+size_t num_col_writes_concept = 0;
+size_t num_col_reads_concept = 0;
 
 class mirror_block_multi_vector: public block_multi_vector
 {

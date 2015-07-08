@@ -184,6 +184,9 @@ public:
 	/// \brief Create a new MultiVec and copy contents of \c *this into it (deep copy).
 	/// \return Pointer to the new multivector	
 	virtual Anasazi::MultiVec<ScalarType> * CloneCopy () const {
+		num_col_writes_concept += mat->get_num_cols();
+		num_col_reads_concept += mat->get_num_cols();
+
 		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy %1% (#cols: %2%)")
 			% name % mat->get_num_cols();
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
@@ -206,6 +209,9 @@ public:
 	  */
 	virtual Anasazi::MultiVec<ScalarType> * CloneCopy (
 			const std::vector<int>& index) const {
+		num_col_writes_concept += index.size();
+		num_col_reads_concept += index.size();
+
 		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy sub %1% (#cols: %2%)")
 			% name % index.size();
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
@@ -315,6 +321,12 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"this(%1%) = %2% * A(%3%) * B(%4%x%5%) + %6% * this")
 			% name % alpha % fm_A.name % B.numRows() % B.numCols() % beta;
+		if (alpha != 0)
+			num_col_reads_concept += fm_A.mat->get_num_cols();
+		if (beta != 0)
+			num_col_reads_concept += mat->get_num_cols();
+		num_col_writes_concept += mat->get_num_cols();
+
 		fm::detail::mem_col_matrix_store::ptr Bstore
 			= fm::detail::mem_col_matrix_store::create(
 					B.numRows(), B.numCols(), fm::get_scalar_type<ScalarType>());
@@ -341,6 +353,9 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"this(%1%) = %2% * A(%3%) + %4% *  B(%5%)")
 			% name % alpha % fm_A.name % beta % fm_B.name;
+		num_col_reads_concept += fm_A.mat->get_num_cols() + fm_B.mat->get_num_cols();
+		num_col_writes_concept += mat->get_num_cols();
+
 		if (alpha == 1 && beta == 0)
 			this->mat->assign(*fm_A.mat);
 		else if (alpha == 0 && beta == 1)
@@ -360,6 +375,9 @@ public:
 
 	//! Scale each element of the vectors in \c *this with \c alpha.
 	virtual void MvScale ( ScalarType alpha ) {
+		num_col_writes_concept += mat->get_num_cols();
+		num_col_reads_concept += mat->get_num_cols();
+
 		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) *= %2%") % name % alpha;
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
@@ -371,6 +389,9 @@ public:
 
 	//! Scale each element of the <tt>i</tt>-th vector in \c *this with <tt>alpha[i]</tt>.
 	virtual void MvScale ( const std::vector<ScalarType>& alpha ) {
+		num_col_writes_concept += mat->get_num_cols();
+		num_col_reads_concept += mat->get_num_cols();
+
 		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s) *= vec") % name;
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
@@ -393,6 +414,8 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"B(%1%x%2%) = %3% * A(%4%)^T * this(%5%)")
 			% B.numRows() % B.numCols() % alpha % fm_A.name % name;
+		num_col_reads_concept += fm_A.mat->get_num_cols() + mat->get_num_cols();
+
 		assert((size_t) B.numRows() == fm_A.mat->get_num_cols());
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
 		assert(fm_A.mat->get_num_rows() == this->mat->get_num_rows());
@@ -457,6 +480,8 @@ public:
 	///   \c i-th vector of \c *this.
 	virtual void MvNorm (
 			std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> & normvec) const {
+		num_col_reads_concept += mat->get_num_cols();
+
 		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
 			% name % normvec.size();
 		verify();
@@ -493,6 +518,9 @@ public:
 	/// in \c *this indicated by the indices given in \c index.
 	virtual void SetBlock (const Anasazi::MultiVec<ScalarType>& A,
 			const std::vector<int>& index) {
+		num_col_reads_concept += index.size();
+		num_col_writes_concept += index.size();
+
 		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
@@ -508,6 +536,8 @@ public:
 
 	//! Fill all the vectors in \c *this with random numbers.
 	virtual void MvRandom () {
+		num_col_writes_concept += mat->get_num_cols();
+
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) = random") % name;
 		mat->init_rand<ScalarType>(-1, 1);
 //		ep_mat->MvRandom();
