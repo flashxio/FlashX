@@ -159,22 +159,24 @@ std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
 			std::min(get_num_cols(), CHUNK_SIZE));
 }
 
-local_matrix_store::const_ptr EM_matrix_store::get_portion(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols) const
-{
-	return const_cast<EM_matrix_store *>(this)->get_portion(start_row,
-			start_col, num_rows, num_cols);
-}
-
 local_matrix_store::ptr EM_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols)
 {
+	// This doesn't need to be used. Changing the data in the local portion
+	// doesn't affect the data in the disks.
+	assert(0);
+	return local_matrix_store::ptr();
+}
+
+local_matrix_store::const_ptr EM_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
 	safs::io_interface &io = ios->get_curr_io();
 	bool ready = false;
 	portion_compute::ptr compute(new sync_read_compute(ready));
-	local_matrix_store::ptr ret = get_portion_async(start_row, start_col,
+	local_matrix_store::const_ptr ret = get_portion_async(start_row, start_col,
 			num_rows, num_cols, compute);
 	if (ret == NULL)
 		return ret;
@@ -184,17 +186,19 @@ local_matrix_store::ptr EM_matrix_store::get_portion(
 	return ret;
 }
 
-local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols, portion_compute::ptr compute) const
-{
-	return const_cast<EM_matrix_store *>(this)->get_portion_async(
-			start_row, start_col, num_rows, num_cols, compute);
-}
-
 local_matrix_store::ptr EM_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute)
+{
+	// This doesn't need to be used. Changing the data in the local portion
+	// doesn't affect the data in the disks.
+	assert(0);
+	return local_matrix_store::ptr();
+}
+
+local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, portion_compute::ptr compute) const
 {
 	size_t local_start_row = start_row % CHUNK_SIZE;
 	size_t local_start_col = start_col % CHUNK_SIZE;
