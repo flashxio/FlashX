@@ -8,6 +8,7 @@
 #include "local_matrix_store.h"
 #include "sparse_matrix.h"
 #include "EM_dense_matrix.h"
+#include "matrix_stats.h"
 
 using namespace fm;
 
@@ -421,8 +422,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -431,8 +433,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
@@ -441,8 +444,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall row matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -451,8 +455,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -461,8 +466,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
@@ -471,8 +477,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall row matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
