@@ -656,7 +656,8 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
 			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
-					matrix_layout_t::L_ROW);
+					// I should use BLAS for multiplication here.
+					matrix_layout_t::L_ROW, true);
 			detail::matrix_stats.print_diff(orig_stats);
 			assert(res->store_layout() == res1->store_layout());
 			detail::local_matrix_store::ptr part = res->get_portion(
