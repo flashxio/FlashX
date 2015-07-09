@@ -66,12 +66,6 @@ class local_matrix_store: public matrix_store
 	// Which node the matrix data is stored.
 	int node_id;
 protected:
-	off_t get_local_start_row() const {
-		return local_start_row;
-	}
-	off_t get_local_start_col() const {
-		return local_start_col;
-	}
 	size_t get_orig_num_rows() const {
 		return num_rows;
 	}
@@ -161,6 +155,13 @@ public:
 
 	int get_node_id() const {
 		return node_id;
+	}
+
+	off_t get_local_start_row() const {
+		return local_start_row;
+	}
+	off_t get_local_start_col() const {
+		return local_start_col;
 	}
 
 	off_t get_global_start_row() const {

@@ -42,8 +42,11 @@ class portion_mapply_op;
  */
 class mapply_matrix_store: public virtual_matrix_store, public EM_object
 {
+	// This identifies the data in a matrix.
+	// So when a matrix is transposed, it should share the same data id.
+	const size_t data_id;
+
 	matrix_layout_t layout;
-	size_t num_EM_mats;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
@@ -54,7 +57,7 @@ public:
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
-			size_t nrow, size_t ncol);
+			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
 
 	virtual void materialize_self() const;
 
