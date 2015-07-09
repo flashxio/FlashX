@@ -214,6 +214,9 @@ public:
 	}
 
 	void add_orig_compute(portion_compute::ptr compute) {
+		// When the portion compute is created, the user must have provide
+		// his portion compute.
+		assert(orig_computes.size() > 0);
 		orig_computes.push_back(compute);
 	}
 
@@ -232,6 +235,10 @@ void collect_portion_compute::run(char *buf, size_t size)
 		for (size_t i = 0; i < orig_computes.size(); i++)
 			orig_computes[i]->run(res->get_raw_arr(),
 					num_eles * res->get_entry_size());
+		// This only runs once.
+		// Let's remove all user's portion compute to indicate that it has
+		// been invoked.
+		orig_computes.clear();
 	}
 }
 
