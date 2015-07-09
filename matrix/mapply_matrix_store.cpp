@@ -454,11 +454,10 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 
 	// If the virtual matrix store has been materialized, we should return
 	// the portion from the materialized store directly.
-	if (res) {
-		ret = res->get_portion(start_row, start_col, num_rows, num_cols);
-		local_mem_buffer::cache_portion(data_id, ret);
-		return ret;
-	}
+	// If the materialized matrix store is external memory, it should cache
+	// the portion itself.
+	if (res)
+		return res->get_portion(start_row, start_col, num_rows, num_cols);
 
 	std::vector<local_matrix_store::const_ptr> parts(in_mats.size());
 	if (is_wide()) {
@@ -519,12 +518,9 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 	// the portion from the materialized store directly.
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
-	if (res) {
-		local_matrix_store::const_ptr ret = res->get_portion_async(start_row,
-				start_col, num_rows, num_cols, orig_compute);
-		local_mem_buffer::cache_portion(data_id, ret);
-		return ret;
-	}
+	if (res)
+		return res->get_portion_async(start_row, start_col, num_rows, num_cols,
+				orig_compute);
 
 	// We should try to get the portion from the local thread memory buffer
 	// first.
