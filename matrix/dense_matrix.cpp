@@ -304,10 +304,7 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		assert(0);
-		return detail::portion_mapply_op::const_ptr();
-	}
+	virtual detail::portion_mapply_op::const_ptr transpose() const;
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
@@ -315,6 +312,45 @@ public:
 					+ "*") + Bstore->get_name() + std::string(")");
 	}
 };
+
+template<class T>
+class t_multiply_tall_op: public detail::portion_mapply_op
+{
+	multiply_tall_op<T> op;
+public:
+	t_multiply_tall_op(const multiply_tall_op<T> &_op): detail::portion_mapply_op(
+			_op.get_out_num_cols(), _op.get_out_num_rows(),
+			_op.get_output_type()), op(_op) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		std::vector<fm::detail::local_matrix_store::const_ptr> t_ins(ins.size());
+		t_ins[0] = std::static_pointer_cast<const fm::detail::local_matrix_store>(
+				ins[0]->transpose());
+		fm::detail::local_matrix_store::ptr t_out
+			= std::static_pointer_cast<fm::detail::local_matrix_store>(
+					out.transpose());
+		op.run(t_ins, *t_out);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return fm::detail::portion_mapply_op::const_ptr(
+				new multiply_tall_op<T>(op));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return op.to_string(mats);
+	}
+};
+
+template<class T>
+detail::portion_mapply_op::const_ptr multiply_tall_op<T>::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new t_multiply_tall_op<T>(*this));
+}
 
 template<class T>
 void multiply_tall_op<T>::run(
@@ -1630,11 +1666,7 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
-	virtual portion_mapply_op::const_ptr transpose() const {
-		// TODO
-		assert(0);
-		return portion_mapply_op::const_ptr();
-	}
+	virtual portion_mapply_op::const_ptr transpose() const;
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
@@ -1642,6 +1674,44 @@ public:
 			+ local_right->get_name() + ")";
 	}
 };
+
+class t_inner_prod_tall_op: public detail::portion_mapply_op
+{
+	inner_prod_tall_op op;
+public:
+	t_inner_prod_tall_op(const inner_prod_tall_op &_op): detail::portion_mapply_op(
+			_op.get_out_num_cols(), _op.get_out_num_rows(),
+			_op.get_output_type()), op(_op) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		std::vector<fm::detail::local_matrix_store::const_ptr> t_ins(ins.size());
+		t_ins[0] = std::static_pointer_cast<const fm::detail::local_matrix_store>(
+				ins[0]->transpose());
+		fm::detail::local_matrix_store::ptr t_out
+			= std::static_pointer_cast<fm::detail::local_matrix_store>(
+					out.transpose());
+		op.run(t_ins, *t_out);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return fm::detail::portion_mapply_op::const_ptr(
+				new inner_prod_tall_op(op));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return op.to_string(mats);
+	}
+};
+
+detail::portion_mapply_op::const_ptr inner_prod_tall_op::transpose() const
+{
+	return fm::detail::portion_mapply_op::const_ptr(
+			new t_inner_prod_tall_op(*this));
+}
 
 void inner_prod_tall_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
