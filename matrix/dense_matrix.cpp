@@ -1382,8 +1382,8 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const {
-		return portion_mapply_op::const_ptr(new cast_type_op(get_out_num_rows(),
-					get_out_num_cols(), get_output_type()));
+		return portion_mapply_op::const_ptr(new cast_type_op(get_out_num_cols(),
+					get_out_num_rows(), get_output_type()));
 	}
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
