@@ -36,37 +36,31 @@
 #include "FGlib.h"
 #include "FG_vector.h"
 
+// In iterations > 1:
+//		If I'm a vertex that joins a cluster with higher_id I send no messages
+
 using namespace fg;
 
-// NOTE: This script is only meant for undirected graphs!!!
+// NOTE: This routine is only meant for undirected graphs!!!
 namespace {
-typedef safs::page_byte_array::seq_const_iterator<edge_count> data_seq_iterator;
-uint64_t g_edge_weight = 0;
-bool g_changed = false;
-
 // INIT lets us accumulate
 enum stage_t
 {
 	INIT,
 	LEVEL1,
 	RUN,
+	UPDATE,
 };
-
-stage_t louvain_stage = INIT; // Init the stage
-edge_count tot_edge_weight = 0; // Edge weight of the entire graph
 
 class cluster
 {
 	uint32_t weight;
 	uint32_t volume;
-	std::vector<vertex_id_t> members;
-	pthread_spinlock_t lock;
 
 	public:
-	cluster() {
-		weight = 0;
-		volume = 0;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	cluster(uint32_t volume=0, uint32_t weight=0) {
+		this->weight = weight;
+		this->volume = volume;
 	}
 
 	void weight_pe(uint32_t weight) {
@@ -78,49 +72,35 @@ class cluster
 	}
 
 	void volume_pe(uint32_t volume) {
-		this->volume += volume;
 	}
 
 	uint32_t get_volume() {
 		return volume;
 	}
-
-	void add_member(vertex_id_t member, uint32_t volume) {
-		pthread_spin_lock(&lock); // FIXME: Locking :(
-		members.push_back(member);
-		this->volume += volume; 
-		pthread_spin_unlock(&lock);
-	}	
-
-	void remove_member(vertex_id_t member_id, uint32_t volume) {
-		pthread_spin_lock(&lock); // FIXME: Locking :(
-		std::vector<vertex_id_t>::iterator it = std::find(members.begin(), members.end(), member_id);
-		assert(it == members.end()); // TODO: rm -- Should be impossible
-		members.erase(it);
-		this->volume -= volume;
-		pthread_spin_unlock(&lock);
-	}
-
-	std::vector<vertex_id_t>& get_members() {
-		return this->members;
-	}
 };
 
-std::map<vertex_id_t, float> g_volume_map; // Per-vertex volume 
-std::map<vertex_id_t, cluster> cluster_map; // Keep track of what cluster each vertex is in
+typedef safs::page_byte_array::seq_const_iterator<edge_count> data_seq_iterator;
+typedef vertex_id_t cluster_id_t;
+typedef std::map<cluster_id_t, cluster> cluster_map; // Keep track of every cluster & it's metadata
+
+uint64_t g_edge_weight = 0;
+bool g_changed = false;
+stage_t louvain_stage = INIT; // Init the stage
+
+cluster_map g_cluster_map; // Global map from cluster_id : cluster(volume, weight)
 
 class louvain_vertex: public compute_vertex
 {
-	vertex_id_t cluster; // current cluster
+	vertex_id_t cluster_id; // current cluster
 	float modularity;
-	uint32_t self_edge_weight;
+	uint32_t weight;
 	uint32_t volume;
 
 	public:
 	louvain_vertex(vertex_id_t id): compute_vertex(id) {
-		cluster = id;
+		cluster_id = id;
 		modularity = std::numeric_limits<float>::min();
-		self_edge_weight = 0;
+		weight = 0;
 		volume = 0;
 	}
 
@@ -128,19 +108,35 @@ class louvain_vertex: public compute_vertex
 	void run(vertex_program &prog, const page_vertex &vertex);
 	void run_on_message(vertex_program &, const vertex_message &msg1) {}
 
-	void compute_modularity(edge_seq_iterator& id_it, data_seq_iterator& weight_it, 
-		vertex_id_t& max_cluster, float& max_mod, vertex_id_t my_id);
-	void compute_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+	void compute_modularity(edge_seq_iterator& id_it,
+		cluster_id_t& max_cluster, float& max_mod, vertex_id_t my_id);
+	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
 		vertex_program &prog);
+	void compute_per_cluster_vol_weight(vertex_program &prog);
+};
 
+// Each vertex sends a message to its neighbors` 
+class cluster_message: public vertex_message
+{
+	cluster_id_t sender_cluster_id;
+
+	public:
+	cluster_message(cluster_id_t id): 
+		vertex_message(sizeof(cluster_message), true) {
+			this->sender_cluster_id = id;
+		}
+
+	const vertex_id_t get_sender_cluster_id() const {
+		return sender_cluster_id;
+	}
 };
 
 /* We need this to get the total edge_weight of the graph */
 class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 {
 	// Thread local
-	edge_count th_local_edge_count;
-	std::map<vertex_id_t, float> th_local_volume_map;
+	edge_count th_local_edge_count; // For the global edge count
+	cluster_map th_local_cluster_map;
 
 	public:
 	louvain_vertex_program() {
@@ -161,18 +157,20 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 		return th_local_edge_count.get_count();
 	}
 
-	void update_volume(vertex_id_t vid, float vol) {
-		std::map<vertex_id_t, float>::iterator it = th_local_volume_map.find(vid);
+	void update(cluster_id_t id, float vol, uint32_t weight) {
+		// TODO: Case of INIT we always just add since it's one cluster per vertex
+		cluster_map::iterator it = th_local_cluster_map.find(id);
 
-		if (it == th_local_volume_map.end()) {
-			th_local_volume_map[vid] = vol;
+		if (it == th_local_cluster_map.end()) {
+			th_local_cluster_map[id] = cluster(vol, weight);
 		} else {
-			it->second += vol;
+			it->second.volume_pe(vol);
+			it->second.weight_pe(weight);
 		}
 	}
 
-	std::map<vertex_id_t, float>& get_vol_map() {
-		return th_local_volume_map;
+	cluster_map& get_cluster_map() {
+		return th_local_cluster_map;
 	}
 };
 
@@ -186,34 +184,51 @@ class louvain_vertex_program_creater: public vertex_program_creater
 };
 
 void louvain_vertex::run(vertex_program &prog) {
-	// Need to recompute the modularity
-	vertex_id_t id = prog.get_vertex_id(*this);
-	request_vertices(&id, 1);
+	
+	switch (louvain_stage) {
+		case INIT:
+		case LEVEL1:
+		case RUN:
+			{
+				vertex_id_t id = prog.get_vertex_id(*this);
+				request_vertices(&id, 1);
+			}
+			break;
+		case UPDATE:
+			break;
+		default:
+			BOOST_LOG_TRIVIAL(fatal) << "Unknown case louvain stage!";
+	}
 }
 
-// FIXME: This will only work for the first level
-void louvain_vertex::compute_modularity(edge_seq_iterator& id_it, data_seq_iterator& weight_it, 
-		vertex_id_t& max_cluster, float& max_mod, vertex_id_t my_id) {
-	float delta_mod;
+// Tradeoff by iterating through neighbors, instead of the min computation which is every cluster.
+void louvain_vertex::compute_modularity(edge_seq_iterator& id_it, 
+		cluster_id_t& max_cluster, float& max_mod, vertex_id_t my_id) {
 
-	// Iterate through all vertices in the g_volume_map & if one is my 
-	//	neighbor then I need to modify it's volume to not include me.
-	std::map<vertex_id_t, float>::iterator graph_it = g_volume_map.begin(); // Iterator for all graph vertices
+	float delta_mod = 0;
+	cluster curr_cluster = g_cluster_map[my_id];
 
 	while(id_it.has_next()) {
 		vertex_id_t	nid = id_it.next();
-		edge_count e = weight_it.next();
+		cluster neigh_cluster = g_cluster_map[nid];
 
-		delta_mod = ((e.get_count() - 0) / g_edge_weight) + 
-			(((g_volume_map[my_id] - this->self_edge_weight) - 
-			  (g_volume_map[nid] - e.get_count())) * g_volume_map[my_id])
-			/ (float)(2*(g_edge_weight^2));
+		if (nid == this->cluster_id) { // If I'm in the same cluster as my neigh
+			delta_mod = (((neigh_cluster.get_weight() - this->weight) - 
+						(curr_cluster.get_weight()-this->weight)) / (float) g_edge_weight) +
+						((((curr_cluster.get_volume() - this->volume) - (neigh_cluster.get_volume()-this->volume)) 
+						 * this->volume) / (float)(2*(g_edge_weight^2)));
+		} else {
+			delta_mod = ((neigh_cluster.get_weight() - (curr_cluster.get_weight()-this->weight))
+						/ (float) g_edge_weight) +
+						((((curr_cluster.get_volume() - this->volume) - neigh_cluster.get_volume()) 
+						 * this->volume) / (float)(2*(g_edge_weight^2)));
+		}
 
-		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " delta_mod for v" << graph_it->first << " = " << delta_mod;
+		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " delta_mod for v" << nid << " = " << delta_mod;
 
 		if (delta_mod > max_mod) {
 			max_mod = delta_mod;
-			max_cluster = graph_it->first;
+			max_cluster = nid;
 		}
 	}
 }
@@ -224,9 +239,11 @@ void set_changed(bool changed) {
 		g_changed = changed;
 }
 
-void louvain_vertex::compute_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+// Only need to do this once per vertex ever
+void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
 		vertex_program &prog) {
 	edge_count local_edge_weight = 0;
+	uint32_t self_edge_weight = 0;
 
 	while (weight_it.has_next()) {
 		edge_count e = weight_it.next();
@@ -234,54 +251,67 @@ void louvain_vertex::compute_vol_weight(data_seq_iterator& weight_it, edge_seq_i
 
 		local_edge_weight += e.get_count();
 		if (nid == prog.get_vertex_id(*this)) {
-			this->self_edge_weight += e.get_count();
+			self_edge_weight += e.get_count();
 		}
 	}
 
 	((louvain_vertex_program&)prog).
 		pp_ec(local_edge_weight);
-	this->volume = local_edge_weight.get_count() + (2*this->self_edge_weight);
+	this->volume = local_edge_weight.get_count() + (2*self_edge_weight);
+	this->weight = local_edge_weight.get_count() + self_edge_weight;
 
-	((louvain_vertex_program&)prog).update_volume(this->cluster,
-		local_edge_weight.get_count() + (2*this->self_edge_weight));
+	// Add this for the cluster
+	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
 }
 
-// NOTE: If I know your ID I know what cluster you're in
+//  Does not require edgelist
+void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
+	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
+}
+
 void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 
 	switch (louvain_stage) {
-		case INIT: /* INIT just accums the global edge_count. I chose OUT_EDGE at random */
+		case INIT: /* INIT just accums the global edge_count */
 			{
+				// Out edges
 				data_seq_iterator weight_it = 
 					((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-				compute_vol_weight(weight_it, id_it, prog);
+				compute_per_vertex_vol_weight(weight_it, id_it, prog);
+
+				// In edges
+				weight_it = ((const page_directed_vertex&)vertex).
+										get_data_seq_it<edge_count>(IN_EDGE);
+				id_it = vertex.get_neigh_seq_it(IN_EDGE);
+				compute_per_vertex_vol_weight(weight_it, id_it, prog);
 			}
 			break;
 		case LEVEL1:
 			{
 				// Compute the new cluster based on modularity
 				float max_mod = this->modularity;
-				vertex_id_t max_cluster = this->cluster;
+				vertex_id_t max_cluster = this->cluster_id;
 
-				// Ignore's all not connected to this vertex
+				// Out edges
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-				data_seq_iterator weight_it = 
-					((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
-
-				compute_modularity(id_it, weight_it, max_cluster, max_mod, prog.get_vertex_id(*this));
-
-				if (this->cluster != max_cluster) {
+				compute_modularity(id_it, max_cluster, max_mod, prog.get_vertex_id(*this));
+				
+				// In edges
+				id_it = vertex.get_neigh_seq_it(IN_EDGE);
+				compute_modularity(id_it, max_cluster, max_mod, prog.get_vertex_id(*this));
+				
+				if (this->cluster_id != max_cluster) {
 					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " 
 						<< this->modularity << " < " << max_mod <<
-						" ,moved from cluster " << this->cluster << " ==> " << max_cluster << "\n";
+						" ,moved from cluster " << this->cluster_id << " ==> " << max_cluster << "\n";
 					set_changed(true);
 				} else {
 					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " << this->modularity
-						<< " ,stayed in cluster " << this->cluster << "\n";
+						<< " ,stayed in cluster " << this->cluster_id << "\n";
 				}
 
-				this->cluster = max_cluster;
+				this->cluster_id = max_cluster;
 				this->modularity = max_mod;	
 			}
 			break;
@@ -294,15 +324,14 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 	}
 }
 
-// General Addition function for merging maps
-template <typename T>
-T add(T arg1, T arg2) {
-	  return arg1 + arg2;
+// General merge function for cluster maps
+cluster merge_cluster(cluster& c1, cluster& c2) {
+	return cluster(c1.get_volume()+c2.get_volume(), c2.get_weight()+c2.get_weight());
 }
 
 template <typename T, typename U>
 void build_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map,
-		std::map<T, U>& new_map, U (*merge_func) (U, U)) {
+		std::map<T, U>& new_map, U (*merge_func) (U&, U&)) {
 	if (agg_map.size() == 0 || add_map.size() == 0) { return; }
 
 	typename std::map<T,U>::iterator add_it = add_map.begin(); // Always iterate over the add maps keys
@@ -357,20 +386,24 @@ namespace fg
 			g_edge_weight += lvp->get_local_ec();
 			
 			// Merge the volume maps
-			std::map<vertex_id_t, float> merge_map;
-			float (*add_func) (float, float); // Function pointer to add map
-			add_func = &add;
-			build_merge_map(lvp->get_vol_map(), g_volume_map, merge_map, add_func);
+			cluster_map merge_map;
+			cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
+			merge_func = &merge_cluster;
 
-			g_volume_map.insert(merge_map.begin(), merge_map.end());
+			build_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_map, merge_func);
+
+			g_cluster_map.insert(merge_map.begin(), merge_map.end());
 		}
 #if 1
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
-		for (std::map<vertex_id_t, float>::iterator it = g_volume_map.begin();
-				it != g_volume_map.end(); it++) {
-			BOOST_LOG_TRIVIAL(info) << "Vertex: " << it->first << ", Volume: " << it->second;
+
+		for (cluster_map::iterator it = g_cluster_map.begin();
+				it != g_cluster_map.end(); it++) {
+			BOOST_LOG_TRIVIAL(info) << "Cluster: " << it->first << ", Volume: " 
+				<< it->second.get_volume() << ", Weight: " << it->second.get_weight();
 		}
 		BOOST_LOG_TRIVIAL(info) << "\x1B[31m====================================================\x1B[0m\n";
+		exit(0); // TODO: rm
 #endif
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 #if 1
