@@ -41,7 +41,16 @@ class mem_matrix_store;
 
 class EM_matrix_store: public matrix_store, public EM_object
 {
+	/*
+	 * The difference between the two identifiers are:
+	 * `mat_id' identifies the matrix data structure. Whenever the matrix
+	 * is shallow copied or transposed, `mat_id' changes.
+	 * `data_id' identifies the content in a matrix.
+	 * So when a matrix is transposed or shallow copied, it should share
+	 * the same data id.
+	 */
 	const size_t mat_id;
+	const size_t data_id;
 
 	matrix_layout_t layout;
 	file_holder::ptr holder;
@@ -51,12 +60,7 @@ class EM_matrix_store: public matrix_store, public EM_object
 			const scalar_type &type);
 	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 			size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type): matrix_store(nrow, ncol, false,
-				type), mat_id(mat_counter++) {
-		this->layout = layout;
-		this->holder = holder;
-		this->ios = ios;
-	}
+			const scalar_type &type, size_t _data_id);
 public:
 	typedef std::shared_ptr<EM_matrix_store> ptr;
 	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
@@ -95,15 +99,7 @@ public:
 		return layout;
 	}
 
-	virtual matrix_store::const_ptr transpose() const {
-		matrix_layout_t new_layout;
-		if (layout == matrix_layout_t::L_ROW)
-			new_layout = matrix_layout_t::L_COL;
-		else
-			new_layout = matrix_layout_t::L_ROW;
-		return matrix_store::const_ptr(new EM_matrix_store(holder, ios,
-					get_num_cols(), get_num_rows(), new_layout, get_type()));
-	}
+	virtual matrix_store::const_ptr transpose() const;
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 

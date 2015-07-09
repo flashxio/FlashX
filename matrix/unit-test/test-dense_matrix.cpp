@@ -1055,22 +1055,24 @@ void test_mapply_chain(int num_nodes)
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<int>(), true);
 	dense_matrix::ptr smat4 = create_seq_matrix(10, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<int>(), true);
+	dense_matrix::ptr smat5 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, get_scalar_type<int>(), true);
 
 	printf("test a chain of mapply virtual matrices\n");
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
 	dense_matrix::ptr vmat1 = orig_mat1->multiply(*smat1);
-	dense_matrix::ptr vmat3 = orig_mat1->multiply(*smat1);
+	dense_matrix::ptr vmat3 = orig_mat1->multiply(*smat5);
 	dense_matrix::ptr vmat4 = vmat3->multiply(*smat2);
 	dense_matrix::ptr vmat5 = orig_mat2->multiply(*smat3);
 	dense_matrix::ptr vmat6 = vmat4->multiply(*smat4)->add(*vmat5);
-	dense_matrix::ptr res = vmat6->transpose()->multiply(*vmat6);
+	dense_matrix::ptr res = vmat6->transpose()->multiply(*vmat1);
 	detail::matrix_stats.print_diff(orig_stats);
 
 	printf("materialize every matrix operations individually\n");
 	detail::matrix_stats_t orig_stats1 = detail::matrix_stats;
 	dense_matrix::ptr mat1 = orig_mat1->multiply(*smat1);
 	mat1->materialize_self();
-	dense_matrix::ptr mat3 = orig_mat1->multiply(*smat1);
+	dense_matrix::ptr mat3 = orig_mat1->multiply(*smat5);
 	mat3->materialize_self();
 	dense_matrix::ptr mat4 = vmat3->multiply(*smat2);
 	mat4->materialize_self();
@@ -1078,7 +1080,7 @@ void test_mapply_chain(int num_nodes)
 	mat5->materialize_self();
 	dense_matrix::ptr mat6 = vmat4->multiply(*smat4)->add(*vmat5);
 	mat6->materialize_self();
-	dense_matrix::ptr res1 = mat6->transpose()->multiply(*mat6);
+	dense_matrix::ptr res1 = mat6->transpose()->multiply(*mat1);
 	detail::matrix_stats.print_diff(orig_stats1);
 
 	verify_result(*res, *res1, equal_func<int>());

@@ -28,6 +28,7 @@
 #include "raw_data_array.h"
 #include "mem_matrix_store.h"
 #include "matrix_stats.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -75,13 +76,23 @@ public:
 
 EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
 		const scalar_type &type): matrix_store(nrow, ncol, false,
-			type), mat_id(mat_counter++)
+			type), mat_id(mat_counter++), data_id(mat_id)
 {
 	this->layout = layout;
 	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
+}
+
+EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
+		size_t nrow, size_t ncol, matrix_layout_t layout,
+		const scalar_type &type, size_t _data_id): matrix_store(nrow, ncol,
+			false, type), mat_id(mat_counter++), data_id(_data_id)
+{
+	this->layout = layout;
+	this->holder = holder;
+	this->ios = ios;
 }
 
 void EM_matrix_store::reset_data()
@@ -211,8 +222,6 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 		return local_matrix_store::ptr();
 	}
 
-	detail::matrix_stats.inc_read_bytes(
-			num_rows * num_cols * get_entry_size(), false);
 	safs::io_interface &io = ios->get_curr_io();
 	size_t entry_size = get_type().get_size();
 	size_t portion_start_row = start_row - local_start_row;
@@ -231,11 +240,43 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 	// Location of the portion on the disks.
 	off_t off = (get_num_cols() * portion_start_row
 		+ portion_num_rows * portion_start_col) * entry_size;
-
 	// If this is the very last portion (the bottom right portion), the data
 	// size may not be aligned with the page size.
 	size_t num_bytes
 		= ROUNDUP(portion_num_rows * portion_num_cols * entry_size, PAGE_SIZE);
+
+	// We should try to get the portion from the local thread memory buffer
+	// first.
+	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
+			data_id);
+	// If it's in the same portion.
+	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
+					&& (size_t) ret1->get_global_start_col() == start_col
+					&& ret1->get_num_rows() == num_rows
+					&& ret1->get_num_cols() == num_cols)
+				// If it's in the corresponding portion in the transposed matrix.
+				|| ((size_t) ret1->get_global_start_row() == start_col
+					&& (size_t) ret1->get_global_start_col() == start_row
+					&& ret1->get_num_rows() == num_cols
+					&& ret1->get_num_cols() == num_rows))) {
+		assert(ret1->get_local_start_row() == 0);
+		assert(ret1->get_local_start_col() == 0);
+		// In the asynchronous version, data in the portion isn't ready when
+		// the method is called. We should add the user's portion computation
+		// to the queue. When the data is ready, all user's portion computations
+		// will be invoked.
+		safs::data_loc_t loc(io.get_file_id(), off);
+		safs::io_request req(const_cast<char *>(ret1->get_raw_arr()), loc,
+				num_bytes, READ);
+		portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
+		// If there isn't a portion compute related to the I/O request,
+		// it means the data in the portion is ready. TODO should we invoke
+		// user's portion compute directly?
+		assert(cb.has_callback(req));
+		cb.add(req, compute);
+		return ret1;
+	}
+
 	raw_data_array data_arr(num_bytes, -1);
 	// Read the portion in a single I/O request.
 	local_matrix_store::ptr buf;
@@ -254,9 +295,14 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 	io.access(&req, 1);
 	io.flush_requests();
 
+	// Count the number of bytes really read from disks.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), false);
+
 	if (local_start_row > 0 || local_start_col > 0
 			|| num_rows < portion_num_rows || num_cols < portion_num_cols)
 		buf->resize(local_start_row, local_start_col, num_rows, num_cols);
+	local_mem_buffer::cache_portion(data_id, buf);
 	return buf;
 }
 
@@ -621,6 +667,18 @@ bool EM_matrix_store::copy_from(matrix_store::const_ptr mat)
 	}
 	threads->wait4complete();
 	return true;
+}
+
+matrix_store::const_ptr EM_matrix_store::transpose() const
+{
+	matrix_layout_t new_layout;
+	if (layout == matrix_layout_t::L_ROW)
+		new_layout = matrix_layout_t::L_COL;
+	else
+		new_layout = matrix_layout_t::L_ROW;
+	return matrix_store::const_ptr(new EM_matrix_store(holder, ios,
+				get_num_cols(), get_num_rows(), new_layout, get_type(),
+				data_id));
 }
 
 }
