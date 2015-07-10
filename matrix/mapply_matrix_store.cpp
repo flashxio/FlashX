@@ -746,7 +746,8 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 
 std::string mapply_matrix_store::get_name() const
 {
-	return op->to_string(in_mats);
+	return (boost::format("vmat-%1%") % data_id).str()
+		+ op->to_string(in_mats);
 }
 
 size_t mapply_matrix_store::get_underlying_eles() const
