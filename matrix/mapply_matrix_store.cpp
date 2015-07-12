@@ -714,6 +714,19 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 	return ret;
 }
 
+std::pair<size_t, size_t> mapply_matrix_store::get_portion_size() const
+{
+	// I should use a relatively small chunk size here. Otherwise,
+	// the aggregated memory size for buffering a portion of each matrix
+	// will be too large.
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_num_rows(),
+				mem_matrix_store::CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(mem_matrix_store::CHUNK_SIZE,
+				get_num_cols());
+}
+
 matrix_store::const_ptr mapply_matrix_store::transpose() const
 {
 	std::vector<matrix_store::const_ptr> t_in_mats(in_mats.size());
