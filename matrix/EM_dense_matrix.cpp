@@ -250,15 +250,15 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
 			data_id);
 	// If it's in the same portion.
-	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
-					&& (size_t) ret1->get_global_start_col() == start_col
-					&& ret1->get_num_rows() == num_rows
-					&& ret1->get_num_cols() == num_cols)
+	if (ret1 && (((size_t) ret1->get_global_start_row() == portion_start_row
+					&& (size_t) ret1->get_global_start_col() == portion_start_col
+					&& ret1->get_num_rows() == portion_num_rows
+					&& ret1->get_num_cols() == portion_num_cols)
 				// If it's in the corresponding portion in the transposed matrix.
-				|| ((size_t) ret1->get_global_start_row() == start_col
-					&& (size_t) ret1->get_global_start_col() == start_row
-					&& ret1->get_num_rows() == num_cols
-					&& ret1->get_num_cols() == num_rows))) {
+				|| ((size_t) ret1->get_global_start_row() == portion_start_col
+					&& (size_t) ret1->get_global_start_col() == portion_start_row
+					&& ret1->get_num_rows() == portion_num_cols
+					&& ret1->get_num_cols() == portion_num_rows))) {
 		assert(ret1->get_local_start_row() == 0);
 		assert(ret1->get_local_start_col() == 0);
 		// In the asynchronous version, data in the portion isn't ready when
@@ -274,7 +274,13 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 		// user's portion compute directly?
 		assert(cb.has_callback(req));
 		cb.add(req, compute);
-		return ret1;
+
+		if (local_start_row > 0 || local_start_col > 0
+				|| num_rows < portion_num_rows || num_cols < portion_num_cols)
+			return ret1->get_portion(local_start_row, local_start_col,
+					num_rows, num_cols);
+		else
+			return ret1;
 	}
 
 	raw_data_array data_arr(num_bytes, -1);
@@ -299,11 +305,13 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 	detail::matrix_stats.inc_read_bytes(
 			num_rows * num_cols * get_entry_size(), false);
 
+	local_mem_buffer::cache_portion(data_id, buf);
 	if (local_start_row > 0 || local_start_col > 0
 			|| num_rows < portion_num_rows || num_cols < portion_num_cols)
-		buf->resize(local_start_row, local_start_col, num_rows, num_cols);
-	local_mem_buffer::cache_portion(data_id, buf);
-	return buf;
+		return buf->get_portion(local_start_row, local_start_col,
+				num_rows, num_cols);
+	else
+		return buf;
 }
 
 void EM_matrix_store::write_portion_async(
