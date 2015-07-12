@@ -303,7 +303,7 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 
 	// Count the number of bytes really read from disks.
 	detail::matrix_stats.inc_read_bytes(
-			num_rows * num_cols * get_entry_size(), false);
+			buf->get_num_rows() * buf->get_num_cols() * get_entry_size(), false);
 
 	local_mem_buffer::cache_portion(data_id, buf);
 	if (local_start_row > 0 || local_start_col > 0
