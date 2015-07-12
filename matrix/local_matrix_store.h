@@ -223,18 +223,6 @@ public:
 			off_t start_row, off_t start_col) {
 		assert(0);
 	}
-	virtual local_matrix_store::const_ptr get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const {
-		assert(0);
-		return local_matrix_store::const_ptr();
-	}
-	virtual std::shared_ptr<local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		assert(0);
-		return local_matrix_store::ptr();
-	}
 	virtual matrix_store::const_ptr append_cols(
 			const std::vector<matrix_store::const_ptr> &mats) const {
 		throw unsupported_exception(
@@ -254,6 +242,13 @@ public:
 
 class local_col_matrix_store: public local_matrix_store
 {
+	// This is to hold the pointer to the original data so it won't be free'd.
+	raw_data_array orig_data_ref;
+
+protected:
+	void set_orig_data(const raw_data_array &data_ref) {
+		this->orig_data_ref = data_ref;
+	}
 public:
 	typedef std::shared_ptr<local_col_matrix_store> ptr;
 	typedef std::shared_ptr<const local_col_matrix_store> const_ptr;
@@ -277,6 +272,16 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
+	}
+	local_col_matrix_store(const raw_data_array &data_ref, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+		this->orig_data_ref = data_ref;
+	}
+
+	bool hold_orig_data() const {
+		return orig_data_ref.get_raw_data() != NULL;
 	}
 
 	// Get the offset of the entry in the original local matrix store.
@@ -303,10 +308,24 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual local_matrix_store::ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols);
 };
 
 class local_row_matrix_store: public local_matrix_store
 {
+	// This is to hold the pointer to the original data so it won't be free'd.
+	raw_data_array orig_data_ref;
+
+protected:
+	void set_orig_data(const raw_data_array &data_ref) {
+		this->orig_data_ref = data_ref;
+	}
 public:
 	typedef std::shared_ptr<local_row_matrix_store> ptr;
 	typedef std::shared_ptr<const local_row_matrix_store> const_ptr;
@@ -330,6 +349,16 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
+	}
+	local_row_matrix_store(const raw_data_array &data_ref, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+		this->orig_data_ref = data_ref;
+	}
+
+	bool hold_orig_data() const {
+		return orig_data_ref.get_raw_data() != NULL;
 	}
 
 	// Get the offset of the entry in the original local matrix store.
@@ -357,6 +386,13 @@ public:
 	virtual char *get(size_t row, size_t col) {
 		return get_row(row) + col * get_entry_size();
 	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual local_matrix_store::ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols);
 };
 
 /*
@@ -370,14 +406,17 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_col_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
-		if (nrow * ncol > 0)
+		if (nrow * ncol > 0) {
 			data = raw_data_array(nrow * ncol * type.get_size());
+			set_orig_data(data);
+		}
 	}
 
 	local_buf_col_matrix_store(const raw_data_array &data,
 			off_t global_start_row, off_t global_start_col, size_t nrow,
-			size_t ncol, const scalar_type &type, int node_id): local_col_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+			size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(data, global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -425,13 +464,15 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
-		if (nrow * ncol > 0)
+		if (nrow * ncol > 0) {
 			data = raw_data_array(nrow * ncol * type.get_size());
+			set_orig_data(data);
+		}
 	}
 
-	local_buf_row_matrix_store(const raw_data_array &data,
-			off_t global_start_row, off_t global_start_col, size_t nrow,
-			size_t ncol, const scalar_type &type, int node_id): local_row_matrix_store(
+	local_buf_row_matrix_store(const raw_data_array &data, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_row_matrix_store(data,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
@@ -498,6 +539,13 @@ public:
 		this->data = data;
 	}
 
+	local_ref_contig_col_matrix_store(const raw_data_array &data_ref, char *data,
+			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_col_matrix_store(data_ref,
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+		this->data = data;
+	}
+
 	char *get_data() {
 		return data;
 	}
@@ -546,6 +594,13 @@ public:
 	local_ref_contig_row_matrix_store(char *data, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_row_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+		this->data = data;
+	}
+
+	local_ref_contig_row_matrix_store(const raw_data_array &data_ref, char *data,
+			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_row_matrix_store(data_ref,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
@@ -618,6 +673,16 @@ public:
 		assert(cols.size() == ncol);
 	}
 
+	local_ref_col_matrix_store(const raw_data_array &data_ref,
+			const std::vector<char *> &cols, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_col_matrix_store(
+				data_ref, global_start_row, global_start_col, nrow, cols.size(),
+				type, node_id) {
+		this->cols = cols;
+		assert(cols.size() == ncol);
+	}
+
 	const std::vector<char *> &get_data() {
 		return cols;
 	}
@@ -664,6 +729,16 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row,
 				global_start_col, rows.size(), ncol, type, node_id) {
+		this->rows = rows;
+		assert(rows.size() == nrow);
+	}
+
+	local_ref_row_matrix_store(const raw_data_array &data_ref,
+			const std::vector<char *> &rows, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_row_matrix_store(
+				data_ref, global_start_row, global_start_col, rows.size(), ncol,
+				type, node_id) {
 		this->rows = rows;
 		assert(rows.size() == nrow);
 	}
@@ -724,6 +799,13 @@ public:
 		this->data = data;
 	}
 
+	local_cref_contig_col_matrix_store(const raw_data_array &data_ref, const char *data,
+			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_col_matrix_store(data_ref,
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+		this->data = data;
+	}
+
 	const char *get_data() const {
 		return data;
 	}
@@ -767,6 +849,13 @@ public:
 			off_t global_start_col, size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id) {
+		this->data = data;
+	}
+
+	local_cref_contig_row_matrix_store(const raw_data_array &data_ref, const char *data,
+			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_row_matrix_store(data_ref,
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -828,6 +917,15 @@ public:
 		assert(cols.size() == ncol);
 	}
 
+	local_cref_col_matrix_store(const raw_data_array &data_ref,
+			const std::vector<const char *> &cols, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(data_ref, global_start_row,
+				global_start_col, nrow, cols.size(), type, node_id) {
+		this->cols = cols;
+		assert(cols.size() == ncol);
+	}
+
 	const std::vector<const char *> get_data() const {
 		return cols;
 	}
@@ -869,6 +967,15 @@ public:
 			off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row,
+				global_start_col, rows.size(), ncol, type, node_id) {
+		this->rows = rows;
+		assert(rows.size() == nrow);
+	}
+
+	local_cref_row_matrix_store(const raw_data_array &data_ref,
+			const std::vector<const char *> &rows, off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(data_ref, global_start_row,
 				global_start_col, rows.size(), ncol, type, node_id) {
 		this->rows = rows;
 		assert(rows.size() == nrow);
@@ -951,6 +1058,19 @@ public:
 	virtual char *get_col(size_t col) {
 		return NULL;
 	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+	virtual local_matrix_store::ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) {
+		assert(0);
+		return local_matrix_store::ptr();
+	}
 };
 
 class lvirtual_row_matrix_store: public local_row_matrix_store
@@ -996,6 +1116,19 @@ public:
 	}
 	virtual char *get_rows(size_t row_start, size_t row_end) {
 		return NULL;
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+	virtual local_matrix_store::ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) {
+		assert(0);
+		return local_matrix_store::ptr();
 	}
 };
 
