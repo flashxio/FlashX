@@ -958,25 +958,121 @@ public:
 	}
 };
 
+/*
+ * This local write buffer helps to write data to part of a portion and
+ * keep track of which parts are valid. It can flush data to EM matrix
+ * when all parts have valid data.
+ * This assumes that each part in the portion has the same size and users
+ * always write data of the same size to the portion.
+ */
+class local_write_buffer
+{
+	EM_matrix_store::ptr to_mat;
+	local_matrix_store::ptr buf;
+	// This indicates which parts of the portion has valid data.
+	std::vector<bool> valid_parts;
+	// This is the number of valid parts in this portion.
+	size_t num_valid_parts;
+	size_t min_portion_size;
+	bool has_flushed;
+
+	local_write_buffer(EM_matrix_store::ptr to_mat, off_t global_start,
+			size_t length, size_t min_portion_size);
+public:
+	typedef std::shared_ptr<local_write_buffer> ptr;
+
+	static ptr create(EM_matrix_store::ptr to_mat, off_t global_start,
+			size_t length, size_t min_portion_size) {
+		return ptr(new local_write_buffer(to_mat, global_start, length,
+					min_portion_size));
+	}
+
+	~local_write_buffer() {
+		assert(has_flushed);
+	}
+
+	bool is_all_valid() const {
+		return num_valid_parts == valid_parts.size();
+	}
+
+	void flush() {
+		assert(!has_flushed);
+		to_mat->write_portion_async(buf, buf->get_global_start_row(),
+				buf->get_global_start_col());
+		has_flushed = true;
+	}
+
+	local_matrix_store::ptr set_part(size_t global_start_row,
+			size_t global_start_col, size_t num_rows, size_t num_cols);
+};
+
+local_matrix_store::ptr local_write_buffer::set_part(size_t global_start_row,
+		size_t global_start_col, size_t num_rows, size_t num_cols)
+{
+	assert(global_start_col >= (size_t) buf->get_global_start_col());
+	assert(global_start_row >= (size_t) buf->get_global_start_row());
+	size_t local_start;
+	if (to_mat->is_wide())
+		local_start = global_start_col - buf->get_global_start_col();
+	else
+		local_start = global_start_row - buf->get_global_start_row();
+	assert(local_start % min_portion_size == 0);
+	size_t part_idx = local_start / min_portion_size;
+	// The part shouldn't be valid.
+	assert(!valid_parts[part_idx]);
+	valid_parts[part_idx] = true;
+	num_valid_parts++;
+	return buf->get_portion(global_start_row - buf->get_global_start_row(),
+			global_start_col - buf->get_global_start_col(),
+			num_rows, num_cols);
+}
+
+local_write_buffer::local_write_buffer(EM_matrix_store::ptr to_mat,
+		off_t global_start, size_t length, size_t min_portion_size)
+{
+	size_t global_start_row, global_start_col, num_rows, num_cols;
+	if (to_mat->is_wide()) {
+		global_start_row = 0;
+		global_start_col = global_start;
+		num_rows = to_mat->get_num_rows();
+		num_cols = length;
+	}
+	else {
+		global_start_row = global_start;
+		global_start_col = 0;
+		num_rows = length;
+		num_cols = to_mat->get_num_cols();
+	}
+	size_t num_parts = ceil(((double) length) / min_portion_size);
+	valid_parts.resize(num_parts);
+
+	this->has_flushed = false;
+	this->num_valid_parts = 0;
+	this->min_portion_size = min_portion_size;
+	this->to_mat = to_mat;
+	if (to_mat->store_layout() == matrix_layout_t::L_ROW)
+		buf = detail::local_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(global_start_row,
+					global_start_col, num_rows, num_cols,
+					to_mat->get_type(), -1));
+	else
+		buf = detail::local_matrix_store::ptr(
+				new detail::local_buf_col_matrix_store(global_start_row,
+					global_start_col, num_rows, num_cols,
+					to_mat->get_type(), -1));
+}
+
 class EM_mat_mapply_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	size_t num_EM_mats;
 	EM_matrix_store::ptr res_mat;
 	portion_mapply_op::const_ptr op;
+	size_t min_portion_size;
 public:
 	EM_mat_mapply_dispatcher(const std::vector<matrix_store::const_ptr> &mats,
 			EM_matrix_store::ptr res_mat, portion_mapply_op::const_ptr op,
-			size_t tot_len, size_t portion_size): detail::EM_portion_dispatcher(
-				tot_len, portion_size) {
-		this->mats = mats;
-		this->res_mat = res_mat;
-		this->op = op;
-		num_EM_mats = 0;
-		for (size_t i = 0; i < mats.size(); i++)
-			if (!mats[i]->is_in_mem())
-				num_EM_mats++;
-	}
+			size_t tot_len, size_t portion_size);
 
 	virtual void create_task(off_t global_start, size_t length);
 };
@@ -988,9 +1084,12 @@ class mapply_portion_compute: public portion_compute
 	size_t num_reads;
 	EM_matrix_store::ptr to_mat;
 	const portion_mapply_op &op;
+	local_write_buffer::ptr write_buf;
 public:
-	mapply_portion_compute(size_t num_required_reads, EM_matrix_store::ptr mat,
+	mapply_portion_compute(local_write_buffer::ptr write_buf,
+			size_t num_required_reads, EM_matrix_store::ptr mat,
 			const portion_mapply_op &_op): op(_op) {
+		this->write_buf = write_buf;
 		this->to_mat = mat;
 		this->num_required_reads = num_required_reads;
 		this->num_reads = 0;
@@ -1010,9 +1109,7 @@ void mapply_portion_compute::run(char *buf, size_t size)
 	num_reads++;
 	if (num_required_reads == num_reads) {
 		const detail::local_matrix_store &first_mat = *local_stores.front();
-		if (to_mat) {
-			size_t global_start_row = first_mat.get_global_start_row();
-			size_t global_start_col = first_mat.get_global_start_col();
+		if (write_buf) {
 			size_t res_num_rows;
 			size_t res_num_cols;
 			if (to_mat->is_wide()) {
@@ -1023,54 +1120,88 @@ void mapply_portion_compute::run(char *buf, size_t size)
 				res_num_rows = first_mat.get_num_rows();
 				res_num_cols = to_mat->get_num_cols();
 			}
-			detail::local_matrix_store::ptr local_res;
-			if (to_mat->store_layout() == matrix_layout_t::L_ROW)
-				local_res = detail::local_matrix_store::ptr(
-						new detail::local_buf_row_matrix_store(global_start_row,
-							global_start_col, res_num_rows, res_num_cols,
-							to_mat->get_type(), -1));
-			else
-				local_res = detail::local_matrix_store::ptr(
-						new detail::local_buf_col_matrix_store(global_start_row,
-							global_start_col, res_num_rows, res_num_cols,
-							to_mat->get_type(), -1));
+			local_matrix_store::ptr local_res = write_buf->set_part(
+					first_mat.get_global_start_row(),
+					first_mat.get_global_start_col(), res_num_rows, res_num_cols);
 			op.run(local_stores, *local_res);
-			to_mat->write_portion_async(local_res, global_start_row,
-					global_start_col);
+			if (write_buf->is_all_valid())
+				write_buf->flush();
 		}
 		else
 			op.run(local_stores, empty_store);
 	}
 }
 
+EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
+		const std::vector<matrix_store::const_ptr> &mats,
+		EM_matrix_store::ptr res_mat, portion_mapply_op::const_ptr op,
+		size_t tot_len, size_t portion_size): detail::EM_portion_dispatcher(
+			tot_len, portion_size)
+{
+	this->mats = mats;
+	this->res_mat = res_mat;
+	this->op = op;
+	num_EM_mats = 0;
+	for (size_t i = 0; i < mats.size(); i++)
+		if (!mats[i]->is_in_mem())
+			num_EM_mats++;
+
+	assert(mats.size() > 0);
+	if (mats[0]->is_wide()) {
+		min_portion_size = mats[0]->get_portion_size().second;
+		for (size_t i = 1; i < mats.size(); i++)
+			min_portion_size = std::min(min_portion_size,
+					mats[i]->get_portion_size().second);
+		for (size_t i = 0; i < mats.size(); i++)
+			assert(mats[i]->get_portion_size().second % min_portion_size == 0);
+	}
+	else {
+		min_portion_size = mats[0]->get_portion_size().first;
+		for (size_t i = 1; i < mats.size(); i++)
+			min_portion_size = std::min(min_portion_size,
+					mats[i]->get_portion_size().first);
+		for (size_t i = 0; i < mats.size(); i++)
+			assert(mats[i]->get_portion_size().first % min_portion_size == 0);
+	}
+}
+
+/*
+ * This method is invoked in each worker thread.
+ */
 void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 {
-	std::vector<detail::local_matrix_store::const_ptr> local_stores(
-			mats.size());
-	mapply_portion_compute *mapply_compute = new mapply_portion_compute(
-			num_EM_mats, res_mat, *op);
-	mapply_portion_compute::ptr compute(mapply_compute);
-	for (size_t j = 0; j < local_stores.size(); j++) {
-		size_t global_start_row;
-		size_t global_start_col;
-		size_t num_rows;
-		size_t num_cols;
-		if (mats[j]->is_wide()) {
-			global_start_row = 0;
-			global_start_col = global_start;
-			num_rows = mats[j]->get_num_rows();
-			num_cols = length;
+	local_write_buffer::ptr write_buf;
+	if (res_mat)
+		write_buf = local_write_buffer::create(res_mat, global_start, length,
+				min_portion_size);
+
+	for (size_t local_start = 0; local_start < length;
+			local_start += min_portion_size) {
+		size_t local_length = std::min(min_portion_size, length - local_start);
+		std::vector<detail::local_matrix_store::const_ptr> local_stores(
+				mats.size());
+		mapply_portion_compute *mapply_compute = new mapply_portion_compute(
+				write_buf, num_EM_mats, res_mat, *op);
+		mapply_portion_compute::ptr compute(mapply_compute);
+		for (size_t j = 0; j < local_stores.size(); j++) {
+			size_t global_start_row, global_start_col, num_rows, num_cols;
+			if (mats[j]->is_wide()) {
+				global_start_row = 0;
+				global_start_col = global_start + local_start;
+				num_rows = mats[j]->get_num_rows();
+				num_cols = local_length;
+			}
+			else {
+				global_start_row = global_start + local_start;
+				global_start_col = 0;
+				num_rows = local_length;
+				num_cols = mats[j]->get_num_cols();
+			}
+			local_stores[j] = mats[j]->get_portion_async(global_start_row,
+					global_start_col, num_rows, num_cols, compute);
 		}
-		else {
-			global_start_row = global_start;
-			global_start_col = 0;
-			num_rows = length;
-			num_cols = mats[j]->get_num_cols();
-		}
-		local_stores[j] = mats[j]->get_portion_async(global_start_row,
-				global_start_col, num_rows, num_cols, compute);
+		mapply_compute->set_buf(local_stores);
 	}
-	mapply_compute->set_buf(local_stores);
 }
 
 }
@@ -1160,7 +1291,7 @@ matrix_store::ptr __mapply_portion(
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 		EM_mat_mapply_dispatcher::ptr dispatcher(
 				new EM_mat_mapply_dispatcher(mats, res, op, tot_len,
-					portion_size));
+					EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
 			io_worker_task *task = new io_worker_task(dispatcher, 1);
 			for (size_t j = 0; j < mats.size(); j++) {

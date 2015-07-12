@@ -36,7 +36,7 @@ namespace fm
 namespace detail
 {
 
-static const size_t CHUNK_SIZE = 1024 * 1024;
+const size_t EM_matrix_store::CHUNK_SIZE = 1024 * 1024;
 
 /*
  * These two functions define the length and portion size for 1D partitioning

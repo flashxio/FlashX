@@ -62,6 +62,8 @@ class EM_matrix_store: public matrix_store, public EM_object
 			size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, size_t _data_id);
 public:
+	static const size_t CHUNK_SIZE;
+
 	typedef std::shared_ptr<EM_matrix_store> ptr;
 	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
 
