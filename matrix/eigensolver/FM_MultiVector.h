@@ -530,8 +530,8 @@ public:
 		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s)[%ld vecs] = A(%s)")
-			% name % index.size() % fm_A.name;
+		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%)[%2%] = A(%3%)")
+			% name % vec2str(index) % fm_A.name;
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
