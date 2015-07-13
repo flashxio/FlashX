@@ -123,9 +123,6 @@ public:
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
 
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const;
-
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };

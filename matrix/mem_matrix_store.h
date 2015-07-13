@@ -197,8 +197,6 @@ public:
 		return matrix_layout_t::L_COL;
 	}
 	virtual bool write2file(const std::string &file_name) const;
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const;
 };
 
 /*
@@ -276,8 +274,6 @@ public:
 		return matrix_layout_t::L_ROW;
 	}
 	virtual bool write2file(const std::string &file_name) const;
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const;
 };
 
 /*

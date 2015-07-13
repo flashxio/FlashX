@@ -177,11 +177,6 @@ public:
 			<< "Can't get a column from a NUMA tall row matrix";
 		return vec_store::const_ptr();
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a row-major matrix");
-	}
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
@@ -260,8 +255,6 @@ public:
 			<< "Can't get a row from a NUMA tall column matrix";
 		return vec_store::const_ptr();
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 
@@ -332,11 +325,6 @@ public:
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		return store.get_cols(idxs);
-	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a row-major matrix");
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
@@ -418,11 +406,6 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "Can't get a row from a NUMA wide col matrix";
 		return vec_store::const_ptr();
-	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a wide column-major matrix");
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

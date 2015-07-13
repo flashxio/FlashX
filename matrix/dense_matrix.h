@@ -285,8 +285,6 @@ public:
 	std::shared_ptr<vector> row_norm2() const;
 	std::shared_ptr<vector> col_norm2() const;
 
-	dense_matrix::ptr append_cols(const std::vector<dense_matrix::ptr> &mats);
-
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		scalar_variable::ptr var(new scalar_variable_impl<T>(val));

@@ -89,11 +89,6 @@ public:
 		assert(0);
 		return false;
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a virtual matrix");
-	}
 };
 
 }

@@ -910,16 +910,6 @@ void dense_matrix::materialize_self() const
 		= detail::virtual_matrix_store::cast(store)->materialize();
 }
 
-dense_matrix::ptr dense_matrix::append_cols(
-		const std::vector<dense_matrix::ptr> &mats)
-{
-	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
-	for (size_t i = 0; i < mats.size(); i++)
-		stores[i] = mats[i]->store;
-	detail::matrix_store::const_ptr ret = store->append_cols(stores);
-	return dense_matrix::create(ret);
-}
-
 /********************************* mapply ************************************/
 
 namespace detail

@@ -182,9 +182,6 @@ public:
 	}
 	virtual void materialize_self() const {
 	}
-
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 };
 
 }

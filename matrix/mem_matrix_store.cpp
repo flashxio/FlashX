@@ -718,52 +718,6 @@ void mem_matrix_store::set_data(const set_operate &op)
 	mem_threads->wait4complete();
 }
 
-matrix_store::const_ptr mem_col_matrix_store::append_cols(
-		const std::vector<matrix_store::const_ptr> &mats) const
-{
-	for (size_t i = 0; i < mats.size(); i++) {
-		if (!mats[i]->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in memory";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_num_rows() != get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different length";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_type() != get_type()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different type";
-			return matrix_store::const_ptr();
-		}
-	}
-	assert(!is_wide());
-	std::vector<const char *> src_cols;
-	for (size_t i = 0; i < get_num_cols(); i++)
-		src_cols.push_back(get_col(i));
-	for (size_t i = 0; i < mats.size(); i++) {
-		for (size_t j = 0; j < mats[i]->get_num_cols(); j++) {
-			const mem_col_matrix_store &mem_mat
-				= dynamic_cast<const mem_col_matrix_store &>(*mats[i]);
-			src_cols.push_back(mem_mat.get_col(j));
-		}
-	}
-	mem_col_matrix_store::ptr ret = mem_col_matrix_store::create(
-			get_num_rows(), src_cols.size(), get_type());
-#pragma omp parallel for
-	for (size_t i = 0; i < src_cols.size(); i++)
-		memcpy(ret->get_col(i), src_cols[i], get_num_rows() * get_entry_size());
-	return ret;
-}
-
-matrix_store::const_ptr mem_row_matrix_store::append_cols(
-		const std::vector<matrix_store::const_ptr> &mats) const
-{
-	throw unsupported_exception(
-			"can't add columns to a row-major matrix");
-}
-
 }
 
 }

@@ -396,43 +396,6 @@ matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
 	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(wanted));
 }
 
-matrix_store::const_ptr NUMA_col_tall_matrix_store::append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const
-{
-	std::vector<NUMA_vec_store::ptr> data(this->data.begin(), this->data.end());
-	for (size_t i = 0; i < mats.size(); i++) {
-		if (mats[i]->get_num_rows() != get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different length";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_type() != get_type()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different type";
-			return matrix_store::const_ptr();
-		}
-
-		if (!mats[i]->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in memory";
-			return matrix_store::const_ptr();
-		}
-		const mem_matrix_store &mem_mat
-			= static_cast<const mem_matrix_store &>(*mats[i]);
-		if (mem_mat.get_num_nodes() <= 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in NUMA memory";
-			return matrix_store::const_ptr();
-		}
-
-		const NUMA_col_tall_matrix_store &numa_mat
-			= dynamic_cast<const NUMA_col_tall_matrix_store &>(mem_mat);
-		data.insert(data.end(), numa_mat.data.begin(), numa_mat.data.end());
-	}
-
-	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(data));
-}
-
 bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const
 {
 	FILE *f = fopen(file_name.c_str(), "w");

@@ -390,13 +390,6 @@ void EM_matrix_store::write_portion_async(
 	io.flush_requests();
 }
 
-matrix_store::const_ptr EM_matrix_store::append_cols(
-		const std::vector<matrix_store::const_ptr> &mats) const
-{
-	// TODO
-	assert(0);
-}
-
 std::vector<safs::io_interface::ptr> EM_matrix_store::create_ios() const
 {
 	std::vector<safs::io_interface::ptr> ret(1);
