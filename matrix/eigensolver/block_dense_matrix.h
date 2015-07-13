@@ -55,8 +55,6 @@ public:
 		return ptr(new block_multi_vector(nrow, ncol, block_size, type));
 	}
 
-	bool resize_block(size_t new_block_size);
-
 	size_t get_num_rows() const {
 		return num_rows;
 	}

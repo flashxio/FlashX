@@ -318,35 +318,6 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 	}
 }
 
-bool block_multi_vector::resize_block(size_t new_block_size)
-{
-	assert(0);
-	for (size_t i = 0; i < mats.size(); i++)
-		assert(mats[i].use_count() == 1);
-	assert(get_block_size() % new_block_size == 0);
-	size_t num_subblocks = get_block_size() / new_block_size;
-	std::vector<fm::dense_matrix::ptr> new_mats(
-			num_subblocks * get_num_blocks());
-	for (size_t i = 0; i < new_mats.size(); i++) {
-		size_t subblock_idx = i % num_subblocks;
-		size_t old_block_idx = i / num_subblocks;
-		std::vector<off_t> subblock_offs(new_block_size);
-		for (size_t j = 0; j < new_block_size; j++)
-			subblock_offs[j] = subblock_idx * new_block_size + j;
-		const fm::detail::mem_matrix_store &mem_store
-			= dynamic_cast<const fm::detail::mem_matrix_store &>(
-					mats[old_block_idx]->get_data());
-		fm::detail::mem_matrix_store::const_ptr sub_store
-			= fm::detail::mem_matrix_store::cast(mem_store.get_cols(
-						subblock_offs));
-		new_mats[i] = fm::dense_matrix::create(sub_store);
-	}
-
-	mats = new_mats;
-	block_size = new_block_size;
-	return true;
-}
-
 block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		const std::vector<int> &index)
 {
