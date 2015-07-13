@@ -102,6 +102,8 @@ public:
 
 	fm::dense_matrix::const_ptr get_col(off_t col_idx) const;
 
+	fm::dense_matrix::ptr get_col_mat(const std::vector<off_t> &index) const;
+
 	block_multi_vector::ptr get_cols(const std::vector<int> &index);
 	/*
 	 * The difference between get_cols and get_cols_mirror is that any change

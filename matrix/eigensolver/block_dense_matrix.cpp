@@ -22,6 +22,7 @@
 #include "block_dense_matrix.h"
 #include "dotp_matrix_store.h"
 #include "matrix_stats.h"
+#include "collected_col_matrix_store.h"
 
 namespace fm
 {
@@ -731,39 +732,67 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	return dense_matrix::create(res);
 }
 
-typedef std::vector<std::pair<int, detail::NUMA_vec_store::ptr> > block_col_set_t;
+typedef std::vector<int> block_col_set_t;
 
-std::vector<block_col_set_t> get_col_index_blocks(const block_multi_vector &mv,
-		const std::vector<int>& index, size_t block_size)
+/*
+ * This function splits the columns into blocks.
+ */
+std::vector<block_col_set_t> get_col_index_blocks(const std::vector<int>& index,
+		size_t block_size)
 {
 	std::vector<block_col_set_t> col_blocks;
-
-	std::set<int> block_set;
+	col_blocks.push_back(block_col_set_t());
 	for (size_t i = 0; i < index.size(); i++) {
-		int col_idx = index[i];
-		size_t block_idx = col_idx / block_size;
-		block_set.insert(block_idx);
-
-		dense_matrix::const_ptr tmp_mat = mv.get_col(i);
-		detail::vec_store::ptr col = const_cast<detail::NUMA_col_tall_matrix_store &>(
-					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-						tmp_mat->get_data())).get_col_vec(0);
-		// Not in the same block
-		if (col_blocks.empty() || col_blocks.back()[0].first / block_size
-				!= block_idx) {
-			block_col_set_t set(1);
-			set[0] = std::pair<int, detail::NUMA_vec_store::ptr>(col_idx,
-					detail::NUMA_vec_store::cast(col));
-			col_blocks.push_back(set);
+		if (col_blocks.back().empty())
+			col_blocks.back().push_back(index[i]);
+		else if (col_blocks.back().back() / block_size == index[i] / block_size)
+			col_blocks.back().push_back(index[i]);
+		else {
+			col_blocks.push_back(block_col_set_t());
+			col_blocks.back().push_back(index[i]);
 		}
-		else
-			// In the same block.
-			col_blocks.back().push_back(std::pair<int, detail::NUMA_vec_store::ptr>(
-						col_idx, detail::NUMA_vec_store::cast(col)));
 	}
-	assert(block_set.size() == col_blocks.size());
-
 	return col_blocks;
+}
+
+fm::dense_matrix::ptr block_multi_vector::get_col_mat(
+		const std::vector<off_t> &_index) const
+{
+	std::vector<int> index(_index.begin(), _index.end());
+	std::vector<block_col_set_t> col_index_blocks
+		= get_col_index_blocks(index, get_block_size());
+	std::vector<dense_matrix::ptr> mats(col_index_blocks.size());
+	for (size_t i = 0; i < mats.size(); i++) {
+		block_col_set_t block_cols = col_index_blocks[i];
+		int block_idx = block_cols[0] / get_block_size();
+		std::vector<off_t> offs_in_block(block_cols.size());
+		for (size_t i = 0; i < block_cols.size(); i++) {
+			assert((size_t) block_idx == block_cols[i] / get_block_size());
+			offs_in_block[i] = block_cols[i] % get_block_size();
+		}
+		mats[i] = get_block(block_idx)->get_cols(offs_in_block);
+	}
+
+	if (mats.size() == 1)
+		return mats[0];
+	else {
+		std::vector<detail::matrix_store::const_ptr> const_mats(mats.size());
+		for (size_t i = 0; i < mats.size(); i++)
+			const_mats[i] = mats[i]->get_raw_store();
+		return dense_matrix::create(collected_matrix_store::create(
+					const_mats, index.size()));
+	}
+}
+
+dense_matrix::ptr materialize_block(dense_matrix::ptr mat)
+{
+	assert(mat->is_virtual());
+	num_col_writes += mat->get_num_cols();
+	printf("materialize %s\n", mat->get_data().get_name().c_str());
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	mat->materialize_self();
+	detail::matrix_stats.print_diff(orig_stats);
+	return mat;
 }
 
 void block_multi_vector::set_block(const block_multi_vector &mv,
@@ -777,95 +806,91 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			this->set_block(block_start + i, mv.get_block(i));
 	}
 	else {
-		// They should all be in the same block.
+		assert(std::is_sorted(index.begin(), index.end()));
 		std::vector<block_col_set_t> col_index_blocks
-			= get_col_index_blocks(mv, index, get_block_size());
+			= get_col_index_blocks(index, get_block_size());
+		size_t mv_col_idx = 0;
 		for (size_t k = 0; k < col_index_blocks.size(); k++) {
+			// The column index on the current MV.
 			block_col_set_t block_cols = col_index_blocks[k];
-			int block_idx = block_cols[0].first / get_block_size();
+			// The block index on the current MV.
+			int this_block_idx = block_cols[0] / get_block_size();
+			// The column index inside a block of the current MV.
 			std::vector<off_t> offs_in_block(block_cols.size());
 			for (size_t i = 0; i < block_cols.size(); i++) {
-				assert((size_t) block_idx == block_cols[i].first / get_block_size());
-				offs_in_block[i] = block_cols[i].first % get_block_size();
+				assert((size_t) this_block_idx == block_cols[i] / get_block_size());
+				offs_in_block[i] = block_cols[i] % get_block_size();
 			}
+			std::vector<off_t> mv_block_cols(block_cols.size());
+			for (size_t i = 0; i < block_cols.size(); i++)
+				mv_block_cols[i] = mv_col_idx++;
 
 			// Get all columns in the block.
-			fm::dense_matrix::ptr block = get_block(block_idx);
-			// The block might be a one-value matrix, so we have to materialize
-			// the matrix to change its columns. This rarely happens.
-			// TODO We might want the uninitialized columns to be virtualized.
-			if (block->is_virtual()) {
-				num_col_writes += block->get_num_cols();
-				printf("materialize %s\n", block->get_data().get_name().c_str());
-				detail::matrix_stats_t orig_stats = detail::matrix_stats;
-				block->materialize_self();
-				detail::matrix_stats.print_diff(orig_stats);
+			fm::dense_matrix::ptr this_block = get_block(this_block_idx);
+			fm::dense_matrix::ptr new_mat;
+			// We can use the entire block in the input MV to replace the block
+			// in the current MV.
+			if (offs_in_block.front() == 0
+					&& offs_in_block.size() == get_block_size())
+				new_mat = mv.get_col_mat(mv_block_cols);
+			// The front part of the block in the current MV is replaced.
+			else if (offs_in_block.front() == 0) {
+				std::vector<detail::matrix_store::const_ptr> mats(2);
+				mats[0] = mv.get_col_mat(mv_block_cols)->get_raw_store();
+				std::vector<off_t> remain_cols(
+						get_block_size() - mv_block_cols.size());
+				for (size_t i = 0; i < remain_cols.size(); i++)
+					remain_cols[i] = offs_in_block.back() + i + 1;
+				assert((size_t) remain_cols.back() == get_block_size() - 1);
+				mats[1] = this_block->get_cols(remain_cols)->get_raw_store();
+				if (mats[1] == NULL)
+					mats[1] = materialize_block(this_block)->get_cols(
+							remain_cols)->get_raw_store();
+				new_mat = fm::dense_matrix::create(
+						collected_matrix_store::create(mats, get_block_size()));
 			}
-			detail::NUMA_col_tall_matrix_store &numa_mat
-				= const_cast<detail::NUMA_col_tall_matrix_store &>(
-						dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-							block->get_data()));
-			std::vector<detail::NUMA_vec_store::ptr> cols(numa_mat.get_num_cols());
-			for (size_t i = 0; i < cols.size(); i++)
-				cols[i] = detail::NUMA_vec_store::cast(numa_mat.get_col_vec(i));
+			else if ((size_t) offs_in_block.back() == get_block_size() - 1) {
+				std::vector<detail::matrix_store::const_ptr> mats(2);
+				std::vector<off_t> remain_cols(
+						get_block_size() - mv_block_cols.size());
+				for (size_t i = 0; i < remain_cols.size(); i++)
+					remain_cols[i] = i;
+				assert(remain_cols.back() == offs_in_block.front() - 1);
+				mats[0] = this_block->get_cols(remain_cols)->get_raw_store();
+				if (mats[0] == NULL)
+					mats[0] = materialize_block(this_block)->get_cols(
+							remain_cols)->get_raw_store();
+				mats[1] = mv.get_col_mat(mv_block_cols)->get_raw_store();
+				new_mat = fm::dense_matrix::create(
+						collected_matrix_store::create(mats, get_block_size()));
+			}
+			else {
+				std::vector<detail::matrix_store::const_ptr> mats(3);
+				std::vector<off_t> front_cols(offs_in_block.front());
+				for (size_t i = 0; i < front_cols.size(); i++)
+					front_cols[i] = i;
+				assert(front_cols.back() == offs_in_block.front() - 1);
+				mats[0] = this_block->get_cols(front_cols)->get_raw_store();
+				if (mats[0] == NULL)
+					mats[0] = materialize_block(this_block)->get_cols(
+							front_cols)->get_raw_store();
+				mats[1] = mv.get_col_mat(mv_block_cols)->get_raw_store();
+				std::vector<off_t> back_cols(
+						get_block_size() - offs_in_block.back() - 1);
+				for (size_t i = 0; i < back_cols.size(); i++)
+					back_cols[i] = offs_in_block.back() + i + 1;
+				assert((size_t) back_cols.back() == get_block_size() - 1);
+				mats[2] = this_block->get_cols(back_cols)->get_raw_store();
+				assert(mats[2]);
+				assert(front_cols.size() + mv_block_cols.size() + back_cols.size()
+						== get_block_size());
+				new_mat = fm::dense_matrix::create(
+						collected_matrix_store::create(mats, get_block_size()));
+			}
 
-			// changes some of the columns accordingly.
-			for (size_t i = 0; i < block_cols.size(); i++)
-				cols[offs_in_block[i]] = block_cols[i].second;
-
-			// Create a dense matrix for the block and assign it to the original
-			// block.
-			fm::dense_matrix::ptr new_mat = fm::dense_matrix::create(
-					fm::detail::NUMA_col_tall_matrix_store::create(cols));
-			set_block(block_idx, new_mat);
+			set_block(this_block_idx, new_mat);
 		}
 	}
-}
-
-class merge_cols_op: public detail::portion_mapply_op
-{
-public:
-	merge_cols_op(size_t num_rows, size_t num_cols,
-			const scalar_type &type): detail::portion_mapply_op(
-				num_rows, num_cols, type) {
-	}
-
-	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &out) const;
-
-	// This is only used once, so it's not necessary to implement these
-	// two methods.
-	virtual portion_mapply_op::const_ptr transpose() const {
-		assert(0);
-		return portion_mapply_op::const_ptr();
-	}
-	virtual std::string to_string(
-			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		return std::string();
-	}
-};
-
-void merge_cols_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &out) const
-{
-	assert(out.store_layout() == matrix_layout_t::L_COL);
-	detail::local_col_matrix_store &col_out
-		= static_cast<detail::local_col_matrix_store &>(out);
-
-	size_t out_col_idx = 0;
-	for (size_t i = 0; i < ins.size(); i++) {
-		assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
-		const detail::local_col_matrix_store &col_in
-			= static_cast<const detail::local_col_matrix_store &>(*ins[i]);
-		for (size_t col_idx = 0; col_idx < col_in.get_num_cols(); col_idx++) {
-			assert(out_col_idx < out.get_num_cols());
-			memcpy(col_out.get_col(out_col_idx), col_in.get_col(col_idx),
-					col_in.get_num_rows() * col_in.get_entry_size());
-			out_col_idx++;
-		}
-	}
-	assert(out_col_idx == out.get_num_cols());
 }
 
 fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
@@ -873,16 +898,15 @@ fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
 	if (mats.size() == 1)
 		return mats[0];
 	else {
-		std::vector<dense_matrix::const_ptr> const_mats(mats.begin(),
-				mats.end());
+		std::vector<detail::matrix_store::const_ptr> const_mats(mats.size());
+		for (size_t i = 0; i < mats.size(); i++)
+			const_mats[i] = mats[i]->get_raw_store();
 		size_t tot_num_cols = 0;
 		for (size_t i = 0; i < mats.size(); i++)
 			tot_num_cols += mats[i]->get_num_cols();
-		dense_matrix::ptr new_mat = fm::detail::mapply_portion(const_mats,
-				detail::portion_mapply_op::const_ptr(new merge_cols_op(
-						mats[0]->get_num_rows(), tot_num_cols,
-						mats[0]->get_type())),
-				mats[0]->store_layout());
+		dense_matrix::ptr new_mat
+			= dense_matrix::create(collected_matrix_store::create(
+						const_mats, tot_num_cols));
 		printf("conv2matrix: materialize %s\n",
 				new_mat->get_data().get_name().c_str());
 		num_col_writes += new_mat->get_num_cols();
