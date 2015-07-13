@@ -26,6 +26,12 @@
 #include "dense_matrix.h"
 #include "matrix_store.h"
 
+namespace fm
+{
+
+namespace eigen
+{
+
 class spm_function
 {
 public:
@@ -61,5 +67,9 @@ struct eigen_options
  */
 eigen_res compute_eigen(spm_function *func, bool sym,
 		struct eigen_options &opts);
+
+}
+
+}
 
 #endif

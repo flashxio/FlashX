@@ -27,6 +27,12 @@
 
 #include "eigensolver.h"
 
+namespace fm
+{
+
+namespace eigen
+{
+
 extern size_t num_col_writes;
 extern size_t num_col_writes_concept;
 extern size_t num_col_reads_concept;
@@ -156,5 +162,9 @@ public:
 		return ret_vecs;
 	}
 };
+
+}
+
+}
 
 #endif

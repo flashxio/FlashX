@@ -25,6 +25,7 @@
 #include "eigensolver.h"
 
 using namespace fm;
+using namespace fm::eigen;
 
 class FM_Operator: public spm_function
 {

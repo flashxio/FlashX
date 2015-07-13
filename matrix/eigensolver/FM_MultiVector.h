@@ -47,6 +47,12 @@
 
 static int MV_id;
 
+namespace fm
+{
+
+namespace eigen
+{
+
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
@@ -425,11 +431,11 @@ public:
 		// This is a special case: we compute the dot product of a col vector
 		// with itself.
 		if (fm_A.mat->get_num_cols() == 1 && mat->get_num_cols() == 1) {
-			const fm::detail::sub_dotp_matrix_store *col1
-				= dynamic_cast<const fm::detail::sub_dotp_matrix_store *>(
+			const sub_dotp_matrix_store *col1
+				= dynamic_cast<const sub_dotp_matrix_store *>(
 						fm_A.mat->get_block(0)->get_raw_store().get());
-			const fm::detail::sub_dotp_matrix_store *col2
-				= dynamic_cast<const fm::detail::sub_dotp_matrix_store *>(
+			const sub_dotp_matrix_store *col2
+				= dynamic_cast<const sub_dotp_matrix_store *>(
 						mat->get_block(0)->get_raw_store().get());
 			if (col1 && col2
 					&& col1->get_orig_store() == col2->get_orig_store()) {
@@ -489,8 +495,8 @@ public:
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			printf("materialize %s on the fly\n",
 					mat->get_block(i)->get_data().get_name().c_str());
-			fm::detail::dotp_matrix_store::ptr dotp
-				= fm::detail::dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
+			dotp_matrix_store::ptr dotp
+				= dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
 			mat->set_block(i, fm::dense_matrix::create(dotp));
 			std::vector<ScalarType> col_dots = dotp->get_col_dot_prods();
 			// TODO do I need long double here?
@@ -636,6 +642,10 @@ public:
 #endif // HAVE_ANASAZI_TSQR
 };
 
+}
+
+}
+
 namespace Anasazi
 {
 
@@ -649,17 +659,17 @@ namespace Anasazi
 /// \tparam ScalarType The type of entries in the multivector; the
 ///   template parameter of MultiVec.
 template<class ScalarType>
-class MultiVecTraits<ScalarType, FM_MultiVector<ScalarType> > {
+class MultiVecTraits<ScalarType, fm::eigen::FM_MultiVector<ScalarType> > {
 public:
 	//! @name Creation methods
 	//@{ 
 
 	/// \brief Create a new empty \c MultiVec containing \c numvecs columns.
 	/// \return Reference-counted pointer to the new \c MultiVec.
-	static Teuchos::RCP<FM_MultiVector<ScalarType> > Clone (
-			const FM_MultiVector<ScalarType>& mv, const int numvecs) {
-		return Teuchos::rcp ((FM_MultiVector<ScalarType> *)
-				const_cast<FM_MultiVector<ScalarType>&> (mv).Clone(numvecs)); 
+	static Teuchos::RCP<fm::eigen::FM_MultiVector<ScalarType> > Clone (
+			const fm::eigen::FM_MultiVector<ScalarType>& mv, const int numvecs) {
+		return Teuchos::rcp ((fm::eigen::FM_MultiVector<ScalarType> *)
+				const_cast<fm::eigen::FM_MultiVector<ScalarType>&> (mv).Clone(numvecs)); 
 	}
 
 	/*!
@@ -667,10 +677,10 @@ public:
 	 * into the new vector (deep copy).
 	  \return Reference-counted pointer to the new \c Anasazi::MultiVec.
 	  */
-	static Teuchos::RCP<FM_MultiVector<ScalarType> > CloneCopy(
-			const FM_MultiVector<ScalarType>& mv) {
-		return Teuchos::rcp((FM_MultiVector<ScalarType> *)
-				const_cast<FM_MultiVector<ScalarType>&>(mv).CloneCopy());
+	static Teuchos::RCP<fm::eigen::FM_MultiVector<ScalarType> > CloneCopy(
+			const fm::eigen::FM_MultiVector<ScalarType>& mv) {
+		return Teuchos::rcp((fm::eigen::FM_MultiVector<ScalarType> *)
+				const_cast<fm::eigen::FM_MultiVector<ScalarType>&>(mv).CloneCopy());
 	}
 
 	/*! \brief Creates a new \c Anasazi::MultiVec and copies the selected
@@ -679,10 +689,12 @@ public:
 	  The copied vectors from \c mv are indicated by the \c index.size() indices in \c index.      
 	  \return Reference-counted pointer to the new \c Anasazi::MultiVec.
 	  */
-	static Teuchos::RCP<FM_MultiVector<ScalarType> > CloneCopy(
-			const FM_MultiVector<ScalarType>& mv, const std::vector<int>& index) {
-		return Teuchos::rcp((FM_MultiVector<ScalarType> *)
-				const_cast<FM_MultiVector<ScalarType>&>(mv).CloneCopy(index));
+	static Teuchos::RCP<fm::eigen::FM_MultiVector<ScalarType> > CloneCopy(
+			const fm::eigen::FM_MultiVector<ScalarType>& mv,
+			const std::vector<int>& index) {
+		return Teuchos::rcp((fm::eigen::FM_MultiVector<ScalarType> *)
+				const_cast<fm::eigen::FM_MultiVector<ScalarType>&>(
+					mv).CloneCopy(index));
 	}
 
 	/*! \brief Creates a new \c Anasazi::MultiVec that shares the selected
@@ -692,9 +704,10 @@ public:
 	  by the indices given in \c index.
 	  \return Reference-counted pointer to the new \c Anasazi::MultiVec.
 	  */    
-	static Teuchos::RCP<FM_MultiVector<ScalarType> > CloneViewNonConst(
-			FM_MultiVector<ScalarType>& mv, const std::vector<int>& index) {
-		return Teuchos::rcp((FM_MultiVector<ScalarType> *)
+	static Teuchos::RCP<fm::eigen::FM_MultiVector<ScalarType> > CloneViewNonConst(
+			fm::eigen::FM_MultiVector<ScalarType>& mv,
+			const std::vector<int>& index) {
+		return Teuchos::rcp((fm::eigen::FM_MultiVector<ScalarType> *)
 				mv.CloneViewNonConst(index));
 	}
 
@@ -705,10 +718,12 @@ public:
 	  indicated by the indices given in \c index.
 	  \return Reference-counted pointer to the new const \c Anasazi::MultiVec.
 	  */      
-	static Teuchos::RCP<const FM_MultiVector<ScalarType> > CloneView(
-			const FM_MultiVector<ScalarType>& mv, const std::vector<int>& index) {
-		return Teuchos::rcp((FM_MultiVector<ScalarType> *)
-				const_cast<FM_MultiVector<ScalarType>&>(mv).CloneView(index));
+	static Teuchos::RCP<const fm::eigen::FM_MultiVector<ScalarType> > CloneView(
+			const fm::eigen::FM_MultiVector<ScalarType>& mv,
+			const std::vector<int>& index) {
+		return Teuchos::rcp((fm::eigen::FM_MultiVector<ScalarType> *)
+				const_cast<fm::eigen::FM_MultiVector<ScalarType>&>(
+					mv).CloneView(index));
 	}
 
 	//@}
@@ -717,12 +732,13 @@ public:
 	//@{ 
 
 	//! Obtain the vector length of \c mv.
-	ANASAZI_DEPRECATED static int GetVecLength(const FM_MultiVector<ScalarType>& mv) {
+	ANASAZI_DEPRECATED static int GetVecLength(
+			const fm::eigen::FM_MultiVector<ScalarType>& mv) {
 		return mv.GetGlobalLength();
 	}
 
 	//! Obtain the number of vectors in \c mv
-	static int GetNumberVecs(const FM_MultiVector<ScalarType>& mv) {
+	static int GetNumberVecs(const fm::eigen::FM_MultiVector<ScalarType>& mv) {
 		return mv.GetNumberVecs();
 	}
 
@@ -733,22 +749,25 @@ public:
 
 	/*! \brief Update \c mv with \f$ \alpha AB + \beta mv \f$.
 	*/
-	static void MvTimesMatAddMv( ScalarType alpha, const FM_MultiVector<ScalarType>& A, 
+	static void MvTimesMatAddMv( ScalarType alpha,
+			const fm::eigen::FM_MultiVector<ScalarType>& A, 
 			const Teuchos::SerialDenseMatrix<int,ScalarType>& B, 
-			ScalarType beta, FM_MultiVector<ScalarType>& mv )
+			ScalarType beta, fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.MvTimesMatAddMv(alpha, A, B, beta); }
 
 	/*! \brief Replace \c mv with \f$\alpha A + \beta B\f$.
 	*/
-	static void MvAddMv( ScalarType alpha, const FM_MultiVector<ScalarType>& A,
-			ScalarType beta, const FM_MultiVector<ScalarType>& B,
-			FM_MultiVector<ScalarType>& mv)
+	static void MvAddMv( ScalarType alpha,
+			const fm::eigen::FM_MultiVector<ScalarType>& A,
+			ScalarType beta, const fm::eigen::FM_MultiVector<ScalarType>& B,
+			fm::eigen::FM_MultiVector<ScalarType>& mv)
 	{ mv.MvAddMv(alpha, A, beta, B); }
 
 	/*! \brief Compute a dense matrix \c B through the matrix-matrix multiply \f$ \alpha A^Tmv \f$.
 	*/
-	static void MvTransMv( ScalarType alpha, const FM_MultiVector<ScalarType>& A,
-			const FM_MultiVector<ScalarType>& mv,
+	static void MvTransMv( ScalarType alpha,
+			const fm::eigen::FM_MultiVector<ScalarType>& A,
+			const fm::eigen::FM_MultiVector<ScalarType>& mv,
 			Teuchos::SerialDenseMatrix<int, ScalarType>& B
 #ifdef HAVE_ANASAZI_EXPERIMENTAL
 			, ConjType conj = Anasazi::CONJ
@@ -762,8 +781,9 @@ public:
 
 	/*! \brief Compute a vector \c b where the components are the individual dot-products of the \c i-th columns of \c A and \c mv, i.e.\f$b[i] = A[i]^H mv[i]\f$.
 	*/
-	static void MvDot( const FM_MultiVector<ScalarType>& mv,
-			const FM_MultiVector<ScalarType>& A, std::vector<ScalarType> & b
+	static void MvDot( const fm::eigen::FM_MultiVector<ScalarType>& mv,
+			const fm::eigen::FM_MultiVector<ScalarType>& A,
+			std::vector<ScalarType> & b
 #ifdef HAVE_ANASAZI_EXPERIMENTAL
 			, ConjType conj = Anasazi::CONJ
 #endif
@@ -775,11 +795,11 @@ public:
 			); }
 
 	//! Scale each element of the vectors in \c *this with \c alpha.
-	static void MvScale ( FM_MultiVector<ScalarType>& mv, ScalarType alpha )
+	static void MvScale ( fm::eigen::FM_MultiVector<ScalarType>& mv, ScalarType alpha )
 	{ mv.MvScale( alpha ); }
 
 	//! Scale each element of the \c i-th vector in \c *this with \c alpha[i].
-	static void MvScale ( FM_MultiVector<ScalarType>& mv,
+	static void MvScale ( fm::eigen::FM_MultiVector<ScalarType>& mv,
 			const std::vector<ScalarType>& alpha )
 	{ mv.MvScale( alpha ); }
 
@@ -790,7 +810,7 @@ public:
 	/*! \brief Compute the 2-norm of each individual vector of \c mv.  
 	  Upon return, \c normvec[i] holds the value of \f$||mv_i||_2\f$, the \c i-th column of \c mv.
 	  */
-	static void MvNorm( const FM_MultiVector<ScalarType>& mv,
+	static void MvNorm( const fm::eigen::FM_MultiVector<ScalarType>& mv,
 			std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> & normvec)
 	{ mv.MvNorm(normvec); }
 
@@ -802,18 +822,19 @@ public:
 	  The \c numvecs vectors in \c A are copied to a subset of vectors in \c mv indicated by the indices given in \c index,
 	  i.e.<tt> mv[index[i]] = A[i]</tt>.
 	  */
-	static void SetBlock( const FM_MultiVector<ScalarType>& A,
-			const std::vector<int>& index, FM_MultiVector<ScalarType>& mv )
+	static void SetBlock( const fm::eigen::FM_MultiVector<ScalarType>& A,
+			const std::vector<int>& index,
+			fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.SetBlock(A, index); }
 
 	/*! \brief Replace the vectors in \c mv with random vectors.
 	*/
-	static void MvRandom( FM_MultiVector<ScalarType>& mv )
+	static void MvRandom( fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.MvRandom(); }
 
 	/*! \brief Replace each element of the vectors in \c mv with \c alpha.
 	*/
-	static void MvInit( FM_MultiVector<ScalarType>& mv,
+	static void MvInit( fm::eigen::FM_MultiVector<ScalarType>& mv,
 			ScalarType alpha = Teuchos::ScalarTraits<ScalarType>::zero() )
 	{ mv.MvInit(alpha); }
 
@@ -822,7 +843,8 @@ public:
 	//@{ 
 
 	//! Print the \c mv multi-vector to the \c os output stream.
-	static void MvPrint( const FM_MultiVector<ScalarType>& mv, std::ostream& os )
+	static void MvPrint( const fm::eigen::FM_MultiVector<ScalarType>& mv,
+			std::ostream& os )
 	{ mv.MvPrint(os); }
 
 	//@}

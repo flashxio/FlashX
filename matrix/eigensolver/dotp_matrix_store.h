@@ -26,10 +26,10 @@
 namespace fm
 {
 
-namespace detail
+namespace eigen
 {
 
-class sub_dotp_matrix_store: public virtual_matrix_store
+class sub_dotp_matrix_store: public detail::virtual_matrix_store
 {
 	matrix_store::const_ptr orig_store;
 	std::vector<off_t> idxs;
@@ -37,7 +37,7 @@ class sub_dotp_matrix_store: public virtual_matrix_store
 public:
 	sub_dotp_matrix_store(matrix_store::const_ptr orig_store,
 			const std::vector<double> &dot_prods,
-			const std::vector<off_t> &idxs): virtual_matrix_store(
+			const std::vector<off_t> &idxs): detail::virtual_matrix_store(
 				orig_store->get_num_rows(), idxs.size(),
 				orig_store->is_in_mem(), orig_store->get_type()) {
 		this->orig_store = orig_store;
@@ -72,14 +72,14 @@ public:
 		return matrix_store::const_ptr();
 	}
 
-	virtual local_matrix_store::const_ptr get_portion_async(size_t start_row,
-			size_t start_col, size_t num_rows, size_t num_cols,
-			portion_compute::ptr compute) const {
-		return local_matrix_store::const_ptr();
+	virtual detail::local_matrix_store::const_ptr get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
+			detail::portion_compute::ptr compute) const {
+		return detail::local_matrix_store::const_ptr();
 	}
-	virtual local_matrix_store::const_ptr get_portion(size_t start_row,
+	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
-		return local_matrix_store::const_ptr();
+		return detail::local_matrix_store::const_ptr();
 	}
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		return std::pair<size_t, size_t>(0, 0);
@@ -95,12 +95,12 @@ public:
  * of the matrix. When we need to fetch a column, this class returns a special
  * virtual matrix that has the dot product of that column.
  */
-class dotp_matrix_store: public virtual_matrix_store
+class dotp_matrix_store: public detail::virtual_matrix_store
 {
 	matrix_store::const_ptr orig_store;
 	std::vector<double> col_dot_prods;
 
-	dotp_matrix_store(matrix_store::const_ptr orig_store): virtual_matrix_store(
+	dotp_matrix_store(matrix_store::const_ptr orig_store): detail::virtual_matrix_store(
 				orig_store->get_num_rows(), orig_store->get_num_cols(),
 				orig_store->is_in_mem(), orig_store->get_type()) {
 		this->orig_store = orig_store;
@@ -149,13 +149,13 @@ public:
 		return orig_store->transpose();
 	}
 
-	virtual local_matrix_store::const_ptr get_portion_async(size_t start_row,
-			size_t start_col, size_t num_rows, size_t num_cols,
-			portion_compute::ptr compute) const {
+	virtual detail::local_matrix_store::const_ptr get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
+			detail::portion_compute::ptr compute) const {
 		return orig_store->get_portion_async(start_row, start_col, num_rows,
 				num_cols, compute);
 	}
-	virtual local_matrix_store::const_ptr get_portion(size_t start_row,
+	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		return orig_store->get_portion(start_row, start_col, num_rows, num_cols);
 	}

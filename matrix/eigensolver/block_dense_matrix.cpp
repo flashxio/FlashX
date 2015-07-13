@@ -23,7 +23,12 @@
 #include "dotp_matrix_store.h"
 #include "matrix_stats.h"
 
-using namespace fm;
+namespace fm
+{
+
+namespace eigen
+{
+
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
 size_t num_col_reads_concept = 0;
@@ -233,8 +238,8 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	fm::dense_matrix::const_ptr ret;
 	if (block->is_virtual()) {
 		// We need to handle the special case explicitly.
-		const detail::dotp_matrix_store *dotp
-			= dynamic_cast<const detail::dotp_matrix_store *>(
+		const dotp_matrix_store *dotp
+			= dynamic_cast<const dotp_matrix_store *>(
 					block->get_raw_store().get());
 		if (dotp)
 			ret = dense_matrix::create(dotp->get_cols(offs));
@@ -290,8 +295,8 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		dense_matrix::ptr ret1;
 		if (block->is_virtual()) {
 			// We need to handle the special case explicitly.
-			const detail::dotp_matrix_store *dotp
-				= dynamic_cast<const detail::dotp_matrix_store *>(
+			const dotp_matrix_store *dotp
+				= dynamic_cast<const dotp_matrix_store *>(
 					block->get_raw_store().get());
 			if (dotp)
 				ret1 = dense_matrix::create(dotp->get_cols(local_offs));
@@ -884,4 +889,8 @@ fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
 		new_mat->materialize_self();
 		return new_mat;
 	}
+}
+
+}
+
 }

@@ -26,6 +26,8 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
+using namespace fm::eigen;
+
 namespace Anasazi
 {
 
@@ -47,6 +49,12 @@ public:
 };
 
 }
+
+namespace fm
+{
+
+namespace eigen
+{
 
 eigen_options::eigen_options()
 {
@@ -248,4 +256,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		<< detail::matrix_stats.get_multiplies() << endl;
 
 	return res;
+}
+
+}
+
 }
