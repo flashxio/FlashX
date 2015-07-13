@@ -47,8 +47,101 @@ public:
 };
 
 /*
+ * This is a simply way of replacing some columns in a matrix with columns
+ * from another matrix.
+ */
+class set_cols_op: public detail::portion_mapply_op
+{
+	std::vector<off_t> offs_in_mirror;
+public:
+	set_cols_op(const std::vector<off_t> &offs_in_mirror, size_t num_rows,
+			size_t num_cols, const scalar_type &type): detail::portion_mapply_op(
+				num_rows, num_cols, type) {
+		this->offs_in_mirror = offs_in_mirror;
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 2);
+		return std::string("set_cols(") + mats[0]->get_name()
+			+ ", " + mats[1]->get_name() + ")";
+	}
+};
+
+class set_rows_op: public detail::portion_mapply_op
+{
+	std::vector<off_t> offs_in_mirror;
+public:
+	set_rows_op(const std::vector<off_t> &offs_in_mirror, size_t num_rows,
+			size_t num_cols, const scalar_type &type): detail::portion_mapply_op(
+				num_rows, num_cols, type) {
+		this->offs_in_mirror = offs_in_mirror;
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 2);
+		return std::string("set_rows(") + mats[0]->get_name()
+			+ ", " + mats[1]->get_name() + ")";
+	}
+};
+
+void set_cols_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 2);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+	assert(ins[1]->store_layout() == matrix_layout_t::L_COL);
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	const detail::local_col_matrix_store &col_in1
+		= static_cast<const detail::local_col_matrix_store &>(*ins[1]);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+	out.copy_from(*ins[0]);
+	for (size_t i = 0; i < offs_in_mirror.size(); i++)
+		memcpy(col_out.get_col(offs_in_mirror[i]), col_in1.get_col(i),
+				col_out.get_num_rows() * col_out.get_entry_size());
+}
+
+void set_rows_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 2);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+	assert(ins[1]->store_layout() == matrix_layout_t::L_ROW);
+	assert(out.store_layout() == matrix_layout_t::L_ROW);
+	const detail::local_row_matrix_store &row_in1
+		= static_cast<const detail::local_row_matrix_store &>(*ins[1]);
+	detail::local_row_matrix_store &row_out
+		= static_cast<detail::local_row_matrix_store &>(out);
+	out.copy_from(*ins[0]);
+	for (size_t i = 0; i < offs_in_mirror.size(); i++)
+		memcpy(row_out.get_row(offs_in_mirror[i]), row_in1.get_row(i),
+				row_out.get_num_cols() * row_out.get_entry_size());
+}
+
+detail::portion_mapply_op::const_ptr set_cols_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new set_rows_op(offs_in_mirror,
+				get_out_num_cols(), get_out_num_rows(), get_output_type()));
+}
+
+detail::portion_mapply_op::const_ptr set_rows_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new set_cols_op(offs_in_mirror,
+				get_out_num_cols(), get_out_num_rows(), get_output_type()));
+}
+
+/*
  * This mirrors some columns in the block of a block_multi_vector.
- * It only works if each block use NUMA_matrix_store.
  */
 class mirror_cols_block_multi_vector: public block_multi_vector
 {
@@ -63,56 +156,49 @@ class mirror_cols_block_multi_vector: public block_multi_vector
 		this->offs_in_mirror = offs_in_mirror;
 	}
 public:
-	static ptr create(const std::vector<detail::NUMA_vec_store::ptr> &vecs,
-			const std::vector<off_t> &offs_in_mirror,
+	static ptr create(fm::dense_matrix::ptr mat, const std::vector<off_t> &offs,
 			fm::dense_matrix::ptr mirrored_mat) {
 		std::vector<fm::dense_matrix::ptr> mats(1);
-		mats[0] = fm::dense_matrix::create(
-				detail::NUMA_col_tall_matrix_store::create(vecs));
-		return ptr(new mirror_cols_block_multi_vector(mats, offs_in_mirror,
-					mirrored_mat));
+		mats[0] = mat;
+		return ptr(new mirror_cols_block_multi_vector(mats, offs, mirrored_mat));
 	}
 
-	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat) {
-		assert(block_idx == 0);
-		assert(mat->get_num_cols() == get_block_size());
-		mats[block_idx]->assign(*mat);
-		if (mirrored_mat->is_virtual()) {
-			num_col_writes += mirrored_mat->get_num_cols();
-			printf("materialize %s\n", mirrored_mat->get_data().get_name().c_str());
-			detail::matrix_stats_t orig_stats = detail::matrix_stats;
-			mirrored_mat->materialize_self();
-			detail::matrix_stats.print_diff(orig_stats);
-		}
-		if (mat->is_virtual()) {
-			num_col_writes += mat->get_num_cols();
-			printf("materialize %s\n", mat->get_data().get_name().c_str());
-			detail::matrix_stats_t orig_stats = detail::matrix_stats;
-			mat->materialize_self();
-			detail::matrix_stats.print_diff(orig_stats);
-		}
-
-		detail::NUMA_col_tall_matrix_store &mirrored_numa_mat
-			= const_cast<detail::NUMA_col_tall_matrix_store &>(
-					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-						mirrored_mat->get_data()));
-		std::vector<detail::NUMA_vec_store::ptr> cols(mirrored_mat->get_num_cols());
-		for (size_t i = 0; i < cols.size(); i++)
-			cols[i] = detail::NUMA_vec_store::cast(mirrored_numa_mat.get_col_vec(i));
-
-		detail::NUMA_col_tall_matrix_store &numa_in_mat
-			= const_cast<detail::NUMA_col_tall_matrix_store &>(
-					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-						mat->get_data()));
-		for (size_t i = 0; i < mat->get_num_cols(); i++)
-			cols[offs_in_mirror[i]]
-				= detail::NUMA_vec_store::cast(numa_in_mat.get_col_vec(i));
-
-		fm::dense_matrix::ptr new_mat = fm::dense_matrix::create(
-				fm::detail::NUMA_col_tall_matrix_store::create(cols));
-		mirrored_mat->assign(*new_mat);
-	}
+	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat);
 };
+
+void mirror_cols_block_multi_vector::set_block(off_t block_idx,
+		fm::dense_matrix::const_ptr mat)
+{
+	assert(block_idx == 0);
+	assert(mat->get_num_cols() == get_block_size());
+	mats[block_idx]->assign(*mat);
+	if (mirrored_mat->is_virtual()) {
+		num_col_writes += mirrored_mat->get_num_cols();
+		printf("set_block1: materialize %s\n",
+				mirrored_mat->get_data().get_name().c_str());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		mirrored_mat->materialize_self();
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+	if (mat->is_virtual()) {
+		num_col_writes += mat->get_num_cols();
+		printf("set_block2: materialize %s\n",
+				mat->get_data().get_name().c_str());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		mat->materialize_self();
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+
+	std::vector<fm::dense_matrix::const_ptr> in_mats(2);
+	in_mats[0] = mirrored_mat;
+	in_mats[1] = mat;
+	dense_matrix::ptr new_mat = fm::detail::mapply_portion(in_mats,
+			detail::portion_mapply_op::const_ptr(new set_cols_op(
+					offs_in_mirror, mirrored_mat->get_num_rows(),
+					mirrored_mat->get_num_cols(), mirrored_mat->get_type())),
+			mirrored_mat->store_layout());
+	mirrored_mat->assign(*new_mat);
+}
 
 block_multi_vector::block_multi_vector(
 		const std::vector<fm::dense_matrix::ptr> &mats): type(mats[0]->get_type())
@@ -289,18 +375,15 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 
 		// Get the columns in the block.
 		fm::dense_matrix::ptr block = get_block(block_start);
-		assert(!block->is_virtual());
-		detail::NUMA_col_tall_matrix_store &numa_block
-			= const_cast<detail::NUMA_col_tall_matrix_store &>(
-					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
-						block->get_data()));
-		std::vector<detail::NUMA_vec_store::ptr> cols(index.size());
-		for (size_t i = 0; i < cols.size(); i++)
-			cols[i] = detail::NUMA_vec_store::cast(
-					numa_block.get_col_vec(idxs_in_block[i]));
-
+		if (block->is_virtual()) {
+			printf("get_cols_mirror: materialize %s\n",
+					block->get_data().get_name().c_str());
+			num_col_writes += block->get_num_cols();
+			block->materialize_self();
+		}
 		mirror_cols_block_multi_vector::ptr ret
-			= mirror_cols_block_multi_vector::create(cols, idxs_in_block, block);
+			= mirror_cols_block_multi_vector::create(
+					block->get_cols(idxs_in_block), idxs_in_block, block);
 		return ret;
 	}
 	else {
@@ -763,12 +846,71 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 	}
 }
 
+class merge_cols_op: public detail::portion_mapply_op
+{
+public:
+	merge_cols_op(size_t num_rows, size_t num_cols,
+			const scalar_type &type): detail::portion_mapply_op(
+				num_rows, num_cols, type) {
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	// This is only used once, so it's not necessary to implement these
+	// two methods.
+	virtual portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void merge_cols_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+
+	size_t out_col_idx = 0;
+	for (size_t i = 0; i < ins.size(); i++) {
+		assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
+		const detail::local_col_matrix_store &col_in
+			= static_cast<const detail::local_col_matrix_store &>(*ins[i]);
+		for (size_t col_idx = 0; col_idx < col_in.get_num_cols(); col_idx++) {
+			assert(out_col_idx < out.get_num_cols());
+			memcpy(col_out.get_col(out_col_idx), col_in.get_col(col_idx),
+					col_in.get_num_rows() * col_in.get_entry_size());
+			out_col_idx++;
+		}
+	}
+	assert(out_col_idx == out.get_num_cols());
+}
+
 fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
 {
 	if (mats.size() == 1)
 		return mats[0];
 	else {
-		std::vector<fm::dense_matrix::ptr> remains(mats.begin() + 1, mats.end());
-		return mats.front()->append_cols(remains);
+		std::vector<dense_matrix::const_ptr> const_mats(mats.begin(),
+				mats.end());
+		size_t tot_num_cols = 0;
+		for (size_t i = 0; i < mats.size(); i++)
+			tot_num_cols += mats[i]->get_num_cols();
+		dense_matrix::ptr new_mat = fm::detail::mapply_portion(const_mats,
+				detail::portion_mapply_op::const_ptr(new merge_cols_op(
+						mats[0]->get_num_rows(), tot_num_cols,
+						mats[0]->get_type())),
+				mats[0]->store_layout());
+		printf("conv2matrix: materialize %s\n",
+				new_mat->get_data().get_name().c_str());
+		num_col_writes += new_mat->get_num_cols();
+		new_mat->materialize_self();
+		return new_mat;
 	}
 }
