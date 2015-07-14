@@ -239,7 +239,7 @@ SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 	BOOST_VERIFY(mret == 0);
 
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
-			mat_file, safs::GLOBAL_CACHE_ACCESS);
+			mat_file, safs::REMOTE_ACCESS);
 	if (io_fac == NULL) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"can't create io factory for %1%") % mat_file;
@@ -252,7 +252,11 @@ SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 
-	io->access(data, 0, size, READ);
+	assert(size % PAGE_SIZE == 0);
+	safs::data_loc_t loc(io->get_file_id(), 0);
+	safs::io_request req(data, loc, size, READ);
+	io->access(&req, 1);
+	io->wait4complete(1);
 	matrix_header *header = (matrix_header *) data;
 	header->verify();
 	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
