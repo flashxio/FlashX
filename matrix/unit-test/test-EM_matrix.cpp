@@ -159,17 +159,43 @@ void test_get_row_col()
 		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
 }
 
-void test_load()
+void test_copy1(detail::mem_matrix_store::ptr mem_mat)
 {
-	printf("test loading an EM matrix\n");
-	detail::EM_matrix_store::ptr mat = detail::EM_matrix_store::create(
-			9999999, 10, matrix_layout_t::L_COL, get_scalar_type<long>());
-	mat->set_data(set_col_operate(mat->get_num_cols()));
+	mem_mat->set_data(set_col_operate(mem_mat->get_num_cols()));
+	detail::EM_matrix_store::ptr em_mat = detail::EM_matrix_store::create(
+			mem_mat->get_num_rows(), mem_mat->get_num_cols(),
+			mem_mat->store_layout(), mem_mat->get_type());
+	em_mat->copy_from(mem_mat);
 
-	detail::mem_matrix_store::ptr mem_mat = mat->load();
-	for (size_t i = 0; i < mem_mat->get_num_rows(); i++)
-		for (size_t j = 0; j < mem_mat->get_num_cols(); j++)
-			assert(mem_mat->get<long>(i, j) == i * mem_mat->get_num_cols() + j);
+	detail::mem_matrix_store::ptr mem_mat2 = em_mat->load();
+#pragma omp parallel for
+	for (size_t i = 0; i < mem_mat2->get_num_rows(); i++)
+		for (size_t j = 0; j < mem_mat2->get_num_cols(); j++)
+			assert(mem_mat2->get<long>(i, j) == i * mem_mat2->get_num_cols() + j);
+}
+
+void test_copy()
+{
+	printf("test copy between EM and in-mem\n");
+	detail::mem_matrix_store::ptr mem_mat;
+
+	mem_mat = detail::mem_matrix_store::create(
+			9999999, 10, matrix_layout_t::L_COL, get_scalar_type<long>(), -1);
+	test_copy1(mem_mat);
+
+	mem_mat = detail::mem_matrix_store::create(10, 9999999,
+			matrix_layout_t::L_COL, get_scalar_type<long>(), -1);
+	test_copy1(mem_mat);
+
+	mem_mat = detail::mem_matrix_store::create(
+			9999999, 10, matrix_layout_t::L_COL, get_scalar_type<long>(),
+			matrix_conf.get_num_nodes());
+	test_copy1(mem_mat);
+
+	mem_mat = detail::mem_matrix_store::create(10, 9999999,
+			matrix_layout_t::L_COL, get_scalar_type<long>(),
+			matrix_conf.get_num_nodes());
+	test_copy1(mem_mat);
 }
 
 int main(int argc, char *argv[])
@@ -183,7 +209,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_load();
+	test_copy();
 	test_get_row_col();
 	test_set_data();
 	test_get_portion();

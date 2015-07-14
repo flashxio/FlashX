@@ -114,33 +114,27 @@ public:
 
 class portion_callback: public safs::callback
 {
-	std::unordered_map<char *, portion_compute::ptr> computes;
+	std::unordered_map<long, std::vector<portion_compute::ptr> > computes;
 public:
 	typedef std::shared_ptr<portion_callback> ptr;
+
+	static long get_portion_key(const safs::io_request &req) {
+		return (long) req.get_buf();
+	}
 
 	virtual ~portion_callback() {
 		assert(computes.empty());
 	}
 
+	bool has_callback(const safs::io_request &req) const {
+		auto it = computes.find(get_portion_key(req));
+		return it != computes.end();
+	}
 	void add(const safs::io_request &req, portion_compute::ptr compute) {
-		auto ret = computes.insert(std::pair<char *, portion_compute::ptr>(
-					req.get_buf(), compute));
-		assert(ret.second);
+		add(get_portion_key(req), compute);
 	}
-
-	virtual int invoke(safs::io_request *reqs[], int num) {
-		for (int i = 0; i < num; i++) {
-			auto it = computes.find(reqs[i]->get_buf());
-			// Sometimes we want to use the I/O instance synchronously, and
-			// we don't need to keep a compute here.
-			if (it == computes.end())
-				continue;
-			portion_compute::ptr compute = it->second;
-			computes.erase(it);
-			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
-		}
-		return 0;
-	}
+	void add(long key, portion_compute::ptr compute);
+	virtual int invoke(safs::io_request *reqs[], int num);
 };
 
 class sync_read_compute: public portion_compute

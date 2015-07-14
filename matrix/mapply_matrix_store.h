@@ -42,8 +42,11 @@ class portion_mapply_op;
  */
 class mapply_matrix_store: public virtual_matrix_store, public EM_object
 {
+	// This identifies the data in a matrix.
+	// So when a matrix is transposed, it should share the same data id.
+	const size_t data_id;
+
 	matrix_layout_t layout;
-	size_t num_EM_mats;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
@@ -54,7 +57,7 @@ public:
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
-			size_t nrow, size_t ncol);
+			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
 
 	virtual void materialize_self() const;
 
@@ -74,9 +77,7 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		return in_mats.front()->get_portion_size();
-	}
+	virtual std::pair<size_t, size_t> get_portion_size() const;
 	virtual int get_num_nodes() const {
 		return in_mats.front()->get_num_nodes();
 	}
@@ -88,6 +89,9 @@ public:
 	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+
+	virtual std::string get_name() const;
+	virtual size_t get_underlying_eles() const;
 };
 
 }

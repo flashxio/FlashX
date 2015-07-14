@@ -876,6 +876,152 @@ void scale_rows(const local_matrix_store &store, const local_vec_store &vals,
 	}
 }
 
+local_matrix_store::const_ptr local_row_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) <<
+			"get row portion from local matrix: out of boundary";
+		return local_matrix_store::const_ptr();
+	}
+
+	local_row_matrix_store::const_ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		std::vector<const char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(local_start_row + i)
+				+ local_start_col * get_entry_size();
+		ret = local_row_matrix_store::const_ptr(new local_cref_row_matrix_store(
+					orig_data_ref, rows, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		assert(local_start_col == 0 && num_cols == get_num_cols());
+		off_t start_off = get_num_cols() * local_start_row * get_entry_size();
+		ret = local_row_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::const_ptr local_col_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get col portion from local matrix: out of boundary";
+		return local_matrix_store::const_ptr();
+	}
+
+	local_col_matrix_store::const_ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		assert(local_start_row == 0 && num_rows == get_num_rows());
+		off_t start_off = get_num_rows() * local_start_col * get_entry_size();
+		ret = local_col_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		std::vector<const char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(local_start_col + i)
+				+ local_start_row * get_entry_size();
+		ret = local_col_matrix_store::const_ptr(new local_cref_col_matrix_store(
+					orig_data_ref, cols, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::ptr local_row_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (read_only())
+		return local_matrix_store::ptr();
+
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get const row portion from local matrix: out of boundary";
+		return local_matrix_store::ptr();
+	}
+
+	local_row_matrix_store::ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		std::vector<char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(local_start_row + i)
+				+ local_start_col * get_entry_size();
+		ret = local_row_matrix_store::ptr(new local_ref_row_matrix_store(
+					orig_data_ref, rows, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		assert(local_start_col == 0 && num_cols == get_num_cols());
+		off_t start_off = get_num_cols() * local_start_row * get_entry_size();
+		ret = local_row_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::ptr local_col_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (read_only())
+		return local_matrix_store::ptr();
+
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get const col portion from local matrix: out of boundary";
+		return local_matrix_store::ptr();
+	}
+
+	local_col_matrix_store::ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		assert(local_start_row == 0 && num_rows == get_num_rows());
+		off_t start_off = get_num_rows() * local_start_col * get_entry_size();
+		ret = local_col_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		std::vector<char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(local_start_col + i)
+				+ local_start_row * get_entry_size();
+		ret = local_col_matrix_store::ptr(new local_ref_col_matrix_store(
+					orig_data_ref, cols, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
 }
 
 }

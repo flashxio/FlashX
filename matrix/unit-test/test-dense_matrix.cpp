@@ -8,6 +8,7 @@
 #include "local_matrix_store.h"
 #include "sparse_matrix.h"
 #include "EM_dense_matrix.h"
+#include "matrix_stats.h"
 
 using namespace fm;
 
@@ -421,8 +422,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -431,8 +433,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
@@ -441,8 +444,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide row matrix X tall row matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -451,8 +455,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -461,8 +466,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
@@ -471,8 +477,9 @@ void test_multiply_double(int num_nodes)
 	verify_result(*res, *correct, approx_equal_func());
 
 	printf("Test multiplication on wide column matrix X tall row matrix\n");
-	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
+	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<double>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
@@ -1033,12 +1040,76 @@ void test_sum_row_col(int num_nodes)
 	test_sum_row_col1(mat);
 }
 
+void test_mapply_chain(int num_nodes, const scalar_type &type)
+{
+	printf("test mapply chain for %s\n",
+			type == get_scalar_type<int>() ? "int" : "double");
+	dense_matrix::ptr orig_mat1 = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes, type);
+	dense_matrix::ptr orig_mat2 = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes, type);
+	dense_matrix::ptr smat1 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, type, true);
+	dense_matrix::ptr smat2 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, type, true);
+	dense_matrix::ptr smat3 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, type, true);
+	dense_matrix::ptr smat4 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, type, true);
+	dense_matrix::ptr smat5 = create_seq_matrix(10, 10,
+			matrix_layout_t::L_COL, num_nodes, type, true);
+
+	printf("test a chain of mapply virtual matrices\n");
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	dense_matrix::ptr vmat1 = orig_mat1->multiply(*smat1,
+			matrix_layout_t::L_NONE, true);
+	dense_matrix::ptr vmat3 = orig_mat1->multiply(*smat5,
+			matrix_layout_t::L_NONE, true);
+	dense_matrix::ptr vmat4 = vmat3->multiply(*smat2,
+			matrix_layout_t::L_NONE, true);
+	dense_matrix::ptr vmat5 = orig_mat2->multiply(*smat3,
+			matrix_layout_t::L_NONE, true);
+	dense_matrix::ptr vmat6 = vmat4->multiply(*smat4,
+			matrix_layout_t::L_NONE, true)->add(*vmat5);
+	dense_matrix::ptr res = vmat6->transpose()->multiply(*vmat1,
+			matrix_layout_t::L_NONE, true);
+	detail::matrix_stats.print_diff(orig_stats);
+
+	printf("materialize every matrix operations individually\n");
+	detail::matrix_stats_t orig_stats1 = detail::matrix_stats;
+	dense_matrix::ptr mat1 = orig_mat1->multiply(*smat1,
+			matrix_layout_t::L_NONE, true);
+	mat1->materialize_self();
+	dense_matrix::ptr mat3 = orig_mat1->multiply(*smat5,
+			matrix_layout_t::L_NONE, true);
+	mat3->materialize_self();
+	dense_matrix::ptr mat4 = vmat3->multiply(*smat2,
+			matrix_layout_t::L_NONE, true);
+	mat4->materialize_self();
+	dense_matrix::ptr mat5 = orig_mat2->multiply(*smat3,
+			matrix_layout_t::L_NONE, true);
+	mat5->materialize_self();
+	dense_matrix::ptr mat6 = vmat4->multiply(*smat4,
+			matrix_layout_t::L_NONE, true)->add(*vmat5);
+	mat6->materialize_self();
+	dense_matrix::ptr res1 = mat6->transpose()->multiply(*mat1,
+			matrix_layout_t::L_NONE, true);
+	detail::matrix_stats.print_diff(orig_stats1);
+
+	if (type == get_scalar_type<int>())
+		verify_result(*res, *res1, equal_func<int>());
+	else
+		verify_result(*res, *res1, approx_equal_func());
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_mapply_chain(-1, get_scalar_type<double>());
+	test_mapply_chain(-1, get_scalar_type<int>());
 	test_multiply_double(-1);
 	test_cast();
 	test_write2file();
@@ -1070,6 +1141,9 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_mapply_chain(-1, get_scalar_type<double>());
+	test_mapply_chain(-1, get_scalar_type<int>());
+	test_mapply_chain(num_nodes, get_scalar_type<int>());
 	test_multiply_double(-1);
 	test_cast();
 	test_write2file();

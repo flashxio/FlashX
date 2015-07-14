@@ -20,6 +20,7 @@
 
 #include "local_mem_buffer.h"
 #include "matrix_config.h"
+#include "local_matrix_store.h"
 
 namespace fm
 {
@@ -95,6 +96,9 @@ void local_mem_buffer::clear_local_bufs()
 			free(buf);
 		}
 	}
+	portions.clear();
+	// TODO we should also clear all entries in `buf'. But it causes
+	// memory deallocation error. Why?
 }
 
 std::shared_ptr<char> local_mem_buffer::alloc(size_t num_bytes)
@@ -150,6 +154,59 @@ void local_mem_buffer::clear_bufs()
 	for (auto it = mem_set.begin(); it != mem_set.end(); it++)
 		(*it)->clear_local_bufs();
 	mem_lock.unlock();
+}
+
+void local_mem_buffer::_cache_portion(long key,
+		local_matrix_store::const_ptr portion)
+{
+	auto it = portions.find(key);
+	if (it == portions.end())
+		portions.insert(std::pair<long, local_matrix_store::const_ptr>(
+					key, portion));
+	// We only buffer the most recent portion for a matrix.
+	// This is enough for the current mapply operations.
+	else
+		it->second = portion;
+}
+
+local_matrix_store::const_ptr local_mem_buffer::_get_mat_portion(long key)
+{
+	auto it = portions.find(key);
+	if (it == portions.end())
+		return NULL;
+	else
+		return it->second;
+}
+
+void local_mem_buffer::cache_portion(long key,
+		local_matrix_store::const_ptr portion)
+{
+	if (!initialized)
+		return;
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr)
+		((local_mem_buffer *) addr)->_cache_portion(key, portion);
+	else {
+		local_mem_buffer *buf = new local_mem_buffer();
+		pthread_setspecific(mem_key, buf);
+		mem_lock.lock();
+		mem_set.push_back(buf);
+		mem_lock.unlock();
+		buf->_cache_portion(key, portion);
+	}
+}
+
+local_matrix_store::const_ptr local_mem_buffer::get_mat_portion(long key)
+{
+	if (!initialized)
+		return NULL;
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr)
+		return ((local_mem_buffer *) addr)->_get_mat_portion(key);
+	else
+		return NULL;
 }
 
 spin_lock local_mem_buffer::mem_lock;

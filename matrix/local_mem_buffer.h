@@ -36,15 +36,22 @@ namespace fm
 namespace detail
 {
 
+class local_matrix_store;
+
 /*
- * This class keeps memory allocated in the local thread.
- * If a piece of memory of the same size is being used again in the near
- * future, we can reuse the memory allocated previously.
- * It is guaranteed to be used in the same thread, so locking isn't needed.
+ * This class keeps memory buffers in the local thread.
  *
- * The idea is to avoid allocating a large piece of memory from malloc.
- * It turns out to be fairly expensive to allocate a large piece memory
+ * If a piece of memory of the same size is being used again in the near
+ * future, we can buffer the piece of memory and reuse it, so that we can
+ * avoid allocating a large piece of memory from malloc.
+ * It turns out to be fairly expensive to allocate a large piece of memory
  * with malloc in multiple threads. It can cause lock contention.
+ *
+ * If a portion of data in a matrix store will be used again (which is very
+ * likely to happen in a chain of matrix computation), we should buffer it.
+ *
+ * The buffered data is guaranteed to be used in the same thread, so locking
+ * isn't needed.
  */
 class local_mem_buffer
 {
@@ -59,11 +66,18 @@ class local_mem_buffer
 	size_t num_frees;
 	std::unordered_map<size_t, std::deque<char *> > bufs;
 
+	std::unordered_map<long, std::shared_ptr<const local_matrix_store> > portions;
+
 	local_mem_buffer() {
 		num_allocs = 0;
 		num_frees = 0;
 	}
 	std::shared_ptr<char> _alloc(size_t num_bytes);
+
+	void _cache_portion(long key,
+			std::shared_ptr<const local_matrix_store> portion);
+	std::shared_ptr<const local_matrix_store> _get_mat_portion(long key);
+
 	void clear_local_bufs();
 public:
 	/*
@@ -78,6 +92,15 @@ public:
 	 * memory consumption.
 	 */
 	static void clear_bufs();
+
+	/*
+	 * We cache matrix portions for EM matrix store and mapply virtual matrix
+	 * store, so that we can reduce amount of data read from disks and
+	 * save some computation.
+	 */
+	static void cache_portion(long key,
+			std::shared_ptr<const local_matrix_store> portion);
+	static std::shared_ptr<const local_matrix_store> get_mat_portion(long key);
 
 	/*
 	 * This function allocates memory from the memory buffer in the local thread.

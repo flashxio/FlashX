@@ -111,6 +111,38 @@ safs::io_interface &EM_object::io_set::get_curr_io() const
 	}
 }
 
+void portion_callback::add(long key, portion_compute::ptr compute)
+{
+	auto it = computes.find(key);
+	if (it == computes.end()) {
+		std::vector<portion_compute::ptr> tmp(1);
+		tmp[0] = compute;
+		auto ret = computes.insert(
+				std::pair<long, std::vector<portion_compute::ptr> >(key, tmp));
+		assert(ret.second);
+	}
+	else
+		it->second.push_back(compute);
+}
+
+int portion_callback::invoke(safs::io_request *reqs[], int num)
+{
+	for (int i = 0; i < num; i++) {
+		auto it = computes.find(get_portion_key(*reqs[i]));
+		// Sometimes we want to use the I/O instance synchronously, and
+		// we don't need to keep a compute here.
+		if (it == computes.end())
+			continue;
+		for (auto comp_it = it->second.begin(); comp_it != it->second.end();
+				comp_it++) {
+			portion_compute::ptr compute = *comp_it;
+			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
+		}
+		computes.erase(it);
+	}
+	return 0;
+}
+
 }
 
 }

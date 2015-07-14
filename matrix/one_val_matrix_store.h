@@ -40,6 +40,10 @@ public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
 
+	virtual std::string get_name() const {
+		return (boost::format("one_val_mat(%1%,%2%)") % get_num_rows()
+			% get_num_cols()).str();
+	}
 	virtual matrix_store::ptr materialize() const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -67,6 +71,10 @@ public:
 	}
 	virtual int get_num_nodes() const {
 		return num_nodes;
+	}
+
+	virtual size_t get_underlying_eles() const {
+		return 0;
 	}
 };
 

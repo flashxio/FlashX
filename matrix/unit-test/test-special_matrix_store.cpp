@@ -23,6 +23,10 @@ public:
 		return detail::portion_mapply_op::const_ptr(new mapply_add_op(
 					get_out_num_cols(), get_out_num_rows(), get_output_type()));
 	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "";
+	}
 };
 
 class multiply_op: public detail::portion_mapply_op
@@ -44,6 +48,10 @@ public:
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const;
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "";
+	}
 };
 
 class t_multiply_op: public detail::portion_mapply_op
@@ -66,6 +74,10 @@ public:
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "";
 	}
 };
 
