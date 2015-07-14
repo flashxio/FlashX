@@ -2217,7 +2217,8 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 				new EM_mat_agg_dispatcher(store, partial_res, op,
 					margin, tot_len, portion_size));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
-			detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
+			detail::io_worker_task *task = new detail::io_worker_task(
+					dispatcher, 1);
 			const detail::EM_object *obj
 				= dynamic_cast<const detail::EM_object *>(store.get());
 			task->register_EM_obj(const_cast<detail::EM_object *>(obj));
