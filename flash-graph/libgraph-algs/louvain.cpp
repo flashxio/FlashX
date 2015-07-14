@@ -232,13 +232,21 @@ void louvain_vertex::compute_modularity(edge_seq_iterator& id_it,
 	float delta_mod = 0;
 	cluster curr_cluster = g_cluster_map[my_id];
 
+#if 0
+	/** DEBUG **/
 	BOOST_LOG_TRIVIAL(info) << "Vertex " << my_id << " ==> cluster:" << curr_cluster;
+	/** DEBUG **/
+#endif
 
 	while(id_it.has_next()) {
 		vertex_id_t	nid = id_it.next();
 		cluster neigh_cluster = g_cluster_map[nid];
 
+#if 0
+	/** DEBUG **/
 		BOOST_LOG_TRIVIAL(info) << "Neighbor " << nid << " ==> cluster: " << neigh_cluster; 
+	/** DEBUG **/
+#endif
 
 		if (nid == this->cluster_id) { // If I'm in the same cluster as my neigh
 			delta_mod = (((neigh_cluster.get_weight() - this->weight) - 
@@ -252,7 +260,11 @@ void louvain_vertex::compute_modularity(edge_seq_iterator& id_it,
 						 * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
 		}
 
+#if 0
+		/** DEBUG **/
 		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " delta_mod for v" << nid << " = " << delta_mod << "\n";
+		/** DEBUG **/
+#endif
 
 		if (delta_mod > max_mod) {
 			max_mod = delta_mod;
@@ -267,8 +279,6 @@ void set_changed(bool changed) {
 		g_changed = changed;
 	if (changed && (!g_changed))
 		g_changed = changed;
-	else 
-		BOOST_LOG_TRIVIAL(fatal) << "Unknown option for g_changed";
 }
 
 // Only need to do this once per vertex ever
@@ -335,17 +345,29 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 				compute_modularity(id_it, max_cluster, max_mod, prog.get_vertex_id(*this));
 				
 				if (this->cluster_id != max_cluster) {
-					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " 
-						<< this->modularity << " < " << max_mod <<
-						", moved from cluster " << this->cluster_id << " ==> " << max_cluster << "\n";
+#if 1
+					/** DEBUG **/
+					BOOST_LOG_TRIVIAL(info) << "v" << prog.get_vertex_id(*this) 
+						<< ": mod = " << this->modularity << " < " << max_mod <<
+						", moved c" << this->cluster_id << " ==> " << max_cluster << "\n";
+					/** DEBUG **/
+#endif
 					set_changed(true);
 				} else {
-					BOOST_LOG_TRIVIAL(info) << "Vertex " << prog.get_vertex_id(*this) << " with mod = " << this->modularity
-						<< " ,stayed in cluster " << this->cluster_id << "\n";
+#if 0
+					/** DEBUG **/
+					BOOST_LOG_TRIVIAL(info) << "v" << prog.get_vertex_id(*this) << 
+						": mod = " << this->modularityv<< ", stayed in cluster " 
+						<< this->cluster_id << "\n";
+					/** DEBUG **/
+#endif
 				}
 
 				this->cluster_id = max_cluster;
 				this->modularity = max_mod;	
+
+				((louvain_vertex_program&)prog).update(this->cluster_id, this->volume,
+				   	this->weight);
 			}
 			break;
 		case RUN:
@@ -408,6 +430,26 @@ std::map<T, U> build_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map
 	return new_map;
 }
 
+// FIXME: Building this is serial and likely already slow to
+void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
+
+	std::vector<vertex_program::ptr> ec_progs;
+	graph->get_vertex_programs(ec_progs);
+	BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+		louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
+
+		if (accum_edges) { g_edge_weight += lvp->get_local_ec(); }
+
+		// Merge the volume maps
+		cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
+		merge_func = &merge_cluster;
+
+		cluster_map merge_map = build_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
+		g_cluster_map.insert(merge_map.begin(), merge_map.end());
+	}
+
+}
+
 }
 
 namespace fg 
@@ -432,26 +474,15 @@ namespace fg
 		graph->start_all(vertex_initializer::ptr(), 
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 		graph->wait4complete();
-		std::vector<vertex_program::ptr> ec_progs;
-		graph->get_vertex_programs(ec_progs);
-		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
-			louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
-			g_edge_weight += lvp->get_local_ec();
-			
-			// Merge the volume maps
-			
-			cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
-			merge_func = &merge_cluster;
+		
+		build_global_cluster_map(graph, true);
 
-			cluster_map merge_map = build_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
-			g_cluster_map.insert(merge_map.begin(), merge_map.end());
-		}
 #if 1
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
 
+		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 		BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
 		print_cluster_map(g_cluster_map);
-
 		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 #endif
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -461,9 +492,10 @@ namespace fg
 		int iter = 0;
 
 		do {
+			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++ 
+												<< " ********************************\x1B[0m\n\n\n";
+
 			/** DEBUG **/
-			BOOST_LOG_TRIVIAL(info) << "\n\n******************** ITERATION: " << iter++ 
-												<< " ********************************\n\n";
 #if 1
 			FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
 					graph->get_num_vertices());
@@ -471,14 +503,32 @@ namespace fg
 			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
 			ret->print(); 
 
-			if (iter > 5) { fprintf(stderr, "Premature kill"); exit(-1); } 
+			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+			BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
+			print_cluster_map(g_cluster_map);
+			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+
+			// if (iter > 5) { fprintf(stderr, "Premature kill"); exit(-1); } 
 #endif
 			/** DEBUG **/
 
 			set_changed(false);
-			graph->start_all(); // TODO: Init correctly so we get per vertex weight & volume
+			graph->start_all(vertex_initializer::ptr(), 
+				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 			graph->wait4complete();
+			g_cluster_map.clear(); // FIXME: Is it faster to just erase the old and build new? Linear time ...
+			build_global_cluster_map(graph, false);
 		} while (g_changed);
+
+#if 1
+		/** DEBUG **/
+		FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
+				graph->get_num_vertices());
+		graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
+		BOOST_LOG_TRIVIAL(info) << "Final vertex clusters @ end of Level1:";
+		ret->print(); 
+		/** DEBUG **/
+#endif
 
 		louvain_stage = RUN;
 		BOOST_LOG_TRIVIAL(info) << "\n Reached running stage\n"; 
