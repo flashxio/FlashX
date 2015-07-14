@@ -96,6 +96,12 @@ void mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	}
 }
 
+/*
+ * This is to materialize the entire portion of a mapply store.
+ * When there are a chain of mapply operations, we need to break a mapply
+ * portion into smaller portions, so that data in the chain can be retained
+ * in the CPU cache as much as possible.
+ */
 void mapply_store::materialize_whole()
 {
 	local_matrix_store::ptr res;
