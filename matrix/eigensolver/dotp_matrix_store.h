@@ -68,6 +68,29 @@ public:
 		return orig_store->store_layout();
 	}
 
+	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
+			size_t start_col, size_t num_rows, size_t num_cols) const {
+		assert(!orig_store->is_wide());
+		assert(orig_store->store_layout() == matrix_layout_t::L_COL);
+		detail::local_matrix_store::const_ptr orig = orig_store->get_portion(
+				start_row, 0, num_rows, orig_store->get_num_cols());
+		const detail::local_col_matrix_store &col_orig
+			= static_cast<const detail::local_col_matrix_store &>(*orig);
+		detail::local_buf_col_matrix_store *store
+			= new detail::local_buf_col_matrix_store(start_row, start_col,
+					num_rows, num_cols, get_type(), orig->get_node_id());
+		for (size_t i = 0; i < idxs.size(); i++)
+			memcpy(store->get_col(i), col_orig.get_col(idxs[i]),
+					store->get_num_rows() * store->get_entry_size());
+		return detail::local_matrix_store::const_ptr(store);
+	}
+
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		assert(!orig_store->is_wide());
+		return std::pair<size_t, size_t>(orig_store->get_portion_size().first,
+				idxs.size());
+	}
+
 	matrix_store::const_ptr transpose() const {
 		return matrix_store::const_ptr();
 	}
@@ -76,13 +99,6 @@ public:
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		return detail::local_matrix_store::const_ptr();
-	}
-	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
-			size_t start_col, size_t num_rows, size_t num_cols) const {
-		return detail::local_matrix_store::const_ptr();
-	}
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		return std::pair<size_t, size_t>(0, 0);
 	}
 
 	virtual matrix_store::ptr materialize() const {

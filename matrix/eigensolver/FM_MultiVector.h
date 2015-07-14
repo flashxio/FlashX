@@ -89,17 +89,24 @@ public:
 	void verify() const {
 #ifdef FM_VERIFY
 		int len = ep_mat->GlobalLength();
-		assert((size_t) ep_mat->NumVectors() == mat->get_num_cols());
 		assert((size_t) len == mat->get_num_rows());
-		for (int i = 0; i < ep_mat->NumVectors(); i++) {
-			fm::mem_dense_matrix::const_ptr col = fm::mem_dense_matrix::cast(
-					mat->get_col(i));
-			for (int j = 0; j < len; j++) {
-				double v1 = (*ep_mat)[i][j];
-				double v2 = col->get<double>(j, 0);
-				if (v1 != v2)
-					printf("v1: %g, v2: %g, diff: %g\n", v1, v2, v1 - v2);
-				assert(abs(v1 - v2) == 0);
+		assert(mat->get_num_cols() == (size_t) ep_mat->NumVectors());
+		size_t ep_col_idx = 0;
+		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
+			dense_matrix::ptr block = mat->get_block(i);
+			detail::local_matrix_store::const_ptr portion
+				= block->get_data().get_portion(0);
+			assert(block->get_num_rows() == portion->get_num_rows());
+			assert(block->get_num_cols() == portion->get_num_cols());
+			for (size_t j = 0; j < portion->get_num_cols(); j++) {
+				for (size_t k = 0; k < portion->get_num_rows(); k++) {
+					double v1 = (*ep_mat)[ep_col_idx][k];
+					double v2 = portion->get<ScalarType>(k, j);
+					if (v1 != v2)
+						printf("v1: %g, v2: %g, diff: %g\n", v1, v2, v1 - v2);
+					assert(abs(v1 - v2) == 0);
+				}
+				ep_col_idx++;
 			}
 		}
 #endif
@@ -149,19 +156,27 @@ public:
 				memcpy(col_store->get_col(j), (*ep_mat)[col_idx],
 						mat->get_num_rows() * mat->get_entry_size());
 			}
-			mat->set_block(i, fm::mem_dense_matrix::create(col_store));
+			mat->set_block(i, fm::dense_matrix::create(col_store));
 		}
 #endif
 	}
 
 	void sync_fm2ep() {
 #ifdef FM_VERIFY
-		for (int i = 0; i < ep_mat->NumVectors(); i++) {
-			fm::dense_matrix::const_ptr col = mat->get_col(i);
-			const fm::detail::mem_matrix_store &col_store
-				= dynamic_cast<const fm::detail::mem_matrix_store &>(col->get_data());
-			for (size_t j = 0; j < col_store.get_num_rows(); j++)
-				(*ep_mat)[i][j] = col_store.get<ScalarType>(j, 0);
+		printf("There are %ld blocks and each block has %ld cols\n",
+				mat->get_num_blocks(), mat->get_block(0)->get_num_cols());
+		size_t ep_col_idx = 0;
+		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
+			dense_matrix::ptr block = mat->get_block(i);
+			detail::local_matrix_store::const_ptr portion
+				= block->get_data().get_portion(0);
+			assert(block->get_num_rows() == portion->get_num_rows());
+			assert(block->get_num_cols() == portion->get_num_cols());
+			for (size_t j = 0; j < portion->get_num_cols(); j++) {
+				for (size_t k = 0; k < portion->get_num_rows(); k++)
+					(*ep_mat)[ep_col_idx][k] = portion->get<ScalarType>(k, j);
+				ep_col_idx++;
+			}
 		}
 #endif
 	}
@@ -446,7 +461,7 @@ public:
 
 		fm::dense_matrix::ptr res = mat->MvTransMv(*fm_A.mat);
 		const_cast<FM_MultiVector *>(this)->sync_fm2ep();
-#ifdef FM_VERIFY
+#if 0
 		ep_mat->MvTransMv(alpha, *fm_A.ep_mat, B);
 		for (int i = 0; i < B.numRows(); i++)
 			for (int j = 0; j < B.numCols(); j++) {
