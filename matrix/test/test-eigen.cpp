@@ -72,21 +72,57 @@ public:
 	}
 };
 
+void print_usage()
+{
+	fprintf(stderr, "eigensolver conf_file matrix_file index_file nev [options]\n");
+	fprintf(stderr, "-b block_size\n");
+	fprintf(stderr, "-n num_blocks\n");
+	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
+	fprintf(stderr, "-t tolerance\n");
+}
+
 int main (int argc, char *argv[])
 {
-	if (argc < 5) {
-		fprintf(stderr, "eigensolver conf_file matrix_file index_file nev [solver]\n");
+	int opt;
+	int num_opts = 0;
+	struct eigen_options opts;
+	while ((opt = getopt(argc, argv, "b:n:s:t:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'b':
+				opts.block_size = atoi(optarg);
+				num_opts++;
+				break;
+			case 'n':
+				opts.num_blocks = atoi(optarg);
+				num_opts++;
+				break;
+			case 's':
+				opts.solver = optarg;
+				num_opts++;
+				break;
+			case 't':
+				opts.tol = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 4) {
+		print_usage();
 		exit(1);
 	}
 
-	std::string conf_file = argv[1];
-	std::string matrix_file = argv[2];
-	std::string index_file = argv[3];
+	std::string conf_file = argv[0];
+	std::string matrix_file = argv[1];
+	std::string index_file = argv[2];
+	opts.nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
-	struct eigen_options opts;
-	opts.nev = atoi(argv[4]); // number of eigenvalues for which to solve;
-	if (argc >= 6)
-		opts.solver = argv[5];
 	//
 	// Set up the test problem.
 	//
