@@ -166,8 +166,10 @@ void EM_matrix_store::set_data(const set_operate &op)
 
 std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
 {
-	return std::pair<size_t, size_t>(std::min(get_num_rows(), CHUNK_SIZE),
-			std::min(get_num_cols(), CHUNK_SIZE));
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_num_rows(), CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(CHUNK_SIZE, get_num_cols());
 }
 
 local_matrix_store::ptr EM_matrix_store::get_portion(
