@@ -2544,4 +2544,50 @@ vector::ptr dense_matrix::col_norm2() const
 	return sqrt_mat->get_col(0);
 }
 
+class copy_op: public detail::portion_mapply_op
+{
+public:
+	copy_op(size_t out_num_rows, size_t out_num_cols,
+			const scalar_type &out_type): detail::portion_mapply_op(
+			out_num_rows, out_num_cols, out_type) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		out.copy_from(*ins[0]);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const
+{
+	// If the current matrix is EM matrix and we want to convert it to
+	// an EM matrix, don't do anything.
+	if (!in_mem && !store->is_in_mem())
+		return clone();
+	// If the current matrix is in-mem matrix and it stores in the same
+	// number of NUMA nodes as requested, don't do anything.
+	if (in_mem && store->is_in_mem() && store->get_num_nodes() == num_nodes)
+		return clone();
+
+	std::vector<detail::matrix_store::const_ptr> in_mats(1);
+	in_mats[0] = store;
+	dense_matrix::ptr ret = dense_matrix::create(__mapply_portion(in_mats,
+				detail::portion_mapply_op::const_ptr(new copy_op(get_num_rows(),
+						get_num_cols(), get_type())),
+				store_layout(), in_mem, num_nodes));
+	ret->materialize_self();
+	return ret;
+}
+
 }

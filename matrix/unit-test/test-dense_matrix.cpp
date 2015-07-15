@@ -1184,6 +1184,37 @@ void test_mem_matrix(int num_nodes)
 	}
 }
 
+void test_conv_store()
+{
+	in_mem = true;
+	dense_matrix::ptr mat0 = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, -1, get_scalar_type<int>());
+	assert(mat0->is_in_mem());
+	printf("conv in-mem to EM\n");
+	dense_matrix::ptr EM_mat = mat0->conv_store(false, -1);
+	assert(!EM_mat->is_in_mem());
+	printf("conv EM to in-mem\n");
+	dense_matrix::ptr smp_mat = EM_mat->conv_store(true, -1);
+	assert(smp_mat->is_in_mem());
+	verify_result(*mat0, *smp_mat, equal_func<int>());
+
+	if (matrix_conf.get_num_nodes() > 1) {
+		printf("conv SMP to NUMA\n");
+		dense_matrix::ptr numa_mat = mat0->conv_store(true,
+				matrix_conf.get_num_nodes());
+		verify_result(*mat0, *numa_mat, equal_func<int>());
+
+		printf("conv NUMA to EM\n");
+		EM_mat = numa_mat->conv_store(false, -1);
+		assert(!EM_mat->is_in_mem());
+
+		printf("conv EM to NUMA\n");
+		numa_mat = EM_mat->conv_store(true, matrix_conf.get_num_nodes());
+		assert(numa_mat->is_in_mem());
+		verify_result(*mat0, *numa_mat, equal_func<int>());
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -1196,6 +1227,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_conv_store();
 	test_mem_matrix(num_nodes);
 	test_EM_matrix(num_nodes);
 

@@ -261,7 +261,18 @@ public:
 	}
 
 	dense_matrix::ptr transpose() const;
+	/*
+	 * This converts the data layout of the dense matrix.
+	 * It actually generates a virtual matrix that represents the matrix
+	 * with required data layout.
+	 */
 	dense_matrix::ptr conv2(matrix_layout_t layout) const;
+	/*
+	 * This method converts the storage media of the matrix.
+	 * It can convert an in-memory matrix to an EM matrix, or vice versa.
+	 * The output matrix is materialized.
+	 */
+	dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
 
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
