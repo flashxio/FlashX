@@ -86,18 +86,29 @@ public:
 	}
 };
 
+/*
+ * These two functions return a virtual matrix that records the computation.
+ */
+
 std::shared_ptr<dense_matrix> mapply_portion(
 		const std::vector<std::shared_ptr<const dense_matrix> > &mats,
 		// A user can specify the layout of the output dense matrix.
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+matrix_store::ptr __mapply_portion_virtual(
+		const std::vector<matrix_store::const_ptr> &store,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+
+/*
+ * These two functions return a materialized matrix.
+ */
 
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
-
-matrix_store::ptr __mapply_portion_virtual(
-		const std::vector<matrix_store::const_ptr> &store,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool in_mem, int num_nodes);
 
 }
 
