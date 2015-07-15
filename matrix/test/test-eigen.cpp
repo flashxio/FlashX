@@ -37,7 +37,6 @@ public:
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
 		assert(x->get_type() == get_scalar_type<double>());
-		assert(x->is_in_mem());
 		const detail::mem_matrix_store &mem_in
 			= static_cast<const detail::mem_matrix_store &>(x->get_data());
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
@@ -79,6 +78,7 @@ void print_usage()
 	fprintf(stderr, "-n num_blocks\n");
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
+	fprintf(stderr, "-e: the external memory mode.\n");
 }
 
 int main (int argc, char *argv[])
@@ -86,7 +86,7 @@ int main (int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	struct eigen_options opts;
-	while ((opt = getopt(argc, argv, "b:n:s:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:n:s:t:e")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -104,6 +104,9 @@ int main (int argc, char *argv[])
 			case 't':
 				opts.tol = atof(optarg);
 				num_opts++;
+				break;
+			case 'e':
+				opts.in_mem = false;
 				break;
 			default:
 				print_usage();

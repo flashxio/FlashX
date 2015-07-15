@@ -39,6 +39,7 @@ extern size_t num_col_reads_concept;
 
 class block_multi_vector
 {
+	bool in_mem;
 	size_t block_size;
 	size_t num_rows;
 	size_t num_cols;
@@ -47,8 +48,9 @@ protected:
 	std::vector<fm::dense_matrix::ptr> mats;
 
 	block_multi_vector(size_t nrow, size_t ncol, size_t block_size,
-			const fm::scalar_type &_type);
-	block_multi_vector(const std::vector<fm::dense_matrix::ptr> &mats);
+			const fm::scalar_type &_type, bool in_mem);
+	block_multi_vector(const std::vector<fm::dense_matrix::ptr> &mats,
+			bool in_mem);
 public:
 	typedef std::shared_ptr<block_multi_vector> ptr;
 
@@ -56,9 +58,9 @@ public:
 			const block_multi_vector &X, block_multi_vector &Y);
 
 	static ptr create(size_t nrow, size_t ncol, size_t block_size,
-			const fm::scalar_type &type) {
+			const fm::scalar_type &type, bool in_mem) {
 		assert(ncol % block_size == 0);
-		return ptr(new block_multi_vector(nrow, ncol, block_size, type));
+		return ptr(new block_multi_vector(nrow, ncol, block_size, type, in_mem));
 	}
 
 	size_t get_num_rows() const {
@@ -134,14 +136,14 @@ public:
 		for (size_t i = 0; i < num_blocks; i++)
 			set_block(i, fm::dense_matrix::create_randu<Type>(min, max,
 						get_num_rows(), block_size, fm::matrix_layout_t::L_COL,
-						get_num_nodes(), true));
+						get_num_nodes(), in_mem));
 	}
 
 	template<class Type>
 	block_multi_vector::ptr multiply_scalar(Type val) const {
 		size_t num_blocks = get_num_blocks();
 		block_multi_vector::ptr ret_vecs = block_multi_vector::create(
-				get_num_rows(), get_num_cols(), block_size, type);
+				get_num_rows(), get_num_cols(), block_size, type, in_mem);
 		for (size_t i = 0; i < num_blocks; i++)
 			ret_vecs->set_block(i, get_block(i)->multiply_scalar(val));
 		return ret_vecs;
@@ -151,7 +153,7 @@ public:
 	block_multi_vector::ptr scale_cols(const std::vector<Type> &vec) const {
 		size_t num_blocks = get_num_blocks();
 		block_multi_vector::ptr ret_vecs = block_multi_vector::create(
-				get_num_rows(), get_num_cols(), block_size, type);
+				get_num_rows(), get_num_cols(), block_size, type, in_mem);
 		for (size_t i = 0; i < num_blocks; i++) {
 			fm::detail::smp_vec_store::ptr sub_vec
 				= fm::detail::smp_vec_store::create(block_size,

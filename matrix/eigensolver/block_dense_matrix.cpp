@@ -38,8 +38,8 @@ class mirror_block_multi_vector: public block_multi_vector
 {
 	// When mirroring the original matrix, we need to make sure that
 	// the pointers point to the original matrix.
-	mirror_block_multi_vector(
-			const std::vector<fm::dense_matrix::ptr> &mats): block_multi_vector(mats) {
+	mirror_block_multi_vector(const std::vector<fm::dense_matrix::ptr> &mats,
+			bool in_mem): block_multi_vector(mats, in_mem) {
 	}
 public:
 	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat) {
@@ -47,8 +47,9 @@ public:
 		mats[block_idx]->assign(*mat);
 	}
 
-	static ptr create(const std::vector<fm::dense_matrix::ptr> &mats) {
-		return ptr(new mirror_block_multi_vector(mats));
+	static ptr create(const std::vector<fm::dense_matrix::ptr> &mats,
+			bool in_mem) {
+		return ptr(new mirror_block_multi_vector(mats, in_mem));
 	}
 };
 
@@ -157,16 +158,18 @@ class mirror_cols_block_multi_vector: public block_multi_vector
 	mirror_cols_block_multi_vector(
 			const std::vector<fm::dense_matrix::ptr> &mats,
 			const std::vector<off_t> &offs_in_mirror,
-			fm::dense_matrix::ptr mirrored_mat): block_multi_vector(mats) {
+			fm::dense_matrix::ptr mirrored_mat, bool in_mem): block_multi_vector(
+				mats, in_mem) {
 		this->mirrored_mat = mirrored_mat;
 		this->offs_in_mirror = offs_in_mirror;
 	}
 public:
 	static ptr create(fm::dense_matrix::ptr mat, const std::vector<off_t> &offs,
-			fm::dense_matrix::ptr mirrored_mat) {
+			fm::dense_matrix::ptr mirrored_mat, bool in_mem) {
 		std::vector<fm::dense_matrix::ptr> mats(1);
 		mats[0] = mat;
-		return ptr(new mirror_cols_block_multi_vector(mats, offs, mirrored_mat));
+		return ptr(new mirror_cols_block_multi_vector(mats, offs, mirrored_mat,
+					in_mem));
 	}
 
 	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat);
@@ -207,26 +210,32 @@ void mirror_cols_block_multi_vector::set_block(off_t block_idx,
 }
 
 block_multi_vector::block_multi_vector(
-		const std::vector<fm::dense_matrix::ptr> &mats): type(mats[0]->get_type())
+		const std::vector<fm::dense_matrix::ptr> &mats,
+		bool in_mem): type(mats[0]->get_type())
 {
+	this->in_mem = in_mem;
 	this->num_rows = mats[0]->get_num_rows();
 	this->num_cols = mats[0]->get_num_cols() * mats.size();
 	this->block_size = mats[0]->get_num_cols();
 	this->mats = mats;
-	for (size_t i = 1; i < mats.size(); i++)
+	for (size_t i = 1; i < mats.size(); i++) {
 		assert(this->block_size == mats[i]->get_num_cols());
+		assert(this->in_mem == mats[i]->is_in_mem());
+		assert(this->num_rows == mats[i]->get_num_rows());
+	}
 }
 
 block_multi_vector::block_multi_vector(size_t nrow, size_t ncol,
-		size_t block_size, const fm::scalar_type &_type): type(_type)
+		size_t block_size, const fm::scalar_type &_type, bool in_mem): type(_type)
 {
+	this->in_mem = in_mem;
 	this->num_rows = nrow;
 	this->num_cols = ncol;
 	this->block_size = block_size;
 	mats.resize(ncol / block_size);
 	for (size_t i = 0; i < mats.size(); i++)
 		mats[i] = dense_matrix::create(nrow, block_size,
-				matrix_layout_t::L_COL, type, get_num_nodes(), true);
+				matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
 }
 
 dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
@@ -276,7 +285,7 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 	// get entire blocks.
 	if (index.size() % get_block_size() == 0 && index[0] % get_block_size() == 0) {
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
-				index.size(), get_block_size(), get_type());
+				index.size(), get_block_size(), get_type(), in_mem);
 		size_t num_blocks = index.size() / get_block_size();
 		size_t block_start = index[0] / get_block_size();
 		for (size_t i = 0; i < num_blocks; i++)
@@ -291,7 +300,7 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 			local_offs[i] = index[i] - block_start * get_block_size();
 
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
-				index.size(), index.size(), get_type());
+				index.size(), index.size(), get_type(), in_mem);
 		dense_matrix::ptr block = get_block(block_start);
 		dense_matrix::ptr ret1;
 		if (block->is_virtual()) {
@@ -317,7 +326,7 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 	}
 	else {
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
-				index.size(), 1, get_type());
+				index.size(), 1, get_type(), in_mem);
 		for (size_t i = 0; i < index.size(); i++)
 			ret->set_block(i, get_col(index[i]));
 		return ret;
@@ -335,7 +344,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		for (size_t i = 0; i < num_blocks; i++)
 			mats[i] = get_block(i + block_start);
 		mirror_block_multi_vector::ptr ret
-			= mirror_block_multi_vector::create(mats);
+			= mirror_block_multi_vector::create(mats, in_mem);
 		return ret;
 	}
 	else if (is_same_block(index, get_block_size())) {
@@ -360,7 +369,8 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		}
 		mirror_cols_block_multi_vector::ptr ret
 			= mirror_cols_block_multi_vector::create(
-					block->get_cols(idxs_in_block), idxs_in_block, block);
+					block->get_cols(idxs_in_block), idxs_in_block, block,
+					in_mem);
 		return ret;
 	}
 	else {
@@ -394,13 +404,26 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	assert(X.get_block_size() == Y.get_block_size());
 	assert(X.get_type() == Y.get_type());
 	size_t num_blocks = X.get_num_blocks();
+	int num_nodes = matrix_conf.get_num_nodes();
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
+		num_col_reads_concept += in->get_num_cols();
 		if (in->store_layout() == matrix_layout_t::L_COL)
 			in = in->conv2(matrix_layout_t::L_ROW);
-		if (in->is_virtual()) {
-			num_col_writes += in->get_num_cols();
+		bool in_mem = in->is_in_mem();
+		// If the input matrix isn't in memory, we should load it first.
+		// When loading, if the input matrix is a virtual matrix, materialize
+		// it in memory.
+		if (!in->is_in_mem()) {
+			printf("load the input matrix for SpMM to memory\n");
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
+			in = in->conv_store(true, num_nodes);
+			detail::matrix_stats.print_diff(orig_stats);
+		}
+		// If the input matrix is in memory and is virtual, we should
+		// materialize it.
+		else if (in->is_virtual()) {
 			printf("materialize %s\n", in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
@@ -409,6 +432,16 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		res = multiply.run(in);
 		if (res->store_layout() == matrix_layout_t::L_ROW)
 			res = res->conv2(matrix_layout_t::L_COL);
+		// If the input matrix isn't in memory, we should convert it to
+		// EM matrix.
+		if (!in_mem) {
+			printf("write the output matrix of SpMM to disks\n");
+			num_col_writes += res->get_num_cols();
+			num_col_writes_concept += res->get_num_cols();
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
+			res = res->conv_store(false, -1);
+			detail::matrix_stats.print_diff(orig_stats);
+		}
 		assert(res->store_layout() == matrix_layout_t::L_COL);
 		Y.set_block(i, res);
 	}
@@ -417,7 +450,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 block_multi_vector::ptr block_multi_vector::clone() const
 {
 	block_multi_vector::ptr vecs= block_multi_vector::create(
-			get_num_rows(), get_num_cols(), block_size, type);
+			get_num_rows(), get_num_cols(), block_size, type, in_mem);
 	size_t num_blocks = get_num_blocks();
 	for (size_t i = 0; i < num_blocks; i++)
 		vecs->mats[i] = this->get_block(i)->clone();
@@ -629,7 +662,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	block_multi_vector::ptr vecs= block_multi_vector::create(
 			// mapply_portion can only output one matrix, so `vecs' can
 			// only have one block.
-			get_num_rows(), B->get_num_cols(), B->get_num_cols(), type);
+			get_num_rows(), B->get_num_cols(), B->get_num_cols(), type, in_mem);
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -688,7 +721,7 @@ block_multi_vector::ptr block_multi_vector::add(
 		const block_multi_vector &vecs) const
 {
 	block_multi_vector::ptr ret= block_multi_vector::create(
-			get_num_rows(), get_num_cols(), block_size, type);
+			get_num_rows(), get_num_cols(), block_size, type, in_mem);
 	size_t num_blocks = get_num_blocks();
 	for (size_t i = 0; i < num_blocks; i++)
 		ret->mats[i] = this->get_block(i)->add(*vecs.get_block(i));

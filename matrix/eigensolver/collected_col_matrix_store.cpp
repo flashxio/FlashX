@@ -153,11 +153,6 @@ collected_matrix_store::ptr collected_matrix_store::create(
 			BOOST_LOG_TRIVIAL(error) << "collected cols have different types";
 			return collected_matrix_store::ptr();
 		}
-		if (num_nodes != mats[i]->get_num_nodes()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "collected cols are in different numbers of NUMA nodes";
-			return collected_matrix_store::ptr();
-		}
 	}
 	return ptr(new collected_matrix_store(mats, num_cols));
 }

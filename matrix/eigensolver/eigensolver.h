@@ -58,6 +58,7 @@ struct eigen_options
 	int nev;
 	std::string solver;
 	std::string which;
+	bool in_mem;
 
 	eigen_options();
 };

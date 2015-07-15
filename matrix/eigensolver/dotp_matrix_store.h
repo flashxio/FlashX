@@ -111,7 +111,7 @@ public:
  * of the matrix. When we need to fetch a column, this class returns a special
  * virtual matrix that has the dot product of that column.
  */
-class dotp_matrix_store: public detail::virtual_matrix_store
+class dotp_matrix_store: public detail::virtual_matrix_store, public detail::EM_object
 {
 	matrix_store::const_ptr orig_store;
 	std::vector<double> col_dot_prods;
@@ -188,6 +188,13 @@ public:
 	}
 	virtual size_t get_underlying_eles() const {
 		return orig_store->get_underlying_eles();
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const {
+		const detail::EM_object *obj = dynamic_cast<const detail::EM_object *>(
+				orig_store.get());
+		assert(obj);
+		return obj->create_ios();
 	}
 };
 

@@ -56,22 +56,26 @@ namespace eigen
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
+	bool in_mem;
 	std::string name;
 	block_multi_vector::ptr mat;
 #ifdef FM_VERIFY
 	std::shared_ptr<Anasazi::EpetraMultiVec> ep_mat;
 #endif
 
-	FM_MultiVector(const std::string &extra) {
+	FM_MultiVector(const std::string &extra, bool in_mem) {
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
 		this->name = std::string(name_buf) + " " + extra;
+		this->in_mem = in_mem;
 	}
 public:
-	FM_MultiVector(size_t num_rows, size_t num_cols, size_t block_size) {
+	FM_MultiVector(size_t num_rows, size_t num_cols, size_t block_size,
+			bool in_mem) {
+		this->in_mem = in_mem;
 		// We don't materialize the column matrix.
 		mat = block_multi_vector::create(num_rows, num_cols, block_size,
-				fm::get_scalar_type<ScalarType>());
+				fm::get_scalar_type<ScalarType>(), in_mem);
 
 #ifdef FM_VERIFY
 		Epetra_SerialComm Comm;
@@ -193,10 +197,10 @@ public:
 		FM_MultiVector<ScalarType> *ret;
 		if (numvecs % mat->get_block_size() == 0)
 			ret = new FM_MultiVector<ScalarType>(
-					mat->get_num_rows(), numvecs, mat->get_block_size());
+					mat->get_num_rows(), numvecs, mat->get_block_size(), in_mem);
 		else
 			ret = new FM_MultiVector<ScalarType>(
-					mat->get_num_rows(), numvecs, numvecs);
+					mat->get_num_rows(), numvecs, numvecs, in_mem);
 		BOOST_LOG_TRIVIAL(info) << boost::format("create new %1% (#cols: %2%)")
 			% ret->get_name() % numvecs;
 		return ret;
@@ -211,7 +215,8 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy %1% (#cols: %2%)")
 			% name % mat->get_num_cols();
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
-		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
+		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
+				in_mem);
 		ret->mat = this->mat->clone();
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -236,7 +241,8 @@ public:
 		BOOST_LOG_TRIVIAL(info) << boost::format("deep copy sub %1% (#cols: %2%)")
 			% name % index.size();
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
-		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
+		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
+				in_mem);
 		ret->mat = mat->get_cols(index);
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -256,7 +262,8 @@ public:
 	virtual Anasazi::MultiVec<ScalarType> * CloneViewNonConst (
 			const std::vector<int>& index) {
 		std::string extra = std::string("(") + get_name() + "[" + vec2str(index) + "])";
-		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
+		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
+				in_mem);
 		BOOST_LOG_TRIVIAL(info) << boost::format("view %1% (#cols: %2%)")
 			% ret->name % index.size();
 		ret->mat = mat->get_cols_mirror(index);
@@ -300,7 +307,8 @@ public:
 	virtual const Anasazi::MultiVec<ScalarType> * CloneView (
 			const std::vector<int>& index) const {
 		std::string extra = std::string("(const ") + get_name() + "[" + vec2str(index) + "])";
-		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
+		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
+				in_mem);
 		BOOST_LOG_TRIVIAL(info) << boost::format("const view %1% (#cols: %2%)")
 			% ret->name % index.size();
 		ret->mat = mat->get_cols(index);
