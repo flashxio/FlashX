@@ -80,12 +80,6 @@ public:
 		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
 	}
 
-	/*
-	 * Load the EM matrix to memory.
-	 */
-	std::shared_ptr<mem_matrix_store> load() const;
-	bool copy_from(matrix_store::const_ptr mat);
-
 	virtual size_t get_underlying_eles() const {
 		return get_num_rows() * get_num_cols();
 	}

@@ -89,12 +89,16 @@ dense_matrix::ptr naive_multiply(const dense_matrix &m1, const dense_matrix &m2)
 	detail::mem_matrix_store::const_ptr mem_m2;
 	if (m1.is_in_mem())
 		mem_m1 = detail::mem_matrix_store::cast(m1.get_raw_store());
-	else
-		mem_m1 = detail::EM_matrix_store::cast(m1.get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_mat = m1.conv_store(true, -1);
+		mem_m1 = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	}
 	if (m2.is_in_mem())
 		mem_m2 = detail::mem_matrix_store::cast(m2.get_raw_store());
-	else
-		mem_m2 = detail::EM_matrix_store::cast(m2.get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_mat = m2.conv_store(true, -1);
+		mem_m2 = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	}
 #pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
@@ -120,12 +124,16 @@ dense_matrix::ptr blas_multiply(const dense_matrix &m1, const dense_matrix &m2)
 	detail::mem_matrix_store::const_ptr mem_m2;
 	if (tmp1->is_in_mem())
 		mem_m1 = detail::mem_matrix_store::cast(tmp1->get_raw_store());
-	else
-		mem_m1 = detail::EM_matrix_store::cast(tmp1->get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_tmp = tmp1->conv_store(true, -1);
+		mem_m1 = detail::mem_matrix_store::cast(mem_tmp->get_raw_store());
+	}
 	if (tmp2->is_in_mem())
 		mem_m2 = detail::mem_matrix_store::cast(tmp2->get_raw_store());
-	else
-		mem_m2 = detail::EM_matrix_store::cast(tmp2->get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_tmp = tmp2->conv_store(true, -1);
+		mem_m2 = detail::mem_matrix_store::cast(mem_tmp->get_raw_store());
+	}
 	assert(mem_m1->get_num_nodes() < 0);
 	assert(mem_m2->get_num_nodes() < 0);
 
@@ -214,12 +222,16 @@ void verify_result(const dense_matrix &m1, const dense_matrix &m2,
 	detail::mem_matrix_store::const_ptr mem_m2;
 	if (m1.is_in_mem())
 		mem_m1 = detail::mem_matrix_store::cast(m1.get_raw_store());
-	else
-		mem_m1 = detail::EM_matrix_store::cast(m1.get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_mat = m1.conv_store(true, -1);
+		mem_m1 = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	}
 	if (m2.is_in_mem())
 		mem_m2 = detail::mem_matrix_store::cast(m2.get_raw_store());
-	else
-		mem_m2 = detail::EM_matrix_store::cast(m2.get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_mat = m2.conv_store(true, -1);
+		mem_m2 = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	}
 
 #pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++)
@@ -1001,8 +1013,10 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 	detail::mem_matrix_store::const_ptr mem_m;
 	if (mat->is_in_mem())
 		mem_m = detail::mem_matrix_store::cast(mat->get_raw_store());
-	else
-		mem_m = detail::EM_matrix_store::cast(mat->get_raw_store())->load();
+	else {
+		dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
+		mem_m = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	}
 	for (size_t i = 0; i < vec->get_length(); i++) {
 		int sum = 0;
 		for (size_t j = 0; j < mat->get_num_cols(); j++)
