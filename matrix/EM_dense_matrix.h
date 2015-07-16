@@ -56,11 +56,28 @@ class EM_matrix_store: public matrix_store, public EM_object
 	file_holder::ptr holder;
 	io_set::ptr ios;
 
+	/*
+	 * These two fields are used for sub matrix.
+	 * They indicates the actual number of rows and columns stored on disks.
+	 * In contrast, get_num_rows() and get_num_cols() are #rows and columns
+	 * exposed to users.
+	 */
+	size_t orig_num_rows;
+	size_t orig_num_cols;
+
+	size_t get_orig_num_rows() const {
+		return orig_num_rows;
+	}
+
+	size_t get_orig_num_cols() const {
+		return orig_num_cols;
+	}
+
 	EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type);
-	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
-			size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, size_t _data_id);
+	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
+			size_t ncol, size_t orig_nrow, size_t orig_ncol,
+			matrix_layout_t layout, const scalar_type &type, size_t _data_id);
 public:
 	static const size_t CHUNK_SIZE;
 
@@ -78,6 +95,10 @@ public:
 
 	static const_ptr cast(matrix_store::const_ptr store) {
 		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
+	}
+
+	size_t get_matrix_id() const {
+		return mat_id;
 	}
 
 	virtual size_t get_underlying_eles() const {
@@ -117,6 +138,10 @@ public:
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
 
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };

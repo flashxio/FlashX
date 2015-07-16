@@ -585,10 +585,11 @@ void test_agg_sub_col(int num_nodes)
 	printf("Test aggregation on a column-wise submatrix\n");
 	dense_matrix::ptr col_m = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
-	std::vector<off_t> idxs(3);
+	std::vector<off_t> idxs(4);
 	idxs[0] = 1;
 	idxs[1] = 5;
 	idxs[2] = 3;
+	idxs[3] = 4;
 	dense_matrix::ptr sub_m = col_m->get_cols(idxs);
 	assert(sub_m != NULL);
 
@@ -613,10 +614,11 @@ void test_agg_sub_row(int num_nodes)
 	printf("Test aggregation on a row-wise submatrix\n");
 	dense_matrix::ptr col_m = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
-	std::vector<off_t> idxs(3);
+	std::vector<off_t> idxs(4);
 	idxs[0] = 1;
 	idxs[1] = 5;
 	idxs[2] = 3;
+	idxs[3] = 4;
 	dense_matrix::ptr sub_col_m = col_m->get_cols(idxs);
 	dense_matrix::ptr sub_row_m = sub_col_m->transpose();
 
