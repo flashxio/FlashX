@@ -73,8 +73,8 @@ public:
 		return num_nodes;
 	}
 
-	virtual size_t get_underlying_eles() const {
-		return 0;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return std::unordered_map<size_t, size_t>();
 	}
 };
 

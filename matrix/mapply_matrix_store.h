@@ -91,7 +91,7 @@ public:
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 
 	virtual std::string get_name() const;
-	virtual size_t get_underlying_eles() const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 };
 
 }

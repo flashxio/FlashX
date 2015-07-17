@@ -60,8 +60,8 @@ public:
 				% orig_store->get_num_rows() % idxs.size()).str();
 	}
 
-	virtual size_t get_underlying_eles() const {
-		return orig_store->get_underlying_eles();
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return orig_store->get_underlying_mats();
 	}
 
 	matrix_layout_t store_layout() const {
@@ -186,8 +186,8 @@ public:
 	virtual int get_num_nodes() const {
 		return orig_store->get_num_nodes();
 	}
-	virtual size_t get_underlying_eles() const {
-		return orig_store->get_underlying_eles();
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return orig_store->get_underlying_mats();
 	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {

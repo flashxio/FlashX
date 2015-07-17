@@ -175,9 +175,8 @@ public:
 		return (boost::format("local_mat(%1%,%2%)") % get_num_rows()
 			% get_num_cols()).str();
 	}
-	virtual size_t get_underlying_eles() const {
-		// This method doesn't make too much sense for local matrix store.
-		return 0;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return std::unordered_map<size_t, size_t>();
 	}
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,

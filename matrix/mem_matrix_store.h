@@ -60,8 +60,10 @@ public:
 
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
-	virtual size_t get_underlying_eles() const {
-		return get_num_rows() * get_num_cols();
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		// TODO for now, we assume that an in-mem matrix doesn't have
+		// underlying matrix.
+		return std::unordered_map<size_t, size_t>();
 	}
 	virtual std::string get_name() const {
 		return (boost::format("mem_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()

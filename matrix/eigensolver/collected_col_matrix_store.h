@@ -89,7 +89,9 @@ public:
 		return num_nodes;
 	}
 
-	virtual size_t get_underlying_eles() const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return merged_mat->get_underlying_mats();
+	}
 
 	matrix_layout_t store_layout() const {
 		assert(merged_mat);

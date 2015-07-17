@@ -142,7 +142,6 @@ collected_matrix_store::ptr collected_matrix_store::create(
 	assert(!mats.empty());
 	size_t num_rows = mats[0]->get_num_rows();
 	const scalar_type &type = mats[0]->get_type();
-	int num_nodes = mats[0]->get_num_nodes();
 	for (size_t i = 0; i < mats.size(); i++) {
 		if (num_rows != mats[i]->get_num_rows()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -242,14 +241,6 @@ detail::matrix_store::const_ptr collected_matrix_store::transpose() const
 	for (size_t i = 0; i < orig_mats.size(); i++)
 		store->orig_mats[i] = orig_mats[i]->transpose();
 	return detail::matrix_store::const_ptr(store);
-}
-
-size_t collected_matrix_store::get_underlying_eles() const
-{
-	size_t num_eles = 0;
-	for (size_t i = 0; i < orig_mats.size(); i++)
-		num_eles += orig_mats[i]->get_underlying_eles();
-	return num_eles;
 }
 
 }

@@ -769,15 +769,25 @@ std::string mapply_matrix_store::get_name() const
 		+ op->to_string(in_mats);
 }
 
-size_t mapply_matrix_store::get_underlying_eles() const
+std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() const
 {
-	// TODO this isn't accurate, because the input matrix stores may also be
-	// virtual matrix stores and they share the underlying physically
-	// materialized matrix stores.
-	size_t num = 0;
-	for (size_t i = 0; i < in_mats.size(); i++)
-		num += in_mats[i]->get_underlying_eles();
-	return num;
+	if (res)
+		return res->get_underlying_mats();
+
+	std::unordered_map<size_t, size_t> final_res;
+	for (size_t i = 0; i < in_mats.size(); i++) {
+		std::unordered_map<size_t, size_t> res = in_mats[i]->get_underlying_mats();
+		/*
+		 * When we merge, we only need to collect the matrices with different
+		 * data IDs.
+		 */
+		for (auto it = res.begin(); it != res.end(); it++) {
+			auto to_it = final_res.find(it->first);
+			if (to_it == final_res.end())
+				final_res.insert(std::pair<size_t, size_t>(it->first, it->second));
+		}
+	}
+	return final_res;
 }
 
 }

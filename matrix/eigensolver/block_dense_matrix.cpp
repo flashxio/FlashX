@@ -691,11 +691,15 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 				A_num_blocks, C_num_blocks, d_alpha, d_beta,
 				this->get_num_rows(), this->get_num_cols()));
 	vecs->mats[0] = mapply_portion(mats, op, matrix_layout_t::L_COL);
-	if (A.get_num_blocks() > 2) {
-		num_col_writes += vecs->mats[0]->get_num_cols();
-		printf("materialize %s\n", vecs->mats[0]->get_data().get_name().c_str());
+	dense_matrix::ptr block = vecs->mats[0];
+	std::unordered_map<size_t, size_t> bytes
+		= block->get_data().get_underlying_mats();
+	if (bytes.size() > 2) {
+		printf("There are %ld underlying matrices\n", bytes.size());
+		num_col_writes += block->get_num_cols();
+		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
-		vecs->mats[0]->materialize_self();
+		block->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 	}
 	return vecs;
@@ -734,14 +738,20 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	detail::mem_col_matrix_store::ptr res = detail::mem_col_matrix_store::create(
 			mv.get_num_cols(), this->get_num_cols(), type);
 	std::vector<detail::matrix_store::const_ptr> blocks1(mv.get_num_blocks());
-	for (size_t i = 0; i < blocks1.size(); i++)
+	for (size_t i = 0; i < blocks1.size(); i++) {
 		blocks1[i] = mv.get_block(i)->get_raw_store();
+		if (blocks1[i]->is_virtual())
+			printf("materialize %s on the fly\n", blocks1[i]->get_name().c_str());
+	}
 	dense_matrix::ptr in1 = dense_matrix::create(collected_matrix_store::create(
 				blocks1, mv.get_num_cols()));
 
 	std::vector<detail::matrix_store::const_ptr> blocks2(this->get_num_blocks());
-	for (size_t i = 0; i < blocks2.size(); i++)
+	for (size_t i = 0; i < blocks2.size(); i++) {
 		blocks2[i] = this->get_block(i)->get_raw_store();
+		if (blocks2[i]->is_virtual())
+			printf("materialize %s on the fly\n", blocks2[i]->get_name().c_str());
+	}
 	dense_matrix::ptr in2 = dense_matrix::create(collected_matrix_store::create(
 				blocks2, this->get_num_cols()));
 	return in1->transpose()->multiply(*in2, matrix_layout_t::L_NONE, true);

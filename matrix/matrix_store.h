@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <atomic>
+#include <unordered_map>
 
 #include "matrix_header.h"
 #include "generic_type.h"
@@ -106,11 +107,10 @@ public:
 	}
 
 	/*
-	 * This method gets the number of underlying elements in the matrix store.
-	 * For a real matrix (its data has been materialized), it's #rows * #cols.
-	 * For a virtual matrix, the number varies.
+	 * This method gets underlying materialized matrix IDs and the number of
+	 * elements in each of these materialized matrices.
 	 */
-	virtual size_t get_underlying_eles() const = 0;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const = 0;
 	virtual std::string get_name() const = 0;
 
 	virtual matrix_layout_t store_layout() const = 0;
