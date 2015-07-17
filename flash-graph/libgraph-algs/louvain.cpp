@@ -37,9 +37,6 @@
 #include "FG_vector.h"
 #include "save_result.h"
 
-// In iterations > 1:
-//		If I'm a vertex that joins a cluster with higher_id I send no messages
-
 using namespace fg;
 
 // NOTE: This routine is only meant for undirected graphs!!!
@@ -48,9 +45,9 @@ namespace {
 enum stage_t
 {
 	INIT,
-	LEVEL1,
 	RUN,
-	UPDATE,
+	UPDATE_CLUSTERS,
+	REBUILD,
 };
 
 class cluster
@@ -71,7 +68,7 @@ class cluster
 		this->weight += weight;
 	}
 
-	uint32_t get_weight() const {
+	const uint32_t get_weight() const {
 		return weight;
 	}
 
@@ -79,7 +76,7 @@ class cluster
 		this->volume += volume;
 	}
 
-	uint32_t get_volume() const {
+	const uint32_t get_volume() const {
 		return volume;
 	}
 };
@@ -101,8 +98,21 @@ stage_t louvain_stage = INIT; // Init the stage
 
 cluster_map g_cluster_map; // Global map from cluster_id : cluster(volume, weight)
 
+// If anything changes cluster we cannot converge
+void set_changed(bool changed) {
+	if (!changed) // Only once per iter so no prob with this
+		g_changed = changed;
+	if (changed && (!g_changed))
+		g_changed = changed;
+}
+
+
 static void print_cluster_map(cluster_map cl_map) {
 
+	if (cl_map.size() == 0) {
+		BOOST_LOG_TRIVIAL(info) << "EMPTY";
+		return;
+	}
 	for (cluster_map::iterator it = cl_map.begin(); it != cl_map.end(); ++it) {
 		BOOST_LOG_TRIVIAL(info) << "Cluster: " << it->first << ", " << it->second;
 	}
@@ -111,47 +121,34 @@ static void print_cluster_map(cluster_map cl_map) {
 class louvain_vertex: public compute_vertex
 {
 	cluster_id_t cluster_id; // current cluster
-	float modularity;
+	float max_modularity; // max modularity to any cluster
 	uint32_t weight;
 	uint32_t volume;
 
 	public:
 	louvain_vertex(vertex_id_t id): compute_vertex(id) {
 		cluster_id = id;
-		modularity = std::numeric_limits<float>::min();
+		max_modularity = 0;
 		weight = 0;
 		volume = 0;
 	}
 
-	void run(vertex_program &prog);
-	void run(vertex_program &prog, const page_vertex &vertex);
-	void run_on_message(vertex_program &, const vertex_message &msg1) {}
+	void run(vertex_program &prog) {
+		vertex_id_t id = prog.get_vertex_id(*this);
+		request_vertices(&id, 1);
+	}
 
-	void compute_modularity(edge_seq_iterator& id_it,
-		cluster_id_t& max_cluster, float& max_mod, vertex_id_t my_id);
+	void run(vertex_program &prog, const page_vertex &vertex);
+	void run_on_message(vertex_program &prog, const vertex_message &msg1);
+
+	void compute_modularity(cluster_id_t neigh_cluster_id, vertex_id_t my_id);
 	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
 		vertex_program &prog);
 	void compute_per_cluster_vol_weight(vertex_program &prog);
 
 	// Used for save_query join
-	cluster_id_t get_result() const {
+	const cluster_id_t get_result() const {
 		return cluster_id;
-	}
-};
-
-// Each vertex sends a message to its neighbors` 
-class cluster_message: public vertex_message
-{
-	cluster_id_t sender_cluster_id;
-
-	public:
-	cluster_message(cluster_id_t id): 
-		vertex_message(sizeof(cluster_message), true) {
-			this->sender_cluster_id = id;
-		}
-
-	const vertex_id_t get_sender_cluster_id() const {
-		return sender_cluster_id;
 	}
 };
 
@@ -177,12 +174,11 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 		this->th_local_edge_count += weight;
 	}
 
-	uint32_t get_local_ec() {
+	const uint32_t get_local_ec() const {
 		return th_local_edge_count.get_count();
 	}
 
 	void update(cluster_id_t id, float vol, uint32_t weight) {
-		// TODO: Case of INIT we always just add since it's one cluster per vertex
 		cluster_map::iterator it = th_local_cluster_map.find(id);
 
 		if (it == th_local_cluster_map.end()) {
@@ -207,110 +203,20 @@ class louvain_vertex_program_creater: public vertex_program_creater
 		}
 };
 
-void louvain_vertex::run(vertex_program &prog) {
-	
-	switch (louvain_stage) {
-		case INIT:
-		case LEVEL1:
-		case RUN:
-			{
-				vertex_id_t id = prog.get_vertex_id(*this);
-				request_vertices(&id, 1);
-			}
-			break;
-		case UPDATE:
-			break;
-		default:
-			BOOST_LOG_TRIVIAL(fatal) << "Unknown case louvain stage!";
-	}
-}
+class cluster_message: public vertex_message
+{
+	cluster_id_t sender_cluster_id;
 
-// Tradeoff by iterating through neighbors, instead of the min computation which is every cluster.
-void louvain_vertex::compute_modularity(edge_seq_iterator& id_it, 
-		cluster_id_t& max_cluster, float& max_mod, vertex_id_t my_id) {
-
-	float delta_mod = 0;
-	cluster curr_cluster = g_cluster_map[my_id];
-
-#if 0
-	/** DEBUG **/
-	BOOST_LOG_TRIVIAL(info) << "Vertex " << my_id << " ==> cluster:" << curr_cluster;
-	/** DEBUG **/
-#endif
-
-	while(id_it.has_next()) {
-		vertex_id_t	nid = id_it.next();
-		cluster neigh_cluster = g_cluster_map[nid];
-
-#if 0
-	/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "Neighbor " << nid << " ==> cluster: " << neigh_cluster; 
-	/** DEBUG **/
-#endif
-
-		if (nid == this->cluster_id) { // If I'm in the same cluster as my neigh
-			delta_mod = (((neigh_cluster.get_weight() - this->weight) - 
-						(curr_cluster.get_weight()-this->weight)) / (float) g_edge_weight) +
-						(((int)((curr_cluster.get_volume() - this->volume) - (neigh_cluster.get_volume()-this->volume)) 
-						 * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
-		} else {
-			delta_mod = ((neigh_cluster.get_weight() - (curr_cluster.get_weight()-this->weight))
-						/ (float) g_edge_weight) +
-						(((int)((curr_cluster.get_volume() - this->volume) - neigh_cluster.get_volume()) 
-						 * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
+	public:
+	cluster_message(cluster_id_t cluster_id):
+		vertex_message(sizeof(cluster_message), false)	{
+			this->sender_cluster_id = cluster_id;
 		}
 
-#if 0
-		/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " delta_mod for v" << nid << " = " << delta_mod << "\n";
-		/** DEBUG **/
-#endif
-
-		if (delta_mod > max_mod) {
-			max_mod = delta_mod;
-			max_cluster = nid;
-		}
+	const cluster_id_t get_sender_cluster_id() const {
+		return sender_cluster_id;
 	}
-}
-
-// If anything changes cluster we cannot converge
-void set_changed(bool changed) {
-	if (!changed) // Only once per iter so no prob with this
-		g_changed = changed;
-	if (changed && (!g_changed))
-		g_changed = changed;
-}
-
-// Only need to do this once per vertex ever
-void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
-		vertex_program &prog) {
-	edge_count local_edge_weight = 0;
-	uint32_t self_edge_weight = 0;
-
-	while (weight_it.has_next()) {
-		edge_count e = weight_it.next();
-		vertex_id_t nid = id_it.next();
-
-		local_edge_weight += e.get_count();
-		if (nid == prog.get_vertex_id(*this)) {
-			self_edge_weight += e.get_count();
-		}
-	}
-
-	((louvain_vertex_program&)prog).
-		pp_ec(local_edge_weight);
-	this->volume += local_edge_weight.get_count() + (2*self_edge_weight);
-	this->weight += local_edge_weight.get_count() + self_edge_weight;
-
-	// Add this for the cluster
-	((louvain_vertex_program&)prog).update(this->cluster_id, local_edge_weight.get_count() + 
-		(2*self_edge_weight), local_edge_weight.get_count() + self_edge_weight);
-}
-
-//  Does not require edgelist
-void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
-	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
-}
+};
 
 void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 
@@ -330,53 +236,103 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 				compute_per_vertex_vol_weight(weight_it, id_it, prog);
 			}
 			break;
-		case LEVEL1:
+		case RUN:
 			{
-				// Compute the new cluster based on modularity
-				float max_mod = this->modularity;
-				vertex_id_t max_cluster = this->cluster_id;
-
+				// Broadcast cluster_id to all my neighbors then rely on run_on_message
 				// Out edges
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-				compute_modularity(id_it, max_cluster, max_mod, prog.get_vertex_id(*this));
+				cluster_message out_msg(this->cluster_id);
+				prog.multicast_msg(id_it, out_msg);
 				
 				// In edges
 				id_it = vertex.get_neigh_seq_it(IN_EDGE);
-				compute_modularity(id_it, max_cluster, max_mod, prog.get_vertex_id(*this));
-				
-				if (this->cluster_id != max_cluster) {
-#if 1
-					/** DEBUG **/
-					BOOST_LOG_TRIVIAL(info) << "v" << prog.get_vertex_id(*this) 
-						<< ": mod = " << this->modularity << " < " << max_mod <<
-						", moved c" << this->cluster_id << " ==> " << max_cluster << "\n";
-					/** DEBUG **/
-#endif
-					set_changed(true);
-				} else {
-#if 0
-					/** DEBUG **/
-					BOOST_LOG_TRIVIAL(info) << "v" << prog.get_vertex_id(*this) << 
-						": mod = " << this->modularityv<< ", stayed in cluster " 
-						<< this->cluster_id << "\n";
-					/** DEBUG **/
-#endif
-				}
-
-				this->cluster_id = max_cluster;
-				this->modularity = max_mod;	
-
-				((louvain_vertex_program&)prog).update(this->cluster_id, this->volume,
-				   	this->weight);
+				cluster_message in_msg(this->cluster_id);
+				prog.multicast_msg(id_it, in_msg);
 			}
 			break;
-		case RUN:
-			BOOST_LOG_TRIVIAL(fatal) << "Run unimplemented!";
+		case UPDATE_CLUSTERS:
+			compute_per_cluster_vol_weight(prog);
 			break;
-
 		default:
 			assert(0);
 	}
+}
+
+void louvain_vertex::run_on_message(vertex_program &prog, const vertex_message &msg1) {
+	
+	const cluster_message& msg = (const cluster_message& ) msg1;
+	if (msg.get_sender_cluster_id() == cluster_id) { 
+		return; // Ignore since my cluster will not change
+	} else {
+		// This may update the cluster and modularity values
+		compute_modularity(msg.get_sender_cluster_id(), prog.get_vertex_id(*this));
+	}
+}
+
+// Tradeoff by iterating through neighbors, instead of the min computation which is every cluster.
+void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id_t my_id) {
+
+	// TODO: Optimize these lookups
+	cluster curr_cluster = g_cluster_map[cluster_id];
+	cluster neigh_cluster = g_cluster_map[neigh_cluster_id];
+
+#if 0
+	/** DEBUG **/
+	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id << 
+		" ==> " << curr_cluster << "processing neigh in cluster: " << neigh_cluster; 
+	/** GUBED **/
+#endif
+	
+	// TODO: Remove divisions & hope for no overflow
+	float delta_mod = ((neigh_cluster.get_weight() - (curr_cluster.get_weight()-this->weight))
+			/ (float) g_edge_weight) +
+		(((int)((curr_cluster.get_volume() - this->volume) - neigh_cluster.get_volume()) 
+		  * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
+
+	if (delta_mod > this->max_modularity) {
+#if 0
+		/** DEBUG **/
+		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " moved from c" <<  cluster_id << " to c"
+		   << neigh_cluster_id << ", delta_mod = "<< delta_mod << "\n";
+		/** GUBED **/
+#endif
+
+		max_modularity = delta_mod;
+		this->cluster_id = neigh_cluster_id;
+		set_changed(true); // Global notification of cluster change
+	}
+}
+
+// Only need to do this once per vertex ever
+void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+		vertex_program &prog) {
+	edge_count local_edge_weight = 0;
+	uint32_t self_edge_weight = 0;
+
+	while (weight_it.has_next()) {
+		edge_count e = weight_it.next();
+		vertex_id_t nid = id_it.next();
+
+		local_edge_weight += e.get_count();
+		if (nid == prog.get_vertex_id(*this)) {
+			self_edge_weight += e.get_count();
+		}
+	}
+
+
+	((louvain_vertex_program&)prog).
+		pp_ec(local_edge_weight);
+	this->volume += local_edge_weight.get_count() + (2*self_edge_weight);
+	this->weight += local_edge_weight.get_count() + self_edge_weight;
+
+	// Add this for the cluster
+	((louvain_vertex_program&)prog).update(this->cluster_id, local_edge_weight.get_count() + 
+		(2*self_edge_weight), local_edge_weight.get_count() + self_edge_weight);
+}
+
+//  Does not require edgelist
+void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
+	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
 }
 
 // General merge function for cluster maps
@@ -420,9 +376,9 @@ std::map<T, U> build_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map
 		if (add_it->first == agg_it->first) {
 			new_map[add_it->first] = merge_func(add_it->second, agg_it->second);
 
-			BOOST_LOG_TRIVIAL(info) << "new_map add:"; print_cluster_map(new_map);
+			// BOOST_LOG_TRIVIAL(info) << "new_map add:"; print_cluster_map(new_map);
 		} else {
-			BOOST_LOG_TRIVIAL(info) << "new_map new:"; print_cluster_map(new_map);
+			// BOOST_LOG_TRIVIAL(info) << "new_map new:"; print_cluster_map(new_map);
 			new_map[add_it->first] = add_it->second;
 		}
 	}
@@ -431,6 +387,7 @@ std::map<T, U> build_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map
 }
 
 // FIXME: Building this is serial and likely already slow to
+// FIXME: Remove accum_edges eventually 
 void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
 
 	std::vector<vertex_program::ptr> ec_progs;
@@ -445,9 +402,10 @@ void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
 		merge_func = &merge_cluster;
 
 		cluster_map merge_map = build_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
+
+		// Merging this clustermap 
 		g_cluster_map.insert(merge_map.begin(), merge_map.end());
 	}
-
 }
 
 }
@@ -477,46 +435,53 @@ namespace fg
 		
 		build_global_cluster_map(graph, true);
 
-#if 1
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
-
+#if 0
+		/** DEBUG **/
 		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 		BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
 		print_cluster_map(g_cluster_map);
 		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+		/** GUBED **/
 #endif
-		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-#if 1
-		louvain_stage = LEVEL1;
-
 		int iter = 0;
 
 		do {
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++ 
-												<< " ********************************\x1B[0m\n\n\n";
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+			louvain_stage = RUN;
+			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL 1 ITERATION: " << iter++ 
+												<< " ********************************\x1B[0m\n\n";
 
-			/** DEBUG **/
 #if 1
+			/** DEBUG **/
 			FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
 					graph->get_num_vertices());
 			graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
 			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
 			ret->print(); 
-
+#endif
+#if 0
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 			BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
 			print_cluster_map(g_cluster_map);
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 
 			// if (iter > 5) { fprintf(stderr, "Premature kill"); exit(-1); } 
+			/** GUBED **/
 #endif
-			/** DEBUG **/
 
 			set_changed(false);
 			graph->start_all(vertex_initializer::ptr(), 
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 			graph->wait4complete();
-			g_cluster_map.clear(); // FIXME: Is it faster to just erase the old and build new? Linear time ...
+			g_cluster_map.clear(); // TODO: Opt
+		/*~~~~~~~~~~~~~~~~~~~ Update per thread then global cluster maps ~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+			louvain_stage = UPDATE_CLUSTERS;
+			graph->start_all(vertex_initializer::ptr(), 
+				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
+			graph->wait4complete();
+
+			// Now aggregate the cluster maps
 			build_global_cluster_map(graph, false);
 		} while (g_changed);
 
@@ -525,15 +490,13 @@ namespace fg
 		FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
 				graph->get_num_vertices());
 		graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
-		BOOST_LOG_TRIVIAL(info) << "Final vertex clusters @ end of Level1:";
+		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
 		ret->print(); 
-		/** DEBUG **/
+		/** GUBED **/
 #endif
 
-		louvain_stage = RUN;
-		BOOST_LOG_TRIVIAL(info) << "\n Reached running stage\n"; 
-#endif
-
+		louvain_stage = REBUILD; // TODO: Do something here
+		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n"; 
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER
