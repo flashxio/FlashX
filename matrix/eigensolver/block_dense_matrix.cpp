@@ -731,38 +731,20 @@ block_multi_vector::ptr block_multi_vector::add(
 dense_matrix::ptr block_multi_vector::MvTransMv(
 		const block_multi_vector &mv) const
 {
-	// TODO this isn't an efficient implementation.
-	detail::mem_row_matrix_store::ptr res = detail::mem_row_matrix_store::create(
+	detail::mem_col_matrix_store::ptr res = detail::mem_col_matrix_store::create(
 			mv.get_num_cols(), this->get_num_cols(), type);
-	size_t block_num_rows = mv.get_block_size();
-	size_t block_num_cols = get_block_size();
-	for (size_t i = 0; i < get_num_blocks(); i++) {
-		for (size_t j = 0; j < mv.get_num_blocks(); j++) {
-			dense_matrix::const_ptr mv_block = mv.get_block(j);
-			if (mv_block->is_virtual())
-				printf("materialize %s on the fly\n",
-						mv_block->get_data().get_name().c_str());
-			dense_matrix::const_ptr block = get_block(i);
-			if (block->is_virtual())
-				printf("materialize %s on the fly\n",
-						block->get_data().get_name().c_str());
-			detail::matrix_stats_t orig_stats = detail::matrix_stats;
-			fm::dense_matrix::ptr tA = mv.get_block(j)->transpose();
-			fm::dense_matrix::ptr res1 = tA->multiply(*get_block(i),
-					// I should use BLAS for multiplication here.
-					matrix_layout_t::L_ROW, true);
-			detail::matrix_stats.print_diff(orig_stats);
-			assert(res->store_layout() == res1->store_layout());
-			detail::local_matrix_store::ptr part = res->get_portion(
-					block_num_rows * j, block_num_cols * i,
-					block_num_rows, block_num_cols);
-			detail::local_matrix_store::const_ptr local_store
-				= static_cast<const detail::mem_matrix_store &>(
-						res1->get_data()).get_portion(0);
-			part->copy_from(*local_store);
-		}
-	}
-	return dense_matrix::create(res);
+	std::vector<detail::matrix_store::const_ptr> blocks1(mv.get_num_blocks());
+	for (size_t i = 0; i < blocks1.size(); i++)
+		blocks1[i] = mv.get_block(i)->get_raw_store();
+	dense_matrix::ptr in1 = dense_matrix::create(collected_matrix_store::create(
+				blocks1, mv.get_num_cols()));
+
+	std::vector<detail::matrix_store::const_ptr> blocks2(this->get_num_blocks());
+	for (size_t i = 0; i < blocks2.size(); i++)
+		blocks2[i] = this->get_block(i)->get_raw_store();
+	dense_matrix::ptr in2 = dense_matrix::create(collected_matrix_store::create(
+				blocks2, this->get_num_cols()));
+	return in1->transpose()->multiply(*in2, matrix_layout_t::L_NONE, true);
 }
 
 typedef std::vector<int> block_col_set_t;

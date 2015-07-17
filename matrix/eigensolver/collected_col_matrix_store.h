@@ -30,7 +30,7 @@ namespace fm
 namespace eigen
 {
 
-class collected_matrix_store: public detail::virtual_matrix_store
+class collected_matrix_store: public detail::virtual_matrix_store, public detail::EM_object
 {
 	// Indicates a row/column in the original matrices.
 	struct rc_idx {
@@ -99,6 +99,14 @@ public:
 	virtual matrix_store::ptr materialize() const {
 		return static_cast<const detail::virtual_matrix_store *>(
 				merged_mat.get())->materialize();
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const {
+		assert(merged_mat);
+		const detail::EM_object *obj = dynamic_cast<const detail::EM_object *>(
+				merged_mat.get());
+		assert(obj);
+		return obj->create_ios();
 	}
 };
 
