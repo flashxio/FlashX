@@ -231,41 +231,84 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 
 	safs::io_interface &io = ios->get_curr_io();
 	size_t entry_size = get_type().get_size();
+	// The information of a portion.
 	size_t portion_start_row = start_row - local_start_row;
 	size_t portion_start_col = start_col - local_start_col;
 	size_t portion_num_rows;
 	size_t portion_num_cols;
-	if (portion_start_row + CHUNK_SIZE > get_orig_num_rows())
+	if (store_layout() == matrix_layout_t::L_COL && num_rows == CHUNK_SIZE)
+		portion_num_rows = num_rows;
+	else if (portion_start_row + CHUNK_SIZE > get_orig_num_rows())
 		portion_num_rows = get_orig_num_rows() - portion_start_row;
 	else
 		portion_num_rows = CHUNK_SIZE;
-	if (portion_start_col + CHUNK_SIZE > get_orig_num_cols())
+
+	if (store_layout() == matrix_layout_t::L_ROW && num_cols == CHUNK_SIZE)
+		portion_num_cols = num_cols;
+	else if (portion_start_col + CHUNK_SIZE > get_orig_num_cols())
 		portion_num_cols = get_orig_num_cols() - portion_start_col;
 	else
 		portion_num_cols = CHUNK_SIZE;
 
+	// The information of the part of data fetched in a portion.
+	size_t fetch_start_row = portion_start_row;
+	size_t fetch_start_col = portion_start_col;
+	size_t fetch_num_rows = portion_num_rows;
+	size_t fetch_num_cols = portion_num_cols;
 	// Location of the portion on the disks.
+	// The number of elements above the portion row
 	off_t off = (get_orig_num_cols() * portion_start_row
+			// The number of elements in front of the wanted portion
+			// in the same portion row.
 		+ portion_num_rows * portion_start_col) * entry_size;
+	if (portion_num_rows < CHUNK_SIZE && portion_num_cols < CHUNK_SIZE) {
+		// This is the very last portion, we have to fetch the entire portion.
+	}
+	// If we fetch data from a col-major matrix and fetch the entire cols,
+	// we only need to fetch the wanted columns
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		fetch_start_col += local_start_col;
+		off += local_start_col * portion_num_rows * entry_size;
+		local_start_col = 0;
+	}
+	// For the same reason, we only need to fetch the wanted rows.
+	else {
+		fetch_start_row += local_start_row;
+		off += local_start_row * portion_num_cols * entry_size;
+		local_start_row = 0;
+	}
+
 	// If this is the very last portion (the bottom right portion), the data
 	// size may not be aligned with the page size.
-	size_t num_bytes
-		= ROUNDUP(portion_num_rows * portion_num_cols * entry_size, PAGE_SIZE);
+	size_t num_bytes;
+	if (portion_num_rows < CHUNK_SIZE && portion_num_cols < CHUNK_SIZE) {
+		// We have to fetch the entire portion for the very last portion.
+		num_bytes = ROUNDUP(portion_num_rows * portion_num_cols * entry_size,
+				PAGE_SIZE);
+	}
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		num_bytes = ROUNDUP(portion_num_rows * num_cols * entry_size, PAGE_SIZE);
+		fetch_num_cols = num_cols;
+	}
+	else {
+		num_bytes = ROUNDUP(num_rows * portion_num_cols * entry_size, PAGE_SIZE);
+		fetch_num_rows = num_rows;
+	}
 
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
 			data_id);
 	// If it's in the same portion.
-	if (ret1 && (((size_t) ret1->get_global_start_row() == portion_start_row
-					&& (size_t) ret1->get_global_start_col() == portion_start_col
-					&& ret1->get_num_rows() == portion_num_rows
-					&& ret1->get_num_cols() == portion_num_cols)
+	if (ret1 && (((size_t) ret1->get_global_start_row() == fetch_start_row
+					&& (size_t) ret1->get_global_start_col() == fetch_start_col
+					&& ret1->get_num_rows() == fetch_num_rows
+					&& ret1->get_num_cols() == fetch_num_cols)
 				// If it's in the corresponding portion in the transposed matrix.
-				|| ((size_t) ret1->get_global_start_row() == portion_start_col
-					&& (size_t) ret1->get_global_start_col() == portion_start_row
-					&& ret1->get_num_rows() == portion_num_cols
-					&& ret1->get_num_cols() == portion_num_rows))) {
+				|| ((size_t) ret1->get_global_start_row() == fetch_start_col
+					&& (size_t) ret1->get_global_start_col() == fetch_start_row
+					&& ret1->get_num_rows() == fetch_num_cols
+					&& ret1->get_num_cols() == fetch_num_rows))) {
 		assert(ret1->get_local_start_row() == 0);
 		assert(ret1->get_local_start_col() == 0);
 		// In the asynchronous version, data in the portion isn't ready when
@@ -282,12 +325,14 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 		assert(cb.has_callback(req));
 		cb.add(req, compute);
 
+		local_matrix_store::const_ptr ret;
 		if (local_start_row > 0 || local_start_col > 0
-				|| num_rows < portion_num_rows || num_cols < portion_num_cols)
-			return ret1->get_portion(local_start_row, local_start_col,
+				|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
+			ret = ret1->get_portion(local_start_row, local_start_col,
 					num_rows, num_cols);
 		else
-			return ret1;
+			ret = ret1;
+		return ret;
 	}
 
 	raw_data_array data_arr(num_bytes, -1);
@@ -295,12 +340,12 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 	local_matrix_store::ptr buf;
 	if (store_layout() == matrix_layout_t::L_ROW)
 		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(data_arr,
-					portion_start_row, portion_start_col, portion_num_rows,
-					portion_num_cols, get_type(), data_arr.get_node_id()));
+					fetch_start_row, fetch_start_col, fetch_num_rows,
+					fetch_num_cols, get_type(), data_arr.get_node_id()));
 	else
 		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(data_arr,
-					portion_start_row, portion_start_col, portion_num_rows,
-					portion_num_cols, get_type(), data_arr.get_node_id()));
+					fetch_start_row, fetch_start_col, fetch_num_rows,
+					fetch_num_cols, get_type(), data_arr.get_node_id()));
 
 	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(buf->get_raw_arr(), loc, num_bytes, READ);
@@ -313,12 +358,14 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 			buf->get_num_rows() * buf->get_num_cols() * get_entry_size(), false);
 
 	local_mem_buffer::cache_portion(data_id, buf);
+	local_matrix_store::const_ptr ret;
 	if (local_start_row > 0 || local_start_col > 0
-			|| num_rows < portion_num_rows || num_cols < portion_num_cols)
-		return buf->get_portion(local_start_row, local_start_col,
+			|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
+		ret = buf->get_portion(local_start_row, local_start_col,
 				num_rows, num_cols);
 	else
-		return buf;
+		ret = buf;
+	return ret;
 }
 
 void EM_matrix_store::write_portion_async(
