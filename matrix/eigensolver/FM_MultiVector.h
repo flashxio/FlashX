@@ -56,6 +56,7 @@ namespace eigen
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
+	std::string solver;
 	bool in_mem;
 	std::string name;
 	block_multi_vector::ptr mat;
@@ -63,15 +64,18 @@ class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 	std::shared_ptr<Anasazi::EpetraMultiVec> ep_mat;
 #endif
 
-	FM_MultiVector(const std::string &extra, bool in_mem) {
+	FM_MultiVector(const std::string &extra, bool in_mem,
+			const std::string &solver) {
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
 		this->name = std::string(name_buf) + " " + extra;
 		this->in_mem = in_mem;
+		this->solver = solver;
 	}
 public:
 	FM_MultiVector(size_t num_rows, size_t num_cols, size_t block_size,
-			bool in_mem) {
+			bool in_mem, const std::string &solver) {
+		this->solver = solver;
 		this->in_mem = in_mem;
 		// We don't materialize the column matrix.
 		mat = block_multi_vector::create(num_rows, num_cols, block_size,
@@ -196,11 +200,11 @@ public:
 	virtual Anasazi::MultiVec<ScalarType> * Clone(const int numvecs) const {
 		FM_MultiVector<ScalarType> *ret;
 		if (numvecs % mat->get_block_size() == 0)
-			ret = new FM_MultiVector<ScalarType>(
-					mat->get_num_rows(), numvecs, mat->get_block_size(), in_mem);
+			ret = new FM_MultiVector<ScalarType>(mat->get_num_rows(), numvecs,
+					mat->get_block_size(), in_mem, solver);
 		else
 			ret = new FM_MultiVector<ScalarType>(
-					mat->get_num_rows(), numvecs, numvecs, in_mem);
+					mat->get_num_rows(), numvecs, numvecs, in_mem, solver);
 		BOOST_LOG_TRIVIAL(info) << boost::format("create new %1% (#cols: %2%)")
 			% ret->get_name() % numvecs;
 		return ret;
@@ -216,7 +220,7 @@ public:
 			% name % mat->get_num_cols();
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem);
+				in_mem, solver);
 		ret->mat = this->mat->clone();
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -242,7 +246,7 @@ public:
 			% name % index.size();
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem);
+				in_mem, solver);
 		ret->mat = mat->get_cols(index);
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -263,7 +267,7 @@ public:
 			const std::vector<int>& index) {
 		std::string extra = std::string("(") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem);
+				in_mem, solver);
 		BOOST_LOG_TRIVIAL(info) << boost::format("view %1% (#cols: %2%)")
 			% ret->name % index.size();
 		ret->mat = mat->get_cols_mirror(index);
@@ -308,7 +312,19 @@ public:
 			const std::vector<int>& index) const {
 		std::string extra = std::string("(const ") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem);
+				in_mem, solver);
+		if (index.size() == 1
+				&& (solver == "KrylovSchur" || solver == "Davidson")) {
+			size_t block_idx = index[0] / mat->get_block_size();
+			dense_matrix::ptr block = mat->get_block(block_idx);
+			const dotp_matrix_store *store
+				= dynamic_cast<const dotp_matrix_store *>(block->get_raw_store().get());
+			if (store == NULL) {
+				dotp_matrix_store::ptr dotp = dotp_matrix_store::create(
+						mat->get_block(block_idx)->get_raw_store());
+				mat->set_block(block_idx, fm::dense_matrix::create(dotp));
+			}
+		}
 		BOOST_LOG_TRIVIAL(info) << boost::format("const view %1% (#cols: %2%)")
 			% ret->name % index.size();
 		ret->mat = mat->get_cols(index);
