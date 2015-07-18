@@ -754,7 +754,11 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	}
 	dense_matrix::ptr in2 = dense_matrix::create(collected_matrix_store::create(
 				blocks2, this->get_num_cols()));
-	return in1->transpose()->multiply(*in2, matrix_layout_t::L_NONE, true);
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
+			matrix_layout_t::L_NONE, true);
+	detail::matrix_stats.print_diff(orig_stats);
+	return ret;
 }
 
 typedef std::vector<int> block_col_set_t;
