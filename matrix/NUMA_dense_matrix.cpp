@@ -79,7 +79,7 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
-			type), mapper(num_nodes)
+			type, mat_counter++), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
@@ -127,7 +127,7 @@ char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
 		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
-			nrow, ncol, type)
+			nrow, ncol, type, mat_counter++)
 {
 	data.resize(ncol);
 	for (size_t i = 0; i < ncol; i++)
