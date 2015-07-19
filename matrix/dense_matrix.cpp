@@ -1332,21 +1332,14 @@ matrix_store::ptr __mapply_portion(
 	}
 	else {
 		detail::matrix_store::ptr res;
-		if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0) {
+		if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0)
 			res = detail::matrix_store::create(op->get_out_num_rows(),
 					op->get_out_num_cols(), out_layout, op->get_output_type(),
 					out_num_nodes, out_in_mem);
-			if (res->is_wide())
-				portion_size = std::max(portion_size,
-						res->get_portion_size().second);
-			else
-				portion_size = std::max(portion_size,
-						res->get_portion_size().first);
-		}
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 		EM_mat_mapply_dispatcher::ptr dispatcher(
 				new EM_mat_mapply_dispatcher(mats, res, op, tot_len,
-					portion_size));
+					EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
 			io_worker_task *task = new io_worker_task(dispatcher, 1);
 			for (size_t j = 0; j < mats.size(); j++) {
