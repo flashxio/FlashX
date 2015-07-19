@@ -29,11 +29,13 @@ namespace fm
 namespace eigen
 {
 
-class sub_dotp_matrix_store: public detail::virtual_matrix_store
+class sub_dotp_matrix_store: public detail::virtual_matrix_store, public detail::EM_object
 {
 	matrix_store::const_ptr orig_store;
 	std::vector<off_t> idxs;
 	std::vector<double> col_dot_prods;
+
+	matrix_store::const_ptr materialized;
 public:
 	sub_dotp_matrix_store(matrix_store::const_ptr orig_store,
 			const std::vector<double> &dot_prods,
@@ -68,6 +70,18 @@ public:
 		return orig_store->store_layout();
 	}
 
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		std::vector<off_t> orig_idxs(idxs.size());
+		std::vector<double> sub_dot_prods(idxs.size());
+		for (size_t i = 0; i < idxs.size(); i++) {
+			sub_dot_prods[i] = col_dot_prods[idxs[i]];
+			orig_idxs[i] = this->idxs[idxs[i]];
+		}
+		return matrix_store::const_ptr(new sub_dotp_matrix_store(orig_store,
+					sub_dot_prods, orig_idxs));
+	}
+
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		assert(!orig_store->is_wide());
@@ -92,17 +106,29 @@ public:
 	}
 
 	matrix_store::const_ptr transpose() const {
-		return matrix_store::const_ptr();
+		return orig_store->get_cols(idxs)->transpose();
 	}
 
 	virtual detail::local_matrix_store::const_ptr get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
-		return detail::local_matrix_store::const_ptr();
+		if (materialized == NULL)
+			const_cast<sub_dotp_matrix_store *>(this)->materialized
+				= orig_store->get_cols(idxs);
+		return materialized->get_portion_async(start_row, start_col,
+				num_rows, num_cols, compute);
 	}
 
 	virtual matrix_store::ptr materialize() const {
+		assert(0);
 		return matrix_store::ptr();
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const {
+		const detail::EM_object *obj = dynamic_cast<const detail::EM_object *>(
+				orig_store.get());
+		assert(obj);
+		return obj->create_ios();
 	}
 };
 
@@ -180,7 +206,14 @@ public:
 	}
 
 	virtual matrix_store::ptr materialize() const {
-		return matrix_store::ptr(new dotp_matrix_store(*this));
+		if (orig_store->is_virtual()) {
+			const detail::virtual_matrix_store *store
+				= static_cast<const detail::virtual_matrix_store *>(
+						orig_store.get());
+			return store->materialize();
+		}
+		else
+			return matrix_store::ptr(new dotp_matrix_store(*this));
 	}
 
 	virtual int get_num_nodes() const {
