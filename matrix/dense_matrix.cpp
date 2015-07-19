@@ -2043,108 +2043,17 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 namespace
 {
 
-class aggregate_task: public thread_task
-{
-	detail::local_matrix_store::const_ptr local_store;
-	const bulk_operate &op;
-	detail::agg_margin margin;
-	local_ref_vec_store local_res;
-public:
-	aggregate_task(detail::local_matrix_store::const_ptr local_store,
-			const bulk_operate &_op, detail::agg_margin margin,
-			char *_local_res, size_t res_len): op(_op), local_res(_local_res,
-				0, res_len, _op.get_output_type(), -1) {
-		this->local_store = local_store;
-		this->margin = margin;
-	}
-
-	void run() {
-		detail::aggregate(*local_store, op, margin, local_res);
-	}
-};
-
-class EM_mat_agg_dispatcher: public detail::EM_portion_dispatcher
-{
-	detail::matrix_store::const_ptr mat;
-	const bulk_operate &op;
-	// This is a row-major matrix. Each row contains the partial aggregation
-	// result of a portion in the original matrix.
-	detail::mem_matrix_store::ptr partial_res;
-	detail::agg_margin margin;
-public:
-	EM_mat_agg_dispatcher(detail::matrix_store::const_ptr mat,
-			detail::mem_matrix_store::ptr partial_res, const bulk_operate &_op,
-			detail::agg_margin margin, size_t tot_len,
-			size_t portion_size): detail::EM_portion_dispatcher(tot_len,
-				portion_size), op(_op) {
-		this->mat = mat;
-		this->partial_res = partial_res;
-		this->margin = margin;
-	}
-
-	virtual void create_task(off_t global_start, size_t length);
-};
-
-class agg_portion_compute: public detail::portion_compute
-{
-	detail::local_matrix_store::const_ptr local_store;
-	const bulk_operate &op;
-	detail::agg_margin margin;
-	local_ref_vec_store local_res;
-public:
-	agg_portion_compute(const bulk_operate &_op, detail::agg_margin margin,
-			char *_local_res, size_t res_len): op(_op), local_res(_local_res,
-				0, res_len, _op.get_output_type(), -1) {
-		this->margin = margin;
-	}
-
-	void set_buf(detail::local_matrix_store::const_ptr local_store) {
-		this->local_store = local_store;
-	}
-
-	virtual void run(char *buf, size_t size) {
-		detail::aggregate(*local_store, op, margin, local_res);
-	}
-};
-
-void EM_mat_agg_dispatcher::create_task(off_t global_start, size_t length)
-{
-	assert(global_start % get_portion_size() == 0);
-	off_t res_idx = global_start / get_portion_size();
-	char *local_res = partial_res->get_row(res_idx);
-	agg_portion_compute *agg_compute = new agg_portion_compute(op, margin,
-			local_res, partial_res->get_num_cols());
-	agg_portion_compute::ptr compute(agg_compute);
-	size_t global_start_row;
-	size_t global_start_col;
-	size_t num_rows;
-	size_t num_cols;
-	if (mat->is_wide()) {
-		global_start_row = 0;
-		global_start_col = global_start;
-		num_rows = mat->get_num_rows();
-		num_cols = length;
-	}
-	else {
-		global_start_row = global_start;
-		global_start_col = 0;
-		num_rows = length;
-		num_cols = mat->get_num_cols();
-	}
-	detail::local_matrix_store::const_ptr local_store = mat->get_portion_async(
-			global_start_row, global_start_col, num_rows, num_cols, compute);
-	agg_compute->set_buf(local_store);
-}
-
 /*
  * This allows us to aggregate on the shorter dimension.
+ * It outputs a long vector, so the result doesn't need to be materialized
+ * immediately.
  */
-class matrix_margin_agg_op: public detail::portion_mapply_op
+class matrix_short_agg_op: public detail::portion_mapply_op
 {
 	detail::agg_margin margin;
 	const bulk_operate &op;
 public:
-	matrix_margin_agg_op(detail::agg_margin margin, const bulk_operate &_op,
+	matrix_short_agg_op(detail::agg_margin margin, const bulk_operate &_op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, _op.get_output_type()), op(_op) {
 		this->margin = margin;
@@ -2175,7 +2084,7 @@ public:
 		detail::agg_margin new_margin
 			= (this->margin == detail::agg_margin::MAR_ROW ?
 			detail::agg_margin::MAR_COL : detail::agg_margin::MAR_ROW);
-		return portion_mapply_op::const_ptr(new matrix_margin_agg_op(
+		return portion_mapply_op::const_ptr(new matrix_short_agg_op(
 					new_margin, op, get_out_num_cols(), get_out_num_rows()));
 	}
 	virtual std::string to_string(
@@ -2184,6 +2093,61 @@ public:
 		return std::string("agg(") + mats[0]->get_name() + ")";
 	}
 };
+
+/*
+ * This aggregates on the longer dimension.
+ * It outputs a very short vector, so the result is materialized immediately.
+ */
+class matrix_long_agg_op: public detail::portion_mapply_op
+{
+	detail::agg_margin margin;
+	const bulk_operate &op;
+	// Each row stores the local aggregation results on a thread.
+	detail::mem_row_matrix_store::ptr partial_res;
+	std::vector<local_vec_store::ptr> local_bufs;
+public:
+	matrix_long_agg_op(detail::mem_row_matrix_store::ptr partial_res,
+			detail::agg_margin margin, const bulk_operate &_op): detail::portion_mapply_op(
+				0, 0, partial_res->get_type()), op(_op) {
+		this->partial_res = partial_res;
+		this->margin = margin;
+		local_bufs.resize(partial_res->get_num_rows());
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &) const;
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void matrix_long_agg_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &) const
+{
+	assert(ins.size() == 1);
+	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
+			thread::get_curr_thread());
+	int thread_id = thread->get_pool_thread_id();
+	if (local_bufs[thread_id] == NULL)
+		const_cast<matrix_long_agg_op *>(this)->local_bufs[thread_id]
+			= local_vec_store::ptr(new local_buf_vec_store(0,
+						partial_res->get_num_cols(), partial_res->get_type(),
+						ins[0]->get_node_id()));
+	detail::aggregate(*ins[0], op, margin, *local_bufs[thread_id]);
+
+	op.runAA(partial_res->get_num_cols(), partial_res->get_row(thread_id),
+			local_bufs[thread_id]->get_raw_arr(),
+			partial_res->get_row(thread_id));
+}
 
 }
 
@@ -2207,7 +2171,7 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 			out_num_rows = 1;
 			out_num_cols = store->get_num_cols();
 		}
-		matrix_margin_agg_op::const_ptr agg_op(new matrix_margin_agg_op(
+		matrix_short_agg_op::const_ptr agg_op(new matrix_short_agg_op(
 					margin, op, out_num_rows, out_num_cols));
 		matrix_layout_t output_layout = (margin == detail::agg_margin::MAR_ROW
 				? matrix_layout_t::L_COL : matrix_layout_t::L_ROW);
@@ -2225,65 +2189,31 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
 	 */
-
-	size_t num_chunks = store->get_num_portions();
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t num_threads = threads->get_num_threads();
 	detail::mem_row_matrix_store::ptr partial_res;
 	if (margin == detail::agg_margin::BOTH)
-		partial_res = detail::mem_row_matrix_store::create(num_chunks,
+		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				1, op.get_output_type());
 	// For the next two cases, I assume the partial result is small enough
 	// to be kept in memory.
 	else if (margin == detail::agg_margin::MAR_ROW)
-		partial_res = detail::mem_row_matrix_store::create(num_chunks,
+		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				store->get_num_rows(), op.get_output_type());
 	else if (margin == detail::agg_margin::MAR_COL)
-		partial_res = detail::mem_row_matrix_store::create(num_chunks,
+		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				store->get_num_cols(), op.get_output_type());
 	else
 		// This shouldn't happen.
 		assert(0);
+	partial_res->reset_data();
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	if (store->is_in_mem()) {
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= store->get_portion(i);
-
-			int node_id = local_store->get_node_id();
-			// If the local matrix portion is not assigned to any node, 
-			// assign the tasks in round robin fashion.
-			if (node_id < 0)
-				node_id = i % threads->get_num_nodes();
-			threads->process_task(node_id,
-					new aggregate_task(local_store, op, margin,
-						partial_res->get_row(i), partial_res->get_num_cols()));
-		}
-	}
-	else {
-		size_t tot_len;
-		size_t portion_size;
-		if (store->is_wide()) {
-			tot_len = store->get_num_cols();
-			portion_size = store->get_portion_size().second;
-		}
-		else {
-			tot_len = store->get_num_rows();
-			portion_size = store->get_portion_size().first;
-		}
-		EM_mat_agg_dispatcher::ptr dispatcher(
-				new EM_mat_agg_dispatcher(store, partial_res, op,
-					margin, tot_len, portion_size));
-		for (size_t i = 0; i < threads->get_num_threads(); i++) {
-			detail::io_worker_task *task = new detail::io_worker_task(
-					dispatcher, 1);
-			const detail::EM_object *obj
-				= dynamic_cast<const detail::EM_object *>(store.get());
-			task->register_EM_obj(const_cast<detail::EM_object *>(obj));
-			threads->process_task(i % threads->get_num_nodes(), task);
-		}
-	}
-	threads->wait4complete();
+	std::shared_ptr<matrix_long_agg_op> agg_op(new matrix_long_agg_op(
+				partial_res, margin, op));
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = store;
+	__mapply_portion(ins, agg_op, matrix_layout_t::L_ROW);
 
 	// The last step is to aggregate the partial results from all portions.
 	// It runs in serial. I hope it's not a bottleneck.
