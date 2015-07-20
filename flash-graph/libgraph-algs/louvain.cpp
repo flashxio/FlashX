@@ -344,7 +344,7 @@ template<typename T, typename U >
 void print_hash(std::map<T,U>& map) {
 
 	std::cout << "{ ";
-	for (typename std::map<T,U>::iterator it=map.begin(); it != map.end(); ++it)
+	for (typename std::map<T,U>::iterator it = map.begin(); it != map.end(); ++it)
 		std::cout << it->first << ":" << it->second << ", ";
 
 	std::cout << "}\n";
@@ -408,6 +408,43 @@ void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
 	}
 }
 
+// TODO: Opt -- eliminate memory copies
+// TODO: Opt -- omp opts - schedule, loop unroll etc.. 
+void par_build_global_cluster_map(graph_engine::ptr graph) {
+	std::vector<vertex_program::ptr> ec_progs;
+	graph->get_vertex_programs(ec_progs);
+
+	std::vector<cluster_map> merged_maps;
+	merged_maps.resize(ec_progs.size() / 2);
+
+	cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
+	merge_func = &merge_cluster;
+
+	//#pragma omp parallel for
+	for (uint32_t i = 0; i < ec_progs.size()-1; i+=2) {
+
+		merged_maps[i/2] = build_merge_map(louvain_vertex_program::cast2(ec_progs[i])->get_cluster_map(), 
+								louvain_vertex_program::cast2(ec_progs[i+1])->get_cluster_map(), merge_func);
+		if (i == 0 && (ec_progs.size() % 2 != 0)) { // Handle odd # of threads in the first merge iteration
+			merged_maps[i/2] = build_merge_map(louvain_vertex_program::cast2(ec_progs.back())->get_cluster_map(),
+														merged_maps[0], merge_func);
+		}
+	}
+
+	while (merged_maps.size() > 1) {
+		//#pragma omp parallel for
+		for(uint32_t i = 0; i < merged_maps.size()-1; i+=2) {
+			merged_maps[i/2] = build_merge_map(merged_maps[i], merged_maps[i+1], merge_func);
+		}
+
+		if ((merged_maps.size() / 2) % 2 != 0) {
+			merged_maps[0] = build_merge_map(merged_maps[0], merged_maps[(merged_maps.size()/2)-1], merge_func);
+		}
+
+		merged_maps.erase(merged_maps.begin() + (merged_maps.size()/2), merged_maps.end()); // Get rid of the back end of the vector
+	}
+}
+
 }
 
 namespace fg 
@@ -449,7 +486,7 @@ namespace fg
 		do {
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL 1 ITERATION: " << iter++ 
+			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++ 
 												<< " ********************************\x1B[0m\n\n";
 
 #if 1
