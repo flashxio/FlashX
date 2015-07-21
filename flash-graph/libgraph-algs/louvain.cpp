@@ -59,7 +59,11 @@ class cluster
 	uint32_t volume;
 
 	public:
-	cluster(uint32_t volume=0, uint32_t weight=0) {
+	cluster() {
+
+	}
+
+	cluster(uint32_t volume, uint32_t weight) {
 		this->weight = weight;
 		this->volume = volume;
 	}
@@ -81,7 +85,6 @@ class cluster
 	}
 };
 
-// Easy printer for cluster
 std::ostream& operator<< (std::ostream& ost, const cluster& clust) {
 	ost << "(vol:" << clust.get_volume() << ", wgt:" 
 		<< clust.get_weight() << "), ";
@@ -99,7 +102,7 @@ stage_t louvain_stage = INIT; // Init the stage
 cluster_map g_cluster_map; // Global map from cluster_id : cluster(volume, weight)
 
 // If anything changes cluster we cannot converge
-void set_changed(bool changed) {
+static void set_changed(bool changed) {
 	if (!changed) // Only once per iter so no prob with this
 		g_changed = changed;
 	if (changed && (!g_changed))
@@ -107,7 +110,8 @@ void set_changed(bool changed) {
 }
 
 
-static void print_cluster_map(cluster_map cl_map) {
+// Easy printer for cluster
+static void print_cluster_map(cluster_map& cl_map) {
 
 	if (cl_map.size() == 0) {
 		BOOST_LOG_TRIVIAL(info) << "EMPTY";
@@ -116,6 +120,18 @@ static void print_cluster_map(cluster_map cl_map) {
 	for (cluster_map::iterator it = cl_map.begin(); it != cl_map.end(); ++it) {
 		BOOST_LOG_TRIVIAL(info) << "Cluster: " << it->first << ", " << it->second;
 	}
+}
+
+static void print_cluster_map_sum(cluster_map& cl_map) {
+	uint32_t weight_sum = 0;
+	uint32_t vol_sum = 0;
+
+	for (cluster_map::iterator it = cl_map.begin(); it != cl_map.end(); ++it) {
+		weight_sum += it->second.get_weight();
+		vol_sum += it->second.get_volume();
+	}
+	BOOST_LOG_TRIVIAL(info) << "Cluster map weight sum: " << weight_sum;
+	BOOST_LOG_TRIVIAL(info) << "Cluster map volume sum: " << vol_sum;
 }
 
 class louvain_vertex: public compute_vertex
@@ -152,6 +168,7 @@ class louvain_vertex: public compute_vertex
 	}
 };
 
+// TODO: Opt -- create 2 of these one for INIT and other for others
 /* We need this to get the total edge_weight of the graph */
 class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 {
@@ -179,6 +196,14 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 	}
 
 	void update(cluster_id_t id, float vol, uint32_t weight) {
+
+#if 0
+		BOOST_LOG_TRIVIAL(info) << "Cluster before update:";
+		print_cluster_map(th_local_cluster_map);
+		BOOST_LOG_TRIVIAL(info) << "Adding c" << id << ", vol=" << vol << ", wgt=" << weight;
+		printf("\n");
+#endif
+
 		cluster_map::iterator it = th_local_cluster_map.find(id);
 
 		if (it == th_local_cluster_map.end()) {
@@ -187,6 +212,12 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 			it->second.volume_pe(vol);
 			it->second.weight_pe(weight);
 		}
+
+#if 0
+		BOOST_LOG_TRIVIAL(info) << "Cluster after update:";
+		print_cluster_map(th_local_cluster_map);
+		printf("\n");
+#endif
 	}
 
 	cluster_map& get_cluster_map() {
@@ -332,12 +363,14 @@ void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it,
 
 //  Does not require edgelist
 void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
+	//BOOST_LOG_TRIVIAL(info) << "v"<< prog.get_vertex_id(*this) << ", " << "c" << cluster_id 
+		//<< " += vol: " << volume << ", += wgt: " << weight; 
 	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
 }
 
 // General merge function for cluster maps
 cluster merge_cluster(cluster& c1, cluster& c2) {
-	return cluster(c1.get_volume()+c2.get_volume(), c2.get_weight()+c2.get_weight());
+	return cluster(c1.get_volume()+c2.get_volume(), c1.get_weight()+c2.get_weight());
 }
 
 template<typename T, typename U >
@@ -351,44 +384,33 @@ void print_hash(std::map<T,U>& map) {
 }
 
 template <typename T, typename U>
-std::map<T, U> build_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map,
-		 U (*merge_func) (U&, U&)) {
+void prune_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map,
+		U (*merge_func) (U&, U&)) {
 
 	if (agg_map.size() == 0 || add_map.size() == 0) {
-		return add_map;
+		return;
 	}
-
-	std::map<T,U> new_map;
 
 	typename std::map<T,U>::iterator add_it = add_map.begin(); // Always iterate over the add maps keys
 	typename std::map<T,U>::iterator agg_it = agg_map.begin();
 
 	for (; add_it != add_map.end(); ++add_it) {
-
 		// skip the keys we don't care about
 		while (agg_it->first < add_it->first) {
 			if (++agg_it == agg_map.end()) {  // There are no more keys in the agg_map
-				new_map.insert(add_it, add_map.end()); // Get the rest of the map
 				break;
 			}
 		}
 
 		if (add_it->first == agg_it->first) {
-			new_map[add_it->first] = merge_func(add_it->second, agg_it->second);
-
-			// BOOST_LOG_TRIVIAL(info) << "new_map add:"; print_cluster_map(new_map);
-		} else {
-			// BOOST_LOG_TRIVIAL(info) << "new_map new:"; print_cluster_map(new_map);
-			new_map[add_it->first] = add_it->second;
+			agg_map[agg_it->first] = merge_func(add_it->second, agg_it->second);
 		}
 	}
-
-	return new_map;
 }
 
 // FIXME: Building this is serial and likely already slow to
 // FIXME: Remove accum_edges eventually 
-void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
+void build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 	std::vector<vertex_program::ptr> ec_progs;
 	graph->get_vertex_programs(ec_progs);
@@ -401,18 +423,47 @@ void build_global_cluster_map(graph_engine::ptr graph, bool accum_edges) {
 		cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
 		merge_func = &merge_cluster;
 
-		cluster_map merge_map = build_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
+#if 0
+		BOOST_LOG_TRIVIAL(info) << "Before th_local_cluster_map:";
+		print_cluster_map(lvp->get_cluster_map());
+		print_cluster_map_sum(lvp->get_cluster_map());
+		printf("\n");
+
+		BOOST_LOG_TRIVIAL(info) << "Before g_cluster_map";
+		print_cluster_map(g_cluster_map);
+		print_cluster_map_sum(g_cluster_map);
+		printf("\n");
+#endif
+		prune_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
 
 		// Merging this clustermap 
-		g_cluster_map.insert(merge_map.begin(), merge_map.end());
+		g_cluster_map.insert(lvp->get_cluster_map().begin(), lvp->get_cluster_map().end());
+
+#if 0
+		BOOST_LOG_TRIVIAL(info) << "After g_cluster_map";
+		print_cluster_map(g_cluster_map);
+		print_cluster_map_sum(g_cluster_map);
+		printf("\n");
+#endif
 	}
 }
 
 // TODO: Opt -- eliminate memory copies
 // TODO: Opt -- omp opts - schedule, loop unroll etc.. 
-void par_build_global_cluster_map(graph_engine::ptr graph) {
+#if 0
+void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 	std::vector<vertex_program::ptr> ec_progs;
 	graph->get_vertex_programs(ec_progs);
+
+
+#if 1
+	if (accum_edges) {
+		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+			louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
+			g_edge_weight += lvp->get_local_ec();
+		}
+	}
+#endif
 
 	std::vector<cluster_map> merged_maps;
 	merged_maps.resize(ec_progs.size() / 2);
@@ -423,10 +474,10 @@ void par_build_global_cluster_map(graph_engine::ptr graph) {
 	//#pragma omp parallel for
 	for (uint32_t i = 0; i < ec_progs.size()-1; i+=2) {
 
-		merged_maps[i/2] = build_merge_map(louvain_vertex_program::cast2(ec_progs[i])->get_cluster_map(), 
+		merged_maps[i/2] = prune_merge_map(louvain_vertex_program::cast2(ec_progs[i])->get_cluster_map(), 
 								louvain_vertex_program::cast2(ec_progs[i+1])->get_cluster_map(), merge_func);
 		if (i == 0 && (ec_progs.size() % 2 != 0)) { // Handle odd # of threads in the first merge iteration
-			merged_maps[i/2] = build_merge_map(louvain_vertex_program::cast2(ec_progs.back())->get_cluster_map(),
+			merged_maps[i/2] = prune_merge_map(louvain_vertex_program::cast2(ec_progs.back())->get_cluster_map(),
 														merged_maps[0], merge_func);
 		}
 	}
@@ -434,16 +485,19 @@ void par_build_global_cluster_map(graph_engine::ptr graph) {
 	while (merged_maps.size() > 1) {
 		//#pragma omp parallel for
 		for(uint32_t i = 0; i < merged_maps.size()-1; i+=2) {
-			merged_maps[i/2] = build_merge_map(merged_maps[i], merged_maps[i+1], merge_func);
+			merged_maps[i/2] = prune_merge_map(merged_maps[i], 
+					merged_maps[i+1], merge_func);
 		}
 
 		if ((merged_maps.size() / 2) % 2 != 0) {
-			merged_maps[0] = build_merge_map(merged_maps[0], merged_maps[(merged_maps.size()/2)-1], merge_func);
+			merged_maps[0] = prune_merge_map(merged_maps[0], 
+					merged_maps[(merged_maps.size()/2)-1], merge_func);
 		}
-
-		merged_maps.erase(merged_maps.begin() + (merged_maps.size()/2), merged_maps.end()); // Get rid of the back end of the vector
+		merged_maps.erase(merged_maps.begin() + (merged_maps.size()/2), 
+				merged_maps.end()); // Get rid of the back end of the vector
 	}
 }
+#endif
 
 }
 
@@ -497,13 +551,14 @@ namespace fg
 			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
 			ret->print(); 
 #endif
-#if 0
+#if 1
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 			BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
 			print_cluster_map(g_cluster_map);
+			print_cluster_map_sum(g_cluster_map);
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 
-			// if (iter > 5) { fprintf(stderr, "Premature kill"); exit(-1); } 
+			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); } 
 			/** GUBED **/
 #endif
 
