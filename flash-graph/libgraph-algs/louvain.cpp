@@ -423,28 +423,10 @@ void build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 		cluster (*merge_func) (cluster&, cluster&); // Function pointer to merge a cluster map
 		merge_func = &merge_cluster;
 
-#if 0
-		BOOST_LOG_TRIVIAL(info) << "Before th_local_cluster_map:";
-		print_cluster_map(lvp->get_cluster_map());
-		print_cluster_map_sum(lvp->get_cluster_map());
-		printf("\n");
-
-		BOOST_LOG_TRIVIAL(info) << "Before g_cluster_map";
-		print_cluster_map(g_cluster_map);
-		print_cluster_map_sum(g_cluster_map);
-		printf("\n");
-#endif
 		prune_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
 
 		// Merging this clustermap 
 		g_cluster_map.insert(lvp->get_cluster_map().begin(), lvp->get_cluster_map().end());
-
-#if 0
-		BOOST_LOG_TRIVIAL(info) << "After g_cluster_map";
-		print_cluster_map(g_cluster_map);
-		print_cluster_map_sum(g_cluster_map);
-		printf("\n");
-#endif
 	}
 }
 
