@@ -301,7 +301,19 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 
 void block_spmm_task::notify_complete()
 {
-	if (output.store_layout() == matrix_layout_t::L_COL)
+	// It's possible that the entire block row is empty. In this case,
+	// we didn't create out_part for the output portion. We need to reset
+	// the data in the portion.
+	if (out_part == NULL) {
+		size_t block_row_start = get_io().get_top_left().get_row_idx();
+		size_t block_num_rows = std::min(get_io().get_num_rows(),
+				output.get_num_rows() - block_row_start);
+		detail::local_matrix_store::ptr tmp = output.get_portion(
+				block_row_start, 0, block_num_rows, output.get_num_cols());
+		assert(tmp);
+		tmp->reset_data();
+	}
+	else if (output.store_layout() == matrix_layout_t::L_COL)
 		output.get_portion(out_part->get_global_start_row(),
 				out_part->get_global_start_col(), out_part->get_num_rows(),
 				out_part->get_num_cols())->copy_from(*out_part);
