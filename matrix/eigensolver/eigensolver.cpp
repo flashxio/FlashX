@@ -59,7 +59,6 @@ namespace eigen
 eigen_options::eigen_options()
 {
 	tol = 1.0e-8;
-	num_blocks = 8;
 	max_restarts = 100;
 	max_iters = 500;
 	block_size = 0;
@@ -68,16 +67,14 @@ eigen_options::eigen_options()
 	which="LM";
 	in_mem = true;
 
-	if (solver == "Davidson" || solver == "KrylovSchur") {
-		block_size = nev + 1;
-	}
-	else if (solver == "LOBPCG") {
-		block_size = 4;
-	}
+	if (solver == "Davidson" || solver == "KrylovSchur")
+		num_blocks = 8;
+	else if (solver == "LOBPCG")
+		num_blocks = 10;
 }
 
 eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &opts)
+		struct eigen_options &_opts)
 {
 	using Teuchos::RCP;
 	using Teuchos::rcp;
@@ -97,6 +94,9 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 
 	RCP<spm_function> A = rcp(func);
 
+	struct eigen_options opts = _opts;
+	if (opts.block_size == 0)
+		opts.block_size = 2 * opts.nev;
 	// Set eigensolver parameters.
 	const double tol = opts.tol; // convergence tolerance
 	const int numBlocks = opts.num_blocks; // restart length
