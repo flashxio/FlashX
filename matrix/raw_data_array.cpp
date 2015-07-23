@@ -67,18 +67,19 @@ public:
 
 std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
 {
+	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
-		return std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
+		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
 	else {
-		std::shared_ptr<char> ret = local_mem_buffer::alloc(num_bytes);
+		ret = local_mem_buffer::alloc(num_bytes);
 		if (ret == NULL)
-			return std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
+			ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
 					aligned_deleter());
-		else
-			return ret;
 	}
+	assert(ret);
+	return ret;
 }
 
 class reset_data_task: public thread_task
