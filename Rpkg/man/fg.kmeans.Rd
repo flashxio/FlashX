@@ -3,7 +3,8 @@
 \alias{fg.kmeans}
 \title{Perform k-means clustering on a data matrix.}
 \usage{
-fg.kmeans(mat, k, max.iters = 10, init = c("random", "forgy", "kmeanspp"))
+fg.kmeans(mat, k, max.iters = 10, max.threads = Machine$integer.max,
+  init = c("random", "forgy", "kmeanspp"))
 }
 \arguments{
 \item{mat}{A numeric matrix of data.}
@@ -12,9 +13,11 @@ fg.kmeans(mat, k, max.iters = 10, init = c("random", "forgy", "kmeanspp"))
 
 \item{max.iters}{The maximum number of iterations allowed.}
 
+\item{max.threads}{The maximum number of threads allowed (Default is 1 per core).}
+
 \item{init}{The form of initialization to use when the algorithm begins.
              The default is "random". For a desciption of each see:
-             http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods}
+             http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.}
 }
 \value{
 A named list with the following members:

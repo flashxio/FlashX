@@ -1020,16 +1020,22 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 	return ret;
 }
 
-RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
+RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pmax_threads, SEXP pinit)
 {
 	Rcpp::NumericMatrix rcpp_mat = Rcpp::NumericMatrix(pmat);
 	vsize_t k = INTEGER(pk)[0];
 	vsize_t max_iters = INTEGER(pmax_iters)[0];
 	std::string init = CHAR(STRING_ELT(pinit,0));
+	int max_threads = INTEGER(pmax_threads)[0];
+		
 	if (!R_is_real(pmat)) {
-		fprintf(stderr, "the input matrix for kmeans has to be float points\n");
+		fprintf(stderr, "The input matrix for kmeans has to be float points\n");
 		return R_NilValue;
 	}
+	if (max_threads < 1) {
+		fprintf(stderr, "# threads must be >= 1");
+	}	
+
 	double *r_mat = REAL(pmat);
 
 	const size_t NUM_ROWS = rcpp_mat.nrow();
@@ -1050,7 +1056,7 @@ RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
 	Rcpp::List ret;
 
 	ret["iter"] = compute_kmeans(p_fg_mat, p_clusters, p_clust_asgns,
-			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, init);
+			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, max_threads, init);
 	delete [] p_fg_mat;
 
 	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);

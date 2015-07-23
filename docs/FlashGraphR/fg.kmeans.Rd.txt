@@ -9,7 +9,8 @@ Description:
 
 Usage:
 
-     fg.kmeans(mat, k, max.iters = 10, init = c("random", "forgy", "kmeanspp"))
+     fg.kmeans(mat, k, max.iters = 10, max.threads = Machine$integer.max,
+       init = c("random", "forgy", "kmeanspp"))
      
 Arguments:
 
@@ -19,9 +20,12 @@ Arguments:
 
 max.iters: The maximum number of iterations allowed.
 
+max.threads: The maximum number of threads allowed (Default is 1 per
+          core).
+
     init: The form of initialization to use when the algorithm begins.
           The default is "random". For a desciption of each see:
-          http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+          http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
 
 Value:
 

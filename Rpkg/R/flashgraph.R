@@ -857,9 +857,10 @@ print.fg <- function(fg)
 #' @param mat A numeric matrix of data.
 #' @param k The number of clusters.
 #' @param max.iters The maximum number of iterations allowed.
+#' @param max.threads The maximum number of threads allowed (Default is 1 per core).
 #' @param init The form of initialization to use when the algorithm begins.
 #'              The default is "random". For a desciption of each see:
-#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
 #'
 #' @return A named list with the following members:
 #'         iters: The number of (outer) iterations performed.
@@ -874,12 +875,14 @@ print.fg <- function(fg)
 #'
 #' @name fg.kmeans
 #' @author Disa Mhembere <disa@@jhu.edu>
-fg.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp"))
+fg.kmeans <- function(mat, k, max.iters=10, max.threads=Machine$integer.max,
+					  init=c("random", "forgy","kmeanspp"))
 {
     stopifnot(mat != NULL)
     stopifnot(class(mat) == "matrix")
+	stopifnot(as.integer(max.threads) > 0)
     .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
-          as.integer(max.iters), init, PACKAGE="FlashGraphR")
+          as.integer(max.iters), as.integer(max.threads), init, PACKAGE="FlashGraphR")
 }
 
 #' Vertex betweenness centrality.
