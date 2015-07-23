@@ -23,7 +23,6 @@
 #endif
 
 #include "FGlib.h"
-#include "matrix/matrix_eigensolver.h"
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/kmeans.h"
 #include "ts_graph.h"
@@ -40,6 +39,9 @@ void int_handler(int sig_num)
 #endif
 	exit(0);
 }
+
+typedef double ev_float_t;
+typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
 
 template <typename T>
 void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs) 
@@ -85,10 +87,11 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 	unsigned max_iters=std::numeric_limits<unsigned>::max();
 	std::string which = "LA";
 	std::string init = "forgy";
+	int num_threads = 64;
 
 	int num_opts = 0;
 
-	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -122,6 +125,10 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 				break;
 			case 'o':
 				outfile = optarg;
+				num_opts++;
+				break;
+			case 'T':
+				num_threads = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -159,7 +166,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 
 		gettimeofday(&start, NULL);
 		unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
-				p_clust_asgn_cnt, matrix->get_num_rows(), nev, k, max_iters, init);
+				p_clust_asgn_cnt, matrix->get_num_rows(), nev, k, max_iters, num_threads, init);
 
 
 		gettimeofday(&end, NULL);
@@ -198,7 +205,7 @@ int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 void print_usage()
 {
 	fprintf(stderr,
-			"test_matrx conf_file graph_file index_file algorithm [alg-options]\n");
+			"test_matrix conf_file graph_file index_file algorithm [alg-options]\n");
     fprintf(stderr, "-c confs: add more configurations to the system\n");
     fprintf(stderr, "-p num: the number of Lancos base vectors\n");
     fprintf(stderr, "-e num: the number of actual eigenvalues\n");
