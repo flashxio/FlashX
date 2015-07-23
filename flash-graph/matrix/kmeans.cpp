@@ -192,6 +192,7 @@ static void E_step(const double* matrix, double* clusters,
 
 		pt_cl_as_cnt[omp_get_thread_num()][asgnd_clust]++; // Add to local copy
 		// Accumulate for local copies
+		assert(omp_get_thread_num() <= OMP_MAX_THREADS);
 		for (unsigned col = 0; col < NEV; col++) {
 			pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] = 
 				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] + matrix[row*NEV + col];
@@ -280,12 +281,16 @@ namespace fg
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 		const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS, 
-		const std::string init)
+		const int max_threads, const std::string init)
 {
 	NEV = nev;
 	K = k;
 	NUM_ROWS = num_rows;
-	OMP_MAX_THREADS = get_num_omp_threads();
+	assert(max_threads > 0);
+
+	OMP_MAX_THREADS = std::min(max_threads, get_num_omp_threads());
+	omp_set_num_threads(OMP_MAX_THREADS);
+	BOOST_LOG_TRIVIAL(info) << "Running on " << OMP_MAX_THREADS << " threads!";
 
 	if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
 		BOOST_LOG_TRIVIAL(fatal)

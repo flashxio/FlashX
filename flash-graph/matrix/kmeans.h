@@ -32,6 +32,7 @@
 #include <vector>
 #include <limits> 
 #include <iostream>
+#include <algorithm>
 
 #include "log.h"
 #include "common.h"
@@ -53,6 +54,6 @@ namespace fg
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 		const unsigned num_rows, const unsigned nev, const size_t k, 
-		const unsigned MAX_ITERS, const std::string init="random");
+		const unsigned MAX_ITERS, const int max_threads, const std::string init="random");
 }
 #endif
