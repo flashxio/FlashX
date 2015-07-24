@@ -875,7 +875,7 @@ print.fg <- function(fg)
 #'
 #' @name fg.kmeans
 #' @author Disa Mhembere <disa@@jhu.edu>
-fg.kmeans <- function(mat, k, max.iters=10, max.threads=Machine$integer.max,
+fg.kmeans <- function(mat, k, max.iters=10, max.threads=256,
 					  init=c("random", "forgy","kmeanspp"))
 {
     stopifnot(mat != NULL)
