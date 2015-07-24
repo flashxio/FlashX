@@ -10,6 +10,10 @@
 
 // Include header for block Davidson eigensolver
 #include "AnasaziBlockDavidsonSolMgr.hpp"
+// Include header for LOBPCG eigensolver
+#include "AnasaziLOBPCGSolMgr.hpp"
+// Include header for block Davidson eigensolver
+#include "AnasaziBlockKrylovSchurSolMgr.hpp"
 // Include header to define eigenproblem Ax = \lambda*x
 #include "AnasaziBasicEigenproblem.hpp"
 #include "AnasaziOperator.hpp"
@@ -110,50 +114,23 @@ RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g,
 	return A;
 }
 
-int main (int argc, char *argv[])
+RCP<map_type> Map;
+
+void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
+		int blockSize, int numBlocks, double tol)
 {
-
-	if (argc < 5) {
-		fprintf(stderr, "eigensolver conf_file graph_file index_file nev\n");
-		exit(1);
-	}
-
-	std::string conf_file = argv[1];
-	std::string graph_file = argv[2];
-	std::string index_file = argv[3];
-	int nev = atoi(argv[4]); // number of eigenvalues for which to solve
-
-	// Anasazi solvers have the following template parameters:
-	//
-	//   - Scalar: The type of dot product results.
-	//   - MV: The type of (multi)vectors.
-	//   - OP: The type of operators (functions from multivector to
-	//     multivector).  A matrix (like Epetra_CrsMatrix) is an example
-	//     of an operator; an Ifpack preconditioner is another example.
-	//
 	// Here, Scalar is double, MV is Tpetra::MultiVector, and OP is FMTp_Operator.
 	typedef Anasazi::MultiVecTraits<double, MV> MVT;
-	typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
-
-	//
-	// Set up the test problem.
-	//
-	config_map::ptr configs = config_map::create(conf_file);
-	init_flash_matrix(configs);
-
-	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
 
 	// Set eigensolver parameters.
-	const double tol = 1.0e-12; // convergence tolerance
-	const int blockSize = nev + 1; // block size (number of eigenvectors processed at once)
-	const int numBlocks = 3; // restart length
 	const int maxRestarts = 100; // maximum number of restart cycles
+	const int maxIters = 500;
 
-	Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
-	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
-	RCP<map_type> Map = rcp (new map_type(
-				fg->get_graph_header().get_num_vertices(), 0, comm));
-	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(), fg->get_index_data(), Map);
+	printf("solver: %s\n", solver.c_str());
+	printf("block size: %d\n", blockSize);
+	printf("#blocks: %d\n", numBlocks);
+	printf("tol: %f\n", tol);
+
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (Map, (size_t) blockSize));
@@ -175,7 +152,7 @@ int main (int argc, char *argv[])
 	const bool boolret = problem->setProblem();
 	if (boolret != true) {
 		cerr << "Anasazi::BasicEigenproblem::setProblem() returned an error." << endl;
-		return -1;
+		return;
 	}
 
 	// Create a ParameterList, to pass parameters into the Block
@@ -183,28 +160,49 @@ int main (int argc, char *argv[])
 	Teuchos::ParameterList anasaziPL;
 	anasaziPL.set ("Which", "LM");
 	anasaziPL.set ("Block Size", blockSize);
-	anasaziPL.set ("Num Blocks", numBlocks);
-	anasaziPL.set ("Maximum Restarts", maxRestarts);
 	anasaziPL.set ("Convergence Tolerance", tol);
 	anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
 			Anasazi::TimingDetails + Anasazi::FinalSummary);
 
+	Anasazi::ReturnType returnCode;
 	// Create the Block Davidson eigensolver.
-	Anasazi::BlockDavidsonSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
+	if (solver == "Davidson") {
+		anasaziPL.set ("Num Blocks", numBlocks);
+		anasaziPL.set ("Maximum Restarts", maxRestarts);
 
-	// Solve the eigenvalue problem.
-	//
-	// Note that creating the eigensolver is separate from solving it.
-	// After creating the eigensolver, you may call solve() multiple
-	// times with different parameters or initial vectors.  This lets
-	// you reuse intermediate state, like allocated basis vectors.
-	Anasazi::ReturnType returnCode = anasaziSolver.solve ();
+		Anasazi::BlockDavidsonSolMgr<double, MV, OP> anasaziSolver (problem,
+				anasaziPL);
+		// Solve the eigenvalue problem.
+		returnCode = anasaziSolver.solve ();
+	}
+	else if (solver == "KrylovSchur") {
+		anasaziPL.set ("Num Blocks", numBlocks);
+		anasaziPL.set ("Maximum Restarts", maxRestarts);
+
+		Anasazi::BlockKrylovSchurSolMgr<double, MV, OP> anasaziSolver (problem,
+				anasaziPL);
+		// Solve the eigenvalue problem.
+		returnCode = anasaziSolver.solve ();
+	}
+	else if (solver == "LOBPCG") {
+		anasaziPL.set ("Maximum Iterations", maxIters);
+		anasaziPL.set ("Full Ortho", true);
+		anasaziPL.set ("Use Locking", true);
+
+		// Create the LOBPCG eigensolver.
+		Anasazi::LOBPCGSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
+		// Solve the eigenvalue problem.
+		returnCode = anasaziSolver.solve ();
+	}
+	else
+		assert(0);
+
 	if (returnCode != Anasazi::Converged) {
 		cout << "Anasazi eigensolver did not converge." << endl;
 	}
-
 	// Get the eigenvalues and eigenvectors from the eigenproblem.
 	Anasazi::Eigensolution<double,MV> sol = problem->getSolution ();
+
 	// Anasazi returns eigenvalues as Anasazi::Value, so that if
 	// Anasazi's Scalar type is real-valued (as it is in this case), but
 	// some eigenvalues are complex, you can still access the
@@ -243,6 +241,88 @@ int main (int argc, char *argv[])
 	}
 	cout << "------------------------------------------------------" << endl;
 	cout << iter_no << endl;
+}
+
+void print_usage()
+{
+	fprintf(stderr, "eigensolver conf_file matrix_file index_file nev [options]\n");
+	fprintf(stderr, "-b block_size\n");
+	fprintf(stderr, "-n num_blocks\n");
+	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
+	fprintf(stderr, "-t tolerance\n");
+	fprintf(stderr, "-S: run SVD\n");
+}
+
+int main (int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+	size_t blockSize = 4;
+	size_t numBlocks = 8;
+	std::string solver = "LOBPCG";
+	double tol = 1e-8;
+	while ((opt = getopt(argc, argv, "b:n:s:t:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'b':
+				blockSize = atoi(optarg);
+				num_opts++;
+				break;
+			case 'n':
+				numBlocks = atoi(optarg);
+				num_opts++;
+				break;
+			case 's':
+				solver = optarg;
+				num_opts++;
+				break;
+			case 't':
+				tol = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 4) {
+		print_usage();
+		exit(1);
+	}
+
+	std::string conf_file = argv[0];
+	std::string graph_file = argv[1];
+	std::string index_file = argv[2];
+	int nev = atoi(argv[3]); // number of eigenvalues for which to solve;
+
+	// Anasazi solvers have the following template parameters:
+	//
+	//   - Scalar: The type of dot product results.
+	//   - MV: The type of (multi)vectors.
+	//   - OP: The type of operators (functions from multivector to
+	//     multivector).  A matrix (like Epetra_CrsMatrix) is an example
+	//     of an operator; an Ifpack preconditioner is another example.
+	//
+	typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
+
+	//
+	// Set up the test problem.
+	//
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
+	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
+
+	Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
+	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
+	Map = rcp (new map_type(fg->get_graph_header().get_num_vertices(),
+				0, comm));
+	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(),
+			fg->get_index_data(), Map);
+	compute_eigen(A, nev, solver, blockSize, numBlocks, tol);
 
 	return 0;
 }
