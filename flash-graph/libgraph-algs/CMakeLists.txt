@@ -18,4 +18,5 @@ add_library(graph-algs STATIC
 	wcc.cpp
 	bfs_graph.cpp
 	betweenness_centrality.cpp
+	louvain.cpp
 )
