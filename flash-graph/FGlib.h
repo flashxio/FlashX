@@ -374,7 +374,7 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
  * \param fg The FlashGraph graph object for which you want to compute.
  * \param levels The number of levels of the hierarchy to do.
  */
-void compute_louvain(FG_graph::ptr fg, uint32_t levels);
+void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
 }
 
 #endif
