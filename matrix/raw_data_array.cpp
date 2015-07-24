@@ -67,6 +67,9 @@ public:
 
 std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
 {
+	if (num_bytes == 0)
+		return std::shared_ptr<char>();
+
 	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
