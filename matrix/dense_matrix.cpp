@@ -40,6 +40,32 @@ namespace fm
 namespace detail
 {
 
+void portion_mapply_op::run(
+		const std::vector<std::shared_ptr<const local_matrix_store> > &ins) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "It doesn't support running on only input matrices";
+	assert(0);
+}
+
+void portion_mapply_op::run(
+		const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+		local_matrix_store &out) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "It doesn't support running on input matrices and output one matrix";
+	assert(0);
+}
+
+void portion_mapply_op::run(
+		const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+		const std::vector<std::shared_ptr<local_matrix_store> > &outs) const
+{
+	BOOST_LOG_TRIVIAL(error)
+		<< "It doesn't support running on input matrices and output multiple matrices";
+	assert(0);
+}
+
 matrix_stats_t matrix_stats;
 
 void matrix_stats_t::print_diff(const matrix_stats_t &orig) const
@@ -459,8 +485,7 @@ public:
 	}
 
 	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &) const;
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		assert(0);
@@ -477,8 +502,7 @@ public:
 
 template<class T>
 void multiply_wide_op<T>::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &) const
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
 	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
@@ -918,33 +942,27 @@ namespace detail
 namespace
 {
 
-class local_empty_matrix_store: public local_buf_col_matrix_store
-{
-public:
-	local_empty_matrix_store(): local_buf_col_matrix_store(0, 0, 0, 0,
-			get_scalar_type<int>(), -1) {
-	}
-} empty_store;
-
 class mapply_task: public thread_task
 {
 	std::vector<detail::local_matrix_store::const_ptr> local_stores;
-	detail::local_matrix_store::ptr local_res;
+	std::vector<detail::local_matrix_store::ptr> local_res;
 	const portion_mapply_op &op;
 public:
 	mapply_task(
 			const std::vector<detail::local_matrix_store::const_ptr> &local_stores,
 			const portion_mapply_op &_op,
-			detail::local_matrix_store::ptr local_res): op(_op) {
+			const std::vector<detail::local_matrix_store::ptr> &local_res): op(_op) {
 		this->local_stores = local_stores;
 		this->local_res = local_res;
 	}
 
 	void run() {
-		if (local_res)
-			op.run(local_stores, *local_res);
+		if (local_res.empty())
+			op.run(local_stores);
+		else if (local_res.size() == 1)
+			op.run(local_stores, *local_res[0]);
 		else
-			op.run(local_stores, empty_store);
+			op.run(local_stores, local_res);
 	}
 };
 
@@ -1070,14 +1088,14 @@ local_write_buffer::local_write_buffer(matrix_store::ptr to_mat,
 class EM_mat_mapply_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
+	std::vector<matrix_store::ptr> res_mats;
 	size_t num_EM_mats;
-	matrix_store::ptr res_mat;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
 	EM_mat_mapply_dispatcher(const std::vector<matrix_store::const_ptr> &mats,
-			matrix_store::ptr res_mat, portion_mapply_op::const_ptr op,
-			size_t tot_len, size_t portion_size);
+			const std::vector<matrix_store::ptr> &res_mats,
+			portion_mapply_op::const_ptr op, size_t tot_len, size_t portion_size);
 
 	virtual void create_task(off_t global_start, size_t length);
 };
@@ -1085,17 +1103,17 @@ public:
 class mapply_portion_compute: public portion_compute
 {
 	std::vector<detail::local_matrix_store::const_ptr> local_stores;
+	std::vector<local_write_buffer::ptr> write_bufs;
+	std::vector<matrix_store::ptr> to_mats;
 	size_t num_required_reads;
 	size_t num_reads;
-	matrix_store::ptr to_mat;
 	const portion_mapply_op &op;
-	local_write_buffer::ptr write_buf;
 public:
-	mapply_portion_compute(local_write_buffer::ptr write_buf,
-			size_t num_required_reads, matrix_store::ptr mat,
+	mapply_portion_compute(const std::vector<local_write_buffer::ptr> &write_bufs,
+			size_t num_required_reads, const std::vector<matrix_store::ptr> mats,
 			const portion_mapply_op &_op): op(_op) {
-		this->write_buf = write_buf;
-		this->to_mat = mat;
+		this->write_bufs = write_bufs;
+		this->to_mats = mats;
 		this->num_required_reads = num_required_reads;
 		this->num_reads = 0;
 	}
@@ -1114,26 +1132,31 @@ void mapply_portion_compute::run_complete()
 {
 	assert(!local_stores.empty());
 	const detail::local_matrix_store &first_mat = *local_stores.front();
-	if (write_buf) {
+	std::vector<local_matrix_store::ptr> local_res(write_bufs.size());
+	for (size_t i = 0; i < write_bufs.size(); i++) {
 		size_t res_num_rows;
 		size_t res_num_cols;
-		if (to_mat->is_wide()) {
-			res_num_rows = to_mat->get_num_rows();
+		if (to_mats[i]->is_wide()) {
+			res_num_rows = to_mats[i]->get_num_rows();
 			res_num_cols = first_mat.get_num_cols();
 		}
 		else {
 			res_num_rows = first_mat.get_num_rows();
-			res_num_cols = to_mat->get_num_cols();
+			res_num_cols = to_mats[i]->get_num_cols();
 		}
-		local_matrix_store::ptr local_res = write_buf->set_part(
+		local_res[i] = write_bufs[i]->set_part(
 				first_mat.get_global_start_row(),
 				first_mat.get_global_start_col(), res_num_rows, res_num_cols);
-		op.run(local_stores, *local_res);
-		if (write_buf->is_all_valid())
-			write_buf->flush();
 	}
+	if (local_res.empty())
+		op.run(local_stores);
+	else if (local_res.size() == 1)
+		op.run(local_stores, *local_res[0]);
 	else
-		op.run(local_stores, empty_store);
+		op.run(local_stores, local_res);
+	for (size_t i = 0; i < write_bufs.size(); i++)
+		if (write_bufs[i]->is_all_valid())
+			write_bufs[i]->flush();
 }
 
 void mapply_portion_compute::run(char *buf, size_t size)
@@ -1146,12 +1169,12 @@ void mapply_portion_compute::run(char *buf, size_t size)
 
 EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
 		const std::vector<matrix_store::const_ptr> &mats,
-		matrix_store::ptr res_mat, portion_mapply_op::const_ptr op,
-		size_t tot_len, size_t portion_size): detail::EM_portion_dispatcher(
-			tot_len, portion_size)
+		const std::vector<matrix_store::ptr> &res_mats,
+		portion_mapply_op::const_ptr op, size_t tot_len,
+		size_t portion_size): detail::EM_portion_dispatcher(tot_len, portion_size)
 {
 	this->mats = mats;
-	this->res_mat = res_mat;
+	this->res_mats = res_mats;
 	this->op = op;
 	num_EM_mats = 0;
 	for (size_t i = 0; i < mats.size(); i++)
@@ -1164,10 +1187,10 @@ EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
 		for (size_t i = 1; i < mats.size(); i++)
 			min_portion_size = std::min(min_portion_size,
 					mats[i]->get_portion_size().second);
-		if (res_mat) {
+		for (size_t i = 0; i < res_mats.size(); i++) {
 			min_portion_size = std::min(min_portion_size,
-					res_mat->get_portion_size().second);
-			assert(res_mat->get_portion_size().second % min_portion_size == 0);
+					res_mats[i]->get_portion_size().second);
+			assert(res_mats[i]->get_portion_size().second % min_portion_size == 0);
 		}
 		for (size_t i = 0; i < mats.size(); i++)
 			assert(mats[i]->get_portion_size().second % min_portion_size == 0);
@@ -1177,10 +1200,10 @@ EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
 		for (size_t i = 1; i < mats.size(); i++)
 			min_portion_size = std::min(min_portion_size,
 					mats[i]->get_portion_size().first);
-		if (res_mat) {
+		for (size_t i = 0; i < res_mats.size(); i++) {
 			min_portion_size = std::min(min_portion_size,
-					res_mat->get_portion_size().first);
-			assert(res_mat->get_portion_size().first % min_portion_size == 0);
+					res_mats[i]->get_portion_size().first);
+			assert(res_mats[i]->get_portion_size().first % min_portion_size == 0);
 		}
 		for (size_t i = 0; i < mats.size(); i++)
 			assert(mats[i]->get_portion_size().first % min_portion_size == 0);
@@ -1192,10 +1215,10 @@ EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
  */
 void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 {
-	local_write_buffer::ptr write_buf;
-	if (res_mat)
-		write_buf = local_write_buffer::create(res_mat, global_start, length,
-				min_portion_size);
+	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
+	for (size_t i = 0; i < res_mats.size(); i++)
+		write_bufs[i] = local_write_buffer::create(res_mats[i], global_start,
+				length, min_portion_size);
 
 	for (size_t local_start = 0; local_start < length;
 			local_start += min_portion_size) {
@@ -1203,7 +1226,7 @@ void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 		std::vector<detail::local_matrix_store::const_ptr> local_stores(
 				mats.size());
 		mapply_portion_compute *mapply_compute = new mapply_portion_compute(
-				write_buf, num_EM_mats, res_mat, *op);
+				write_bufs, num_EM_mats, res_mats, *op);
 		mapply_portion_compute::ptr compute(mapply_compute);
 		bool all_in_mem = true;
 		for (size_t j = 0; j < local_stores.size(); j++) {
@@ -1250,20 +1273,49 @@ matrix_store::ptr __mapply_portion(
 		for (size_t i = 1; i < mats.size(); i++)
 			num_nodes = std::max(num_nodes, mats[i]->get_num_nodes());
 	}
-	return __mapply_portion(mats, op, out_layout, out_in_mem, num_nodes);
+	std::vector<matrix_store::ptr> out_mats;
+	if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0) {
+		detail::matrix_store::ptr res = detail::matrix_store::create(
+				op->get_out_num_rows(), op->get_out_num_cols(),
+				out_layout, op->get_output_type(), num_nodes, out_in_mem);
+		assert(res);
+		out_mats.push_back(res);
+	}
+	bool ret = __mapply_portion(mats, op, out_mats);
+	if (ret && out_mats.size() == 1)
+		return out_mats[0];
+	else
+		return matrix_store::ptr();
 }
 
 // This function computes the result of mapply.
 // We allow to not output a matrix.
-matrix_store::ptr __mapply_portion(
+bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool out_in_mem, int out_num_nodes)
+		portion_mapply_op::const_ptr op,
+		const std::vector<matrix_store::ptr> &out_mats)
 {
+	bool out_in_mem;
+	int out_num_nodes;
+	if (out_mats.empty()) {
+		out_in_mem = true;
+		out_num_nodes = -1;
+	}
+	else {
+		out_in_mem = out_mats.front()->is_in_mem();
+		out_num_nodes = out_mats.front()->get_num_nodes();
+		detail::matrix_stats.inc_write_bytes(
+				out_mats[0]->get_num_rows() * out_mats[0]->get_num_cols()
+				* out_mats[0]->get_entry_size(), out_in_mem);
+	}
+	for (size_t i = 1; i < out_mats.size(); i++) {
+		assert(out_in_mem == out_mats[i]->is_in_mem());
+		assert(out_num_nodes == out_mats[i]->get_num_nodes());
+		detail::matrix_stats.inc_write_bytes(
+				out_mats[i]->get_num_rows() * out_mats[i]->get_num_cols()
+				* out_mats[i]->get_entry_size(), out_in_mem);
+	}
 	assert(mats.size() >= 1);
-	detail::matrix_stats.inc_write_bytes(
-			op->get_out_num_rows() * op->get_out_num_cols()
-			* op->get_output_type().get_size(), out_in_mem);
 
 	bool all_in_mem = mats[0]->is_in_mem();
 	size_t num_chunks = mats.front()->get_num_portions();
@@ -1297,20 +1349,13 @@ matrix_store::ptr __mapply_portion(
 	all_in_mem = all_in_mem && out_in_mem;
 
 	if (all_in_mem) {
-		detail::mem_matrix_store::ptr res;
-		if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0)
-			res = detail::mem_matrix_store::create(
-					op->get_out_num_rows(), op->get_out_num_cols(),
-					out_layout, op->get_output_type(), out_num_nodes);
-
 		std::vector<detail::local_matrix_store::const_ptr> local_stores(
 				mats.size());
+		std::vector<detail::local_matrix_store::ptr> local_out_stores(
+				out_mats.size());
 		detail::mem_thread_pool::ptr mem_threads
 			= detail::mem_thread_pool::get_global_mem_threads();
 		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::ptr local_res;
-			if (res)
-				local_res = res->get_portion(i);
 			int node_id = -1;
 			for (size_t j = 0; j < local_stores.size(); j++) {
 				local_stores[j] = mats[j]->get_portion(i);
@@ -1319,26 +1364,27 @@ matrix_store::ptr __mapply_portion(
 				else
 					assert(node_id == local_stores[j]->get_node_id());
 			}
+			for (size_t j = 0; j < out_mats.size(); j++) {
+				local_out_stores[j] = out_mats[j]->get_portion(i);
+				if (node_id < 0)
+					node_id = local_out_stores[j]->get_node_id();
+				else
+					assert(node_id == local_out_stores[j]->get_node_id());
+			}
 
 			// If the local matrix portion is not assigned to any node, 
 			// assign the tasks in round robin fashion.
 			if (node_id < 0)
 				node_id = i % mem_threads->get_num_nodes();
 			mem_threads->process_task(node_id,
-					new mapply_task(local_stores, *op, local_res));
+					new mapply_task(local_stores, *op, local_out_stores));
 		}
 		mem_threads->wait4complete();
-		return res;
 	}
 	else {
-		detail::matrix_store::ptr res;
-		if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0)
-			res = detail::matrix_store::create(op->get_out_num_rows(),
-					op->get_out_num_cols(), out_layout, op->get_output_type(),
-					out_num_nodes, out_in_mem);
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 		EM_mat_mapply_dispatcher::ptr dispatcher(
-				new EM_mat_mapply_dispatcher(mats, res, op, tot_len,
+				new EM_mat_mapply_dispatcher(mats, out_mats, op, tot_len,
 					EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
 			io_worker_task *task = new io_worker_task(dispatcher, 1);
@@ -1349,13 +1395,16 @@ matrix_store::ptr __mapply_portion(
 					task->register_EM_obj(const_cast<EM_object *>(obj));
 				}
 			}
-			if (res && !res->is_in_mem())
-				task->register_EM_obj(dynamic_cast<EM_object *>(res.get()));
+			for (size_t j = 0; j < out_mats.size(); j++) {
+				if (!out_mats[j]->is_in_mem())
+					task->register_EM_obj(
+							dynamic_cast<EM_object *>(out_mats[j].get()));
+			}
 			threads->process_task(i % threads->get_num_nodes(), task);
 		}
 		threads->wait4complete();
-		return res;
 	}
+	return true;
 }
 
 matrix_store::ptr __mapply_portion_virtual(
@@ -1950,8 +1999,7 @@ public:
 	}
 
 	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &out) const;
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		// We don't need to implement this because we materialize
@@ -1968,8 +2016,7 @@ public:
 };
 
 void inner_prod_wide_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &out) const
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	detail::pool_task_thread *curr
 		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
@@ -2115,8 +2162,7 @@ public:
 	}
 
 	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &) const;
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		assert(0);
@@ -2130,8 +2176,7 @@ public:
 };
 
 void matrix_long_agg_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &) const
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 1);
 	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
@@ -2505,12 +2550,17 @@ dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const
 
 	std::vector<detail::matrix_store::const_ptr> in_mats(1);
 	in_mats[0] = store;
-	dense_matrix::ptr ret = dense_matrix::create(__mapply_portion(in_mats,
-				detail::portion_mapply_op::const_ptr(new copy_op(get_num_rows(),
-						get_num_cols(), get_type())),
-				store_layout(), in_mem, num_nodes));
-	ret->materialize_self();
-	return ret;
+	std::vector<detail::matrix_store::ptr> out_mats(1);
+	out_mats[0] = detail::matrix_store::create(get_num_rows(), get_num_cols(),
+			store_layout(), get_type(), num_nodes, in_mem);
+
+	detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
+				get_num_cols(), get_type()));
+	bool ret = detail::__mapply_portion(in_mats, op, out_mats);
+	if (ret)
+		return dense_matrix::create(out_mats[0]);
+	else
+		return dense_matrix::ptr();
 }
 
 }
