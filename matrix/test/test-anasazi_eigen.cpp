@@ -246,8 +246,10 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 void print_usage()
 {
 	fprintf(stderr, "eigensolver conf_file matrix_file index_file nev [options]\n");
-	fprintf(stderr, "-b block_size\n");
-	fprintf(stderr, "-n num_blocks\n");
+	fprintf(stderr, "-b block_size_start\n");
+	fprintf(stderr, "-B block_size_end\n");
+	fprintf(stderr, "-n num_blocks_start\n");
+	fprintf(stderr, "-N num_blocks_end\n");
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
 	fprintf(stderr, "-S: run SVD\n");
@@ -257,19 +259,29 @@ int main (int argc, char *argv[])
 {
 	int opt;
 	int num_opts = 0;
-	size_t blockSize = 4;
-	size_t numBlocks = 8;
+	size_t blockSizeStart = 4;
+	size_t blockSizeEnd = 0;
+	size_t numBlocksStart = 8;
+	size_t numBlocksEnd = 0;
 	std::string solver = "LOBPCG";
 	double tol = 1e-8;
-	while ((opt = getopt(argc, argv, "b:n:s:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
-				blockSize = atoi(optarg);
+				blockSizeStart = atoi(optarg);
+				num_opts++;
+				break;
+			case 'B':
+				blockSizeEnd = atoi(optarg);
 				num_opts++;
 				break;
 			case 'n':
-				numBlocks = atoi(optarg);
+				numBlocksStart = atoi(optarg);
+				num_opts++;
+				break;
+			case 'N':
+				numBlocksEnd = atoi(optarg);
 				num_opts++;
 				break;
 			case 's':
@@ -285,6 +297,10 @@ int main (int argc, char *argv[])
 				abort();
 		}
 	}
+	if (blockSizeEnd == 0)
+		blockSizeEnd = blockSizeStart;
+	if (numBlocksEnd == 0)
+		numBlocksEnd = numBlocksStart;
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
@@ -322,7 +338,12 @@ int main (int argc, char *argv[])
 				0, comm));
 	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(),
 			fg->get_index_data(), Map);
-	compute_eigen(A, nev, solver, blockSize, numBlocks, tol);
+	for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
+			blockSize *= 2) {
+		for (size_t numBlocks = numBlocksStart; numBlocks <= numBlocksEnd;
+				numBlocks *= 2)
+			compute_eigen(A, nev, solver, blockSize, numBlocks, tol);
+	}
 
 	return 0;
 }
