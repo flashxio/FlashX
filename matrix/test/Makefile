@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm test-oblas_dgemm
+	el2al al22d al2crs test-sort test-eigen test-dgemm
 
 trilinos: test-anasazi_eigen test-tpetra_multiply
 
