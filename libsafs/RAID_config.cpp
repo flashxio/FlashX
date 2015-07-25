@@ -27,6 +27,13 @@
 namespace safs
 {
 
+static safs_header get_safs_header(const RAID_config &conf,
+		const std::string &file_name)
+{
+	safs_file f(conf, file_name);
+	return f.get_header();
+}
+
 file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 {
 	/*
@@ -52,6 +59,8 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		}
 		std::vector<std::string> part_ids;
 		dir.read_all_files(part_ids);
+		if (part_ids.size() > 1)
+			part_ids = safs_file::erase_header_file(part_ids);
 		if (part_ids.size() != 1) {
 			fprintf(stderr,
 					"wrong format of the SAFS file %s, check the directory %s\n",
@@ -75,13 +84,21 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		files.push_back(it->second);
 	}
 
-	switch (RAID_mapping_option) {
+	safs_header header = get_safs_header(*this, file_name);
+	int block_size = RAID_block_size;
+	int mapping_option = RAID_mapping_option;
+	// The per-file config can overwrite the default config.
+	if (header.is_valid()) {
+		block_size = header.get_block_size();
+		mapping_option = header.get_mapping_option();
+	}
+	switch (mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(file_name, files, RAID_block_size);
+			return new RAID0_mapper(file_name, files, block_size);
 		case RAID5:
-			return new RAID5_mapper(file_name, files, RAID_block_size);
+			return new RAID5_mapper(file_name, files, block_size);
 		case HASH:
-			return new hash_mapper(file_name, files, RAID_block_size);
+			return new hash_mapper(file_name, files, block_size);
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);

@@ -808,10 +808,10 @@ public:
 		return (end_pg - begin_pg) / PAGE_SIZE;
 	}
 
-	bool inside_RAID_block() const {
-		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
-		return ROUND(this->get_offset(), RAID_block_size)
-			== ROUND(this->get_offset() + this->get_size() - 1, RAID_block_size);
+	bool inside_RAID_block(int block_size) const {
+		int block_size_bytes = block_size * PAGE_SIZE;
+		return ROUND(this->get_offset(), block_size_bytes)
+			== ROUND(this->get_offset() + this->get_size() - 1, block_size_bytes);
 	}
 
 	void *get_user_data() const {

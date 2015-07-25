@@ -41,7 +41,7 @@ class buffered_io: public io_interface
 	int flags;
 public:
 	buffered_io(const logical_file_partition &partition_,
-			thread *t, int flags = O_RDWR);
+			thread *t, const safs_header &header, int flags = O_RDWR);
 
 	virtual ~buffered_io() {
 		for (unsigned i = 0; i < fds.size(); i++)

@@ -204,7 +204,8 @@ public:
 };
 
 direct_comp_io::direct_comp_io(std::shared_ptr<remote_io> io): io_interface(
-		io->get_thread()), req_buf(io->get_node_id(), 10240, true)
+		io->get_thread(), io->get_header()), req_buf(io->get_node_id(),
+		10240, true)
 {
 	comp_sched = comp_io_scheduler::ptr(new default_comp_io_scheduler(
 				this->get_node_id()));

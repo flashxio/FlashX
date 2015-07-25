@@ -57,7 +57,7 @@ class remote_io: public io_interface
 public:
 	remote_io(const std::vector<std::shared_ptr<disk_io_thread> > &remotes,
 			slab_allocator &msg_allocator, file_mapper *mapper, thread *t,
-			int max_reqs = MAX_DISK_CACHED_REQS);
+			const safs_header &header, int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_io();
 
