@@ -79,14 +79,16 @@ void print_usage()
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
 	fprintf(stderr, "-e: the external memory mode.\n");
+	fprintf(stderr, "-o file: output eigenvectors\n");
 }
 
 int main (int argc, char *argv[])
 {
 	int opt;
 	int num_opts = 0;
+	std::string output_file;
 	struct eigen_options opts;
-	while ((opt = getopt(argc, argv, "b:n:s:t:e")) != -1) {
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -107,6 +109,10 @@ int main (int argc, char *argv[])
 				break;
 			case 'e':
 				opts.in_mem = false;
+				break;
+			case 'o':
+				output_file = optarg;
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -152,6 +158,15 @@ int main (int argc, char *argv[])
 
 	eigen_res res = compute_eigen(new FM_Operator(mat),
 			mat->is_symmetric(), opts);
+	// We only save eigenvectors if they are stored in memory.
+	if (!output_file.empty() && res.vecs->is_in_mem()) {
+		printf("Save eigenvectors to %s\n", output_file.c_str());
+		res.vecs->materialize_self();
+		const detail::mem_matrix_store &store
+			= dynamic_cast<const detail::mem_matrix_store &>(res.vecs->get_data());
+		bool ret = store.write2file(output_file);
+		assert(ret);
+	}
 
 	return 0;
 }
