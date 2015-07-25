@@ -16,13 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "in_mem_storage.h"
 
 #include "fm_utils.h"
 #include "factor.h"
 #include "generic_type.h"
 #include "local_vec_store.h"
-#include "mem_data_frame.h"
-#include "mem_vector_vector.h"
+#include "data_frame.h"
+#include "vector_vector.h"
+#include "local_vv_store.h"
+#include "mem_vv_store.h"
+#include "EM_vector.h"
 
 namespace fm
 {
@@ -123,171 +127,233 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 		return vector_vector::ptr();
 	}
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	std::string sort_vec_name = df->get_vec_name(0);
-	df->sort(sort_vec_name);
-	assert(df->is_sorted(sort_vec_name));
+	data_frame::const_ptr sorted_df = df->sort(sort_vec_name);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to sort the edge list\n",
+			time_diff(start, end));
+	gettimeofday(&start, NULL);
+	assert(sorted_df->is_sorted(sort_vec_name));
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to test if the edge list is sorted\n",
+			time_diff(start, end));
 	adj_apply_operate adj_op;
-	return df->groupby(sort_vec_name, adj_op);
+	gettimeofday(&start, NULL);
+	vector_vector::ptr ret = sorted_df->groupby(sort_vec_name, adj_op);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to groupby the edge list.\n",
+			time_diff(start, end));
+	return ret;
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_directed_graph(
+static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_directed_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
-	// For in-edge adjacency lists, all edges share the same destination vertex
-	// should be stored together.
-	mem_data_frame::ptr tmp = mem_data_frame::create();
+	struct timeval start, end;
+	// Leave the space for graph header.
+	detail::vec_store::ptr graph_data = detail::vec_store::create(
+			fg::graph_header::get_header_size(),
+			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+
+	/*
+	 * Construct the in-edge adjacency lists.
+	 * All edges share the same destination vertex should be stored together.
+	 */
+
+	data_frame::ptr tmp = data_frame::create();
 	tmp->add_vec("dest", df->get_vec("dest"));
 	tmp->add_vec("source", df->get_vec("source"));
 	df = tmp;
-	mem_vector_vector::ptr in_adjs = mem_vector_vector::cast(
-			fm::create_1d_matrix(df));
+	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
+	size_t num_vertices = in_adjs->get_num_vecs();
 	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
+	gettimeofday(&start, NULL);
+	// Get the number of in-edges for each vertex.
+	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
+			num_vertices, get_scalar_type<fg::vsize_t>());
+	for (size_t i = 0; i < num_vertices; i++) {
+		num_in_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					in_adjs->get_length(i), 0));
+	}
+	size_t num_edges = vector::create(num_in_edges)->sum<fg::vsize_t>();
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #in-edges\n", time_diff(start, end));
+	// Move in-edge adjacency lists to the final image.
+	const detail::vv_store &in_adj_store
+		= dynamic_cast<const detail::vv_store &>(in_adjs->get_data());
+	gettimeofday(&start, NULL);
+	graph_data->append(in_adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append in-edge adjacency list\n",
+			time_diff(start, end));
+	in_adjs = NULL;
 
-	// For out-edge adjacency lists, all edges share the same source vertex
-	// should be stored together.
-	tmp = mem_data_frame::create();
+	/*
+	 * Construct out-edge adjacency lists.
+	 * All edges share the same source vertex should be stored together.
+	 */
+
+	tmp = data_frame::create();
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
-	mem_vector_vector::ptr out_adjs = mem_vector_vector::cast(
-			create_1d_matrix(df));
+	vector_vector::ptr out_adjs = create_1d_matrix(df);
 	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
-
-	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
-	// There might be different numbers of in-adjacency list and out-adjacency
-	// list.
-	size_t num_vertices = std::max(out_adjs->get_num_vecs(),
-			in_adjs->get_num_vecs());
-	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
-			num_vertices, get_scalar_type<fg::vsize_t>());
+	assert(out_adjs->get_num_vecs() == num_vertices);
+	// Get the number of out-edge for each vertex.
+	gettimeofday(&start, NULL);
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
-	printf("create vertex index\n");
-	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
-		if (i < in_adjs->get_num_vecs()) {
-			const fg::ext_mem_undirected_vertex *v
-				= (const fg::ext_mem_undirected_vertex *) in_adjs->get_raw_arr(i);
-			num_edges += v->get_num_edges();
-			num_in_edges->set(i,
-					fg::ext_mem_undirected_vertex::vsize2num_edges(
-						in_adjs->get_length(i), 0));
-		}
-		else
-			num_in_edges->set(i, 0);
-
-		if (i < out_adjs->get_num_vecs())
-			num_out_edges->set(i,
-					fg::ext_mem_undirected_vertex::vsize2num_edges(
-						out_adjs->get_length(i), 0));
-		else
-			num_out_edges->set(i, 0);
+		num_out_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					out_adjs->get_length(i), 0));
 	}
+	assert(vector::create(num_out_edges)->sum<fg::vsize_t>() == num_edges);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #out-edges\n", time_diff(start, end));
 	printf("There are %ld edges\n", num_edges);
-	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
+	// Move out-edge adjacency lists to the final image.
+	const detail::vv_store &out_adj_store
+		= dynamic_cast<const detail::vv_store &>(out_adjs->get_data());
+	gettimeofday(&start, NULL);
+	graph_data->append(out_adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append out-edge adjacency list\n",
+			time_diff(start, end));
+	out_adjs = NULL;
 
-	struct deleter {
-		void operator()(char *buf) {
-			delete [] buf;
-		}
-	};
-	printf("create the graph image\n");
-	size_t tot_graph_size = fg::graph_header::get_header_size()
-		+ in_adjs->get_tot_num_entries() + out_adjs->get_tot_num_entries();
-	std::shared_ptr<char> graph_data(new char[tot_graph_size], deleter());
-	off_t copy_start = 0;
-	memcpy(graph_data.get() + copy_start, &header,
+	// Construct the graph header.
+	gettimeofday(&start, NULL);
+	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
+	local_vec_store::ptr header_store(new local_buf_vec_store(0,
+			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
+	memcpy(header_store->get_raw_arr(), &header,
 			fg::graph_header::get_header_size());
-	copy_start += fg::graph_header::get_header_size();
-	memcpy(graph_data.get() + copy_start, in_adjs->get_raw_data(),
-			in_adjs->get_tot_num_entries());
-	copy_start += in_adjs->get_tot_num_entries();
-	memcpy(graph_data.get() + copy_start, out_adjs->get_raw_data(),
-			out_adjs->get_tot_num_entries());
-	copy_start += out_adjs->get_tot_num_entries();
-	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
-			graph_data, copy_start);
+	graph_data->set_portion(header_store, 0);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph header\n",
+			time_diff(start, end));
 
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
 	printf("create the vertex index image\n");
+	gettimeofday(&start, NULL);
 	fg::cdirected_vertex_index::ptr vindex
 		= fg::cdirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_in_edges->get_raw_arr(),
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(),
 				header);
-	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph index\n",
+			time_diff(start, end));
+	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
+			graph_data);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_undirected_graph(
+static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undirected_graph(
 		const std::string &graph_name, data_frame::ptr df)
 {
-	// For out-edge adjacency lists, all edges share the same source vertex
-	// should be stored together.
-	mem_data_frame::ptr tmp = mem_data_frame::create();
+	struct timeval start, end;
+	// Leave the space for graph header.
+	detail::vec_store::ptr graph_data = detail::vec_store::create(0,
+			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+
+	// All edges share the same source vertex should be stored together.
+	data_frame::ptr tmp = data_frame::create();
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
 	df = tmp;
-	printf("there are %ld vecs in data frame\n", tmp->get_num_vecs());
-	mem_vector_vector::ptr adjs = mem_vector_vector::cast(
-			create_1d_matrix(df));
+	vector_vector::ptr adjs = create_1d_matrix(df);
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
 
-	// There might be different numbers of in-adjacency list and out-adjacency
-	// list.
+	gettimeofday(&start, NULL);
 	size_t num_vertices = adjs->get_num_vecs();
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
-	printf("create vertex index\n");
 	size_t num_edges = 0;
-	for (size_t i = 0; i < num_vertices; i++)
-		num_out_edges->set(i, fg::ext_mem_undirected_vertex::vsize2num_edges(
-					adjs->get_length(i), 0));
+	for (size_t i = 0; i < num_vertices; i++) {
+		size_t local_num_edges = fg::ext_mem_undirected_vertex::vsize2num_edges(
+					adjs->get_length(i), 0);
+		num_out_edges->set(i, local_num_edges);
+		num_edges += local_num_edges;
+	}
+	assert(num_edges % 2 == 0);
+	num_edges /= 2;
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to get #edges\n", time_diff(start, end));
 	printf("There are %ld edges\n", num_edges);
-	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
 
-	struct deleter {
-		void operator()(char *buf) {
-			delete [] buf;
-		}
-	};
 	printf("create the graph image\n");
-	size_t tot_graph_size = fg::graph_header::get_header_size()
-		+ adjs->get_tot_num_entries();
-	std::shared_ptr<char> graph_data(new char[tot_graph_size], deleter());
-	off_t copy_start = 0;
-	memcpy(graph_data.get() + copy_start, &header,
+	gettimeofday(&start, NULL);
+	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
+	local_vec_store::ptr header_store(new local_buf_vec_store(0,
+			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
+	memcpy(header_store->get_raw_arr(), &header,
 			fg::graph_header::get_header_size());
-	copy_start += fg::graph_header::get_header_size();
-	memcpy(graph_data.get() + copy_start, adjs->get_raw_data(),
-			adjs->get_tot_num_entries());
-	copy_start += adjs->get_tot_num_entries();
-	fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
-			graph_data, copy_start);
+	graph_data->append(*header_store);
+
+	const detail::vv_store &adj_store
+		= dynamic_cast<const detail::vv_store &>(adjs->get_data());
+	graph_data->append(adj_store.get_data());
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to append the adjacency list\n",
+			time_diff(start, end));
 
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
 	printf("create the vertex index image\n");
+	gettimeofday(&start, NULL);
 	fg::cundirected_vertex_index::ptr vindex
 		= fg::cundirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
-	return std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr>(vindex, graph);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct the graph index\n",
+			time_diff(start, end));
+	return std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
+			graph_data);
 }
 
-std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> create_fg_mem_graph(
-		const std::string &graph_name, data_frame::ptr df, bool directed)
+fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
+		data_frame::ptr df, bool directed)
 {
+	std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> res;
 	if (directed)
-		return create_fg_mem_directed_graph(graph_name, df);
+		res = create_fg_directed_graph(graph_name, df);
 	else
-		return create_fg_mem_undirected_graph(graph_name, df);
+		res = create_fg_undirected_graph(graph_name, df);
+
+	if (res.second->is_in_mem()) {
+		fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
+				detail::smp_vec_store::cast(res.second)->get_raw_data(),
+				res.second->get_length());
+		return fg::FG_graph::create(graph, res.first, graph_name, NULL);
+	}
+	else {
+		detail::EM_vec_store::ptr graph_data = detail::EM_vec_store::cast(res.second);
+		detail::EM_vec_store::ptr index_vec = detail::EM_vec_store::create(0,
+				get_scalar_type<char>());
+		local_cref_vec_store index_store((const char *) res.first.get(), 0,
+					res.first->get_index_size(), get_scalar_type<char>(), -1);
+		index_vec->append(index_store);
+		std::string graph_file_name = graph_name + ".adj";
+		bool ret = graph_data->set_persistent(graph_file_name);
+		assert(ret);
+		std::string index_file_name = graph_name + ".index";
+		ret = index_vec->set_persistent(index_file_name);
+		assert(ret);
+		return fg::FG_graph::create(graph_file_name, index_file_name, NULL);
+	}
 }
 
 class set_2d_label_operate: public type_set_vec_operate<factor_value_t>
@@ -303,7 +369,7 @@ public:
 	}
 };
 
-class part_2d_apply_operate: public gr_apply_operate<sub_vector_vector>
+class part_2d_apply_operate: public gr_apply_operate<local_vv_store>
 {
 	// The row length (aka. the total number of columns) of the matrix.
 	size_t row_len;
@@ -314,7 +380,7 @@ public:
 		this->row_len = row_len;
 	}
 
-	void run(const void *key, const sub_vector_vector &val,
+	void run(const void *key, const local_vv_store &val,
 			local_vec_store &out) const;
 
 	const scalar_type &get_key_type() const {
@@ -330,7 +396,7 @@ public:
 	}
 };
 
-void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
+void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
 	size_t block_height = block_size.get_num_rows();
@@ -339,15 +405,29 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 	factor_value_t block_row_id = *(const factor_value_t *) key;
 	size_t tot_num_non_zeros = 0;
 	size_t max_row_parts = 0;
+	const fg::ext_mem_undirected_vertex *first_v
+		= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(0);
+	fg::vertex_id_t start_vid = first_v->get_id();
+	std::vector<std::vector<const fg::ext_mem_undirected_vertex *> > edge_dist_map(
+			num_blocks);
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
+		assert(val.get_length(i) == v->get_size());
 		assert(v->get_id() / block_height == (size_t) block_row_id);
 		tot_num_non_zeros += v->get_num_edges();
 		// I definitely over estimate the number of row parts.
 		// If a row doesn't have many non-zero entries, I assume that
 		// the non-zero entries distribute evenly across all row parts.
 		max_row_parts += std::min(num_blocks, v->get_num_edges());
+
+		// Fill the edge distribution map.
+		for (size_t i = 0; i < v->get_num_edges(); i++) {
+			size_t vector_idx = v->get_neighbor(i) / block_width;
+			if (edge_dist_map[vector_idx].empty()
+					|| edge_dist_map[vector_idx].back() != v)
+				edge_dist_map[vector_idx].push_back(v);
+		}
 	}
 
 	std::vector<size_t> neigh_idxs(val.get_num_vecs());
@@ -374,17 +454,15 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 		sparse_block_2d *block
 			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
 					block_row_id, col_idx / block_width);
+		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
+			= edge_dist_map[col_idx / block_width];
 		// Iterate the vectors in the vector_vector one by one.
-		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
-			const fg::ext_mem_undirected_vertex *v
-				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
-			// If the vertex has no more edges left.
-			if (neigh_idxs[row_idx] >= v->get_num_edges())
-				continue;
-			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx);
-			// If the vertex has no edges that fall in the range.
-			if (v->get_neighbor(neigh_idxs[row_idx]) >= col_idx + block_width)
-				continue;
+		for (size_t i = 0; i < v_ptrs.size(); i++) {
+			const fg::ext_mem_undirected_vertex *v = v_ptrs[i];
+			size_t row_idx = v->get_id() - start_vid;
+			assert(neigh_idxs[row_idx] < v->get_num_edges());
+			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx
+					&& v->get_neighbor(neigh_idxs[row_idx]) < col_idx + block_width);
 
 			sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
 			size_t idx = neigh_idxs[row_idx];
@@ -409,6 +487,14 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 			block->verify(block_size);
 		}
 	}
+	// If the block row doesn't have any non-zero entries, let's insert an
+	// empty block row, so the matrix index can work correctly.
+	if (curr_size == 0) {
+		curr_size = sizeof(sparse_block_2d);
+		const sparse_block_2d *block
+			= (const sparse_block_2d *) out.get_raw_arr();
+		assert(block->is_empty());
+	}
 	out.resize(curr_size);
 }
 
@@ -418,7 +504,7 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
-			set_2d_label_operate(block_size));
+			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
@@ -451,27 +537,40 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 }
 
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file)
+		const std::string &mat_file, const std::string &mat_idx_file,
+		bool to_safs)
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
-			set_2d_label_operate(block_size));
+			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows));
 
 	matrix_header mheader(matrix_type::SPARSE, 0, num_rows, num_rows,
 			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
-	FILE *f_2d = fopen(mat_file.c_str(), "w");
-	if (f_2d == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
-			% mat_file % strerror(errno);
-		return;
+	if (!to_safs) {
+		FILE *f_2d = fopen(mat_file.c_str(), "w");
+		if (f_2d == NULL) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
+				% mat_file % strerror(errno);
+			return;
+		}
+		fwrite(&mheader, sizeof(mheader), 1, f_2d);
+		bool ret = res->cat()->export2(f_2d);
+		assert(ret);
+		fclose(f_2d);
 	}
-	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	bool ret = mem_vector::cast(res->cat())->export2(f_2d);
-	assert(ret);
-	fclose(f_2d);
+	else {
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(0,
+				get_scalar_type<char>());
+		local_cref_vec_store header_store((const char *) &mheader,
+				0, sizeof(mheader), get_scalar_type<char>(), -1);
+		vec->append(header_store);
+		vec->append(dynamic_cast<const detail::vv_store &>(
+					res->get_data()).get_data());
+		vec->set_persistent(mat_file);
+	}
 
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
@@ -482,7 +581,10 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 	}
 	offsets[res->get_num_vecs()] = off;
 	SpM_2d_index::ptr mindex = SpM_2d_index::create(mheader, offsets);
-	mindex->dump(mat_idx_file);
+	if (!to_safs)
+		mindex->dump(mat_idx_file);
+	else
+		mindex->safs_dump(mat_idx_file);
 }
 
 }

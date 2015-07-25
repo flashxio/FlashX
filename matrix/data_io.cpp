@@ -17,6 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_GZIP
+#include <zlib.h>
+#endif
+
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
 
@@ -28,8 +32,6 @@
 #include "generic_type.h"
 #include "matrix_config.h"
 #include "data_frame.h"
-#include "mem_data_frame.h"
-#include "mem_vector.h"
 #include "mem_worker_thread.h"
 
 namespace fm
@@ -41,6 +43,8 @@ class file_io
 {
 public:
 	typedef std::shared_ptr<file_io> ptr;
+
+	static ptr create(const std::string &file_name);
 
 	virtual ~file_io() {
 	}
@@ -77,6 +81,110 @@ public:
 		return file_size - curr_off == 0;
 	}
 };
+
+#ifdef USE_GZIP
+class gz_file_io: public file_io
+{
+	std::vector<char> prev_buf;
+	size_t prev_buf_bytes;
+
+	gzFile f;
+
+	gz_file_io(gzFile f) {
+		this->f = f;
+		prev_buf_bytes = 0;
+		prev_buf.resize(PAGE_SIZE);
+	}
+public:
+	static ptr create(const std::string &file);
+
+	~gz_file_io() {
+		gzclose(f);
+	}
+
+	std::unique_ptr<char[]> read_lines(const size_t wanted_bytes,
+			size_t &read_bytes);
+
+	bool eof() const {
+		return gzeof(f) && prev_buf_bytes == 0;
+	}
+};
+
+std::unique_ptr<char[]> gz_file_io::read_lines(
+		const size_t wanted_bytes1, size_t &read_bytes)
+{
+	read_bytes = 0;
+	size_t wanted_bytes = wanted_bytes1;
+	size_t buf_size = wanted_bytes + PAGE_SIZE;
+	char *buf = new char[buf_size];
+	std::unique_ptr<char[]> ret_buf(buf);
+	if (prev_buf_bytes > 0) {
+		memcpy(buf, prev_buf.data(), prev_buf_bytes);
+		buf += prev_buf_bytes;
+		read_bytes += prev_buf_bytes;
+		wanted_bytes -= prev_buf_bytes;
+		prev_buf_bytes = 0;
+	}
+
+	if (!gzeof(f)) {
+		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
+		if (ret <= 0) {
+			if (ret < 0 || !gzeof(f)) {
+				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
+				exit(1);
+			}
+		}
+
+		if ((size_t) ret > wanted_bytes) {
+			int i = 0;
+			int over_read = ret - wanted_bytes;
+			for (; i < over_read; i++) {
+				if (buf[wanted_bytes + i] == '\n') {
+					i++;
+					break;
+				}
+			}
+			read_bytes += wanted_bytes + i;
+			buf += wanted_bytes + i;
+
+			prev_buf_bytes = over_read - i;
+			assert(prev_buf_bytes <= (size_t) PAGE_SIZE);
+			memcpy(prev_buf.data(), buf, prev_buf_bytes);
+		}
+		else
+			read_bytes += ret;
+	}
+	// The line buffer must end with '\0'.
+	assert(read_bytes < buf_size);
+	ret_buf[read_bytes] = 0;
+	return ret_buf;
+}
+
+file_io::ptr gz_file_io::create(const std::string &file)
+{
+	gzFile f = gzopen(file.c_str(), "rb");
+	if (f == Z_NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("fail to open gz file %1%: %2%")
+			% file % strerror(errno);
+		return ptr();
+	}
+	return ptr(new gz_file_io(f));
+}
+
+#endif
+
+file_io::ptr file_io::create(const std::string &file_name)
+{
+#ifdef USE_GZIP
+	size_t loc = file_name.rfind(".gz");
+	// If the file name ends up with ".gz", we consider it as a gzip file.
+	if (loc != std::string::npos && loc + 3 == file_name.length())
+		return gz_file_io::create(file_name);
+	else
+#endif
+		return text_file_io::create(file_name);
+}
 
 file_io::ptr text_file_io::create(const std::string file)
 {
@@ -169,21 +277,73 @@ namespace
 
 class data_frame_set
 {
+	std::atomic<size_t> num_dfs;
 	std::vector<data_frame::ptr> dfs;
-	pthread_spinlock_t lock;
+	pthread_mutex_t lock;
+	pthread_cond_t fetch_cond;
+	pthread_cond_t add_cond;
+	size_t max_queue_size;
+	bool wait_for_fetch;
+	bool wait_for_add;
 public:
-	data_frame_set() {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	data_frame_set(size_t max_queue_size) {
+		this->max_queue_size = max_queue_size;
+		pthread_mutex_init(&lock, NULL);
+		pthread_cond_init(&fetch_cond, NULL);
+		pthread_cond_init(&add_cond, NULL);
+		num_dfs = 0;
+		wait_for_fetch = false;
+		wait_for_add = false;
+	}
+	~data_frame_set() {
+		pthread_mutex_destroy(&lock);
+		pthread_cond_destroy(&fetch_cond);
+		pthread_cond_destroy(&add_cond);
 	}
 
 	void add(data_frame::ptr df) {
-		pthread_spin_lock(&lock);
+		pthread_mutex_lock(&lock);
+		while (dfs.size() >= max_queue_size) {
+			// If the consumer thread is wait for adding new data frames, we
+			// should wake them up before going to sleep. There is only
+			// one thread waiting for fetching data frames, so we only need
+			// to signal one thread.
+			if (wait_for_fetch)
+				pthread_cond_signal(&fetch_cond);
+			wait_for_add = true;
+			pthread_cond_wait(&add_cond, &lock);
+			wait_for_add = false;
+		}
 		dfs.push_back(df);
-		pthread_spin_unlock(&lock);
+		num_dfs++;
+		pthread_mutex_unlock(&lock);
+		pthread_cond_signal(&fetch_cond);
 	}
 
-	const std::vector<data_frame::ptr> &get_data_frames() const {
-		return dfs;
+	std::vector<data_frame::ptr> fetch_data_frames() {
+		std::vector<data_frame::ptr> ret;
+		pthread_mutex_lock(&lock);
+		while (dfs.empty()) {
+			// If some threads are wait for adding new data frames, we should
+			// wake them up before going to sleep. Potentially, there are
+			// multiple threads waiting at the same time, we should wake
+			// all of them up.
+			if (wait_for_add)
+				pthread_cond_broadcast(&add_cond);
+			wait_for_fetch = true;
+			pthread_cond_wait(&fetch_cond, &lock);
+			wait_for_fetch = false;
+		}
+		ret = dfs;
+		dfs.clear();
+		num_dfs = 0;
+		pthread_mutex_unlock(&lock);
+		pthread_cond_broadcast(&add_cond);
+		return ret;
+	}
+
+	size_t get_num_dfs() const {
+		return num_dfs;
 	}
 };
 
@@ -202,7 +362,7 @@ public:
 	}
 
 	void run() {
-		mem_data_frame::ptr df = mem_data_frame::create();
+		data_frame::ptr df = data_frame::create();
 		df->add_vec(parser.get_col_name(0),
 				detail::smp_vec_store::create(0, parser.get_col_type(0)));
 		df->add_vec(parser.get_col_name(1),
@@ -212,49 +372,138 @@ public:
 	}
 };
 
+class file_parse_task: public thread_task
+{
+	file_io::ptr io;
+	const line_parser &parser;
+	data_frame_set &dfs;
+public:
+	file_parse_task(file_io::ptr io, const line_parser &_parser,
+			data_frame_set &_dfs): parser(_parser), dfs(_dfs) {
+		this->io = io;
+	}
+
+	void run();
+};
+
+void file_parse_task::run()
+{
+	while (!io->eof()) {
+		size_t size = 0;
+		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+		assert(size > 0);
+		data_frame::ptr df = data_frame::create();
+		df->add_vec(parser.get_col_name(0),
+				detail::smp_vec_store::create(0, parser.get_col_type(0)));
+		df->add_vec(parser.get_col_name(1),
+				detail::smp_vec_store::create(0, parser.get_col_type(1)));
+		parse_lines(std::move(lines), size, parser, *df);
+		dfs.add(df);
+	}
 }
 
-static bool read_lines(const std::string &file, const line_parser &parser,
-		data_frame &df)
+}
+
+data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
+		bool in_mem)
 {
-	file_io::ptr io = text_file_io::create(file);
+	data_frame::ptr df = data_frame::create();
+	df->add_vec(parser.get_col_name(0),
+			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
+	df->add_vec(parser.get_col_name(1),
+			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
+
+	file_io::ptr io = file_io::create(file);
 	if (io == NULL)
-		return false;
+		return data_frame::ptr();
 
 	printf("parse edge list\n");
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	data_frame_set dfs;
-	size_t i = 0;
-	while (!io->eof()) {
-		size_t size = 0;
-		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+	data_frame_set dfs(MAX_PENDING);
 
-		int node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id,
-				new parse_task(std::move(lines), size, parser, dfs));
-		i++;
+	while (!io->eof()) {
+		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
+		for (size_t i = 0; i < num_tasks && !io->eof(); i++) {
+			size_t size = 0;
+			std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+
+			mem_threads->process_task(-1,
+					new parse_task(std::move(lines), size, parser, dfs));
+		}
+		if (dfs.get_num_dfs() > 0) {
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			if (!tmp_dfs.empty())
+				df->append(tmp_dfs.begin(), tmp_dfs.end());
+		}
 	}
 	mem_threads->wait4complete();
+	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+	if (!tmp_dfs.empty())
+		df->append(tmp_dfs.begin(), tmp_dfs.end());
 
-	printf("merge parse results\n");
-	df.append(dfs.get_data_frames().begin(), dfs.get_data_frames().end());
-	return true;
+	return df;
 }
 
 data_frame::ptr read_lines(const std::vector<std::string> &files,
-		const line_parser &parser)
+		const line_parser &parser, bool in_mem)
 {
-	mem_data_frame::ptr df = mem_data_frame::create();
+	if (files.size() == 1)
+		return read_lines(files[0], parser, in_mem);
+
+	data_frame::ptr df = data_frame::create();
 	df->add_vec(parser.get_col_name(0),
-			detail::smp_vec_store::create(0, parser.get_col_type(0)));
+			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
 	df->add_vec(parser.get_col_name(1),
-			detail::smp_vec_store::create(0, parser.get_col_type(1)));
-	BOOST_FOREACH(std::string file, files) {
-		bool ret = read_lines(file, parser, *df);
-		if (!ret)
-			return data_frame::ptr();
+			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
+	data_frame_set dfs(MAX_PENDING);
+	/*
+	 * We assign a thread to each file. This works better if there are
+	 * many small input files. If the input files are compressed, this
+	 * approach also parallelizes decompression.
+	 *
+	 * TODO it may not work so well if there are a small number of large
+	 * input files.
+	 */
+	auto file_it = files.begin();
+	while (file_it != files.end()) {
+		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
+		for (size_t i = 0; i < num_tasks && file_it != files.end(); i++) {
+			file_io::ptr io = file_io::create(*file_it);
+			file_it++;
+			mem_threads->process_task(-1,
+					new file_parse_task(io, parser, dfs));
+		}
+		// This is the only thread that can fetch data frames from the queue.
+		// If there are pending tasks in the thread pool, it's guaranteed
+		// that we can fetch data frames from the queue.
+		if (mem_threads->get_num_pending() > 0) {
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			if (!tmp_dfs.empty())
+				df->append(tmp_dfs.begin(), tmp_dfs.end());
+		}
 	}
+	// TODO It might be expensive to calculate the number of pending
+	// tasks every time.
+	while (mem_threads->get_num_pending() > 0) {
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		if (!tmp_dfs.empty())
+			df->append(tmp_dfs.begin(), tmp_dfs.end());
+	}
+	mem_threads->wait4complete();
+	// At this point, all threads have stoped working. If there are
+	// data frames in the queue, they are the very last ones.
+	if (dfs.get_num_dfs() > 0) {
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		if (!tmp_dfs.empty())
+			df->append(tmp_dfs.begin(), tmp_dfs.end());
+	}
+
 	return df;
 }
 

@@ -57,21 +57,21 @@ void init_out_offs(fg::vertex_index::ptr vindex, std::vector<off_t> &out_offs)
 	size_t num_vertices = vindex->get_num_vertices();
 	assert(num_vertices + 1 == out_offs.size());
 	if (vindex->is_compressed()) {
+		out_offs[0] = get_out_off(vindex);
 		if (vindex->get_graph_header().is_directed_graph()) {
 			fg::in_mem_cdirected_vertex_index::ptr dindex
 				= fg::in_mem_cdirected_vertex_index::create(*vindex);
-			out_offs[0] = 0;
 			for (size_t i = 1; i <= num_vertices; i++)
 				out_offs[i] = out_offs[i - 1] + dindex->get_out_size(i - 1);
 		}
 		else {
 			fg::in_mem_cundirected_vertex_index::ptr uindex
 				= fg::in_mem_cundirected_vertex_index::create(*vindex);
-			out_offs[0] = 0;
 			for (size_t i = 1; i <= num_vertices; i++)
 				out_offs[i] = out_offs[i - 1] + uindex->get_size(i - 1);
 		}
-		assert((size_t) out_offs[num_vertices] == get_out_size(vindex));
+		assert((size_t) out_offs[num_vertices]
+				== get_out_size(vindex) + out_offs[0]);
 	}
 	else {
 		if (vindex->get_graph_header().is_directed_graph()) {
@@ -79,17 +79,16 @@ void init_out_offs(fg::vertex_index::ptr vindex, std::vector<off_t> &out_offs)
 			fg::directed_vertex_index::ptr dindex
 				= fg::directed_vertex_index::cast(vindex);
 			for (size_t i = 0; i < num_vertices; i++)
-				out_offs[i] = dindex->get_vertex(i).get_out_off()
-					- out_part_loc;
-			out_offs[num_vertices] = get_out_size(vindex);
+				out_offs[i] = dindex->get_vertex(i).get_out_off();
+			out_offs[num_vertices] = get_out_size(vindex) + out_part_loc;
 		}
 		else {
 			fg::undirected_vertex_index::ptr uindex
 				= fg::undirected_vertex_index::cast(vindex);
 			for (size_t i = 0; i < num_vertices; i++)
-				out_offs[i] = uindex->get_vertex(i).get_off()
-					- vindex->get_header_size();
-			out_offs[num_vertices] = get_out_size(vindex);
+				out_offs[i] = uindex->get_vertex(i).get_off();
+			out_offs[num_vertices]
+				= get_out_size(vindex) + vindex->get_header_size();
 		}
 	}
 	for (size_t i = 1; i <= num_vertices; i++)
@@ -104,18 +103,18 @@ void init_in_offs(fg::vertex_index::ptr vindex, std::vector<off_t> &in_offs)
 	if (vindex->is_compressed()) {
 		fg::in_mem_cdirected_vertex_index::ptr dindex
 			= fg::in_mem_cdirected_vertex_index::create(*vindex);
-		in_offs[0] = 0;
+		in_offs[0] = get_in_off(vindex);
 		for (size_t i = 1; i <= num_vertices; i++)
 			in_offs[i] = in_offs[i - 1] + dindex->get_in_size(i - 1);
-		assert((size_t) in_offs[num_vertices] == get_in_size(vindex));
+		assert((size_t) in_offs[num_vertices]
+				== get_in_size(vindex) + in_offs[0]);
 	}
 	else {
 		fg::directed_vertex_index::ptr dindex
 			= fg::directed_vertex_index::cast(vindex);
 		for (size_t i = 0; i < num_vertices; i++)
-			in_offs[i] = dindex->get_vertex(i).get_in_off()
-				- vindex->get_header_size();
-		in_offs[num_vertices] = get_in_size(vindex);
+			in_offs[i] = dindex->get_vertex(i).get_in_off();
+		in_offs[num_vertices] = get_in_size(vindex) + vindex->get_header_size();
 	}
 	for (size_t i = 1; i <= num_vertices; i++)
 		assert(in_offs[i] > in_offs[i - 1]);

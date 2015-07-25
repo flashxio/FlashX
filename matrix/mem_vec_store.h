@@ -105,6 +105,14 @@ public:
 		return std::static_pointer_cast<const smp_vec_store>(store);
 	}
 
+	std::shared_ptr<char> get_raw_data() {
+		return data.get_raw_data();
+	}
+
+	std::shared_ptr<const char> get_raw_data() const {
+		return data.get_raw_data();
+	}
+
 	virtual char *get_raw_arr() {
 		return arr;
 	}
@@ -140,6 +148,8 @@ public:
 		return vec_store::ptr(new smp_vec_store(*this));
 	}
 
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc);
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc, size_t size);
 	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
 			size_t size) const;

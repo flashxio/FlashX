@@ -22,7 +22,6 @@
 
 #include "vertex.h"
 #include "matrix_header.h"
-#include "mem_vector.h"
 #include "vector_vector.h"
 
 namespace safs
@@ -170,6 +169,10 @@ public:
 	}
 
 	bool is_block_end(const rp_edge_iterator &it) const {
+		// If the block doesn't have data, it's always true.
+		if (is_empty())
+			return true;
+
 		size_t off = it.get_curr_addr() - row_parts;
 		return off
 			// There is an empty row in the end of a block to indicate
@@ -178,6 +181,7 @@ public:
 	}
 
 	rp_edge_iterator get_first_edge_iterator() const {
+		assert(!is_empty());
 		// Discard the const qualifier
 		// TODO I should make a const edge iterator
 		sparse_row_part *rp = (sparse_row_part *) row_parts;
@@ -277,8 +281,10 @@ public:
 	static ptr load(const std::string &idx_file);
 	static ptr safs_load(const std::string &idx_file);
 
+	void verify() const;
 	size_t get_num_block_rows() const;
 	void dump(const std::string &file) const;
+	void safs_dump(const std::string &file) const;
 	off_t get_block_row_off(size_t idx) const;
 	const matrix_header &get_header() const {
 		return header;
@@ -311,10 +317,14 @@ class SpM_2d_storage
 public:
 	typedef std::shared_ptr<SpM_2d_storage> ptr;
 
+	static ptr safs_load(const std::string &mat_file,
+			SpM_2d_index::ptr index);
 	static ptr load(const std::string &mat_file,
 			SpM_2d_index::ptr index);
 	static ptr create(const matrix_header &header, const vector_vector &vv,
 			SpM_2d_index::ptr index);
+
+	static void verify(SpM_2d_index::ptr index, const std::string &mat_file);
 
 	block_row_iterator get_block_row_it(size_t idx) const {
 		char *start = data.get() + index->get_block_row_off(idx);

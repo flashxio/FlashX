@@ -21,6 +21,8 @@
  */
 
 #include <memory>
+#include <atomic>
+#include <unordered_map>
 
 #include "matrix_header.h"
 #include "generic_type.h"
@@ -33,7 +35,9 @@ class set_operate;
 namespace detail
 {
 
+class portion_compute;
 class local_matrix_store;
+class vec_store;
 
 class matrix_store
 {
@@ -49,17 +53,17 @@ class matrix_store
 	// The type is a reference. It makes the dense matrix object uncopiable.
 	// Maybe this is what we want.
 	const scalar_type &type;
+protected:
+	static std::atomic<size_t> mat_counter;
 public:
 	typedef std::shared_ptr<matrix_store> ptr;
 	typedef std::shared_ptr<const matrix_store> const_ptr;
 
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, int num_nodes, bool in_mem);
+
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
-			const scalar_type &_type): type(_type) {
-		this->nrow = nrow;
-		this->ncol = ncol;
-		this->in_mem = in_mem;
-		this->entry_size = type.get_size();
-	}
+			const scalar_type &_type);
 
 	virtual ~matrix_store() {
 	}
@@ -89,6 +93,10 @@ public:
 		return in_mem;
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
 	/*
 	 * The shape of a matrix: a tall matrix or a wide matrix.
 	 * We care about the shape of a large matrix. We deal with a tall matrix
@@ -97,6 +105,13 @@ public:
 	bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
+
+	/*
+	 * This method gets underlying materialized matrix IDs and the number of
+	 * elements in each of these materialized matrices.
+	 */
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const = 0;
+	virtual std::string get_name() const = 0;
 
 	virtual matrix_layout_t store_layout() const = 0;
 
@@ -113,15 +128,60 @@ public:
 	 */
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
+	/*
+	 * These two versions get a portion of data from the matrix asynchronously.
+	 * When a local matrix store is returned, it's not guaranteed that the
+	 * data in the local matrix store is valid. The computation passed to
+	 * these two methods are invoked when the portion of data is loaded
+	 * in memory. During the time between returning from the methods and
+	 * the portion of data becomes available, it's users' responsibility
+	 * of keep the local matrix store alive.
+	 */
+	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) = 0;
+	/*
+	 * These versions fetches the portion of data. It's guaranteed that
+	 * the data in the returned local matrix store is valid.
+	 */
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t id) const;
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) = 0;
+
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const {
+		assert(0);
+		return std::shared_ptr<const vec_store>();
+	}
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const {
+		assert(0);
+		return std::shared_ptr<const vec_store>();
+	}
 
 	virtual bool is_virtual() const {
 		return false;
 	}
 	virtual void materialize_self() const {
 	}
-
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 };
 
 }

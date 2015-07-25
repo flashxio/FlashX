@@ -46,7 +46,7 @@ void io_request::init(char *buf, const data_loc_t &loc, ssize_t size,
 	assert(loc.get_offset() <= MAX_FILE_SIZE);
 	this->file_id = loc.get_file_id();
 	this->offset = loc.get_offset();
-	this->io_addr = (long) io;
+	this->io = io;
 	if (is_extended_req()) {
 		if (buf)
 			add_buf(buf, size);

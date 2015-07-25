@@ -1,5 +1,7 @@
 #include <malloc.h>
 
+#include "safs_file.h"
+
 #include "EM_vector.h"
 #include "sparse_matrix.h"
 #include "matrix_config.h"
@@ -80,7 +82,8 @@ public:
 
 void test_setdata()
 {
-	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+	printf("test set data in EM vector\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_seq_operate<int>());
 	assert(vec->is_sorted());
@@ -88,11 +91,16 @@ void test_setdata()
 
 void test_sort_summary()
 {
+	printf("test sort summary\n");
 	const scalar_type &type = get_scalar_type<int>();
-	size_t sort_buf_size = matrix_conf.get_sort_buf_size() / type.get_size();
 	size_t num_bufs = 10;
+	std::pair<size_t, size_t> sizes = EM_sort_detail::cal_sort_buf_size(type,
+			matrix_conf.get_sort_buf_size() / type.get_size() * num_bufs);
+	size_t sort_buf_size = sizes.first;
+	size_t anchor_gap_size = sizes.second;
 	std::vector<local_buf_vec_store::ptr> bufs(num_bufs);
-	EM_sort_detail::sort_portion_summary summary(type, num_bufs);
+	EM_sort_detail::sort_portion_summary summary(num_bufs, sort_buf_size,
+			anchor_gap_size);
 	for (size_t i = 0; i < num_bufs; i++) {
 		local_buf_vec_store::ptr buf(new local_buf_vec_store(i * sort_buf_size,
 					sort_buf_size, type, -1));
@@ -115,7 +123,6 @@ void test_sort_summary()
 	std::sort(anchor_vals.begin(), anchor_vals.end());
 
 	EM_sort_detail::anchor_prio_queue::ptr queue = summary.get_prio_queue();
-	size_t anchor_gap_size = matrix_conf.get_anchor_gap_size() / type.get_size();
 	size_t max_fetch_size = anchor_gap_size * 8;
 	size_t fetch_size = random() % max_fetch_size;
 	size_t min_loc = 0;
@@ -137,13 +144,92 @@ void test_sort_summary()
 
 void test_sort()
 {
-	EM_vec_store::ptr vec = EM_vec_store::create(10000000,
+	printf("test sort\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
 			get_scalar_type<int>());
 	vec->set_data(set_rand_operate<int>(1000));
+	local_vec_store::ptr copy = vec->get_portion(0, vec->get_length());
+
 	assert(!vec->is_sorted());
 	printf("sort vec\n");
 	vec->sort();
 	assert(vec->is_sorted());
+	local_vec_store::ptr sorted_copy = vec->get_portion(0, vec->get_length());
+	copy->get_type().get_sorter().sort(copy->get_raw_arr(), copy->get_length(),
+			false);
+	assert(memcmp(copy->get_raw_arr(), sorted_copy->get_raw_arr(),
+				copy->get_length() * copy->get_type().get_size()) == 0);
+}
+
+void test_sort_mult1()
+{
+	printf("test sort a single vector\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(10000000 + random() % 1000000,
+			get_scalar_type<int>());
+	vec->set_data(set_rand_operate<int>(1000));
+	local_vec_store::ptr copy = vec->get_portion(0, vec->get_length());
+
+	std::vector<EM_vec_store::const_ptr> vecs(1);
+	vecs[0] = vec;
+	assert(!vec->is_sorted());
+	printf("sort vec\n");
+	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
+	assert(sorted_vecs[0]->is_sorted());
+
+	local_vec_store::ptr sorted_copy = sorted_vecs[0]->get_portion(0, vec->get_length());
+	copy->get_type().get_sorter().sort(copy->get_raw_arr(), copy->get_length(),
+			false);
+	assert(memcmp(copy->get_raw_arr(), sorted_copy->get_raw_arr(),
+				copy->get_length() * copy->get_type().get_size()) == 0);
+}
+
+void test_sort_mult()
+{
+	printf("test sort multiple vectors\n");
+	EM_vec_store::ptr vec1 = EM_vec_store::create(10000000 + random() % 1000000,
+			get_scalar_type<int>());
+	vec1->set_data(set_rand_operate<int>(1000));
+	EM_vec_store::ptr vec2 = EM_vec_store::cast(vec1->deep_copy());
+
+	std::vector<EM_vec_store::const_ptr> vecs(2);
+	vecs[0] = vec1;
+	vecs[1] = vec2;
+	assert(!vec1->is_sorted());
+	assert(!vec2->is_sorted());
+	printf("sort vec\n");
+	std::vector<EM_vec_store::ptr> sorted_vecs = sort(vecs);
+	assert(sorted_vecs[0]->is_sorted());
+	assert(sorted_vecs[1]->is_sorted());
+
+	local_vec_store::ptr copy1 = sorted_vecs[0]->get_portion(0,
+			sorted_vecs[0]->get_length());
+	local_vec_store::ptr copy2 = sorted_vecs[1]->get_portion(0,
+			sorted_vecs[1]->get_length());
+	assert(memcmp(copy1->get_raw_arr(), copy2->get_raw_arr(),
+			copy1->get_length() * copy1->get_type().get_size()) == 0);
+}
+
+void test_append()
+{
+	printf("test append\n");
+	std::vector<vec_store::const_ptr> vecs(5);
+	for (size_t i = 0; i < vecs.size(); i++)
+		vecs[i] = smp_vec_store::create(1000, get_scalar_type<int>());
+	EM_vec_store::ptr em_vec = EM_vec_store::create(0, get_scalar_type<int>());
+	em_vec->append(vecs.begin(), vecs.end());
+}
+
+void test_set_persistent()
+{
+	printf("test set persistent\n");
+	EM_vec_store::ptr vec = EM_vec_store::create(1000000, get_scalar_type<int>());
+	std::string file_name = "test.vec";
+	bool ret = vec->set_persistent(file_name);
+	assert(ret);
+	vec = NULL;
+	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
+	assert(f.exist());
+	f.delete_file();
 }
 
 int main(int argc, char *argv[])
@@ -156,13 +242,16 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
-	matrix_conf.set_anchor_gap_size(1024 * 128);
 	matrix_conf.set_sort_buf_size(1024 * 1024 * 8);
 	matrix_conf.set_write_io_buf_size(1024 * 1024);
 
+	test_set_persistent();
+	test_append();
 	test_setdata();
 	test_sort_summary();
 	test_sort();
+	test_sort_mult();
+	test_sort_mult1();
 
 	destroy_flash_matrix();
 }

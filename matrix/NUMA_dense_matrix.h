@@ -35,9 +35,11 @@ namespace detail
 
 class NUMA_matrix_store: public mem_matrix_store
 {
+	const size_t data_id;
 protected:
-	NUMA_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
+	NUMA_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
+			size_t _data_id): mem_matrix_store(nrow, ncol,
+				type), data_id(_data_id) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_matrix_store> ptr;
@@ -49,6 +51,16 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
+	size_t get_data_id() const {
+		return data_id;
+	}
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		std::unordered_map<size_t, size_t> ret;
+		ret.insert(std::pair<size_t, size_t>(data_id,
+					get_num_rows() * get_num_cols()));
+		return ret;
+	}
+
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
 		assert(0);
@@ -59,7 +71,6 @@ public:
 		assert(0);
 		return matrix_store::const_ptr();
 	}
-
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;
@@ -69,8 +80,8 @@ public:
 class NUMA_row_matrix_store: public NUMA_matrix_store
 {
 protected:
-	NUMA_row_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): NUMA_matrix_store(nrow, ncol, type) {
+	NUMA_row_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
+			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_row_matrix_store> ptr;
@@ -88,8 +99,8 @@ public:
 class NUMA_col_matrix_store: public NUMA_matrix_store
 {
 protected:
-	NUMA_col_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): NUMA_matrix_store(nrow, ncol, type) {
+	NUMA_col_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
+			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_col_matrix_store> ptr;
@@ -124,7 +135,7 @@ class NUMA_row_tall_matrix_store: public NUMA_row_matrix_store
 	NUMA_row_tall_matrix_store(
 			const NUMA_row_tall_matrix_store &mat): NUMA_row_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(),
-			mat.get_type()), mapper(mat.get_num_nodes()) {
+			mat.get_type(), mat.get_data_id()), mapper(mat.get_num_nodes()) {
 		this->data = mat.data;
 	}
 
@@ -142,10 +153,11 @@ public:
 		return data.size();
 	}
 
-	const char *get_row(off_t row_idx) const;
-	char *get_row(off_t row_idx);
-	const char *get_rows(off_t row_start, off_t row_end) const;
-	char *get_rows(off_t row_start, off_t row_end);
+	const char *get_row(size_t row_idx) const;
+	char *get_row(size_t row_idx);
+	using NUMA_matrix_store::get_rows;
+	const char *get_rows(size_t row_start, size_t row_end) const;
+	char *get_rows(size_t row_start, size_t row_end);
 
 	const char *get(size_t row_idx, size_t col_idx) const {
 		const char *row = get_row(row_idx);
@@ -177,13 +189,9 @@ public:
 			<< "Can't get a column from a NUMA tall row matrix";
 		return vec_store::const_ptr();
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a row-major matrix");
-	}
 
 	virtual matrix_store::const_ptr transpose() const;
+	virtual bool write2file(const std::string &file_name) const;
 
 	friend class NUMA_col_wide_matrix_store;
 };
@@ -201,14 +209,15 @@ class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 	NUMA_col_tall_matrix_store(
 			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_col_matrix_store(
 				cols.front()->get_length(), cols.size(),
-				cols.front()->get_type()) {
+				cols.front()->get_type(), mat_counter++) {
 		this->data = cols;
 	}
 
 	// The copy constructor performs shallow copy.
 	NUMA_col_tall_matrix_store(
 			const NUMA_col_tall_matrix_store &mat): NUMA_col_matrix_store(
-			mat.get_num_rows(), mat.get_num_cols(), mat.get_type()) {
+			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
+			mat.get_data_id()) {
 		this->data = mat.data;
 	}
 
@@ -259,12 +268,11 @@ public:
 			<< "Can't get a row from a NUMA tall column matrix";
 		return vec_store::const_ptr();
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 
 	virtual matrix_store::const_ptr transpose() const;
+	virtual bool write2file(const std::string &file_name) const;
 
 	friend class NUMA_row_wide_matrix_store;
 };
@@ -275,7 +283,7 @@ class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
 
 	NUMA_row_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
-				type), store(ncol, nrow, num_nodes, type) {
+				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
 	/*
@@ -284,7 +292,7 @@ class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
 	NUMA_row_wide_matrix_store(
 			const NUMA_col_tall_matrix_store &_store): NUMA_row_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
-				_store.get_type()), store(_store) {
+				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_row_wide_matrix_store> ptr;
@@ -331,11 +339,6 @@ public:
 			const std::vector<off_t> &idxs) const {
 		return store.get_cols(idxs);
 	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a row-major matrix");
-	}
 
 	virtual matrix_store::const_ptr transpose() const;
 };
@@ -346,7 +349,7 @@ class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
 
 	NUMA_col_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type): NUMA_col_matrix_store(nrow, ncol,
-				type), store(ncol, nrow, num_nodes, type) {
+				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
 	/*
@@ -355,7 +358,7 @@ class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
 	NUMA_col_wide_matrix_store(
 			const NUMA_row_tall_matrix_store &_store): NUMA_col_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
-				_store.get_type()), store(_store) {
+				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_col_wide_matrix_store> ptr;
@@ -373,19 +376,20 @@ public:
 		return store.get_num_nodes();
 	}
 
-	const char *get_col(off_t col_idx) const {
+	const char *get_col(size_t col_idx) const {
 		return store.get_row(col_idx);
 	}
 
-	char *get_col(off_t col_idx) {
+	char *get_col(size_t col_idx) {
 		return store.get_row(col_idx);
 	}
 
-	const char *get_cols(off_t col_start, off_t col_end) const {
+	using NUMA_matrix_store::get_cols;
+	const char *get_cols(size_t col_start, size_t col_end) const {
 		return store.get_rows(col_start, col_end);
 	}
 
-	char *get_cols(off_t col_start, off_t col_end) {
+	char *get_cols(size_t col_start, size_t col_end) {
 		return store.get_rows(col_start, col_end);
 	}
 
@@ -415,11 +419,6 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "Can't get a row from a NUMA wide col matrix";
 		return vec_store::const_ptr();
-	}
-	virtual matrix_store::const_ptr append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"can't add columns to a wide column-major matrix");
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

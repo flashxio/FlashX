@@ -1,6 +1,6 @@
 #include "NUMA_vector.h"
 #include "matrix_config.h"
-#include "mem_vector.h"
+#include "vector.h"
 #include "mem_worker_thread.h"
 
 const size_t num_eles = 1024 * 1024 * 1024;
@@ -22,11 +22,12 @@ public:
 void test_sort()
 {
 	size_t len = (random() % num_eles) + num_eles;
-	mem_vector::ptr mem_vec = mem_vector::create(len, get_scalar_type<long>(),
+	vector::ptr mem_vec = vector::create(len, get_scalar_type<long>(), true,
 			rand_set());
 	detail::NUMA_vec_store::ptr numa_vec = detail::NUMA_vec_store::create(len,
 			num_nodes, get_scalar_type<long>());
-	numa_vec->copy_from(mem_vec->get_raw_arr(),
+	numa_vec->copy_from(
+			dynamic_cast<const detail::mem_vec_store &>(mem_vec->get_data()).get_raw_arr(),
 			mem_vec->get_length() * sizeof(long));
 
 	struct timeval start, end;

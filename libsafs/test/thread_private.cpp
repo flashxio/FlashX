@@ -613,6 +613,7 @@ void thread_private::run()
 	gettimeofday(&curr, NULL);
 	printf("thread %d has issued all requests at %ld\n", idx,
 			time_diff_us(start_time, curr));
+	io->wait4complete(io->num_pending_ios());
 	io->cleanup();
 	gettimeofday(&end_time, NULL);
 

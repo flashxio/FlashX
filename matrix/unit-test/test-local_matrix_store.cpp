@@ -237,7 +237,8 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 
 	const bulk_operate &op = store->get_type().get_basic_ops().get_add();
 	int sum = 0;
-	aggregate(*store, op, (char *) &sum);
+	local_ref_vec_store res((char *) &sum, 0, 1, get_scalar_type<int>(), -1);
+	aggregate(*store, op, agg_margin::BOTH, res);
 	int num_eles = store->get_num_rows() * store->get_num_cols();
 	assert(sum == (num_eles - 1) * num_eles / 2);
 }

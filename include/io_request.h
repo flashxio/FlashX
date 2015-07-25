@@ -490,14 +490,11 @@ public:
  */
 class io_request
 {
-	int file_id;
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
-	off_t offset: 48;
-	// The max size should be aligned with the page size.
-	static const size_t MAX_BUF_SIZE = (1L << 32) - PAGE_SIZE;
-	unsigned long buf_size_low: 16;
-	long user_data_addr: 48;
-	unsigned long buf_size_high: 16;
+	static const int MAX_NODE_ID = (1 << 8) - 1;
+
+	size_t buf_size;
+	off_t offset;
 
 	// These two flags decide how the payload is interpreted, so they are
 	// initialized when the object is created and can't be changed manually.
@@ -516,13 +513,11 @@ class io_request
 	unsigned int high_prio: 1;
 	unsigned int low_latency: 1;
 	unsigned int discarded: 1;
-	static const int MAX_NODE_ID = (1 << 8) - 1;
 	unsigned int node_id: 8;
-	// Linux uses 48 bit for addresses.
-	// When the request is completed, the IO instance will be notified of
-	// the completion. The IO is usually the issuer IO, but it can be other
-	// IOs.
-	unsigned long io_addr: 48;
+	int file_id;
+
+	io_interface *io;
+	void *user_data;
 
 	union {
 		/**
@@ -557,13 +552,11 @@ class io_request
 	}
 
 	void set_int_buf_size(size_t size) {
-		assert(size <= MAX_BUF_SIZE);
-		buf_size_high = size >> 16;
-		buf_size_low = size & 0xFFFFL;
+		buf_size = size;
 	}
 
 	size_t get_int_buf_size() const {
-		return (buf_size_high << 16) + buf_size_low;
+		return buf_size;
 	}
 
 public:
@@ -574,7 +567,7 @@ public:
 	};
 
 	static size_t get_max_req_size() {
-		return MAX_BUF_SIZE;
+		return std::numeric_limits<size_t>::max();
 	}
 
 	// By default, a request is initialized as a flush request.
@@ -600,7 +593,7 @@ public:
 			int node_id = MAX_NODE_ID, bool sync = false) {
 		payload_type = BASIC_REQ;
 		data_inline = 0;
-		user_data_addr = 0;
+		user_data = NULL;
 		init(buf, loc, size, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
@@ -611,7 +604,7 @@ public:
 		payload_type = EXT_REQ;
 		data_inline = 0;
 		payload.ext = ext;
-		user_data_addr =0;
+		user_data = NULL;
 		init(NULL, loc, 0, access_method, io, node_id);
 		use_default_flags();
 		this->sync = false;
@@ -631,7 +624,7 @@ public:
 			int node_id = MAX_NODE_ID) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
-		user_data_addr = 0;
+		user_data = NULL;
 		init(NULL, loc, size, access_method, io, node_id);
 		payload.compute = compute;
 		use_default_flags();
@@ -664,7 +657,7 @@ public:
 			assert(!this->is_extended_req() && req.is_extended_req());
 		}
 		copy_flags(req);
-		this->user_data_addr = req.user_data_addr;
+		this->user_data = req.user_data;
 	}
 
 	void init() {
@@ -683,10 +676,10 @@ public:
 		high_prio = 0;
 		sync = 0;
 		node_id = MAX_NODE_ID;
-		io_addr = 0;
+		io = NULL;
 		access_method = 0;
 		set_int_buf_size(0);
-		user_data_addr = 0;
+		user_data = NULL;
 	}
 
 	void init(char *buf, const data_loc_t &loc, ssize_t size,
@@ -741,11 +734,11 @@ public:
 	}
 
 	void set_io(io_interface *io) {
-		this->io_addr = (long) io;
+		this->io = io;
 	}
 
 	io_interface *get_io() const {
-		return (io_interface *) (long) io_addr;
+		return io;
 	}
 
 	int get_node_id() const {
@@ -815,18 +808,18 @@ public:
 		return (end_pg - begin_pg) / PAGE_SIZE;
 	}
 
-	bool inside_RAID_block() const {
-		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
-		return ROUND(this->get_offset(), RAID_block_size)
-			== ROUND(this->get_offset() + this->get_size() - 1, RAID_block_size);
+	bool inside_RAID_block(int block_size) const {
+		int block_size_bytes = block_size * PAGE_SIZE;
+		return ROUND(this->get_offset(), block_size_bytes)
+			== ROUND(this->get_offset() + this->get_size() - 1, block_size_bytes);
 	}
 
 	void *get_user_data() const {
-		return (void *) (long) user_data_addr;
+		return user_data;
 	}
 
 	void set_user_data(void *data) {
-		user_data_addr = (long) data;
+		this->user_data = data;
 	}
 
 	void *get_priv() const {

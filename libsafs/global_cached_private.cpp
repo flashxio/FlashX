@@ -829,8 +829,8 @@ int global_cached_io::process_completed_requests()
 }
 
 global_cached_io::global_cached_io(thread *t, io_interface::ptr underlying,
-		page_cache::ptr cache, comp_io_scheduler::ptr sched): io_interface(t),
-	pending_requests(
+		page_cache::ptr cache, comp_io_scheduler::ptr sched): io_interface(t,
+			underlying->get_header()), pending_requests(
 			std::string("pending_req_queue-") + itoa(underlying->get_node_id()),
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE, INT_MAX),
 	complete_queue(std::string("gcached_complete_queue-") + itoa(
@@ -1014,7 +1014,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 {
 	ssize_t ret = 0;
 
-	assert(npages <= params.get_RAID_block_size());
+	assert(npages <= get_block_size());
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
 	io_request multibuf_req(ext, INVALID_DATA_LOC, req.get_access_method(), this,
@@ -1132,7 +1132,7 @@ int global_cached_io::handle_pending_requests()
 	return tot;
 }
 
-void merge_pages2req(io_request &req, page_cache &cache)
+void merge_pages2req(io_request &req, page_cache &cache, size_t block_size)
 {
 	if (!params.is_cache_large_write())
 		return;
@@ -1140,8 +1140,8 @@ void merge_pages2req(io_request &req, page_cache &cache)
 	thread_safe_page *p;
 	off_t off = req.get_offset();
 	off_t forward_off = off + PAGE_SIZE;
-	off_t block_off = ROUND(off, params.get_RAID_block_size() * PAGE_SIZE);
-	off_t block_end_off = block_off + params.get_RAID_block_size() * PAGE_SIZE;
+	off_t block_off = ROUND(off, block_size * PAGE_SIZE);
+	off_t block_end_off = block_off + block_size * PAGE_SIZE;
 	page_id_t pg_id(req.get_file_id(), forward_off);
 	while (forward_off < block_end_off
 			&& (p = (thread_safe_page *) cache.search(pg_id))) {
@@ -1194,7 +1194,7 @@ void merge_pages2req(io_request &req, page_cache &cache)
 				break;
 		}
 	}
-	assert(req.inside_RAID_block());
+	assert(req.inside_RAID_block(block_size));
 }
 
 /**
@@ -1229,7 +1229,7 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	p->inc_ref();
 	p->unlock();
 
-	merge_pages2req(req, get_global_cache());
+	merge_pages2req(req, get_global_cache(), get_block_size());
 	// The writeback data should have no overlap with the original request
 	// that triggered this writeback.
 	assert(!req.has_overlap(orig->get_offset(), orig->get_size()));
@@ -1337,7 +1337,7 @@ void global_cached_io::process_user_req(
 {
 	int pg_idx = 0;
 	// In max, we use the number of pages in the RAID block.
-	thread_safe_page *pages[params.get_RAID_block_size()];
+	thread_safe_page *pages[get_block_size()];
 	int num_pages_ready = 0;
 	int num_bytes_completed = 0;
 	while (!processing_req.is_empty()) {
@@ -1451,9 +1451,9 @@ void global_cached_io::process_user_req(
 		else {
 			// Right now, we don't care in which nodes the pages are.
 			pages[pg_idx++] = p;
-			assert(pg_idx <= params.get_RAID_block_size());
+			assert(pg_idx <= get_block_size());
 			if ((pages[0]->get_offset() + PAGE_SIZE * pg_idx)
-					% (params.get_RAID_block_size() * PAGE_SIZE) == 0) {
+					% (get_block_size() * PAGE_SIZE) == 0) {
 				io_request req;
 				processing_req.get_orig()->extract(pages[0]->get_offset(),
 						pg_idx * PAGE_SIZE, req);
@@ -1768,11 +1768,11 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 	get_thread()->activate();
 }
 
-static bool cross_RAID_block_bound(off_t off, size_t size)
+static bool cross_RAID_block_bound(off_t off, size_t size, size_t block_size)
 {
 	off_t end = off + size;
-	off_t block_begin = ROUND(off, params.get_RAID_block_size() * PAGE_SIZE);
-	return end - block_begin > params.get_RAID_block_size() * PAGE_SIZE;
+	off_t block_begin = ROUND(off, block_size * PAGE_SIZE);
+	return end - block_begin > (off_t) (block_size * PAGE_SIZE);
 }
 
 static bool merge_req(io_request &merged, const io_request &req)
@@ -1832,7 +1832,7 @@ void global_cached_io::flush_requests()
 					// The merged request will cross the boundary of
 					// a RAID block.
 					|| cross_RAID_block_bound(req.get_offset(),
-						req.get_size() + under_req->get_size())
+						req.get_size() + under_req->get_size(), get_block_size())
 					// We can't merge the two requests.
 					|| !merge_req(req, *under_req)) {
 				num_sent++;

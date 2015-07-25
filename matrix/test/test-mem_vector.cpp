@@ -1,9 +1,10 @@
 #include <boost/format.hpp>
 
 #include "log.h"
+#include "common.h"
 
 #include "mem_vec_store.h"
-#include "mem_vector.h"
+#include "vector.h"
 
 using namespace fm;
 
@@ -39,8 +40,8 @@ void test_permute()
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random());
 	detail::smp_vec_store::ptr clone = detail::smp_vec_store::cast(vec->deep_copy());
-	mem_vector::ptr vec1 = mem_vector::create(clone);
-	mem_vector::ptr vec2 = mem_vector::create(vec);
+	vector::ptr vec1 = vector::create(clone);
+	vector::ptr vec2 = vector::create(vec);
 	assert(vec1->equals(*vec2));
 
 	struct timeval start, end;
@@ -61,8 +62,8 @@ void test_permute()
 	detail::smp_vec_store::ptr sorted2 = clone->detail::smp_vec_store::get(*idxs);
 	gettimeofday(&end, NULL);
 	printf("permute without type takes %fseconds\n", time_diff(start, end));
-	vec1 = mem_vector::create(sorted1);
-	vec2 = mem_vector::create(sorted2);
+	vec1 = vector::create(sorted1);
+	vec2 = vector::create(sorted2);
 	assert(vec1->equals(*vec2));
 }
 

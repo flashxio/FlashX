@@ -239,6 +239,7 @@ public:
 		SQRT,
 		ABS,
 		NOT,
+		SQ,
 		NUM_OPS,
 	};
 
@@ -265,7 +266,7 @@ class basic_uops_impl: public basic_uops
 
 	struct uop_abs {
 		OutType operator()(const InType &e) const {
-			return std::abs(e);
+			return (OutType) std::abs(e);
 		}
 	};
 
@@ -275,10 +276,17 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct sq {
+		OutType operator()(const InType &e) const {
+			return e * e;
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
 	bulk_uoperate_impl<uop_not, bool, bool> not_op;
+	bulk_uoperate_impl<sq, InType, OutType> sq_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -287,6 +295,7 @@ public:
 		ops.push_back(&sqrt_op);
 		ops.push_back(&abs_op);
 		ops.push_back(&not_op);
+		ops.push_back(&sq_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {
@@ -336,10 +345,20 @@ public:
 	}
 };
 
+/*
+ * Find the first location where its element is different from the first
+ * element in the array.
+ */
 template<class T>
 class find_next_impl: public agg_operate
 {
 public:
+	/*
+	 * The first element in the array is pointed by `left_arr' and there are
+	 * `num_eles' in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
 	virtual void run(size_t num_eles, const void *left_arr,
 			void *output) const {
 		const T *curr = (const T *) left_arr;
@@ -353,21 +372,74 @@ public:
 	virtual const scalar_type &get_output_type() const;
 };
 
+/*
+ * Search backwards and find the first location where its element is different
+ * from the last element in the array.
+ */
+template<class T>
+class find_prev_impl: public agg_operate
+{
+public:
+	/*
+	 * The end of the array is indicated by `arr_end'. The last element
+	 * is right before `arr_end'. There are `num_eles' elements in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
+	virtual void run(size_t num_eles, const void *arr_end,
+			void *output) const {
+		const T *curr = ((const T *) arr_end) - 1;
+		T val = *curr;
+		const T *first = ((const T *) arr_end) - num_eles;
+		for (; curr > first && *curr == val; curr--);
+		if (*curr != val)
+			curr++;
+		assert(*curr == val);
+		*(size_t *) output = ((const T *) arr_end) - curr;
+	}
+
+	virtual const scalar_type &get_input_type() const;
+	virtual const scalar_type &get_output_type() const;
+};
+
 class agg_ops
 {
 public:
 	typedef std::shared_ptr<agg_ops> ptr;
 
 	virtual const agg_operate &get_find_next() const = 0;
+	virtual const agg_operate &get_find_prev() const = 0;
 };
 
 template<class InType, class OutType>
 class agg_ops_impl: public agg_ops
 {
 	find_next_impl<InType> find_next;
+	find_prev_impl<InType> find_prev;
 public:
 	virtual const agg_operate &get_find_next() const {
 		return find_next;
+	}
+	virtual const agg_operate &get_find_prev() const {
+		return find_prev;
+	}
+};
+
+template<class LeftType1, class RightType1, class ResType1>
+struct multiply
+{
+	ResType1 operator()(const LeftType1 &e1, const RightType1 &e2) const {
+		return e1 * e2;
+	}
+};
+
+template<>
+struct multiply<double, double, double>
+{
+	double operator()(const double &e1, const double &e2) const {
+		long double first = e1;
+		long double second = e2;
+		return first * second;
 	}
 };
 
@@ -377,12 +449,6 @@ public:
 template<class LeftType, class RightType, class ResType>
 class basic_ops_impl: public basic_ops
 {
-	struct multiply {
-		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return e1 * e2;
-		}
-	};
-
 	struct add {
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 + e2;
@@ -425,7 +491,7 @@ class basic_ops_impl: public basic_ops
 
 	struct pow {
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return std::pow(e1, e2);
+			return (ResType) std::pow(e1, e2);
 		}
 	};
 
@@ -449,7 +515,8 @@ class basic_ops_impl: public basic_ops
 
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
-	bulk_operate_impl<multiply, LeftType, RightType, ResType> mul_op;
+	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
+		LeftType, RightType, ResType> mul_op;
 	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
 	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
@@ -602,6 +669,18 @@ const scalar_type &find_next_impl<T>::get_input_type() const
 
 template<class T>
 const scalar_type &find_next_impl<T>::get_output_type() const
+{
+	return get_scalar_type<size_t>();
+}
+
+template<class T>
+const scalar_type &find_prev_impl<T>::get_input_type() const
+{
+	return get_scalar_type<T>();
+}
+
+template<class T>
+const scalar_type &find_prev_impl<T>::get_output_type() const
 {
 	return get_scalar_type<size_t>();
 }

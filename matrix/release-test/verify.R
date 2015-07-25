@@ -45,6 +45,37 @@ stopifnot(fm.ncol(fm.mat) == 100)
 mat1 <- fm.conv.FM2R(fm.mat)
 stopifnot(sum(mat1 == mat) == fm.ncol(fm.mat) * fm.nrow(fm.mat))
 
+test.scale <- function(fm.mat, byrow)
+{
+	if (byrow)
+		fm.vec <- fm.seq.int(1, fm.nrow(fm.mat), 1)
+	else
+		fm.vec <- fm.seq.int(1, fm.ncol(fm.mat), 1)
+	fm.res <- fm.scale(fm.mat, fm.vec, byrow)
+
+	vec <- fm.conv.FM2R(fm.vec)
+	mat <- fm.conv.FM2R(fm.mat)
+	if (byrow)
+		res <- diag(vec) %*% mat
+	else
+		res <- mat %*% diag(vec)
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == nrow(res) * ncol(res))
+}
+
+print("scale matrix test")
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 100, 10, TRUE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 100, 10, FALSE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 10, 100, TRUE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 10, 100, FALSE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+
 test.MV1 <- function(fm.mat, fm.vec, res)
 {
 	fm.res <- fm.multiply(fm.mat, fm.vec)

@@ -100,7 +100,7 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 
 	// TODO let's just use in-memory dense matrix first.
 	GetRNGstate();
-	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<double>(),
+	vector::ptr v = vector::create(n, get_scalar_type<double>(), true,
 			rand_set_operate<double>(min, max));
 	PutRNGstate();
 	return create_FMR_vector(v->get_raw_store(), "");
@@ -270,6 +270,8 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 			fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
 			return R_NilValue;
 		}
+		// We need to make sure the dense matrix is materialized before SpMM.
+		right_mat->materialize_self();
 		return SpMM(matrix, right_mat);
 	}
 }
@@ -311,7 +313,7 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 }
 
 template<class T, class RType>
-void copy_FM2Rvector(const mem_vector &vec, RType *r_arr)
+void copy_FM2Rvector(const detail::smp_vec_store &vec, RType *r_arr)
 {
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
@@ -335,8 +337,9 @@ template<class T, class RType>
 void copy_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
-		mem_vector::ptr mem_vec = mem_vector::cast(mem_mat->get_col(0));
-		copy_FM2Rvector<T>(*mem_vec, ret);
+		vector::ptr mem_vec = mem_mat->get_col(0);
+		copy_FM2Rvector<T>(dynamic_cast<const detail::smp_vec_store &>(
+					mem_vec->get_data()), ret);
 	}
 	else
 		copy_FM2Rmatrix<T>(*mem_mat, ret);
@@ -1105,4 +1108,41 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	ret["vals"] = vals;
 	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
 	return ret;
+}
+
+RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
+{
+	bool byrow = LOGICAL(pbyrow)[0];
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support scale rows/cols of a sparse matrix\n");
+		return R_NilValue;
+	}
+	if (!is_vector(pvec)) {
+		fprintf(stderr, "The second argument should be a vector\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	vector::ptr vec = get_vector(pvec);
+	if (vec == NULL) {
+		return R_NilValue;
+	}
+	dense_matrix::ptr res;
+	if (byrow) {
+		if (mat->get_num_rows() != vec->get_length()) {
+			fprintf(stderr,
+					"The length of the vector doesn't match the rows of the matrix\n");
+			return R_NilValue;
+		}
+		res = mat->scale_rows(vec);
+	}
+	else {
+		if (mat->get_num_cols() != vec->get_length()) {
+			fprintf(stderr,
+					"The length of the vector doesn't match the columns of the matrix\n");
+			return R_NilValue;
+		}
+		res = mat->scale_cols(vec);
+	}
+	return create_FMR_matrix(res, "scale");
 }

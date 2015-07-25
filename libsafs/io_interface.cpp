@@ -539,10 +539,10 @@ io_interface::ptr posix_io_factory::create_io(thread *t)
 	io_interface *io;
 	switch (access_option) {
 		case READ_ACCESS:
-			io = new buffered_io(global_partition, t);
+			io = new buffered_io(global_partition, t, get_header());
 			break;
 		case DIRECT_ACCESS:
-			io = new direct_io(global_partition, t);
+			io = new direct_io(global_partition, t, get_header());
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
@@ -568,7 +568,7 @@ io_interface::ptr aio_factory::create_io(thread *t)
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(),
-			t, O_RDWR);
+			t, get_header(), O_RDWR);
 	num_ios++;
 	return io_interface::ptr(io);
 }
@@ -620,7 +620,7 @@ io_interface::ptr remote_io_factory::create_io(thread *t)
 
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
-			get_msg_allocator(t->get_node_id()), &mapper, t);
+			get_msg_allocator(t->get_node_id()), &mapper, t, get_header());
 	return io_interface::ptr(io);
 }
 
@@ -774,6 +774,12 @@ io_interface::~io_interface()
 		io_factory->collect_stat(*this);
 		io_factory->destroy_io(*this);
 	}
+}
+
+file_io_factory::file_io_factory(const std::string _name): name(_name)
+{
+	safs_file f(get_sys_RAID_conf(), name);
+	header = f.get_header();
 }
 
 }

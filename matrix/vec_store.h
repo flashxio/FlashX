@@ -44,6 +44,8 @@ public:
 	typedef std::shared_ptr<vec_store> ptr;
 	typedef std::shared_ptr<const vec_store> const_ptr;
 
+	static ptr create(size_t length, const scalar_type &_type, bool in_mem);
+
 	vec_store(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
 		this->length = length;
 		this->in_mem = in_mem;
@@ -94,6 +96,12 @@ public:
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;
 
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc) = 0;
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
+			size_t size) = 0;
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
+			size_t size) const = 0;
 	virtual size_t get_portion_size() const = 0;
 	virtual size_t get_num_portions() const {
 		double len = get_length();

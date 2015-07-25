@@ -19,13 +19,61 @@
 
 #include "log.h"
 #include "local_vec_store.h"
-#include "mem_data_frame.h"
+#include "data_frame.h"
 #include "mem_vv_store.h"
 #include "mem_vec_store.h"
 #include "matrix_store.h"
 
 namespace fm
 {
+
+local_vec_store::ptr local_vec_store::get_portion(off_t loc, size_t size)
+{
+	assert(loc + size <= get_length());
+	size_t entry_size = get_type().get_size();
+	if (get_raw_arr())
+		return local_vec_store::ptr(new local_ref_vec_store(
+					get_raw_arr() + loc * entry_size, get_global_start() + loc,
+					size, get_type(), get_node_id()));
+	else {
+		const local_vec_store *const_this = this;
+		return local_vec_store::ptr(new local_cref_vec_store(
+					const_this->get_raw_arr() + loc * entry_size,
+					get_global_start() + loc, size, get_type(), get_node_id()));
+	}
+}
+
+local_vec_store::const_ptr local_vec_store::get_portion(off_t loc,
+			size_t size) const
+{
+	assert(get_raw_arr());
+	assert(loc + size <= get_length());
+	size_t entry_size = get_type().get_size();
+	return local_vec_store::ptr(new local_cref_vec_store(
+				get_raw_arr() + loc * entry_size, get_global_start() + loc,
+				size, get_type(), get_node_id()));
+}
+
+bool local_vec_store::set_portion(std::shared_ptr<const local_vec_store> store,
+		off_t loc)
+{
+	if (store->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The input store has a different type";
+		return false;
+	}
+	if (loc + store->get_length() > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "out of boundary";
+		return false;
+	}
+	if (get_raw_arr() == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "This local vector is read-only";
+		return false;
+	}
+	size_t entry_size = get_type().get_size();
+	memcpy(get_raw_arr() + loc * entry_size, store->get_raw_arr(),
+			store->get_length() * entry_size);
+	return true;
+}
 
 detail::vec_store::ptr local_vec_store::sort_with_index()
 {
@@ -102,16 +150,16 @@ data_frame::ptr local_vec_store::groupby(
 		val->resize(val_locs.size());
 		val->set(val_locs);
 	}
-	mem_data_frame::ptr ret = mem_data_frame::create();
+	data_frame::ptr ret = data_frame::create();
 	if (with_val)
 		ret->add_vec("val", val);
 	ret->add_vec("agg", agg);
 	return ret;
 }
 
-local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs)
+local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs) const
 {
-	local_vec_store::ptr ret(new local_buf_vec_store(0, idxs.size(), get_type(), -1));
+	local_vec_store::ptr ret(new local_buf_vec_store(-1, idxs.size(), get_type(), -1));
 	std::vector<const char *> ptrs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++)
 		ptrs[i] = this->get(idxs[i]);
@@ -145,8 +193,9 @@ bool local_cref_vec_store::resize(size_t new_length)
 
 bool local_buf_vec_store::resize(size_t new_length)
 {
-	if (get_length() < new_length) {
-		arr.expand(new_length * get_type().get_size());
+	size_t new_num_bytes = new_length * get_type().get_size();
+	if (arr.get_num_bytes() < new_num_bytes) {
+		arr.expand(new_num_bytes);
 		set_data(arr.get_raw(), arr.get_raw());
 	}
 	detail::vec_store::resize(new_length);
