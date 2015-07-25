@@ -220,7 +220,6 @@ block_multi_vector::block_multi_vector(
 	this->mats = mats;
 	for (size_t i = 1; i < mats.size(); i++) {
 		assert(this->block_size == mats[i]->get_num_cols());
-		assert(this->in_mem == mats[i]->is_in_mem());
 		assert(this->num_rows == mats[i]->get_num_rows());
 	}
 }
