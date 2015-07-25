@@ -46,7 +46,7 @@ struct part_file_info
 
 class RAID_config;
 
-class safs_file: public file_interface
+class safs_file
 {
 	// The collection of native files.
 	std::vector<part_file_info> native_dirs;

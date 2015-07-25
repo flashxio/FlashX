@@ -35,20 +35,7 @@
 namespace safs
 {
 
-class file_interface
-{
-public:
-	virtual ~file_interface() {
-	}
-	virtual const std::string &get_name() const = 0;
-	virtual bool exist() const = 0;
-	virtual ssize_t get_size() const = 0;
-	virtual bool create_file(size_t file_size) = 0;
-	virtual bool delete_file() = 0;
-	virtual bool rename(const std::string &new_name) = 0;
-};
-
-class native_file: public file_interface
+class native_file
 {
 	std::string file_name;
 public:
