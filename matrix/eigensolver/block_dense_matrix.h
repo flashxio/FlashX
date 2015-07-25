@@ -36,6 +36,7 @@ namespace eigen
 extern size_t num_col_writes;
 extern size_t num_col_writes_concept;
 extern size_t num_col_reads_concept;
+extern size_t num_multiply_concept;
 
 class block_multi_vector
 {

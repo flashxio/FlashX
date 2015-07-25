@@ -247,6 +247,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	cout << "#col writes: " << num_col_writes << endl;
 	cout << "#col reads: " << num_col_reads_concept << " in concept" << endl;
 	cout << "#col writes: " << num_col_writes_concept << " in concept" << endl;
+	cout << "#multiply: " << num_multiply_concept << " in concept" << endl;
 	cout << "#mem read bytes: " << detail::matrix_stats.get_read_bytes(true)
 		<< endl;
 	cout << "#mem write bytes: " << detail::matrix_stats.get_write_bytes(true)
