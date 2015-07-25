@@ -27,11 +27,11 @@
 using namespace fm;
 using namespace fm::eigen;
 
-class FM_Operator: public spm_function
+class eigen_Operator: public spm_function
 {
 	sparse_matrix::ptr mat;
 public:
-	FM_Operator(sparse_matrix::ptr mat) {
+	eigen_Operator(sparse_matrix::ptr mat) {
 		this->mat = mat;
 	}
 
@@ -44,22 +44,41 @@ public:
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
 		mat->multiply<double>(mem_in, *res);
 		return dense_matrix::create(res);
+	}
 
-#if 0
-		assert((size_t) x.GetGlobalLength() == mat->get_num_cols());
-		assert((size_t) y.GetGlobalLength() == mat->get_num_rows());
-		mem_vector::ptr in = mem_vector::create(mat->get_num_cols(),
-				get_scalar_type<double>());
-		mem_vector::ptr out = mem_vector::create(mat->get_num_rows(),
-				get_scalar_type<double>());
-		for (int i = 0; i < x.GetNumberVecs(); i++) {
-			memcpy(in->get_raw_arr(), x.get_ep_mv()[i], in->get_length() * sizeof(double));
-			out->reset_data();
-			mat->multiply<double>(*in, *out);
-			memcpy(y.get_ep_mv()[i], out->get_raw_arr(), out->get_length() * sizeof(double));
-		}
-		y.sync_ep2fm();
-#endif
+	virtual size_t get_num_cols() const {
+		return mat->get_num_cols();
+	}
+
+	virtual size_t get_num_rows() const {
+		return mat->get_num_rows();
+	}
+};
+
+class SVD_Operator: public spm_function
+{
+	sparse_matrix::ptr mat;
+public:
+	SVD_Operator(sparse_matrix::ptr mat) {
+		this->mat = mat;
+	}
+
+	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+		assert(x->get_type() == get_scalar_type<double>());
+		const detail::mem_matrix_store &mem_in
+			= static_cast<const detail::mem_matrix_store &>(x->get_data());
+		detail::mem_matrix_store::ptr tmp = detail::mem_matrix_store::create(
+				mat->get_num_rows(), mem_in.get_num_cols(),
+				matrix_layout_t::L_ROW, mem_in.get_type(), mem_in.get_num_nodes());
+		mat->multiply<double>(mem_in, *tmp);
+		mat->transpose();
+
+		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+				mat->get_num_rows(), mem_in.get_num_cols(),
+				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
+		mat->multiply<double>(*tmp, *res);
+		mat->transpose();
+		return dense_matrix::create(res);
 	}
 
 	virtual size_t get_num_cols() const {
@@ -80,6 +99,7 @@ void print_usage()
 	fprintf(stderr, "-t tolerance\n");
 	fprintf(stderr, "-e: the external memory mode.\n");
 	fprintf(stderr, "-o file: output eigenvectors\n");
+	fprintf(stderr, "-S: run SVD\n");
 }
 
 int main (int argc, char *argv[])
@@ -88,7 +108,8 @@ int main (int argc, char *argv[])
 	int num_opts = 0;
 	std::string output_file;
 	struct eigen_options opts;
-	while ((opt = getopt(argc, argv, "b:n:s:t:eo:")) != -1) {
+	bool run_svd = false;
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:S")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -113,6 +134,8 @@ int main (int argc, char *argv[])
 			case 'o':
 				output_file = optarg;
 				num_opts++;
+			case 'S':
+				run_svd = true;
 				break;
 			default:
 				print_usage();
@@ -122,7 +145,7 @@ int main (int argc, char *argv[])
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
-	if (argc < 4) {
+	if (argc < 4 || (run_svd && argc < 6)) {
 		print_usage();
 		exit(1);
 	}
@@ -130,7 +153,15 @@ int main (int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string matrix_file = argv[1];
 	std::string index_file = argv[2];
-	opts.nev = atoi(argv[3]); // number of eigenvalues for which to solve;
+	std::string t_matrix_file;
+	std::string t_index_file;
+	if (run_svd) {
+		t_matrix_file = argv[3];
+		t_index_file = argv[4];
+		opts.nev = atoi(argv[5]);
+	}
+	else
+		opts.nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
 	//
 	// Set up the test problem.
@@ -145,19 +176,39 @@ int main (int argc, char *argv[])
 		index = SpM_2d_index::safs_load(index_file);
 	else
 		index = SpM_2d_index::load(index_file);
+	SpM_2d_index::ptr t_index;
+	if (run_svd) {
+		safs::safs_file t_idx_f(safs::get_sys_RAID_conf(), t_index_file);
+		if (t_idx_f.exist())
+			t_index = SpM_2d_index::safs_load(t_index_file);
+		else
+			t_index = SpM_2d_index::load(t_index_file);
+	}
 
 	// Load matrix.
 	sparse_matrix::ptr mat;
 	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
-	if (mat_f.exist())
-		mat = sparse_matrix::create(index, safs::create_io_factory(
-					matrix_file, safs::REMOTE_ACCESS));
+	if (run_svd && mat_f.exist())
+		mat = sparse_matrix::create(
+				index, safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS),
+				t_index, safs::create_io_factory(t_matrix_file,
+					safs::REMOTE_ACCESS));
+	else if (run_svd)
+		mat = sparse_matrix::create(
+				index, SpM_2d_storage::load(matrix_file, index),
+				t_index, SpM_2d_storage::load(t_matrix_file, t_index));
+	else if (mat_f.exist())
+		mat = sparse_matrix::create(index,
+				safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS));
 	else
 		mat = sparse_matrix::create(index,
 				SpM_2d_storage::load(matrix_file, index));
 
-	eigen_res res = compute_eigen(new FM_Operator(mat),
-			mat->is_symmetric(), opts);
+	eigen_res res;
+	if (run_svd)
+		res = compute_eigen(new SVD_Operator(mat), true, opts);
+	else
+		res = compute_eigen(new eigen_Operator(mat), mat->is_symmetric(), opts);
 	// We only save eigenvectors if they are stored in memory.
 	if (!output_file.empty() && res.vecs->is_in_mem()) {
 		printf("Save eigenvectors to %s\n", output_file.c_str());

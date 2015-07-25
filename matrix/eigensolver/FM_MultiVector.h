@@ -371,6 +371,8 @@ public:
 		if (beta != 0)
 			num_col_reads_concept += mat->get_num_cols();
 		num_col_writes_concept += mat->get_num_cols();
+		num_multiply_concept
+			+= fm_A.mat->get_num_rows() * fm_A.mat->get_num_cols() * B.numCols();
 
 		fm::detail::mem_col_matrix_store::ptr Bstore
 			= fm::detail::mem_col_matrix_store::create(
@@ -422,6 +424,7 @@ public:
 	virtual void MvScale ( ScalarType alpha ) {
 		num_col_writes_concept += mat->get_num_cols();
 		num_col_reads_concept += mat->get_num_cols();
+		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
 		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) *= %2%") % name % alpha;
@@ -436,6 +439,7 @@ public:
 	virtual void MvScale ( const std::vector<ScalarType>& alpha ) {
 		num_col_writes_concept += mat->get_num_cols();
 		num_col_reads_concept += mat->get_num_cols();
+		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
 		sync_fm2ep();
 		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s) *= vec") % name;
@@ -460,6 +464,8 @@ public:
 				"B(%1%x%2%) = %3% * A(%4%)^T * this(%5%)")
 			% B.numRows() % B.numCols() % alpha % fm_A.name % name;
 		num_col_reads_concept += fm_A.mat->get_num_cols() + mat->get_num_cols();
+		num_multiply_concept
+			+= fm_A.mat->get_num_cols() * mat->get_num_rows() * mat->get_num_cols();
 
 		assert((size_t) B.numRows() == fm_A.mat->get_num_cols());
 		assert((size_t) B.numCols() == this->mat->get_num_cols());
@@ -526,6 +532,7 @@ public:
 	virtual void MvNorm (
 			std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> & normvec) const {
 		num_col_reads_concept += mat->get_num_cols();
+		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
 		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
 			% name % normvec.size();
@@ -899,6 +906,38 @@ public:
 	typedef details::MultiVecTsqrAdapter<ScalarType> tsqr_adaptor_type;
 #endif // HAVE_ANASAZI_TSQR
 };
+
+// \brief An extension of the MultiVecTraits class that adds a new vector length method.
+/// \ingroup anasazi_opvec_interfaces
+///
+/// This traits class provides an additional method to the multivector
+/// operations for finding the number of rows that is 64-bit compatible.
+/// The method in this traits class will replace the GetVecLength()
+/// method, which will be deprecated, and removed in the next major
+/// Trilinos release.  At this time, this traits class will call the
+/// GetVecLength() method by default for any traits implementation that
+/// does not specialize this template.  However, for 64-bit support this
+/// template will need to be specialized.
+///
+/// \note You do <i>not</i> need to write a specialization of
+///   MultiVecTraitsExt if you are using Epetra, Tpetra, or Thyra
+///   multivectors.  Anasazi already provides specializations for
+///   these types.  Just relax and enjoy using the solvers!
+template<class ScalarType>
+class MultiVecTraitsExt<ScalarType, fm::eigen::FM_MultiVector<ScalarType> > {
+public:
+	//! @name New attribute methods
+	//@{
+
+	//! Obtain the vector length of \c mv.
+	//! \note This method supersedes GetVecLength, which will be deprecated.
+	static ptrdiff_t GetGlobalLength( const fm::eigen::FM_MultiVector<ScalarType>& mv ) {
+		return mv.GetGlobalLength();
+	}
+
+	//@}
+};
+  
 
 }
 

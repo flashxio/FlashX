@@ -1118,6 +1118,80 @@ void test_mapply_chain(int num_nodes, const scalar_type &type)
 		verify_result(*res, *res1, approx_equal_func());
 }
 
+class split_op: public detail::portion_mapply_op
+{
+public:
+	split_op(): portion_mapply_op(0, 0, get_scalar_type<int>()) {
+	}
+	void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			const std::vector<detail::local_matrix_store::ptr> &outs) const;
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void split_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		const std::vector<detail::local_matrix_store::ptr> &outs) const
+{
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+	for (size_t i = 0; i < outs.size(); i++)
+		assert(outs[i]->store_layout() == matrix_layout_t::L_COL);
+	const detail::local_col_matrix_store &col_in
+		= dynamic_cast<const detail::local_col_matrix_store &>(*ins[0]);
+	size_t col_idx = 0;
+	for (size_t j = 0; j < outs.size(); j++) {
+		detail::local_col_matrix_store &col_out
+			= dynamic_cast<detail::local_col_matrix_store &>(*outs[j]);
+		for (size_t i = 0; i < col_out.get_num_cols(); i++) {
+			assert(col_idx < col_in.get_num_cols());
+			memcpy(col_out.get_col(i), col_in.get_col(col_idx),
+					col_in.get_num_rows() * col_in.get_entry_size());
+			col_idx++;
+		}
+	}
+	assert(col_idx == ins[0]->get_num_cols());
+}
+
+void test_mul_output(int num_nodes)
+{
+	printf("test multiple output\n");
+	dense_matrix::ptr mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<double>());
+	std::vector<detail::matrix_store::const_ptr> in(1);
+	in[0] = mat->get_raw_store();
+	std::vector<detail::matrix_store::ptr> out(2);
+	out[0] = detail::matrix_store::create(long_dim, 5, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), mat->get_data().get_num_nodes(),
+			mat->is_in_mem());
+	out[1] = detail::matrix_store::create(long_dim, 5, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), mat->get_data().get_num_nodes(),
+			mat->is_in_mem());
+	bool ret = __mapply_portion(in,
+			detail::portion_mapply_op::const_ptr(new split_op()), out);
+	assert(ret);
+
+	dense_matrix::ptr out_mat0 = dense_matrix::create(out[0]);
+	dense_matrix::ptr out_mat1 = dense_matrix::create(out[1]);
+	dense_matrix::ptr in_mat = dense_matrix::create(in[0]);
+	scalar_variable::ptr agg0 = out_mat0->aggregate(
+			out[0]->get_type().get_basic_ops().get_add());
+	scalar_variable::ptr agg1 = out_mat1->aggregate(
+			out[1]->get_type().get_basic_ops().get_add());
+	scalar_variable::ptr agg = in_mat->aggregate(
+			out[0]->get_type().get_basic_ops().get_add());
+	assert(*(double *) agg1->get_raw() - *(double *) agg0->get_raw()
+			== out[0]->get_num_cols() * out[0]->get_num_cols() * out[0]->get_num_rows());
+	assert(*(double *) agg0->get_raw() + *(double *) agg1->get_raw()
+			== *(double *) agg->get_raw());
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1157,6 +1231,8 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_mul_output(-1);
+	test_mul_output(num_nodes);
 	test_mapply_chain(-1, get_scalar_type<double>());
 	test_mapply_chain(-1, get_scalar_type<int>());
 	test_mapply_chain(num_nodes, get_scalar_type<int>());

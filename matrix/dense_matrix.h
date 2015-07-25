@@ -69,9 +69,24 @@ public:
 
 	virtual portion_mapply_op::const_ptr transpose() const = 0;
 
+	/*
+	 * There are three versions of performing computation on the portions.
+	 * The first version performs computation only on input portions;
+	 * the second version performs computation on input portions and
+	 * outputs only one matrix;
+	 * the third version performs computation on input portions and outputs
+	 * multiple matrices.
+	 */
+
+	virtual void run(
+			const std::vector<std::shared_ptr<const local_matrix_store> > &ins) const;
 	virtual void run(
 			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
-			local_matrix_store &out) const = 0;
+			local_matrix_store &out) const;
+	virtual void run(
+			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+			const std::vector<std::shared_ptr<local_matrix_store> > &outs) const;
+
 	virtual std::string to_string(
 			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 
@@ -105,11 +120,10 @@ matrix_store::ptr __mapply_portion_virtual(
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
-matrix_store::ptr __mapply_portion(
+bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool in_mem, int num_nodes);
-
+		portion_mapply_op::const_ptr op,
+		const std::vector<matrix_store::ptr> &out_mats);
 }
 
 /*

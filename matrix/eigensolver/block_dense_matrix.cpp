@@ -33,6 +33,7 @@ namespace eigen
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
 size_t num_col_reads_concept = 0;
+size_t num_multiply_concept = 0;
 
 class mirror_block_multi_vector: public block_multi_vector
 {
@@ -220,7 +221,6 @@ block_multi_vector::block_multi_vector(
 	this->mats = mats;
 	for (size_t i = 1; i < mats.size(); i++) {
 		assert(this->block_size == mats[i]->get_num_cols());
-		assert(this->in_mem == mats[i]->is_in_mem());
 		assert(this->num_rows == mats[i]->get_num_rows());
 	}
 }
@@ -457,6 +457,9 @@ block_multi_vector::ptr block_multi_vector::clone() const
 	return vecs;
 }
 
+namespace
+{
+
 template<class T>
 class gemm_op: public fm::detail::portion_mapply_op
 {
@@ -654,15 +657,56 @@ void gemm_op<T>::run(
 		out.copy_from(*tmp_res);
 }
 
+/*
+ * This split a col-major matrix into multiple col-major matrices.
+ */
+class split_op: public detail::portion_mapply_op
+{
+public:
+	split_op(): portion_mapply_op(0, 0, get_scalar_type<int>()) {
+	}
+	void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			const std::vector<detail::local_matrix_store::ptr> &outs) const;
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void split_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		const std::vector<detail::local_matrix_store::ptr> &outs) const
+{
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+	for (size_t i = 0; i < outs.size(); i++)
+		assert(outs[i]->store_layout() == matrix_layout_t::L_COL);
+	const detail::local_col_matrix_store &col_in
+		= dynamic_cast<const detail::local_col_matrix_store &>(*ins[0]);
+	size_t col_idx = 0;
+	for (size_t j = 0; j < outs.size(); j++) {
+		detail::local_col_matrix_store &col_out
+			= dynamic_cast<detail::local_col_matrix_store &>(*outs[j]);
+		for (size_t i = 0; i < col_out.get_num_cols(); i++) {
+			assert(col_idx < col_in.get_num_cols());
+			memcpy(col_out.get_col(i), col_in.get_col(col_idx),
+					col_in.get_num_rows() * col_in.get_entry_size());
+			col_idx++;
+		}
+	}
+	assert(col_idx == ins[0]->get_num_cols());
+}
+
+}
+
 block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::mem_col_matrix_store::const_ptr B, const scalar_variable &alpha,
 		const scalar_variable &beta) const
 {
-	// The product can only have one block.
-	block_multi_vector::ptr vecs= block_multi_vector::create(
-			// mapply_portion can only output one matrix, so `vecs' can
-			// only have one block.
-			get_num_rows(), B->get_num_cols(), B->get_num_cols(), type, in_mem);
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -690,17 +734,60 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	detail::portion_mapply_op::const_ptr op(new gemm_op<double>(B,
 				A_num_blocks, C_num_blocks, d_alpha, d_beta,
 				this->get_num_rows(), this->get_num_cols()));
-	vecs->mats[0] = mapply_portion(mats, op, matrix_layout_t::L_COL);
-	dense_matrix::ptr block = vecs->mats[0];
+	dense_matrix::ptr block = mapply_portion(mats, op, matrix_layout_t::L_COL);
 	std::unordered_map<size_t, size_t> bytes
 		= block->get_data().get_underlying_mats();
-	if (bytes.size() > 2) {
+
+	block_multi_vector::ptr vecs;
+	// We are going to assign the result to the current MV. The result
+	// of gemm is a single matrix. If the current MV stores data in multiple
+	// matrices, its block size will be different from the number of columns
+	// of the gemm result. In this case, we need to split the gemm result.
+	if (get_block_size() != block->get_num_cols()) {
+		size_t num_out_cols = block->get_num_cols();
+		size_t num_out_rows = block->get_num_rows();
+		assert(num_out_cols % get_block_size() == 0);
+		std::vector<detail::matrix_store::ptr> outs(
+				num_out_cols / get_block_size());
+		for (size_t i = 0; i < outs.size(); i++)
+			outs[i] = detail::matrix_store::create(num_out_rows, get_block_size(),
+					block->store_layout(), type,
+					block->get_data().get_num_nodes(), in_mem);
+
+		printf("Split matrix\n");
+		printf("There are %ld underlying matrices\n", bytes.size());
+		num_col_writes += block->get_num_cols();
+		printf("materialize %s\n", block->get_data().get_name().c_str());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = block->get_raw_store();
+		bool ret = __mapply_portion(ins,
+				detail::portion_mapply_op::const_ptr(new split_op()), outs);
+		assert(ret);
+		detail::matrix_stats.print_diff(orig_stats);
+
+		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
+				get_block_size(), type, in_mem);
+		assert(vecs->mats.size() == outs.size());
+		for (size_t i = 0; i < outs.size(); i++)
+			vecs->mats[i] = dense_matrix::create(outs[i]);
+	}
+	else if (bytes.size() > 2) {
 		printf("There are %ld underlying matrices\n", bytes.size());
 		num_col_writes += block->get_num_cols();
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		block->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
+
+		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
+				B->get_num_cols(), type, in_mem);
+		vecs->mats[0] = block;
+	}
+	else {
+		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
+				B->get_num_cols(), type, in_mem);
+		vecs->mats[0] = block;
 	}
 	return vecs;
 }

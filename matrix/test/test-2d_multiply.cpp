@@ -69,19 +69,14 @@ void test_SpMV(sparse_matrix::ptr mat)
 
 class mat_init_operate: public type_set_operate<double>
 {
-	size_t num_rows;
-	size_t num_cols;
 public:
 	mat_init_operate(size_t num_rows, size_t num_cols) {
-		this->num_rows = num_rows;
-		this->num_cols = num_cols;
 	}
 
 	virtual void set(double *arr, size_t num_eles, off_t row_idx,
 			            off_t col_idx) const {
-		double start_val = row_idx * num_cols + col_idx;
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = start_val++;
+			arr[i] = row_idx * (i + col_idx);
 	}
 };
 
@@ -118,6 +113,17 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 		ProfilerStop();
 #endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
+
+	for (size_t k = 0; k < in->get_num_cols(); k++) {
+		double in_sum = 0;
+		for (size_t i = 0; i < in->get_num_rows(); i++)
+			in_sum += *(double *) in->get(i, k);
+		double out_sum = 0;
+		for (size_t i = 0; i < mat->get_num_cols(); i++)
+			out_sum += *(double *) out->get(i, k);
+		printf("%ld: sum of input: %lf, sum of product: %lf\n",
+				k, in_sum, out_sum);
+	}
 }
 
 void print_usage()
@@ -127,14 +133,12 @@ void print_usage()
 			"-w matrix_width: the number of columns of the dense matrix\n");
 	fprintf(stderr, "-o exec_order: hilbert or seq\n");
 	fprintf(stderr, "-c cache_size: cpu cache size\n");
-	exit(1);
 }
 
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
-		fprintf(stderr,
-				"test conf_file matrix_file index_file [options]\n");
+		print_usage();
 		exit(1);
 	}
 
