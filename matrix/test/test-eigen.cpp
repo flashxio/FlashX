@@ -134,6 +134,7 @@ int main (int argc, char *argv[])
 			case 'o':
 				output_file = optarg;
 				num_opts++;
+				break;
 			case 'S':
 				run_svd = true;
 				break;
