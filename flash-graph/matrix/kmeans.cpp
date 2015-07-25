@@ -60,6 +60,24 @@ static void print_vector(typename std::vector<T>& v)
 	std::cout <<  " ]\n";
 }
 
+/*\Internal
+ * \brief print a col wise matrix of type double / double.
+* Used for testing only.
+* \param matrix The col wise matrix.
+* \param rows The number of rows in the mat
+* \param cols The number of cols in the mat
+*/
+template <typename T>
+static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
+	for (unsigned row = 0; row < rows; row++) {
+		std::cout << "[";
+		for (unsigned col = 0; col < cols; col++) {
+			std::cout << " " << matrix[row*cols + col];
+		}
+		std::cout <<  " ]\n";
+	}	
+}
+
 /**
  * \brief Get the squared distance given two values.
  *	\param arg1 the first value.
@@ -114,30 +132,58 @@ static void forgy_init(const double* matrix, double* clusters) {
 }
 
 /**
- * \brief A parallel version of the kmeans++ initialization alg.
+ * \brief A partially parallel version of the kmeans++ initialization alg.
+ *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
  */
-static void kmeanspp_init()
+static void kmeanspp_init(const double* matrix, double* clusters)
 {
-	BOOST_LOG_TRIVIAL(fatal) << "kmeanspp not yet implemented";
-	exit(-1);
-}
+	BOOST_LOG_TRIVIAL(info) << "K is set to " << K;
+	// Init distance array
+	double* dist = new double [NUM_ROWS*sizeof(double)];
+	for (size_t i = 0; i < NUM_ROWS; i++)
+		dist[i] = std::numeric_limits<double>::max();
 
-/*\Internal
-* \brief print a col wise matrix of type double / double.
-* Used for testing only.
-* \param matrix The col wise matrix.
-* \param rows The number of rows in the mat
-* \param cols The number of cols in the mat
-*/
-template <typename T>
-static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
-	for (unsigned row = 0; row < rows; row++) {
-		std::cout << "[";
-		for (unsigned col = 0; col < cols; col++) {
-			std::cout << " " << matrix[row*cols + col];
+	BOOST_LOG_TRIVIAL(info) << "initialized distance array to double::max";
+
+	// Choose c1 uniiformly at random
+	unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
+
+	memcpy(&clusters[0], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
+	dist[rand_idx] = 0.0;
+	BOOST_LOG_TRIVIAL(info) << "Chosen center at data point: " << rand_idx;
+
+	size_t clust_idx = 0; // The number of clusters assigned
+
+	// Choose next center c_i with weighted prob
+	while ((clust_idx + 1) < K) {
+		double cum_sum = 0;
+#pragma omp parallel for reduction(+:cum_sum) shared (dist)
+		for (size_t row = 0; row < NUM_ROWS; row++) {
+			double sum = 0; // Per thread instance
+			for (unsigned col = 0; col < NEV; col++) {
+				sum += dist_sq(matrix[(row*NEV) + col], clusters[clust_idx*NEV + col]);
+			}
+			if (sum < dist[row]) { // Found a closer cluster than before
+				dist[row] = sum;
+			}
+			cum_sum += dist[row]; // TODO: Check race condition when OMP-ing
 		}
-		std::cout <<  " ]\n";
-	}	
+
+		cum_sum *= (((double)random()) / (RAND_MAX)); // TODO: Verify
+		clust_idx++;
+
+		for (size_t i=0; i < NUM_ROWS; i++) {
+			cum_sum -= dist[i];
+			if (cum_sum <= 0) {
+				BOOST_LOG_TRIVIAL(info) << "\nChoosing " << i << " as center K = " << clust_idx;
+				memcpy(&clusters[clust_idx], &matrix[i*NEV], sizeof(clusters[0])*NEV);
+				break;
+			}
+		}
+		assert (cum_sum <= 0);
+	}
+	delete [] dist;
+	BOOST_LOG_TRIVIAL(info) << "Cluster centers after kmeans++";  print_mat(clusters, K, NEV);
 }
 
 /**
@@ -290,7 +336,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 
 	OMP_MAX_THREADS = std::min(max_threads, get_num_omp_threads());
 	omp_set_num_threads(OMP_MAX_THREADS);
-	BOOST_LOG_TRIVIAL(info) << "Running on " << OMP_MAX_THREADS << " threads!";
+	BOOST_LOG_TRIVIAL(warning) << "Running on " << OMP_MAX_THREADS << " threads!";
 
 	if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
 		BOOST_LOG_TRIVIAL(fatal)
@@ -326,7 +372,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 	}
 	else {
 		if (init == "kmeanspp") {
-			kmeanspp_init(); // TODO: kmeanspp
+			kmeanspp_init(matrix, clusters);
 		}
 	}
 
