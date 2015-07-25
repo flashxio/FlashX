@@ -204,7 +204,7 @@ void comm_verify_file(int argc, char *argv[])
 void comm_load_file2fs(int argc, char *argv[])
 {
 	if (argc < 2) {
-		fprintf(stderr, "load file_name ext_file\n");
+		fprintf(stderr, "load file_name ext_file [block_size]\n");
 		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
 		fprintf(stderr, "ext_file is the file in the external file system\n");
 		exit(-1);
@@ -212,6 +212,13 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
+	size_t block_size = params.get_RAID_block_size();
+	if (argc >= 3) {
+		block_size = str2size(argv[2]);
+		// block_size is the number of pages.
+		block_size /= PAGE_SIZE;
+	}
+	printf("RAID block size is %ld pages\n", block_size);
 
 	configs->add_options("writable=1");
 	init_io_system(configs, false);
@@ -221,7 +228,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	// If the file in SAFS doesn't exist, create a new one.
 	if (!file.exist()) {
 		safs_file file(get_sys_RAID_conf(), int_file_name);
-		file.create_file(source->get_size());
+		file.create_file(source->get_size(), block_size);
 		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
 				file.get_size());
 	}
