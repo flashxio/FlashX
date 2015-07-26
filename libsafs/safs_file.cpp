@@ -117,13 +117,26 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		size_per_disk++;
 	size_per_disk = ROUNDUP(size_per_disk, 512);
 
+	// We use the random index to reorder the native directories.
+	// So different files map their data chunks to disks in different order.
+	// The benefit is that when we access data in the same location but from
+	// different files, the data is likely fetched from different disks.
+	// Thus, this leads to better I/O utilization.
+	std::vector<int> dir_idxs(native_dirs.size());
+	for (size_t i = 0; i < dir_idxs.size(); i++)
+		dir_idxs[i] = i;
+	random_shuffle(dir_idxs.begin(), dir_idxs.end());
+
 	safs_header header(block_size, mapping_option, true);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[i].name);
+		native_dir dir(native_dirs[dir_idxs[i]].name);
 		bool ret = dir.create_dir(true);
 		if (!ret)
 			return false;
+		// We store the metadata of the SAFS in the directory that
+		// stores the first part.
 		if (i == 0) {
+			printf("the first part is in %s\n", dir.get_name().c_str());
 			std::string header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
