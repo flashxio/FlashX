@@ -36,5 +36,19 @@ vec_store::ptr vec_store::create(size_t length, const scalar_type &type,
 		return EM_vec_store::create(length, type);
 }
 
+size_t vec_store::copy_to(char *data, size_t num_eles) const
+{
+	size_t num_copy_eles = std::min(get_length(), num_eles);
+	size_t portion_size = get_portion_size();
+	size_t entry_size = get_type().get_size();
+	for (size_t idx = 0; idx < num_copy_eles; idx += portion_size) {
+		size_t len = std::min(portion_size, num_copy_eles - idx);
+		local_vec_store::const_ptr store = get_portion(idx, len);
+		assert(store);
+		memcpy(data + idx * entry_size, store->get_raw_arr(), len * entry_size);
+	}
+	return num_copy_eles;
+}
+
 }
 }
