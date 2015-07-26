@@ -53,7 +53,7 @@ public:
 		return true;
 	}
 
-	virtual matrix_store::ptr materialize() const = 0;
+	virtual matrix_store::const_ptr materialize() const = 0;
 
 	virtual void reset_data() {
 		assert(0);

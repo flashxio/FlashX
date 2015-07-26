@@ -44,7 +44,7 @@ public:
 		return (boost::format("one_val_mat(%1%,%2%)") % get_num_rows()
 			% get_num_cols()).str();
 	}
-	virtual matrix_store::ptr materialize() const;
+	virtual matrix_store::const_ptr materialize() const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;

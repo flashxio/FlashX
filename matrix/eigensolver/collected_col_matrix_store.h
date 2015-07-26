@@ -98,7 +98,7 @@ public:
 		return merged_mat->store_layout();
 	}
 
-	virtual matrix_store::ptr materialize() const {
+	virtual matrix_store::const_ptr materialize() const {
 		return static_cast<const detail::virtual_matrix_store *>(
 				merged_mat.get())->materialize();
 	}

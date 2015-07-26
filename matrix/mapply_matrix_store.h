@@ -61,7 +61,7 @@ public:
 
 	virtual void materialize_self() const;
 
-	virtual matrix_store::ptr materialize() const;
+	virtual matrix_store::const_ptr materialize() const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;

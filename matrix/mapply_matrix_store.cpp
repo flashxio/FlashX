@@ -510,9 +510,12 @@ void mapply_matrix_store::materialize_self() const
 	mutable_this->res = materialize();
 }
 
-matrix_store::ptr mapply_matrix_store::materialize() const
+matrix_store::const_ptr mapply_matrix_store::materialize() const
 {
-	return __mapply_portion(in_mats, op, layout);
+	if (res)
+		return res;
+	else
+		return __mapply_portion(in_mats, op, layout);
 }
 
 vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
