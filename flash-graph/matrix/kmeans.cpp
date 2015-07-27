@@ -150,7 +150,7 @@ static void kmeanspp_init(const double* matrix, double* clusters)
 
 	memcpy(&clusters[0], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
 	dist[rand_idx] = 0.0;
-	BOOST_LOG_TRIVIAL(info) << "Chosen center at data point: " << rand_idx;
+	BOOST_LOG_TRIVIAL(info) << "\nChoosing " << rand_idx << " as center K = 0";
 
 	size_t clust_idx = 0; // The number of clusters assigned
 
@@ -175,15 +175,20 @@ static void kmeanspp_init(const double* matrix, double* clusters)
 		for (size_t i=0; i < NUM_ROWS; i++) {
 			cum_sum -= dist[i];
 			if (cum_sum <= 0) {
-				BOOST_LOG_TRIVIAL(info) << "\nChoosing " << i << " as center K = " << clust_idx;
-				memcpy(&clusters[clust_idx], &matrix[i*NEV], sizeof(clusters[0])*NEV);
+				BOOST_LOG_TRIVIAL(info) << "Choosing " << i << " as center K = " << clust_idx;
+				memcpy(&(clusters[clust_idx*NEV]), &(matrix[i*NEV]), sizeof(clusters[0])*NEV);
 				break;
 			}
 		}
 		assert (cum_sum <= 0);
 	}
 	delete [] dist;
-	BOOST_LOG_TRIVIAL(info) << "Cluster centers after kmeans++";  print_mat(clusters, K, NEV);
+
+#if 0
+	BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NEV);
+	BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++"; print_mat(clusters, K, NEV);
+	exit(-1);
+#endif
 }
 
 /**
