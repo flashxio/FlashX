@@ -89,6 +89,10 @@ public:
 		this->length = new_length;
 		return true;
 	}
+
+	// Copy #eles to the data array and return #eles copied.
+	virtual size_t copy_to(char *data, size_t num_eles) const;
+
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end) = 0;
 	virtual bool append(const vec_store &vec) = 0;

@@ -180,7 +180,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 }
 
 in_mem_io::in_mem_io(std::shared_ptr<char> data, int file_id,
-		thread *t): io_interface(t), req_buf(get_node_id(), 1024)
+		thread *t): io_interface(t, safs_header()), req_buf(get_node_id(), 1024)
 {
 	this->data = data;
 	this->file_id = file_id;

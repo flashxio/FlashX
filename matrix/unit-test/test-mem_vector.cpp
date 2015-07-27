@@ -190,6 +190,16 @@ void test_copy_from()
 		assert(stl_vec[i] == vec->get<int>(i));
 }
 
+void test_conv2std()
+{
+	printf("test convert to a std vector\n");
+	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	std::vector<int> stl_vec = vec->conv2std<int>();
+	assert(stl_vec.size() == vec->get_length());
+	for (size_t i = 0; i < stl_vec.size(); i++)
+		assert(stl_vec[i] == 1 + 2 * i);
+}
+
 int main()
 {
 	test_sort();
@@ -199,4 +209,5 @@ int main()
 	test_resize();
 	test_get_sub();
 	test_copy_from();
+	test_conv2std();
 }

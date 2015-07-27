@@ -64,6 +64,14 @@ public:
 		return store;
 	}
 
+	template<class T>
+	std::vector<T> conv2std() const {
+		assert(is_type<T>());
+		std::vector<T> ret(get_length());
+		store->copy_to((char *) ret.data(), ret.size());
+		return ret;
+	}
+
 	bool is_in_mem() const {
 		return store->is_in_mem();
 	}

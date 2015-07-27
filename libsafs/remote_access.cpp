@@ -77,8 +77,8 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 
 remote_io::remote_io(const std::vector<disk_io_thread::ptr> &remotes,
 		slab_allocator &_msg_allocator, file_mapper *mapper, thread *t,
-		int max_reqs): io_interface(t), max_disk_cached_reqs(
-			max_reqs), complete_queue(std::string(
+		const safs_header &header, int max_reqs): io_interface(t,
+			header), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
 					"disk_complete_queue-") + itoa(t->get_node_id()), t->get_node_id(),
 				COMPLETE_QUEUE_SIZE, std::numeric_limits<int>::max()),
 			msg_allocator(_msg_allocator)
@@ -116,7 +116,7 @@ io_interface *remote_io::clone(thread *t) const
 	ASSERT_TRUE(t);
 	num_ios.inc(1);
 	remote_io *copy = new remote_io(io_threads, msg_allocator,
-			block_mapper, t, this->max_disk_cached_reqs);
+			block_mapper, t, get_header(), this->max_disk_cached_reqs);
 	copy->cb = this->cb;
 	return copy;
 }
@@ -196,7 +196,7 @@ void remote_io::access(io_request *requests, int num,
 		}
 
 		// If the request accesses one RAID block, it's simple.
-		if (requests[i].inside_RAID_block()) {
+		if (requests[i].inside_RAID_block(get_block_size())) {
 			off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
 			int idx = block_mapper->map2file(pg_off);
 			// The cache inside a sender is extensible, so it can absorb
@@ -222,19 +222,19 @@ void remote_io::access(io_request *requests, int num,
 			assert(!requests[i].is_extended_req());
 			orig->init(requests[i]);
 			off_t end = orig->get_offset() + orig->get_size();
-			const off_t RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
+			const off_t block_size = get_block_size() * PAGE_SIZE;
 			for (off_t begin = orig->get_offset(); begin < end;
-					begin = ROUND(begin + RAID_block_size, RAID_block_size)) {
+					begin = ROUND(begin + block_size, block_size)) {
 				io_req_extension *ext = new io_req_extension();
 				ext->set_priv(orig);
 				io_request req(ext, INVALID_DATA_LOC, 0, NULL, 0);
-				int size = ROUND(begin + RAID_block_size, RAID_block_size) - begin;
+				int size = ROUND(begin + block_size, block_size) - begin;
 				size = min(size, end - begin);
 				// It only supports to extract a specified request from
 				// a single-buffer request.
 				orig->extract(begin, size, req);
 				req.set_io(this);
-				assert(req.inside_RAID_block());
+				assert(req.inside_RAID_block(get_block_size()));
 
 				// Send a request.
 				off_t pg_off = req.get_offset() / PAGE_SIZE;

@@ -1094,7 +1094,8 @@ class flush_io: public io_interface
 	}
 public:
 	flush_io(io_interface::ptr underlying, associative_cache *cache,
-			associative_flusher *flusher): io_interface(NULL) {
+			associative_flusher *flusher): io_interface(NULL,
+				underlying->get_header()) {
 		this->underlying = underlying;
 		this->cache = cache;
 		this->flusher = flusher;

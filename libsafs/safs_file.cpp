@@ -38,6 +38,16 @@ safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 	this->name = file_name;
 }
 
+std::vector<std::string> safs_file::erase_header_file(
+		const std::vector<std::string> &files)
+{
+	std::vector<std::string> ret;
+	for (auto it = files.begin(); it != files.end(); it++)
+		if (*it != "header")
+			ret.push_back(*it);
+	return ret;
+}
+
 bool safs_file::exist() const
 {
 	std::set<int> part_ids;
@@ -47,6 +57,8 @@ bool safs_file::exist() const
 			return false;
 		std::vector<std::string> files;
 		dir.read_all_files(files);
+		if (files.size() > 1)
+			files = erase_header_file(files);
 		if (files.size() != 1) {
 			fprintf(stderr, "%s doesn't have exactly one file\n",
 					dir.get_name().c_str());
@@ -71,6 +83,8 @@ ssize_t safs_file::get_size() const
 		native_dir dir(native_dirs[i].name);
 		std::vector<std::string> local_files;
 		dir.read_all_files(local_files);
+		if (local_files.size() > 1)
+			local_files = erase_header_file(local_files);
 		assert(local_files.size() == 1);
 		native_file f(dir.get_name() + "/" + local_files[0]);
 		ret += f.get_size();
@@ -96,18 +110,47 @@ bool safs_file::rename(const std::string &new_name)
 	return true;
 }
 
-bool safs_file::create_file(size_t file_size)
+bool safs_file::create_file(size_t file_size, int block_size, int mapping_option)
 {
 	size_t size_per_disk = file_size / native_dirs.size();
 	if (file_size % native_dirs.size() > 0)
 		size_per_disk++;
 	size_per_disk = ROUNDUP(size_per_disk, 512);
 
+	// We use the random index to reorder the native directories.
+	// So different files map their data chunks to disks in different order.
+	// The benefit is that when we access data in the same location but from
+	// different files, the data is likely fetched from different disks.
+	// Thus, this leads to better I/O utilization.
+	std::vector<int> dir_idxs(native_dirs.size());
+	for (size_t i = 0; i < dir_idxs.size(); i++)
+		dir_idxs[i] = i;
+	random_shuffle(dir_idxs.begin(), dir_idxs.end());
+
+	safs_header header(block_size, mapping_option, true);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[i].name);
+		native_dir dir(native_dirs[dir_idxs[i]].name);
 		bool ret = dir.create_dir(true);
 		if (!ret)
 			return false;
+		// We store the metadata of the SAFS in the directory that
+		// stores the first part.
+		if (i == 0) {
+			printf("the first part is in %s\n", dir.get_name().c_str());
+			std::string header_file = dir.get_name() + "/header";
+			FILE *f = fopen(header_file.c_str(), "w");
+			if (f == NULL) {
+				perror("fopen");
+				return false;
+			}
+			size_t num_writes = fwrite(&header, sizeof(header), 1, f);
+			if (num_writes != 1) {
+				perror("fwrite");
+				return false;
+			}
+			int ret = fclose(f);
+			assert(ret == 0);
+		}
 		native_file f(dir.get_name() + "/" + itoa(i));
 		ret = f.create_file(size_per_disk);
 		if (!ret)
@@ -125,6 +168,32 @@ bool safs_file::delete_file()
 			return false;
 	}
 	return true;
+}
+
+safs_header safs_file::get_header() const
+{
+	for (size_t i = 0; i < native_dirs.size(); i++) {
+		std::string dir_str = native_dirs[i].name;
+		if (!file_exist(dir_str) || !file_exist(dir_str + "/header"))
+			continue;
+		std::string file_name = dir_str + "/header";
+		FILE *f = fopen(file_name.c_str(), "r");
+		if (f == NULL) {
+			perror("fopen");
+			break;
+		}
+		safs_header header;
+		size_t num_reads = fread(&header, sizeof(header), 1, f);
+		if (num_reads != 1) {
+			perror("fread");
+			break;
+		}
+		int ret = fclose(f);
+		assert(ret == 0);
+		return header;
+	}
+
+	return safs_header();
 }
 
 size_t get_all_safs_files(std::set<std::string> &files)
