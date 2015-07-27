@@ -107,7 +107,7 @@ static void random_partition_init(unsigned* cluster_assignments)
 	}
 
 	// NOTE: M-Step is called in compute func to update cluster counts & centers 
-#if 0
+#if KM_TEST
 	printf("After rand paritions cluster_asgns: "); print_arr(cluster_assignments, NUM_ROWS);
 #endif
 	BOOST_LOG_TRIVIAL(info) << "Random init end\n";
@@ -128,29 +128,30 @@ static void forgy_init(const double* matrix, double* clusters) {
 		unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
 		memcpy(&clusters[clust_idx*NEV], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
 	}
+
 	BOOST_LOG_TRIVIAL(info) << "Forgy init end";
 }
 
 /**
- * \brief A partially parallel version of the kmeans++ initialization alg.
+ * \brief A parallel version of the kmeans++ initialization alg.
  *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
  */
 static void kmeanspp_init(const double* matrix, double* clusters)
 {
-	BOOST_LOG_TRIVIAL(info) << "K is set to " << K;
 	// Init distance array
 	double* dist = new double [NUM_ROWS*sizeof(double)];
 	for (size_t i = 0; i < NUM_ROWS; i++)
 		dist[i] = std::numeric_limits<double>::max();
-
-	BOOST_LOG_TRIVIAL(info) << "initialized distance array to double::max";
 
 	// Choose c1 uniiformly at random
 	unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
 
 	memcpy(&clusters[0], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
 	dist[rand_idx] = 0.0;
+
+#if KM_TEST
 	BOOST_LOG_TRIVIAL(info) << "\nChoosing " << rand_idx << " as center K = 0";
+#endif
 
 	size_t clust_idx = 0; // The number of clusters assigned
 
@@ -175,7 +176,9 @@ static void kmeanspp_init(const double* matrix, double* clusters)
 		for (size_t i=0; i < NUM_ROWS; i++) {
 			cum_sum -= dist[i];
 			if (cum_sum <= 0) {
+#if KM_TEST
 				BOOST_LOG_TRIVIAL(info) << "Choosing " << i << " as center K = " << clust_idx;
+#endif
 				memcpy(&(clusters[clust_idx*NEV]), &(matrix[i*NEV]), sizeof(clusters[0])*NEV);
 				break;
 			}
@@ -184,10 +187,9 @@ static void kmeanspp_init(const double* matrix, double* clusters)
 	}
 	delete [] dist;
 
-#if 0
+#if KM_TEST
 	BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NEV);
 	BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++"; print_mat(clusters, K, NEV);
-	exit(-1);
 #endif
 }
 
@@ -201,7 +203,9 @@ static void E_step(const double* matrix, double* clusters,
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts)
 {
 
+#if KM_TEST
     gettimeofday(&start, NULL);
+#endif
 
 	// Create per thread vectors
 	std::vector<std::vector<unsigned>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
@@ -250,7 +254,9 @@ static void E_step(const double* matrix, double* clusters,
 		}
     }
 	
+#if KM_TEST
 	BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
+#endif
 	memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 
 	// Serial aggreate of OMP_MAX_THREADS vectors
@@ -269,8 +275,10 @@ static void E_step(const double* matrix, double* clusters,
 		}
 	}
 
+#if KM_TEST
     gettimeofday(&end, NULL);
     BOOST_LOG_TRIVIAL(info) << "E-step time taken = " << time_diff(start, end) << " sec";
+#endif
 
 #if KM_TEST
 	printf("Cluster assignment counts: "); print_arr(cluster_assignment_counts, K);
@@ -288,13 +296,20 @@ static void E_step(const double* matrix, double* clusters,
 static void M_step(const double* matrix, double* clusters, unsigned* 
 		cluster_assignment_counts, const unsigned* cluster_assignments, bool init=false)
 {
+
+#if KM_TEST
 	BOOST_LOG_TRIVIAL(info) << "M_step start";
+#endif
 	
 	if (init) {
+#if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
+#endif
 		memset(clusters, 0, sizeof(clusters[0])*K*NEV);
 
+#if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
+#endif
 		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 
 		for (unsigned vid = 0; vid < NUM_ROWS; vid++) {
@@ -310,7 +325,9 @@ static void M_step(const double* matrix, double* clusters, unsigned*
 	}
 
 	// Take the mean of all added means
+#if KM_TEST
 	BOOST_LOG_TRIVIAL(info) << " Div by in place ...";
+#endif
 	for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
 		if (cluster_assignment_counts[clust_idx] > 0) { // Avoid div by 0
 // #pragma omp parallel for firstprivate(cluster_assignment_counts, NEV) shared(clusters)
@@ -357,6 +374,8 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 		exit(-1);
 	}
 
+	gettimeofday(&start , NULL);
+
 	/*** Begin VarInit of data structures ***/
 	memset(cluster_assignments, -1, 
 			sizeof(cluster_assignments[0])*NUM_ROWS);
@@ -393,7 +412,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 	while (iter < MAX_ITERS) {
 		// Hold cluster assignment counter
 
-		BOOST_LOG_TRIVIAL(info) << "\nE-step Iteration " << iter << 
+		BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter << 
 			" . Computing cluster assignments ...";
 		E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
@@ -402,13 +421,18 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 			break;
 		} else { updated = false; }
 
+#if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
-		M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);
-		
+#endif
+		M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);		
 		iter++;
 	}
 
 	omp_destroy_lock(&writelock);
+
+	gettimeofday(&end, NULL);
+    BOOST_LOG_TRIVIAL(warning) << "\n\nAlgorithmic time taken = " << 
+		time_diff(start, end) << " sec\n";
 
 #ifdef PROFILER
 	ProfilerStop();
