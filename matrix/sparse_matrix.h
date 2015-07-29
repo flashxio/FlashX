@@ -327,13 +327,17 @@ public:
 
 		size_t start_col_idx
 			= block.get_block_col_idx() * block_size.get_num_cols();
+		size_t num_cols = std::min(block_size.get_num_cols(),
+				input.get_length() - start_col_idx);
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
+		size_t num_rows = std::min(block_size.get_num_rows(),
+				output.get_length() - start_row_idx);
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		const char *in_buf = input.get_sub_arr(start_col_idx,
-				start_col_idx + block_size.get_num_cols());
+				start_col_idx + num_cols);
 		char *out_buf = output.get_sub_arr(start_row_idx,
-				start_row_idx + block_size.get_num_rows());
+				start_row_idx + num_rows);
 		assert(in_buf);
 		assert(out_buf);
 		while (!block.is_block_end(it)) {
