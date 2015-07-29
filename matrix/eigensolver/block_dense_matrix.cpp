@@ -30,6 +30,7 @@ namespace fm
 namespace eigen
 {
 
+bool cache_recent = true;
 dense_matrix::ptr cached_mat;
 
 size_t num_col_writes = 0;
@@ -479,10 +480,11 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			res = res->conv2(matrix_layout_t::L_COL);
 		// If the input matrix isn't in memory, we should convert it to
 		// EM matrix.
-		if (!in_mem) {
+		if (!in_mem)
+			num_col_writes_concept += res->get_num_cols();
+		if (!in_mem && !cache_recent) {
 			printf("write the output matrix of SpMM to disks\n");
 			num_col_writes += res->get_num_cols();
-			num_col_writes_concept += res->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			res = res->conv_store(false, -1);
 			detail::matrix_stats.print_diff(orig_stats);
@@ -819,14 +821,15 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	}
 	else if (bytes.size() > 2) {
 		printf("There are %ld underlying matrices\n", bytes.size());
-		num_col_writes += block->get_num_cols();
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		// If we want to cache the most recently materialized matrix.
-		if (!in_mem)
+		if (!in_mem && cache_recent)
 			block->move_store(true, matrix_conf.get_num_nodes());
-		else
+		else {
+			num_col_writes += block->get_num_cols();
 			block->materialize_self();
+		}
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
