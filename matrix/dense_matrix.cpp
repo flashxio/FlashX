@@ -2542,11 +2542,12 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 {
 	// If the current matrix is EM matrix and we want to convert it to
 	// an EM matrix, don't do anything.
-	if (!in_mem && !store->is_in_mem())
+	if (!in_mem && !store->is_in_mem() && !store->is_virtual())
 		return store;
 	// If the current matrix is in-mem matrix and it stores in the same
 	// number of NUMA nodes as requested, don't do anything.
-	if (in_mem && store->is_in_mem() && store->get_num_nodes() == num_nodes)
+	if (in_mem && store->is_in_mem() && store->get_num_nodes() == num_nodes
+			&& !store->is_virtual())
 		return store;
 
 	std::vector<detail::matrix_store::const_ptr> in_mats(1);
