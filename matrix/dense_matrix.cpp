@@ -2537,16 +2537,17 @@ public:
 	}
 };
 
-dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const
+detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
+		int num_nodes) const
 {
 	// If the current matrix is EM matrix and we want to convert it to
 	// an EM matrix, don't do anything.
 	if (!in_mem && !store->is_in_mem())
-		return clone();
+		return store;
 	// If the current matrix is in-mem matrix and it stores in the same
 	// number of NUMA nodes as requested, don't do anything.
 	if (in_mem && store->is_in_mem() && store->get_num_nodes() == num_nodes)
-		return clone();
+		return store;
 
 	std::vector<detail::matrix_store::const_ptr> in_mats(1);
 	in_mats[0] = store;
@@ -2558,9 +2559,30 @@ dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const
 				get_num_cols(), get_type()));
 	bool ret = detail::__mapply_portion(in_mats, op, out_mats);
 	if (ret)
-		return dense_matrix::create(out_mats[0]);
+		return out_mats[0];
+	else
+		return detail::matrix_store::const_ptr();
+}
+
+dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const
+{
+	detail::matrix_store::const_ptr store = _conv_store(in_mem, num_nodes);
+	if (store)
+		return dense_matrix::create(store);
 	else
 		return dense_matrix::ptr();
+}
+
+bool dense_matrix::move_store(bool in_mem, int num_nodes) const
+{
+	detail::matrix_store::const_ptr store = _conv_store(in_mem, num_nodes);
+	if (store == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't move matrix store to another storage media";
+		return false;
+	}
+	const_cast<dense_matrix *>(this)->store = store;
+	return true;
 }
 
 }
