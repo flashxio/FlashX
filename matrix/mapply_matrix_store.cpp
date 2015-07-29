@@ -326,6 +326,10 @@ public:
 		this->orig_computes.push_back(orig_compute);
 	}
 
+	size_t get_num_EM_parts() const {
+		return parts.size();
+	}
+
 	void add_EM_part(local_matrix_store::const_ptr part) {
 		parts.push_back(part);
 	}
@@ -629,7 +633,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
-local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
+async_cres_t mapply_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr orig_compute) const
 {
@@ -679,7 +683,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 		// matrix store may already by ready. TODO I need to verify it.
 		assert(collect_compute);
 		collect_compute->add_orig_compute(orig_compute);
-		return ret1;
+		return async_cres_t(false, ret1);
 	}
 
 	std::shared_ptr<collect_portion_compute> collect_compute
@@ -691,9 +695,11 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 		assert(start_row == 0);
 		assert(num_rows == get_num_rows());
 		for (size_t i = 0; i < in_mats.size(); i++) {
-			parts[i] = in_mats[i]->get_portion_async(start_row, start_col,
+			async_cres_t res = in_mats[i]->get_portion_async(start_row, start_col,
 					in_mats[i]->get_num_rows(), num_cols, collect_compute);
-			if (!in_mats[i]->is_in_mem() && collect_compute)
+			parts[i] = res.second;
+			// If the data in the request portion is invalid.
+			if (!res.first && collect_compute)
 				collect_compute->add_EM_part(parts[i]);
 		}
 	}
@@ -701,9 +707,11 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 		assert(start_col == 0);
 		assert(num_cols == get_num_cols());
 		for (size_t i = 0; i < in_mats.size(); i++) {
-			parts[i] = in_mats[i]->get_portion_async(start_row, start_col,
+			async_cres_t res = in_mats[i]->get_portion_async(start_row, start_col,
 					num_rows, in_mats[i]->get_num_cols(), collect_compute);
-			if (!in_mats[i]->is_in_mem() && collect_compute)
+			parts[i] = res.second;
+			// If the data in the request portion is invalid.
+			if (!res.first && collect_compute)
 				collect_compute->add_EM_part(parts[i]);
 		}
 	}
@@ -720,7 +728,10 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion_async(
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
 	local_mem_buffer::cache_portion(data_id, ret);
-	return ret;
+	// If all parts are from the in-mem matrix store or have been cached by
+	// the underlying matrices, the data in the returned portion is immediately
+	// accessible.
+	return async_cres_t(collect_compute->get_num_EM_parts() == 0, ret);
 }
 
 std::pair<size_t, size_t> mapply_matrix_store::get_portion_size() const

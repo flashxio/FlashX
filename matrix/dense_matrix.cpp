@@ -1089,7 +1089,6 @@ class EM_mat_mapply_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
-	size_t num_EM_mats;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
@@ -1110,17 +1109,20 @@ class mapply_portion_compute: public portion_compute
 	const portion_mapply_op &op;
 public:
 	mapply_portion_compute(const std::vector<local_write_buffer::ptr> &write_bufs,
-			size_t num_required_reads, const std::vector<matrix_store::ptr> mats,
+			const std::vector<matrix_store::ptr> mats,
 			const portion_mapply_op &_op): op(_op) {
 		this->write_bufs = write_bufs;
 		this->to_mats = mats;
-		this->num_required_reads = num_required_reads;
+		this->num_required_reads = 0;
 		this->num_reads = 0;
 	}
 
 	void set_buf(
 			const std::vector<detail::local_matrix_store::const_ptr> &stores) {
 		this->local_stores = stores;
+	}
+	void set_EM_parts(size_t num_EM_parts) {
+		this->num_required_reads = num_EM_parts;
 	}
 
 	virtual void run(char *buf, size_t size);
@@ -1176,10 +1178,6 @@ EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
 	this->mats = mats;
 	this->res_mats = res_mats;
 	this->op = op;
-	num_EM_mats = 0;
-	for (size_t i = 0; i < mats.size(); i++)
-		if (!mats[i]->is_in_mem())
-			num_EM_mats++;
 
 	assert(mats.size() > 0);
 	if (mats[0]->is_wide()) {
@@ -1226,9 +1224,9 @@ void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 		std::vector<detail::local_matrix_store::const_ptr> local_stores(
 				mats.size());
 		mapply_portion_compute *mapply_compute = new mapply_portion_compute(
-				write_bufs, num_EM_mats, res_mats, *op);
+				write_bufs, res_mats, *op);
 		mapply_portion_compute::ptr compute(mapply_compute);
-		bool all_in_mem = true;
+		size_t num_EM_parts = 0;
 		for (size_t j = 0; j < local_stores.size(); j++) {
 			size_t global_start_row, global_start_col, num_rows, num_cols;
 			if (mats[j]->is_wide()) {
@@ -1243,14 +1241,17 @@ void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 				num_rows = local_length;
 				num_cols = mats[j]->get_num_cols();
 			}
-			all_in_mem = all_in_mem && mats[j]->is_in_mem();
-			local_stores[j] = mats[j]->get_portion_async(global_start_row,
+			async_cres_t res = mats[j]->get_portion_async(global_start_row,
 					global_start_col, num_rows, num_cols, compute);
+			if (!res.first)
+				num_EM_parts++;
+			local_stores[j] = res.second;
 		}
 		mapply_compute->set_buf(local_stores);
-		// When all input matrices are in memory, we need to run the portion
-		// compute manually by ourselves.
-		if (all_in_mem)
+		mapply_compute->set_EM_parts(num_EM_parts);
+		// When all input parts are in memory or have been cached, we need to
+		// run the portion compute manually by ourselves.
+		if (num_EM_parts == 0)
 			mapply_compute->run_complete();
 	}
 }

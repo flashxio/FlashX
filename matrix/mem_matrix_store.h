@@ -88,15 +88,17 @@ public:
 		return NULL;
 	}
 
-	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) const {
-		return get_portion(start_row, start_col, num_rows, num_cols);
+	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			std::shared_ptr<portion_compute> compute) const {
+		return async_cres_t(true,
+				get_portion(start_row, start_col, num_rows, num_cols));
 	}
-	virtual std::shared_ptr<local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) {
-		return get_portion(start_row, start_col, num_rows, num_cols);
+	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			std::shared_ptr<portion_compute> compute) {
+		return async_res_t(true,
+				get_portion(start_row, start_col, num_rows, num_cols));
 	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,

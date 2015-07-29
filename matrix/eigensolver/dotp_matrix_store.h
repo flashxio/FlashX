@@ -109,7 +109,7 @@ public:
 		return orig_store->get_cols(idxs)->transpose();
 	}
 
-	virtual detail::local_matrix_store::const_ptr get_portion_async(
+	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		if (materialized == NULL)
@@ -191,7 +191,7 @@ public:
 		return orig_store->transpose();
 	}
 
-	virtual detail::local_matrix_store::const_ptr get_portion_async(
+	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		return orig_store->get_portion_async(start_row, start_col, num_rows,
