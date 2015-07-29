@@ -37,6 +37,7 @@ extern size_t num_col_writes;
 extern size_t num_col_writes_concept;
 extern size_t num_col_reads_concept;
 extern size_t num_multiply_concept;
+extern dense_matrix::ptr cached_mat;
 
 class block_multi_vector
 {

@@ -30,6 +30,8 @@ namespace fm
 namespace eigen
 {
 
+dense_matrix::ptr cached_mat;
+
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
 size_t num_col_reads_concept = 0;
@@ -345,6 +347,27 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 			mats[i] = get_block(i + block_start);
 		mirror_block_multi_vector::ptr ret
 			= mirror_block_multi_vector::create(mats, in_mem);
+		// We want the dense matrices in the basis materialized.
+		// This can reduce significant computation.
+		if (num_blocks == 1) {
+			if (!in_mem && cached_mat && cached_mat->is_virtual()) {
+				printf("materialize the old cached mat %s to disks\n",
+						cached_mat->get_data().get_name().c_str());
+				num_col_writes += cached_mat->get_num_cols();
+				detail::matrix_stats_t orig_stats = detail::matrix_stats;
+				bool ret = cached_mat->move_store(false, -1);
+				assert(ret);
+				detail::matrix_stats.print_diff(orig_stats);
+			}
+			else if (cached_mat && cached_mat->is_virtual()) {
+				printf("materialize the old cached mat %s\n",
+						cached_mat->get_data().get_name().c_str());
+				detail::matrix_stats_t orig_stats = detail::matrix_stats;
+				cached_mat->materialize_self();
+				detail::matrix_stats.print_diff(orig_stats);
+			}
+			cached_mat = mats[0];
+		}
 		return ret;
 	}
 	else if (is_same_block(index, get_block_size())) {
@@ -405,31 +428,53 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	assert(X.get_type() == Y.get_type());
 	size_t num_blocks = X.get_num_blocks();
 	int num_nodes = matrix_conf.get_num_nodes();
+	bool in_mem = X.in_mem;
+	printf("SpMM: input matirx is in-mem: %d\n", in_mem);
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
 		num_col_reads_concept += in->get_num_cols();
-		if (in->store_layout() == matrix_layout_t::L_COL)
-			in = in->conv2(matrix_layout_t::L_ROW);
-		bool in_mem = in->is_in_mem();
-		// If the input matrix isn't in memory, we should load it first.
-		// When loading, if the input matrix is a virtual matrix, materialize
-		// it in memory.
-		if (!in->is_in_mem()) {
-			printf("load the input matrix for SpMM to memory\n");
+		// If we run in the EM mode, we should materialize the cached matrix
+		// and write out the most recently cached matrix.
+		if (!in_mem && in->is_virtual() && ((cached_mat == in)
+					|| (cached_mat
+						&& cached_mat->get_raw_store() == in->get_raw_store()))) {
+			printf("materialize in mat %s to disks\n", in->get_data().get_name().c_str());
+			num_col_writes += cached_mat->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
-			in = in->conv_store(true, num_nodes);
+			bool ret = cached_mat->move_store(false, -1);
+			assert(ret);
 			detail::matrix_stats.print_diff(orig_stats);
 		}
-		// If the input matrix is in memory and is virtual, we should
-		// materialize it.
-		else if (in->is_virtual()) {
-			printf("materialize %s\n", in->get_data().get_name().c_str());
+		// Otherwise, we still want to materialize the matrix.
+		else if (in->is_virtual() && cached_mat
+				&& cached_mat->get_raw_store() == in->get_raw_store()) {
+			printf("materialize in mat %s\n", in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
 		}
-		res = multiply.run(in);
+
+		assert(in->store_layout() == matrix_layout_t::L_COL);
+		dense_matrix::ptr row_in = in->conv2(matrix_layout_t::L_ROW);
+		// If the input matrix isn't in memory, we should load it first.
+		// When loading, if the input matrix is a virtual matrix, materialize
+		// it in memory.
+		if (!row_in->is_in_mem()) {
+			printf("load the input matrix for SpMM to memory\n");
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
+			row_in = row_in->conv_store(true, num_nodes);
+			detail::matrix_stats.print_diff(orig_stats);
+		}
+		// If the input matrix is in memory and is virtual, we should
+		// materialize it.
+		else if (row_in->is_virtual()) {
+			printf("materialize %s\n", row_in->get_data().get_name().c_str());
+			detail::matrix_stats_t orig_stats = detail::matrix_stats;
+			row_in->materialize_self();
+			detail::matrix_stats.print_diff(orig_stats);
+		}
+		res = multiply.run(row_in);
 		if (res->store_layout() == matrix_layout_t::L_ROW)
 			res = res->conv2(matrix_layout_t::L_COL);
 		// If the input matrix isn't in memory, we should convert it to
@@ -777,7 +822,11 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		num_col_writes += block->get_num_cols();
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
-		block->materialize_self();
+		// If we want to cache the most recently materialized matrix.
+		if (!in_mem)
+			block->move_store(true, matrix_conf.get_num_nodes());
+		else
+			block->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
