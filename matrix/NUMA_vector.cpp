@@ -108,6 +108,11 @@ const char *NUMA_vec_store::get_sub_arr(off_t start, off_t end) const
 				"[%1%, %2%) isn't in the same range") % start % end;
 		return NULL;
 	}
+	if ((size_t) start >= get_length() || (size_t) end > get_length()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("[%1%, %2%) is out of boundary") % start % end;
+		return NULL;
+	}
 
 	std::pair<int, size_t> loc = mapper.map2physical(start);
 	size_t off = loc.second * get_entry_size();
