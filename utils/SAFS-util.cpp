@@ -426,6 +426,60 @@ void comm_delete_file(int argc, char *argv[])
 	file.delete_file();
 }
 
+void comm_export(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "export file_name ext_file\n");
+		return;
+	}
+
+	std::string file_name = argv[0];
+	std::string ext_file = argv[1];
+
+	FILE *f = fopen(ext_file.c_str(), "w");
+	if (f == NULL) {
+		fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(),
+				strerror(errno));
+		return;
+	}
+
+	init_io_system(configs, false);
+	file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
+			REMOTE_ACCESS);
+	io_interface::ptr io = create_io(io_factory, thread::get_curr_thread());
+	size_t phy_file_size = io_factory->get_file_size();
+	size_t file_size = io_factory->get_header().get_size();
+	assert(file_size <= phy_file_size);
+	if (file_size == 0)
+		file_size = phy_file_size;
+	
+	size_t buf_size = 16 * 1024 * 1024;
+	char *buf = (char *) valloc(buf_size);
+	assert(buf);
+	size_t off = 0;
+	while (off < file_size) {
+		data_loc_t loc(io->get_file_id(), off);
+		size_t read_size = buf_size;
+		size_t write_size = buf_size;
+		if (off + buf_size > file_size) {
+			// The physical storage size of SAFS is always rounded to
+			// the page size, and we access the SAFS file with direct I/O,
+			// so we need to round up the read size.
+			read_size = ROUNDUP(file_size - off, PAGE_SIZE);
+			write_size = file_size - off;
+		}
+		io_request req(buf, loc, read_size, READ);
+		io->access(&req, 1);
+		io->wait4complete(1);
+
+		size_t ret = fwrite(buf, write_size, 1, f);
+		assert(ret == 1);
+		off += read_size;
+	}
+
+	fclose(f);
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -449,6 +503,8 @@ struct command commands[] = {
 		"load_part file_name ext_file part_id: load part of the file to SAFS"},
 	{"verify", comm_verify_file,
 		"verify file_name [ext_file]: verify data in the file"},
+	{"export", comm_export,
+		"export file_name ext_file: export an SAFS file to Linux filesystem"},
 };
 
 int get_num_commands()
