@@ -147,6 +147,14 @@ public:
 			const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
+
+	/*
+	 * Set this matrix persistent in SAFS, so that even if there isn't
+	 * a reference to the matrix, its data still stored in SAFS.
+	 */
+	bool set_persistent(const std::string &name) const {
+		return holder->set_persistent(name);
+	}
 };
 
 }
