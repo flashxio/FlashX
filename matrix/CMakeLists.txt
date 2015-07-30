@@ -15,7 +15,6 @@ add_library(FMatrix STATIC
 	sparse_matrix.cpp
 	EM_dense_matrix.cpp
 	matrix_io.cpp
-	mem_dense_matrix.cpp
 	data_frame.cpp
 	generic_type.cpp
 	matrix_header.cpp
@@ -43,6 +42,8 @@ add_library(FMatrix STATIC
 	vector.cpp
 	vector_vector.cpp
 	vv_store.cpp
+	EM_object.cpp
+	local_mem_buffer.cpp
 )
 
 subdirs(eigensolver)
