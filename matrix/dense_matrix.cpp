@@ -1362,14 +1362,14 @@ bool __mapply_portion(
 				local_stores[j] = mats[j]->get_portion(i);
 				if (node_id < 0)
 					node_id = local_stores[j]->get_node_id();
-				else
+				else if (local_stores[j]->get_node_id() >= 0)
 					assert(node_id == local_stores[j]->get_node_id());
 			}
 			for (size_t j = 0; j < out_mats.size(); j++) {
 				local_out_stores[j] = out_mats[j]->get_portion(i);
 				if (node_id < 0)
 					node_id = local_out_stores[j]->get_node_id();
-				else
+				else if (local_out_stores[j]->get_node_id() >= 0)
 					assert(node_id == local_out_stores[j]->get_node_id());
 			}
 
