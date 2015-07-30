@@ -21,6 +21,7 @@
 
 #include "sparse_matrix.h"
 #include "dense_matrix.h"
+#include "EM_dense_matrix.h"
 
 #include "eigensolver.h"
 
@@ -282,12 +283,15 @@ int main (int argc, char *argv[])
 	else
 		res = compute_eigen(new eigen_Operator(mat), mat->is_symmetric(), opts);
 	// We only save eigenvectors if they are stored in memory.
-	if (!output_file.empty() && res.vecs->is_in_mem()) {
+	if (!output_file.empty()) {
 		printf("Save eigenvectors to %s\n", output_file.c_str());
-		res.vecs->materialize_self();
-		const detail::mem_matrix_store &store
-			= dynamic_cast<const detail::mem_matrix_store &>(res.vecs->get_data());
-		bool ret = store.write2file(output_file);
+		if (res.vecs->is_in_mem())
+			res.vecs = res.vecs->conv_store(false, -1);
+		else
+			res.vecs->materialize_self();
+		const detail::EM_matrix_store &store
+			= dynamic_cast<const detail::EM_matrix_store &>(res.vecs->get_data());
+		bool ret = store.set_persistent(output_file);
 		assert(ret);
 	}
 
