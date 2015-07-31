@@ -754,6 +754,27 @@ void print_io_thread_stat()
 	}
 }
 
+void print_io_summary()
+{
+	size_t num_reads = 0;
+	size_t num_read_bytes = 0;
+	size_t num_writes = 0;
+	size_t num_write_bytes = 0;
+
+	sleep(1);
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
+		disk_io_thread::ptr t = global_data.read_threads[i];
+		if (t) {
+			num_reads += t->get_num_reads();
+			num_read_bytes += t->get_num_read_bytes();
+			num_writes += t->get_num_writes();
+			num_write_bytes += t->get_num_write_bytes();
+		}
+	}
+	printf("It reads %ld bytes (in %ld reqs) and writes %ld bytes (in %ld reqs)\n",
+			num_read_bytes, num_reads, num_write_bytes, num_writes);
+}
+
 ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
