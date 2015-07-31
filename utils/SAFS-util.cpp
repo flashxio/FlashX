@@ -480,6 +480,25 @@ void comm_export(int argc, char *argv[])
 	fclose(f);
 }
 
+void comm_show_info(int argc, char *argv[])
+{
+	if (argc < 1) {
+		fprintf(stderr, "info file_name\n");
+		return;
+	}
+
+	init_io_system(configs, false);
+	std::string file_name = argv[0];
+
+	file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
+			REMOTE_ACCESS);
+	safs_header header = io_factory->get_header();
+	printf("file: %s\n", file_name.c_str());
+	printf("RAID block size: %d\n", header.get_block_size() * PAGE_SIZE);
+	printf("RAID mapping option: %d\n", header.get_mapping_option());
+	printf("file size: %ld\n", header.get_size());
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -505,6 +524,8 @@ struct command commands[] = {
 		"verify file_name [ext_file]: verify data in the file"},
 	{"export", comm_export,
 		"export file_name ext_file: export an SAFS file to Linux filesystem"},
+	{"info", comm_show_info,
+		"info file_name: show the information of an SAFS file"},
 };
 
 int get_num_commands()
