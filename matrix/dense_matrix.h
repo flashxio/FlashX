@@ -155,6 +155,8 @@ private:
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
 	dense_matrix::ptr _multiply_scalar(scalar_variable::const_ptr var) const;
+
+	detail::matrix_store::const_ptr _conv_store(bool in_mem, int num_nodes) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
@@ -284,9 +286,10 @@ public:
 	/*
 	 * This method converts the storage media of the matrix.
 	 * It can convert an in-memory matrix to an EM matrix, or vice versa.
-	 * The output matrix is materialized.
+	 * The output matrix is always materialized.
 	 */
 	dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
+	bool move_store(bool in_mem, int num_nodes) const;
 
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,

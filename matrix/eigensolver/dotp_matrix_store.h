@@ -109,7 +109,7 @@ public:
 		return orig_store->get_cols(idxs)->transpose();
 	}
 
-	virtual detail::local_matrix_store::const_ptr get_portion_async(
+	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		if (materialized == NULL)
@@ -119,7 +119,7 @@ public:
 				num_rows, num_cols, compute);
 	}
 
-	virtual matrix_store::ptr materialize() const {
+	virtual matrix_store::const_ptr materialize() const {
 		assert(0);
 		return matrix_store::ptr();
 	}
@@ -191,7 +191,7 @@ public:
 		return orig_store->transpose();
 	}
 
-	virtual detail::local_matrix_store::const_ptr get_portion_async(
+	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		return orig_store->get_portion_async(start_row, start_col, num_rows,
@@ -205,7 +205,7 @@ public:
 		return orig_store->get_portion_size();
 	}
 
-	virtual matrix_store::ptr materialize() const {
+	virtual matrix_store::const_ptr materialize() const {
 		if (orig_store->is_virtual()) {
 			const detail::virtual_matrix_store *store
 				= static_cast<const detail::virtual_matrix_store *>(

@@ -19,7 +19,6 @@
 
 #include <stdio.h>
 
-#include "mem_dense_matrix.h"
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
 
@@ -104,7 +103,7 @@ SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name
 {
 	detail::matrix_store::const_ptr mat = vec->conv2mat(vec->get_length(),
 			1, false);
-	return create_FMR_vector(mem_dense_matrix::create(
+	return create_FMR_vector(dense_matrix::create(
 				detail::mem_matrix_store::cast(mat)), name);
 }
 

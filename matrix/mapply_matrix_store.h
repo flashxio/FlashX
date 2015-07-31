@@ -61,7 +61,7 @@ public:
 
 	virtual void materialize_self() const;
 
-	virtual matrix_store::ptr materialize() const;
+	virtual matrix_store::const_ptr materialize() const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -74,7 +74,7 @@ public:
 			size_t num_cols) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
-	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
+	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
 	virtual std::pair<size_t, size_t> get_portion_size() const;

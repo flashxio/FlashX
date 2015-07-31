@@ -53,7 +53,7 @@ public:
 		return true;
 	}
 
-	virtual matrix_store::ptr materialize() const = 0;
+	virtual matrix_store::const_ptr materialize() const = 0;
 
 	virtual void reset_data() {
 		assert(0);
@@ -73,11 +73,11 @@ public:
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
 	}
-	virtual std::shared_ptr<local_matrix_store> get_portion_async(
+	virtual async_res_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) {
 		assert(0);
-		return std::shared_ptr<local_matrix_store>();
+		return async_res_t();
 	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,

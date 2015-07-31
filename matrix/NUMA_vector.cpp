@@ -28,6 +28,7 @@
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
 #include "matrix_store.h"
+#include "NUMA_dense_matrix.h"
 
 namespace fm
 {
@@ -106,6 +107,11 @@ const char *NUMA_vec_store::get_sub_arr(off_t start, off_t end) const
 			!= mapper.get_logical_range_id(end - 1)) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"[%1%, %2%) isn't in the same range") % start % end;
+		return NULL;
+	}
+	if ((size_t) start >= get_length() || (size_t) end > get_length()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("[%1%, %2%) is out of boundary") % start % end;
 		return NULL;
 	}
 
@@ -278,20 +284,32 @@ vec_store::ptr NUMA_vec_store::deep_copy() const
 local_vec_store::const_ptr NUMA_vec_store::get_portion(off_t start,
 		size_t length) const
 {
-	return local_vec_store::const_ptr();
+	const char *raw_data = get_sub_arr(start, start + length);
+	if (raw_data == NULL)
+		return local_vec_store::const_ptr();
+
+	std::pair<int, size_t> loc = mapper.map2physical(start);
+	return local_vec_store::const_ptr(new local_cref_vec_store(raw_data,
+				start, length, get_type(), data[loc.first].get_node_id()));
 }
 
 local_vec_store::ptr NUMA_vec_store::get_portion(off_t start, size_t length)
 {
-	return local_vec_store::ptr();
+	char *raw_data = get_sub_arr(start, start + length);
+	if (raw_data == NULL)
+		return local_vec_store::ptr();
+
+	std::pair<int, size_t> loc = mapper.map2physical(start);
+	return local_vec_store::ptr(new local_ref_vec_store(raw_data,
+				start, length, get_type(), data[loc.first].get_node_id()));
 }
 
 matrix_store::const_ptr NUMA_vec_store::conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const
 {
-	BOOST_LOG_TRIVIAL(error)
-		<< "can't convert a NUMA vector to a matrix";
-	return matrix_store::ptr();
+	std::vector<NUMA_vec_store::ptr> cols(1);
+	cols[0] = NUMA_vec_store::ptr(new NUMA_vec_store(*this));
+	return NUMA_col_tall_matrix_store::create(cols);
 }
 
 }

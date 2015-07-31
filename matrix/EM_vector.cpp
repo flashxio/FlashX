@@ -1453,7 +1453,7 @@ matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const
 {
 	BOOST_LOG_TRIVIAL(error)
-		<< "can't convert a NUMA vector to a matrix";
+		<< "can't convert an EM vector to a matrix";
 	return matrix_store::ptr();
 }
 

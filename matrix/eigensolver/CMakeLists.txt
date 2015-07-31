@@ -11,4 +11,5 @@ endif()
 add_library(eigen STATIC
 	block_dense_matrix.cpp
 	eigensolver.cpp
+	collected_col_matrix_store.cpp
 )

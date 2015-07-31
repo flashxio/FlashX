@@ -68,7 +68,7 @@ public:
 			const std::vector<off_t> &idxs) const;
 	virtual detail::matrix_store::const_ptr transpose() const;
 
-	virtual detail::local_matrix_store::const_ptr get_portion_async(
+	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		assert(merged_mat);
@@ -98,7 +98,7 @@ public:
 		return merged_mat->store_layout();
 	}
 
-	virtual matrix_store::ptr materialize() const {
+	virtual matrix_store::const_ptr materialize() const {
 		return static_cast<const detail::virtual_matrix_store *>(
 				merged_mat.get())->materialize();
 	}

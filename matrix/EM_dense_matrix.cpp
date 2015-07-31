@@ -194,27 +194,29 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion(
 	safs::io_interface &io = ios->get_curr_io();
 	bool ready = false;
 	portion_compute::ptr compute(new sync_read_compute(ready));
-	local_matrix_store::const_ptr ret = get_portion_async(start_row, start_col,
+	async_cres_t ret = get_portion_async(start_row, start_col,
 			num_rows, num_cols, compute);
-	if (ret == NULL)
-		return ret;
+	// If we can't get the specified portion or the portion already has
+	// the valid data.
+	if (ret.second == NULL || ret.first)
+		return ret.second;
 
 	while (!ready)
 		io.wait4complete(1);
-	return ret;
+	return ret.second;
 }
 
-local_matrix_store::ptr EM_matrix_store::get_portion_async(
+async_res_t EM_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute)
 {
 	// This doesn't need to be used. Changing the data in the local portion
 	// doesn't affect the data in the disks.
 	assert(0);
-	return local_matrix_store::ptr();
+	return async_res_t();
 }
 
-local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
+async_cres_t EM_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute) const
 {
@@ -226,7 +228,7 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 			|| start_row + num_rows > get_orig_num_rows()
 			|| start_col + num_cols > get_orig_num_cols()) {
 		BOOST_LOG_TRIVIAL(error) << "Out of boundary of a portion";
-		return local_matrix_store::ptr();
+		return async_cres_t();
 	}
 
 	safs::io_interface &io = ios->get_curr_io();
@@ -320,10 +322,10 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 				num_bytes, READ);
 		portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
 		// If there isn't a portion compute related to the I/O request,
-		// it means the data in the portion is ready. TODO should we invoke
-		// user's portion compute directly?
-		assert(cb.has_callback(req));
-		cb.add(req, compute);
+		// it means the data in the portion is ready.
+		bool valid_data = !cb.has_callback(req);
+		if (!valid_data)
+			cb.add(req, compute);
 
 		local_matrix_store::const_ptr ret;
 		if (local_start_row > 0 || local_start_col > 0
@@ -332,7 +334,7 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 					num_rows, num_cols);
 		else
 			ret = ret1;
-		return ret;
+		return async_cres_t(valid_data, ret);
 	}
 
 	raw_data_array data_arr(num_bytes, -1);
@@ -365,7 +367,7 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion_async(
 				num_rows, num_cols);
 	else
 		ret = buf;
-	return ret;
+	return async_cres_t(false, ret);
 }
 
 void EM_matrix_store::write_portion_async(
@@ -566,19 +568,19 @@ public:
 					dynamic_cast<const EM_matrix_store &>(*t_mat)));
 	}
 
-	virtual local_matrix_store::const_ptr get_col_portion_async(
+	virtual async_cres_t get_col_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, portion_compute::ptr compute) const;
-	virtual local_matrix_store::const_ptr get_row_portion_async(
+	virtual async_cres_t get_row_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, portion_compute::ptr compute) const;
-	virtual local_matrix_store::const_ptr get_portion_async(
+	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, portion_compute::ptr compute) const {
 		if (start_row + num_rows > get_num_rows()
 				|| start_col + num_cols > get_num_cols()) {
 			BOOST_LOG_TRIVIAL(error) << "get portion async: out of boundary";
-			return local_matrix_store::const_ptr();
+			return async_cres_t();
 		}
 
 		// TODO it should maintain a buffer.
@@ -625,12 +627,12 @@ public:
 			return EM_matrix_store::get_row_vec(rc_idxs[idx]);
 	}
 
-	virtual local_matrix_store::ptr get_portion_async(
+	virtual async_res_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, portion_compute::ptr compute) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "Don't support non-const get_portion_async in a sub EM matrix";
-		return local_matrix_store::ptr();
+		return async_res_t();
 	}
 
 	virtual void write_portion_async(local_matrix_store::const_ptr portion,
@@ -728,7 +730,7 @@ static std::vector<std::pair<off_t, off_t> > split_idxs(
 	return vecs;
 }
 
-local_matrix_store::const_ptr sub_EM_matrix_store::get_col_portion_async(
+async_cres_t sub_EM_matrix_store::get_col_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute) const
 {
@@ -747,16 +749,20 @@ local_matrix_store::const_ptr sub_EM_matrix_store::get_col_portion_async(
 	for (size_t i = 0; i < ranges.size(); i++) {
 		size_t local_num_cols = ranges[i].second - ranges[i].first;
 		collected_cols += local_num_cols;
-		bufs[i] = EM_matrix_store::get_portion_async(
+		async_cres_t res = EM_matrix_store::get_portion_async(
 				start_row, ranges[i].first, num_rows, local_num_cols,
 				collect_compute);
+		// We assume the requested portion doesn't have data, so the callback
+		// function is invoked when the data is ready.
+		assert(!res.first);
+		bufs[i] = res.second;
 	}
 	assert(collected_cols == num_cols);
 	_collect_compute->set_bufs(bufs);
-	return ret;
+	return async_cres_t(false, ret);
 }
 
-local_matrix_store::const_ptr sub_EM_matrix_store::get_row_portion_async(
+async_cres_t sub_EM_matrix_store::get_row_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute) const
 {
@@ -775,13 +781,17 @@ local_matrix_store::const_ptr sub_EM_matrix_store::get_row_portion_async(
 	for (size_t i = 0; i < ranges.size(); i++) {
 		size_t local_num_rows = ranges[i].second - ranges[i].first;
 		collected_rows += local_num_rows;
-		bufs[i] = EM_matrix_store::get_portion_async(
+		async_cres_t res = EM_matrix_store::get_portion_async(
 				ranges[i].first, start_col, local_num_rows, num_cols,
 				collect_compute);
+		// We assume the requested portion doesn't have data, so the callback
+		// function is invoked when the data is ready.
+		assert(!res.first);
+		bufs[i] = res.second;
 	}
 	assert(collected_rows == num_rows);
 	_collect_compute->set_bufs(bufs);
-	return ret;
+	return async_cres_t(false, ret);
 }
 
 matrix_store::const_ptr EM_matrix_store::get_cols(
