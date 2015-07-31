@@ -309,4 +309,11 @@ bool vector::export2(FILE *f) const
 	return true;
 }
 
+vector::ptr vector::sapply(bulk_uoperate::const_ptr op) const
+{
+	dense_matrix::ptr tmp = conv2mat(get_length(), 1, false);
+	dense_matrix::ptr tmp1 = tmp->sapply(op);
+	return tmp1->get_col(0);
+}
+
 }

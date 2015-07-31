@@ -131,12 +131,12 @@ public:
 			size_t num_cols);
 
 	virtual std::pair<size_t, size_t> get_portion_size() const;
-	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, portion_compute::ptr compute) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, portion_compute::ptr compute);
+	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			portion_compute::ptr compute) const;
+	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			portion_compute::ptr compute);
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);

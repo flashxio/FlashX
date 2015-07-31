@@ -65,7 +65,7 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 	}
 }
 
-matrix_store::ptr one_val_matrix_store::materialize() const
+matrix_store::const_ptr one_val_matrix_store::materialize() const
 {
 	return matrix_store::ptr(new one_val_matrix_store(*this));
 }

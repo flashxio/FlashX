@@ -110,6 +110,7 @@ public:
 	std::shared_ptr<data_frame> groupby(
 			const gr_apply_operate<local_vec_store> &op, bool with_val) const;
 
+	vector::ptr sapply(bulk_uoperate::const_ptr op) const;
 	scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	scalar_variable::ptr dot_prod(const vector &vec) const;
 

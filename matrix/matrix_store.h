@@ -39,6 +39,9 @@ class portion_compute;
 class local_matrix_store;
 class vec_store;
 
+typedef std::pair<bool, std::shared_ptr<local_matrix_store> > async_res_t;
+typedef std::pair<bool, std::shared_ptr<const local_matrix_store> > async_cres_t;
+
 class matrix_store
 {
 	size_t nrow;
@@ -131,18 +134,20 @@ public:
 	/*
 	 * These two versions get a portion of data from the matrix asynchronously.
 	 * When a local matrix store is returned, it's not guaranteed that the
-	 * data in the local matrix store is valid. The computation passed to
+	 * data in the local matrix store is valid. A status in the returned value
+	 * indicates whether the data is valid. If the data is invalid when it's
+	 * returned from the two methods, the computation passed to
 	 * these two methods are invoked when the portion of data is loaded
 	 * in memory. During the time between returning from the methods and
 	 * the portion of data becomes available, it's users' responsibility
 	 * of keep the local matrix store alive.
 	 */
-	virtual std::shared_ptr<const local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) const = 0;
-	virtual std::shared_ptr<local_matrix_store> get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) = 0;
+	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			std::shared_ptr<portion_compute> compute) const = 0;
+	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			std::shared_ptr<portion_compute> compute) = 0;
 	/*
 	 * These versions fetches the portion of data. It's guaranteed that
 	 * the data in the returned local matrix store is valid.

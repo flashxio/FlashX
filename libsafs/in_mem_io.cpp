@@ -165,7 +165,10 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 		}
 		else {
 			assert(req.get_req_type() == io_request::BASIC_REQ);
-			memcpy(req.get_buf(), data.get() + req.get_offset(), req.get_size());
+			if (req.get_access_method() == READ)
+				memcpy(req.get_buf(), data.get() + req.get_offset(), req.get_size());
+			else
+				memcpy(data.get() + req.get_offset(), req.get_buf(), req.get_size());
 			io_request *reqs[1];
 			reqs[0] = &req;
 			if (this->have_callback())

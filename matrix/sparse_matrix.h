@@ -327,13 +327,17 @@ public:
 
 		size_t start_col_idx
 			= block.get_block_col_idx() * block_size.get_num_cols();
+		size_t num_cols = std::min(block_size.get_num_cols(),
+				input.get_length() - start_col_idx);
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
+		size_t num_rows = std::min(block_size.get_num_rows(),
+				output.get_length() - start_row_idx);
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		const char *in_buf = input.get_sub_arr(start_col_idx,
-				start_col_idx + block_size.get_num_cols());
+				start_col_idx + num_cols);
 		char *out_buf = output.get_sub_arr(start_row_idx,
-				start_row_idx + block_size.get_num_rows());
+				start_row_idx + num_rows);
 		assert(in_buf);
 		assert(out_buf);
 		while (!block.is_block_end(it)) {
@@ -450,7 +454,9 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
 	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
 	size_t size = matrix_conf.get_cpu_cache_size() / entry_size
 		/ block_size.get_num_rows();
-	return std::max(size, 1UL);
+	size_t max_size
+		= detail::mem_matrix_store::CHUNK_SIZE / block_size.get_num_rows();
+	return std::min(std::max(size, 1UL), max_size);
 }
 
 /*
