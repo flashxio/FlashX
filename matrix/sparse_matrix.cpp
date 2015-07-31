@@ -243,21 +243,9 @@ block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
 
 const char *block_spmm_task::get_in_rows(size_t start_row, size_t num_rows)
 {
-	// Since the task needs to process the entire block rows, it needs
-	// to access many blocks. Each time a user wants to access in_part,
-	// he needs to specify which block is required.
-	size_t in_part_size = input.get_portion_size().first;
-	size_t in_part_id = start_row / in_part_size;
-	if (in_part == NULL || (size_t) in_part->get_global_start_row()
-			!= in_part_id * in_part_size)
-		in_part = detail::local_row_matrix_store::cast(
-				input.get_portion(in_part_id));
-
-	// Get the contiguous rows in the input and output matrices.
-	size_t local_start = start_row - in_part->get_global_start_row();
-	size_t local_end = std::min(local_start + num_rows,
-			in_part->get_num_rows());
-	return in_part->get_rows(local_start, local_end);
+	const char *ret = input.get_rows(start_row, start_row + num_rows);
+	assert(ret);
+	return ret;
 }
 
 char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)

@@ -213,11 +213,9 @@ class block_spmm_task: public block_compute_task
 	detail::mem_matrix_store &output;
 
 	/*
-	 * A task is responsible for processing the entire block rows. The data in
-	 * in_part multiplies with the super block and the result is stored
-	 * in out_part.
+	 * A task is responsible for processing the entire block rows.
+	 * The result is stored in out_part.
 	 */
-	detail::local_row_matrix_store::const_ptr in_part;
 	detail::local_row_matrix_store::ptr out_part;
 public:
 	block_spmm_task(const detail::mem_matrix_store &_input,
