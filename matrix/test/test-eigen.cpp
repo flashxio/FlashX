@@ -295,5 +295,7 @@ int main (int argc, char *argv[])
 		assert(ret);
 	}
 
+	safs::print_io_summary();
+
 	return 0;
 }
