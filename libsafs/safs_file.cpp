@@ -127,7 +127,7 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		dir_idxs[i] = i;
 	random_shuffle(dir_idxs.begin(), dir_idxs.end());
 
-	safs_header header(block_size, mapping_option, true);
+	safs_header header(block_size, mapping_option, true, file_size);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[dir_idxs[i]].name);
 		bool ret = dir.create_dir(true);
