@@ -179,7 +179,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
-	params.print();
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
