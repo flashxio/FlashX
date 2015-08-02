@@ -1058,29 +1058,90 @@ public:
 	}
 };
 
+template<class T>
+T get_scalar(SEXP val)
+{
+	if (R_is_integer(val))
+		return INTEGER(val)[0];
+	else
+		return REAL(val)[0];
+}
+
 RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 		SEXP penv)
 {
 	Rcpp::LogicalVector sym(psym);
 	Rcpp::List options(poptions);
 
-	eigen::eigen_options opts;
-	opts.tol = REAL(options["tol"])[0];
-	opts.num_blocks = INTEGER(options["num_blocks"])[0];
-	opts.max_restarts = INTEGER(options["max_restarts"])[0];
-	opts.max_iters = INTEGER(options["max_iters"])[0];
-	opts.block_size = INTEGER(options["block_size"])[0];
-	opts.nev = INTEGER(options["nev"])[0];
-	opts.solver = CHAR(STRING_ELT(options["solver"], 0));
-	opts.which = CHAR(STRING_ELT(options["which"], 0));
-	size_t n = INTEGER(options["n"])[0];
+	size_t nev = 1;
+	if (options.containsElementNamed("nev"))
+		nev = get_scalar<size_t>(options["nev"]);
+	std::string solver = "KrylovSchur";
+	if (options.containsElementNamed("solver"))
+		solver = CHAR(STRING_ELT(options["solver"], 0));
+
+	eigen::eigen_options opts(nev, solver);
+	if (options.containsElementNamed("tol"))
+		opts.tol = REAL(options["tol"])[0];
+	if (options.containsElementNamed("num_blocks"))
+		opts.num_blocks = get_scalar<int>(options["num_blocks"]);
+	if (options.containsElementNamed("max_restarts"))
+		opts.max_restarts = get_scalar<int>(options["max_restarts"]);
+	if (options.containsElementNamed("max_iters"))
+		opts.max_iters = get_scalar<int>(options["max_iters"]);
+	if (options.containsElementNamed("block_size"))
+		opts.block_size = get_scalar<int>(options["block_size"]);
+	if (options.containsElementNamed("which"))
+		opts.which = CHAR(STRING_ELT(options["which"], 0));
+
+	if (!options.containsElementNamed("n")) {
+		fprintf(stderr,
+				"User needs to specify `n' (the size of the eigenproblem)\n");
+		return R_NilValue;
+	}
+	size_t n = get_scalar<size_t>(options["n"]);
 	eigen::eigen_res res = eigen::compute_eigen(new R_spm_function(pfunc,
 				pextra, penv, n), sym[0], opts);
+
+	// Return the options.
+
+	Rcpp::IntegerVector nev_vec(1);
+	nev_vec[0] = opts.nev;
+	options["nev"] = nev_vec;
+
+	Rcpp::NumericVector tol_vec(1);
+	tol_vec[0] = opts.tol;
+	options["tol"] = tol_vec;
+
+	Rcpp::IntegerVector nblocks_vec(1);
+	nblocks_vec[0] = opts.num_blocks;
+	options["num_blocks"] = nblocks_vec;
+
+	Rcpp::IntegerVector max_restarts_vec(1);
+	max_restarts_vec[0] = opts.max_restarts;
+	options["max_restarts"] = max_restarts_vec;
+
+	Rcpp::IntegerVector max_iters_vec(1);
+	max_iters_vec[0] = opts.max_iters;
+	options["max_iters"] = max_iters_vec;
+
+	Rcpp::IntegerVector block_size_vec(1);
+	block_size_vec[0] = opts.block_size;
+	options["block_size"] = block_size_vec;
+	
+	Rcpp::StringVector solver_str(1);
+	solver_str[0] = Rcpp::String(opts.solver);
+	options["solver"] = solver_str;
+
+	Rcpp::StringVector which_str(1);
+	which_str[0] = Rcpp::String(opts.which);
+	options["which"] = which_str;
 
 	Rcpp::List ret;
 	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
 	ret["vals"] = vals;
 	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
+	ret["options"] = options;
 	return ret;
 }
 

@@ -587,7 +587,7 @@ fm.read.obj <- function(file)
 #'         vectors: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.eigen <- function(func, extra=NULL, sym=FALSE, options=fm.eigen.default,
+fm.eigen <- function(func, extra=NULL, sym=FALSE, options=NULL,
 					 env = parent.frame())
 {
 	.Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
