@@ -499,6 +499,28 @@ void comm_show_info(int argc, char *argv[])
 	printf("file size: %ld\n", header.get_size());
 }
 
+void comm_rename(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "rename file_name new_name\n");
+		return;
+	}
+
+	init_io_system(configs, false);
+	std::string file_name = argv[0];
+	std::string new_name = argv[1];
+	safs_file f(get_sys_RAID_conf(), file_name);
+	if (!f.exist()) {
+		fprintf(stderr, "%s doesn't exist in SAFS\n", file_name.c_str());
+		return;
+	}
+
+	bool ret = f.rename(new_name);
+	if (!ret)
+		fprintf(stderr, "can't rename %s to %s\n", file_name.c_str(),
+				new_name.c_str());
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -526,6 +548,8 @@ struct command commands[] = {
 		"export file_name ext_file: export an SAFS file to Linux filesystem"},
 	{"info", comm_show_info,
 		"info file_name: show the information of an SAFS file"},
+	{"rename", comm_rename,
+		"rename file_name new_name: rename an SAFS file"},
 };
 
 int get_num_commands()
