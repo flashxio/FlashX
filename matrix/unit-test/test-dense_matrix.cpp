@@ -1192,6 +1192,38 @@ void test_mul_output(int num_nodes)
 			== *(double *) agg->get_raw());
 }
 
+class set_col_operate1: public type_set_operate<int>
+{
+	size_t num_cols;
+public:
+	set_col_operate1(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = (row_idx + i) * num_cols + col_idx + 1;
+		}
+	}
+};
+
+void test_min()
+{
+	printf("test min\n");
+	const bulk_operate &op = *get_scalar_type<int>().get_basic_ops().get_op(
+			basic_ops::op_idx::MIN);
+
+	dense_matrix::ptr mat = dense_matrix::create(2000, 1,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate1(4));
+	scalar_variable::ptr res = mat->aggregate(op);
+	assert(*(int *) res->get_raw() == 1);
+
+	mat = dense_matrix::create(long_dim, 1, matrix_layout_t::L_COL,
+			get_scalar_type<int>(), set_col_operate1(4));
+	res = mat->aggregate(op);
+	assert(*(int *) res->get_raw() == 1);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1231,6 +1263,7 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_min();
 	test_mul_output(-1);
 	test_mul_output(num_nodes);
 	test_mapply_chain(-1, get_scalar_type<double>());
