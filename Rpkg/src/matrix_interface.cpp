@@ -163,40 +163,6 @@ static basic_uops_impl<int, int> R_basic_uops_I;
 static basic_uops_impl<double, double> R_basic_uops_D;
 static basic_uops_impl<bool, bool> R_basic_uops_B;
 
-static basic_ops &get_inner_prod_left_ops(const dense_matrix &left,
-		const dense_matrix &right)
-{
-	if (left.get_entry_size() == sizeof(int)
-			&& right.get_entry_size() == sizeof(int))
-		return R_basic_ops_IID;
-	else if (left.get_entry_size() == sizeof(double)
-			&& right.get_entry_size() == sizeof(int))
-		return R_basic_ops_DI;
-	else if (left.get_entry_size() == sizeof(int)
-			&& right.get_entry_size() == sizeof(double))
-		return R_basic_ops_ID;
-	else if (left.get_entry_size() == sizeof(double)
-			&& right.get_entry_size() == sizeof(double))
-		return R_basic_ops_DD;
-	else {
-		fprintf(stderr, "the matrix has a wrong type\n");
-		abort();
-	}
-}
-
-static basic_ops &get_inner_prod_right_ops(const bulk_operate &left_ops)
-{
-	if (left_ops.output_entry_size() == 4)
-		return R_basic_ops_II;
-	else if (left_ops.output_entry_size() == 8)
-		return R_basic_ops_DD;
-	else {
-		fprintf(stderr,
-				"the left operator of inner product has a wrong output type\n");
-		abort();
-	}
-}
-
 static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 {
 	const detail::mem_vec_store &in_vec
