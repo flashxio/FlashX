@@ -233,11 +233,6 @@ void SpM_2d_storage::verify() const
 SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		SpM_2d_index::ptr index)
 {
-	size_t size = safs::safs_file(safs::get_sys_RAID_conf(), mat_file).get_size();
-	char *data = NULL;
-	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
-	BOOST_VERIFY(mret == 0);
-
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			mat_file, safs::REMOTE_ACCESS);
 	if (io_fac == NULL) {
@@ -252,7 +247,11 @@ SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 
-	assert(size % PAGE_SIZE == 0);
+	size_t size = io_fac->get_file_size();
+	char *data = NULL;
+	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
+	BOOST_VERIFY(mret == 0);
+
 	safs::data_loc_t loc(io->get_file_id(), 0);
 	safs::io_request req(data, loc, size, READ);
 	io->access(&req, 1);
