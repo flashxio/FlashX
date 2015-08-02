@@ -2153,6 +2153,9 @@ class matrix_long_agg_op: public detail::portion_mapply_op
 	// Each row stores the local aggregation results on a thread.
 	detail::mem_row_matrix_store::ptr partial_res;
 	std::vector<local_vec_store::ptr> local_bufs;
+	// This indicates the number of times that data has been aggregated to
+	// the partial results.
+	std::vector<size_t> num_aggs;
 public:
 	matrix_long_agg_op(detail::mem_row_matrix_store::ptr partial_res,
 			detail::agg_margin margin, const bulk_operate &_op): detail::portion_mapply_op(
@@ -2160,6 +2163,19 @@ public:
 		this->partial_res = partial_res;
 		this->margin = margin;
 		local_bufs.resize(partial_res->get_num_rows());
+		num_aggs.resize(partial_res->get_num_rows());
+	}
+
+	bool valid_row(size_t off) const {
+		return num_aggs[off] > 0;
+	}
+
+	size_t get_num_valid_rows() const {
+		size_t ret = 0;
+		for (size_t i = 0; i < num_aggs.size(); i++)
+			if (num_aggs[i] > 0)
+				ret++;
+		return ret;
 	}
 
 	virtual void run(
@@ -2190,9 +2206,17 @@ void matrix_long_agg_op::run(
 						ins[0]->get_node_id()));
 	detail::aggregate(*ins[0], op, margin, *local_bufs[thread_id]);
 
-	op.runAA(partial_res->get_num_cols(), partial_res->get_row(thread_id),
-			local_bufs[thread_id]->get_raw_arr(),
-			partial_res->get_row(thread_id));
+	// If this is the first time, we should copy the local results to
+	// the corresponding row.
+	if (num_aggs[thread_id] == 0)
+		memcpy(partial_res->get_row(thread_id),
+				local_bufs[thread_id]->get_raw_arr(),
+				partial_res->get_num_cols() * partial_res->get_entry_size());
+	else
+		op.runAA(partial_res->get_num_cols(), partial_res->get_row(thread_id),
+				local_bufs[thread_id]->get_raw_arr(),
+				partial_res->get_row(thread_id));
+	const_cast<matrix_long_agg_op *>(this)->num_aggs[thread_id]++;
 }
 
 }
@@ -2263,8 +2287,28 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 
 	// The last step is to aggregate the partial results from all portions.
 	// It runs in serial. I hope it's not a bottleneck.
-	detail::local_matrix_store::const_ptr local_res = partial_res->get_portion(
-			0, 0, partial_res->get_num_rows(), partial_res->get_num_cols());
+	detail::local_matrix_store::const_ptr local_res;
+	size_t num_valid_rows = agg_op->get_num_valid_rows();
+	// If all rows are valid.
+	if (num_valid_rows == partial_res->get_num_rows())
+		local_res = partial_res->get_portion(
+				0, 0, partial_res->get_num_rows(), partial_res->get_num_cols());
+	else {
+		// Otherwise, we have to pick all the valid rows out.
+		detail::local_row_matrix_store::ptr tmp(
+				new detail::local_buf_row_matrix_store(0, 0, num_valid_rows,
+					partial_res->get_num_cols(), partial_res->get_type(), -1));
+		size_t entry_size = partial_res->get_entry_size();
+		size_t copy_row = 0;
+		for (size_t i = 0; i < partial_res->get_num_rows(); i++)
+			if (agg_op->valid_row(i)) {
+				memcpy(tmp->get_row(copy_row), partial_res->get_row(i),
+						partial_res->get_num_cols() * entry_size);
+				copy_row++;
+			}
+		assert(copy_row == num_valid_rows);
+		local_res = tmp;
+	}
 	detail::smp_vec_store::ptr res = detail::smp_vec_store::create(
 			partial_res->get_num_cols(), partial_res->get_type());
 	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_length(),
