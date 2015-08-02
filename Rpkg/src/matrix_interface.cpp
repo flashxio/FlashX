@@ -299,8 +299,14 @@ void copy_FM2R_mem(dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
 		vector::ptr mem_vec = mem_mat->get_col(0);
-		assert(sizeof(T) == sizeof(RType));
-		mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
+		if (sizeof(T) == sizeof(RType))
+			mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
+		else {
+			std::unique_ptr<T[]> tmp(new T[mem_vec->get_length()]);
+			mem_vec->get_data().copy_to((char *) tmp.get(), mem_vec->get_length());
+			for (size_t i = 0; i < mem_vec->get_length(); i++)
+				ret[i] = tmp[i];
+		}
 	}
 	else
 		copy_FM2Rmatrix<T>(*mem_mat, ret);
