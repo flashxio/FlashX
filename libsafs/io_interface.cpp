@@ -798,8 +798,11 @@ io_interface::~io_interface()
 
 file_io_factory::file_io_factory(const std::string _name): name(_name)
 {
-	safs_file f(get_sys_RAID_conf(), name);
-	header = f.get_header();
+	// It's possible that SAFS hasn't been initialized.
+	if (global_data.raid_conf) {
+		safs_file f(*global_data.raid_conf, name);
+		header = f.get_header();
+	}
 }
 
 }
