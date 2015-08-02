@@ -594,23 +594,6 @@ fm.eigen <- function(func, extra=NULL, sym=FALSE, options=fm.eigen.default,
 		  as.list(options), PACKAGE="FlashGraphR")
 }
 
-fm.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
-{
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fm")
-
-	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  "LS", as.double(tol), PACKAGE="FlashGraphR")
-
-	norm.col <- function(x)
-	{
-		x / sqrt(sum(x * x))
-	}
-	list(values=ret$values, left=ret$vectors,
-		 right=apply(fm.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
-		 options=ret$options)
-}
-
 fm.scale <- function(mat, vec, byrow)
 {
 	.Call("R_FM_scale", mat, vec, as.logical(byrow), PACKAGE="FlashGraphR")
