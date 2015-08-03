@@ -1,0 +1,24 @@
+Create a FlashMatrixR vector with replicated elements.
+
+Description:
+
+     Create a FlashMatrixR vector with replicated elements.
+
+Usage:
+
+     fm.rep.int(x, times)
+     
+Arguments:
+
+       x: A constant initial value
+
+   times: The length of the vector to be generated.
+
+Value:
+
+     A FlashMatrixR vector
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

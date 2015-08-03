@@ -7,7 +7,8 @@
 \usage{
 fg.fetch.subgraph.igraph(graph, vertices)
 
-fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""))
+fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""),
+  compress = TRUE)
 }
 \arguments{
 \item{graph}{The FlashGraphR object}
