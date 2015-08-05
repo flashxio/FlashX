@@ -246,8 +246,54 @@ public:
 	void notify_complete();
 };
 
-template<class T>
+template<class T, int ROW_WIDTH>
 class block_spmm_task_impl: public block_spmm_task
+{
+	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
+			const T *in_rows, T *out_rows) {
+		size_t row_idx = it.get_rel_row_idx();
+		T *dest_row = out_rows + ROW_WIDTH * row_idx;
+		while (it.has_next()) {
+			size_t col_idx = it.next();
+			const T *src_row = in_rows + ROW_WIDTH * col_idx;
+			for (size_t j = 0; j < ROW_WIDTH; j++)
+				dest_row[j] += src_row[j];
+		}
+		return it;
+	}
+public:
+	block_spmm_task_impl(const detail::mem_matrix_store &input,
+			detail::mem_matrix_store &output, const matrix_io &io,
+			const sparse_matrix &mat,
+			block_exec_order::ptr order): block_spmm_task(input,
+				output, io, mat, order) {
+		assert(ROW_WIDTH == output.get_num_cols());
+	}
+
+	void run_on_block(const sparse_block_2d &block) {
+		if (block.is_empty())
+			return;
+
+		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
+		size_t num_in_rows = std::min(block_size.get_num_cols(),
+				get_in_matrix().get_num_rows() - in_row_start);
+		const char *in_rows = get_in_rows(in_row_start, num_in_rows);
+
+		size_t out_row_start = block.get_block_row_idx() * block_size.get_num_rows();
+		size_t num_out_rows = std::min(block_size.get_num_rows(),
+				get_out_matrix().get_num_rows() - out_row_start);
+		char *out_rows = get_out_rows(out_row_start, num_out_rows);
+
+		rp_edge_iterator it = block.get_first_edge_iterator();
+		while (!block.is_block_end(it)) {
+			it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
+			it = block.get_next_edge_iterator(it);
+		}
+	}
+};
+
+template<class T>
+class block_spmm_task_impl<T, 0>: public block_spmm_task
 {
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
 			const T *in_rows, T *out_rows) {
@@ -424,9 +470,25 @@ public:
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		if (order)
-			return compute_task::ptr(new block_spmm_task_impl<T>(input, output,
-						io, mat, order));
+		if (order) {
+			switch (output.get_num_cols()) {
+				case 2:
+					return compute_task::ptr(new block_spmm_task_impl<T, 2>(
+								input, output, io, mat, order));
+				case 4:
+					return compute_task::ptr(new block_spmm_task_impl<T, 4>(
+								input, output, io, mat, order));
+				case 8:
+					return compute_task::ptr(new block_spmm_task_impl<T, 8>(
+								input, output, io, mat, order));
+				case 16:
+					return compute_task::ptr(new block_spmm_task_impl<T, 16>(
+								input, output, io, mat, order));
+				default:
+					return compute_task::ptr(new block_spmm_task_impl<T, 0>(
+								input, output, io, mat, order));
+			}
+		}
 		else
 			return compute_task::ptr(new fg_row_spmm_task<T>(input, output, io));
 	}
