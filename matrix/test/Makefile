@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm
+	el2al al22d al2crs test-sort test-eigen test-dgemm test-mkl_eigen
 
 trilinos: test-anasazi_eigen test-tpetra_multiply
 
@@ -61,6 +61,12 @@ test-tpetra_multiply.o: test-tpetra_multiply.cpp
 
 test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
 	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+
+test-mkl_eigen.o: test-mkl_eigen.cpp
+	mpic++ -c test-mkl_eigen.cpp $(CXXFLAGS) -I/home/zhengda/intel/mkl/include/
+
+test-mkl_eigen: test-mkl_eigen.o
+	mpic++ test-mkl_eigen.o -o test-mkl_eigen $(LDTRILINOS) $(LDFLAGS) -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lm
 
 test-anasazi_eigen.o: test-anasazi_eigen.cpp
 	mpic++ -c test-anasazi_eigen.cpp $(CXXFLAGS)
