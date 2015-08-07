@@ -75,14 +75,8 @@ void test_spmm(const std::vector<crs_idx_t> &row_idxs,
 	crs_idx_t ncolA = num_cols;
 	double alpha = 1;
 	double beta = 0;
-	const std::vector<crs_idx_t> &pntrb = row_idxs;
-	std::vector<crs_idx_t> pntre(row_idxs.size());
-	pntre[0] = val_vec.size();
-#pragma omp parallel for
-	for (size_t i = 1; i < pntre.size(); i++)
-		pntre[i] = pntrb[i];
 	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
-			col_vec.data(), pntrb.data(), pntre.data() + 1, in_vec.data(),
+			col_vec.data(), row_idxs.data(), row_idxs.data() + 1, in_vec.data(),
 			&ncolC, &beta, out_vec.data(), &ncolC);
 	gettimeofday(&end, NULL);
 	printf("SpMM takes %.3fs\n", time_diff(start, end));
