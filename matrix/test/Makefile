@@ -53,14 +53,20 @@ al2crs: al2crs.o fg_utils.o ../libFMatrix.a
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
-LDTRILINOS = -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
+LDTRILINOS = -ltpetra -ltpetrakernels -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
 		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
+test-tpetra_multiply.o: test-tpetra_multiply.cpp
+	mpic++ -c test-tpetra_multiply.cpp $(CXXFLAGS)
+
 test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
-	$(CXX) -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+
+test-anasazi_eigen.o: test-anasazi_eigen.cpp
+	mpic++ -c test-anasazi_eigen.cpp $(CXXFLAGS)
 
 test-anasazi_eigen: test-anasazi_eigen.o
-	$(CXX) test-anasazi_eigen.o -o test-anasazi_eigen $(LDTRILINOS) $(LDFLAGS)
+	mpic++ test-anasazi_eigen.o -o test-anasazi_eigen $(LDTRILINOS) $(LDFLAGS)
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
