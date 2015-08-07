@@ -264,11 +264,13 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 
 void print_usage()
 {
-	fprintf(stderr, "eigensolver matrix_file index_file nev [options]\n");
+	fprintf(stderr, "eigensolver matrix_file index_file [options]\n");
 	fprintf(stderr, "-b block_size_start\n");
 	fprintf(stderr, "-B block_size_end\n");
 	fprintf(stderr, "-n num_blocks_start\n");
 	fprintf(stderr, "-N num_blocks_end\n");
+	fprintf(stderr, "-e nev_start\n");
+	fprintf(stderr, "-E nev_end\n");
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
 	fprintf(stderr, "-S: run SVD\n");
@@ -282,9 +284,11 @@ int main (int argc, char *argv[])
 	size_t blockSizeEnd = 0;
 	size_t numBlocksStart = 8;
 	size_t numBlocksEnd = 0;
+	size_t nevStart = 8;
+	size_t nevEnd = 0;
 	std::string solver = "LOBPCG";
 	double tol = 1e-8;
-	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:e:E:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -311,6 +315,14 @@ int main (int argc, char *argv[])
 				tol = atof(optarg);
 				num_opts++;
 				break;
+			case 'e':
+				nevStart = atoi(optarg);
+				num_opts++;
+				break;
+			case 'E':
+				nevEnd = atoi(optarg);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -320,17 +332,18 @@ int main (int argc, char *argv[])
 		blockSizeEnd = blockSizeStart;
 	if (numBlocksEnd == 0)
 		numBlocksEnd = numBlocksStart;
+	if (nevEnd == 0)
+		nevEnd = nevStart;
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
-	if (argc < 3) {
+	if (argc < 2) {
 		print_usage();
 		exit(1);
 	}
 
 	std::string graph_file = argv[0];
 	std::string index_file = argv[1];
-	int nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
 	fg::vertex_index::ptr index = fg::vertex_index::load(index_file);
 	Teuchos::GlobalMPISession mpiSession (&argc, &argv);
@@ -345,11 +358,13 @@ int main (int argc, char *argv[])
 				0, comm));
 	int my_rank = comm->getRank();
 	RCP<crs_matrix_type> A = create_crs(graph_file, index, Map, my_rank);
-	for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
-			blockSize *= 2) {
-		for (size_t numBlocks = numBlocksStart; numBlocks <= numBlocksEnd;
-				numBlocks *= 2)
-			compute_eigen(A, nev, solver, blockSize, numBlocks, tol, my_rank);
+	for (size_t nev = nevStart; nev <= nevEnd; nev *= 2) {
+		for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
+				blockSize *= 2) {
+			for (size_t numBlocks = numBlocksStart; numBlocks <= numBlocksEnd;
+					numBlocks *= 2)
+				compute_eigen(A, nev, solver, blockSize, numBlocks, tol, my_rank);
+		}
 	}
 
 	return 0;
