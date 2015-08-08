@@ -10,9 +10,6 @@
 
 #include "crs_header.h"
 
-#define MKL_ILP64
-#define FLEXCOMPLEX
-#define MKL_INT crs_idx_t
 #include <mkl.h>
 
 // Include header for block Davidson eigensolver
@@ -777,8 +774,8 @@ public:
 
 std::atomic<size_t> iter_no;
 
-typedef crs_idx_t local_ordinal_type;
-typedef crs_idx_t global_ordinal_type;
+typedef int local_ordinal_type;
+typedef int global_ordinal_type;
 
 typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType  Node;
 typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, Node> MV;
@@ -824,27 +821,31 @@ spm_function::spm_function(const std::string &crs_file)
 	nrowA = header.get_num_rows();
 	ncolA = header.get_num_cols();
 	size_t nnz = header.get_num_non_zeros();
-	printf("There are %ld rows, %ld cols and %ld nnz\n", nrowA, ncolA, nnz);
+	printf("There are %d rows, %d cols and %ld nnz\n", nrowA, ncolA, nnz);
 
-	row_idxs.resize(nrowA + 1);
-	col_vec.resize(nnz);
+	std::vector<crs_idx_t> row_idxs64(nrowA + 1);
+	std::vector<crs_idx_t> col_vec64(nnz);
 	printf("read CRS\n");
-	ret = fread(row_idxs.data(), row_idxs.size() * sizeof(row_idxs[0]),
+	ret = fread(row_idxs64.data(), row_idxs64.size() * sizeof(row_idxs64[0]),
 			1, f);
 	if (ret == 0) {
 		fprintf(stderr, "can't read row idxs: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	ret = fread(col_vec.data(), col_vec.size() * sizeof(col_vec[0]), 1, f);
+	ret = fread(col_vec64.data(), col_vec64.size() * sizeof(col_vec64[0]), 1, f);
 	if (ret == 0) {
 		fprintf(stderr, "can't read col idxs: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	for (size_t i = 0; i < col_vec.size(); i++)
-		assert(col_vec[i] < ncolA);
+	for (size_t i = 0; i < col_vec64.size(); i++)
+		assert(col_vec64[i] < (size_t) ncolA);
 
+	assert(row_idxs.empty());
+	row_idxs.insert(row_idxs.end(), row_idxs64.begin(), row_idxs64.end());
+	assert(col_vec.empty());
+	col_vec.insert(col_vec.end(), col_vec64.begin(), col_vec64.end());
 	val_vec.resize(nnz);
 	printf("Create value vector of %ld entries for the adj matrix\n", val_vec.size());
 #pragma omp parallel for
@@ -926,13 +927,10 @@ void compute_eigen(spm_function *func, int nev, const std::string &solver,
 	printf("tol: %g\n", tol);
 
 	RCP<OP> A = rcp(func);
-	printf("check point1\n");
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (Map, (size_t) blockSize));
-	printf("check point2\n");
 	ivec->randomize();
-	printf("check point3\n");
 
 	// Create the eigenproblem.  This object holds all the stuff about
 	// your problem that Anasazi will see.  In this case, it knows about
@@ -946,7 +944,6 @@ void compute_eigen(spm_function *func, int nev, const std::string &solver,
 	// Set the number of eigenvalues requested
 	problem->setNEV (nev);
 
-	printf("check point4\n");
 	// Tell the eigenproblem that you are finishing passing it information.
 	const bool boolret = problem->setProblem();
 	if (boolret != true) {
@@ -988,13 +985,10 @@ void compute_eigen(spm_function *func, int nev, const std::string &solver,
 		anasaziPL.set ("Full Ortho", true);
 		anasaziPL.set ("Use Locking", true);
 
-		printf("check point5\n");
 		// Create the LOBPCG eigensolver.
 		Anasazi::LOBPCGSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
-		printf("check point6\n");
 		// Solve the eigenvalue problem.
 		returnCode = anasaziSolver.solve ();
-		printf("check point7\n");
 	}
 	else
 		assert(0);
