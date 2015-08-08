@@ -129,6 +129,8 @@ int main(int argc, char *argv[])
 	read_data(out_data.get_raw(), out_size, 1, out_off, f);
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
 	init_out_offs(vindex, out_offs);
+	for (size_t i = 0; i < out_offs.size(); i++)
+		out_offs[i] -= out_off;
 	vector_vector::ptr out_adjs = vector_vector::create(
 			out_data, out_offs, get_scalar_type<char>());
 
@@ -144,6 +146,8 @@ int main(int argc, char *argv[])
 		read_data(in_data.get_raw(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
 		init_in_offs(vindex, in_offs);
+		for (size_t i = 0; i < in_offs.size(); i++)
+			in_offs[i] -= in_off;
 		vector_vector::ptr in_adjs = vector_vector::create(
 				in_data, in_offs, get_scalar_type<char>());
 
