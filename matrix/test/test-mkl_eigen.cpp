@@ -782,28 +782,8 @@ typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, No
 
 size_t edge_data_size = 0;
 
-class spm_function
-{
-	std::vector<MKL_INT> row_idxs;
-	std::vector<MKL_INT> col_vec;
-	std::vector<double> val_vec;
-	MKL_INT nrowA;
-	MKL_INT ncolA;
-public:
-	typedef std::shared_ptr<const spm_function> const_ptr;
-
-	spm_function(const std::string &crs_file);
-
-	void run(const MV &in, MV &out) const;
-	size_t get_num_rows() const {
-		return nrowA;
-	}
-	size_t get_num_cols() const {
-		return ncolA;
-	}
-};
-
-spm_function::spm_function(const std::string &crs_file)
+static void read_index(const std::string &crs_file, std::vector<MKL_INT> &row_idxs,
+		std::vector<MKL_INT> &col_vec)
 {
 	FILE *f = fopen(crs_file.c_str(), "r");
 	if (f == NULL) {
@@ -818,10 +798,10 @@ spm_function::spm_function(const std::string &crs_file)
 		exit(1);
 	}
 
-	nrowA = header.get_num_rows();
-	ncolA = header.get_num_cols();
+	size_t nrowA = header.get_num_rows();
+	size_t ncolA = header.get_num_cols();
 	size_t nnz = header.get_num_non_zeros();
-	printf("There are %d rows, %d cols and %ld nnz\n", nrowA, ncolA, nnz);
+	printf("There are %ld rows, %ld cols and %ld nnz\n", nrowA, ncolA, nnz);
 
 	std::vector<crs_idx_t> row_idxs64(nrowA + 1);
 	std::vector<crs_idx_t> col_vec64(nnz);
@@ -840,17 +820,12 @@ spm_function::spm_function(const std::string &crs_file)
 	}
 
 	for (size_t i = 0; i < col_vec64.size(); i++)
-		assert(col_vec64[i] < (size_t) ncolA);
+		assert(col_vec64[i] < ncolA);
 
 	assert(row_idxs.empty());
 	row_idxs.insert(row_idxs.end(), row_idxs64.begin(), row_idxs64.end());
 	assert(col_vec.empty());
 	col_vec.insert(col_vec.end(), col_vec64.begin(), col_vec64.end());
-	val_vec.resize(nnz);
-	printf("Create value vector of %ld entries for the adj matrix\n", val_vec.size());
-#pragma omp parallel for
-	for (size_t i = 0; i < val_vec.size(); i++)
-		val_vec[i] = 1;
 }
 
 static void conv2row(const MV &src, double *res)
@@ -874,11 +849,71 @@ void conv2col(const double *mat, MV &res)
 	}
 }
 
-void spm_function::run(const MV &in, MV &out) const
+class spm_function
+{
+public:
+	typedef std::shared_ptr<const spm_function> const_ptr;
+	virtual void run(const MV &in, MV &out) const = 0;
+	virtual size_t get_num_rows() const = 0;
+	virtual size_t get_num_cols() const = 0;
+};
+
+class eigen_function: public spm_function
+{
+	std::vector<MKL_INT> row_idxs;
+	std::vector<MKL_INT> col_vec;
+	std::vector<double> val_vec;
+public:
+	eigen_function(const std::string &crs_file);
+
+	virtual void run(const MV &in, MV &out) const;
+	virtual size_t get_num_rows() const {
+		return row_idxs.size() - 1;
+	}
+	virtual size_t get_num_cols() const {
+		return row_idxs.size() - 1;
+	}
+};
+
+class SVD_function: public spm_function
+{
+	std::vector<MKL_INT> row_idxs;
+	std::vector<MKL_INT> col_vec;
+	std::vector<MKL_INT> t_row_idxs;
+	std::vector<MKL_INT> t_col_vec;
+	// Both matrices share the same value array because both matrices have
+	// the same number of nnz and all nnz have the same value.
+	std::vector<double> val_vec;
+public:
+	SVD_function(const std::string &crs_file, const std::string t_crs_file);
+
+	virtual void run(const MV &in, MV &out) const;
+	virtual size_t get_num_rows() const {
+		return row_idxs.size() - 1;
+	}
+	virtual size_t get_num_cols() const {
+		return row_idxs.size() - 1;
+	}
+};
+
+eigen_function::eigen_function(const std::string &crs_file)
+{
+	read_index(crs_file, row_idxs, col_vec);
+	size_t nnz = col_vec.size();
+	val_vec.resize(nnz);
+	printf("Create value vector of %ld entries for the adj matrix\n", val_vec.size());
+#pragma omp parallel for
+	for (size_t i = 0; i < val_vec.size(); i++)
+		val_vec[i] = 1;
+}
+
+void eigen_function::run(const MV &in, MV &out) const
 {
 	std::vector<double> in_data(in.getGlobalLength() * in.getNumVectors());
 	std::vector<double> out_data(out.getGlobalLength() * out.getNumVectors());
 	MKL_INT ncolC = out.getNumVectors();
+	MKL_INT nrowA = get_num_rows();
+	MKL_INT ncolA = get_num_cols();
 	double alpha = 1;
 	double beta = 0;
 	// Copy data from `in' (in column major) to `in_data' (in row major).
@@ -886,6 +921,42 @@ void spm_function::run(const MV &in, MV &out) const
 	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
 			col_vec.data(), row_idxs.data(), row_idxs.data() + 1, in_data.data(),
 			&ncolC, &beta, out_data.data(), &ncolC);
+	// Copy data from `out_data' (in row major) to `out' (in column major).
+	conv2col(out_data.data(), out);
+}
+
+SVD_function::SVD_function(const std::string &crs_file,
+		const std::string t_crs_file)
+{
+	read_index(crs_file, row_idxs, col_vec);
+	read_index(t_crs_file, t_row_idxs, t_col_vec);
+	size_t nnz = col_vec.size();
+	val_vec.resize(nnz);
+	printf("Create value vector of %ld entries for the adj matrix\n", val_vec.size());
+#pragma omp parallel for
+	for (size_t i = 0; i < val_vec.size(); i++)
+		val_vec[i] = 1;
+}
+
+void SVD_function::run(const MV &in, MV &out) const
+{
+	std::vector<double> in_data(in.getGlobalLength() * in.getNumVectors());
+	std::vector<double> tmp_data(out.getGlobalLength() * out.getNumVectors());
+	std::vector<double> out_data(out.getGlobalLength() * out.getNumVectors());
+	MKL_INT ncolC = out.getNumVectors();
+	MKL_INT nrowA = get_num_rows();
+	MKL_INT ncolA = get_num_cols();
+	double alpha = 1;
+	double beta = 0;
+	// Copy data from `in' (in column major) to `in_data' (in row major).
+	conv2row(in, in_data.data());
+	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
+			col_vec.data(), row_idxs.data(), row_idxs.data() + 1, in_data.data(),
+			&ncolC, &beta, tmp_data.data(), &ncolC);
+
+	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
+			t_col_vec.data(), t_row_idxs.data(), t_row_idxs.data() + 1,
+			tmp_data.data(), &ncolC, &beta, out_data.data(), &ncolC);
 	// Copy data from `out_data' (in row major) to `out' (in column major).
 	conv2col(out_data.data(), out);
 }
@@ -1059,9 +1130,10 @@ int main (int argc, char *argv[])
 	size_t blockSizeEnd = 0;
 	size_t numBlocksStart = 8;
 	size_t numBlocksEnd = 0;
+	std::string type = "eigen";
 	std::string solver = "LOBPCG";
 	double tol = 1e-8;
-	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:T:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -1088,6 +1160,10 @@ int main (int argc, char *argv[])
 				tol = atof(optarg);
 				num_opts++;
 				break;
+			case 'T':
+				type = optarg;
+				num_opts++;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -1100,13 +1176,20 @@ int main (int argc, char *argv[])
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
-	if (argc < 2) {
+	if ((argc < 2 && type != "SVD") || (argc < 3 && type == "SVD")) {
 		print_usage();
 		exit(1);
 	}
 
 	std::string csr_file = argv[0];
-	int nev = atoi(argv[1]); // number of eigenvalues for which to solve;
+	std::string t_csr_file;
+	int nev;
+	if (type == "SVD") {
+		t_csr_file = argv[1];
+		nev = atoi(argv[2]);
+	}
+	else
+		nev = atoi(argv[1]); // number of eigenvalues for which to solve;
 
 	// Anasazi solvers have the following template parameters:
 	//
@@ -1121,7 +1204,15 @@ int main (int argc, char *argv[])
 	//
 	// Set up the test problem.
 	//
-	spm_function *A = new spm_function(csr_file);
+	spm_function *A;
+	if (type == "eigen")
+		A = new eigen_function(csr_file);
+	else if (type == "SVD")
+		A = new SVD_function(csr_file, t_csr_file);
+	else {
+		fprintf(stderr, "wrong type: %s\n", type.c_str());
+		exit(1);
+	}
 	assert(A->get_num_rows() == A->get_num_cols());
 
 	Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
