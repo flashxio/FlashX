@@ -831,22 +831,28 @@ static void read_index(const std::string &crs_file, std::vector<MKL_INT> &row_id
 static void conv2row(const MV &src, double *res)
 {
 	size_t col_length = src.getGlobalLength();
-	for (size_t j = 0; j < src.getNumVectors(); j++) {
-		Teuchos::ArrayRCP<const double> col = src.getData(j);
-		for (size_t i = 0; i < col_length; i++)
-			res[i * src.getNumVectors() + j] = col[i];
-	}
+	std::vector<Teuchos::ArrayRCP<const double> > src_cols(src.getNumVectors());
+	for (size_t j = 0; j < src.getNumVectors(); j++)
+		src_cols[j] = src.getData(j);
+
+#pragma omp parallel for
+	for (size_t i = 0; i < col_length; i++)
+		for (size_t j = 0; j < src.getNumVectors(); j++)
+			res[i * src.getNumVectors() + j] = src_cols[j][i];
 }
 
 void conv2col(const double *mat, MV &res)
 {
 	size_t col_length = res.getGlobalLength();
 	size_t num_cols = res.getNumVectors();
-	for (size_t j = 0; j < num_cols; j++) {
-		Teuchos::ArrayRCP<double> col = res.getDataNonConst(j);
-		for (size_t i = 0; i < col_length; i++)
-			col[i] = mat[i * num_cols + j];
-	}
+	std::vector<Teuchos::ArrayRCP<double> > dst_cols(num_cols);
+	for (size_t j = 0; j < num_cols; j++)
+		dst_cols[j] = res.getDataNonConst(j);
+
+#pragma omp parallel for
+	for (size_t i = 0; i < col_length; i++)
+		for (size_t j = 0; j < num_cols; j++)
+			dst_cols[j][i] = mat[i * num_cols + j];
 }
 
 class spm_function
@@ -916,13 +922,27 @@ void eigen_function::run(const MV &in, MV &out) const
 	MKL_INT ncolA = get_num_cols();
 	double alpha = 1;
 	double beta = 0;
+	struct timeval start, end;
 	// Copy data from `in' (in column major) to `in_data' (in row major).
+	gettimeofday(&start, NULL);
 	conv2row(in, in_data.data());
+	gettimeofday(&end, NULL);
+	double time1 = time_diff(start, end);
+
+	start = end;
 	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
 			col_vec.data(), row_idxs.data(), row_idxs.data() + 1, in_data.data(),
 			&ncolC, &beta, out_data.data(), &ncolC);
+	gettimeofday(&end, NULL);
+	double time2 = time_diff(start, end);
+
 	// Copy data from `out_data' (in row major) to `out' (in column major).
+	start = end;
 	conv2col(out_data.data(), out);
+	gettimeofday(&end, NULL);
+	double time3 = time_diff(start, end);
+
+	printf("SpMM: %.3f, col2row: %.3f, row2col: %.3f\n", time2, time1, time3);
 }
 
 SVD_function::SVD_function(const std::string &crs_file,
@@ -948,8 +968,14 @@ void SVD_function::run(const MV &in, MV &out) const
 	MKL_INT ncolA = get_num_cols();
 	double alpha = 1;
 	double beta = 0;
+	struct timeval start, end;
 	// Copy data from `in' (in column major) to `in_data' (in row major).
+	gettimeofday(&start, NULL);
 	conv2row(in, in_data.data());
+	gettimeofday(&end, NULL);
+	double time1 = time_diff(start, end);
+
+	start = end;
 	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
 			col_vec.data(), row_idxs.data(), row_idxs.data() + 1, in_data.data(),
 			&ncolC, &beta, tmp_data.data(), &ncolC);
@@ -957,8 +983,16 @@ void SVD_function::run(const MV &in, MV &out) const
 	mkl_dcsrmm("N", &nrowA, &ncolC, &ncolA, &alpha, "G  C", val_vec.data(),
 			t_col_vec.data(), t_row_idxs.data(), t_row_idxs.data() + 1,
 			tmp_data.data(), &ncolC, &beta, out_data.data(), &ncolC);
+	gettimeofday(&end, NULL);
+	double time2 = time_diff(start, end);
+
 	// Copy data from `out_data' (in row major) to `out' (in column major).
+	start = end;
 	conv2col(out_data.data(), out);
+	gettimeofday(&end, NULL);
+	double time3 = time_diff(start, end);
+
+	printf("two SpMM: %.3f, col2row: %.3f, row2col: %.3f\n", time2, time1, time3);
 }
 
 namespace Anasazi
@@ -969,7 +1003,6 @@ class OperatorTraits <double, MV, spm_function>
 {
 public:
 	static void Apply(const spm_function& Op, const MV& x, MV& y) {
-		printf("run sparse matrix multiplication\n");
 		Op.run(x, y);
 	}
 };
