@@ -982,7 +982,7 @@ typedef Tpetra::Map<local_ordinal_type, global_ordinal_type, Node> map_type;
 
 RCP<map_type> Map;
 
-void compute_eigen(spm_function *func, int nev, const std::string &solver,
+void compute_eigen(RCP<OP> A, int nev, const std::string &solver,
 		int blockSize, int numBlocks, double tol)
 {
 	// Here, Scalar is double, MV is Tpetra::MultiVector, and OP is FMTp_Operator.
@@ -997,7 +997,6 @@ void compute_eigen(spm_function *func, int nev, const std::string &solver,
 	printf("#blocks: %d\n", numBlocks);
 	printf("tol: %g\n", tol);
 
-	RCP<OP> A = rcp(func);
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (Map, (size_t) blockSize));
@@ -1204,11 +1203,11 @@ int main (int argc, char *argv[])
 	//
 	// Set up the test problem.
 	//
-	spm_function *A;
+	RCP<OP> A;
 	if (type == "eigen")
-		A = new eigen_function(csr_file);
+		A = rcp(new eigen_function(csr_file));
 	else if (type == "SVD")
-		A = new SVD_function(csr_file, t_csr_file);
+		A = rcp(new SVD_function(csr_file, t_csr_file));
 	else {
 		fprintf(stderr, "wrong type: %s\n", type.c_str());
 		exit(1);
