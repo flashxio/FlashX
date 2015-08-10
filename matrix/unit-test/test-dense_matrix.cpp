@@ -1224,6 +1224,36 @@ void test_min()
 	assert(*(int *) res->get_raw() == 1);
 }
 
+void test_apply_scalar()
+{
+	printf("test apply scalar\n");
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr tmp = mat1->minus(*mat2);
+	assert(tmp->get_type() == get_scalar_type<double>());
+	tmp = tmp->abs();
+	assert(tmp->get_type() == get_scalar_type<double>());
+	tmp = tmp->lt_scalar<double>(1e-5);
+	assert(tmp->get_type() == get_scalar_type<bool>());
+	scalar_variable::ptr res = tmp->sum();
+	assert(res->get_type() == get_scalar_type<size_t>());
+
+	detail::mem_matrix_store::const_ptr store1
+		= detail::mem_matrix_store::cast(mat1->get_raw_store());
+	detail::mem_matrix_store::const_ptr store2
+		= detail::mem_matrix_store::cast(mat2->get_raw_store());
+	size_t num = 0;
+	for (size_t i = 0; i < store1->get_num_rows(); i++)
+		for (size_t j = 0; j < store2->get_num_cols(); j++) {
+			if (std::abs(store1->get<double>(i, j) - store2->get<double>(i, j)) < 1e-5)
+				num++;
+		}
+	assert(num == *(size_t *) res->get_raw());
+	printf("two matrices have %ld elements with similar values\n", num);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1263,6 +1293,7 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_apply_scalar();
 	test_min();
 	test_mul_output(-1);
 	test_mul_output(num_nodes);

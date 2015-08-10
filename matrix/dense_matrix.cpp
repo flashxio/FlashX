@@ -737,33 +737,34 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 namespace
 {
 
-class multiply_scalar_op: public detail::portion_mapply_op
+class apply_scalar_op: public detail::portion_mapply_op
 {
 	scalar_variable::const_ptr var;
-	const bulk_operate &op;
+	bulk_operate::const_ptr op;
 public:
-	multiply_scalar_op(scalar_variable::const_ptr var, size_t out_num_rows,
-			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
-				out_num_cols, var->get_type()),
-			op(var->get_type().get_basic_ops().get_multiply()) {
+	apply_scalar_op(scalar_variable::const_ptr var, bulk_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->var = var;
+		this->op = op;
 	}
 	void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
 			detail::local_matrix_store &out) const;
+
 	detail::portion_mapply_op::const_ptr transpose() const {
-		return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
-					var, get_out_num_cols(), get_out_num_rows()));
+		return detail::portion_mapply_op::const_ptr(new apply_scalar_op(
+					var, op, get_out_num_cols(), get_out_num_rows()));
 	}
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
 		return std::string("(") + mats[0]->get_name()
-			+ " * scalar" + std::string(")");
+			+ " apply scalar" + std::string(")");
 	}
 };
 
-void multiply_scalar_op::run(
+void apply_scalar_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
@@ -780,7 +781,7 @@ void multiply_scalar_op::run(
 		detail::local_col_matrix_store &col_out
 			= static_cast<detail::local_col_matrix_store &>(out);
 		for (size_t i = 0; i < out.get_num_cols(); i++)
-			op.runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
+			op->runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
 					col_out.get_col(i));
 	}
 	else {
@@ -789,15 +790,15 @@ void multiply_scalar_op::run(
 		detail::local_row_matrix_store &row_out
 			= static_cast<detail::local_row_matrix_store &>(out);
 		for (size_t i = 0; i < out.get_num_rows(); i++)
-			op.runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
+			op->runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
 					row_out.get_row(i));
 	}
 }
 
 }
 
-dense_matrix::ptr dense_matrix::_multiply_scalar(
-		scalar_variable::const_ptr var) const
+dense_matrix::ptr dense_matrix::apply_scalar(
+		scalar_variable::const_ptr var, bulk_operate::const_ptr op) const
 {
 	if (get_type() != var->get_type()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -807,10 +808,10 @@ dense_matrix::ptr dense_matrix::_multiply_scalar(
 
 	std::vector<detail::matrix_store::const_ptr> stores(1);
 	stores[0] = store;
-	detail::portion_mapply_op::const_ptr op(new multiply_scalar_op(
-				var, get_num_rows(), get_num_cols()));
-	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores, op,
-			store_layout());
+	detail::portion_mapply_op::const_ptr mapply_op(new apply_scalar_op(
+				var, op, get_num_rows(), get_num_cols()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores,
+			mapply_op, store_layout());
 	return dense_matrix::create(ret);
 }
 
@@ -2629,6 +2630,18 @@ bool dense_matrix::move_store(bool in_mem, int num_nodes) const
 	}
 	const_cast<dense_matrix *>(this)->store = store;
 	return true;
+}
+
+dense_matrix::ptr dense_matrix::logic_not() const
+{
+	if (get_type() != get_scalar_type<bool>()) {
+		BOOST_LOG_TRIVIAL(error) << "logic_not only works on boolean matrix";
+		return dense_matrix::ptr();
+	}
+
+	bulk_uoperate::const_ptr op = bulk_uoperate::conv2ptr(
+			*get_type().get_basic_uops().get_op(basic_uops::op_idx::NOT));
+	return sapply(op);
 }
 
 }
