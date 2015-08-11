@@ -342,6 +342,11 @@ public:
 			return aggregate(get_type().get_basic_ops().get_add());
 	}
 
+	std::shared_ptr<scalar_variable> max() const {
+		return aggregate(*get_type().get_basic_ops().get_op(
+					basic_ops::op_idx::MAX));
+	}
+
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
