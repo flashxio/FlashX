@@ -10,6 +10,8 @@
 #include "EM_dense_matrix.h"
 #include "matrix_stats.h"
 
+#include "eigensolver/block_dense_matrix.h"
+
 using namespace fm;
 
 class set_col_operate: public type_set_operate<int>
@@ -1371,6 +1373,55 @@ void test_conv_store()
 	}
 }
 
+void test_block_mv()
+{
+	printf("gemm on block multi-vector\n");
+	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
+			long_dim, 16, 2, get_scalar_type<double>(), true);
+	for (size_t i = 0; i < mv->get_num_blocks(); i++)
+		mv->set_block(i, create_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	dense_matrix::ptr mat = create_matrix(mv->get_num_cols(),
+			mv->get_block_size(), matrix_layout_t::L_COL, -1,
+			get_scalar_type<double>());
+	mat->materialize_self();
+	detail::mem_col_matrix_store::const_ptr B
+		= detail::mem_col_matrix_store::cast(mat->get_raw_store());
+	scalar_variable_impl<double> alpha(2);
+	scalar_variable_impl<double> beta(3);
+
+	eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
+			long_dim, mv->get_block_size(), mv->get_block_size(),
+			get_scalar_type<double>(), true);
+	res1->set_block(0, create_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res1->set_multiply_blocks(2);
+	res1 = res1->gemm(*mv, B, alpha, beta);
+	assert(res1->get_num_blocks() == 1);
+	dense_matrix::ptr res_mat1 = res1->get_block(0);
+	res_mat1->materialize_self();
+
+	eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
+			long_dim, mv->get_block_size(), mv->get_block_size(),
+			get_scalar_type<double>(), true);
+	res2->set_block(0, create_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res2->set_multiply_blocks(mv->get_num_blocks());
+	res2 = res2->gemm(*mv, B, alpha, beta);
+	assert(res2->get_num_blocks() == 1);
+	dense_matrix::ptr res_mat2 = res2->get_block(0);
+	res_mat2->materialize_self();
+
+	dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+	scalar_variable::ptr max_diff = diff->abs()->max();
+	scalar_variable::ptr max1 = res_mat1->max();
+	scalar_variable::ptr max2 = res_mat2->max();
+	printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+			*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+			*(double *) max2->get_raw());
+	assert(*(double *) max_diff->get_raw() == 0);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -1383,6 +1434,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_block_mv();
 	test_conv_store();
 	test_mem_matrix(num_nodes);
 	test_EM_matrix(num_nodes);
