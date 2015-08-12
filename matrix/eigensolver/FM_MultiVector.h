@@ -523,8 +523,10 @@ public:
 			, ConjType conj = Anasazi::CONJ
 #endif
 			) const {
-		// TODO
-		assert(0);
+		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("MvDot(A(%1%), this(%2%))") % fm_A.name % name;
+		b = mat->MvDot(*fm_A.mat);
 	}
 
 	//! @name Norm method

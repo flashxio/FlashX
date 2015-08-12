@@ -128,6 +128,7 @@ public:
 
 	block_multi_vector::ptr add(const block_multi_vector &vecs) const;
 	fm::dense_matrix::ptr MvTransMv(const block_multi_vector &mv) const;
+	std::vector<double> MvDot(const block_multi_vector &mv) const;
 
 	fm::dense_matrix::ptr conv2matrix() const;
 
