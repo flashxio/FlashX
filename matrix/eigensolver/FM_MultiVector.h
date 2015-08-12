@@ -26,6 +26,10 @@
 
 #include "log.h"
 
+#ifndef TRILINOS_VERSION
+#define TRILINOS_VERSION 12
+#endif
+
 #include "AnasaziMultiVec.hpp"
 
 #include "NUMA_vector.h"
@@ -911,7 +915,17 @@ public:
 	/// implementations throw std::logic_error.
 	typedef details::MultiVecTsqrAdapter<ScalarType> tsqr_adaptor_type;
 #endif // HAVE_ANASAZI_TSQR
+
+#if TRILINOS_VERSION >= 12
+	//! Obtain the vector length of \c mv.
+	//! \note This method supersedes GetVecLength, which will be deprecated.
+	static ptrdiff_t GetGlobalLength( const fm::eigen::FM_MultiVector<ScalarType>& mv ) {
+		return mv.GetGlobalLength();
+	}
+#endif
 };
+
+#if TRILINOS_VERSION < 12
 
 // \brief An extension of the MultiVecTraits class that adds a new vector length method.
 /// \ingroup anasazi_opvec_interfaces
@@ -943,6 +957,8 @@ public:
 
 	//@}
 };
+
+#endif
 
 }
 
