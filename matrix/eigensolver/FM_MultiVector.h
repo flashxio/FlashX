@@ -315,15 +315,19 @@ public:
 				in_mem, solver);
 		if (index.size() == 1
 				&& (solver == "KrylovSchur" || solver == "Davidson")) {
+			fm::detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			size_t block_idx = index[0] / mat->get_block_size();
 			dense_matrix::ptr block = mat->get_block(block_idx);
 			const dotp_matrix_store *store
 				= dynamic_cast<const dotp_matrix_store *>(block->get_raw_store().get());
 			if (store == NULL) {
+				printf("clone view: materialize %s on the fly\n",
+						block->get_data().get_name().c_str());
 				dotp_matrix_store::ptr dotp = dotp_matrix_store::create(
 						mat->get_block(block_idx)->get_raw_store());
 				mat->set_block(block_idx, fm::dense_matrix::create(dotp));
 			}
+			fm::detail::matrix_stats.print_diff(orig_stats);
 		}
 		BOOST_LOG_TRIVIAL(info) << boost::format("const view %1% (#cols: %2%)")
 			% ret->name % index.size();
@@ -539,7 +543,7 @@ public:
 		verify();
 		fm::detail::matrix_stats_t orig_stats = fm::detail::matrix_stats;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
-			printf("materialize %s on the fly\n",
+			printf("norm: materialize %s on the fly\n",
 					mat->get_block(i)->get_data().get_name().c_str());
 			dotp_matrix_store::ptr dotp
 				= dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
@@ -937,7 +941,6 @@ public:
 
 	//@}
 };
-  
 
 }
 
