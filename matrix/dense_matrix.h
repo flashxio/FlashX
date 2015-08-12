@@ -319,6 +319,13 @@ public:
 		const bulk_operate &op = get_type().get_basic_ops().get_sub();
 		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
+	/*
+	 * This performs element-wise multiplication between two matrices.
+	 */
+	dense_matrix::ptr multiply_ele(const dense_matrix &mat) const {
+		const bulk_operate &op = get_type().get_basic_ops().get_multiply();
+		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+	}
 
 	dense_matrix::ptr abs() const {
 		bulk_uoperate::const_ptr op = bulk_uoperate::conv2ptr(

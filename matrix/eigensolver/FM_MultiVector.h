@@ -26,6 +26,10 @@
 
 #include "log.h"
 
+#ifndef TRILINOS_VERSION
+#define TRILINOS_VERSION 12
+#endif
+
 #include "AnasaziMultiVec.hpp"
 
 #include "NUMA_vector.h"
@@ -315,15 +319,19 @@ public:
 				in_mem, solver);
 		if (index.size() == 1
 				&& (solver == "KrylovSchur" || solver == "Davidson")) {
+			fm::detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			size_t block_idx = index[0] / mat->get_block_size();
 			dense_matrix::ptr block = mat->get_block(block_idx);
 			const dotp_matrix_store *store
 				= dynamic_cast<const dotp_matrix_store *>(block->get_raw_store().get());
 			if (store == NULL) {
+				printf("clone view: materialize %s on the fly\n",
+						block->get_data().get_name().c_str());
 				dotp_matrix_store::ptr dotp = dotp_matrix_store::create(
 						mat->get_block(block_idx)->get_raw_store());
 				mat->set_block(block_idx, fm::dense_matrix::create(dotp));
 			}
+			fm::detail::matrix_stats.print_diff(orig_stats);
 		}
 		BOOST_LOG_TRIVIAL(info) << boost::format("const view %1% (#cols: %2%)")
 			% ret->name % index.size();
@@ -519,8 +527,10 @@ public:
 			, ConjType conj = Anasazi::CONJ
 #endif
 			) const {
-		// TODO
-		assert(0);
+		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("MvDot(A(%1%), this(%2%))") % fm_A.name % name;
+		b = mat->MvDot(*fm_A.mat);
 	}
 
 	//! @name Norm method
@@ -539,7 +549,7 @@ public:
 		verify();
 		fm::detail::matrix_stats_t orig_stats = fm::detail::matrix_stats;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
-			printf("materialize %s on the fly\n",
+			printf("norm: materialize %s on the fly\n",
 					mat->get_block(i)->get_data().get_name().c_str());
 			dotp_matrix_store::ptr dotp
 				= dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
@@ -905,7 +915,17 @@ public:
 	/// implementations throw std::logic_error.
 	typedef details::MultiVecTsqrAdapter<ScalarType> tsqr_adaptor_type;
 #endif // HAVE_ANASAZI_TSQR
+
+#if TRILINOS_VERSION >= 12
+	//! Obtain the vector length of \c mv.
+	//! \note This method supersedes GetVecLength, which will be deprecated.
+	static ptrdiff_t GetGlobalLength( const fm::eigen::FM_MultiVector<ScalarType>& mv ) {
+		return mv.GetGlobalLength();
+	}
+#endif
 };
+
+#if TRILINOS_VERSION < 12
 
 // \brief An extension of the MultiVecTraits class that adds a new vector length method.
 /// \ingroup anasazi_opvec_interfaces
@@ -937,7 +957,8 @@ public:
 
 	//@}
 };
-  
+
+#endif
 
 }
 

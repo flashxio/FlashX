@@ -1033,6 +1033,23 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	return ret;
 }
 
+std::vector<double> block_multi_vector::MvDot(const block_multi_vector &mv) const
+{
+	std::vector<double> ret;
+
+	assert(mv.get_num_cols() == this->get_num_cols());
+	assert(mv.get_block_size() == this->get_block_size());
+	for (size_t i = 0; i < mv.get_num_blocks(); i++) {
+		dense_matrix::ptr mat1 = get_block(i);
+		dense_matrix::ptr mat2 = mv.get_block(i);
+		dense_matrix::ptr res = mat1->multiply_ele(*mat2);
+		vector::ptr sum = res->col_sum();
+		std::vector<double> tmp = sum->conv2std<double>();
+		ret.insert(ret.end(), tmp.begin(), tmp.end());
+	}
+	return ret;
+}
+
 typedef std::vector<int> block_col_set_t;
 
 /*
