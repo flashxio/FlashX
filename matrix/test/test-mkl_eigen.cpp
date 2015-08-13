@@ -2,11 +2,14 @@
 // eigenvalue problem $A x = \lambda x$, using Anasazi's
 // implementation of the Block Davidson method.
 
-#include "sparse_matrix.h"
-#include "vertex.h"
-#include "vertex_index.h"
-#include "in_mem_storage.h"
-#include "io_interface.h"
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/time.h>
+#include <assert.h>
+#include <omp.h>
+
+#include <atomic>
 
 #include "crs_header.h"
 
@@ -30,14 +33,18 @@
 // BEGIN MAIN ROUTINE
 // ****************************************************************************
 
-using namespace fm;
-
 using Teuchos::RCP;
 using Teuchos::rcp;
 using Teuchos::ArrayRCP;
 using std::cerr;
 using std::cout;
 using std::endl;
+
+inline static float time_diff(struct timeval time1, struct timeval time2)
+{
+	return time2.tv_sec - time1.tv_sec
+			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
+}
 
 #if 0
 class MKL_MultiVector: public Anasazi::MultiVec<double>
@@ -942,7 +949,8 @@ void eigen_function::run(const MV &in, MV &out) const
 	gettimeofday(&end, NULL);
 	double time3 = time_diff(start, end);
 
-	printf("SpMM: %.3f, col2row: %.3f, row2col: %.3f\n", time2, time1, time3);
+	printf("SpMM (%d): %.3f, col2row: %.3f, row2col: %.3f\n", ncolC,
+			time2, time1, time3);
 }
 
 SVD_function::SVD_function(const std::string &crs_file,
@@ -992,7 +1000,8 @@ void SVD_function::run(const MV &in, MV &out) const
 	gettimeofday(&end, NULL);
 	double time3 = time_diff(start, end);
 
-	printf("two SpMM: %.3f, col2row: %.3f, row2col: %.3f\n", time2, time1, time3);
+	printf("two SpMM (%d): %.3f, col2row: %.3f, row2col: %.3f\n", ncolC,
+			time2, time1, time3);
 }
 
 namespace Anasazi

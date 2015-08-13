@@ -63,10 +63,12 @@ test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
 	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
 
 test-mkl_eigen.o: test-mkl_eigen.cpp
-	mpic++ -c test-mkl_eigen.cpp $(CXXFLAGS) -I/home/zhengda/intel/mkl/include/
+	$(CXX) -O3 -c test-mkl_eigen.cpp -std=c++0x -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
 
 test-mkl_eigen: test-mkl_eigen.o
-	mpic++ test-mkl_eigen.o -o test-mkl_eigen $(LDTRILINOS) $(LDFLAGS) -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lm
+	$(CXX) test-mkl_eigen.o -o test-mkl_eigen -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp \
+		-ltpetra -ltpetrakernels -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist		\
+		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
 test-anasazi_eigen.o: test-anasazi_eigen.cpp
 	mpic++ -c test-anasazi_eigen.cpp $(CXXFLAGS)
