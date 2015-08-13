@@ -169,9 +169,9 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 			num_rows * num_cols * get_entry_size(), true);
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = get_portion_size().first;
-	if (ROUND(start_row, chunk_size)
-			!= ROUND(start_row + num_rows - 1, chunk_size))
+	size_t range_size = mapper.get_range_size();
+	if (ROUND(start_row, range_size)
+			!= ROUND(start_row + num_rows - 1, range_size))
 		return local_matrix_store::const_ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
@@ -190,9 +190,9 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = get_portion_size().first;
-	if (ROUND(start_row, chunk_size)
-			!= ROUND(start_row + num_rows - 1, chunk_size))
+	size_t range_size = mapper.get_range_size();
+	if (ROUND(start_row, range_size)
+			!= ROUND(start_row + num_rows - 1, range_size))
 		return local_matrix_store::ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
@@ -242,9 +242,9 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = get_portion_size().first;
-	if (ROUND(start_row, chunk_size)
-			!= ROUND(start_row + num_rows - 1, chunk_size))
+	size_t range_size = data.front()->get_mapper().get_range_size();
+	if (ROUND(start_row, range_size)
+			!= ROUND(start_row + num_rows - 1, range_size))
 		return local_matrix_store::const_ptr();
 
 	// Let's only count read bytes from the const version of get_portion.
@@ -273,9 +273,9 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = get_portion_size().first;
-	if (ROUND(start_row, chunk_size)
-			!= ROUND(start_row + num_rows - 1, chunk_size))
+	size_t range_size = data.front()->get_mapper().get_range_size();
+	if (ROUND(start_row, range_size)
+			!= ROUND(start_row + num_rows - 1, range_size))
 		return local_matrix_store::ptr();
 
 	int node_id = data.front()->get_node_id(start_row);
