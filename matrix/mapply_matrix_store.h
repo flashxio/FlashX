@@ -52,6 +52,12 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	 */
 	bool cache_portion;
 
+	/*
+	 * This indicates whether the input matrices are accessed in parallel
+	 * when the matrix is materialized.
+	 */
+	bool par_access;
+
 	matrix_layout_t layout;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
@@ -62,11 +68,16 @@ public:
 
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
-			portion_mapply_op::const_ptr op, matrix_layout_t layout,
-			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
+			portion_mapply_op::const_ptr op,
+			matrix_layout_t layout, size_t nrow, size_t ncol,
+			size_t data_id = mat_counter++);
 
 	virtual void set_cache_portion(bool cache_portion) {
 		this->cache_portion = cache_portion;
+	}
+
+	void set_par_access(bool par_access) {
+		this->par_access = par_access;
 	}
 
 	virtual void materialize_self() const;

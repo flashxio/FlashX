@@ -108,10 +108,12 @@ public:
 std::shared_ptr<dense_matrix> mapply_portion(
 		const std::vector<std::shared_ptr<const dense_matrix> > &mats,
 		// A user can specify the layout of the output dense matrix.
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 matrix_store::ptr __mapply_portion_virtual(
 		const std::vector<matrix_store::const_ptr> &store,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 
 /*
  * These three functions return a materialized matrix.

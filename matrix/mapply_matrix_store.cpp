@@ -500,6 +500,7 @@ mapply_matrix_store::mapply_matrix_store(
 			ncol, is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
+	this->par_access = true;
 	this->cache_portion = true;
 	this->layout = layout;
 	this->op = op;
@@ -528,7 +529,8 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 		}
 	}
 	else
-		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes);
+		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes,
+				par_access);
 }
 
 vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
