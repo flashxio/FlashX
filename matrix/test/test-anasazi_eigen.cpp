@@ -217,6 +217,7 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 	if (returnCode != Anasazi::Converged && my_rank == 0) {
 		cout << "Anasazi eigensolver did not converge." << endl;
 	}
+#if 0
 	// Get the eigenvalues and eigenvectors from the eigenproblem.
 	Anasazi::Eigensolution<double,MV> sol = problem->getSolution ();
 
@@ -260,6 +261,7 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 		cout << "------------------------------------------------------" << endl;
 		cout << iter_no << endl;
 	}
+#endif
 }
 
 void print_usage()
