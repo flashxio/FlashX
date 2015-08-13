@@ -1368,36 +1368,32 @@ void test_mem_matrix(int num_nodes)
 	test_sum_row_col(-1);
 	test_sum_row_col(num_nodes);
 
-	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
-		matrix_val = (matrix_val_t) i;
-		printf("matrix val type: %d\n", i);
-
-		test_conv2(-1);
-		test_conv2(num_nodes);
-		test_scale_cols(-1);
-		test_scale_cols(num_nodes);
-		test_scale_rows(-1);
-		test_scale_rows(num_nodes);
-		test_multiply_scalar(-1);
-		test_multiply_scalar(num_nodes);
-		test_ele_wise(-1);
-		test_ele_wise(num_nodes);
-		test_multiply_col(-1);
-		test_multiply_col(num_nodes);
-		test_agg_col(-1);
-		test_agg_col(num_nodes);
-		test_multiply_matrix(-1);
-		test_multiply_matrix(num_nodes);
-		test_agg_row(-1);
-		test_agg_row(num_nodes);
-		test_agg_sub_col(-1);
-		test_agg_sub_row(-1);
+	matrix_val = matrix_val_t::SEQ;
+	test_conv2(-1);
+	test_conv2(num_nodes);
+	test_scale_cols(-1);
+	test_scale_cols(num_nodes);
+	test_scale_rows(-1);
+	test_scale_rows(num_nodes);
+	test_multiply_scalar(-1);
+	test_multiply_scalar(num_nodes);
+	test_ele_wise(-1);
+	test_ele_wise(num_nodes);
+	test_multiply_col(-1);
+	test_multiply_col(num_nodes);
+	test_agg_col(-1);
+	test_agg_col(num_nodes);
+	test_multiply_matrix(-1);
+	test_multiply_matrix(num_nodes);
+	test_agg_row(-1);
+	test_agg_row(num_nodes);
+	test_agg_sub_col(-1);
+	test_agg_sub_row(-1);
 #if 0
-		test_rand_init();
-		test_conv_row_col();
-		test_flatten();
+	test_rand_init();
+	test_conv_row_col();
+	test_flatten();
 #endif
-	}
 }
 
 void test_conv_store()
@@ -1437,11 +1433,12 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
 			long_dim, 16, 2, get_scalar_type<double>(), true);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
-		mv->set_block(i, create_matrix(long_dim, mv->get_block_size(),
-					matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
-	dense_matrix::ptr mat = create_matrix(mv->get_num_cols(),
+		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
+					false));
+	dense_matrix::ptr mat = create_seq_matrix(mv->get_num_cols(),
 			mv->get_block_size(), matrix_layout_t::L_COL, -1,
-			get_scalar_type<double>());
+			get_scalar_type<double>(), true);
 	mat->materialize_self();
 	detail::mem_col_matrix_store::const_ptr B
 		= detail::mem_col_matrix_store::cast(mat->get_raw_store());
@@ -1451,8 +1448,8 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
-	res1->set_block(0, create_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
 	res1->set_multiply_blocks(2);
 	res1 = res1->gemm(*mv, B, alpha, beta);
 	assert(res1->get_num_blocks() == 1);
@@ -1462,8 +1459,8 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
-	res2->set_block(0, create_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
 	res2->set_multiply_blocks(mv->get_num_blocks());
 	res2 = res2->gemm(*mv, B, alpha, beta);
 	assert(res2->get_num_blocks() == 1);

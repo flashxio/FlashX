@@ -512,15 +512,23 @@ void mapply_matrix_store::materialize_self() const
 		return;
 
 	mapply_matrix_store *mutable_this = const_cast<mapply_matrix_store *>(this);
-	mutable_this->res = materialize();
+	mutable_this->res = materialize(is_in_mem(), get_num_nodes());
 }
 
-matrix_store::const_ptr mapply_matrix_store::materialize() const
+matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
+			int num_nodes) const
 {
-	if (res)
-		return res;
+	if (res) {
+		if (res->is_in_mem() == in_mem && res->get_num_nodes() == num_nodes)
+			return res;
+		else {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't materialize the mapply matrix to the specified storage";
+			return matrix_store::const_ptr();
+		}
+	}
 	else
-		return __mapply_portion(in_mats, op, layout);
+		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes);
 }
 
 vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
