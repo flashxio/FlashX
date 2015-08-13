@@ -1431,7 +1431,7 @@ void test_block_mv()
 {
 	printf("gemm on block multi-vector\n");
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
-			long_dim, 16, 2, get_scalar_type<double>(), true);
+			long_dim, 16, 2, get_scalar_type<double>(), false);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
 		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
