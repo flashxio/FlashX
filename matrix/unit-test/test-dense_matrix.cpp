@@ -1437,11 +1437,12 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
 			long_dim, 16, 2, get_scalar_type<double>(), true);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
-		mv->set_block(i, create_matrix(long_dim, mv->get_block_size(),
-					matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
-	dense_matrix::ptr mat = create_matrix(mv->get_num_cols(),
+		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
+					false));
+	dense_matrix::ptr mat = create_seq_matrix(mv->get_num_cols(),
 			mv->get_block_size(), matrix_layout_t::L_COL, -1,
-			get_scalar_type<double>());
+			get_scalar_type<double>(), true);
 	mat->materialize_self();
 	detail::mem_col_matrix_store::const_ptr B
 		= detail::mem_col_matrix_store::cast(mat->get_raw_store());
@@ -1451,8 +1452,8 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
-	res1->set_block(0, create_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
 	res1->set_multiply_blocks(2);
 	res1 = res1->gemm(*mv, B, alpha, beta);
 	assert(res1->get_num_blocks() == 1);
@@ -1462,8 +1463,8 @@ void test_block_mv()
 	eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
-	res2->set_block(0, create_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>()));
+	res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
 	res2->set_multiply_blocks(mv->get_num_blocks());
 	res2 = res2->gemm(*mv, B, alpha, beta);
 	assert(res2->get_num_blocks() == 1);
