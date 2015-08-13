@@ -838,6 +838,22 @@ detail::mem_col_matrix_store::const_ptr get_sub_mat(
 
 }
 
+static void set_caching(
+		const std::vector<detail::matrix_store::const_ptr> &mats, bool caching)
+{
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(*mats[i]).set_cache_portion(caching);
+}
+
+static std::vector<detail::matrix_store::const_ptr> get_input_matrices(
+		const block_multi_vector &mv)
+{
+	std::vector<detail::matrix_store::const_ptr> mats(mv.get_num_blocks());
+	for (size_t i = 0; i < mv.get_num_blocks(); i++)
+		mats[i] = mv.get_block(i)->get_raw_store();
+	return mats;
+}
+
 block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::mem_col_matrix_store::const_ptr B, const scalar_variable &alpha,
 		const scalar_variable &beta) const
@@ -882,9 +898,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		// and generate some temp matrices.
 		for (size_t i = 0; i < A_num_blocks; i += MAX_MUL_BLOCKS) {
 			size_t num_sub_mats = std::min(MAX_MUL_BLOCKS, A_num_blocks - i);
-			std::vector<dense_matrix::const_ptr> sub_mats(num_sub_mats);
+			std::vector<detail::matrix_store::const_ptr> sub_mats(num_sub_mats);
 			for (size_t j = 0; j < num_sub_mats; j++)
-				sub_mats[j] = A.get_block(i + j);
+				sub_mats[j] = A.get_block(i + j)->get_raw_store();
 			detail::portion_mapply_op::const_ptr op;
 			detail::mem_col_matrix_store::const_ptr sub_B = get_sub_mat(B,
 					i * A.get_block_size(), 0, num_sub_mats * A.get_block_size(),
@@ -899,14 +915,19 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 				if (d_beta) {
 					sub_mats.resize(num_sub_mats + C_num_blocks);
 					for (size_t j = num_sub_mats; j < sub_mats.size(); j++)
-						sub_mats[j] = this->get_block(j - num_sub_mats);
+						sub_mats[j] = this->get_block(
+								j - num_sub_mats)->get_raw_store();
 				}
 				op = detail::portion_mapply_op::const_ptr(new gemm_op<double>(
 							sub_B, num_sub_mats, C_num_blocks, d_alpha, d_beta,
 							this->get_num_rows(), this->get_num_cols()));
 			}
-			tmp_mats.push_back(mapply_portion(sub_mats, op,
-						matrix_layout_t::L_COL));
+			detail::matrix_store::ptr tmp_store = detail::__mapply_portion_virtual(
+					sub_mats, op, matrix_layout_t::L_COL);
+			// We really don't need to cache the portion in this intermediate
+			// matrix in the hierarchy.
+			tmp_store->set_cache_portion(false);
+			tmp_mats.push_back(dense_matrix::create(tmp_store));
 		}
 
 		// We then sum all of the temp matrices with the original alpha
@@ -941,9 +962,13 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = block->get_raw_store();
+		std::vector<detail::matrix_store::const_ptr> orig_input_mats
+			= get_input_matrices(A);
+		set_caching(orig_input_mats, false);
 		bool ret = __mapply_portion(ins,
 				detail::portion_mapply_op::const_ptr(new split_op()), outs);
 		assert(ret);
+		set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
@@ -956,6 +981,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		printf("There are %ld underlying matrices\n", bytes.size());
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		std::vector<detail::matrix_store::const_ptr> orig_input_mats
+			= get_input_matrices(A);
+		set_caching(orig_input_mats, false);
 		// If we want to cache the most recently materialized matrix.
 		if (!in_mem && cache_recent)
 			block->move_store(true, matrix_conf.get_num_nodes());
@@ -963,6 +991,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 			num_col_writes += block->get_num_cols();
 			block->materialize_self();
 		}
+		set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
