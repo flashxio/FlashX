@@ -1349,6 +1349,9 @@ void collected_portions::run_all_portions()
 	mapply_portion_compute compute(write_bufs, res_mats, *op);
 	compute.set_buf(ready_portions);
 	compute.run_complete();
+
+	// We don't need these portions now. They should be free'd.
+	ready_portions.clear();
 }
 
 /*
@@ -1370,12 +1373,19 @@ public:
 	}
 
 	virtual void run(char *buf, size_t size) {
+		// This forces the portion of a mapply matrix to materialize and
+		// release the data in the underlying portion.
+		// TODO it's better to have a better way to materialize the mapply
+		// matrix portion.
+		pending_portion->get_raw_arr();
 		collected->add_ready_portion(pending_portion);
+		pending_portion = NULL;
 		// We have fetched all portions, let's run computation on it.
 		if (remain_mats.empty())
 			collected->run_all_portions();
 		else
 			fetch_portion(remain_mats, collected);
+		collected = NULL;
 	}
 
 	static void fetch_portion(const std::vector<matrix_store::const_ptr> &mats,
