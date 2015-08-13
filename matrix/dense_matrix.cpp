@@ -932,7 +932,8 @@ void dense_matrix::materialize_self() const
 	if (!store->is_virtual())
 		return;
 	const_cast<dense_matrix *>(this)->store
-		= detail::virtual_matrix_store::cast(store)->materialize();
+		= detail::virtual_matrix_store::cast(store)->materialize(
+				store->is_in_mem(), store->get_num_nodes());
 }
 
 /********************************* mapply ************************************/
@@ -1461,6 +1462,26 @@ matrix_store::ptr __mapply_portion(
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				op->get_out_num_rows(), op->get_out_num_cols(),
 				out_layout, op->get_output_type(), num_nodes, out_in_mem);
+		assert(res);
+		out_mats.push_back(res);
+	}
+	bool ret = __mapply_portion(mats, op, out_mats, par_access);
+	if (ret && out_mats.size() == 1)
+		return out_mats[0];
+	else
+		return matrix_store::ptr();
+}
+
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool out_in_mem, int out_num_nodes, bool par_access)
+{
+	std::vector<matrix_store::ptr> out_mats;
+	if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0) {
+		detail::matrix_store::ptr res = detail::matrix_store::create(
+				op->get_out_num_rows(), op->get_out_num_cols(),
+				out_layout, op->get_output_type(), out_num_nodes, out_in_mem);
 		assert(res);
 		out_mats.push_back(res);
 	}
@@ -2783,19 +2804,24 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 			&& !store->is_virtual())
 		return store;
 
-	std::vector<detail::matrix_store::const_ptr> in_mats(1);
-	in_mats[0] = store;
-	std::vector<detail::matrix_store::ptr> out_mats(1);
-	out_mats[0] = detail::matrix_store::create(get_num_rows(), get_num_cols(),
-			store_layout(), get_type(), num_nodes, in_mem);
+	if (store->is_virtual())
+		return detail::virtual_matrix_store::cast(store)->materialize(in_mem,
+				num_nodes);
+	else {
+		std::vector<detail::matrix_store::const_ptr> in_mats(1);
+		in_mats[0] = store;
+		std::vector<detail::matrix_store::ptr> out_mats(1);
+		out_mats[0] = detail::matrix_store::create(get_num_rows(), get_num_cols(),
+				store_layout(), get_type(), num_nodes, in_mem);
 
-	detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
-				get_num_cols(), get_type()));
-	bool ret = detail::__mapply_portion(in_mats, op, out_mats);
-	if (ret)
-		return out_mats[0];
-	else
-		return detail::matrix_store::const_ptr();
+		detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
+					get_num_cols(), get_type()));
+		bool ret = detail::__mapply_portion(in_mats, op, out_mats);
+		if (ret)
+			return out_mats[0];
+		else
+			return detail::matrix_store::const_ptr();
+	}
 }
 
 dense_matrix::ptr dense_matrix::conv_store(bool in_mem, int num_nodes) const

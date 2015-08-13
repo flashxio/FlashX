@@ -98,9 +98,9 @@ public:
 		return merged_mat->store_layout();
 	}
 
-	virtual matrix_store::const_ptr materialize() const {
+	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const {
 		return static_cast<const detail::virtual_matrix_store *>(
-				merged_mat.get())->materialize();
+				merged_mat.get())->materialize(in_mem, num_nodes);
 	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {

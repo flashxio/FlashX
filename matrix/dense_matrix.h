@@ -114,13 +114,21 @@ matrix_store::ptr __mapply_portion_virtual(
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
 
 /*
- * These two functions return a materialized matrix.
+ * These three functions return a materialized matrix.
+ * The first version determines the storage of the output matrix automatically.
+ * The second version allows users to specify the storage for the output matrix.
+ * The third version not only allows users to specify the storage for the output
+ * matrix, but also allows multiple output matrices.
  */
 
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
 		bool par_access = true);
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool out_in_mem, int out_num_nodes, bool par_access = true);
 bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op,
