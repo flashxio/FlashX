@@ -119,11 +119,12 @@ matrix_store::ptr __mapply_portion_virtual(
 
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op,
-		const std::vector<matrix_store::ptr> &out_mats);
+		const std::vector<matrix_store::ptr> &out_mats, bool par_access = true);
 }
 
 /*

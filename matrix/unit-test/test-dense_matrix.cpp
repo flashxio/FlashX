@@ -1256,6 +1256,64 @@ void test_apply_scalar()
 	printf("two matrices have %ld elements with similar values\n", num);
 }
 
+class add_portion_op: public detail::portion_mapply_op
+{
+public:
+	add_portion_op(size_t num_rows, size_t num_cols): detail::portion_mapply_op(
+			num_rows, num_cols, get_scalar_type<double>()) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		out.reset_data();
+		for (size_t i = 0; i < ins.size(); i++) {
+			assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
+			detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			assert(in);
+			detail::mapply2(out, *in,
+					out.get_type().get_basic_ops().get_add(), out);
+		}
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void test_mapply_mixed(int num_nodes)
+{
+	printf("test serial and parallel mapply\n");
+	std::vector<dense_matrix::ptr> mats(5);
+	mats[0] = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL, -1, true);
+	mats[1] = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 11, matrix_layout_t::L_COL, -1, false);
+	mats[2] = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 12, matrix_layout_t::L_COL, -1, false);
+	mats[3] = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 13, matrix_layout_t::L_COL, num_nodes, true);
+	mats[4] = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 14, matrix_layout_t::L_COL, -1, false);
+
+	detail::portion_mapply_op::const_ptr op(new add_portion_op(
+				long_dim, 10));
+	std::vector<detail::matrix_store::const_ptr> stores(5);
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mats[i]->get_raw_store();
+	dense_matrix::ptr par_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, true));
+	dense_matrix::ptr serial_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, false));
+	scalar_variable::ptr max_diff = par_res->minus(*serial_res)->abs()->max();
+	assert(*(double *) max_diff->get_raw() == 0);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1434,6 +1492,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_mapply_mixed(num_nodes);
 	test_block_mv();
 	test_conv_store();
 	test_mem_matrix(num_nodes);
