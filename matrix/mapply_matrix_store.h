@@ -46,6 +46,12 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	// So when a matrix is transposed, it should share the same data id.
 	const size_t data_id;
 
+	/*
+	 * This indicates whether or not we cache a portion in each worker thread.
+	 * By default, this is enabled.
+	 */
+	bool cache_portion;
+
 	matrix_layout_t layout;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
@@ -58,6 +64,10 @@ public:
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
 			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
+
+	virtual void set_cache_portion(bool cache_portion) {
+		this->cache_portion = cache_portion;
+	}
 
 	virtual void materialize_self() const;
 

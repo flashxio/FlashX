@@ -500,6 +500,7 @@ mapply_matrix_store::mapply_matrix_store(
 			ncol, is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
+	this->cache_portion = true;
 	this->layout = layout;
 	this->op = op;
 }
@@ -606,7 +607,8 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 		ret = local_matrix_store::const_ptr(new lmapply_col_matrix_store(
 					parts, *op, NULL, start_row, start_col, num_rows, num_cols,
 					get_type(), parts.front()->get_node_id()));
-	local_mem_buffer::cache_portion(data_id, ret);
+	if (cache_portion)
+		local_mem_buffer::cache_portion(data_id, ret);
 	return ret;
 }
 
@@ -727,7 +729,8 @@ async_cres_t mapply_matrix_store::get_portion_async(
 					num_cols, get_type(), parts.front()->get_node_id()));
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
-	local_mem_buffer::cache_portion(data_id, ret);
+	if (cache_portion)
+		local_mem_buffer::cache_portion(data_id, ret);
 	// If all parts are from the in-mem matrix store or have been cached by
 	// the underlying matrices, the data in the returned portion is immediately
 	// accessible.

@@ -907,7 +907,10 @@ local_matrix_store::const_ptr local_row_matrix_store::get_portion(
 					global_start_row, global_start_col,
 					num_rows, num_cols, get_type(), get_node_id()));
 	}
-	assert(ret->hold_orig_data());
+	// If the current local matrix has the original data, the returned local matrix
+	// should also hold the data.
+	if (this->hold_orig_data())
+		assert(ret->hold_orig_data());
 	return ret;
 }
 
@@ -942,7 +945,10 @@ local_matrix_store::const_ptr local_col_matrix_store::get_portion(
 					orig_data_ref, cols, global_start_row, global_start_col,
 					num_rows, num_cols, get_type(), get_node_id()));
 	}
-	assert(ret->hold_orig_data());
+	// If the current local matrix has the original data, the returned local matrix
+	// should also hold the data.
+	if (this->hold_orig_data())
+		assert(ret->hold_orig_data());
 	return ret;
 }
 
@@ -980,7 +986,10 @@ local_matrix_store::ptr local_row_matrix_store::get_portion(
 					global_start_row, global_start_col,
 					num_rows, num_cols, get_type(), get_node_id()));
 	}
-	assert(ret->hold_orig_data());
+	// If the current local matrix has the original data, the returned local matrix
+	// should also hold the data.
+	if (this->hold_orig_data())
+		assert(ret->hold_orig_data());
 	return ret;
 }
 
@@ -1018,7 +1027,10 @@ local_matrix_store::ptr local_col_matrix_store::get_portion(
 					orig_data_ref, cols, global_start_row, global_start_col,
 					num_rows, num_cols, get_type(), get_node_id()));
 	}
-	assert(ret->hold_orig_data());
+	// If the current local matrix has the original data, the returned local matrix
+	// should also hold the data.
+	if (this->hold_orig_data())
+		assert(ret->hold_orig_data());
 	return ret;
 }
 

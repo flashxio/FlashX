@@ -78,6 +78,7 @@ EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layou
 		const scalar_type &type): matrix_store(nrow, ncol, false,
 			type), mat_id(mat_counter++), data_id(mat_id)
 {
+	this->cache_portion = true;
 	this->orig_num_rows = nrow;
 	this->orig_num_cols = ncol;
 	this->layout = layout;
@@ -93,6 +94,7 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 		size_t _data_id): matrix_store(nrow, ncol, false, type), mat_id(
 			mat_counter++), data_id(_data_id)
 {
+	this->cache_portion = true;
 	this->orig_num_rows = orig_nrow;
 	this->orig_num_cols = orig_ncol;
 	this->layout = layout;
@@ -359,7 +361,8 @@ async_cres_t EM_matrix_store::get_portion_async(
 	detail::matrix_stats.inc_read_bytes(
 			buf->get_num_rows() * buf->get_num_cols() * get_entry_size(), false);
 
-	local_mem_buffer::cache_portion(data_id, buf);
+	if (cache_portion)
+		local_mem_buffer::cache_portion(data_id, buf);
 	local_matrix_store::const_ptr ret;
 	if (local_start_row > 0 || local_start_col > 0
 			|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)

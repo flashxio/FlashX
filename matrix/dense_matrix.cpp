@@ -737,33 +737,34 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 namespace
 {
 
-class multiply_scalar_op: public detail::portion_mapply_op
+class apply_scalar_op: public detail::portion_mapply_op
 {
 	scalar_variable::const_ptr var;
-	const bulk_operate &op;
+	bulk_operate::const_ptr op;
 public:
-	multiply_scalar_op(scalar_variable::const_ptr var, size_t out_num_rows,
-			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
-				out_num_cols, var->get_type()),
-			op(var->get_type().get_basic_ops().get_multiply()) {
+	apply_scalar_op(scalar_variable::const_ptr var, bulk_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->var = var;
+		this->op = op;
 	}
 	void run(const std::vector<std::shared_ptr<const detail::local_matrix_store> > &ins,
 			detail::local_matrix_store &out) const;
+
 	detail::portion_mapply_op::const_ptr transpose() const {
-		return detail::portion_mapply_op::const_ptr(new multiply_scalar_op(
-					var, get_out_num_cols(), get_out_num_rows()));
+		return detail::portion_mapply_op::const_ptr(new apply_scalar_op(
+					var, op, get_out_num_cols(), get_out_num_rows()));
 	}
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
 		return std::string("(") + mats[0]->get_name()
-			+ " * scalar" + std::string(")");
+			+ " apply scalar" + std::string(")");
 	}
 };
 
-void multiply_scalar_op::run(
+void apply_scalar_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
@@ -780,7 +781,7 @@ void multiply_scalar_op::run(
 		detail::local_col_matrix_store &col_out
 			= static_cast<detail::local_col_matrix_store &>(out);
 		for (size_t i = 0; i < out.get_num_cols(); i++)
-			op.runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
+			op->runAE(out.get_num_rows(), col_in.get_col(i), var->get_raw(),
 					col_out.get_col(i));
 	}
 	else {
@@ -789,15 +790,15 @@ void multiply_scalar_op::run(
 		detail::local_row_matrix_store &row_out
 			= static_cast<detail::local_row_matrix_store &>(out);
 		for (size_t i = 0; i < out.get_num_rows(); i++)
-			op.runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
+			op->runAE(out.get_num_cols(), row_in.get_row(i), var->get_raw(),
 					row_out.get_row(i));
 	}
 }
 
 }
 
-dense_matrix::ptr dense_matrix::_multiply_scalar(
-		scalar_variable::const_ptr var) const
+dense_matrix::ptr dense_matrix::apply_scalar(
+		scalar_variable::const_ptr var, bulk_operate::const_ptr op) const
 {
 	if (get_type() != var->get_type()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -807,10 +808,10 @@ dense_matrix::ptr dense_matrix::_multiply_scalar(
 
 	std::vector<detail::matrix_store::const_ptr> stores(1);
 	stores[0] = store;
-	detail::portion_mapply_op::const_ptr op(new multiply_scalar_op(
-				var, get_num_rows(), get_num_cols()));
-	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores, op,
-			store_layout());
+	detail::portion_mapply_op::const_ptr mapply_op(new apply_scalar_op(
+				var, op, get_num_rows(), get_num_cols()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores,
+			mapply_op, store_layout());
 	return dense_matrix::create(ret);
 }
 
@@ -1085,16 +1086,94 @@ local_write_buffer::local_write_buffer(matrix_store::ptr to_mat,
 	}
 }
 
-class EM_mat_mapply_dispatcher: public detail::EM_portion_dispatcher
+static size_t cal_min_portion_size(
+		const std::vector<matrix_store::const_ptr> &mats1,
+		const std::vector<matrix_store::ptr> &mats2)
+{
+	assert(mats1.size() > 0);
+	if (mats1[0]->is_wide()) {
+		size_t min_portion_size = mats1[0]->get_portion_size().second;
+		for (size_t i = 1; i < mats1.size(); i++)
+			min_portion_size = std::min(min_portion_size,
+					mats1[i]->get_portion_size().second);
+		for (size_t i = 0; i < mats2.size(); i++) {
+			min_portion_size = std::min(min_portion_size,
+					mats2[i]->get_portion_size().second);
+			assert(mats2[i]->get_portion_size().second % min_portion_size == 0);
+		}
+		for (size_t i = 0; i < mats1.size(); i++)
+			assert(mats1[i]->get_portion_size().second % min_portion_size == 0);
+		return min_portion_size;
+	}
+	else {
+		size_t min_portion_size = mats1[0]->get_portion_size().first;
+		for (size_t i = 1; i < mats1.size(); i++)
+			min_portion_size = std::min(min_portion_size,
+					mats1[i]->get_portion_size().first);
+		for (size_t i = 0; i < mats2.size(); i++) {
+			min_portion_size = std::min(min_portion_size,
+					mats2[i]->get_portion_size().first);
+			assert(mats2[i]->get_portion_size().first % min_portion_size == 0);
+		}
+		for (size_t i = 0; i < mats1.size(); i++)
+			assert(mats1[i]->get_portion_size().first % min_portion_size == 0);
+		return min_portion_size;
+	}
+}
+
+/*
+ * This dispatcher issues I/O to access the same portion of all dense matrices
+ * simultaneously. This may have good I/O performance, but may consume a lot
+ * of memory when it runs for a large group of dense matrices.
+ */
+class EM_mat_mapply_par_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
-	EM_mat_mapply_dispatcher(const std::vector<matrix_store::const_ptr> &mats,
+	EM_mat_mapply_par_dispatcher(
+			const std::vector<matrix_store::const_ptr> &mats,
 			const std::vector<matrix_store::ptr> &res_mats,
-			portion_mapply_op::const_ptr op, size_t tot_len, size_t portion_size);
+			portion_mapply_op::const_ptr op, size_t tot_len,
+			size_t portion_size): detail::EM_portion_dispatcher(tot_len,
+				portion_size) {
+		this->mats = mats;
+		this->res_mats = res_mats;
+		this->op = op;
+		this->min_portion_size = cal_min_portion_size(mats, res_mats);
+	}
+
+	virtual void create_task(off_t global_start, size_t length);
+};
+
+/*
+ * This dispatcher accesses one portion of a dense matrix at a time in a thread,
+ * although I/O is still performed asynchronously. This is particularly useful
+ * when we compute on a large group of dense matrices. Users can split the large
+ * group and build a hierarchy to compute on the dense matrices. In this hierarchy,
+ * we can use this dispatcher to limit the matrices that are being accessed
+ * at the same time to reduce memory consumption.
+ */
+class EM_mat_mapply_serial_dispatcher: public detail::EM_portion_dispatcher
+{
+	std::vector<matrix_store::const_ptr> mats;
+	std::vector<matrix_store::ptr> res_mats;
+	portion_mapply_op::const_ptr op;
+	size_t min_portion_size;
+public:
+	EM_mat_mapply_serial_dispatcher(
+			const std::vector<matrix_store::const_ptr> &mats,
+			const std::vector<matrix_store::ptr> &res_mats,
+			portion_mapply_op::const_ptr op, size_t tot_len,
+			size_t portion_size): detail::EM_portion_dispatcher(tot_len,
+				portion_size) {
+		this->mats = mats;
+		this->res_mats = res_mats;
+		this->op = op;
+		this->min_portion_size = cal_min_portion_size(mats, res_mats);
+	}
 
 	virtual void create_task(off_t global_start, size_t length);
 };
@@ -1169,55 +1248,20 @@ void mapply_portion_compute::run(char *buf, size_t size)
 		run_complete();
 }
 
-EM_mat_mapply_dispatcher::EM_mat_mapply_dispatcher(
-		const std::vector<matrix_store::const_ptr> &mats,
-		const std::vector<matrix_store::ptr> &res_mats,
-		portion_mapply_op::const_ptr op, size_t tot_len,
-		size_t portion_size): detail::EM_portion_dispatcher(tot_len, portion_size)
-{
-	this->mats = mats;
-	this->res_mats = res_mats;
-	this->op = op;
-
-	assert(mats.size() > 0);
-	if (mats[0]->is_wide()) {
-		min_portion_size = mats[0]->get_portion_size().second;
-		for (size_t i = 1; i < mats.size(); i++)
-			min_portion_size = std::min(min_portion_size,
-					mats[i]->get_portion_size().second);
-		for (size_t i = 0; i < res_mats.size(); i++) {
-			min_portion_size = std::min(min_portion_size,
-					res_mats[i]->get_portion_size().second);
-			assert(res_mats[i]->get_portion_size().second % min_portion_size == 0);
-		}
-		for (size_t i = 0; i < mats.size(); i++)
-			assert(mats[i]->get_portion_size().second % min_portion_size == 0);
-	}
-	else {
-		min_portion_size = mats[0]->get_portion_size().first;
-		for (size_t i = 1; i < mats.size(); i++)
-			min_portion_size = std::min(min_portion_size,
-					mats[i]->get_portion_size().first);
-		for (size_t i = 0; i < res_mats.size(); i++) {
-			min_portion_size = std::min(min_portion_size,
-					res_mats[i]->get_portion_size().first);
-			assert(res_mats[i]->get_portion_size().first % min_portion_size == 0);
-		}
-		for (size_t i = 0; i < mats.size(); i++)
-			assert(mats[i]->get_portion_size().first % min_portion_size == 0);
-	}
-}
-
 /*
  * This method is invoked in each worker thread.
  */
-void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
+void EM_mat_mapply_par_dispatcher::create_task(off_t global_start,
+		size_t length)
 {
 	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
 	for (size_t i = 0; i < res_mats.size(); i++)
 		write_bufs[i] = local_write_buffer::create(res_mats[i], global_start,
 				length, min_portion_size);
 
+	// We fetch the portions using the minimum portion size among
+	// the matrices. The idea is to reduce the amount of data cached
+	// in virtual matrices.
 	for (size_t local_start = 0; local_start < length;
 			local_start += min_portion_size) {
 		size_t local_length = std::min(min_portion_size, length - local_start);
@@ -1256,11 +1300,149 @@ void EM_mat_mapply_dispatcher::create_task(off_t global_start, size_t length)
 	}
 }
 
+class collected_portions
+{
+	// The output matrices.
+	std::vector<matrix_store::ptr> res_mats;
+	// The portions with data ready.
+	std::vector<local_matrix_store::const_ptr> ready_portions;
+
+	// The location of the portions.
+	off_t global_start;
+	size_t length;
+
+	portion_mapply_op::const_ptr op;
+public:
+	typedef std::shared_ptr<collected_portions> ptr;
+
+	collected_portions(const std::vector<matrix_store::ptr> &res_mats,
+			portion_mapply_op::const_ptr op, off_t global_start, size_t length) {
+		this->res_mats = res_mats;
+		this->global_start = global_start;
+		this->length = length;
+		this->op = op;
+	}
+
+	off_t get_global_start() const {
+		return global_start;
+	}
+
+	size_t get_length() const {
+		return length;
+	}
+
+	void run_all_portions();
+
+	void add_ready_portion(local_matrix_store::const_ptr portion) {
+		ready_portions.push_back(portion);
+	}
+};
+
+void collected_portions::run_all_portions()
+{
+	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
+	for (size_t i = 0; i < res_mats.size(); i++)
+		write_bufs[i] = local_write_buffer::create(res_mats[i], global_start,
+				length, length);
+
+	mapply_portion_compute compute(write_bufs, res_mats, *op);
+	compute.set_buf(ready_portions);
+	compute.run_complete();
+}
+
+/*
+ * This class reads the EM portions one at a time. After it reads all portions,
+ * it invokes mapply_portion_compute.
+ */
+class serial_read_portion_compute: public portion_compute
+{
+	// The remaining matrices where we need to read portions from.
+	std::vector<matrix_store::const_ptr> remain_mats;
+
+	collected_portions::ptr collected;
+
+	// The portion that is being read.
+	local_matrix_store::const_ptr pending_portion;
+public:
+	serial_read_portion_compute(collected_portions::ptr collected) {
+		this->collected = collected;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		collected->add_ready_portion(pending_portion);
+		// We have fetched all portions, let's run computation on it.
+		if (remain_mats.empty())
+			collected->run_all_portions();
+		else
+			fetch_portion(remain_mats, collected);
+	}
+
+	static void fetch_portion(const std::vector<matrix_store::const_ptr> &mats,
+			collected_portions::ptr collected);
+};
+
+// TODO I need to copy the vectors multiple times. Is this problematic?
+void serial_read_portion_compute::fetch_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		collected_portions::ptr collected)
+{
+	serial_read_portion_compute *_compute
+		= new serial_read_portion_compute(collected);
+	serial_read_portion_compute::ptr compute(_compute);
+	size_t global_start_row, global_start_col, num_rows, num_cols;
+	size_t j;
+	for (j = 0; j < mats.size(); j++) {
+		if (mats[j]->is_wide()) {
+			global_start_row = 0;
+			global_start_col = collected->get_global_start();
+			num_rows = mats[j]->get_num_rows();
+			num_cols = collected->get_length();
+		}
+		else {
+			global_start_row = collected->get_global_start();
+			global_start_col = 0;
+			num_rows = collected->get_length();
+			num_cols = mats[j]->get_num_cols();
+		}
+		async_cres_t res = mats[j]->get_portion_async(global_start_row,
+				global_start_col, num_rows, num_cols, compute);
+		if (!res.first) {
+			_compute->pending_portion = res.second;
+			break;
+		}
+		else
+			collected->add_ready_portion(res.second);
+	}
+	if (j == mats.size()) {
+		// All portions are ready, we can perform computation now.
+		collected->run_all_portions();
+	}
+	else {
+		// This portion compute will be invoked once the pending portion
+		// is ready.
+		_compute->remain_mats.insert(_compute->remain_mats.end(),
+				mats.begin() + j + 1, mats.end());
+	}
+}
+
+/*
+ * This method is invoked in each worker thread.
+ */
+void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
+		size_t length)
+{
+	// Here we don't use the minimum portion size.
+	collected_portions::ptr collected(new collected_portions(res_mats, op,
+				global_start, length));
+	serial_read_portion_compute::fetch_portion(mats, collected);
+}
+
 }
 
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access)
 {
 	// As long as one of the input matrices is in external memory, we output
 	// an EM matrix.
@@ -1282,7 +1464,7 @@ matrix_store::ptr __mapply_portion(
 		assert(res);
 		out_mats.push_back(res);
 	}
-	bool ret = __mapply_portion(mats, op, out_mats);
+	bool ret = __mapply_portion(mats, op, out_mats, par_access);
 	if (ret && out_mats.size() == 1)
 		return out_mats[0];
 	else
@@ -1294,7 +1476,7 @@ matrix_store::ptr __mapply_portion(
 bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op,
-		const std::vector<matrix_store::ptr> &out_mats)
+		const std::vector<matrix_store::ptr> &out_mats, bool par_access)
 {
 	bool out_in_mem;
 	int out_num_nodes;
@@ -1384,9 +1566,15 @@ bool __mapply_portion(
 	}
 	else {
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
-		EM_mat_mapply_dispatcher::ptr dispatcher(
-				new EM_mat_mapply_dispatcher(mats, out_mats, op, tot_len,
-					EM_matrix_store::CHUNK_SIZE));
+		detail::EM_portion_dispatcher::ptr dispatcher;
+		if (par_access)
+			dispatcher = detail::EM_portion_dispatcher::ptr(
+					new EM_mat_mapply_par_dispatcher(mats, out_mats, op,
+						tot_len, EM_matrix_store::CHUNK_SIZE));
+		else
+			dispatcher = detail::EM_portion_dispatcher::ptr(
+					new EM_mat_mapply_serial_dispatcher(mats, out_mats, op,
+						tot_len, EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
 			io_worker_task *task = new io_worker_task(dispatcher, 1);
 			for (size_t j = 0; j < mats.size(); j++) {
@@ -2629,6 +2817,18 @@ bool dense_matrix::move_store(bool in_mem, int num_nodes) const
 	}
 	const_cast<dense_matrix *>(this)->store = store;
 	return true;
+}
+
+dense_matrix::ptr dense_matrix::logic_not() const
+{
+	if (get_type() != get_scalar_type<bool>()) {
+		BOOST_LOG_TRIVIAL(error) << "logic_not only works on boolean matrix";
+		return dense_matrix::ptr();
+	}
+
+	bulk_uoperate::const_ptr op = bulk_uoperate::conv2ptr(
+			*get_type().get_basic_uops().get_op(basic_uops::op_idx::NOT));
+	return sapply(op);
 }
 
 }
