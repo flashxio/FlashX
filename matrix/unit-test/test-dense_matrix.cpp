@@ -1368,36 +1368,32 @@ void test_mem_matrix(int num_nodes)
 	test_sum_row_col(-1);
 	test_sum_row_col(num_nodes);
 
-	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
-		matrix_val = (matrix_val_t) i;
-		printf("matrix val type: %d\n", i);
-
-		test_conv2(-1);
-		test_conv2(num_nodes);
-		test_scale_cols(-1);
-		test_scale_cols(num_nodes);
-		test_scale_rows(-1);
-		test_scale_rows(num_nodes);
-		test_multiply_scalar(-1);
-		test_multiply_scalar(num_nodes);
-		test_ele_wise(-1);
-		test_ele_wise(num_nodes);
-		test_multiply_col(-1);
-		test_multiply_col(num_nodes);
-		test_agg_col(-1);
-		test_agg_col(num_nodes);
-		test_multiply_matrix(-1);
-		test_multiply_matrix(num_nodes);
-		test_agg_row(-1);
-		test_agg_row(num_nodes);
-		test_agg_sub_col(-1);
-		test_agg_sub_row(-1);
+	matrix_val = matrix_val_t::SEQ;
+	test_conv2(-1);
+	test_conv2(num_nodes);
+	test_scale_cols(-1);
+	test_scale_cols(num_nodes);
+	test_scale_rows(-1);
+	test_scale_rows(num_nodes);
+	test_multiply_scalar(-1);
+	test_multiply_scalar(num_nodes);
+	test_ele_wise(-1);
+	test_ele_wise(num_nodes);
+	test_multiply_col(-1);
+	test_multiply_col(num_nodes);
+	test_agg_col(-1);
+	test_agg_col(num_nodes);
+	test_multiply_matrix(-1);
+	test_multiply_matrix(num_nodes);
+	test_agg_row(-1);
+	test_agg_row(num_nodes);
+	test_agg_sub_col(-1);
+	test_agg_sub_row(-1);
 #if 0
-		test_rand_init();
-		test_conv_row_col();
-		test_flatten();
+	test_rand_init();
+	test_conv_row_col();
+	test_flatten();
 #endif
-	}
 }
 
 void test_conv_store()
