@@ -934,7 +934,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		// and beta.
 		detail::portion_mapply_op::const_ptr op(new sum_op<double>(
 					this->get_num_rows(), this->get_num_cols()));
-		block = mapply_portion(tmp_mats, op, matrix_layout_t::L_COL);
+		// We will materialize the mapply in a hierarchical way,
+		// so the intermediate matrices should be read from SSDs in serial.
+		block = mapply_portion(tmp_mats, op, matrix_layout_t::L_COL, false);
 	}
 
 	std::unordered_map<size_t, size_t> bytes
