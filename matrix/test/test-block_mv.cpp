@@ -3,18 +3,16 @@
 using namespace fm;
 
 size_t long_dim = 60 * 1024 * 1024;
-//size_t long_dim = 1024 * 1024;
 
-void test_gemm()
+void test_gemm(bool in_mem)
 {
 	printf("gemm on block multi-vector\n");
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
-//			long_dim, 32, 4, get_scalar_type<double>(), false);
-			long_dim, 128, 4, get_scalar_type<double>(), false);
+			long_dim, 128, 4, get_scalar_type<double>(), in_mem);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
 		mv->set_block(i, dense_matrix::create_randu<double>(0, 1,
 					long_dim, mv->get_block_size(),
-					matrix_layout_t::L_COL, -1, false));
+					matrix_layout_t::L_COL, -1, in_mem));
 	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
 			mv->get_num_cols(), mv->get_block_size(), matrix_layout_t::L_COL,
 			-1, true);
@@ -29,7 +27,7 @@ void test_gemm()
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
 	res1->set_block(0, dense_matrix::create_const<double>(0, long_dim,
-				mv->get_block_size(), matrix_layout_t::L_COL, -1, false));
+				mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
 	res1->set_multiply_blocks(4);
 	gettimeofday(&start, NULL);
 	res1 = res1->gemm(*mv, B, alpha, beta);
@@ -44,7 +42,7 @@ void test_gemm()
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
 	res2->set_block(0, dense_matrix::create_const<double>(0, long_dim,
-				mv->get_block_size(), matrix_layout_t::L_COL, -1, false));
+				mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
 	res2->set_multiply_blocks(mv->get_num_blocks());
 	gettimeofday(&start, NULL);
 	res2 = res2->gemm(*mv, B, alpha, beta);
@@ -74,7 +72,8 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_gemm();
+	test_gemm(true);
+	test_gemm(false);
 
 	destroy_flash_matrix();
 }
