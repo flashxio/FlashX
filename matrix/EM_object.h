@@ -126,6 +126,10 @@ public:
 		assert(computes.empty());
 	}
 
+	bool has_callback() const {
+		return !computes.empty();
+	}
+
 	bool has_callback(const safs::io_request &req) const {
 		auto it = computes.find(get_portion_key(req));
 		return it != computes.end();

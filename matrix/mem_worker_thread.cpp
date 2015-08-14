@@ -147,6 +147,12 @@ void io_worker_task::run()
 	pthread_spin_lock(&lock);
 	EM_objs.clear();
 	pthread_spin_unlock(&lock);
+
+	for (size_t i = 0; i < ios.size(); i++) {
+		portion_callback &cb = static_cast<portion_callback &>(
+				ios[i]->get_callback());
+		assert(!cb.has_callback());
+	}
 }
 
 }

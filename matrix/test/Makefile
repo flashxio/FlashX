@@ -18,11 +18,11 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
+CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
-all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
+all: test-fg_SpMV test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
 	el2al al22d al2crs test-sort test-eigen test-dgemm test-mkl_eigen
 
 trilinos: test-anasazi_eigen test-tpetra_multiply
@@ -37,6 +37,9 @@ test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
+
+test-block_mv: test-block_mv.o ../libFMatrix.a ../eigensolver/libeigen.a
+	$(CXX) -o test-block_mv test-block_mv.o $(LDFLAGS) -L../eigensolver -leigen
 
 test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
 	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
