@@ -1305,7 +1305,11 @@ class collected_portions
 {
 	// The output matrices.
 	std::vector<matrix_store::ptr> res_mats;
+	// The portions with partial result.
+	// This is only used when the operation is aggregation.
+	local_matrix_store::ptr res_portion;
 	// The portions with data ready.
+	// This is only used when the operation isn't aggregation.
 	std::vector<local_matrix_store::const_ptr> ready_portions;
 
 	// The location of the portions.
@@ -1334,24 +1338,88 @@ public:
 
 	void run_all_portions();
 
-	void add_ready_portion(local_matrix_store::const_ptr portion) {
+	void add_ready_portion(local_matrix_store::const_ptr portion);
+};
+
+void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion)
+{
+	if (op->is_agg() && res_portion) {
+		std::vector<local_matrix_store::const_ptr> local_stores(2);
+		local_stores[0] = res_portion;
+		local_stores[1] = portion;
+		// We store the partial result in a single portion, regardless of
+		// the number of output matrices we want to generate eventually.
+		op->run(local_stores, *res_portion);
+	}
+	else if (op->is_agg()) {
+		// If this is an aggregation operation, it should output an matrix.
+		assert(!res_mats.empty());
+		// Regardless of the number of output matrices we want to generate
+		// eventually, we only use one matrix portion to store
+		// the intermediate aggregation result.
+		size_t start_row, start_col, num_rows, num_cols;
+		if (res_mats.front()->is_wide()) {
+			start_row = 0;
+			start_col = global_start;
+			num_rows = op->get_out_num_rows();
+			num_cols = length;
+		}
+		else {
+			start_row = global_start;
+			start_col = 0;
+			num_rows = length;
+			num_cols = op->get_out_num_cols();
+		}
+
+		if (res_mats.front()->store_layout() == matrix_layout_t::L_COL)
+			res_portion = local_matrix_store::ptr(
+					new local_buf_col_matrix_store(start_row, start_col,
+						num_rows, num_cols, op->get_output_type(),
+						portion->get_node_id()));
+		else
+			res_portion = local_matrix_store::ptr(
+					new local_buf_row_matrix_store(start_row, start_col,
+						num_rows, num_cols, op->get_output_type(),
+						portion->get_node_id()));
+
+		std::vector<local_matrix_store::const_ptr> local_stores(1);
+		local_stores[0] = portion;
+		// We rely on the user-defined function to copy the first portion
+		// to the partial result portion.
+		op->run(local_stores, *res_portion);
+	}
+	else {
+		// This forces the portion of a mapply matrix to materialize and
+		// release the data in the underlying portion.
+		// TODO it's better to have a better way to materialize the mapply
+		// matrix portion.
+		portion->get_raw_arr();
 		ready_portions.push_back(portion);
 	}
-};
+}
 
 void collected_portions::run_all_portions()
 {
 	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
 	for (size_t i = 0; i < res_mats.size(); i++)
-		write_bufs[i] = local_write_buffer::create(res_mats[i], global_start,
-				length, length);
-
+		write_bufs[i] = local_write_buffer::create(res_mats[i],
+				global_start, length, length);
 	mapply_portion_compute compute(write_bufs, res_mats, *op);
-	compute.set_buf(ready_portions);
-	compute.run_complete();
 
-	// We don't need these portions now. They should be free'd.
-	ready_portions.clear();
+	if (res_portion) {
+		std::vector<detail::local_matrix_store::const_ptr> stores(1);
+		stores[0] = res_portion;
+		compute.set_buf(stores);
+		compute.run_complete();
+		res_portion = NULL;
+	}
+	else {
+		compute.set_buf(ready_portions);
+		compute.run_complete();
+
+		// We don't need these portions now. They should be free'd.
+		ready_portions.clear();
+	}
 }
 
 /*
@@ -1373,11 +1441,6 @@ public:
 	}
 
 	virtual void run(char *buf, size_t size) {
-		// This forces the portion of a mapply matrix to materialize and
-		// release the data in the underlying portion.
-		// TODO it's better to have a better way to materialize the mapply
-		// matrix portion.
-		pending_portion->get_raw_arr();
 		collected->add_ready_portion(pending_portion);
 		pending_portion = NULL;
 		// We have fetched all portions, let's run computation on it.

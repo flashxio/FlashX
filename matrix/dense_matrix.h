@@ -90,6 +90,15 @@ public:
 	virtual std::string to_string(
 			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 
+	/*
+	 * Give a hint if this operation is aggregation, so we can optimize
+	 * the backend accordingly. When this is an aggregation operation,
+	 * the second `run' method has to be implemented.
+	 */
+	virtual bool is_agg() const {
+		return false;
+	}
+
 	size_t get_out_num_rows() const {
 		return out_num_rows;
 	}

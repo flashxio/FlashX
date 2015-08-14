@@ -596,9 +596,16 @@ public:
 	virtual void run(
 			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
 			fm::detail::local_matrix_store &out) const {
-		out.reset_data();
-		for (size_t i = 0; i < ins.size(); i++)
-			mapply2(*ins[i], out, out.get_type().get_basic_ops().get_add(), out);
+		assert(!ins.empty());
+		if (ins.size() == 1)
+			out.copy_from(*ins[0]);
+		else {
+			mapply2(*ins[0], *ins[1],
+					out.get_type().get_basic_ops().get_add(), out);
+			for (size_t i = 2; i < ins.size(); i++)
+				mapply2(*ins[i], out,
+						out.get_type().get_basic_ops().get_add(), out);
+		}
 	}
 
 	virtual fm::detail::portion_mapply_op::const_ptr transpose() const;
@@ -612,6 +619,10 @@ public:
 			str += mats[i]->get_name() + "+";
 		str += mats[mats.size() - 1]->get_name() + ")";
 		return str;
+	}
+
+	virtual bool is_agg() const {
+		return true;
 	}
 };
 
@@ -643,6 +654,10 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		return op.to_string(mats);
+	}
+
+	virtual bool is_agg() const {
+		return true;
 	}
 };
 
