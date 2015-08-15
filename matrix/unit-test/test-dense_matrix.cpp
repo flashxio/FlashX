@@ -11,6 +11,7 @@
 #include "matrix_stats.h"
 
 #include "eigensolver/block_dense_matrix.h"
+#include "eigensolver/collected_col_matrix_store.h"
 
 using namespace fm;
 
@@ -1429,13 +1430,14 @@ void test_conv_store()
 
 void test_block_mv()
 {
+	bool in_mem = false;
 	printf("gemm on block multi-vector\n");
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
-			long_dim, 16, 2, get_scalar_type<double>(), false);
+			long_dim, 14, 2, get_scalar_type<double>(), in_mem);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
 		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
-					false));
+					in_mem));
 	dense_matrix::ptr mat = create_seq_matrix(mv->get_num_cols(),
 			mv->get_block_size(), matrix_layout_t::L_COL, -1,
 			get_scalar_type<double>(), true);
@@ -1445,36 +1447,92 @@ void test_block_mv()
 	scalar_variable_impl<double> alpha(2);
 	scalar_variable_impl<double> beta(3);
 
-	eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
-			long_dim, mv->get_block_size(), mv->get_block_size(),
-			get_scalar_type<double>(), true);
-	res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
-	res1->set_multiply_blocks(2);
-	res1 = res1->gemm(*mv, B, alpha, beta);
-	assert(res1->get_num_blocks() == 1);
-	dense_matrix::ptr res_mat1 = res1->get_block(0);
-	res_mat1->materialize_self();
+	{
+		printf("gemm1\n");
+		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
+				long_dim, mv->get_block_size(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
+		res1->set_multiply_blocks(2);
+		res1 = res1->gemm(*mv, B, alpha, beta);
+		assert(res1->get_num_blocks() == 1);
+		dense_matrix::ptr res_mat1 = res1->get_block(0);
+		res_mat1->materialize_self();
 
-	eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
-			long_dim, mv->get_block_size(), mv->get_block_size(),
-			get_scalar_type<double>(), true);
-	res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
-				matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
-	res2->set_multiply_blocks(mv->get_num_blocks());
-	res2 = res2->gemm(*mv, B, alpha, beta);
-	assert(res2->get_num_blocks() == 1);
-	dense_matrix::ptr res_mat2 = res2->get_block(0);
-	res_mat2->materialize_self();
+		printf("gemm2\n");
+		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
+				long_dim, mv->get_block_size(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
+		res2->set_multiply_blocks(mv->get_num_blocks());
+		res2 = res2->gemm(*mv, B, alpha, beta);
+		assert(res2->get_num_blocks() == 1);
+		dense_matrix::ptr res_mat2 = res2->get_block(0);
+		res_mat2->materialize_self();
 
-	dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
-	scalar_variable::ptr max_diff = diff->abs()->max();
-	scalar_variable::ptr max1 = res_mat1->max();
-	scalar_variable::ptr max2 = res_mat2->max();
-	printf("max diff: %g, max mat1: %g, max mat2: %g\n",
-			*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
-			*(double *) max2->get_raw());
-	assert(*(double *) max_diff->get_raw() == 0);
+		dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+		scalar_variable::ptr max_diff = diff->abs()->max();
+		scalar_variable::ptr max1 = res_mat1->max();
+		scalar_variable::ptr max2 = res_mat2->max();
+		printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+				*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+				*(double *) max2->get_raw());
+		assert(*(double *) max_diff->get_raw() == 0);
+	}
+
+	mat = create_seq_matrix(mv->get_num_cols(),
+			mv->get_block_size() * 2, matrix_layout_t::L_COL, -1,
+			get_scalar_type<double>(), true);
+	mat->materialize_self();
+	B = detail::mem_col_matrix_store::cast(mat->get_raw_store());
+
+	{
+		printf("gemm1\n");
+		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
+				long_dim, B->get_num_cols(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		std::vector<detail::matrix_store::const_ptr> orig_res_stores(res1->get_num_blocks());
+		for (size_t i = 0; i < res1->get_num_blocks(); i++) {
+			res1->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
+						matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
+						in_mem));
+			orig_res_stores[i] = res1->get_block(i)->get_raw_store();
+		}
+		res1->set_multiply_blocks(2);
+		res1 = res1->gemm(*mv, B, alpha, beta);
+
+		printf("gemm2\n");
+		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
+				long_dim, B->get_num_cols(), B->get_num_cols(),
+				get_scalar_type<double>(), true);
+		res2->set_block(0, dense_matrix::create(
+					eigen::collected_matrix_store::create(orig_res_stores,
+						res1->get_num_cols())));
+		res2->set_multiply_blocks(mv->get_num_blocks());
+		res2 = res2->gemm(*mv, B, alpha, beta);
+		assert(res2->get_num_blocks() == 1);
+		res2->get_block(0)->materialize_self();
+
+		off_t col_off = 0;
+		for (size_t i = 0; i < res1->get_num_blocks(); i++) {
+			std::vector<off_t> col_idxs(res1->get_block_size());
+			for (size_t j = 0; j < res1->get_block_size(); j++)
+				col_idxs[j] = col_off++;
+			dense_matrix::ptr res_mat1 = res1->get_block(i);
+			dense_matrix::ptr res_mat2 = res2->get_block(0)->get_cols(col_idxs);
+
+			dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+			scalar_variable::ptr max_diff = diff->abs()->max();
+			scalar_variable::ptr max1 = res_mat1->max();
+			scalar_variable::ptr max2 = res_mat2->max();
+			printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+					*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+					*(double *) max2->get_raw());
+			assert(*(double *) max_diff->get_raw() == 0);
+		}
+	}
 }
 
 int main(int argc, char *argv[])

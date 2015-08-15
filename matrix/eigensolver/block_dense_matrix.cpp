@@ -963,36 +963,29 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	// of the gemm result. In this case, we need to split the gemm result.
 	if (get_block_size() != block->get_num_cols()) {
 		size_t num_out_cols = block->get_num_cols();
-		size_t num_out_rows = block->get_num_rows();
 		assert(num_out_cols % get_block_size() == 0);
-		std::vector<detail::matrix_store::ptr> outs(
-				num_out_cols / get_block_size());
-		for (size_t i = 0; i < outs.size(); i++)
-			outs[i] = detail::matrix_store::create(num_out_rows, get_block_size(),
-					block->store_layout(), type,
-					block->get_data().get_num_nodes(), in_mem);
 
 		printf("Split matrix\n");
 		printf("There are %ld underlying matrices\n", bytes.size());
 		num_col_writes += block->get_num_cols();
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
-		std::vector<detail::matrix_store::const_ptr> ins(1);
-		ins[0] = block->get_raw_store();
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
 		set_caching(orig_input_mats, false);
-		bool ret = __mapply_portion(ins,
-				detail::portion_mapply_op::const_ptr(new split_op()), outs);
-		assert(ret);
+		block->materialize_self();
 		set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
 				get_block_size(), type, in_mem);
-		assert(vecs->mats.size() == outs.size());
-		for (size_t i = 0; i < outs.size(); i++)
-			vecs->mats[i] = dense_matrix::create(outs[i]);
+		off_t col_off = 0;
+		for (size_t i = 0; i < vecs->mats.size(); i++) {
+			std::vector<off_t> idxs(get_block_size());
+			for (size_t j = 0; j < get_block_size(); j++)
+				idxs[j] = col_off++;
+			vecs->mats[i] = block->get_cols(idxs);
+		}
 	}
 	else if (bytes.size() > 2) {
 		printf("There are %ld underlying matrices\n", bytes.size());
