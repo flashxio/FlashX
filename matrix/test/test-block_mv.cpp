@@ -23,6 +23,20 @@ void test_gemm(bool in_mem)
 
 	struct timeval start, end;
 
+	eigen::block_multi_vector::ptr res0 = eigen::block_multi_vector::create(
+			long_dim, mv->get_block_size(), mv->get_block_size(),
+			get_scalar_type<double>(), true);
+	res0->set_block(0, dense_matrix::create_const<double>(0, long_dim,
+				mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+	res0->set_multiply_blocks(1);
+	gettimeofday(&start, NULL);
+	res0 = res0->gemm(*mv, B, alpha, beta);
+	assert(res0->get_num_blocks() == 1);
+	dense_matrix::ptr res_mat0 = res0->get_block(0);
+	res_mat0->materialize_self();
+	gettimeofday(&end, NULL);
+	printf("agg materialization takes %.3f seconds\n", time_diff(start, end));
+
 	eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
