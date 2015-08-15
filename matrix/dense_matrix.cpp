@@ -1161,6 +1161,10 @@ class EM_mat_mapply_serial_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
+
+	// These maintain per-thread states.
+	std::vector<size_t> num_local_portions;
+	std::vector<size_t> num_local_issues;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
@@ -1174,9 +1178,21 @@ public:
 		this->res_mats = res_mats;
 		this->op = op;
 		this->min_portion_size = cal_min_portion_size(mats, res_mats);
+
+		detail::mem_thread_pool::ptr threads
+			= detail::mem_thread_pool::get_global_mem_threads();
+		num_local_portions.resize(threads->get_num_threads());
+		num_local_issues.resize(threads->get_num_threads());
 	}
 
 	virtual void create_task(off_t global_start, size_t length);
+	virtual bool issue_task();
+
+	void issue_local_portions(size_t num) {
+		detail::pool_task_thread *curr
+			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+		num_local_issues[curr->get_pool_thread_id()] += num;
+	}
 };
 
 class mapply_portion_compute: public portion_compute
@@ -1428,6 +1444,7 @@ void collected_portions::run_all_portions()
  */
 class serial_read_portion_compute: public portion_compute
 {
+	EM_mat_mapply_serial_dispatcher &dispatcher;
 	// The remaining matrices where we need to read portions from.
 	std::vector<matrix_store::const_ptr> remain_mats;
 
@@ -1436,7 +1453,8 @@ class serial_read_portion_compute: public portion_compute
 	// The portion that is being read.
 	local_matrix_store::const_ptr pending_portion;
 public:
-	serial_read_portion_compute(collected_portions::ptr collected) {
+	serial_read_portion_compute(collected_portions::ptr collected,
+			EM_mat_mapply_serial_dispatcher &_dispatcher): dispatcher(_dispatcher) {
 		this->collected = collected;
 	}
 
@@ -1447,21 +1465,23 @@ public:
 		if (remain_mats.empty())
 			collected->run_all_portions();
 		else
-			fetch_portion(remain_mats, collected);
+			fetch_portion(remain_mats, collected, dispatcher);
 		collected = NULL;
 	}
 
 	static void fetch_portion(const std::vector<matrix_store::const_ptr> &mats,
-			collected_portions::ptr collected);
+			collected_portions::ptr collected,
+			EM_mat_mapply_serial_dispatcher &dispatcher);
 };
 
 // TODO I need to copy the vectors multiple times. Is this problematic?
 void serial_read_portion_compute::fetch_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		collected_portions::ptr collected)
+		collected_portions::ptr collected,
+		EM_mat_mapply_serial_dispatcher &dispatcher)
 {
 	serial_read_portion_compute *_compute
-		= new serial_read_portion_compute(collected);
+		= new serial_read_portion_compute(collected, dispatcher);
 	serial_read_portion_compute::ptr compute(_compute);
 	size_t global_start_row, global_start_col, num_rows, num_cols;
 	size_t j;
@@ -1488,10 +1508,14 @@ void serial_read_portion_compute::fetch_portion(
 			collected->add_ready_portion(res.second);
 	}
 	if (j == mats.size()) {
+		// The dispatcher accessed `j' portions.
+		dispatcher.issue_local_portions(j);
 		// All portions are ready, we can perform computation now.
 		collected->run_all_portions();
 	}
 	else {
+		// The dispatcher accessed `j + 1' portions.
+		dispatcher.issue_local_portions(j + 1);
 		// This portion compute will be invoked once the pending portion
 		// is ready.
 		_compute->remain_mats.insert(_compute->remain_mats.end(),
@@ -1508,7 +1532,32 @@ void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
 	// Here we don't use the minimum portion size.
 	collected_portions::ptr collected(new collected_portions(res_mats, op,
 				global_start, length));
-	serial_read_portion_compute::fetch_portion(mats, collected);
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	num_local_portions[curr->get_pool_thread_id()] += mats.size();
+	serial_read_portion_compute::fetch_portion(mats, collected, *this);
+}
+
+bool EM_mat_mapply_serial_dispatcher::issue_task()
+{
+	bool ret = EM_portion_dispatcher::issue_task();
+	if (ret)
+		return true;
+	else {
+		detail::pool_task_thread *curr
+			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+		int thread_id = curr->get_pool_thread_id();
+		// If we haven't issued requests to access all portions, we should wait.
+		if (num_local_issues[thread_id] < num_local_portions[thread_id]) {
+			// We only need to sleep at the end.
+			// All worker threads wait until all portions are processed.
+			// This actually improves performance. TODO why?
+			usleep(100);
+			return true;
+		}
+		else
+			return false;
+	}
 }
 
 }
