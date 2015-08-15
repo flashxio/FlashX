@@ -873,6 +873,13 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::mem_col_matrix_store::const_ptr B, const scalar_variable &alpha,
 		const scalar_variable &beta) const
 {
+	if (A.get_num_cols() != B->get_num_rows()
+			|| A.get_num_rows() != get_num_rows()
+			|| B->get_num_cols() != get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "Wrong dimension for GEMM";
+		return block_multi_vector::ptr();
+	}
+
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
