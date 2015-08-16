@@ -1368,41 +1368,48 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 		op->run(local_stores, *res_portion);
 	}
 	else if (op->is_agg()) {
-		// If this is an aggregation operation, it should output an matrix.
-		assert(!res_mats.empty());
-		// Regardless of the number of output matrices we want to generate
-		// eventually, we only use one matrix portion to store
-		// the intermediate aggregation result.
-		size_t start_row, start_col, num_rows, num_cols;
-		if (res_mats.front()->is_wide()) {
-			start_row = 0;
-			start_col = global_start;
-			num_rows = op->get_out_num_rows();
-			num_cols = length;
+		if (op->get_out_num_rows() > 0 && op->get_out_num_cols() > 0) {
+			// Regardless of the number of output matrices we want to generate
+			// eventually, we only use one matrix portion to store
+			// the intermediate aggregation result.
+			size_t start_row, start_col, num_rows, num_cols;
+			if (res_mats.front()->is_wide()) {
+				start_row = 0;
+				start_col = global_start;
+				num_rows = op->get_out_num_rows();
+				num_cols = length;
+			}
+			else {
+				start_row = global_start;
+				start_col = 0;
+				num_rows = length;
+				num_cols = op->get_out_num_cols();
+			}
+
+			if (res_mats.front()->store_layout() == matrix_layout_t::L_COL)
+				res_portion = local_matrix_store::ptr(
+						new local_buf_col_matrix_store(start_row, start_col,
+							num_rows, num_cols, op->get_output_type(),
+							portion->get_node_id()));
+			else
+				res_portion = local_matrix_store::ptr(
+						new local_buf_row_matrix_store(start_row, start_col,
+							num_rows, num_cols, op->get_output_type(),
+							portion->get_node_id()));
+
+			std::vector<local_matrix_store::const_ptr> local_stores(1);
+			local_stores[0] = portion;
+			// We rely on the user-defined function to copy the first portion
+			// to the partial result portion.
+			op->run(local_stores, *res_portion);
 		}
 		else {
-			start_row = global_start;
-			start_col = 0;
-			num_rows = length;
-			num_cols = op->get_out_num_cols();
+			std::vector<local_matrix_store::const_ptr> local_stores(1);
+			local_stores[0] = portion;
+			// We rely on the user-defined function to copy the first portion
+			// to the partial result portion.
+			op->run(local_stores);
 		}
-
-		if (res_mats.front()->store_layout() == matrix_layout_t::L_COL)
-			res_portion = local_matrix_store::ptr(
-					new local_buf_col_matrix_store(start_row, start_col,
-						num_rows, num_cols, op->get_output_type(),
-						portion->get_node_id()));
-		else
-			res_portion = local_matrix_store::ptr(
-					new local_buf_row_matrix_store(start_row, start_col,
-						num_rows, num_cols, op->get_output_type(),
-						portion->get_node_id()));
-
-		std::vector<local_matrix_store::const_ptr> local_stores(1);
-		local_stores[0] = portion;
-		// We rely on the user-defined function to copy the first portion
-		// to the partial result portion.
-		op->run(local_stores, *res_portion);
 	}
 	else {
 		// This forces the portion of a mapply matrix to materialize and
@@ -1416,6 +1423,11 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 
 void collected_portions::run_all_portions()
 {
+	// If this is an aggregation operation and no result portion was generated,
+	// return now.
+	if (op->is_agg() && res_portion == NULL)
+		return;
+
 	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
 	for (size_t i = 0; i < res_mats.size(); i++)
 		write_bufs[i] = local_write_buffer::create(res_mats[i],
