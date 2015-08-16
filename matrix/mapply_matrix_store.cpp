@@ -700,10 +700,13 @@ async_cres_t mapply_matrix_store::get_portion_async(
 			collect_compute = store->get_compute();
 		}
 		// If the collect compute doesn't exist, it mean the data in the local
-		// matrix store may already by ready. TODO I need to verify it.
-		assert(collect_compute);
-		collect_compute->add_orig_compute(orig_compute);
-		return async_cres_t(false, ret1);
+		// matrix store may already by ready.
+		if (collect_compute) {
+			collect_compute->add_orig_compute(orig_compute);
+			return async_cres_t(false, ret1);
+		}
+		else
+			return async_cres_t(true, ret1);
 	}
 
 	std::shared_ptr<collect_portion_compute> collect_compute
