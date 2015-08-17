@@ -75,6 +75,49 @@ void test_gemm(bool in_mem)
 			*(double *) max2->get_raw());
 }
 
+void test_MvTransMv(bool in_mem)
+{
+	printf("MvTransMv on block multi-vector\n");
+	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
+			long_dim, 128, 4, get_scalar_type<double>(), in_mem);
+	for (size_t i = 0; i < mv1->get_num_blocks(); i++)
+		mv1->set_block(i, dense_matrix::create_randu<double>(0, 1,
+					long_dim, mv1->get_block_size(),
+					matrix_layout_t::L_COL, -1, in_mem));
+	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
+			long_dim, 4, 4, get_scalar_type<double>(), in_mem);
+	mv2->set_block(0, dense_matrix::create_randu<double>(0, 1, long_dim,
+				mv2->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+
+	struct timeval start, end;
+
+	mv1->set_multiply_blocks(1);
+	gettimeofday(&start, NULL);
+	fm::dense_matrix::ptr res1 = mv1->MvTransMv(*mv2);
+	gettimeofday(&end, NULL);
+	printf("MvTransMv (1 block) takes %.3f seconds\n", time_diff(start, end));
+
+	mv1->set_multiply_blocks(4);
+	gettimeofday(&start, NULL);
+	fm::dense_matrix::ptr res2 = mv1->MvTransMv(*mv2);
+	gettimeofday(&end, NULL);
+	printf("MvTransMv (4 blocks) takes %.3f seconds\n", time_diff(start, end));
+
+	mv1->set_multiply_blocks(mv1->get_num_blocks());
+	gettimeofday(&start, NULL);
+	fm::dense_matrix::ptr res3 = mv1->MvTransMv(*mv2);
+	gettimeofday(&end, NULL);
+	printf("MvTransMv (all blocks) takes %.3f seconds\n", time_diff(start, end));
+
+	dense_matrix::ptr diff = res2->minus(*res3);
+	scalar_variable::ptr max_diff = diff->abs()->max();
+	scalar_variable::ptr max1 = res2->max();
+	scalar_variable::ptr max2 = res3->max();
+	printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+			*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+			*(double *) max2->get_raw());
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -87,7 +130,9 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	test_gemm(true);
+	test_MvTransMv(true);
 	test_gemm(false);
+	test_MvTransMv(false);
 
 	destroy_flash_matrix();
 }
