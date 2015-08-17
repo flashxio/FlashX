@@ -1150,6 +1150,62 @@ public:
 };
 
 /*
+ * This collects all the portions in a partition that are required by
+ * an operation and are ready in memory.
+ */
+class collected_portions
+{
+	// The output matrices.
+	std::vector<matrix_store::ptr> res_mats;
+	// The portions with partial result.
+	// This is only used when the operation is aggregation.
+	local_matrix_store::ptr res_portion;
+	// The portions with data ready.
+	// This is only used when the operation isn't aggregation.
+	std::vector<local_matrix_store::const_ptr> ready_portions;
+
+	// The number of portions that are ready.
+	size_t num_ready;
+	// The number of portions that are required for the computation.
+	size_t num_required;
+
+	// The location of the portions.
+	off_t global_start;
+	size_t length;
+
+	portion_mapply_op::const_ptr op;
+public:
+	typedef std::shared_ptr<collected_portions> ptr;
+
+	collected_portions(const std::vector<matrix_store::ptr> &res_mats,
+			portion_mapply_op::const_ptr op, size_t num_required,
+			off_t global_start, size_t length) {
+		this->res_mats = res_mats;
+		this->global_start = global_start;
+		this->length = length;
+		this->op = op;
+		this->num_required = num_required;
+		this->num_ready = 0;
+	}
+
+	off_t get_global_start() const {
+		return global_start;
+	}
+
+	size_t get_length() const {
+		return length;
+	}
+
+	void run_all_portions();
+
+	void add_ready_portion(local_matrix_store::const_ptr portion);
+
+	bool is_complete() const {
+		return num_required == num_ready;
+	}
+};
+
+/*
  * This dispatcher accesses one portion of a dense matrix at a time in a thread,
  * although I/O is still performed asynchronously. This is particularly useful
  * when we compute on a large group of dense matrices. Users can split the large
@@ -1159,12 +1215,21 @@ public:
  */
 class EM_mat_mapply_serial_dispatcher: public detail::EM_portion_dispatcher
 {
+	/*
+	 * This contains the data structure for fetching data in a partition
+	 * across all dense matrices in an operation.
+	 * The first member contains the matrices whose portions haven't been
+	 * fetched; the second member contains the portions that have been
+	 * successfully fetched.
+	 */
+	typedef std::pair<std::deque<matrix_store::const_ptr>,
+			collected_portions::ptr> part_state_t;
+
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
 
 	// These maintain per-thread states.
-	std::vector<size_t> num_local_portions;
-	std::vector<size_t> num_local_issues;
+	std::vector<part_state_t> part_states;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
@@ -1181,18 +1246,11 @@ public:
 
 		detail::mem_thread_pool::ptr threads
 			= detail::mem_thread_pool::get_global_mem_threads();
-		num_local_portions.resize(threads->get_num_threads());
-		num_local_issues.resize(threads->get_num_threads());
+		part_states.resize(threads->get_num_threads());
 	}
 
 	virtual void create_task(off_t global_start, size_t length);
 	virtual bool issue_task();
-
-	void issue_local_portions(size_t num) {
-		detail::pool_task_thread *curr
-			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-		num_local_issues[curr->get_pool_thread_id()] += num;
-	}
 };
 
 class mapply_portion_compute: public portion_compute
@@ -1317,48 +1375,11 @@ void EM_mat_mapply_par_dispatcher::create_task(off_t global_start,
 	}
 }
 
-class collected_portions
-{
-	// The output matrices.
-	std::vector<matrix_store::ptr> res_mats;
-	// The portions with partial result.
-	// This is only used when the operation is aggregation.
-	local_matrix_store::ptr res_portion;
-	// The portions with data ready.
-	// This is only used when the operation isn't aggregation.
-	std::vector<local_matrix_store::const_ptr> ready_portions;
-
-	// The location of the portions.
-	off_t global_start;
-	size_t length;
-
-	portion_mapply_op::const_ptr op;
-public:
-	typedef std::shared_ptr<collected_portions> ptr;
-
-	collected_portions(const std::vector<matrix_store::ptr> &res_mats,
-			portion_mapply_op::const_ptr op, off_t global_start, size_t length) {
-		this->res_mats = res_mats;
-		this->global_start = global_start;
-		this->length = length;
-		this->op = op;
-	}
-
-	off_t get_global_start() const {
-		return global_start;
-	}
-
-	size_t get_length() const {
-		return length;
-	}
-
-	void run_all_portions();
-
-	void add_ready_portion(local_matrix_store::const_ptr portion);
-};
-
 void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion)
 {
+	num_ready++;
+	assert(num_ready <= num_required);
+
 	if (op->is_agg() && res_portion) {
 		std::vector<local_matrix_store::const_ptr> local_stores(2);
 		local_stores[0] = res_portion;
@@ -1423,6 +1444,7 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 
 void collected_portions::run_all_portions()
 {
+	assert(is_complete());
 	// If this is an aggregation operation and no result portion was generated,
 	// return now.
 	if (op->is_agg() && res_portion == NULL)
@@ -1456,61 +1478,52 @@ void collected_portions::run_all_portions()
  */
 class serial_read_portion_compute: public portion_compute
 {
-	EM_mat_mapply_serial_dispatcher &dispatcher;
-	// The remaining matrices where we need to read portions from.
-	std::vector<matrix_store::const_ptr> remain_mats;
-
 	collected_portions::ptr collected;
 
 	// The portion that is being read.
 	local_matrix_store::const_ptr pending_portion;
 public:
-	serial_read_portion_compute(collected_portions::ptr collected,
-			EM_mat_mapply_serial_dispatcher &_dispatcher): dispatcher(_dispatcher) {
+	serial_read_portion_compute(collected_portions::ptr collected) {
 		this->collected = collected;
 	}
 
 	virtual void run(char *buf, size_t size) {
 		collected->add_ready_portion(pending_portion);
 		pending_portion = NULL;
-		// We have fetched all portions, let's run computation on it.
-		if (remain_mats.empty())
+		if (collected->is_complete())
 			collected->run_all_portions();
-		else
-			fetch_portion(remain_mats, collected, dispatcher);
 		collected = NULL;
 	}
 
-	static void fetch_portion(const std::vector<matrix_store::const_ptr> &mats,
-			collected_portions::ptr collected,
-			EM_mat_mapply_serial_dispatcher &dispatcher);
+	static void fetch_portion(std::deque<matrix_store::const_ptr> &mats,
+			collected_portions::ptr collected);
 };
 
 // TODO I need to copy the vectors multiple times. Is this problematic?
 void serial_read_portion_compute::fetch_portion(
-		const std::vector<matrix_store::const_ptr> &mats,
-		collected_portions::ptr collected,
-		EM_mat_mapply_serial_dispatcher &dispatcher)
+		std::deque<matrix_store::const_ptr> &mats,
+		collected_portions::ptr collected)
 {
 	serial_read_portion_compute *_compute
-		= new serial_read_portion_compute(collected, dispatcher);
+		= new serial_read_portion_compute(collected);
 	serial_read_portion_compute::ptr compute(_compute);
 	size_t global_start_row, global_start_col, num_rows, num_cols;
-	size_t j;
-	for (j = 0; j < mats.size(); j++) {
-		if (mats[j]->is_wide()) {
+	while (!mats.empty()) {
+		matrix_store::const_ptr mat = mats.front();
+		mats.pop_front();
+		if (mat->is_wide()) {
 			global_start_row = 0;
 			global_start_col = collected->get_global_start();
-			num_rows = mats[j]->get_num_rows();
+			num_rows = mat->get_num_rows();
 			num_cols = collected->get_length();
 		}
 		else {
 			global_start_row = collected->get_global_start();
 			global_start_col = 0;
 			num_rows = collected->get_length();
-			num_cols = mats[j]->get_num_cols();
+			num_cols = mat->get_num_cols();
 		}
-		async_cres_t res = mats[j]->get_portion_async(global_start_row,
+		async_cres_t res = mat->get_portion_async(global_start_row,
 				global_start_col, num_rows, num_cols, compute);
 		if (!res.first) {
 			_compute->pending_portion = res.second;
@@ -1519,19 +1532,9 @@ void serial_read_portion_compute::fetch_portion(
 		else
 			collected->add_ready_portion(res.second);
 	}
-	if (j == mats.size()) {
-		// The dispatcher accessed `j' portions.
-		dispatcher.issue_local_portions(j);
+	if (collected->is_complete()) {
 		// All portions are ready, we can perform computation now.
 		collected->run_all_portions();
-	}
-	else {
-		// The dispatcher accessed `j + 1' portions.
-		dispatcher.issue_local_portions(j + 1);
-		// This portion compute will be invoked once the pending portion
-		// is ready.
-		_compute->remain_mats.insert(_compute->remain_mats.end(),
-				mats.begin() + j + 1, mats.end());
 	}
 }
 
@@ -1541,35 +1544,40 @@ void serial_read_portion_compute::fetch_portion(
 void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
 		size_t length)
 {
-	// Here we don't use the minimum portion size.
-	collected_portions::ptr collected(new collected_portions(res_mats, op,
-				global_start, length));
 	detail::pool_task_thread *curr
 		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	num_local_portions[curr->get_pool_thread_id()] += mats.size();
-	serial_read_portion_compute::fetch_portion(mats, collected, *this);
+	int thread_id = curr->get_pool_thread_id();
+	assert(part_states[thread_id].first.empty());
+	assert(part_states[thread_id].second == NULL);
+
+	// Here we don't use the minimum portion size.
+	collected_portions::ptr collected(new collected_portions(res_mats, op,
+				mats.size(), global_start, length));
+	part_states[thread_id].second = collected;
+	part_states[thread_id].first.insert(part_states[thread_id].first.end(),
+			mats.begin(), mats.end());
+	serial_read_portion_compute::fetch_portion(part_states[thread_id].first,
+			collected);
 }
 
 bool EM_mat_mapply_serial_dispatcher::issue_task()
 {
-	bool ret = EM_portion_dispatcher::issue_task();
-	if (ret)
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	int thread_id = curr->get_pool_thread_id();
+	// If the data of the matrices in the current partition hasn't been
+	// fetched, we fetch them first.
+	if (!part_states[thread_id].first.empty()) {
+		assert(part_states[thread_id].second != NULL);
+		serial_read_portion_compute::fetch_portion(
+				part_states[thread_id].first, part_states[thread_id].second);
 		return true;
-	else {
-		detail::pool_task_thread *curr
-			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-		int thread_id = curr->get_pool_thread_id();
-		// If we haven't issued requests to access all portions, we should wait.
-		if (num_local_issues[thread_id] < num_local_portions[thread_id]) {
-			// We only need to sleep at the end.
-			// All worker threads wait until all portions are processed.
-			// This actually improves performance. TODO why?
-			usleep(100);
-			return true;
-		}
-		else
-			return false;
 	}
+
+	// If we are ready to access the next partition, we reset the pointer
+	// to the collection of the portions in the current partition.
+	part_states[thread_id].second = NULL;
+	return EM_portion_dispatcher::issue_task();
 }
 
 }
