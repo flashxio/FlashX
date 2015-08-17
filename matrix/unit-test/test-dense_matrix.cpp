@@ -1291,15 +1291,15 @@ void test_mapply_mixed(int num_nodes)
 {
 	printf("test serial and parallel mapply\n");
 	std::vector<dense_matrix::ptr> mats(5);
-	mats[0] = dense_matrix::create_randu<double>(0, 1,
+	mats[0] = dense_matrix::create_randu<size_t>(0, 1000,
 			long_dim, 10, matrix_layout_t::L_COL, -1, true);
-	mats[1] = dense_matrix::create_randu<double>(0, 1,
+	mats[1] = dense_matrix::create_randu<size_t>(0, 1000,
 			long_dim, 11, matrix_layout_t::L_COL, -1, false);
-	mats[2] = dense_matrix::create_randu<double>(0, 1,
+	mats[2] = dense_matrix::create_randu<size_t>(0, 1000,
 			long_dim, 12, matrix_layout_t::L_COL, -1, false);
-	mats[3] = dense_matrix::create_randu<double>(0, 1,
+	mats[3] = dense_matrix::create_randu<size_t>(0, 1000,
 			long_dim, 13, matrix_layout_t::L_COL, num_nodes, true);
-	mats[4] = dense_matrix::create_randu<double>(0, 1,
+	mats[4] = dense_matrix::create_randu<size_t>(0, 1000,
 			long_dim, 14, matrix_layout_t::L_COL, -1, false);
 
 	detail::portion_mapply_op::const_ptr op(new add_portion_op(
@@ -1312,7 +1312,8 @@ void test_mapply_mixed(int num_nodes)
 	dense_matrix::ptr serial_res = dense_matrix::create(detail::__mapply_portion(
 				stores, op, matrix_layout_t::L_COL, false));
 	scalar_variable::ptr max_diff = par_res->minus(*serial_res)->abs()->max();
-	assert(*(double *) max_diff->get_raw() == 0);
+	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
+	assert(*(size_t *) max_diff->get_raw() == 0);
 }
 
 void test_EM_matrix(int num_nodes)
