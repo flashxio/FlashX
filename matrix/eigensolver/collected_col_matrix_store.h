@@ -110,6 +110,11 @@ public:
 		assert(obj);
 		return obj->create_ios();
 	}
+
+	virtual void set_cache_portion(bool cache_portion) {
+		const_cast<detail::matrix_store &>(*merged_mat).set_cache_portion(
+				cache_portion);
+	}
 };
 
 }
