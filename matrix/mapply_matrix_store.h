@@ -72,9 +72,7 @@ public:
 			matrix_layout_t layout, size_t nrow, size_t ncol,
 			size_t data_id = mat_counter++);
 
-	virtual void set_cache_portion(bool cache_portion) {
-		this->cache_portion = cache_portion;
-	}
+	virtual void set_cache_portion(bool cache_portion);
 
 	void set_par_access(bool par_access) {
 		this->par_access = par_access;

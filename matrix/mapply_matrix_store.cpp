@@ -828,6 +828,13 @@ std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() co
 	return final_res;
 }
 
+void mapply_matrix_store::set_cache_portion(bool cache_portion)
+{
+	this->cache_portion = cache_portion;
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).set_cache_portion(cache_portion);
+}
+
 }
 
 }
