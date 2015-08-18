@@ -1239,8 +1239,13 @@ dense_matrix::ptr MvTransMv_wide(
 					matrix_layout_t::L_COL));
 		mul_ops.push_back(op);
 	}
+
+	set_caching(blocks1, false);
+	set_caching(tmp_res, false);
+	const_cast<detail::matrix_store &>(*in2).set_cache_portion(true);
 	__mapply_portion(tmp_res, detail::portion_mapply_op::const_ptr(new empty_op()),
 			matrix_layout_t::L_COL, false);
+	set_caching(blocks1, true);
 
 	// There we put all result matrices together.
 	detail::matrix_store::ptr res = detail::matrix_store::create(
