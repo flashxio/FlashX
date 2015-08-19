@@ -396,6 +396,21 @@ public:
 	}
 };
 
+namespace
+{
+
+struct coo_less
+{
+	bool operator()(const coo_nz_t &a, const coo_nz_t &b) {
+		if (a.first == b.first)
+			return a.second < b.second;
+		else
+			return a.first < b.first;
+	}
+};
+
+}
+
 void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
@@ -448,6 +463,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 	// The maximal size of a row part.
 	size_t max_row_size = sparse_row_part::get_size(block_width);
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
+	std::vector<fg::vertex_id_t> local_neighs;
 	size_t num_non_zeros = 0;
 	// Iterate columns. Actually it strides instead of iterating all columns.
 	for (size_t col_idx = 0; col_idx < row_len; col_idx += block_width) {
@@ -456,37 +472,47 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 					block_row_id, col_idx / block_width);
 		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
 			= edge_dist_map[col_idx / block_width];
+		std::vector<coo_nz_t> single_nnz;
 		// Iterate the vectors in the vector_vector one by one.
 		for (size_t i = 0; i < v_ptrs.size(); i++) {
 			const fg::ext_mem_undirected_vertex *v = v_ptrs[i];
-			size_t row_idx = v->get_id() - start_vid;
+			fg::vertex_id_t row_idx = v->get_id() - start_vid;
 			assert(neigh_idxs[row_idx] < v->get_num_edges());
 			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx
 					&& v->get_neighbor(neigh_idxs[row_idx]) < col_idx + block_width);
 
-			sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
 			size_t idx = neigh_idxs[row_idx];
-			rp_edge_iterator edge_it = part->get_edge_iterator();
+			local_neighs.clear();
 			for (; idx < v->get_num_edges()
-					&& v->get_neighbor(idx) < col_idx + block_width; idx++) {
-				edge_it.append(block_size, v->get_neighbor(idx));
-			}
-			size_t local_nnz = edge_it.get_offset();
+					&& v->get_neighbor(idx) < col_idx + block_width; idx++)
+				local_neighs.push_back(v->get_neighbor(idx));
+			size_t local_nnz = local_neighs.size();
 			assert(local_nnz <= block_width);
 			neigh_idxs[row_idx] = idx;
-			num_non_zeros += local_nnz;
-			assert(block->get_size() + sparse_row_part::get_size(local_nnz)
-					<= max_block_size - curr_size);
-			block->append(*part, sparse_row_part::get_size(local_nnz));
+
+			if (local_neighs.size() > 1) {
+				sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
+				rp_edge_iterator edge_it = part->get_edge_iterator();
+				for (size_t k = 0; k < local_neighs.size(); k++)
+					edge_it.append(block_size, local_neighs[k]);
+				assert(block->get_size() + sparse_row_part::get_size(local_nnz)
+						<= max_block_size - curr_size);
+				block->append(*part, sparse_row_part::get_size(local_nnz));
+			}
+			else if (local_neighs.size() == 1)
+				single_nnz.push_back(coo_nz_t(row_idx, local_neighs[0]));
 		}
-		// Only the non-empty blocks exist in a block row.
+		if (!single_nnz.empty())
+			block->add_coo(single_nnz, block_size);
+		// After we finish adding rows to a block, we need to finalize it.
+		block->finalize();
 		if (!block->is_empty()) {
-			// After we finish adding rows to a block, we need to finalize it.
-			block->finalize();
 			curr_size += block->get_size();
 			block->verify(block_size);
 		}
+		num_non_zeros += block->get_nnz();
 	}
+	assert(tot_num_non_zeros == num_non_zeros);
 	// If the block row doesn't have any non-zero entries, let's insert an
 	// empty block row, so the matrix index can work correctly.
 	if (curr_size == 0) {
@@ -496,6 +522,34 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		assert(block->is_empty());
 	}
 	out.resize(curr_size);
+
+#ifdef VERIFY_ENABLED
+	std::vector<coo_nz_t> all_coos;
+	block_row_iterator br_it((const sparse_block_2d *) out.get_raw_arr(),
+			(const sparse_block_2d *) (out.get_raw_arr() + curr_size));
+	while (br_it.has_next()) {
+		const sparse_block_2d &block = br_it.next();
+		std::vector<coo_nz_t> coos = block.get_non_zeros(block_size);
+		all_coos.insert(all_coos.end(), coos.begin(), coos.end());
+	}
+	assert(tot_num_non_zeros == all_coos.size());
+	std::sort(all_coos.begin(), all_coos.end(), coo_less());
+
+	auto coo_it = all_coos.begin();
+	for (size_t i = 0; i < val.get_num_vecs(); i++) {
+		const fg::ext_mem_undirected_vertex *v
+			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
+		bool correct = true;
+		for (size_t j = 0; j < v->get_num_edges(); j++) {
+			if (v->get_id() != coo_it->first)
+				correct = false;
+			if (v->get_neighbor(j) != coo_it->second)
+				correct = false;
+			coo_it++;
+		}
+		assert(correct);
+	}
+#endif
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(

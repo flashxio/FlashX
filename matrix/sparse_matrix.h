@@ -261,6 +261,16 @@ class block_spmm_task_impl: public block_spmm_task
 		}
 		return it;
 	}
+	void run_on_coo(const local_coo_t *coos, size_t num,
+			const T *in_rows, T *out_rows) {
+		for (size_t i = 0; i < num; i++) {
+			local_coo_t coo = coos[i];
+			const T *src_row = in_rows + ROW_WIDTH * coo.second /* col_idx */;
+			T *dest_row = out_rows + ROW_WIDTH * coo.first /* row_idx */ ;
+			for (size_t j = 0; j < ROW_WIDTH; j++)
+				dest_row[j] += src_row[j];
+		}
+	}
 public:
 	block_spmm_task_impl(const detail::mem_matrix_store &input,
 			detail::mem_matrix_store &output, const matrix_io &io,
@@ -284,11 +294,15 @@ public:
 				get_out_matrix().get_num_rows() - out_row_start);
 		char *out_rows = get_out_rows(out_row_start, num_out_rows);
 
-		rp_edge_iterator it = block.get_first_edge_iterator();
-		while (!block.is_block_end(it)) {
-			it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
-			it = block.get_next_edge_iterator(it);
+		if (block.has_rparts()) {
+			rp_edge_iterator it = block.get_first_edge_iterator();
+			while (!block.is_rparts_end(it)) {
+				it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
+				it = block.get_next_edge_iterator(it);
+			}
 		}
+		run_on_coo(block.get_coo_start(), block.get_num_coo_vals(),
+				(const T *) in_rows, (T *) out_rows);
 	}
 };
 
@@ -307,6 +321,17 @@ class block_spmm_task_impl<T, 0>: public block_spmm_task
 				dest_row[j] += src_row[j];
 		}
 		return it;
+	}
+	void run_on_coo(const local_coo_t *coos, size_t num,
+			const T *in_rows, T *out_rows) {
+		size_t row_width = get_out_matrix().get_num_cols();
+		for (size_t i = 0; i < num; i++) {
+			local_coo_t coo = coos[i];
+			const T *src_row = in_rows + row_width * coo.second /* col_idx */;
+			T *dest_row = out_rows + row_width * coo.first /* row_idx */ ;
+			for (size_t j = 0; j < row_width; j++)
+				dest_row[j] += src_row[j];
+		}
 	}
 public:
 	block_spmm_task_impl(const detail::mem_matrix_store &input,
@@ -330,11 +355,15 @@ public:
 				get_out_matrix().get_num_rows() - out_row_start);
 		char *out_rows = get_out_rows(out_row_start, num_out_rows);
 
-		rp_edge_iterator it = block.get_first_edge_iterator();
-		while (!block.is_block_end(it)) {
-			it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
-			it = block.get_next_edge_iterator(it);
+		if (block.has_rparts()) {
+			rp_edge_iterator it = block.get_first_edge_iterator();
+			while (!block.is_rparts_end(it)) {
+				it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
+				it = block.get_next_edge_iterator(it);
+			}
 		}
+		run_on_coo(block.get_coo_start(), block.get_num_coo_vals(),
+				(const T *) in_rows, (T *) out_rows);
 	}
 };
 
@@ -358,6 +387,13 @@ class block_spmv_task: public block_compute_task
 		out_arr[it.get_rel_row_idx()] += sum;
 		return it;
 	}
+	void run_on_coo(const local_coo_t *coos, size_t num,
+			const T *in_arr, T *out_arr) {
+		for (size_t i = 0; i < num; i++) {
+			local_coo_t coo = coos[i];
+			out_arr[coo.first /* row_idx */] += in_arr[coo.second /* col_idx */];
+		}
+	}
 public:
 	block_spmv_task(const detail::mem_vec_store &_input,
 			detail::mem_vec_store &_output, const matrix_io &_io,
@@ -377,17 +413,21 @@ public:
 			= block.get_block_row_idx() * block_size.get_num_rows();
 		size_t num_rows = std::min(block_size.get_num_rows(),
 				output.get_length() - start_row_idx);
-		rp_edge_iterator it = block.get_first_edge_iterator();
 		const char *in_buf = input.get_sub_arr(start_col_idx,
 				start_col_idx + num_cols);
 		char *out_buf = output.get_sub_arr(start_row_idx,
 				start_row_idx + num_rows);
 		assert(in_buf);
 		assert(out_buf);
-		while (!block.is_block_end(it)) {
-			it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
-			it = block.get_next_edge_iterator(it);
+		if (block.has_rparts()) {
+			rp_edge_iterator it = block.get_first_edge_iterator();
+			while (!block.is_rparts_end(it)) {
+				it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
+				it = block.get_next_edge_iterator(it);
+			}
 		}
+		run_on_coo(block.get_coo_start(), block.get_num_coo_vals(),
+				(const T *) in_buf, (T *) out_buf);
 	}
 
 	void notify_complete() {

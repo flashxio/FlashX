@@ -83,6 +83,9 @@ public:
 	}
 };
 
+typedef std::pair<uint16_t, uint16_t> local_coo_t;
+typedef std::pair<size_t, size_t> coo_nz_t;
+
 /*
  * This stores part of a row. It doesn't contain any attributes.
  */
@@ -135,17 +138,23 @@ class sparse_block_2d
 	// TODO I need to make sure 32-bits are enough. Normally, they should be.
 	// This is the total size of all row parts in the block.
 	uint32_t rparts_size;
+	uint32_t num_coo_vals;
 	// This is where the row parts are serialized.
 	char row_parts[0];
 
 	// The 2D-partitioned block has to be allowed in the heap. The copy
 	// constructor doesn't make sense for it.
 	sparse_block_2d(const sparse_block_2d &block) = delete;
+
+	local_coo_t *get_coo_start() {
+		return (local_coo_t *) (row_parts + rparts_size);
+	}
 public:
 	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx) {
 		this->block_row_idx = block_row_idx;
 		this->block_col_idx = block_col_idx;
 		rparts_size = 0;
+		num_coo_vals = 0;
 	}
 
 	size_t get_block_row_idx() const {
@@ -156,21 +165,21 @@ public:
 		return block_col_idx;
 	}
 
-	size_t get_rparts_size() const {
-		return rparts_size;
-	}
-
 	bool is_empty() const {
-		return get_rparts_size() == 0;
+		return !has_rparts() && num_coo_vals == 0;
 	}
 
 	size_t get_size() const {
-		return sizeof(*this) + get_rparts_size();
+		return sizeof(*this) + rparts_size + num_coo_vals * sizeof(local_coo_t);
 	}
 
-	bool is_block_end(const rp_edge_iterator &it) const {
+	bool has_rparts() const {
+		return rparts_size > 0;
+	}
+
+	bool is_rparts_end(const rp_edge_iterator &it) const {
 		// If the block doesn't have data, it's always true.
-		if (is_empty())
+		if (!has_rparts())
 			return true;
 
 		size_t off = it.get_curr_addr() - row_parts;
@@ -181,7 +190,7 @@ public:
 	}
 
 	rp_edge_iterator get_first_edge_iterator() const {
-		assert(!is_empty());
+		assert(has_rparts());
 		// Discard the const qualifier
 		// TODO I should make a const edge iterator
 		sparse_row_part *rp = (sparse_row_part *) row_parts;
@@ -197,14 +206,31 @@ public:
 
 	void append(const sparse_row_part &part, size_t part_size);
 
+	void add_coo(const std::vector<coo_nz_t> &nnz,
+			const block_2d_size &block_size);
+
+	size_t get_num_coo_vals() const {
+		return num_coo_vals;
+	}
+	const local_coo_t *get_coo_start() const {
+		return (const local_coo_t *) (row_parts + rparts_size);
+	}
+
+	std::vector<coo_nz_t> get_non_zeros(const block_2d_size &block_size) const;
+
 	/*
 	 * We need to add an empty row in the end, so the edge iterator can
 	 * notice the end of the last row.
 	 */
 	void finalize() {
-		sparse_row_part end(std::numeric_limits<uint16_t>::max());
-		append(end, sparse_row_part::get_size(0));
+		// If there are row parts but there aren't coo values.
+		if (rparts_size > 0 && num_coo_vals == 0) {
+			sparse_row_part end(std::numeric_limits<uint16_t>::max());
+			append(end, sparse_row_part::get_size(0));
+		}
 	}
+
+	size_t get_nnz() const;
 
 	void verify(const block_2d_size &block_size) const;
 };
