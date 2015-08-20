@@ -512,6 +512,9 @@ public:
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		if (order) {
 			switch (output.get_num_cols()) {
+				case 1:
+					return compute_task::ptr(new block_spmm_task_impl<T, 1>(
+								input, output, io, mat, order));
 				case 2:
 					return compute_task::ptr(new block_spmm_task_impl<T, 2>(
 								input, output, io, mat, order));
