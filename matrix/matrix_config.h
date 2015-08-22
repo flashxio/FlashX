@@ -255,8 +255,6 @@ inline void matrix_config::init(config_map::ptr map)
 {
 	if (map->has_option("threads"))
 		map->read_option_int("threads", num_threads);
-	if (!power2(num_threads))
-		throw fg::conf_exception("The number of worker threads has to be 2^n");
 	if (map->has_option("FM_prof_file"))
 		map->read_option("FM_prof_file", prof_file);
 	if (map->has_option("in_mem_matrix"))
