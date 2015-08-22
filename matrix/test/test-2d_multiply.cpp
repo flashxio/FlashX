@@ -76,7 +76,7 @@ public:
 	virtual void set(double *arr, size_t num_eles, off_t row_idx,
 			            off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = row_idx * (i + col_idx);
+			arr[i] = row_idx * (i + col_idx + 1);
 	}
 };
 
