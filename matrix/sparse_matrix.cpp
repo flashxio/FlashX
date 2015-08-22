@@ -316,8 +316,8 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	init_io_gens(num_block_rows, io_gens);
 #ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
@@ -329,7 +329,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
 #ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
+	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 }
