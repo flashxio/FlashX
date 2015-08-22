@@ -527,6 +527,15 @@ public:
 				case 16:
 					return compute_task::ptr(new block_spmm_task_impl<T, 16>(
 								input, output, io, mat, order));
+				case 32:
+					return compute_task::ptr(new block_spmm_task_impl<T, 32>(
+								input, output, io, mat, order));
+				case 64:
+					return compute_task::ptr(new block_spmm_task_impl<T, 64>(
+								input, output, io, mat, order));
+				case 128:
+					return compute_task::ptr(new block_spmm_task_impl<T, 128>(
+								input, output, io, mat, order));
 				default:
 					return compute_task::ptr(new block_spmm_task_impl<T, 0>(
 								input, output, io, mat, order));
