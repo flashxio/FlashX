@@ -162,6 +162,7 @@ void print_usage()
 	fprintf(stderr, "-m: force to run in memory\n");
 	fprintf(stderr, "-r number: the number of repeats\n");
 	fprintf(stderr, "-g: the matrix is stored in FlashGraph format\n");
+	fprintf(stderr, "-n number: the number of NUMA nodes\n");
 }
 
 int main(int argc, char *argv[])
@@ -178,7 +179,8 @@ int main(int argc, char *argv[])
 	bool in_mem = false;
 	size_t repeats = 1;
 	bool use_fg = false;
-	while ((opt = getopt(argc, argv, "w:o:c:mr:g")) != -1) {
+	int num_nodes = 0;
+	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -197,6 +199,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'g':
 				use_fg = true;
+				break;
+			case 'n':
+				num_nodes = atoi(optarg);
 				break;
 			default:
 				print_usage();
@@ -222,7 +227,9 @@ int main(int argc, char *argv[])
 	else
 		mat = load_2d_matrix(matrix_file, index_file, in_mem);
 
-	int num_nodes = matrix_conf.get_num_nodes();
+	if (num_nodes == 0)
+		num_nodes = matrix_conf.get_num_nodes();
+
 	if (mat_width == 0) {
 		for (size_t k = 0; k < repeats; k++)
 			test_SpMV(mat, num_nodes);
