@@ -77,7 +77,7 @@ public:
 		rb_io_size = 1024;
 		rb_steal_io_size = 1;
 		cpu_cache_size = 1024 * 1024;
-		hilbert_order = true;
+		hilbert_order = false;
 		num_nodes = 1;
 		sort_buf_size = 128 * 1024 * 1024;
 		groupby_buf_size = 128 * 1024 * 1024;
