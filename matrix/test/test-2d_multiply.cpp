@@ -134,6 +134,7 @@ void print_usage()
 	fprintf(stderr, "-o exec_order: hilbert or seq\n");
 	fprintf(stderr, "-c cache_size: cpu cache size\n");
 	fprintf(stderr, "-m: force to run in memory\n");
+	fprintf(stderr, "-r number: the number of repeats\n");
 }
 
 int main(int argc, char *argv[])
@@ -143,12 +144,13 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	size_t mat_width = 1;
+	size_t mat_width = 0;
 	std::string exec_order = "hilbert";
 	size_t cpu_cache_size = 1024 * 1024;
 	int opt;
 	bool in_mem = false;
-	while ((opt = getopt(argc, argv, "w:o:c:m")) != -1) {
+	size_t repeats = 1;
+	while ((opt = getopt(argc, argv, "w:o:c:mr:")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -161,6 +163,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'm':
 				in_mem = true;
+				break;
+			case 'r':
+				repeats = atoi(optarg);
 				break;
 			default:
 				print_usage();
@@ -201,10 +206,17 @@ int main(int argc, char *argv[])
 				SpM_2d_storage::load(matrix_file, index));
 	printf("load the matrix image\n");
 
-	if (mat_width == 1)
-		test_SpMV(mat);
-	else
-		test_SpMM(mat, mat_width);
+	if (mat_width == 0) {
+		for (size_t k = 0; k < repeats; k++)
+			test_SpMV(mat);
+		for (size_t i = 1; i <= 16; i *= 2)
+			for (size_t k = 0; k < repeats; k++)
+				test_SpMM(mat, i);
+	}
+	else {
+		for (size_t k = 0; k < repeats; k++)
+			test_SpMM(mat, mat_width);
+	}
 
 	destroy_flash_matrix();
 }
