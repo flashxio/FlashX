@@ -83,6 +83,7 @@ void test_spmm(const std::vector<crs_idx_t> &row_idxs,
 
 	assert(out_vec.size() == (row_idxs.size() - 1) * num_vecs);
 	// The output matrix is organized in row major.
+#pragma omp parallel for
 	for (size_t i = 0; i < out_vec.size(); i++) {
 		size_t col_idx = i % num_vecs;
 		size_t row_idx = i / num_vecs;
@@ -141,7 +142,10 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < val_vec.size(); i++)
 		val_vec[i] = 1;
 
-	test_spmv(row_idxs, col_vec, val_vec, num_rows, num_cols);
-	for (int num_vecs = 1; num_vecs <= 16; num_vecs *= 2)
-		test_spmm(row_idxs, col_vec, val_vec, num_rows, num_cols, num_vecs);
+	for (size_t i = 0; i < 5; i++)
+		test_spmv(row_idxs, col_vec, val_vec, num_rows, num_cols);
+	for (int num_vecs = 2; num_vecs <= 128; num_vecs *= 2) {
+		for (size_t i = 0; i < 5; i++)
+			test_spmm(row_idxs, col_vec, val_vec, num_rows, num_cols, num_vecs);
+	}
 }
