@@ -114,6 +114,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 #endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
 
+#ifdef VERIFY_RESULT
 	for (size_t k = 0; k < in->get_num_cols(); k++) {
 		double in_sum = 0;
 		for (size_t i = 0; i < in->get_num_rows(); i++)
@@ -124,6 +125,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 		printf("%ld: sum of input: %lf, sum of product: %lf\n",
 				k, in_sum, out_sum);
 	}
+#endif
 }
 
 void print_usage()
