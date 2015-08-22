@@ -83,15 +83,31 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes)
 	detail::mem_matrix_store::ptr in
 		= detail::mem_matrix_store::create(mat->get_num_cols(), mat_width,
 				matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
-	in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
+	if (num_nodes < 0) {
+		// This forces all memory is allocated in a single NUMA node.
+		for (size_t i = 0; i < in->get_num_rows(); i++)
+			for (size_t j = 0; j < in->get_num_cols(); j++)
+				in->set<double>(i, j, i * (j + 1));
+	}
+	else
+		in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 	printf("set input data\n");
 
 	// Initialize the output matrix and allocate pages for it.
 	detail::mem_matrix_store::ptr out
 		= detail::mem_matrix_store::create(mat->get_num_rows(), mat_width,
 				matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
-	out->reset_data();
+	if (num_nodes < 0) {
+		// This forces all memory is allocated in a single NUMA node.
+		for (size_t i = 0; i < in->get_num_rows(); i++)
+			for (size_t j = 0; j < in->get_num_cols(); j++)
+				out->set<double>(i, j, 0);
+	}
+	else
+		out->reset_data();
 	printf("reset output data\n");
+	printf("in mat is on %d nodes and out mat is on %d nodes\n",
+			in->get_num_nodes(), out->get_num_nodes());
 
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
