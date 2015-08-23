@@ -117,8 +117,46 @@ void fg_row_spmv_task<T, VectorType>::run_on_row(
  * We implement this method for the sake of compatibility. It doesn't
  * run very fast.
  */
-template<class T>
+template<class T, int ROW_WIDTH>
 class fg_row_spmm_task: public fg_row_compute_task
+{
+	const detail::mem_matrix_store &input;
+	detail::mem_matrix_store &output;
+public:
+	fg_row_spmm_task(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output,
+			const matrix_io &_io): fg_row_compute_task(_io),
+				input(_input), output(_output) {
+		assert(input.get_type() == get_scalar_type<T>());
+		assert(output.get_type() == get_scalar_type<T>());
+		assert(input.get_num_cols() == output.get_num_cols());
+		assert(input.get_num_cols() == (size_t) ROW_WIDTH);
+	}
+
+	void run_on_row(const fg::ext_mem_undirected_vertex &v);
+};
+
+template<class T, int ROW_WIDTH>
+void fg_row_spmm_task<T, ROW_WIDTH>::run_on_row(
+		const fg::ext_mem_undirected_vertex &v)
+{
+	T res[ROW_WIDTH];
+	for (size_t i = 0; i < (size_t) ROW_WIDTH; i++)
+		res[i] = 0;
+
+	for (size_t i = 0; i < v.get_num_edges(); i++) {
+		fg::vertex_id_t id = v.get_neighbor(i);
+		// It's fairly expensive to get a row because it requires a function
+		// call on a virtual method.
+		const T *row = (const T *) input.get_row(id);
+		for (size_t j = 0; j < (size_t) ROW_WIDTH; j++)
+			res[j] += row[j];
+	}
+	memcpy(output.get_row(v.get_id()), res, sizeof(T) * ROW_WIDTH);
+}
+
+template<class T>
+class fg_row_spmm_task<T, 0>: public fg_row_compute_task
 {
 	const detail::mem_matrix_store &input;
 	detail::mem_matrix_store &output;
@@ -132,26 +170,22 @@ public:
 		assert(input.get_num_cols() == output.get_num_cols());
 	}
 
-	void run_on_row(const fg::ext_mem_undirected_vertex &v);
-};
+	void run_on_row(const fg::ext_mem_undirected_vertex &v) {
+		T res[input.get_num_cols()];
+		for (size_t i = 0; i < input.get_num_cols(); i++)
+			res[i] = 0;
 
-template<class T>
-void fg_row_spmm_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
-{
-	T res[input.get_num_cols()];
-	for (size_t i = 0; i < input.get_num_cols(); i++)
-		res[i] = 0;
-
-	for (size_t i = 0; i < v.get_num_edges(); i++) {
-		fg::vertex_id_t id = v.get_neighbor(i);
-		// It's fairly expensive to get a row because it requires a function
-		// call on a virtual method.
-		const T *row = (const T *) input.get_row(id);
-		for (size_t j = 0; j < input.get_num_cols(); j++)
-			res[j] += row[j];
+		for (size_t i = 0; i < v.get_num_edges(); i++) {
+			fg::vertex_id_t id = v.get_neighbor(i);
+			// It's fairly expensive to get a row because it requires a function
+			// call on a virtual method.
+			const T *row = (const T *) input.get_row(id);
+			for (size_t j = 0; j < input.get_num_cols(); j++)
+				res[j] += row[j];
+		}
+		memcpy(output.get_row(v.get_id()), res, sizeof(T) * input.get_num_cols());
 	}
-	memcpy(output.get_row(v.get_id()), res, sizeof(T) * input.get_num_cols());
-}
+};
 
 class block_compute_task;
 
@@ -541,8 +575,37 @@ public:
 								input, output, io, mat, order));
 			}
 		}
-		else
-			return compute_task::ptr(new fg_row_spmm_task<T>(input, output, io));
+		else {
+			switch (output.get_num_cols()) {
+				case 1:
+					return compute_task::ptr(new fg_row_spmm_task<T, 1>(input,
+								output, io));
+				case 2:
+					return compute_task::ptr(new fg_row_spmm_task<T, 2>(input,
+								output, io));
+				case 4:
+					return compute_task::ptr(new fg_row_spmm_task<T, 4>(input,
+								output, io));
+				case 8:
+					return compute_task::ptr(new fg_row_spmm_task<T, 8>(input,
+								output, io));
+				case 16:
+					return compute_task::ptr(new fg_row_spmm_task<T, 16>(input,
+								output, io));
+				case 32:
+					return compute_task::ptr(new fg_row_spmm_task<T, 32>(input,
+								output, io));
+				case 64:
+					return compute_task::ptr(new fg_row_spmm_task<T, 64>(input,
+								output, io));
+				case 128:
+					return compute_task::ptr(new fg_row_spmm_task<T, 128>(input,
+								output, io));
+				default:
+					return compute_task::ptr(new fg_row_spmm_task<T, 0>(input,
+								output, io));
+			}
+		}
 	}
 };
 
