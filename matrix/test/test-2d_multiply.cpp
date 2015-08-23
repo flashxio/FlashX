@@ -72,7 +72,9 @@ public:
 	virtual void set(double *arr, size_t num_eles, off_t row_idx,
 			            off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = row_idx * (i + col_idx + 1);
+			// Reduce the value of the elements to avoid float-point
+			// rounding error.
+			arr[i] = (row_idx % 100) * (i + col_idx + 1);
 	}
 };
 
@@ -87,7 +89,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes)
 		// This forces all memory is allocated in a single NUMA node.
 		for (size_t i = 0; i < in->get_num_rows(); i++)
 			for (size_t j = 0; j < in->get_num_cols(); j++)
-				in->set<double>(i, j, i * (j + 1));
+				in->set<double>(i, j, (i % 100) * (j + 1));
 	}
 	else
 		in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
