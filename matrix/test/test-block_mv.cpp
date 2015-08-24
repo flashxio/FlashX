@@ -80,12 +80,17 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 }
 
 void test_gemm(bool in_mem, size_t block_size, size_t min_num_blocks,
-		size_t max_num_blocks)
+		size_t max_num_blocks, size_t num_cached_blocks)
 {
 	std::vector<dense_matrix::ptr> mats(max_num_blocks);
-	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-				block_size, matrix_layout_t::L_COL, -1, in_mem);
+	for (size_t i = 0; i < mats.size(); i++) {
+		if (i < num_cached_blocks)
+			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+					block_size, matrix_layout_t::L_COL, -1, true);
+		else
+			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+					block_size, matrix_layout_t::L_COL, -1, in_mem);
+	}
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
 			num_blocks *= 2) {
@@ -141,18 +146,22 @@ void test_MvTransMv(eigen::block_multi_vector::ptr mv1,
 }
 
 void test_MvTransMv(bool in_mem, size_t block_size,
-		size_t min_num_blocks, size_t max_num_blocks)
+		size_t min_num_blocks, size_t max_num_blocks, size_t num_cached_blocks)
 {
 	std::vector<dense_matrix::ptr> mats(max_num_blocks);
-	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-				block_size, matrix_layout_t::L_COL, -1, in_mem);
+	for (size_t i = 0; i < mats.size(); i++) {
+		if (i < num_cached_blocks)
+			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+					block_size, matrix_layout_t::L_COL, -1, true);
+		else
+			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+					block_size, matrix_layout_t::L_COL, -1, in_mem);
+	}
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
 			long_dim, block_size, block_size, get_scalar_type<double>(), in_mem);
 	mv2->set_block(0, dense_matrix::create_randu<double>(0, 1, long_dim,
 				mv2->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
 
-	printf("MvTransMv on block multi-vector\n");
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
 			num_blocks *= 2) {
 		eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
@@ -160,6 +169,8 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 				get_scalar_type<double>(), in_mem);
 		for (size_t i = 0; i < mv1->get_num_blocks(); i++)
 			mv1->set_block(i, mats[i]);
+		printf("MvTransMv on block MV (block size: %ld, #blocks: %ld)\n",
+				block_size, mv1->get_num_blocks());
 		test_MvTransMv(mv1, mv2);
 	}
 }
@@ -175,15 +186,15 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_gemm(true, 4, 1, 128);
-	test_gemm(true, 64, 1, 8);
-	test_MvTransMv(true, 4, 1, 128);
-	test_MvTransMv(true, 64, 1, 8);
+	test_gemm(true, 4, 1, 128, 0);
+	test_gemm(true, 64, 1, 8, 0);
+	test_MvTransMv(true, 4, 128, 128, 0);
+	test_MvTransMv(true, 64, 1, 8, 0);
 
-	test_gemm(false, 4, 1, 128);
-	test_gemm(false, 64, 1, 8);
-	test_MvTransMv(false, 4, 1, 128);
-	test_MvTransMv(false, 64, 1, 8);
+	test_gemm(false, 4, 8, 128, 4);
+	test_gemm(false, 64, 1, 8, 0);
+	test_MvTransMv(false, 4, 8, 128, 4);
+	test_MvTransMv(false, 64, 1, 8, 0);
 
 	destroy_flash_matrix();
 }
