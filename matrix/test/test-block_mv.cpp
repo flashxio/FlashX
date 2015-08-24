@@ -8,6 +8,7 @@ size_t repeats = 1;
 void test_gemm(eigen::block_multi_vector::ptr mv)
 {
 	bool in_mem = mv->get_block(0)->is_in_mem();
+	int num_nodes = mv->get_block(0)->get_data().get_num_nodes();
 	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
 			mv->get_num_cols(), mv->get_block_size(),
 			matrix_layout_t::L_COL, -1, true);
@@ -24,7 +25,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 			long_dim, mv->get_block_size(), mv->get_block_size(),
 			get_scalar_type<double>(), true);
 	res0->set_block(0, dense_matrix::create_const<double>(0, long_dim,
-				mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+				mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
 	res0->set_multiply_blocks(1);
 	gettimeofday(&start, NULL);
 	res0 = res0->gemm(*mv, B, alpha, beta);
@@ -40,7 +41,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 				long_dim, mv->get_block_size(), mv->get_block_size(),
 				get_scalar_type<double>(), true);
 		res1->set_block(0, dense_matrix::create_const<double>(0, long_dim,
-					mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+					mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
 		res1->set_multiply_blocks(4);
 		gettimeofday(&start, NULL);
 		res1 = res1->gemm(*mv, B, alpha, beta);
@@ -57,7 +58,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 				long_dim, mv->get_block_size(), mv->get_block_size(),
 				get_scalar_type<double>(), true);
 		res2->set_block(0, dense_matrix::create_const<double>(0, long_dim,
-					mv->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+					mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
 		res2->set_multiply_blocks(mv->get_num_blocks());
 		gettimeofday(&start, NULL);
 		res2 = res2->gemm(*mv, B, alpha, beta);
@@ -86,10 +87,12 @@ void test_gemm(bool in_mem, size_t block_size, size_t min_num_blocks,
 	for (size_t i = 0; i < mats.size(); i++) {
 		if (i < num_cached_blocks)
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL, -1, true);
+					block_size, matrix_layout_t::L_COL,
+					matrix_conf.get_num_nodes(), true);
 		else
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL, -1, in_mem);
+					block_size, matrix_layout_t::L_COL,
+					matrix_conf.get_num_nodes(), in_mem);
 	}
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
@@ -152,15 +155,18 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 	for (size_t i = 0; i < mats.size(); i++) {
 		if (i < num_cached_blocks)
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL, -1, true);
+					block_size, matrix_layout_t::L_COL,
+					matrix_conf.get_num_nodes(), true);
 		else
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL, -1, in_mem);
+					block_size, matrix_layout_t::L_COL,
+					matrix_conf.get_num_nodes(), in_mem);
 	}
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
 			long_dim, block_size, block_size, get_scalar_type<double>(), in_mem);
 	mv2->set_block(0, dense_matrix::create_randu<double>(0, 1, long_dim,
-				mv2->get_block_size(), matrix_layout_t::L_COL, -1, in_mem));
+				mv2->get_block_size(), matrix_layout_t::L_COL,
+				matrix_conf.get_num_nodes(), in_mem));
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
 			num_blocks *= 2) {
