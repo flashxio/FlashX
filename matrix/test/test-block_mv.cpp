@@ -1,3 +1,7 @@
+#ifdef PROFILER
+#include <google/profiler.h>
+#endif
+
 #include "eigensolver/block_dense_matrix.h"
 
 using namespace fm;
@@ -122,20 +126,32 @@ void test_MvTransMv(eigen::block_multi_vector::ptr mv1,
 #endif
 
 	mv1->set_multiply_blocks(4);
+#ifdef PROFILER
+	ProfilerStart("MvTransMv.4B.prof");
+#endif
 	for (size_t i = 0; i < repeats; i++) {
 		gettimeofday(&start, NULL);
 		fm::dense_matrix::ptr res2 = mv1->MvTransMv(*mv2);
 		gettimeofday(&end, NULL);
 		printf("MvTransMv (4 blocks) takes %.3f seconds\n", time_diff(start, end));
 	}
+#ifdef PROFILER
+	ProfilerStop();
+#endif
 
 	mv1->set_multiply_blocks(mv1->get_num_blocks());
+#ifdef PROFILER
+	ProfilerStart("MvTransMv.all.prof");
+#endif
 	for (size_t i = 0; i < repeats; i++) {
 		gettimeofday(&start, NULL);
 		fm::dense_matrix::ptr res3 = mv1->MvTransMv(*mv2);
 		gettimeofday(&end, NULL);
 		printf("MvTransMv (all blocks) takes %.3f seconds\n", time_diff(start, end));
 	}
+#ifdef PROFILER
+	ProfilerStop();
+#endif
 
 #if 0
 	dense_matrix::ptr diff = res2->minus(*res3);
