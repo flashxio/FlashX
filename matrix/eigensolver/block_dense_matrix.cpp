@@ -1140,7 +1140,8 @@ void multiply_wide_op<T>::run(
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const T *Amat = (const T *) Astore->get_raw_arr();
 	detail::local_matrix_store::ptr Abuf;
-	if (Amat == NULL || Astore->store_layout() != Alayout) {
+	assert(Astore->store_layout() == Alayout);
+	if (Amat == NULL) {
 		if (Alayout == matrix_layout_t::L_ROW)
 			Abuf = detail::local_matrix_store::ptr(
 					new fm::detail::local_buf_row_matrix_store(0, 0,
@@ -1159,7 +1160,8 @@ void multiply_wide_op<T>::run(
 	detail::local_matrix_store::const_ptr Bstore = ins[1];
 	const T *Bmat = (const T *) Bstore->get_raw_arr();
 	detail::local_matrix_store::ptr Bbuf;
-	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
+	assert(Bstore->store_layout() == Blayout);
+	if (Bmat == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
 			Bbuf = detail::local_matrix_store::ptr(
 					new fm::detail::local_buf_col_matrix_store(0, 0,
@@ -1323,10 +1325,20 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	}
 	else if (blocks1.size() > MAX_MUL_BLOCKS && blocks2.size() <= MAX_MUL_BLOCKS) {
 		detail::matrix_store::const_ptr in2;
-		if (blocks2.size() == 1)
-			in2 = this->get_block(0)->get_raw_store();
-		else
-			in2 = collected_matrix_store::create(blocks2, this->get_num_cols());
+		assert(blocks1.front()->store_layout() == matrix_layout_t::L_COL);
+		// We should convert the data layout in advance so that multiple groups
+		// can share the data with the converted layout.
+		if (blocks2.size() == 1) {
+			dense_matrix::ptr tmp
+				= this->get_block(0)->conv2(matrix_layout_t::L_ROW);
+			in2 = tmp->get_raw_store();
+		}
+		else {
+			dense_matrix::ptr tmp = dense_matrix::create(
+					collected_matrix_store::create(blocks2, this->get_num_cols()));
+			tmp = tmp->conv2(matrix_layout_t::L_ROW);
+			in2 = tmp->get_raw_store();
+		}
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = MvTransMv_wide(blocks1, in2, MAX_MUL_BLOCKS);
 		detail::matrix_stats.print_diff(orig_stats);
@@ -1334,10 +1346,17 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	}
 	else if (blocks1.size() <= MAX_MUL_BLOCKS && blocks2.size() > MAX_MUL_BLOCKS) {
 		detail::matrix_store::const_ptr in1;
-		if (blocks1.size() == 1)
-			in1 = mv.get_block(0)->get_raw_store();
-		else
-			in1 = collected_matrix_store::create(blocks1, mv.get_num_cols());
+		if (blocks1.size() == 1) {
+			dense_matrix::ptr tmp
+				= mv.get_block(0)->conv2(matrix_layout_t::L_ROW);
+			in1 = tmp->get_raw_store();
+		}
+		else {
+			dense_matrix::ptr tmp = dense_matrix::create(
+					collected_matrix_store::create(blocks1, mv.get_num_cols()));
+			tmp = tmp->conv2(matrix_layout_t::L_ROW);
+			in1 = tmp->get_raw_store();
+		}
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = MvTransMv_wide(blocks2, in1, MAX_MUL_BLOCKS);
 		detail::matrix_stats.print_diff(orig_stats);
