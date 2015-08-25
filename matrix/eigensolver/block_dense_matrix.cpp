@@ -711,7 +711,6 @@ void gemm_op<T>::run(
 			ins[0]->get_num_rows() * Bstore->get_num_cols() * Bstore->get_num_cols());
 
 	assert(A_num_blocks + C_num_blocks == ins.size());
-	int node_id = ins.front()->get_node_id();
 	off_t global_start_row = ins.front()->get_global_start_row();
 	off_t global_start_col = ins.front()->get_global_start_col();
 
@@ -723,7 +722,7 @@ void gemm_op<T>::run(
 			= new detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
 					out.get_num_rows(), out.get_num_cols(),
-					get_scalar_type<T>(), node_id);
+					get_scalar_type<T>(), -1);
 		// TODO we don't need to allocate this every time.
 		tmp_res = fm::detail::local_col_matrix_store::ptr(raw_tmp_res);
 		if (beta && C_num_blocks == 1)
@@ -753,7 +752,7 @@ void gemm_op<T>::run(
 		fm::detail::local_col_matrix_store::ptr in_buf(
 				new fm::detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), node_id));
+					num_rows, num_cols, get_scalar_type<T>(), -1));
 		copy_from_blocks(ins.begin(), ins.begin() + A_num_blocks, *in_buf);
 		Astore = in_buf;
 	}
@@ -765,7 +764,7 @@ void gemm_op<T>::run(
 		fm::detail::local_col_matrix_store::ptr in_buf(
 				new fm::detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), node_id));
+					num_rows, num_cols, get_scalar_type<T>(), -1));
 		in_buf->copy_from(*ins.front());
 		Astore = in_buf;
 	}
