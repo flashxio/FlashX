@@ -180,12 +180,12 @@ protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
 	}
-	virtual bool verify_aggregate(const bulk_operate &op) const;
-	virtual bool verify_inner_prod(const dense_matrix &m,
+	bool verify_aggregate(const bulk_operate &op) const;
+	bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual bool verify_mapply2(const dense_matrix &m,
+	bool verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
-	virtual bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
+	bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
@@ -222,9 +222,6 @@ public:
 	}
 	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
-
-	virtual ~dense_matrix() {
-	}
 
 	const detail::matrix_store &get_data() const {
 		return *store;
@@ -291,7 +288,7 @@ public:
 	 * can modify the pointer. If someone changes in the pointer in the cloned
 	 * matrix, it doesn't affect the current matrix.
 	 */
-	virtual dense_matrix::ptr clone() const {
+	dense_matrix::ptr clone() const {
 		return ptr(new dense_matrix(get_raw_store()));
 	}
 
