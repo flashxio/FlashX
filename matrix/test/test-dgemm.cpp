@@ -55,13 +55,13 @@ void test_dgemm(size_t m, size_t n, size_t k)
 		C = (double *) memalign(64, m*n*sizeof( double ));
 		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, A,
 				m, B, k, 0, C, m);
-		mkl_free(C);
+		free(C);
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds\n", time_diff(start, end));
 	}
 
-	mkl_free(A);
-	mkl_free(B);
+	free(A);
+	free(B);
 }
 
 void test_dgemms(size_t block_size, size_t max_num_blocks)
