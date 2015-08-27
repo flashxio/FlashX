@@ -260,7 +260,8 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 			ret = dense_matrix::create(dotp->get_cols(offs));
 		else {
 			num_col_writes += block->get_num_cols();
-			printf("materialize %s\n", block->get_data().get_name().c_str());
+			printf("get_col: materialize %s\n",
+					block->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			block->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -317,7 +318,8 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 				ret1 = dense_matrix::create(dotp->get_cols(local_offs));
 			else {
 				num_col_writes += block->get_num_cols();
-				printf("materialize %s\n", block->get_data().get_name().c_str());
+				printf("get_cols: materialize %s\n",
+						block->get_data().get_name().c_str());
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				block->materialize_self();
 				detail::matrix_stats.print_diff(orig_stats);
@@ -420,6 +422,8 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 #endif
 }
 
+std::atomic<size_t> num_spmm;
+
 void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		const block_multi_vector &X, block_multi_vector &Y)
 {
@@ -432,7 +436,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	size_t num_blocks = X.get_num_blocks();
 	int num_nodes = matrix_conf.get_num_nodes();
 	bool in_mem = X.in_mem;
-	printf("SpMM: input matirx is in-mem: %d\n", in_mem);
+	printf("SpMM %ld: input matirx is in-mem: %d\n", num_spmm.load(), in_mem);
+	num_spmm++;
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
@@ -442,7 +447,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		if (!in_mem && in->is_virtual() && ((cached_mat == in)
 					|| (cached_mat
 						&& cached_mat->get_raw_store() == in->get_raw_store()))) {
-			printf("materialize in mat %s to disks\n", in->get_data().get_name().c_str());
+			printf("spmm: materialize in mat %s to disks\n",
+					in->get_data().get_name().c_str());
 			num_col_writes += cached_mat->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			bool ret = cached_mat->move_store(false, -1);
@@ -452,7 +458,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// Otherwise, we still want to materialize the matrix.
 		else if (in->is_virtual() && cached_mat
 				&& cached_mat->get_raw_store() == in->get_raw_store()) {
-			printf("materialize in mat %s\n", in->get_data().get_name().c_str());
+			printf("spmm: materialize in mat %s\n",
+					in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -472,7 +479,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// If the input matrix is in memory and is virtual, we should
 		// materialize it.
 		else if (row_in->is_virtual()) {
-			printf("materialize %s\n", row_in->get_data().get_name().c_str());
+			printf("spmm: materialize %s\n",
+					row_in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			row_in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -1441,7 +1449,7 @@ dense_matrix::ptr materialize_block(dense_matrix::ptr mat)
 {
 	assert(mat->is_virtual());
 	num_col_writes += mat->get_num_cols();
-	printf("materialize %s\n", mat->get_data().get_name().c_str());
+	printf("set_block: materialize %s\n", mat->get_data().get_name().c_str());
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
 	mat->materialize_self();
 	detail::matrix_stats.print_diff(orig_stats);
