@@ -628,7 +628,7 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
 	// Maybe the reason is that I run eight threads in a processor, which has
 	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
 	size_t size = matrix_conf.get_cpu_cache_size() / entry_size
-		/ block_size.get_num_rows();
+		/ block_size.get_num_rows() / 2;
 	size_t max_size
 		= detail::mem_matrix_store::CHUNK_SIZE / block_size.get_num_rows();
 	return std::min(std::max(size, 1UL), max_size);
