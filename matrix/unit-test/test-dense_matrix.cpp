@@ -1450,6 +1450,17 @@ void test_sub_matrix()
 	exit(0);
 }
 
+void test_copy(int num_nodes, bool in_mem)
+{
+	printf("test deep copy a dense matrix\n");
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, num_nodes, in_mem);
+	dense_matrix::ptr copy = mat->deep_copy();
+	dense_matrix::ptr diff = mat->minus(*copy);
+	scalar_variable::ptr max_var = diff->abs()->max();
+	assert(*(const int *) max_var->get_raw() == 0);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1490,6 +1501,7 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_copy(-1, true);
 	test_apply_scalar();
 	test_min();
 	test_mul_output(-1);

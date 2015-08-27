@@ -291,6 +291,7 @@ public:
 	dense_matrix::ptr clone() const {
 		return ptr(new dense_matrix(get_raw_store()));
 	}
+	dense_matrix::ptr deep_copy() const;
 
 	dense_matrix::ptr transpose() const;
 	/*
