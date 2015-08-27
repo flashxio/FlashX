@@ -111,6 +111,10 @@ public:
 		this->cache_portion = cache_portion;
 	}
 
+	bool is_cache_portion() const {
+		return cache_portion;
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		ret.insert(std::pair<size_t, size_t>(data_id,

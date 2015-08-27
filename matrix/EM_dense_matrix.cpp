@@ -547,11 +547,26 @@ matrix_store::const_ptr EM_matrix_store::transpose() const
  */
 class sub_EM_matrix_store: public EM_matrix_store
 {
+	const size_t mat_id;
+	const size_t data_id;
 	std::vector<off_t> rc_idxs;
+
+	sub_EM_matrix_store(const std::vector<off_t> idxs,
+			const EM_matrix_store &store, size_t _data_id): EM_matrix_store(
+				store), mat_id(mat_counter++), data_id(_data_id) {
+		this->rc_idxs = idxs;
+		assert(idxs.size() > 0);
+		if (store_layout() == matrix_layout_t::L_COL)
+			matrix_store::resize(get_num_rows(), idxs.size());
+		else
+			matrix_store::resize(idxs.size(), get_num_cols());
+	}
 public:
 	sub_EM_matrix_store(const std::vector<off_t> idxs,
-			const EM_matrix_store &store): EM_matrix_store(store) {
-		// TODO the sub matrix should have a different data id.
+			const EM_matrix_store &store): EM_matrix_store(store), mat_id(
+				// The sub matrix has a different matrix ID and data ID from
+				// its parent matrix.
+				mat_counter++), data_id(mat_id) {
 		this->rc_idxs = idxs;
 		assert(idxs.size() > 0);
 		if (store_layout() == matrix_layout_t::L_COL)
@@ -568,7 +583,7 @@ public:
 	virtual matrix_store::const_ptr transpose() const {
 		matrix_store::const_ptr t_mat = EM_matrix_store::transpose();
 		return matrix_store::const_ptr(new sub_EM_matrix_store(rc_idxs,
-					dynamic_cast<const EM_matrix_store &>(*t_mat)));
+					dynamic_cast<const EM_matrix_store &>(*t_mat), data_id));
 	}
 
 	virtual async_cres_t get_col_portion_async(
@@ -585,8 +600,6 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "get portion async: out of boundary";
 			return async_cres_t();
 		}
-
-		// TODO it should maintain a buffer.
 
 		if (store_layout() == matrix_layout_t::L_COL)
 			return get_col_portion_async(start_row, start_col,
@@ -657,16 +670,22 @@ namespace
 
 class collect_rc_compute: public portion_compute
 {
-	portion_compute::ptr compute;
+	std::vector<portion_compute::ptr> computes;
 	local_matrix_store::ptr collected;
 	std::vector<local_matrix_store::const_ptr> orig_portions;
 	size_t num_collects;
 public:
+	typedef std::shared_ptr<collect_rc_compute> ptr;
+
 	collect_rc_compute(portion_compute::ptr compute,
 			local_matrix_store::ptr collected) {
-		this->compute = compute;
+		computes.push_back(compute);
 		this->collected = collected;
 		num_collects = 0;
+	}
+
+	void add_orig_compute(portion_compute::ptr compute) {
+		computes.push_back(compute);
 	}
 
 	void set_bufs(const std::vector<local_matrix_store::const_ptr> &orig) {
@@ -698,9 +717,10 @@ void collect_rc_compute::run_complete()
 	}
 
 	collected->reset_size();
-	size_t num_eles = collected->get_num_rows() * collected->get_num_cols();
-	compute->run(collected->get_raw_arr(),
-			num_eles * collected->get_entry_size());
+	// I can't pass the raw array to the compute run now.
+	// TODO Maybe I should pass the portion object to the run.
+	for (size_t i = 0; i < computes.size(); i++)
+		computes[i]->run(NULL, 0);
 }
 
 void collect_rc_compute::run(char *buf, size_t size)
@@ -710,6 +730,48 @@ void collect_rc_compute::run(char *buf, size_t size)
 	if (num_collects == orig_portions.size())
 		run_complete();
 }
+
+class local_collected_buf_col_matrix_store: public local_buf_col_matrix_store
+{
+	std::weak_ptr<collect_rc_compute> compute;
+public:
+	typedef std::shared_ptr<local_collected_buf_col_matrix_store> ptr;
+
+	local_collected_buf_col_matrix_store(off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_buf_col_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+	}
+
+	void set_compute(collect_rc_compute::ptr compute) {
+		this->compute = compute;
+	}
+
+	collect_rc_compute::ptr get_compute() const {
+		return compute.lock();
+	}
+};
+
+class local_collected_buf_row_matrix_store: public local_buf_row_matrix_store
+{
+	std::weak_ptr<collect_rc_compute> compute;
+public:
+	typedef std::shared_ptr<local_collected_buf_row_matrix_store> ptr;
+
+	local_collected_buf_row_matrix_store(off_t global_start_row,
+			off_t global_start_col, size_t nrow, size_t ncol,
+			const scalar_type &type, int node_id): local_buf_row_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
+	}
+
+	void set_compute(collect_rc_compute::ptr compute) {
+		this->compute = compute;
+	}
+
+	collect_rc_compute::ptr get_compute() const {
+		return compute.lock();
+	}
+};
 
 }
 
@@ -742,10 +804,61 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 	std::vector<std::pair<off_t, off_t> > ranges = split_idxs(wanted_it,
 			wanted_end);
 
-	local_matrix_store::ptr ret(new local_buf_col_matrix_store(start_row,
-				start_col, num_rows, num_cols, get_type(), -1));
-	collect_rc_compute *_collect_compute = new collect_rc_compute(compute, ret);
-	portion_compute::ptr collect_compute(_collect_compute);
+	size_t start_fetched_row;
+	size_t num_fetched_rows;
+	if (is_wide()) {
+		start_fetched_row = start_row;
+		num_fetched_rows = num_rows;
+	}
+	else {
+		start_fetched_row = start_row - (start_row % CHUNK_SIZE);
+		num_fetched_rows = std::min(CHUNK_SIZE,
+				get_num_rows() - start_fetched_row);
+	}
+
+	// Fetch the portion from the cache.
+	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
+			data_id);
+	// If it's in the same portion.
+	if (ret1 && (((size_t) ret1->get_global_start_row() == start_fetched_row
+					&& (size_t) ret1->get_global_start_col() == start_col
+					&& ret1->get_num_rows() == num_fetched_rows
+					&& ret1->get_num_cols() == num_cols)
+				// If it's in the corresponding portion in the transposed matrix.
+				|| ((size_t) ret1->get_global_start_row() == start_col
+					&& (size_t) ret1->get_global_start_col() == start_fetched_row
+					&& ret1->get_num_rows() == num_cols
+					&& ret1->get_num_cols() == num_fetched_rows))) {
+		assert(ret1->get_local_start_row() == 0);
+		assert(ret1->get_local_start_col() == 0);
+		// In the asynchronous version, data in the portion isn't ready when
+		// the method is called. We should add the user's portion computation
+		// to the queue. When the data is ready, all user's portion computations
+		// will be invoked.
+		local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+		local_collected_buf_col_matrix_store *store
+			= dynamic_cast<local_collected_buf_col_matrix_store *>(tmp);
+		collect_rc_compute::ptr collect_compute = store->get_compute();
+		// If collect_rc_compute doesn't exist, it mean the data has been read
+		// from disks.
+		bool valid_data = collect_compute == NULL;
+		if (!valid_data)
+			collect_compute->add_orig_compute(compute);
+
+		local_matrix_store::const_ptr ret;
+		if (start_fetched_row < start_row || num_rows < num_fetched_rows)
+			ret = ret1->get_portion(start_row - start_fetched_row, 0,
+					num_rows, num_cols);
+		else
+			ret = ret1;
+		return async_cres_t(valid_data, ret);
+	}
+
+	local_collected_buf_col_matrix_store::ptr ret(
+			new local_collected_buf_col_matrix_store(start_fetched_row,
+				start_col, num_fetched_rows, num_cols, get_type(), -1));
+	collect_rc_compute::ptr collect_compute(new collect_rc_compute(compute, ret));
+	ret->set_compute(collect_compute);
 
 	std::vector<local_matrix_store::const_ptr> bufs(ranges.size());
 	size_t collected_cols = 0;
@@ -753,16 +866,22 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 		size_t local_num_cols = ranges[i].second - ranges[i].first;
 		collected_cols += local_num_cols;
 		async_cres_t res = EM_matrix_store::get_portion_async(
-				start_row, ranges[i].first, num_rows, local_num_cols,
-				collect_compute);
+				start_fetched_row, ranges[i].first, num_fetched_rows,
+				local_num_cols, collect_compute);
 		// We assume the requested portion doesn't have data, so the callback
 		// function is invoked when the data is ready.
 		assert(!res.first);
 		bufs[i] = res.second;
 	}
 	assert(collected_cols == num_cols);
-	_collect_compute->set_bufs(bufs);
-	return async_cres_t(false, ret);
+	collect_compute->set_bufs(bufs);
+	if (is_cache_portion())
+		local_mem_buffer::cache_portion(data_id, ret);
+	if (num_fetched_rows == num_rows)
+		return async_cres_t(false, ret);
+	else
+		return async_cres_t(false, ret->get_portion(
+					start_row - start_fetched_row, 0, num_rows, num_cols));
 }
 
 async_cres_t sub_EM_matrix_store::get_row_portion_async(
@@ -774,10 +893,59 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 	std::vector<std::pair<off_t, off_t> > ranges = split_idxs(wanted_it,
 			wanted_end);
 
-	local_matrix_store::ptr ret(new local_buf_row_matrix_store(start_row,
-				start_col, num_rows, num_cols, get_type(), -1));
-	collect_rc_compute *_collect_compute = new collect_rc_compute(compute, ret);
-	portion_compute::ptr collect_compute(_collect_compute);
+	size_t start_fetched_col;
+	size_t num_fetched_cols;
+	if (is_wide()) {
+		start_fetched_col = start_col - (start_col % CHUNK_SIZE);
+		num_fetched_cols = std::min(CHUNK_SIZE,
+				get_num_cols() - start_fetched_col);
+	}
+	else {
+		start_fetched_col = start_col;
+		num_fetched_cols = num_cols;
+	}
+
+	// Fetch the portion from the cache.
+	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
+			data_id);
+	// If it's in the same portion.
+	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
+					&& (size_t) ret1->get_global_start_col() == start_fetched_col
+					&& ret1->get_num_rows() == num_rows
+					&& ret1->get_num_cols() == num_fetched_cols)
+				// If it's in the corresponding portion in the transposed matrix.
+				|| ((size_t) ret1->get_global_start_row() == start_fetched_col
+					&& (size_t) ret1->get_global_start_col() == start_row
+					&& ret1->get_num_rows() == num_fetched_cols
+					&& ret1->get_num_cols() == num_rows))) {
+		assert(ret1->get_local_start_row() == 0);
+		assert(ret1->get_local_start_col() == 0);
+		// In the asynchronous version, data in the portion isn't ready when
+		// the method is called. We should add the user's portion computation
+		// to the queue. When the data is ready, all user's portion computations
+		// will be invoked.
+		local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+		local_collected_buf_row_matrix_store *store
+			= dynamic_cast<local_collected_buf_row_matrix_store *>(tmp);
+		collect_rc_compute::ptr collect_compute = store->get_compute();
+		bool valid_data = collect_compute == NULL;
+		if (!valid_data)
+			collect_compute->add_orig_compute(compute);
+
+		local_matrix_store::const_ptr ret;
+		if (start_fetched_col < start_col || num_cols < num_fetched_cols)
+			ret = ret1->get_portion(0, start_col - start_fetched_col,
+					num_rows, num_cols);
+		else
+			ret = ret1;
+		return async_cres_t(valid_data, ret);
+	}
+
+	local_collected_buf_row_matrix_store::ptr ret(
+			new local_collected_buf_row_matrix_store(start_row,
+				start_fetched_col, num_rows, num_fetched_cols, get_type(), -1));
+	collect_rc_compute::ptr collect_compute(new collect_rc_compute(compute, ret));
+	ret->set_compute(collect_compute);
 
 	std::vector<local_matrix_store::const_ptr> bufs(ranges.size());
 	size_t collected_rows = 0;
@@ -785,16 +953,22 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 		size_t local_num_rows = ranges[i].second - ranges[i].first;
 		collected_rows += local_num_rows;
 		async_cres_t res = EM_matrix_store::get_portion_async(
-				ranges[i].first, start_col, local_num_rows, num_cols,
-				collect_compute);
+				ranges[i].first, start_fetched_col, local_num_rows,
+				num_fetched_cols, collect_compute);
 		// We assume the requested portion doesn't have data, so the callback
 		// function is invoked when the data is ready.
 		assert(!res.first);
 		bufs[i] = res.second;
 	}
 	assert(collected_rows == num_rows);
-	_collect_compute->set_bufs(bufs);
-	return async_cres_t(false, ret);
+	collect_compute->set_bufs(bufs);
+	if (is_cache_portion())
+		local_mem_buffer::cache_portion(data_id, ret);
+	if (num_fetched_cols == num_cols)
+		return async_cres_t(false, ret);
+	else
+		return async_cres_t(false, ret->get_portion(
+					0, start_col - start_fetched_col, num_rows, num_cols));
 }
 
 matrix_store::const_ptr EM_matrix_store::get_cols(
