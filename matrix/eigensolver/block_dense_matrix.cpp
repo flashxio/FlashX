@@ -899,6 +899,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	size_t A_num_blocks = A.get_num_blocks();
 	size_t C_num_blocks = d_beta != 0 ? this->get_num_blocks() : 0;
 	dense_matrix::ptr block;
+	bool use_hierarchy = false;
 	if (A_num_blocks <= MAX_MUL_BLOCKS) {
 		std::vector<dense_matrix::const_ptr> mats;
 		if (d_beta) {
@@ -920,6 +921,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	}
 	else {
 		printf("compute gemm hierarchically\n");
+		use_hierarchy = true;
 		// If there are too many blocks in the subspace, we need to perform
 		// gemm in a hierarchical fashion.
 		std::vector<dense_matrix::const_ptr> tmp_mats;
@@ -986,9 +988,11 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
-		set_caching(orig_input_mats, false);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, false);
 		block->materialize_self();
-		set_caching(orig_input_mats, true);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
@@ -1007,7 +1011,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
-		set_caching(orig_input_mats, false);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, false);
 		// If we want to cache the most recently materialized matrix.
 		if (!in_mem && cache_recent)
 			block->move_store(true, matrix_conf.get_num_nodes());
@@ -1015,7 +1020,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 			num_col_writes += block->get_num_cols();
 			block->materialize_self();
 		}
-		set_caching(orig_input_mats, true);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
