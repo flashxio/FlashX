@@ -40,9 +40,14 @@ public:
 	 */
 	static void Apply ( const spm_function& Op,
 			const FM_MultiVector<double>& x, FM_MultiVector<double>& y ) {
-		BOOST_LOG_TRIVIAL(info) << boost::format("SpMM: y(%1%) = A * x(%2%)")
-			% y.get_name() % x.get_name();
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"SpMM: y(%1%) = A * x(%2%)") % y.get_name() % x.get_name();
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
 		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data());
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "SpMM takes " << time_diff(start, end)
+			<< " seconds";
 		y.sync_fm2ep();
 	}
 
