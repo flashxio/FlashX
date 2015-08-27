@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 
 	test_gemm(true, 4, 1, 128, 0);
 	test_gemm(true, 64, 1, 8, 0);
-	test_MvTransMv(true, 4, 128, 128, 0);
+	test_MvTransMv(true, 4, 1, 128, 0);
 	test_MvTransMv(true, 64, 1, 8, 0);
 
 	test_gemm(false, 4, 8, 128, 4);
