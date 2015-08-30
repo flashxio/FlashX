@@ -47,7 +47,7 @@ public:
 	}
 
 	virtual void move_next() = 0;
-	virtual bool move_to(int idx) = 0;
+	virtual bool move_to(off_t idx) = 0;
 	virtual int get_num_vertices() const = 0;
 
 	off_t get_curr_off() const {
@@ -93,7 +93,7 @@ public:
 		}
 	}
 
-	virtual bool move_to(int idx) {
+	virtual bool move_to(off_t idx) {
 		bool ret = it.move_to(idx);
 		if (!ret) {
 			_has_next = false;
@@ -140,7 +140,7 @@ public:
 			*(EntryType *) next_buf = *p;
 	}
 
-	virtual bool move_to(int idx) {
+	virtual bool move_to(off_t idx) {
 		p = start + idx;
 		if (p + 1 < end) {
 			*(EntryType *) curr_buf = *p;
@@ -186,7 +186,7 @@ public:
 		}
 	}
 
-	virtual bool move_to(int rel_idx) {
+	virtual bool move_to(off_t rel_idx) {
 		this->idx = begin + rel_idx;
 		if ((size_t) idx < end) {
 			vertex_offset e = index.get_vertex(idx);
@@ -238,7 +238,7 @@ public:
 		}
 	}
 
-	virtual bool move_to(int rel_idx) {
+	virtual bool move_to(off_t rel_idx) {
 		this->idx = begin + rel_idx;
 		if ((size_t) idx < end) {
 			directed_vertex_entry e = index.get_vertex(idx);
