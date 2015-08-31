@@ -352,8 +352,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 	else
 		traverse_edge = edge_type::OUT_EDGE;
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	graph_index::ptr index;
 	if (num_bfs == 1)
 		index = NUMA_graph_index<simple_diameter_vertex>::create(
@@ -373,6 +371,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	std::vector<vertex_id_t> start_vertices;
 	while (start_vertices.size() < num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
