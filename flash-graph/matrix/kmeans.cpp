@@ -27,6 +27,8 @@ static size_t K;
 static unsigned NUM_ROWS;
 static omp_lock_t writelock;
 short OMP_MAX_THREADS;
+static double TOLERANCE;
+static unsigned g_num_changed;
 
 static struct timeval start, end;
 
@@ -210,9 +212,11 @@ static void E_step(const double* matrix, double* clusters,
 	// Create per thread vectors
 	std::vector<std::vector<unsigned>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
 	std::vector<std::vector<double>> pt_cl; // K * nev * OMP_MAX_THREADS
+	std::vector<size_t> pt_num_change; // Per thread changed cluster count. OMP_MAX_THREADS
 
 	pt_cl_as_cnt.resize(OMP_MAX_THREADS);
 	pt_cl.resize(OMP_MAX_THREADS);
+	pt_num_change.resize(OMP_MAX_THREADS);
 
 	for (int i = 0; i < OMP_MAX_THREADS; i++) {
 		pt_cl_as_cnt[i].resize(K); // C++ default is 0 value in all
@@ -242,6 +246,7 @@ static void E_step(const double* matrix, double* clusters,
 				updated = true;
 				omp_unset_lock(&writelock);
 			}
+			pt_num_change[omp_get_thread_num()]++;
 		}
         cluster_assignments[row] = asgnd_clust;
 
@@ -261,6 +266,9 @@ static void E_step(const double* matrix, double* clusters,
 
 	// Serial aggreate of OMP_MAX_THREADS vectors
 	for (int i = 0; i < OMP_MAX_THREADS; i++) {
+		// Updated the changed cluster count
+		g_num_changed += pt_num_change[i];
+
 		// Counts
 		for (unsigned j = 0; j < K; j++) {
 			cluster_assignment_counts[j] += pt_cl_as_cnt[i][j];
@@ -283,6 +291,7 @@ static void E_step(const double* matrix, double* clusters,
 #if KM_TEST
 	printf("Cluster assignment counts: "); print_arr(cluster_assignment_counts, K);
     printf("Cluster assignments:\n"); print_arr(cluster_assignments, NUM_ROWS);
+	BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << g_num_changed;
 #endif
 }
 
@@ -349,12 +358,13 @@ namespace fg
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 		const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS, 
-		const int max_threads, const std::string init)
+		const int max_threads, const std::string init, const double tolerance)
 {
 	NEV = nev;
 	K = k;
 	NUM_ROWS = num_rows;
-	assert(max_threads > 0);
+	TOLERANCE = tolerance;
+	assert(max_threads > 0 || TOLERANCE >= 0);
 
 	OMP_MAX_THREADS = std::min(max_threads, get_num_omp_threads());
 	omp_set_num_threads(OMP_MAX_THREADS);
@@ -416,7 +426,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 			" . Computing cluster assignments ...";
 		E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
-		if (!updated) {
+		if (!updated || (g_num_changed/(double)NUM_ROWS) <= TOLERANCE) {
 			converged = true;
 			break;
 		} else { updated = false; }
