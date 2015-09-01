@@ -27,8 +27,7 @@ static size_t K;
 static unsigned NUM_ROWS;
 static omp_lock_t writelock;
 short OMP_MAX_THREADS;
-static double TOLERANCE;
-static unsigned g_num_changed;
+static unsigned g_num_changed = 0;
 
 static struct timeval start, end;
 
@@ -363,8 +362,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 	NEV = nev;
 	K = k;
 	NUM_ROWS = num_rows;
-	TOLERANCE = tolerance;
-	assert(max_threads > 0 || TOLERANCE >= 0);
+	assert(max_threads > 0);
 
 	OMP_MAX_THREADS = std::min(max_threads, get_num_omp_threads());
 	omp_set_num_threads(OMP_MAX_THREADS);
@@ -426,10 +424,13 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 			" . Computing cluster assignments ...";
 		E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
-		if (!updated || (g_num_changed/(double)NUM_ROWS) <= TOLERANCE) {
+		if (!updated || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
 			converged = true;
 			break;
-		} else { updated = false; }
+		} else { 
+			g_num_changed = 0;
+			updated = false; 
+		}
 
 #if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
