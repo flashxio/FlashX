@@ -124,8 +124,9 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	int num_threads = 1024;
 
 	int num_opts = 0;
+	double tolerance = -1;
 
-	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:l:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -134,6 +135,10 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 				break;
 			case 'k':
 				k = atol(optarg);
+				num_opts++;
+				break;
+			case 'l':
+				tolerance = atof(optarg);
 				num_opts++;
 				break;
 			case 'e': 
@@ -216,8 +221,9 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	/* End Malloc */
 
 	gettimeofday(&start, NULL);
+	BOOST_LOG_TRIVIAL(info) << "The tolerance is : " << tolerance;
 	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
-			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init);
+			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance);
 
 
 	gettimeofday(&end, NULL);
@@ -263,6 +269,7 @@ void print_usage()
     fprintf(stderr, "-i iters: maximum number of iterations\n");
     fprintf(stderr, "-f file: input file in fg format\n");
     fprintf(stderr, "-m matrix_layout: i.e., row or col\n");
+    fprintf(stderr, "-l tolerance for convergence (1E-6)\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
