@@ -55,7 +55,6 @@ void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs)
 	}
 }
 
-
 /* For testing only */
 void dummy_eigs(unsigned nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pairs) {
 	// Fake eigen computation for WIKI
@@ -74,24 +73,59 @@ void dummy_eigs(unsigned nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pa
 	}
 }
 
-void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
-{
+static double* read_fg(std::string filename, std::string lay,
+		size_t* NUM_ROWS=NULL, size_t* NUM_COLS=NULL) {
+	std::ifstream infile;
+	infile.open(filename, std::ios::in | std::ios::binary);
+	double* outmat = NULL;
+
+	if (infile.is_open()) {
+		BOOST_LOG_TRIVIAL(info) << "Beginning read ...";
+
+		if (*NUM_ROWS == 0 || *NUM_COLS == 0) {
+			BOOST_LOG_TRIVIAL(info) << "Reading matrix dims from file ...";
+			infile.read((char*)NUM_ROWS, sizeof(size_t));
+			infile.read((char*)NUM_COLS, sizeof(size_t));
+		}
+
+		assert(*NUM_ROWS > 0 && *NUM_COLS > 0);
+		outmat = new double[(*NUM_ROWS)*(*NUM_COLS)];
+		if (lay == "row") {
+		} else if (lay == "col") {
+			// Swap dimensions
+			size_t tmp = *NUM_ROWS;
+			*NUM_ROWS = *NUM_COLS;
+			*NUM_COLS = tmp;
+		}
+		BOOST_LOG_TRIVIAL(info) << "Number of rows = " << *NUM_ROWS;
+		BOOST_LOG_TRIVIAL(info) << "Number of cols = " << *NUM_COLS;
+		infile.read((char*)&outmat[0], sizeof(double)*(*NUM_ROWS)*(*NUM_COLS));
+
+		infile.close();
+	}
+	return outmat;
+}
+
+void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	int opt;
 	std::string confs;
 	std::string matrix_type = "adj";
-	int nev = 1;
+	size_t nev = 1;
 	int ncv = 2;
+	size_t nrow = 0;
 	unsigned k = 1;
 	std::string outfile = "";
+	std::string infile = "";
+	std::string lay = "";	
 
 	unsigned max_iters=std::numeric_limits<unsigned>::max();
 	std::string which = "LA";
 	std::string init = "forgy";
-	int num_threads = 64;
+	int num_threads = 1024;
 
 	int num_opts = 0;
 
-	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -103,7 +137,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 				num_opts++;
 				break;
 			case 'e': 
-				nev = atoi(optarg);
+				nev = atol(optarg);
 				ncv = 2*nev; // Chosen as a defualt
 				num_opts++;
 				break;
@@ -131,6 +165,14 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 				num_threads = atoi(optarg);
 				num_opts++;
 				break;
+			case 'f':
+				infile = optarg;
+				num_opts++;
+				break;
+			case 'm':
+				lay = optarg; 
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -144,57 +186,63 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
 	struct timeval start, end;
+	double* p_eig_matrix = NULL;
 
-	if (matrix_type == "adj") {
+	if (infile != "") {
+		p_eig_matrix = read_fg(infile, lay, &nrow, &nev);
+
+	} else if (matrix_type == "adj") {
 		std::vector<eigen_pair_t> eigen_pairs;
 		FG_adj_matrix::ptr matrix = FG_adj_matrix::create(graph);
+		nrow = matrix->get_num_rows();
 
 #if 0
 		compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
 #else
-		dummy_eigs(nev, matrix->get_num_rows(), eigen_pairs);
+		dummy_eigs(nev, nrow, eigen_pairs);
 #endif
 		// Convert the eigen_pairs to a flattened matrix
-		double* p_eig_matrix = new double[matrix->get_num_rows()*nev];
+		p_eig_matrix = new double[nrow*nev];
 		pairs_to_p_mat(p_eig_matrix, eigen_pairs);
 
-		/* Malloc */
-		double* p_clusters = new double [k*nev];
-		unsigned* p_clust_asgns = new unsigned [matrix->get_num_rows()];
-		unsigned* p_clust_asgn_cnt = new unsigned [k];
-		/* End Malloc */
-
-		gettimeofday(&start, NULL);
-		unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
-				p_clust_asgn_cnt, matrix->get_num_rows(), nev, k, max_iters, num_threads, init);
-
-
-		gettimeofday(&end, NULL);
-
-		printf("Kmeans took %u iters and %.3f sec\n", iters, time_diff(start, end));
-
-		printf("Printing cluster assignment counts:\n");
-		printf("[ ");
-		for (unsigned i = 0; i < k; i++) {
-			std::cout << p_clust_asgn_cnt[i] << " ";
-		}
-		printf("]\n");
-		
-		/* Reclamation */
-		printf("Freeing p_eig_matrix\n");
-		delete [] p_eig_matrix;
-
-		printf("Freeing p_clust_asgns\n");
-		delete [] p_clust_asgns;
-
-		printf("Freeing p_clust_asgn_cnt\n");
-		delete [] p_clust_asgn_cnt;
-
-		printf("Freeing p_clusters\n");
-		delete [] p_clusters;
 	} else {
 		assert (0);
 	}
+
+	/* Malloc */
+	double* p_clusters = new double [k*nev];
+	unsigned* p_clust_asgns = new unsigned [nrow];
+	unsigned* p_clust_asgn_cnt = new unsigned [k];
+	/* End Malloc */
+
+	gettimeofday(&start, NULL);
+	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
+			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init);
+
+
+	gettimeofday(&end, NULL);
+
+	printf("Kmeans took %u iters and %.3f sec\n", iters, time_diff(start, end));
+
+	printf("Printing cluster assignment counts:\n");
+	printf("[ ");
+	for (unsigned i = 0; i < k; i++) {
+		std::cout << p_clust_asgn_cnt[i] << " ";
+	}
+	printf("]\n");
+
+	/* Reclamation */
+	printf("Freeing p_eig_matrix\n");
+	delete [] p_eig_matrix;
+
+	printf("Freeing p_clust_asgns\n");
+	delete [] p_clust_asgns;
+
+	printf("Freeing p_clust_asgn_cnt\n");
+	delete [] p_clust_asgn_cnt;
+
+	printf("Freeing p_clusters\n");
+	delete [] p_clusters;
 }
 
 std::string supported_algs[] = {
@@ -213,6 +261,8 @@ void print_usage()
     fprintf(stderr, "-w which: which side of eigenvalues\n");
     fprintf(stderr, "-t type: type of initialization for kmeans ['random', 'forgy', 'kmeanspp']\n");
     fprintf(stderr, "-i iters: maximum number of iterations\n");
+    fprintf(stderr, "-f file: input file in fg format\n");
+    fprintf(stderr, "-m matrix_layout: i.e., row or col\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
@@ -244,7 +294,8 @@ int main(int argc, char *argv[])
 		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
-	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
+	//FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr graph = NULL;
 
 	if (alg == "kmeans") {
 		run_kmeans(graph, argc, argv);
