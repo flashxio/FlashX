@@ -1,0 +1,28 @@
+Apply a Function to two FlashMatrixR vectors/matrices.
+
+Description:
+
+     `mapply' applies `FUN' to the first elements of each vector, the
+     second elements, the third elements, and so on. Two
+     vectors/matrices should have the same shape. Currently, `mapply'
+     only accepts predefined basic operators returned by
+     `fm.get.basic.op'.
+
+Usage:
+
+     fm.mapply2(FUN, o1, o2)
+     
+Arguments:
+
+     FUN: the user-defined operators.
+
+     o1,: o2 a FlashMatrixR vector/matrix.
+
+Value:
+
+     a FlashMatrixR vector/matrix.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

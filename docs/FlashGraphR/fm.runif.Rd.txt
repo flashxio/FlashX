@@ -1,0 +1,22 @@
+Create a FlashMatrixR vector with uniformly random numbers.
+
+Description:
+
+     Create a FlashMatrixR vector with uniformly random numbers.
+
+Usage:
+
+     fm.runif(n, min = 0, max = 1)
+     
+Arguments:
+
+       n: the number of random numbers to be generated.
+
+     min: lower limits of the distribution.
+
+     max: upper limits of the distribution.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

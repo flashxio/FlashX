@@ -280,6 +280,13 @@ namespace fg
 
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm counts triangles in an undirected graph";
+		return FG_vector<size_t>::ptr();
+	}
+
 	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
 	graph_index::ptr index = NUMA_graph_index<undirected_triangle_vertex>::create(
 			fg->get_graph_header());

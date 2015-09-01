@@ -1,0 +1,35 @@
+Maxima and Minima
+
+Description:
+
+     Returns the (parallel) maxima and minima of the input values.
+
+Usage:
+
+     fm.pmin2(o1, o2)
+     
+     fm.pmax2(o1, o2)
+     
+Arguments:
+
+      o1: the input vector/matrix.
+
+      o2: the input vector/matrix.
+
+Details:
+
+     `fm.pmin2' and `fm.pmax2' works on two input vectors and returns
+     return a single vector/matrix giving the 'parallel' maxima (or
+     minima) of the vectors/matrices. The first element of the result
+     is the maximum (minimum) of the first elements of all the
+     arguments, the second element of the result is the maximum
+     (minimum) of the second elements of all the arguments and so on.
+
+Value:
+
+     a vector/matrix.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

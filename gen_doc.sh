@@ -2,7 +2,7 @@
 
 echo 'roxygen2::roxygenize("Rpkg/")' | R --no-save
 mkdir -p docs/FlashGraphR
-for file in `ls flash-graph/Rpkg/man/`
+for file in `ls Rpkg/man/`
 do
 	input_file="Rpkg/man/$file"
 	output_file="docs/FlashGraphR/${file}.txt"

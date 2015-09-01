@@ -20,6 +20,8 @@
 #include <gperftools/profiler.h>
 #endif
 
+#include "log.h"
+
 #include "triangle_shared.h"
 
 using namespace fg;
@@ -365,6 +367,13 @@ namespace fg
 FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm counts triangles in a directed graph";
+		return FG_vector<size_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);

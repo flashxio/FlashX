@@ -1,0 +1,27 @@
+Set the specified column of a FlashMatrixR matrix.
+
+Description:
+
+     Set the specified column of a FlashMatrixR matrix.
+
+Usage:
+
+     fm.set.cols(fm, idxs, m2)
+     
+Arguments:
+
+      fm: A flashMatrixR matrix
+
+    idxs: an array of column indices in fm.
+
+      m2: A flashMatrixR matrix or vector.
+
+Value:
+
+     a logical value that indicates whether the operation is
+     successful.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
