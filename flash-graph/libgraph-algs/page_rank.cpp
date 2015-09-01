@@ -199,6 +199,13 @@ namespace fg
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<float>::ptr();
+	}
+
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		BOOST_LOG_TRIVIAL(fatal)
@@ -248,6 +255,13 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<float>::ptr();
+	}
+
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		BOOST_LOG_TRIVIAL(fatal)

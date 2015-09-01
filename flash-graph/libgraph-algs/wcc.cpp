@@ -405,6 +405,13 @@ namespace fg
 
 FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on an undirected graph";
+		return FG_vector<vertex_id_t>::ptr();
+	}
+
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<cc_vertex>::create(
@@ -441,6 +448,13 @@ FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
 
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<vertex_id_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
@@ -477,6 +491,13 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 
 FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<vertex_id_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<sync_wcc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
@@ -514,6 +535,13 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 		time_t start_time, time_t time_interval)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<vertex_id_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
