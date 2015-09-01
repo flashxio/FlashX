@@ -25,8 +25,8 @@
 #include "mem_matrix_store.h"
 #include "local_matrix_store.h"
 #include "NUMA_dense_matrix.h"
-#include "mem_vector.h"
 #include "mem_worker_thread.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
@@ -35,6 +35,12 @@ namespace detail
 {
 
 const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
+
+mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
+		const scalar_type &type): matrix_store(nrow, ncol, true,
+			type), mat_id(mat_counter++)
+{
+}
 
 vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
 {
@@ -143,11 +149,17 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = -1;
+	// For a wide matrix
 	if (start_row == 0 && num_rows == get_num_rows())
 		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
 					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
+	// For a tall matrix
 	else {
 		std::vector<const char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
@@ -168,71 +180,17 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 	int node_id = -1;
+	// For a wide matrix
 	if (start_row == 0 && num_rows == get_num_rows())
 		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
 					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
+	// For a tall matrix
 	else {
 		std::vector<char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_col_matrix_store(
-					cols, start_row, start_col, num_rows, num_cols, get_type(),
-					node_id));
-	}
-}
-
-local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
-{
-	int node_id = -1;
-	// For a wide matrix
-	if (is_wide()) {
-		size_t start_col = id * CHUNK_SIZE;
-		size_t start_row = 0;
-		size_t num_rows = get_num_rows();
-		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
-					get_col(start_col), start_row, start_col,
-					num_rows, num_cols, get_type(), node_id));
-	}
-	// For a tall matrix
-	else {
-		size_t start_row = id * CHUNK_SIZE;
-		size_t start_col = 0;
-		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		size_t num_cols = get_num_cols();
-		std::vector<char *> cols(num_cols);
-		for (size_t i = 0; i < num_cols; i++)
-			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
-		return local_matrix_store::ptr(new local_ref_col_matrix_store(
-					cols, start_row, start_col, num_rows, num_cols, get_type(),
-					node_id));
-	}
-}
-
-local_matrix_store::const_ptr mem_col_matrix_store::get_portion(size_t id) const
-{
-	int node_id = -1;
-	// For a wide matrix
-	if (is_wide()) {
-		size_t start_col = id * CHUNK_SIZE;
-		size_t start_row = 0;
-		size_t num_rows = get_num_rows();
-		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
-					get_col(start_col), start_row, start_col,
-					num_rows, num_cols, get_type(), node_id));
-	}
-	// For a tall matrix
-	else {
-		size_t start_row = id * CHUNK_SIZE;
-		size_t start_col = 0;
-		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		size_t num_cols = get_num_cols();
-		std::vector<const char *> cols(num_cols);
-		for (size_t i = 0; i < num_cols; i++)
-			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
-		return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
 					cols, start_row, start_col, num_rows, num_cols, get_type(),
 					node_id));
 	}
@@ -247,11 +205,17 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds";
 		return local_matrix_store::const_ptr();
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = -1;
+	// For a tall matrix
 	if (start_col == 0 && num_cols == get_num_cols())
 		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
 					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
+	// For a wide matrix
 	else {
 		std::vector<const char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
@@ -272,71 +236,17 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 	int node_id = -1;
+	// For a tall matrix
 	if (start_col == 0 && num_cols == get_num_cols())
 		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
+	// For a wide matrix
 	else {
 		std::vector<char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_row_matrix_store(
-					rows, start_row, start_col, num_rows, num_cols, get_type(),
-					node_id));
-	}
-}
-
-local_matrix_store::ptr mem_row_matrix_store::get_portion(size_t id)
-{
-	int node_id = -1;
-	// For a tall matrix
-	if (!is_wide()) {
-		size_t start_row = id * CHUNK_SIZE;
-		size_t start_col = 0;
-		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		size_t num_cols = get_num_cols();
-		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-					get_row(start_row), start_row, start_col,
-					num_rows, num_cols, get_type(), node_id));
-	}
-	// For a wide matrix
-	else {
-		size_t start_col = id * CHUNK_SIZE;
-		size_t start_row = 0;
-		size_t num_rows = get_num_rows();
-		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-		std::vector<char *> rows(num_rows);
-		for (size_t i = 0; i < num_rows; i++)
-			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
-		return local_matrix_store::ptr(new local_ref_row_matrix_store(
-					rows, start_row, start_col, num_rows, num_cols, get_type(),
-					node_id));
-	}
-}
-
-local_matrix_store::const_ptr mem_row_matrix_store::get_portion(size_t id) const
-{
-	int node_id = -1;
-	// For a tall matrix
-	if (!is_wide()) {
-		size_t start_row = id * CHUNK_SIZE;
-		size_t start_col = 0;
-		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		size_t num_cols = get_num_cols();
-		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-					get_row(start_row), start_row, start_col,
-					num_rows, num_cols, get_type(), node_id));
-	}
-	// For a wide matrix
-	else {
-		size_t start_col = id * CHUNK_SIZE;
-		size_t start_row = 0;
-		size_t num_rows = get_num_rows();
-		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-		std::vector<const char *> rows(num_rows);
-		for (size_t i = 0; i < num_rows; i++)
-			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
-		return local_matrix_store::const_ptr(new local_cref_row_matrix_store(
 					rows, start_row, start_col, num_rows, num_cols, get_type(),
 					node_id));
 	}
@@ -370,6 +280,9 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	std::vector<const char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++)
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -377,46 +290,6 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
 				cols, start_row, start_col, num_rows, num_cols, get_type(),
 				node_id));
-}
-
-local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(size_t id)
-{
-	size_t start_col, start_row, num_rows, num_cols;
-	// For a wide matrix
-	if (is_wide()) {
-		start_col = id * CHUNK_SIZE;
-		start_row = 0;
-		num_rows = get_num_rows();
-		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-	}
-	// For a tall matrix
-	else {
-		start_row = id * CHUNK_SIZE;
-		start_col = 0;
-		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		num_cols = get_num_cols();
-	}
-	return get_portion(start_row, start_col, num_rows, num_cols);
-}
-
-local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(size_t id) const
-{
-	size_t start_col, start_row, num_rows, num_cols;
-	// For a wide matrix
-	if (is_wide()) {
-		start_col = id * CHUNK_SIZE;
-		start_row = 0;
-		num_rows = get_num_rows();
-		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-	}
-	// For a tall matrix
-	else {
-		start_row = id * CHUNK_SIZE;
-		start_col = 0;
-		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		num_cols = get_num_cols();
-	}
-	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
 local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(
@@ -429,6 +302,9 @@ local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	std::vector<const char *> rows(num_rows);
 	for (size_t i = 0; i < num_rows; i++)
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();
@@ -455,46 +331,6 @@ local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(
 	return local_matrix_store::ptr(new local_ref_row_matrix_store(
 				rows, start_row, start_col, num_rows, num_cols, get_type(),
 				node_id));
-}
-
-local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(size_t id)
-{
-	size_t start_col, start_row, num_rows, num_cols;
-	// For a wide matrix
-	if (is_wide()) {
-		start_col = id * CHUNK_SIZE;
-		start_row = 0;
-		num_rows = get_num_rows();
-		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-	}
-	// For a tall matrix
-	else {
-		start_row = id * CHUNK_SIZE;
-		start_col = 0;
-		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		num_cols = get_num_cols();
-	}
-	return get_portion(start_row, start_col, num_rows, num_cols);
-}
-
-local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(size_t id) const
-{
-	size_t start_col, start_row, num_rows, num_cols;
-	// For a wide matrix
-	if (is_wide()) {
-		start_col = id * CHUNK_SIZE;
-		start_row = 0;
-		num_rows = get_num_rows();
-		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
-	}
-	// For a tall matrix
-	else {
-		start_row = id * CHUNK_SIZE;
-		start_col = 0;
-		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
-		num_cols = get_num_cols();
-	}
-	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
 matrix_store::const_ptr mem_col_matrix_store::transpose() const
@@ -612,6 +448,7 @@ bool mem_row_matrix_store::write2file(const std::string &file_name) const
 			BOOST_LOG_TRIVIAL(error)
 				<< boost::format("can't write to %1%: %2%")
 				% file_name % strerror(errno);
+			fclose(f);
 			return false;
 		}
 	}
@@ -879,78 +716,6 @@ void mem_matrix_store::set_data(const set_operate &op)
 		mem_threads->process_task(node_id, new set_task(local_store, op));
 	}
 	mem_threads->wait4complete();
-}
-
-matrix_store::ptr mem_matrix_store::conv2(matrix_layout_t layout) const
-{
-	if (store_layout() == layout)
-		return matrix_store::ptr();
-
-	mem_matrix_store::ptr ret = mem_matrix_store::create(get_num_rows(),
-			get_num_cols(), layout, get_type(), get_num_nodes());
-	size_t num_chunks = get_num_portions();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	for (size_t i = 0; i < num_chunks; i++) {
-		detail::local_matrix_store::const_ptr src_store = get_portion(i);
-		detail::local_matrix_store::ptr dest_store = ret->get_portion(i);
-
-		int node_id = src_store->get_node_id();
-		// If the local matrix portion is not assigned to any node, 
-		// assign the tasks in round robin fashion.
-		if (node_id < 0)
-			node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new copy_task(src_store,
-					dest_store));
-	}
-	mem_threads->wait4complete();
-	return ret;
-}
-
-matrix_store::const_ptr mem_col_matrix_store::append_cols(
-		const std::vector<matrix_store::const_ptr> &mats) const
-{
-	for (size_t i = 0; i < mats.size(); i++) {
-		if (!mats[i]->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in memory";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_num_rows() != get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different length";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_type() != get_type()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different type";
-			return matrix_store::const_ptr();
-		}
-	}
-	assert(!is_wide());
-	std::vector<const char *> src_cols;
-	for (size_t i = 0; i < get_num_cols(); i++)
-		src_cols.push_back(get_col(i));
-	for (size_t i = 0; i < mats.size(); i++) {
-		for (size_t j = 0; j < mats[i]->get_num_cols(); j++) {
-			const mem_col_matrix_store &mem_mat
-				= dynamic_cast<const mem_col_matrix_store &>(*mats[i]);
-			src_cols.push_back(mem_mat.get_col(j));
-		}
-	}
-	mem_col_matrix_store::ptr ret = mem_col_matrix_store::create(
-			get_num_rows(), src_cols.size(), get_type());
-#pragma omp parallel for
-	for (size_t i = 0; i < src_cols.size(); i++)
-		memcpy(ret->get_col(i), src_cols[i], get_num_rows() * get_entry_size());
-	return ret;
-}
-
-matrix_store::const_ptr mem_row_matrix_store::append_cols(
-		const std::vector<matrix_store::const_ptr> &mats) const
-{
-	throw unsupported_exception(
-			"can't add columns to a row-major matrix");
 }
 
 }

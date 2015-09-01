@@ -71,6 +71,14 @@ public:
 		memset(data.get(), 0, num_bytes);
 	}
 
+	std::shared_ptr<char> get_raw_data() {
+		return data;
+	}
+
+	std::shared_ptr<const char> get_raw_data() const {
+		return data;
+	}
+
 	char *get_raw() {
 		return data.get();
 	}

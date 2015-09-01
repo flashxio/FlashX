@@ -22,17 +22,17 @@ CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph 
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
-all: test_io_gen test-mem_matrix test-EM_vector	\
+all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
 	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
-	test-special_matrix_store
+	test-special_matrix_store test-EM_vector_vector test-rounderror
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
 
-test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
-	$(CXX) -o test-mem_matrix test-mem_matrix.o $(LDFLAGS)
+test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
+	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
 
 test-NUMA_dense_matrix: test-NUMA_dense_matrix.o ../libFMatrix.a
 	$(CXX) -o test-NUMA_dense_matrix test-NUMA_dense_matrix.o $(LDFLAGS)
@@ -45,6 +45,9 @@ test-NUMA_vector: test-NUMA_vector.o ../libFMatrix.a
 
 test-mem_vector_vector: test-mem_vector_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector_vector test-mem_vector_vector.o $(LDFLAGS)
+
+test-EM_vector_vector: test-EM_vector_vector.o ../libFMatrix.a
+	$(CXX) -o test-EM_vector_vector test-EM_vector_vector.o $(LDFLAGS)
 
 test-data_frame: test-data_frame.o ../libFMatrix.a
 	$(CXX) -o test-data_frame test-data_frame.o $(LDFLAGS)
@@ -76,12 +79,15 @@ test-mem_matrix_store: test-mem_matrix_store.o ../libFMatrix.a
 test-special_matrix_store: test-special_matrix_store.o ../libFMatrix.a
 	$(CXX) -o test-special_matrix_store test-special_matrix_store.o $(LDFLAGS)
 
+test-rounderror: test-rounderror.o ../libFMatrix.a
+	$(CXX) -o test-rounderror test-rounderror.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f test_io_gen
-	rm -f test-mem_matrix
+	rm -f test-dense_matrix
 	rm -f test-NUMA_dense_matrix
 	rm -f test-mem_vector
 	rm -f test-NUMA_vector
@@ -96,5 +102,6 @@ clean:
 	rm -f test-local_matrix_store
 	rm -f test-mem_matrix_store
 	rm -f test-special_matrix_store
+	rm -f test-rounderror
 
 -include $(DEPS) 

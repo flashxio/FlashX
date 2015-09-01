@@ -23,8 +23,8 @@
 namespace safs
 {
 
-buffered_io::buffered_io(const logical_file_partition &partition_,
-		thread *t, int flags): io_interface(t), partition(
+buffered_io::buffered_io(const logical_file_partition &partition_, thread *t,
+		const safs_header &header, int flags): io_interface(t, header), partition(
 			partition_), fds(partition.get_num_files())
 {
 	this->flags = flags;

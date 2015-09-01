@@ -11,6 +11,7 @@
 #include "FM_MultiVector.h"
 
 #include "sparse_matrix.h"
+#include "matrix_stats.h"
 
 #include "eigensolver.h"
 #include "block_dense_matrix.h"
@@ -24,6 +25,8 @@ using namespace fm;
 using std::cerr;
 using std::cout;
 using std::endl;
+
+using namespace fm::eigen;
 
 namespace Anasazi
 {
@@ -47,27 +50,43 @@ public:
 
 }
 
-eigen_options::eigen_options()
+namespace fm
+{
+
+namespace eigen
+{
+
+eigen_options::eigen_options(int nev, std::string solver)
 {
 	tol = 1.0e-8;
-	num_blocks = 8;
 	max_restarts = 100;
 	max_iters = 500;
-	block_size = 0;
-	nev = 1;
-	solver = "LOBPCG";
+	this->nev = nev;
+	this->solver = solver;
 	which="LM";
+	in_mem = true;
 
-	if (solver == "Davidson" || solver == "KrylovSchur") {
-		block_size = nev + 1;
+	if (solver == "KrylovSchur") {
+		block_size = 1;
+		// The KrylovSchur solver wants the number of blocks to be at least 3.
+		num_blocks = std::max(nev * 2, 3);
+	}
+	else if (solver == "Davidson") {
+		block_size = nev;
+		num_blocks = 4;
 	}
 	else if (solver == "LOBPCG") {
 		block_size = 4;
+		num_blocks = 10;
+	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << "Unknown solver: " << solver;
+		exit(1);
 	}
 }
 
 eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &opts)
+		struct eigen_options &_opts)
 {
 	using Teuchos::RCP;
 	using Teuchos::rcp;
@@ -87,6 +106,9 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 
 	RCP<spm_function> A = rcp(func);
 
+	struct eigen_options opts = _opts;
+	if (opts.block_size == 0)
+		opts.block_size = 2 * opts.nev;
 	// Set eigensolver parameters.
 	const double tol = opts.tol; // convergence tolerance
 	const int numBlocks = opts.num_blocks; // restart length
@@ -99,7 +121,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
-	RCP<MV> ivec = rcp (new MV (A->get_num_cols(), blockSize, blockSize));
+	RCP<MV> ivec = rcp (new MV (A->get_num_cols(), blockSize, blockSize,
+				opts.in_mem, opts.solver));
 	ivec->Random ();
 
 	// Create the eigenproblem.  This object holds all the stuff about
@@ -201,7 +224,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	std::vector<double> normR (sol.numVecs);
 	if (sol.numVecs > 0) {
 		Teuchos::SerialDenseMatrix<int,double> T (sol.numVecs, sol.numVecs);
-		MV tempAevec (A->get_num_rows(), sol.numVecs, evecs->get_block_size());
+		MV tempAevec (A->get_num_rows(), sol.numVecs, evecs->get_block_size(),
+				opts.in_mem, opts.solver);
 		T.putScalar (0.0);
 		for (int i=0; i<sol.numVecs; ++i) {
 			T(i,i) = evals[i].realpart;
@@ -233,6 +257,24 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	}
 	cout << "------------------------------------------------------" << endl;
 	cout << "#col writes: " << num_col_writes << endl;
+	cout << "#col reads: " << num_col_reads_concept << " in concept" << endl;
+	cout << "#col writes: " << num_col_writes_concept << " in concept" << endl;
+	cout << "#multiply: " << num_multiply_concept << " in concept" << endl;
+	cout << "#mem read bytes: " << detail::matrix_stats.get_read_bytes(true)
+		<< endl;
+	cout << "#mem write bytes: " << detail::matrix_stats.get_write_bytes(true)
+		<< endl;
+	cout << "#EM read bytes: " << detail::matrix_stats.get_read_bytes(false)
+		<< endl;
+	cout << "#EM write bytes: " << detail::matrix_stats.get_write_bytes(false)
+		<< endl;
+	cout << "#double float-point multiplies: "
+		<< detail::matrix_stats.get_multiplies() << endl;
+	cached_mat = NULL;
 
 	return res;
+}
+
+}
+
 }

@@ -10,8 +10,9 @@ make
 cd ..
 
 R CMD build Rpkg
+version=`R --version | grep "R version" | awk '{print $3}' | awk -F. '{print $1 "." $2}'`
 if [ -d ~/R ]; then
-	path=`find ~/R -name Rcpp.h`
+	path=`find ~/R -name Rcpp.h | grep ${version}`
 fi
 if [ -z "$path" ]; then
 	path=`find /usr/local -name Rcpp.h`

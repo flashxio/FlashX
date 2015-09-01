@@ -26,6 +26,7 @@
 
 #include "sorter.h"
 #include "stl_algs.h"
+#include "type_cast.h"
 
 namespace fm
 {
@@ -41,6 +42,7 @@ enum prim_type
 	P_LONG,
 	P_FLOAT,
 	P_DOUBLE,
+	P_LDOUBLE,
 	P_BOOL,
 	P_USHORT,
 	P_UINT,
@@ -91,6 +93,12 @@ inline prim_type get_type<double>()
 }
 
 template<>
+inline prim_type get_type<long double>()
+{
+	return prim_type::P_LDOUBLE;
+}
+
+template<>
 inline prim_type get_type<bool>()
 {
 	return prim_type::P_BOOL;
@@ -117,8 +125,6 @@ inline prim_type get_type<unsigned long>()
 class basic_uops;
 class basic_ops;
 class agg_ops;
-class mem_vector;
-class mem_vector_vector;
 class scatter_gather;
 class scalar_variable;
 class rand_gen;
@@ -143,10 +149,17 @@ public:
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	// Create Random generator with the uniform distribution.
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max) const = 0;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max, const scalar_variable &seed) const = 0;
+	// Create Random generator with the normal distribution.
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var) const = 0;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var, const scalar_variable &seed) const = 0;
+	virtual const type_cast &get_type_cast(const scalar_type &type) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -169,10 +182,14 @@ public:
 	virtual const agg_ops &get_agg_ops() const;
 
 	virtual std::shared_ptr<scalar_variable> create_scalar() const;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max) const;
-	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
 			const scalar_variable &max, const scalar_variable &seed) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var, const scalar_variable &seed) const;
 
 	virtual const sorter &get_sorter() const {
 		static type_sorter<T> sort;
@@ -185,6 +202,7 @@ public:
 		return algs;
 	}
 	virtual const set_operate &get_set_const(const scalar_variable &val) const;
+	virtual const type_cast &get_type_cast(const scalar_type &type) const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();
@@ -212,6 +230,7 @@ class scalar_variable
 {
 public:
 	typedef std::shared_ptr<scalar_variable> ptr;
+	typedef std::shared_ptr<const scalar_variable> const_ptr;
 	/**
 	 * Get the raw representation of the type.
 	 */
@@ -225,6 +244,10 @@ public:
 	 * Set the value of the scalar variable in the raw representation.
 	 */
 	virtual bool set_raw(const char *v, int size) = 0;
+	/*
+	 * Test if the value is equal to the one stored in the given address.
+	 */
+	virtual bool equals(const char *addr) const = 0;
 
 	virtual size_t get_size() const {
 		return get_type().get_size();
@@ -261,6 +284,10 @@ public:
 
 		memcpy(&this->v, v, size);
 		return true;
+	}
+
+	virtual bool equals(const char *addr) const {
+		return v == *(const T *) addr;
 	}
 
 	T get() const {

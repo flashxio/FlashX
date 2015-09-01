@@ -155,8 +155,8 @@ void async_io::io_ref::dec_ref()
 }
 
 async_io::async_io(const logical_file_partition &partition,
-		int aio_depth_per_file, thread *t, int flags): io_interface(t), AIO_DEPTH(
-			aio_depth_per_file)
+		int aio_depth_per_file, thread *t, const safs_header &header,
+		int flags): io_interface(t, header), AIO_DEPTH(aio_depth_per_file)
 {
 	int node_id = t->get_node_id();
 	cb_allocator = new callback_allocator(node_id,
@@ -178,7 +178,7 @@ async_io::async_io(const logical_file_partition &partition,
 	open_flags = flags;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
-		io_ref io(new buffered_io(partition, t, O_DIRECT | flags));
+		io_ref io(new buffered_io(partition, t, header, O_DIRECT | flags));
 		default_io = io;
 		open_files.insert(std::pair<int, io_ref>(file_id, io));
 #if 0
@@ -440,7 +440,7 @@ int async_io::open_file(const logical_file_partition &partition)
 	auto it = open_files.find(file_id);
 	if (it == open_files.end()) {
 		buffered_io *io = new buffered_io(partition, get_thread(),
-				O_DIRECT | open_flags);
+				get_header(), O_DIRECT | open_flags);
 		open_files.insert(std::pair<int, io_ref>(file_id, io_ref(io)));
 #if 0
 		if (data)
@@ -454,7 +454,7 @@ int async_io::open_file(const logical_file_partition &partition)
 	// The file has been opened but was closed.
 	else {
 		it->second = io_ref(new buffered_io(partition, get_thread(),
-					O_DIRECT | open_flags));
+					get_header(), O_DIRECT | open_flags));
 	}
 	return 0;
 }

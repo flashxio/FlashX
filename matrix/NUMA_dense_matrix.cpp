@@ -22,6 +22,7 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
+#include "matrix_stats.h"
 
 namespace fm
 {
@@ -78,7 +79,7 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
-			type), mapper(num_nodes)
+			type, mat_counter++), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
@@ -87,22 +88,22 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 				local_lens[node_id] * ncol * get_entry_size(), node_id);
 }
 
-char *NUMA_row_tall_matrix_store::get_row(off_t row_idx)
+char *NUMA_row_tall_matrix_store::get_row(size_t row_idx)
 {
 	auto phy_loc = mapper.map2physical(row_idx);
 	return data[phy_loc.first].get_raw()
 		+ phy_loc.second * get_num_cols() * get_entry_size();
 }
 
-const char *NUMA_row_tall_matrix_store::get_row(off_t row_idx) const
+const char *NUMA_row_tall_matrix_store::get_row(size_t row_idx) const
 {
 	auto phy_loc = mapper.map2physical(row_idx);
 	return data[phy_loc.first].get_raw()
 		+ phy_loc.second * get_num_cols() * get_entry_size();
 }
 
-const char *NUMA_row_tall_matrix_store::get_rows(off_t row_start,
-		off_t row_end) const
+const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,
+		size_t row_end) const
 {
 	if (mapper.get_logical_range_id(row_start)
 			!= mapper.get_logical_range_id(row_end - 1)) {
@@ -113,7 +114,7 @@ const char *NUMA_row_tall_matrix_store::get_rows(off_t row_start,
 	return get_row(row_start);
 }
 
-char *NUMA_row_tall_matrix_store::get_rows(off_t row_start, off_t row_end)
+char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
 {
 	if (mapper.get_logical_range_id(row_start)
 			!= mapper.get_logical_range_id(row_end - 1)) {
@@ -126,7 +127,7 @@ char *NUMA_row_tall_matrix_store::get_rows(off_t row_start, off_t row_end)
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
 		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
-			nrow, ncol, type)
+			nrow, ncol, type, mat_counter++)
 {
 	data.resize(ncol);
 	for (size_t i = 0; i < ncol; i++)
@@ -162,6 +163,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	// We have to retrieve the entire rows.
 	if (num_cols != get_num_cols() || start_col != 0)
 		return local_matrix_store::const_ptr();
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
 	size_t chunk_size = get_portion_size().first;
@@ -204,6 +209,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
 				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
@@ -238,6 +247,9 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::const_ptr();
 
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	int node_id = data.front()->get_node_id(start_row);
 	std::vector<const char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++) {
@@ -295,6 +307,10 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 				start_row + num_rows);
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
 				cols, start_row, start_col, num_rows, num_cols, get_type(),
 				node_id));
@@ -380,41 +396,82 @@ matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
 	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(wanted));
 }
 
-matrix_store::const_ptr NUMA_col_tall_matrix_store::append_cols(
-			const std::vector<matrix_store::const_ptr> &mats) const
+bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const
 {
-	std::vector<NUMA_vec_store::ptr> data(this->data.begin(), this->data.end());
-	for (size_t i = 0; i < mats.size(); i++) {
-		if (mats[i]->get_num_rows() != get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different length";
-			return matrix_store::const_ptr();
-		}
-		if (mats[i]->get_type() != get_type()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't append columns with different type";
-			return matrix_store::const_ptr();
-		}
-
-		if (!mats[i]->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in memory";
-			return matrix_store::const_ptr();
-		}
-		const mem_matrix_store &mem_mat
-			= static_cast<const mem_matrix_store &>(*mats[i]);
-		if (mem_mat.get_num_nodes() <= 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The columns aren't in NUMA memory";
-			return matrix_store::const_ptr();
-		}
-
-		const NUMA_col_tall_matrix_store &numa_mat
-			= dynamic_cast<const NUMA_col_tall_matrix_store &>(mem_mat);
-		data.insert(data.end(), numa_mat.data.begin(), numa_mat.data.end());
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
 	}
+	if (!write_header(f))
+		return false;
 
-	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(data));
+	size_t num_portions = get_num_portions();
+	size_t tot_size = 0;
+	for (size_t i = 0; i < num_portions; i++) {
+		local_matrix_store::const_ptr portion = get_portion(i);
+		const char *data = portion->get_raw_arr();
+		assert(data);
+		size_t data_size = portion->get_num_rows() * portion->get_num_cols(
+				) * portion->get_entry_size();
+		tot_size += data_size;
+		size_t ret = fwrite(data, data_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			fclose(f);
+			return false;
+		}
+	}
+	printf("write %ld bytes\n", tot_size);
+	fclose(f);
+	return true;
+}
+
+static void copy_vec(const NUMA_vec_store &vec, char *buf)
+{
+	size_t portion_size = vec.get_portion_size();
+	for (size_t idx = 0; idx < vec.get_length(); idx += portion_size) {
+		size_t local_len = std::min(portion_size, vec.get_length() - idx);
+		const char *portion = vec.get_sub_arr(idx, idx + local_len);
+		assert(portion);
+		memcpy(buf + idx * vec.get_entry_size(), portion,
+				local_len * vec.get_entry_size());
+	}
+}
+
+bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	if (!write_header(f))
+		return false;
+
+	size_t tot_size = 0;
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		NUMA_vec_store::const_ptr col = data[i];
+		size_t col_size = col->get_length() * col->get_entry_size();
+		tot_size += col_size;
+		std::unique_ptr<char[]> tmp(new char[col_size]);
+		copy_vec(*col, tmp.get());
+		size_t ret = fwrite(tmp.get(), col_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			fclose(f);
+			return false;
+		}
+	}
+	printf("write %ld bytes\n", tot_size);
+	fclose(f);
+	return true;
 }
 
 }

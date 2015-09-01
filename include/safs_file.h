@@ -28,6 +28,8 @@
 
 #include "common.h"
 #include "native_file.h"
+#include "safs_header.h"
+#include "parameters.h"
 
 namespace safs
 {
@@ -46,13 +48,18 @@ struct part_file_info
 
 class RAID_config;
 
-class safs_file: public file_interface
+class safs_file
 {
 	// The collection of native files.
 	std::vector<part_file_info> native_dirs;
 	std::string name;
 public:
+	static std::vector<std::string> erase_header_file(
+			const std::vector<std::string> &files);
+
 	safs_file(const RAID_config &conf, const std::string &file_name);
+
+	safs_header get_header() const;
 
 	const std::string &get_name() const {
 		return name;
@@ -60,7 +67,9 @@ public:
 
 	bool exist() const;
 	ssize_t get_size() const;
-	bool create_file(size_t file_size);
+	bool create_file(size_t file_size,
+			int block_size = params.get_RAID_block_size(),
+			int mapping_option = params.get_RAID_mapping_option());
 	bool delete_file();
 	bool rename(const std::string &new_name);
 };

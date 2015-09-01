@@ -44,6 +44,8 @@ public:
 	typedef std::shared_ptr<vec_store> ptr;
 	typedef std::shared_ptr<const vec_store> const_ptr;
 
+	static ptr create(size_t length, const scalar_type &_type, bool in_mem);
+
 	vec_store(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
 		this->length = length;
 		this->in_mem = in_mem;
@@ -87,6 +89,10 @@ public:
 		this->length = new_length;
 		return true;
 	}
+
+	// Copy #eles to the data array and return #eles copied.
+	virtual size_t copy_to(char *data, size_t num_eles) const;
+
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end) = 0;
 	virtual bool append(const vec_store &vec) = 0;
@@ -94,6 +100,12 @@ public:
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;
 
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc) = 0;
+	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
+			size_t size) = 0;
+	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
+			size_t size) const = 0;
 	virtual size_t get_portion_size() const = 0;
 	virtual size_t get_num_portions() const {
 		double len = get_length();

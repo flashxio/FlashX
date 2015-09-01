@@ -25,6 +25,8 @@
 #include "matrix_io.h"
 #include "matrix_config.h"
 #include "hilbert_curve.h"
+#include "mem_worker_thread.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -172,6 +174,14 @@ void block_compute_task::run(char *buf, size_t size)
 	off_t orig_off = io.get_loc().get_offset();
 	off_t local_off = orig_off - ROUND_PAGE(orig_off);
 	assert(local_off + io.get_size() <= size);
+	size_t block_row_start
+		= io.get_top_left().get_row_idx() / block_size.get_num_rows();
+	size_t num_block_rows
+		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
+	assert(io.get_top_left().get_col_idx() == 0);
+	size_t block_col_start = 0;
+	size_t num_block_cols
+		= ceil(((double) io.get_num_cols()) / block_size.get_num_cols());
 
 	// We access data in super blocks.
 	// A super block is a set of blocks organized in a square or
@@ -199,6 +209,10 @@ void block_compute_task::run(char *buf, size_t size)
 					continue;
 				}
 				const sparse_block_2d &b = its[i].get_curr();
+				assert(b.get_block_row_idx() >= block_row_start
+						&& b.get_block_row_idx() < block_row_start + num_block_rows);
+				assert(b.get_block_col_idx() >= block_col_start
+						&& b.get_block_col_idx() < block_col_start + num_block_cols);
 				assert(b.get_block_col_idx() >= sb_col_idx + j);
 				if (b.get_block_col_idx() == sb_col_idx + j) {
 					blocks[idx] = &b;
@@ -229,21 +243,9 @@ block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
 
 const char *block_spmm_task::get_in_rows(size_t start_row, size_t num_rows)
 {
-	// Since the task needs to process the entire block rows, it needs
-	// to access many blocks. Each time a user wants to access in_part,
-	// he needs to specify which block is required.
-	size_t in_part_size = input.get_portion_size().first;
-	size_t in_part_id = start_row / in_part_size;
-	if (in_part == NULL || (size_t) in_part->get_global_start_row()
-			!= in_part_id * in_part_size)
-		in_part = detail::local_row_matrix_store::cast(
-				input.get_portion(in_part_id));
-
-	// Get the contiguous rows in the input and output matrices.
-	size_t local_start = start_row - in_part->get_global_start_row();
-	size_t local_end = std::min(local_start + num_rows,
-			in_part->get_num_rows());
-	return in_part->get_rows(local_start, local_end);
+	const char *ret = input.get_rows(start_row, start_row + num_rows);
+	assert(ret);
+	return ret;
 }
 
 char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
@@ -287,7 +289,19 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 
 void block_spmm_task::notify_complete()
 {
-	if (output.store_layout() == matrix_layout_t::L_COL)
+	// It's possible that the entire block row is empty. In this case,
+	// we didn't create out_part for the output portion. We need to reset
+	// the data in the portion.
+	if (out_part == NULL) {
+		size_t block_row_start = get_io().get_top_left().get_row_idx();
+		size_t block_num_rows = std::min(get_io().get_num_rows(),
+				output.get_num_rows() - block_row_start);
+		detail::local_matrix_store::ptr tmp = output.get_portion(
+				block_row_start, 0, block_num_rows, output.get_num_cols());
+		assert(tmp);
+		tmp->reset_data();
+	}
+	else if (output.store_layout() == matrix_layout_t::L_COL)
 		output.get_portion(out_part->get_global_start_row(),
 				out_part->get_global_start_col(), out_part->get_num_rows(),
 				out_part->get_num_cols())->copy_from(*out_part);
@@ -732,13 +746,21 @@ void init_flash_matrix(config_map::ptr configs)
 			init_count--;
 			throw e;
 		}
+		size_t num_nodes = matrix_conf.get_num_nodes();
+		size_t num_threads = matrix_conf.get_num_threads();
+		detail::local_mem_buffer::init();
+		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
+				num_threads / num_nodes);
 	}
 }
 
 void destroy_flash_matrix()
 {
-	if (init_count.fetch_sub(1) == 1)
+	if (init_count.fetch_sub(1) == 1) {
 		safs::destroy_io_system();
+		detail::local_mem_buffer::destroy();
+		// TODO I should also destroy the worker thread here.
+	}
 }
 
 }

@@ -41,7 +41,8 @@ FG_graph::FG_graph(const std::string &graph_file,
 	this->configs = configs;
 
 	try {
-		graph_engine::init_flash_graph(configs);
+		if (configs)
+			graph_engine::init_flash_graph(configs);
 	} catch (init_error &e) {
 		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
 	}
@@ -106,7 +107,8 @@ FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
 		const std::string &graph_name, config_map::ptr configs)
 {
 	try {
-		graph_engine::init_flash_graph(configs);
+		if (configs)
+			graph_engine::init_flash_graph(configs);
 	} catch (init_error &e) {
 		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
 	}

@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
@@ -181,6 +183,44 @@ void test_transpose()
 	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
 }
 
+void test_write2file1(NUMA_matrix_store::ptr mat)
+{
+	char *tmp_file_name = tempnam(".", "tmp.mat");
+	if (mat->store_layout() == matrix_layout_t::L_ROW)
+		mat->set_data(set_row_operate(mat->get_num_cols()));
+	else
+		mat->set_data(set_col_operate(mat->get_num_cols()));
+	bool ret = mat->write2file(tmp_file_name);
+	assert(ret);
+
+	mem_matrix_store::ptr read_mat = mem_matrix_store::load(tmp_file_name);
+	assert(read_mat);
+	assert(read_mat->get_num_rows() == mat->get_num_rows());
+	assert(read_mat->get_num_cols() == mat->get_num_cols());
+	assert(read_mat->get_type() == mat->get_type());
+	assert(read_mat->store_layout() == mat->store_layout());
+#pragma omp parallel for
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			assert(mat->get<long>(i, j) == read_mat->get<long>(i, j));
+	}
+
+	unlink(tmp_file_name);
+}
+
+void test_write2file()
+{
+	NUMA_matrix_store::ptr mat;
+	printf("write a tall row matrix\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_write2file1(mat);
+	printf("write a tall column matrix\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_write2file1(mat);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc >= 3) {
@@ -192,6 +232,7 @@ int main(int argc, char *argv[])
 	matrix_conf.set_num_threads(num_threads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
+	test_write2file();
 	test_portion();
 	test_init();
 	test_transpose();

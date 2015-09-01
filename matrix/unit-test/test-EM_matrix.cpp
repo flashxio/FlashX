@@ -1,35 +1,12 @@
 #include <malloc.h>
 
 #include "EM_dense_matrix.h"
-#include "mem_dense_matrix.h"
 #include "sparse_matrix.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 
-class read_double_compute: public submatrix_compute
-{
-	size_t start_row;
-public:
-	read_double_compute(size_t start_row): submatrix_compute(start_row, 0) {
-		this->start_row = start_row;
-	}
-
-	virtual void run(const mem_dense_matrix &subm) {
-		size_t expected_v = start_row * subm.get_num_cols();
-		for (size_t i = 0; i < subm.get_num_rows(); i++) {
-			for (size_t j = 0; j < subm.get_num_cols(); j++) {
-				double *v = (double *) subm.get(i, j);
-				if (*v != expected_v)
-					fprintf(stderr, "m[%ld,%ld]: %lf, expected: %ld\n",
-							i, j, *v, expected_v);
-				assert(*v == expected_v);
-				expected_v++;
-			}
-		}
-	}
-};
-
-class set_col_operate: public type_set_operate<double>
+class set_col_operate: public type_set_operate<long>
 {
 	size_t num_cols;
 public:
@@ -37,85 +14,149 @@ public:
 		this->num_cols = num_cols;
 	}
 
-	void set(double *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+	void set(long *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = (row_idx + i) * num_cols + col_idx;
 		}
 	}
 };
 
-void test_fetch_set()
+class set_row_operate: public type_set_operate<long>
 {
-	EM_col_dense_matrix::ptr m = EM_col_dense_matrix::create(1024 * 1024, 5,
-			get_scalar_type<double>());
-	m->set_data(set_col_operate(5));
-
-	size_t num_rows = 1024 * 8;
-	EM_dense_matrix_accessor::ptr accessor = m->create_accessor();
-	for (size_t i = 0; i < m->get_num_rows(); i += num_rows) {
-		accessor->fetch_submatrix(i, num_rows, 0, m->get_num_cols(),
-				submatrix_compute::ptr(new read_double_compute(i)));
-	}
-	accessor->wait4all();
-	printf("passed fetch/set test\n");
-}
-
-class verify_prod_compute: public submatrix_compute
-{
-	size_t start_row;
-	const mem_dense_matrix &m;
+	size_t num_cols;
 public:
-	verify_prod_compute(size_t start_row,
-			const mem_dense_matrix &_m): submatrix_compute(start_row, 0), m(_m) {
-		this->start_row = start_row;
+	set_row_operate(size_t num_cols) {
+		this->num_cols = num_cols;
 	}
 
-	virtual void run(const mem_dense_matrix &subm) {
-		for (size_t i = 0; i < subm.get_num_rows(); i++) {
-			for (size_t j = 0; j < subm.get_num_cols(); j++) {
-				double *v = (double *) subm.get(i, j);
-				double *expected_v = (double *) m.get(i + start_row, j);
-				if (*v != *expected_v)
-					printf("m[%ld,%ld]: %lf, expected: %lf\n",
-							i, j, *v, *expected_v);
-				assert(*v == *expected_v);
-			}
+	void set(long *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = row_idx * num_cols + col_idx + i;
 		}
 	}
 };
 
-void test_inner_prod()
+void verify_portion(const detail::local_matrix_store &portion,
+		size_t tot_num_cols)
 {
-	EM_col_dense_matrix::ptr em = EM_col_dense_matrix::create(1024 * 1024, 5,
-			get_scalar_type<double>());
-	mem_col_dense_matrix::ptr big_im = mem_col_dense_matrix::create(
-			em->get_num_rows(), em->get_num_cols(), get_scalar_type<double>());
-	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
-			em->get_num_cols(), em->get_num_cols(), get_scalar_type<double>());
-
-	// Init the big external-memory matrix
-	em->set_data(set_col_operate(em->get_num_cols()));
-
-	// Init the big in-memory matrix
-	big_im->set_data(set_col_operate(big_im->get_num_cols()));
-	small_im->serial_set_data(set_col_operate(small_im->get_num_cols()));
-
-	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
-			*small_im);
-	mem_dense_matrix::ptr im_res = multiply<double, double, double>(*big_im,
-			*small_im);
-
-	size_t num_rows = 1024 * 8;
-	EM_dense_matrix_accessor::ptr accessor = em_res->create_accessor();
-	for (size_t i = 0; i < em_res->get_num_rows(); i += num_rows) {
-		accessor->fetch_submatrix(i, num_rows, 0, em_res->get_num_cols(),
-				submatrix_compute::ptr(new verify_prod_compute(i, *im_res)));
+	if (portion.store_layout() == matrix_layout_t::L_ROW) {
+		const detail::local_row_matrix_store &rows
+			= dynamic_cast<const detail::local_row_matrix_store &>(portion);
+		for (size_t i = 0; i < rows.get_num_rows(); i++) {
+			const long *row = (const long *) rows.get_row(i);
+			for (size_t j = 0; j < rows.get_num_cols(); j++) {
+				if (row[j] != (rows.get_global_start_row()
+							+ i) * tot_num_cols + rows.get_global_start_col() + j)
+					printf("%ld, %ld: %ld\n", rows.get_global_start_row() + i,
+							rows.get_global_start_col() + j, row[j]);
+				assert(row[j] == (rows.get_global_start_row()
+							+ i) * tot_num_cols + rows.get_global_start_col() + j);
+			}
+		}
 	}
-	accessor->wait4all();
-	// TODO we have to destroy the accessors first before we can destroy
-	// the matrices and vectors.
-	accessor = NULL;
-	printf("passed inner product test\n");
+	else {
+		const detail::local_col_matrix_store &cols
+			= dynamic_cast<const detail::local_col_matrix_store &>(portion);
+		for (size_t i = 0; i < cols.get_num_cols(); i++) {
+			const long *col = (const long *) cols.get_col(i);
+			for (size_t j = 0; j < cols.get_num_rows(); j++)
+				assert(col[j] == (cols.get_global_start_row()
+							+ j) * tot_num_cols + cols.get_global_start_col() + i);
+		}
+	}
+}
+
+void verify_matrix(detail::EM_matrix_store::ptr store)
+{
+	std::pair<size_t, size_t> portion_size = store->get_portion_size();
+	if (store->is_wide()) {
+		for (size_t off = 0; off < store->get_num_cols();
+				off += portion_size.second) {
+			size_t num_cols = std::min(portion_size.second,
+					store->get_num_cols() - off);
+			detail::local_matrix_store::ptr portion = store->get_portion(
+					0, off, store->get_num_rows(), num_cols);
+			verify_portion(*portion, store->get_num_cols());
+		}
+	}
+	else {
+		for (size_t off = 0; off < store->get_num_rows();
+				off += portion_size.first) {
+			size_t num_rows = std::min(portion_size.first,
+					store->get_num_rows() - off);
+			detail::local_matrix_store::ptr portion = store->get_portion(
+					off, 0, num_rows, store->get_num_cols());
+			verify_portion(*portion, store->get_num_cols());
+		}
+	}
+}
+
+void test_set_data()
+{
+	detail::EM_matrix_store::ptr mat;
+
+	printf("test setdata a row tall matrix\n");
+	mat = detail::EM_matrix_store::create(9999999, 10, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	verify_matrix(mat);
+
+	printf("test setdata a column tall matrix\n");
+	mat = detail::EM_matrix_store::create(9999999, 10, matrix_layout_t::L_COL,
+			get_scalar_type<long>());
+	mat->set_data(set_col_operate(mat->get_num_cols()));
+	verify_matrix(mat);
+
+	printf("test setdata a row wide matrix\n");
+	mat = detail::EM_matrix_store::create(10, 9999999, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	verify_matrix(mat);
+
+	printf("test setdata a column wide matrix\n");
+	mat = detail::EM_matrix_store::create(10, 9999999, matrix_layout_t::L_COL,
+			get_scalar_type<long>());
+	mat->set_data(set_col_operate(mat->get_num_cols()));
+	verify_matrix(mat);
+}
+
+void test_get_portion()
+{
+	// Test getting unaligned portions.
+}
+
+void test_get_row_col()
+{
+	printf("accessing a row/column\n");
+	detail::EM_matrix_store::ptr mat;
+	off_t idx = 1;
+
+	mat = detail::EM_matrix_store::create(9999999, 10, matrix_layout_t::L_COL,
+			get_scalar_type<long>());
+	mat->set_data(set_col_operate(mat->get_num_cols()));
+	detail::smp_vec_store::const_ptr col = detail::smp_vec_store::cast(
+			mat->get_col_vec(idx));
+	assert(col->get_length() == mat->get_num_rows());
+	assert(col->get_type() == mat->get_type());
+	for (size_t i = 0; i < col->get_length(); i++)
+		assert(col->get<long>(i) == i * mat->get_num_cols() + idx);
+
+	mat = detail::EM_matrix_store::create(10, 9999999, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	detail::smp_vec_store::const_ptr row = detail::smp_vec_store::cast(
+			mat->get_row_vec(idx));
+	assert(row->get_length() == mat->get_num_cols());
+	for (size_t i = 0; i < row->get_length(); i++)
+		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
+
+	mat = detail::EM_matrix_store::create(9999, 10, matrix_layout_t::L_ROW,
+			get_scalar_type<long>());
+	mat->set_data(set_row_operate(mat->get_num_cols()));
+	row = detail::smp_vec_store::cast(mat->get_row_vec(idx));
+	assert(row->get_length() == mat->get_num_cols());
+	for (size_t i = 0; i < row->get_length(); i++)
+		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
 }
 
 int main(int argc, char *argv[])
@@ -129,8 +170,9 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_fetch_set();
-	test_inner_prod();
+	test_get_row_col();
+	test_set_data();
+	test_get_portion();
 
 	destroy_flash_matrix();
 }

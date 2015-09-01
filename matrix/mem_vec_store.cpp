@@ -64,6 +64,7 @@ smp_vec_store::smp_vec_store(const detail::raw_data_array &data,
 		const scalar_type &type): mem_vec_store(
 			data.get_num_bytes() / type.get_size(), type)
 {
+	assert(data.get_num_bytes() % type.get_size() == 0);
 	this->data = data;
 	this->arr = this->data.get_raw();
 }
@@ -214,8 +215,10 @@ bool smp_vec_store::expose_sub_vec(off_t start, size_t length)
 vec_store::ptr smp_vec_store::deep_copy() const
 {
 	assert(get_raw_arr() == data.get_raw());
-	detail::raw_data_array data = this->data.deep_copy();
-	return smp_vec_store::create(data, get_type());
+	detail::raw_data_array copy = this->data.deep_copy();
+	smp_vec_store::ptr ret = smp_vec_store::create(copy, get_type());
+	ret->resize(this->get_length());
+	return ret;
 }
 
 vec_store::ptr smp_vec_store::sort_with_index()
@@ -238,6 +241,23 @@ void smp_vec_store::set(const std::vector<const char *> &locs)
 {
 	assert(locs.size() <= get_length());
 	get_type().get_sg().gather(locs, arr);
+}
+
+bool smp_vec_store::set_portion(std::shared_ptr<const local_vec_store> store,
+		off_t loc)
+{
+	if (store->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The input store has a different type";
+		return false;
+	}
+	if (loc + store->get_length() > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "out of boundary";
+		return false;
+	}
+	size_t entry_size = get_type().get_size();
+	memcpy(arr + loc * entry_size, store->get_raw_arr(),
+			store->get_length() * entry_size);
+	return true;
 }
 
 local_vec_store::ptr smp_vec_store::get_portion(off_t loc, size_t size)

@@ -31,7 +31,7 @@ namespace detail
 
 one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout,
-		int num_nodes): virtual_matrix_store(nrow, ncol, val->get_type())
+		int num_nodes): virtual_matrix_store(nrow, ncol, true, val->get_type())
 {
 	if (num_nodes > 0)
 		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes));
@@ -41,11 +41,13 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 
 	size_t buf_size;
 	if (is_wide()) {
-		size_t part_num_cols = std::min(CHUNK_SIZE, get_num_cols());
+		size_t part_num_cols = std::min(mem_matrix_store::CHUNK_SIZE,
+				get_num_cols());
 		buf_size = get_num_rows() * part_num_cols * get_entry_size();
 	}
 	else {
-		size_t part_num_rows = std::min(CHUNK_SIZE, get_num_rows());
+		size_t part_num_rows = std::min(mem_matrix_store::CHUNK_SIZE,
+				get_num_rows());
 		buf_size = get_num_cols() * part_num_rows * get_entry_size();
 	}
 	const set_operate &set = get_type().get_set_const(*val);
@@ -63,14 +65,9 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 	}
 }
 
-matrix_store::ptr one_val_matrix_store::materialize() const
+matrix_store::const_ptr one_val_matrix_store::materialize() const
 {
-	detail::matrix_store::ptr store = detail::mem_matrix_store::create(
-			get_num_rows(), get_num_cols(), store_layout(), get_type(),
-			get_num_nodes());
-	const set_operate &op = get_type().get_set_const(*val);
-	store->set_data(op);
-	return store;
+	return matrix_store::ptr(new one_val_matrix_store(*this));
 }
 
 vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
@@ -144,14 +141,16 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(size_t id) const
 	size_t num_cols;
 	if (is_wide()) {
 		start_row = 0;
-		start_col = CHUNK_SIZE * id;
+		start_col = mem_matrix_store::CHUNK_SIZE * id;
 		num_rows = get_num_rows();
-		num_cols = std::min(CHUNK_SIZE, get_num_cols() - start_col);
+		num_cols = std::min(mem_matrix_store::CHUNK_SIZE,
+				get_num_cols() - start_col);
 	}
 	else {
-		start_row = CHUNK_SIZE * id;
+		start_row = mem_matrix_store::CHUNK_SIZE * id;
 		start_col = 0;
-		num_rows = std::min(CHUNK_SIZE, get_num_rows() - start_row);
+		num_rows = std::min(mem_matrix_store::CHUNK_SIZE,
+				get_num_rows() - start_row);
 		num_cols = get_num_cols();
 	}
 	return get_portion(start_row, start_col, num_rows, num_cols);
@@ -168,6 +167,16 @@ matrix_store::const_ptr one_val_matrix_store::transpose() const
 		assert(0);
 	return matrix_store::const_ptr(new one_val_matrix_store(val,
 				get_num_cols(), get_num_rows(), new_layout, get_num_nodes()));
+}
+
+std::pair<size_t, size_t> one_val_matrix_store::get_portion_size() const
+{
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_num_rows(),
+				mem_matrix_store::CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(mem_matrix_store::CHUNK_SIZE,
+				get_num_cols());
 }
 
 }

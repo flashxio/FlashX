@@ -22,10 +22,10 @@ CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLA
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
-all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen
+all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
+	el2al al22d al2crs test-sort test-eigen test-dgemm
 
-trilinos: BlockDavidsonTpetra test-tpetra_multiply
+trilinos: test-anasazi_eigen test-tpetra_multiply
 
 mkl: test-mkl_multiply test-mkl_dgemm
 
@@ -38,11 +38,8 @@ test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
 
-test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
-	$(CXX) -o test-mem_matrix test-mem_matrix.o $(LDFLAGS)
-
-test-EM_matrix: test-EM_matrix.o ../libFMatrix.a
-	$(CXX) -o test-EM_matrix test-EM_matrix.o $(LDFLAGS)
+test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
+	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
 
 el2al: el2al.o ../libFMatrix.a
 	$(CXX) -o el2al el2al.o $(LDFLAGS)
@@ -62,8 +59,8 @@ LDTRILINOS = -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuc
 test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
 	$(CXX) -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
 
-BlockDavidsonTpetra: BlockDavidsonTpetra.o
-	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(LDTRILINOS) $(LDFLAGS)
+test-anasazi_eigen: test-anasazi_eigen.o
+	$(CXX) test-anasazi_eigen.o -o test-anasazi_eigen $(LDTRILINOS) $(LDFLAGS)
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
@@ -71,13 +68,25 @@ test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 test-mkl_multiply: test-mkl_multiply.o
 	$(CXX) -o test-mkl_multiply test-mkl_multiply.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp
 
-test-mkl_dgemm.o: test-mkl_dgemm.cpp
-	$(CXX) -O3 -c test-mkl_dgemm.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
+test-mkl_dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -o test-mkl_dgemm.o -I/home/zhengda/intel/mkl/include/ -I. -fopenmp -DUSE_MKL
 
 test-mkl_dgemm: test-mkl_dgemm.o
 	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
 
-TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
+test-dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -I. -fopenmp
+
+test-dgemm: test-dgemm.o
+	$(CXX) -o test-dgemm test-dgemm.o -lcblas -lm -fopenmp -lm
+
+test-oblas_dgemm.o: test-dgemm.cpp
+	$(CXX) -O3 -c test-dgemm.cpp -o test-oblas_dgemm.o -I. -I/home/zhengda/local/include -fopenmp
+
+test-oblas_dgemm: test-oblas_dgemm.o
+	$(CXX) -o test-oblas_dgemm test-oblas_dgemm.o -lopenblas -lm -fopenmp -lm
+
+TRILINOS_LDFLAGS := -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi -lanasaziepetra -lepetra
 CXXFLAGS += -I../eigensolver
 
 test-eigen: test-eigen.o ../libFMatrix.a ../eigensolver/libeigen.a
@@ -89,9 +98,8 @@ clean:
 	rm -f *~
 	rm -f test-fg_SpMV
 	rm -f test-2d_multiply
-	rm -f test-mem_matrix
+	rm -f test-dense_matrix
 	rm -f test-mem_vector
-	rm -f test-EM_matrix
 	rm -f el2al
 	rm -f al22d
 	rm -f al2crs

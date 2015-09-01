@@ -32,6 +32,7 @@
 #include "thread.h"
 #include "io_request.h"
 #include "comm_exception.h"
+#include "safs_header.h"
 
 namespace safs
 {
@@ -151,6 +152,7 @@ class file_io_factory;
  */
 class io_interface
 {
+	safs_header header;
 	thread *curr;		// the thread where the IO instance runs.
 
 	// This is an index for locating this IO object in a global table.
@@ -161,7 +163,8 @@ class io_interface
 	std::shared_ptr<file_io_factory> io_factory;
 
 protected:
-	io_interface(thread *t) {
+	io_interface(thread *t, const safs_header &header) {
+		this->header = header;
 		this->curr = t;
 		this->io_idx = io_counter.inc(1) - 1;
 		max_num_pending_ios = params.get_max_num_pending_ios();
@@ -171,6 +174,17 @@ public:
 	typedef std::shared_ptr<io_interface> ptr;
 
 	virtual ~io_interface();
+
+	const safs_header &get_header() const {
+		return header;
+	}
+
+	int get_block_size() const {
+		if (header.is_valid())
+			return header.get_block_size();
+		else
+			return params.get_RAID_block_size();
+	}
 
 	/*
 	 * This stores the I/O factory that creates the I/O instance.
@@ -382,6 +396,7 @@ public:
  */
 class file_io_factory
 {
+	safs_header header;
 	comp_io_sched_creator::ptr creator;
 	// The name of the file.
 	const std::string name;
@@ -401,10 +416,13 @@ class file_io_factory
 public:
 	typedef std::shared_ptr<file_io_factory> shared_ptr;
 
-	file_io_factory(const std::string _name): name(_name) {
-	}
+	file_io_factory(const std::string _name);
 
 	virtual ~file_io_factory() {
+	}
+
+	const safs_header &get_header() const {
+		return header;
 	}
 
 	/**
@@ -503,6 +521,11 @@ const RAID_config &get_sys_RAID_conf();
  * This method print the I/O statistic information. It's used for debugging.
  */
 void print_io_thread_stat();
+
+/**
+ * This function prints the summary info on I/O statistics in the system.
+ */
+void print_io_summary();
 
 /**
  * The users can set the weight of a file. The file weight is used by

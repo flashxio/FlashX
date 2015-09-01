@@ -19,7 +19,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#if 0
 
 #include <memory>
 #include <boost/format.hpp>
@@ -27,189 +26,139 @@
 #include "log.h"
 
 #include "bulk_operate.h"
-#include "EM_vector.h"
-#include "dense_matrix.h"
+#include "matrix_store.h"
+#include "EM_object.h"
+#include "mem_worker_thread.h"
 
 namespace fm
 {
 
-class mem_dense_matrix;
-class mem_col_dense_matrix;
-class bulk_operate;
-
-struct submatrix_loc
+namespace detail
 {
-	size_t start_row;
-	size_t start_col;
-	size_t nrow;
-	size_t ncol;
-};
 
-class submatrix_compute
+class local_matrix_store;
+class mem_matrix_store;
+
+class EM_matrix_store: public matrix_store, public EM_object
 {
-	size_t start_row;
-	size_t start_col;
+	/*
+	 * The difference between the two identifiers are:
+	 * `mat_id' identifies the matrix data structure. Whenever the matrix
+	 * is shallow copied or transposed, `mat_id' changes.
+	 * `data_id' identifies the content in a matrix.
+	 * So when a matrix is transposed or shallow copied, it should share
+	 * the same data id.
+	 */
+	const size_t mat_id;
+	const size_t data_id;
+
+	matrix_layout_t layout;
+	file_holder::ptr holder;
+	io_set::ptr ios;
+
+	/*
+	 * These two fields are used for sub matrix.
+	 * They indicates the actual number of rows and columns stored on disks.
+	 * In contrast, get_num_rows() and get_num_cols() are #rows and columns
+	 * exposed to users.
+	 */
+	size_t orig_num_rows;
+	size_t orig_num_cols;
+
+	size_t get_orig_num_rows() const {
+		return orig_num_rows;
+	}
+
+	size_t get_orig_num_cols() const {
+		return orig_num_cols;
+	}
+
+	EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type);
+	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
+			size_t ncol, size_t orig_nrow, size_t orig_ncol,
+			matrix_layout_t layout, const scalar_type &type, size_t _data_id);
 public:
-	typedef std::shared_ptr<submatrix_compute> ptr;
-	submatrix_compute(size_t start_row, size_t start_col) {
-		this->start_row = start_row;
-		this->start_col = start_col;
+	static const size_t CHUNK_SIZE;
+
+	typedef std::shared_ptr<EM_matrix_store> ptr;
+	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
+
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type) {
+		return ptr(new EM_matrix_store(nrow, ncol, layout, type));
 	}
 
-	virtual void run(const mem_dense_matrix &subm) = 0;
-};
-
-class EM_dense_matrix_accessor
-{
-public:
-	typedef std::shared_ptr<EM_dense_matrix_accessor> ptr;
-
-	virtual ~EM_dense_matrix_accessor() {
+	static ptr cast(matrix_store::ptr store) {
+		return std::dynamic_pointer_cast<EM_matrix_store>(store);
 	}
 
-	virtual bool fetch_submatrix(size_t start_row, size_t nrow,
-			size_t start_col, size_t ncol,
-			submatrix_compute::ptr compute) = 0;
-	virtual bool set_submatrix(size_t start_row, size_t start_col,
-			std::shared_ptr<mem_dense_matrix> subm) = 0;
-	virtual int num_pending_reqs() const = 0;
-	virtual void wait4complete(int num) = 0;
-	virtual void wait4all() = 0;
-};
-
-class EM_dense_matrix: public dense_matrix
-{
-protected:
-	EM_dense_matrix(size_t nrow, size_t ncol,
-			const scalar_type &type): dense_matrix(nrow, ncol, type, false) {
-	}
-public:
-	typedef std::shared_ptr<EM_dense_matrix> ptr;
-
-	static ptr cast(dense_matrix::ptr m);
-	static bool exist(const std::string &name);
-
-	virtual ~EM_dense_matrix() {
+	static const_ptr cast(matrix_store::const_ptr store) {
+		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
 	}
 
-	virtual EM_dense_matrix_accessor::ptr create_accessor() = 0;
-};
-
-/*
- * In this matrix class, data is stored in columns.
- * This has to be a very narrow matrix, i.e., the column length must be much
- * larger than the row length.
- */
-class EM_col_dense_matrix: public EM_dense_matrix
-{
-	// The number of elements.
-	static const size_t COL_CHUNK_SIZE;
-
-	EM_vector::ptr data;
-
-	EM_col_dense_matrix(size_t nrow, size_t ncol,
-			const scalar_type &type): EM_dense_matrix(nrow, ncol, type) {
-		data = EM_vector::create(nrow * ncol, type.get_size());
+	size_t get_matrix_id() const {
+		return mat_id;
 	}
 
-	EM_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			const std::string &name): EM_dense_matrix(nrow, ncol, type) {
-		data = EM_vector::create(nrow * ncol, type.get_size(), name);
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		std::unordered_map<size_t, size_t> ret;
+		ret.insert(std::pair<size_t, size_t>(data_id,
+					get_num_rows() * get_num_cols()));
+		return ret;
+	}
+	virtual std::string get_name() const {
+		return (boost::format("EM_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
+			% get_num_cols()).str();
 	}
 
-	void split_matrix(std::vector<submatrix_loc> &locs) const;
-public:
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
-		return ptr(new EM_col_dense_matrix(nrow, ncol, type));
-	}
-
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
-			const std::string &name) {
-		return ptr(new EM_col_dense_matrix(nrow, ncol, type, name));
-	}
-
-	virtual bool write2file(const std::string&) const {
-		BOOST_LOG_TRIVIAL(error) << "can't write an EM matrix to a file";
-		return false;
-	}
+	virtual void reset_data();
+	virtual void set_data(const set_operate &op);
 
 	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_COL;
+		return layout;
 	}
 
-	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
-	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
-			const bulk_operate &op) const;
-	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
-	virtual dense_matrix::ptr apply(apply_margin margin,
-			const arr_apply_operate &op) const;
+	virtual matrix_store::const_ptr transpose() const;
 
-	virtual void set_data(const set_operate &op);
-	virtual void reset_data();
-	virtual bool copy_from(const dense_matrix &mat);
-	virtual dense_matrix::ptr shallow_copy() const;
-	virtual dense_matrix::ptr deep_copy() const;
-	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
-	virtual dense_matrix::ptr transpose() const;
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 
-	EM_dense_matrix_accessor::ptr create_accessor();
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols);
+
+	virtual std::pair<size_t, size_t> get_portion_size() const;
+	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			portion_compute::ptr compute) const;
+	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols,
+			portion_compute::ptr compute);
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col);
+
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
+
+	/*
+	 * Set this matrix persistent in SAFS, so that even if there isn't
+	 * a reference to the matrix, its data still stored in SAFS.
+	 */
+	bool set_persistent(const std::string &name) const {
+		return holder->set_persistent(name);
+	}
 };
 
-class EM_subvec_accessor;
-
-class EM_col_matrix_accessor: public EM_dense_matrix_accessor
-{
-	EM_col_dense_matrix &m;
-	EM_vector_accessor::ptr accessor;
-
-	// The buffers for requests issued by sub accessors.
-	std::vector<fetch_vec_request> fetch_reqs;
-	std::vector<set_vec_request> set_reqs;
-	std::vector<std::shared_ptr<EM_subvec_accessor> > sub_accessors;
-
-	int pending_reqs;
-
-	void flush();
-public:
-	typedef std::shared_ptr<EM_col_matrix_accessor> ptr;
-
-	EM_col_matrix_accessor(EM_col_dense_matrix &_m, EM_vector::ptr cols);
-	~EM_col_matrix_accessor();
-
-	bool fetch_submatrix(size_t start_row, size_t nrow,
-			size_t start_col, size_t ncol, submatrix_compute::ptr compute);
-	bool set_submatrix(size_t start_row, size_t start_col,
-			std::shared_ptr<mem_dense_matrix> subm);
-	/*
-	 * The number of pending I/O requests.
-	 */
-	int num_pending_reqs() const {
-		return pending_reqs;
-	}
-	/*
-	 * Notify the completion of an I/O request.
-	 */
-	void complete_req() {
-		pending_reqs--;
-	}
-	/*
-	 * Wait for the specified number of I/O requests to be completed.
-	 */
-	virtual void wait4complete(int num);
-	virtual void wait4all();
-};
-
-template<class LeftType, class RightType, class ResType>
-EM_dense_matrix::ptr multiply(EM_dense_matrix &m1, dense_matrix &m2)
-{
-	basic_ops_impl<LeftType, RightType, ResType> ops;
-	return EM_dense_matrix::cast(m1.inner_prod(m2, ops.get_multiply(), ops.get_add()));
 }
 
 }
-
-#endif
 
 #endif

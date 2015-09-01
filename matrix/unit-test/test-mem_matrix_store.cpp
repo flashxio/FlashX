@@ -250,27 +250,6 @@ void test_transpose()
 					== j * t_store->get_num_rows() + idxs[i]);
 }
 
-void test_conv2()
-{
-	printf("conv2 layout\n");
-	mem_matrix_store::ptr store = mem_col_matrix_store::create(
-				1000, 10, get_scalar_type<int>());
-	mem_matrix_store::ptr store1 = mem_matrix_store::cast(
-			store->conv2(matrix_layout_t::L_ROW));
-	assert(store->get_num_rows() == store1->get_num_rows());
-	assert(store->get_num_cols() == store1->get_num_cols());
-	for (size_t i = 0; i < store->get_num_rows(); i++)
-		for (size_t j = 0; j < store->get_num_cols(); j++)
-			assert(store->get<int>(i, j) == store1->get<int>(i, j));
-
-	store = mem_matrix_store::cast(store1->conv2(matrix_layout_t::L_COL));
-	assert(store->get_num_rows() == store1->get_num_rows());
-	assert(store->get_num_cols() == store1->get_num_cols());
-	for (size_t i = 0; i < store->get_num_rows(); i++)
-		for (size_t j = 0; j < store->get_num_cols(); j++)
-			assert(store->get<int>(i, j) == store1->get<int>(i, j));
-}
-
 int main()
 {
 	test_reset(1000);
@@ -281,5 +260,4 @@ int main()
 	test_sub_row_matrix();
 	test_io();
 	test_transpose();
-	test_conv2();
 }

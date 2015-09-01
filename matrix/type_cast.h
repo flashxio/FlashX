@@ -1,5 +1,5 @@
-#ifndef __MEM_DATA_FRAME_H__
-#define __MEM_DATA_FRAME_H__
+#ifndef __TYPE_CAST_H__
+#define __TYPE_CAST_H__
 
 /*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
@@ -20,37 +20,38 @@
  * limitations under the License.
  */
 
-#include "data_frame.h"
+#include <stdlib.h>
 
 namespace fm
 {
 
-class vector_vector;
+class scalar_type;
 
-class mem_data_frame: public data_frame
+class type_cast
 {
-	mem_data_frame(): data_frame() {
-	}
-
-	mem_data_frame(const std::vector<named_vec_t> &named_vecs): data_frame(
-			named_vecs) {
-	}
 public:
-	typedef std::shared_ptr<mem_data_frame> ptr;
-
-	static ptr create() {
-		return ptr(new mem_data_frame());
-	}
-
-	static ptr create(const std::vector<named_vec_t> &named_vecs) {
-		return ptr(new mem_data_frame(named_vecs));
-	}
-
-	virtual std::shared_ptr<vector_vector> groupby(const std::string &col_name,
-			gr_apply_operate<sub_data_frame> &op) const;
-	virtual bool sort(const std::string &col_name);
-	virtual bool is_sorted(const std::string &col_name) const;
+	static bool require_cast(const scalar_type &t1, const scalar_type &t2);
+	virtual void cast(size_t num, const void *in, void *out) const = 0;
 };
+
+template<class T1, class T2>
+class type_cast_impl: public type_cast
+{
+public:
+	virtual void cast(size_t num, const void *in, void *out) const {
+		const T1 *t_in = (const T1 *) in;
+		T2 *t_out = (T2 *) out;
+		for (size_t i = 0; i < num; i++)
+			t_out[i] = t_in[i];
+	}
+};
+
+template<class T1, class T2>
+const type_cast &get_type_cast()
+{
+	static type_cast_impl<T1, T2> cast;
+	return cast;
+}
 
 }
 

@@ -27,6 +27,7 @@
 #include "NUMA_mapper.h"
 #include "matrix_config.h"
 #include "bulk_operate.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -66,13 +67,22 @@ public:
 
 std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
 {
+	if (num_bytes == 0)
+		return std::shared_ptr<char>();
+
+	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
-		return std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
+		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
-	else
-		return std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
-				aligned_deleter());
+	else {
+		ret = local_mem_buffer::alloc(num_bytes);
+		if (ret == NULL)
+			ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
+					aligned_deleter());
+	}
+	assert(ret);
+	return ret;
 }
 
 class reset_data_task: public thread_task
@@ -97,7 +107,6 @@ class set_data_task: public thread_task
 	size_t to_size;
 	int node_id;
 	const set_range_operate &set_range;
-	size_t entry_size;
 	size_t range_size;
 public:
 	// `to_off', `to_size' and `range_size' are in the number of bytes.

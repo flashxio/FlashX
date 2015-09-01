@@ -45,6 +45,37 @@ stopifnot(fm.ncol(fm.mat) == 100)
 mat1 <- fm.conv.FM2R(fm.mat)
 stopifnot(sum(mat1 == mat) == fm.ncol(fm.mat) * fm.nrow(fm.mat))
 
+test.scale <- function(fm.mat, byrow)
+{
+	if (byrow)
+		fm.vec <- fm.seq.int(1, fm.nrow(fm.mat), 1)
+	else
+		fm.vec <- fm.seq.int(1, fm.ncol(fm.mat), 1)
+	fm.res <- fm.scale(fm.mat, fm.vec, byrow)
+
+	vec <- fm.conv.FM2R(fm.vec)
+	mat <- fm.conv.FM2R(fm.mat)
+	if (byrow)
+		res <- diag(vec) %*% mat
+	else
+		res <- mat %*% diag(vec)
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == nrow(res) * ncol(res))
+}
+
+print("scale matrix test")
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 100, 10, TRUE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 100, 10, FALSE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 10, 100, TRUE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+fm.mat <- fm.matrix(fm.seq.int(1,1000,1), 10, 100, FALSE)
+test.scale(fm.mat, TRUE)
+test.scale(fm.mat, FALSE)
+
 test.MV1 <- function(fm.mat, fm.vec, res)
 {
 	fm.res <- fm.multiply(fm.mat, fm.vec)
@@ -518,29 +549,6 @@ fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 rmat <- fm.conv.FM2R(fm.mat)
 stopifnot(fm.sum(fm.mat) == sum(rmat))
 stopifnot(fm.sum(fm.t(fm.mat)) == sum(rmat))
-
-norm2 <- function(x) sqrt(sum(x * x))
-print("norm2 on rows of a matrix")
-fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
-fm.res <- fm.norm.matrix(fm.mat, 1, type="2")
-res <- t(apply(fm.conv.FM2R(fm.mat), 1, function(x) x/norm2(x)))
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
-print("norm2 on columns of a matrix")
-fm.res <- fm.norm.matrix(fm.mat, 2, type="2")
-res <- apply(fm.conv.FM2R(fm.mat), 2, function(x) x/norm2(x))
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
-
-print("norm2 on rows of a tranposed matrix")
-fm.mat <- fm.t(fm.mat)
-fm.res <- fm.norm.matrix(fm.mat, 1, type="2")
-rmat <- fm.conv.FM2R(fm.mat)
-res <- t(apply(rmat, 1, function(x) x/norm2(x)))
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
-print("norm2 on columns of a tranposed matrix")
-fm.res <- fm.norm.matrix(fm.mat, 2, type="2")
-rmat <- fm.conv.FM2R(fm.mat)
-res <- apply(rmat, 2, function(x) x/norm2(x))
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
 
 # TODO test transpose a sparse matrix.
 

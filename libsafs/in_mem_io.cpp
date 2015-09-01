@@ -165,7 +165,10 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 		}
 		else {
 			assert(req.get_req_type() == io_request::BASIC_REQ);
-			memcpy(req.get_buf(), data.get() + req.get_offset(), req.get_size());
+			if (req.get_access_method() == READ)
+				memcpy(req.get_buf(), data.get() + req.get_offset(), req.get_size());
+			else
+				memcpy(data.get() + req.get_offset(), req.get_buf(), req.get_size());
 			io_request *reqs[1];
 			reqs[0] = &req;
 			if (this->have_callback())
@@ -177,7 +180,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 }
 
 in_mem_io::in_mem_io(std::shared_ptr<char> data, int file_id,
-		thread *t): io_interface(t), req_buf(get_node_id(), 1024)
+		thread *t): io_interface(t, safs_header()), req_buf(get_node_id(), 1024)
 {
 	this->data = data;
 	this->file_id = file_id;

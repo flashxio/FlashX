@@ -179,7 +179,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
-	params.print();
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
@@ -539,10 +538,10 @@ io_interface::ptr posix_io_factory::create_io(thread *t)
 	io_interface *io;
 	switch (access_option) {
 		case READ_ACCESS:
-			io = new buffered_io(global_partition, t);
+			io = new buffered_io(global_partition, t, get_header());
 			break;
 		case DIRECT_ACCESS:
-			io = new direct_io(global_partition, t);
+			io = new direct_io(global_partition, t, get_header());
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
@@ -568,7 +567,7 @@ io_interface::ptr aio_factory::create_io(thread *t)
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(),
-			t, O_RDWR);
+			t, get_header(), O_RDWR);
 	num_ios++;
 	return io_interface::ptr(io);
 }
@@ -620,7 +619,7 @@ io_interface::ptr remote_io_factory::create_io(thread *t)
 
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
-			get_msg_allocator(t->get_node_id()), &mapper, t);
+			get_msg_allocator(t->get_node_id()), &mapper, t, get_header());
 	return io_interface::ptr(io);
 }
 
@@ -755,6 +754,27 @@ void print_io_thread_stat()
 	}
 }
 
+void print_io_summary()
+{
+	size_t num_reads = 0;
+	size_t num_read_bytes = 0;
+	size_t num_writes = 0;
+	size_t num_write_bytes = 0;
+
+	sleep(1);
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
+		disk_io_thread::ptr t = global_data.read_threads[i];
+		if (t) {
+			num_reads += t->get_num_reads();
+			num_read_bytes += t->get_num_read_bytes();
+			num_writes += t->get_num_writes();
+			num_write_bytes += t->get_num_write_bytes();
+		}
+	}
+	printf("It reads %ld bytes (in %ld reqs) and writes %ld bytes (in %ld reqs)\n",
+			num_read_bytes, num_reads, num_write_bytes, num_writes);
+}
+
 ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
@@ -773,6 +793,15 @@ io_interface::~io_interface()
 	if (io_factory) {
 		io_factory->collect_stat(*this);
 		io_factory->destroy_io(*this);
+	}
+}
+
+file_io_factory::file_io_factory(const std::string _name): name(_name)
+{
+	// It's possible that SAFS hasn't been initialized.
+	if (global_data.raid_conf) {
+		safs_file f(*global_data.raid_conf, name);
+		header = f.get_header();
 	}
 }
 

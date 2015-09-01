@@ -47,10 +47,6 @@ class local_vec_store: public detail::mem_vec_store
 	off_t global_start;
 	int node_id;
 protected:
-	off_t get_local_start() const {
-		return global_start - orig_global_start;
-	}
-
 	void set_data(const char *const_data, char *data) {
 		this->data = data;
 		this->const_data = const_data;
@@ -66,6 +62,25 @@ public:
 		this->global_start = _global_start;
 		this->node_id = node_id;
 	}
+	local_vec_store(const char *const_data, char *data, off_t _global_start,
+			size_t length, size_t entry_size, const scalar_type &type,
+			int node_id): detail::mem_vec_store(length, entry_size,
+				type), orig_global_start(_global_start), orig_length(length) {
+		this->data = data;
+		this->const_data = const_data;
+		this->global_start = _global_start;
+		this->node_id = node_id;
+	}
+
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		assert(start + length <= orig_length);
+		global_start = orig_global_start + start;
+		return mem_vec_store::resize(length);
+	}
+	virtual void reset_expose() {
+		global_start = orig_global_start;
+		mem_vec_store::resize(orig_length);
+	}
 
 	int get_node_id() const {
 		return node_id;
@@ -73,6 +88,10 @@ public:
 
 	off_t get_global_start() const {
 		return global_start;
+	}
+
+	off_t get_local_start() const {
+		return global_start - orig_global_start;
 	}
 
 	typedef std::shared_ptr<local_vec_store> ptr;
@@ -111,7 +130,7 @@ public:
 	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
 			size_t nrow, size_t ncol, bool byrow) const;
 
-	local_vec_store::ptr get(std::vector<off_t> &idxs);
+	local_vec_store::ptr get(std::vector<off_t> &idxs) const;
 
 	const char *get(off_t idx) const {
 		return const_data + idx * get_entry_size();
@@ -120,6 +139,12 @@ public:
 	char *get(off_t idx) {
 		return data + idx * get_entry_size();
 	}
+
+	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
+	virtual local_vec_store::const_ptr get_portion(off_t loc,
+			size_t size) const;
+	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
+			off_t loc);
 
 	void set_raw(off_t idx, const char *val) {
 		assert(const_data == data);
@@ -141,16 +166,6 @@ public:
 	 * The following methods aren't needed by this class and its child classes.
 	 */
 
-	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
-			size_t size) {
-		assert(0);
-		return std::shared_ptr<local_vec_store>();
-	}
-	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
-			size_t size) const {
-		assert(0);
-		return std::shared_ptr<local_vec_store>();
-	}
 	virtual size_t get_portion_size() const {
 		assert(0);
 		return 0;
@@ -172,10 +187,12 @@ public:
 
 class local_ref_vec_store: public local_vec_store
 {
+	char *orig_data;
 public:
 	local_ref_vec_store(char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				data, global_start, length, type, node_id) {
+		this->orig_data = data;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -185,14 +202,25 @@ public:
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_ref_vec_store(*this));
 	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		char *new_data = orig_data + start * get_type().get_size();
+		set_data(new_data, new_data);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(orig_data, orig_data);
+		local_vec_store::reset_expose();
+	}
 };
 
 class local_cref_vec_store: public local_vec_store
 {
+	const char *orig_data;
 public:
 	local_cref_vec_store(const char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				NULL, global_start, length, type, node_id) {
+		this->orig_data = data;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -201,6 +229,15 @@ public:
 	}
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_cref_vec_store(*this));
+	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		const char *new_data = orig_data + start * get_type().get_size();
+		set_data(new_data, NULL);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(orig_data, NULL);
+		local_vec_store::reset_expose();
 	}
 };
 
@@ -222,6 +259,15 @@ public:
 	}
 	virtual detail::vec_store::const_ptr shallow_copy() const {
 		return detail::vec_store::const_ptr(new local_buf_vec_store(*this));
+	}
+	virtual bool expose_sub_vec(off_t start, size_t length) {
+		char *new_data = arr.get_raw() + start * get_type().get_size();
+		set_data(new_data, new_data);
+		return local_vec_store::expose_sub_vec(start, length);
+	}
+	virtual void reset_expose() {
+		set_data(arr.get_raw(), arr.get_raw());
+		local_vec_store::reset_expose();
 	}
 };
 

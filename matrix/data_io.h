@@ -47,7 +47,7 @@ public:
 };
 
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
-		const line_parser &parser);
+		const line_parser &parser, bool in_mem);
 
 }
 

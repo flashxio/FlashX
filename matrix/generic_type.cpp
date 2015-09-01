@@ -36,22 +36,169 @@ scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 }
 
 template<class T>
-rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+rand_gen::ptr scalar_type_impl<T>::create_randu_gen(const scalar_variable &min,
 		const scalar_variable &max) const
 {
 	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
 	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
-	return rand_gen::create<T>(t_min.get(), t_max.get());
+	return rand_gen::create_randu<T>(t_min.get(), t_max.get());
 }
 
 template<class T>
-rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+rand_gen::ptr scalar_type_impl<T>::create_randu_gen(const scalar_variable &min,
 		const scalar_variable &max, const scalar_variable &seed) const
 {
 	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
 	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
 	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
-	return rand_gen::create<T>(t_min.get(), t_max.get(), t_seed.get());
+	return rand_gen::create_randu<T>(t_min.get(), t_max.get(), t_seed.get());
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<char>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<char>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned short>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned int>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<unsigned long>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<bool>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<>
+rand_gen::ptr scalar_type_impl<bool>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	assert(0);
+	return rand_gen::ptr();
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var) const
+{
+	scalar_variable_impl<T> &t_mean = (scalar_variable_impl<T> &) mean;
+	scalar_variable_impl<T> &t_var = (scalar_variable_impl<T> &) var;
+	return rand_gen::create_randn<T>(t_mean.get(), t_var.get());
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_randn_gen(const scalar_variable &mean,
+		const scalar_variable &var, const scalar_variable &seed) const
+{
+	scalar_variable_impl<T> &t_mean = (scalar_variable_impl<T> &) mean;
+	scalar_variable_impl<T> &t_var = (scalar_variable_impl<T> &) var;
+	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
+	return rand_gen::create_randn<T>(t_mean.get(), t_var.get(), t_seed.get());
 }
 
 template<class T>
@@ -92,6 +239,37 @@ const agg_ops &scalar_type_impl<T>::get_agg_ops() const
 	return aops;
 }
 
+template<class T>
+const type_cast &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
+{
+	switch(type.get_type()) {
+		case P_CHAR:
+			return fm::get_type_cast<T, char>();
+		case P_SHORT:
+			return fm::get_type_cast<T, short>();
+		case P_INTEGER:
+			return fm::get_type_cast<T, int>();
+		case P_LONG:
+			return fm::get_type_cast<T, long>();
+		case P_FLOAT:
+			return fm::get_type_cast<T, float>();
+		case P_DOUBLE:
+			return fm::get_type_cast<T, double>();
+		case P_LDOUBLE:
+			return fm::get_type_cast<T, long double>();
+		case P_BOOL:
+			return fm::get_type_cast<T, bool>();
+		case P_USHORT:
+			return fm::get_type_cast<T, unsigned short>();
+		case P_UINT:
+			return fm::get_type_cast<T, unsigned int>();
+		case P_ULONG:
+			return fm::get_type_cast<T, unsigned long>();
+		default:
+			throw invalid_arg_exception("invalid prim type");
+	}
+}
+
 const scalar_type &get_scalar_type(prim_type type)
 {
 	switch(type) {
@@ -107,6 +285,8 @@ const scalar_type &get_scalar_type(prim_type type)
 			return get_scalar_type<float>();
 		case P_DOUBLE:
 			return get_scalar_type<double>();
+		case P_LDOUBLE:
+			return get_scalar_type<long double>();
 		case P_BOOL:
 			return get_scalar_type<bool>();
 		case P_USHORT:

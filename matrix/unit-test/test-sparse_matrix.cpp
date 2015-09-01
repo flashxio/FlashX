@@ -1,8 +1,10 @@
 #include <unordered_set>
 
+#include "in_mem_storage.h"
+
 #include "fm_utils.h"
 #include "sparse_matrix.h"
-#include "mem_data_frame.h"
+#include "data_frame.h"
 
 using namespace fm;
 
@@ -47,7 +49,7 @@ data_frame::ptr create_rand_el()
 		idx++;
 	}
 
-	mem_data_frame::ptr df = mem_data_frame::create();
+	data_frame::ptr df = data_frame::create();
 	df->add_vec("source", sources);
 	df->add_vec("dest", dests);
 	return df;
@@ -128,8 +130,7 @@ void test_multiply_block()
 
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::create(
-				detail::mem_vec_store::cast(df->get_vec(i)));
+		vector::ptr vec = vector::create(df->get_vec(i));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	// I artificially add an invalid out-edge for each vertex, so it's
@@ -139,7 +140,7 @@ void test_multiply_block()
 	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
-	mem_data_frame::ptr new_df = mem_data_frame::create();
+	data_frame::ptr new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(0), seq_vec);
 	new_df->add_vec(df->get_vec_name(1), rep_vec);
 	df->append(new_df);
@@ -205,8 +206,7 @@ void test_multiply_fg()
 	data_frame::ptr df = create_rand_el();
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		mem_vector::ptr vec = mem_vector::create(
-				detail::mem_vec_store::cast(df->get_vec(i)));
+		vector::ptr vec = vector::create(df->get_vec(i));
 		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	// I artificially add an invalid out-edge for each vertex, so it's
@@ -216,21 +216,18 @@ void test_multiply_fg()
 	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
-	mem_data_frame::ptr new_df = mem_data_frame::create();
+	data_frame::ptr new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(0), seq_vec);
 	new_df->add_vec(df->get_vec_name(1), rep_vec);
 	df->append(new_df);
 
 	// I artificially add an invalid in-edge for each vertex.
-	new_df = mem_data_frame::create();
+	new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(1), seq_vec);
 	new_df->add_vec(df->get_vec_name(0), rep_vec);
 	df->append(new_df);
 
-	std::pair<fg::vertex_index::ptr, fg::in_mem_graph::ptr> graph
-		= create_fg_mem_graph("test", df, true);
-	fg::FG_graph::ptr fg = fg::FG_graph::create(graph.second, graph.first,
-			"test", config_map::create());
+	fg::FG_graph::ptr fg = create_fg_graph("test", df, true);
 	test_spmv_fg(fg);
 	test_spmm_fg(fg);
 }

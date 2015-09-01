@@ -21,7 +21,9 @@
  */
 
 #include "virtual_matrix_store.h"
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
+#include "mem_matrix_store.h"
+#include "EM_object.h"
 
 namespace fm
 {
@@ -31,40 +33,51 @@ namespace detail
 
 class portion_mapply_op;
 
-class mapply_matrix_store: public virtual_matrix_store
+/*
+ * This class represents the result matrix of mapply operations.
+ * It partially materializes a portion of the matrix when the portion
+ * is needed. The underlying matrices that mapply runs on can be both
+ * stored in memory and on disks. Therefore, this matrix should also
+ * expose the EM object interface.
+ */
+class mapply_matrix_store: public virtual_matrix_store, public EM_object
 {
+	// This identifies the data in a matrix.
+	// So when a matrix is transposed, it should share the same data id.
+	const size_t data_id;
+
 	matrix_layout_t layout;
-	std::vector<mem_matrix_store::const_ptr> in_mats;
+	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 	// The materialized result matrix.
-	mem_matrix_store::const_ptr res;
+	matrix_store::const_ptr res;
 public:
 	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
 	mapply_matrix_store(
-			const std::vector<mem_matrix_store::const_ptr> &in_mats,
+			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op, matrix_layout_t layout,
-			size_t nrow, size_t ncol);
+			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
 
 	virtual void materialize_self() const;
 
-	virtual matrix_store::ptr materialize() const;
-
-	virtual const char *get(size_t row, size_t col) const;
+	virtual matrix_store::const_ptr materialize() const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
+	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		return in_mats.front()->get_portion_size();
-	}
+	virtual async_cres_t get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
+	virtual std::pair<size_t, size_t> get_portion_size() const;
 	virtual int get_num_nodes() const {
 		return in_mats.front()->get_num_nodes();
 	}
@@ -74,6 +87,11 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return layout;
 	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+
+	virtual std::string get_name() const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 };
 
 }

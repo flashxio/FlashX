@@ -17,11 +17,12 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include <cblas.h>
 
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
-#include "mem_vector.h"
 #include "dense_matrix.h"
 #include "local_vec_store.h"
 
@@ -532,29 +533,72 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 
 }
 
-void aggregate(const local_matrix_store &store, const bulk_operate &op, char *res)
+void aggregate(const local_matrix_store &store, const bulk_operate &op,
+		agg_margin margin, local_vec_store &res)
 {
 	size_t output_size = op.output_entry_size();
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	// If the store has data stored contiguously.
-	if (store.get_raw_arr())
-		op.runA(ncol * nrow, store.get_raw_arr(), res);
-	// For row-major matrix.
-	else if (store.store_layout() == matrix_layout_t::L_ROW) {
-		const local_row_matrix_store &row_store = (const local_row_matrix_store &) store;
-		std::unique_ptr<char []> raw_arr(new char[output_size * nrow]);
+	if (margin == agg_margin::BOTH) {
+		assert(res.get_length() == 1);
+		// If the store has data stored contiguously.
+		if (store.get_raw_arr())
+			op.runA(ncol * nrow, store.get_raw_arr(), res.get_raw_arr());
+		// For row-major matrix.
+		else if (store.store_layout() == matrix_layout_t::L_ROW) {
+			const local_row_matrix_store &row_store
+				= static_cast<const local_row_matrix_store &>(store);
+			std::unique_ptr<char []> raw_arr(new char[output_size * nrow]);
+			for (size_t i = 0; i < nrow; i++)
+				op.runA(ncol, row_store.get_row(i),
+						raw_arr.get() + output_size * i);
+			op.runA(nrow, raw_arr.get(), res.get_raw_arr());
+		}
+		else {
+			assert(store.store_layout() == matrix_layout_t::L_COL);
+			const local_col_matrix_store &col_store
+				= static_cast<const local_col_matrix_store &>(store);
+			std::unique_ptr<char []> raw_arr(new char[output_size * ncol]);
+			for (size_t i = 0; i < ncol; i++)
+				op.runA(nrow, col_store.get_col(i),
+						raw_arr.get() + output_size * i);
+			op.runA(ncol, raw_arr.get(), res.get_raw_arr());
+		}
+	}
+	else if (margin == agg_margin::MAR_ROW) {
+		local_matrix_store::const_ptr buf_mat;
+		const local_row_matrix_store *row_store;
+		if (store.store_layout() == matrix_layout_t::L_COL) {
+			buf_mat = store.conv2(matrix_layout_t::L_ROW);
+			assert(buf_mat);
+			row_store = static_cast<const local_row_matrix_store *>(
+					buf_mat.get());
+		}
+		else
+			row_store = static_cast<const local_row_matrix_store *>(&store);
+		assert(res.get_length() == store.get_num_rows());
 		for (size_t i = 0; i < nrow; i++)
-			op.runA(ncol, row_store.get_row(i), raw_arr.get() + output_size * i);
-		op.runA(nrow, raw_arr.get(), res);
+			op.runA(ncol, row_store->get_row(i), res.get(i));
+	}
+	else if (margin == agg_margin::MAR_COL) {
+		local_matrix_store::const_ptr buf_mat;
+		const local_col_matrix_store *col_store;
+		if (store.store_layout() == matrix_layout_t::L_ROW) {
+			buf_mat = store.conv2(matrix_layout_t::L_COL);
+			col_store = static_cast<const local_col_matrix_store *>(
+					buf_mat.get());
+		}
+		else
+			col_store = static_cast<const local_col_matrix_store *>(&store);
+		assert(res.get_length() == store.get_num_cols());
+		for (size_t i = 0; i < ncol; i++)
+			op.runA(nrow, col_store->get_col(i), res.get(i));
 	}
 	else {
-		assert(store.store_layout() == matrix_layout_t::L_COL);
-		const local_col_matrix_store &col_store = (const local_col_matrix_store &) store;
-		std::unique_ptr<char []> raw_arr(new char[output_size * ncol]);
-		for (size_t i = 0; i < ncol; i++)
-			op.runA(nrow, col_store.get_col(i), raw_arr.get() + output_size * i);
-		op.runA(ncol, raw_arr.get(), res);
+		// This shouldn't happen.
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"aggregate on an unknown margin %1%") % margin;
+		assert(0);
 	}
 }
 
@@ -675,23 +719,38 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store &res)
 {
 	if (m1.store_layout() == matrix_layout_t::L_ROW) {
-		assert(m2.store_layout() == matrix_layout_t::L_COL);
+		local_matrix_store::ptr new_m2;
+		const local_matrix_store *col_m2 = &m2;
+		if (m2.store_layout() == matrix_layout_t::L_ROW) {
+			new_m2 = m2.conv2(matrix_layout_t::L_COL);
+			col_m2 = new_m2.get();
+		}
+		assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 		assert(res.store_layout() == matrix_layout_t::L_ROW);
 		if (m1.is_wide())
 			inner_prod_row_wide(static_cast<const local_row_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 		else
 			inner_prod_row_tall(static_cast<const local_row_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 	}
 	else {
 		if (m1.is_wide()) {
-			assert(m2.store_layout() == matrix_layout_t::L_COL);
+			local_matrix_store::ptr new_m2;
+			const local_matrix_store *col_m2 = &m2;
+			// TODO we can handle the case of left wide col-major matrix and
+			// right tall row-major matrix more efficiently, so we don't need
+			// to convert the right matrix.
+			if (m2.store_layout() == matrix_layout_t::L_ROW) {
+				new_m2 = m2.conv2(matrix_layout_t::L_COL);
+				col_m2 = new_m2.get();
+			}
+			assert(col_m2->store_layout() == matrix_layout_t::L_COL);
 			assert(res.store_layout() == matrix_layout_t::L_ROW);
 			inner_prod_col_wide(static_cast<const local_col_matrix_store &>(m1),
-					static_cast<const local_col_matrix_store &>(m2), left_op,
+					static_cast<const local_col_matrix_store &>(*col_m2), left_op,
 					right_op, static_cast<local_row_matrix_store &>(res));
 		}
 		else {
@@ -757,7 +816,7 @@ double_multiply_operate dm_op;
 
 }
 
-void scale_cols(const local_matrix_store &store, const mem_vector &vals,
+void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
@@ -787,7 +846,7 @@ void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 	}
 }
 
-void scale_rows(const local_matrix_store &store, const mem_vector &vals,
+void scale_rows(const local_matrix_store &store, const local_vec_store &vals,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
@@ -815,6 +874,152 @@ void scale_rows(const local_matrix_store &store, const mem_vector &vals,
 			op->runAA(nrow, col_store.get_col(i), vals.get_raw_arr(),
 					col_res.get_col(i));
 	}
+}
+
+local_matrix_store::const_ptr local_row_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) <<
+			"get row portion from local matrix: out of boundary";
+		return local_matrix_store::const_ptr();
+	}
+
+	local_row_matrix_store::const_ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		std::vector<const char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(local_start_row + i)
+				+ local_start_col * get_entry_size();
+		ret = local_row_matrix_store::const_ptr(new local_cref_row_matrix_store(
+					orig_data_ref, rows, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		assert(local_start_col == 0 && num_cols == get_num_cols());
+		off_t start_off = get_num_cols() * local_start_row * get_entry_size();
+		ret = local_row_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::const_ptr local_col_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get col portion from local matrix: out of boundary";
+		return local_matrix_store::const_ptr();
+	}
+
+	local_col_matrix_store::const_ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		assert(local_start_row == 0 && num_rows == get_num_rows());
+		off_t start_off = get_num_rows() * local_start_col * get_entry_size();
+		ret = local_col_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		std::vector<const char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(local_start_col + i)
+				+ local_start_row * get_entry_size();
+		ret = local_col_matrix_store::const_ptr(new local_cref_col_matrix_store(
+					orig_data_ref, cols, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::ptr local_row_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (read_only())
+		return local_matrix_store::ptr();
+
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get const row portion from local matrix: out of boundary";
+		return local_matrix_store::ptr();
+	}
+
+	local_row_matrix_store::ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		std::vector<char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(local_start_row + i)
+				+ local_start_col * get_entry_size();
+		ret = local_row_matrix_store::ptr(new local_ref_row_matrix_store(
+					orig_data_ref, rows, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		assert(local_start_col == 0 && num_cols == get_num_cols());
+		off_t start_off = get_num_cols() * local_start_row * get_entry_size();
+		ret = local_row_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
+}
+
+local_matrix_store::ptr local_col_matrix_store::get_portion(
+		size_t local_start_row, size_t local_start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (read_only())
+		return local_matrix_store::ptr();
+
+	if (local_start_row + num_rows > get_num_rows()
+			|| local_start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get const col portion from local matrix: out of boundary";
+		return local_matrix_store::ptr();
+	}
+
+	local_col_matrix_store::ptr ret;
+	size_t global_start_row = get_global_start_row() + local_start_row;
+	size_t global_start_col = get_global_start_col() + local_start_col;
+	if (is_wide()) {
+		assert(local_start_row == 0 && num_rows == get_num_rows());
+		off_t start_off = get_num_rows() * local_start_col * get_entry_size();
+		ret = local_col_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+					orig_data_ref, get_raw_arr() + start_off,
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	else {
+		std::vector<char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(local_start_col + i)
+				+ local_start_row * get_entry_size();
+		ret = local_col_matrix_store::ptr(new local_ref_col_matrix_store(
+					orig_data_ref, cols, global_start_row, global_start_col,
+					num_rows, num_cols, get_type(), get_node_id()));
+	}
+	assert(ret->hold_orig_data());
+	return ret;
 }
 
 }

@@ -204,7 +204,7 @@ void comm_verify_file(int argc, char *argv[])
 void comm_load_file2fs(int argc, char *argv[])
 {
 	if (argc < 2) {
-		fprintf(stderr, "load file_name ext_file\n");
+		fprintf(stderr, "load file_name ext_file [block_size]\n");
 		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
 		fprintf(stderr, "ext_file is the file in the external file system\n");
 		exit(-1);
@@ -212,6 +212,13 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
+	size_t block_size = params.get_RAID_block_size();
+	if (argc >= 3) {
+		block_size = str2size(argv[2]);
+		// block_size is the number of pages.
+		block_size /= PAGE_SIZE;
+	}
+	printf("RAID block size is %ld pages\n", block_size);
 
 	configs->add_options("writable=1");
 	init_io_system(configs, false);
@@ -221,7 +228,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	// If the file in SAFS doesn't exist, create a new one.
 	if (!file.exist()) {
 		safs_file file(get_sys_RAID_conf(), int_file_name);
-		file.create_file(source->get_size());
+		file.create_file(source->get_size(), block_size);
 		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
 				file.get_size());
 	}
@@ -419,6 +426,101 @@ void comm_delete_file(int argc, char *argv[])
 	file.delete_file();
 }
 
+void comm_export(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "export file_name ext_file\n");
+		return;
+	}
+
+	std::string file_name = argv[0];
+	std::string ext_file = argv[1];
+
+	FILE *f = fopen(ext_file.c_str(), "w");
+	if (f == NULL) {
+		fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(),
+				strerror(errno));
+		return;
+	}
+
+	init_io_system(configs, false);
+	file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
+			REMOTE_ACCESS);
+	io_interface::ptr io = create_io(io_factory, thread::get_curr_thread());
+	size_t phy_file_size = io_factory->get_file_size();
+	size_t file_size = io_factory->get_header().get_size();
+	assert(file_size <= phy_file_size);
+	if (file_size == 0)
+		file_size = phy_file_size;
+	
+	size_t buf_size = 16 * 1024 * 1024;
+	char *buf = (char *) valloc(buf_size);
+	assert(buf);
+	size_t off = 0;
+	while (off < file_size) {
+		data_loc_t loc(io->get_file_id(), off);
+		size_t read_size = buf_size;
+		size_t write_size = buf_size;
+		if (off + buf_size > file_size) {
+			// The physical storage size of SAFS is always rounded to
+			// the page size, and we access the SAFS file with direct I/O,
+			// so we need to round up the read size.
+			read_size = ROUNDUP(file_size - off, PAGE_SIZE);
+			write_size = file_size - off;
+		}
+		io_request req(buf, loc, read_size, READ);
+		io->access(&req, 1);
+		io->wait4complete(1);
+
+		size_t ret = fwrite(buf, write_size, 1, f);
+		assert(ret == 1);
+		off += read_size;
+	}
+
+	fclose(f);
+}
+
+void comm_show_info(int argc, char *argv[])
+{
+	if (argc < 1) {
+		fprintf(stderr, "info file_name\n");
+		return;
+	}
+
+	init_io_system(configs, false);
+	std::string file_name = argv[0];
+
+	file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
+			REMOTE_ACCESS);
+	safs_header header = io_factory->get_header();
+	printf("file: %s\n", file_name.c_str());
+	printf("RAID block size: %d\n", header.get_block_size() * PAGE_SIZE);
+	printf("RAID mapping option: %d\n", header.get_mapping_option());
+	printf("file size: %ld\n", header.get_size());
+}
+
+void comm_rename(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "rename file_name new_name\n");
+		return;
+	}
+
+	init_io_system(configs, false);
+	std::string file_name = argv[0];
+	std::string new_name = argv[1];
+	safs_file f(get_sys_RAID_conf(), file_name);
+	if (!f.exist()) {
+		fprintf(stderr, "%s doesn't exist in SAFS\n", file_name.c_str());
+		return;
+	}
+
+	bool ret = f.rename(new_name);
+	if (!ret)
+		fprintf(stderr, "can't rename %s to %s\n", file_name.c_str(),
+				new_name.c_str());
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -442,6 +544,12 @@ struct command commands[] = {
 		"load_part file_name ext_file part_id: load part of the file to SAFS"},
 	{"verify", comm_verify_file,
 		"verify file_name [ext_file]: verify data in the file"},
+	{"export", comm_export,
+		"export file_name ext_file: export an SAFS file to Linux filesystem"},
+	{"info", comm_show_info,
+		"info file_name: show the information of an SAFS file"},
+	{"rename", comm_rename,
+		"rename file_name new_name: rename an SAFS file"},
 };
 
 int get_num_commands()

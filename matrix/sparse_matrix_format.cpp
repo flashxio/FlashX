@@ -26,6 +26,7 @@
 
 #include "sparse_matrix_format.h"
 #include "matrix_config.h"
+#include "local_vec_store.h"
 
 namespace fm
 {
@@ -59,6 +60,16 @@ void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 	assert(((size_t) rparts_size) + part_size
 			<= std::numeric_limits<uint32_t>::max());
 	rparts_size += part_size;
+}
+
+void SpM_2d_index::verify() const
+{
+	header.verify();
+	off_t off = offs[0];
+	for (size_t i = 1; i < get_num_entries(); i++) {
+		assert(off < offs[i]);
+		off = offs[i];
+	}
 }
 
 SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,
@@ -104,6 +115,37 @@ void SpM_2d_index::dump(const std::string &file) const
 		return;
 	}
 	fclose(f);
+}
+
+void SpM_2d_index::safs_dump(const std::string &file) const
+{
+	size_t size = get_size(get_num_entries());
+	safs::safs_file f(safs::get_sys_RAID_conf(), file);
+	bool ret = f.create_file(size);
+	assert(ret);
+
+	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
+			file, safs::REMOTE_ACCESS);
+	if (io_fac == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io factory for %1%") % file;
+		return;
+	}
+
+	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
+	if (io == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io instance for %1%") % file;
+		return;
+	}
+
+	local_buf_vec_store buf(0, ROUNDUP(size, PAGE_SIZE),
+			get_scalar_type<char>(), -1);
+	memcpy(buf.get_raw_arr(), this, size);
+	safs::data_loc_t loc(io_fac->get_file_id(), 0);
+	safs::io_request req(buf.get_raw_arr(), loc, buf.get_length(), WRITE);
+	io->access(&req, 1);
+	io->wait4complete(1);
 }
 
 off_t SpM_2d_index::get_block_row_off(size_t idx) const
@@ -172,6 +214,7 @@ void SpM_2d_storage::verify() const
 	matrix_header *header = (matrix_header *) data.get();
 	header->verify();
 	block_2d_size block_size = index->get_header().get_2d_block_size();
+#pragma omp parallel for
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
 		block_row_iterator brow_it = get_block_row_it(i);
 		long prev_block_col_idx = -1;
@@ -185,6 +228,38 @@ void SpM_2d_storage::verify() const
 			num_blocks++;
 		}
 	}
+}
+
+SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
+		SpM_2d_index::ptr index)
+{
+	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
+			mat_file, safs::REMOTE_ACCESS);
+	if (io_fac == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io factory for %1%") % mat_file;
+		return SpM_2d_storage::ptr();
+	}
+	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
+	if (io == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io instance for %1%") % mat_file;
+		return SpM_2d_storage::ptr();
+	}
+
+	size_t size = io_fac->get_file_size();
+	char *data = NULL;
+	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
+	BOOST_VERIFY(mret == 0);
+
+	safs::data_loc_t loc(io->get_file_id(), 0);
+	safs::io_request req(data, loc, size, READ);
+	io->access(&req, 1);
+	io->wait4complete(1);
+	matrix_header *header = (matrix_header *) data;
+	header->verify();
+	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
+				index, mat_file));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
@@ -222,7 +297,7 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 			<< "The vector of vectors has to be in memory";
 		return SpM_2d_storage::ptr();
 	}
-	mem_vector::ptr vec = mem_vector::cast(vv.cat());
+	vector::ptr vec = vv.cat();
 	if (vec->get_type().get_type() != get_type<char>()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The vector of vectors contains a wrong type of data";
@@ -238,7 +313,9 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 			ROUNDUP(size, PAGE_SIZE));
 	BOOST_VERIFY(ret == 0);
 	*(matrix_header *) data = header;
-	memcpy(data + sizeof(header), vec->get_raw_arr(), vec->get_length());
+	memcpy(data + sizeof(header),
+			dynamic_cast<const detail::mem_vec_store &>(vec->get_data()).get_raw_arr(),
+			vec->get_length());
 	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
 				index, "anonymous"));
 }
@@ -247,6 +324,51 @@ safs::file_io_factory::shared_ptr SpM_2d_storage::create_io_factory() const
 {
 	return safs::file_io_factory::shared_ptr(new safs::in_mem_io_factory(
 				data, mat_file_id, mat_name));
+}
+
+void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file)
+{
+	index->verify();
+
+	assert(safs::native_file(mat_file).exist());
+	FILE *f = fopen(mat_file.c_str(), "r");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
+			% mat_file % strerror(errno);
+		return;
+	}
+
+	printf("There are %ld block rows\n", index->get_num_block_rows());
+	block_2d_size block_size = index->get_header().get_2d_block_size();
+	printf("block size: %ld, %ld\n", block_size.get_num_rows(),
+			block_size.get_num_cols());
+	for (size_t i = 0; i < index->get_num_block_rows(); i++) {
+		off_t off = index->get_block_row_off(i);
+		size_t size = index->get_block_row_off(i + 1) - index->get_block_row_off(i);
+		void *data = malloc(size);
+		int seek_ret = fseek(f, off, SEEK_SET);
+		assert(seek_ret == 0);
+		size_t ret = fread(data, size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
+				% mat_file % strerror(errno);
+			fclose(f);
+			return;
+		}
+		block_row_iterator it((const sparse_block_2d *) data,
+				(const sparse_block_2d *) (((char *) data) + size));
+		size_t tot_brow_size = 0;
+		while (it.has_next()) {
+			const sparse_block_2d &block = it.next();
+			tot_brow_size += block.get_size();
+			if (block.is_empty())
+				continue;
+			block.verify(block_size);
+		}
+		assert(tot_brow_size == size);
+		free(data);
+	}
+	fclose(f);
 }
 
 }

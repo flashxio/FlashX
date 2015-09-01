@@ -17,480 +17,807 @@
  * limitations under the License.
  */
 
-#if 0
-
 #include <boost/foreach.hpp>
 
 #include "io_interface.h"
 #include "safs_file.h"
 
 #include "matrix_config.h"
-#include "mem_dense_matrix.h"
 #include "EM_dense_matrix.h"
-#include "bulk_operate.h"
+#include "local_matrix_store.h"
+#include "raw_data_array.h"
+#include "mem_matrix_store.h"
+#include "matrix_stats.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
 
-EM_dense_matrix::ptr EM_dense_matrix::cast(dense_matrix::ptr m)
+namespace detail
 {
-	if (m->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't cast an in-mem matrix to EM_dense_matrix";
-		return EM_dense_matrix::ptr();
-	}
-	return std::static_pointer_cast<EM_dense_matrix>(m);
-}
 
-bool EM_dense_matrix::exist(const std::string &name)
-{
-	safs::safs_file f(safs::get_sys_RAID_conf(), name);
-	return f.exist();
-}
-
-void EM_col_matrix_accessor::flush()
-{
-	if (!fetch_reqs.empty()) {
-		accessor->fetch_subvecs(fetch_reqs.data(), fetch_reqs.size());
-		fetch_reqs.clear();
-	}
-	if (!set_reqs.empty()) {
-		accessor->set_subvecs(set_reqs.data(), set_reqs.size());
-		set_reqs.clear();
-	}
-}
-
-class EM_subvec_accessor
-{
-	std::vector<fetch_vec_request> &fetch_reqs;
-	std::vector<set_vec_request> &set_reqs;
-	size_t start;
-	size_t end;
-public:
-	typedef std::shared_ptr<EM_subvec_accessor> ptr;
-
-	EM_subvec_accessor(std::vector<fetch_vec_request> &_fetch_reqs,
-			std::vector<set_vec_request> &_set_reqs, size_t start,
-			size_t end): fetch_reqs(_fetch_reqs), set_reqs(_set_reqs) {
-		this->start = start;
-		this->end = end;
-	}
-
-	void fetch_subvec(char *buf, size_t start, size_t length,
-			subvec_compute::ptr compute) {
-		assert(this->start + start + length <= end);
-		fetch_vec_request req;
-		req.buf = buf;
-		req.start = this->start + start;
-		req.length = length;
-		req.compute = compute;
-		fetch_reqs.push_back(req);
-	}
-
-	void set_subvec(const char *buf, size_t start, size_t length,
-			subvec_compute::ptr compute) {
-		assert(this->start + start + length <= end);
-		set_vec_request req;
-		req.buf = buf;
-		req.start = this->start + start;
-		req.length = length;
-		req.compute = compute;
-		set_reqs.push_back(req);
-	}
-};
-
-struct subcol_struct
-{
-	mem_col_dense_matrix::ptr subm;
-	size_t count;
-
-	subcol_struct() {
-		count = 0;
-	}
-
-	typedef std::shared_ptr<subcol_struct> ptr;
-};
+const size_t EM_matrix_store::CHUNK_SIZE = 1024 * 1024;
 
 /*
- * This subvec compute is to help read data from a column-wise matrix
- * on disks and store the result on a column-wise matrix in memory.
- * Once the in-memory matrix gets complete data, it invokes the computation
- * on the in-memory matrix.
+ * These two functions define the length and portion size for 1D partitioning
+ * on a matrix.
  */
-class fetch_subcol_compute: public subvec_compute
+
+static inline size_t get_tot_len(const matrix_store &mat)
 {
-	subcol_struct::ptr subcol;
-	submatrix_compute::ptr compute;
-	EM_col_matrix_accessor &accessor;
+	return mat.is_wide() ? mat.get_num_cols() : mat.get_num_rows();
+}
+
+static inline size_t get_portion_size(const matrix_store &mat)
+{
+	return mat.is_wide() ? mat.get_portion_size().second : mat.get_portion_size().first;
+}
+
+namespace
+{
+
+/*
+ * When we write data to disks, we need to have something to hold the buffer.
+ * This holds the local buffer until the write completes.
+ */
+class portion_write_complete: public portion_compute
+{
+	local_matrix_store::const_ptr store;
 public:
-	fetch_subcol_compute(EM_col_matrix_accessor &_accessor,
-			subcol_struct::ptr subcol,
-			submatrix_compute::ptr compute): accessor(_accessor) {
-		this->subcol = subcol;
+	portion_write_complete(local_matrix_store::const_ptr store) {
+		this->store = store;
+	}
+
+	virtual void run(char *buf, size_t size) {
+	}
+};
+
+}
+
+EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
+		const scalar_type &type): matrix_store(nrow, ncol, false,
+			type), mat_id(mat_counter++), data_id(mat_id)
+{
+	this->orig_num_rows = nrow;
+	this->orig_num_cols = ncol;
+	this->layout = layout;
+	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());
+	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+			holder->get_name(), safs::REMOTE_ACCESS);
+	ios = io_set::ptr(new io_set(factory));
+}
+
+EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
+		size_t nrow, size_t ncol, size_t orig_nrow, size_t orig_ncol,
+		matrix_layout_t layout, const scalar_type &type,
+		size_t _data_id): matrix_store(nrow, ncol, false, type), mat_id(
+			mat_counter++), data_id(_data_id)
+{
+	this->orig_num_rows = orig_nrow;
+	this->orig_num_cols = orig_ncol;
+	this->layout = layout;
+	this->holder = holder;
+	this->ios = ios;
+}
+
+void EM_matrix_store::reset_data()
+{
+	assert(0);
+}
+
+namespace
+{
+
+class EM_mat_setdata_dispatcher: public EM_portion_dispatcher
+{
+	const set_operate &op;
+	EM_matrix_store &to_mat;
+public:
+	EM_mat_setdata_dispatcher(EM_matrix_store &store, const set_operate &_op);
+
+	virtual void create_task(off_t global_start, size_t length);
+};
+
+EM_mat_setdata_dispatcher::EM_mat_setdata_dispatcher(EM_matrix_store &store,
+		const set_operate &_op): EM_portion_dispatcher(get_tot_len(store),
+			fm::detail::get_portion_size(store)), op(_op), to_mat(store)
+{
+}
+
+void EM_mat_setdata_dispatcher::create_task(off_t global_start,
+		size_t length)
+{
+	size_t global_start_row, global_start_col;
+	size_t num_rows, num_cols;
+	if (to_mat.is_wide()) {
+		global_start_row = 0;
+		global_start_col = global_start;
+		num_rows = to_mat.get_num_rows();
+		num_cols = length;
+	}
+	else {
+		global_start_row = global_start;
+		global_start_col = 0;
+		num_rows = length;
+		num_cols = to_mat.get_num_cols();
+	}
+	local_matrix_store::ptr buf;
+	if (to_mat.store_layout() == matrix_layout_t::L_COL)
+		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					global_start_row, global_start_col, num_rows, num_cols,
+					to_mat.get_type(), -1));
+	else
+		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					global_start_row, global_start_col, num_rows, num_cols,
+					to_mat.get_type(), -1));
+	buf->set_data(op);
+	to_mat.write_portion_async(buf, global_start_row, global_start_col);
+}
+
+}
+
+void EM_matrix_store::set_data(const set_operate &op)
+{
+	mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
+	EM_mat_setdata_dispatcher::ptr dispatcher(
+			new EM_mat_setdata_dispatcher(*this, op));
+	for (size_t i = 0; i < threads->get_num_threads(); i++) {
+		io_worker_task *task = new io_worker_task(dispatcher);
+		task->register_EM_obj(this);
+		threads->process_task(i % threads->get_num_nodes(), task);
+	}
+	threads->wait4complete();
+}
+
+std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
+{
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_num_rows(), CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(CHUNK_SIZE, get_num_cols());
+}
+
+local_matrix_store::ptr EM_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols)
+{
+	// This doesn't need to be used. Changing the data in the local portion
+	// doesn't affect the data in the disks.
+	assert(0);
+	return local_matrix_store::ptr();
+}
+
+local_matrix_store::const_ptr EM_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	safs::io_interface &io = ios->get_curr_io();
+	bool ready = false;
+	portion_compute::ptr compute(new sync_read_compute(ready));
+	async_cres_t ret = get_portion_async(start_row, start_col,
+			num_rows, num_cols, compute);
+	// If we can't get the specified portion or the portion already has
+	// the valid data.
+	if (ret.second == NULL || ret.first)
+		return ret.second;
+
+	while (!ready)
+		io.wait4complete(1);
+	return ret.second;
+}
+
+async_res_t EM_matrix_store::get_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, portion_compute::ptr compute)
+{
+	// This doesn't need to be used. Changing the data in the local portion
+	// doesn't affect the data in the disks.
+	assert(0);
+	return async_res_t();
+}
+
+async_cres_t EM_matrix_store::get_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, portion_compute::ptr compute) const
+{
+	size_t local_start_row = start_row % CHUNK_SIZE;
+	size_t local_start_col = start_col % CHUNK_SIZE;
+	// For now, we only allow this method to fetch data from a portion.
+	if (local_start_row + num_rows > CHUNK_SIZE
+			|| local_start_col + num_cols > CHUNK_SIZE
+			|| start_row + num_rows > get_orig_num_rows()
+			|| start_col + num_cols > get_orig_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary of a portion";
+		return async_cres_t();
+	}
+
+	safs::io_interface &io = ios->get_curr_io();
+	size_t entry_size = get_type().get_size();
+	// The information of a portion.
+	size_t portion_start_row = start_row - local_start_row;
+	size_t portion_start_col = start_col - local_start_col;
+	size_t portion_num_rows;
+	size_t portion_num_cols;
+	if (store_layout() == matrix_layout_t::L_COL && num_rows == CHUNK_SIZE)
+		portion_num_rows = num_rows;
+	else if (portion_start_row + CHUNK_SIZE > get_orig_num_rows())
+		portion_num_rows = get_orig_num_rows() - portion_start_row;
+	else
+		portion_num_rows = CHUNK_SIZE;
+
+	if (store_layout() == matrix_layout_t::L_ROW && num_cols == CHUNK_SIZE)
+		portion_num_cols = num_cols;
+	else if (portion_start_col + CHUNK_SIZE > get_orig_num_cols())
+		portion_num_cols = get_orig_num_cols() - portion_start_col;
+	else
+		portion_num_cols = CHUNK_SIZE;
+
+	// The information of the part of data fetched in a portion.
+	size_t fetch_start_row = portion_start_row;
+	size_t fetch_start_col = portion_start_col;
+	size_t fetch_num_rows = portion_num_rows;
+	size_t fetch_num_cols = portion_num_cols;
+	// Location of the portion on the disks.
+	// The number of elements above the portion row
+	off_t off = (get_orig_num_cols() * portion_start_row
+			// The number of elements in front of the wanted portion
+			// in the same portion row.
+		+ portion_num_rows * portion_start_col) * entry_size;
+	if (portion_num_rows < CHUNK_SIZE && portion_num_cols < CHUNK_SIZE) {
+		// This is the very last portion, we have to fetch the entire portion.
+	}
+	// If we fetch data from a col-major matrix and fetch the entire cols,
+	// we only need to fetch the wanted columns
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		fetch_start_col += local_start_col;
+		off += local_start_col * portion_num_rows * entry_size;
+		local_start_col = 0;
+	}
+	// For the same reason, we only need to fetch the wanted rows.
+	else {
+		fetch_start_row += local_start_row;
+		off += local_start_row * portion_num_cols * entry_size;
+		local_start_row = 0;
+	}
+
+	// If this is the very last portion (the bottom right portion), the data
+	// size may not be aligned with the page size.
+	size_t num_bytes;
+	if (portion_num_rows < CHUNK_SIZE && portion_num_cols < CHUNK_SIZE) {
+		// We have to fetch the entire portion for the very last portion.
+		num_bytes = ROUNDUP(portion_num_rows * portion_num_cols * entry_size,
+				PAGE_SIZE);
+	}
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		num_bytes = ROUNDUP(portion_num_rows * num_cols * entry_size, PAGE_SIZE);
+		fetch_num_cols = num_cols;
+	}
+	else {
+		num_bytes = ROUNDUP(num_rows * portion_num_cols * entry_size, PAGE_SIZE);
+		fetch_num_rows = num_rows;
+	}
+
+	// We should try to get the portion from the local thread memory buffer
+	// first.
+	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
+			data_id);
+	// If it's in the same portion.
+	if (ret1 && (((size_t) ret1->get_global_start_row() == fetch_start_row
+					&& (size_t) ret1->get_global_start_col() == fetch_start_col
+					&& ret1->get_num_rows() == fetch_num_rows
+					&& ret1->get_num_cols() == fetch_num_cols)
+				// If it's in the corresponding portion in the transposed matrix.
+				|| ((size_t) ret1->get_global_start_row() == fetch_start_col
+					&& (size_t) ret1->get_global_start_col() == fetch_start_row
+					&& ret1->get_num_rows() == fetch_num_cols
+					&& ret1->get_num_cols() == fetch_num_rows))) {
+		assert(ret1->get_local_start_row() == 0);
+		assert(ret1->get_local_start_col() == 0);
+		// In the asynchronous version, data in the portion isn't ready when
+		// the method is called. We should add the user's portion computation
+		// to the queue. When the data is ready, all user's portion computations
+		// will be invoked.
+		safs::data_loc_t loc(io.get_file_id(), off);
+		safs::io_request req(const_cast<char *>(ret1->get_raw_arr()), loc,
+				num_bytes, READ);
+		portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
+		// If there isn't a portion compute related to the I/O request,
+		// it means the data in the portion is ready.
+		bool valid_data = !cb.has_callback(req);
+		if (!valid_data)
+			cb.add(req, compute);
+
+		local_matrix_store::const_ptr ret;
+		if (local_start_row > 0 || local_start_col > 0
+				|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
+			ret = ret1->get_portion(local_start_row, local_start_col,
+					num_rows, num_cols);
+		else
+			ret = ret1;
+		return async_cres_t(valid_data, ret);
+	}
+
+	raw_data_array data_arr(num_bytes, -1);
+	// Read the portion in a single I/O request.
+	local_matrix_store::ptr buf;
+	if (store_layout() == matrix_layout_t::L_ROW)
+		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(data_arr,
+					fetch_start_row, fetch_start_col, fetch_num_rows,
+					fetch_num_cols, get_type(), data_arr.get_node_id()));
+	else
+		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(data_arr,
+					fetch_start_row, fetch_start_col, fetch_num_rows,
+					fetch_num_cols, get_type(), data_arr.get_node_id()));
+
+	safs::data_loc_t loc(io.get_file_id(), off);
+	safs::io_request req(buf->get_raw_arr(), loc, num_bytes, READ);
+	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
+	io.access(&req, 1);
+	io.flush_requests();
+
+	// Count the number of bytes really read from disks.
+	detail::matrix_stats.inc_read_bytes(
+			buf->get_num_rows() * buf->get_num_cols() * get_entry_size(), false);
+
+	local_mem_buffer::cache_portion(data_id, buf);
+	local_matrix_store::const_ptr ret;
+	if (local_start_row > 0 || local_start_col > 0
+			|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
+		ret = buf->get_portion(local_start_row, local_start_col,
+				num_rows, num_cols);
+	else
+		ret = buf;
+	return async_cres_t(false, ret);
+}
+
+void EM_matrix_store::write_portion_async(
+		local_matrix_store::const_ptr portion, off_t start_row,
+		off_t start_col)
+{
+	assert(store_layout() == portion->store_layout());
+	assert(start_row % CHUNK_SIZE == 0 && start_col % CHUNK_SIZE == 0);
+	assert(start_row + portion->get_num_rows() <= get_num_rows()
+			&& start_col + portion->get_num_cols() <= get_num_cols());
+	// Make sure the portion is stored contiguously on disks.
+	// Otherwise, we need to read data from the disk first, modify it and
+	// write it back.
+	if (portion->get_global_start_row() + CHUNK_SIZE > get_num_rows())
+		assert(portion->get_num_rows()
+				== get_num_rows() - portion->get_global_start_row());
+	else
+		assert(portion->get_num_rows() == CHUNK_SIZE);
+	if (portion->get_global_start_col() + CHUNK_SIZE > get_num_cols())
+		assert(portion->get_num_cols()
+				== get_num_cols() - portion->get_global_start_col());
+	else
+		assert(portion->get_num_cols() == CHUNK_SIZE);
+
+	// And data in memory is also stored contiguously.
+	// This constraint can be relaxed in the future.
+	assert(portion->get_raw_arr());
+
+	safs::io_interface &io = ios->get_curr_io();
+	size_t entry_size = get_type().get_size();
+
+	// Location of the portion on the disks.
+	// I need to compute the location here because I might need to change
+	// the size of a portion later.
+	off_t off = (get_num_cols() * portion->get_global_start_row()
+		+ portion->get_num_rows() * portion->get_global_start_col()) * entry_size;
+
+	size_t num_bytes
+		= portion->get_num_rows() * portion->get_num_cols() * entry_size;
+	// If this is the very last portion (the bottom right portion), the data
+	// size may not be aligned with the page size.
+	if (num_bytes % PAGE_SIZE != 0) {
+		raw_data_array data_arr(ROUNDUP(num_bytes, PAGE_SIZE),
+				portion->get_node_id());
+		// if the data layout is row wise, we should align the number of
+		// rows, so the rows are still stored contiguously.
+		if (store_layout() == matrix_layout_t::L_ROW) {
+			local_buf_row_matrix_store::ptr tmp_buf(new local_buf_row_matrix_store(
+						data_arr, portion->get_global_start_row(),
+						portion->get_global_start_col(),
+						portion->get_num_rows(), portion->get_num_cols(),
+						portion->get_type(), portion->get_node_id()));
+			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(), num_bytes);
+			portion = tmp_buf;
+		}
+		// if the data layout is column wise, we should align the number of
+		// columns, so the columns are still stored contiguously.
+		else {
+			local_buf_col_matrix_store::ptr tmp_buf(new local_buf_col_matrix_store(
+						portion->get_global_start_row(),
+						portion->get_global_start_col(),
+						portion->get_num_rows(), portion->get_num_cols(),
+						portion->get_type(), portion->get_node_id()));
+			memcpy(tmp_buf->get_raw_arr(), portion->get_raw_arr(), num_bytes);
+			portion = tmp_buf;
+		}
+		num_bytes = ROUNDUP(num_bytes, PAGE_SIZE);
+	}
+
+	safs::data_loc_t loc(io.get_file_id(), off);
+	safs::io_request req(const_cast<char *>(portion->get_raw_arr()),
+			loc, num_bytes, WRITE);
+	portion_compute::ptr compute(new portion_write_complete(portion));
+	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
+	io.access(&req, 1);
+	io.flush_requests();
+}
+
+std::vector<safs::io_interface::ptr> EM_matrix_store::create_ios() const
+{
+	std::vector<safs::io_interface::ptr> ret(1);
+	ret[0] = ios->create_io();
+	return ret;
+}
+
+vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
+{
+	if ((size_t) idx >= get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		return vec_store::const_ptr();
+	}
+
+	size_t entry_size = get_type().get_size();
+	safs::io_interface &io = ios->get_curr_io();
+	if (get_num_cols() == 1) {
+		size_t len = roundup_ele(get_num_rows(), PAGE_SIZE, entry_size);
+		smp_vec_store::ptr vec = smp_vec_store::create(len, get_type());
+		vec->expose_sub_vec(0, get_num_rows());
+
+		safs::data_loc_t loc(io.get_file_id(), 0);
+		safs::io_request req(vec->get_raw_arr(), loc, len * entry_size, READ);
+		io.access(&req, 1);
+		io.wait4complete(1);
+		return vec;
+	}
+	else if (store_layout() == matrix_layout_t::L_COL) {
+		smp_vec_store::ptr vec = smp_vec_store::create(get_num_rows(),
+				get_type());
+
+		// Read all portions of data with the full length.
+		std::vector<safs::io_request> reqs;
+		off_t row_idx = 0;
+		for (; row_idx + CHUNK_SIZE < get_num_rows(); row_idx += CHUNK_SIZE) {
+			off_t off = (get_num_cols() * row_idx
+					+ CHUNK_SIZE * idx) * entry_size;
+
+			safs::data_loc_t loc(io.get_file_id(), off);
+			safs::io_request req(vec->get_raw_arr() + row_idx * entry_size, loc,
+					CHUNK_SIZE * entry_size, READ);
+			reqs.push_back(req);
+		}
+
+		// Read the data in the last portion. It's possible that the offset
+		// and the length of the data isn't aligned with the page size.
+		size_t last_nrows = get_num_rows() - row_idx;
+		assert(last_nrows <= CHUNK_SIZE);
+		off_t ele_start = (get_num_cols() * row_idx + last_nrows * idx);
+		off_t read_start = round_ele(ele_start, PAGE_SIZE, entry_size);
+		size_t num_read_eles = roundup_ele(last_nrows, PAGE_SIZE, entry_size);
+		assert(read_start <= ele_start
+				&& ele_start + last_nrows <= read_start + num_read_eles);
+		smp_vec_store::ptr tmp = smp_vec_store::create(num_read_eles, get_type());
+		safs::data_loc_t loc(io.get_file_id(), read_start * entry_size);
+		safs::io_request req(tmp->get_raw_arr(), loc,
+				num_read_eles * entry_size, READ);
+		reqs.push_back(req);
+
+		io.access(reqs.data(), reqs.size());
+		io.wait4complete(reqs.size());
+		memcpy(vec->get_raw_arr() + row_idx * entry_size,
+				tmp->get_raw_arr() + (ele_start - read_start) * entry_size,
+				last_nrows * entry_size);
+		return vec;
+	}
+	else {
+		return vec_store::const_ptr();
+	}
+}
+
+vec_store::const_ptr EM_matrix_store::get_row_vec(off_t idx) const
+{
+	if ((size_t) idx >= get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		return vec_store::const_ptr();
+	}
+	return transpose()->get_col_vec(idx);
+}
+
+matrix_store::const_ptr EM_matrix_store::transpose() const
+{
+	matrix_layout_t new_layout;
+	if (layout == matrix_layout_t::L_ROW)
+		new_layout = matrix_layout_t::L_COL;
+	else
+		new_layout = matrix_layout_t::L_ROW;
+	return matrix_store::const_ptr(new EM_matrix_store(holder, ios,
+				get_num_cols(), get_num_rows(), get_orig_num_cols(),
+				get_orig_num_rows(), new_layout, get_type(), data_id));
+}
+
+/*
+ * This matrix store accesses a set of rows of a wide matrix or a set of columns
+ * of a tall matrix.
+ */
+class sub_EM_matrix_store: public EM_matrix_store
+{
+	std::vector<off_t> rc_idxs;
+public:
+	sub_EM_matrix_store(const std::vector<off_t> idxs,
+			const EM_matrix_store &store): EM_matrix_store(store) {
+		// TODO the sub matrix should have a different data id.
+		this->rc_idxs = idxs;
+		assert(idxs.size() > 0);
+		if (store_layout() == matrix_layout_t::L_COL)
+			matrix_store::resize(get_num_rows(), idxs.size());
+		else
+			matrix_store::resize(idxs.size(), get_num_cols());
+	}
+
+	virtual std::string get_name() const {
+		return (boost::format("sub_EM_mat-%1%(%2%,%3%)") % get_matrix_id()
+				% get_num_rows() % get_num_cols()).str();
+	}
+
+	virtual matrix_store::const_ptr transpose() const {
+		matrix_store::const_ptr t_mat = EM_matrix_store::transpose();
+		return matrix_store::const_ptr(new sub_EM_matrix_store(rc_idxs,
+					dynamic_cast<const EM_matrix_store &>(*t_mat)));
+	}
+
+	virtual async_cres_t get_col_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, portion_compute::ptr compute) const;
+	virtual async_cres_t get_row_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, portion_compute::ptr compute) const;
+	virtual async_cres_t get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, portion_compute::ptr compute) const {
+		if (start_row + num_rows > get_num_rows()
+				|| start_col + num_cols > get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error) << "get portion async: out of boundary";
+			return async_cres_t();
+		}
+
+		// TODO it should maintain a buffer.
+
+		if (store_layout() == matrix_layout_t::L_COL)
+			return get_col_portion_async(start_row, start_col,
+					num_rows, num_cols, compute);
+		else
+			return get_row_portion_async(start_row, start_col,
+					num_rows, num_cols, compute);
+	}
+
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		std::vector<off_t> orig_idxs(idxs.size());
+		for (size_t i = 0; i < idxs.size(); i++)
+			orig_idxs[i] = rc_idxs[idxs[i]];
+		return EM_matrix_store::get_cols(orig_idxs);
+	}
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		std::vector<off_t> orig_idxs(idxs.size());
+		for (size_t i = 0; i < idxs.size(); i++)
+			orig_idxs[i] = rc_idxs[idxs[i]];
+		return EM_matrix_store::get_rows(orig_idxs);
+	}
+
+	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
+		if (store_layout() == matrix_layout_t::L_COL)
+			return EM_matrix_store::get_col_vec(rc_idxs[idx]);
+		else {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't get a col from a sub EM row matrix";
+			return vec_store::const_ptr();
+		}
+	}
+	virtual vec_store::const_ptr get_row_vec(off_t idx) const {
+		if (store_layout() == matrix_layout_t::L_COL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't get a row from a sub EM col matrix";
+			return vec_store::const_ptr();
+		}
+		else
+			return EM_matrix_store::get_row_vec(rc_idxs[idx]);
+	}
+
+	virtual async_res_t get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, portion_compute::ptr compute) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Don't support non-const get_portion_async in a sub EM matrix";
+		return async_res_t();
+	}
+
+	virtual void write_portion_async(local_matrix_store::const_ptr portion,
+			off_t start_row, off_t start_col) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Don't support write_portion_async in a sub EM matrix";
+	}
+	virtual void reset_data() {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Don't support reset_data in a sub EM matrix";
+	}
+	virtual void set_data(const set_operate &op) {
+		BOOST_LOG_TRIVIAL(error) << "Don't support set_data in a sub EM matrix";
+	}
+};
+
+namespace
+{
+
+class collect_rc_compute: public portion_compute
+{
+	portion_compute::ptr compute;
+	local_matrix_store::ptr collected;
+	std::vector<local_matrix_store::const_ptr> orig_portions;
+	size_t num_collects;
+public:
+	collect_rc_compute(portion_compute::ptr compute,
+			local_matrix_store::ptr collected) {
 		this->compute = compute;
+		this->collected = collected;
+		num_collects = 0;
 	}
 
-	virtual void run(char *buf, size_t size) {
-		subcol->count++;
-		accessor.complete_req();
-		if (subcol->count == subcol->subm->get_num_cols())
-			compute->run(*subcol->subm);
+	void set_bufs(const std::vector<local_matrix_store::const_ptr> &orig) {
+		this->orig_portions = orig;
 	}
+	virtual void run(char *buf, size_t size);
+	void run_complete();
 };
 
-bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
-		size_t start_col, size_t sub_ncol, submatrix_compute::ptr compute)
+void collect_rc_compute::run_complete()
 {
-	if (start_row + sub_nrow > m.get_num_rows()
-			|| start_col + sub_ncol > m.get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "fetch submatrix is out of range";
-		return false;
-	}
-
-	subcol_struct::ptr subcol = subcol_struct::ptr(new subcol_struct());
-	subcol->subm = mem_col_dense_matrix::create(sub_nrow, sub_ncol,
-			m.get_type());
-	for (size_t i = 0; i < sub_ncol; i++) {
-		sub_accessors[start_col + i]->fetch_subvec(subcol->subm->get_col(i),
-				start_row, sub_nrow,
-				subvec_compute::ptr(new fetch_subcol_compute(*this,
-						subcol, compute)));
-	}
-	flush();
-	pending_reqs += sub_ncol;
-	return true;
-}
-
-/*
- * The subvec compute doesn't do anything. The only function of the class
- * is to keep a reference to the sub matrix. As long as the compute object
- * exists, the sub matrix won't be deallocated.
- */
-class store_subcol_compute: public subvec_compute
-{
-	subcol_struct::ptr subcol;
-	EM_col_matrix_accessor &accessor;
-public:
-	store_subcol_compute(EM_col_matrix_accessor &_accessor,
-			subcol_struct::ptr subcol): accessor(_accessor) {
-		this->subcol = subcol;
-	}
-
-	virtual void run(char *buf, size_t size) {
-		subcol->count++;
-		accessor.complete_req();
-	}
-};
-
-bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
-		mem_dense_matrix::ptr subm)
-{
-	if (start_row + subm->get_num_rows() > m.get_num_rows()
-			|| start_col + subm->get_num_cols() > m.get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "store submatrix is out of range";
-		return false;
-	}
-
-	assert(subm->store_layout() == matrix_layout_t::L_COL);
-	mem_col_dense_matrix::ptr sub_colm
-		= std::static_pointer_cast<mem_col_dense_matrix>(subm);
-	size_t sub_nrow = subm->get_num_rows();
-	size_t sub_ncol = subm->get_num_cols();
-	subcol_struct::ptr subcol = subcol_struct::ptr(new subcol_struct());
-	subcol->subm = sub_colm;
-	for (size_t i = 0; i < sub_ncol; i++) {
-		sub_accessors[start_col + i]->set_subvec(sub_colm->get_col(i), start_row,
-				sub_nrow, subvec_compute::ptr(new store_subcol_compute(*this,
-						subcol)));
-	}
-	flush();
-	pending_reqs += sub_ncol;
-	return true;
-}
-
-void EM_col_matrix_accessor::wait4complete(int num)
-{
-	int num2wait = std::min(num, pending_reqs);
-	if (num2wait == 0)
-		return;
-	accessor->wait4complete(num2wait);
-}
-
-void EM_col_matrix_accessor::wait4all()
-{
-	accessor->wait4all();
-}
-
-EM_col_matrix_accessor::EM_col_matrix_accessor(EM_col_dense_matrix &_m,
-		EM_vector::ptr data): m(_m)
-{
-	pending_reqs = 0;
-	accessor = data->create_accessor();
-	sub_accessors.resize(m.get_num_cols());
-	for (size_t i = 0; i < m.get_num_cols(); i++)
-		sub_accessors[i] = EM_subvec_accessor::ptr(new EM_subvec_accessor(
-					fetch_reqs, set_reqs, i * m.get_num_rows(),
-					(i + 1) * m.get_num_rows()));
-}
-
-EM_col_matrix_accessor::~EM_col_matrix_accessor()
-{
-	wait4all();
-	assert(pending_reqs == 0);
-}
-
-/*
- * The task to perform inner product once the submatrix is read from disks.
- */
-class submatrix_inner_prod_compute: public submatrix_compute
-{
-	const mem_dense_matrix &m;
-	EM_dense_matrix_accessor &res_m;
-	const bulk_operate &left_op;
-	const bulk_operate &right_op;
-	size_t start_out_row;
-	size_t start_out_col;
-public:
-	submatrix_inner_prod_compute(size_t start_row, size_t start_col,
-			size_t start_out_row, size_t start_out_col,
-			const bulk_operate &_left_op, const bulk_operate &_right_op,
-			const mem_dense_matrix &_m, EM_dense_matrix_accessor &_res_m): submatrix_compute(
-				start_row, start_col), m(_m), res_m(_res_m), left_op(_left_op),
-			right_op(_right_op) {
-		this->start_out_row = start_out_row;
-		this->start_out_col = start_out_col;
-	}
-
-	void run(const mem_dense_matrix &subm) {
-		mem_dense_matrix::ptr sub_res = mem_dense_matrix::cast(
-				subm.serial_inner_prod(m, left_op, right_op));
-		res_m.set_submatrix(start_out_row, start_out_col, sub_res);
-	}
-};
-
-class submatrix_gen
-{
-	std::deque<submatrix_loc> locs;
-	pthread_spinlock_t lock;
-public:
-	typedef std::shared_ptr<submatrix_gen> ptr;
-
-	submatrix_gen(const std::vector<submatrix_loc> &_locs): locs(
-			_locs.begin(), _locs.end()) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	bool next(submatrix_loc &loc) {
-		pthread_spin_lock(&lock);
-		bool ret = !locs.empty();
-		if (ret) {
-			loc = locs.front();
-			locs.pop_front();
+	if (collected->store_layout() == matrix_layout_t::L_COL) {
+		size_t num_cols = 0;
+		for (size_t i = 0; i < orig_portions.size(); i++) {
+			collected->resize(0, num_cols, collected->get_num_rows(),
+					orig_portions[i]->get_num_cols());
+			collected->copy_from(*orig_portions[i]);
+			num_cols += orig_portions[i]->get_num_cols();
 		}
-		pthread_spin_unlock(&lock);
-		return ret;
 	}
-};
+	else {
+		size_t num_rows = 0;
+		for (size_t i = 0; i < orig_portions.size(); i++) {
+			collected->resize(num_rows, 0, orig_portions[i]->get_num_rows(),
+					collected->get_num_cols());
+			collected->copy_from(*orig_portions[i]);
+			num_rows += orig_portions[i]->get_num_rows();
+		}
+	}
 
-/*
- * A worker thread to compute inner product on a matrix.
- */
-class col_inner_prod_thread: public thread
-{
-	int worker_id;
-	EM_dense_matrix &in_m;
-	EM_dense_matrix &out_m;
-	const mem_dense_matrix &m;
-	const bulk_operate &left_op;
-	const bulk_operate &right_op;
-	submatrix_gen::ptr gen;
-public:
-	col_inner_prod_thread(EM_dense_matrix &in_m, EM_dense_matrix &out_m,
-			const mem_dense_matrix &m, const bulk_operate &left_op,
-			const bulk_operate &right_op, submatrix_gen::ptr gen,
-			int work_id, int node_id);
-
-	void run();
-};
-
-col_inner_prod_thread::col_inner_prod_thread(EM_dense_matrix &in_m,
-		EM_dense_matrix &out_m, const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op,
-		submatrix_gen::ptr gen, int worker_id, int node_id): thread(
-			"inner-prod-thread", node_id), in_m(in_m), out_m(
-			out_m), m(m), left_op(left_op), right_op(right_op)
-{
-	this->gen = gen;
-	this->worker_id = worker_id;
+	collected->reset_size();
+	size_t num_eles = collected->get_num_rows() * collected->get_num_cols();
+	compute->run(collected->get_raw_arr(),
+			num_eles * collected->get_entry_size());
 }
 
-void col_inner_prod_thread::run()
+void collect_rc_compute::run(char *buf, size_t size)
 {
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	EM_dense_matrix_accessor::ptr in_accessor = in_m.create_accessor();
-	EM_dense_matrix_accessor::ptr out_accessor = out_m.create_accessor();
-	size_t ncol = in_m.get_num_cols();
-	size_t tot_nrow = 0;
-	submatrix_loc loc;
-	while (gen->next(loc)) {
-		tot_nrow += loc.nrow;
-		in_accessor->fetch_submatrix(loc.start_row, loc.nrow,
-				loc.start_col, loc.ncol, submatrix_compute::ptr(
-					new submatrix_inner_prod_compute(loc.start_row,
-						loc.start_col, loc.start_row, loc.start_col,
-						left_op, right_op, m, *out_accessor)));
-		while ((size_t) in_accessor->num_pending_reqs() > 2 * ncol)
-			in_accessor->wait4complete(ncol);
-		while ((size_t) out_accessor->num_pending_reqs() > 2 * ncol)
-			out_accessor->wait4complete(1);
-	}
-	in_accessor->wait4all();
-	out_accessor->wait4all();
-	stop();
-	gettimeofday(&end, NULL);
-	printf("t%d(%d) takes %.3fs to compute %ld rows\n", worker_id,
-			get_node_id(), time_diff(start, end), tot_nrow);
+	num_collects++;
+	// After we collect all columns.
+	if (num_collects == orig_portions.size())
+		run_complete();
 }
 
-void EM_col_dense_matrix::split_matrix(std::vector<submatrix_loc> &locs) const
-{
-	for (size_t i = 0; i < get_num_rows(); i += COL_CHUNK_SIZE) {
-		struct submatrix_loc loc;
-		loc.start_row = i;
-		loc.start_col = 0;
-		loc.ncol = get_num_cols();
-		loc.nrow = std::min(COL_CHUNK_SIZE, get_num_rows() - loc.start_row);
-		locs.push_back(loc);
-	}
-	printf("matrix has %ld rows and breaks into %ld submatrices\n",
-			get_num_rows(), locs.size());
 }
 
-dense_matrix::ptr EM_col_dense_matrix::inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
+static std::vector<std::pair<off_t, off_t> > split_idxs(
+		std::vector<off_t>::const_iterator it,
+		std::vector<off_t>::const_iterator end)
 {
-	if (!m.is_in_mem()) {
+	assert(it != end);
+	std::vector<std::pair<off_t, off_t> > vecs(1);
+	vecs[0].first = *it;
+	vecs[0].second = *it + 1;
+	for (it++; it != end; it++) {
+		// It's contiguous.
+		if (vecs.back().second == *it)
+			vecs.back().second++;
+		else {
+			std::pair<off_t, off_t> new_range(*it, *it + 1);
+			vecs.push_back(new_range);
+		}
+	}
+	return vecs;
+}
+
+async_cres_t sub_EM_matrix_store::get_col_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, portion_compute::ptr compute) const
+{
+	auto wanted_it = rc_idxs.begin() + start_col;
+	auto wanted_end = wanted_it + num_cols;
+	std::vector<std::pair<off_t, off_t> > ranges = split_idxs(wanted_it,
+			wanted_end);
+
+	local_matrix_store::ptr ret(new local_buf_col_matrix_store(start_row,
+				start_col, num_rows, num_cols, get_type(), -1));
+	collect_rc_compute *_collect_compute = new collect_rc_compute(compute, ret);
+	portion_compute::ptr collect_compute(_collect_compute);
+
+	std::vector<local_matrix_store::const_ptr> bufs(ranges.size());
+	size_t collected_cols = 0;
+	for (size_t i = 0; i < ranges.size(); i++) {
+		size_t local_num_cols = ranges[i].second - ranges[i].first;
+		collected_cols += local_num_cols;
+		async_cres_t res = EM_matrix_store::get_portion_async(
+				start_row, ranges[i].first, num_rows, local_num_cols,
+				collect_compute);
+		// We assume the requested portion doesn't have data, so the callback
+		// function is invoked when the data is ready.
+		assert(!res.first);
+		bufs[i] = res.second;
+	}
+	assert(collected_cols == num_cols);
+	_collect_compute->set_bufs(bufs);
+	return async_cres_t(false, ret);
+}
+
+async_cres_t sub_EM_matrix_store::get_row_portion_async(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols, portion_compute::ptr compute) const
+{
+	auto wanted_it = rc_idxs.begin() + start_row;
+	auto wanted_end = wanted_it + num_rows;
+	std::vector<std::pair<off_t, off_t> > ranges = split_idxs(wanted_it,
+			wanted_end);
+
+	local_matrix_store::ptr ret(new local_buf_row_matrix_store(start_row,
+				start_col, num_rows, num_cols, get_type(), -1));
+	collect_rc_compute *_collect_compute = new collect_rc_compute(compute, ret);
+	portion_compute::ptr collect_compute(_collect_compute);
+
+	std::vector<local_matrix_store::const_ptr> bufs(ranges.size());
+	size_t collected_rows = 0;
+	for (size_t i = 0; i < ranges.size(); i++) {
+		size_t local_num_rows = ranges[i].second - ranges[i].first;
+		collected_rows += local_num_rows;
+		async_cres_t res = EM_matrix_store::get_portion_async(
+				ranges[i].first, start_col, local_num_rows, num_cols,
+				collect_compute);
+		// We assume the requested portion doesn't have data, so the callback
+		// function is invoked when the data is ready.
+		assert(!res.first);
+		bufs[i] = res.second;
+	}
+	assert(collected_rows == num_rows);
+	_collect_compute->set_bufs(bufs);
+	return async_cres_t(false, ret);
+}
+
+matrix_store::const_ptr EM_matrix_store::get_cols(
+			const std::vector<off_t> &idxs) const
+{
+	if (store_layout() == matrix_layout_t::L_ROW || is_wide()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "EM inner product only supports in-mem right matrix";
-		return dense_matrix::ptr();
+			<< "can't support get cols from a row-major or wide matrix";
+		return matrix_store::const_ptr();
 	}
-	if (!verify_inner_prod(m, left_op, right_op))
-		return dense_matrix::ptr();
 
-	EM_col_dense_matrix::ptr res = EM_col_dense_matrix::create(
-			get_num_rows(), m.get_num_cols(), right_op.get_output_type());
-	std::vector<submatrix_loc> all_locs;
-	split_matrix(all_locs);
-	submatrix_gen::ptr gen = submatrix_gen::ptr(new submatrix_gen(all_locs));
+	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, *this));
+}
 
-	size_t num_threads = matrix_conf.get_num_threads();
-	size_t num_nodes = safs::params.get_num_nodes();
-	std::vector<col_inner_prod_thread *> threads(num_threads);
-	for (size_t i = 0; i < num_threads; i++) {
-		// TODO let's discard the const qualifer for now.
-		threads[i] = new col_inner_prod_thread((EM_dense_matrix &) *this,
-				*res, (const mem_dense_matrix &) m, left_op, right_op,
-				gen, i, i % num_nodes);
-		threads[i]->start();
+matrix_store::const_ptr EM_matrix_store::get_rows(
+			const std::vector<off_t> &idxs) const
+{
+	if (store_layout() == matrix_layout_t::L_COL || !is_wide()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't support get cols from a col-major or tall matrix";
+		return matrix_store::const_ptr();
 	}
-	for (size_t i = 0; i < num_threads; i++) {
-		if (threads[i]) {
-			threads[i]->join();
-			delete threads[i];
-		}
-	}
-	return res;
-}
 
-EM_dense_matrix_accessor::ptr EM_col_dense_matrix::create_accessor()
-{
-	return EM_dense_matrix_accessor::ptr(new EM_col_matrix_accessor(*this,
-				data));
+	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, *this));
 }
-
-void EM_col_dense_matrix::reset_data()
-{
-	// TODO
-	assert(0);
-}
-
-bool EM_col_dense_matrix::copy_from(const dense_matrix &mat)
-{
-	// TODO
-	assert(0);
-}
-
-scalar_variable::ptr EM_col_dense_matrix::aggregate(const bulk_operate &op) const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::shallow_copy() const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::deep_copy() const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::conv2(size_t nrow, size_t ncol,
-		bool byrow) const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::transpose() const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::mapply2(const dense_matrix &m,
-		const bulk_operate &op) const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::sapply(const bulk_uoperate &op) const
-{
-	// TODO
-	assert(0);
-}
-
-dense_matrix::ptr EM_col_dense_matrix::apply(apply_margin margin,
-		const arr_apply_operate &op) const
-{
-	// TODO
-	assert(0);
-}
-
-void EM_col_dense_matrix::set_data(const set_operate &op)
-{
-	EM_dense_matrix_accessor::ptr accessor = create_accessor();
-	size_t nrow = get_num_rows();
-	size_t ncol = get_num_cols();
-	for (size_t i = 0; i < nrow; i += COL_CHUNK_SIZE) {
-		size_t chunk_size = std::min(COL_CHUNK_SIZE, nrow);
-		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(
-				chunk_size, ncol, get_type());
-		mem_m->serial_set_data(op);
-		accessor->set_submatrix(i, 0, mem_m);
-		while ((size_t) accessor->num_pending_reqs() > 2 * ncol)
-			accessor->wait4complete(1);
-	}
-	accessor->wait4all();
-}
-
-const size_t EM_col_dense_matrix::COL_CHUNK_SIZE = 1024 * 1024;
 
 }
 
-#endif
+}

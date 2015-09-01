@@ -18,7 +18,7 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lboost_date_time $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
 all: test_algs

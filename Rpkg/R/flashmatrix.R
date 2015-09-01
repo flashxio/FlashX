@@ -572,6 +572,17 @@ fm.read.obj <- function(file)
 #' It is a list with the following members, which correspond directly to
 #' Anasazi parameters:
 #'
+#' nev Numeric scalar. The number of eigenvalues to be computed.
+#' solver String. The name of the eigensolver to solve the eigenproblems.
+#'				Currently, it supports three eigensolvers: KrylovSchur,
+#'				Davidson and LOBPCG. KrylovSchur is the default eigensolver.
+#' tol Numeric scalar. Stopping criterion: the relative accuracy of
+#'				the Ritz value is considered acceptable if its error is less
+#'				than `tol' times its estimated value.
+#' block_size Numeric scalar. The eigensolvers use a block extension of an
+#'				eigensolver algorithm. The block size determines the number
+#'				of the vectors that operate together.
+#' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
 #' which Specify which eigenvalues/vectors to compute, character
 #'              constant with exactly two characters.
 #' Possible values for symmetric input matrices:
@@ -579,36 +590,22 @@ fm.read.obj <- function(file)
 #' "SA" Compute "nev" smallest (algebraic) eigenvalues.
 #' "LM" Compute `nev' largest (in magnitude) eigenvalues.
 #' "SM" Compute `nev' smallest (in magnitude) eigenvalues.
-#' nev Numeric scalar. The number of eigenvalues to be computed.
-#' ncv Number of Lanczos vectors to be generated.
 #'
 #' @return A named list with the following members:
 #'         values: Numeric vector, the desired eigenvalues.
 #'         vectors: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.eigen <- function(func, extra=NULL, sym=FALSE, options=fm.eigen.default,
+fm.eigen <- function(func, extra=NULL, sym=FALSE, options=NULL,
 					 env = parent.frame())
 {
 	.Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
 		  as.list(options), PACKAGE="FlashGraphR")
 }
 
-fm.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
+fm.scale <- function(mat, vec, byrow)
 {
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fm")
-
-	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  "LS", as.double(tol), PACKAGE="FlashGraphR")
-
-	norm.col <- function(x)
-	{
-		x / sqrt(sum(x * x))
-	}
-	list(values=ret$values, left=ret$vectors,
-		 right=apply(fm.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
-		 options=ret$options)
+	.Call("R_FM_scale", mat, vec, as.logical(byrow), PACKAGE="FlashGraphR")
 }
 
 print.fm <- function(fm)

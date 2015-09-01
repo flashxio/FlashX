@@ -12,7 +12,7 @@ int num_tries = 1000000;
 template<class T>
 void test_rand(T min, T max)
 {
-	rand_gen::ptr gen = rand_gen::create<T>(min, max);
+	rand_gen::ptr gen = rand_gen::create_randu<T>(min, max);
 	assert(gen->get_type() == get_scalar_type<T>());
 	std::vector<T> randv(num_tries);
 	gen->gen((char *) randv.data(), randv.size());
@@ -22,7 +22,7 @@ void test_rand(T min, T max)
 
 void test_rand_bool()
 {
-	rand_gen::ptr gen = rand_gen::create<bool>(0, 1);
+	rand_gen::ptr gen = rand_gen::create_randu<bool>(0, 1);
 	assert(gen->get_type() == get_scalar_type<bool>());
 	std::unique_ptr<bool[]> randv(new bool[num_tries]);
 	gen->gen((char *) randv.get(), num_tries);
