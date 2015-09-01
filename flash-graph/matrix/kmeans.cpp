@@ -167,10 +167,10 @@ static void kmeanspp_init(const double* matrix, double* clusters)
 			if (sum < dist[row]) { // Found a closer cluster than before
 				dist[row] = sum;
 			}
-			cum_sum += dist[row]; // TODO: Check race condition when OMP-ing
+			cum_sum += dist[row];
 		}
 
-		cum_sum *= (((double)random()) / (RAND_MAX)); // TODO: Verify
+		cum_sum *= (((double)random()) / (RAND_MAX));
 		clust_idx++;
 
 		for (size_t i=0; i < NUM_ROWS; i++) {
