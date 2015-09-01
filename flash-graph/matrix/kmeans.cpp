@@ -222,7 +222,8 @@ static void E_step(const double* matrix, double* clusters,
 		pt_cl[i].resize(K*NEV);
 	}
 
-#pragma omp parallel for firstprivate(matrix, clusters) shared(pt_cl_as_cnt, cluster_assignments)
+#pragma omp parallel for firstprivate(matrix, clusters) shared(pt_cl_as_cnt, cluster_assignments)\
+	schedule(static)
     for (unsigned row = 0; row < NUM_ROWS; row++) {
         size_t asgnd_clust = std::numeric_limits<size_t>::max();
         double best = std::numeric_limits<double>::max();
@@ -274,7 +275,7 @@ static void E_step(const double* matrix, double* clusters,
 		}
 		
 		// Summation for cluster centers
-#pragma omp parallel for firstprivate(pt_cl) shared(clusters)
+#pragma omp parallel for firstprivate(pt_cl) shared(clusters) schedule(static)
 		for (unsigned row = 0; row < K; row++) { /* ClusterID */
 			for (unsigned col = 0; col < NEV; col++) { /* Features */
 				clusters[row*NEV+col] = pt_cl[i][row*NEV + col] + clusters[row*NEV + col];
