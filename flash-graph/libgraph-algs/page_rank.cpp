@@ -206,8 +206,6 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		exit(-1);
 	}
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
@@ -221,6 +219,8 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	pr_stage = pr_stage_t::INIT;
 	graph->start_all(); 
 	graph->wait4complete();
@@ -255,8 +255,6 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		exit(-1);
 	}
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
@@ -270,6 +268,8 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph->start_all(); 
 	graph->wait4complete();
 	gettimeofday(&end, NULL);

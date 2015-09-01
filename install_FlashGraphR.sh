@@ -1,5 +1,14 @@
 #!/bin/sh
 
+mkdir -p build
+cd build
+cmake ..;
+if [ $? != 0 ]; then
+	exit
+fi
+make
+cd ..
+
 R CMD build Rpkg
 if [ -d ~/R ]; then
 	path=`find ~/R -name Rcpp.h`
