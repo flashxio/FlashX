@@ -1114,6 +1114,13 @@ namespace fg
 
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm works on a directed graph";
+		return FG_vector<vertex_id_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);

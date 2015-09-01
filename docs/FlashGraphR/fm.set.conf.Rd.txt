@@ -1,0 +1,21 @@
+Reconfigure FlashMatrixR
+
+Description:
+
+     This reconfigures FlashMatrixR with the settings in the
+     configuration file. The configuration file contains a list of
+     key-value pairs. Each line in the file is a key-value pair in the
+     form of "key_name=value".
+
+Usage:
+
+     fm.set.conf(conf.file)
+     
+Arguments:
+
+conf.file: The configuration file.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

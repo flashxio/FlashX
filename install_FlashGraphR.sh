@@ -1,5 +1,14 @@
 #!/bin/sh
 
+mkdir -p build
+cd build
+cmake ..;
+if [ $? != 0 ]; then
+	exit
+fi
+make
+cd ..
+
 R CMD build Rpkg
 version=`R --version | grep "R version" | awk '{print $3}' | awk -F. '{print $1 "." $2}'`
 if [ -d ~/R ]; then

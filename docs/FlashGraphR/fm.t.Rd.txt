@@ -1,0 +1,22 @@
+Transpose a FlashMatrixR matrix.
+
+Description:
+
+     Transpose a FlashMatrixR matrix.
+
+Usage:
+
+     fm.t(m)
+     
+Arguments:
+
+       m: a FlashMatrixR matrix
+
+Value:
+
+     a FlashMatrixR matrix
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

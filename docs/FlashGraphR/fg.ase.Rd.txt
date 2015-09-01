@@ -6,7 +6,7 @@ Description:
 
 Usage:
 
-     fg.ASE(fg, num.eigen, which = c("A, AcD, L, nL, nL_tau"),
+     fg.ASE.igraph(fg, num.eigen, which = c("A, AcD, L, nL, nL_tau"),
        which.eigen = c("LM, LA, SM, SA"), c = 1, tau = 1, tol = 1e-12)
      
 Arguments:

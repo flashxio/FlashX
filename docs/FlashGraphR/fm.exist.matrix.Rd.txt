@@ -1,0 +1,24 @@
+Indicate whether a matrix has been loaded to FlashMatrixR
+
+Description:
+
+     This function indicates whether a matrix has been loaded to
+     FlashMatrixR.
+
+Usage:
+
+     fm.exist.matrix(name)
+     
+Arguments:
+
+    name: A matrix name.
+
+Value:
+
+     A boolean value: true if the matrix has been loaded to
+     FlashMatrixR.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

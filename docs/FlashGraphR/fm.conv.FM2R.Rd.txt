@@ -1,0 +1,22 @@
+Convert a FlashMatrixR object to a regular R object
+
+Description:
+
+     Convert a FlashMatrixR object to a regular R object
+
+Usage:
+
+     fm.conv.FM2R(obj)
+     
+Arguments:
+
+     obj: a FlashMatrixR object
+
+Value:
+
+     a regular R object.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

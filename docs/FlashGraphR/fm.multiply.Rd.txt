@@ -1,0 +1,25 @@
+Matrix multiplication
+
+Description:
+
+     Multiply a sparse/dense matrix with a dense vector/matrix.
+
+Usage:
+
+     fm.multiply(fm, mat)
+     
+Arguments:
+
+      fm: A FlashMatrixR matrix
+
+     mat: A FlashMatrixR dense matrix.
+
+Value:
+
+     a FlashMatrixR vector if the second argument is a vector; a
+     FlashMatrixR matrix if the second argument is a matrix.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
