@@ -66,8 +66,8 @@ public:
 		assert(num_cols <= block_max_num_cols);
 		nrow_log = log2(num_rows);
 		ncol_log = log2(num_cols);
-		assert((1 << nrow_log) == num_rows);
-		assert((1 << ncol_log) == num_cols);
+		assert((1U << nrow_log) == num_rows);
+		assert((1U << ncol_log) == num_cols);
 	}
 
 	size_t get_nrow_log() const {

@@ -438,7 +438,7 @@ public:
 };
 
 template<class T>
-static dense_matrix operator*(const dense_matrix &m, T val)
+dense_matrix operator*(const dense_matrix &m, T val)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
@@ -448,7 +448,7 @@ static dense_matrix operator*(const dense_matrix &m, T val)
 }
 
 template<class T>
-static dense_matrix operator*(T val, const dense_matrix &m)
+dense_matrix operator*(T val, const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
@@ -457,7 +457,7 @@ static dense_matrix operator*(T val, const dense_matrix &m)
 	return *ret;
 }
 
-static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
@@ -466,7 +466,7 @@ static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 	return *ret;
 }
 
-static dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
+inline dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
@@ -475,7 +475,7 @@ static dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
 	return *ret;
 }
 
-static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.add(m2);
 	assert(ret);
@@ -484,7 +484,7 @@ static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 	return *ret;
 }
 
-static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.minus(m2);
 	assert(ret);
@@ -494,7 +494,7 @@ static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 }
 
 template<class T>
-static T as_scalar(const dense_matrix &m)
+inline T as_scalar(const dense_matrix &m)
 {
 	assert(m.get_type() == get_scalar_type<T>());
 	m.materialize_self();
@@ -504,7 +504,7 @@ static T as_scalar(const dense_matrix &m)
 	return mem_m->get<T>(0, 0);
 }
 
-static inline dense_matrix t(const dense_matrix &m)
+inline dense_matrix t(const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.transpose();
 	assert(ret);
