@@ -132,6 +132,10 @@ class matrix_header
 	void init(matrix_type mat_type, size_t entry_size, size_t nrows,
 			size_t ncols, matrix_layout_t layout, prim_type data_type);
 public:
+	static size_t get_header_size() {
+		return sizeof(matrix_header);
+	}
+
 	matrix_header() {
 		memset(u.page, 0, sizeof(u.page));
 	}

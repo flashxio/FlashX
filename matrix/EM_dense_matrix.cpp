@@ -86,6 +86,21 @@ EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layou
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
+
+	// Write the header to the file.
+	safs::io_interface::ptr io = safs::create_io(factory,
+			thread::get_curr_thread());
+	char *buf = NULL;
+	int ret = posix_memalign((void **) &buf, PAGE_SIZE,
+			matrix_header::get_header_size());
+	assert(ret == 0);
+	new (buf) matrix_header(matrix_type::DENSE, type.get_size(),
+			nrow, ncol, layout, type.get_type());
+	safs::data_loc_t loc(io->get_file_id(), 0);
+	safs::io_request req(buf, loc, matrix_header::get_header_size(), WRITE);
+	io->access(&req, 1);
+	io->wait4complete(1);
+	free(buf);
 }
 
 EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
@@ -319,7 +334,8 @@ async_cres_t EM_matrix_store::get_portion_async(
 		// the method is called. We should add the user's portion computation
 		// to the queue. When the data is ready, all user's portion computations
 		// will be invoked.
-		safs::data_loc_t loc(io.get_file_id(), off);
+		safs::data_loc_t loc(io.get_file_id(),
+				off + matrix_header::get_header_size());
 		safs::io_request req(const_cast<char *>(ret1->get_raw_arr()), loc,
 				num_bytes, READ);
 		portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
@@ -351,7 +367,8 @@ async_cres_t EM_matrix_store::get_portion_async(
 					fetch_start_row, fetch_start_col, fetch_num_rows,
 					fetch_num_cols, get_type(), data_arr.get_node_id()));
 
-	safs::data_loc_t loc(io.get_file_id(), off);
+	safs::data_loc_t loc(io.get_file_id(),
+			off + matrix_header::get_header_size());
 	safs::io_request req(buf->get_raw_arr(), loc, num_bytes, READ);
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
@@ -440,7 +457,8 @@ void EM_matrix_store::write_portion_async(
 		num_bytes = ROUNDUP(num_bytes, PAGE_SIZE);
 	}
 
-	safs::data_loc_t loc(io.get_file_id(), off);
+	safs::data_loc_t loc(io.get_file_id(),
+			off + matrix_header::get_header_size());
 	safs::io_request req(const_cast<char *>(portion->get_raw_arr()),
 			loc, num_bytes, WRITE);
 	portion_compute::ptr compute(new portion_write_complete(portion));
@@ -470,7 +488,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 		smp_vec_store::ptr vec = smp_vec_store::create(len, get_type());
 		vec->expose_sub_vec(0, get_num_rows());
 
-		safs::data_loc_t loc(io.get_file_id(), 0);
+		safs::data_loc_t loc(io.get_file_id(), matrix_header::get_header_size());
 		safs::io_request req(vec->get_raw_arr(), loc, len * entry_size, READ);
 		io.access(&req, 1);
 		io.wait4complete(1);
@@ -487,7 +505,8 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 			off_t off = (get_num_cols() * row_idx
 					+ CHUNK_SIZE * idx) * entry_size;
 
-			safs::data_loc_t loc(io.get_file_id(), off);
+			safs::data_loc_t loc(io.get_file_id(),
+					off + matrix_header::get_header_size());
 			safs::io_request req(vec->get_raw_arr() + row_idx * entry_size, loc,
 					CHUNK_SIZE * entry_size, READ);
 			reqs.push_back(req);
@@ -503,7 +522,8 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 		assert(read_start <= ele_start
 				&& ele_start + last_nrows <= read_start + num_read_eles);
 		smp_vec_store::ptr tmp = smp_vec_store::create(num_read_eles, get_type());
-		safs::data_loc_t loc(io.get_file_id(), read_start * entry_size);
+		safs::data_loc_t loc(io.get_file_id(),
+				read_start * entry_size + matrix_header::get_header_size());
 		safs::io_request req(tmp->get_raw_arr(), loc,
 				num_read_eles * entry_size, READ);
 		reqs.push_back(req);
