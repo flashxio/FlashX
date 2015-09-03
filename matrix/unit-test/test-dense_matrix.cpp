@@ -1446,8 +1446,6 @@ void test_sub_matrix()
 	max_var = diff->abs()->max();
 	printf("max diff: %g\n", *(const double *) max_var->get_raw());
 	assert(*(const double *) max_var->get_raw() == 0);
-
-	exit(0);
 }
 
 void test_copy(int num_nodes, bool in_mem)
