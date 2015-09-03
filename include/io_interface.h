@@ -523,6 +523,11 @@ const RAID_config &get_sys_RAID_conf();
 void print_io_thread_stat();
 
 /**
+ * This function prints the summary info on I/O statistics in the system.
+ */
+void print_io_summary();
+
+/**
  * The users can set the weight of a file. The file weight is used by
  * the page cache. The file with a higher weight can have its data in
  * the page cache longer.

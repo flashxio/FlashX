@@ -215,6 +215,8 @@ void mapply_store::materialize_whole()
 	// data from `whole_res' from now on.
 	for (size_t i = 0; i < res_bufs.size(); i++)
 		res_bufs[i] = NULL;
+	// We don't need the input matrix portions any more.
+	ins.clear();
 }
 
 void mapply_store::materialize() const
@@ -303,6 +305,9 @@ void mapply_store::materialize() const
 		// `whole_res' from now on.
 		for (size_t i = 0; i < res_bufs.size(); i++)
 			mutable_this->res_bufs[i] = NULL;
+
+		// We don't need the input matrix portions any more.
+		mutable_this->ins.clear();
 	}
 }
 
@@ -314,7 +319,7 @@ void mapply_store::materialize() const
  */
 class collect_portion_compute: public portion_compute
 {
-	std::vector<local_matrix_store::const_ptr> parts;
+	size_t num_EM_parts;
 	std::vector<portion_compute::ptr> orig_computes;
 	local_matrix_store::ptr res;
 	size_t num_reads;
@@ -322,16 +327,17 @@ public:
 	typedef std::shared_ptr<collect_portion_compute> ptr;
 
 	collect_portion_compute(portion_compute::ptr orig_compute) {
+		this->num_EM_parts = 0;
 		this->num_reads = 0;
 		this->orig_computes.push_back(orig_compute);
 	}
 
 	size_t get_num_EM_parts() const {
-		return parts.size();
+		return num_EM_parts;
 	}
 
 	void add_EM_part(local_matrix_store::const_ptr part) {
-		parts.push_back(part);
+		num_EM_parts++;
 	}
 
 	void add_orig_compute(portion_compute::ptr compute) {
@@ -351,7 +357,7 @@ public:
 void collect_portion_compute::run(char *buf, size_t size)
 {
 	num_reads++;
-	if (num_reads == parts.size()) {
+	if (num_reads == num_EM_parts) {
 		size_t num_eles = res->get_num_rows() * res->get_num_cols();
 		for (size_t i = 0; i < orig_computes.size(); i++)
 			orig_computes[i]->run(res->get_raw_arr(),
@@ -360,6 +366,8 @@ void collect_portion_compute::run(char *buf, size_t size)
 		// Let's remove all user's portion compute to indicate that it has
 		// been invoked.
 		orig_computes.clear();
+		// We don't need to reference the result matrix portion any more.
+		res = NULL;
 	}
 }
 
@@ -500,6 +508,8 @@ mapply_matrix_store::mapply_matrix_store(
 			ncol, is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
+	this->par_access = true;
+	this->cache_portion = true;
 	this->layout = layout;
 	this->op = op;
 }
@@ -511,15 +521,24 @@ void mapply_matrix_store::materialize_self() const
 		return;
 
 	mapply_matrix_store *mutable_this = const_cast<mapply_matrix_store *>(this);
-	mutable_this->res = materialize();
+	mutable_this->res = materialize(is_in_mem(), get_num_nodes());
 }
 
-matrix_store::const_ptr mapply_matrix_store::materialize() const
+matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
+			int num_nodes) const
 {
-	if (res)
-		return res;
+	if (res) {
+		if (res->is_in_mem() == in_mem && res->get_num_nodes() == num_nodes)
+			return res;
+		else {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't materialize the mapply matrix to the specified storage";
+			return matrix_store::const_ptr();
+		}
+	}
 	else
-		return __mapply_portion(in_mats, op, layout);
+		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes,
+				par_access);
 }
 
 vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
@@ -606,7 +625,8 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 		ret = local_matrix_store::const_ptr(new lmapply_col_matrix_store(
 					parts, *op, NULL, start_row, start_col, num_rows, num_cols,
 					get_type(), parts.front()->get_node_id()));
-	local_mem_buffer::cache_portion(data_id, ret);
+	if (cache_portion)
+		local_mem_buffer::cache_portion(data_id, ret);
 	return ret;
 }
 
@@ -680,10 +700,13 @@ async_cres_t mapply_matrix_store::get_portion_async(
 			collect_compute = store->get_compute();
 		}
 		// If the collect compute doesn't exist, it mean the data in the local
-		// matrix store may already by ready. TODO I need to verify it.
-		assert(collect_compute);
-		collect_compute->add_orig_compute(orig_compute);
-		return async_cres_t(false, ret1);
+		// matrix store may already by ready.
+		if (collect_compute) {
+			collect_compute->add_orig_compute(orig_compute);
+			return async_cres_t(false, ret1);
+		}
+		else
+			return async_cres_t(true, ret1);
 	}
 
 	std::shared_ptr<collect_portion_compute> collect_compute
@@ -727,7 +750,8 @@ async_cres_t mapply_matrix_store::get_portion_async(
 					num_cols, get_type(), parts.front()->get_node_id()));
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
-	local_mem_buffer::cache_portion(data_id, ret);
+	if (cache_portion)
+		local_mem_buffer::cache_portion(data_id, ret);
 	// If all parts are from the in-mem matrix store or have been cached by
 	// the underlying matrices, the data in the returned portion is immediately
 	// accessible.
@@ -802,6 +826,13 @@ std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() co
 		}
 	}
 	return final_res;
+}
+
+void mapply_matrix_store::set_cache_portion(bool cache_portion)
+{
+	this->cache_portion = cache_portion;
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).set_cache_portion(cache_portion);
 }
 
 }

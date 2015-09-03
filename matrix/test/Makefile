@@ -18,12 +18,12 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
+CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
-all: test-fg_SpMV test-2d_multiply test-dense_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm
+all: test-fg_SpMV test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
+	el2al al22d al2crs test-sort test-eigen test-dgemm test-mkl_eigen
 
 trilinos: test-anasazi_eigen test-tpetra_multiply
 
@@ -37,6 +37,9 @@ test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
+
+test-block_mv: test-block_mv.o ../libFMatrix.a ../eigensolver/libeigen.a
+	$(CXX) -o test-block_mv test-block_mv.o $(LDFLAGS) -L../eigensolver -leigen
 
 test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
 	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
@@ -53,14 +56,28 @@ al2crs: al2crs.o fg_utils.o ../libFMatrix.a
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
-LDTRILINOS = -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
+LDTRILINOS = -ltpetra -ltpetrakernels -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
 		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
+test-tpetra_multiply.o: test-tpetra_multiply.cpp
+	mpic++ -c test-tpetra_multiply.cpp $(CXXFLAGS)
+
 test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
-	$(CXX) -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+
+test-mkl_eigen.o: test-mkl_eigen.cpp
+	$(CXX) -O3 -c test-mkl_eigen.cpp -std=c++0x -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
+
+test-mkl_eigen: test-mkl_eigen.o
+	$(CXX) test-mkl_eigen.o -o test-mkl_eigen -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp \
+		-ltpetra -ltpetrakernels -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist		\
+		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
+
+test-anasazi_eigen.o: test-anasazi_eigen.cpp
+	mpic++ -c test-anasazi_eigen.cpp $(CXXFLAGS)
 
 test-anasazi_eigen: test-anasazi_eigen.o
-	$(CXX) test-anasazi_eigen.o -o test-anasazi_eigen $(LDTRILINOS) $(LDFLAGS)
+	mpic++ test-anasazi_eigen.o -o test-anasazi_eigen $(LDTRILINOS) $(LDFLAGS)
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp

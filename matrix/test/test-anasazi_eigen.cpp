@@ -39,8 +39,8 @@ using std::endl;
 
 std::atomic<size_t> iter_no;
 
-typedef fg::vsize_t local_ordinal_type;
-typedef fg::vsize_t global_ordinal_type;
+typedef size_t local_ordinal_type;
+typedef size_t global_ordinal_type;
 
 typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType  Node;
 typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, Node> MV;
@@ -53,61 +53,76 @@ typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_m
 size_t edge_data_size = 0;
 
 ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
-		size_t &num_rows)
+		size_t first_row, size_t num_local_rows)
 {
 	fg::in_mem_query_vertex_index::ptr query_index
 		= fg::in_mem_query_vertex_index::create(index, false);
 
-	ArrayRCP<size_t> numEntries(index->get_num_vertices());
-	for (size_t i = 0; i < index->get_num_vertices(); i++)
-		numEntries[i] = query_index->get_num_edges(i, fg::edge_type::IN_EDGE);
-
-	num_rows = index->get_num_vertices();
+	ArrayRCP<size_t> numEntries(num_local_rows);
+	for (size_t i = 0; i < num_local_rows; i++)
+		numEntries[i] = query_index->get_num_edges(i + first_row,
+				fg::edge_type::IN_EDGE);
 	return numEntries;
 }
 
-RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g,
-		fg::vertex_index::ptr index, RCP<map_type> map)
+RCP<crs_matrix_type> create_crs(const std::string &graph_file,
+		fg::vertex_index::ptr index, RCP<map_type> map, int my_rank)
 {
-	safs::io_interface::ptr io = create_io(g->create_io_factory(),
-			thread::get_curr_thread());
-	const size_t numMyElements = map->getNodeNumElements ();
+	fg::in_mem_cundirected_vertex_index::ptr cu_vindex
+		= fg::in_mem_cundirected_vertex_index::create(*index);
 
-	size_t numRows;
-	ArrayRCP<const size_t> numEntriesPerRow = getNumEntriesPerRow(index, numRows);
-	assert(numRows == numMyElements);
+	const size_t numMyElements = map->getNodeNumElements ();
+	const global_ordinal_type gblRow0 = map->getGlobalElement(0);
+	const size_t numRows = index->get_num_vertices();
+	printf("first vertex in process %d: %ld\n", my_rank, gblRow0);
+
+	ArrayRCP<const size_t> numEntriesPerRow = getNumEntriesPerRow(index,
+			gblRow0, numMyElements);
+	size_t tot_size = 0;
+	for (size_t i = 0; i < numMyElements; i++)
+		tot_size += fg::ext_mem_undirected_vertex::num_edges2vsize(
+				numEntriesPerRow[i], edge_data_size);;
+	off_t off = cu_vindex->get_vertex(gblRow0).get_off();
+
+	// Read the portion of the graph image that belongs to the current process.
+	std::unique_ptr<char[]> graph_data(new char[tot_size]);
+	FILE *f = fopen(graph_file.c_str(), "r");
+	assert(f);
+	int seek_ret = fseek(f, off, SEEK_SET);
+	assert(seek_ret == 0);
+	size_t read_ret = fread(graph_data.get(), tot_size, 1, f);
+	assert(read_ret == 1);
+	fclose(f);
+
+	printf("fill the CRS matrix\n");
 	// Create a Tpetra sparse matrix whose rows have distribution given by the Map.
 	RCP<crs_matrix_type> A (new crs_matrix_type (map, numEntriesPerRow,
 				Tpetra::ProfileType::StaticProfile));
-
-	const size_t vheader_size = fg::ext_mem_undirected_vertex::get_header_size();
-	char vheader_buf[vheader_size];
-	const fg::ext_mem_undirected_vertex *vheader
-		= (const fg::ext_mem_undirected_vertex *) vheader_buf;
-	off_t off = fg::graph_header::get_header_size();
+	std::vector<global_ordinal_type> cols;
+	std::vector<double> vals;
+	off_t local_off = 0;
 	// Fill the sparse matrix, one row at a time.
 	for (local_ordinal_type lclRow = 0;
 			lclRow < static_cast<local_ordinal_type> (numMyElements); ++lclRow) {
-		io->access(vheader_buf, off, vheader_size, READ);
-		fg::vsize_t num_edges = vheader->get_num_edges();
-		assert(num_edges > 0);
-		size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
-				edge_data_size);
-		std::unique_ptr<char[]> buf(new char[size]);
-		io->access(buf.get(), off, size, READ);
-
+		const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
 		const fg::ext_mem_undirected_vertex *v
-			= (const fg::ext_mem_undirected_vertex *) buf.get();
-		std::vector<global_ordinal_type> cols(num_edges);
-		std::vector<double> vals(num_edges);
+			= (const fg::ext_mem_undirected_vertex *) (graph_data.get() + local_off);
+		assert(v->get_id() == gblRow);
+		fg::vsize_t num_edges = v->get_num_edges();
+		cols.resize(num_edges);
+		vals.resize(num_edges);
 		for (fg::vsize_t i = 0; i < num_edges; i++) {
 			cols[i] = v->get_neighbor(i);
+			assert(cols[i] < numRows);
 			vals[i] = 1;
 		}
-		const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
+		assert(num_edges == numEntriesPerRow[lclRow]);
+		assert(gblRow < numRows);
 		A->insertGlobalValues (gblRow, cols, vals);
-		off += size;
+		local_off += fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+				edge_data_size);
 	}
+	assert((size_t) local_off == tot_size);
 
 	// Tell the sparse matrix that we are done adding entries to it.
 	A->fillComplete ();
@@ -117,7 +132,7 @@ RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g,
 RCP<map_type> Map;
 
 void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
-		int blockSize, int numBlocks, double tol)
+		int blockSize, int numBlocks, double tol, int my_rank)
 {
 	// Here, Scalar is double, MV is Tpetra::MultiVector, and OP is FMTp_Operator.
 	typedef Anasazi::MultiVecTraits<double, MV> MVT;
@@ -126,10 +141,12 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 	const int maxRestarts = 100; // maximum number of restart cycles
 	const int maxIters = 500;
 
-	printf("solver: %s\n", solver.c_str());
-	printf("block size: %d\n", blockSize);
-	printf("#blocks: %d\n", numBlocks);
-	printf("tol: %f\n", tol);
+	if (my_rank == 0) {
+		printf("solver: %s\n", solver.c_str());
+		printf("block size: %d\n", blockSize);
+		printf("#blocks: %d\n", numBlocks);
+		printf("tol: %g\n", tol);
+	}
 
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
@@ -197,9 +214,10 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 	else
 		assert(0);
 
-	if (returnCode != Anasazi::Converged) {
+	if (returnCode != Anasazi::Converged && my_rank == 0) {
 		cout << "Anasazi eigensolver did not converge." << endl;
 	}
+#if 0
 	// Get the eigenvalues and eigenvectors from the eigenproblem.
 	Anasazi::Eigensolution<double,MV> sol = problem->getSolution ();
 
@@ -225,31 +243,36 @@ void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
 		MVT::MvNorm (tempAevec, normR);
 	}
 
-	// Print the results on MPI process 0.
-	cout << "Solver manager returned "
-		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.")
-		<< endl << endl
-		<< "------------------------------------------------------" << endl
-		<< std::setw(16) << "Eigenvalue"
-		<< std::setw(18) << "Direct Residual"
-		<< endl
-		<< "------------------------------------------------------" << endl;
-	for (int i=0; i<sol.numVecs; ++i) {
-		cout << std::setw(16) << evals[i].realpart
-			<< std::setw(18) << normR[i] / evals[i].realpart
-			<< endl;
+	if (my_rank == 0) {
+		// Print the results on MPI process 0.
+		cout << "Solver manager returned "
+			<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.")
+			<< endl << endl
+			<< "------------------------------------------------------" << endl
+			<< std::setw(16) << "Eigenvalue"
+			<< std::setw(18) << "Direct Residual"
+			<< endl
+			<< "------------------------------------------------------" << endl;
+		for (int i=0; i<sol.numVecs; ++i) {
+			cout << std::setw(16) << evals[i].realpart
+				<< std::setw(18) << normR[i] / evals[i].realpart
+				<< endl;
+		}
+		cout << "------------------------------------------------------" << endl;
+		cout << iter_no << endl;
 	}
-	cout << "------------------------------------------------------" << endl;
-	cout << iter_no << endl;
+#endif
 }
 
 void print_usage()
 {
-	fprintf(stderr, "eigensolver conf_file matrix_file index_file nev [options]\n");
+	fprintf(stderr, "eigensolver matrix_file index_file [options]\n");
 	fprintf(stderr, "-b block_size_start\n");
 	fprintf(stderr, "-B block_size_end\n");
 	fprintf(stderr, "-n num_blocks_start\n");
 	fprintf(stderr, "-N num_blocks_end\n");
+	fprintf(stderr, "-e nev_start\n");
+	fprintf(stderr, "-E nev_end\n");
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
 	fprintf(stderr, "-S: run SVD\n");
@@ -263,9 +286,11 @@ int main (int argc, char *argv[])
 	size_t blockSizeEnd = 0;
 	size_t numBlocksStart = 8;
 	size_t numBlocksEnd = 0;
+	size_t nevStart = 8;
+	size_t nevEnd = 0;
 	std::string solver = "LOBPCG";
 	double tol = 1e-8;
-	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:B:n:N:s:t:e:E:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -292,6 +317,14 @@ int main (int argc, char *argv[])
 				tol = atof(optarg);
 				num_opts++;
 				break;
+			case 'e':
+				nevStart = atoi(optarg);
+				num_opts++;
+				break;
+			case 'E':
+				nevEnd = atoi(optarg);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -301,48 +334,39 @@ int main (int argc, char *argv[])
 		blockSizeEnd = blockSizeStart;
 	if (numBlocksEnd == 0)
 		numBlocksEnd = numBlocksStart;
+	if (nevEnd == 0)
+		nevEnd = nevStart;
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
-	if (argc < 4) {
+	if (argc < 2) {
 		print_usage();
 		exit(1);
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-	int nev = atoi(argv[3]); // number of eigenvalues for which to solve;
+	std::string graph_file = argv[0];
+	std::string index_file = argv[1];
 
-	// Anasazi solvers have the following template parameters:
-	//
-	//   - Scalar: The type of dot product results.
-	//   - MV: The type of (multi)vectors.
-	//   - OP: The type of operators (functions from multivector to
-	//     multivector).  A matrix (like Epetra_CrsMatrix) is an example
-	//     of an operator; an Ifpack preconditioner is another example.
-	//
-	typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
+	fg::vertex_index::ptr index = fg::vertex_index::load(index_file);
+	Teuchos::GlobalMPISession mpiSession (&argc, &argv);
 
 	//
 	// Set up the test problem.
 	//
-	config_map::ptr configs = config_map::create(conf_file);
-	init_flash_matrix(configs);
-
-	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
-
+	typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
 	Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
 	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
-	Map = rcp (new map_type(fg->get_graph_header().get_num_vertices(),
+	Map = rcp (new map_type(index->get_graph_header().get_num_vertices(),
 				0, comm));
-	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(),
-			fg->get_index_data(), Map);
-	for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
-			blockSize *= 2) {
-		for (size_t numBlocks = numBlocksStart; numBlocks <= numBlocksEnd;
-				numBlocks *= 2)
-			compute_eigen(A, nev, solver, blockSize, numBlocks, tol);
+	int my_rank = comm->getRank();
+	RCP<crs_matrix_type> A = create_crs(graph_file, index, Map, my_rank);
+	for (size_t nev = nevStart; nev <= nevEnd; nev *= 2) {
+		for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
+				blockSize *= 2) {
+			for (size_t numBlocks = numBlocksStart; numBlocks <= numBlocksEnd;
+					numBlocks *= 2)
+				compute_eigen(A, nev, solver, blockSize, numBlocks, tol, my_rank);
+		}
 	}
 
 	return 0;

@@ -64,14 +64,16 @@ void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 	else
 		triangles = compute_directed_triangles(graph,
 				directed_triangle_type::CYCLE);
-	printf("There are %ld cycle triangles\n", triangles->sum());
+	if (triangles)
+		printf("There are %ld cycle triangles\n", triangles->sum());
 }
 
 void run_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
 	FG_vector<size_t>::ptr triangles;
 	triangles = compute_undirected_triangles(graph);
-	printf("There are %ld triangles\n", triangles->sum());
+	if (triangles)
+		printf("There are %ld triangles\n", triangles->sum());
 }
 
 void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
@@ -102,8 +104,10 @@ void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 		fprintf(stderr, "we don't support local scan of more than 2 hops\n");
 		exit(1);
 	}
-	std::pair<size_t, off_t> ret = scan->max_val_loc();
-	printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
+	if (scan) {
+		std::pair<size_t, off_t> ret = scan->max_val_loc();
+		printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
+	}
 }
 
 void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
@@ -127,9 +131,11 @@ void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
 
 	FG_vector<std::pair<vertex_id_t, size_t> >::ptr scan
 		= compute_topK_scan(graph, topK);
-	printf("The top %d scans:\n", topK);
-	for (int i = 0; i < topK; i++)
-		printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
+	if (scan) {
+		printf("The top %d scans:\n", topK);
+		for (int i = 0; i < topK; i++)
+			printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
+	}
 }
 
 void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
@@ -148,7 +154,9 @@ void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
 
 void run_cc(FG_graph::ptr graph, int argc, char *argv[])
 {
-	print_cc(compute_cc(graph));
+	FG_vector<vertex_id_t>::ptr cc = compute_cc(graph);
+	if (cc)
+		print_cc(cc);
 }
 
 void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
@@ -177,6 +185,9 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 		comp_ids = compute_sync_wcc(graph);
 	else
 		comp_ids = compute_wcc(graph);
+	if (comp_ids == NULL)
+		return;
+
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
 		if (f == NULL) {
@@ -192,7 +203,9 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 
 void run_scc(FG_graph::ptr graph, int argc, char *argv[])
 {
-	print_cc(compute_scc(graph));
+	FG_vector<vertex_id_t>::ptr cc = compute_scc(graph);
+	if (cc)
+		print_cc(cc);
 }
 
 void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
@@ -265,6 +278,9 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 		default:
 			abort();
 	}
+	if (pr == NULL)
+		return;
+
 	std::vector<std::pair<float, off_t> > val_locs;
 	pr->max_val_locs(10, val_locs);
 	printf("The sum of pagerank of all vertices: %f\n", pr->sum());
@@ -424,7 +440,8 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
 	FG_vector<vertex_id_t>::ptr comp_ids = compute_ts_wcc(graph, start_time,
 			time_interval);
-	print_cc(comp_ids);
+	if (comp_ids)
+		print_cc(comp_ids);
 }
 
 void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
@@ -461,7 +478,7 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
 	FG_vector<size_t>::ptr kcorev = compute_kcore(graph, k, kmax);
-	if (!write_out.empty())
+	if (!write_out.empty() && kcorev)
 		kcorev->to_file(write_out);
 }
 
@@ -498,7 +515,7 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
 	FG_vector<float>::ptr btwn_v = compute_betweenness_centrality(graph, ids);
-	if (!write_out.empty())
+	if (!write_out.empty() && btwn_v)
 		btwn_v->to_file(write_out);
 }
 

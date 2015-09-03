@@ -217,6 +217,7 @@ block_multi_vector::block_multi_vector(
 		const std::vector<fm::dense_matrix::ptr> &mats,
 		bool in_mem): type(mats[0]->get_type())
 {
+	this->MAX_MUL_BLOCKS = 8;
 	this->in_mem = in_mem;
 	this->num_rows = mats[0]->get_num_rows();
 	this->num_cols = mats[0]->get_num_cols() * mats.size();
@@ -231,6 +232,7 @@ block_multi_vector::block_multi_vector(
 block_multi_vector::block_multi_vector(size_t nrow, size_t ncol,
 		size_t block_size, const fm::scalar_type &_type, bool in_mem): type(_type)
 {
+	this->MAX_MUL_BLOCKS = 8;
 	this->in_mem = in_mem;
 	this->num_rows = nrow;
 	this->num_cols = ncol;
@@ -584,9 +586,91 @@ public:
 };
 
 template<class T>
+class sum_op: public fm::detail::portion_mapply_op
+{
+public:
+	sum_op(size_t out_num_rows, size_t out_num_cols): fm::detail::portion_mapply_op(
+				out_num_rows, out_num_cols, get_scalar_type<T>()) {
+	}
+
+	virtual void run(
+			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
+			fm::detail::local_matrix_store &out) const {
+		assert(!ins.empty());
+		if (ins.size() == 1)
+			out.copy_from(*ins[0]);
+		else {
+			mapply2(*ins[0], *ins[1],
+					out.get_type().get_basic_ops().get_add(), out);
+			for (size_t i = 2; i < ins.size(); i++)
+				mapply2(*ins[i], out,
+						out.get_type().get_basic_ops().get_add(), out);
+		}
+	}
+
+	virtual fm::detail::portion_mapply_op::const_ptr transpose() const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		std::string str;
+		assert(mats.size() > 1);
+		str = "(";
+		for (size_t i = 0; i < mats.size() - 1; i++)
+			str += mats[i]->get_name() + "+";
+		str += mats[mats.size() - 1]->get_name() + ")";
+		return str;
+	}
+
+	virtual bool is_agg() const {
+		return true;
+	}
+};
+
+template<class T>
+class t_sum_op: public fm::detail::portion_mapply_op
+{
+	sum_op<T> op;
+public:
+	t_sum_op(const sum_op<T> &_op): fm::detail::portion_mapply_op(
+			_op.get_out_num_cols(), _op.get_out_num_rows(),
+			_op.get_output_type()), op(_op) {
+	}
+
+	virtual void run(
+			const std::vector<fm::detail::local_matrix_store::const_ptr> &ins,
+			fm::detail::local_matrix_store &out) const {
+		std::vector<fm::detail::local_matrix_store::const_ptr> t_ins(ins.size());
+		for (size_t i = 0; i < ins.size(); i++)
+			t_ins[i] = std::static_pointer_cast<const fm::detail::local_matrix_store>(
+					ins[i]->transpose());
+		fm::detail::local_matrix_store::ptr t_out
+			= std::static_pointer_cast<fm::detail::local_matrix_store>(
+					out.transpose());
+		op.run(t_ins, *t_out);
+	}
+	virtual fm::detail::portion_mapply_op::const_ptr transpose() const {
+		return fm::detail::portion_mapply_op::const_ptr(new sum_op<T>(op));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return op.to_string(mats);
+	}
+
+	virtual bool is_agg() const {
+		return true;
+	}
+};
+
+template<class T>
 fm::detail::portion_mapply_op::const_ptr gemm_op<T>::transpose() const
 {
 	return fm::detail::portion_mapply_op::const_ptr(new t_gemm_op<T>(*this));
+}
+
+template<class T>
+fm::detail::portion_mapply_op::const_ptr sum_op<T>::transpose() const
+{
+	return fm::detail::portion_mapply_op::const_ptr(new t_sum_op<T>(*this));
 }
 
 typedef std::vector<fm::detail::local_matrix_store::const_ptr>::const_iterator block_iterator;
@@ -748,12 +832,54 @@ void split_op::run(
 	assert(col_idx == ins[0]->get_num_cols());
 }
 
+detail::mem_col_matrix_store::const_ptr get_sub_mat(
+		detail::mem_col_matrix_store::const_ptr mat, size_t start_row,
+		size_t start_col, size_t num_rows, size_t num_cols)
+{
+	detail::local_matrix_store::const_ptr portion = mat->get_portion(
+			start_row, start_col, num_rows, num_cols);
+	assert(portion);
+	detail::local_col_matrix_store::const_ptr col_portion
+		= detail::local_col_matrix_store::cast(portion);
+	assert(col_portion);
+
+	detail::mem_col_matrix_store::ptr ret = detail::mem_col_matrix_store::create(
+			num_rows, num_cols, col_portion->get_type());
+	for (size_t i = 0; i < num_cols; i++)
+		memcpy(ret->get_col(i), col_portion->get_col(i),
+				num_rows * ret->get_entry_size());
+	return ret;
+}
+
+}
+
+static void set_caching(
+		const std::vector<detail::matrix_store::const_ptr> &mats, bool caching)
+{
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(*mats[i]).set_cache_portion(caching);
+}
+
+static std::vector<detail::matrix_store::const_ptr> get_input_matrices(
+		const block_multi_vector &mv)
+{
+	std::vector<detail::matrix_store::const_ptr> mats(mv.get_num_blocks());
+	for (size_t i = 0; i < mv.get_num_blocks(); i++)
+		mats[i] = mv.get_block(i)->get_raw_store();
+	return mats;
 }
 
 block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::mem_col_matrix_store::const_ptr B, const scalar_variable &alpha,
 		const scalar_variable &beta) const
 {
+	if (A.get_num_cols() != B->get_num_rows()
+			|| A.get_num_rows() != get_num_rows()
+			|| B->get_num_cols() != get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "Wrong dimension for GEMM";
+		return block_multi_vector::ptr();
+	}
+
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -761,30 +887,82 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	double d_beta
 		= dynamic_cast<const scalar_variable_impl<double> &>(beta).get();
 
-	std::vector<dense_matrix::const_ptr> mats;
-	if (d_beta) {
-		mats.resize(A.get_num_blocks() + this->get_num_blocks());
-		for (size_t i = A.get_num_blocks(); i < mats.size(); i++)
-			mats[i] = this->get_block(i - A.get_num_blocks());
-	}
-	else
-		mats.resize(A.get_num_blocks());
-	for (size_t i = 0; i < A.get_num_blocks(); i++)
-		mats[i] = A.get_block(i);
-
 	// This works for double float points.
 	assert(type == fm::get_scalar_type<double>());
 	size_t A_num_blocks = A.get_num_blocks();
 	size_t C_num_blocks = d_beta != 0 ? this->get_num_blocks() : 0;
-	assert(A_num_blocks + C_num_blocks == mats.size());
-	// I assume B is small enough.
-	detail::portion_mapply_op::const_ptr op(new gemm_op<double>(B,
-				A_num_blocks, C_num_blocks, d_alpha, d_beta,
-				this->get_num_rows(), this->get_num_cols()));
-	dense_matrix::ptr block = mapply_portion(mats, op, matrix_layout_t::L_COL);
+	dense_matrix::ptr block;
+	if (A_num_blocks <= MAX_MUL_BLOCKS) {
+		std::vector<dense_matrix::const_ptr> mats;
+		if (d_beta) {
+			mats.resize(A.get_num_blocks() + this->get_num_blocks());
+			for (size_t i = A.get_num_blocks(); i < mats.size(); i++)
+				mats[i] = this->get_block(i - A.get_num_blocks());
+		}
+		else
+			mats.resize(A.get_num_blocks());
+		for (size_t i = 0; i < A.get_num_blocks(); i++)
+			mats[i] = A.get_block(i);
+		assert(A_num_blocks + C_num_blocks == mats.size());
+
+		// I assume B is small enough.
+		detail::portion_mapply_op::const_ptr op(new gemm_op<double>(B,
+					A_num_blocks, C_num_blocks, d_alpha, d_beta,
+					this->get_num_rows(), this->get_num_cols()));
+		block = mapply_portion(mats, op, matrix_layout_t::L_COL);
+	}
+	else {
+		printf("compute gemm hierarchically\n");
+		// If there are too many blocks in the subspace, we need to perform
+		// gemm in a hierarchical fashion.
+		std::vector<dense_matrix::const_ptr> tmp_mats;
+		// We first perform multiplication on the subset of the matrices
+		// and generate some temp matrices.
+		for (size_t i = 0; i < A_num_blocks; i += MAX_MUL_BLOCKS) {
+			size_t num_sub_mats = std::min(MAX_MUL_BLOCKS, A_num_blocks - i);
+			std::vector<detail::matrix_store::const_ptr> sub_mats(num_sub_mats);
+			for (size_t j = 0; j < num_sub_mats; j++)
+				sub_mats[j] = A.get_block(i + j)->get_raw_store();
+			detail::portion_mapply_op::const_ptr op;
+			detail::mem_col_matrix_store::const_ptr sub_B = get_sub_mat(B,
+					i * A.get_block_size(), 0, num_sub_mats * A.get_block_size(),
+					B->get_num_cols());
+			if (i + MAX_MUL_BLOCKS < A_num_blocks)
+				op = detail::portion_mapply_op::const_ptr(new gemm_op<double>(
+							sub_B, sub_mats.size(), 0, d_alpha, 0,
+							this->get_num_rows(), this->get_num_cols()));
+			else {
+				// This is the last group.
+				size_t num_sub_mats = sub_mats.size();
+				if (d_beta) {
+					sub_mats.resize(num_sub_mats + C_num_blocks);
+					for (size_t j = num_sub_mats; j < sub_mats.size(); j++)
+						sub_mats[j] = this->get_block(
+								j - num_sub_mats)->get_raw_store();
+				}
+				op = detail::portion_mapply_op::const_ptr(new gemm_op<double>(
+							sub_B, num_sub_mats, C_num_blocks, d_alpha, d_beta,
+							this->get_num_rows(), this->get_num_cols()));
+			}
+			detail::matrix_store::ptr tmp_store = detail::__mapply_portion_virtual(
+					sub_mats, op, matrix_layout_t::L_COL);
+			// We really don't need to cache the portion in this intermediate
+			// matrix in the hierarchy.
+			tmp_store->set_cache_portion(false);
+			tmp_mats.push_back(dense_matrix::create(tmp_store));
+		}
+
+		// We then sum all of the temp matrices with the original alpha
+		// and beta.
+		detail::portion_mapply_op::const_ptr op(new sum_op<double>(
+					this->get_num_rows(), this->get_num_cols()));
+		// We will materialize the mapply in a hierarchical way,
+		// so the intermediate matrices should be read from SSDs in serial.
+		block = mapply_portion(tmp_mats, op, matrix_layout_t::L_COL, false);
+	}
+
 	std::unordered_map<size_t, size_t> bytes
 		= block->get_data().get_underlying_mats();
-
 	block_multi_vector::ptr vecs;
 	// We are going to assign the result to the current MV. The result
 	// of gemm is a single matrix. If the current MV stores data in multiple
@@ -792,37 +970,37 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	// of the gemm result. In this case, we need to split the gemm result.
 	if (get_block_size() != block->get_num_cols()) {
 		size_t num_out_cols = block->get_num_cols();
-		size_t num_out_rows = block->get_num_rows();
 		assert(num_out_cols % get_block_size() == 0);
-		std::vector<detail::matrix_store::ptr> outs(
-				num_out_cols / get_block_size());
-		for (size_t i = 0; i < outs.size(); i++)
-			outs[i] = detail::matrix_store::create(num_out_rows, get_block_size(),
-					block->store_layout(), type,
-					block->get_data().get_num_nodes(), in_mem);
 
 		printf("Split matrix\n");
 		printf("There are %ld underlying matrices\n", bytes.size());
 		num_col_writes += block->get_num_cols();
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
-		std::vector<detail::matrix_store::const_ptr> ins(1);
-		ins[0] = block->get_raw_store();
-		bool ret = __mapply_portion(ins,
-				detail::portion_mapply_op::const_ptr(new split_op()), outs);
-		assert(ret);
+		std::vector<detail::matrix_store::const_ptr> orig_input_mats
+			= get_input_matrices(A);
+		set_caching(orig_input_mats, false);
+		block->materialize_self();
+		set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
 				get_block_size(), type, in_mem);
-		assert(vecs->mats.size() == outs.size());
-		for (size_t i = 0; i < outs.size(); i++)
-			vecs->mats[i] = dense_matrix::create(outs[i]);
+		off_t col_off = 0;
+		for (size_t i = 0; i < vecs->mats.size(); i++) {
+			std::vector<off_t> idxs(get_block_size());
+			for (size_t j = 0; j < get_block_size(); j++)
+				idxs[j] = col_off++;
+			vecs->mats[i] = block->get_cols(idxs);
+		}
 	}
 	else if (bytes.size() > 2) {
 		printf("There are %ld underlying matrices\n", bytes.size());
 		printf("materialize %s\n", block->get_data().get_name().c_str());
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		std::vector<detail::matrix_store::const_ptr> orig_input_mats
+			= get_input_matrices(A);
+		set_caching(orig_input_mats, false);
 		// If we want to cache the most recently materialized matrix.
 		if (!in_mem && cache_recent)
 			block->move_store(true, matrix_conf.get_num_nodes());
@@ -830,6 +1008,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 			num_col_writes += block->get_num_cols();
 			block->materialize_self();
 		}
+		set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
@@ -871,6 +1050,240 @@ block_multi_vector::ptr block_multi_vector::add(
 	return ret;
 }
 
+template<class T>
+class multiply_wide_op: public detail::portion_mapply_op
+{
+	std::vector<detail::local_matrix_store::ptr> res_bufs;
+	size_t out_num_rows;
+	size_t out_num_cols;
+	matrix_layout_t Alayout;
+	matrix_layout_t Blayout;
+public:
+	multiply_wide_op(size_t num_threads, size_t out_num_rows,
+			size_t out_num_cols, size_t fake_num_rows,
+			matrix_layout_t required_layout): detail::portion_mapply_op(
+				// We have to output something to make it work for the upper
+				// level of the mapply hierarchy.
+				fake_num_rows, 1, get_scalar_type<T>()) {
+		res_bufs.resize(num_threads);
+		this->out_num_rows = out_num_rows;
+		this->out_num_cols = out_num_cols;
+		// We need to transpose the A matrix, so we want the data in the A matrix
+		// to be organized in the opposite layout to the required.
+		if (required_layout == matrix_layout_t::L_COL)
+			Alayout = matrix_layout_t::L_ROW;
+		else
+			Alayout = matrix_layout_t::L_COL;
+		Blayout = required_layout;
+	}
+
+	const std::vector<detail::local_matrix_store::ptr> &get_partial_results(
+			) const {
+		return res_bufs;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 2);
+		return std::string("(") + (mats[0]->get_name()
+					+ "*") + mats[1]->get_name() + std::string(")");
+	}
+};
+
+class empty_op: public detail::portion_mapply_op
+{
+public:
+	empty_op(): detail::portion_mapply_op(0, 0,
+			get_scalar_type<double>()) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
+		for (size_t i = 0; i < ins.size(); i++)
+			ins[i]->get_raw_arr();
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+
+	virtual bool is_agg() const {
+		return true;
+	}
+};
+
+template<class T>
+void multiply_wide_op<T>::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 2);
+	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
+			thread::get_curr_thread());
+	int thread_id = thread->get_pool_thread_id();
+
+	detail::local_matrix_store::const_ptr Astore = ins[0];
+	const T *Amat = (const T *) Astore->get_raw_arr();
+	detail::local_matrix_store::ptr Abuf;
+	if (Amat == NULL || Astore->store_layout() != Alayout) {
+		if (Alayout == matrix_layout_t::L_ROW)
+			Abuf = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_row_matrix_store(0, 0,
+						Astore->get_num_rows(), Astore->get_num_cols(),
+						Astore->get_type(), -1));
+		else
+			Abuf = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						Astore->get_num_rows(), Astore->get_num_cols(),
+						Astore->get_type(), -1));
+		Abuf->copy_from(*Astore);
+		Amat = (const T *) Abuf->get_raw_arr();
+	}
+	assert(Amat);
+
+	detail::local_matrix_store::const_ptr Bstore = ins[1];
+	const T *Bmat = (const T *) Bstore->get_raw_arr();
+	detail::local_matrix_store::ptr Bbuf;
+	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
+		if (Blayout == matrix_layout_t::L_COL)
+			Bbuf = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						Bstore->get_num_rows(), Bstore->get_num_cols(),
+						Bstore->get_type(), -1));
+		else
+			Bbuf = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_row_matrix_store(0, 0,
+						Bstore->get_num_rows(), Bstore->get_num_cols(),
+						Bstore->get_type(), -1));
+		Bbuf->copy_from(*Bstore);
+		Bmat = (const T *) Bbuf->get_raw_arr();
+	}
+	assert(Bmat);
+
+	if (res_bufs[thread_id] == NULL) {
+		if (Blayout == matrix_layout_t::L_COL)
+			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+				= detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_col_matrix_store(0, 0,
+							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+		else
+			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+				= detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_row_matrix_store(0, 0,
+							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+		res_bufs[thread_id]->reset_data();
+	}
+	assert(res_bufs[thread_id]->store_layout() == Blayout);
+	T *res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
+	// The A matrix is the transpose of the matrix we need. Since the A matrix
+	// is stored in contiguous memory and is organized in row major, we can
+	// easily interpret it as its transpose by switching its #rows and #cols.
+	if (Blayout == matrix_layout_t::L_COL)
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_cols(), Bstore->get_num_cols(),
+				Astore->get_num_rows(), 1, Amat,
+				Astore->get_num_cols(), Bmat, Bstore->get_num_rows(),
+				1, res_mat, out_num_rows);
+	else
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+				Astore->get_num_cols(), Bstore->get_num_cols(),
+				Astore->get_num_rows(), 1, Amat,
+				Astore->get_num_rows(), Bmat, Bstore->get_num_cols(),
+				1, res_mat, out_num_cols);
+}
+
+dense_matrix::ptr MvTransMv_wide(
+		const std::vector<detail::matrix_store::const_ptr> &blocks1,
+		detail::matrix_store::const_ptr in2, const size_t MAX_MUL_BLOCKS)
+{
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t num_threads = threads->get_num_threads();
+	std::vector<detail::matrix_store::const_ptr> tmp_res;
+	std::vector<detail::portion_mapply_op::const_ptr> mul_ops;
+	for (size_t i = 0; i < blocks1.size(); i += MAX_MUL_BLOCKS) {
+		size_t num = std::min(blocks1.size() - i, MAX_MUL_BLOCKS);
+		std::vector<detail::matrix_store::const_ptr> sub_block(
+				blocks1.begin() + i, blocks1.begin() + i + num);
+		detail::matrix_store::ptr in1 = collected_matrix_store::create(
+				sub_block, num * blocks1.front()->get_num_cols());
+		std::vector<detail::matrix_store::const_ptr> tmp_ins(2);
+		tmp_ins[0] = in1;
+		tmp_ins[1] = in2;
+		size_t out_num_rows = num * blocks1.front()->get_num_cols();
+		size_t out_num_cols = in2->get_num_cols();
+		detail::portion_mapply_op::const_ptr op(new multiply_wide_op<double>(
+					num_threads, out_num_rows, out_num_cols,
+					// The left matrix is larger. After it is transposed,
+					// it is stored in row-major order. Let's multiply
+					// the matrices in row-major order.
+					in2->get_num_rows(), matrix_layout_t::L_ROW));
+		tmp_res.push_back(__mapply_portion_virtual(tmp_ins, op,
+					// This is a layout of the fake output. It doesn't
+					// really matter.
+					matrix_layout_t::L_COL));
+		mul_ops.push_back(op);
+	}
+
+	set_caching(blocks1, false);
+	set_caching(tmp_res, false);
+	const_cast<detail::matrix_store &>(*in2).set_cache_portion(true);
+	__mapply_portion(tmp_res, detail::portion_mapply_op::const_ptr(new empty_op()),
+			matrix_layout_t::L_COL, false);
+	set_caching(blocks1, true);
+
+	// There we put all result matrices together.
+	detail::matrix_store::ptr res = detail::matrix_store::create(
+			blocks1.size() * blocks1.front()->get_num_cols(),
+			in2->get_num_cols(), matrix_layout_t::L_ROW,
+			tmp_res.front()->get_type(), -1, true);
+	res->reset_data();
+	size_t start_row = 0;
+	for (size_t i = 0; i < mul_ops.size(); i++) {
+		std::shared_ptr<const multiply_wide_op<double> > op
+			= std::static_pointer_cast<const multiply_wide_op<double> >(mul_ops[i]);
+		std::vector<detail::local_matrix_store::ptr> local_ms
+			= op->get_partial_results();
+		assert(local_ms.size() == num_threads);
+
+		// Get a non-empty result generated in a worker thread.
+		detail::local_matrix_store::ptr local_m;
+		for (size_t i = 0; i < local_ms.size(); i++)
+			if (local_ms[i])
+				local_m = local_ms[i];
+		assert(local_m);
+
+		// Aggregate the results from omp threads.
+		// This matrix is small. We can always keep it in memory.
+		detail::local_matrix_store::ptr local_res = res->get_portion(
+				start_row, 0, local_m->get_num_rows(), local_m->get_num_cols());
+		const bulk_operate &add = local_res->get_type().get_basic_ops().get_add();
+		for (size_t j = 0; j < local_ms.size(); j++) {
+			// It's possible that the local matrix store doesn't exist
+			// because the input matrix is very small.
+			if (local_ms[j])
+				detail::mapply2(*local_res, *local_ms[j], add, *local_res);
+		}
+		start_row += local_res->get_num_rows();
+	}
+	return dense_matrix::create(res);
+}
+
 dense_matrix::ptr block_multi_vector::MvTransMv(
 		const block_multi_vector &mv) const
 {
@@ -882,21 +1295,75 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 		if (blocks1[i]->is_virtual())
 			printf("materialize %s on the fly\n", blocks1[i]->get_name().c_str());
 	}
-	dense_matrix::ptr in1 = dense_matrix::create(collected_matrix_store::create(
-				blocks1, mv.get_num_cols()));
-
 	std::vector<detail::matrix_store::const_ptr> blocks2(this->get_num_blocks());
 	for (size_t i = 0; i < blocks2.size(); i++) {
 		blocks2[i] = this->get_block(i)->get_raw_store();
 		if (blocks2[i]->is_virtual())
 			printf("materialize %s on the fly\n", blocks2[i]->get_name().c_str());
 	}
-	dense_matrix::ptr in2 = dense_matrix::create(collected_matrix_store::create(
-				blocks2, this->get_num_cols()));
-	detail::matrix_stats_t orig_stats = detail::matrix_stats;
-	dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
-			matrix_layout_t::L_NONE, true);
-	detail::matrix_stats.print_diff(orig_stats);
+
+	if (blocks1.size() <= MAX_MUL_BLOCKS && blocks2.size() <= MAX_MUL_BLOCKS) {
+		dense_matrix::ptr in1;
+		if (blocks1.size() == 1)
+			in1 = mv.get_block(0);
+		else
+			in1 = dense_matrix::create(collected_matrix_store::create(blocks1,
+						mv.get_num_cols()));
+		dense_matrix::ptr in2;
+		if (blocks2.size() == 1)
+			in2 = this->get_block(0);
+		else
+			in2 = dense_matrix::create(collected_matrix_store::create(blocks2,
+						this->get_num_cols()));
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
+				matrix_layout_t::L_NONE, true);
+		detail::matrix_stats.print_diff(orig_stats);
+		return ret;
+	}
+	else if (blocks1.size() > MAX_MUL_BLOCKS && blocks2.size() <= MAX_MUL_BLOCKS) {
+		detail::matrix_store::const_ptr in2;
+		if (blocks2.size() == 1)
+			in2 = this->get_block(0)->get_raw_store();
+		else
+			in2 = collected_matrix_store::create(blocks2, this->get_num_cols());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		dense_matrix::ptr ret = MvTransMv_wide(blocks1, in2, MAX_MUL_BLOCKS);
+		detail::matrix_stats.print_diff(orig_stats);
+		return ret;
+	}
+	else if (blocks1.size() <= MAX_MUL_BLOCKS && blocks2.size() > MAX_MUL_BLOCKS) {
+		detail::matrix_store::const_ptr in1;
+		if (blocks1.size() == 1)
+			in1 = mv.get_block(0)->get_raw_store();
+		else
+			in1 = collected_matrix_store::create(blocks1, mv.get_num_cols());
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		dense_matrix::ptr ret = MvTransMv_wide(blocks2, in1, MAX_MUL_BLOCKS);
+		detail::matrix_stats.print_diff(orig_stats);
+		return ret->transpose();
+	}
+	else {
+		// I don't need to handle this case right now.
+		assert(0);
+		return dense_matrix::ptr();
+	}
+}
+
+std::vector<double> block_multi_vector::MvDot(const block_multi_vector &mv) const
+{
+	std::vector<double> ret;
+
+	assert(mv.get_num_cols() == this->get_num_cols());
+	assert(mv.get_block_size() == this->get_block_size());
+	for (size_t i = 0; i < mv.get_num_blocks(); i++) {
+		dense_matrix::ptr mat1 = get_block(i);
+		dense_matrix::ptr mat2 = mv.get_block(i);
+		dense_matrix::ptr res = mat1->multiply_ele(*mat2);
+		vector::ptr sum = res->col_sum();
+		std::vector<double> tmp = sum->conv2std<double>();
+		ret.insert(ret.end(), tmp.begin(), tmp.end());
+	}
 	return ret;
 }
 

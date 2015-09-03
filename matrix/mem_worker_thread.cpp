@@ -121,7 +121,6 @@ void io_worker_task::run()
 
 	// The task runs until there are no tasks left in the queue.
 	while (dispatch->issue_task()) {
-		// TODO we need to make this a parameter.
 		for (size_t i = 0; i < ios.size(); i++) {
 			ios[i]->wait4complete(0);
 			while (ios[i]->num_pending_ios() > max_pending_ios)
@@ -129,24 +128,35 @@ void io_worker_task::run()
 		}
 	}
 	// Test if all I/O instances have processed all requests.
-	bool complete;
+	size_t num_pending;
 	do {
-		complete = true;
 		for (size_t i = 0; i < ios.size(); i++) {
 			ios[i]->wait4complete(0);
 			// If there is still an I/O instance has pending requests,
 			// we need to start over and test all I/O instances again.
-			if (ios[i]->num_pending_ios() > 0) {
-				complete = false;
+			if (ios[i]->num_pending_ios() > 0)
 				ios[i]->wait4complete(1);
-			}
 		}
-		// If all I/O instances have no pending I/O requests left.
-	} while (!complete);
+
+		// Test if all I/O instances have pending I/O requests left.
+		// When a portion of a matrix is ready in memory and being processed,
+		// it may result in writing data to another matrix. Therefore, we
+		// need to process all completed I/O requests (portions with data
+		// in memory) first and then count the number of new pending I/Os.
+		num_pending = 0;
+		for (size_t i = 0; i < ios.size(); i++)
+			num_pending += ios[i]->num_pending_ios();
+	} while (num_pending > 0);
 
 	pthread_spin_lock(&lock);
 	EM_objs.clear();
 	pthread_spin_unlock(&lock);
+
+	for (size_t i = 0; i < ios.size(); i++) {
+		portion_callback &cb = static_cast<portion_callback &>(
+				ios[i]->get_callback());
+		assert(!cb.has_callback());
+	}
 }
 
 }

@@ -19,7 +19,7 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+LDFLAGS := $(OMP_FLAG) -L../eigensolver -leigen -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
 all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
@@ -31,7 +31,7 @@ all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
 
-test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
+test-dense_matrix: test-dense_matrix.o ../libFMatrix.a ../eigensolver/libeigen.a
 	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
 
 test-NUMA_dense_matrix: test-NUMA_dense_matrix.o ../libFMatrix.a

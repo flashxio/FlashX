@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libmatrix test unit-test eigensolver
+all: libmatrix eigensolver test unit-test
 
 libmatrix: $(OBJS)
 	rm -f libFMatrix.a
@@ -30,7 +30,7 @@ libmatrix: $(OBJS)
 test: libmatrix eigensolver
 	$(MAKE) -C test
 
-unit-test: libmatrix
+unit-test: libmatrix eigensolver
 	$(MAKE) -C unit-test
 
 eigensolver: libmatrix

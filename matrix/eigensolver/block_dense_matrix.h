@@ -41,6 +41,8 @@ extern dense_matrix::ptr cached_mat;
 
 class block_multi_vector
 {
+	size_t MAX_MUL_BLOCKS;
+
 	bool in_mem;
 	size_t block_size;
 	size_t num_rows;
@@ -63,6 +65,10 @@ public:
 			const fm::scalar_type &type, bool in_mem) {
 		assert(ncol % block_size == 0);
 		return ptr(new block_multi_vector(nrow, ncol, block_size, type, in_mem));
+	}
+
+	void set_multiply_blocks(size_t num) {
+		MAX_MUL_BLOCKS = num;
 	}
 
 	size_t get_num_rows() const {
@@ -128,6 +134,7 @@ public:
 
 	block_multi_vector::ptr add(const block_multi_vector &vecs) const;
 	fm::dense_matrix::ptr MvTransMv(const block_multi_vector &mv) const;
+	std::vector<double> MvDot(const block_multi_vector &mv) const;
 
 	fm::dense_matrix::ptr conv2matrix() const;
 

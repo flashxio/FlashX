@@ -179,7 +179,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
-	params.print();
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
@@ -755,6 +754,27 @@ void print_io_thread_stat()
 	}
 }
 
+void print_io_summary()
+{
+	size_t num_reads = 0;
+	size_t num_read_bytes = 0;
+	size_t num_writes = 0;
+	size_t num_write_bytes = 0;
+
+	sleep(1);
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
+		disk_io_thread::ptr t = global_data.read_threads[i];
+		if (t) {
+			num_reads += t->get_num_reads();
+			num_read_bytes += t->get_num_read_bytes();
+			num_writes += t->get_num_writes();
+			num_write_bytes += t->get_num_write_bytes();
+		}
+	}
+	printf("It reads %ld bytes (in %ld reqs) and writes %ld bytes (in %ld reqs)\n",
+			num_read_bytes, num_reads, num_write_bytes, num_writes);
+}
+
 ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
@@ -778,8 +798,11 @@ io_interface::~io_interface()
 
 file_io_factory::file_io_factory(const std::string _name): name(_name)
 {
-	safs_file f(get_sys_RAID_conf(), name);
-	header = f.get_header();
+	// It's possible that SAFS hasn't been initialized.
+	if (global_data.raid_conf) {
+		safs_file f(*global_data.raid_conf, name);
+		header = f.get_header();
+	}
 }
 
 }

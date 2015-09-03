@@ -451,8 +451,6 @@ namespace fg
 FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex,
 		part_directed_triangle_vertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
@@ -463,6 +461,8 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);

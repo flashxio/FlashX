@@ -10,6 +10,9 @@
 #include "EM_dense_matrix.h"
 #include "matrix_stats.h"
 
+#include "eigensolver/block_dense_matrix.h"
+#include "eigensolver/collected_col_matrix_store.h"
+
 using namespace fm;
 
 class set_col_operate: public type_set_operate<int>
@@ -1192,6 +1195,127 @@ void test_mul_output(int num_nodes)
 			== *(double *) agg->get_raw());
 }
 
+class set_col_operate1: public type_set_operate<int>
+{
+	size_t num_cols;
+public:
+	set_col_operate1(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = (row_idx + i) * num_cols + col_idx + 1;
+		}
+	}
+};
+
+void test_min()
+{
+	printf("test min\n");
+	const bulk_operate &op = *get_scalar_type<int>().get_basic_ops().get_op(
+			basic_ops::op_idx::MIN);
+
+	dense_matrix::ptr mat = dense_matrix::create(2000, 1,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate1(4));
+	scalar_variable::ptr res = mat->aggregate(op);
+	assert(*(int *) res->get_raw() == 1);
+
+	mat = dense_matrix::create(long_dim, 1, matrix_layout_t::L_COL,
+			get_scalar_type<int>(), set_col_operate1(4));
+	res = mat->aggregate(op);
+	assert(*(int *) res->get_raw() == 1);
+}
+
+void test_apply_scalar()
+{
+	printf("test apply scalar\n");
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr tmp = mat1->minus(*mat2);
+	assert(tmp->get_type() == get_scalar_type<double>());
+	tmp = tmp->abs();
+	assert(tmp->get_type() == get_scalar_type<double>());
+	tmp = tmp->lt_scalar<double>(1e-5);
+	assert(tmp->get_type() == get_scalar_type<bool>());
+	scalar_variable::ptr res = tmp->sum();
+	assert(res->get_type() == get_scalar_type<size_t>());
+
+	detail::mem_matrix_store::const_ptr store1
+		= detail::mem_matrix_store::cast(mat1->get_raw_store());
+	detail::mem_matrix_store::const_ptr store2
+		= detail::mem_matrix_store::cast(mat2->get_raw_store());
+	size_t num = 0;
+	for (size_t i = 0; i < store1->get_num_rows(); i++)
+		for (size_t j = 0; j < store2->get_num_cols(); j++) {
+			if (std::abs(store1->get<double>(i, j) - store2->get<double>(i, j)) < 1e-5)
+				num++;
+		}
+	assert(num == *(size_t *) res->get_raw());
+	printf("two matrices have %ld elements with similar values\n", num);
+}
+
+class add_portion_op: public detail::portion_mapply_op
+{
+public:
+	add_portion_op(size_t num_rows, size_t num_cols): detail::portion_mapply_op(
+			num_rows, num_cols, get_scalar_type<double>()) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		out.reset_data();
+		for (size_t i = 0; i < ins.size(); i++) {
+			assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
+			detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			assert(in);
+			detail::mapply2(out, *in,
+					out.get_type().get_basic_ops().get_add(), out);
+		}
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void test_mapply_mixed(int num_nodes)
+{
+	printf("test serial and parallel mapply\n");
+	std::vector<dense_matrix::ptr> mats(5);
+	mats[0] = dense_matrix::create_randu<size_t>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, -1, true);
+	mats[1] = dense_matrix::create_randu<size_t>(0, 1000,
+			long_dim, 11, matrix_layout_t::L_COL, -1, false);
+	mats[2] = dense_matrix::create_randu<size_t>(0, 1000,
+			long_dim, 12, matrix_layout_t::L_COL, -1, false);
+	mats[3] = dense_matrix::create_randu<size_t>(0, 1000,
+			long_dim, 13, matrix_layout_t::L_COL, num_nodes, true);
+	mats[4] = dense_matrix::create_randu<size_t>(0, 1000,
+			long_dim, 14, matrix_layout_t::L_COL, -1, false);
+
+	detail::portion_mapply_op::const_ptr op(new add_portion_op(
+				long_dim, 10));
+	std::vector<detail::matrix_store::const_ptr> stores(5);
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mats[i]->get_raw_store();
+	dense_matrix::ptr par_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, true));
+	dense_matrix::ptr serial_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, false));
+	scalar_variable::ptr max_diff = par_res->minus(*serial_res)->abs()->max();
+	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
+	assert(*(size_t *) max_diff->get_raw() == 0);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
@@ -1231,6 +1355,8 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_apply_scalar();
+	test_min();
 	test_mul_output(-1);
 	test_mul_output(num_nodes);
 	test_mapply_chain(-1, get_scalar_type<double>());
@@ -1244,36 +1370,32 @@ void test_mem_matrix(int num_nodes)
 	test_sum_row_col(-1);
 	test_sum_row_col(num_nodes);
 
-	for (int i = 0; i < matrix_val_t::NUM_TYPES; i++) {
-		matrix_val = (matrix_val_t) i;
-		printf("matrix val type: %d\n", i);
-
-		test_conv2(-1);
-		test_conv2(num_nodes);
-		test_scale_cols(-1);
-		test_scale_cols(num_nodes);
-		test_scale_rows(-1);
-		test_scale_rows(num_nodes);
-		test_multiply_scalar(-1);
-		test_multiply_scalar(num_nodes);
-		test_ele_wise(-1);
-		test_ele_wise(num_nodes);
-		test_multiply_col(-1);
-		test_multiply_col(num_nodes);
-		test_agg_col(-1);
-		test_agg_col(num_nodes);
-		test_multiply_matrix(-1);
-		test_multiply_matrix(num_nodes);
-		test_agg_row(-1);
-		test_agg_row(num_nodes);
-		test_agg_sub_col(-1);
-		test_agg_sub_row(-1);
+	matrix_val = matrix_val_t::SEQ;
+	test_conv2(-1);
+	test_conv2(num_nodes);
+	test_scale_cols(-1);
+	test_scale_cols(num_nodes);
+	test_scale_rows(-1);
+	test_scale_rows(num_nodes);
+	test_multiply_scalar(-1);
+	test_multiply_scalar(num_nodes);
+	test_ele_wise(-1);
+	test_ele_wise(num_nodes);
+	test_multiply_col(-1);
+	test_multiply_col(num_nodes);
+	test_agg_col(-1);
+	test_agg_col(num_nodes);
+	test_multiply_matrix(-1);
+	test_multiply_matrix(num_nodes);
+	test_agg_row(-1);
+	test_agg_row(num_nodes);
+	test_agg_sub_col(-1);
+	test_agg_sub_row(-1);
 #if 0
-		test_rand_init();
-		test_conv_row_col();
-		test_flatten();
+	test_rand_init();
+	test_conv_row_col();
+	test_flatten();
 #endif
-	}
 }
 
 void test_conv_store()
@@ -1307,6 +1429,168 @@ void test_conv_store()
 	}
 }
 
+void test_bmv_multiply_tall()
+{
+	bool in_mem = false;
+	printf("gemm tall on block multi-vector\n");
+	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
+			long_dim, 14, 2, get_scalar_type<double>(), in_mem);
+	for (size_t i = 0; i < mv->get_num_blocks(); i++)
+		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
+					in_mem));
+	dense_matrix::ptr mat = create_seq_matrix(mv->get_num_cols(),
+			mv->get_block_size(), matrix_layout_t::L_COL, -1,
+			get_scalar_type<double>(), true);
+	mat->materialize_self();
+	detail::mem_col_matrix_store::const_ptr B
+		= detail::mem_col_matrix_store::cast(mat->get_raw_store());
+	scalar_variable_impl<double> alpha(2);
+	scalar_variable_impl<double> beta(3);
+
+	{
+		printf("gemm1\n");
+		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
+				long_dim, mv->get_block_size(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
+		res1->set_multiply_blocks(2);
+		res1 = res1->gemm(*mv, B, alpha, beta);
+		assert(res1->get_num_blocks() == 1);
+		dense_matrix::ptr res_mat1 = res1->get_block(0);
+		res_mat1->materialize_self();
+
+		printf("gemm2\n");
+		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
+				long_dim, mv->get_block_size(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
+		res2->set_multiply_blocks(mv->get_num_blocks());
+		res2 = res2->gemm(*mv, B, alpha, beta);
+		assert(res2->get_num_blocks() == 1);
+		dense_matrix::ptr res_mat2 = res2->get_block(0);
+		res_mat2->materialize_self();
+
+		dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+		scalar_variable::ptr max_diff = diff->abs()->max();
+		scalar_variable::ptr max1 = res_mat1->max();
+		scalar_variable::ptr max2 = res_mat2->max();
+		printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+				*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+				*(double *) max2->get_raw());
+		assert(*(double *) max_diff->get_raw() == 0);
+	}
+
+	mat = create_seq_matrix(mv->get_num_cols(),
+			mv->get_block_size() * 2, matrix_layout_t::L_COL, -1,
+			get_scalar_type<double>(), true);
+	mat->materialize_self();
+	B = detail::mem_col_matrix_store::cast(mat->get_raw_store());
+
+	{
+		printf("gemm1\n");
+		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
+				long_dim, B->get_num_cols(), mv->get_block_size(),
+				get_scalar_type<double>(), true);
+		std::vector<detail::matrix_store::const_ptr> orig_res_stores(res1->get_num_blocks());
+		for (size_t i = 0; i < res1->get_num_blocks(); i++) {
+			res1->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
+						matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
+						in_mem));
+			orig_res_stores[i] = res1->get_block(i)->get_raw_store();
+		}
+		res1->set_multiply_blocks(2);
+		res1 = res1->gemm(*mv, B, alpha, beta);
+
+		printf("gemm2\n");
+		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
+				long_dim, B->get_num_cols(), B->get_num_cols(),
+				get_scalar_type<double>(), true);
+		res2->set_block(0, dense_matrix::create(
+					eigen::collected_matrix_store::create(orig_res_stores,
+						res1->get_num_cols())));
+		res2->set_multiply_blocks(mv->get_num_blocks());
+		res2 = res2->gemm(*mv, B, alpha, beta);
+		assert(res2->get_num_blocks() == 1);
+		res2->get_block(0)->materialize_self();
+
+		off_t col_off = 0;
+		for (size_t i = 0; i < res1->get_num_blocks(); i++) {
+			std::vector<off_t> col_idxs(res1->get_block_size());
+			for (size_t j = 0; j < res1->get_block_size(); j++)
+				col_idxs[j] = col_off++;
+			dense_matrix::ptr res_mat1 = res1->get_block(i);
+			dense_matrix::ptr res_mat2 = res2->get_block(0)->get_cols(col_idxs);
+
+			dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+			scalar_variable::ptr max_diff = diff->abs()->max();
+			scalar_variable::ptr max1 = res_mat1->max();
+			scalar_variable::ptr max2 = res_mat2->max();
+			printf("max diff: %g, max mat1: %g, max mat2: %g\n",
+					*(double *) max_diff->get_raw(), *(double *) max1->get_raw(),
+					*(double *) max2->get_raw());
+			assert(*(double *) max_diff->get_raw() == 0);
+		}
+	}
+}
+
+void test_bmv_multiply_wide()
+{
+	bool in_mem = false;
+	printf("gemm wide on block multi-vector\n");
+	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
+			long_dim, 14, 2, get_scalar_type<double>(), in_mem);
+	for (size_t i = 0; i < mv1->get_num_blocks(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 10, long_dim,
+				mv1->get_block_size(), matrix_layout_t::L_COL, -1, in_mem);
+		mv1->set_block(i, mat->cast_ele_type(get_scalar_type<double>()));
+	}
+
+	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
+			long_dim, 2, 2, get_scalar_type<double>(), in_mem);
+	for (size_t i = 0; i < mv2->get_num_blocks(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 10, long_dim,
+				mv2->get_block_size(), matrix_layout_t::L_COL, -1, in_mem);
+		mv2->set_block(i, mat->cast_ele_type(get_scalar_type<double>()));
+	}
+
+	printf("gemm0\n");
+	mv1->set_multiply_blocks(mv1->get_num_blocks());
+	dense_matrix::ptr res0 = mv1->MvTransMv(*mv2);
+
+	printf("gemm1\n");
+	mv1->set_multiply_blocks(2);
+	dense_matrix::ptr res1 = mv1->MvTransMv(*mv2);
+
+	printf("gemm2\n");
+	mv2->set_multiply_blocks(2);
+	dense_matrix::ptr res2 = mv2->MvTransMv(*mv1);
+	res2 = res2->transpose();
+
+	assert(res0->get_num_rows() == res1->get_num_rows());
+	assert(res0->get_num_cols() == res1->get_num_cols());
+	assert(res0->get_num_rows() == res2->get_num_rows());
+	assert(res0->get_num_cols() == res2->get_num_cols());
+
+	dense_matrix::ptr diff1 = res0->minus(*res1);
+	scalar_variable::ptr max_diff1 = diff1->abs()->max();
+	dense_matrix::ptr diff2 = res0->minus(*res2);
+	scalar_variable::ptr max_diff2 = diff2->abs()->max();
+	printf("max diff1: %g, max diff2: %g\n",
+			*(double *) max_diff1->get_raw(),
+			*(double *) max_diff2->get_raw());
+	assert(*(double *) max_diff1->get_raw() == 0);
+	assert(*(double *) max_diff2->get_raw() == 0);
+}
+
+void test_block_mv()
+{
+	test_bmv_multiply_wide();
+	test_bmv_multiply_tall();
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -1319,7 +1603,9 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_block_mv();
 	test_conv_store();
+	test_mapply_mixed(num_nodes);
 	test_mem_matrix(num_nodes);
 	test_EM_matrix(num_nodes);
 

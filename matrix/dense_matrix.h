@@ -90,6 +90,15 @@ public:
 	virtual std::string to_string(
 			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 
+	/*
+	 * Give a hint if this operation is aggregation, so we can optimize
+	 * the backend accordingly. When this is an aggregation operation,
+	 * the second `run' method has to be implemented.
+	 */
+	virtual bool is_agg() const {
+		return false;
+	}
+
 	size_t get_out_num_rows() const {
 		return out_num_rows;
 	}
@@ -108,22 +117,33 @@ public:
 std::shared_ptr<dense_matrix> mapply_portion(
 		const std::vector<std::shared_ptr<const dense_matrix> > &mats,
 		// A user can specify the layout of the output dense matrix.
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 matrix_store::ptr __mapply_portion_virtual(
 		const std::vector<matrix_store::const_ptr> &store,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 
 /*
- * These two functions return a materialized matrix.
+ * These three functions return a materialized matrix.
+ * The first version determines the storage of the output matrix automatically.
+ * The second version allows users to specify the storage for the output matrix.
+ * The third version not only allows users to specify the storage for the output
+ * matrix, but also allows multiple output matrices.
  */
 
 matrix_store::ptr __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
+matrix_store::ptr __mapply_portion(
+		const std::vector<matrix_store::const_ptr> &mats,
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool out_in_mem, int out_num_nodes, bool par_access = true);
 bool __mapply_portion(
 		const std::vector<matrix_store::const_ptr> &mats,
 		portion_mapply_op::const_ptr op,
-		const std::vector<matrix_store::ptr> &out_mats);
+		const std::vector<matrix_store::ptr> &out_mats, bool par_access = true);
 }
 
 /*
@@ -154,7 +174,6 @@ private:
 	detail::matrix_store::ptr inner_prod_wide(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
-	dense_matrix::ptr _multiply_scalar(scalar_variable::const_ptr var) const;
 
 	detail::matrix_store::const_ptr _conv_store(bool in_mem, int num_nodes) const;
 protected:
@@ -301,6 +320,8 @@ public:
 	dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
 	dense_matrix::ptr apply(apply_margin margin,
 			arr_apply_operate::const_ptr op) const;
+	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
+			bulk_operate::const_ptr) const;
 
 	dense_matrix::ptr scale_cols(std::shared_ptr<const vector> vals) const;
 	dense_matrix::ptr scale_rows(std::shared_ptr<const vector> vals) const;
@@ -318,16 +339,64 @@ public:
 		const bulk_operate &op = get_type().get_basic_ops().get_sub();
 		return this->mapply2(mat, bulk_operate::conv2ptr(op));
 	}
+	/*
+	 * This performs element-wise multiplication between two matrices.
+	 */
+	dense_matrix::ptr multiply_ele(const dense_matrix &mat) const {
+		const bulk_operate &op = get_type().get_basic_ops().get_multiply();
+		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+	}
+
+	dense_matrix::ptr abs() const {
+		bulk_uoperate::const_ptr op = bulk_uoperate::conv2ptr(
+				*get_type().get_basic_uops().get_op(basic_uops::op_idx::ABS));
+		return sapply(op);
+	}
+
+	dense_matrix::ptr logic_not() const;
 
 	std::shared_ptr<vector> row_sum() const;
 	std::shared_ptr<vector> col_sum() const;
 	std::shared_ptr<vector> row_norm2() const;
 	std::shared_ptr<vector> col_norm2() const;
 
+	std::shared_ptr<scalar_variable> sum() const {
+		if (get_type() == get_scalar_type<bool>()) {
+			dense_matrix::ptr tmp = cast_ele_type(get_scalar_type<size_t>());
+			return tmp->sum();
+		}
+		else
+			return aggregate(get_type().get_basic_ops().get_add());
+	}
+
+	std::shared_ptr<scalar_variable> max() const {
+		return aggregate(*get_type().get_basic_ops().get_op(
+					basic_ops::op_idx::MAX));
+	}
+
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
-		return _multiply_scalar(var);
+		bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+				var->get_type().get_basic_ops().get_multiply());
+		return apply_scalar(var, op);
+	}
+
+	template<class T>
+	dense_matrix::ptr minus_scalar(T val) const {
+		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
+		bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+				var->get_type().get_basic_ops().get_sub());
+		return apply_scalar(var, op);
+	}
+
+	template<class T>
+	dense_matrix::ptr lt_scalar(T val) const {
+		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
+		bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+				*var->get_type().get_basic_ops().get_op(basic_ops::op_idx::GE));
+		dense_matrix::ptr tmp = apply_scalar(var, op);
+		return tmp->logic_not();
 	}
 
 	double norm2() const;

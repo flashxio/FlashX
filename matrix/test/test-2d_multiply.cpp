@@ -133,6 +133,7 @@ void print_usage()
 			"-w matrix_width: the number of columns of the dense matrix\n");
 	fprintf(stderr, "-o exec_order: hilbert or seq\n");
 	fprintf(stderr, "-c cache_size: cpu cache size\n");
+	fprintf(stderr, "-m: force to run in memory\n");
 }
 
 int main(int argc, char *argv[])
@@ -146,7 +147,8 @@ int main(int argc, char *argv[])
 	std::string exec_order = "hilbert";
 	size_t cpu_cache_size = 1024 * 1024;
 	int opt;
-	while ((opt = getopt(argc, argv, "w:o:c:")) != -1) {
+	bool in_mem = false;
+	while ((opt = getopt(argc, argv, "w:o:c:m")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -156,6 +158,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'c':
 				cpu_cache_size = atoi(optarg);
+				break;
+			case 'm':
+				in_mem = true;
 				break;
 			default:
 				print_usage();
@@ -185,7 +190,10 @@ int main(int argc, char *argv[])
 
 	sparse_matrix::ptr mat;
 	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
-	if (mat_f.exist())
+	if (mat_f.exist() && in_mem)
+		mat = sparse_matrix::create(index,
+				SpM_2d_storage::safs_load(matrix_file, index));
+	else if (mat_f.exist())
 		mat = sparse_matrix::create(index, safs::create_io_factory(
 					matrix_file, safs::REMOTE_ACCESS));
 	else

@@ -122,7 +122,8 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	detail::mapply_matrix_store::const_ptr mapply_store(new detail::mapply_matrix_store(
 				in_stores, op, mat1->store_layout(),
 				mat1->get_num_rows(), mat1->get_num_cols()));
-	dense_matrix::ptr res2 = dense_matrix::create(mapply_store->materialize());
+	dense_matrix::ptr res2 = dense_matrix::create(mapply_store->materialize(
+				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	{
 		const detail::mem_matrix_store &mem_mat1
 			= dynamic_cast<const detail::mem_matrix_store &>(mat1->get_data());
@@ -137,7 +138,8 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	}
 
 	dense_matrix::ptr t_res = dense_matrix::create(
-			detail::virtual_matrix_store::cast(mapply_store->transpose())->materialize());
+			detail::virtual_matrix_store::cast(mapply_store->transpose())->materialize(
+				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	{
 		const detail::mem_matrix_store &mem_mat1
 			= dynamic_cast<const detail::mem_matrix_store &>(mat1->get_data());
@@ -172,7 +174,8 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	mapply_store = detail::mapply_matrix_store::const_ptr(new detail::mapply_matrix_store(
 				in_stores, op, large_mat->store_layout(),
 				large_mat->get_num_rows(), large_mat->get_num_cols()));
-	res2 = dense_matrix::create(mapply_store->materialize());
+	res2 = dense_matrix::create(mapply_store->materialize(
+				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	verify_result(res1, res2);
 
 	const detail::mem_matrix_store &mem_res
@@ -188,7 +191,8 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	}
 
 	t_res = dense_matrix::create(detail::virtual_matrix_store::cast(
-				mapply_store->transpose())->materialize());
+				mapply_store->transpose())->materialize(
+				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	verify_result(res1->transpose(), t_res);
 }
 

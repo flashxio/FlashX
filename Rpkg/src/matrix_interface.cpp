@@ -136,13 +136,28 @@ RcppExport SEXP R_FM_load_matrix(SEXP pmat_file, SEXP pindex_file)
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 
-	SpM_2d_index::ptr index = SpM_2d_index::load(index_file);
+	SpM_2d_index::ptr index;
+	safs::safs_file index_f(safs::get_sys_RAID_conf(), index_file);
+	if (index_f.exist())
+		index = SpM_2d_index::safs_load(index_file);
+	else
+		index = SpM_2d_index::load(index_file);
 	if (index == NULL) {
 		fprintf(stderr, "can't load index\n");
 		return R_NilValue;
 	}
-	sparse_matrix::ptr mat = sparse_matrix::create(index,
-			SpM_2d_storage::load(mat_file, index));
+
+	SpM_2d_storage::ptr store;
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
+	if (mat_f.exist())
+		store = SpM_2d_storage::safs_load(mat_file, index);
+	else
+		store = SpM_2d_storage::load(mat_file, index);
+	if (store == NULL) {
+		fprintf(stderr, "can't load matrix file\n");
+		return R_NilValue;
+	}
+	sparse_matrix::ptr mat = sparse_matrix::create(index, store);
 	return create_FMR_matrix(mat, "mat_file");
 }
 
@@ -162,40 +177,6 @@ static basic_ops_impl<double, double, double> R_basic_ops_DD;
 static basic_uops_impl<int, int> R_basic_uops_I;
 static basic_uops_impl<double, double> R_basic_uops_D;
 static basic_uops_impl<bool, bool> R_basic_uops_B;
-
-static basic_ops &get_inner_prod_left_ops(const dense_matrix &left,
-		const dense_matrix &right)
-{
-	if (left.get_entry_size() == sizeof(int)
-			&& right.get_entry_size() == sizeof(int))
-		return R_basic_ops_IID;
-	else if (left.get_entry_size() == sizeof(double)
-			&& right.get_entry_size() == sizeof(int))
-		return R_basic_ops_DI;
-	else if (left.get_entry_size() == sizeof(int)
-			&& right.get_entry_size() == sizeof(double))
-		return R_basic_ops_ID;
-	else if (left.get_entry_size() == sizeof(double)
-			&& right.get_entry_size() == sizeof(double))
-		return R_basic_ops_DD;
-	else {
-		fprintf(stderr, "the matrix has a wrong type\n");
-		abort();
-	}
-}
-
-static basic_ops &get_inner_prod_right_ops(const bulk_operate &left_ops)
-{
-	if (left_ops.output_entry_size() == 4)
-		return R_basic_ops_II;
-	else if (left_ops.output_entry_size() == 8)
-		return R_basic_ops_DD;
-	else {
-		fprintf(stderr,
-				"the left operator of inner product has a wrong output type\n");
-		abort();
-	}
-}
 
 static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 {
@@ -278,8 +259,17 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 {
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (matrix->is_type<int>() && right_mat->is_type<double>())
+		matrix = matrix->cast_ele_type(get_scalar_type<double>());
+	if (matrix->is_type<double>() && right_mat->is_type<int>())
+		right_mat = right_mat->cast_ele_type(get_scalar_type<double>());
 	dense_matrix::ptr res = matrix->multiply(*right_mat,
 			matrix->store_layout(), true);
+	if (res == NULL)
+		return R_NilValue;
+
+	if (!res->is_type<double>())
+		res = res->cast_ele_type(get_scalar_type<double>());
 
 	bool is_vec = is_vector(pmat);
 	if (res && is_vec) {
@@ -333,8 +323,14 @@ void copy_FM2R_mem(dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
 		vector::ptr mem_vec = mem_mat->get_col(0);
-		assert(sizeof(T) == sizeof(RType));
-		mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
+		if (sizeof(T) == sizeof(RType))
+			mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
+		else {
+			std::unique_ptr<T[]> tmp(new T[mem_vec->get_length()]);
+			mem_vec->get_data().copy_to((char *) tmp.get(), mem_vec->get_length());
+			for (size_t i = 0; i < mem_vec->get_length(); i++)
+				ret[i] = tmp[i];
+		}
 	}
 	else
 		copy_FM2Rmatrix<T>(*mem_mat, ret);
@@ -1077,29 +1073,90 @@ public:
 	}
 };
 
+template<class T>
+T get_scalar(SEXP val)
+{
+	if (R_is_integer(val))
+		return INTEGER(val)[0];
+	else
+		return REAL(val)[0];
+}
+
 RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 		SEXP penv)
 {
 	Rcpp::LogicalVector sym(psym);
 	Rcpp::List options(poptions);
 
-	eigen::eigen_options opts;
-	opts.tol = REAL(options["tol"])[0];
-	opts.num_blocks = INTEGER(options["num_blocks"])[0];
-	opts.max_restarts = INTEGER(options["max_restarts"])[0];
-	opts.max_iters = INTEGER(options["max_iters"])[0];
-	opts.block_size = INTEGER(options["block_size"])[0];
-	opts.nev = INTEGER(options["nev"])[0];
-	opts.solver = CHAR(STRING_ELT(options["solver"], 0));
-	opts.which = CHAR(STRING_ELT(options["which"], 0));
-	size_t n = INTEGER(options["n"])[0];
+	size_t nev = 1;
+	if (options.containsElementNamed("nev"))
+		nev = get_scalar<size_t>(options["nev"]);
+	std::string solver = "KrylovSchur";
+	if (options.containsElementNamed("solver"))
+		solver = CHAR(STRING_ELT(options["solver"], 0));
+
+	eigen::eigen_options opts(nev, solver);
+	if (options.containsElementNamed("tol"))
+		opts.tol = REAL(options["tol"])[0];
+	if (options.containsElementNamed("num_blocks"))
+		opts.num_blocks = get_scalar<int>(options["num_blocks"]);
+	if (options.containsElementNamed("max_restarts"))
+		opts.max_restarts = get_scalar<int>(options["max_restarts"]);
+	if (options.containsElementNamed("max_iters"))
+		opts.max_iters = get_scalar<int>(options["max_iters"]);
+	if (options.containsElementNamed("block_size"))
+		opts.block_size = get_scalar<int>(options["block_size"]);
+	if (options.containsElementNamed("which"))
+		opts.which = CHAR(STRING_ELT(options["which"], 0));
+
+	if (!options.containsElementNamed("n")) {
+		fprintf(stderr,
+				"User needs to specify `n' (the size of the eigenproblem)\n");
+		return R_NilValue;
+	}
+	size_t n = get_scalar<size_t>(options["n"]);
 	eigen::eigen_res res = eigen::compute_eigen(new R_spm_function(pfunc,
 				pextra, penv, n), sym[0], opts);
+
+	// Return the options.
+
+	Rcpp::IntegerVector nev_vec(1);
+	nev_vec[0] = opts.nev;
+	options["nev"] = nev_vec;
+
+	Rcpp::NumericVector tol_vec(1);
+	tol_vec[0] = opts.tol;
+	options["tol"] = tol_vec;
+
+	Rcpp::IntegerVector nblocks_vec(1);
+	nblocks_vec[0] = opts.num_blocks;
+	options["num_blocks"] = nblocks_vec;
+
+	Rcpp::IntegerVector max_restarts_vec(1);
+	max_restarts_vec[0] = opts.max_restarts;
+	options["max_restarts"] = max_restarts_vec;
+
+	Rcpp::IntegerVector max_iters_vec(1);
+	max_iters_vec[0] = opts.max_iters;
+	options["max_iters"] = max_iters_vec;
+
+	Rcpp::IntegerVector block_size_vec(1);
+	block_size_vec[0] = opts.block_size;
+	options["block_size"] = block_size_vec;
+	
+	Rcpp::StringVector solver_str(1);
+	solver_str[0] = Rcpp::String(opts.solver);
+	options["solver"] = solver_str;
+
+	Rcpp::StringVector which_str(1);
+	which_str[0] = Rcpp::String(opts.which);
+	options["which"] = which_str;
 
 	Rcpp::List ret;
 	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
 	ret["vals"] = vals;
 	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
+	ret["options"] = options;
 	return ret;
 }
 

@@ -664,12 +664,19 @@ namespace fg
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
-	struct timeval end;
-	gettimeofday(&graph_start, NULL);
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm current works on a directed graph";
+		return FG_vector<std::pair<vertex_id_t, size_t> >::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
 		part_topK_scan_vertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
+	struct timeval end;
+	gettimeofday(&graph_start, NULL);
 	max_scan.reset();
 	known_scans.clear();
 

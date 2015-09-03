@@ -87,6 +87,12 @@ public:
 	virtual char *get_col(size_t col) {
 		return NULL;
 	}
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		return NULL;
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		return NULL;
+	}
 
 	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
 			size_t num_rows, size_t num_cols,
@@ -248,6 +254,12 @@ public:
 
 	virtual char *get_row(size_t row) {
 		return data.get_raw() + row * get_num_cols() * get_entry_size();
+	}
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		return get_row(row_start);
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		return get_row(row_start);
 	}
 
 	virtual const char *get(size_t row, size_t col) const {

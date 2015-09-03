@@ -119,7 +119,7 @@ public:
 				num_rows, num_cols, compute);
 	}
 
-	virtual matrix_store::const_ptr materialize() const {
+	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const {
 		assert(0);
 		return matrix_store::ptr();
 	}
@@ -205,12 +205,12 @@ public:
 		return orig_store->get_portion_size();
 	}
 
-	virtual matrix_store::const_ptr materialize() const {
+	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const {
 		if (orig_store->is_virtual()) {
 			const detail::virtual_matrix_store *store
 				= static_cast<const detail::virtual_matrix_store *>(
 						orig_store.get());
-			return store->materialize();
+			return store->materialize(in_mem, num_nodes);
 		}
 		else
 			return matrix_store::ptr(new dotp_matrix_store(*this));

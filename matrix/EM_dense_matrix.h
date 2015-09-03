@@ -57,6 +57,12 @@ class EM_matrix_store: public matrix_store, public EM_object
 	io_set::ptr ios;
 
 	/*
+	 * This indicates whether or not we cache a portion in each worker thread.
+	 * By default, this is enabled.
+	 */
+	bool cache_portion;
+
+	/*
 	 * These two fields are used for sub matrix.
 	 * They indicates the actual number of rows and columns stored on disks.
 	 * In contrast, get_num_rows() and get_num_cols() are #rows and columns
@@ -99,6 +105,10 @@ public:
 
 	size_t get_matrix_id() const {
 		return mat_id;
+	}
+
+	virtual void set_cache_portion(bool cache_portion) {
+		this->cache_portion = cache_portion;
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
@@ -147,6 +157,14 @@ public:
 			const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
+
+	/*
+	 * Set this matrix persistent in SAFS, so that even if there isn't
+	 * a reference to the matrix, its data still stored in SAFS.
+	 */
+	bool set_persistent(const std::string &name) const {
+		return holder->set_persistent(name);
+	}
 };
 
 }

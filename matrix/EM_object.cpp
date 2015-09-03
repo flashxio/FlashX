@@ -133,12 +133,17 @@ int portion_callback::invoke(safs::io_request *reqs[], int num)
 		// we don't need to keep a compute here.
 		if (it == computes.end())
 			continue;
-		for (auto comp_it = it->second.begin(); comp_it != it->second.end();
-				comp_it++) {
+
+		std::vector<portion_compute::ptr> tmp = it->second;
+		// We have to remove the vector of computes from the hashtable first.
+		// Otherwise, the user-defined `run' function may try to add new
+		// computes to the vector.
+		computes.erase(it);
+
+		for (auto comp_it = tmp.begin(); comp_it != tmp.end(); comp_it++) {
 			portion_compute::ptr compute = *comp_it;
 			compute->run(reqs[i]->get_buf(), reqs[i]->get_size());
 		}
-		computes.erase(it);
 	}
 	return 0;
 }

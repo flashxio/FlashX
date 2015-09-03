@@ -350,6 +350,13 @@ namespace fg
 
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm current works on a directed graph";
+		return FG_vector<size_t>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);

@@ -187,6 +187,13 @@ public:
 	}
 	virtual void materialize_self() const {
 	}
+
+	/*
+	 * This allow users to enable/disable caching data portions.
+	 * It's used by EM matrix and mapply virtual matrix.
+	 */
+	virtual void set_cache_portion(bool cache_portion) {
+	}
 };
 
 }

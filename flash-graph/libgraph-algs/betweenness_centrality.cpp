@@ -395,6 +395,13 @@ namespace fg
 {
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std::vector<vertex_id_t>& ids)
 {
+	bool directed = fg->get_graph_header().is_directed_graph();
+	if (!directed) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "This algorithm currently works on a directed graph";
+		return FG_vector<float>::ptr();
+	}
+
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);

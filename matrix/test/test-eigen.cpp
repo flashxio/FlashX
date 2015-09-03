@@ -21,6 +21,7 @@
 
 #include "sparse_matrix.h"
 #include "dense_matrix.h"
+#include "EM_dense_matrix.h"
 
 #include "eigensolver.h"
 
@@ -175,29 +176,33 @@ int main (int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	std::string output_file;
-	struct eigen_options opts;
 	std::string type = "eigen";
+	int block_size = -1;
+	int num_blocks = -1;
+	std::string solver;
+	double tol = -1;
+	bool in_mem = true;
 	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
-				opts.block_size = atoi(optarg);
+				block_size = atoi(optarg);
 				num_opts++;
 				break;
 			case 'n':
-				opts.num_blocks = atoi(optarg);
+				num_blocks = atoi(optarg);
 				num_opts++;
 				break;
 			case 's':
-				opts.solver = optarg;
+				solver = optarg;
 				num_opts++;
 				break;
 			case 't':
-				opts.tol = atof(optarg);
+				tol = atof(optarg);
 				num_opts++;
 				break;
 			case 'e':
-				opts.in_mem = false;
+				in_mem = false;
 				break;
 			case 'o':
 				output_file = optarg;
@@ -215,7 +220,7 @@ int main (int argc, char *argv[])
 
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
-	if (argc < 4 || (type == "SVD" && argc < 6)) {
+	if ((type != "SVD" && argc < 4) || (type == "SVD" && argc < 6)) {
 		print_usage();
 		exit(1);
 	}
@@ -225,13 +230,23 @@ int main (int argc, char *argv[])
 	std::string index_file = argv[2];
 	std::string t_matrix_file;
 	std::string t_index_file;
+	int nev;
 	if (type == "SVD") {
 		t_matrix_file = argv[3];
 		t_index_file = argv[4];
-		opts.nev = atoi(argv[5]);
+		nev = atoi(argv[5]);
 	}
 	else
-		opts.nev = atoi(argv[3]); // number of eigenvalues for which to solve;
+		nev = atoi(argv[3]); // number of eigenvalues for which to solve;
+
+	struct eigen_options opts(nev, solver);
+	if (block_size > 0)
+		opts.block_size = block_size;
+	if (num_blocks > 0)
+		opts.num_blocks = num_blocks;
+	if (tol > 0)
+		opts.tol = tol;
+	opts.in_mem = in_mem;
 
 	//
 	// Set up the test problem.
@@ -282,14 +297,19 @@ int main (int argc, char *argv[])
 	else
 		res = compute_eigen(new eigen_Operator(mat), mat->is_symmetric(), opts);
 	// We only save eigenvectors if they are stored in memory.
-	if (!output_file.empty() && res.vecs->is_in_mem()) {
+	if (!output_file.empty()) {
 		printf("Save eigenvectors to %s\n", output_file.c_str());
-		res.vecs->materialize_self();
-		const detail::mem_matrix_store &store
-			= dynamic_cast<const detail::mem_matrix_store &>(res.vecs->get_data());
-		bool ret = store.write2file(output_file);
+		if (res.vecs->is_in_mem())
+			res.vecs = res.vecs->conv_store(false, -1);
+		else
+			res.vecs->materialize_self();
+		const detail::EM_matrix_store &store
+			= dynamic_cast<const detail::EM_matrix_store &>(res.vecs->get_data());
+		bool ret = store.set_persistent(output_file);
 		assert(ret);
 	}
+
+	safs::print_io_summary();
 
 	return 0;
 }

@@ -53,7 +53,12 @@ public:
 		return true;
 	}
 
-	virtual matrix_store::const_ptr materialize() const = 0;
+	/*
+	 * When we materialize the matrix, we can specify where the materialized
+	 * matrix is stored.
+	 */
+	virtual matrix_store::const_ptr materialize(bool in_mem,
+			int num_nodes) const = 0;
 
 	virtual void reset_data() {
 		assert(0);

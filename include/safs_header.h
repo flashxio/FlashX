@@ -34,7 +34,6 @@ class safs_header
 	uint32_t block_size;
 	uint32_t mapping_option;
 	uint32_t writable;
-	// TODO I'll deal with this later.
 	uint64_t num_bytes;
 public:
 	safs_header() {
@@ -46,13 +45,14 @@ public:
 		this->num_bytes = 0;
 	}
 
-	safs_header(int block_size, int mapping_option, bool writable) {
+	safs_header(int block_size, int mapping_option, bool writable,
+			size_t file_size) {
 		this->magic_number = MAGIC_NUMBER;
 		this->version_number = CURR_VERSION;
 		this->block_size = block_size;
 		this->mapping_option = mapping_option;
 		this->writable = writable;
-		this->num_bytes = 0;
+		this->num_bytes = file_size;
 	}
 
 	int get_block_size() const {
@@ -77,6 +77,14 @@ public:
 
 	bool is_valid() const {
 		return block_size != 0;
+	}
+
+	void resize(size_t new_size) {
+		this->num_bytes = new_size;
+	}
+
+	size_t get_size() const {
+		return num_bytes;
 	}
 };
 

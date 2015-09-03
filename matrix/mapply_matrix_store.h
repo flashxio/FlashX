@@ -46,6 +46,18 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	// So when a matrix is transposed, it should share the same data id.
 	const size_t data_id;
 
+	/*
+	 * This indicates whether or not we cache a portion in each worker thread.
+	 * By default, this is enabled.
+	 */
+	bool cache_portion;
+
+	/*
+	 * This indicates whether the input matrices are accessed in parallel
+	 * when the matrix is materialized.
+	 */
+	bool par_access;
+
 	matrix_layout_t layout;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
@@ -56,12 +68,20 @@ public:
 
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
-			portion_mapply_op::const_ptr op, matrix_layout_t layout,
-			size_t nrow, size_t ncol, size_t data_id = mat_counter++);
+			portion_mapply_op::const_ptr op,
+			matrix_layout_t layout, size_t nrow, size_t ncol,
+			size_t data_id = mat_counter++);
+
+	virtual void set_cache_portion(bool cache_portion);
+
+	void set_par_access(bool par_access) {
+		this->par_access = par_access;
+	}
 
 	virtual void materialize_self() const;
 
-	virtual matrix_store::const_ptr materialize() const;
+	virtual matrix_store::const_ptr materialize(bool in_mem,
+		int num_nodes) const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
