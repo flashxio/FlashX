@@ -716,7 +716,7 @@ void gemm_op<T>::run(
 		fm::detail::local_matrix_store &out) const
 {
 	detail::matrix_stats.inc_multiplies(
-			ins[0]->get_num_rows() * Bstore->get_num_cols() * Bstore->get_num_cols());
+			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
 
 	assert(A_num_blocks + C_num_blocks == ins.size());
 	off_t global_start_row = ins.front()->get_global_start_row();
@@ -1145,6 +1145,9 @@ void multiply_wide_op<T>::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * out.get_num_rows() * out.get_num_cols());
+
 	assert(ins.size() >= 2);
 	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
 			thread::get_curr_thread());
