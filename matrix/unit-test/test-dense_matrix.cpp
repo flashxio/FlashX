@@ -1459,12 +1459,28 @@ void test_copy(int num_nodes, bool in_mem)
 	assert(*(const int *) max_var->get_raw() == 0);
 }
 
+void test_EM_persistent()
+{
+	printf("test creating a matrix from an existing matrix file\n");
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, -1, false);
+	detail::EM_matrix_store::const_ptr store1
+		= detail::EM_matrix_store::cast(mat->get_raw_store());
+	store1->set_persistent("test.mat");
+	dense_matrix::ptr mat2 = dense_matrix::create(
+			detail::EM_matrix_store::create("test.mat"));
+	dense_matrix::ptr diff = mat->minus(*mat2);
+	scalar_variable::ptr max_var = diff->abs()->max();
+	assert(*(const int *) max_var->get_raw() == 0);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_EM_persistent();
 	test_sub_matrix();
 	test_mapply_chain(-1, get_scalar_type<double>());
 	test_mapply_chain(-1, get_scalar_type<int>());

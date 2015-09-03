@@ -117,6 +117,36 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 	this->ios = ios;
 }
 
+EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
+{
+	file_holder::ptr holder = file_holder::create(mat_file);
+	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+			holder->get_name(), safs::REMOTE_ACCESS);
+	io_set::ptr ios(new io_set(factory));
+
+	// Read the matrix header.
+	safs::io_interface::ptr io = safs::create_io(factory,
+			thread::get_curr_thread());
+	char *buf = NULL;
+	int ret = posix_memalign((void **) &buf, PAGE_SIZE,
+			matrix_header::get_header_size());
+	assert(ret == 0);
+	safs::data_loc_t loc(io->get_file_id(), 0);
+	safs::io_request req(buf, loc, matrix_header::get_header_size(), READ);
+	io->access(&req, 1);
+	io->wait4complete(1);
+
+	matrix_header *header = (matrix_header *) buf;
+	EM_matrix_store::ptr ret_mat(new EM_matrix_store(holder, ios,
+				header->get_num_rows(), header->get_num_cols(),
+				header->get_num_rows(), header->get_num_cols(),
+				// TODO we should save the data Id in the matrix header.
+				header->get_layout(), header->get_data_type(), mat_counter++));
+	free(buf);
+
+	return ret_mat;
+}
+
 void EM_matrix_store::reset_data()
 {
 	assert(0);

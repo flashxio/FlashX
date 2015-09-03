@@ -90,6 +90,8 @@ public:
 	typedef std::shared_ptr<EM_matrix_store> ptr;
 	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
 
+	static ptr create(const std::string &mat_file);
+
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type) {
 		return ptr(new EM_matrix_store(nrow, ncol, layout, type));
