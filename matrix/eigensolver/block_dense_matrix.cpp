@@ -1159,7 +1159,7 @@ void multiply_wide_op<T>::run(
 		num_Arows = ins[0]->get_num_rows();
 		num_Acols = ins[0]->get_num_cols();
 	}
-	detail::local_matrix_store::ptr Abuf;
+	detail::local_col_matrix_store::ptr Abuf;
 	if (Amat == NULL) {
 		size_t A_num_blocks = ins.size() - 1;
 		size_t block_size = ins.front()->get_num_cols();
@@ -1167,7 +1167,7 @@ void multiply_wide_op<T>::run(
 		size_t num_cols = block_size * A_num_blocks;
 		off_t global_start_row = ins.front()->get_global_start_row();
 		off_t global_start_col = ins.front()->get_global_start_col();
-		fm::detail::local_col_matrix_store::ptr Abuf(
+		Abuf = fm::detail::local_col_matrix_store::ptr(
 				new fm::detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
 					num_rows, num_cols, get_scalar_type<T>(), -1));
