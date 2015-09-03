@@ -173,8 +173,8 @@ public:
 		return u.d.layout;
 	}
 
-	prim_type get_data_type() const {
-		return u.d.data_type;
+	const scalar_type &get_data_type() const {
+		return get_scalar_type(u.d.data_type);
 	}
 
 	bool is_matrix_file() const {
