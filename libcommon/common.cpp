@@ -35,6 +35,7 @@
 
 #include <atomic>
 #include <sstream>
+#include <random>
 
 #include "common.h"
 
@@ -217,4 +218,20 @@ int get_omp_thread_num()
 #else
 	return 0;
 #endif
+}
+
+static std::random_device rd;
+static std::mt19937 rng(rd());
+
+std::string gen_rand_name(size_t len)
+{
+	std::string chars(
+			"abcdefghijklmnopqrstuvwxyz"
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			"1234567890");
+	std::uniform_int_distribution<int> index_dist(0, chars.size() - 1);
+	std::string ret(len, '0');
+	for(size_t i = 0; i < len; ++i)
+		ret[i] = chars[index_dist(rng)];
+	return ret;
 }

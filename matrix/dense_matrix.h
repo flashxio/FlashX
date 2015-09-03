@@ -180,12 +180,12 @@ protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
 	}
-	virtual bool verify_aggregate(const bulk_operate &op) const;
-	virtual bool verify_inner_prod(const dense_matrix &m,
+	bool verify_aggregate(const bulk_operate &op) const;
+	bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual bool verify_mapply2(const dense_matrix &m,
+	bool verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
-	virtual bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
+	bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
@@ -222,9 +222,6 @@ public:
 	}
 	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
-
-	virtual ~dense_matrix() {
-	}
 
 	const detail::matrix_store &get_data() const {
 		return *store;
@@ -291,9 +288,10 @@ public:
 	 * can modify the pointer. If someone changes in the pointer in the cloned
 	 * matrix, it doesn't affect the current matrix.
 	 */
-	virtual dense_matrix::ptr clone() const {
+	dense_matrix::ptr clone() const {
 		return ptr(new dense_matrix(get_raw_store()));
 	}
+	dense_matrix::ptr deep_copy() const;
 
 	dense_matrix::ptr transpose() const;
 	/*
@@ -440,7 +438,7 @@ public:
 };
 
 template<class T>
-static dense_matrix operator*(const dense_matrix &m, T val)
+dense_matrix operator*(const dense_matrix &m, T val)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
@@ -450,7 +448,7 @@ static dense_matrix operator*(const dense_matrix &m, T val)
 }
 
 template<class T>
-static dense_matrix operator*(T val, const dense_matrix &m)
+dense_matrix operator*(T val, const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
@@ -459,7 +457,7 @@ static dense_matrix operator*(T val, const dense_matrix &m)
 	return *ret;
 }
 
-static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
@@ -468,7 +466,7 @@ static dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 	return *ret;
 }
 
-static dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
+inline dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
@@ -477,7 +475,7 @@ static dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
 	return *ret;
 }
 
-static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.add(m2);
 	assert(ret);
@@ -486,7 +484,7 @@ static dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 	return *ret;
 }
 
-static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
+inline dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.minus(m2);
 	assert(ret);
@@ -496,7 +494,7 @@ static dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 }
 
 template<class T>
-static T as_scalar(const dense_matrix &m)
+inline T as_scalar(const dense_matrix &m)
 {
 	assert(m.get_type() == get_scalar_type<T>());
 	m.materialize_self();
@@ -506,7 +504,7 @@ static T as_scalar(const dense_matrix &m)
 	return mem_m->get<T>(0, 0);
 }
 
-static inline dense_matrix t(const dense_matrix &m)
+inline dense_matrix t(const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.transpose();
 	assert(ret);

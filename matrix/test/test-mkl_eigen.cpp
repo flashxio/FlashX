@@ -2,6 +2,7 @@
 // eigenvalue problem $A x = \lambda x$, using Anasazi's
 // implementation of the Block Davidson method.
 
+#include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>

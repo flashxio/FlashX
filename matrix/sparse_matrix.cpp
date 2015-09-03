@@ -261,23 +261,15 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 		// It's guaranteed that all output rows are stored contiguously together.
 		assert((block_row_start + block_num_rows - 1) / out_part_size
 				== out_part_id);
-		// Another difference between in_part and out_part is that out_part
-		// should only cover the 
-		if (output.store_layout() == matrix_layout_t::L_ROW)
-			out_part = detail::local_row_matrix_store::cast(
-					output.get_portion(block_row_start, 0,
-						block_num_rows, output.get_num_cols()));
-		else {
-			// If the output matrix isn't row major, we can't save
-			// the product to the output matrix directly. Instead, we create
-			// a buffer to keep the product temporarily.
-			out_part = detail::local_row_matrix_store::ptr(
-					new detail::local_buf_row_matrix_store(block_row_start, 0,
-						block_num_rows, output.get_num_cols(), output.get_type(),
-						// we allocate the buffer in the local node.
-						-1));
-			out_part->reset_data();
-		}
+
+		// We maintain a local buffer for the corresponding part of
+		// the output matrix.
+		out_part = detail::local_row_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(block_row_start, 0,
+					block_num_rows, output.get_num_cols(), output.get_type(),
+					// we allocate the buffer in the local node.
+					-1));
+		out_part->reset_data();
 	}
 
 	// Get the contiguous rows in the input and output matrices.
@@ -301,7 +293,7 @@ void block_spmm_task::notify_complete()
 		assert(tmp);
 		tmp->reset_data();
 	}
-	else if (output.store_layout() == matrix_layout_t::L_COL)
+	else
 		output.get_portion(out_part->get_global_start_row(),
 				out_part->get_global_start_col(), out_part->get_num_rows(),
 				out_part->get_num_cols())->copy_from(*out_part);
@@ -316,8 +308,8 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	init_io_gens(num_block_rows, io_gens);
 #ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
@@ -329,7 +321,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
 #ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
+	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 }

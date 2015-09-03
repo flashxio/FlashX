@@ -29,14 +29,25 @@ namespace detail
 EM_object::file_holder::ptr EM_object::file_holder::create_temp(
 		const std::string &name, size_t num_bytes)
 {
-	char *tmp = tempnam(".", name.c_str());
-	std::string tmp_name = basename(tmp);
+	const size_t MAX_TRIES = 10;
+	size_t i;
+	std::string tmp_name;
+	for (i = 0; i < MAX_TRIES; i++) {
+		tmp_name = name + gen_rand_name(8);
+		safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
+		if (!f.exist())
+			break;
+	}
+	if (i == MAX_TRIES) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a temp matrix name because max tries are reached";
+		return EM_object::file_holder::ptr();
+	}
+
 	safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
-	assert(!f.exist());
 	bool ret = f.create_file(num_bytes);
 	assert(ret);
 	file_holder::ptr holder(new file_holder(tmp_name, false));
-	free(tmp);
 	return holder;
 }
 

@@ -1316,12 +1316,172 @@ void test_mapply_mixed(int num_nodes)
 	assert(*(size_t *) max_diff->get_raw() == 0);
 }
 
+void test_sub_matrix()
+{
+	printf("test sub tall col-matrix\n");
+	size_t long_dim = 16 * 1024 * 1024;
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, -1, false);
+	mat = mat->cast_ele_type(get_scalar_type<double>());
+	mat->materialize_self();
+
+	// Get the first sub-matrix.
+	std::vector<off_t> sub_offs1(2);
+	sub_offs1[0] = 1;
+	sub_offs1[1] = 2;
+	dense_matrix::ptr sub_mat1 = mat->get_cols(sub_offs1);
+	// Get the in-mem copy of the first sub-matrix.
+	detail::matrix_stats_t orig_stats1 = detail::matrix_stats;
+	dense_matrix::ptr copy1 = sub_mat1->conv_store(true, -1);
+	printf("copy the first sub matrix\n");
+	detail::matrix_stats.print_diff(orig_stats1);
+
+	{
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		dense_matrix::ptr diff = sub_mat1->minus(*copy1);
+		scalar_variable::ptr max_var = diff->abs()->max();
+		printf("max diff: %g\n", *(const double *) max_var->get_raw());
+		detail::matrix_stats.print_diff(orig_stats);
+		assert(*(const double *) max_var->get_raw() == 0);
+	}
+
+	// Get the second sub-matrix and its in-mem copy.
+	std::vector<off_t> sub_offs2(2);
+	sub_offs2[0] = 4;
+	sub_offs2[1] = 5;
+	dense_matrix::ptr sub_mat2 = mat->get_cols(sub_offs2);
+	dense_matrix::ptr copy2 = sub_mat2->conv_store(true, -1);
+
+	// Get the third matrix (in-mem).
+	dense_matrix::ptr mat3 = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 2, matrix_layout_t::L_COL, -1, true);
+	mat3 = mat3->cast_ele_type(get_scalar_type<double>());
+	mat3->materialize_self();
+
+	// Create the block MV from the sub-matrices.
+	size_t num_cols = sub_mat1->get_num_cols() + sub_mat2->get_num_cols()
+		+ mat3->get_num_cols();
+	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
+			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem);
+	mv1->set_block(0, sub_mat1);
+	mv1->set_block(1, sub_mat2);
+	mv1->set_block(2, mat3);
+
+	// Create the block MV from the in-mem matrices.
+	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
+			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem);
+	mv2->set_block(0, copy1);
+	mv2->set_block(1, copy2);
+	mv2->set_block(2, mat3);
+
+	// Create the right matrix for GEMM.
+	dense_matrix::ptr right_mat = dense_matrix::create_randu<int>(0, 1000,
+			num_cols, 2, matrix_layout_t::L_COL, -1, true);
+	detail::mem_col_matrix_store::const_ptr B
+		= detail::mem_col_matrix_store::cast(right_mat->get_raw_store());
+	scalar_variable_impl<double> alpha(2);
+	scalar_variable_impl<double> beta(3);
+
+	// Perform GEMM on the first block MV.
+	eigen::block_multi_vector::ptr res1;
+	dense_matrix::ptr res_mat1;
+	{
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		res1 = eigen::block_multi_vector::create(
+				long_dim, mv1->get_block_size(), mv1->get_block_size(),
+				get_scalar_type<double>(), false);
+		res1->set_block(0, create_seq_matrix(long_dim, mv1->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
+		res1 = res1->gemm(*mv1, B, alpha, beta);
+		res_mat1 = res1->get_block(0);
+		res_mat1->materialize_self();
+		printf("The first GEMM on the submatrix\n");
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+
+	// Perform GEMM on the second block MV.
+	eigen::block_multi_vector::ptr res2;
+	dense_matrix::ptr res_mat2;
+	{
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		res2 = eigen::block_multi_vector::create(
+				long_dim, mv1->get_block_size(), mv1->get_block_size(),
+				get_scalar_type<double>(), true);
+		res2->set_block(0, create_seq_matrix(long_dim, mv1->get_block_size(),
+					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), true));
+		res2 = res2->gemm(*mv2, B, alpha, beta);
+		res_mat2 = res2->get_block(0);
+		res_mat2->materialize_self();
+		printf("The second GEMM on the in-mem matrix\n");
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+
+	// Compare the result of GEMM.
+	dense_matrix::ptr diff = res_mat1->minus(*res_mat2);
+	scalar_variable::ptr max_var = diff->abs()->max();
+	printf("max diff: %g\n", *(const double *) max_var->get_raw());
+	assert(*(const double *) max_var->get_raw() == 0);
+
+	assert(!res_mat1->is_in_mem());
+	assert(res_mat2->is_in_mem());
+
+	// Perform MvTransMv.
+	dense_matrix::ptr res3;
+	{
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		res3 = mv1->MvTransMv(*res1);
+		printf("The first MvTransMv\n");
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+	dense_matrix::ptr res4;
+	{
+		detail::matrix_stats_t orig_stats = detail::matrix_stats;
+		res4 = mv2->MvTransMv(*res2);
+		printf("The second MvTransMv\n");
+		detail::matrix_stats.print_diff(orig_stats);
+	}
+
+	// Compare the result of MvTransMv.
+	diff = res_mat1->minus(*res_mat2);
+	max_var = diff->abs()->max();
+	printf("max diff: %g\n", *(const double *) max_var->get_raw());
+	assert(*(const double *) max_var->get_raw() == 0);
+}
+
+void test_copy(int num_nodes, bool in_mem)
+{
+	printf("test deep copy a dense matrix\n");
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, num_nodes, in_mem);
+	dense_matrix::ptr copy = mat->deep_copy();
+	dense_matrix::ptr diff = mat->minus(*copy);
+	scalar_variable::ptr max_var = diff->abs()->max();
+	assert(*(const int *) max_var->get_raw() == 0);
+}
+
+void test_EM_persistent()
+{
+	printf("test creating a matrix from an existing matrix file\n");
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, -1, false);
+	detail::EM_matrix_store::const_ptr store1
+		= detail::EM_matrix_store::cast(mat->get_raw_store());
+	store1->set_persistent("test.mat");
+	dense_matrix::ptr mat2 = dense_matrix::create(
+			detail::EM_matrix_store::create("test.mat"));
+	dense_matrix::ptr diff = mat->minus(*mat2);
+	scalar_variable::ptr max_var = diff->abs()->max();
+	assert(*(const int *) max_var->get_raw() == 0);
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_EM_persistent();
+	test_sub_matrix();
 	test_mapply_chain(-1, get_scalar_type<double>());
 	test_mapply_chain(-1, get_scalar_type<int>());
 	test_multiply_double(-1);
@@ -1355,6 +1515,7 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_copy(-1, true);
 	test_apply_scalar();
 	test_min();
 	test_mul_output(-1);

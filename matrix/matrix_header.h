@@ -66,8 +66,8 @@ public:
 		assert(num_cols <= block_max_num_cols);
 		nrow_log = log2(num_rows);
 		ncol_log = log2(num_cols);
-		assert((1 << nrow_log) == num_rows);
-		assert((1 << ncol_log) == num_cols);
+		assert((1U << nrow_log) == num_rows);
+		assert((1U << ncol_log) == num_cols);
 	}
 
 	size_t get_nrow_log() const {
@@ -132,6 +132,10 @@ class matrix_header
 	void init(matrix_type mat_type, size_t entry_size, size_t nrows,
 			size_t ncols, matrix_layout_t layout, prim_type data_type);
 public:
+	static size_t get_header_size() {
+		return sizeof(matrix_header);
+	}
+
 	matrix_header() {
 		memset(u.page, 0, sizeof(u.page));
 	}
@@ -169,8 +173,8 @@ public:
 		return u.d.layout;
 	}
 
-	prim_type get_data_type() const {
-		return u.d.data_type;
+	const scalar_type &get_data_type() const {
+		return get_scalar_type(u.d.data_type);
 	}
 
 	bool is_matrix_file() const {

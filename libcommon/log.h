@@ -58,7 +58,7 @@ public:
 
 	~simple_log_stream() {
 		if (!log_data && level >= curr_log_level)
-			std::cout << "\n";
+			std::cout << "\n" << std::flush;
 	}
 
 	static void set_global_log_level(c_log_level level) {

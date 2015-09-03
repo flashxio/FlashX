@@ -978,7 +978,7 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 				// the location have values smaller than `min_val'. Actually,
 				// we can also merge all elements whose value is equal to
 				// `min_val'.
-				if (leftover_start < tot_len && min_val->equals(start
+				if ((size_t) leftover_start < tot_len && min_val->equals(start
 							+ leftover_start * entry_size)) {
 					size_t rel_loc;
 					type.get_agg_ops().get_find_next().run(
@@ -989,11 +989,11 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 					assert(rel_loc > 0 && rel_loc <= tot_len - leftover_start);
 					leftover_start += rel_loc;
 				}
-				assert(leftover_start <= tot_len);
+				assert((size_t) leftover_start <= tot_len);
 			}
 			else
 				leftover_start = tot_len;
-			assert(leftover_start <= tot_len);
+			assert((size_t) leftover_start <= tot_len);
 			merge_sizes[i] = leftover_start;
 			merge_size += leftover_start;
 			leftover_size += (tot_len - leftover_start);

@@ -499,7 +499,7 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 
 	size_t nrow = header.get_num_rows();
 	size_t ncol = header.get_num_cols();
-	const scalar_type &type = get_scalar_type(header.get_data_type());
+	const scalar_type &type = header.get_data_type();
 	size_t mat_size = nrow * ncol * type.get_size();
 	detail::raw_data_array data(mat_size);
 	ret = fread(data.get_raw(), mat_size, 1, f);

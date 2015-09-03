@@ -3005,4 +3005,14 @@ dense_matrix::ptr dense_matrix::logic_not() const
 	return sapply(op);
 }
 
+dense_matrix::ptr dense_matrix::deep_copy() const
+{
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = store;
+	detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
+				get_num_cols(), get_type()));
+	return dense_matrix::create(__mapply_portion(ins, op,
+				store->store_layout()));
+}
+
 }

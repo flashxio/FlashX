@@ -21,6 +21,7 @@
  */
 
 #include <stdlib.h>
+#include <time.h>
 
 #include <boost/format.hpp>
 
@@ -56,6 +57,14 @@ namespace fm
 
 namespace eigen
 {
+
+static std::string get_curr_time_str()
+{
+	time_t curr = time(NULL);
+	std::string ret = ctime(&curr);
+	ret[ret.length() - 1] = 0;
+	return ret;
+}
 
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
@@ -369,9 +378,11 @@ public:
 	virtual void MvTimesMatAddMv (ScalarType alpha, 
 			const Anasazi::MultiVec<ScalarType>& A, 
 			const Teuchos::SerialDenseMatrix<int,ScalarType>& B, ScalarType beta) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
 		sync_fm2ep();
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		BOOST_LOG_TRIVIAL(info) << boost::format(
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
 				"this(%1%) = %2% * A(%3%) * B(%4%x%5%) + %6% * this")
 			% name % alpha % fm_A.name % B.numRows() % B.numCols() % beta;
 		if (alpha != 0)
@@ -397,6 +408,9 @@ public:
 #endif
 		fm_A.verify();
 		this->verify();
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "gemm takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	//! Replace \c *this with \c alpha * \c A + \c beta * \c B.
@@ -405,7 +419,7 @@ public:
 		sync_fm2ep();
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		const FM_MultiVector &fm_B = dynamic_cast<const FM_MultiVector &>(B);
-		BOOST_LOG_TRIVIAL(info) << boost::format(
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
 				"this(%1%) = %2% * A(%3%) + %4% *  B(%5%)")
 			% name % alpha % fm_A.name % beta % fm_B.name;
 		num_col_reads_concept += fm_A.mat->get_num_cols() + fm_B.mat->get_num_cols();
@@ -435,7 +449,8 @@ public:
 		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
 		sync_fm2ep();
-		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) *= %2%") % name % alpha;
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"this(%1%) *= %2%") % name % alpha;
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -450,7 +465,8 @@ public:
 		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
 		sync_fm2ep();
-		BOOST_LOG_TRIVIAL(info) << boost::format("this(%s) *= vec") % name;
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"this(%s) *= vec") % name;
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
 #ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
@@ -467,8 +483,11 @@ public:
 			, ConjType conj = Anasazi::CONJ
 #endif				 
 			) const {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		BOOST_LOG_TRIVIAL(info) << boost::format(
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
 				"B(%1%x%2%) = %3% * A(%4%)^T * this(%5%)")
 			% B.numRows() % B.numCols() % alpha % fm_A.name % name;
 		num_col_reads_concept += fm_A.mat->get_num_cols() + mat->get_num_cols();
@@ -514,6 +533,9 @@ public:
 				B(i, j) = mem_res.get<ScalarType>(i, j) * lalpha;
 			}
 		}
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "MvTransMv takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	/// \brief Compute the dot product of each column of *this with the corresponding column of A.
@@ -527,10 +549,16 @@ public:
 			, ConjType conj = Anasazi::CONJ
 #endif
 			) const {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		BOOST_LOG_TRIVIAL(info)
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":"
 			<< boost::format("MvDot(A(%1%), this(%2%))") % fm_A.name % name;
 		b = mat->MvDot(*fm_A.mat);
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "MvDot takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	//! @name Norm method
@@ -541,11 +569,14 @@ public:
 	///   \c i-th vector of \c *this.
 	virtual void MvNorm (
 			std::vector<typename Teuchos::ScalarTraits<ScalarType>::magnitudeType> & normvec) const {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
 		num_col_reads_concept += mat->get_num_cols();
 		num_multiply_concept += mat->get_num_rows() * mat->get_num_cols();
 
-		BOOST_LOG_TRIVIAL(info) << boost::format("norm(%1%)(#cols: %2%)")
-			% name % normvec.size();
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"norm(%1%)(#cols: %2%)") % name % normvec.size();
 		verify();
 		fm::detail::matrix_stats_t orig_stats = fm::detail::matrix_stats;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
@@ -570,6 +601,9 @@ public:
 			assert(normvec[i] == normvec1[i]);
 		}
 #endif
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "MvNorm takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	//! @name Initialization methods
@@ -580,31 +614,44 @@ public:
 	/// in \c *this indicated by the indices given in \c index.
 	virtual void SetBlock (const Anasazi::MultiVec<ScalarType>& A,
 			const std::vector<int>& index) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
 		num_col_reads_concept += index.size();
 		num_col_writes_concept += index.size();
 
 		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
-		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%)[%2%] = A(%3%)")
-			% name % vec2str(index) % fm_A.name;
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"this(%1%)[%2%] = A(%3%)") % name % vec2str(index) % fm_A.name;
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
 #endif
 		fm_A.verify();
 		this->verify();
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "SetBlock takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	//! Fill all the vectors in \c *this with random numbers.
 	virtual void MvRandom () {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
 		num_col_writes_concept += mat->get_num_cols();
 
-		BOOST_LOG_TRIVIAL(info) << boost::format("this(%1%) = random") % name;
+		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
+				"this(%1%) = random") % name;
 		mat->init_rand<ScalarType>(-1, 1);
 //		ep_mat->MvRandom();
 		sync_fm2ep();
 		this->verify();
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "MvRandom takes " << time_diff(start, end)
+			<< " seconds";
 	}
 
 	//! Replace each element of the vectors in \c *this with \c alpha.

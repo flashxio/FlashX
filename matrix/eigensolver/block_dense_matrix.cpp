@@ -260,7 +260,8 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 			ret = dense_matrix::create(dotp->get_cols(offs));
 		else {
 			num_col_writes += block->get_num_cols();
-			printf("materialize %s\n", block->get_data().get_name().c_str());
+			printf("get_col: materialize %s\n",
+					block->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			block->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -317,7 +318,8 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 				ret1 = dense_matrix::create(dotp->get_cols(local_offs));
 			else {
 				num_col_writes += block->get_num_cols();
-				printf("materialize %s\n", block->get_data().get_name().c_str());
+				printf("get_cols: materialize %s\n",
+						block->get_data().get_name().c_str());
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				block->materialize_self();
 				detail::matrix_stats.print_diff(orig_stats);
@@ -420,6 +422,8 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 #endif
 }
 
+std::atomic<size_t> num_spmm;
+
 void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		const block_multi_vector &X, block_multi_vector &Y)
 {
@@ -432,7 +436,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	size_t num_blocks = X.get_num_blocks();
 	int num_nodes = matrix_conf.get_num_nodes();
 	bool in_mem = X.in_mem;
-	printf("SpMM: input matirx is in-mem: %d\n", in_mem);
+	printf("SpMM %ld: input matirx is in-mem: %d\n", num_spmm.load(), in_mem);
+	num_spmm++;
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
@@ -442,7 +447,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		if (!in_mem && in->is_virtual() && ((cached_mat == in)
 					|| (cached_mat
 						&& cached_mat->get_raw_store() == in->get_raw_store()))) {
-			printf("materialize in mat %s to disks\n", in->get_data().get_name().c_str());
+			printf("spmm: materialize in mat %s to disks\n",
+					in->get_data().get_name().c_str());
 			num_col_writes += cached_mat->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			bool ret = cached_mat->move_store(false, -1);
@@ -452,7 +458,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// Otherwise, we still want to materialize the matrix.
 		else if (in->is_virtual() && cached_mat
 				&& cached_mat->get_raw_store() == in->get_raw_store()) {
-			printf("materialize in mat %s\n", in->get_data().get_name().c_str());
+			printf("spmm: materialize in mat %s\n",
+					in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -472,7 +479,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// If the input matrix is in memory and is virtual, we should
 		// materialize it.
 		else if (row_in->is_virtual()) {
-			printf("materialize %s\n", row_in->get_data().get_name().c_str());
+			printf("spmm: materialize %s\n",
+					row_in->get_data().get_name().c_str());
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			row_in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -708,10 +716,9 @@ void gemm_op<T>::run(
 		fm::detail::local_matrix_store &out) const
 {
 	detail::matrix_stats.inc_multiplies(
-			ins[0]->get_num_rows() * Bstore->get_num_cols() * Bstore->get_num_cols());
+			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
 
 	assert(A_num_blocks + C_num_blocks == ins.size());
-	int node_id = ins.front()->get_node_id();
 	off_t global_start_row = ins.front()->get_global_start_row();
 	off_t global_start_col = ins.front()->get_global_start_col();
 
@@ -723,7 +730,7 @@ void gemm_op<T>::run(
 			= new detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
 					out.get_num_rows(), out.get_num_cols(),
-					get_scalar_type<T>(), node_id);
+					get_scalar_type<T>(), -1);
 		// TODO we don't need to allocate this every time.
 		tmp_res = fm::detail::local_col_matrix_store::ptr(raw_tmp_res);
 		if (beta && C_num_blocks == 1)
@@ -753,7 +760,7 @@ void gemm_op<T>::run(
 		fm::detail::local_col_matrix_store::ptr in_buf(
 				new fm::detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), node_id));
+					num_rows, num_cols, get_scalar_type<T>(), -1));
 		copy_from_blocks(ins.begin(), ins.begin() + A_num_blocks, *in_buf);
 		Astore = in_buf;
 	}
@@ -765,7 +772,7 @@ void gemm_op<T>::run(
 		fm::detail::local_col_matrix_store::ptr in_buf(
 				new fm::detail::local_buf_col_matrix_store(
 					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), node_id));
+					num_rows, num_cols, get_scalar_type<T>(), -1));
 		in_buf->copy_from(*ins.front());
 		Astore = in_buf;
 	}
@@ -892,6 +899,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	size_t A_num_blocks = A.get_num_blocks();
 	size_t C_num_blocks = d_beta != 0 ? this->get_num_blocks() : 0;
 	dense_matrix::ptr block;
+	bool use_hierarchy = false;
 	if (A_num_blocks <= MAX_MUL_BLOCKS) {
 		std::vector<dense_matrix::const_ptr> mats;
 		if (d_beta) {
@@ -913,6 +921,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	}
 	else {
 		printf("compute gemm hierarchically\n");
+		use_hierarchy = true;
 		// If there are too many blocks in the subspace, we need to perform
 		// gemm in a hierarchical fashion.
 		std::vector<dense_matrix::const_ptr> tmp_mats;
@@ -979,9 +988,11 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
-		set_caching(orig_input_mats, false);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, false);
 		block->materialize_self();
-		set_caching(orig_input_mats, true);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
@@ -1000,7 +1011,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
-		set_caching(orig_input_mats, false);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, false);
 		// If we want to cache the most recently materialized matrix.
 		if (!in_mem && cache_recent)
 			block->move_store(true, matrix_conf.get_num_nodes());
@@ -1008,7 +1020,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 			num_col_writes += block->get_num_cols();
 			block->materialize_self();
 		}
-		set_caching(orig_input_mats, true);
+		if (use_hierarchy)
+			set_caching(orig_input_mats, true);
 		detail::matrix_stats.print_diff(orig_stats);
 
 		vecs = block_multi_vector::create(get_num_rows(), B->get_num_cols(),
@@ -1132,34 +1145,47 @@ void multiply_wide_op<T>::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
-	assert(ins.size() == 2);
+	detail::matrix_stats.inc_multiplies(
+			ins[0]->get_num_rows() * out.get_num_rows() * out.get_num_cols());
+
+	assert(ins.size() >= 2);
 	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
 			thread::get_curr_thread());
 	int thread_id = thread->get_pool_thread_id();
 
-	detail::local_matrix_store::const_ptr Astore = ins[0];
-	const T *Amat = (const T *) Astore->get_raw_arr();
-	detail::local_matrix_store::ptr Abuf;
-	if (Amat == NULL || Astore->store_layout() != Alayout) {
-		if (Alayout == matrix_layout_t::L_ROW)
-			Abuf = detail::local_matrix_store::ptr(
-					new fm::detail::local_buf_row_matrix_store(0, 0,
-						Astore->get_num_rows(), Astore->get_num_cols(),
-						Astore->get_type(), -1));
-		else
-			Abuf = detail::local_matrix_store::ptr(
-					new fm::detail::local_buf_col_matrix_store(0, 0,
-						Astore->get_num_rows(), Astore->get_num_cols(),
-						Astore->get_type(), -1));
-		Abuf->copy_from(*Astore);
+	const T *Amat = NULL;
+	size_t num_Arows;
+	size_t num_Acols;
+	if (ins.size() == 2) {
+		assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+		Amat = (const T *) ins[0]->get_raw_arr();
+		num_Arows = ins[0]->get_num_rows();
+		num_Acols = ins[0]->get_num_cols();
+	}
+	detail::local_col_matrix_store::ptr Abuf;
+	if (Amat == NULL) {
+		size_t A_num_blocks = ins.size() - 1;
+		size_t block_size = ins.front()->get_num_cols();
+		size_t num_rows = ins.front()->get_num_rows();
+		size_t num_cols = block_size * A_num_blocks;
+		off_t global_start_row = ins.front()->get_global_start_row();
+		off_t global_start_col = ins.front()->get_global_start_col();
+		Abuf = fm::detail::local_col_matrix_store::ptr(
+				new fm::detail::local_buf_col_matrix_store(
+					global_start_row, global_start_col,
+					num_rows, num_cols, get_scalar_type<T>(), -1));
+		copy_from_blocks(ins.begin(), ins.begin() + ins.size() - 1, *Abuf);
+		num_Arows = Abuf->get_num_rows();
+		num_Acols = Abuf->get_num_cols();
 		Amat = (const T *) Abuf->get_raw_arr();
 	}
 	assert(Amat);
 
-	detail::local_matrix_store::const_ptr Bstore = ins[1];
+	detail::local_matrix_store::const_ptr Bstore = ins.back();
 	const T *Bmat = (const T *) Bstore->get_raw_arr();
 	detail::local_matrix_store::ptr Bbuf;
-	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
+	assert(Bstore->store_layout() == Blayout);
+	if (Bmat == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
 			Bbuf = detail::local_matrix_store::ptr(
 					new fm::detail::local_buf_col_matrix_store(0, 0,
@@ -1194,17 +1220,13 @@ void multiply_wide_op<T>::run(
 	// is stored in contiguous memory and is organized in row major, we can
 	// easily interpret it as its transpose by switching its #rows and #cols.
 	if (Blayout == matrix_layout_t::L_COL)
-		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_cols(), Bstore->get_num_cols(),
-				Astore->get_num_rows(), 1, Amat,
-				Astore->get_num_cols(), Bmat, Bstore->get_num_rows(),
-				1, res_mat, out_num_rows);
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, num_Acols,
+				Bstore->get_num_cols(), num_Arows, 1, Amat, num_Acols, Bmat,
+				Bstore->get_num_rows(), 1, res_mat, out_num_rows);
 	else
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_cols(), Bstore->get_num_cols(),
-				Astore->get_num_rows(), 1, Amat,
-				Astore->get_num_rows(), Bmat, Bstore->get_num_cols(),
-				1, res_mat, out_num_cols);
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, num_Acols,
+				Bstore->get_num_cols(), num_Arows, 1, Amat, num_Arows, Bmat,
+				Bstore->get_num_cols(), 1, res_mat, out_num_cols);
 }
 
 dense_matrix::ptr MvTransMv_wide(
@@ -1218,13 +1240,9 @@ dense_matrix::ptr MvTransMv_wide(
 	std::vector<detail::portion_mapply_op::const_ptr> mul_ops;
 	for (size_t i = 0; i < blocks1.size(); i += MAX_MUL_BLOCKS) {
 		size_t num = std::min(blocks1.size() - i, MAX_MUL_BLOCKS);
-		std::vector<detail::matrix_store::const_ptr> sub_block(
+		std::vector<detail::matrix_store::const_ptr> tmp_ins(
 				blocks1.begin() + i, blocks1.begin() + i + num);
-		detail::matrix_store::ptr in1 = collected_matrix_store::create(
-				sub_block, num * blocks1.front()->get_num_cols());
-		std::vector<detail::matrix_store::const_ptr> tmp_ins(2);
-		tmp_ins[0] = in1;
-		tmp_ins[1] = in2;
+		tmp_ins.push_back(in2);
 		size_t out_num_rows = num * blocks1.front()->get_num_cols();
 		size_t out_num_cols = in2->get_num_cols();
 		detail::portion_mapply_op::const_ptr op(new multiply_wide_op<double>(
@@ -1323,10 +1341,20 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	}
 	else if (blocks1.size() > MAX_MUL_BLOCKS && blocks2.size() <= MAX_MUL_BLOCKS) {
 		detail::matrix_store::const_ptr in2;
-		if (blocks2.size() == 1)
-			in2 = this->get_block(0)->get_raw_store();
-		else
-			in2 = collected_matrix_store::create(blocks2, this->get_num_cols());
+		assert(blocks1.front()->store_layout() == matrix_layout_t::L_COL);
+		// We should convert the data layout in advance so that multiple groups
+		// can share the data with the converted layout.
+		if (blocks2.size() == 1) {
+			dense_matrix::ptr tmp
+				= this->get_block(0)->conv2(matrix_layout_t::L_ROW);
+			in2 = tmp->get_raw_store();
+		}
+		else {
+			dense_matrix::ptr tmp = dense_matrix::create(
+					collected_matrix_store::create(blocks2, this->get_num_cols()));
+			tmp = tmp->conv2(matrix_layout_t::L_ROW);
+			in2 = tmp->get_raw_store();
+		}
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = MvTransMv_wide(blocks1, in2, MAX_MUL_BLOCKS);
 		detail::matrix_stats.print_diff(orig_stats);
@@ -1334,10 +1362,17 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	}
 	else if (blocks1.size() <= MAX_MUL_BLOCKS && blocks2.size() > MAX_MUL_BLOCKS) {
 		detail::matrix_store::const_ptr in1;
-		if (blocks1.size() == 1)
-			in1 = mv.get_block(0)->get_raw_store();
-		else
-			in1 = collected_matrix_store::create(blocks1, mv.get_num_cols());
+		if (blocks1.size() == 1) {
+			dense_matrix::ptr tmp
+				= mv.get_block(0)->conv2(matrix_layout_t::L_ROW);
+			in1 = tmp->get_raw_store();
+		}
+		else {
+			dense_matrix::ptr tmp = dense_matrix::create(
+					collected_matrix_store::create(blocks1, mv.get_num_cols()));
+			tmp = tmp->conv2(matrix_layout_t::L_ROW);
+			in1 = tmp->get_raw_store();
+		}
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = MvTransMv_wide(blocks2, in1, MAX_MUL_BLOCKS);
 		detail::matrix_stats.print_diff(orig_stats);
@@ -1423,7 +1458,7 @@ dense_matrix::ptr materialize_block(dense_matrix::ptr mat)
 {
 	assert(mat->is_virtual());
 	num_col_writes += mat->get_num_cols();
-	printf("materialize %s\n", mat->get_data().get_name().c_str());
+	printf("set_block: materialize %s\n", mat->get_data().get_name().c_str());
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
 	mat->materialize_self();
 	detail::matrix_stats.print_diff(orig_stats);
