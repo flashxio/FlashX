@@ -225,6 +225,11 @@ off_t SpM_2d_index::get_block_row_off(size_t idx) const
 
 SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 {
+	if (!safs::is_safs_init()) {
+		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
+		return SpM_2d_index::ptr();
+	}
+
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			idx_file, safs::GLOBAL_CACHE_ACCESS);
 	if (io_fac == NULL) {
@@ -299,6 +304,11 @@ void SpM_2d_storage::verify() const
 SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		SpM_2d_index::ptr index)
 {
+	if (!safs::is_safs_init()) {
+		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
+		return SpM_2d_storage::ptr();
+	}
+
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			mat_file, safs::REMOTE_ACCESS);
 	if (io_fac == NULL) {
