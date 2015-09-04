@@ -120,6 +120,11 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 {
 	file_holder::ptr holder = file_holder::create(mat_file);
+	if (holder == NULL) {
+		BOOST_LOG_TRIVIAL(error) << mat_file + " doesn't exist";
+		return EM_matrix_store::ptr();
+	}
+
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	io_set::ptr ios(new io_set(factory));
