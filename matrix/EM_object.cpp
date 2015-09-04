@@ -80,6 +80,11 @@ bool EM_object::file_holder::set_persistent(const std::string &new_name)
 	return true;
 }
 
+void EM_object::file_holder::unset_persistent()
+{
+	persistent = false;
+}
+
 safs::io_interface::ptr EM_object::io_set::create_io()
 {
 	thread *t = thread::get_curr_thread();

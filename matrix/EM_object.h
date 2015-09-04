@@ -52,6 +52,10 @@ public:
 			return file_name;
 		}
 		bool set_persistent(const std::string &new_name);
+		void unset_persistent();
+		bool is_persistent() const {
+			return persistent;
+		}
 	};
 
 	class io_set {

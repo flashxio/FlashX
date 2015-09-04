@@ -167,10 +167,14 @@ public:
 	/*
 	 * Set this matrix persistent in SAFS, so that even if there isn't
 	 * a reference to the matrix, its data still stored in SAFS.
+	 * This method isn't thread-safe.
 	 */
-	bool set_persistent(const std::string &name) const {
-		return holder->set_persistent(name);
-	}
+	bool set_persistent(const std::string &name) const;
+	/*
+	 * Unset the persistency of the matrix in SAFS, so that the matrix file
+	 * is deleted after all references to the matrix are gone.
+	 */
+	void unset_persistent() const;
 };
 
 }
