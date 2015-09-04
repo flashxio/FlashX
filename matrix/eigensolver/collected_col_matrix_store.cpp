@@ -156,10 +156,20 @@ collected_matrix_store::ptr collected_matrix_store::create(
 	return ptr(new collected_matrix_store(mats, num_cols));
 }
 
+static bool all_in_mem(
+		const std::vector<detail::matrix_store::const_ptr> &mats)
+{
+	bool in_mem = true;
+	for (size_t i = 0; i < mats.size(); i++)
+		if (!mats[i]->is_in_mem())
+			in_mem = false;
+	return in_mem;
+}
+
 collected_matrix_store::collected_matrix_store(
 		const std::vector<detail::matrix_store::const_ptr> &mats,
 		size_t num_cols): virtual_matrix_store(mats[0]->get_num_rows(),
-			num_cols, mats[0]->is_in_mem(), mats[0]->get_type())
+			num_cols, all_in_mem(mats), mats[0]->get_type())
 {
 	size_t num_rows = mats[0]->get_num_rows();
 	const scalar_type &type = mats[0]->get_type();
