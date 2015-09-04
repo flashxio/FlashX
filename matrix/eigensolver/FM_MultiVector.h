@@ -123,8 +123,6 @@ public:
 				for (size_t k = 0; k < portion->get_num_rows(); k++) {
 					double v1 = (*ep_mat)[ep_col_idx][k];
 					double v2 = portion->get<ScalarType>(k, j);
-					if (v1 != v2)
-						printf("v1: %g, v2: %g, diff: %g\n", v1, v2, v1 - v2);
 					assert(abs(v1 - v2) == 0);
 				}
 				ep_col_idx++;
@@ -184,8 +182,9 @@ public:
 
 	void sync_fm2ep() {
 #ifdef FM_VERIFY
-		printf("There are %ld blocks and each block has %ld cols\n",
-				mat->get_num_blocks(), mat->get_block(0)->get_num_cols());
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"There are %1% blocks and each block has %2% cols")
+			% mat->get_num_blocks() % mat->get_block(0)->get_num_cols();
 		size_t ep_col_idx = 0;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			dense_matrix::ptr block = mat->get_block(i);
@@ -334,8 +333,9 @@ public:
 			const dotp_matrix_store *store
 				= dynamic_cast<const dotp_matrix_store *>(block->get_raw_store().get());
 			if (store == NULL) {
-				printf("clone view: materialize %s on the fly\n",
-						block->get_data().get_name().c_str());
+				BOOST_LOG_TRIVIAL(info) << boost::format(
+						"clone view: materialize %1% on the fly")
+					% block->get_data().get_name();
 				dotp_matrix_store::ptr dotp = dotp_matrix_store::create(
 						mat->get_block(block_idx)->get_raw_store());
 				mat->set_block(block_idx, fm::dense_matrix::create(dotp));
@@ -580,8 +580,9 @@ public:
 		verify();
 		fm::detail::matrix_stats_t orig_stats = fm::detail::matrix_stats;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
-			printf("norm: materialize %s on the fly\n",
-					mat->get_block(i)->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << boost::format(
+					"norm: materialize %1% on the fly")
+				% mat->get_block(i)->get_data().get_name();
 			dotp_matrix_store::ptr dotp
 				= dotp_matrix_store::create(mat->get_block(i)->get_raw_store());
 			mat->set_block(i, fm::dense_matrix::create(dotp));
@@ -597,7 +598,8 @@ public:
 				normvec.size());
 		ep_mat->MvNorm(normvec1);
 		for (size_t i = 0; i < normvec.size(); i++) {
-			printf("%ld: %g\n", i, normvec[i] - normvec1[i]);
+			BOOST_LOG_TRIVIAL(info) << boost::format("%1%: %2%")
+				% i % (normvec[i] - normvec1[i]);
 			assert(normvec[i] == normvec1[i]);
 		}
 #endif

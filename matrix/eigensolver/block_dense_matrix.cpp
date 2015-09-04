@@ -187,16 +187,16 @@ void mirror_cols_block_multi_vector::set_block(off_t block_idx,
 	mats[block_idx]->assign(*mat);
 	if (mirrored_mat->is_virtual()) {
 		num_col_writes += mirrored_mat->get_num_cols();
-		printf("set_block1: materialize %s\n",
-				mirrored_mat->get_data().get_name().c_str());
+		BOOST_LOG_TRIVIAL(info) << std::string("set_block1: materialize ")
+			+ mirrored_mat->get_data().get_name();
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		mirrored_mat->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 	}
 	if (mat->is_virtual()) {
 		num_col_writes += mat->get_num_cols();
-		printf("set_block2: materialize %s\n",
-				mat->get_data().get_name().c_str());
+		BOOST_LOG_TRIVIAL(info) << std::string("set_block2: materialize ")
+			+ mat->get_data().get_name();
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		mat->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
@@ -260,8 +260,8 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 			ret = dense_matrix::create(dotp->get_cols(offs));
 		else {
 			num_col_writes += block->get_num_cols();
-			printf("get_col: materialize %s\n",
-					block->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << std::string("get_col: materialize ")
+				+ block->get_data().get_name();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			block->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -318,8 +318,8 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 				ret1 = dense_matrix::create(dotp->get_cols(local_offs));
 			else {
 				num_col_writes += block->get_num_cols();
-				printf("get_cols: materialize %s\n",
-						block->get_data().get_name().c_str());
+				BOOST_LOG_TRIVIAL(info) << std::string("get_cols: materialize ")
+					+ block->get_data().get_name();
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				block->materialize_self();
 				detail::matrix_stats.print_diff(orig_stats);
@@ -356,8 +356,9 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		// This can reduce significant computation.
 		if (num_blocks == 1) {
 			if (!in_mem && cached_mat && cached_mat->is_virtual()) {
-				printf("materialize the old cached mat %s to disks\n",
-						cached_mat->get_data().get_name().c_str());
+				BOOST_LOG_TRIVIAL(info) << boost::format(
+						"materialize the old cached mat %1% to disks")
+					% cached_mat->get_data().get_name();
 				num_col_writes += cached_mat->get_num_cols();
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				bool ret = cached_mat->move_store(false, -1);
@@ -365,8 +366,9 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 				detail::matrix_stats.print_diff(orig_stats);
 			}
 			else if (cached_mat && cached_mat->is_virtual()) {
-				printf("materialize the old cached mat %s\n",
-						cached_mat->get_data().get_name().c_str());
+				BOOST_LOG_TRIVIAL(info)
+					<< std::string("materialize the old cached mat ")
+					+ cached_mat->get_data().get_name();
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
 				cached_mat->materialize_self();
 				detail::matrix_stats.print_diff(orig_stats);
@@ -390,8 +392,9 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		// Get the columns in the block.
 		fm::dense_matrix::ptr block = get_block(block_start);
 		if (block->is_virtual()) {
-			printf("get_cols_mirror: materialize %s\n",
-					block->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info)
+				<< std::string("get_cols_mirror: materialize ")
+				+ block->get_data().get_name();
 			num_col_writes += block->get_num_cols();
 			block->materialize_self();
 		}
@@ -436,7 +439,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 	size_t num_blocks = X.get_num_blocks();
 	int num_nodes = matrix_conf.get_num_nodes();
 	bool in_mem = X.in_mem;
-	printf("SpMM %ld: input matirx is in-mem: %d\n", num_spmm.load(), in_mem);
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"SpMM %1%: input matirx is in-mem: %2%") % num_spmm.load() % in_mem;
 	num_spmm++;
 	for (size_t i = 0; i < num_blocks; i++) {
 		dense_matrix::ptr in = X.get_block(i);
@@ -447,8 +451,9 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		if (!in_mem && in->is_virtual() && ((cached_mat == in)
 					|| (cached_mat
 						&& cached_mat->get_raw_store() == in->get_raw_store()))) {
-			printf("spmm: materialize in mat %s to disks\n",
-					in->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << boost::format(
+					"spmm: materialize in mat %1% to disks")
+				% in->get_data().get_name();
 			num_col_writes += cached_mat->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			bool ret = cached_mat->move_store(false, -1);
@@ -458,8 +463,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// Otherwise, we still want to materialize the matrix.
 		else if (in->is_virtual() && cached_mat
 				&& cached_mat->get_raw_store() == in->get_raw_store()) {
-			printf("spmm: materialize in mat %s\n",
-					in->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << std::string("spmm: materialize in mat ")
+				+ in->get_data().get_name();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -471,7 +476,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// When loading, if the input matrix is a virtual matrix, materialize
 		// it in memory.
 		if (!row_in->is_in_mem()) {
-			printf("load the input matrix for SpMM to memory\n");
+			BOOST_LOG_TRIVIAL(info) << "load the input matrix for SpMM to memory";
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			row_in = row_in->conv_store(true, num_nodes);
 			detail::matrix_stats.print_diff(orig_stats);
@@ -479,8 +484,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// If the input matrix is in memory and is virtual, we should
 		// materialize it.
 		else if (row_in->is_virtual()) {
-			printf("spmm: materialize %s\n",
-					row_in->get_data().get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << std::string("spmm: materialize ")
+				+ row_in->get_data().get_name();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			row_in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
@@ -493,7 +498,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		if (!in_mem)
 			num_col_writes_concept += res->get_num_cols();
 		if (!in_mem && !cache_recent) {
-			printf("write the output matrix of SpMM to disks\n");
+			BOOST_LOG_TRIVIAL(info) << "write the output matrix of SpMM to disks";
 			num_col_writes += res->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			res = res->conv_store(false, -1);
@@ -920,7 +925,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		block = mapply_portion(mats, op, matrix_layout_t::L_COL);
 	}
 	else {
-		printf("compute gemm hierarchically\n");
+		BOOST_LOG_TRIVIAL(info) << "compute gemm hierarchically";
 		use_hierarchy = true;
 		// If there are too many blocks in the subspace, we need to perform
 		// gemm in a hierarchical fashion.
@@ -981,10 +986,12 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		size_t num_out_cols = block->get_num_cols();
 		assert(num_out_cols % get_block_size() == 0);
 
-		printf("Split matrix\n");
-		printf("There are %ld underlying matrices\n", bytes.size());
+		BOOST_LOG_TRIVIAL(info) << "Split matrix";
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("There are %1% underlying matrices") % bytes.size();
 		num_col_writes += block->get_num_cols();
-		printf("materialize %s\n", block->get_data().get_name().c_str());
+		BOOST_LOG_TRIVIAL(info)
+			<< std::string("materialize ") + block->get_data().get_name();
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
@@ -1006,8 +1013,10 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		}
 	}
 	else if (bytes.size() > 2) {
-		printf("There are %ld underlying matrices\n", bytes.size());
-		printf("materialize %s\n", block->get_data().get_name().c_str());
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"There are %1% underlying matrices") % bytes.size();
+		BOOST_LOG_TRIVIAL(info) << std::string("materialize ")
+			+ block->get_data().get_name();
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		std::vector<detail::matrix_store::const_ptr> orig_input_mats
 			= get_input_matrices(A);
@@ -1311,13 +1320,15 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 	for (size_t i = 0; i < blocks1.size(); i++) {
 		blocks1[i] = mv.get_block(i)->get_raw_store();
 		if (blocks1[i]->is_virtual())
-			printf("materialize %s on the fly\n", blocks1[i]->get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << boost::format(
+					"materialize %1% on the fly") % blocks1[i]->get_name();
 	}
 	std::vector<detail::matrix_store::const_ptr> blocks2(this->get_num_blocks());
 	for (size_t i = 0; i < blocks2.size(); i++) {
 		blocks2[i] = this->get_block(i)->get_raw_store();
 		if (blocks2[i]->is_virtual())
-			printf("materialize %s on the fly\n", blocks2[i]->get_name().c_str());
+			BOOST_LOG_TRIVIAL(info) << boost::format(
+					"materialize %1% on the fly") % blocks2[i]->get_name();
 	}
 
 	if (blocks1.size() <= MAX_MUL_BLOCKS && blocks2.size() <= MAX_MUL_BLOCKS) {
@@ -1458,7 +1469,8 @@ dense_matrix::ptr materialize_block(dense_matrix::ptr mat)
 {
 	assert(mat->is_virtual());
 	num_col_writes += mat->get_num_cols();
-	printf("set_block: materialize %s\n", mat->get_data().get_name().c_str());
+	BOOST_LOG_TRIVIAL(info) << std::string(
+			"set_block: materialize ") + mat->get_data().get_name();
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
 	mat->materialize_self();
 	detail::matrix_stats.print_diff(orig_stats);
@@ -1577,8 +1589,8 @@ fm::dense_matrix::ptr block_multi_vector::conv2matrix() const
 		dense_matrix::ptr new_mat
 			= dense_matrix::create(collected_matrix_store::create(
 						const_mats, tot_num_cols));
-		printf("conv2matrix: materialize %s\n",
-				new_mat->get_data().get_name().c_str());
+		BOOST_LOG_TRIVIAL(info) << std::string("conv2matrix: materialize ")
+			+ new_mat->get_data().get_name();
 		num_col_writes += new_mat->get_num_cols();
 		new_mat->materialize_self();
 		return new_mat;
