@@ -109,6 +109,46 @@ void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
 }
 
+static size_t wait4ios(const std::vector<safs::io_interface::ptr> &ios,
+		size_t max_pending_ios)
+{
+	size_t num_pending;
+	do {
+		num_pending = 0;
+		for (size_t i = 0; i < ios.size(); i++)
+			num_pending += ios[i]->num_pending_ios();
+
+		// Figure out how many I/O requests we have to wait for in
+		// this iteration.
+		int num_to_process;
+		if (num_pending > max_pending_ios)
+			num_to_process = num_pending - max_pending_ios;
+		else
+			num_to_process = 0;
+
+		for (size_t i = 0; i < ios.size(); i++) {
+			int ret = ios[i]->wait4complete(0);
+			assert(ret >= 0);
+			num_to_process -= ret;
+			if (ios[i]->num_pending_ios() > 0 && num_to_process > 0) {
+				ret = ios[i]->wait4complete(1);
+				assert(ret >= 1);
+				num_to_process -= ret;
+			}
+		}
+
+		// Test if all I/O instances have pending I/O requests left.
+		// When a portion of a matrix is ready in memory and being processed,
+		// it may result in writing data to another matrix. Therefore, we
+		// need to process all completed I/O requests (portions with data
+		// in memory) first and then count the number of new pending I/Os.
+		num_pending = 0;
+		for (size_t i = 0; i < ios.size(); i++)
+			num_pending += ios[i]->num_pending_ios();
+	} while (num_pending > max_pending_ios);
+	return num_pending;
+}
+
 void io_worker_task::run()
 {
 	std::vector<safs::io_interface::ptr> ios;
@@ -120,33 +160,11 @@ void io_worker_task::run()
 	pthread_spin_unlock(&lock);
 
 	// The task runs until there are no tasks left in the queue.
-	while (dispatch->issue_task()) {
-		for (size_t i = 0; i < ios.size(); i++) {
-			ios[i]->wait4complete(0);
-			while (ios[i]->num_pending_ios() > max_pending_ios)
-				ios[i]->wait4complete(1);
-		}
-	}
+	while (dispatch->issue_task())
+		wait4ios(ios, max_pending_ios);
 	// Test if all I/O instances have processed all requests.
-	size_t num_pending;
-	do {
-		for (size_t i = 0; i < ios.size(); i++) {
-			ios[i]->wait4complete(0);
-			// If there is still an I/O instance has pending requests,
-			// we need to start over and test all I/O instances again.
-			if (ios[i]->num_pending_ios() > 0)
-				ios[i]->wait4complete(1);
-		}
-
-		// Test if all I/O instances have pending I/O requests left.
-		// When a portion of a matrix is ready in memory and being processed,
-		// it may result in writing data to another matrix. Therefore, we
-		// need to process all completed I/O requests (portions with data
-		// in memory) first and then count the number of new pending I/Os.
-		num_pending = 0;
-		for (size_t i = 0; i < ios.size(); i++)
-			num_pending += ios[i]->num_pending_ios();
-	} while (num_pending > 0);
+	size_t num_pending = wait4ios(ios, 0);
+	assert(num_pending == 0);
 
 	pthread_spin_lock(&lock);
 	EM_objs.clear();
