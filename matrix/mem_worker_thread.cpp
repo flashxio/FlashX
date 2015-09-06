@@ -102,6 +102,19 @@ mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 	return global_threads;
 }
 
+size_t mem_thread_pool::get_global_num_threads()
+{
+	return get_global_mem_threads()->get_num_threads();
+}
+
+int mem_thread_pool::get_curr_thread_id()
+{
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	assert(curr);
+	return curr->get_pool_thread_id();
+}
+
 void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		int nthreads_per_node)
 {

@@ -71,6 +71,8 @@ public:
 	typedef std::shared_ptr<mem_thread_pool> ptr;
 
 	static ptr get_global_mem_threads();
+	static size_t get_global_num_threads();
+	static int get_curr_thread_id();
 	static void init_global_mem_threads(int num_nodes, int nthreads_per_node);
 
 	static ptr create(int num_nodes, int nthreads_per_node) {
