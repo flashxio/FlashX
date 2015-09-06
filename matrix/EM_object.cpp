@@ -87,36 +87,31 @@ void EM_object::file_holder::unset_persistent()
 
 safs::io_interface::ptr EM_object::io_set::create_io()
 {
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	assert((size_t) thread_id < thread_ios.size());
 	thread *t = thread::get_curr_thread();
 	assert(t);
-	pthread_spin_lock(&io_lock);
-	auto it = thread_ios.find(t);
-	if (it == thread_ios.end()) {
+	if (thread_ios[thread_id] == NULL) {
 		safs::io_interface::ptr io = safs::create_io(factory, t);
 		io->set_callback(portion_callback::ptr(new portion_callback()));
-		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
+		thread_ios[thread_id] = io;
 		pthread_setspecific(io_key, io.get());
-		pthread_spin_unlock(&io_lock);
 		return io;
 	}
-	else {
-		safs::io_interface::ptr io = it->second;
-		pthread_spin_unlock(&io_lock);
-		return io;
-	}
+	else
+		return thread_ios[thread_id];
 }
 
 EM_object::io_set::io_set(safs::file_io_factory::shared_ptr factory)
 {
+	thread_ios.resize(detail::mem_thread_pool::get_global_num_threads());
 	this->factory = factory;
 	int ret = pthread_key_create(&io_key, NULL);
 	assert(ret == 0);
-	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 EM_object::io_set::~io_set()
 {
-	pthread_spin_destroy(&io_lock);
 	pthread_key_delete(io_key);
 	thread_ios.clear();
 }

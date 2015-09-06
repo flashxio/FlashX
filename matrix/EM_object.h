@@ -61,9 +61,8 @@ public:
 	class io_set {
 		safs::file_io_factory::shared_ptr factory;
 		// This keeps an I/O instance for each thread.
-		std::unordered_map<thread *, safs::io_interface::ptr> thread_ios;
+		std::vector<safs::io_interface::ptr> thread_ios;
 		pthread_key_t io_key;
-		pthread_spinlock_t io_lock;
 	public:
 		typedef std::shared_ptr<io_set> ptr;
 		io_set(safs::file_io_factory::shared_ptr factory);
