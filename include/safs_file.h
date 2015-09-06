@@ -52,7 +52,11 @@ class safs_file
 {
 	// The collection of native files.
 	std::vector<part_file_info> native_dirs;
+	// The path of the header file in the local Linux filesystem.
+	std::string header_file;
 	std::string name;
+
+	std::string get_header_file() const;
 public:
 	static std::vector<std::string> erase_header_file(
 			const std::vector<std::string> &files);
@@ -60,6 +64,13 @@ public:
 	safs_file(const RAID_config &conf, const std::string &file_name);
 
 	safs_header get_header() const;
+
+	/*
+	 * An SAFS file allows a user to store user-defined metadata along with
+	 * the data in the file.
+	 */
+	bool set_user_metadata(const std::vector<char> &data);
+	std::vector<char> get_user_metadata() const;
 
 	const std::string &get_name() const {
 		return name;

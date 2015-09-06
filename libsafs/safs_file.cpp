@@ -137,7 +137,7 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		// stores the first part.
 		if (i == 0) {
 			printf("the first part is in %s\n", dir.get_name().c_str());
-			std::string header_file = dir.get_name() + "/header";
+			header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
 				perror("fopen");
@@ -156,6 +156,7 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		if (!ret)
 			return false;
 	}
+	assert(!header_file.empty());
 	return true;
 }
 
@@ -170,30 +171,98 @@ bool safs_file::delete_file()
 	return true;
 }
 
-safs_header safs_file::get_header() const
+std::string safs_file::get_header_file() const
 {
+	if (!header_file.empty())
+		return header_file;
+
 	for (size_t i = 0; i < native_dirs.size(); i++) {
 		std::string dir_str = native_dirs[i].name;
-		if (!file_exist(dir_str) || !file_exist(dir_str + "/header"))
-			continue;
-		std::string file_name = dir_str + "/header";
-		FILE *f = fopen(file_name.c_str(), "r");
-		if (f == NULL) {
-			perror("fopen");
+		if (file_exist(dir_str) && file_exist(dir_str + "/header")) {
+			const_cast<safs_file *>(this)->header_file = dir_str + "/header";
 			break;
 		}
-		safs_header header;
-		size_t num_reads = fread(&header, sizeof(header), 1, f);
-		if (num_reads != 1) {
-			perror("fread");
-			break;
-		}
-		int ret = fclose(f);
-		assert(ret == 0);
-		return header;
 	}
+	return header_file;
+}
 
-	return safs_header();
+safs_header safs_file::get_header() const
+{
+	std::string header_file = get_header_file();
+	assert(file_exist(header_file));
+	FILE *f = fopen(header_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		return safs_header();
+	}
+	safs_header header;
+	size_t num_reads = fread(&header, sizeof(header), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		return safs_header();
+	}
+	int ret = fclose(f);
+	assert(ret == 0);
+	return header;
+}
+
+bool safs_file::set_user_metadata(const std::vector<char> &data)
+{
+	std::string header_file = get_header_file();
+	native_file native_f(header_file);
+	assert(native_f.exist());
+	size_t file_size = native_f.get_size();
+	assert(file_size >= sizeof(safs_header));
+
+	FILE *f = fopen(header_file.c_str(), "w");
+	if (f == NULL) {
+		perror("fopen");
+		return false;
+	}
+	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	if (ret != 0) {
+		perror("fseek");
+		return false;
+	}
+	size_t num_writes = fwrite(data.data(), data.size(), 1, f);
+	if (num_writes != 1) {
+		perror("fwrite");
+		return false;
+	}
+	ret = fclose(f);
+	assert(ret == 0);
+	return true;
+}
+
+std::vector<char> safs_file::get_user_metadata() const
+{
+	std::string header_file = get_header_file();
+	native_file native_f(header_file);
+	assert(native_f.exist());
+	size_t file_size = native_f.get_size();
+	assert(file_size >= sizeof(safs_header));
+	if (file_size == sizeof(safs_header))
+		return std::vector<char>();
+
+	FILE *f = fopen(header_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		return std::vector<char>();
+	}
+	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	if (ret != 0) {
+		perror("fseek");
+		return std::vector<char>();
+	}
+	std::vector<char> data(file_size - sizeof(safs_header));
+	size_t num_reads = fread(data.data(), data.size(), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		return std::vector<char>();
+	}
+	ret = fclose(f);
+	assert(ret == 0);
+	return data;
 }
 
 size_t get_all_safs_files(std::set<std::string> &files)
