@@ -92,10 +92,14 @@ safs::io_interface::ptr EM_object::io_set::create_io()
 	pthread_spin_lock(&io_lock);
 	auto it = thread_ios.find(t);
 	if (it == thread_ios.end()) {
+		pthread_spin_unlock(&io_lock);
+
 		safs::io_interface::ptr io = safs::create_io(factory, t);
 		io->set_callback(portion_callback::ptr(new portion_callback()));
-		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
 		pthread_setspecific(io_key, io.get());
+
+		pthread_spin_lock(&io_lock);
+		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
 		pthread_spin_unlock(&io_lock);
 		return io;
 	}
