@@ -374,7 +374,7 @@ namespace fg
 
 		OMP_MAX_THREADS = std::min(max_threads, get_num_omp_threads());
 		omp_set_num_threads(OMP_MAX_THREADS);
-		BOOST_LOG_TRIVIAL(warning) << "Running on " << OMP_MAX_THREADS << " threads!";
+		BOOST_LOG_TRIVIAL(info) << "Running on " << OMP_MAX_THREADS << " threads!";
 
 		if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
 			BOOST_LOG_TRIVIAL(fatal)
@@ -450,7 +450,7 @@ namespace fg
 		omp_destroy_lock(&writelock);
 
 		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(warning) << "\n\nAlgorithmic time taken = " << 
+		BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " << 
 			time_diff(start, end) << " sec\n";
 
 #ifdef PROFILER
