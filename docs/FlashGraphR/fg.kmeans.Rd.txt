@@ -9,8 +9,8 @@ Description:
 
 Usage:
 
-     fg.kmeans(mat, k, max.iters = 10, max.threads = Machine$integer.max,
-       init = c("random", "forgy", "kmeanspp"))
+     fg.kmeans(mat, k, max.iters = 10, max.threads = 256, init = c("random",
+       "forgy", "kmeanspp"), tol = -1)
      
 Arguments:
 
@@ -26,6 +26,11 @@ max.threads: The maximum number of threads allowed (Default is 1 per
     init: The form of initialization to use when the algorithm begins.
           The default is "random". For a desciption of each see:
           http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
+
+     tol: The tolerance for convergence. Between 0 and 1 and is the
+          minimum fraction of cluster changes necessary to cause
+          non-convergence. Default is -1 which represents no cluster
+          changes.
 
 Value:
 
