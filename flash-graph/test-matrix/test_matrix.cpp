@@ -266,6 +266,7 @@ void print_usage()
     fprintf(stderr, "-k num: the number of clusters desired\n");
     fprintf(stderr, "-w which: which side of eigenvalues\n");
     fprintf(stderr, "-t type: type of initialization for kmeans ['random', 'forgy', 'kmeanspp']\n");
+    fprintf(stderr, "-T num_thread: The number of OMP threads to run\n");
     fprintf(stderr, "-i iters: maximum number of iterations\n");
     fprintf(stderr, "-f file: input file in fg format\n");
     fprintf(stderr, "-m matrix_layout: i.e., row or col\n");
