@@ -231,7 +231,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = disk_io_thread::ptr(new disk_io_thread(
-						partition, global_data.raid_conf->get_disk(k).node_id,
+						partition, global_data.raid_conf->get_disk(k).get_node_id(),
 						NULL, k, flags));
 		}
 #if 0
@@ -690,7 +690,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option)
 {
 	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf->get_disk(i).name
+		std::string abs_path = global_data.raid_conf->get_disk(i).get_file_name()
 			+ "/" + file_name;
 		native_file f(abs_path);
 		if (!f.exist())

@@ -45,7 +45,8 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	 */
 	std::map<int, part_file_info> file_map;
 	for (unsigned i = 0; i < root_paths.size(); i++) {
-		std::string dir_name = root_paths[i].name + std::string("/") + file_name;
+		std::string dir_name = root_paths[i].get_file_name()
+			+ std::string("/") + file_name;
 		native_dir dir(dir_name);
 		if (!dir.exist()) {
 			fprintf(stderr, "%s for the SAFS file %s doesn't exist\n",
@@ -68,8 +69,8 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 			return NULL;
 		}
 		int part_id = atoi(part_ids[0].c_str());
-		part_file_info info = root_paths[i];
-		info.name = dir_name + std::string("/") + part_ids[0];
+		part_file_info info(dir_name + std::string("/") + part_ids[0],
+				root_paths[i].get_disk_id(), root_paths[i].get_node_id());
 		file_map.insert(std::pair<int, part_file_info>(part_id, info));
 	}
 	if (file_map.size() < root_paths.size()) {
@@ -125,7 +126,7 @@ std::set<int> RAID_config::get_node_ids() const
 	std::set<int> node_ids;
 	int num_paths = root_paths.size();
 	for (int k = 0; k < num_paths; k++) {
-		node_ids.insert(root_paths[k].node_id);
+		node_ids.insert(root_paths[k].get_node_id());
 	}
 	return node_ids;
 }
@@ -143,6 +144,7 @@ static int retrieve_data_files(std::string file_file,
 		return 0;
 	}
 
+	int disk_id = 0;
 	while ((line_length = getline(&line, &size, fd)) > 0) {
 		line[line_length - 1] = 0;
 		// skip comment lines.
@@ -150,24 +152,25 @@ static int retrieve_data_files(std::string file_file,
 			continue;
 
 		char *colon = strstr(line, ":");
-		part_file_info info;
 		char *name = line;
+		int node_id = 0;
 		if (colon) {
 			*colon = 0;
 			std::string node_id_str = line;
 			node_id_str.erase(std::remove_if(node_id_str.begin(),
 						node_id_str.end(), isspace), node_id_str.end());
-			info.node_id = atoi(node_id_str.c_str());
+			node_id = atoi(node_id_str.c_str());
 			colon++;
 			name = colon;
 		}
-		info.name = name;
-		info.name.erase(std::remove_if(info.name.begin(), info.name.end(),
-					isspace), info.name.end());
-		data_files.push_back(info);
+		std::string path_name = name;
+		path_name.erase(std::remove_if(path_name.begin(), path_name.end(),
+					isspace), path_name.end());
+		data_files.emplace_back(path_name, disk_id, node_id);
 		free(line);
 		line = NULL;
 		size = 0;
+		disk_id++;
 	}
 	fclose(fd);
 	return data_files.size();

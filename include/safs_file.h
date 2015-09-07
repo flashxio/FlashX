@@ -38,12 +38,37 @@ namespace safs
  * This stores the local filesystem file information that stores
  * each partition of SAFS files.
  */
-struct part_file_info
+class part_file_info
 {
 	// The file name in the local filesystem.
 	std::string name;
+	// The disk ID where the block is stored.
+	int disk_id;
 	// The NUMA node id where the disk is connected to.
 	int node_id;
+public:
+	part_file_info() {
+		disk_id = 0;
+		node_id = 0;
+	}
+
+	part_file_info(const std::string &name, int disk_id, int node_id) {
+		this->name = name;
+		this->disk_id = disk_id;
+		this->node_id = node_id;
+	}
+
+	std::string get_file_name() const {
+		return name;
+	}
+
+	int get_disk_id() const {
+		return disk_id;
+	}
+
+	int get_node_id() const {
+		return node_id;
+	}
 };
 
 class RAID_config;

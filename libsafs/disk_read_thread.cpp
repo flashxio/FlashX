@@ -29,6 +29,24 @@ namespace safs
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
+/*
+ * This is run inside the I/O thread, so it's OK to access its data structure.
+ */
+void disk_io_thread::open_comm::run()
+{
+	// Find the indeces of the disks that are accessed by the I/O thread.
+	int num_files = mapper->get_num_files();
+	std::vector<int> indices;
+	for (int i = 0; i < num_files; i++) {
+		if (t.disk_ids.find(mapper->get_disk_id(i)) != t.disk_ids.end())
+			indices.push_back(i);
+	}
+
+	logical_file_partition part(indices, mapper);
+	int ret = aio->open_file(part);
+	set_status(ret);
+}
+
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
@@ -46,6 +64,11 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 		partition(_partition),
 		filter(_partition.get_mapper(), _disk_id)
 {
+	// Find out the disks that this I/O thread is responsible for.
+	int num_disks = partition.get_num_files();
+	for (int i = 0; i < num_disks; i++)
+		disk_ids.insert(partition.get_disk_id(i));
+
 	this->cache = cache;
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.

@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 #include <string>
-#include <tr1/unordered_map>
+#include <unordered_set>
 
 #include "aio_private.h"
 #include "io_request.h"
@@ -97,23 +97,16 @@ class disk_io_thread: public thread
 	class open_comm: public remote_comm
 	{
 		file_mapper *mapper;
-		const logical_file_partition *partition;
 		async_io *aio;
+		disk_io_thread &t;
 	public:
 		open_comm(async_io *aio, file_mapper *mapper,
-				const logical_file_partition *partition) {
+				disk_io_thread &_t): t(_t) {
 			this->aio = aio;
 			this->mapper = mapper;
-			this->partition = partition;
 		}
 
-		void run() {
-			logical_file_partition *part = partition->create_file_partition(
-					mapper);
-			int ret = aio->open_file(*part);
-			delete part;
-			set_status(ret);
-		}
+		void run();
 	};
 
 	class close_comm: public remote_comm
@@ -134,6 +127,8 @@ class disk_io_thread: public thread
 
 	const int disk_id;
 
+	// The id of disks accessed by this thread.
+	std::unordered_set<int> disk_ids;
 	msg_queue<io_request> queue;
 	msg_queue<io_request> low_prio_queue;
 	thread_safe_FIFO_queue<remote_comm *> comm_queue;
@@ -221,7 +216,7 @@ public:
 
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
-		remote_comm *comm = new open_comm(aio, mapper, &partition);
+		remote_comm *comm = new open_comm(aio, mapper, *this);
 		return execute_remote_comm(comm);
 	}
 
