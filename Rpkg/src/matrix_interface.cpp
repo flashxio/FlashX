@@ -137,22 +137,22 @@ RcppExport SEXP R_FM_load_matrix(SEXP pmat_file, SEXP pindex_file)
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 
 	SpM_2d_index::ptr index;
-	safs::safs_file index_f(safs::get_sys_RAID_conf(), index_file);
+	safs::native_file index_f(index_file);
 	if (index_f.exist())
-		index = SpM_2d_index::safs_load(index_file);
-	else
 		index = SpM_2d_index::load(index_file);
+	else
+		index = SpM_2d_index::safs_load(index_file);
 	if (index == NULL) {
 		fprintf(stderr, "can't load index\n");
 		return R_NilValue;
 	}
 
 	SpM_2d_storage::ptr store;
-	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
+	safs::native_file mat_f(mat_file);
 	if (mat_f.exist())
-		store = SpM_2d_storage::safs_load(mat_file, index);
-	else
 		store = SpM_2d_storage::load(mat_file, index);
+	else
+		store = SpM_2d_storage::safs_load(mat_file, index);
 	if (store == NULL) {
 		fprintf(stderr, "can't load matrix file\n");
 		return R_NilValue;

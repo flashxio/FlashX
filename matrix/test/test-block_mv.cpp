@@ -2,12 +2,35 @@
 #include <google/profiler.h>
 #endif
 
+#include "EM_dense_matrix.h"
 #include "eigensolver/block_dense_matrix.h"
 
 using namespace fm;
 
 size_t long_dim = 60 * 1024 * 1024;
 size_t repeats = 1;
+
+std::vector<dense_matrix::ptr> get_EM_matrices(size_t num_rows, size_t num_cols,
+		size_t num_mats)
+{
+	std::vector<dense_matrix::ptr> mats(num_mats);
+	for (size_t i = 0; i < mats.size(); i++) {
+		std::string mat_name = (boost::format("test-%1%rows-%2%cols-%3%.mat")
+				% num_rows % num_cols % i).str();
+		detail::EM_matrix_store::const_ptr store
+			= detail::EM_matrix_store::create(mat_name);
+		if (store == NULL) {
+			mats[i] = dense_matrix::create_randu<double>(0, 1, num_rows, num_cols,
+					matrix_layout_t::L_COL, -1, false);
+			detail::EM_matrix_store::const_ptr store
+				= detail::EM_matrix_store::cast(mats[i]->get_raw_store());
+			store->set_persistent(mat_name);
+		}
+		else
+			mats[i] = dense_matrix::create(store);
+	}
+	return mats;
+}
 
 void test_gemm(eigen::block_multi_vector::ptr mv)
 {
@@ -88,15 +111,17 @@ void test_gemm(bool in_mem, size_t block_size, size_t min_num_blocks,
 		size_t max_num_blocks, size_t num_cached_blocks)
 {
 	std::vector<dense_matrix::ptr> mats(max_num_blocks);
+	std::vector<dense_matrix::ptr> EM_mats;
+	if (!in_mem)
+		EM_mats = get_EM_matrices(long_dim, block_size,
+				mats.size() - num_cached_blocks);
 	for (size_t i = 0; i < mats.size(); i++) {
-		if (i < num_cached_blocks)
+		if (in_mem || i < num_cached_blocks)
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
 					block_size, matrix_layout_t::L_COL,
 					matrix_conf.get_num_nodes(), true);
 		else
-			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL,
-					matrix_conf.get_num_nodes(), in_mem);
+			mats[i] = EM_mats[i - num_cached_blocks];
 	}
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
@@ -168,21 +193,21 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 		size_t min_num_blocks, size_t max_num_blocks, size_t num_cached_blocks)
 {
 	std::vector<dense_matrix::ptr> mats(max_num_blocks);
+	std::vector<dense_matrix::ptr> EM_mats;
+	if (!in_mem)
+		EM_mats = get_EM_matrices(long_dim, block_size,
+				mats.size() - num_cached_blocks + 1);
 	for (size_t i = 0; i < mats.size(); i++) {
-		if (i < num_cached_blocks)
+		if (in_mem || i < num_cached_blocks)
 			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
 					block_size, matrix_layout_t::L_COL,
 					matrix_conf.get_num_nodes(), true);
 		else
-			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL,
-					matrix_conf.get_num_nodes(), in_mem);
+			mats[i] = EM_mats[i - num_cached_blocks];
 	}
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
 			long_dim, block_size, block_size, get_scalar_type<double>(), in_mem);
-	mv2->set_block(0, dense_matrix::create_randu<double>(0, 1, long_dim,
-				mv2->get_block_size(), matrix_layout_t::L_COL,
-				matrix_conf.get_num_nodes(), in_mem));
+	mv2->set_block(0, EM_mats.back());
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
 			num_blocks *= 2) {

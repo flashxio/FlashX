@@ -51,6 +51,16 @@ EM_object::file_holder::ptr EM_object::file_holder::create_temp(
 	return holder;
 }
 
+EM_object::file_holder::ptr EM_object::file_holder::create(
+		const std::string &name)
+{
+	safs::safs_file f(safs::get_sys_RAID_conf(), name);
+	if (!f.exist())
+		return ptr();
+	else
+		return ptr(new file_holder(name, true));
+}
+
 EM_object::file_holder::~file_holder()
 {
 	if (!persistent) {
@@ -68,6 +78,11 @@ bool EM_object::file_holder::set_persistent(const std::string &new_name)
 	persistent = true;
 	this->file_name = new_name;
 	return true;
+}
+
+void EM_object::file_holder::unset_persistent()
+{
+	persistent = false;
 }
 
 safs::io_interface::ptr EM_object::io_set::create_io()

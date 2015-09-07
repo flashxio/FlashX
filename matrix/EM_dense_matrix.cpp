@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
 #include <boost/foreach.hpp>
 
 #include "io_interface.h"
@@ -37,6 +38,8 @@ namespace detail
 {
 
 const size_t EM_matrix_store::CHUNK_SIZE = 256 * 1024;
+
+static std::unordered_map<std::string, EM_object::file_holder::ptr> file_holders;
 
 /*
  * These two functions define the length and portion size for 1D partitioning
@@ -119,7 +122,25 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 
 EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 {
-	file_holder::ptr holder = file_holder::create(mat_file);
+	// The file holder might already exist in the hashtable.
+	// We should create only one holder for a matrix file in the system.
+	file_holder::ptr holder;
+	auto it = file_holders.find(mat_file);
+	if (it != file_holders.end())
+		holder = it->second;
+	else {
+		holder = file_holder::create(mat_file);
+		if (holder) {
+			auto ret = file_holders.insert(
+					std::pair<std::string, file_holder::ptr>(mat_file, holder));
+			assert(ret.second);
+		}
+	}
+	if (holder == NULL) {
+		BOOST_LOG_TRIVIAL(error) << mat_file + " doesn't exist";
+		return EM_matrix_store::ptr();
+	}
+
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	io_set::ptr ios(new io_set(factory));
@@ -1043,6 +1064,30 @@ matrix_store::const_ptr EM_matrix_store::get_rows(
 	}
 
 	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, *this));
+}
+
+bool EM_matrix_store::set_persistent(const std::string &name) const
+{
+	// We need to keep holder in a global hashtable, so later on
+	// when someone else creates a matrix to access the file, he can
+	// use the holder directly from the hashtable.
+	auto ret = file_holders.insert(
+			std::pair<std::string, file_holder::ptr>(name, holder));
+	if (!ret.second) {
+		BOOST_LOG_TRIVIAL(error) << "The matrix name already exists";
+		return false;
+	}
+	return holder->set_persistent(name);
+}
+
+void EM_matrix_store::unset_persistent() const
+{
+	size_t ret = file_holders.erase(holder->get_name());
+	if (ret == 0) {
+		assert(!holder->is_persistent());
+		return;
+	}
+	holder->unset_persistent();
 }
 
 }

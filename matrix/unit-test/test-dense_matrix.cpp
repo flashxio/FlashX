@@ -1461,17 +1461,50 @@ void test_copy(int num_nodes, bool in_mem)
 
 void test_EM_persistent()
 {
+	std::string mat_name = "test.mat";
 	printf("test creating a matrix from an existing matrix file\n");
-	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
-			long_dim, 10, matrix_layout_t::L_COL, -1, false);
-	detail::EM_matrix_store::const_ptr store1
-		= detail::EM_matrix_store::cast(mat->get_raw_store());
-	store1->set_persistent("test.mat");
-	dense_matrix::ptr mat2 = dense_matrix::create(
-			detail::EM_matrix_store::create("test.mat"));
-	dense_matrix::ptr diff = mat->minus(*mat2);
-	scalar_variable::ptr max_var = diff->abs()->max();
-	assert(*(const int *) max_var->get_raw() == 0);
+	{
+		// Remove the test matrix file.
+		detail::EM_matrix_store::ptr store
+			= detail::EM_matrix_store::create(mat_name);
+		if (store)
+			store->unset_persistent();
+	}
+	{
+		// Create the test matrix file.
+		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
+				long_dim, 10, matrix_layout_t::L_COL, -1, false);
+		detail::EM_matrix_store::const_ptr store1
+			= detail::EM_matrix_store::cast(mat->get_raw_store());
+		bool ret = store1->set_persistent(mat_name);
+		assert(ret);
+		dense_matrix::ptr mat2 = dense_matrix::create(
+				detail::EM_matrix_store::create(mat_name));
+		assert(mat2);
+		dense_matrix::ptr diff = mat->minus(*mat2);
+		scalar_variable::ptr max_var = diff->abs()->max();
+		assert(*(const int *) max_var->get_raw() == 0);
+	}
+	{
+		// Access an existing matrix file.
+		dense_matrix::ptr mat = dense_matrix::create(
+				detail::EM_matrix_store::create(mat_name));
+		assert(mat);
+		dense_matrix::ptr test = mat->lt_scalar<int>(1001);
+		scalar_variable::ptr sum = test->sum();
+		assert(*(const size_t *) sum->get_raw()
+				== mat->get_num_rows() * mat->get_num_cols());
+		detail::EM_matrix_store::const_ptr store
+			= detail::EM_matrix_store::cast(mat->get_raw_store());
+		// Delete the matrix file.
+		store->unset_persistent();
+	}
+	{
+		// Test if the matrix file still exists.
+		detail::EM_matrix_store::ptr store
+			= detail::EM_matrix_store::create(mat_name);
+		assert(store == NULL);
+	}
 }
 
 void test_EM_matrix(int num_nodes)
