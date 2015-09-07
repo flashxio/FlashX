@@ -861,6 +861,9 @@ print.fg <- function(fg)
 #' @param init The form of initialization to use when the algorithm begins.
 #'              The default is "random". For a desciption of each see:
 #'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
+#' @param tol The tolerance for convergence. Between 0 and 1 and is the minimum fraction
+#'				of cluster changes necessary to cause non-convergence. Default is -1 which
+#'				represents no cluster changes. 
 #'
 #' @return A named list with the following members:
 #'         iters: The number of (outer) iterations performed.
@@ -876,13 +879,13 @@ print.fg <- function(fg)
 #' @name fg.kmeans
 #' @author Disa Mhembere <disa@@jhu.edu>
 fg.kmeans <- function(mat, k, max.iters=10, max.threads=256,
-					  init=c("random", "forgy","kmeanspp"))
+					  init=c("random", "forgy","kmeanspp"), tol=-1)
 {
     stopifnot(mat != NULL)
     stopifnot(class(mat) == "matrix")
 	stopifnot(as.integer(max.threads) > 0)
-    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
-          as.integer(max.iters), as.integer(max.threads), init, PACKAGE="FlashGraphR")
+    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k), as.integer(max.iters),
+		  as.integer(max.threads), init, as.double(tol), PACKAGE="FlashGraphR")
 }
 
 #' Vertex betweenness centrality.
