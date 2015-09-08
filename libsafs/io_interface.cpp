@@ -232,7 +232,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			// Create disk accessing threads.
 			global_data.read_threads[k] = disk_io_thread::ptr(new disk_io_thread(
 						partition, global_data.raid_conf->get_disk(k).get_node_id(),
-						NULL, k, flags));
+						flags));
 		}
 #if 0
 		debug.register_task(new debug_global_data());
@@ -255,11 +255,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
 				global_data.raid_conf->get_num_disks());
-		int num_files = global_data.read_threads.size();
-		for (int k = 0; k < num_files; k++) {
-			global_data.read_threads[k]->register_cache(
-					global_data.global_cache);
-		}
 
 		// The remote IO will never be used. It's only used for creating
 		// more remote IOs for flushing dirty pages, so it doesn't matter
