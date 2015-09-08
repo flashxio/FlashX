@@ -222,6 +222,9 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 
 	gettimeofday(&start, NULL);
 	BOOST_LOG_TRIVIAL(info) << "The tolerance is : " << tolerance;
+	BOOST_LOG_TRIVIAL(info) << "nrow = " << nrow;
+	BOOST_LOG_TRIVIAL(info) << "ncol = " << nev;
+
 	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
 			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance);
 
