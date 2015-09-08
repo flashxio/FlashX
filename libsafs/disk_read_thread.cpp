@@ -67,9 +67,7 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
-	assert(partition.get_num_files() == 1);
-	// An I/O thread accesses only one physical file. The safs header isn't
-	// needed.
+	// The safs header isn't needed.
 	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, safs_header(), flags);
 
 	num_reads = 0;

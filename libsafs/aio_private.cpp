@@ -109,7 +109,8 @@ void async_io::io_ref::dec_ref()
 
 async_io::async_io(const logical_file_partition &partition,
 		int aio_depth_per_file, thread *t, const safs_header &header,
-		int flags): io_interface(t, header), AIO_DEPTH(aio_depth_per_file)
+		int flags): io_interface(t, header), AIO_DEPTH(
+			aio_depth_per_file * partition.get_num_files())
 {
 	int node_id = t->get_node_id();
 	cb_allocator = new callback_allocator(node_id,
