@@ -25,7 +25,6 @@
 #endif
 
 namespace {
-	bool updated = false;
 	static unsigned NEV;
 	static size_t K;
 	static unsigned NUM_ROWS;
@@ -243,20 +242,15 @@ namespace {
 			}
 
 			if (asgnd_clust != cluster_assignments[row]) { 
-				// We must avoid the possible race condition on the `updated` variable
-				// Cheap because it only happens a max of once per iteration.
-				if (!updated) { 
-					omp_set_lock(&writelock);
-					updated = true;
-					omp_unset_lock(&writelock);
-				}
 				pt_num_change[omp_get_thread_num()]++;
 			}
 			cluster_assignments[row] = asgnd_clust;
 
 			pt_cl_as_cnt[omp_get_thread_num()][asgnd_clust]++; // Add to local copy
 			// Accumulate for local copies
+#if KM_TEST
 			assert(omp_get_thread_num() <= OMP_MAX_THREADS);
+#endif
 			for (unsigned col = 0; col < NEV; col++) {
 				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] = 
 					pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] + matrix[row*NEV + col];
@@ -378,7 +372,8 @@ namespace fg
 
 		if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
 			BOOST_LOG_TRIVIAL(fatal)
-				<< "'k' must be between 2 and the number of rows in the matrix";
+				<< "'k' must be between 2 and the number of rows in the matrix" << 
+				"k = " << K;
 			exit(-1);
 		}
 
@@ -432,12 +427,11 @@ namespace fg
 				" . Computing cluster assignments ...";
 			E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
-			if (!updated || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
+			if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
 				converged = true;
 				break;
 			} else { 
 				g_num_changed = 0;
-				updated = false; 
 			}
 
 #if KM_TEST
