@@ -47,13 +47,13 @@ namespace {
 			printf("]\n");
 		}
 
-	/* 
+	/*
 	 * \Internal
 	 * \brief Simple helper used to print a vector.
 	 * \param v The vector to print.
 	 */
 	template <typename T>
-		static void print_vector(typename std::vector<T>& v) 
+		static void print_vector(typename std::vector<T>& v)
 		{
 			std::cout << "[";
 
@@ -79,7 +79,7 @@ namespace {
 					std::cout << " " << matrix[row*cols + col];
 				}
 				std::cout <<  " ]\n";
-			}	
+			}
 		}
 
 	/**
@@ -88,19 +88,19 @@ namespace {
 	 *	\param arg2 the second value.
 	 *  \return the squared distance.
 	 */
-	static double dist_sq(double arg1, double arg2) 
+	static double dist_sq(double arg1, double arg2)
 	{
 		double diff = arg1 - arg2;
 		return diff*diff;
 	}
 
 	/**
-	 * \brief This initializes clusters by randomly choosing sample 
+	 * \brief This initializes clusters by randomly choosing sample
 	 *		membership in a cluster.
 	 * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void random_partition_init(unsigned* cluster_assignments) 
+	static void random_partition_init(unsigned* cluster_assignments)
 	{
 		BOOST_LOG_TRIVIAL(info) << "Random init start";
 
@@ -110,7 +110,7 @@ namespace {
 			cluster_assignments[vid] = assigned_cluster;
 		}
 
-		// NOTE: M-Step is called in compute func to update cluster counts & centers 
+		// NOTE: M-Step is called in compute func to update cluster counts & centers
 #if KM_TEST
 		printf("After rand paritions cluster_asgns: "); print_arr(cluster_assignments, NUM_ROWS);
 #endif
@@ -203,7 +203,7 @@ namespace {
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void E_step(const double* matrix, double* clusters, 
+	static void E_step(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts)
 	{
 
@@ -241,7 +241,7 @@ namespace {
 				}
 			}
 
-			if (asgnd_clust != cluster_assignments[row]) { 
+			if (asgnd_clust != cluster_assignments[row]) {
 				pt_num_change[omp_get_thread_num()]++;
 			}
 			cluster_assignments[row] = asgnd_clust;
@@ -252,7 +252,7 @@ namespace {
 			assert(omp_get_thread_num() <= OMP_MAX_THREADS);
 #endif
 			for (unsigned col = 0; col < NEV; col++) {
-				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] = 
+				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] =
 					pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] + matrix[row*NEV + col];
 			}
 		}
@@ -300,7 +300,7 @@ namespace {
 	 * \param cluster_assignment_counts How many members each cluster has.
 	 * \param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void M_step(const double* matrix, double* clusters, unsigned* 
+	static void M_step(const double* matrix, double* clusters, unsigned*
 			cluster_assignment_counts, const unsigned* cluster_assignments, bool init=false)
 	{
 
@@ -322,11 +322,11 @@ namespace {
 			for (unsigned vid = 0; vid < NUM_ROWS; vid++) {
 
 				unsigned asgnd_clust = cluster_assignments[vid];
-				cluster_assignment_counts[asgnd_clust]++;	
+				cluster_assignment_counts[asgnd_clust]++;
 
 				for (unsigned col = 0; col < NEV; col++) {
-					clusters[asgnd_clust*NEV + col] = 
-						clusters[asgnd_clust*NEV + col] + matrix[vid*NEV + col];	
+					clusters[asgnd_clust*NEV + col] =
+						clusters[asgnd_clust*NEV + col] + matrix[vid*NEV + col];
 				}
 			}
 		}
@@ -339,7 +339,7 @@ namespace {
 			if (cluster_assignment_counts[clust_idx] > 0) { // Avoid div by 0
 				// #pragma omp parallel for firstprivate(cluster_assignment_counts, NEV) shared(clusters)
 				for (unsigned col = 0; col < NEV; col++) {
-					clusters[clust_idx*NEV + col] = 
+					clusters[clust_idx*NEV + col] =
 						clusters[clust_idx*NEV + col] / cluster_assignment_counts[clust_idx];
 				}
 			}
@@ -353,9 +353,9 @@ namespace {
 
 namespace fg
 {
-	unsigned compute_kmeans(const double* matrix, double* clusters, 
+	unsigned compute_kmeans(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-			const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS, 
+			const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS,
 			const int max_threads, const std::string init, const double tolerance)
 	{
 #ifdef PROFILER
@@ -370,9 +370,9 @@ namespace fg
 		omp_set_num_threads(OMP_MAX_THREADS);
 		BOOST_LOG_TRIVIAL(info) << "Running on " << OMP_MAX_THREADS << " threads!";
 
-		if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
+		if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) {
 			BOOST_LOG_TRIVIAL(fatal)
-				<< "'k' must be between 2 and the number of rows in the matrix" << 
+				<< "'k' must be between 2 and the number of rows in the matrix" <<
 				"k = " << K;
 			exit(-1);
 		}
@@ -388,7 +388,7 @@ namespace fg
 		gettimeofday(&start , NULL);
 
 		/*** Begin VarInit of data structures ***/
-		memset(cluster_assignments, -1, 
+		memset(cluster_assignments, -1,
 				sizeof(cluster_assignments[0])*NUM_ROWS);
 		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 		omp_init_lock(&writelock);
@@ -418,33 +418,33 @@ namespace fg
 		std::string str_iters =  MAX_ITERS == std::numeric_limits<unsigned>::max() ?
 			"until convergence ...":
 			std::to_string(MAX_ITERS) + " iterations ...";
-		BOOST_LOG_TRIVIAL(info) << "Computing " << str_iters; 
+		BOOST_LOG_TRIVIAL(info) << "Computing " << str_iters;
 		unsigned iter = 1;
 		while (iter < MAX_ITERS) {
 			// Hold cluster assignment counter
 
-			BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter << 
+			BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
 				" . Computing cluster assignments ...";
 			E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
 			if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
 				converged = true;
 				break;
-			} else { 
+			} else {
 				g_num_changed = 0;
 			}
 
 #if KM_TEST
 			BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
 #endif
-			M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);		
+			M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);
 			iter++;
 		}
 
 		omp_destroy_lock(&writelock);
 
 		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " << 
+		BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
 			time_diff(start, end) << " sec\n";
 
 #ifdef PROFILER
