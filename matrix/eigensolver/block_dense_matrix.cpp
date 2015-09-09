@@ -529,17 +529,21 @@ class gemm_op: public fm::detail::portion_mapply_op
 	T beta;
 	size_t A_num_blocks;
 	size_t C_num_blocks;
+	std::vector<detail::local_col_matrix_store::ptr> Abufs;
+	std::vector<detail::local_col_matrix_store::ptr> res_bufs;
 	detail::mem_col_matrix_store::const_ptr Bstore;
 public:
-	gemm_op(detail::mem_col_matrix_store::const_ptr B, size_t A_num_blocks,
-			size_t C_num_blocks, T alpha, T beta, size_t out_num_rows,
-			size_t out_num_cols): fm::detail::portion_mapply_op(
+	gemm_op(int num_threads, detail::mem_col_matrix_store::const_ptr B,
+			size_t A_num_blocks, size_t C_num_blocks, T alpha, T beta,
+			size_t out_num_rows, size_t out_num_cols): fm::detail::portion_mapply_op(
 				out_num_rows, out_num_cols, get_scalar_type<T>()) {
 		this->alpha = alpha;
 		this->beta = beta;
 		this->A_num_blocks = A_num_blocks;
 		this->C_num_blocks = C_num_blocks;
 		this->Bstore = B;
+		Abufs.resize(num_threads);
+		res_bufs.resize(num_threads);
 	}
 
 	virtual void run(
@@ -699,10 +703,6 @@ static void copy_from_blocks(block_iterator begin, block_iterator end,
 				it->get());
 	size_t type_size = res_store.get_type().get_size();
 	for (size_t i = 0; i < col_ins.size(); i++) {
-		assert(res_store.get_global_start_row()
-				== col_ins[i]->get_global_start_row());
-		assert(res_store.get_global_start_col()
-				== col_ins[i]->get_global_start_col());
 		assert(res_store.get_type() == col_ins[i]->get_type());
 		assert(res_store.get_num_rows() == col_ins[i]->get_num_rows());
 
@@ -722,28 +722,29 @@ void gemm_op<T>::run(
 {
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
-
 	assert(A_num_blocks + C_num_blocks == ins.size());
-	off_t global_start_row = ins.front()->get_global_start_row();
-	off_t global_start_col = ins.front()->get_global_start_col();
+
+	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
+			thread::get_curr_thread());
+	int thread_id = thread->get_pool_thread_id();
 
 	T *res_mat;
 	res_mat = (T *) out.get_raw_arr();
-	fm::detail::local_matrix_store::ptr tmp_res;
 	if (res_mat == NULL) {
-		fm::detail::local_col_matrix_store *raw_tmp_res
-			= new detail::local_buf_col_matrix_store(
-					global_start_row, global_start_col,
-					out.get_num_rows(), out.get_num_cols(),
-					get_scalar_type<T>(), -1);
-		// TODO we don't need to allocate this every time.
-		tmp_res = fm::detail::local_col_matrix_store::ptr(raw_tmp_res);
+		if (res_bufs[thread_id] == NULL
+				|| res_bufs[thread_id]->get_num_rows() != out.get_num_rows()
+				|| res_bufs[thread_id]->get_num_cols() != out.get_num_cols())
+			const_cast<gemm_op<T> *>(this)->res_bufs[thread_id]
+				= fm::detail::local_col_matrix_store::ptr(
+					new detail::local_buf_col_matrix_store(0, 0,
+						out.get_num_rows(), out.get_num_cols(),
+						get_scalar_type<T>(), -1));
 		if (beta && C_num_blocks == 1)
-			tmp_res->copy_from(*ins.back());
+			res_bufs[thread_id]->copy_from(*ins.back());
 		else if (beta)
 			copy_from_blocks(ins.begin() + A_num_blocks, ins.end(),
-					*raw_tmp_res);
-		res_mat = (T *) tmp_res->get_raw_arr();
+					*res_bufs[thread_id]);
+		res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
 	}
 	else {
 		if (beta && C_num_blocks == 1)
@@ -761,25 +762,30 @@ void gemm_op<T>::run(
 		size_t num_rows = ins.front()->get_num_rows();
 		size_t num_cols = block_size * A_num_blocks;
 		assert(num_cols == Bstore->get_num_rows());
-		// TODO we don't need to allocate this every time.
-		fm::detail::local_col_matrix_store::ptr in_buf(
-				new fm::detail::local_buf_col_matrix_store(
-					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), -1));
-		copy_from_blocks(ins.begin(), ins.begin() + A_num_blocks, *in_buf);
-		Astore = in_buf;
+		if (Abufs[thread_id] == NULL
+				|| Abufs[thread_id]->get_num_rows() != num_rows
+				|| Abufs[thread_id]->get_num_cols() != num_cols)
+			const_cast<gemm_op<T> *>(this)->Abufs[thread_id]
+				= fm::detail::local_col_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						num_rows, num_cols, get_scalar_type<T>(), -1));
+		copy_from_blocks(ins.begin(), ins.begin() + A_num_blocks,
+				*Abufs[thread_id]);
+		Astore = Abufs[thread_id];
 	}
 	// All data in this portion isn't contiguous.
 	else if (ins[0]->get_raw_arr() == NULL) {
 		size_t num_rows = ins.front()->get_num_rows();
 		size_t num_cols = ins.front()->get_num_cols();
-		// TODO we don't need to allocate this every time.
-		fm::detail::local_col_matrix_store::ptr in_buf(
-				new fm::detail::local_buf_col_matrix_store(
-					global_start_row, global_start_col,
-					num_rows, num_cols, get_scalar_type<T>(), -1));
-		in_buf->copy_from(*ins.front());
-		Astore = in_buf;
+		if (Abufs[thread_id] == NULL
+				|| Abufs[thread_id]->get_num_rows() != num_rows
+				|| Abufs[thread_id]->get_num_cols() != num_cols)
+			const_cast<gemm_op<T> *>(this)->Abufs[thread_id]
+				= fm::detail::local_col_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						num_rows, num_cols, get_scalar_type<T>(), -1));
+		Abufs[thread_id]->copy_from(*ins.front());
+		Astore = Abufs[thread_id];
 	}
 	else
 		Astore = fm::detail::local_col_matrix_store::cast(ins[0]);
@@ -796,8 +802,8 @@ void gemm_op<T>::run(
 			Astore->get_num_cols(), alpha, Amat,
 			Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
 			beta, res_mat, out.get_num_rows());
-	if (tmp_res)
-		out.copy_from(*tmp_res);
+	if (res_bufs[thread_id])
+		out.copy_from(*res_bufs[thread_id]);
 }
 
 /*
@@ -892,6 +898,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		return block_multi_vector::ptr();
 	}
 
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t num_threads = threads->get_num_threads();
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -919,8 +928,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		assert(A_num_blocks + C_num_blocks == mats.size());
 
 		// I assume B is small enough.
-		detail::portion_mapply_op::const_ptr op(new gemm_op<double>(B,
-					A_num_blocks, C_num_blocks, d_alpha, d_beta,
+		detail::portion_mapply_op::const_ptr op(new gemm_op<double>(num_threads,
+					B, A_num_blocks, C_num_blocks, d_alpha, d_beta,
 					this->get_num_rows(), this->get_num_cols()));
 		block = mapply_portion(mats, op, matrix_layout_t::L_COL);
 	}
@@ -943,7 +952,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 					B->get_num_cols());
 			if (i + MAX_MUL_BLOCKS < A_num_blocks)
 				op = detail::portion_mapply_op::const_ptr(new gemm_op<double>(
-							sub_B, sub_mats.size(), 0, d_alpha, 0,
+							num_threads, sub_B, sub_mats.size(), 0, d_alpha, 0,
 							this->get_num_rows(), this->get_num_cols()));
 			else {
 				// This is the last group.
@@ -955,8 +964,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 								j - num_sub_mats)->get_raw_store();
 				}
 				op = detail::portion_mapply_op::const_ptr(new gemm_op<double>(
-							sub_B, num_sub_mats, C_num_blocks, d_alpha, d_beta,
-							this->get_num_rows(), this->get_num_cols()));
+							num_threads, sub_B, num_sub_mats, C_num_blocks,
+							d_alpha, d_beta, this->get_num_rows(),
+							this->get_num_cols()));
 			}
 			detail::matrix_store::ptr tmp_store = detail::__mapply_portion_virtual(
 					sub_mats, op, matrix_layout_t::L_COL);

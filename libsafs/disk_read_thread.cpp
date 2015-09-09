@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include "cache.h"
 #include "disk_read_thread.h"
 #include "parameters.h"
 #include "aio_private.h"
@@ -29,30 +28,46 @@ namespace safs
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
+/*
+ * This is run inside the I/O thread, so it's OK to access its data structure.
+ */
+void disk_io_thread::open_comm::run()
+{
+	// Find the indeces of the disks that are accessed by the I/O thread.
+	int num_files = mapper->get_num_files();
+	std::vector<int> indices;
+	for (int i = 0; i < num_files; i++) {
+		if (t.disk_ids.find(mapper->get_disk_id(i)) != t.disk_ids.end())
+			indices.push_back(i);
+	}
+
+	logical_file_partition part(indices, mapper);
+	int ret = aio->open_file(part);
+	set_status(ret);
+}
+
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, page_cache::ptr cache, int _disk_id, int flags): thread(
-			std::string("io-thread-") + itoa(node_id), node_id),
-		disk_id(_disk_id),
-		queue(node_id, std::string("io-queue-") + itoa(node_id),
+		int node_id, int flags): thread(std::string("io-thread-") + itoa(node_id),
+			node_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false),
 		// TODO let's allow the low-priority queue to
 		// be infinitely large for now.
 		low_prio_queue(node_id, std::string("io-queue-low_prio-")
 				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
 		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
-				INT_MAX), 
-		partition(_partition),
-		filter(_partition.get_mapper(), _disk_id)
+				INT_MAX), partition(_partition)
 {
-	this->cache = cache;
+	// Find out the disks that this I/O thread is responsible for.
+	int num_disks = partition.get_num_files();
+	for (int i = 0; i < num_disks; i++)
+		disk_ids.insert(partition.get_disk_id(i));
+
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
-	assert(partition.get_num_files() == 1);
-	// An I/O thread accesses only one physical file. The safs header isn't
-	// needed.
+	// The safs header isn't needed.
 	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, safs_header(), flags);
 
 	num_reads = 0;
@@ -88,6 +103,9 @@ void notify_ignored_flushes(io_request ignored_flushes[], int num_ignored)
 
 int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
+	assert(0);
+	return -1;
+#if 0
 	int num_accesses = 0;
 
 	struct timeval curr_time;
@@ -191,6 +209,7 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		notify_ignored_flushes(ignored_flushes.data(), num_ignored);
 
 	return num_accesses;
+#endif
 }
 
 void disk_io_thread::run_commands(
@@ -253,12 +272,6 @@ void disk_io_thread::run() {
 			else if (aio->num_pending_ios() > 0) {
 				aio->wait4complete(1);
 			}
-			else if (cache) {
-				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
-				if (ret == 0)
-					break;
-				num_requested_flushes += ret;
-			}
 			else
 				break;
 
@@ -291,26 +304,10 @@ void disk_io_thread::run() {
 	} while (aio->num_pending_ios() > 0);
 }
 
-int disk_io_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
-		int num, const thread_safe_page *returned_pages[])
-{
-	int num_returned = 0;
-	for (int i = 0; i < num; i++) {
-		// All files use the same mapping function and the same block size,
-		// so it works fine with multiple files.
-		// TODO if we decide to use different block sizes for different files,
-		// we need to change it.
-		int id = mapper->map2file(pages[i]->get_offset());
-		if (this->disk_id == id)
-			returned_pages[num_returned++] = pages[i];
-	}
-	return num_returned;
-}
-
 void disk_io_thread::print_state()
 {
 	printf("io thread %d has %d reqs and %d low-prio reqs in the queue\n",
-			disk_id, queue.get_num_objs(), low_prio_queue.get_num_objs());
+			get_id(), queue.get_num_objs(), low_prio_queue.get_num_objs());
 	aio->print_state();
 }
 

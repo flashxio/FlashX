@@ -4,6 +4,7 @@
 
 #include "EM_dense_matrix.h"
 #include "eigensolver/block_dense_matrix.h"
+#include "matrix_stats.h"
 
 using namespace fm;
 
@@ -69,7 +70,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 				get_scalar_type<double>(), true);
 		res1->set_block(0, dense_matrix::create_const<double>(0, long_dim,
 					mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
-		res1->set_multiply_blocks(4);
+		res1->set_multiply_blocks(8);
 		gettimeofday(&start, NULL);
 		res1 = res1->gemm(*mv, B, alpha, beta);
 		assert(res1->get_num_blocks() == 1);
@@ -116,11 +117,7 @@ void test_gemm(bool in_mem, size_t block_size, size_t min_num_blocks,
 		EM_mats = get_EM_matrices(long_dim, block_size,
 				mats.size() - num_cached_blocks);
 	for (size_t i = 0; i < mats.size(); i++) {
-		if (in_mem || i < num_cached_blocks)
-			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL,
-					matrix_conf.get_num_nodes(), true);
-		else
+		if (!in_mem && i >= num_cached_blocks)
 			mats[i] = EM_mats[i - num_cached_blocks];
 	}
 
@@ -131,8 +128,13 @@ void test_gemm(bool in_mem, size_t block_size, size_t min_num_blocks,
 				get_scalar_type<double>(), in_mem);
 		printf("gemm on block multi-vector (block size: %ld, #blocks: %ld)\n",
 				mv->get_block_size(), mv->get_num_blocks());
-		for (size_t i = 0; i < mv->get_num_blocks(); i++)
+		for (size_t i = 0; i < mv->get_num_blocks(); i++) {
+			if (mats[i] == NULL)
+				mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+						block_size, matrix_layout_t::L_COL,
+						matrix_conf.get_num_nodes(), true);
 			mv->set_block(i, mats[i]);
+		}
 		test_gemm(mv);
 	}
 }
@@ -150,7 +152,7 @@ void test_MvTransMv(eigen::block_multi_vector::ptr mv1,
 	printf("MvTransMv (1 block) takes %.3f seconds\n", time_diff(start, end));
 #endif
 
-	mv1->set_multiply_blocks(4);
+	mv1->set_multiply_blocks(8);
 #ifdef PROFILER
 	ProfilerStart("MvTransMv.4B.prof");
 #endif
@@ -198,28 +200,71 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 		EM_mats = get_EM_matrices(long_dim, block_size,
 				mats.size() - num_cached_blocks + 1);
 	for (size_t i = 0; i < mats.size(); i++) {
-		if (in_mem || i < num_cached_blocks)
-			mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
-					block_size, matrix_layout_t::L_COL,
-					matrix_conf.get_num_nodes(), true);
-		else
+		if (!in_mem && i >= num_cached_blocks)
 			mats[i] = EM_mats[i - num_cached_blocks];
 	}
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
 			long_dim, block_size, block_size, get_scalar_type<double>(), in_mem);
-	mv2->set_block(0, EM_mats.back());
+	if (in_mem)
+		mv2->set_block(0, dense_matrix::create_randu<double>(0, 1, long_dim,
+					block_size, matrix_layout_t::L_COL,
+					matrix_conf.get_num_nodes(), true));
+	else
+		mv2->set_block(0, EM_mats.back());
 
 	for (size_t num_blocks = min_num_blocks; num_blocks <= max_num_blocks;
 			num_blocks *= 2) {
 		eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
 				long_dim, num_blocks * block_size, block_size,
 				get_scalar_type<double>(), in_mem);
-		for (size_t i = 0; i < mv1->get_num_blocks(); i++)
-			mv1->set_block(i, mats[i]);
 		printf("MvTransMv on block MV (block size: %ld, #blocks: %ld)\n",
 				block_size, mv1->get_num_blocks());
+		for (size_t i = 0; i < mv1->get_num_blocks(); i++) {
+			if (mats[i] == NULL)
+				mats[i] = dense_matrix::create_randu<double>(0, 1, long_dim,
+						block_size, matrix_layout_t::L_COL,
+						matrix_conf.get_num_nodes(), true);
+			mv1->set_block(i, mats[i]);
+		}
 		test_MvTransMv(mv1, mv2);
 	}
+}
+
+void test_gemm_simple(bool in_mem, size_t dim1, size_t dim2)
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, dim1,
+			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), true);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	dense_matrix::ptr res = mat1->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	res->materialize_self();
+	detail::matrix_stats.print_diff(orig_stats);
+
+	gettimeofday(&end, NULL);
+	printf("simple gemm takes %.3f seconds\n", time_diff(start, end));
+}
+
+void test_MvTransMv_simple(bool in_mem, size_t dim1, size_t dim2)
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	mat1->transpose()->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	detail::matrix_stats.print_diff(orig_stats);
+
+	gettimeofday(&end, NULL);
+	printf("simple MvTransMv takes %.3f seconds\n", time_diff(start, end));
 }
 
 int main(int argc, char *argv[])
@@ -243,5 +288,9 @@ int main(int argc, char *argv[])
 	test_MvTransMv(false, 4, 8, 128, 4);
 	test_MvTransMv(false, 64, 1, 8, 0);
 
+#if 0
+	test_gemm_simple(false, 128 * 4, 4);
+	test_MvTransMv_simple(false, 128 * 4, 4);
+#endif
 	destroy_flash_matrix();
 }

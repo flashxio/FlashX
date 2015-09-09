@@ -1739,7 +1739,7 @@ bool __mapply_portion(
 					new EM_mat_mapply_serial_dispatcher(mats, out_mats, op,
 						tot_len, EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
-			io_worker_task *task = new io_worker_task(dispatcher, 1);
+			io_worker_task *task = new io_worker_task(dispatcher, 16);
 			for (size_t j = 0; j < mats.size(); j++) {
 				if (!mats[j]->is_in_mem()) {
 					const EM_object *obj

@@ -199,6 +199,8 @@ void remote_io::access(io_request *requests, int num,
 		if (requests[i].inside_RAID_block(get_block_size())) {
 			off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
 			int idx = block_mapper->map2file(pg_off);
+			// Map to the right disk.
+			idx = block_mapper->get_disk_id(idx);
 			// The cache inside a sender is extensible, so it can absorb
 			// all requests.
 			int ret;
@@ -239,6 +241,8 @@ void remote_io::access(io_request *requests, int num,
 				// Send a request.
 				off_t pg_off = req.get_offset() / PAGE_SIZE;
 				int idx = block_mapper->map2file(pg_off);
+				// Map to the right disk.
+				idx = block_mapper->get_disk_id(idx);
 				// The cache inside a sender is extensible, so it can absorb
 				// all requests.
 				int ret;

@@ -388,7 +388,7 @@ void comm_list(int argc, char *argv[])
 
 	// First find all individual file names in the root directories.
 	for (int i = 0; i < conf.get_num_disks(); i++) {
-		std::string dir_name = conf.get_disk(i).name;
+		std::string dir_name = conf.get_disk(i).get_file_name();
 		native_dir dir(dir_name);
 		std::vector<std::string> file_names;
 		dir.read_all_files(file_names);

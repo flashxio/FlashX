@@ -61,6 +61,10 @@ struct global_data_collection
 	// Count the number of times init_io_system is executed successfully.
 	std::atomic<long> init_count;
 	RAID_config::ptr raid_conf;
+	// This contains a set of unique I/O threads.
+	std::set<disk_io_thread::ptr> read_thread_set;
+	// Each element points to an I/O thread in the set above.
+	// Multiple elements may point to the same I/O thread.
 	std::vector<disk_io_thread::ptr> read_threads;
 	pthread_mutex_t mutex;
 	// TODO there is memory leak here.
@@ -111,8 +115,9 @@ public:
 
 void debug_global_data::run()
 {
-	for (unsigned i = 0; i < global_data.read_threads.size(); i++)
-		global_data.read_threads[i]->print_state();
+	for (auto it = global_data.read_thread_set.begin();
+			it != global_data.read_thread_set.end(); it++)
+		(*it)->print_state();
 }
 
 const RAID_config &get_sys_RAID_conf()
@@ -184,7 +189,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	// The I/O system has been initialized.
 	if (is_safs_init()) {
 		global_data.init_count++;
-		assert(!global_data.read_threads.empty());
+		assert(!global_data.read_thread_set.empty());
 		return;
 	}
 
@@ -226,14 +231,32 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
 		global_data.read_threads.resize(num_files);
-		for (int k = 0; k < num_files; k++) {
-			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices, mapper);
-			// Create disk accessing threads.
-			global_data.read_threads[k] = disk_io_thread::ptr(new disk_io_thread(
-						partition, global_data.raid_conf->get_disk(k).node_id,
-						NULL, k, flags));
+		std::map<int, std::vector<int> > indices;
+		for (int i = 0; i < num_files; i++) {
+			int node_id = mapper->get_file_node_id(i);
+			auto it = indices.find(node_id);
+			if (it == indices.end()) {
+				std::vector<int> per_node_indices(1);
+				per_node_indices[0] = i;
+				indices.insert(std::pair<int, std::vector<int> >(node_id,
+							per_node_indices));
+			}
+			else {
+				it->second.push_back(i);
+			}
 		}
+		for (auto it = indices.begin(); it != indices.end(); it++) {
+			logical_file_partition partition(it->second, mapper);
+			// Create disk accessing threads.
+			disk_io_thread::ptr t(new disk_io_thread(partition, it->first,
+						flags));
+			for (size_t i = 0; i < it->second.size(); i++) {
+				int file_idx = it->second[i];
+				global_data.read_threads[file_idx] = t;
+			}
+		}
+		global_data.read_thread_set.insert(global_data.read_threads.begin(),
+				global_data.read_threads.end());
 #if 0
 		debug.register_task(new debug_global_data());
 #endif
@@ -255,11 +278,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
 				global_data.raid_conf->get_num_disks());
-		int num_files = global_data.read_threads.size();
-		for (int k = 0; k < num_files; k++) {
-			global_data.read_threads[k]->register_cache(
-					global_data.global_cache);
-		}
 
 		// The remote IO will never be used. It's only used for creating
 		// more remote IOs for flushing dirty pages, so it doesn't matter
@@ -308,13 +326,14 @@ void destroy_io_system()
 	size_t num_writes = 0;
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
-	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_threads) {
+	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
 		num_reads += t->get_num_reads();
 		num_writes += t->get_num_writes();
 		num_read_bytes += t->get_num_read_bytes();
 		num_write_bytes += t->get_num_write_bytes();
 	}
-	global_data.read_threads.resize(0);
+	global_data.read_threads.clear();
+	global_data.read_thread_set.clear();
 	destroy_aio();
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("I/O threads get %1% reads (%2% bytes) and %3% writes (%4% bytes)")
@@ -596,17 +615,18 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 	int num_files = mapper.get_num_files();
 	assert((int) global_data.read_threads.size() == num_files);
 
-	for (int i = 0; i < num_files; i++) {
-		global_data.read_threads[i]->open_file(&mapper);
-	}
+	for (auto it = global_data.read_thread_set.begin();
+			it != global_data.read_thread_set.end(); it++)
+		(*it)->open_file(&mapper);
 }
 
 remote_io_factory::~remote_io_factory()
 {
 	assert(num_ios == 0);
 	// If the I/O threads haven't been destroyed.
-	for (size_t i = 0; i < global_data.read_threads.size(); i++)
-		global_data.read_threads[i]->close_file(&mapper);
+	for (auto it = global_data.read_thread_set.begin();
+			it != global_data.read_thread_set.end(); it++)
+		(*it)->close_file(&mapper);
 }
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
@@ -690,7 +710,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option)
 {
 	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf->get_disk(i).name
+		std::string abs_path = global_data.raid_conf->get_disk(i).get_file_name()
 			+ "/" + file_name;
 		native_file f(abs_path);
 		if (!f.exist())
@@ -747,8 +767,7 @@ io_interface::ptr create_io(file_io_factory::shared_ptr factory, thread *t)
 void print_io_thread_stat()
 {
 	sleep(1);
-	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_io_thread::ptr t = global_data.read_threads[i];
+	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
 		if (t)
 			t->print_stat();
 	}
@@ -762,8 +781,7 @@ void print_io_summary()
 	size_t num_write_bytes = 0;
 
 	sleep(1);
-	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_io_thread::ptr t = global_data.read_threads[i];
+	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
 		if (t) {
 			num_reads += t->get_num_reads();
 			num_read_bytes += t->get_num_read_bytes();

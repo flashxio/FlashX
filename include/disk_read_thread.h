@@ -23,14 +23,13 @@
 #include <unistd.h>
 
 #include <string>
-#include <tr1/unordered_map>
+#include <unordered_set>
 
 #include "aio_private.h"
 #include "io_request.h"
 #include "container.h"
 #include "file_partition.h"
 #include "messaging.h"
-#include "cache.h"
 #include "thread.h"
 
 namespace safs
@@ -97,23 +96,16 @@ class disk_io_thread: public thread
 	class open_comm: public remote_comm
 	{
 		file_mapper *mapper;
-		const logical_file_partition *partition;
 		async_io *aio;
+		disk_io_thread &t;
 	public:
 		open_comm(async_io *aio, file_mapper *mapper,
-				const logical_file_partition *partition) {
+				disk_io_thread &_t): t(_t) {
 			this->aio = aio;
 			this->mapper = mapper;
-			this->partition = partition;
 		}
 
-		void run() {
-			logical_file_partition *part = partition->create_file_partition(
-					mapper);
-			int ret = aio->open_file(*part);
-			delete part;
-			set_status(ret);
-		}
+		void run();
 	};
 
 	class close_comm: public remote_comm
@@ -132,8 +124,8 @@ class disk_io_thread: public thread
 		}
 	};
 
-	const int disk_id;
-
+	// The id of disks accessed by this thread.
+	std::unordered_set<int> disk_ids;
 	msg_queue<io_request> queue;
 	msg_queue<io_request> low_prio_queue;
 	thread_safe_FIFO_queue<remote_comm *> comm_queue;
@@ -155,22 +147,6 @@ class disk_io_thread: public thread
 	long num_msgs;
 
 	atomic_integer flush_counter;
-
-	class dirty_page_filter: public page_filter {
-		const file_mapper *mapper;
-		int disk_id;
-	public:
-		dirty_page_filter(const file_mapper *_mapper, int disk_id) {
-			this->disk_id = disk_id;
-			this->mapper = _mapper;
-		}
-
-		int filter(const thread_safe_page *pages[], int num,
-				const thread_safe_page *returned_pages[]);
-	};
-
-	page_cache::ptr cache;
-	dirty_page_filter filter;
 
 	int process_low_prio_msg(message<io_request> &low_prio_msg);
 
@@ -198,7 +174,7 @@ public:
 	typedef std::shared_ptr<disk_io_thread> ptr;
 
 	disk_io_thread(const logical_file_partition &partition, int node_id,
-			page_cache::ptr cache, int disk_id, int flags);
+			int flags);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;
@@ -221,17 +197,13 @@ public:
 
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
-		remote_comm *comm = new open_comm(aio, mapper, &partition);
+		remote_comm *comm = new open_comm(aio, mapper, *this);
 		return execute_remote_comm(comm);
 	}
 
 	int close_file(file_mapper *mapper) {
 		remote_comm *comm = new close_comm(aio, mapper->get_file_id());
 		return execute_remote_comm(comm);
-	}
-
-	void register_cache(page_cache::ptr cache) {
-		this->cache = cache;
 	}
 
 	~disk_io_thread() {

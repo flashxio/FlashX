@@ -32,9 +32,11 @@ namespace safs
 
 safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 {
-	conf.get_disks(native_dirs);
+	native_dirs = conf.get_disks();
 	for (unsigned i = 0; i < native_dirs.size(); i++)
-		native_dirs[i].name += "/" + file_name;
+		native_dirs[i] = part_file_info(
+				native_dirs[i].get_file_name() + "/" + file_name,
+				native_dirs[i].get_disk_id(), native_dirs[i].get_node_id());
 	this->name = file_name;
 }
 
@@ -52,7 +54,7 @@ bool safs_file::exist() const
 {
 	std::set<int> part_ids;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[i].name);
+		native_dir dir(native_dirs[i].get_file_name());
 		if (!dir.exist())
 			return false;
 		std::vector<std::string> files;
@@ -80,7 +82,7 @@ ssize_t safs_file::get_size() const
 		return -1;
 	size_t ret = 0;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[i].name);
+		native_dir dir(native_dirs[i].get_file_name());
 		std::vector<std::string> local_files;
 		dir.read_all_files(local_files);
 		if (local_files.size() > 1)
@@ -98,14 +100,15 @@ bool safs_file::rename(const std::string &new_name)
 		return false;
 
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_file f(native_dirs[i].name);
+		native_file f(native_dirs[i].get_file_name());
 		if (!f.rename(f.get_dir_name() + "/" + new_name))
 			return false;
 	}
 	name = new_name;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_file f(native_dirs[i].name);
-		native_dirs[i].name = f.get_dir_name() + "/" + new_name;
+		native_file f(native_dirs[i].get_file_name());
+		native_dirs[i] = part_file_info(f.get_dir_name() + "/" + new_name,
+				native_dirs[i].get_disk_id(), native_dirs[i].get_node_id());
 	}
 	return true;
 }
@@ -129,7 +132,7 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 
 	safs_header header(block_size, mapping_option, true, file_size);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[dir_idxs[i]].name);
+		native_dir dir(native_dirs[dir_idxs[i]].get_file_name());
 		bool ret = dir.create_dir(true);
 		if (!ret)
 			return false;
@@ -137,7 +140,7 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		// stores the first part.
 		if (i == 0) {
 			printf("the first part is in %s\n", dir.get_name().c_str());
-			std::string header_file = dir.get_name() + "/header";
+			header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
 				perror("fopen");
@@ -156,13 +159,14 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 		if (!ret)
 			return false;
 	}
+	assert(!header_file.empty());
 	return true;
 }
 
 bool safs_file::delete_file()
 {
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
-		native_dir dir(native_dirs[i].name);
+		native_dir dir(native_dirs[i].get_file_name());
 		bool ret = dir.delete_dir(true);
 		if (!ret)
 			return false;
@@ -170,30 +174,98 @@ bool safs_file::delete_file()
 	return true;
 }
 
+std::string safs_file::get_header_file() const
+{
+	if (!header_file.empty())
+		return header_file;
+
+	for (size_t i = 0; i < native_dirs.size(); i++) {
+		std::string dir_str = native_dirs[i].get_file_name();
+		if (file_exist(dir_str) && file_exist(dir_str + "/header")) {
+			const_cast<safs_file *>(this)->header_file = dir_str + "/header";
+			break;
+		}
+	}
+	return header_file;
+}
+
 safs_header safs_file::get_header() const
 {
-	for (size_t i = 0; i < native_dirs.size(); i++) {
-		std::string dir_str = native_dirs[i].name;
-		if (!file_exist(dir_str) || !file_exist(dir_str + "/header"))
-			continue;
-		std::string file_name = dir_str + "/header";
-		FILE *f = fopen(file_name.c_str(), "r");
-		if (f == NULL) {
-			perror("fopen");
-			break;
-		}
-		safs_header header;
-		size_t num_reads = fread(&header, sizeof(header), 1, f);
-		if (num_reads != 1) {
-			perror("fread");
-			break;
-		}
-		int ret = fclose(f);
-		assert(ret == 0);
-		return header;
+	std::string header_file = get_header_file();
+	assert(file_exist(header_file));
+	FILE *f = fopen(header_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		return safs_header();
 	}
+	safs_header header;
+	size_t num_reads = fread(&header, sizeof(header), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		return safs_header();
+	}
+	int ret = fclose(f);
+	assert(ret == 0);
+	return header;
+}
 
-	return safs_header();
+bool safs_file::set_user_metadata(const std::vector<char> &data)
+{
+	std::string header_file = get_header_file();
+	native_file native_f(header_file);
+	assert(native_f.exist());
+	size_t file_size = native_f.get_size();
+	assert(file_size >= sizeof(safs_header));
+
+	FILE *f = fopen(header_file.c_str(), "w");
+	if (f == NULL) {
+		perror("fopen");
+		return false;
+	}
+	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	if (ret != 0) {
+		perror("fseek");
+		return false;
+	}
+	size_t num_writes = fwrite(data.data(), data.size(), 1, f);
+	if (num_writes != 1) {
+		perror("fwrite");
+		return false;
+	}
+	ret = fclose(f);
+	assert(ret == 0);
+	return true;
+}
+
+std::vector<char> safs_file::get_user_metadata() const
+{
+	std::string header_file = get_header_file();
+	native_file native_f(header_file);
+	assert(native_f.exist());
+	size_t file_size = native_f.get_size();
+	assert(file_size >= sizeof(safs_header));
+	if (file_size == sizeof(safs_header))
+		return std::vector<char>();
+
+	FILE *f = fopen(header_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		return std::vector<char>();
+	}
+	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	if (ret != 0) {
+		perror("fseek");
+		return std::vector<char>();
+	}
+	std::vector<char> data(file_size - sizeof(safs_header));
+	size_t num_reads = fread(data.data(), data.size(), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		return std::vector<char>();
+	}
+	ret = fclose(f);
+	assert(ret == 0);
+	return data;
 }
 
 size_t get_all_safs_files(std::set<std::string> &files)
@@ -203,7 +275,7 @@ size_t get_all_safs_files(std::set<std::string> &files)
 
 	// First find all individual file names in the root directories.
 	for (int i = 0; i < conf.get_num_disks(); i++) {
-		std::string dir_name = conf.get_disk(i).name;
+		std::string dir_name = conf.get_disk(i).get_file_name();
 		native_dir dir(dir_name);
 		std::vector<std::string> file_names;
 		dir.read_all_files(file_names);

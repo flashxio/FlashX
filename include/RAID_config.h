@@ -72,9 +72,8 @@ public:
 		return root_paths[idx];
 	}
 
-	int get_disks(std::vector<part_file_info> &disks) const {
-		disks = root_paths;
-		return disks.size();
+	std::vector<part_file_info> get_disks() const {
+		return root_paths;
 	}
 
 	int get_num_disks() const {
