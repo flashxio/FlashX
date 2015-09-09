@@ -70,7 +70,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 				get_scalar_type<double>(), true);
 		res1->set_block(0, dense_matrix::create_const<double>(0, long_dim,
 					mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
-		res1->set_multiply_blocks(4);
+		res1->set_multiply_blocks(8);
 		gettimeofday(&start, NULL);
 		res1 = res1->gemm(*mv, B, alpha, beta);
 		assert(res1->get_num_blocks() == 1);
@@ -152,7 +152,7 @@ void test_MvTransMv(eigen::block_multi_vector::ptr mv1,
 	printf("MvTransMv (1 block) takes %.3f seconds\n", time_diff(start, end));
 #endif
 
-	mv1->set_multiply_blocks(4);
+	mv1->set_multiply_blocks(8);
 #ifdef PROFILER
 	ProfilerStart("MvTransMv.4B.prof");
 #endif
