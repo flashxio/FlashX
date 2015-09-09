@@ -230,6 +230,43 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 	}
 }
 
+void test_gemm_simple(bool in_mem, size_t dim1, size_t dim2)
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, dim1,
+			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), true);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	dense_matrix::ptr res = mat1->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	res->materialize_self();
+	detail::matrix_stats.print_diff(orig_stats);
+
+	gettimeofday(&end, NULL);
+	printf("simple gemm takes %.3f seconds\n", time_diff(start, end));
+}
+
+void test_MvTransMv_simple(bool in_mem, size_t dim1, size_t dim2)
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, long_dim,
+			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
+	detail::matrix_stats_t orig_stats = detail::matrix_stats;
+	mat1->transpose()->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	detail::matrix_stats.print_diff(orig_stats);
+
+	gettimeofday(&end, NULL);
+	printf("simple MvTransMv takes %.3f seconds\n", time_diff(start, end));
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -251,5 +288,9 @@ int main(int argc, char *argv[])
 	test_MvTransMv(false, 4, 8, 128, 4);
 	test_MvTransMv(false, 64, 1, 8, 0);
 
+#if 0
+	test_gemm_simple(false, 128 * 4, 4);
+	test_MvTransMv_simple(false, 128 * 4, 4);
+#endif
 	destroy_flash_matrix();
 }
