@@ -78,14 +78,15 @@ public:
 }
 
 EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
-		const scalar_type &type): matrix_store(nrow, ncol, false,
-			type), mat_id(mat_counter++), data_id(mat_id)
+		const scalar_type &type, safs::safs_file_group::ptr group): matrix_store(
+			nrow, ncol, false, type), mat_id(mat_counter++), data_id(mat_id)
 {
 	this->cache_portion = true;
 	this->orig_num_rows = nrow;
 	this->orig_num_cols = ncol;
 	this->layout = layout;
-	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());
+	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size(),
+			group);
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));

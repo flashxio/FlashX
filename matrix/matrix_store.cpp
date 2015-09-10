@@ -32,12 +32,12 @@ std::atomic<size_t> matrix_store::mat_counter;
 
 matrix_store::ptr matrix_store::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes,
-		bool in_mem)
+		bool in_mem, safs::safs_file_group::ptr group)
 {
 	if (in_mem)
 		return mem_matrix_store::create(nrow, ncol, layout, type, num_nodes);
 	else
-		return EM_matrix_store::create(nrow, ncol, layout, type);
+		return EM_matrix_store::create(nrow, ncol, layout, type, group);
 }
 
 matrix_store::matrix_store(size_t nrow, size_t ncol, bool in_mem,
