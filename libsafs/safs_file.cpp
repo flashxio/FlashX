@@ -192,7 +192,10 @@ std::string safs_file::get_header_file() const
 safs_header safs_file::get_header() const
 {
 	std::string header_file = get_header_file();
-	assert(file_exist(header_file));
+	if (!file_exist(header_file)) {
+		fprintf(stderr, "%s doesn't exist\n", header_file.c_str());
+		return safs_header();
+	}
 	FILE *f = fopen(header_file.c_str(), "r");
 	if (f == NULL) {
 		perror("fopen");
