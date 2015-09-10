@@ -113,7 +113,8 @@ bool safs_file::rename(const std::string &new_name)
 	return true;
 }
 
-bool safs_file::create_file(size_t file_size, int block_size, int mapping_option)
+bool safs_file::create_file(size_t file_size, int block_size,
+		int mapping_option, safs_file_group::ptr group)
 {
 	size_t size_per_disk = file_size / native_dirs.size();
 	if (file_size % native_dirs.size() > 0)
@@ -125,10 +126,15 @@ bool safs_file::create_file(size_t file_size, int block_size, int mapping_option
 	// The benefit is that when we access data in the same location but from
 	// different files, the data is likely fetched from different disks.
 	// Thus, this leads to better I/O utilization.
-	std::vector<int> dir_idxs(native_dirs.size());
-	for (size_t i = 0; i < dir_idxs.size(); i++)
-		dir_idxs[i] = i;
-	random_shuffle(dir_idxs.begin(), dir_idxs.end());
+	std::vector<int> dir_idxs;
+	if (group == NULL) {
+		dir_idxs.resize(native_dirs.size());
+		for (size_t i = 0; i < dir_idxs.size(); i++)
+			dir_idxs[i] = i;
+		random_shuffle(dir_idxs.begin(), dir_idxs.end());
+	}
+	else
+		dir_idxs = group->add_file(*this);
 
 	safs_header header(block_size, mapping_option, true, file_size);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
@@ -297,6 +303,24 @@ size_t get_all_safs_files(std::set<std::string> &files)
 		}
 	}
 	return 0;
+}
+
+static std::atomic<size_t> num_safs_groups;
+
+safs_file_group::safs_file_group(const RAID_config &conf): group_id(
+		num_safs_groups++)
+{
+	num_disks = conf.get_num_disks();
+	num_files = 0;
+}
+
+std::vector<int> safs_file_group::add_file(safs_file &file)
+{
+	std::vector<int> ret(num_disks);
+	for (size_t i = 0; i < ret.size(); i++)
+		ret[i] = (num_files + i) % num_disks;
+	num_files++;
+	return ret;
 }
 
 }

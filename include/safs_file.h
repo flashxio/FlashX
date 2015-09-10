@@ -72,6 +72,7 @@ public:
 };
 
 class RAID_config;
+class safs_file_group;
 
 class safs_file
 {
@@ -105,9 +106,22 @@ public:
 	ssize_t get_size() const;
 	bool create_file(size_t file_size,
 			int block_size = params.get_RAID_block_size(),
-			int mapping_option = params.get_RAID_mapping_option());
+			int mapping_option = params.get_RAID_mapping_option(),
+			std::shared_ptr<safs_file_group> group = NULL);
 	bool delete_file();
 	bool rename(const std::string &new_name);
+};
+
+class safs_file_group
+{
+	size_t num_files;
+	size_t num_disks;
+	const size_t group_id;
+public:
+	typedef std::shared_ptr<safs_file_group> ptr;
+
+	safs_file_group(const RAID_config &conf);
+	std::vector<int> add_file(safs_file &file);
 };
 
 size_t get_all_safs_files(std::set<std::string> &files);
