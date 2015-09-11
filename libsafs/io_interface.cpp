@@ -823,4 +823,15 @@ file_io_factory::file_io_factory(const std::string _name): name(_name)
 	}
 }
 
+io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios)
+{
+	if (ios.empty())
+		return io_select::ptr();
+
+	io_select::ptr select = ios.front()->create_io_select();
+	for (size_t i = 0; i < ios.size(); i++)
+		select->add_io(ios[i]);
+	return select;
+}
+
 }

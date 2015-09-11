@@ -142,6 +142,7 @@ enum {
 };
 
 class file_io_factory;
+class io_select;
 
 /**
  * This class defines the interface of accessing a SAFS file.
@@ -364,6 +365,36 @@ public:
 			int access_method) {
 		return IO_UNSUPPORTED;
 	}
+
+	virtual std::shared_ptr<io_select> create_io_select() const {
+		return std::shared_ptr<io_select>();
+	}
+};
+
+/**
+ * This is equivalent to select() in Linux.
+ * Users can register multiple I/O instances to this object and wait
+ * for I/O completion from all of the I/O instances.
+ * Each type of I/O instance has its own io_select. Users have to add
+ * an I/O instance to the right I/O select.
+ */
+class io_select
+{
+public:
+	typedef std::shared_ptr<io_select> ptr;
+
+	/**
+	 * Add an I/O instance to the I/O select.
+	 * If the type of I/O stance doesn't match with the I/O select,
+	 * the registration fails.
+	 */
+	virtual bool add_io(io_interface::ptr io) = 0;
+	/**
+	 * The total number of pending I/O requests in all of the registered
+	 * I/O instances.
+	 */
+	virtual int num_pending_ios() const = 0;
+	virtual int wait4complete(int num_to_complete) = 0;
 };
 
 /**
@@ -479,6 +510,8 @@ public:
 
 class cache_config;
 class RAID_config;
+
+io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios);
 
 /**
  * This function creates an I/O factory of the specified I/O method.

@@ -55,6 +55,8 @@ class remote_io: public io_interface
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 public:
+	typedef std::shared_ptr<remote_io> ptr;
+
 	remote_io(const std::vector<std::shared_ptr<disk_io_thread> > &remotes,
 			slab_allocator &msg_allocator, file_mapper *mapper, thread *t,
 			const safs_header &header, int max_reqs = MAX_DISK_CACHED_REQS);
@@ -63,6 +65,7 @@ public:
 
 	virtual int process_completed_requests(io_request reqs[], int num);
 	int process_completed_requests(int num);
+	int process_all_completed_requests();
 
 	virtual int thread_init() {
 		return 0;
@@ -104,6 +107,8 @@ public:
 	size_t get_num_reqs() const {
 		return num_issued_reqs.get();
 	}
+
+	virtual io_select::ptr create_io_select() const;
 };
 
 }
