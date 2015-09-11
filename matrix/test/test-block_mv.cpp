@@ -10,6 +10,9 @@ using namespace fm;
 
 size_t long_dim = 60 * 1024 * 1024;
 size_t repeats = 1;
+size_t multiply_blocks = 8;
+
+safs::safs_file_group::ptr group;
 
 std::vector<dense_matrix::ptr> get_EM_matrices(size_t num_rows, size_t num_cols,
 		size_t num_mats)
@@ -22,7 +25,7 @@ std::vector<dense_matrix::ptr> get_EM_matrices(size_t num_rows, size_t num_cols,
 			= detail::EM_matrix_store::create(mat_name);
 		if (store == NULL) {
 			mats[i] = dense_matrix::create_randu<double>(0, 1, num_rows, num_cols,
-					matrix_layout_t::L_COL, -1, false);
+					matrix_layout_t::L_COL, -1, false, group);
 			detail::EM_matrix_store::const_ptr store
 				= detail::EM_matrix_store::cast(mats[i]->get_raw_store());
 			store->set_persistent(mat_name);
@@ -70,7 +73,7 @@ void test_gemm(eigen::block_multi_vector::ptr mv)
 				get_scalar_type<double>(), true);
 		res1->set_block(0, dense_matrix::create_const<double>(0, long_dim,
 					mv->get_block_size(), matrix_layout_t::L_COL, num_nodes, in_mem));
-		res1->set_multiply_blocks(8);
+		res1->set_multiply_blocks(multiply_blocks);
 		gettimeofday(&start, NULL);
 		res1 = res1->gemm(*mv, B, alpha, beta);
 		assert(res1->get_num_blocks() == 1);
@@ -152,7 +155,7 @@ void test_MvTransMv(eigen::block_multi_vector::ptr mv1,
 	printf("MvTransMv (1 block) takes %.3f seconds\n", time_diff(start, end));
 #endif
 
-	mv1->set_multiply_blocks(8);
+	mv1->set_multiply_blocks(multiply_blocks);
 #ifdef PROFILER
 	ProfilerStart("MvTransMv.4B.prof");
 #endif
@@ -277,6 +280,15 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
+
+	multiply_blocks = 8;
+	group = safs::safs_file_group::create(safs::get_sys_RAID_conf(),
+			safs::safs_file_group::group_t::NAIVE);
+	printf("multiply block size: %ld\n", multiply_blocks);
+	if (group)
+		printf("file group type: %s\n", group->get_name().c_str());
+	else
+		printf("file group type: rand permute\n");
 
 	test_gemm(true, 4, 1, 128, 0);
 	test_gemm(true, 64, 1, 8, 0);
