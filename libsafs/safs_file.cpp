@@ -30,6 +30,15 @@
 namespace safs
 {
 
+static std::vector<int> shuffle_disks(int num_disks)
+{
+	std::vector<int> permute(num_disks);
+	for (size_t i = 0; i < permute.size(); i++)
+		permute[i] = i;
+	random_shuffle(permute.begin(), permute.end());
+	return permute;
+}
+
 safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 {
 	native_dirs = conf.get_disks();
@@ -127,12 +136,8 @@ bool safs_file::create_file(size_t file_size, int block_size,
 	// different files, the data is likely fetched from different disks.
 	// Thus, this leads to better I/O utilization.
 	std::vector<int> dir_idxs;
-	if (group == NULL) {
-		dir_idxs.resize(native_dirs.size());
-		for (size_t i = 0; i < dir_idxs.size(); i++)
-			dir_idxs[i] = i;
-		random_shuffle(dir_idxs.begin(), dir_idxs.end());
-	}
+	if (group == NULL)
+		dir_idxs = shuffle_disks(native_dirs.size());
 	else
 		dir_idxs = group->add_file(*this);
 
@@ -305,22 +310,106 @@ size_t get_all_safs_files(std::set<std::string> &files)
 	return 0;
 }
 
-static std::atomic<size_t> num_safs_groups;
-
-safs_file_group::safs_file_group(const RAID_config &conf): group_id(
-		num_safs_groups++)
+class naive_file_group: public safs_file_group
 {
-	num_disks = conf.get_num_disks();
+	size_t num_files;
+	size_t num_disks;
+public:
+	naive_file_group(const RAID_config &conf) {
+		num_files = 0;
+		num_disks = conf.get_num_disks();
+	}
+	std::vector<int> add_file(safs_file &file) {
+		std::vector<int> ret(num_disks);
+		for (size_t i = 0; i < num_disks; i++)
+			ret[i] = i;
+		num_files++;
+		return ret;
+	}
+	std::string get_name() const {
+		return "naive";
+	}
+};
+
+class rotate_file_group: public safs_file_group
+{
+	size_t num_files;
+	size_t num_disks;
+public:
+	rotate_file_group(const RAID_config &conf) {
+		num_files = 0;
+		num_disks = conf.get_num_disks();
+	}
+	std::vector<int> add_file(safs_file &file) {
+		std::vector<int> ret(num_disks);
+		for (size_t i = 0; i < num_disks; i++)
+			ret[i] = (num_files + i) % num_disks;
+		num_files++;
+		return ret;
+	}
+	std::string get_name() const {
+		return "rotate";
+	}
+};
+
+class rand_rotate_file_group: public safs_file_group
+{
+	// The base permute is the permutation that other permutations are based
+	// on. Other permutations just rotate the base permutation from a random
+	// location. Every #disks files share the same base permutation.
+	std::vector<std::vector<int> > base_permutes;
+	std::vector<std::vector<int> > rand_rotates;
+	size_t num_files;
+public:
+	rand_rotate_file_group(const RAID_config &conf);
+	std::vector<int> add_file(safs_file &file);
+	std::string get_name() const {
+		return "rand_rotate";
+	}
+};
+
+rand_rotate_file_group::rand_rotate_file_group(const RAID_config &conf)
+{
+	int num_disks = conf.get_num_disks();
 	num_files = 0;
+	base_permutes.push_back(shuffle_disks(num_disks));
+	// Every #disks files share the same base permutation.
+	rand_rotates.push_back(shuffle_disks(num_disks));
 }
 
-std::vector<int> safs_file_group::add_file(safs_file &file)
+std::vector<int> rand_rotate_file_group::add_file(safs_file &file)
 {
+	size_t num_disks = base_permutes.front().size();
+	size_t base_idx = num_files / num_disks;
+	if (base_idx >= base_permutes.size()) {
+		base_permutes.push_back(shuffle_disks(num_disks));
+		rand_rotates.push_back(shuffle_disks(num_disks));
+	}
+	assert(base_permutes.size() > base_idx);
+
+	std::vector<int> base = base_permutes[base_idx];
 	std::vector<int> ret(num_disks);
+	size_t rotate = rand_rotates[base_idx][num_files % num_disks];
 	for (size_t i = 0; i < ret.size(); i++)
-		ret[i] = (num_files + i) % num_disks;
+		ret[i] = base[(rotate + i) % num_disks];
 	num_files++;
 	return ret;
+}
+
+safs_file_group::ptr safs_file_group::create(const RAID_config &conf,
+		group_t type)
+{
+	switch (type) {
+		case group_t::NAIVE:
+			return safs_file_group::ptr(new naive_file_group(conf));
+		case group_t::ROTATE:
+			return safs_file_group::ptr(new rotate_file_group(conf));
+		case group_t::RAND_ROTATE:
+			return safs_file_group::ptr(new rand_rotate_file_group(conf));
+		default:
+			fprintf(stderr, "unknow group type: %d\n", type);
+			return safs_file_group::ptr();
+	}
 }
 
 }

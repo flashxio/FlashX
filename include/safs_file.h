@@ -114,14 +114,17 @@ public:
 
 class safs_file_group
 {
-	size_t num_files;
-	size_t num_disks;
-	const size_t group_id;
 public:
+	enum group_t {
+		NAIVE,
+		ROTATE,
+		RAND_ROTATE,
+	};
 	typedef std::shared_ptr<safs_file_group> ptr;
 
-	safs_file_group(const RAID_config &conf);
-	std::vector<int> add_file(safs_file &file);
+	static ptr create(const RAID_config &conf, group_t type);
+	virtual std::vector<int> add_file(safs_file &file) = 0;
+	virtual std::string get_name() const = 0;
 };
 
 size_t get_all_safs_files(std::set<std::string> &files);
