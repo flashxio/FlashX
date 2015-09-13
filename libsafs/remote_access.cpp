@@ -479,7 +479,7 @@ int remote_io_select::wait4complete(int num_to_complete)
 	// If we need to process more I/O requests, we need to wait until
 	// I/O threads wake us up.
 	while (num_complete < num_to_complete) {
-		if (num_complete < num_to_complete)
+		if (!params.is_busy_wait())
 			curr->wait();
 		for (size_t i = 0; i < ios.size(); i++) {
 			ios[i]->flush_requests();

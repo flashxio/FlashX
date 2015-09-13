@@ -68,6 +68,7 @@ sys_parameters::sys_parameters()
 	writable = false;
 	max_num_pending_ios = 1000;
 	huge_page_enabled = false;
+	busy_wait = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -175,6 +176,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		huge_page_enabled = true;
 	}
+
+	it = configs.find("busy_wait");
+	if (it != configs.end()) {
+		busy_wait = true;
+	}
 }
 
 void sys_parameters::print()
@@ -198,6 +204,7 @@ void sys_parameters::print()
 	BOOST_LOG_TRIVIAL(info) << "\twritable: " << writable;
 	BOOST_LOG_TRIVIAL(info) << "\tmax_num_pending_ios: " << max_num_pending_ios;
 	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
+	BOOST_LOG_TRIVIAL(info) << "\tbusy_wait: " << busy_wait;
 }
 
 void sys_parameters::print_help()
@@ -236,6 +243,8 @@ void sys_parameters::print_help()
 	std::cout << "\tmax_num_pending_ios: the max number of pending IOs in an I/O instance"
 		<< std::endl;
 	std::cout << "\thuge_page_enabled: determine whether we use huge page for large chunk of memory"
+		<< std::endl;
+	std::cout << "\tbusy_wait: determine whether remote I/O busy wait for I/O completion"
 		<< std::endl;
 }
 
