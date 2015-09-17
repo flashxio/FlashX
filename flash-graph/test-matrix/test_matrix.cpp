@@ -126,7 +126,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	int num_opts = 0;
 	double tolerance = -1;
 
-	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:l:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:l:r:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -144,6 +144,10 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 			case 'e': 
 				nev = atol(optarg);
 				ncv = 2*nev; // Chosen as a defualt
+				num_opts++;
+				break;
+			case 'r': 
+				nrow = atol(optarg);
 				num_opts++;
 				break;
 			case 'p': 
@@ -274,6 +278,7 @@ void print_usage()
     fprintf(stderr, "-f file: input file in fg format\n");
     fprintf(stderr, "-m matrix_layout: i.e., row or col\n");
     fprintf(stderr, "-l tolerance for convergence (1E-6)\n");
+    fprintf(stderr, "-r Number of row in matrix\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
