@@ -19,7 +19,7 @@
 
 #include "kmeans.h"
 #define KM_TEST 0
-#define KM_SERIAL_DIV 1
+#define KM_SERIAL_DIV 0
 
 #ifdef PROFILER
 #include <gperftools/profiler.h>
@@ -29,7 +29,6 @@ namespace {
 	static unsigned NEV;
 	static size_t K;
 	static unsigned NUM_ROWS;
-	//static omp_lock_t writelock;
 	short OMP_MAX_THREADS;
 	static unsigned g_num_changed = 0;
 
@@ -265,7 +264,6 @@ namespace {
 		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 		memset(clusters, 0, sizeof(clusters[0])*K*NEV);
 
-#if KM_SERIAL_DIV
 		// Serial aggreate of OMP_MAX_THREADS vectors
 		for (int i = 0; i < OMP_MAX_THREADS; i++) {
 			// Updated the changed cluster count
@@ -284,36 +282,6 @@ namespace {
 				}
 			}
 		}
-#else
-		BOOST_LOG_TRIVIAL(info) << "Parallel Division";
-#pragma omp parallel for collapse(3) schedule(static)
-		for (int th = 0; th < OMP_MAX_THREADS; th++) {
-			for (size_t clust_idx = 0; clust_idx < K; clust_idx++) {
-				for (unsigned col = 0; col < NEV; col++) {
-					if (pt_cl_as_cnt[th][clust_idx] > 0) 
-						pt_cl[th][clust_idx*K + col] = pt_cl[th][clust_idx*K + col] / pt_cl_as_cnt[th][clust_idx];
-				}
-			}
-		}
-
-#pragma omp parallel for collapse(3) schedule(static)
-		for (int th = 0; th < OMP_MAX_THREADS; th++) {
-			for (unsigned row = 0; row < K; row++) { /* ClusterID */
-				for (unsigned col = 0; col < NEV; col++) { /* Features */
-					clusters[row*NEV+col] = pt_cl[th][row*NEV + col] + clusters[row*NEV + col];
-				}
-			}
-		}
-
-		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
-		// One serial step
-		for (int th = 0; th < OMP_MAX_THREADS; th++) {
-			g_num_changed += pt_num_change[th]; // Updated the changed cluster count
-			for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-				cluster_assignment_counts[clust_idx] += pt_cl_as_cnt[th][clust_idx];
-			}
-		}
-#endif
 
 #if KM_TEST
 		gettimeofday(&end, NULL);
@@ -421,7 +389,6 @@ namespace fg
 		memset(cluster_assignments, -1,
 				sizeof(cluster_assignments[0])*NUM_ROWS);
 		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
-		//omp_init_lock(&writelock);
 
 		/*** End VarInit ***/
 
@@ -464,14 +431,10 @@ namespace fg
 				g_num_changed = 0;
 			}
 
-#if KM_SERIAL_DIV
 			BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
 			M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);
-#endif
 			iter++;
 		}
-
-		//omp_destroy_lock(&writelock);
 
 		gettimeofday(&end, NULL);
 		BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
