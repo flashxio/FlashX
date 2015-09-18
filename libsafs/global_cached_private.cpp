@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-/**
+/*
  * This file implements global cache.
  * There are three types of requests:
  * original request: it is a copy of the request passed from access() and 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -45,7 +45,7 @@
 #include "safs_file.h"
 #include "exception.h"
 
-/**
+/*
  * This global data collection is very static.
  * Once the data is initialized, no data needs to be changed.
  * The mutex is to used only at the initialization.

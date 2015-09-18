@@ -1,7 +1,7 @@
 #ifndef __SIMPLE_KV_STORE_H__
 #define __SIMPLE_KV_STORE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -144,7 +144,7 @@ public:
 	}
 };
 
-/**
+/*
  * This is a simple key-value store over a single file.
  * It supports only one type of user-defined tasks on values and can be used
  * in one thread.
@@ -278,7 +278,7 @@ public:
 		flush_io_requests();
 	}
 
-	/**
+	/*
 	 * Serve user requests asynchronously.
 	 */
 	void async_request(TaskType &task) {

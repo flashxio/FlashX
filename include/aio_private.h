@@ -1,7 +1,7 @@
 #ifndef __AIO_PRIVATE_H__
 #define __AIO_PRIVATE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *

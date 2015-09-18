@@ -1,7 +1,7 @@
 #ifndef __MESSAGING_H__
 #define __MESSAGING_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -158,7 +158,7 @@ class message
 
 	void destroy();
 
-	/**
+	/*
 	 * This just returns the address of the next object.
 	 */
 	T *get_next_addr() {
@@ -197,7 +197,7 @@ public:
 		init();
 	}
 
-	/**
+	/*
 	 * It's actually the number of remaining objects in the message.
 	 */
 	int get_num_objs() const {
@@ -284,7 +284,7 @@ public:
 	}
 };
 
-/**
+/*
  * It contains multiple messages. It basically helps construct messages.
  */
 template<class T>
@@ -361,7 +361,7 @@ public:
 		return accept_inline;
 	}
 
-	/**
+	/*
 	 * This method needs to be used with caution.
 	 * It may change the behavior of other threads if they also access
 	 * the queue, so it's better to use it when no other threads are
@@ -391,7 +391,7 @@ class thread_safe_msg_sender
 	slab_allocator *alloc;
 	msg_queue<T> *dest_queue;
 
-	/**
+	/*
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
 	thread_safe_msg_sender(slab_allocator *alloc,
@@ -412,7 +412,7 @@ public:
 		delete s;
 	}
 
-	/**
+	/*
 	 * flush the entries in the buffer to the queues.
 	 * return the number of entries that have been flushed.
 	 */
@@ -455,7 +455,7 @@ class simple_msg_sender
 	int num_objs;
 
 protected:
-	/**
+	/*
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
 	simple_msg_sender(int node_id, slab_allocator *alloc,
@@ -487,7 +487,7 @@ public:
 		return 1;
 	}
 
-	/**
+	/*
 	 * This returns the number of remaining messages instead of the number
 	 * of remaining objects.
 	 */
