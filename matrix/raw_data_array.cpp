@@ -194,10 +194,10 @@ void set_array_ranges(const NUMA_mapper &mapper, size_t length,
 		std::vector<raw_data_array> &arrs)
 {
 	// The number of threads per NUMA node.
-	size_t nthreads_per_node
-		= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t nthreads_per_node
+		= mem_threads->get_num_threads() / matrix_conf.get_num_nodes();
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(length);
 	for (size_t i = 0; i < arrs.size(); i++) {
 		size_t num_local_bytes = local_lens[i] * entry_size;

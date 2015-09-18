@@ -94,7 +94,7 @@ mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 {
 	if (global_threads == NULL) {
 		int nthreads_per_node
-			= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
+			= matrix_conf.get_num_DM_threads() / matrix_conf.get_num_nodes();
 		assert(nthreads_per_node > 0);
 		global_threads = mem_thread_pool::create(matrix_conf.get_num_nodes(),
 				nthreads_per_node);

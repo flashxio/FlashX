@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
 	}
 
 	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_threads(num_threads);
+	matrix_conf.set_num_DM_threads(num_threads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
 	test_write2file();

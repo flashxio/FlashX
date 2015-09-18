@@ -302,7 +302,7 @@ void block_spmm_task::notify_complete()
 void sparse_matrix::compute(task_creator::ptr creator,
 		size_t num_block_rows) const
 {
-	int num_workers = matrix_conf.get_num_threads();
+	int num_workers = matrix_conf.get_num_SpM_threads();
 	int num_nodes = safs::params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
@@ -739,7 +739,7 @@ void init_flash_matrix(config_map::ptr configs)
 			throw e;
 		}
 		size_t num_nodes = matrix_conf.get_num_nodes();
-		size_t num_threads = matrix_conf.get_num_threads();
+		size_t num_threads = matrix_conf.get_num_DM_threads();
 		detail::local_mem_buffer::init();
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);

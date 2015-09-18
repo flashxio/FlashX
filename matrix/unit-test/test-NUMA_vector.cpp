@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	}
 
 	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_threads(nthreads);
+	matrix_conf.set_num_DM_threads(nthreads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			nthreads / num_nodes);
 	test_init();

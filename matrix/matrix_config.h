@@ -34,7 +34,10 @@ namespace fm
  */
 class matrix_config
 {
-	int num_threads;
+	// The number of threads for sparse matrix.
+	int num_SpM_threads;
+	// The number of threads for dense matrix.
+	int num_DM_threads;
 	std::string prof_file;
 	bool _in_mem_matrix;
 	// With 1D partition, a matrix is partitioned into row blocks.
@@ -71,7 +74,8 @@ public:
 	 * their default values.
 	 */
 	matrix_config() {
-		num_threads = 4;
+		num_SpM_threads = 4;
+		num_DM_threads = 4;
 		_in_mem_matrix = false;
 		row_block_size = 1024;
 		rb_io_size = 1024;
@@ -109,11 +113,19 @@ public:
 	}
 
 	/**
-	 * \brief Get the number of worker threads.
-	 * \return The number of worker threads.
+	 * \brief Get the number of worker threads for sparse matrix.
+	 * \return The number of worker threads for sparse matrix.
 	 */
-	int get_num_threads() const {
-		return num_threads;
+	int get_num_SpM_threads() const {
+		return num_SpM_threads;
+	}
+
+	/**
+	 * \brief Get the number of worker threads for dense matrix.
+	 * \return The number of worker threads for dense matrix.
+	 */
+	int get_num_DM_threads() const {
+		return num_DM_threads;
 	}
 
 	/**
@@ -164,8 +176,12 @@ public:
 		hilbert_order = hilbert;
 	}
 
-	void set_num_threads(int nthreads) {
-		this->num_threads = nthreads;
+	void set_num_SpM_threads(int nthreads) {
+		this->num_SpM_threads = nthreads;
+	}
+
+	void set_num_DM_threads(int nthreads) {
+		this->num_DM_threads = nthreads;
 	}
 
 	void set_num_nodes(int num_nodes) {
@@ -235,7 +251,8 @@ inline void matrix_config::print_help()
 inline void matrix_config::print()
 {
 	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in matrix operations.";
-	BOOST_LOG_TRIVIAL(info) << "\tthreads: " << num_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tSpM threads: " << num_SpM_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tDM threads: " << num_DM_threads;
 	BOOST_LOG_TRIVIAL(info) << "\tFM_prof_file: " << prof_file;
 	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
@@ -253,8 +270,10 @@ inline void matrix_config::print()
 
 inline void matrix_config::init(config_map::ptr map)
 {
-	if (map->has_option("threads"))
-		map->read_option_int("threads", num_threads);
+	if (map->has_option("SpM_threads"))
+		map->read_option_int("SpM_threads", num_SpM_threads);
+	if (map->has_option("DM_threads"))
+		map->read_option_int("DM_threads", num_DM_threads);
 	if (map->has_option("FM_prof_file"))
 		map->read_option("FM_prof_file", prof_file);
 	if (map->has_option("in_mem_matrix"))
