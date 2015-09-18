@@ -212,6 +212,9 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
+	configs->add_options("writable=1");
+	init_io_system(configs, false);
+
 	size_t block_size = params.get_RAID_block_size();
 	if (argc >= 3) {
 		block_size = str2size(argv[2]);
@@ -220,8 +223,6 @@ void comm_load_file2fs(int argc, char *argv[])
 	}
 	printf("RAID block size is %ld pages\n", block_size);
 
-	configs->add_options("writable=1");
-	init_io_system(configs, false);
 	data_source *source = new file_data_source(ext_file);
 
 	safs_file file(get_sys_RAID_conf(), int_file_name);
