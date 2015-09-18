@@ -1,7 +1,7 @@
 #ifndef __ALIGNED_ALLOCATOR_H__
 #define __ALIGNED_ALLOCATOR_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -24,7 +24,7 @@
 
 #include "common.h"
 
-/**
+/*
  * The class can allocate aligned memory if the alignment provided
  * by the user is a power of two.
  */

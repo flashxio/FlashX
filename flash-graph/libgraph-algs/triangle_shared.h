@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -25,7 +25,7 @@
 #include "FG_vector.h"
 #include "FGlib.h"
 
-/**
+/*
  * This contains the data structures shared directed triangle counting
  * and undirected triangle counting.
  */
@@ -171,7 +171,7 @@ public:
 		value += num;
 	}
 
-	/**
+	/*
 	 * Pointer to the runtime data.
 	 */
 

@@ -1,7 +1,7 @@
 #ifndef __CACHE_H__
 #define __CACHE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -450,7 +450,7 @@ public:
 	virtual void sanity_check() const = 0;
 };
 
-/**
+/*
  * This is used to implement hashtable-based indexing.
  */
 class frame: public thread_safe_page
@@ -467,7 +467,7 @@ public:
 	frame(const page_id_t &pg_id, char *data): thread_safe_page(pg_id, data, -1) {
 	}
 
-	/**
+	/*
 	 * To remove the warning of clang++, I need to define a virtual destructor.
 	 * But I really don't need to clean up anything.
 	 */

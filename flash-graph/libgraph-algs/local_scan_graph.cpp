@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -233,7 +233,7 @@ runtime_data_t *create_runtime(graph_engine &graph, local_scan_vertex &scan_v,
 			return operator()(e.get_id());
 		}
 
-		/**
+		/*
 		 * We are going to count edges on the vertices with the most edges.
 		 * If two vertices have the same number of edges, we compute
 		 * on the vertices with the largest Id.

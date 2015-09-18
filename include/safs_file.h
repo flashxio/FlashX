@@ -1,7 +1,7 @@
 #ifndef __SAFS_FILE_H__
 #define __SAFS_FILE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *

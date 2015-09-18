@@ -1,7 +1,7 @@
 #ifndef __STEAL_STATE_H__
 #define __STEAL_STATE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -29,7 +29,7 @@ namespace fg
 
 class compute_vertex;
 
-/**
+/*
  * This class maintains the states to handle vertices being stolen by
  * other threads.
  * There are two stages:

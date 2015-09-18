@@ -1,7 +1,7 @@
 #ifndef __WORKER_THREAD_H__
 #define __WORKER_THREAD_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -154,7 +154,7 @@ public:
 	void fetch_reset_active_vertices(std::vector<local_vid_t> &local_ids);
 };
 
-/**
+/*
  * The queue for active vertices.
  */
 class active_vertex_queue
@@ -175,7 +175,7 @@ public:
 	}
 };
 
-/**
+/*
  * This vertex queue is sorted based on the vertex ID.
  */
 class default_vertex_queue: public active_vertex_queue
@@ -316,7 +316,7 @@ class worker_thread: public thread
 	// This points to the vertex that is currently being processed.
 	compute_vertex_pointer curr_vertex;
 
-	/**
+	/*
 	 * A vertex is allowed to send messages to other vertices.
 	 * The message passing scheme between vertices are implemented as follows:
 	 * all non-empty vertices (with edges) have a message holder;
@@ -354,7 +354,7 @@ class worker_thread: public thread
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
 
-	/**
+	/*
 	 * Get the number of vertices being processed in the current level.
 	 */
 	int get_num_vertices_processing() const {
@@ -378,7 +378,7 @@ public:
 	void run();
 	void init();
 
-	/**
+	/*
 	 * When a vertex has been completed for the current iteration, this
 	 * method is invoked to notify the worker thread, so that the worker
 	 * thread can update its statistics on the number of completed vertices.
@@ -422,7 +422,7 @@ public:
 	}
 	vertex_compute *get_vertex_compute(compute_vertex_pointer v);
 
-	/**
+	/*
 	 * Activate the vertex in its own partition for the next iteration.
 	 */
 	void activate_vertex(local_vid_t id) {
