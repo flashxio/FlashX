@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -77,7 +77,7 @@ config_map::ptr config_map::create(const std::string &conf_file)
 		return map;
 }
 
-/**
+/*
  * All options should have the following format:
  *		key=value.
  * All options that don't have the format are ignored.

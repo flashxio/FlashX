@@ -1,7 +1,7 @@
 #ifndef __CONTAINER_H__
 #define __CONTAINER_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -45,7 +45,7 @@ public:
 	virtual bool is_empty() = 0;
 };
 
-/**
+/*
  * this is a first-in-first-out queue.
  * However, the location of an entry in the queue never changes.
  */
@@ -160,7 +160,7 @@ public:
 
 	bool expand_queue(int new_size);
 
-	/**
+	/*
 	 * Get the first element in the queue.
 	 */
 	T &front() {
@@ -168,7 +168,7 @@ public:
 		return buf[loc_in_queue(start)];
 	}
 
-	/**
+	/*
 	 * Get the last element in the queue.
 	 */
 	T &back() {
@@ -252,7 +252,7 @@ public:
 template<class T>
 class thread_safe_FIFO_queue;
 
-/**
+/*
  * this is a thread-safe FIFO queue.
  * It supports bulk operations.
  */
@@ -338,7 +338,7 @@ public:
 		return 0;
 	}
 
-	/**
+	/*
 	 * It guarantees to be able to add n entries to the queue.
 	 * If there isn't enough space left, it will increase the capacity
 	 * of the queue.
@@ -358,7 +358,7 @@ public:
 		while (add(&entry, 1) == 0);
 	}
 
-	/**
+	/*
 	 * Get the existing entries from the queue.
 	 * It locks the buffer, so don't over use it.
 	 */
@@ -389,7 +389,7 @@ public:
 	}
 };
 
-/**
+/*
  * This FIFO queue can block the thread if
  * a thread wants to add more entries when the queue is full;
  * or
@@ -458,7 +458,7 @@ public:
 		return -1;
 	}
 
-	/**
+	/*
 	 * This method wakes up the thread that is waiting on the queue
 	 * and can be interrupted.
 	 * This can only wake up one thread.
@@ -489,7 +489,7 @@ public:
 	}
 };
 
-/**
+/*
  * This is used to allocate an array on the stack.
  * Some code needs to allocate a large array sometimes, but most of time,
  * it only needs a small array.

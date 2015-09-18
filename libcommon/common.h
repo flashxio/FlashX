@@ -1,7 +1,7 @@
 #ifndef __MY_COMMON_H__
 #define __MY_COMMON_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -95,7 +95,7 @@ inline static T max(T v1, T v2)
 	return v1 < v2 ? v2 : v1;
 }
 
-/**
+/*
  * Check if the integer is a power of two.
  */
 bool align_check(size_t alignment);

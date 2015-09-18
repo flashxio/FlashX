@@ -1,7 +1,7 @@
 #ifndef __COMPUTE_STAT_H__
 #define __COMPUTE_STAT_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -22,12 +22,12 @@
 
 #include "concurrency.h"
 
-/**
+/*
  * These provides a thread-safe way to compute some statistics:
  *	mean, max, min, etc on streaming data.
  */
 
-/**
+/*
  * Compute the average value of elements in a vector.
  */
 template<class T>

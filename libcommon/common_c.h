@@ -1,7 +1,7 @@
 #ifndef __COMMON_C_H__
 #define __COMMON_C_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
