@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-/**
+/*
  * This program computes the overlap of each pair of vertices
  * given by the user.
  */
@@ -36,7 +36,7 @@ enum overlap_stage_t
 	COMP_OVERLAP,
 } overlap_stage;
 
-/**
+/*
  * This contains all vertices that we want to compute pair-wise overlap.
  */
 std::vector<vertex_id_t> overlap_vertices;

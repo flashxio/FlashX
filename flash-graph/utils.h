@@ -1,7 +1,7 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -46,7 +46,7 @@ class vertex_index;
 class in_mem_vertex;
 class ext_mem_undirected_vertex;
 
-/**
+/*
  * This class serializes a graph and stores it in contiguous memory.
  */
 class serial_graph

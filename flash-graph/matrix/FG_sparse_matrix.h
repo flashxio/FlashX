@@ -1,7 +1,7 @@
 #ifndef __FG_SPARSE_MATRIX_H__
 #define __FG_SPARSE_MATRIX_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -129,7 +129,7 @@ inline static edge_type reverse_dir(edge_type type)
 	}
 }
 
-/**
+/*
  * The vertex program for sparse matrix vector multiplication
  * on the adjacency matrix.
  */
@@ -175,7 +175,7 @@ public:
 	}
 };
 
-/**
+/*
  * The vertex program that groups rows or columns of a sparse matrix
  * and aggregates rows or columns in each group.
  */
@@ -357,7 +357,7 @@ public:
 		graph->wait4complete();
 	}
 
-	/**
+	/*
 	 * Group rows or columns based on labels and compute aggregation info
 	 * of each group in each column or row. It returns a Kxn dense matrix
 	 * where K is the number of groups and n is the number of columns or

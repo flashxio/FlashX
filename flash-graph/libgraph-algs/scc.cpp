@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -951,7 +951,7 @@ public:
 	}
 };
 
-/**
+/*
  * This initializes the start vertices for forward-backward BFS.
  */
 class fwbw_initializer: public vertex_initializer
@@ -964,7 +964,7 @@ public:
 	}
 };
 
-/**
+/*
  * This prepares all vertices in the graph for forward-backward BFS.
  */
 class fwbw_reset: public vertex_initializer

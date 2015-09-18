@@ -86,7 +86,7 @@ public:
 	}
 };
 
-/**
+/*
  * The information of vertex header.
  * It contains the vertex ID and the number of edges.
  */
@@ -109,7 +109,7 @@ public:
 	}
 };
 
-/**
+/*
  * The information of directed vertex header.
  * In addition to the vertex header, it has the number of in-edges
  * and out-edges.

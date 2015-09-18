@@ -1,7 +1,7 @@
 #ifndef __MY_STAT_H__
 #define __MY_STAT_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -112,7 +112,7 @@ public:
 	}
 };
 
-/**
+/*
  * This count the apperances of each value of type T.
  */
 template<class T>

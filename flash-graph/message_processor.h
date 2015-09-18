@@ -1,7 +1,7 @@
 #ifndef __MESSAGE_PROCESSOR_H__
 #define __MESSAGE_PROCESSOR_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -33,7 +33,7 @@ class steal_state_t;
 class compute_vertex;
 class compute_vertex_pointer;
 
-/**
+/*
  * This class is to process the messages sent to the owner thread.
  * The complexity here is that some messages can't be processed when
  * we try to process them. Therefore, we need an extra buffer to keep them

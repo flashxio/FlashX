@@ -1,7 +1,7 @@
 #ifndef __FG_DENSE_MATRIX_H__
 #define __FG_DENSE_MATRIX_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -178,7 +178,7 @@ protected:
 public:
 	typedef std::shared_ptr<FG_dense_matrix<T, MatrixStore> > ptr;
 
-	/**
+	/*
 	 * Create a dense matrix.
 	 * `nrow' and `ncol' specify the reserved space for the matrix.
 	 */
@@ -218,7 +218,7 @@ public:
 			this->matrix_store.set(idx, i, vec->get(i));
 	}
 
-	/**
+	/*
 	 * Resize the matrix.
 	 * `nrow' and `ncol' defined the size of the matrix. They must be smaller
 	 * than or equal to the space reserved for the matrix.
@@ -230,7 +230,7 @@ public:
 		this->ncol = ncol;
 	}
 
-	/**
+	/*
 	 * Multiply the matrix by a vector and return the result vector.
 	 */
 	typename FG_vector<T>::ptr multiply(FG_vector<T> &vec) const {
@@ -247,7 +247,7 @@ public:
 		return ret;
 	}
 
-	/**
+	/*
 	 * Multiply the matrix by a vector and the user can specify how the result
 	 * is stored.
 	 */
@@ -263,7 +263,7 @@ public:
 		}
 	}
 
-	/**
+	/*
 	 * Multiply the matrix by another matrix.
 	 * The other matrix needs to have fewer columns so that the result can be
 	 * stored in the same matrix. The multiplication also changes the number
@@ -340,7 +340,7 @@ public:
 		return this->matrix_store.get(row);
 	}
   
-  /**
+  /*
     * \brief Assign all values in the matrix a single value
     * \param val The value a user wishes to assign.
     */
