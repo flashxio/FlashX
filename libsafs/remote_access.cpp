@@ -411,7 +411,8 @@ int remote_io::wait4complete(int num_to_complete)
 
 	process_all_completed_requests();
 	while (pending - num_pending_ios() < num_to_complete) {
-		get_thread()->wait();
+		if (!params.is_busy_wait())
+			get_thread()->wait();
 		process_all_completed_requests();
 	}
 	return pending - num_pending_ios();
