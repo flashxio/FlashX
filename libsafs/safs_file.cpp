@@ -229,7 +229,7 @@ bool safs_file::set_user_metadata(const std::vector<char> &data)
 	native_file native_f(header_file);
 	assert(native_f.exist());
 
-	FILE *f = fopen(header_file.c_str(), "w");
+	FILE *f = fopen(header_file.c_str(), "r+");
 	if (f == NULL) {
 		perror("fopen");
 		return false;
