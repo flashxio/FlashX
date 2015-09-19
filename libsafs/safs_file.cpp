@@ -228,15 +228,13 @@ bool safs_file::set_user_metadata(const std::vector<char> &data)
 	std::string header_file = get_header_file();
 	native_file native_f(header_file);
 	assert(native_f.exist());
-	size_t file_size = native_f.get_size();
-	assert(file_size >= sizeof(safs_header));
 
 	FILE *f = fopen(header_file.c_str(), "w");
 	if (f == NULL) {
 		perror("fopen");
 		return false;
 	}
-	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	int ret = fseek(f, safs_header::get_header_size(), SEEK_SET);
 	if (ret != 0) {
 		perror("fseek");
 		return false;
@@ -257,8 +255,8 @@ std::vector<char> safs_file::get_user_metadata() const
 	native_file native_f(header_file);
 	assert(native_f.exist());
 	size_t file_size = native_f.get_size();
-	assert(file_size >= sizeof(safs_header));
-	if (file_size == sizeof(safs_header))
+	assert(file_size >= safs_header::get_header_size());
+	if (file_size == safs_header::get_header_size())
 		return std::vector<char>();
 
 	FILE *f = fopen(header_file.c_str(), "r");
@@ -266,12 +264,12 @@ std::vector<char> safs_file::get_user_metadata() const
 		perror("fopen");
 		return std::vector<char>();
 	}
-	int ret = fseek(f, sizeof(safs_header), SEEK_SET);
+	int ret = fseek(f, safs_header::get_header_size(), SEEK_SET);
 	if (ret != 0) {
 		perror("fseek");
 		return std::vector<char>();
 	}
-	std::vector<char> data(file_size - sizeof(safs_header));
+	std::vector<char> data(file_size - safs_header::get_header_size());
 	size_t num_reads = fread(data.data(), data.size(), 1, f);
 	if (num_reads != 1) {
 		perror("fread");

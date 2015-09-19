@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include "io_request.h"
+
 namespace safs
 {
 
@@ -36,6 +38,10 @@ class safs_header
 	uint32_t writable;
 	uint64_t num_bytes;
 public:
+	static size_t get_header_size() {
+		return PAGE_SIZE;
+	}
+
 	safs_header() {
 		this->magic_number = MAGIC_NUMBER;
 		this->version_number = CURR_VERSION;
