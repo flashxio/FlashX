@@ -55,7 +55,7 @@ static dense_matrix::ptr get_mat(std::string filename) {
 	return dmat;
 }
 
-// COMMON for reading col-wise data
+// COMMON for reading contiguous double data
 static double* bin_read(std::string fname) {
 	std::ifstream _if;
 	_if.open(fname, std::ios::binary | std::ios::in);
@@ -87,19 +87,33 @@ static void to_spark(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_spark(double* outmat, std::ofstream& of) {
+static void to_spark(double* outmat, std::ofstream& of, const conv_layout lay) {
 	BOOST_LOG_TRIVIAL(info) << "Writing matrix";
-	// Write it
-	for (size_t row=0; row < g_ncol; row++) {
-		for (size_t col=0; col < g_nrow; col++) {
-			if (col < g_nrow-1) {
-				of << outmat[row*g_nrow+col] << " ";
-			} else {
-				of << outmat[row*g_nrow+col];
+
+	if (lay == RAWCOL) {
+		// Write it
+		for (size_t row=0; row < g_ncol; row++) {
+			for (size_t col=0; col < g_nrow; col++) {
+				if (col < g_nrow-1) {
+					of << outmat[row*g_nrow+col] << " ";
+				} else {
+					of << outmat[row*g_nrow+col];
+				}
 			}
+			of << "\n";
 		}
-		of << "\n";
-	}
+	} else if (lay == RAWROW) {
+		for (size_t row = 0; row < g_nrow; row++) {
+			for (size_t col = 0; col < g_ncol; col++) {
+				if (col < g_ncol-1) {
+					of << outmat[row*g_ncol+col] << " ";
+				} else {
+					of << outmat[row*g_ncol+col];
+				}
+			}
+			of << "\n";
+		}
+	} else { assert(0); }
 	delete [] outmat;
 }
 
@@ -121,20 +135,34 @@ static void to_kmeans_par(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_kmeans_par(double* outmat, std::ofstream& of) {
+static void to_kmeans_par(double* outmat, std::ofstream& of, const conv_layout lay) {
 	BOOST_LOG_TRIVIAL(info) << "Writing matrix";
 	// Write it
-	for (size_t row = 0; row < g_ncol; row++) {
-		of << row+1 << " ";
-		for (size_t col = 0; col < g_nrow; col++) {
-			if (col < g_nrow-1) {
-				of << outmat[row*g_nrow+col] << " ";
-			} else {
-				of << outmat[row*g_nrow+col];
+	if (lay == RAWCOL) {
+		for (size_t row = 0; row < g_ncol; row++) {
+			of << row+1 << " ";
+			for (size_t col = 0; col < g_nrow; col++) {
+				if (col < g_nrow-1) {
+					of << outmat[row*g_nrow+col] << " ";
+				} else {
+					of << outmat[row*g_nrow+col];
+				}
 			}
+			of << "\n";
 		}
-		of << "\n";
-	}
+	} else if (lay == RAWROW) {
+		for (size_t row = 0; row < g_nrow; row++) {
+			of << row+1 << " ";
+			for (size_t col = 0; col < g_ncol; col++) {
+				if (col < g_ncol-1) {
+					of << outmat[row*g_ncol+col] << " ";
+				} else {
+					of << outmat[row*g_ncol+col];
+				}
+			}
+			of << "\n";
+		}
+	} else { assert(0); }
 	delete [] outmat;
 }
 
@@ -157,7 +185,7 @@ static void to_fg(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_fg(double* mat, std::ofstream& of) {
+static void to_fg(double* mat, std::ofstream& of, const conv_layout lay) {
 	const size_t NUM_ROWS = g_nrow;
 	const size_t NUM_COLS = g_ncol;
 	BOOST_LOG_TRIVIAL(info) << "nrow = " << NUM_ROWS << ", ncol = " << NUM_COLS;
@@ -166,44 +194,6 @@ static void to_fg(double* mat, std::ofstream& of) {
 	of.write((char*)&NUM_COLS, sizeof(size_t)); // size_t cols
 	of.write((char*)&mat[0], sizeof(double)*g_ncol*g_nrow);
 	delete [] mat;
-}
-
-static void to_sofia(dense_matrix::ptr dmat, std::ofstream& of) {
-#if 0
-	for (size_t row=0; row < dmat->get_num_rows(); row++) {
-		std::shared_ptr<vector> curr_row = dmat->get_row(row);
-		std::vector<double> stdvec = curr_row->conv2std<double>();
-
-		of << "1 ";
-		for (size_t col=0; col < stdvec.size(); col++) {
-			if (col < stdvec.size()-1) {
-				of << col+1 << ":" << stdvec[col] << " ";
-			} else {
-				of << col+1 << ":" << stdvec[col];
-			}
-		}
-		of << "\n";
-	}
-#endif
-}
-
-static void to_sofia(double* outmat, std::ofstream& of) {
-#if 0
-	BOOST_LOG_TRIVIAL(info) << "Writing matrix";
-	// Write it
-	for (size_t row = 0; row < g_ncol; row++) {
-		of << "1 ";
-		for (size_t col = 0; col < g_nrow; col++) {
-			if (col < g_nrow-1) {
-				of << col+1 << ":" << outmat[row*g_nrow+col] << " ";
-			} else {
-				of << col+1 << ":" << outmat[row*g_nrow+col];
-			}
-		}
-		of << "\n";
-	}
-	delete [] outmat;
-#endif
 }
 
 static void to_h2o(dense_matrix::ptr dmat, std::ofstream& of) {
@@ -219,31 +209,46 @@ static void to_h2o(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_h2o(double* outmat, std::ofstream& of) {
+static void to_h2o(double* outmat, std::ofstream& of, const conv_layout lay) {
 	BOOST_LOG_TRIVIAL(info) << "Writing matrix ...";
-	// Write it
-	for (size_t row = 0; row < g_ncol; row++) {
-		of << row + 1;
-		for (size_t col = 0; col < g_nrow; col++) {
-			of << "," << outmat[row*g_nrow+col];
+	if (lay == RAWCOL) {
+		// Write it
+		for (size_t row = 0; row < g_ncol; row++) {
+			of << row + 1;
+			for (size_t col = 0; col < g_nrow; col++) {
+				of << "," << outmat[row*g_nrow+col];
+			}
+			of << "\n";
 		}
-		of << "\n";
-	}
+	} else if (lay == RAWROW) {
+		for (size_t row = 0; row < g_nrow; row++) {
+			of << row+1;
+			for (size_t col = 0; col < g_ncol; col++) {
+				of << "," << outmat[row*g_nrow+col];
+			}
+			of << "\n";
+		}
+	} else { assert(0); }
 	delete [] outmat;
 }
 
 int main(int argc, char* argv[]) {
 	if (argc < 5) {
-		fprintf(stderr, "usage: ./convert_matrix in_filename to_format out_filename layout[row/col] [nrow] [ncol]");
+		fprintf(stderr, "usage: ./convert_matrix in_filename to_format"
+			   " out_filename layout[row/col/rrow/rcol] [nrow] [ncol]");
 		exit(-1);
 	}
 
 	std::string infile = (argv[1]);
 	std::string to_format = argv[2];
 	std::string out_filename = argv[3];
-	matrix_layout_t lay = std::string(argv[4]) == "row" ? L_ROW : L_COL;
+	std::string argv4 = std::string(argv[4]);
+	conv_layout lay = argv4 == "row" ? ROW 
+		: argv4 == "col" ? COL
+		: argv4 == "rrow" ? RAWROW
+		: RAWCOL;
 
-	if (lay == L_COL) {
+	if ((lay == RAWROW || lay == RAWCOL) && argc != 7) {
 		fprintf(stderr, "Must provide 2 more args for col-wise");
 		exit(-1);
 	}
@@ -256,73 +261,57 @@ int main(int argc, char* argv[]) {
 	std::ofstream out_file;
 
 	if (to_format == "h2o") {
-		BOOST_LOG_TRIVIAL(info) << "Converting to h2o format ... ";
+		BOOST_LOG_TRIVIAL(info) << "Converting to " << to_format << " format ...";
 		out_file.open(out_filename, std::ios::out);
 		if (out_file.is_open()) {
-			if (lay == L_ROW) {
+			if (lay == ROW || lay == COL) {
 				to_h2o(get_mat(infile), out_file);
 			} else {
-				to_h2o(bin_read(infile), out_file);
+				to_h2o(bin_read(infile), out_file, lay);
 			}
 			out_file.close();
 		} else { 
 			BOOST_LOG_TRIVIAL(info) << "Failed to open " << out_filename;
 			exit(911);
 		}
-	} else	if (to_format == "spark") {
-		BOOST_LOG_TRIVIAL(info) << "Converting to spark format ... ";
+	} else	if (to_format == "spark" || to_format == "dato") {
+		BOOST_LOG_TRIVIAL(info) << "Converting to " << to_format << " format ...";
 		out_file.open(out_filename, std::ios::out);
 		if (out_file.is_open()) {
-
-			if (lay == L_ROW) {
+			if (lay == ROW || lay == COL) {
+				printf("Shouldnt be here!\n"); exit(-1);
 				to_spark(get_mat(infile), out_file);
 			} else {
-				to_spark(bin_read(infile), out_file);
+				to_spark(bin_read(infile), out_file, lay);
 			}
 			out_file.close();
-		} else { 
+		} else {
 			BOOST_LOG_TRIVIAL(info) << "Failed to open " << out_filename;
 			exit(911);
 		}
 	} else if (to_format == "kmp") {
-		BOOST_LOG_TRIVIAL(info) << "Converting to kmeans_par format ... ";
+		BOOST_LOG_TRIVIAL(info) << "Converting to " << to_format << " format ...";
 		out_file.open(out_filename, std::ios::out);
 		if (out_file.is_open()) {
 			fprintf(stderr, "Failed to open file\n");
-			if (lay == L_ROW) {
+			if (lay == ROW || lay == COL) {
 				to_kmeans_par(get_mat(infile), out_file);
 			} else {
-				to_kmeans_par(bin_read(infile), out_file);
+				to_kmeans_par(bin_read(infile), out_file, lay);
 			}
 			out_file.close();
-		} else { 
+		} else {
 			BOOST_LOG_TRIVIAL(info) << "Failed to open " << out_filename;
 			exit(911);
 		}
-	} else if (to_format == "sofia") {
-		BOOST_LOG_TRIVIAL(info) << "Converting to sofia format ... ";
-		out_file.open(out_filename, std::ios::out);
-		if (out_file.is_open()) {
-			fprintf(stderr, "Failed to open file\n");
-			if (lay == L_ROW) {
-				to_sofia(get_mat(infile), out_file);
-			} else {
-				to_sofia(bin_read(infile), out_file);
-			}
-			out_file.close();
-		} else { 
-			BOOST_LOG_TRIVIAL(info) << "Failed to open " << out_filename;
-			exit(911);
-		}
-
 	} else if (to_format == "fg") {
-		BOOST_LOG_TRIVIAL(info) << "Converting to fg format ... ";
+		BOOST_LOG_TRIVIAL(info) << "Converting to " << to_format << " format ...";
 		out_file.open(out_filename, std::ios::binary | std::ios::trunc | std::ios::out);
 		if (out_file.is_open()) {
-			if (lay == L_ROW) {
+			if (lay == ROW || lay == COL) {
 				to_fg(get_mat(infile), out_file);
 			} else {
-				to_fg(bin_read(infile), out_file);
+				to_fg(bin_read(infile), out_file, lay);
 			}
 			BOOST_LOG_TRIVIAL(info) << "Conversion to fg complete";
 			out_file.close();

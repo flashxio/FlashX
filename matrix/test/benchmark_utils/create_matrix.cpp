@@ -49,15 +49,21 @@ class set_col_operate: public type_set_operate<double>
 
 int main (int argc, char* argv[]) {
 	if (argc < 2) {
-		fprintf(stderr, "usage: ./create_matrix [row/col]");
+		fprintf(stderr, "usage: ./create_matrix [row/col/rrow/rcol]");
 		exit(911);
 	}
 
-	const size_t nrow = 5;
-	const size_t ncol = 7;
+	const size_t nrow = 7;
+	const size_t ncol = 5;
 	std::string outfn = "data/tiny/testmat";
+	std::string argv1 = std::string(argv[1]);
 
-	if (std::string(argv[1]) == "row") {
+	const conv_layout lay = argv1 == "row" ? ROW
+		: argv1 == "col" ? COL
+		: argv1 == "rrow" ? RAWROW
+		: RAWCOL;
+
+	if (lay == ROW || lay == COL) {
 		const scalar_variable_impl<double> mean(.5);
 		const set_col_operate sco(ncol);
 
@@ -65,8 +71,10 @@ int main (int argc, char* argv[]) {
 		dense_matrix::ptr dmat = dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL, 
 				get_scalar_type<double>(), sco, -1, true);
 
-		BOOST_LOG_TRIVIAL(info) << "TRANSPOSING matrix to row major ...";
-		dmat = dmat->transpose();
+		if (lay == ROW) {
+			BOOST_LOG_TRIVIAL(info) << "TRANSPOSING matrix to row major ...";
+			dmat = dmat->transpose();
+		} // else leave as col-wise
 
 #if 1
 		BOOST_LOG_TRIVIAL(info) << "Printing row-wise matrix for verification!\n";
@@ -76,15 +84,13 @@ int main (int argc, char* argv[]) {
 		BOOST_LOG_TRIVIAL(info) << "Writing the matrix";
 		// convert to mem_matrix_store
 		mem_matrix_store::const_ptr mms = mem_matrix_store::cast(dmat->get_raw_store());
-		mms->write2file(outfn+"_dm_rw.bin");
 
-#if 1
-		BOOST_LOG_TRIVIAL(info) << "Test read of matrix";
-		dense_matrix::ptr rdmat = dense_matrix::create(mem_matrix_store::load(outfn+"_dm_rw.bin"));
-		BOOST_LOG_TRIVIAL(info) << "Test print of matrix";
-		print_dmat(rdmat);
-#endif
-	} else if (std::string(argv[1]) == "col") {
+		if (lay == ROW)
+			mms->write2file(outfn+"_dm_rw.bin");
+		else 
+			mms->write2file(outfn+"_dm_cw.bin");
+
+	} else if (lay == RAWROW || lay == RAWCOL) {
 		int min = 1; int max = 50;
 
 		double* dmat = new double [nrow*ncol];
@@ -93,33 +99,37 @@ int main (int argc, char* argv[]) {
 		}
 
 #if 1
-		BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
-		for (size_t row = 0; row < nrow; row++) {
-			for (size_t col = 0; col < ncol; col++) {
-				std::cout << " | " << dmat[row + (nrow*col)];
-			}
-			std::cout << " |\n";
-		}
+		if (lay == RAWCOL) 
+			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
+		else
+			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
+		print_mat(dmat, nrow, ncol, lay); 
 
-#endif
-#if 0
-		BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix as vector for verification";
-		std::cout << "[ ";
-		for (size_t i = 0; i < nrow*ncol; i++) {
-			std::cout << dmat[i] << " ";	
-		}
-		std::cout << "]\n";
 #endif
 
 		BOOST_LOG_TRIVIAL(info) << "Writing the matrix";
 		std::ofstream outfile;
-		outfile.open(outfn+"_cw.bin", std::ios::binary | std::ios::trunc | std::ios::out);
+		if (lay == RAWCOL) 
+			outfile.open(outfn+"_rcw.bin", std::ios::binary | std::ios::trunc | std::ios::out);
+		else
+			outfile.open(outfn+"_rrw.bin", std::ios::binary | std::ios::trunc | std::ios::out);
+
 		outfile.write((char*)&dmat[0], (sizeof(double)*nrow*ncol));
 		outfile.close();
 		delete [] dmat;
 
+#if 1
 		BOOST_LOG_TRIVIAL(info) << "Test read of matrix";
-	    read_fg(outfn+"_cw.bin", L_COL, nrow, ncol); 
+		double* read_mat;
+		if (lay == RAWCOL) 
+			read_mat = read_fg(outfn+"_cw.bin", RAWCOL, nrow, ncol); 
+		else
+			read_mat = read_fg(outfn+"_rrw.bin", RAWROW, nrow, ncol);
+		
+		std::cout << "Read matrix: \n";
+		print_mat(read_mat, nrow, ncol, lay); 
+		delete [] read_mat;
+#endif
 	} else {
 		fprintf(stderr, "Unknown matrix type '%s'", argv[1]);
 	}

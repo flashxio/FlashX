@@ -25,6 +25,8 @@
 using namespace fm;
 using namespace fm::detail;
 
+enum conv_layout{ROW, COL, RAWROW, RAWCOL};
+
 template <typename T>
 static void print_vector(typename std::vector<T>& v) 
 {
@@ -38,14 +40,17 @@ static void print_vector(typename std::vector<T>& v)
 }
 
 template <typename T>
-static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
+static void print_mat(T* matrix, const unsigned rows, const unsigned cols, 
+		conv_layout lay=RAWROW) {
 	for (unsigned row = 0; row < rows; row++) {
-		std::cout << "[";
+		if (lay == RAWROW) { std::cout << "["; }
 		for (unsigned col = 0; col < cols; col++) {
-			std::cout << " " << matrix[row*cols + col];
+			if (lay == RAWROW) { std::cout << " " << matrix[row*cols + col]; }
+			else { std::cout << " | " << matrix[row + (rows*col)]; }
 		}
-		std::cout <<  " ]\n";
-	}	
+		if (lay == RAWROW) { std::cout <<  " ]\n"; }
+		else { std::cout << " |\n"; }
+	}
 }
 
 static void print_dmat(dense_matrix::ptr dmat) {
@@ -58,7 +63,7 @@ static void print_dmat(dense_matrix::ptr dmat) {
 
 // read_nrow_ncol - does the data have the nrow, ncol first before it?
 // No return since outmat is malloced and populated
-static double* read_fg(std::string filename, matrix_layout_t lay,
+static double* read_fg(std::string filename, conv_layout lay,
 		size_t NUM_ROWS=0, size_t NUM_COLS=0) {
 	std::ifstream infile;
 	infile.open(filename, std::ios::in | std::ios::binary);
@@ -74,12 +79,14 @@ static double* read_fg(std::string filename, matrix_layout_t lay,
 
 		assert(NUM_ROWS > 0 && NUM_COLS > 0);
 
-		if (lay == L_ROW) {
-		} else if (lay == L_COL) {
+		if (lay == RAWROW) {
+		} else if (lay == RAWCOL) {
 			// Swap dimensions
 			size_t tmp = NUM_ROWS;
 			NUM_ROWS = NUM_COLS;
 			NUM_COLS = tmp;
+		} else {
+			assert (0);
 		}
 
 		BOOST_LOG_TRIVIAL(info) << "Number of rows = " << NUM_ROWS;
