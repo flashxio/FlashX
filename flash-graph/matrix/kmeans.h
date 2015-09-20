@@ -54,7 +54,7 @@ namespace fg
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 		const unsigned num_rows, const unsigned nev, const size_t k, 
-		const unsigned MAX_ITERS, const int max_threads, const std::string init="random", 
+		const unsigned MAX_ITERS, const int max_threads, const std::string init="kmeanspp",
 		const double tolerance=-1);
 }
 #endif

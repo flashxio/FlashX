@@ -431,7 +431,9 @@ namespace fg
 				g_num_changed = 0;
 			}
 
+#if KM_TEST
 			BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
+#endif
 			M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);
 			iter++;
 		}
