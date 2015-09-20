@@ -41,9 +41,7 @@ class async_io;
 
 class disk_io_thread: public thread
 {
-	static const int LOCAL_BUF_SIZE = 16;
-
-	/**
+	/*
 	 * This is a remote command that is to be executed in the I/O thread.
 	 * It is mainly used to open and close physical files in the I/O thread.
 	 */
@@ -90,7 +88,7 @@ class disk_io_thread: public thread
 		}
 	};
 
-	/**
+	/*
 	 * The command opens a file in the I/O thread.
 	 */
 	class open_comm: public remote_comm
@@ -157,6 +155,9 @@ class disk_io_thread: public thread
 	int get_num_low_prio_reqs() {
 		return low_prio_queue.get_num_objs();
 	}
+
+	size_t get_all_reqs(msg_queue<io_request> &queue,
+			std::vector<io_request> &reqs);
 
 	void run_commands(thread_safe_FIFO_queue<remote_comm *> &);
 

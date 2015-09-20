@@ -226,6 +226,40 @@ void disk_io_thread::run_commands(
 	}
 }
 
+size_t disk_io_thread::get_all_reqs(msg_queue<io_request> &queue,
+		std::vector<io_request> &reqs)
+{
+	const int LOCAL_BUF_SIZE = 16;
+	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
+	std::vector<io_request> local_reqs;
+	size_t tot_num_reqs = 0;
+	while (!queue.is_empty()) {
+		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
+		num_msgs += num;
+
+		// Get all I/O requests from the messages.
+		for (int i = 0; i < num; i++) {
+			int num_reqs = msg_buffer[i].get_num_objs();
+			local_reqs.resize(num_reqs);
+			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
+			for (int j = 0; j < num_reqs; j++) {
+				if (local_reqs[j].get_access_method() == READ) {
+					num_reads++;
+					num_read_bytes += local_reqs[j].get_size();
+				}
+				else {
+					num_writes++;
+					num_write_bytes += local_reqs[j].get_size();
+				}
+			}
+			msg_buffer[i].clear();
+			reqs.insert(reqs.end(), local_reqs.begin(), local_reqs.end());
+			tot_num_reqs += local_reqs.size();
+		}
+	}
+	return tot_num_reqs;
+}
+
 void disk_io_thread::run() {
 	// First, check if we need to flush requests.
 	int num_flushes = flush_counter.get();
@@ -236,22 +270,25 @@ void disk_io_thread::run() {
 		aio->flush_requests();
 	}
 
-	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
 	message<io_request> low_prio_msg;
+	std::vector<io_request> local_reqs;
 
-	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
 		// TODO I need to make sure that checking commands doesn't cause
 		// noticeable CPU consumption.
 		if (!comm_queue.is_empty())
 			run_commands(comm_queue);
-		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-		num_msgs += num;
+
+		int num = get_all_reqs(queue, local_reqs);
+
 		if (is_debug_enabled())
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
 					low_prio_queue.get_num_entries());
 		// The high-prio queue is empty.
+		// TODO we might want to get all low-priority I/O requests for
+		// better scheduling, like the normal I/O requests. But low-priority
+		// requests aren't used, so we don't need to do anything for now.
 		while (num == 0) {
 			// we can process as many low-prio requests as possible,
 			// but they shouldn't block the thread.
@@ -275,29 +312,11 @@ void disk_io_thread::run() {
 			else
 				break;
 
-			// Let's try to fetch requests again.
-			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-			num_msgs += num;
+			num = get_all_reqs(queue, local_reqs);
 		}
 
-		stack_array<io_request> local_reqs(LOCAL_REQ_BUF_SIZE);
-		for (int i = 0; i < num; i++) {
-			int num_reqs = msg_buffer[i].get_num_objs();
-			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
-			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
-			for (int j = 0; j < num_reqs; j++) {
-				if (local_reqs[j].get_access_method() == READ) {
-					num_reads++;
-					num_read_bytes += local_reqs[j].get_size();
-				}
-				else {
-					num_writes++;
-					num_write_bytes += local_reqs[j].get_size();
-				}
-			}
-			aio->access(local_reqs.data(), num_reqs);
-			msg_buffer[i].clear();
-		}
+		aio->access(local_reqs.data(), local_reqs.size());
+		local_reqs.clear();
 
 		// We can't exit the loop if there are still pending AIO requests.
 		// This thread is responsible for processing completed AIO requests.
