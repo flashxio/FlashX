@@ -44,8 +44,6 @@ typedef size_t global_ordinal_type;
 
 typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType  Node;
 typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, Node> MV;
-typedef Tpetra::Operator<double, global_ordinal_type, global_ordinal_type, Node> OP;
-typedef Anasazi::OperatorTraits<double, MV, OP> OPT;
 
 typedef Tpetra::Map<local_ordinal_type, global_ordinal_type, Node> map_type;
 typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_matrix_type;
@@ -53,42 +51,54 @@ typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_m
 size_t edge_data_size = 0;
 
 ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
-		size_t first_row, size_t num_local_rows)
+		size_t first_row, size_t num_local_rows, fg::edge_type type)
 {
 	fg::in_mem_query_vertex_index::ptr query_index
 		= fg::in_mem_query_vertex_index::create(index, false);
 
 	ArrayRCP<size_t> numEntries(num_local_rows);
 	for (size_t i = 0; i < num_local_rows; i++)
-		numEntries[i] = query_index->get_num_edges(i + first_row,
-				fg::edge_type::IN_EDGE);
+		numEntries[i] = query_index->get_num_edges(i + first_row, type);
 	return numEntries;
 }
 
 RCP<crs_matrix_type> create_crs(const std::string &graph_file,
-		fg::vertex_index::ptr index, RCP<map_type> map, int my_rank)
+		fg::vertex_index::ptr index, fg::edge_type type,
+		RCP<map_type> map, int my_rank)
 {
-	fg::in_mem_cundirected_vertex_index::ptr cu_vindex
-		= fg::in_mem_cundirected_vertex_index::create(*index);
-
 	const size_t numMyElements = map->getNodeNumElements ();
 	const global_ordinal_type gblRow0 = map->getGlobalElement(0);
 	const size_t numRows = index->get_num_vertices();
 	printf("first vertex in process %d: %ld\n", my_rank, gblRow0);
 
 	ArrayRCP<const size_t> numEntriesPerRow = getNumEntriesPerRow(index,
-			gblRow0, numMyElements);
+			gblRow0, numMyElements, type);
 	size_t tot_size = 0;
 	for (size_t i = 0; i < numMyElements; i++)
 		tot_size += fg::ext_mem_undirected_vertex::num_edges2vsize(
 				numEntriesPerRow[i], edge_data_size);;
-	off_t off = cu_vindex->get_vertex(gblRow0).get_off();
+
+	off_t first_off;
+	if (index->get_graph_header().is_directed_graph()) {
+		fg::in_mem_cdirected_vertex_index::ptr cu_vindex
+			= fg::in_mem_cdirected_vertex_index::create(*index);
+		if (type == fg::edge_type::IN_EDGE)
+			first_off = cu_vindex->get_vertex(gblRow0).get_in_off();
+		else
+			first_off = cu_vindex->get_vertex(gblRow0).get_out_off();
+	}
+	else {
+		fg::in_mem_cundirected_vertex_index::ptr cu_vindex
+			= fg::in_mem_cundirected_vertex_index::create(*index);
+		first_off = cu_vindex->get_vertex(gblRow0).get_off();
+	}
 
 	// Read the portion of the graph image that belongs to the current process.
+	printf("read %ld bytes of the graph\n", tot_size);
 	std::unique_ptr<char[]> graph_data(new char[tot_size]);
 	FILE *f = fopen(graph_file.c_str(), "r");
 	assert(f);
-	int seek_ret = fseek(f, off, SEEK_SET);
+	int seek_ret = fseek(f, first_off, SEEK_SET);
 	assert(seek_ret == 0);
 	size_t read_ret = fread(graph_data.get(), tot_size, 1, f);
 	assert(read_ret == 1);
@@ -131,7 +141,74 @@ RCP<crs_matrix_type> create_crs(const std::string &graph_file,
 
 RCP<map_type> Map;
 
-void compute_eigen(RCP<crs_matrix_type> A, int nev, const std::string &solver,
+class spm_function
+{
+public:
+	typedef std::shared_ptr<const spm_function> const_ptr;
+
+	virtual void run(const MV& x, MV& y) const = 0;
+};
+
+class eigen_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type, Node>
+{
+	RCP<crs_matrix_type> A;
+public:
+	eigen_operator(RCP<crs_matrix_type> A) {
+		this->A = A;
+	}
+
+	Teuchos::RCP<const map_type> getDomainMap() const {
+		return A->getDomainMap();
+	}
+
+	Teuchos::RCP<const map_type> getRangeMap() const {
+		return A->getRangeMap();
+	}
+
+	void apply (const MV &X, MV &Y, Teuchos::ETransp mode, double alpha,
+			double beta) const {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		A->apply(X, Y);
+		gettimeofday(&end, NULL);
+		printf("SpMM takes %.3f seconds\n", time_diff(start, end));
+	}
+};
+
+class SVD_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type, Node>
+{
+	RCP<crs_matrix_type> A;
+	RCP<crs_matrix_type> tA;
+public:
+	SVD_operator(RCP<crs_matrix_type> A, RCP<crs_matrix_type> tA) {
+		this->A = A;
+		this->tA = tA;
+	}
+
+	Teuchos::RCP<const map_type> getDomainMap() const {
+		return A->getDomainMap();
+	}
+
+	Teuchos::RCP<const map_type> getRangeMap() const {
+		return A->getRangeMap();
+	}
+
+	void apply (const MV &X, MV &Y, Teuchos::ETransp mode, double alpha,
+			double beta) const {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		RCP<MV> tmp = rcp (new MV (Map, X.getNumVectors()));
+		A->apply(X, *tmp);
+		tA->apply(*tmp, Y);
+		gettimeofday(&end, NULL);
+		printf("SVD SpMM takes %.3f seconds\n", time_diff(start, end));
+	}
+};
+
+typedef Tpetra::Operator<double, global_ordinal_type, global_ordinal_type, Node> OP;
+typedef Anasazi::OperatorTraits<double, MV, OP> OPT;
+
+void compute_eigen(RCP<OP> A, int nev, const std::string &solver,
 		int blockSize, int numBlocks, double tol, int my_rank)
 {
 	// Here, Scalar is double, MV is Tpetra::MultiVector, and OP is FMTp_Operator.
@@ -275,7 +352,6 @@ void print_usage()
 	fprintf(stderr, "-E nev_end\n");
 	fprintf(stderr, "-s solver: Davidson, KrylovSchur, LOBPCG\n");
 	fprintf(stderr, "-t tolerance\n");
-	fprintf(stderr, "-S: run SVD\n");
 }
 
 int main (int argc, char *argv[])
@@ -359,7 +435,22 @@ int main (int argc, char *argv[])
 	Map = rcp (new map_type(index->get_graph_header().get_num_vertices(),
 				0, comm));
 	int my_rank = comm->getRank();
-	RCP<crs_matrix_type> A = create_crs(graph_file, index, Map, my_rank);
+
+	RCP<OP> A;
+	if (index->get_graph_header().is_directed_graph()) {
+		RCP<crs_matrix_type> mat = create_crs(graph_file, index,
+				fg::edge_type::OUT_EDGE, Map, my_rank);
+		RCP<crs_matrix_type> t_mat = create_crs(graph_file, index,
+				fg::edge_type::IN_EDGE, Map, my_rank);
+		A = rcp(new SVD_operator(mat, t_mat));
+	}
+	else {
+		RCP<crs_matrix_type> mat = create_crs(graph_file, index,
+				fg::edge_type::OUT_EDGE, Map, my_rank);
+		A = mat;
+//		A = rcp(new eigen_operator(mat));
+	}
+
 	for (size_t nev = nevStart; nev <= nevEnd; nev *= 2) {
 		for (size_t blockSize = blockSizeStart; blockSize <= blockSizeEnd;
 				blockSize *= 2) {
