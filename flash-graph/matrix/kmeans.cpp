@@ -332,6 +332,7 @@ namespace {
 		// Take the mean of all added means
 #if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << " Div by in place ...";
+		double* clusters = __builtin_assume_aligned(clusters);
 #endif
 		for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
 			if (cluster_assignment_counts[clust_idx] > 0) { // Avoid div by 0
