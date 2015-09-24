@@ -630,7 +630,7 @@ public:
 	}
 
 	virtual std::string get_name() const {
-		return (boost::format("sub_EM_mat-%1%(%2%,%3%)") % get_matrix_id()
+		return (boost::format("sub_EM_mat-%1%(%2%,%3%)") % mat_id
 				% get_num_rows() % get_num_cols()).str();
 	}
 

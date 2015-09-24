@@ -105,10 +105,6 @@ public:
 		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
 	}
 
-	size_t get_matrix_id() const {
-		return mat_id;
-	}
-
 	virtual void set_cache_portion(bool cache_portion) {
 		this->cache_portion = cache_portion;
 	}
