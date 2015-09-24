@@ -56,16 +56,20 @@ al2crs: al2crs.o fg_utils.o ../libFMatrix.a
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
-TRILINOSMPILIB = -ltpetra -ltpetraclassicnodeapi -ltpetrakernels -lteuchoscomm \
+TRILINOSMPILIBPATH=-L/home/zhengda/trilinos-12.0.1-mpi/lib/
+TRILINOSMPIINCPATH=-I/home/zhengda/trilinos-12.0.1-mpi/include/
+
+TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
+				 -ltpetraclassicnodeapi -ltpetrakernels -lteuchoscomm \
 				 -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist \
 				 -lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers \
 				 -lteuchoskokkoscompat
 
 FG2Tpetra.o: FG2Tpetra.cpp
-	mpic++ -c FG2Tpetra.cpp $(CXXFLAGS)
+	mpic++ -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_multiply.o: test-tpetra_multiply.cpp
-	mpic++ -c test-tpetra_multiply.cpp $(CXXFLAGS)
+	mpic++ -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_multiply: test-tpetra_multiply.o FG2Tpetra.o ../libFMatrix.a
 	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB)
@@ -79,7 +83,7 @@ test-mkl_eigen: test-mkl_eigen.o
 		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
 test-anasazi_eigen.o: test-anasazi_eigen.cpp
-	mpic++ -c test-anasazi_eigen.cpp $(CXXFLAGS)
+	mpic++ -c test-anasazi_eigen.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-anasazi_eigen: test-anasazi_eigen.o FG2Tpetra.o
 	mpic++ test-anasazi_eigen.o FG2Tpetra.o -o test-anasazi_eigen $(TRILINOSMPILIB) $(LDFLAGS) -llapack -lblas
