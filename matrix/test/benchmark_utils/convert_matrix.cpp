@@ -222,9 +222,9 @@ static void to_h2o(double* outmat, std::ofstream& of, const conv_layout lay) {
 		}
 	} else if (lay == RAWROW) {
 		for (size_t row = 0; row < g_nrow; row++) {
-			of << row+1;
+			of << row + 1;
 			for (size_t col = 0; col < g_ncol; col++) {
-				of << "," << outmat[row*g_nrow+col];
+				of << "," << outmat[row*g_ncol+col];
 			}
 			of << "\n";
 		}
