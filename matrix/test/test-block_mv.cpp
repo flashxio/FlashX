@@ -2,6 +2,8 @@
 #include <google/profiler.h>
 #endif
 
+#include "RAID_config.h"
+
 #include "EM_dense_matrix.h"
 #include "eigensolver/block_dense_matrix.h"
 #include "matrix_stats.h"
@@ -13,6 +15,106 @@ size_t repeats = 1;
 size_t multiply_blocks = 8;
 
 safs::safs_file_group::ptr group;
+
+class rand_rotate_file_group: public safs::safs_file_group
+{
+	// The base permute is the permutation that other permutations are based
+	// on. Other permutations just rotate the base permutation from a random
+	// location. Every #disks files share the same base permutation.
+	std::vector<std::vector<int> > base_permutes;
+	std::vector<std::vector<int> > rand_rotates;
+	size_t num_files;
+	size_t num_same;
+public:
+	rand_rotate_file_group(const safs::RAID_config &conf, size_t num_same);
+	std::vector<int> add_file(safs::safs_file &file);
+	std::string get_name() const {
+		return std::string("rand_rotate-") + itoa(num_same);
+	}
+};
+
+static std::vector<int> shuffle_disks(int num_disks)
+{
+	std::vector<int> permute(num_disks);
+	for (size_t i = 0; i < permute.size(); i++)
+		permute[i] = i;
+	random_shuffle(permute.begin(), permute.end());
+	return permute;
+}
+
+rand_rotate_file_group::rand_rotate_file_group(const safs::RAID_config &conf,
+		size_t num_same)
+{
+	this->num_same = num_same;
+	int num_disks = conf.get_num_disks();
+	assert(num_disks % num_same == 0);
+	num_files = 0;
+	base_permutes.push_back(shuffle_disks(num_disks));
+	std::vector<int> base_rotate = shuffle_disks(num_disks);
+	base_rotate.resize(num_disks / num_same);
+	std::vector<int> rotate(num_disks);
+	for (size_t i = 0; i < base_rotate.size(); i++) {
+		for (size_t j = 0; j < num_same; j++) {
+			rotate[i * num_same + j] = base_rotate[i];
+			printf("rotate %ld: %d\n", i * num_same + j, base_rotate[i]);
+		}
+	}
+	rand_rotates.push_back(rotate);
+}
+
+std::vector<int> rand_rotate_file_group::add_file(safs::safs_file &file)
+{
+	size_t num_disks = base_permutes.front().size();
+	size_t base_idx = num_files / num_disks;
+	if (base_idx >= base_permutes.size()) {
+		base_permutes.push_back(shuffle_disks(num_disks));
+		std::vector<int> base_rotate = shuffle_disks(num_disks);
+		base_rotate.resize(num_disks / num_same);
+		std::vector<int> rotate(num_disks);
+		for (size_t i = 0; i < base_rotate.size(); i++) {
+			for (size_t j = 0; j < num_same; j++) {
+				rotate[i * num_same + j] = base_rotate[i];
+				printf("rotate %ld: %d\n", i * num_same + j, base_rotate[i]);
+			}
+		}
+		rand_rotates.push_back(rotate);
+	}
+	assert(base_permutes.size() > base_idx);
+
+	std::vector<int> base = base_permutes[base_idx];
+	std::vector<int> ret(num_disks);
+	size_t rotate = rand_rotates[base_idx][num_files % num_disks];
+	for (size_t i = 0; i < ret.size(); i++)
+		ret[i] = base[(rotate + i) % num_disks];
+	num_files++;
+	return ret;
+}
+
+class rand_permute_file_group: public safs::safs_file_group
+{
+	size_t num_files;
+	size_t num_disks;
+	size_t num_same;
+	std::vector<int> permute;
+public:
+	rand_permute_file_group(const safs::RAID_config &conf, size_t num_same) {
+		this->num_same = num_same;
+		num_disks = conf.get_num_disks();
+		assert(num_disks % num_same == 0);
+		num_files = 0;
+	}
+
+	std::vector<int> add_file(safs::safs_file &file) {
+		if (num_files % num_same == 0)
+			permute = shuffle_disks(num_disks);
+		num_files++;
+		return permute;
+	}
+
+	std::string get_name() const {
+		return std::string("rand_permute-") + itoa(num_same);
+	}
+};
 
 std::vector<dense_matrix::ptr> get_EM_matrices(size_t num_rows, size_t num_cols,
 		size_t num_mats)
