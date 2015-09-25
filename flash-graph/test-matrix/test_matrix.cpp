@@ -90,8 +90,7 @@ static double* read_fg(std::string filename, std::string lay,
 
 		assert(*NUM_ROWS > 0 && *NUM_COLS > 0);
 		outmat = new double[(*NUM_ROWS)*(*NUM_COLS)];
-		if (lay == "row") {
-		} else if (lay == "col") {
+		if (lay == "col") {
 			// Swap dimensions
 			size_t tmp = *NUM_ROWS;
 			*NUM_ROWS = *NUM_COLS;
