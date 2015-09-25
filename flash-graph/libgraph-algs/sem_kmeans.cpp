@@ -70,7 +70,7 @@ namespace {
 
             void div(const unsigned val) {
                 for (unsigned i = 0; i < mean.size(); i++) {
-                    mean[i] /= val;
+                    mean[i] /= double(val);
                 }
                 complete = true;
             }
@@ -100,6 +100,7 @@ namespace {
             void clear() {
                 this->assign(0);
                 this->num_members = 0;
+                complete = false;
             }
 
             const std::vector<double>& get_mean() const {
@@ -140,7 +141,7 @@ namespace {
             }
 
             double& operator[] (const unsigned index) {
-                assert(index >= mean.size());
+                assert(index < mean.size());
                 return mean[index];
             }
 
@@ -154,6 +155,8 @@ namespace {
                 return *this;
             }
     };
+
+    static std::vector<cluster::ptr> clusters; // cluster means/centers
 
     // Helper
     static void print_clusters(std::vector<cluster::ptr>& clusters) {
@@ -187,19 +190,19 @@ namespace {
         void run(vertex_program& prog, const page_vertex &vertex) { 
             switch (g_stage) {
                 case INIT:
-                    printf("In init\n");
                     run_init(prog, vertex, g_init);
                     break;
                 case ESTEP:
-                    printf("estep\n"); // TODO
+                    run_distance(prog, vertex);
                     break;
                 default:
                     assert(0);
             }
         }
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
-
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
+        void run_distance(vertex_program& prog, const page_vertex &vertex);
+        double get_distance(unsigned cl, edge_seq_iterator& id_it, data_seq_iterator& count_it);
     };
 
     /* Used in per thread cluster formation */
@@ -233,6 +236,10 @@ namespace {
         const unsigned get_pt_changed() {
             return pt_changed;
         }
+
+       void pt_changed_pp() {
+           pt_changed++;
+       }
     };
 
     class kmeans_vertex_program_creater: public vertex_program_creater
@@ -247,13 +254,13 @@ namespace {
         switch (g_init) {
             case RANDOM:
                 {
-                    this->cluster_id = random() % K;
-#if KM_TEST
-                    BOOST_LOG_TRIVIAL(info) << "Random init: v"<< prog.get_vertex_id(*this)
-                        << " assigned to cluster: c" <<  cluster_id;
-#endif
+                    unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
-
+#if KM_TEST
+                    printf("Random init: v%u assigned to cluster: c%x\n", prog.get_vertex_id(*this), new_cluster_id);
+                    if (new_cluster_id != cluster_id) { vprog.pt_changed_pp(); }
+#endif
+                    this-> cluster_id = new_cluster_id;
                     edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
                     data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
                         get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
@@ -273,15 +280,82 @@ namespace {
         }
     }
 
+    double kmeans_vertex::get_distance(unsigned cl, edge_seq_iterator& id_it,
+         data_seq_iterator& count_it) {
+        double dist = 0;
+        double diff;
+        while(id_it.has_next()) {
+            vertex_id_t nid = id_it.next();
+            edge_count e = count_it.next();
+            diff = e.get_count() - (*clusters[cl])[nid]; // TODO: Determine if I need to take the abs value here
+            dist += diff*diff; 
+        }
+        return dist;
+    }
 
+    void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
+        kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
+        double best = std::numeric_limits<double>::max();
+        unsigned new_cluster_id = INVALID_CLUST_ID;
 
+        for (unsigned cl = 0; cl < K; cl++) {
+            // TODO: Better access pattern than getting a new iterator every time
+            edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+            data_seq_iterator count_it = ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
+            
+            if (get_distance(cl, id_it, count_it) < best) { // Get the distance to cluster `cl'
+                new_cluster_id = cl;
+            }
+        }
+
+        if (new_cluster_id != this->cluster_id) {
+            vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
+        }
+        this->cluster_id = new_cluster_id;
+
+        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+        data_seq_iterator count_it = ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
+        vprog.get_pt_cluster(cluster_id)->add_member(id_it, count_it);
+    }
+
+    static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
+        BOOST_LOG_TRIVIAL(info) << "Getting cluster membership";
+        FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
+        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
+        return vec;
+    }
+
+    static void clear_clusters() {
+        for (unsigned thd = 0; thd < clusters.size(); thd++) {
+            clusters[thd]->clear(); 
+        } 
+    }
+
+    static void update_clusters(graph_engine::ptr mat) {
+        clear_clusters(); // TODO: See cost
+        std::vector<vertex_program::ptr> kms_clust_progs;
+        mat->get_vertex_programs(kms_clust_progs);
+
+        for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
+            kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
+            std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
+
+            g_num_changed += kms_prog->get_pt_changed();
+            /* Merge the per-thread clusters */
+            for (unsigned cl = 0; cl < K; cl++) {
+                *(clusters[cl]) += *(pt_clusters[cl]);
+                if (thd == kms_clust_progs.size()-1) {
+                    clusters[cl]->finalize();
+                }
+            }
+        }
+    }
 }
 
 namespace fg
 {
-    void compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned MAX_ITERS, const double tolerance)
-    {
+    FG_vector<unsigned>::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+            const unsigned MAX_ITERS, const double tolerance) {
 #ifdef PROFILER
         ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
 #endif
@@ -290,10 +364,9 @@ namespace fg
         graph_engine::ptr mat = fg->create_engine(index);
 
         K = k;
-        std::vector<cluster::ptr> clusters; // cluster means/centers
         std::vector<unsigned> cluster_assignments; // Which cluster a sample is in
         NUM_ROWS = mat->get_max_vertex_id();
-        NUM_COLS = 5; // FIXME: Store the maximum dimension of the matrix in header
+        NUM_COLS = 7; // FIXME: Store the maximum dimension of the matrix in header
 
         // Check k
         if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) {
@@ -334,37 +407,19 @@ namespace fg
         }
 
         BOOST_LOG_TRIVIAL(info) << "Running init ...";
-
         mat->start_all(vertex_initializer::ptr(),
                 vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
         mat->wait4complete();
+        
+        if (g_init == RANDOM)
+            update_clusters(mat);
 
-        // **** Functionize **** // 
-        BOOST_LOG_TRIVIAL(info) << "Verifying initial clusters";
-        FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
-        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
-
-        std::vector<vertex_program::ptr> kms_clust_progs;
-        mat->get_vertex_programs(kms_clust_progs);
-
-        for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
-            kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-            std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
-            /* Merge the per-thread clusters */
-            for(unsigned cl = 0; cl < K; cl++) {
-                *(clusters[cl]) += *(pt_clusters[cl]);
-                if (thd == kms_clust_progs.size()-1) {
-                    clusters[cl]->finalize();
-                }
-            }
-        }
-        // **** End Functionize **** // 
-
-        BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
-        vec->print();
+#if KM_TEST
         BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
         print_clusters(clusters);
-        exit(-1);
+        BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
+        get_membership(mat)->print();
+#endif
 
         g_stage = ESTEP;
         BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
@@ -379,7 +434,22 @@ namespace fg
         while (iter < MAX_ITERS) {
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
                 " . Computing cluster assignments ...";
-            // E_step();
+
+            mat->start_all(vertex_initializer::ptr(),
+                    vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
+            mat->wait4complete();
+#if KM_TEST
+            BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
+#endif
+            update_clusters(mat);
+
+#if KM_TEST
+            BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
+            print_clusters(clusters);
+            BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
+            get_membership(mat)->print();
+            BOOST_LOG_TRIVIAL(info) << "Samples changes cluster" << g_num_changed;
+#endif
 
             if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
                 converged = true;
@@ -387,11 +457,6 @@ namespace fg
             } else {
                 g_num_changed = 0;
             }
-
-#if KM_TEST
-            BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
-#endif
-            // M_step();
             iter++;
         }
 
@@ -413,6 +478,6 @@ namespace fg
         }
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-        //return;
+        return get_membership(mat);
     }
 }
