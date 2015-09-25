@@ -384,7 +384,7 @@ void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
   * \param MAX_ITERS The max number of iterations to compute for.
   * \param tolerance The min fraction of changes from 1 iter to next required to converge.
   */
-void compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+FG_vector<unsigned>::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
                     const unsigned MAX_ITERS, const double tolerance);
 }
 #endif
