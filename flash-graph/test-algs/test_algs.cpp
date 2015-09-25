@@ -891,6 +891,8 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "louvain") {
 		run_louvain(graph, argc, argv);
+	} else if (alg == "sem_kmeans") {
+		run_sem_kmeans(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
