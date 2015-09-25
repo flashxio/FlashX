@@ -375,6 +375,16 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
  * \param levels The number of levels of the hierarchy to do.
  */
 void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
-}
 
+/**
+  * \brief Compute Semi-External Memory kmeans
+  * \param fg The FlashGraph graph object for which you want to compute.
+  * \param k The number of clusters.
+  * \param init Initialization type [random, forgy, kmeanspp].
+  * \param MAX_ITERS The max number of iterations to compute for.
+  * \param tolerance The min fraction of changes from 1 iter to next required to converge.
+  */
+void compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+                    const unsigned MAX_ITERS, const double tolerance);
+}
 #endif

@@ -682,6 +682,42 @@ void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 	compute_louvain(graph, levels);
 }
 
+void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+    unsigned k = 0;
+    unsigned max_iters = std::numeric_limits<unsigned>::max();
+    std::string init = "";
+    double tolerance = -1;
+
+
+	while ((opt = getopt(argc, argv, "k:i:t:l:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'k':
+				k = atol(optarg);
+				num_opts++;
+				break;
+			case 'i':
+                max_iters = atol(optarg);
+				break;
+			case 't':
+                init = optarg;
+				break;
+            case 'l':
+                tolerance = atof(optarg);
+                num_opts++;
+                break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+    compute_sem_kmeans(graph, k, init, max_iters, tolerance);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -699,7 +735,8 @@ std::string supported_algs[] = {
 	"overlap",
 	"bfs",
 	"spmv",
-	"louvain"
+	"louvain",
+    "sem_kmeans"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -762,6 +799,13 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "sem_kmeans\n");
+	fprintf(stderr, "-k: the number of clusters to use\n");
+	fprintf(stderr, "-i: max number of iterations\n");
+	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
+	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
+	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
