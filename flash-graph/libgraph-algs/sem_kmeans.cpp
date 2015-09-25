@@ -118,6 +118,11 @@ namespace {
                 return mean.size();
             }
 
+            void finalize() {
+                assert(!complete);
+                this->div(this->num_members);
+            }
+
             // TODO: Make args const
             void add_member(edge_seq_iterator& id_it, data_seq_iterator& count_it) {
                 while(id_it.has_next()) {
@@ -201,6 +206,7 @@ namespace {
     class kmeans_vertex_program : public vertex_program_impl<kmeans_vertex>
     {
         std::vector<cluster::ptr> pt_clusters;
+        unsigned pt_changed;
 
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
@@ -208,6 +214,7 @@ namespace {
         kmeans_vertex_program() {
             for (unsigned thd = 0; thd < K; thd++) {
                 pt_clusters.push_back(cluster::create(NUM_COLS));
+                pt_changed = 0;
             }
         }
 
@@ -219,8 +226,12 @@ namespace {
             return pt_clusters;
         }
 
-        cluster::ptr get_cluster(const unsigned id) {
+        cluster::ptr get_pt_cluster(const unsigned id) {
             return pt_clusters[id];
+        }
+
+        const unsigned get_pt_changed() {
+            return pt_changed;
         }
     };
 
@@ -246,7 +257,7 @@ namespace {
                     edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
                     data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
                         get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
-                    vprog.get_cluster(cluster_id)->add_member(id_it, count_it);
+                    vprog.get_pt_cluster(cluster_id)->add_member(id_it, count_it);
                 }
                 break;
             case FORGY:
@@ -336,14 +347,16 @@ namespace fg
         std::vector<vertex_program::ptr> kms_clust_progs;
         mat->get_vertex_programs(kms_clust_progs);
 
-        BOOST_FOREACH(vertex_program::ptr vprog, kms_clust_progs) {
-            kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(vprog);
+        for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
+            kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
             std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
             /* Merge the per-thread clusters */
             for(unsigned cl = 0; cl < K; cl++) {
                 *(clusters[cl]) += *(pt_clusters[cl]);
+                if (thd == kms_clust_progs.size()-1) {
+                    clusters[cl]->finalize();
+                }
             }
-            // TODO: Divide
         }
         // **** End Functionize **** // 
 
