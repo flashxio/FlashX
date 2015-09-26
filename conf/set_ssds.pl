@@ -67,7 +67,7 @@ for (sort {$a <=> $b} keys %host_ids) {
 }
 
 my $dev_idx = 1;
-open(my $fh, ">", "conf/data_files.txt");
+open(my $fh, ">", "conf/data_files.txt") or die "can't open conf/data_files.txt";
 for (sort keys %devices) {
 	my $dev = $_;
 	my $main_name = get_main_devname($dev);
@@ -87,6 +87,7 @@ for (sort keys %devices) {
 	system("cat /sys/block/${main_name}/queue/scheduler");
 	system("echo 2 > /sys/block/${main_name}/queue/rq_affinity");
 	system("echo 0 > /sys/block/${main_name}/queue/add_random");
+	system("echo 4096 > /sys/block/${main_name}/queue/max_sectors_kb");
 	$dev_idx++;
 }
 
