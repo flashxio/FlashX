@@ -2,6 +2,9 @@
 
 use strict;
 
+# This is optimized for sequential I/O on SSDs.
+my $max_block_size = 4096;
+
 # this file mounts SSDs to their corresponding directories and sets
 # up data files correctly.
 
@@ -87,7 +90,7 @@ for (sort keys %devices) {
 	system("cat /sys/block/${main_name}/queue/scheduler");
 	system("echo 2 > /sys/block/${main_name}/queue/rq_affinity");
 	system("echo 0 > /sys/block/${main_name}/queue/add_random");
-	system("echo 4096 > /sys/block/${main_name}/queue/max_sectors_kb");
+	system("echo $max_block_size > /sys/block/${main_name}/queue/max_sectors_kb");
 	$dev_idx++;
 }
 
