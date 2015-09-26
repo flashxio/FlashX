@@ -39,6 +39,8 @@ class thread
 	volatile pid_t tid;
 	int thread_idx;
 	int node_id;
+	// Indicate which CPU cores the thread is bound to.
+	std::vector<int> cpu_affinity;
 	pthread_t id;
 	bool blocking;
 	std::string name;
@@ -53,28 +55,14 @@ class thread
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 
+	void construct_init();
+
 	friend void init_thread_class();
 	friend void *thread_run(void *arg);
 public:
-	thread(std::string name, int node_id, bool blocking = true) {
-		thread_class_init();
-
-		tid = -1;
-		thread_idx = num_threads.inc(1);
-		this->name = name + "-" + itoa(thread_idx);
-		this->node_id = node_id;
-		this->blocking = blocking;
-		this->id = 0;
-
-		_is_activated = false;
-		_has_exit = false;
-		_is_running = true;
-		_is_sleeping = true;
-
-		pthread_mutex_init(&mutex, NULL);
-		pthread_cond_init(&cond, NULL);
-		user_data = NULL;
-	}
+	thread(std::string name, int node_id, bool blocking = true);
+	thread(std::string name, const std::vector<int> &cpu_affinity,
+			bool blocking = true);
 
 	void set_user_data(void *user_data) {
 		assert(this->user_data == NULL);
@@ -126,6 +114,10 @@ public:
 
 	int get_node_id() const {
 		return node_id;
+	}
+
+	const std::vector<int> get_cpu_affinity() const {
+		return cpu_affinity;
 	}
 
 	void stop() {
@@ -208,6 +200,14 @@ class task_thread: public thread
 public:
 	task_thread(const std::string &name, int node): thread(name,
 			node), tasks(node, 1024, true) {
+		pthread_mutex_init(&mutex, NULL);
+		pthread_cond_init(&cond, NULL);
+		all_complete = false;
+		num_pending = 0;
+	}
+
+	task_thread(const std::string &name, const std::vector<int> &cpus,
+			int node): thread(name, cpus), tasks(node, 1024, true) {
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 		all_complete = false;
