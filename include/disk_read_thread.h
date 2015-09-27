@@ -174,8 +174,10 @@ class disk_io_thread: public thread
 public:
 	typedef std::shared_ptr<disk_io_thread> ptr;
 
-	disk_io_thread(const logical_file_partition &partition, int node_id,
-			int flags);
+	// cpu_id is the CPU where the I/O thread is bound to.
+	// node_id is the NUMA node where the I/O thread runs.
+	disk_io_thread(const logical_file_partition &partition, int cpu_id,
+			int node_id, int flags);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;

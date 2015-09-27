@@ -48,9 +48,9 @@ void disk_io_thread::open_comm::run()
 
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
-disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, int flags): thread(std::string("io-thread-") + itoa(node_id),
-			node_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
+disk_io_thread::disk_io_thread(const logical_file_partition &_partition, int cpu_id,
+		int node_id, int flags): thread(std::string("io-thread-") + itoa(cpu_id),
+			std::vector<int>(1, cpu_id)), queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false),
 		// TODO let's allow the low-priority queue to
 		// be infinitely large for now.

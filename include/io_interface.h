@@ -550,6 +550,11 @@ bool is_safs_init();
 const RAID_config &get_sys_RAID_conf();
 
 /**
+ * Get the CPU cores that are used for I/O dedicatedly.
+ */
+const std::vector<int> &get_io_cpus();
+
+/**
  * \internal
  * This method print the I/O statistic information. It's used for debugging.
  */

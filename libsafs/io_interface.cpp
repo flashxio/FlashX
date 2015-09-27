@@ -70,6 +70,7 @@ struct global_data_collection
 	// TODO there is memory leak here.
 	cache_config::ptr cache_conf;
 	page_cache::ptr global_cache;
+	std::vector<int> io_cpus;
 #ifdef PART_IO
 	// For part_global_cached_io
 	part_io_process_table *table;
@@ -248,8 +249,12 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		for (auto it = indices.begin(); it != indices.end(); it++) {
 			logical_file_partition partition(it->second, mapper);
 			// Create disk accessing threads.
-			disk_io_thread::ptr t(new disk_io_thread(partition, it->first,
-						flags));
+			const CPU_core &core = cpus.get_node(it->first).get_core(0);
+			std::vector<int> units = core.get_units();
+			global_data.io_cpus.insert(global_data.io_cpus.end(),
+					units.begin(), units.end());
+			disk_io_thread::ptr t(new disk_io_thread(partition, units[0],
+						it->first, flags));
 			for (size_t i = 0; i < it->second.size(); i++) {
 				int file_idx = it->second[i];
 				global_data.read_threads[file_idx] = t;
@@ -832,6 +837,11 @@ io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios)
 	for (size_t i = 0; i < ios.size(); i++)
 		select->add_io(ios[i]);
 	return select;
+}
+
+const std::vector<int> &get_io_cpus()
+{
+	return global_data.io_cpus;
 }
 
 }
