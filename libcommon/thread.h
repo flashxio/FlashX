@@ -21,9 +21,11 @@
  */
 
 #include <pthread.h>
-#include <atomic>
+#include <hwloc.h>
 
+#include <atomic>
 #include <string>
+#include <set>
 
 #include "concurrency.h"
 #include "common.h"
@@ -254,5 +256,77 @@ public:
 		return num_pending;
 	}
 };
+
+class CPU_core
+{
+	std::vector<int> logical_units;
+public:
+	CPU_core(hwloc_obj_t core);
+
+	const std::vector<int> get_units() const {
+		return logical_units;
+	}
+
+	off_t get_logical_unit(size_t idx) const {
+		return logical_units[idx];
+	}
+
+	size_t get_num_units() const {
+		return logical_units.size();
+	}
+};
+
+class NUMA_node
+{
+	std::vector<CPU_core> cores;
+	std::set<int> lus;
+public:
+	NUMA_node(hwloc_obj_t node);
+
+	bool contain_lu(int unit) const {
+		return lus.find(unit) != lus.end();
+	}
+
+	std::vector<int> get_logical_units() const;
+
+	const CPU_core &get_core(size_t idx) const {
+		return cores[idx];
+	}
+
+	size_t get_num_cores() const {
+		return cores.size();
+	}
+
+	size_t get_num_logical_units() const {
+		return cores.size() * cores.front().get_num_units();
+	}
+};
+
+class CPU_hierarchy
+{
+	std::vector<NUMA_node> nodes;
+public:
+	CPU_hierarchy();
+
+	const NUMA_node &get_node(size_t idx) const {
+		return nodes[idx];
+	}
+
+	size_t get_num_nodes() const {
+		return nodes.size();
+	}
+
+	size_t get_num_cores() const {
+		return nodes.size() * nodes.front().get_num_cores();
+	}
+
+	size_t get_num_logical_units() const {
+		return nodes.size() * nodes.front().get_num_logical_units();
+	}
+
+	std::vector<int> lus2node(const std::vector<int> &lus) const;
+};
+
+extern CPU_hierarchy cpus;
 
 #endif

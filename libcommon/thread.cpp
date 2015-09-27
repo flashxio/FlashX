@@ -25,6 +25,86 @@
 #include "thread.h"
 #include "common.h"
 
+std::vector<hwloc_obj_t> get_objs_by_type(hwloc_obj_t obj, hwloc_obj_type_t type)
+{
+	if (obj->arity > 0 && obj->first_child->type == type) {
+		std::vector<hwloc_obj_t> cores(obj->arity);
+		for (size_t i = 0; i < cores.size(); i++)
+			cores[i] = obj->children[i];
+		return cores;
+	}
+	if (obj->arity == 0)
+		return std::vector<hwloc_obj_t>();
+	else {
+		std::vector<hwloc_obj_t> cores;
+		for (size_t i = 0; i < obj->arity; i++) {
+			std::vector<hwloc_obj_t> tmp = get_objs_by_type(obj->children[i],
+					type);
+			cores.insert(cores.end(), tmp.begin(), tmp.end());
+		}
+		return cores;
+	}
+}
+
+CPU_core::CPU_core(hwloc_obj_t core)
+{
+	std::vector<hwloc_obj_t> pus = get_objs_by_type(core,
+			HWLOC_OBJ_PU);
+	logical_units.resize(pus.size());
+	for (size_t i = 0; i < logical_units.size(); i++)
+		logical_units[i] = pus[i]->os_index;
+}
+
+NUMA_node::NUMA_node(hwloc_obj_t node)
+{
+	std::vector<hwloc_obj_t> hwloc_cores = get_objs_by_type(node,
+			HWLOC_OBJ_CORE);
+	for (size_t i = 0; i < hwloc_cores.size(); i++)
+		cores.emplace_back(hwloc_cores[i]);
+	std::vector<int> lu_vec = get_logical_units();
+	lus.insert(lu_vec.begin(), lu_vec.end());
+}
+
+std::vector<int> NUMA_node::get_logical_units() const
+{
+	std::vector<int> ret;
+	for (size_t i = 0; i < get_num_cores(); i++) {
+		std::vector<int> units = get_core(i).get_units();
+		ret.insert(ret.end(), units.begin(), units.end());
+	}
+	return ret;
+}
+
+CPU_hierarchy::CPU_hierarchy()
+{
+	hwloc_topology_t topology;
+	hwloc_topology_init(&topology);
+	hwloc_topology_load(topology);
+	int num_nodes = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_NODE);
+	for (int i = 0; i < num_nodes; i++) {
+		hwloc_obj_t node = hwloc_get_obj_by_type(topology,
+				HWLOC_OBJ_NODE, i);
+		nodes.emplace_back(node);
+	}
+}
+
+std::vector<int> CPU_hierarchy::lus2node(const std::vector<int> &lus) const
+{
+	std::vector<int> ret(lus.size(), -1);
+	for (size_t i = 0; i < get_num_nodes(); i++) {
+		const NUMA_node &node = get_node(i);
+		for (size_t j = 0; j < lus.size(); j++) {
+			if (node.contain_lu(lus[j])) {
+				assert(ret[j] == -1);
+				ret[j] = i;
+			}
+		}
+	}
+	return ret;
+}
+
+CPU_hierarchy cpus;
+
 static void bind2node_id(int node_id)
 {
 	struct bitmask *bmp = numa_allocate_nodemask();
