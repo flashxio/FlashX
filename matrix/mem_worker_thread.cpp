@@ -32,17 +32,31 @@ namespace fm
 namespace detail
 {
 
+std::vector<int> get_cpus(int node_id)
+{
+	std::vector<int> io_cpus = safs::get_io_cpus();
+	std::vector<int> logical_units = cpus.get_node(node_id).get_logical_units();
+	std::set<int> cpu_set(logical_units.begin(), logical_units.end());
+	// Remove the logical units where I/O threads run.
+	for (size_t j = 0; j < io_cpus.size(); j++)
+		cpu_set.erase(io_cpus[j]);
+	return std::vector<int>(cpu_set.begin(), cpu_set.end());
+}
+
 mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 {
 	tot_num_tasks = 0;
 	threads.resize(num_nodes);
 	for (int i = 0; i < num_nodes; i++) {
+		// Get the CPU cores that are in node i.
+		std::vector<int> cpus = get_cpus(i);
 		threads[i].resize(nthreads_per_node);
 		for (int j = 0; j < nthreads_per_node; j++) {
 			std::string name
 				= std::string("mem-worker-") + itoa(i) + "-" + itoa(j);
 			threads[i][j] = std::shared_ptr<pool_task_thread>(
-					new pool_task_thread(i * nthreads_per_node + j, name, i));
+					new pool_task_thread(i * nthreads_per_node + j, name,
+						cpus, i));
 			threads[i][j]->start();
 		}
 	}

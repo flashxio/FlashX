@@ -42,16 +42,7 @@ class matrix_worker_thread: public thread
 	matrix_worker_thread(int worker_id, int node_id,
 			safs::file_io_factory::shared_ptr factory,
 			const std::vector<matrix_io_generator::ptr> &gens,
-			std::shared_ptr<task_creator> creator): thread("matrix-thread",
-				node_id) {
-		this->worker_id = worker_id;
-		assert((size_t) worker_id < gens.size());
-		this->this_io_gen = gens[worker_id];
-		this->io_gens = gens;
-		this->tcreator = creator;
-		this->factory = factory;
-		this->steal_io_id = (worker_id + 1) % io_gens.size();
-	}
+			std::shared_ptr<task_creator> creator);
 
 	bool get_next_io(matrix_io &io);
 public:
