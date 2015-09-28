@@ -251,6 +251,13 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		// Iterate over the NUMA nodes with disks.
 		for (auto it = indices.begin(); it != indices.end(); it++) {
 			// Create disk accessing threads.
+			if (it->second.size() % params.get_num_io_threads() != 0) {
+				fprintf(stderr, "There are %ld disks on Node %d, but %d I/O threads\n",
+						it->second.size(), it->first, params.get_num_io_threads());
+				fprintf(stderr,
+						"The number of disks should be divisible by #I/O threads\n");
+				exit(-1);
+			}
 			std::vector<disk_io_thread::ptr> ts(params.get_num_io_threads());
 			for (size_t i = 0; i < ts.size(); i++) {
 				const CPU_core &core = cpus.get_node(it->first).get_core(i);
