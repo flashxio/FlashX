@@ -24,6 +24,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <map>
 
 #include "graph_engine.h"
 #include "graph_config.h"
@@ -44,6 +45,7 @@ namespace {
     static unsigned K;
     static unsigned g_num_changed = 0;
     static struct timeval start, end;
+    static std::map<vertex_id_t, unsigned> g_init_hash;
 
     enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
 
@@ -108,6 +110,10 @@ namespace {
 
             const std::vector<double>& get_mean() const {
                 return mean;
+            }
+
+            void set_mean(std::vector<double>& mean) {
+                this->mean = mean;
             }
 
             const unsigned get_num_members() const {
@@ -276,9 +282,8 @@ namespace {
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
 #if KM_TEST
                     printf("Random init: v%u assigned to cluster: c%x\n", prog.get_vertex_id(*this), new_cluster_id);
-                    if (new_cluster_id != cluster_id) { vprog.pt_changed_pp(); }
 #endif
-                    this-> cluster_id = new_cluster_id;
+                    this->cluster_id = new_cluster_id;
                     edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
                     data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
                         get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
@@ -286,8 +291,26 @@ namespace {
                 }
                 break;
             case FORGY:
-                printf("Forgy init\n"); // TODO
-                assert(0);
+                {
+                    vertex_id_t my_id = prog.get_vertex_id(*this);
+#if KM_TEST
+                    printf("Forgy init: v%u setting cluster: c%x\n", my_id, g_init_hash[my_id]);
+#endif
+                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
+                    data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
+                        get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
+
+                    // Build the setter vector that we assign to a cluster center
+                    std::vector<double> setter;
+                    setter.assign(NUM_COLS, 0);
+                    while (id_it.has_next()) {
+                        vertex_id_t nid = id_it.next();
+                        edge_count e = count_it.next();
+                        setter[nid] = (double) e.get_count();
+                    }
+
+                    clusters[g_init_hash[my_id]]->set_mean(setter);
+                }
                 break;
             case PLUSPLUS:
                 printf("PlusPlus init\n"); // TODO
@@ -336,7 +359,8 @@ namespace {
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
             data_seq_iterator count_it = 
                 ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
-            printf("Vertex%u changed membership from c%u to c%u\n", my_id, cluster_id, new_cluster_id);
+            printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
+                    my_id, cluster_id, new_cluster_id, best);
             print_sample(my_id, count_it, id_it);
 #endif
             vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
@@ -350,7 +374,6 @@ namespace {
     }
 
     static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
-        BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
         FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
         mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
         return vec;
@@ -400,7 +423,7 @@ namespace fg
         K = k;
         std::vector<unsigned> cluster_assignments; // Which cluster a sample is in
         NUM_ROWS = mat->get_max_vertex_id();
-        NUM_COLS = 7; // FIXME: Store the maximum dimension of the matrix in header
+        NUM_COLS = 7; // 200; // FIXME: Store the maximum dimension of the matrix in header
 
         // Check k
         if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) {
@@ -429,32 +452,38 @@ namespace fg
         g_stage = INIT;
 
         if (init == "random") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
+            BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
             g_init = RANDOM;
+            mat->start_all(vertex_initializer::ptr(),
+                    vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
+            mat->wait4complete();
+
+            update_clusters(mat);
         }
         if (init == "forgy") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
+            BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
             g_init = FORGY;
+
+            // Select K in range NUM_ROWS
+            std::vector<vertex_id_t> init_ids; // Used to start engine
+            for (unsigned cl = 0; cl < K; cl++) {
+                vertex_id_t id = random() % NUM_ROWS;
+                g_init_hash[id] = cl; // <vertex_id, cluster_id>
+                init_ids.push_back(id);
+            }
+            mat->start(&init_ids.front(), K);
+            mat->wait4complete();
+
         } else if (init == "kmeanspp") {
             BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
             g_init = PLUSPLUS;
-        }
-
-        BOOST_LOG_TRIVIAL(info) << "Running init ...";
-        mat->start_all(vertex_initializer::ptr(),
-                vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
-        mat->wait4complete();
-        
-        if (g_init == RANDOM) {
-            update_clusters(mat);
-            g_num_changed = 0;
         }
 
 #if KM_TEST
         BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
         print_clusters(clusters);
         BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
-        get_membership(mat)->print();
+        get_membership(mat)->print(NUM_COLS);
 #endif
 
         g_stage = ESTEP;
@@ -482,8 +511,8 @@ namespace fg
 #if KM_TEST
             BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
             print_clusters(clusters);
-            BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
-            get_membership(mat)->print();
+            BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
+            get_membership(mat)->print(NUM_COLS);
             BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
 #endif
 
