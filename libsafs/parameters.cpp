@@ -69,6 +69,7 @@ sys_parameters::sys_parameters()
 	max_num_pending_ios = 1000;
 	huge_page_enabled = false;
 	busy_wait = false;
+	num_io_threads = 1;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -181,6 +182,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		busy_wait = true;
 	}
+
+	it = configs.find("num_io_threads");
+	if (it != configs.end()) {
+		num_io_threads = str2size(it->second);
+	}
 }
 
 void sys_parameters::print()
@@ -205,6 +211,7 @@ void sys_parameters::print()
 	BOOST_LOG_TRIVIAL(info) << "\tmax_num_pending_ios: " << max_num_pending_ios;
 	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
 	BOOST_LOG_TRIVIAL(info) << "\tbusy_wait: " << busy_wait;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_io_threads: " << num_io_threads;
 }
 
 void sys_parameters::print_help()
@@ -245,6 +252,8 @@ void sys_parameters::print_help()
 	std::cout << "\thuge_page_enabled: determine whether we use huge page for large chunk of memory"
 		<< std::endl;
 	std::cout << "\tbusy_wait: determine whether remote I/O busy wait for I/O completion"
+		<< std::endl;
+	std::cout << "\tnum_io_threads: the number of threads per NUMA node for I/O processing."
 		<< std::endl;
 }
 

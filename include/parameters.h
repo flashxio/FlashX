@@ -55,6 +55,8 @@ class sys_parameters
 	int max_num_pending_ios;
 	bool huge_page_enabled;
 	bool busy_wait;
+	// The number of I/O threads per NUMA node.
+	int num_io_threads;
 public:
 	sys_parameters();
 
@@ -138,6 +140,11 @@ public:
 
 	bool is_huge_page_enabled() const {
 		return huge_page_enabled;
+	}
+
+	// The number of I/O threads per NUMA node.
+	int get_num_io_threads() const {
+		return num_io_threads;
 	}
 };
 

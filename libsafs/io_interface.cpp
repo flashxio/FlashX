@@ -232,6 +232,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
 		global_data.read_threads.resize(num_files);
+		// Determine a map to indicate which NUMA nodes the disks are
+		// attached to.
 		std::map<int, std::vector<int> > indices;
 		for (int i = 0; i < num_files; i++) {
 			int node_id = mapper->get_file_node_id(i);
@@ -246,18 +248,26 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 				it->second.push_back(i);
 			}
 		}
+		// Iterate over the NUMA nodes with disks.
 		for (auto it = indices.begin(); it != indices.end(); it++) {
-			logical_file_partition partition(it->second, mapper);
 			// Create disk accessing threads.
-			const CPU_core &core = cpus.get_node(it->first).get_core(0);
-			std::vector<int> units = core.get_units();
-			global_data.io_cpus.insert(global_data.io_cpus.end(),
-					units.begin(), units.end());
-			disk_io_thread::ptr t(new disk_io_thread(partition, units[0],
-						it->first, flags));
-			for (size_t i = 0; i < it->second.size(); i++) {
-				int file_idx = it->second[i];
-				global_data.read_threads[file_idx] = t;
+			std::vector<disk_io_thread::ptr> ts(params.get_num_io_threads());
+			for (size_t i = 0; i < ts.size(); i++) {
+				const CPU_core &core = cpus.get_node(it->first).get_core(i);
+				std::vector<int> units = core.get_units();
+				global_data.io_cpus.insert(global_data.io_cpus.end(),
+						units.begin(), units.end());
+
+				std::vector<int> disks(it->second.size() / ts.size());
+				for (size_t j = 0; j < disks.size(); j++)
+					disks[j] = it->second[i * disks.size() + j];
+				logical_file_partition partition(disks, mapper);
+				ts[i] = disk_io_thread::ptr(new disk_io_thread(partition,
+							units[0], it->first, flags));
+				for (size_t j = 0; j < disks.size(); j++) {
+					int file_idx = disks[j];
+					global_data.read_threads[file_idx] = ts[i];
+				}
 			}
 		}
 		global_data.read_thread_set.insert(global_data.read_threads.begin(),
