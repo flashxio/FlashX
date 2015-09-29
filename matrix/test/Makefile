@@ -25,7 +25,7 @@ LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 all: test-fg_SpMV test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
 	el2al al22d al2crs test-sort test-eigen test-dgemm test-mkl_eigen
 
-trilinos: test-anasazi_eigen test-tpetra_multiply
+trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
 mkl: test-mkl_multiply test-mkl_dgemm
 
@@ -67,6 +67,12 @@ TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
 
 FG2Tpetra.o: FG2Tpetra.cpp
 	mpic++ -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+
+test-tpetra_MV_multiply.o: test-tpetra_MV_multiply.cpp
+	mpic++ -c test-tpetra_MV_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+
+test-tpetra_MV_multiply: test-tpetra_MV_multiply.o FG2Tpetra.o ../libFMatrix.a
+	mpic++ -o test-tpetra_MV_multiply test-tpetra_MV_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB) -llapack -lblas
 
 test-tpetra_multiply.o: test-tpetra_multiply.cpp
 	mpic++ -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
