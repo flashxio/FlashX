@@ -367,16 +367,15 @@ class FG_vector
 	 * \brief Serial element-wise print of the vector.
 	 *	**Not intended for very large vectors**
 	 */
-	void print() {
-		vsize_t MAX_PRINT_SIZE = 100;
-		vsize_t print_len = get_size() > MAX_PRINT_SIZE ? MAX_PRINT_SIZE : get_size();
+	void print(vsize_t max_print_size=100) {
+		vsize_t print_len = get_size() > max_print_size ? max_print_size : get_size();
 
 		std::cout << "[";
 		for (vsize_t i=0; i < print_len; i++) {
 			std::cout << " " << get(i);
 		}
 
-		if (print_len == MAX_PRINT_SIZE && print_len != get_size()) {
+		if (print_len == max_print_size && print_len != get_size()) {
 			std::cout << "...";
 		}
 		std::cout <<  " ]\n\n";
