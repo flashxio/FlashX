@@ -26,7 +26,6 @@
 #include "matrix_config.h"
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
-#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -129,6 +128,15 @@ bool hilbert_exec_order::exec(block_compute_task &task,
 	return true;
 }
 
+namespace
+{
+struct buf_deleter {
+	void operator()(char *buf) const {
+		free(buf);
+	}
+};
+}
+
 block_compute_task::block_compute_task(const matrix_io &_io,
 		const sparse_matrix &mat, block_exec_order::ptr order): io(
 			_io), block_size(mat.get_block_size())
@@ -142,8 +150,15 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 
 	off_t orig_off = io.get_loc().get_offset();
 	off = ROUND_PAGE(orig_off);
-	buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
-	buf = (char *) valloc(buf_size);
+	real_io_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
+	buf = detail::local_mem_buffer::get_irreg();
+	// If there isn't a buffer available in the local thread or the local buffer
+	// is smaller than required, we allocate a new buffer.
+	// The smaller buffer will be deallocated if it exists.
+	if (buf.second == NULL || buf.first < real_io_size) {
+		std::shared_ptr<char> tmp((char *) valloc(real_io_size), buf_deleter());
+		buf = detail::local_mem_buffer::irreg_buf_t(real_io_size, tmp);
+	}
 
 	// The last entry in the vector indicates the end of the last block row.
 	block_rows.resize(num_block_rows + 1);
@@ -160,9 +175,15 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 	for (size_t i = 0; i < num_block_rows; i++) {
 		// The offset of the block row in the buffer.
 		off_t local_off = block_row_offs[i] - off;
-		block_rows[i] = buf + local_off;
+		block_rows[i] = buf.second.get() + local_off;
 	}
-	block_rows[num_block_rows] = buf + block_row_offs[num_block_rows] - off;
+	block_rows[num_block_rows]
+		= buf.second.get() + block_row_offs[num_block_rows] - off;
+}
+
+block_compute_task::~block_compute_task()
+{
+	detail::local_mem_buffer::cache_irreg(buf);
 }
 
 /*

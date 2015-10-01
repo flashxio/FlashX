@@ -55,6 +55,9 @@ class local_matrix_store;
  */
 class local_mem_buffer
 {
+public:
+	typedef std::pair<size_t, std::shared_ptr<char> > irreg_buf_t;
+private:
 	// The lock is to protect `mem_set'.
 	static spin_lock mem_lock;
 	// This contains all local mem buffers in the system.
@@ -64,9 +67,21 @@ class local_mem_buffer
 
 	size_t num_allocs;
 	size_t num_frees;
+	/*
+	 * This buffers the memory allocated for part of a vector or a matrix.
+	 * The key is the size of a buffer. It works like a slab allocator.
+	 */
 	std::unordered_map<size_t, std::deque<char *> > bufs;
 
+	/*
+	 * This buffers a portion of a dense matrix.
+	 * The portion of the data is valid. It may be read from the SSDs
+	 * or materialized in a virtual matrix.
+	 * The key is the data Id of a dense matrix.
+	 */
 	std::unordered_map<long, std::shared_ptr<const local_matrix_store> > portions;
+
+	std::deque<irreg_buf_t> irreg_bufs;
 
 	local_mem_buffer() {
 		num_allocs = 0;
@@ -106,6 +121,15 @@ public:
 	 * This function allocates memory from the memory buffer in the local thread.
 	 */
 	static std::shared_ptr<char> alloc(size_t num_bytes);
+
+	/*
+	 * Cache a memory buffer of irregular size in the local thread.
+	 */
+	static void cache_irreg(irreg_buf_t buf);
+	/*
+	 * Get a piece of memory of irregular size buffered in the local thread.
+	 */
+	static irreg_buf_t get_irreg();
 
 	~local_mem_buffer();
 };

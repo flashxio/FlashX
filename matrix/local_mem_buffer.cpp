@@ -209,6 +209,40 @@ local_matrix_store::const_ptr local_mem_buffer::get_mat_portion(long key)
 		return NULL;
 }
 
+void local_mem_buffer::cache_irreg(irreg_buf_t buf)
+{
+	if (!initialized)
+		return;
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr)
+		((local_mem_buffer *) addr)->irreg_bufs.push_back(buf);
+	else {
+		local_mem_buffer *local_buf = new local_mem_buffer();
+		pthread_setspecific(mem_key, local_buf);
+		mem_lock.lock();
+		mem_set.push_back(local_buf);
+		mem_lock.unlock();
+		local_buf->irreg_bufs.push_back(buf);
+	}
+}
+
+local_mem_buffer::irreg_buf_t local_mem_buffer::get_irreg()
+{
+	if (!initialized)
+		return irreg_buf_t();
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr) {
+		local_mem_buffer *local_buf = (local_mem_buffer *) addr;
+		irreg_buf_t ret = local_buf->irreg_bufs.front();
+		local_buf->irreg_bufs.pop_front();
+		return ret;
+	}
+	else
+		return irreg_buf_t();
+}
+
 spin_lock local_mem_buffer::mem_lock;
 std::vector<local_mem_buffer *> local_mem_buffer::mem_set;
 std::atomic<bool> local_mem_buffer::initialized;
