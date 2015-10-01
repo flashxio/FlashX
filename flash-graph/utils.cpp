@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -1271,7 +1271,7 @@ class undirected_edge_graph: public edge_graph
 			return serial_graph::ptr(new disk_undirected_graph(*this, creator));
 	}
 public:
-	/**
+	/*
 	 * num_edges tells the edge graph that there will be num_edges
 	 * edges added to the graph.
 	 */
@@ -1303,7 +1303,7 @@ public:
 			large_io_creator::ptr creator) const;
 };
 
-/**
+/*
  * This represents a directed graph in the form of edge list.
  * It maintains a sorted list of out-edges (sorted on the from vertices)
  * and a sorted list of in-edges (sorted on the to vertices).
@@ -1339,7 +1339,7 @@ class directed_edge_graph: public edge_graph
 			return serial_graph::ptr(new disk_directed_graph(*this, creator));
 	}
 public:
-	/**
+	/*
 	 * num_edges tells the edge graph that there will be num_edges
 	 * edges added to the graph.
 	 */
@@ -1790,7 +1790,7 @@ public:
 	virtual ~graph_file_io() {
 	}
 
-	/**
+	/*
 	 * It read a text of an edge list roughly the size of the wanted bytes.
 	 * The returned text may be a little more than the wanted bytes, but
 	 * it's guaranteed that all lines are complete.
@@ -2516,7 +2516,7 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	return g;
 }
 
-/**
+/*
  * This function loads edge lists from a tex file, parses them in parallel,
  * and convert the graph into the form of adjacency lists.
  */

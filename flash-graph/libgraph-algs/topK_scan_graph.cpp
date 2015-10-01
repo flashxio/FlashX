@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -101,7 +101,7 @@ public:
 
 typedef std::pair<vertex_id_t, size_t> vertex_scan;
 
-/**
+/*
  * This class maintains the local scan that have been computed.
  */
 class scan_collection
@@ -122,7 +122,7 @@ public:
 		sorted = false;
 	}
 
-	/**
+	/*
 	 * Get the ith largest scan.
 	 */
 	vertex_scan get(int idx) {

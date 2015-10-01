@@ -1,7 +1,7 @@
 #ifndef __VERTEX_INDEX_H__
 #define __VERTEX_INDEX_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -127,7 +127,7 @@ public:
 	}
 };
 
-/**
+/*
  * This vertex index maps a vertex id to the location of the vertex in a file.
  */
 template <class vertex_entry_type>

@@ -1,7 +1,7 @@
 #ifndef __CONFIG_MAP_H__
 #define __CONFIG_MAP_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 
-/**
+/*
  * This maintains key-value pairs for options.
  */
 class config_map

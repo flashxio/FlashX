@@ -1,7 +1,7 @@
 #ifndef __CONCURRENCY_H__
 #define __CONCURRENCY_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -157,7 +157,7 @@ public:
 		flags = 0;
 	}
 
-	/**
+	/*
 	 * Set the flag and return the orig flag.
 	 */
 	bool set_flag(int flag) {
@@ -165,7 +165,7 @@ public:
 		return orig & (0x1 << flag);
 	}
 
-	/**
+	/*
 	 * Clear the flag and return the orig flag.
 	 */
 	bool clear_flag(int flag) {
