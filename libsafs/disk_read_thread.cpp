@@ -87,6 +87,45 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition, int cpu
 	thread::start();
 }
 
+disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
+		int node_id, int flags): thread(std::string("io-thread-") + itoa(node_id),
+			node_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
+			IO_QUEUE_SIZE, INT_MAX, false),
+		// TODO let's allow the low-priority queue to
+		// be infinitely large for now.
+		low_prio_queue(node_id, std::string("io-queue-low_prio-")
+				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
+		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
+				INT_MAX), partition(_partition)
+{
+	// Find out the disks that this I/O thread is responsible for.
+	int num_disks = partition.get_num_files();
+	for (int i = 0; i < num_disks; i++)
+		disk_ids.insert(partition.get_disk_id(i));
+
+	// We don't want AIO to open any files yet, so we pass a file partition
+	// definition without a file mapper.
+	logical_file_partition part(_partition.get_phy_file_indices());
+	// The safs header isn't needed.
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, safs_header(), flags);
+
+	num_reads = 0;
+	num_writes = 0;
+	num_read_bytes = 0;
+	num_write_bytes = 0;
+	num_low_prio_accesses = 0;
+	num_requested_flushes = 0;
+	num_ignored_flushes_evicted = 0;
+	num_ignored_flushes_cleaned = 0;
+	num_ignored_flushes_old = 0;
+	tot_flush_delay = 0;
+	max_flush_delay = 0;
+	min_flush_delay = LONG_MAX;
+	num_msgs = 0;
+
+	thread::start();
+}
+
 /**
  * Notify the IO issuer of the ignored flushes.
  * All flush requests must come from the same IO instance.

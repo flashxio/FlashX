@@ -57,6 +57,9 @@ class sys_parameters
 	bool busy_wait;
 	// The number of I/O threads per NUMA node.
 	int num_io_threads;
+	// Bind a I/O thread to a specific CPU core and ensure no other threads
+	// to use this core.
+	bool bind_io_thread;
 public:
 	sys_parameters();
 
@@ -145,6 +148,10 @@ public:
 	// The number of I/O threads per NUMA node.
 	int get_num_io_threads() const {
 		return num_io_threads;
+	}
+
+	bool is_bind_io_thread() const {
+		return bind_io_thread;
 	}
 };
 

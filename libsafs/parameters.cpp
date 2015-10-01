@@ -70,6 +70,7 @@ sys_parameters::sys_parameters()
 	huge_page_enabled = false;
 	busy_wait = false;
 	num_io_threads = 1;
+	bind_io_thread = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -187,6 +188,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		num_io_threads = str2size(it->second);
 	}
+
+	it = configs.find("bind_io_thread");
+	if (it != configs.end()) {
+		bind_io_thread = true;
+	}
 }
 
 void sys_parameters::print()
@@ -212,6 +218,7 @@ void sys_parameters::print()
 	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
 	BOOST_LOG_TRIVIAL(info) << "\tbusy_wait: " << busy_wait;
 	BOOST_LOG_TRIVIAL(info) << "\tnum_io_threads: " << num_io_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tbind_io_thread: " << bind_io_thread;
 }
 
 void sys_parameters::print_help()
@@ -254,6 +261,8 @@ void sys_parameters::print_help()
 	std::cout << "\tbusy_wait: determine whether remote I/O busy wait for I/O completion"
 		<< std::endl;
 	std::cout << "\tnum_io_threads: the number of threads per NUMA node for I/O processing."
+		<< std::endl;
+	std::cout << "\tbind_io_thread: determine whether to bind an I/O thread to a CPU core and use the core exclusivly."
 		<< std::endl;
 }
 

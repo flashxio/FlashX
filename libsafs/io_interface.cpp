@@ -260,17 +260,24 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			}
 			std::vector<disk_io_thread::ptr> ts(params.get_num_io_threads());
 			for (size_t i = 0; i < ts.size(); i++) {
-				const CPU_core &core = cpus.get_node(it->first).get_core(i);
-				std::vector<int> units = core.get_units();
-				global_data.io_cpus.insert(global_data.io_cpus.end(),
-						units.begin(), units.end());
-
 				std::vector<int> disks(it->second.size() / ts.size());
 				for (size_t j = 0; j < disks.size(); j++)
 					disks[j] = it->second[i * disks.size() + j];
 				logical_file_partition partition(disks, mapper);
-				ts[i] = disk_io_thread::ptr(new disk_io_thread(partition,
-							units[0], it->first, flags));
+
+				if (params.is_bind_io_thread()) {
+					// If we bind an I/O thread to a specific CPU core, the CPU
+					// core will be used by the thread exclusively.
+					const CPU_core &core = cpus.get_node(it->first).get_core(i);
+					std::vector<int> units = core.get_units();
+					global_data.io_cpus.insert(global_data.io_cpus.end(),
+							units.begin(), units.end());
+					ts[i] = disk_io_thread::ptr(new disk_io_thread(partition,
+								units[0], it->first, flags));
+				}
+				else
+					ts[i] = disk_io_thread::ptr(new disk_io_thread(partition,
+								it->first, flags));
 				for (size_t j = 0; j < disks.size(); j++) {
 					int file_idx = disks[j];
 					global_data.read_threads[file_idx] = ts[i];
