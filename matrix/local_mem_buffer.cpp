@@ -97,6 +97,7 @@ void local_mem_buffer::clear_local_bufs()
 		}
 	}
 	portions.clear();
+	irreg_bufs.clear();
 	// TODO we should also clear all entries in `buf'. But it causes
 	// memory deallocation error. Why?
 }
