@@ -1316,6 +1316,14 @@ void test_mapply_mixed(int num_nodes)
 	assert(*(size_t *) max_diff->get_raw() == 0);
 }
 
+namespace fm
+{
+namespace eigen
+{
+extern bool cache_recent;
+}
+}
+
 void test_sub_matrix()
 {
 	printf("test sub tall col-matrix\n");
@@ -1385,6 +1393,7 @@ void test_sub_matrix()
 	// Perform GEMM on the first block MV.
 	eigen::block_multi_vector::ptr res1;
 	dense_matrix::ptr res_mat1;
+	fm::eigen::cache_recent = false;
 	{
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		res1 = eigen::block_multi_vector::create(
