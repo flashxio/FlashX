@@ -245,8 +245,6 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 				range.idx + range.num) - idx->get_block_row_off(range.idx);
 		brows.push_back(brow);
 	}
-	// Sort the block rows based on the size of block rows.
-	std::sort(brows.begin(), brows.end());
 	this->num_brows = brows.size();
 }
 
