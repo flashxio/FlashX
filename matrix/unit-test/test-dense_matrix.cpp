@@ -1375,7 +1375,7 @@ void test_sub_matrix()
 	mv2->set_block(2, mat3);
 
 	// Create the right matrix for GEMM.
-	dense_matrix::ptr right_mat = dense_matrix::create_randu<int>(0, 1000,
+	dense_matrix::ptr right_mat = dense_matrix::create_randu<double>(0, 1,
 			num_cols, 2, matrix_layout_t::L_COL, -1, true);
 	detail::mem_col_matrix_store::const_ptr B
 		= detail::mem_col_matrix_store::cast(right_mat->get_raw_store());
