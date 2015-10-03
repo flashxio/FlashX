@@ -52,6 +52,11 @@ public:
 		this->pool_thread_id = pool_thread_id;
 	}
 
+	pool_task_thread(int pool_thread_id, const std::string &name,
+			int node_id): task_thread(name, node_id) {
+		this->pool_thread_id = pool_thread_id;
+	}
+
 	int get_pool_thread_id() const {
 		return pool_thread_id;
 	}
