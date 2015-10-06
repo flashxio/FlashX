@@ -63,7 +63,7 @@ namespace {
         }
 
     enum init_type_t { RANDOM, FORGY, PLUSPLUS } g_init; // May have to use
-    enum kmspp_stage_t { ADDMEAN, DIST } g_kmspp_stage; // Either adding a mean / computing dist 
+    enum kmspp_stage_t { ADDMEAN, DIST } g_kmspp_stage; // Either adding a mean / computing dist
     enum kms_stage_t { INIT, ESTEP } g_stage; // What phase of the algo we're in
 
     typedef std::pair<edge_seq_iterator, data_seq_iterator> seq_iter;
@@ -183,7 +183,7 @@ namespace {
 
     // Helpers //
     static void print_clusters(std::vector<cluster::ptr>& clusters) {
-        for (std::vector<cluster::ptr>::iterator it = clusters.begin(); 
+        for (std::vector<cluster::ptr>::iterator it = clusters.begin();
                 it != clusters.end(); ++it) {
             print_vector<double>((*it)->get_mean());
         }
@@ -224,7 +224,7 @@ namespace {
             request_vertices(&id, 1);
         }
 
-        void run(vertex_program& prog, const page_vertex &vertex) { 
+        void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
                 case INIT:
                     run_init(prog, vertex, g_init);
@@ -237,7 +237,7 @@ namespace {
             }
         }
 
-        // Set a cluster to have the same mean as this sample 
+        // Set a cluster to have the same mean as this sample
         void set_as_mean(const page_vertex &vertex, vertex_id_t my_id, unsigned to_cluster_id) {
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
             data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
@@ -366,7 +366,7 @@ namespace {
                 break;
             case PLUSPLUS:
                 {
-                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); 
+                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
                     data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
                         get_data_seq_it<edge_count>(OUT_EDGE);
 
@@ -402,7 +402,7 @@ namespace {
             vertex_id_t nid = id_it.next();
             edge_count e = count_it.next();
             diff = e.get_count() - (*g_clusters[cl])[nid]; // TODO: Do we need to take the abs value here?
-            dist += diff*diff; 
+            dist += diff*diff;
         }
         return dist;
     }
@@ -415,9 +415,9 @@ namespace {
         for (unsigned cl = 0; cl < K; cl++) {
             // TODO: Better access pattern than getting a new iterator every time
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iterator count_it = 
+            data_seq_iterator count_it =
                 ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
-            
+
             double dist = get_distance(cl, id_it, count_it);
             if (dist < best) { // Get the distance to cluster `cl'
                 new_cluster_id = cl;
@@ -430,7 +430,7 @@ namespace {
 #if VERBOSE
             vertex_id_t my_id = prog.get_vertex_id(*this);
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iterator count_it = 
+            data_seq_iterator count_it =
                 ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
             printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
                     my_id, cluster_id, new_cluster_id, best);
@@ -441,7 +441,7 @@ namespace {
         this->cluster_id = new_cluster_id;
 
         edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-        data_seq_iterator count_it = 
+        data_seq_iterator count_it =
             ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
         vprog.get_pt_cluster(cluster_id)->add_member(id_it, count_it);
     }
@@ -454,8 +454,8 @@ namespace {
 
     static void clear_clusters() {
         for (unsigned thd = 0; thd < g_clusters.size(); thd++) {
-            g_clusters[thd]->clear(); 
-        } 
+            g_clusters[thd]->clear();
+        }
     }
 
     static void update_clusters(graph_engine::ptr mat) {
@@ -477,8 +477,8 @@ namespace {
         }
     }
 
-    /* During kmeans++ we select a new cluster each iteration 
-       This step get the next sample selected as a cluster center 
+    /* During kmeans++ we select a new cluster each iteration
+       This step get the next sample selected as a cluster center
        */
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat) {
 #if KM_TEST
