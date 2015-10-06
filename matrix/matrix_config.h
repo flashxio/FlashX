@@ -68,6 +68,10 @@ class matrix_config
 	size_t write_io_buf_size;
 	// The I/O size used for streaming.
 	size_t stream_io_size;
+	// Indicate whether we keep the memory buffer for I/O in dense matrix
+	// operations. Allocating the memory buffer for every dense matrix operation
+	// is expensive.
+	bool keep_mem_buf;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -88,6 +92,7 @@ public:
 		vv_groupby_buf_size = 1024 * 1024;
 		write_io_buf_size = 128 * 1024 * 1024;
 		stream_io_size = 128 * 1024 * 1024;
+		keep_mem_buf = false;
 	}
 
 	/**
@@ -227,6 +232,10 @@ public:
 	size_t get_stream_io_size() const {
 		return stream_io_size;
 	}
+
+	bool is_keep_mem_buf() const {
+		return keep_mem_buf;
+	}
 };
 
 inline void matrix_config::print_help()
@@ -246,6 +255,7 @@ inline void matrix_config::print_help()
 	printf("\tvv_groupby_buf_size: the buffer size for EM groupby on vector vectors\n");
 	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
 	printf("\tstream_io_size: the I/O size used for streaming\n");
+	printf("\tkeep_mem_buf: indicate whether to keep memory buffer for I/O in dense matrix operation\n");
 }
 
 inline void matrix_config::print()
@@ -266,6 +276,7 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tvv_groupby_buf_size" << vv_groupby_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size" << stream_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf" << keep_mem_buf;
 }
 
 inline void matrix_config::init(config_map::ptr map)
@@ -315,6 +326,8 @@ inline void matrix_config::init(config_map::ptr map)
 		map->read_option_long("stream_io_size", tmp);
 		stream_io_size = tmp;
 	}
+	if (map->has_option("keep_mem_buf"))
+		map->read_option_bool("keep_mem_buf", keep_mem_buf);
 }
 
 extern matrix_config matrix_conf;

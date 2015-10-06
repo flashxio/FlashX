@@ -57,6 +57,12 @@ class local_mem_buffer
 {
 public:
 	typedef std::pair<size_t, std::shared_ptr<char> > irreg_buf_t;
+	enum buff_type {
+		REG_BUF,
+		IRREG_BUF,
+		MAT_PORTION,
+		ALL,
+	};
 private:
 	// The lock is to protect `mem_set'.
 	static spin_lock mem_lock;
@@ -93,7 +99,7 @@ private:
 			std::shared_ptr<const local_matrix_store> portion);
 	std::shared_ptr<const local_matrix_store> _get_mat_portion(long key);
 
-	void clear_local_bufs();
+	void clear_local_bufs(buff_type type);
 public:
 	/*
 	 * We initialize the memory buffers when the system starts to run and
@@ -102,11 +108,12 @@ public:
 	static bool init();
 	static void destroy();
 	/*
-	 * This function is called after each computation on data containers.
+	 * This function clears per-thread memory buffers.
+	 * It is called after each computation on data containers.
 	 * We should delete the local buffer as much as possible to reduce
 	 * memory consumption.
 	 */
-	static void clear_bufs();
+	static void clear_bufs(buff_type type = buff_type::ALL);
 
 	/*
 	 * We cache matrix portions for EM matrix store and mapply virtual matrix

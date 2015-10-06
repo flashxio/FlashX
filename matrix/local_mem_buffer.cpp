@@ -83,21 +83,25 @@ std::shared_ptr<char> local_mem_buffer::_alloc(size_t num_bytes)
 	return ret;
 }
 
-void local_mem_buffer::clear_local_bufs()
+void local_mem_buffer::clear_local_bufs(buff_type type)
 {
 	// This method may be called in another thread.
 	// TODO maybe I should use a lock to protect the per-thread queue.
-	for (auto it = bufs.begin(); it != bufs.end(); it++) {
-		std::deque<char *> &q = it->second;
-		num_frees += q.size();
-		while (!q.empty()) {
-			char *buf = q.front();
-			q.pop_front();
-			free(buf);
+	if (type == buff_type::ALL || type == buff_type::REG_BUF) {
+		for (auto it = bufs.begin(); it != bufs.end(); it++) {
+			std::deque<char *> &q = it->second;
+			num_frees += q.size();
+			while (!q.empty()) {
+				char *buf = q.front();
+				q.pop_front();
+				free(buf);
+			}
 		}
 	}
-	portions.clear();
-	irreg_bufs.clear();
+	if (type == buff_type::ALL || type == buff_type::MAT_PORTION)
+		portions.clear();
+	if (type == buff_type::ALL || type == buff_type::IRREG_BUF)
+		irreg_bufs.clear();
 	// TODO we should also clear all entries in `buf'. But it causes
 	// memory deallocation error. Why?
 }
@@ -149,11 +153,11 @@ void local_mem_buffer::destroy()
 	pthread_key_delete(mem_key);
 }
 
-void local_mem_buffer::clear_bufs()
+void local_mem_buffer::clear_bufs(buff_type type)
 {
 	mem_lock.lock();
 	for (auto it = mem_set.begin(); it != mem_set.end(); it++)
-		(*it)->clear_local_bufs();
+		(*it)->clear_local_bufs(type);
 	mem_lock.unlock();
 }
 

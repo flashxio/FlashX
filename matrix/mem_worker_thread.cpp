@@ -92,7 +92,12 @@ void mem_thread_pool::wait4complete()
 
 	// After all workers complete, we should try to clear the memory buffers
 	// in each worker thread to reduce memory consumption.
-	detail::local_mem_buffer::clear_bufs();
+	// We might want to keep the memory buffer for I/O on dense matrices.
+	if (matrix_conf.is_keep_mem_buf())
+		detail::local_mem_buffer::clear_bufs(
+				detail::local_mem_buffer::MAT_PORTION);
+	else
+		detail::local_mem_buffer::clear_bufs();
 }
 
 size_t mem_thread_pool::get_num_pending() const

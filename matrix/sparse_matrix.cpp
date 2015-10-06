@@ -323,6 +323,9 @@ void block_spmm_task::notify_complete()
 void sparse_matrix::compute(task_creator::ptr creator,
 		size_t num_block_rows) const
 {
+	// We might have kept the memory buffers to avoid the overhead of memory
+	// allocation. We should delete them all before running SpMM.
+	detail::local_mem_buffer::clear_bufs();
 	int num_workers = matrix_conf.get_num_SpM_threads();
 	int num_nodes = safs::params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
@@ -345,6 +348,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
+	detail::local_mem_buffer::clear_bufs();
 }
 
 ///////////// The code for sparse matrix of the FlashGraph format //////////////
