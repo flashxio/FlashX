@@ -355,7 +355,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		// We want the dense matrices in the basis materialized.
 		// This can reduce significant computation.
 		if (num_blocks == 1) {
-			if (!in_mem && cached_mat && cached_mat->is_virtual()) {
+			if (!in_mem && cached_mat) {
 				BOOST_LOG_TRIVIAL(info) << boost::format(
 						"materialize the old cached mat %1% to disks")
 					% cached_mat->get_data().get_name();
@@ -448,8 +448,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		num_col_reads_concept += in->get_num_cols();
 		// If we run in the EM mode, we should materialize the cached matrix
 		// and write out the most recently cached matrix.
-		if (!in_mem && in->is_virtual() && ((cached_mat == in)
-					|| (cached_mat
+		if (!in_mem && ((cached_mat == in) || (cached_mat
 						&& cached_mat->get_raw_store() == in->get_raw_store()))) {
 			BOOST_LOG_TRIVIAL(info) << boost::format(
 					"spmm: materialize in mat %1% to disks")
@@ -1023,7 +1022,9 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 			vecs->mats[i] = block->get_cols(idxs);
 		}
 	}
-	else if (bytes.size() > 2) {
+	// If all matrices are stored in memory or we cache the most recent matrix,
+	// we materialize the result immediately.
+	else if (in_mem || cache_recent) {
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"There are %1% underlying matrices") % bytes.size();
 		BOOST_LOG_TRIVIAL(info) << std::string("materialize ")
