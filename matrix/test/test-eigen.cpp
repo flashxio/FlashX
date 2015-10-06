@@ -299,12 +299,14 @@ int main (int argc, char *argv[])
 	// We only save eigenvectors if they are stored in memory.
 	if (!output_file.empty()) {
 		printf("Save eigenvectors to %s\n", output_file.c_str());
-		if (res.vecs->is_in_mem())
-			res.vecs = res.vecs->conv_store(false, -1);
+		// We save it as a row-major matrix.
+		dense_matrix::ptr ev = res.vecs->conv2(matrix_layout_t::L_ROW);
+		if (ev->is_in_mem())
+			ev = ev->conv_store(false, -1);
 		else
-			res.vecs->materialize_self();
+			ev->materialize_self();
 		const detail::EM_matrix_store &store
-			= dynamic_cast<const detail::EM_matrix_store &>(res.vecs->get_data());
+			= dynamic_cast<const detail::EM_matrix_store &>(ev->get_data());
 		bool ret = store.set_persistent(output_file);
 		assert(ret);
 	}
