@@ -381,10 +381,11 @@ void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
   * \param fg The FlashGraph graph object for which you want to compute.
   * \param k The number of clusters.
   * \param init Initialization type [random, forgy, kmeanspp].
-  * \param MAX_ITERS The max number of iterations to compute for.
+  * \param max_iters The max number of iterations to compute for.
   * \param tolerance The min fraction of changes from 1 iter to next required to converge.
+  * \param comp_thresh Used to prune computation if specified. TODO: Explain.
   */
 FG_vector<unsigned>::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-                    const unsigned MAX_ITERS, const double tolerance);
+                    const unsigned max_iters, const double tolerance, const double comp_thresh=1);
 }
 #endif
