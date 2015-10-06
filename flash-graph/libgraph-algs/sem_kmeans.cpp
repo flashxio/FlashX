@@ -21,6 +21,7 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include <math.h>
 
 #include <vector>
 #include <algorithm>
@@ -31,7 +32,8 @@
 #include "FGlib.h"
 #include "save_result.h"
 
-#define KM_TEST 1
+#define PRUNE 1
+#define KM_TEST 0
 #define VERBOSE 0
 #define INVALID_CLUST_ID -1
 
@@ -49,6 +51,13 @@ namespace {
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
+    static unsigned g_iter;
+    static bool g_even_iter;
+    typedef std::pair<double, double> distpair;
+#if PRUNE
+    static double g_COMP_THRESH;
+    static std::vector<double> g_comp_thresh_v; // To prune computation
+#endif
 
     enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
 
@@ -147,7 +156,6 @@ namespace {
                 this->div(this->num_members);
             }
 
-            // TODO: Make args const
             void add_member(edge_seq_iterator& id_it, data_seq_iterator& count_it) {
                 while(id_it.has_next()) {
                     vertex_id_t nid = id_it.next();
@@ -206,10 +214,13 @@ namespace {
     class kmeans_vertex: public compute_vertex
     {
         unsigned cluster_id;
+        double dist;
 
         public:
         kmeans_vertex(vertex_id_t id):
-            compute_vertex(id) { }
+            compute_vertex(id) {
+                dist = std::numeric_limits<double>::max(); // Start @ max
+            }
 
         unsigned get_result() const {
             return cluster_id;
@@ -220,6 +231,14 @@ namespace {
         }
 
         void run(vertex_program &prog) {
+#if PRUNE
+            if (g_even_iter) {
+                if (this->dist < g_comp_thresh_v[cluster_id]) {
+                    printf("No work for v:%u\n", prog.get_vertex_id(*this));
+                    return; // No work for you!
+                }
+            }
+#endif
             vertex_id_t id = prog.get_vertex_id(*this);
             request_vertices(&id, 1);
         }
@@ -265,6 +284,7 @@ namespace {
     {
         std::vector<cluster::ptr> pt_clusters;
         unsigned pt_changed;
+        std::vector<distpair> bounds; // std::pair<(double) min,(double) max> - 1 per cluster
 
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
@@ -274,6 +294,8 @@ namespace {
             for (unsigned thd = 0; thd < K; thd++) {
                 pt_clusters.push_back(cluster::create(NUM_COLS));
                 pt_changed = 0;
+                bounds.push_back(distpair(std::numeric_limits<double>::max(), 
+                            std::numeric_limits<double>::min()));
             }
         }
 
@@ -285,8 +307,15 @@ namespace {
             return pt_clusters;
         }
 
-        cluster::ptr get_pt_cluster(const unsigned id) {
-            return pt_clusters[id];
+        void add_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iterator& count_it) {
+            pt_clusters[id]->add_member(id_it, count_it);
+        }
+
+        void update_bounds(const unsigned cluster_id, const double val) {
+            if (val < bounds[cluster_id].first)
+                bounds[cluster_id].first = val;
+            if (val > bounds[cluster_id].second)
+                bounds[cluster_id].second = val;
         }
 
         const unsigned get_pt_changed() {
@@ -295,6 +324,10 @@ namespace {
 
        void pt_changed_pp() {
            pt_changed++;
+       }
+
+       std::vector<distpair>& get_bounds() {
+           return bounds;
        }
     };
 
@@ -352,7 +385,7 @@ namespace {
                     edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
                     data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
                         get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
-                    vprog.get_pt_cluster(cluster_id)->add_member(id_it, count_it);
+                    vprog.add_member(cluster_id, id_it, count_it);
                 }
                 break;
             case FORGY:
@@ -443,7 +476,8 @@ namespace {
         edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
         data_seq_iterator count_it =
             ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
-        vprog.get_pt_cluster(cluster_id)->add_member(id_it, count_it);
+        vprog.add_member(cluster_id, id_it, count_it);
+        vprog.update_bounds(cluster_id, best);
     }
 
     static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
@@ -458,23 +492,52 @@ namespace {
         }
     }
 
-    static void update_clusters(graph_engine::ptr mat) {
+    static void update_clusters(graph_engine::ptr mat, std::vector<unsigned>& num_members_v) {
         clear_clusters();
         std::vector<vertex_program::ptr> kms_clust_progs;
         mat->get_vertex_programs(kms_clust_progs);
+#if PRUNE
+        std::vector<distpair> bounds;
+        std::vector<distpair> tmp_g_bounds;
+#endif
+
         for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
             kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
             std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
-
+#if PRUNE
+            if (!g_even_iter) {
+                bounds = kms_prog->get_bounds();
+                if (thd == 0) { tmp_g_bounds = bounds; } // Avoid loc to init tmp_g_bounds
+            }
+#endif
             g_num_changed += kms_prog->get_pt_changed();
             /* Merge the per-thread clusters */
             for (unsigned cl = 0; cl < K; cl++) {
                 *(g_clusters[cl]) += *(pt_clusters[cl]);
+#if PRUNE
+                if (!g_even_iter) {
+                    if (bounds[cl].first < tmp_g_bounds[cl].first) {
+                        tmp_g_bounds[cl].first = bounds[cl].first;
+                    }
+                    if (bounds[cl].second > tmp_g_bounds[cl].second) {
+                        tmp_g_bounds[cl].second = bounds[cl].second;
+                    }
+                }
+#endif
                 if (thd == kms_clust_progs.size()-1) {
                     g_clusters[cl]->finalize();
+                    num_members_v[cl] = g_clusters[cl]->get_num_members();
                 }
             }
         }
+#if PRUNE
+        if (!g_even_iter) {
+            for (unsigned cl = 0; cl < K; cl++) {
+                g_comp_thresh_v[cl] = (fabs(tmp_g_bounds[cl].first - 
+                            tmp_g_bounds[cl].second) * g_COMP_THRESH) + tmp_g_bounds[cl].first;
+            }
+        }
+#endif
     }
 
     /* During kmeans++ we select a new cluster each iteration
@@ -512,7 +575,7 @@ namespace {
 namespace fg
 {
     FG_vector<unsigned>::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned MAX_ITERS, const double tolerance) {
+            const unsigned max_iters, const double tolerance, const double comp_thresh) {
 #ifdef PROFILER
         ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
 #endif
@@ -553,6 +616,12 @@ namespace fg
         for (size_t cl = 0; cl < k; cl++)
             g_clusters.push_back(cluster::create(NUM_COLS));
 
+#if PRUNE
+        g_comp_thresh_v.assign(K, 0); // Init g_COMP_THRESH for each cluster to 0
+        g_COMP_THRESH = comp_thresh;
+#endif
+        std::vector<unsigned> num_members_v;
+        num_members_v.resize(K);
         /*** End VarInit ***/
         g_stage = INIT;
 
@@ -563,7 +632,7 @@ namespace fg
                     vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
             mat->wait4complete();
 
-            update_clusters(mat);
+            update_clusters(mat, num_members_v);
         }
         if (init == "forgy") {
             BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
@@ -626,22 +695,22 @@ namespace fg
 
         bool converged = false;
 
-        std::string str_iters = MAX_ITERS == std::numeric_limits<unsigned>::max() ?
+        std::string str_iters = max_iters == std::numeric_limits<unsigned>::max() ?
             "until convergence ...":
-            std::to_string(MAX_ITERS) + " iterations ...";
+            std::to_string(max_iters) + " iterations ...";
         BOOST_LOG_TRIVIAL(info) << "Computing " << str_iters;
-        unsigned iter = 1;
-        while (iter < MAX_ITERS) {
-            BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
+        g_iter = 1;
+
+        while (g_iter < max_iters) {
+            g_even_iter = true ? (g_iter % 2 == 0) : false;
+            BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
                 " . Computing cluster assignments ...";
 
             mat->start_all(vertex_initializer::ptr(),
                     vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
             mat->wait4complete();
-#if KM_TEST
             BOOST_LOG_TRIVIAL(info) << "M-step Updating cluster means ...";
-#endif
-            update_clusters(mat);
+            update_clusters(mat, num_members_v);
 
 #if KM_TEST
             BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
@@ -657,7 +726,7 @@ namespace fg
             } else {
                 g_num_changed = 0;
             }
-            iter++;
+            g_iter++;
         }
 
         gettimeofday(&end, NULL);
@@ -671,13 +740,14 @@ namespace fg
 
         if (converged) {
             BOOST_LOG_TRIVIAL(info) <<
-                "K-means converged in " << iter << " iterations";
+                "K-means converged in " << g_iter << " iterations";
         } else {
             BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
-                << iter << " iterations";
+                << g_iter << " iterations";
         }
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
+        print_vector<unsigned>(num_members_v);
         return get_membership(mat);
     }
 }
