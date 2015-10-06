@@ -36,7 +36,7 @@ public:
 		this->mat = mat;
 	}
 
-	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
 		assert(x->get_type() == get_scalar_type<double>());
 		const detail::mem_matrix_store &mem_in
 			= static_cast<const detail::mem_matrix_store &>(x->get_data());
@@ -100,7 +100,7 @@ public:
 		deg_vec1_2 = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
 	}
 
-	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
 		assert(x->get_type() == get_scalar_type<double>());
 		dense_matrix::ptr tmp = x->scale_rows(deg_vec1_2);
 		x = NULL;
@@ -132,7 +132,7 @@ public:
 		this->mat = mat;
 	}
 
-	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
 		assert(x->get_type() == get_scalar_type<double>());
 		const detail::mem_matrix_store &mem_in
 			= static_cast<const detail::mem_matrix_store &>(x->get_data());
@@ -140,11 +140,12 @@ public:
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_ROW, mem_in.get_type(), mem_in.get_num_nodes());
 		mat->multiply<double>(mem_in, *tmp);
+		x = NULL;
 		mat->transpose();
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-				mat->get_num_rows(), mem_in.get_num_cols(),
-				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
+				mat->get_num_rows(), tmp->get_num_cols(),
+				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
 		mat->multiply<double>(*tmp, *res);
 		mat->transpose();
 		return dense_matrix::create(res);
