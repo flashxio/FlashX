@@ -174,7 +174,7 @@ namespace {
             for (unsigned thd = 0; thd < K; thd++) {
                 pt_clusters.push_back(cluster::create(NUM_COLS));
                 pt_changed = 0;
-                bounds.push_back(distpair(std::numeric_limits<double>::max(), 
+                bounds.push_back(distpair(std::numeric_limits<double>::max(),
                             std::numeric_limits<double>::min()));
             }
         }
@@ -414,7 +414,7 @@ namespace {
 #if PRUNE
         if (!g_even_iter) {
             for (unsigned cl = 0; cl < K; cl++) {
-                g_comp_thresh_v[cl] = (fabs(tmp_g_bounds[cl].first - 
+                g_comp_thresh_v[cl] = (fabs(tmp_g_bounds[cl].first -
                             tmp_g_bounds[cl].second) * g_COMP_THRESH) + tmp_g_bounds[cl].first;
             }
         }

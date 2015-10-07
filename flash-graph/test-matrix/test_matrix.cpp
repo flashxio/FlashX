@@ -44,7 +44,7 @@ typedef double ev_float_t;
 typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
 
 template <typename T>
-void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs) 
+void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs)
 {
 	unsigned vec_cnt = 0;
 	BOOST_FOREACH(eigen_pair_t &v, eigen_pairs) {
@@ -61,15 +61,15 @@ void dummy_eigs(unsigned nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pa
 	std::cout << "Creating " << nev << " Fake eigs & vecs of len: " << g_size << std::endl;
 	for (unsigned i = 0; i < nev; i++) {
 		double eigval = (double) random() / (double)RAND_MAX;
-		FG_vector<double>::ptr eigvect = 
+		FG_vector<double>::ptr eigvect =
 			FG_vector<double>::create(g_size);
 
 		for (vertex_id_t ii = 0; ii < g_size; ii++) {
-			eigvect->set(ii, (double) random() / (double)RAND_MAX); 
-		} 
+			eigvect->set(ii, (double) random() / (double)RAND_MAX);
+		}
 
 		eigen_pair_t ep(eigval, eigvect);
-		eigen_pairs.push_back(ep); 
+		eigen_pairs.push_back(ep);
 	}
 }
 
@@ -115,7 +115,8 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	unsigned k = 1;
 	std::string outfile = "";
 	std::string infile = "";
-	std::string lay = "";	
+	std::string lay = "";
+    std::string dist_type = "";
 
 	unsigned max_iters=std::numeric_limits<unsigned>::max();
 	std::string which = "LA";
@@ -125,7 +126,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	int num_opts = 0;
 	double tolerance = -1;
 
-	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:l:r:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:k:e:p:w:i:t:o:T:f:m:l:r:d:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -140,16 +141,16 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 				tolerance = atof(optarg);
 				num_opts++;
 				break;
-			case 'e': 
+			case 'e':
 				nev = atol(optarg);
 				ncv = 2*nev; // Chosen as a defualt
 				num_opts++;
 				break;
-			case 'r': 
+			case 'r':
 				nrow = atol(optarg);
 				num_opts++;
 				break;
-			case 'p': 
+			case 'p':
 				ncv = atoi(optarg);
 				num_opts++;
 				break;
@@ -178,7 +179,11 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 				num_opts++;
 				break;
 			case 'm':
-				lay = optarg; 
+				lay = optarg;
+				num_opts++;
+				break;
+			case 'd':
+				dist_type = std::string(optarg);
 				num_opts++;
 				break;
 			default:
@@ -228,8 +233,8 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	BOOST_LOG_TRIVIAL(info) << "nrow = " << nrow;
 	BOOST_LOG_TRIVIAL(info) << "ncol = " << nev;
 
-	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
-			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance);
+	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns,
+			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance, dist_type);
 
 
 	gettimeofday(&end, NULL);
@@ -278,6 +283,7 @@ void print_usage()
     fprintf(stderr, "-m matrix_layout: i.e., row or col\n");
     fprintf(stderr, "-l tolerance for convergence (1E-6)\n");
     fprintf(stderr, "-r Number of row in matrix\n");
+    fprintf(stderr, "-d Distance matric [eucl,cos]\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
