@@ -25,6 +25,7 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 #include "matrix/FG_sparse_matrix.h"
+#include "libgraph-algs/sem_kmeans.h"
 
 using namespace fg;
 
