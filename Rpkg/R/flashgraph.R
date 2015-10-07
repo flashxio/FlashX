@@ -921,3 +921,44 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 	stopifnot(ret)
 	fm.init.basic.op()
 }
+
+#' Perform semi-extenal memory k-means clustering on a data matrix in FG format.
+#'
+#' Assign each row of a matrix to a cluster denoted by a numeric. The clusters
+#' are based on the distance metric of each row to one another. The assigned
+#' cluster will have the smallest distance from the cluster center mean.
+#'
+#' @param mat A numeric matrix of data in FG format.
+#' @param k The number of clusters.
+#' @param max.iters The maximum number of iterations allowed.
+#' @param init The form of initialization to use when the algorithm begins.
+#'              The default is "forgy". For a desciption of each see:
+#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
+#' @param tol The tolerance for convergence. Between 0 and 1 and is the minimum fraction
+#'				of cluster changes necessary to cause non-convergence. Default is -1 which
+#'				represents no cluster changes. 
+#' @param comp.thresh (0-1) Anything under this fraction from the min distance will not
+#'              not be computed every other iteration. This prunes computation.
+#'
+#' @return A named list with the following members:
+#'         iters: The number of (outer) iterations performed.
+#'         centers: A matrix of cluster centers.
+#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+#'         sizes: The number of points in each cluster.
+#'
+#' @examples
+#' num.clusts <- 5
+#' mat <- fg.load.graph("mat-adj", "mat-index") # TODO: how to load
+#' kms <- fg.kmeans(mat, num.clusts)
+#'
+#' @name fg.sem.kmeans
+#' @author Disa Mhembere <disa@@jhu.edu>
+fg.sem.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp"),
+                          tol=-1, comp.thresh=0)
+{
+    stopifnot(mat != NULL)
+    stopifnot(class(mat) == "fg")
+    stopifnot(comp.thresh >= 0 && comp.thresh <= 0)
+    .Call("R_FG_sem_kmeans", fg, as.integer(k), as.integer(max.iters),
+		  init, as.double(tol), as.double(comp.thresh), PACKAGE="FlashGraphR")
+}
