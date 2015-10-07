@@ -174,6 +174,22 @@ namespace fg
                     const std::vector<unsigned>& size, const unsigned iters) {
                 return ptr(new sem_kmeans_ret(cluster_assignments, centers, size, iters));
             }
+
+            const FG_vector<unsigned>::ptr get_cluster_assignments() const {
+                return this->cluster_assignments;
+            }
+
+            const unsigned get_iters() const {
+                return this->iters;
+            }
+
+            const std::vector<unsigned>& get_size() const {
+                return this->size;
+            }
+
+            const std::vector<std::vector<double>>& get_centers() const {
+                return this->centers;
+            }
     };
 
     /**
