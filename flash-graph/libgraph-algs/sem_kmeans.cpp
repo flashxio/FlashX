@@ -40,8 +40,8 @@
 using namespace fg;
 
 namespace {
-
     typedef safs::page_byte_array::seq_const_iterator<edge_count> data_seq_iterator;
+    typedef std::pair<double, double> distpair;
     static unsigned NUM_COLS;
     static unsigned NUM_ROWS;
     static unsigned K;
@@ -53,7 +53,6 @@ namespace {
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
     static unsigned g_iter;
     static bool g_even_iter;
-    typedef std::pair<double, double> distpair;
 #if PRUNE
     static double g_COMP_THRESH;
     static std::vector<double> g_comp_thresh_v; // To prune computation
@@ -74,8 +73,6 @@ namespace {
     enum init_type_t { RANDOM, FORGY, PLUSPLUS } g_init; // May have to use
     enum kmspp_stage_t { ADDMEAN, DIST } g_kmspp_stage; // Either adding a mean / computing dist
     enum kms_stage_t { INIT, ESTEP } g_stage; // What phase of the algo we're in
-
-    typedef std::pair<edge_seq_iterator, data_seq_iterator> seq_iter;
 
     class cluster
     {
@@ -234,7 +231,10 @@ namespace {
 #if PRUNE
             if (g_even_iter) {
                 if (this->dist < g_comp_thresh_v[cluster_id]) {
-                    printf("No work for v:%u\n", prog.get_vertex_id(*this));
+#if VERBOSE
+                    printf("No work for v:%u with dist=%.3f < comp_thresh=%.3f\n",
+                            prog.get_vertex_id(*this), this->dist,  g_comp_thresh_v[cluster_id]);
+#endif
                     return; // No work for you!
                 }
             }
@@ -478,6 +478,7 @@ namespace {
             ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
         vprog.add_member(cluster_id, id_it, count_it);
         vprog.update_bounds(cluster_id, best);
+        this->dist = best;
     }
 
     static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
@@ -570,11 +571,45 @@ namespace {
         }
         exit(EXIT_FAILURE);
     }
+
+    // Return all the cluster means only
+    static void get_means(std::vector<std::vector<double>>& means) {
+        for (std::vector<cluster::ptr>::iterator it = g_clusters.begin();
+                it != g_clusters.end(); ++it) {
+           means.push_back((*it)->get_mean());
+        }
+    }
 }
 
 namespace fg
 {
-    FG_vector<unsigned>::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+    // A class used a return object for R bindings
+    class sem_kmeans_ret
+    {
+        private:
+            FG_vector<unsigned>::ptr cluster_assignments;
+            std::vector<std::vector<double>> centers;
+            std::vector<unsigned> size;
+            unsigned iters;
+
+            sem_kmeans_ret(FG_vector<unsigned>::ptr cluster_assignments,
+                    std::vector<std::vector<double>> centers, std::vector<unsigned>& size, unsigned iters) {
+                this->cluster_assignments = cluster_assignments;
+                this->centers = centers;
+                this->size = size;
+                this->iters = iters;
+            }
+
+        public:
+            typedef typename std::shared_ptr<sem_kmeans_ret> ptr;
+
+            static ptr create(FG_vector<unsigned>::ptr cluster_assignments,
+                    std::vector<std::vector<double>> centers, std::vector<unsigned>& size, unsigned iters) {
+                return ptr(new sem_kmeans_ret(cluster_assignments, centers, size, iters));
+            }
+    };
+
+    sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const double comp_thresh) {
 #ifdef PROFILER
         ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
@@ -584,7 +619,6 @@ namespace fg
         graph_engine::ptr mat = fg->create_engine(index);
 
         K = k;
-        std::vector<unsigned> cluster_assignments; // Which cluster a sample is in
         NUM_ROWS = mat->get_max_vertex_id() + 1;
         NUM_COLS = NUM_ROWS;
 
@@ -612,7 +646,7 @@ namespace fg
 
         gettimeofday(&start , NULL);
         /*** Begin VarInit of data structures ***/
-        cluster_assignments.assign(NUM_ROWS, -1);
+        FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
         for (size_t cl = 0; cl < k; cl++)
             g_clusters.push_back(cluster::create(NUM_COLS));
 
@@ -748,6 +782,11 @@ namespace fg
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
         print_vector<unsigned>(num_members_v);
-        return get_membership(mat);
+
+        std::vector<std::vector<double>> means;
+        get_means(means);
+        cluster_assignments = get_membership(mat);
+
+        return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
     }
 }
