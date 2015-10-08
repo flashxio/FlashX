@@ -154,7 +154,8 @@ bool safs_file::create_file(size_t file_size, int block_size,
 			header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
-				perror("fopen");
+				fprintf(stderr, "fopen %s: %s\n", header_file.c_str(),
+						strerror(errno));
 				return false;
 			}
 			size_t num_writes = fwrite(&header, sizeof(header), 1, f);
@@ -209,7 +210,7 @@ safs_header safs_file::get_header() const
 	}
 	FILE *f = fopen(header_file.c_str(), "r");
 	if (f == NULL) {
-		perror("fopen");
+		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
 		return safs_header();
 	}
 	safs_header header;
@@ -231,7 +232,7 @@ bool safs_file::set_user_metadata(const std::vector<char> &data)
 
 	FILE *f = fopen(header_file.c_str(), "r+");
 	if (f == NULL) {
-		perror("fopen");
+		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
 		return false;
 	}
 	int ret = fseek(f, safs_header::get_header_size(), SEEK_SET);
@@ -261,7 +262,7 @@ std::vector<char> safs_file::get_user_metadata() const
 
 	FILE *f = fopen(header_file.c_str(), "r");
 	if (f == NULL) {
-		perror("fopen");
+		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
 		return std::vector<char>();
 	}
 	int ret = fseek(f, safs_header::get_header_size(), SEEK_SET);
