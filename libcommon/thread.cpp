@@ -65,6 +65,19 @@ NUMA_node::NUMA_node(hwloc_obj_t node)
 	lus.insert(lu_vec.begin(), lu_vec.end());
 }
 
+NUMA_node::NUMA_node(hwloc_topology_t topology)
+{
+	int num_cores = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_CORE);
+	assert(num_cores > 0);
+	for (int i = 0; i < num_cores; i++) {
+		hwloc_obj_t core = hwloc_get_obj_by_type(topology,
+				HWLOC_OBJ_CORE, i);
+		cores.emplace_back(core);
+	}
+	std::vector<int> lu_vec = get_logical_units();
+	lus.insert(lu_vec.begin(), lu_vec.end());
+}
+
 std::vector<int> NUMA_node::get_logical_units() const
 {
 	std::vector<int> ret;
@@ -81,11 +94,15 @@ CPU_hierarchy::CPU_hierarchy()
 	hwloc_topology_init(&topology);
 	hwloc_topology_load(topology);
 	int num_nodes = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_NODE);
-	for (int i = 0; i < num_nodes; i++) {
-		hwloc_obj_t node = hwloc_get_obj_by_type(topology,
-				HWLOC_OBJ_NODE, i);
-		nodes.emplace_back(node);
+	if (num_nodes > 0) {
+		for (int i = 0; i < num_nodes; i++) {
+			hwloc_obj_t node = hwloc_get_obj_by_type(topology,
+					HWLOC_OBJ_NODE, i);
+			nodes.emplace_back(node);
+		}
 	}
+	else
+		nodes.emplace_back(topology);
 }
 
 std::vector<int> CPU_hierarchy::lus2node(const std::vector<int> &lus) const
