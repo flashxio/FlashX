@@ -201,90 +201,90 @@ int main(int argc, char *argv[])
 	printf("sort buf size: %ld, groupby buf size: %ld\n",
 			matrix_conf.get_sort_buf_size(), matrix_conf.get_groupby_buf_size());
 
-	struct timeval start, end;
-	edge_parser parser;
-	/*
-	 * We only need to indicate here whether we use external memory or not.
-	 * If the columns in the data frame are in external memory, it'll always
-	 * use external data containers for the remaining of processing.
-	 */
-	printf("start to read and parse edge list\n");
-	gettimeofday(&start, NULL);
-	data_frame::ptr df = read_lines(files, parser, in_mem);
-	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to parse the edge lists\n",
-			time_diff(start, end));
-	printf("There are %ld edges\n", df->get_num_entries());
-
-	fg::vertex_id_t max_vid = 0;
-	gettimeofday(&start, NULL);
-	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		vector::ptr vec = vector::create(df->get_vec(i));
-		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
-	}
-	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to get the maximal vertex ID\n",
-			time_diff(start, end));
-	printf("max id: %d\n", max_vid);
-	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
-			0, max_vid, 1);
-	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
-			max_vid + 1, fg::INVALID_VERTEX_ID);
-	assert(seq_vec->get_length() == rep_vec->get_length());
-
-	fg::FG_graph::ptr graph;
-	if (directed) {
+	{
+		struct timeval start, end;
+		edge_parser parser;
+		/*
+		 * We only need to indicate here whether we use external memory or not.
+		 * If the columns in the data frame are in external memory, it'll always
+		 * use external data containers for the remaining of processing.
+		 */
+		printf("start to read and parse edge list\n");
 		gettimeofday(&start, NULL);
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		df->append(new_df);
-
-		// I artificially add an invalid in-edge for each vertex.
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(1), seq_vec);
-		new_df->add_vec(df->get_vec_name(0), rep_vec);
-		df->append(new_df);
+		data_frame::ptr df = read_lines(files, parser, in_mem);
 		gettimeofday(&end, NULL);
-		printf("It takes %.3f seconds to prepare for constructing a graph\n",
+		printf("It takes %.3f seconds to parse the edge lists\n",
 				time_diff(start, end));
+		printf("There are %ld edges\n", df->get_num_entries());
 
-		printf("start to construct FlashGraph graph\n");
-		graph = create_fg_graph(graph_name, df, true);
-	}
-	else {
+		fg::vertex_id_t max_vid = 0;
 		gettimeofday(&start, NULL);
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		df->append(new_df);
-
-		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
-		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
-		vec0->append(df->get_vec_ref(1));
-		vec1->append(df->get_vec_ref(0));
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), vec0);
-		new_df->add_vec(df->get_vec_name(1), vec1);
-		df = new_df;
+		for (size_t i = 0; i < df->get_num_vecs(); i++) {
+			vector::ptr vec = vector::create(df->get_vec(i));
+			max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
+		}
 		gettimeofday(&end, NULL);
-		printf("It takes %.3f seconds to prepare for constructing a graph\n",
+		printf("It takes %.3f seconds to get the maximal vertex ID\n",
 				time_diff(start, end));
+		printf("max id: %d\n", max_vid);
+		detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
+				0, max_vid, 1);
+		detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
+				max_vid + 1, fg::INVALID_VERTEX_ID);
+		assert(seq_vec->get_length() == rep_vec->get_length());
 
-		printf("start to construct FlashGraph graph\n");
-		graph = create_fg_graph(graph_name, df, false);
+		fg::FG_graph::ptr graph;
+		if (directed) {
+			gettimeofday(&start, NULL);
+			// I artificially add an invalid out-edge for each vertex, so it's
+			// guaranteed that each vertex exists in the adjacency lists.
+			data_frame::ptr new_df = data_frame::create();
+			new_df->add_vec(df->get_vec_name(0), seq_vec);
+			new_df->add_vec(df->get_vec_name(1), rep_vec);
+			df->append(new_df);
+
+			// I artificially add an invalid in-edge for each vertex.
+			new_df = data_frame::create();
+			new_df->add_vec(df->get_vec_name(1), seq_vec);
+			new_df->add_vec(df->get_vec_name(0), rep_vec);
+			df->append(new_df);
+			gettimeofday(&end, NULL);
+			printf("It takes %.3f seconds to prepare for constructing a graph\n",
+					time_diff(start, end));
+
+			printf("start to construct FlashGraph graph\n");
+			graph = create_fg_graph(graph_name, df, true);
+		}
+		else {
+			gettimeofday(&start, NULL);
+			// I artificially add an invalid out-edge for each vertex, so it's
+			// guaranteed that each vertex exists in the adjacency lists.
+			data_frame::ptr new_df = data_frame::create();
+			new_df->add_vec(df->get_vec_name(0), seq_vec);
+			new_df->add_vec(df->get_vec_name(1), rep_vec);
+			df->append(new_df);
+
+			detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
+			detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
+			vec0->append(df->get_vec_ref(1));
+			vec1->append(df->get_vec_ref(0));
+			new_df = data_frame::create();
+			new_df->add_vec(df->get_vec_name(0), vec0);
+			new_df->add_vec(df->get_vec_name(1), vec1);
+			df = new_df;
+			gettimeofday(&end, NULL);
+			printf("It takes %.3f seconds to prepare for constructing a graph\n",
+					time_diff(start, end));
+
+			printf("start to construct FlashGraph graph\n");
+			graph = create_fg_graph(graph_name, df, false);
+		}
+
+		if (graph->get_index_data())
+			graph->get_index_data()->dump(index_file);
+		if (graph->get_graph_data())
+			graph->get_graph_data()->dump(adj_file);
 	}
-
-	if (graph->get_index_data())
-		graph->get_index_data()->dump(index_file);
-	if (graph->get_graph_data())
-		graph->get_graph_data()->dump(adj_file);
-
-	df = NULL;
 	destroy_flash_matrix();
 
 	return 0;
