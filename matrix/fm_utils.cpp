@@ -175,7 +175,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
-		num_in_edges->set(i,
+		num_in_edges->set<fg::vsize_t>(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(
 					in_adjs->get_length(i), 0));
 	}
@@ -210,7 +210,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
-		num_out_edges->set(i,
+		num_out_edges->set<fg::vsize_t>(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(
 					out_adjs->get_length(i), 0));
 	}
@@ -283,7 +283,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 	for (size_t i = 0; i < num_vertices; i++) {
 		size_t local_num_edges = fg::ext_mem_undirected_vertex::vsize2num_edges(
 					adjs->get_length(i), 0);
-		num_out_edges->set(i, local_num_edges);
+		num_out_edges->set<fg::vsize_t>(i, local_num_edges);
 		num_edges += local_num_edges;
 	}
 	assert(num_edges % 2 == 0);
