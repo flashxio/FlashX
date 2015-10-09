@@ -959,6 +959,6 @@ fg.sem.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeans
     stopifnot(mat != NULL)
     stopifnot(class(mat) == "fg")
     stopifnot(comp.thresh >= 0 && comp.thresh <= 0)
-    .Call("R_FG_sem_kmeans", fg, as.integer(k), as.integer(max.iters),
-		  init, as.double(tol), as.double(comp.thresh), PACKAGE="FlashGraphR")
+    .Call("R_FG_sem_kmeans", mat, as.integer(k), init, as.integer(max.iters),
+		  as.double(tol), as.double(comp.thresh), PACKAGE="FlashGraphR")
 }
