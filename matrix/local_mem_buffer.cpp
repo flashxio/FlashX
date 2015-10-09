@@ -33,7 +33,10 @@ local_mem_buffer::~local_mem_buffer()
 	size_t num_bufs = 0;
 	for (auto it = bufs.begin(); it != bufs.end(); it++)
 		num_bufs += it->second.size();
-	assert(num_bufs + num_frees == num_allocs);
+	assert(num_allocs >= num_bufs + num_frees);
+	size_t diff = num_allocs - num_bufs - num_frees;
+	if (diff != 0)
+		printf("%ld bufs are missing in a local mem buffer\n", diff);
 }
 
 namespace
