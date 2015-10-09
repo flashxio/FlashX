@@ -129,6 +129,7 @@ void print_usage()
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
 	fprintf(stderr, "el2al [options] conf_file edge_file graph_name\n");
 	fprintf(stderr, "-u: undirected graph\n");
+	fprintf(stderr, "-U: unqiue edges\n");
 	fprintf(stderr, "-e: use external memory\n");
 	fprintf(stderr, "-s size: sort buffer size\n");
 	fprintf(stderr, "-g size: groupby buffer size\n");
@@ -138,15 +139,19 @@ int main(int argc, char *argv[])
 {
 	bool directed = true;
 	bool in_mem = true;
+	bool uniq_edge = false;
 	size_t sort_buf_size = 1UL * 1024 * 1024 * 1024;
 	size_t groupby_buf_size = 1UL * 1024 * 1024 * 1024;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "ues:g:")) != -1) {
+	while ((opt = getopt(argc, argv, "uUes:g:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
 				directed = false;
+				break;
+			case 'U':
+				uniq_edge = true;
 				break;
 			case 'e':
 				in_mem = false;
@@ -200,6 +205,7 @@ int main(int argc, char *argv[])
 	matrix_conf.set_groupby_buf_size(groupby_buf_size);
 	printf("sort buf size: %ld, groupby buf size: %ld\n",
 			matrix_conf.get_sort_buf_size(), matrix_conf.get_groupby_buf_size());
+	set_deduplicate(uniq_edge);
 
 	{
 		struct timeval start, end;

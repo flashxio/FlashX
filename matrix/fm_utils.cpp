@@ -31,6 +31,13 @@
 namespace fm
 {
 
+bool deduplicate = false;
+
+void set_deduplicate(bool v)
+{
+	deduplicate = v;
+}
+
 /*
  * This applies to a vector of values corresponding to the same key,
  * and generates an adjacency list.
@@ -87,6 +94,11 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 	}
 	assert(edge_idx == num_edges);
 	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
+	if (deduplicate) {
+		fg::vertex_id_t *end = std::unique(edge_buf.get(),
+				edge_buf.get() + num_edges);
+		num_edges = end - edge_buf.get();
+	}
 	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 			edge_data_size);
 	out.resize(size);
