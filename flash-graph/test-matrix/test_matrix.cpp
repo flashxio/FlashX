@@ -116,7 +116,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	std::string outfile = "";
 	std::string infile = "";
 	std::string lay = "";
-    std::string dist_type = "";
+    std::string dist_type = "eucl";
 
 	unsigned max_iters=std::numeric_limits<unsigned>::max();
 	std::string which = "LA";
@@ -233,9 +233,13 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 	BOOST_LOG_TRIVIAL(info) << "nrow = " << nrow;
 	BOOST_LOG_TRIVIAL(info) << "ncol = " << nev;
 
+#if 1
 	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns,
 			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance, dist_type);
-
+#else
+	unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns,
+			p_clust_asgn_cnt, nrow, nev, k, max_iters, num_threads, init, tolerance);
+#endif
 
 	gettimeofday(&end, NULL);
 
