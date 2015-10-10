@@ -281,6 +281,9 @@ class NUMA_node
 	std::vector<CPU_core> cores;
 	std::set<int> lus;
 public:
+	/* This constructor works for the machine without NUMA nodes. */
+	NUMA_node(hwloc_topology_t topology);
+	/* This constructor works for the machine with NUMA nodes. */
 	NUMA_node(hwloc_obj_t node);
 
 	bool contain_lu(int unit) const {
