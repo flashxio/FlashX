@@ -8,7 +8,11 @@
 
 using namespace boost;
 typedef adjacency_list<> Graph;
-typedef rmat_iterator<minstd_rand, Graph> RMATGen;
+// The length of cycle of rand48 is 2^48-1, which is much longer than
+// minstd_rand.
+// http://www.boost.org/doc/libs/1_55_0/doc/html/boost_random/reference.html
+typedef rand48 rand_gen_t;
+typedef rmat_iterator<rand_gen_t, Graph> RMATGen;
 typedef graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef property_map<Graph, vertex_index_t>::type IndexMap;
 
@@ -36,7 +40,7 @@ int main(int argc, char* argv[])
 
 	std::clock_t start;
 	start = std::clock();
-	minstd_rand gen;
+	rand_gen_t gen(time(NULL));
 	RMATGen gen_it(gen, n, m, 0.57, 0.19, 0.19, 0.05, true);
 	RMATGen gen_end;
 	for (; gen_it != gen_end; ++gen_it) {
