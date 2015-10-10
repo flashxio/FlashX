@@ -31,11 +31,18 @@
 namespace fm
 {
 
-bool deduplicate = false;
+static bool deduplicate = false;
+// remove self edges. It's enabled by default.
+static bool remove_selfe = true;
 
 void set_deduplicate(bool v)
 {
 	deduplicate = v;
+}
+
+void set_remove_self_edge(bool v)
+{
+	remove_selfe = v;
 }
 
 /*
@@ -88,11 +95,15 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
 	size_t edge_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
-		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID)
+		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID
+				// skip self-edges.
+				|| (remove_selfe && vec.get<fg::vertex_id_t>(i) == vid))
 			continue;
 		edge_buf[edge_idx++] = vec.get<fg::vertex_id_t>(i);
 	}
-	assert(edge_idx == num_edges);
+	assert(edge_idx <= num_edges);
+	// If there are self-edges, edge_idx has the actual number of edges.
+	num_edges = edge_idx;
 	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
 	if (deduplicate) {
 		fg::vertex_id_t *end = std::unique(edge_buf.get(),

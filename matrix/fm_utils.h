@@ -72,6 +72,7 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
  */
 
 void set_deduplicate(bool v);
+void set_remove_self_edge(bool v);
 };
 
 #endif
