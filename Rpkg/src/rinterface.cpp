@@ -1043,6 +1043,8 @@ RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pmax_threa
 	const size_t NUM_COLS = rcpp_mat.ncol();
 	double* p_fg_mat = new double[NUM_ROWS * NUM_COLS];
 
+    srand(1234);
+
 #pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
 	for (vsize_t row = 0; row < NUM_ROWS; row++) {
 		for (vsize_t col = 0; col < NUM_COLS; col++) {
