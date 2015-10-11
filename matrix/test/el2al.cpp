@@ -22,6 +22,7 @@
 
 #include <vector>
 #include <string>
+#include <boost/lexical_cast.hpp>
 
 #include "common.h"
 
@@ -64,6 +65,41 @@ public:
 
 	const scalar_type &get_col_type(off_t idx) const {
 		return get_scalar_type<fg::vertex_id_t>();
+	}
+};
+
+template<class AttrType>
+class attr_edge_parser: public line_parser
+{
+public:
+	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
+	size_t get_num_cols() const {
+		return 3;
+	}
+
+	std::string get_col_name(off_t idx) const {
+		switch(idx) {
+			case 0:
+				return "source";
+			case 1:
+				return "dest";
+			case 2:
+				return "attr";
+			default:
+				throw std::invalid_argument("invalid index");
+		}
+	}
+
+	const scalar_type &get_col_type(off_t idx) const {
+		switch(idx) {
+			case 0:
+			case 1:
+				return get_scalar_type<fg::vertex_id_t>();
+			case 2:
+				return get_scalar_type<AttrType>();
+			default:
+				throw std::invalid_argument("invalid index");
+		}
 	}
 };
 
@@ -124,6 +160,83 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 	return froms->get_length();
 }
 
+template<class AttrType>
+size_t attr_edge_parser<AttrType>::parse(const std::vector<std::string> &lines,
+		data_frame &df) const
+{
+	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr attrs = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<AttrType>());
+
+	size_t entry_idx = 0;
+	for (size_t i = 0; i < lines.size(); i++) {
+		const char *line = lines[i].c_str();
+		int len = strlen(line);
+		const char *first = line;
+		// Skip space
+		for (; isspace(*first); first++);
+		if (*first == '#')
+			continue;
+
+		// Make sure we get a number.
+		if (!isdigit(*first)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the first entry isn't a number: ") + first;
+			continue;
+		}
+		fg::vertex_id_t from = atol(first);
+		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
+
+		const char *second = first;
+		// Go to the end of the first number.
+		for (; isdigit(*second); second++);
+		if (second - line == len) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("there isn't second entry: ") + line;
+			continue;
+		}
+		// Skip space between two numbers.
+		for (; isspace(*second); second++);
+		// Make sure we get a number.
+		if (!isdigit(*second)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the second entry isn't a number: ") + second;
+			continue;
+		}
+		fg::vertex_id_t to = atol(second);
+		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
+
+		const char *third = second;
+		// Go to the end of the second number.
+		for (; isdigit(*third); third++);
+		if (third - line == len) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("there isn't third entry: ") + line;
+			continue;
+		}
+		// Skip space between two numbers.
+		for (; isspace(*third); third++);
+		AttrType attr = boost::lexical_cast<AttrType>(third);
+
+		froms->set<fg::vertex_id_t>(entry_idx, from);
+		tos->set<fg::vertex_id_t>(entry_idx, to);
+		attrs->set<AttrType>(entry_idx, attr);
+		entry_idx++;
+	}
+	froms->resize(entry_idx);
+	tos->resize(entry_idx);
+	attrs->resize(entry_idx);
+
+	df.get_vec(0)->append(*froms);
+	df.get_vec(1)->append(*tos);
+	df.get_vec(2)->append(*attrs);
+	printf("add %ld edges\n", froms->get_length());
+	return froms->get_length();
+}
+
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
@@ -133,6 +246,7 @@ void print_usage()
 	fprintf(stderr, "-e: use external memory\n");
 	fprintf(stderr, "-s size: sort buffer size\n");
 	fprintf(stderr, "-g size: groupby buffer size\n");
+	fprintf(stderr, "-t type: the edge attribute type\n");
 }
 
 int main(int argc, char *argv[])
@@ -144,7 +258,8 @@ int main(int argc, char *argv[])
 	size_t groupby_buf_size = 1UL * 1024 * 1024 * 1024;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "uUes:g:")) != -1) {
+	std::string edge_attr_type;
+	while ((opt = getopt(argc, argv, "uUes:g:t:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -162,6 +277,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'g':
 				groupby_buf_size = str2size(optarg);
+				num_opts++;
+				break;
+			case 't':
+				edge_attr_type = optarg;
 				num_opts++;
 				break;
 			default:
@@ -209,7 +328,21 @@ int main(int argc, char *argv[])
 
 	{
 		struct timeval start, end;
-		edge_parser parser;
+		std::shared_ptr<line_parser> parser;
+		if (edge_attr_type.empty())
+			parser = std::shared_ptr<line_parser>(new edge_parser());
+		else if (edge_attr_type == "I")
+			parser = std::shared_ptr<line_parser>(new attr_edge_parser<int>());
+		else if (edge_attr_type == "L")
+			parser = std::shared_ptr<line_parser>(new attr_edge_parser<long>());
+		else if (edge_attr_type == "F")
+			parser = std::shared_ptr<line_parser>(new attr_edge_parser<float>());
+		else if (edge_attr_type == "D")
+			parser = std::shared_ptr<line_parser>(new attr_edge_parser<double>());
+		else {
+			fprintf(stderr, "unsupported edge attribute type\n");
+			exit(1);
+		}
 		/*
 		 * We only need to indicate here whether we use external memory or not.
 		 * If the columns in the data frame are in external memory, it'll always
@@ -217,26 +350,41 @@ int main(int argc, char *argv[])
 		 */
 		printf("start to read and parse edge list\n");
 		gettimeofday(&start, NULL);
-		data_frame::ptr df = read_lines(files, parser, in_mem);
+		data_frame::ptr df = read_lines(files, *parser, in_mem);
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds to parse the edge lists\n",
 				time_diff(start, end));
 		printf("There are %ld edges\n", df->get_num_entries());
+		assert(df->get_num_entries() > 0);
 
-		fg::vertex_id_t max_vid = 0;
 		gettimeofday(&start, NULL);
-		for (size_t i = 0; i < df->get_num_vecs(); i++) {
-			vector::ptr vec = vector::create(df->get_vec(i));
+		fg::vertex_id_t max_vid;
+		{
+			vector::ptr vec = vector::create(df->get_vec(0));
+			assert(vec->get_type() == get_scalar_type<fg::vertex_id_t>());
+			max_vid = vec->max<fg::vertex_id_t>();
+			vec = vector::create(df->get_vec(1));
+			assert(vec->get_type() == get_scalar_type<fg::vertex_id_t>());
 			max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 		}
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds to get the maximal vertex ID\n",
 				time_diff(start, end));
 		printf("max id: %d\n", max_vid);
+
 		detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
 				0, max_vid, 1);
 		detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 				max_vid + 1, fg::INVALID_VERTEX_ID);
+		detail::vec_store::ptr attr_vec;
+		if (edge_attr_type == "I")
+			attr_vec = detail::create_vec_store<int>(max_vid + 1, 0);
+		else if (edge_attr_type == "L")
+			attr_vec = detail::create_vec_store<long>(max_vid + 1, 0);
+		else if (edge_attr_type == "F")
+			attr_vec = detail::create_vec_store<float>(max_vid + 1, 0);
+		else if (edge_attr_type == "D")
+			attr_vec = detail::create_vec_store<double>(max_vid + 1, 0);
 		assert(seq_vec->get_length() == rep_vec->get_length());
 
 		fg::FG_graph::ptr graph;
@@ -247,12 +395,20 @@ int main(int argc, char *argv[])
 			data_frame::ptr new_df = data_frame::create();
 			new_df->add_vec(df->get_vec_name(0), seq_vec);
 			new_df->add_vec(df->get_vec_name(1), rep_vec);
+			if (df->get_num_vecs() == 3) {
+				assert(attr_vec);
+				new_df->add_vec(df->get_vec_name(2), attr_vec);
+			}
 			df->append(new_df);
 
 			// I artificially add an invalid in-edge for each vertex.
 			new_df = data_frame::create();
 			new_df->add_vec(df->get_vec_name(1), seq_vec);
 			new_df->add_vec(df->get_vec_name(0), rep_vec);
+			if (df->get_num_vecs() == 3) {
+				assert(attr_vec);
+				new_df->add_vec(df->get_vec_name(2), attr_vec);
+			}
 			df->append(new_df);
 			gettimeofday(&end, NULL);
 			printf("It takes %.3f seconds to prepare for constructing a graph\n",
@@ -268,15 +424,26 @@ int main(int argc, char *argv[])
 			data_frame::ptr new_df = data_frame::create();
 			new_df->add_vec(df->get_vec_name(0), seq_vec);
 			new_df->add_vec(df->get_vec_name(1), rep_vec);
+			if (df->get_num_vecs() == 3) {
+				assert(attr_vec);
+				new_df->add_vec(df->get_vec_name(2), attr_vec);
+			}
 			df->append(new_df);
 
 			detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
 			detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
+			detail::vec_store::ptr vec2;
+			if (df->get_num_vecs() == 3)
+				vec2 = df->get_vec(2)->deep_copy();
 			vec0->append(df->get_vec_ref(1));
 			vec1->append(df->get_vec_ref(0));
+			if (df->get_num_vecs() == 3)
+				vec2->append(df->get_vec_ref(2));
 			new_df = data_frame::create();
 			new_df->add_vec(df->get_vec_name(0), vec0);
 			new_df->add_vec(df->get_vec_name(1), vec1);
+			if (df->get_num_vecs() == 3)
+				new_df->add_vec(df->get_vec_name(2), vec2);
 			df = new_df;
 			gettimeofday(&end, NULL);
 			printf("It takes %.3f seconds to prepare for constructing a graph\n",
