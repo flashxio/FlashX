@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: el2al rmat-gen graph-stat
+all: el2al rmat-gen graph-stat print_graph
 
 el2al: el2al.o ../libgraph.a
 	$(CXX) -o el2al el2al.o $(LDFLAGS)
@@ -35,6 +35,9 @@ rmat-gen: rmat-gen.o
 graph-stat: graph-stat.o ../libgraph.a
 	$(CXX) -o graph-stat graph-stat.o $(LDFLAGS)
 
+print_graph: print_graph.o ../libgraph.a
+	$(CXX) -o print_graph print_graph.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -43,5 +46,6 @@ clean:
 	rm -f print_ts_graph
 	rm -f rmat-gen
 	rm -f graph-stat
+	rm -f print_graph
 
 -include $(DEPS) 
