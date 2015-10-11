@@ -1,5 +1,5 @@
 FG <- TRUE
-verbose <- TRUE
+verbose <- FALSE
 fgcheck <- function() {
 	if ("FlashGraphR" %in% rownames(installed.packages()) == FALSE) {
 		assign("FG", FALSE, envir = .GlobalEnv)
@@ -29,11 +29,6 @@ plot.by.cluster <- function (data, clusters, title, xlims, ylims, colors, k) {
 				   col=colors[i], xlim=xlims, ylim=ylims)
 		}
 	}
-}
-
-# Plot with a colorscheme that is dictated by the original color
-# each point has in the truth.
-plot.by.truth <- function (){
 }
 
 # Allow no more than 10% degredation compared to R.kmeans
@@ -98,9 +93,8 @@ test.kmeans <- function(k, n=50, std.dev=10, min.ari.thresh=.1)
 		fg.ari <- adjustedRandIndex(fg.kms$cluster, truth)
 		print(paste("The ARI of fg is", fg.ari))
 		stopifnot((fg.ari > R.ari) || 
-				  (abs(fg.ari - R.ari)/mean(c(fg.ari,R.ari))) < min.ari.thresh) # 5% difference only
+				  (abs(fg.ari - R.ari)/mean(c(fg.ari,R.ari))) < min.ari.thresh) # 10% difference only
 	}
-
 
 	if (verbose) {
 		# Cause we have all the data we get the limits
