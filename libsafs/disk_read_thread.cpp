@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include "cache.h"
 #include "disk_read_thread.h"
 #include "parameters.h"
 #include "aio_private.h"
@@ -29,30 +28,85 @@ namespace safs
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
+/*
+ * This is run inside the I/O thread, so it's OK to access its data structure.
+ */
+void disk_io_thread::open_comm::run()
+{
+	// Find the indeces of the disks that are accessed by the I/O thread.
+	int num_files = mapper->get_num_files();
+	std::vector<int> indices;
+	for (int i = 0; i < num_files; i++) {
+		if (t.disk_ids.find(mapper->get_disk_id(i)) != t.disk_ids.end())
+			indices.push_back(i);
+	}
+
+	logical_file_partition part(indices, mapper);
+	int ret = aio->open_file(part);
+	set_status(ret);
+}
+
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
-disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, page_cache::ptr cache, int _disk_id, int flags): thread(
-			std::string("io-thread-") + itoa(node_id), node_id),
-		disk_id(_disk_id),
-		queue(node_id, std::string("io-queue-") + itoa(node_id),
+disk_io_thread::disk_io_thread(const logical_file_partition &_partition, int cpu_id,
+		int node_id, int flags): thread(std::string("io-thread-") + itoa(cpu_id),
+			std::vector<int>(1, cpu_id)), queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false),
 		// TODO let's allow the low-priority queue to
 		// be infinitely large for now.
 		low_prio_queue(node_id, std::string("io-queue-low_prio-")
 				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
 		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
-				INT_MAX), 
-		partition(_partition),
-		filter(_partition.get_mapper(), _disk_id)
+				INT_MAX), partition(_partition)
 {
-	this->cache = cache;
+	// Find out the disks that this I/O thread is responsible for.
+	int num_disks = partition.get_num_files();
+	for (int i = 0; i < num_disks; i++)
+		disk_ids.insert(partition.get_disk_id(i));
+
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
-	assert(partition.get_num_files() == 1);
-	// An I/O thread accesses only one physical file. The safs header isn't
-	// needed.
+	// The safs header isn't needed.
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, safs_header(), flags);
+
+	num_reads = 0;
+	num_writes = 0;
+	num_read_bytes = 0;
+	num_write_bytes = 0;
+	num_low_prio_accesses = 0;
+	num_requested_flushes = 0;
+	num_ignored_flushes_evicted = 0;
+	num_ignored_flushes_cleaned = 0;
+	num_ignored_flushes_old = 0;
+	tot_flush_delay = 0;
+	max_flush_delay = 0;
+	min_flush_delay = LONG_MAX;
+	num_msgs = 0;
+
+	thread::start();
+}
+
+disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
+		int node_id, int flags): thread(std::string("io-thread-") + itoa(node_id),
+			node_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
+			IO_QUEUE_SIZE, INT_MAX, false),
+		// TODO let's allow the low-priority queue to
+		// be infinitely large for now.
+		low_prio_queue(node_id, std::string("io-queue-low_prio-")
+				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
+		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
+				INT_MAX), partition(_partition)
+{
+	// Find out the disks that this I/O thread is responsible for.
+	int num_disks = partition.get_num_files();
+	for (int i = 0; i < num_disks; i++)
+		disk_ids.insert(partition.get_disk_id(i));
+
+	// We don't want AIO to open any files yet, so we pass a file partition
+	// definition without a file mapper.
+	logical_file_partition part(_partition.get_phy_file_indices());
+	// The safs header isn't needed.
 	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, safs_header(), flags);
 
 	num_reads = 0;
@@ -88,6 +142,9 @@ void notify_ignored_flushes(io_request ignored_flushes[], int num_ignored)
 
 int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
+	assert(0);
+	return -1;
+#if 0
 	int num_accesses = 0;
 
 	struct timeval curr_time;
@@ -191,6 +248,7 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		notify_ignored_flushes(ignored_flushes.data(), num_ignored);
 
 	return num_accesses;
+#endif
 }
 
 void disk_io_thread::run_commands(
@@ -207,6 +265,40 @@ void disk_io_thread::run_commands(
 	}
 }
 
+size_t disk_io_thread::get_all_reqs(msg_queue<io_request> &queue,
+		std::vector<io_request> &reqs)
+{
+	const int LOCAL_BUF_SIZE = 16;
+	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
+	std::vector<io_request> local_reqs;
+	size_t tot_num_reqs = 0;
+	while (!queue.is_empty()) {
+		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
+		num_msgs += num;
+
+		// Get all I/O requests from the messages.
+		for (int i = 0; i < num; i++) {
+			int num_reqs = msg_buffer[i].get_num_objs();
+			local_reqs.resize(num_reqs);
+			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
+			for (int j = 0; j < num_reqs; j++) {
+				if (local_reqs[j].get_access_method() == READ) {
+					num_reads++;
+					num_read_bytes += local_reqs[j].get_size();
+				}
+				else {
+					num_writes++;
+					num_write_bytes += local_reqs[j].get_size();
+				}
+			}
+			msg_buffer[i].clear();
+			reqs.insert(reqs.end(), local_reqs.begin(), local_reqs.end());
+			tot_num_reqs += local_reqs.size();
+		}
+	}
+	return tot_num_reqs;
+}
+
 void disk_io_thread::run() {
 	// First, check if we need to flush requests.
 	int num_flushes = flush_counter.get();
@@ -217,22 +309,25 @@ void disk_io_thread::run() {
 		aio->flush_requests();
 	}
 
-	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
 	message<io_request> low_prio_msg;
+	std::vector<io_request> local_reqs;
 
-	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
 		// TODO I need to make sure that checking commands doesn't cause
 		// noticeable CPU consumption.
 		if (!comm_queue.is_empty())
 			run_commands(comm_queue);
-		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-		num_msgs += num;
+
+		int num = get_all_reqs(queue, local_reqs);
+
 		if (is_debug_enabled())
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
 					low_prio_queue.get_num_entries());
 		// The high-prio queue is empty.
+		// TODO we might want to get all low-priority I/O requests for
+		// better scheduling, like the normal I/O requests. But low-priority
+		// requests aren't used, so we don't need to do anything for now.
 		while (num == 0) {
 			// we can process as many low-prio requests as possible,
 			// but they shouldn't block the thread.
@@ -253,64 +348,24 @@ void disk_io_thread::run() {
 			else if (aio->num_pending_ios() > 0) {
 				aio->wait4complete(1);
 			}
-			else if (cache) {
-				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
-				if (ret == 0)
-					break;
-				num_requested_flushes += ret;
-			}
 			else
 				break;
 
-			// Let's try to fetch requests again.
-			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-			num_msgs += num;
+			num = get_all_reqs(queue, local_reqs);
 		}
 
-		stack_array<io_request> local_reqs(LOCAL_REQ_BUF_SIZE);
-		for (int i = 0; i < num; i++) {
-			int num_reqs = msg_buffer[i].get_num_objs();
-			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
-			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
-			for (int j = 0; j < num_reqs; j++) {
-				if (local_reqs[j].get_access_method() == READ) {
-					num_reads++;
-					num_read_bytes += local_reqs[j].get_size();
-				}
-				else {
-					num_writes++;
-					num_write_bytes += local_reqs[j].get_size();
-				}
-			}
-			aio->access(local_reqs.data(), num_reqs);
-			msg_buffer[i].clear();
-		}
+		aio->access(local_reqs.data(), local_reqs.size());
+		local_reqs.clear();
 
 		// We can't exit the loop if there are still pending AIO requests.
 		// This thread is responsible for processing completed AIO requests.
 	} while (aio->num_pending_ios() > 0);
 }
 
-int disk_io_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
-		int num, const thread_safe_page *returned_pages[])
-{
-	int num_returned = 0;
-	for (int i = 0; i < num; i++) {
-		// All files use the same mapping function and the same block size,
-		// so it works fine with multiple files.
-		// TODO if we decide to use different block sizes for different files,
-		// we need to change it.
-		int id = mapper->map2file(pages[i]->get_offset());
-		if (this->disk_id == id)
-			returned_pages[num_returned++] = pages[i];
-	}
-	return num_returned;
-}
-
 void disk_io_thread::print_state()
 {
 	printf("io thread %d has %d reqs and %d low-prio reqs in the queue\n",
-			disk_id, queue.get_num_objs(), low_prio_queue.get_num_objs());
+			get_id(), queue.get_num_objs(), low_prio_queue.get_num_objs());
 	aio->print_state();
 }
 

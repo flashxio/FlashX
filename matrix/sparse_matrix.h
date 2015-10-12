@@ -29,6 +29,7 @@
 #include "NUMA_dense_matrix.h"
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -214,17 +215,14 @@ class block_compute_task: public compute_task
 	std::vector<char *> block_rows;
 	matrix_io io;
 	off_t off;
-	char *buf;
-	size_t buf_size;
+	detail::local_mem_buffer::irreg_buf_t buf;
+	size_t real_io_size;
 protected:
 	block_2d_size block_size;
 public:
 	block_compute_task(const matrix_io &_io, const sparse_matrix &mat,
 			block_exec_order::ptr order);
-
-	~block_compute_task() {
-		free(buf);
-	}
+	~block_compute_task();
 
 	const matrix_io &get_io() const {
 		return io;
@@ -233,8 +231,9 @@ public:
 	virtual void run(char *buf, size_t size);
 
 	virtual safs::io_request get_request() const {
-		return safs::io_request(buf, safs::data_loc_t(io.get_loc().get_file_id(),
-					off), buf_size, READ);
+		return safs::io_request(buf.second.get(),
+				safs::data_loc_t(io.get_loc().get_file_id(), off),
+				real_io_size, READ);
 	}
 
 	virtual void run_on_block(const sparse_block_2d &block) = 0;

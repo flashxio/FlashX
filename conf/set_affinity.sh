@@ -1,17 +1,22 @@
 #!/bin/bash
 
-ctl_name="mpt2sas"
+ctl_pattern="mpt.sas"
+num_cpus=`grep processor /proc/cpuinfo | wc -l`
+num_nodes=`grep "physical id" /proc/cpuinfo | awk 'BEGIN{max=0} {if (max < $4) max=$4} END{print max}'`
+num_nodes=$((num_nodes + 1))
+echo "There are ${num_cpus} CPUs in ${num_nodes} NUMA nodes"
 
 set_affinity_node ()
 {
 	start_cpu=$1
-	start_irq=$2
-	for i in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+	ctl_num=$2
+	irqs=`grep ${ctl_pattern}${ctl_num}-msix /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
+	i=0
+	for irq in $irqs
 	do
-		cpu_num=$(($start_cpu + $i * 4))
-#		cpu_num=$(($cpu_num % 32))
-		#cpu_num=$(($start_cpu))
-		irq_num=$(($start_irq + $i))
+		cpu_num=$(($start_cpu + $i * $num_nodes))
+		irq_num=$irq
+		i=$(($i + 1))
 		echo $cpu_num > /proc/irq/$irq_num/smp_affinity_list
 		echo "set $irq_num to $cpu_num"
 		cat /proc/irq/$irq_num/smp_affinity_list
@@ -30,15 +35,14 @@ ctl_num=0
 node_id=0
 while [ 0 ]
 do
-	irq=`grep ${ctl_name}${ctl_num}-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
-	if [ "$irq" == "" ]
+	irq=`grep ${ctl_pattern}${ctl_num}-msix0 /proc/interrupts`
+	if [ $? == 1 ]
 	then
 		break
 	fi
-	echo "irq: $irq"
 
 	echo "set for controller ${ctl_num}"
-	set_affinity_node $node_id $irq
+	set_affinity_node $node_id $ctl_num
 
 	ctl_num=$((ctl_num+1))
 	node_id=$ctl_num

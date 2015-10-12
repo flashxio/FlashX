@@ -78,32 +78,26 @@ public:
 }
 
 EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
-		const scalar_type &type): matrix_store(nrow, ncol, false,
-			type), mat_id(mat_counter++), data_id(mat_id)
+		const scalar_type &type, safs::safs_file_group::ptr group): matrix_store(
+			nrow, ncol, false, type), mat_id(mat_counter++), data_id(mat_id)
 {
 	this->cache_portion = true;
 	this->orig_num_rows = nrow;
 	this->orig_num_cols = ncol;
 	this->layout = layout;
-	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size());
+	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size(),
+			group);
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
 
-	// Write the header to the file.
-	safs::io_interface::ptr io = safs::create_io(factory,
-			thread::get_curr_thread());
-	char *buf = NULL;
-	int ret = posix_memalign((void **) &buf, PAGE_SIZE,
-			matrix_header::get_header_size());
-	assert(ret == 0);
-	new (buf) matrix_header(matrix_type::DENSE, type.get_size(),
+	// Store the header as the metadata.
+	std::vector<char> header_buf(matrix_header::get_header_size());
+	new (header_buf.data()) matrix_header(matrix_type::DENSE, type.get_size(),
 			nrow, ncol, layout, type.get_type());
-	safs::data_loc_t loc(io->get_file_id(), 0);
-	safs::io_request req(buf, loc, matrix_header::get_header_size(), WRITE);
-	io->access(&req, 1);
-	io->wait4complete(1);
-	free(buf);
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	bool ret = f.set_user_metadata(header_buf);
+	assert(ret);
 }
 
 EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
@@ -146,25 +140,19 @@ EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 	io_set::ptr ios(new io_set(factory));
 
 	// Read the matrix header.
-	safs::io_interface::ptr io = safs::create_io(factory,
-			thread::get_curr_thread());
-	char *buf = NULL;
-	int ret = posix_memalign((void **) &buf, PAGE_SIZE,
-			matrix_header::get_header_size());
-	assert(ret == 0);
-	safs::data_loc_t loc(io->get_file_id(), 0);
-	safs::io_request req(buf, loc, matrix_header::get_header_size(), READ);
-	io->access(&req, 1);
-	io->wait4complete(1);
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	std::vector<char> header_buf = f.get_user_metadata();
+	if (header_buf.size() != matrix_header::get_header_size()) {
+		BOOST_LOG_TRIVIAL(error) << "Cannot get the matrix header";
+		return EM_matrix_store::ptr();
+	}
 
-	matrix_header *header = (matrix_header *) buf;
+	matrix_header *header = (matrix_header *) header_buf.data();
 	EM_matrix_store::ptr ret_mat(new EM_matrix_store(holder, ios,
 				header->get_num_rows(), header->get_num_cols(),
 				header->get_num_rows(), header->get_num_cols(),
 				// TODO we should save the data Id in the matrix header.
 				header->get_layout(), header->get_data_type(), mat_counter++));
-	free(buf);
-
 	return ret_mat;
 }
 
@@ -385,8 +373,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 		// the method is called. We should add the user's portion computation
 		// to the queue. When the data is ready, all user's portion computations
 		// will be invoked.
-		safs::data_loc_t loc(io.get_file_id(),
-				off + matrix_header::get_header_size());
+		safs::data_loc_t loc(io.get_file_id(), off);
 		safs::io_request req(const_cast<char *>(ret1->get_raw_arr()), loc,
 				num_bytes, READ);
 		portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
@@ -418,8 +405,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 					fetch_start_row, fetch_start_col, fetch_num_rows,
 					fetch_num_cols, get_type(), data_arr.get_node_id()));
 
-	safs::data_loc_t loc(io.get_file_id(),
-			off + matrix_header::get_header_size());
+	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(buf->get_raw_arr(), loc, num_bytes, READ);
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
@@ -508,8 +494,7 @@ void EM_matrix_store::write_portion_async(
 		num_bytes = ROUNDUP(num_bytes, PAGE_SIZE);
 	}
 
-	safs::data_loc_t loc(io.get_file_id(),
-			off + matrix_header::get_header_size());
+	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(const_cast<char *>(portion->get_raw_arr()),
 			loc, num_bytes, WRITE);
 	portion_compute::ptr compute(new portion_write_complete(portion));
@@ -539,7 +524,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 		smp_vec_store::ptr vec = smp_vec_store::create(len, get_type());
 		vec->expose_sub_vec(0, get_num_rows());
 
-		safs::data_loc_t loc(io.get_file_id(), matrix_header::get_header_size());
+		safs::data_loc_t loc(io.get_file_id(), 0);
 		safs::io_request req(vec->get_raw_arr(), loc, len * entry_size, READ);
 		io.access(&req, 1);
 		io.wait4complete(1);
@@ -556,8 +541,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 			off_t off = (get_num_cols() * row_idx
 					+ CHUNK_SIZE * idx) * entry_size;
 
-			safs::data_loc_t loc(io.get_file_id(),
-					off + matrix_header::get_header_size());
+			safs::data_loc_t loc(io.get_file_id(), off);
 			safs::io_request req(vec->get_raw_arr() + row_idx * entry_size, loc,
 					CHUNK_SIZE * entry_size, READ);
 			reqs.push_back(req);
@@ -573,8 +557,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 		assert(read_start <= ele_start
 				&& ele_start + last_nrows <= read_start + num_read_eles);
 		smp_vec_store::ptr tmp = smp_vec_store::create(num_read_eles, get_type());
-		safs::data_loc_t loc(io.get_file_id(),
-				read_start * entry_size + matrix_header::get_header_size());
+		safs::data_loc_t loc(io.get_file_id(), read_start * entry_size);
 		safs::io_request req(tmp->get_raw_arr(), loc,
 				num_read_eles * entry_size, READ);
 		reqs.push_back(req);
@@ -647,7 +630,7 @@ public:
 	}
 
 	virtual std::string get_name() const {
-		return (boost::format("sub_EM_mat-%1%(%2%,%3%)") % get_matrix_id()
+		return (boost::format("sub_EM_mat-%1%(%2%,%3%)") % mat_id
 				% get_num_rows() % get_num_cols()).str();
 	}
 

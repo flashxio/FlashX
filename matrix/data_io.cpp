@@ -347,6 +347,24 @@ public:
 	}
 };
 
+static data_frame::ptr create_data_frame(const line_parser &parser)
+{
+	data_frame::ptr df = data_frame::create();
+	for (size_t i = 0; i < parser.get_num_cols(); i++)
+		df->add_vec(parser.get_col_name(i),
+				detail::smp_vec_store::create(0, parser.get_col_type(i)));
+	return df;
+}
+
+static data_frame::ptr create_data_frame(const line_parser &parser, bool in_mem)
+{
+	data_frame::ptr df = data_frame::create();
+	for (size_t i = 0; i < parser.get_num_cols(); i++)
+		df->add_vec(parser.get_col_name(i),
+				detail::vec_store::create(0, parser.get_col_type(i), in_mem));
+	return df;
+}
+
 class parse_task: public thread_task
 {
 	std::unique_ptr<char[]> lines;
@@ -362,11 +380,7 @@ public:
 	}
 
 	void run() {
-		data_frame::ptr df = data_frame::create();
-		df->add_vec(parser.get_col_name(0),
-				detail::smp_vec_store::create(0, parser.get_col_type(0)));
-		df->add_vec(parser.get_col_name(1),
-				detail::smp_vec_store::create(0, parser.get_col_type(1)));
+		data_frame::ptr df = create_data_frame(parser);
 		parse_lines(std::move(lines), size, parser, *df);
 		dfs.add(df);
 	}
@@ -392,11 +406,7 @@ void file_parse_task::run()
 		size_t size = 0;
 		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 		assert(size > 0);
-		data_frame::ptr df = data_frame::create();
-		df->add_vec(parser.get_col_name(0),
-				detail::smp_vec_store::create(0, parser.get_col_type(0)));
-		df->add_vec(parser.get_col_name(1),
-				detail::smp_vec_store::create(0, parser.get_col_type(1)));
+		data_frame::ptr df = create_data_frame(parser);
 		parse_lines(std::move(lines), size, parser, *df);
 		dfs.add(df);
 	}
@@ -407,12 +417,7 @@ void file_parse_task::run()
 data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 		bool in_mem)
 {
-	data_frame::ptr df = data_frame::create();
-	df->add_vec(parser.get_col_name(0),
-			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
-	df->add_vec(parser.get_col_name(1),
-			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
-
+	data_frame::ptr df = create_data_frame(parser, in_mem);
 	file_io::ptr io = file_io::create(file);
 	if (io == NULL)
 		return data_frame::ptr();

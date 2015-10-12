@@ -123,7 +123,7 @@ io_interface *remote_io::clone(thread *t) const
 
 void remote_io::cleanup()
 {
-	process_completed_requests(complete_queue.get_num_entries());
+	process_all_completed_requests();
 
 	num_ios.dec(1);
 	for (unsigned i = 0; i < senders.size(); i++) {
@@ -199,6 +199,8 @@ void remote_io::access(io_request *requests, int num,
 		if (requests[i].inside_RAID_block(get_block_size())) {
 			off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
 			int idx = block_mapper->map2file(pg_off);
+			// Map to the right disk.
+			idx = block_mapper->get_disk_id(idx);
 			// The cache inside a sender is extensible, so it can absorb
 			// all requests.
 			int ret;
@@ -239,6 +241,8 @@ void remote_io::access(io_request *requests, int num,
 				// Send a request.
 				off_t pg_off = req.get_offset() / PAGE_SIZE;
 				int idx = block_mapper->map2file(pg_off);
+				// Map to the right disk.
+				idx = block_mapper->get_disk_id(idx);
 				// The cache inside a sender is extensible, so it can absorb
 				// all requests.
 				int ret;
@@ -280,6 +284,19 @@ void remote_io::flush_requests()
  */
 int remote_io::process_completed_requests(int num)
 {
+	if (num > 0) {
+		stack_array<io_request> reqs(num);
+		int ret = complete_queue.fetch(reqs.data(), num);
+		process_completed_requests(reqs.data(), ret);
+		return ret;
+	}
+	else
+		return 0;
+}
+
+int remote_io::process_all_completed_requests()
+{
+	size_t num = complete_queue.get_num_entries();
 	if (num > 0) {
 		stack_array<io_request> reqs(num);
 		int ret = complete_queue.fetch(reqs.data(), num);
@@ -392,12 +409,11 @@ int remote_io::wait4complete(int num_to_complete)
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
 
-	process_completed_requests(complete_queue.get_num_entries());
-	int iters = 0;
+	process_all_completed_requests();
 	while (pending - num_pending_ios() < num_to_complete) {
-		iters++;
-		get_thread()->wait();
-		process_completed_requests(complete_queue.get_num_entries());
+		if (!params.is_busy_wait())
+			get_thread()->wait();
+		process_all_completed_requests();
 	}
 	return pending - num_pending_ios();
 }
@@ -412,6 +428,71 @@ void remote_io::print_state()
 	for (unsigned i = 0; i < low_prio_senders.size(); i++)
 		printf("\tlow-prio sender %d: remain %d reqs\n", i,
 				low_prio_senders[i]->get_num_remaining());
+}
+
+class remote_io_select: public io_select
+{
+	// TODO it might be better to use a weak pointer to detect whether
+	// an IO interface is destroyed.
+	std::vector<remote_io::ptr> ios;
+	std::set<remote_io::ptr> io_set;
+public:
+	virtual bool add_io(io_interface::ptr io);
+	virtual int num_pending_ios() const;
+	virtual int wait4complete(int num_to_complete);
+};
+
+bool remote_io_select::add_io(io_interface::ptr io)
+{
+	remote_io::ptr rio = std::dynamic_pointer_cast<remote_io>(io);
+	if (rio == NULL)
+		return false;
+	auto ret = io_set.insert(rio);
+	// If the I/O instance doesn't exist yet.
+	if (ret.second)
+		ios.push_back(rio);
+	return true;
+}
+
+int remote_io_select::num_pending_ios() const
+{
+	int num_pending = 0;
+	for (size_t i = 0; i < ios.size(); i++)
+		num_pending += ios[i]->num_pending_ios();
+	return num_pending;
+}
+
+int remote_io_select::wait4complete(int num_to_complete)
+{
+	thread *curr = thread::get_curr_thread();
+	int num_pending = num_pending_ios();
+	num_to_complete = min(num_pending, num_to_complete);
+
+	int num_complete = 0;
+	// We should make sure that we have gone through I/O instances to process
+	// I/O requests that have been completed.
+	for (size_t i = 0; i < ios.size(); i++) {
+		ios[i]->flush_requests();
+		num_complete += ios[i]->process_all_completed_requests();
+		assert(curr == ios[i]->get_thread());
+	}
+
+	// If we need to process more I/O requests, we need to wait until
+	// I/O threads wake us up.
+	while (num_complete < num_to_complete) {
+		if (!params.is_busy_wait())
+			curr->wait();
+		for (size_t i = 0; i < ios.size(); i++) {
+			ios[i]->flush_requests();
+			num_complete += ios[i]->process_all_completed_requests();
+		}
+	}
+	return num_complete;
+}
+
+io_select::ptr remote_io::create_io_select() const
+{
+	return io_select::ptr(new remote_io_select());
 }
 
 atomic_integer remote_io::num_ios;

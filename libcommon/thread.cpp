@@ -25,6 +25,103 @@
 #include "thread.h"
 #include "common.h"
 
+std::vector<hwloc_obj_t> get_objs_by_type(hwloc_obj_t obj, hwloc_obj_type_t type)
+{
+	if (obj->arity > 0 && obj->first_child->type == type) {
+		std::vector<hwloc_obj_t> cores(obj->arity);
+		for (size_t i = 0; i < cores.size(); i++)
+			cores[i] = obj->children[i];
+		return cores;
+	}
+	if (obj->arity == 0)
+		return std::vector<hwloc_obj_t>();
+	else {
+		std::vector<hwloc_obj_t> cores;
+		for (size_t i = 0; i < obj->arity; i++) {
+			std::vector<hwloc_obj_t> tmp = get_objs_by_type(obj->children[i],
+					type);
+			cores.insert(cores.end(), tmp.begin(), tmp.end());
+		}
+		return cores;
+	}
+}
+
+CPU_core::CPU_core(hwloc_obj_t core)
+{
+	std::vector<hwloc_obj_t> pus = get_objs_by_type(core,
+			HWLOC_OBJ_PU);
+	logical_units.resize(pus.size());
+	for (size_t i = 0; i < logical_units.size(); i++)
+		logical_units[i] = pus[i]->os_index;
+}
+
+NUMA_node::NUMA_node(hwloc_obj_t node)
+{
+	std::vector<hwloc_obj_t> hwloc_cores = get_objs_by_type(node,
+			HWLOC_OBJ_CORE);
+	for (size_t i = 0; i < hwloc_cores.size(); i++)
+		cores.emplace_back(hwloc_cores[i]);
+	std::vector<int> lu_vec = get_logical_units();
+	lus.insert(lu_vec.begin(), lu_vec.end());
+}
+
+NUMA_node::NUMA_node(hwloc_topology_t topology)
+{
+	int num_cores = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_CORE);
+	assert(num_cores > 0);
+	for (int i = 0; i < num_cores; i++) {
+		hwloc_obj_t core = hwloc_get_obj_by_type(topology,
+				HWLOC_OBJ_CORE, i);
+		cores.emplace_back(core);
+	}
+	std::vector<int> lu_vec = get_logical_units();
+	lus.insert(lu_vec.begin(), lu_vec.end());
+}
+
+std::vector<int> NUMA_node::get_logical_units() const
+{
+	std::vector<int> ret;
+	for (size_t i = 0; i < get_num_cores(); i++) {
+		std::vector<int> units = get_core(i).get_units();
+		ret.insert(ret.end(), units.begin(), units.end());
+	}
+	return ret;
+}
+
+CPU_hierarchy::CPU_hierarchy()
+{
+	hwloc_topology_t topology;
+	hwloc_topology_init(&topology);
+	hwloc_topology_load(topology);
+	int num_nodes = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_NODE);
+	if (num_nodes > 0) {
+		for (int i = 0; i < num_nodes; i++) {
+			hwloc_obj_t node = hwloc_get_obj_by_type(topology,
+					HWLOC_OBJ_NODE, i);
+			nodes.emplace_back(node);
+		}
+	}
+	else
+		nodes.emplace_back(topology);
+}
+
+std::vector<int> CPU_hierarchy::lus2node(const std::vector<int> &lus) const
+{
+	std::vector<int> ret(lus.size(), -1);
+	for (size_t i = 0; i < get_num_nodes(); i++) {
+		const NUMA_node &node = get_node(i);
+		for (size_t j = 0; j < lus.size(); j++) {
+			if (node.contain_lu(lus[j])) {
+				assert(ret[j] == -1);
+				ret[j] = i;
+			}
+		}
+	}
+	return ret;
+}
+
+CPU_hierarchy cpus;
+
 static void bind2node_id(int node_id)
 {
 	struct bitmask *bmp = numa_allocate_nodemask();
@@ -73,8 +170,17 @@ void *thread_run(void *arg)
 	pthread_setspecific(thread::thread_key, t);
 	t->tid = gettid();
 
+	std::vector<int> cpus = t->get_cpu_affinity();
 	int node_id = t->get_node_id();
-	if (node_id >= 0)
+	if (!cpus.empty()) {
+		cpu_set_t set;
+		CPU_ZERO(&set);
+		for (size_t i = 0; i < cpus.size(); i++)
+			CPU_SET(cpus[i] + 1, &set);
+		if (sched_setaffinity(t->tid, sizeof(set), &set) == -1)
+			fprintf(stderr, "can't set CPU affinity on thread %d\n", t->tid);
+	}
+	else if (node_id >= 0)
 		bind2node_id(node_id);
 
 	t->init();
@@ -86,6 +192,47 @@ void *thread_run(void *arg)
 	t->cleanup();
 	t->exit();
 	return NULL;
+}
+
+void thread::construct_init()
+{
+	tid = -1;
+	thread_idx = num_threads.inc(1);
+	this->id = 0;
+
+	_is_activated = false;
+	_has_exit = false;
+	_is_running = true;
+	_is_sleeping = true;
+
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&cond, NULL);
+	user_data = NULL;
+}
+
+thread::thread(std::string name, int node_id, bool blocking)
+{
+	thread_class_init();
+	construct_init();
+
+	this->node_id = node_id;
+	this->name = name + "-" + itoa(thread_idx);
+	this->blocking = blocking;
+}
+
+thread::thread(std::string name, const std::vector<int> &cpu_affinity,
+		bool blocking)
+{
+	thread_class_init();
+	construct_init();
+
+	std::vector<int> node_ids = cpus.lus2node(cpu_affinity);
+	this->node_id = node_ids.front();
+	for (size_t i = 1; i < cpu_affinity.size(); i++)
+		assert(node_id == node_ids[i]);
+	this->cpu_affinity = cpu_affinity;
+	this->name = name + "-" + itoa(thread_idx);
+	this->blocking = blocking;
 }
 
 void thread::start()

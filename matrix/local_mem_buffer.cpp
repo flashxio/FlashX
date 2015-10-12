@@ -33,7 +33,10 @@ local_mem_buffer::~local_mem_buffer()
 	size_t num_bufs = 0;
 	for (auto it = bufs.begin(); it != bufs.end(); it++)
 		num_bufs += it->second.size();
-	assert(num_bufs + num_frees == num_allocs);
+	assert(num_allocs >= num_bufs + num_frees);
+	size_t diff = num_allocs - num_bufs - num_frees;
+	if (diff != 0)
+		printf("%ld bufs are missing in a local mem buffer\n", diff);
 }
 
 namespace
@@ -83,20 +86,25 @@ std::shared_ptr<char> local_mem_buffer::_alloc(size_t num_bytes)
 	return ret;
 }
 
-void local_mem_buffer::clear_local_bufs()
+void local_mem_buffer::clear_local_bufs(buff_type type)
 {
 	// This method may be called in another thread.
 	// TODO maybe I should use a lock to protect the per-thread queue.
-	for (auto it = bufs.begin(); it != bufs.end(); it++) {
-		std::deque<char *> &q = it->second;
-		num_frees += q.size();
-		while (!q.empty()) {
-			char *buf = q.front();
-			q.pop_front();
-			free(buf);
+	if (type == buff_type::ALL || type == buff_type::REG_BUF) {
+		for (auto it = bufs.begin(); it != bufs.end(); it++) {
+			std::deque<char *> &q = it->second;
+			num_frees += q.size();
+			while (!q.empty()) {
+				char *buf = q.front();
+				q.pop_front();
+				free(buf);
+			}
 		}
 	}
-	portions.clear();
+	if (type == buff_type::ALL || type == buff_type::MAT_PORTION)
+		portions.clear();
+	if (type == buff_type::ALL || type == buff_type::IRREG_BUF)
+		irreg_bufs.clear();
 	// TODO we should also clear all entries in `buf'. But it causes
 	// memory deallocation error. Why?
 }
@@ -148,11 +156,11 @@ void local_mem_buffer::destroy()
 	pthread_key_delete(mem_key);
 }
 
-void local_mem_buffer::clear_bufs()
+void local_mem_buffer::clear_bufs(buff_type type)
 {
 	mem_lock.lock();
 	for (auto it = mem_set.begin(); it != mem_set.end(); it++)
-		(*it)->clear_local_bufs();
+		(*it)->clear_local_bufs(type);
 	mem_lock.unlock();
 }
 
@@ -207,6 +215,40 @@ local_matrix_store::const_ptr local_mem_buffer::get_mat_portion(long key)
 		return ((local_mem_buffer *) addr)->_get_mat_portion(key);
 	else
 		return NULL;
+}
+
+void local_mem_buffer::cache_irreg(irreg_buf_t buf)
+{
+	if (!initialized)
+		return;
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr)
+		((local_mem_buffer *) addr)->irreg_bufs.push_back(buf);
+	else {
+		local_mem_buffer *local_buf = new local_mem_buffer();
+		pthread_setspecific(mem_key, local_buf);
+		mem_lock.lock();
+		mem_set.push_back(local_buf);
+		mem_lock.unlock();
+		local_buf->irreg_bufs.push_back(buf);
+	}
+}
+
+local_mem_buffer::irreg_buf_t local_mem_buffer::get_irreg()
+{
+	if (!initialized)
+		return irreg_buf_t();
+
+	void *addr = pthread_getspecific(mem_key);
+	if (addr) {
+		local_mem_buffer *local_buf = (local_mem_buffer *) addr;
+		irreg_buf_t ret = local_buf->irreg_bufs.front();
+		local_buf->irreg_bufs.pop_front();
+		return ret;
+	}
+	else
+		return irreg_buf_t();
 }
 
 spin_lock local_mem_buffer::mem_lock;

@@ -77,7 +77,7 @@ public:
 
 		int ret = io_queue_init(max_aio, &ctx);
 		if (ret < 0) {
-			perror ("io_queue_init");
+			fprintf(stderr, "io_queue_init fails: %s\n", strerror(-ret));
 			exit (1);
 		}
 	}

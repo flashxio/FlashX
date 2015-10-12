@@ -37,6 +37,12 @@ if (OPENMP_FOUND)
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+find_package(hwloc)
+if (hwloc_FOUND)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_HWLOC")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HWLOC")
+endif()
+
 #set(CMAKE_BUILD_TYPE Release)
 
 # add the binary tree to the search path for include files

@@ -10,3 +10,7 @@ endif()
 if (ZLIB_FOUND)
     target_link_libraries(test_algs z)
 endif()
+
+if (hwloc_FOUND)
+    target_link_libraries(test_algs hwloc)
+endif()

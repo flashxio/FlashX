@@ -13,3 +13,7 @@ endif()
 if (ZLIB_FOUND)
     target_link_libraries(el2al z)
 endif()
+
+if (hwloc_FOUND)
+    target_link_libraries(el2al hwloc)
+endif()

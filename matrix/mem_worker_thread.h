@@ -47,7 +47,13 @@ class pool_task_thread: public task_thread
 	int pool_thread_id;
 public:
 	pool_task_thread(int pool_thread_id, const std::string &name,
-			int node): task_thread(name, node) {
+			const std::vector<int> &cpus, int node_id): task_thread(name, cpus,
+				node_id) {
+		this->pool_thread_id = pool_thread_id;
+	}
+
+	pool_task_thread(int pool_thread_id, const std::string &name,
+			int node_id): task_thread(name, node_id) {
 		this->pool_thread_id = pool_thread_id;
 	}
 
@@ -71,6 +77,8 @@ public:
 	typedef std::shared_ptr<mem_thread_pool> ptr;
 
 	static ptr get_global_mem_threads();
+	static size_t get_global_num_threads();
+	static int get_curr_thread_id();
 	static void init_global_mem_threads(int num_nodes, int nthreads_per_node);
 
 	static ptr create(int num_nodes, int nthreads_per_node) {

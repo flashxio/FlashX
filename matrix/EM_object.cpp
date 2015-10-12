@@ -27,7 +27,8 @@ namespace detail
 {
 
 EM_object::file_holder::ptr EM_object::file_holder::create_temp(
-		const std::string &name, size_t num_bytes)
+		const std::string &name, size_t num_bytes,
+		safs::safs_file_group::ptr group)
 {
 	const size_t MAX_TRIES = 10;
 	size_t i;
@@ -45,7 +46,8 @@ EM_object::file_holder::ptr EM_object::file_holder::create_temp(
 	}
 
 	safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
-	bool ret = f.create_file(num_bytes);
+	bool ret = f.create_file(num_bytes, safs::params.get_RAID_block_size(),
+			safs::params.get_RAID_mapping_option(), group);
 	assert(ret);
 	file_holder::ptr holder(new file_holder(tmp_name, false));
 	return holder;
@@ -92,10 +94,14 @@ safs::io_interface::ptr EM_object::io_set::create_io()
 	pthread_spin_lock(&io_lock);
 	auto it = thread_ios.find(t);
 	if (it == thread_ios.end()) {
+		pthread_spin_unlock(&io_lock);
+
 		safs::io_interface::ptr io = safs::create_io(factory, t);
 		io->set_callback(portion_callback::ptr(new portion_callback()));
-		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
 		pthread_setspecific(io_key, io.get());
+
+		pthread_spin_lock(&io_lock);
+		thread_ios.insert(std::pair<thread *, safs::io_interface::ptr>(t, io));
 		pthread_spin_unlock(&io_lock);
 		return io;
 	}

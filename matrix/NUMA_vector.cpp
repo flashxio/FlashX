@@ -194,12 +194,12 @@ void NUMA_vec_store::sort()
 {
 	assert(!is_sub_vec());
 	// The number of threads per NUMA node.
-	size_t nthreads_per_node
-		= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
 	typedef std::pair<const char *, const char *> arr_pair;
 	std::vector<arr_pair> arrs;
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t nthreads_per_node
+		= mem_threads->get_num_threads() / matrix_conf.get_num_nodes();
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
 	// We first split data into multiple partitions and sort each partition
 	// independently.
@@ -218,7 +218,7 @@ void NUMA_vec_store::sort()
 		}
 	}
 	mem_threads->wait4complete();
-	assert(arrs.size() <= (size_t) matrix_conf.get_num_threads());
+	assert(arrs.size() <= (size_t) mem_threads->get_num_threads());
 
 	// Now we should merge the array parts together.
 	size_t tot_num_bytes = get_length() * get_entry_size();

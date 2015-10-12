@@ -1316,6 +1316,14 @@ void test_mapply_mixed(int num_nodes)
 	assert(*(size_t *) max_diff->get_raw() == 0);
 }
 
+namespace fm
+{
+namespace eigen
+{
+extern bool cache_recent;
+}
+}
+
 void test_sub_matrix()
 {
 	printf("test sub tall col-matrix\n");
@@ -1375,7 +1383,7 @@ void test_sub_matrix()
 	mv2->set_block(2, mat3);
 
 	// Create the right matrix for GEMM.
-	dense_matrix::ptr right_mat = dense_matrix::create_randu<int>(0, 1000,
+	dense_matrix::ptr right_mat = dense_matrix::create_randu<double>(0, 1,
 			num_cols, 2, matrix_layout_t::L_COL, -1, true);
 	detail::mem_col_matrix_store::const_ptr B
 		= detail::mem_col_matrix_store::cast(right_mat->get_raw_store());
@@ -1385,6 +1393,7 @@ void test_sub_matrix()
 	// Perform GEMM on the first block MV.
 	eigen::block_multi_vector::ptr res1;
 	dense_matrix::ptr res_mat1;
+	fm::eigen::cache_recent = false;
 	{
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		res1 = eigen::block_multi_vector::create(

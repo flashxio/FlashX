@@ -31,7 +31,7 @@ static bool read_config_file(const std::string &conf_file,
 {
 	FILE *f = fopen(conf_file.c_str(), "r");
 	if (f == NULL) {
-		perror("fopen");
+		fprintf(stderr, "fopen %s: %s\n", conf_file.c_str(), strerror(errno));
 		return false;
 	}
 

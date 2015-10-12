@@ -44,7 +44,8 @@ public:
 		}
 	public:
 		typedef std::shared_ptr<file_holder> ptr;
-		static ptr create_temp(const std::string &name, size_t num_bytes);
+		static ptr create_temp(const std::string &name, size_t num_bytes,
+				safs::safs_file_group::ptr group);
 		static ptr create(const std::string &name);
 
 		~file_holder();

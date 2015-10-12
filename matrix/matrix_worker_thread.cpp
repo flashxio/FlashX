@@ -73,6 +73,26 @@ int matrix_io_callback::invoke(safs::io_request *reqs[], int num)
 	return 0;
 }
 
+namespace detail
+{
+std::vector<int> get_cpus(int node_id);
+}
+
+matrix_worker_thread::matrix_worker_thread(int worker_id, int node_id,
+		safs::file_io_factory::shared_ptr factory,
+		const std::vector<matrix_io_generator::ptr> &gens,
+		std::shared_ptr<task_creator> creator): thread("matrix-thread",
+			detail::get_cpus(node_id))
+{
+	this->worker_id = worker_id;
+	assert((size_t) worker_id < gens.size());
+	this->this_io_gen = gens[worker_id];
+	this->io_gens = gens;
+	this->tcreator = creator;
+	this->factory = factory;
+	this->steal_io_id = (worker_id + 1) % io_gens.size();
+}
+
 bool matrix_worker_thread::get_next_io(matrix_io &io)
 {
 	if (this_io_gen->has_next_io()) {

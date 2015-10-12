@@ -24,6 +24,8 @@
 #include <atomic>
 #include <unordered_map>
 
+#include "safs_file.h"
+
 #include "matrix_header.h"
 #include "generic_type.h"
 
@@ -63,7 +65,8 @@ public:
 	typedef std::shared_ptr<const matrix_store> const_ptr;
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, int num_nodes, bool in_mem);
+			const scalar_type &type, int num_nodes, bool in_mem,
+			safs::safs_file_group::ptr group = NULL);
 
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &_type);

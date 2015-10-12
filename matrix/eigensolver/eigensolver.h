@@ -37,7 +37,11 @@ class spm_function
 public:
 	typedef std::shared_ptr<const spm_function> const_ptr;
 
-	virtual fm::dense_matrix::ptr run(fm::dense_matrix::ptr x) const = 0;
+	/*
+	 * We pass a reference of the shared pointer to the run method.
+	 * So the user-defined run method can deallocate the input dense matrix.
+	 */
+	virtual fm::dense_matrix::ptr run(fm::dense_matrix::ptr &x) const = 0;
 	virtual size_t get_num_cols() const = 0;
 	virtual size_t get_num_rows() const = 0;
 };

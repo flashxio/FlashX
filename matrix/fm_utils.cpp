@@ -31,6 +31,20 @@
 namespace fm
 {
 
+static bool deduplicate = false;
+// remove self edges. It's enabled by default.
+static bool remove_selfe = true;
+
+void set_deduplicate(bool v)
+{
+	deduplicate = v;
+}
+
+void set_remove_self_edge(bool v)
+{
+	remove_selfe = v;
+}
+
 /*
  * This applies to a vector of values corresponding to the same key,
  * and generates an adjacency list.
@@ -81,12 +95,21 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
 	size_t edge_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
-		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID)
+		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID
+				// skip self-edges.
+				|| (remove_selfe && vec.get<fg::vertex_id_t>(i) == vid))
 			continue;
 		edge_buf[edge_idx++] = vec.get<fg::vertex_id_t>(i);
 	}
-	assert(edge_idx == num_edges);
+	assert(edge_idx <= num_edges);
+	// If there are self-edges, edge_idx has the actual number of edges.
+	num_edges = edge_idx;
 	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
+	if (deduplicate) {
+		fg::vertex_id_t *end = std::unique(edge_buf.get(),
+				edge_buf.get() + num_edges);
+		num_edges = end - edge_buf.get();
+	}
 	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 			edge_data_size);
 	out.resize(size);
@@ -96,6 +119,99 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 	fg::in_mem_undirected_vertex<> v(vid, edge_data_size > 0);
 	for (size_t i = 0; i < num_edges; i++)
 		v.add_edge(fg::edge<>(vid, edge_buf[i]));
+	fg::ext_mem_undirected_vertex::serialize(v, out.get_raw_arr(), size,
+			// The edge type here actually doesn't matter since it's
+			// an undirected vertex.
+			fg::edge_type::OUT_EDGE);
+}
+
+template<class AttrType>
+class attr_adj_apply_operate: public gr_apply_operate<sub_data_frame>
+{
+	typedef std::pair<fg::vertex_id_t, AttrType> edge_type;
+
+	struct edge_compare {
+		bool operator()(const edge_type &e1, const edge_type &e2) {
+			return e1.first < e2.first;
+		}
+	};
+
+	struct edge_predicate {
+		bool operator()(const edge_type &e1, const edge_type &e2) {
+			return e1.first == e2.first;
+		}
+	};
+public:
+	void run(const void *key, const sub_data_frame &val,
+			local_vec_store &out) const;
+
+	const scalar_type &get_key_type() const {
+		return get_scalar_type<fg::vertex_id_t>();
+	}
+
+	const scalar_type &get_output_type() const {
+		return get_scalar_type<char>();
+	}
+
+	size_t get_num_out_eles() const {
+		return 1;
+	}
+};
+
+template<class AttrType>
+void attr_adj_apply_operate<AttrType>::run(const void *key,
+		const sub_data_frame &val, local_vec_store &out) const
+{
+	fg::vertex_id_t vid = *(const fg::vertex_id_t *) key;
+	if (vid == fg::INVALID_VERTEX_ID) {
+		out.resize(0);
+		return;
+	}
+
+	assert(val.size() == 3);
+	assert(out.is_type<char>());
+	// The data frame is sorted based on the first vector and now we need
+	// to access the entries in the second vector.
+	const local_vec_store &vec = *val[1];
+	const local_vec_store &attr_vec = *val[2];
+	assert(vec.get_type() == get_scalar_type<fg::vertex_id_t>());
+
+	// I added an invalid edge for each vertex.
+	// The invalid edge is the maximal integer.
+	fg::vsize_t num_edges = vec.get_length() - 1;
+	// TODO we actually don't need to alloate memory multiple times.
+	std::unique_ptr<edge_type[]> edge_buf
+		= std::unique_ptr<edge_type[]>(new edge_type[num_edges]);
+	size_t edge_idx = 0;
+	for (size_t i = 0; i < vec.get_length(); i++) {
+		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID
+				// skip self-edges.
+				|| (remove_selfe && vec.get<fg::vertex_id_t>(i) == vid))
+			continue;
+		edge_buf[edge_idx].first = vec.get<fg::vertex_id_t>(i);
+		edge_buf[edge_idx].second = attr_vec.get<AttrType>(i);
+		edge_idx++;
+	}
+	assert(edge_idx <= num_edges);
+	// If there are self-edges, edge_idx has the actual number of edges.
+	num_edges = edge_idx;
+	std::sort(edge_buf.get(), edge_buf.get() + num_edges, edge_compare());
+	if (deduplicate) {
+		edge_type *end = std::unique(edge_buf.get(),
+				edge_buf.get() + num_edges, edge_predicate());
+		num_edges = end - edge_buf.get();
+	}
+	size_t edge_data_size = val[2]->get_entry_size();
+	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+			edge_data_size);
+	out.resize(size);
+
+	// Even if we generate a directed, we still can use undirected vertex to
+	// store one type of edges of a vertex.
+	fg::in_mem_undirected_vertex<AttrType> v(vid, edge_data_size > 0);
+	for (size_t i = 0; i < num_edges; i++)
+		v.add_edge(fg::edge<AttrType>(vid, edge_buf[i].first,
+					edge_buf[i].second));
 	fg::ext_mem_undirected_vertex::serialize(v, out.get_raw_arr(), size,
 			// The edge type here actually doesn't matter since it's
 			// an undirected vertex.
@@ -119,6 +235,21 @@ public:
 	}
 };
 
+namespace
+{
+
+struct unit4
+{
+	char data[4];
+};
+
+struct unit8
+{
+	char data[8];
+};
+
+}
+
 vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 {
 	if (df->get_num_vecs() < 2) {
@@ -139,9 +270,23 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to test if the edge list is sorted\n",
 			time_diff(start, end));
-	adj_apply_operate adj_op;
+
 	gettimeofday(&start, NULL);
-	vector_vector::ptr ret = sorted_df->groupby(sort_vec_name, adj_op);
+	vector_vector::ptr ret;
+	if (df->get_num_vecs() == 2)
+		ret = sorted_df->groupby(sort_vec_name, adj_apply_operate());
+	// Instead of giving the real data type, we give a type that indicates
+	// the size of the edge data size. Actually, we don't interpret data type
+	// here. Only the data size matters.
+	else if (df->get_vec(2)->get_entry_size() == 4)
+		ret = sorted_df->groupby(sort_vec_name, attr_adj_apply_operate<unit4>());
+	else if (df->get_vec(2)->get_entry_size() == 8)
+		ret = sorted_df->groupby(sort_vec_name, attr_adj_apply_operate<unit8>());
+	else {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The edge attribute has an unsupported type";
+		return vector_vector::ptr();
+	}
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to groupby the edge list.\n",
 			time_diff(start, end));
@@ -156,6 +301,12 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	detail::vec_store::ptr graph_data = detail::vec_store::create(
 			fg::graph_header::get_header_size(),
 			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+	size_t edge_data_size = 0;
+	if (df->get_num_vecs() == 3) {
+		auto vec = df->get_vec("attr");
+		assert(vec);
+		edge_data_size = vec->get_entry_size();
+	}
 
 	/*
 	 * Construct the in-edge adjacency lists.
@@ -165,6 +316,11 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	data_frame::ptr tmp = data_frame::create();
 	tmp->add_vec("dest", df->get_vec("dest"));
 	tmp->add_vec("source", df->get_vec("source"));
+	if (df->get_num_vecs() == 3) {
+		auto vec = df->get_vec("attr");
+		assert(vec);
+		tmp->add_vec("attr", vec);
+	}
 	df = tmp;
 	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
 	size_t num_vertices = in_adjs->get_num_vecs();
@@ -175,9 +331,9 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	detail::smp_vec_store::ptr num_in_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
-		num_in_edges->set(i,
+		num_in_edges->set<fg::vsize_t>(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					in_adjs->get_length(i), 0));
+					in_adjs->get_length(i), edge_data_size));
 	}
 	size_t num_edges = vector::create(num_in_edges)->sum<fg::vsize_t>();
 	gettimeofday(&end, NULL);
@@ -200,6 +356,11 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	tmp = data_frame::create();
 	tmp->add_vec("source", df->get_vec("source"));
 	tmp->add_vec("dest", df->get_vec("dest"));
+	if (df->get_num_vecs() == 3) {
+		auto vec = df->get_vec("attr");
+		assert(vec);
+		tmp->add_vec("attr", vec);
+	}
 	df = tmp;
 	vector_vector::ptr out_adjs = create_1d_matrix(df);
 	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
@@ -210,9 +371,9 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
-		num_out_edges->set(i,
+		num_out_edges->set<fg::vsize_t>(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(
-					out_adjs->get_length(i), 0));
+					out_adjs->get_length(i), edge_data_size));
 	}
 	assert(vector::create(num_out_edges)->sum<fg::vsize_t>() == num_edges);
 	gettimeofday(&end, NULL);
@@ -230,7 +391,8 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 
 	// Construct the graph header.
 	gettimeofday(&start, NULL);
-	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
+	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges,
+			edge_data_size);
 	local_vec_store::ptr header_store(new local_buf_vec_store(0,
 			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
 	memcpy(header_store->get_raw_arr(), &header,
@@ -265,12 +427,13 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 	// Leave the space for graph header.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(0,
 			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+	size_t edge_data_size = 0;
+	if (df->get_num_vecs() == 3) {
+		auto vec = df->get_vec("attr");
+		assert(vec);
+		edge_data_size = vec->get_entry_size();
+	}
 
-	// All edges share the same source vertex should be stored together.
-	data_frame::ptr tmp = data_frame::create();
-	tmp->add_vec("source", df->get_vec("source"));
-	tmp->add_vec("dest", df->get_vec("dest"));
-	df = tmp;
 	vector_vector::ptr adjs = create_1d_matrix(df);
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
@@ -282,8 +445,8 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 	size_t num_edges = 0;
 	for (size_t i = 0; i < num_vertices; i++) {
 		size_t local_num_edges = fg::ext_mem_undirected_vertex::vsize2num_edges(
-					adjs->get_length(i), 0);
-		num_out_edges->set(i, local_num_edges);
+					adjs->get_length(i), edge_data_size);
+		num_out_edges->set<fg::vsize_t>(i, local_num_edges);
 		num_edges += local_num_edges;
 	}
 	assert(num_edges % 2 == 0);
@@ -294,7 +457,8 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 
 	printf("create the graph image\n");
 	gettimeofday(&start, NULL);
-	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges, 0);
+	fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges,
+			edge_data_size);
 	local_vec_store::ptr header_store(new local_buf_vec_store(0,
 			fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
 	memcpy(header_store->get_raw_arr(), &header,

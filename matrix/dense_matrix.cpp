@@ -898,29 +898,31 @@ public:
 
 dense_matrix::ptr dense_matrix::_create_randu(const scalar_variable &min,
 		const scalar_variable &max, size_t nrow, size_t ncol,
-		matrix_layout_t layout, int num_nodes, bool in_mem)
+		matrix_layout_t layout, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
 {
 	assert(min.get_type() == max.get_type());
 	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, min.get_type(), num_nodes, in_mem);
+			nrow, ncol, layout, min.get_type(), num_nodes, in_mem, group);
 	store->set_data(rand_init(min, max, rand_init::rand_dist_type::UNIF));
 	return dense_matrix::ptr(new dense_matrix(store));
 }
 
 dense_matrix::ptr dense_matrix::_create_randn(const scalar_variable &mean,
 		const scalar_variable &var, size_t nrow, size_t ncol,
-		matrix_layout_t layout, int num_nodes, bool in_mem)
+		matrix_layout_t layout, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
 {
 	assert(mean.get_type() == var.get_type());
 	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, mean.get_type(), num_nodes, in_mem);
+			nrow, ncol, layout, mean.get_type(), num_nodes, in_mem, group);
 	store->set_data(rand_init(mean, var, rand_init::rand_dist_type::NORM));
 	return dense_matrix::ptr(new dense_matrix(store));
 }
 
 dense_matrix::ptr dense_matrix::_create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-		bool in_mem)
+		bool in_mem, safs::safs_file_group::ptr group)
 {
 	detail::matrix_store::ptr store(new detail::one_val_matrix_store(
 				val, nrow, ncol, layout, num_nodes));
@@ -1739,7 +1741,7 @@ bool __mapply_portion(
 					new EM_mat_mapply_serial_dispatcher(mats, out_mats, op,
 						tot_len, EM_matrix_store::CHUNK_SIZE));
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
-			io_worker_task *task = new io_worker_task(dispatcher, 1);
+			io_worker_task *task = new io_worker_task(dispatcher, 16);
 			for (size_t j = 0; j < mats.size(); j++) {
 				if (!mats[j]->is_in_mem()) {
 					const EM_object *obj
@@ -2130,7 +2132,8 @@ dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 }
 
 dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, int num_nodes, bool in_mem)
+			const scalar_type &type, int num_nodes, bool in_mem,
+			safs::safs_file_group::ptr group)
 {
 	store = detail::matrix_store::ptr(new detail::one_val_matrix_store(
 				type.create_scalar(), nrow, ncol, layout, num_nodes));
@@ -2138,7 +2141,7 @@ dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes,
-		bool in_mem)
+		bool in_mem, safs::safs_file_group::ptr group)
 {
 	// If nothing is specified, it creates a zero matrix.
 	detail::matrix_store::ptr store(new detail::one_val_matrix_store(
@@ -2148,10 +2151,10 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, const set_operate &op,
-		int num_nodes, bool in_mem)
+		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
 {
 	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, type, num_nodes, in_mem);
+			nrow, ncol, layout, type, num_nodes, in_mem, group);
 	store->set_data(op);
 	return dense_matrix::ptr(new dense_matrix(store));
 }

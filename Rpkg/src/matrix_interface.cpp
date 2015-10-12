@@ -1055,7 +1055,7 @@ public:
 		this->n = n;
 	}
 
-	virtual dense_matrix::ptr run(dense_matrix::ptr x) const {
+	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
 		// Force R to perform garbage collection. The R garbage collector
 		// doesn't work frequently, so it won't clean up the existing
 		// dense matrices and use a lot of memory.

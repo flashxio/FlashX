@@ -42,6 +42,19 @@ struct block_identifier
 	off_t off;		// the location (in pages) in the file.
 };
 
+/*
+ * The goal of this class is to map a chunk of data in an SAFS to its physical
+ * location in a Linux file on an SSD. Each SAFS file has its own mapping.
+ * It first maps a chunk of data in an SAFS to a location in a logical RAID
+ * stripe and the location is identified by `block_identifier'.
+ * The location in the stripe is further mapped to the physical location
+ * in a file on an SSD.
+ *
+ * In practice, remote_io first uses map2file() and get_disk_id() to identify
+ * the I/O thread that owns the disk where a chunk of data is stored.
+ * Then an I/O thread locates the physical location of the data with
+ * `logical_file_partition', which works with `file_mapper'.
+ */
 class file_mapper
 {
 	static atomic_integer file_id_gen;
@@ -70,25 +83,44 @@ public:
 		return file_id;
 	}
 
+	/*
+	 * Return the name of the SAFS file.
+	 */
 	const std::string &get_name() const {
 		return file_name;
 	}
 
-	const std::string &get_file_name(int idx) const {
-		return files[idx].name;
+	/*
+	 * The name of the physical file that stores the chunk `idx' in a stripe.
+	 */
+	std::string get_file_name(int idx) const {
+		return files[idx].get_file_name();
 	}
 
+	/*
+	 * The NUMA node of the disk where the chunk `idx' in a stripe locates.
+	 */
 	int get_file_node_id(int idx) const {
-		return files[idx].node_id;
+		return files[idx].get_node_id();
+	}
+
+	/*
+	 * The disk Id in the RAID where the chunk `idx' in a stripe locates.
+	 */
+	int get_disk_id(int idx) const {
+		return files[idx].get_disk_id();
 	}
 
 	int get_num_files() const {
 		return (int) files.size();
 	}
 
+	/*
+	 * This maps a chunk of data in the SAFS file to the location of a RAID
+	 * stripe. It doesn't identify the physical location of the chunk of data.
+	 */
 	virtual void map(off_t, struct block_identifier &) const = 0;
 	virtual int map2file(off_t) const = 0;
-	virtual off_t map_backwards(int idx, off_t off_in_file) const = 0;
 
 	virtual file_mapper *clone() = 0;
 };
@@ -113,14 +145,6 @@ public:
 
 	virtual int map2file(off_t off) const {
 		return (int) (((off / STRIPE_BLOCK_SIZE) + rand_start) % get_num_files());
-	}
-
-	virtual off_t map_backwards(int idx, off_t off_in_file) const {
-		int idx_in_block = off_in_file % STRIPE_BLOCK_SIZE;
-		off_t block_in_file = off_in_file / STRIPE_BLOCK_SIZE;
-		return (block_in_file * get_num_files() + (idx - rand_start
-					+ get_num_files()) % get_num_files()) * STRIPE_BLOCK_SIZE
-			+ idx_in_block;
 	}
 
 	virtual file_mapper *clone() {
@@ -151,15 +175,6 @@ public:
 		int shift = (int) ((block_idx / get_num_files()) % get_num_files());
 		return (int) ((block_idx % get_num_files() + shift
 					+ rand_start) % get_num_files());
-	}
-
-	virtual off_t map_backwards(int idx, off_t off_in_file) const {
-		int idx_in_block = off_in_file % STRIPE_BLOCK_SIZE;
-		off_t block_in_file = off_in_file / STRIPE_BLOCK_SIZE;
-		int idx_in_stripe = (rand_start + block_in_file) % get_num_files();
-		return (block_in_file * get_num_files() + (idx - idx_in_stripe
-					+ get_num_files()) % get_num_files()) * STRIPE_BLOCK_SIZE
-			+ idx_in_block;
 	}
 
 	virtual file_mapper *clone() {
@@ -201,10 +216,6 @@ public:
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		off_t p_idx = (CONST_A * block_idx) % CONST_P;
 		return p_idx % get_num_files();
-	}
-
-	virtual off_t map_backwards(int idx, off_t off_in_file) const {
-		throw unsupported_exception();
 	}
 
 	virtual file_mapper *clone() {

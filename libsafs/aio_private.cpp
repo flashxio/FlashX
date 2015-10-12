@@ -54,53 +54,6 @@ struct thread_callback_s
 	embedded_array<struct iovec, MAX_EMBED_BUFS> vec;
 };
 
-#if 0
-class virt_data_impl: public virt_data
-{
-	// fd <-> buffered_io
-	std::tr1::unordered_map<int, const buffered_io *> fd_map;
-public:
-	void add_new_file(const buffered_io *io) {
-		std::vector<int> fds = io->get_fds();
-		for (unsigned i = 0; i < fds.size(); i++)
-			fd_map.insert(std::pair<int, const buffered_io *>(fds[i], io));
-	}
-
-	off_t find_global_off(int fd, off_t off);
-
-	virtual void create_data(int fd, void *data, int size, off_t off) {
-		off_t global_off = find_global_off(fd, off);
-		const buffered_io *io = fd_map[fd];
-		create_write_data((char *) data, size, global_off, io->get_file_id());
-	}
-
-	virtual bool verify_data(int fd, void *data, int size, off_t off) {
-		off_t global_off = find_global_off(fd, off);
-		const buffered_io *io = fd_map[fd];
-		return check_read_content((char *) data, size, global_off,
-				io->get_file_id());
-	}
-};
-
-off_t virt_data_impl::find_global_off(int fd, off_t off)
-{
-	std::tr1::unordered_map<int, const buffered_io *>::const_iterator it
-		= fd_map.find(fd);
-	assert(it != fd_map.end());
-	int idx = -1;
-	for (unsigned i = 0; i < it->second->get_fds().size(); i++) {
-		if (fd == it->second->get_fds()[i])
-			idx = i;
-	}
-	assert(idx >= 0);
-	off_t pg_idx = off / PAGE_SIZE;
-	off_t idx_in_page = off % PAGE_SIZE;
-	off_t global_pg_idx = it->second->get_partition().map_backwards(idx,
-			pg_idx);
-	return global_pg_idx * PAGE_SIZE + idx_in_page;
-}
-#endif
-
 /**
  * This slab allocator makes sure all requests in the callback structure
  * are extended requests.
@@ -156,22 +109,14 @@ void async_io::io_ref::dec_ref()
 
 async_io::async_io(const logical_file_partition &partition,
 		int aio_depth_per_file, thread *t, const safs_header &header,
-		int flags): io_interface(t, header), AIO_DEPTH(aio_depth_per_file)
+		int flags): io_interface(t, header), AIO_DEPTH(
+			aio_depth_per_file * partition.get_num_files())
 {
 	int node_id = t->get_node_id();
 	cb_allocator = new callback_allocator(node_id,
 			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
-
-#if 0
-	data = NULL;
-	if (params.is_use_virt_aio()) {
-		data = new virt_data_impl();
-		ctx = new virt_aio_ctx(data, node_id, AIO_DEPTH);
-	}
-	else
-#endif
-		ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
+	ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
 
 	num_iowait = 0;
 	num_completed_reqs = 0;
@@ -181,10 +126,6 @@ async_io::async_io(const logical_file_partition &partition,
 		io_ref io(new buffered_io(partition, t, header, O_DIRECT | flags));
 		default_io = io;
 		open_files.insert(std::pair<int, io_ref>(file_id, io));
-#if 0
-		if (data)
-			data->add_new_file(io);
-#endif
 	}
 }
 

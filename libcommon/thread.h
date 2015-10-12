@@ -21,9 +21,11 @@
  */
 
 #include <pthread.h>
-#include <atomic>
+#include <hwloc.h>
 
+#include <atomic>
 #include <string>
+#include <set>
 
 #include "concurrency.h"
 #include "common.h"
@@ -37,6 +39,8 @@ class thread
 	volatile pid_t tid;
 	int thread_idx;
 	int node_id;
+	// Indicate which CPU cores the thread is bound to.
+	std::vector<int> cpu_affinity;
 	pthread_t id;
 	bool blocking;
 	std::string name;
@@ -51,28 +55,14 @@ class thread
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 
+	void construct_init();
+
 	friend void init_thread_class();
 	friend void *thread_run(void *arg);
 public:
-	thread(std::string name, int node_id, bool blocking = true) {
-		thread_class_init();
-
-		tid = -1;
-		thread_idx = num_threads.inc(1);
-		this->name = name + "-" + itoa(thread_idx);
-		this->node_id = node_id;
-		this->blocking = blocking;
-		this->id = 0;
-
-		_is_activated = false;
-		_has_exit = false;
-		_is_running = true;
-		_is_sleeping = true;
-
-		pthread_mutex_init(&mutex, NULL);
-		pthread_cond_init(&cond, NULL);
-		user_data = NULL;
-	}
+	thread(std::string name, int node_id, bool blocking = true);
+	thread(std::string name, const std::vector<int> &cpu_affinity,
+			bool blocking = true);
 
 	void set_user_data(void *user_data) {
 		assert(this->user_data == NULL);
@@ -124,6 +114,10 @@ public:
 
 	int get_node_id() const {
 		return node_id;
+	}
+
+	const std::vector<int> get_cpu_affinity() const {
+		return cpu_affinity;
 	}
 
 	void stop() {
@@ -212,6 +206,14 @@ public:
 		num_pending = 0;
 	}
 
+	task_thread(const std::string &name, const std::vector<int> &cpus,
+			int node): thread(name, cpus), tasks(node, 1024, true) {
+		pthread_mutex_init(&mutex, NULL);
+		pthread_cond_init(&cond, NULL);
+		all_complete = false;
+		num_pending = 0;
+	}
+
 	void add_task(thread_task *t) {
 		pthread_mutex_lock(&mutex);
 		all_complete = false;
@@ -254,5 +256,80 @@ public:
 		return num_pending;
 	}
 };
+
+class CPU_core
+{
+	std::vector<int> logical_units;
+public:
+	CPU_core(hwloc_obj_t core);
+
+	const std::vector<int> get_units() const {
+		return logical_units;
+	}
+
+	off_t get_logical_unit(size_t idx) const {
+		return logical_units[idx];
+	}
+
+	size_t get_num_units() const {
+		return logical_units.size();
+	}
+};
+
+class NUMA_node
+{
+	std::vector<CPU_core> cores;
+	std::set<int> lus;
+public:
+	/* This constructor works for the machine without NUMA nodes. */
+	NUMA_node(hwloc_topology_t topology);
+	/* This constructor works for the machine with NUMA nodes. */
+	NUMA_node(hwloc_obj_t node);
+
+	bool contain_lu(int unit) const {
+		return lus.find(unit) != lus.end();
+	}
+
+	std::vector<int> get_logical_units() const;
+
+	const CPU_core &get_core(size_t idx) const {
+		return cores[idx];
+	}
+
+	size_t get_num_cores() const {
+		return cores.size();
+	}
+
+	size_t get_num_logical_units() const {
+		return cores.size() * cores.front().get_num_units();
+	}
+};
+
+class CPU_hierarchy
+{
+	std::vector<NUMA_node> nodes;
+public:
+	CPU_hierarchy();
+
+	const NUMA_node &get_node(size_t idx) const {
+		return nodes[idx];
+	}
+
+	size_t get_num_nodes() const {
+		return nodes.size();
+	}
+
+	size_t get_num_cores() const {
+		return nodes.size() * nodes.front().get_num_cores();
+	}
+
+	size_t get_num_logical_units() const {
+		return nodes.size() * nodes.front().get_num_logical_units();
+	}
+
+	std::vector<int> lus2node(const std::vector<int> &lus) const;
+};
+
+extern CPU_hierarchy cpus;
 
 #endif

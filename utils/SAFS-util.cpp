@@ -212,6 +212,9 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
+	configs->add_options("writable=1");
+	init_io_system(configs, false);
+
 	size_t block_size = params.get_RAID_block_size();
 	if (argc >= 3) {
 		block_size = str2size(argv[2]);
@@ -220,8 +223,6 @@ void comm_load_file2fs(int argc, char *argv[])
 	}
 	printf("RAID block size is %ld pages\n", block_size);
 
-	configs->add_options("writable=1");
-	init_io_system(configs, false);
 	data_source *source = new file_data_source(ext_file);
 
 	safs_file file(get_sys_RAID_conf(), int_file_name);
@@ -388,7 +389,7 @@ void comm_list(int argc, char *argv[])
 
 	// First find all individual file names in the root directories.
 	for (int i = 0; i < conf.get_num_disks(); i++) {
-		std::string dir_name = conf.get_disk(i).name;
+		std::string dir_name = conf.get_disk(i).get_file_name();
 		native_dir dir(dir_name);
 		std::vector<std::string> file_names;
 		dir.read_all_files(file_names);

@@ -25,6 +25,8 @@
 #include <vector>
 #include <memory>
 
+#include "safs_file.h"
+
 #include "generic_type.h"
 #include "matrix_header.h"
 #include "bulk_operate.h"
@@ -161,12 +163,13 @@ private:
 
 	static ptr _create_randu(const scalar_variable &min, const scalar_variable &max,
 			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-			bool in_mem);
+			bool in_mem, safs::safs_file_group::ptr group);
 	static ptr _create_randn(const scalar_variable &mean, const scalar_variable &var,
 			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-			bool in_mem);
+			bool in_mem, safs::safs_file_group::ptr group);
 	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes, bool in_mem);
+			matrix_layout_t layout, int num_nodes, bool in_mem,
+			safs::safs_file_group::ptr group);
 
 	detail::matrix_store::ptr inner_prod_tall(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
@@ -188,40 +191,47 @@ protected:
 	bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
+			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL);
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, const set_operate &op, int num_nodes = -1,
-			bool in_mem = true);
+			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
 	static ptr create(detail::matrix_store::const_ptr store) {
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
 
 	template<class T>
 	static ptr create_randu(T _min, T _max, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
+			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable_impl<T> min(_min);
 		scalar_variable_impl<T> max(_max);
-		return _create_randu(min, max, nrow, ncol, layout, num_nodes, in_mem);
+		return _create_randu(min, max, nrow, ncol, layout, num_nodes, in_mem,
+				group);
 	}
 	template<class T>
 	static ptr create_randn(T _mean, T _var, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
+			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable_impl<T> mean(_mean);
 		scalar_variable_impl<T> var(_var);
-		return _create_randn(mean, var, nrow, ncol, layout, num_nodes, in_mem);
+		return _create_randn(mean, var, nrow, ncol, layout, num_nodes, in_mem,
+				group);
 	}
 
 	template<class T>
 	static ptr create_const(T _val, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true) {
+			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable::ptr val(new scalar_variable_impl<T>(_val));
-		return _create_const(val, nrow, ncol, layout, num_nodes, in_mem);
+		return _create_const(val, nrow, ncol, layout, num_nodes, in_mem, group);
 	}
 
 	dense_matrix() {
 	}
 	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, int num_nodes = -1, bool in_mem = true);
+			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL);
 
 	const detail::matrix_store &get_data() const {
 		return *store;
