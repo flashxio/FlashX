@@ -37,7 +37,10 @@ void sparse_block_2d::verify(const block_2d_size &block_size) const
 	size_t num_rows = 0;
 	if (has_rparts()) {
 		rp_edge_iterator it = get_first_edge_iterator();
-		while (!is_rparts_end(it)) {
+		// The region of row parts contains an empty row part.
+		// so if we see an empty row, we have reached to the end of
+		// the row part region.
+		while (it.has_next()) {
 			size_t num_nz = 0;
 			while (it.has_next()) {
 				num_nz++;
@@ -57,22 +60,6 @@ void sparse_block_2d::verify(const block_2d_size &block_size) const
 	assert(num_rows <= block_size.get_num_rows());
 }
 
-size_t sparse_block_2d::get_nnz() const
-{
-	size_t nnz = 0;
-	if (has_rparts()) {
-		rp_edge_iterator it = get_first_edge_iterator();
-		while (!is_rparts_end(it)) {
-			while (it.has_next()) {
-				nnz++;
-				it.next();
-			}
-			it = get_next_edge_iterator(it);
-		}
-	}
-	return nnz + get_num_coo_vals();
-}
-
 std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 		const block_2d_size &block_size) const
 {
@@ -81,7 +68,7 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 	std::vector<coo_nz_t> ret;
 	if (has_rparts()) {
 		rp_edge_iterator it = get_first_edge_iterator();
-		while (!is_rparts_end(it)) {
+		while (it.has_next()) {
 			while (it.has_next()) {
 				uint16_t rel_row_idx = it.get_rel_row_idx();
 				uint16_t rel_col_idx = it.next();
@@ -93,8 +80,8 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 	}
 	const local_coo_t *lcoo_start = get_coo_start();
 	for (size_t i = 0; i < get_num_coo_vals(); i++) {
-		uint16_t rel_row_idx = lcoo_start[i].first;
-		uint16_t rel_col_idx = lcoo_start[i].second;
+		uint16_t rel_row_idx = lcoo_start[i].get_row_idx();
+		uint16_t rel_col_idx = lcoo_start[i].get_col_idx();
 		ret.push_back(coo_nz_t(row_begin + rel_row_idx,
 					col_begin + rel_col_idx));
 	}
@@ -103,29 +90,48 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 
 void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 {
-	char *end = row_parts + rparts_size;
-
-	memcpy(end, &part, part_size);
-	assert(((size_t) rparts_size) + part_size
-			<= std::numeric_limits<uint32_t>::max());
-	rparts_size += part_size;
+	assert(num_coo_vals == 0);
+	memcpy(get_rpart_end(), &part, part_size);
+	size_t num_entries = part.get_num_entries(part_size);
+	if (num_entries > 0) {
+		nrow++;
+		nnz += num_entries;
+	}
 }
 
-void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nnz,
+void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nz,
 		const block_2d_size &block_size)
 {
-	if (rparts_size > 0) {
+	// This function should only be called once.
+	assert(num_coo_vals == 0);
+
+	// Add an empty row part to indicate the end of the row-part region.
+	sparse_row_part end(std::numeric_limits<uint16_t>::max());
+	append(end, sparse_row_part::get_size(0));
+
+	local_coo_t *lcoo = get_coo_start();
+	for (size_t i = 0; i < nz.size(); i++)
+		lcoo[i] = local_coo_t(nz[i].first & block_size.get_nrow_mask(),
+				nz[i].second & block_size.get_ncol_mask());
+	num_coo_vals = nz.size();
+	nrow += nz.size();
+	nnz += nz.size();
+}
+
+void sparse_block_2d::finalize(const char *data, size_t num_bytes)
+{
+	if (num_bytes == 0)
+		return;
+
+	assert(nnz > 0);
+	// If there are row parts but we haven't added the empty row to indicate
+	// the end of the row part region.
+	if (num_coo_vals == 0) {
 		sparse_row_part end(std::numeric_limits<uint16_t>::max());
 		append(end, sparse_row_part::get_size(0));
 	}
-	// This function should only be called once.
-	assert(num_coo_vals == 0);
-	num_coo_vals = nnz.size();
-	local_coo_t *lcoo = get_coo_start();
-	for (size_t i = 0; i < nnz.size(); i++) {
-		lcoo[i].first = nnz[i].first & block_size.get_nrow_mask();
-		lcoo[i].second = nnz[i].second & block_size.get_ncol_mask();
-	}
+	if (data)
+		memcpy(get_nz_data(), data, num_bytes);
 }
 
 void SpM_2d_index::verify() const
@@ -291,7 +297,7 @@ void SpM_2d_storage::verify() const
 		long prev_block_col_idx = -1;
 		size_t num_blocks = 0;
 		while (brow_it.has_next()) {
-			const sparse_block_2d &block = brow_it.next();
+			const sparse_block_2d &block = brow_it.next(header->get_entry_size());
 			assert(block.get_block_row_idx() == i);
 			assert((long) block.get_block_col_idx() > prev_block_col_idx);
 			prev_block_col_idx = block.get_block_col_idx();
@@ -434,9 +440,10 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 		block_row_iterator it((const sparse_block_2d *) data,
 				(const sparse_block_2d *) (((char *) data) + size));
 		size_t tot_brow_size = 0;
+		size_t entry_size = index->get_header().get_entry_size();
 		while (it.has_next()) {
-			const sparse_block_2d &block = it.next();
-			tot_brow_size += block.get_size();
+			const sparse_block_2d &block = it.next(entry_size);
+			tot_brow_size += block.get_size(entry_size);
 			if (block.is_empty())
 				continue;
 			block.verify(block_size);

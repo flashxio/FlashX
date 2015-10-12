@@ -537,11 +537,13 @@ class part_2d_apply_operate: public gr_apply_operate<local_vv_store>
 {
 	// The row length (aka. the total number of columns) of the matrix.
 	size_t row_len;
+	size_t nz_size;
 	block_2d_size block_size;
 public:
 	part_2d_apply_operate(const block_2d_size &_size,
-			size_t row_len): block_size(_size) {
+			size_t row_len, size_t nz_size): block_size(_size) {
 		this->row_len = row_len;
+		this->nz_size = nz_size;
 	}
 
 	void run(const void *key, const local_vv_store &val,
@@ -570,6 +572,62 @@ struct coo_less
 			return a.second < b.second;
 		else
 			return a.first < b.first;
+	}
+};
+
+class block_nz_data
+{
+	size_t entry_size;
+	std::vector<char> data;
+	size_t num_entries;
+public:
+	block_nz_data(size_t entry_size) {
+		this->entry_size = entry_size;
+		num_entries = 0;
+	}
+
+	void clear() {
+		num_entries = 0;
+		data.clear();
+	}
+
+	void push_back(char *new_entry) {
+		assert(entry_size > 0);
+		if (data.empty())
+			data.resize(16 * entry_size);
+		// If full
+		else if (data.size() == entry_size * num_entries)
+			data.resize(data.size() * 2);
+		memcpy(&data[num_entries * entry_size], new_entry, entry_size);
+		num_entries++;
+	}
+
+	void append(const char *new_entries, size_t num) {
+		assert(entry_size > 0);
+		if (data.empty())
+			data.resize(num_entries * entry_size);
+		else if (data.size() < (this->num_entries + num) * entry_size)
+			data.resize((this->num_entries + num) * entry_size);
+		memcpy(&data[num_entries * entry_size], new_entries, entry_size * num);
+		num_entries += num;
+	}
+
+	const char *get_data() const {
+		if (entry_size == 0)
+			return NULL;
+		else
+			return data.data();
+	}
+
+	size_t get_size() const {
+		return num_entries;
+	}
+
+	bool is_empty() const {
+		if (entry_size == 0)
+			return true;
+		else
+			return data.empty();
 	}
 };
 
@@ -609,6 +667,10 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		}
 	}
 
+	// Containers of non-zero values.
+	block_nz_data data(nz_size);
+	block_nz_data single_nz_data(nz_size);
+
 	std::vector<size_t> neigh_idxs(val.get_num_vecs());
 	// The maximal size of a block.
 	size_t max_block_size
@@ -621,7 +683,10 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		// The size for row part headers is highly over estimated.
 		+ sizeof(sparse_row_part) * max_row_parts
 		// The size is accurate.
-		+ sparse_row_part::get_col_entry_size() * tot_num_non_zeros;
+		+ sparse_row_part::get_col_entry_size() * tot_num_non_zeros
+		// The size of the non-zero entries.
+		+ nz_size * tot_num_non_zeros;
+	size_t max_idx_size = max_block_size - nz_size * tot_num_non_zeros;
 	out.resize(max_block_size);
 	size_t curr_size = 0;
 	// The maximal size of a row part.
@@ -634,6 +699,8 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		sparse_block_2d *block
 			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
 					block_row_id, col_idx / block_width);
+		data.clear();
+		single_nz_data.clear();
 		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
 			= edge_dist_map[col_idx / block_width];
 		std::vector<coo_nz_t> single_nnz;
@@ -641,6 +708,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		for (size_t i = 0; i < v_ptrs.size(); i++) {
 			const fg::ext_mem_undirected_vertex *v = v_ptrs[i];
 			fg::vertex_id_t row_idx = v->get_id() - start_vid;
+			assert(v->get_edge_data_size() == nz_size);
 			assert(neigh_idxs[row_idx] < v->get_num_edges());
 			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx
 					&& v->get_neighbor(neigh_idxs[row_idx]) < col_idx + block_width);
@@ -650,6 +718,17 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 			for (; idx < v->get_num_edges()
 					&& v->get_neighbor(idx) < col_idx + block_width; idx++)
 				local_neighs.push_back(v->get_neighbor(idx));
+			// Get all edge data.
+			if (nz_size > 0 && local_neighs.size() == 1)
+				single_nz_data.push_back(v->get_raw_edge_data(neigh_idxs[row_idx]));
+			else if (nz_size > 0) {
+				size_t tmp_idx = neigh_idxs[row_idx];
+				for (; tmp_idx < v->get_num_edges()
+						&& v->get_neighbor(tmp_idx) < col_idx + block_width;
+						tmp_idx++)
+					data.push_back(v->get_raw_edge_data(tmp_idx));
+				assert(tmp_idx == idx);
+			}
 			size_t local_nnz = local_neighs.size();
 			assert(local_nnz <= block_width);
 			neigh_idxs[row_idx] = idx;
@@ -659,8 +738,10 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 				rp_edge_iterator edge_it = part->get_edge_iterator();
 				for (size_t k = 0; k < local_neighs.size(); k++)
 					edge_it.append(block_size, local_neighs[k]);
-				assert(block->get_size() + sparse_row_part::get_size(local_nnz)
-						<= max_block_size - curr_size);
+				// These two parts don't count the space used by non-zero entries.
+				assert(block->get_size(0) + sparse_row_part::get_size(local_nnz)
+						// So is here.
+						<= max_idx_size - curr_size);
 				block->append(*part, sparse_row_part::get_size(local_nnz));
 			}
 			else if (local_neighs.size() == 1)
@@ -668,10 +749,12 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		}
 		if (!single_nnz.empty())
 			block->add_coo(single_nnz, block_size);
+		if (!single_nz_data.is_empty())
+			data.append(single_nz_data.get_data(), single_nz_data.get_size());
 		// After we finish adding rows to a block, we need to finalize it.
-		block->finalize();
+		block->finalize(data.get_data(), data.get_size() * nz_size);
 		if (!block->is_empty()) {
-			curr_size += block->get_size();
+			curr_size += block->get_size(nz_size);
 			block->verify(block_size);
 		}
 		num_non_zeros += block->get_nnz();
@@ -717,7 +800,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		vector_vector::ptr adjs, const block_2d_size &block_size)
+		vector_vector::ptr adjs, const block_2d_size &block_size, size_t entry_size)
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
@@ -725,9 +808,9 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_rows));
+			part_2d_apply_operate(block_size, num_rows, entry_size));
 
-	matrix_header mheader(matrix_type::SPARSE, 0, num_rows, num_rows,
+	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
 			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
 
 	// Construct the index file of the adjacency matrix.
@@ -745,27 +828,27 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::ptr df, const block_2d_size &block_size)
+		data_frame::ptr df, const block_2d_size &block_size, size_t entry_size)
 {
 	vector_vector::ptr vv = create_1d_matrix(df);
 	if (vv == NULL)
 		return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>();
 	else
-		return create_2d_matrix(vv, block_size);
+		return create_2d_matrix(vv, block_size, entry_size);
 }
 
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file,
-		bool to_safs)
+		size_t entry_size, const std::string &mat_file,
+		const std::string &mat_idx_file, bool to_safs)
 {
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_rows));
+			part_2d_apply_operate(block_size, num_rows, entry_size));
 
-	matrix_header mheader(matrix_type::SPARSE, 0, num_rows, num_rows,
+	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
 			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
 	if (!to_safs) {
 		FILE *f_2d = fopen(mat_file.c_str(), "w");

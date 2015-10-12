@@ -147,7 +147,7 @@ void test_multiply_block()
 
 	vector_vector::ptr adj = create_1d_matrix(df);
 	std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> mat
-		= create_2d_matrix(adj, block_size);
+		= create_2d_matrix(adj, block_size, 0);
 	assert(mat.first);
 	assert(mat.second);
 	mat.second->verify();

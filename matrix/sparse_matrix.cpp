@@ -141,6 +141,7 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 		const sparse_matrix &mat, block_exec_order::ptr order): io(
 			_io), block_size(mat.get_block_size())
 {
+	this->entry_size = mat.get_entry_size();
 	size_t num_block_rows
 		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
 	if (order->is_valid_size(num_block_rows, num_block_rows))
@@ -237,7 +238,7 @@ void block_compute_task::run(char *buf, size_t size)
 				assert(b.get_block_col_idx() >= sb_col_idx + j);
 				if (b.get_block_col_idx() == sb_col_idx + j) {
 					blocks[idx] = &b;
-					its[i].next();
+					its[i].next(entry_size);
 				}
 				else
 					blocks[idx] = NULL;
@@ -381,7 +382,8 @@ class fg_sparse_sym_matrix: public sparse_matrix
 	safs::file_io_factory::shared_ptr factory;
 
 	fg_sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(nrows, true) {
+			size_t nrows, size_t entry_size): sparse_matrix(nrows, entry_size,
+				true) {
 		this->factory = factory;
 	}
 public:
@@ -423,7 +425,8 @@ sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 
 	fg::vsize_t num_vertices = index->get_num_vertices();
 	fg_sparse_sym_matrix *m = new fg_sparse_sym_matrix(fg->get_graph_io_factory(
-				safs::REMOTE_ACCESS), num_vertices);
+				safs::REMOTE_ACCESS), num_vertices,
+			index->get_graph_header().get_edge_data_size());
 
 	// Generate the matrix index from the vertex index.
 	if (index->is_compressed()) {
@@ -478,7 +481,8 @@ class fg_sparse_asym_matrix: public sparse_matrix
 	bool transposed;
 
 	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(nrows, false) {
+			size_t nrows, size_t entry_size): sparse_matrix(nrows, entry_size,
+				false) {
 		transposed = false;
 		this->factory = factory;
 	}
@@ -522,7 +526,8 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 
 	fg::vsize_t num_vertices = index->get_num_vertices();
 	fg_sparse_asym_matrix *m = new fg_sparse_asym_matrix(fg->get_graph_io_factory(
-				safs::REMOTE_ACCESS), num_vertices);
+				safs::REMOTE_ACCESS), num_vertices,
+			index->get_graph_header().get_edge_data_size());
 
 	if (index->is_compressed()) {
 		fg::in_mem_cdirected_vertex_index::ptr dindex
@@ -595,7 +600,8 @@ public:
 	block_sparse_matrix(SpM_2d_index::ptr index,
 			SpM_2d_storage::ptr mat): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(), true), block_size(
+				index->get_header().get_num_cols(),
+				index->get_header().get_entry_size(), true), block_size(
 				index->get_header().get_2d_block_size()) {
 		this->index = index;
 		factory = mat->create_io_factory();
@@ -604,7 +610,8 @@ public:
 	block_sparse_matrix(SpM_2d_index::ptr index,
 			safs::file_io_factory::shared_ptr factory): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(), true), block_size(
+				index->get_header().get_num_cols(),
+				index->get_header().get_entry_size(), true), block_size(
 				index->get_header().get_2d_block_size()) {
 		this->index = index;
 		this->factory = factory;
@@ -668,7 +675,8 @@ public:
 	block_sparse_asym_matrix(SpM_2d_index::ptr index, SpM_2d_storage::ptr mat,
 			SpM_2d_index::ptr t_index, SpM_2d_storage::ptr t_mat): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(), false), block_size(
+				index->get_header().get_num_cols(),
+				index->get_header().get_entry_size(), false), block_size(
 				index->get_header().get_2d_block_size()) {
 		this->mat = block_sparse_matrix::ptr(new block_sparse_matrix(index, mat));
 		this->t_mat = block_sparse_matrix::ptr(new block_sparse_matrix(t_index,
@@ -680,7 +688,8 @@ public:
 			SpM_2d_index::ptr t_index,
 			safs::file_io_factory::shared_ptr t_mat_io_fac): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(), false), block_size(
+				index->get_header().get_num_cols(),
+				index->get_header().get_entry_size(), false), block_size(
 				index->get_header().get_2d_block_size()) {
 		this->mat = block_sparse_matrix::ptr(new block_sparse_matrix(index, mat_io_fac));
 		this->t_mat = block_sparse_matrix::ptr(new block_sparse_matrix(t_index,

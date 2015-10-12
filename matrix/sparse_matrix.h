@@ -217,6 +217,7 @@ class block_compute_task: public compute_task
 	off_t off;
 	detail::local_mem_buffer::irreg_buf_t buf;
 	size_t real_io_size;
+	size_t entry_size;
 protected:
 	block_2d_size block_size;
 public:
@@ -298,8 +299,8 @@ class block_spmm_task_impl: public block_spmm_task
 			const T *in_rows, T *out_rows) {
 		for (size_t i = 0; i < num; i++) {
 			local_coo_t coo = coos[i];
-			const T *src_row = in_rows + ROW_WIDTH * coo.second /* col_idx */;
-			T *dest_row = out_rows + ROW_WIDTH * coo.first /* row_idx */ ;
+			const T *src_row = in_rows + ROW_WIDTH * coo.get_col_idx();
+			T *dest_row = out_rows + ROW_WIDTH * coo.get_row_idx();
 			for (size_t j = 0; j < ROW_WIDTH; j++)
 				dest_row[j] += src_row[j];
 		}
@@ -329,7 +330,8 @@ public:
 
 		if (block.has_rparts()) {
 			rp_edge_iterator it = block.get_first_edge_iterator();
-			while (!block.is_rparts_end(it)) {
+			// An empty row part indicates the end of the row-part region.
+			while (it.has_next()) {
 				it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
 				it = block.get_next_edge_iterator(it);
 			}
@@ -360,8 +362,8 @@ class block_spmm_task_impl<T, 0>: public block_spmm_task
 		size_t row_width = get_out_matrix().get_num_cols();
 		for (size_t i = 0; i < num; i++) {
 			local_coo_t coo = coos[i];
-			const T *src_row = in_rows + row_width * coo.second /* col_idx */;
-			T *dest_row = out_rows + row_width * coo.first /* row_idx */ ;
+			const T *src_row = in_rows + row_width * coo.get_col_idx();
+			T *dest_row = out_rows + row_width * coo.get_row_idx();
 			for (size_t j = 0; j < row_width; j++)
 				dest_row[j] += src_row[j];
 		}
@@ -390,7 +392,8 @@ public:
 
 		if (block.has_rparts()) {
 			rp_edge_iterator it = block.get_first_edge_iterator();
-			while (!block.is_rparts_end(it)) {
+			// An empty row part indicates the end of the row-part region.
+			while (it.has_next()) {
 				it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
 				it = block.get_next_edge_iterator(it);
 			}
@@ -424,7 +427,7 @@ class block_spmv_task: public block_compute_task
 			const T *in_arr, T *out_arr) {
 		for (size_t i = 0; i < num; i++) {
 			local_coo_t coo = coos[i];
-			out_arr[coo.first /* row_idx */] += in_arr[coo.second /* col_idx */];
+			out_arr[coo.get_row_idx()] += in_arr[coo.get_col_idx()];
 		}
 	}
 public:
@@ -454,7 +457,8 @@ public:
 		assert(out_buf);
 		if (block.has_rparts()) {
 			rp_edge_iterator it = block.get_first_edge_iterator();
-			while (!block.is_rparts_end(it)) {
+			// An empty row part indicates the end of the row-part region.
+			while (it.has_next()) {
 				it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
 				it = block.get_next_edge_iterator(it);
 			}
@@ -647,6 +651,8 @@ class sparse_matrix
 	bool is_fg;
 	size_t nrows;
 	size_t ncols;
+	// The size of a non-zero entry.
+	size_t entry_size;
 	bool symmetric;
 
 	template<class T, class VectorType>
@@ -669,18 +675,20 @@ class sparse_matrix
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
-	sparse_matrix(size_t num_vertices, bool symmetric) {
+	sparse_matrix(size_t num_vertices, size_t entry_size, bool symmetric) {
 		this->nrows = num_vertices;
 		this->ncols = num_vertices;
+		this->entry_size = entry_size;
 		this->symmetric = symmetric;
 		this->is_fg = true;
 	}
 
-	sparse_matrix(size_t nrows, size_t ncols, bool symmetric) {
+	sparse_matrix(size_t nrows, size_t ncols, size_t entry_size, bool symmetric) {
 		this->symmetric = symmetric;
 		this->is_fg = false;
 		this->nrows = nrows;
 		this->ncols = ncols;
+		this->entry_size = entry_size;
 	}
 public:
 	typedef std::shared_ptr<sparse_matrix> ptr;
@@ -758,6 +766,13 @@ public:
 	 */
 	virtual block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const = 0;
+
+	/*
+	 * The size of a non-zero entry.
+	 */
+	size_t get_entry_size() const {
+		return entry_size;
+	}
 
 	size_t get_num_rows() const {
 		return nrows;
