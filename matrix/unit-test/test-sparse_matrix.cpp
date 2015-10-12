@@ -42,16 +42,20 @@ data_frame::ptr create_rand_el()
 			edges.size(), get_scalar_type<fg::vertex_id_t>());
 	detail::smp_vec_store::ptr dests = detail::smp_vec_store::create(
 			edges.size(), get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr vals = detail::smp_vec_store::create(
+			edges.size(), get_scalar_type<float>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
-		sources->set(idx, e.first);
-		dests->set(idx, e.second);
+		sources->set<fg::vertex_id_t>(idx, e.first);
+		dests->set<fg::vertex_id_t>(idx, e.second);
+		vals->set<float>(idx, idx);
 		idx++;
 	}
 
 	data_frame::ptr df = data_frame::create();
 	df->add_vec("source", sources);
 	df->add_vec("dest", dests);
+	df->add_vec("attr", vals);
 	return df;
 }
 
@@ -128,33 +132,36 @@ void test_multiply_block()
 	const block_2d_size block_size(1024, 1024);
 	data_frame::ptr df = create_rand_el();
 
-	fg::vertex_id_t max_vid = 0;
-	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		vector::ptr vec = vector::create(df->get_vec(i));
-		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
-	}
+	vector::ptr vec = vector::create(df->get_vec(0));
+	fg::vertex_id_t max_vid = vec->max<fg::vertex_id_t>();
+	vec = vector::create(df->get_vec(1));
+	max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
+
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
 	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
 			0, max_vid, 1);
 	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
+	detail::vec_store::ptr val_vec = detail::create_vec_store<float>(
+			max_vid + 1, 0);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	data_frame::ptr new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(0), seq_vec);
 	new_df->add_vec(df->get_vec_name(1), rep_vec);
+	new_df->add_vec(df->get_vec_name(2), val_vec);
 	df->append(new_df);
 
 	vector_vector::ptr adj = create_1d_matrix(df);
 	std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> mat
-		= create_2d_matrix(adj, block_size, 0);
+		= create_2d_matrix(adj, block_size, val_vec->get_entry_size());
 	assert(mat.first);
 	assert(mat.second);
 	mat.second->verify();
 	std::vector<size_t> degrees(adj->get_num_vecs());
 	for (size_t i = 0; i < adj->get_num_vecs(); i++)
 		degrees[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
-				adj->get_length(i), 0);
+				adj->get_length(i), val_vec->get_entry_size());
 
 	test_spmv_block(mat.first, mat.second, degrees);
 	test_spmm_block(mat.first, mat.second, degrees);
@@ -204,27 +211,31 @@ void test_multiply_fg()
 {
 	printf("Multiply on FlashGraph matrix\n");
 	data_frame::ptr df = create_rand_el();
-	fg::vertex_id_t max_vid = 0;
-	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		vector::ptr vec = vector::create(df->get_vec(i));
-		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
-	}
+	vector::ptr vec = vector::create(df->get_vec(0));
+	fg::vertex_id_t max_vid = vec->max<fg::vertex_id_t>();
+	vec = vector::create(df->get_vec(1));
+	max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
+
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
 	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
 			0, max_vid, 1);
 	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
+	detail::vec_store::ptr val_vec = detail::create_vec_store<float>(
+			max_vid + 1, 0);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	data_frame::ptr new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(0), seq_vec);
 	new_df->add_vec(df->get_vec_name(1), rep_vec);
+	new_df->add_vec(df->get_vec_name(2), val_vec);
 	df->append(new_df);
 
 	// I artificially add an invalid in-edge for each vertex.
 	new_df = data_frame::create();
 	new_df->add_vec(df->get_vec_name(1), seq_vec);
 	new_df->add_vec(df->get_vec_name(0), rep_vec);
+	new_df->add_vec(df->get_vec_name(2), val_vec);
 	df->append(new_df);
 
 	fg::FG_graph::ptr fg = create_fg_graph("test", df, true);
