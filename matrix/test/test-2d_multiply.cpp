@@ -22,47 +22,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-void test_SpMV(sparse_matrix::ptr mat, int num_nodes)
-{
-	printf("test sparse matrix vector multiplication\n");
-	struct timeval start, end;
-	detail::mem_vec_store::ptr in_store = detail::mem_vec_store::create(
-			mat->get_num_cols(), num_nodes, get_scalar_type<double>());
-	in_store->set_data(detail::seq_set_vec_operate<double>(
-				in_store->get_length(), 0, 1));
-	printf("initialize the input vector\n");
-
-	// Initialize the output vector and allocate pages for it.
-	gettimeofday(&start, NULL);
-	detail::mem_vec_store::ptr out_store = detail::mem_vec_store::create(
-			mat->get_num_rows(), num_nodes, get_scalar_type<double>());
-	out_store->reset_data();
-	gettimeofday(&end, NULL);
-	printf("initialize a vector of %ld entries takes %.3f seconds\n",
-			out_store->get_length(), time_diff(start, end));
-
-#ifdef PROFILER
-	if (!matrix_conf.get_prof_file().empty())
-		ProfilerStart(matrix_conf.get_prof_file().c_str());
-#endif
-	printf("start SpMV\n");
-	gettimeofday(&start, NULL);
-	mat->multiply<double>(*in_store, *out_store);
-	gettimeofday(&end, NULL);
-	printf("SpMV completes\n");
-#ifdef PROFILER
-	if (!matrix_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
-	printf("it takes %.3f seconds\n", time_diff(start, end));
-
-	vector::ptr in = vector::create(in_store);
-	double in_sum = in->sum<double>();
-	vector::ptr out = vector::create(out_store);
-	double out_sum = out->sum<double>();
-	printf("sum of input: %lf, sum of product: %lf\n", in_sum, out_sum);
-}
-
 class mat_init_operate: public type_set_operate<double>
 {
 public:
@@ -249,8 +208,6 @@ int main(int argc, char *argv[])
 		num_nodes = matrix_conf.get_num_nodes();
 
 	if (mat_width == 0) {
-		for (size_t k = 0; k < repeats; k++)
-			test_SpMV(mat, num_nodes);
 		for (size_t i = 1; i <= 16; i *= 2)
 			for (size_t k = 0; k < repeats; k++)
 				test_SpMM(mat, i, num_nodes);

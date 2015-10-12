@@ -83,36 +83,6 @@ public:
 };
 
 /*
- * This task performs matrix vector multiplication on a sparse matrix
- * in the FlashGraph format.
- */
-template<class T, class VectorType>
-class fg_row_spmv_task: public fg_row_compute_task
-{
-	const VectorType &input;
-	VectorType &output;
-public:
-	fg_row_spmv_task(const VectorType &_input, VectorType &_output,
-			const matrix_io &_io): fg_row_compute_task(_io), input(
-				_input), output(_output) {
-	}
-
-	void run_on_row(const fg::ext_mem_undirected_vertex &v);
-};
-
-template<class T, class VectorType>
-void fg_row_spmv_task<T, VectorType>::run_on_row(
-		const fg::ext_mem_undirected_vertex &v)
-{
-	T res = 0;
-	for (size_t i = 0; i < v.get_num_edges(); i++) {
-		fg::vertex_id_t id = v.get_neighbor(i);
-		res += *(T *) input.get(id);
-	}
-	*(T *) output.get(v.get_id()) = res;
-}
-
-/*
  * This task performs sparse matrix dense matrix multiplication
  * in the FlashGraph format.
  * We implement this method for the sake of compatibility. It doesn't
@@ -403,128 +373,6 @@ public:
 	}
 };
 
-/*
- * This task performs matrix vector multiplication on a sparse matrix in
- * a native format with 2D partitioning.
- */
-template<class T>
-class block_spmv_task: public block_compute_task
-{
-	const detail::mem_vec_store &input;
-	detail::mem_vec_store &output;
-
-	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
-			const T *in_arr, T *out_arr) {
-		T sum = 0;
-		while (it.has_next()) {
-			size_t rel_col_idx = it.next();
-			sum += in_arr[rel_col_idx];
-		}
-		out_arr[it.get_rel_row_idx()] += sum;
-		return it;
-	}
-	void run_on_coo(const local_coo_t *coos, size_t num,
-			const T *in_arr, T *out_arr) {
-		for (size_t i = 0; i < num; i++) {
-			local_coo_t coo = coos[i];
-			out_arr[coo.get_row_idx()] += in_arr[coo.get_col_idx()];
-		}
-	}
-public:
-	block_spmv_task(const detail::mem_vec_store &_input,
-			detail::mem_vec_store &_output, const matrix_io &_io,
-			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
-				_io, mat, order), input(_input), output(_output) {
-	}
-
-	void run_on_block(const sparse_block_2d &block) {
-		if (block.is_empty())
-			return;
-
-		size_t start_col_idx
-			= block.get_block_col_idx() * block_size.get_num_cols();
-		size_t num_cols = std::min(block_size.get_num_cols(),
-				input.get_length() - start_col_idx);
-		size_t start_row_idx
-			= block.get_block_row_idx() * block_size.get_num_rows();
-		size_t num_rows = std::min(block_size.get_num_rows(),
-				output.get_length() - start_row_idx);
-		const char *in_buf = input.get_sub_arr(start_col_idx,
-				start_col_idx + num_cols);
-		char *out_buf = output.get_sub_arr(start_row_idx,
-				start_row_idx + num_rows);
-		assert(in_buf);
-		assert(out_buf);
-		if (block.has_rparts()) {
-			rp_edge_iterator it = block.get_first_edge_iterator();
-			// An empty row part indicates the end of the row-part region.
-			while (it.has_next()) {
-				it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
-				it = block.get_next_edge_iterator(it);
-			}
-		}
-		run_on_coo(block.get_coo_start(), block.get_num_coo_vals(),
-				(const T *) in_buf, (T *) out_buf);
-	}
-
-	void notify_complete() {
-	}
-};
-
-template<class T, class VectorType>
-class fg_row_spmv_creator: public task_creator
-{
-	const VectorType &input;
-	VectorType &output;
-
-	fg_row_spmv_creator(const VectorType &_input,
-			VectorType &_output): input(_input), output(_output) {
-	}
-public:
-	static task_creator::ptr create(const VectorType &_input,
-			VectorType &_output) {
-		if (_input.get_type() != get_scalar_type<T>()
-				|| _output.get_type() != get_scalar_type<T>()) {
-			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
-			return task_creator::ptr();
-		}
-		return task_creator::ptr(new fg_row_spmv_creator<T, VectorType>(
-					_input, _output));
-	}
-
-	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new fg_row_spmv_task<T, VectorType>(input,
-					output, io));
-	}
-};
-
-template<class T>
-class b2d_spmv_creator: public task_creator
-{
-	const detail::mem_vec_store &input;
-	detail::mem_vec_store &output;
-	const sparse_matrix &mat;
-	block_exec_order::ptr order;
-
-	b2d_spmv_creator(const detail::mem_vec_store &_input,
-			detail::mem_vec_store &_output, const sparse_matrix &_mat);
-public:
-	static task_creator::ptr create(const detail::mem_vec_store &_input,
-			detail::mem_vec_store &_output, const sparse_matrix &mat) {
-		if (_input.get_type() != get_scalar_type<T>()
-				|| _output.get_type() != get_scalar_type<T>()) {
-			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
-			return task_creator::ptr();
-		}
-		return task_creator::ptr(new b2d_spmv_creator<T>(_input, _output, mat));
-	}
-
-	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new block_spmv_task<T>(input, output, io, mat,
-					order));
-	}
-};
-
 template<class T>
 class spmm_creator: public task_creator
 {
@@ -655,18 +503,6 @@ class sparse_matrix
 	size_t entry_size;
 	bool symmetric;
 
-	template<class T, class VectorType>
-	task_creator::ptr get_fg_multiply_creator(const VectorType &in,
-			VectorType &out) const {
-		return fg_row_spmv_creator<T, VectorType>::create(in, out);
-	}
-
-	template<class T>
-	task_creator::ptr get_multiply_creator(const detail::mem_vec_store &in,
-			detail::mem_vec_store &out) const {
-		return b2d_spmv_creator<T>::create(in, out, *this);
-	}
-
 	template<class T>
 	task_creator::ptr get_multiply_creator(const detail::mem_matrix_store &in,
 			detail::mem_matrix_store &out) const {
@@ -793,35 +629,6 @@ public:
 	}
 
 	/*
-	 * This version of SpMV allows users to provide the output vector.
-	 * It requires users to initialize the output vector.
-	 */
-	template<class T>
-	bool multiply(const detail::mem_vec_store &in,
-			detail::mem_vec_store &out) const {
-		if (in.get_length() != ncols) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"the input vector has wrong length %1%. matrix ncols: %2%")
-				% in.get_length() % ncols;
-			return false;
-		}
-		if (is_fg && in.get_num_nodes() >= 0)
-			compute(get_fg_multiply_creator<T, detail::NUMA_vec_store>(
-						dynamic_cast<const detail::NUMA_vec_store &>(in),
-						dynamic_cast<detail::NUMA_vec_store &>(out)),
-					cal_super_block_size(get_block_size(), sizeof(T)));
-		else if (is_fg && in.get_num_nodes() < 0)
-			compute(get_fg_multiply_creator<T, detail::smp_vec_store>(
-						dynamic_cast<const detail::smp_vec_store &>(in),
-						dynamic_cast<detail::smp_vec_store &>(out)),
-					cal_super_block_size(get_block_size(), sizeof(T)));
-		else
-			compute(get_multiply_creator<T>(in, out),
-					cal_super_block_size(get_block_size(), sizeof(T)));
-		return true;
-	}
-
-	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
@@ -853,17 +660,6 @@ public:
 		return true;
 	}
 };
-
-template<class T>
-b2d_spmv_creator<T>::b2d_spmv_creator(const detail::mem_vec_store &_input,
-		detail::mem_vec_store &_output, const sparse_matrix &_mat): input(
-			_input), output(_output), mat(_mat)
-{
-	// We only handle the case the element size is 2^n.
-	assert(1 << ((size_t) log2(sizeof(T))) == sizeof(T));
-	size_t sb_size = cal_super_block_size(mat.get_block_size(), sizeof(T));
-	order = mat.get_multiply_order(sb_size, sb_size);
-}
 
 template<class T>
 spmm_creator<T>::spmm_creator(const detail::mem_matrix_store &_input,

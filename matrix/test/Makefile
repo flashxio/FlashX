@@ -22,15 +22,12 @@ CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eige
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
 
-all: test-fg_SpMV test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
+all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
 	el2al al22d al2crs test-sort test-eigen test-dgemm
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
 mkl: test-mkl_multiply test-mkl_dgemm
-
-test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
-	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 	$(CXX) -o test-2d_multiply test-2d_multiply.o $(LDFLAGS)

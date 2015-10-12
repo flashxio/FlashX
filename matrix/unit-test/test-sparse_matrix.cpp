@@ -59,46 +59,6 @@ data_frame::ptr create_rand_el()
 	return df;
 }
 
-void test_spmv_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
-		const std::vector<size_t> &degrees)
-{
-	printf("test SpMV on 2D-partitioned matrix\n");
-	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
-	size_t num_cols = spm->get_num_cols();
-	size_t num_rows = spm->get_num_rows();
-	printf("test_spmv: the sparse matrix has %ld rows and %ld cols\n",
-			num_rows, num_cols);
-	detail::NUMA_vec_store::ptr in = detail::NUMA_vec_store::create(num_cols,
-			num_nodes, get_scalar_type<int>());
-	for (size_t i = 0; i < num_cols; i++)
-		in->set(i, 1);
-	detail::NUMA_vec_store::ptr out = detail::NUMA_vec_store::create(num_rows,
-			num_nodes, get_scalar_type<int>());
-	spm->multiply<int>(*in, *out);
-	assert(out->get_length() == num_rows);
-	assert(degrees.size() == num_rows);
-	for (size_t i = 0; i < num_rows; i++)
-		assert(out->get<int>(i) == degrees[i]);
-}
-
-void verify_spmm(sparse_matrix::ptr spm, detail::mem_matrix_store::ptr in_mat,
-		detail::mem_matrix_store::ptr out)
-{
-	size_t num_cols = spm->get_num_cols();
-	size_t num_rows = spm->get_num_rows();
-	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
-		detail::NUMA_vec_store::ptr in_vec = detail::NUMA_vec_store::create(
-				num_cols, num_nodes, get_scalar_type<int>());
-		for (size_t j = 0; j < num_rows; j++)
-			in_vec->set<int>(j, in_mat->get<int>(j, i));
-		detail::NUMA_vec_store::ptr out_vec = detail::NUMA_vec_store::create(
-				num_rows, num_nodes, get_scalar_type<int>());
-		spm->multiply<int>(*in_vec, *out_vec);
-		for (size_t j = 0; j < num_rows; j++)
-			assert(out_vec->get<int>(j) == out->get<int>(j, i));
-	}
-}
-
 void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		const std::vector<size_t> &degrees)
 {
@@ -118,12 +78,10 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<int>());
 	spm->multiply<int>(*in_mat, *out);
-	verify_spmm(spm, in_mat, out);
 
 	out = detail::NUMA_col_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<int>());
 	spm->multiply<int>(*in_mat, *out);
-	verify_spmm(spm, in_mat, out);
 }
 
 void test_multiply_block()
@@ -163,27 +121,7 @@ void test_multiply_block()
 		degrees[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
 				adj->get_length(i), val_vec->get_entry_size());
 
-	test_spmv_block(mat.first, mat.second, degrees);
 	test_spmm_block(mat.first, mat.second, degrees);
-}
-
-void test_spmv_fg(fg::FG_graph::ptr fg)
-{
-	printf("test SpMV on FlashGraph matrix\n");
-	sparse_matrix::ptr spm = sparse_matrix::create(fg);
-	size_t num_cols = spm->get_num_cols();
-	size_t num_rows = spm->get_num_rows();
-	detail::smp_vec_store::ptr in = detail::smp_vec_store::create(num_cols,
-			get_scalar_type<int>());
-	for (size_t i = 0; i < num_cols; i++)
-		in->set(i, 1);
-	detail::smp_vec_store::ptr out = detail::smp_vec_store::create(num_rows,
-			get_scalar_type<int>());
-	spm->multiply<int>(*in, *out);
-	assert(out->get_length() == num_rows);
-//	assert(degrees.size() == num_rows);
-//	for (size_t i = 0; i < num_rows; i++)
-//		assert(out->get<int>(i) == degrees[i]);
 }
 
 void test_spmm_fg(fg::FG_graph::ptr fg)
@@ -204,7 +142,6 @@ void test_spmm_fg(fg::FG_graph::ptr fg)
 		= detail::mem_row_matrix_store::create(num_rows, 10,
 				get_scalar_type<int>());
 	spm->multiply<int>(*in_mat, *out);
-//	verify_spmm(spm, in_mat, out);
 }
 
 void test_multiply_fg()
@@ -239,7 +176,6 @@ void test_multiply_fg()
 	df->append(new_df);
 
 	fg::FG_graph::ptr fg = create_fg_graph("test", df, true);
-	test_spmv_fg(fg);
 	test_spmm_fg(fg);
 }
 
