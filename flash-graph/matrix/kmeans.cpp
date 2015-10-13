@@ -83,7 +83,7 @@ namespace {
 		}
 
     // TODO: Doc
-    static double eucl_dist(const unsigned row, const unsigned clust_idx,
+    static double const eucl_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double dist = 0;
         for (unsigned col = 0; col < NEV; col++) {
@@ -97,7 +97,7 @@ namespace {
     /**
       * TODO: Doc
       */
-    static double cos_dist(const unsigned row, const unsigned clust_idx,
+    static double const cos_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double numr, ldenom, rdenom;
         numr = ldenom = rdenom = 0;
@@ -116,7 +116,7 @@ namespace {
     // TODO: Doc
 #if KM_ENABLE_DIST_TYPE
     static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters, 
-            double (*dist_func) (const unsigned, const unsigned, const double*, const double*)) {
+            double (const *dist_func) (const unsigned, const unsigned, const double*, const double*)) {
 #else
     static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters) {
 #endif
@@ -184,7 +184,7 @@ namespace {
 	 */
 #if KM_ENABLE_DIST_TYPE
 	static void kmeanspp_init(const double* matrix, double* clusters, 
-            double (*dist_func)(const unsigned, const unsigned, const double*, const double*)) {
+            double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
 #else
 	static void kmeanspp_init(const double* matrix, double* clusters) {
 #endif
@@ -256,7 +256,7 @@ namespace {
 #if KM_ENABLE_DIST_TYPE
 	static void E_step(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            double (*dist_func)(const unsigned, const unsigned, const double*, const double*)) {
+            const double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
 #else
 	static void E_step(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts) {
@@ -436,7 +436,7 @@ namespace fg
 
 		/*** End VarInit ***/
 #if KM_ENABLE_DIST_TYPE
-        double (*dist_func)(const unsigned, const unsigned, const double*, const double*);
+        const double (const *dist_func)(const unsigned, const unsigned, const double*, const double*);
         if (dist_type == "eucl") {
             BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
             dist_func = &eucl_dist;
