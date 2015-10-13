@@ -43,7 +43,8 @@ public:
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *res);
 		return dense_matrix::create(res);
 	}
 
@@ -94,7 +95,8 @@ public:
 		detail::matrix_store::ptr deg = detail::matrix_store::create(
 				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
-		mat->multiply<double>(vec->get_data(), *deg);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(vec->get_data(), *deg);
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
@@ -111,7 +113,8 @@ public:
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *res);
 		dense_matrix::ptr tmp2 = dense_matrix::create(res);
 		return tmp2->scale_rows(deg_vec1_2);
 	}
@@ -140,14 +143,16 @@ public:
 		detail::mem_matrix_store::ptr tmp = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_ROW, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *tmp);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *tmp);
 		x = NULL;
 		mat->transpose();
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), tmp->get_num_cols(),
 				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
-		mat->multiply<double>(*tmp, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(*tmp, *res);
 		mat->transpose();
 		return dense_matrix::create(res);
 	}

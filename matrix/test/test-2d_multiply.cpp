@@ -76,7 +76,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes)
 #endif
 	printf("Start SpMM\n");
 	gettimeofday(&start, NULL);
-	mat->multiply<double>(*in, *out);
+	mat->multiply<double, float>(*in, *out);
 	gettimeofday(&end, NULL);
 	printf("SpMM completes\n");
 #ifdef PROFILER
@@ -123,10 +123,24 @@ sparse_matrix::ptr load_2d_matrix(const std::string &matrix_file,
 }
 
 sparse_matrix::ptr load_fg_matrix(const std::string &matrix_file,
-		const std::string &index_file, bool in_mem, config_map::ptr configs)
+		const std::string &index_file, bool in_mem, config_map::ptr configs,
+		const std::string &entry_type)
 {
 	fg::FG_graph::ptr fg = fg::FG_graph::create(matrix_file, index_file, configs);
-	return sparse_matrix::create(fg);
+	if (entry_type.empty())
+		return sparse_matrix::create(fg, NULL);
+	else if (entry_type == "I")
+		return sparse_matrix::create(fg, &get_scalar_type<int>());
+	else if (entry_type == "L")
+		return sparse_matrix::create(fg, &get_scalar_type<long>());
+	else if (entry_type == "F")
+		return sparse_matrix::create(fg, &get_scalar_type<float>());
+	else if (entry_type == "D")
+		return sparse_matrix::create(fg, &get_scalar_type<double>());
+	else {
+		fprintf(stderr, "unknown entry type\n");
+		return sparse_matrix::ptr();
+	}
 }
 
 void print_usage()
@@ -140,6 +154,7 @@ void print_usage()
 	fprintf(stderr, "-r number: the number of repeats\n");
 	fprintf(stderr, "-g: the matrix is stored in FlashGraph format\n");
 	fprintf(stderr, "-n number: the number of NUMA nodes\n");
+	fprintf(stderr, "-t type: the type of non-zero entries\n");
 }
 
 int main(int argc, char *argv[])
@@ -157,7 +172,8 @@ int main(int argc, char *argv[])
 	size_t repeats = 1;
 	bool use_fg = false;
 	int num_nodes = 0;
-	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:")) != -1) {
+	std::string entry_type;
+	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -180,6 +196,9 @@ int main(int argc, char *argv[])
 			case 'n':
 				num_nodes = atoi(optarg);
 				break;
+			case 't':
+				entry_type = optarg;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -200,7 +219,8 @@ int main(int argc, char *argv[])
 
 	sparse_matrix::ptr mat;
 	if (use_fg)
-		mat = load_fg_matrix(matrix_file, index_file, in_mem, configs);
+		mat = load_fg_matrix(matrix_file, index_file, in_mem, configs,
+				entry_type);
 	else
 		mat = load_2d_matrix(matrix_file, index_file, in_mem);
 
