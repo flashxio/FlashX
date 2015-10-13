@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: test_load_balancer test_comm
+all: test_load_balancer test_comm test_fake_index
 
 test_load_balancer: test_load_balancer.o ../libgraph.a
 	$(CXX) -o test_load_balancer test_load_balancer.o $(LDFLAGS)
@@ -29,11 +29,15 @@ test_load_balancer: test_load_balancer.o ../libgraph.a
 test_comm: test_comm.o ../libgraph.a
 	$(CXX) -o test_comm test_comm.o $(LDFLAGS)
 
+test_fake_index: test_fake_index.o ../libgraph.a
+	$(CXX) -o test_fake_index test_fake_index.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f test_load_balancer
 	rm -f test_comm
+	rm -f test_fake_index
 
 -include $(DEPS) 
