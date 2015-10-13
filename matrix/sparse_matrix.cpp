@@ -208,9 +208,10 @@ void block_compute_task::run(char *buf, size_t size)
 	// We access data in super blocks.
 	// A super block is a set of blocks organized in a square or
 	// a nearly square.
+	// The last entry in the vector indicates the end of the last block row.
 	size_t num_blocks = block_rows.size() - 1;
 	std::vector<block_row_iterator> its;
-	for (size_t i = 0; i < block_rows.size(); i++) {
+	for (size_t i = 0; i < num_blocks; i++) {
 		its.emplace_back((const sparse_block_2d *) block_rows[i],
 				(const sparse_block_2d *) block_rows[i + 1]);
 	}
