@@ -83,6 +83,10 @@ public:
 		return rel_col_idx_p - rel_col_idx_start;
 	}
 
+	size_t get_entry_size() const {
+		return entry_size;
+	}
+
 	bool has_next() const {
 		// The highest bit of the relative col idx has to be 0.
 		return *rel_col_idx_p <= (size_t) std::numeric_limits<int16_t>::max();
@@ -103,7 +107,8 @@ public:
 	size_t next() {
 		size_t ret = *rel_col_idx_p;
 		rel_col_idx_p++;
-		data_p += entry_size;
+		if (data_p)
+			data_p += entry_size;
 		return ret;
 	}
 
@@ -317,7 +322,10 @@ public:
 		// Discard the const qualifier
 		// TODO I should make a const edge iterator
 		sparse_row_part *rp = (sparse_row_part *) row_parts;
-		return rp->get_edge_iterator(get_nz_data(), entry_size);
+		if (entry_size == 0)
+			return rp->get_edge_iterator();
+		else
+			return rp->get_edge_iterator(get_nz_data(), entry_size);
 	}
 
 	rp_edge_iterator get_next_edge_iterator(const rp_edge_iterator &it) const {
@@ -332,7 +340,10 @@ public:
 		assert(!it.has_next());
 		// TODO I should make a const edge iterator
 		sparse_row_part *rp = (sparse_row_part *) it.get_curr_addr();
-		return rp->get_edge_iterator(it.get_curr_data(), entry_size);
+		if (entry_size == 0)
+			return rp->get_edge_iterator();
+		else
+			return rp->get_edge_iterator(it.get_curr_data(), entry_size);
 	}
 
 	size_t get_num_coo_vals() const {
@@ -340,6 +351,9 @@ public:
 	}
 	const local_coo_t *get_coo_start() const {
 		return (local_coo_t *) (row_parts + get_rheader_size());
+	}
+	const char *get_coo_val_start(size_t entry_size) const {
+		return get_nz_data() + (nnz - num_coo_vals) * entry_size;
 	}
 
 	void append(const sparse_row_part &part, size_t part_size);

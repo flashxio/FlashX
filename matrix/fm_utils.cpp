@@ -800,8 +800,12 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		vector_vector::ptr adjs, const block_2d_size &block_size, size_t entry_size)
+		vector_vector::ptr adjs, const block_2d_size &block_size,
+		const scalar_type *entry_type)
 {
+	size_t entry_size = 0;
+	if (entry_type)
+		entry_size = entry_type->get_size();
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
@@ -810,8 +814,11 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows, entry_size));
 
+	prim_type type = prim_type::P_BOOL;
+	if (entry_type)
+		type = entry_type->get_type();
 	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
-			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
+			matrix_layout_t::L_ROW_2D, type, block_size);
 
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
@@ -828,19 +835,23 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::ptr df, const block_2d_size &block_size, size_t entry_size)
+		data_frame::ptr df, const block_2d_size &block_size,
+		const scalar_type *entry_type)
 {
 	vector_vector::ptr vv = create_1d_matrix(df);
 	if (vv == NULL)
 		return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>();
 	else
-		return create_2d_matrix(vv, block_size, entry_size);
+		return create_2d_matrix(vv, block_size, entry_type);
 }
 
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		size_t entry_size, const std::string &mat_file,
+		const scalar_type *entry_type, const std::string &mat_file,
 		const std::string &mat_idx_file, bool to_safs)
 {
+	size_t entry_size = 0;
+	if (entry_type)
+		entry_size = entry_type->get_size();
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	factor_vector::ptr labels = factor_vector::create(f, num_rows,
@@ -848,8 +859,11 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows, entry_size));
 
+	prim_type type = prim_type::P_BOOL;
+	if (entry_type)
+		type = entry_type->get_type();
 	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
-			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
+			matrix_layout_t::L_ROW_2D, type, block_size);
 	if (!to_safs) {
 		FILE *f_2d = fopen(mat_file.c_str(), "w");
 		if (f_2d == NULL) {
