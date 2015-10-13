@@ -28,6 +28,14 @@
 #include "safs_file.h"
 #include "utils.h"
 
+#define GRAPH_AS_MATRIX 1
+
+#if GRAPH_AS_MATRIX
+#include "fake_index.h"
+#define GRAPH_MAT_ROWS 7
+#define GRAPH_MAT_COLS 5
+#endif
+
 using namespace safs;
 
 namespace fg
@@ -135,10 +143,15 @@ file_io_factory::shared_ptr FG_graph::get_graph_io_factory(int access_option)
 
 vertex_index::ptr FG_graph::get_index_data() const
 {
+#if GRAPH_AS_MATRIX
+    BOOST_LOG_TRIVIAL(info) << "In memory faked index!\n";
+    return make_index(GRAPH_MAT_ROWS, GRAPH_MAT_COLS);
+#else
 	if (index_data)
 		return index_data;
 	else
 		return vertex_index::safs_load(index_file);
+#endif
 }
 
 /******************* Implementation of fetching a subgraph *********************/
