@@ -52,45 +52,6 @@ enum {
 
 class serial_subgraph;
 
-class large_writer
-{
-public:
-	typedef std::shared_ptr<large_writer> ptr;
-
-	virtual ~large_writer() {
-	}
-	virtual int delete_file() = 0;
-	virtual int rename2(const std::string &new_name) = 0;
-	virtual off_t seek(off_t off, int whence) = 0;
-	virtual ssize_t flush() = 0;
-	virtual ssize_t write(const char *buf, size_t bytes) = 0;
-	virtual size_t get_write_bytes() const = 0;
-};
-
-class large_reader
-{
-public:
-	typedef std::shared_ptr<large_reader> ptr;
-
-	virtual ~large_reader() {
-	}
-	virtual bool is_safs() = 0;
-	virtual ssize_t read(char *buf, size_t bytes) = 0;
-	virtual off_t seek(off_t off, int whence) = 0;
-};
-
-class large_io_creator
-{
-public:
-	typedef std::shared_ptr<large_io_creator> ptr;
-	static ptr create(bool safs, const std::string &curr_dir);
-
-	~large_io_creator() {
-	}
-	virtual large_writer::ptr create_writer(const std::string &file) = 0;
-	virtual large_reader::ptr create_reader(const std::string &file) = 0;
-};
-
 /**
  * This class serializes a graph and stores it in contiguous memory.
  */
@@ -174,8 +135,6 @@ public:
 	virtual void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part, std::vector<off_t> &edge_offs) const = 0;
-	virtual std::shared_ptr<serial_graph> serialize_graph(
-			large_io_creator::ptr creator) const = 0;
 	virtual size_t get_num_edges() const = 0;
 
 	bool has_edge_data() const {
