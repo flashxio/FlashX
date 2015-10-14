@@ -188,37 +188,6 @@ public:
 };
 
 /*
- * This interface serializes a graph onto disks.
- */
-class disk_serial_graph: public serial_graph
-{
-	large_io_creator::ptr creator;
-public:
-	typedef std::shared_ptr<disk_serial_graph> ptr;
-
-	disk_serial_graph(std::shared_ptr<vertex_index_construct> index,
-			size_t edge_data_size, large_io_creator::ptr creator): serial_graph(
-				index, edge_data_size) {
-		this->creator = creator;
-	}
-
-	large_io_creator::ptr get_creator() {
-		return creator;
-	}
-
-	virtual void check_ext_graph(const edge_graph &edge_g,
-			const std::string &index_file, large_reader::ptr reader) const = 0;
-	bool dump(const std::string &index_file, const std::string &graph_file,
-			bool compressed_index);
-	virtual bool name_graph_file(const std::string &adj_file) = 0;
-
-	std::shared_ptr<in_mem_graph> dump_graph(
-			const std::string &graph_name) {
-		return std::shared_ptr<in_mem_graph>();
-	}
-};
-
-/*
  * This interface serializes a graph into a single piece of memory.
  */
 class mem_serial_graph: public serial_graph
@@ -233,20 +202,6 @@ public:
 	virtual void add_empty_vertex(vertex_id_t id) = 0;
 };
 
-edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, bool in_mem);
-edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
-		const std::vector<vertex_id_t> to, int edge_attr_type, bool directed);
-serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		large_io_creator::ptr creator);
-
-/*
- * Set parameters of constructing a graph.
- */
-
-void set_num_threads(size_t num_threads);
-void set_sort_buf_size(size_t size);
-void set_write_buf_size(size_t size);
 }
 
 }
