@@ -20,7 +20,7 @@ include ../../Makefile.common
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
-LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas #-lprofiler
+LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
 	el2al al22d al2crs test-sort test-eigen test-dgemm
