@@ -262,6 +262,12 @@ class sparse_block_2d
 				// Let's exclude the last empty row part.
 				- sparse_row_part::get_row_id_size());
 	}
+	const sparse_row_part *get_rpart_end() const {
+		return (sparse_row_part *) (row_parts + get_rheader_size()
+				// Let's exclude the last empty row part.
+				- sparse_row_part::get_row_id_size());
+	}
+
 	local_coo_t *get_coo_start() {
 		return (local_coo_t *) (row_parts + get_rheader_size());
 	}
@@ -344,6 +350,16 @@ public:
 			return rp->get_edge_iterator();
 		else
 			return rp->get_edge_iterator(it.get_curr_data(), entry_size);
+	}
+
+	bool is_rparts_end(const rp_edge_iterator &it) const {
+		// If the block doesn't have non-zero entries or there aren't non-zero
+		// entries in the row parts.
+		if (nnz == 0 || nnz - num_coo_vals == 0)
+			return true;
+
+		return it.get_curr_addr() - sparse_row_part::get_row_id_size()
+			== (const char *) get_rpart_end();
 	}
 
 	size_t get_num_coo_vals() const {

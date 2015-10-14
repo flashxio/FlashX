@@ -325,8 +325,7 @@ public:
 
 		if (block.has_rparts()) {
 			rp_edge_iterator it = block.get_first_edge_iterator(get_entry_size());
-			// An empty row part indicates the end of the row-part region.
-			while (it.has_next()) {
+			while (!block.is_rparts_end(it)) {
 				it = run_on_row_part(it, (const DenseType *) in_rows,
 						(DenseType *) out_rows);
 				it = block.get_next_edge_iterator(it, get_entry_size());
@@ -401,8 +400,7 @@ public:
 
 		if (block.has_rparts()) {
 			rp_edge_iterator it = block.get_first_edge_iterator(get_entry_size());
-			// An empty row part indicates the end of the row-part region.
-			while (it.has_next()) {
+			while (!block.is_rparts_end(it)) {
 				it = run_on_row_part(it, (const DenseType *) in_rows,
 						(DenseType *) out_rows);
 				it = block.get_next_edge_iterator(it, get_entry_size());

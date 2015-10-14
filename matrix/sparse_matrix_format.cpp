@@ -37,10 +37,7 @@ void sparse_block_2d::verify(const block_2d_size &block_size) const
 	size_t num_rows = 0;
 	if (has_rparts()) {
 		rp_edge_iterator it = get_first_edge_iterator();
-		// The region of row parts contains an empty row part.
-		// so if we see an empty row, we have reached to the end of
-		// the row part region.
-		while (it.has_next()) {
+		while (!is_rparts_end(it)) {
 			size_t num_nz = 0;
 			while (it.has_next()) {
 				num_nz++;
@@ -68,7 +65,7 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 	std::vector<coo_nz_t> ret;
 	if (has_rparts()) {
 		rp_edge_iterator it = get_first_edge_iterator();
-		while (it.has_next()) {
+		while (!is_rparts_end(it)) {
 			while (it.has_next()) {
 				uint16_t rel_row_idx = it.get_rel_row_idx();
 				uint16_t rel_col_idx = it.next();
@@ -120,16 +117,13 @@ void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nz,
 
 void sparse_block_2d::finalize(const char *data, size_t num_bytes)
 {
-	if (num_bytes == 0)
-		return;
-
-	assert(nnz > 0);
 	// If there are row parts but we haven't added the empty row to indicate
 	// the end of the row part region.
 	if (num_coo_vals == 0) {
 		sparse_row_part end(std::numeric_limits<uint16_t>::max());
 		append(end, sparse_row_part::get_size(0));
 	}
+
 	if (data)
 		memcpy(get_nz_data(), data, num_bytes);
 }
