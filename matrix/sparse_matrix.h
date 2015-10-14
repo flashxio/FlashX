@@ -267,10 +267,19 @@ public:
 };
 
 template<class DenseType, class SparseType, int ROW_WIDTH>
-class block_spmm_task_impl: public block_spmm_task
+class row_part_func
 {
-	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
-			const DenseType *in_rows, DenseType *out_rows) {
+	size_t row_width;
+public:
+	row_part_func(size_t row_width) {
+		this->row_width = row_width;
+		assert(ROW_WIDTH == row_width);
+	}
+
+	rp_edge_iterator operator()(rp_edge_iterator it,
+			const char *_in_rows, char *_out_rows) {
+		const DenseType *in_rows = (const DenseType *) _in_rows;
+		DenseType *out_rows = (DenseType *) _out_rows;
 		size_t row_idx = it.get_rel_row_idx();
 		DenseType *dest_row = out_rows + ROW_WIDTH * row_idx;
 		bool has_val = it.get_entry_size() > 0;
@@ -285,68 +294,22 @@ class block_spmm_task_impl: public block_spmm_task
 		}
 		return it;
 	}
-	void run_on_coo(const local_coo_t *coos, const SparseType *coo_vals,
-			size_t num, const DenseType *in_rows, DenseType *out_rows) {
-		for (size_t i = 0; i < num; i++) {
-			local_coo_t coo = coos[i];
-			SparseType data = 1;
-			if (coo_vals)
-				data = coo_vals[i];
-			const DenseType *src_row = in_rows + ROW_WIDTH * coo.get_col_idx();
-			DenseType *dest_row = out_rows + ROW_WIDTH * coo.get_row_idx();
-			for (size_t j = 0; j < ROW_WIDTH; j++)
-				dest_row[j] += src_row[j] * data;
-		}
-	}
-public:
-	block_spmm_task_impl(const detail::mem_matrix_store &input,
-			detail::mem_matrix_store &output, const matrix_io &io,
-			const sparse_matrix &mat,
-			block_exec_order::ptr order): block_spmm_task(input,
-				output, io, mat, order) {
-		assert(ROW_WIDTH == output.get_num_cols());
-		if (get_entry_size() > 0)
-			assert(get_entry_size() == sizeof(SparseType));
-	}
-
-	void run_on_block(const sparse_block_2d &block) {
-		if (block.is_empty())
-			return;
-
-		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
-		size_t num_in_rows = std::min(block_size.get_num_cols(),
-				get_in_matrix().get_num_rows() - in_row_start);
-		const char *in_rows = get_in_rows(in_row_start, num_in_rows);
-
-		size_t out_row_start = block.get_block_row_idx() * block_size.get_num_rows();
-		size_t num_out_rows = std::min(block_size.get_num_rows(),
-				get_out_matrix().get_num_rows() - out_row_start);
-		char *out_rows = get_out_rows(out_row_start, num_out_rows);
-
-		if (block.has_rparts()) {
-			rp_edge_iterator it = block.get_first_edge_iterator(get_entry_size());
-			while (!block.is_rparts_end(it)) {
-				it = run_on_row_part(it, (const DenseType *) in_rows,
-						(DenseType *) out_rows);
-				it = block.get_next_edge_iterator(it, get_entry_size());
-			}
-		}
-		const SparseType *coo_vals = NULL;
-		if (get_entry_size() > 0)
-			coo_vals = (const SparseType *) block.get_coo_val_start(
-					get_entry_size());
-		run_on_coo(block.get_coo_start(), coo_vals, block.get_num_coo_vals(),
-				(const DenseType *) in_rows, (DenseType *) out_rows);
-	}
 };
 
 template<class DenseType, class SparseType>
-class block_spmm_task_impl<DenseType, SparseType, 0>: public block_spmm_task
+class row_part_func<DenseType, SparseType, 0>
 {
-	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
-			const DenseType *in_rows, DenseType *out_rows) {
+	size_t row_width;
+public:
+	row_part_func(size_t row_width) {
+		this->row_width = row_width;
+	}
+
+	rp_edge_iterator operator()(rp_edge_iterator it,
+			const char *_in_rows, char *_out_rows) {
+		const DenseType *in_rows = (const DenseType *) _in_rows;
+		DenseType *out_rows = (DenseType *) _out_rows;
 		size_t row_idx = it.get_rel_row_idx();
-		size_t row_width = get_out_matrix().get_num_cols();
 		DenseType *dest_row = out_rows + row_width * row_idx;
 		bool has_val = it.get_entry_size() > 0;
 		while (it.has_next()) {
@@ -360,9 +323,50 @@ class block_spmm_task_impl<DenseType, SparseType, 0>: public block_spmm_task
 		}
 		return it;
 	}
-	void run_on_coo(const local_coo_t *coos, const SparseType *coo_vals,
-			size_t num, const DenseType *in_rows, DenseType *out_rows) {
-		size_t row_width = get_out_matrix().get_num_cols();
+};
+
+template<class DenseType, class SparseType, int ROW_WIDTH>
+class coo_func
+{
+	size_t row_width;
+public:
+	coo_func(size_t row_width) {
+		this->row_width = row_width;
+		assert(ROW_WIDTH == row_width);
+	}
+
+	void operator()(const local_coo_t *coos, const char *_coo_vals,
+			size_t num, const char *_in_rows, char *_out_rows) {
+		const SparseType *coo_vals = (const SparseType *) _coo_vals;
+		const DenseType *in_rows = (const DenseType *) _in_rows;
+		DenseType *out_rows = (DenseType *) _out_rows;
+		for (size_t i = 0; i < num; i++) {
+			local_coo_t coo = coos[i];
+			SparseType data = 1;
+			if (coo_vals)
+				data = coo_vals[i];
+			const DenseType *src_row = in_rows + ROW_WIDTH * coo.get_col_idx();
+			DenseType *dest_row = out_rows + ROW_WIDTH * coo.get_row_idx();
+			for (size_t j = 0; j < ROW_WIDTH; j++)
+				dest_row[j] += src_row[j] * data;
+		}
+	}
+};
+
+template<class DenseType, class SparseType>
+class coo_func<DenseType, SparseType, 0>
+{
+	size_t row_width;
+public:
+	coo_func(size_t row_width) {
+		this->row_width = row_width;
+	}
+
+	void operator()(const local_coo_t *coos, const char *_coo_vals,
+			size_t num, const char *_in_rows, char *_out_rows) {
+		const SparseType *coo_vals = (const SparseType *) _coo_vals;
+		const DenseType *in_rows = (const DenseType *) _in_rows;
+		DenseType *out_rows = (DenseType *) _out_rows;
 		for (size_t i = 0; i < num; i++) {
 			local_coo_t coo = coos[i];
 			SparseType data = 1;
@@ -374,14 +378,17 @@ class block_spmm_task_impl<DenseType, SparseType, 0>: public block_spmm_task
 				dest_row[j] += src_row[j] * data;
 		}
 	}
+};
+
+template<class RpFuncType, class COOFuncType>
+class block_spmm_task_impl: public block_spmm_task
+{
 public:
 	block_spmm_task_impl(const detail::mem_matrix_store &input,
 			detail::mem_matrix_store &output, const matrix_io &io,
 			const sparse_matrix &mat,
 			block_exec_order::ptr order): block_spmm_task(input,
 				output, io, mat, order) {
-		if (get_entry_size() > 0)
-			assert(get_entry_size() == sizeof(SparseType));
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
@@ -397,21 +404,22 @@ public:
 		size_t num_out_rows = std::min(block_size.get_num_rows(),
 				get_out_matrix().get_num_rows() - out_row_start);
 		char *out_rows = get_out_rows(out_row_start, num_out_rows);
+		size_t row_width = get_out_matrix().get_num_cols();
 
 		if (block.has_rparts()) {
+			RpFuncType rp_func(row_width);
 			rp_edge_iterator it = block.get_first_edge_iterator(get_entry_size());
 			while (!block.is_rparts_end(it)) {
-				it = run_on_row_part(it, (const DenseType *) in_rows,
-						(DenseType *) out_rows);
+				it = rp_func(it, in_rows, out_rows);
 				it = block.get_next_edge_iterator(it, get_entry_size());
 			}
 		}
-		const SparseType *coo_vals = NULL;
+		const char *coo_vals = NULL;
+		COOFuncType coo_func(row_width);
 		if (get_entry_size() > 0)
-			coo_vals = (const SparseType *) block.get_coo_val_start(
-					get_entry_size());
-		run_on_coo(block.get_coo_start(), coo_vals, block.get_num_coo_vals(),
-				(const DenseType *) in_rows, (DenseType *) out_rows);
+			coo_vals = block.get_coo_val_start(get_entry_size());
+		coo_func(block.get_coo_start(), coo_vals, block.get_num_coo_vals(),
+				in_rows, out_rows);
 	}
 };
 
@@ -425,6 +433,15 @@ class spmm_creator: public task_creator
 
 	spmm_creator(const detail::mem_matrix_store &_input,
 			detail::mem_matrix_store &_output, const sparse_matrix &_mat);
+
+	template<int ROW_WIDTH>
+	compute_task::ptr create_block_compute_task(const matrix_io &io) const {
+		typedef row_part_func<DenseType, SparseType, ROW_WIDTH> width_rp_func;
+		typedef coo_func<DenseType, SparseType, ROW_WIDTH> width_coo_func;
+		return compute_task::ptr(
+				new block_spmm_task_impl<width_rp_func,  width_coo_func>(
+					input, output, io, mat, order));
+	}
 public:
 	static task_creator::ptr create(const detail::mem_matrix_store &_input,
 			detail::mem_matrix_store &_output, const sparse_matrix &mat) {
@@ -440,58 +457,28 @@ public:
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		if (order) {
 			switch (output.get_num_cols()) {
-				case 1:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 1>(
-								input, output, io, mat, order));
-				case 2:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 2>(
-								input, output, io, mat, order));
-				case 4:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 4>(
-								input, output, io, mat, order));
-				case 8:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 8>(
-								input, output, io, mat, order));
-				case 16:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 16>(
-								input, output, io, mat, order));
-				default:
-					return compute_task::ptr(
-							new block_spmm_task_impl<DenseType, SparseType, 0>(
-								input, output, io, mat, order));
+				case 1: return create_block_compute_task<1>(io);
+				case 2: return create_block_compute_task<2>(io);
+				case 4: return create_block_compute_task<4>(io);
+				case 8: return create_block_compute_task<8>(io);
+				case 16: return create_block_compute_task<16>(io);
+				default: return create_block_compute_task<0>(io);
 			}
 		}
 		else {
 			switch (output.get_num_cols()) {
-				case 1:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 1>(input,
-								output, io));
-				case 2:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 2>(input,
-								output, io));
-				case 4:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 4>(input,
-								output, io));
-				case 8:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 8>(input,
-								output, io));
-				case 16:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 16>(input,
-								output, io));
-				default:
-					return compute_task::ptr(
-							new fg_row_spmm_task<DenseType, SparseType, 0>(input,
-								output, io));
+				case 1: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								SparseType, 1>(input, output, io));
+				case 2: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								SparseType, 2>(input, output, io));
+				case 4: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								SparseType, 4>(input, output, io));
+				case 8: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								SparseType, 8>(input, output, io));
+				case 16: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								 SparseType, 16>(input, output, io));
+				default: return compute_task::ptr(new fg_row_spmm_task<DenseType,
+								 SparseType, 0>(input, output, io));
 			}
 		}
 	}
