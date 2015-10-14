@@ -42,15 +42,15 @@ class rp_edge_iterator
 	uint16_t *rel_col_idx_start;
 	// This points to the current location of the iterator on the row part.
 	uint16_t *rel_col_idx_p;
-	// This points to the non-zero value in the current location.
-	const char *data_p;
+	// This points to the first non-zero entry in the row part.
+	const char *data_start;
 	size_t entry_size;
 public:
 	rp_edge_iterator() {
 		rel_row_idx = 0;
 		rel_col_idx_start = NULL;
 		rel_col_idx_p = NULL;
-		data_p = NULL;
+		data_start = NULL;
 		entry_size = 0;
 	}
 
@@ -58,16 +58,16 @@ public:
 		this->rel_row_idx = rel_row_idx;
 		this->rel_col_idx_start = rel_col_idx_start;
 		this->rel_col_idx_p = rel_col_idx_start;
-		this->data_p = NULL;
+		this->data_start = NULL;
 		this->entry_size = 0;
 	}
 
 	rp_edge_iterator(uint16_t rel_row_idx, uint16_t *rel_col_idx_start,
-			const char *data_p, size_t entry_size) {
+			const char *data_start, size_t entry_size) {
 		this->rel_row_idx = rel_row_idx;
 		this->rel_col_idx_start = rel_col_idx_start;
 		this->rel_col_idx_p = rel_col_idx_start;
-		this->data_p = data_p;
+		this->data_start = data_start;
 		this->entry_size = entry_size;
 	}
 
@@ -99,16 +99,14 @@ public:
 
 	template<class T>
 	T get_curr_data() const {
-		assert(data_p && entry_size == sizeof(T));
-		return *(const T *) data_p;
+		assert(data_start && entry_size == sizeof(T));
+		return *(((const T *) data_start) + (rel_col_idx_p - rel_col_idx_start));
 	}
 
 	// This returns the relative column index.
 	size_t next() {
 		size_t ret = *rel_col_idx_p;
 		rel_col_idx_p++;
-		if (data_p)
-			data_p += entry_size;
 		return ret;
 	}
 
@@ -123,7 +121,7 @@ public:
 	}
 
 	const char *get_curr_data() const {
-		return data_p;
+		return data_start + (rel_col_idx_p - rel_col_idx_start) * entry_size;
 	}
 };
 
