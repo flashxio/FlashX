@@ -605,7 +605,7 @@ public:
 	void append(const char *new_entries, size_t num) {
 		assert(entry_size > 0);
 		if (data.empty())
-			data.resize(num_entries * entry_size);
+			data.resize(num * entry_size);
 		else if (data.size() < (this->num_entries + num) * entry_size)
 			data.resize((this->num_entries + num) * entry_size);
 		memcpy(&data[num_entries * entry_size], new_entries, entry_size * num);
@@ -686,7 +686,6 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		+ sparse_row_part::get_col_entry_size() * tot_num_non_zeros
 		// The size of the non-zero entries.
 		+ nz_size * tot_num_non_zeros;
-	size_t max_idx_size = max_block_size - nz_size * tot_num_non_zeros;
 	out.resize(max_block_size);
 	size_t curr_size = 0;
 	// The maximal size of a row part.
@@ -738,17 +737,19 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 				rp_edge_iterator edge_it = part->get_edge_iterator();
 				for (size_t k = 0; k < local_neighs.size(); k++)
 					edge_it.append(block_size, local_neighs[k]);
-				// These two parts don't count the space used by non-zero entries.
-				assert(block->get_size(0) + sparse_row_part::get_size(local_nnz)
-						// So is here.
-						<= max_idx_size - curr_size);
+				assert(block->get_size(nz_size) + sparse_row_part::get_size(local_nnz)
+						+ local_nnz * nz_size <= max_block_size - curr_size);
 				block->append(*part, sparse_row_part::get_size(local_nnz));
 			}
 			else if (local_neighs.size() == 1)
 				single_nnz.push_back(coo_nz_t(row_idx, local_neighs[0]));
 		}
-		if (!single_nnz.empty())
+		if (!single_nnz.empty()) {
+			assert(block->get_size(nz_size)
+					+ single_nnz.size() * sizeof(local_coo_t)
+					+ single_nnz.size() * nz_size <= max_block_size - curr_size);
 			block->add_coo(single_nnz, block_size);
+		}
 		if (!single_nz_data.is_empty())
 			data.append(single_nz_data.get_data(), single_nz_data.get_size());
 		// After we finish adding rows to a block, we need to finalize it.
