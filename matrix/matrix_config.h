@@ -334,6 +334,9 @@ extern matrix_config matrix_conf;
 
 static const int PAGE_SIZE = 4096;
 
+// TODO We need to try different range size to get better performance.
+static const size_t NUMA_range_size_log = 20;
+
 }
 
 #endif

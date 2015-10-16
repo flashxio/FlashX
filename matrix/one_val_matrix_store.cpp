@@ -22,6 +22,7 @@
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
 #include "vec_store.h"
+#include "matrix_config.h"
 
 namespace fm
 {
@@ -34,7 +35,8 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		int num_nodes): virtual_matrix_store(nrow, ncol, true, val->get_type())
 {
 	if (num_nodes > 0)
-		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes));
+		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
+					NUMA_range_size_log));
 	this->val = val;
 	this->layout = layout;
 	this->num_nodes = num_nodes;
