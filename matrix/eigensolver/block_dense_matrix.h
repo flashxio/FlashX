@@ -104,8 +104,12 @@ public:
 	}
 
 	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat) {
-		assert(mat->get_num_cols() == block_size);
-		mats[block_idx] = mat->clone();
+		if (mat) {
+			assert(mat->get_num_cols() == block_size);
+			mats[block_idx] = mat->clone();
+		}
+		else
+			mats[block_idx] = fm::dense_matrix::ptr();
 	}
 
 	void set_block(const block_multi_vector &mv, const std::vector<int>& index);

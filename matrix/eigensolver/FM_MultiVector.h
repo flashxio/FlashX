@@ -406,6 +406,14 @@ public:
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
+		// In KrylovSchur, if the input MV isn't in the subspace, we can drop
+		// the dense matrix in MV to save memory.
+		if (solver == "KrylovSchur" && fm_A.mat->get_num_blocks() == 1
+				&& fm_A.mat->get_block(0) != NULL
+				&& fm_A.mat->get_block(0)->is_in_mem() && beta == 0) {
+			BOOST_LOG_TRIVIAL(info) << "Drop the matrix to save space";
+			fm_A.mat->set_block(0, fm::dense_matrix::const_ptr());
+		}
 		fm_A.verify();
 		this->verify();
 		gettimeofday(&end, NULL);
