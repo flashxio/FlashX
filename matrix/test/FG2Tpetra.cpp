@@ -1,7 +1,5 @@
 #include "FG2Tpetra.h"
 
-size_t edge_data_size = 0;
-
 ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
 		size_t first_row, size_t num_local_rows, fg::edge_type type)
 {
@@ -16,7 +14,7 @@ ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
 
 RCP<crs_matrix_type> create_crs(const std::string &graph_file,
 		fg::vertex_index::ptr index, fg::edge_type type,
-		RCP<map_type> map, int my_rank)
+		RCP<map_type> map, int my_rank, size_t edge_data_size)
 {
 	const size_t numMyElements = map->getNodeNumElements ();
 	const global_ordinal_type gblRow0 = map->getGlobalElement(0);
@@ -76,7 +74,12 @@ RCP<crs_matrix_type> create_crs(const std::string &graph_file,
 		for (fg::vsize_t i = 0; i < num_edges; i++) {
 			cols[i] = v->get_neighbor(i);
 			assert(cols[i] < numRows);
-			vals[i] = 1;
+			if (v->has_edge_data()) {
+				assert(v->get_edge_data_size() == sizeof(float));
+				vals[i] = v->get_edge_data<float>(i);
+			}
+			else
+				vals[i] = 1;
 		}
 		assert(num_edges == numEntriesPerRow[lclRow]);
 		assert(gblRow < numRows);
