@@ -233,7 +233,6 @@ size_t attr_edge_parser<AttrType>::parse(const std::vector<std::string> &lines,
 	df.get_vec(0)->append(*froms);
 	df.get_vec(1)->append(*tos);
 	df.get_vec(2)->append(*attrs);
-	printf("add %ld edges\n", froms->get_length());
 	return froms->get_length();
 }
 
