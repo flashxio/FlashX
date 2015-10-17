@@ -20,14 +20,12 @@
  * limitations under the License.
  */
 
+#include "in_mem_io.h"
+#include "io_interface.h"
+
 #include "vertex.h"
 #include "matrix_header.h"
 #include "vector_vector.h"
-
-namespace safs
-{
-	class file_io_factory;
-}
 
 namespace fm
 {
@@ -491,10 +489,10 @@ class SpM_2d_storage
 	std::string mat_name;
 	int mat_file_id;
 
-	std::shared_ptr<char> data;
+	safs::NUMA_buffer::ptr data;
 	SpM_2d_index::ptr index;
 
-	SpM_2d_storage(std::shared_ptr<char> data,
+	SpM_2d_storage(safs::NUMA_buffer::ptr data,
 			SpM_2d_index::ptr index, const std::string mat_name) {
 		this->data = data;
 		this->index = index;
@@ -512,13 +510,6 @@ public:
 			SpM_2d_index::ptr index);
 
 	static void verify(SpM_2d_index::ptr index, const std::string &mat_file);
-
-	block_row_iterator get_block_row_it(size_t idx) const {
-		char *start = data.get() + index->get_block_row_off(idx);
-		char *end = data.get() + index->get_block_row_off(idx + 1);
-		return block_row_iterator((const sparse_block_2d *) start,
-				(const sparse_block_2d *) end);
-	}
 
 	size_t get_num_block_rows() const {
 		return index->get_num_block_rows();
