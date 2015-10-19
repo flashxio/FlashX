@@ -1320,7 +1320,7 @@ namespace fm
 {
 namespace eigen
 {
-extern bool cache_recent;
+extern size_t num_cached_mats;
 }
 }
 
@@ -1393,7 +1393,7 @@ void test_sub_matrix()
 	// Perform GEMM on the first block MV.
 	eigen::block_multi_vector::ptr res1;
 	dense_matrix::ptr res_mat1;
-	fm::eigen::cache_recent = false;
+	fm::eigen::num_cached_mats = 0;
 	{
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		res1 = eigen::block_multi_vector::create(

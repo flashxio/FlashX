@@ -30,13 +30,18 @@ namespace fm
 namespace eigen
 {
 
-bool cache_recent = true;
-dense_matrix::ptr cached_mat;
+size_t num_cached_mats = 1;
+std::deque<dense_matrix::ptr> cached_mats;
 
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
 size_t num_col_reads_concept = 0;
 size_t num_multiply_concept = 0;
+
+void set_num_cached_mats(size_t num)
+{
+	num_cached_mats = num;
+}
 
 class mirror_block_multi_vector: public block_multi_vector
 {
@@ -358,25 +363,34 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		// We want the dense matrices in the basis materialized.
 		// This can reduce significant computation.
 		if (num_blocks == 1 && is_subspace) {
-			if (!in_mem && cached_mat) {
+			// If we are in EM mode and we get the max number of cached matrices.
+			// We need to move the least recent matrix to the disks.
+			if (!in_mem && cached_mats.size() >= num_cached_mats) {
+				dense_matrix::ptr first_mat = cached_mats.front();
 				BOOST_LOG_TRIVIAL(info) << boost::format(
-						"materialize the old cached mat %1% to disks")
-					% cached_mat->get_data().get_name();
-				num_col_writes += cached_mat->get_num_cols();
+						"move the old cached mat %1% (%2%) to disks")
+					% first_mat->get_data().get_name() % first_mat.get();
+				num_col_writes += first_mat->get_num_cols();
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
-				bool ret = cached_mat->move_store(false, -1);
+				bool ret = first_mat->move_store(false, -1);
 				assert(ret);
 				detail::matrix_stats.print_diff(orig_stats);
+				cached_mats.pop_front();
 			}
-			else if (cached_mat && cached_mat->is_virtual()) {
+			// The most recent matrix might be virtual. We should materialize it.
+			// Normally this shouldn't happen.
+			if (!cached_mats.empty() && cached_mats.back()->is_virtual()) {
 				BOOST_LOG_TRIVIAL(info)
 					<< std::string("materialize the old cached mat ")
-					+ cached_mat->get_data().get_name();
+					+ cached_mats.back()->get_data().get_name();
 				detail::matrix_stats_t orig_stats = detail::matrix_stats;
-				cached_mat->materialize_self();
+				cached_mats.back()->materialize_self();
 				detail::matrix_stats.print_diff(orig_stats);
 			}
-			cached_mat = mats[0];
+			// We only need to cache matrices in the EM mode.
+			if (!in_mem && num_cached_mats > 0 && mats[0]->is_in_mem()) {
+				cached_mats.push_back(mats[0]);
+			}
 		}
 		return ret;
 	}
@@ -449,6 +463,9 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		dense_matrix::ptr in = X.get_block(i);
 		dense_matrix::ptr res;
 		num_col_reads_concept += in->get_num_cols();
+		// TODO this part of code isn't needed in the KrylovSchur eigensolver.
+		// Let's deal with it later.
+#if 0
 		// If we run in the EM mode, we should materialize the cached matrix
 		// and write out the most recently cached matrix.
 		if (!in_mem && ((cached_mat == in) || (cached_mat
@@ -471,6 +488,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			in->materialize_self();
 			detail::matrix_stats.print_diff(orig_stats);
 		}
+#endif
 
 		assert(in->store_layout() == matrix_layout_t::L_COL);
 		dense_matrix::ptr row_in = in->conv2(matrix_layout_t::L_ROW);
@@ -500,7 +518,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// EM matrix.
 		if (!in_mem)
 			num_col_writes_concept += res->get_num_cols();
-		if (!in_mem && !cache_recent) {
+		if (!in_mem && num_cached_mats == 0) {
 			BOOST_LOG_TRIVIAL(info) << "write the output matrix of SpMM to disks";
 			num_col_writes += res->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
@@ -1028,7 +1046,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	}
 	// If all matrices are stored in memory or we cache the most recent matrix,
 	// we materialize the result immediately.
-	else if (in_mem || cache_recent) {
+	else if (in_mem || num_cached_mats > 0) {
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"There are %1% underlying matrices") % bytes.size();
 		BOOST_LOG_TRIVIAL(info) << std::string("materialize ")
@@ -1039,7 +1057,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		if (use_hierarchy)
 			set_caching(orig_input_mats, false);
 		// If we want to cache the most recently materialized matrix.
-		if (!in_mem && cache_recent)
+		if (!in_mem && num_cached_mats > 0)
 			block->move_store(true, matrix_conf.get_num_nodes());
 		else {
 			num_col_writes += block->get_num_cols();
@@ -1499,10 +1517,29 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 {
 	// We have to set the entire block.
 	if (index[0] % get_block_size() == 0 && index.size() % get_block_size() == 0) {
+		// Normally, the KrylovSchur eigensolver only sets a single block.
+		// It needs to assign more than one block in restart.
+		// TODO This method of detecting restart may not reliable.
+		if (is_subspace && index.size() > get_block_size()) {
+			printf("restart the subspace\n");
+			// When restarting the subspace, we can delete all vectors
+			// in the subspace.
+			for (size_t i = 0; i < mats.size(); i++)
+				mats[i] = dense_matrix::create(num_rows, block_size,
+						matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
+		}
 		size_t num_blocks = index.size() / get_block_size();
 		size_t block_start = index[0] / get_block_size();
 		for (size_t i = 0; i < num_blocks; i++)
 			this->set_block(block_start + i, mv.get_block(i));
+		if (is_subspace && index.size() > get_block_size()) {
+			cached_mats.clear();
+			for (size_t i = 0; i < num_blocks; i++) {
+				dense_matrix::ptr block = this->get_block(block_start + i);
+				if (block->is_in_mem())
+					cached_mats.push_back(block);
+			}
+		}
 	}
 	else {
 		assert(std::is_sorted(index.begin(), index.end()));

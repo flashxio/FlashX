@@ -275,7 +275,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		<< endl;
 	cout << "#double float-point multiplies: "
 		<< detail::matrix_stats.get_multiplies() << endl;
-	cached_mat = NULL;
+	cached_mats.clear();
 
 	return res;
 }

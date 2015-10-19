@@ -24,6 +24,7 @@
 #include "EM_dense_matrix.h"
 
 #include "eigensolver.h"
+#include "block_dense_matrix.h"
 
 using namespace fm;
 using namespace fm::eigen;
@@ -176,6 +177,7 @@ void print_usage()
 	fprintf(stderr, "-e: the external memory mode.\n");
 	fprintf(stderr, "-o file: output eigenvectors\n");
 	fprintf(stderr, "-T type: eigen, SVD, NA_eigen (normalized adjacency)\n");
+	fprintf(stderr, "-c num: The number of cached matrices\n");
 }
 
 int main (int argc, char *argv[])
@@ -189,7 +191,8 @@ int main (int argc, char *argv[])
 	std::string solver;
 	double tol = -1;
 	bool in_mem = true;
-	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:")) != -1) {
+	size_t num_cached = 1;
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -219,6 +222,10 @@ int main (int argc, char *argv[])
 				type = optarg;
 				num_opts++;
 				break;
+			case 'c':
+				num_cached = atoi(optarg);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -246,6 +253,7 @@ int main (int argc, char *argv[])
 	else
 		nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
+	set_num_cached_mats(num_cached);
 	struct eigen_options opts(nev, solver);
 	if (block_size > 0)
 		opts.block_size = block_size;
