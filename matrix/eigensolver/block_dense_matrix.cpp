@@ -1534,10 +1534,15 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			this->set_block(block_start + i, mv.get_block(i));
 		if (is_subspace && index.size() > get_block_size()) {
 			cached_mats.clear();
-			for (size_t i = 0; i < num_blocks; i++) {
+			size_t i;
+			if (num_blocks < num_cached_mats)
+				i = 0;
+			else
+				i = num_blocks - num_cached_mats;
+			for (; i < num_blocks; i++) {
 				dense_matrix::ptr block = this->get_block(block_start + i);
-				if (block->is_in_mem())
-					cached_mats.push_back(block);
+				block->move_store(true, matrix_conf.get_num_nodes());
+				cached_mats.push_back(block);
 			}
 		}
 	}
