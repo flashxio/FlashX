@@ -7,4 +7,5 @@ add_library(common STATIC
 	mem_tracker.cpp
 	slab_allocator.cpp
 	thread.cpp
+	NUMA_mapper.cpp
 )
