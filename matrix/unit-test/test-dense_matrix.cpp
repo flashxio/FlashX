@@ -1370,14 +1370,14 @@ void test_sub_matrix()
 	size_t num_cols = sub_mat1->get_num_cols() + sub_mat2->get_num_cols()
 		+ mat3->get_num_cols();
 	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
-			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem);
+			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem, false);
 	mv1->set_block(0, sub_mat1);
 	mv1->set_block(1, sub_mat2);
 	mv1->set_block(2, mat3);
 
 	// Create the block MV from the in-mem matrices.
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
-			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem);
+			long_dim, num_cols, 2, get_scalar_type<double>(), in_mem, false);
 	mv2->set_block(0, copy1);
 	mv2->set_block(1, copy2);
 	mv2->set_block(2, mat3);
@@ -1398,7 +1398,7 @@ void test_sub_matrix()
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		res1 = eigen::block_multi_vector::create(
 				long_dim, mv1->get_block_size(), mv1->get_block_size(),
-				get_scalar_type<double>(), false);
+				get_scalar_type<double>(), false, false);
 		res1->set_block(0, create_seq_matrix(long_dim, mv1->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), false));
 		res1 = res1->gemm(*mv1, B, alpha, beta);
@@ -1415,7 +1415,7 @@ void test_sub_matrix()
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		res2 = eigen::block_multi_vector::create(
 				long_dim, mv1->get_block_size(), mv1->get_block_size(),
-				get_scalar_type<double>(), true);
+				get_scalar_type<double>(), true, false);
 		res2->set_block(0, create_seq_matrix(long_dim, mv1->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), true));
 		res2 = res2->gemm(*mv2, B, alpha, beta);
@@ -1637,7 +1637,7 @@ void test_bmv_multiply_tall()
 	bool in_mem = false;
 	printf("gemm tall on block multi-vector\n");
 	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
-			long_dim, 14, 2, get_scalar_type<double>(), in_mem);
+			long_dim, 14, 2, get_scalar_type<double>(), in_mem, false);
 	for (size_t i = 0; i < mv->get_num_blocks(); i++)
 		mv->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(),
@@ -1655,7 +1655,7 @@ void test_bmv_multiply_tall()
 		printf("gemm1\n");
 		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
 				long_dim, mv->get_block_size(), mv->get_block_size(),
-				get_scalar_type<double>(), true);
+				get_scalar_type<double>(), true, false);
 		res1->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
 		res1->set_multiply_blocks(2);
@@ -1667,7 +1667,7 @@ void test_bmv_multiply_tall()
 		printf("gemm2\n");
 		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
 				long_dim, mv->get_block_size(), mv->get_block_size(),
-				get_scalar_type<double>(), true);
+				get_scalar_type<double>(), true, false);
 		res2->set_block(0, create_seq_matrix(long_dim, mv->get_block_size(),
 					matrix_layout_t::L_COL, -1, get_scalar_type<double>(), in_mem));
 		res2->set_multiply_blocks(mv->get_num_blocks());
@@ -1696,7 +1696,7 @@ void test_bmv_multiply_tall()
 		printf("gemm1\n");
 		eigen::block_multi_vector::ptr res1 = eigen::block_multi_vector::create(
 				long_dim, B->get_num_cols(), mv->get_block_size(),
-				get_scalar_type<double>(), true);
+				get_scalar_type<double>(), true, false);
 		std::vector<detail::matrix_store::const_ptr> orig_res_stores(res1->get_num_blocks());
 		for (size_t i = 0; i < res1->get_num_blocks(); i++) {
 			res1->set_block(i, create_seq_matrix(long_dim, mv->get_block_size(),
@@ -1710,7 +1710,7 @@ void test_bmv_multiply_tall()
 		printf("gemm2\n");
 		eigen::block_multi_vector::ptr res2 = eigen::block_multi_vector::create(
 				long_dim, B->get_num_cols(), B->get_num_cols(),
-				get_scalar_type<double>(), true);
+				get_scalar_type<double>(), true, false);
 		res2->set_block(0, dense_matrix::create(
 					eigen::collected_matrix_store::create(orig_res_stores,
 						res1->get_num_cols())));
@@ -1744,7 +1744,7 @@ void test_bmv_multiply_wide()
 	bool in_mem = false;
 	printf("gemm wide on block multi-vector\n");
 	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
-			long_dim, 14, 2, get_scalar_type<double>(), in_mem);
+			long_dim, 14, 2, get_scalar_type<double>(), in_mem, false);
 	for (size_t i = 0; i < mv1->get_num_blocks(); i++) {
 		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 10, long_dim,
 				mv1->get_block_size(), matrix_layout_t::L_COL, -1, in_mem);
@@ -1752,7 +1752,7 @@ void test_bmv_multiply_wide()
 	}
 
 	eigen::block_multi_vector::ptr mv2 = eigen::block_multi_vector::create(
-			long_dim, 2, 2, get_scalar_type<double>(), in_mem);
+			long_dim, 2, 2, get_scalar_type<double>(), in_mem, false);
 	for (size_t i = 0; i < mv2->get_num_blocks(); i++) {
 		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 10, long_dim,
 				mv2->get_block_size(), matrix_layout_t::L_COL, -1, in_mem);
