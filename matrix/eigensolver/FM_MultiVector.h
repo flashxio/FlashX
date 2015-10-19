@@ -334,7 +334,7 @@ public:
 		std::string extra = std::string("(const ") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
 				in_mem, solver, subspace_size);
-		if (index.size() == 1
+		if (index.size() == 1 && mat->get_block_size() > 1
 				&& (solver == "KrylovSchur" || solver == "Davidson")) {
 			fm::detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			size_t block_idx = index[0] / mat->get_block_size();
