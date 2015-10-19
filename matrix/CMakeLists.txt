@@ -22,7 +22,6 @@ add_library(FMatrix STATIC
 	hilbert_curve.cpp
 	NUMA_dense_matrix.cpp
 	NUMA_vector.cpp
-	NUMA_mapper.cpp
 	raw_data_array.cpp
 	mem_worker_thread.cpp
 	local_matrix_store.cpp
