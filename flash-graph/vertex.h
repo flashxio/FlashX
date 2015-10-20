@@ -33,6 +33,7 @@
 #include "container.h"
 #include "cache.h"
 #include "FG_basic_types.h"
+#include "graph_file_header.h"
 
 namespace fg
 {
@@ -1166,6 +1167,91 @@ public:
      * \brief Get the vertex ID.
      * \return The vertex ID.
      */
+	vertex_id_t get_id() const {
+		return id;
+	}
+};
+
+class page_row: public page_vertex
+{
+	vertex_id_t id;
+	vsize_t vertex_size;
+	vsize_t num_edges;
+	const safs::page_byte_array &array;
+
+public:
+	page_row(const safs::page_byte_array &arr): page_vertex(
+			false), array(arr) {
+
+    num_edges = 5;  // FIXME: Faked
+    const off_t end = num_edges*sizeof(double); // FIXME: Faked
+#ifdef VERBOSE
+    safs::page_byte_array::seq_const_iterator<double> it =
+      array.get_seq_iterator<double>(0, end);
+    std::cout << "[";
+    while(it.has_next()) {
+      std::cout << " " << it.next();
+    }
+    std::cout << "]\n";
+#endif
+
+    vertex_size = end;
+    id = (arr.get_offset() - graph_header::HEADER_SIZE)/end; // Faked
+	}
+
+	size_t get_size() const {
+		return vertex_size;
+	}
+
+	size_t get_num_edges(edge_type type = edge_type::IN_EDGE) const {
+		return num_edges;
+	}
+
+	edge_iterator get_neigh_begin(edge_type type) const {
+		return array.begin<vertex_id_t>(
+				ext_mem_undirected_vertex::get_header_size());
+	}
+
+	edge_iterator get_neigh_end(edge_type type) const {
+		auto it = get_neigh_begin(type);
+		it += num_edges;
+		return it;
+	}
+
+	edge_seq_iterator get_neigh_seq_it(edge_type type, size_t start = 0,
+			size_t end = -1) const {
+		end = std::min(end, get_num_edges(type));
+		assert(start <= end);
+		assert(end <= get_num_edges(type));
+		return array.get_seq_iterator<vertex_id_t>(
+				 start * sizeof(vertex_id_t),
+				+ end * sizeof(vertex_id_t));
+	}
+
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		vsize_t num_edges = get_num_edges(type);
+		assert(num_edges <= num);
+		array.memcpy(ext_mem_undirected_vertex::get_header_size(),
+				(char *) edges, sizeof(vertex_id_t) * num_edges);
+		return num_edges;
+	}
+
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			size_t start, size_t end) const {
+		return array.get_seq_iterator<edge_data_type>(
+				start * sizeof(edge_data_type), end * sizeof(edge_data_type));
+	}
+
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			) const {
+		size_t start = 0;
+		size_t end = get_num_edges();
+		return get_data_seq_it<edge_data_type>(start, end);
+	}
+
 	vertex_id_t get_id() const {
 		return id;
 	}

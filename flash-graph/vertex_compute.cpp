@@ -99,7 +99,7 @@ void vertex_compute::run(page_byte_array &array)
 {
 	num_complete_fetched++;
 	start_run();
-	page_undirected_vertex pg_v(array);
+	page_row pg_v(array);
 	issue_thread->get_vertex_program(v.is_part()).run(*v, pg_v);
 	finish_run();
 }
@@ -248,7 +248,7 @@ void merged_undirected_vertex_compute::run(page_byte_array &array)
 	vertex_program &curr_vprog = t->get_vertex_program(false);
 	for (int i = 0; i < get_num_vertices(); i++, id++) {
 		sub_page_byte_array sub_arr(array, off);
-		page_undirected_vertex pg_v(sub_arr);
+		page_row pg_v(sub_arr);
 		assert(pg_v.get_id() == id);
 		compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
 		start_run(v);
@@ -373,7 +373,7 @@ void sparse_undirected_vertex_compute::run(page_byte_array &arr)
 		off_t off = this->ranges[i].start_off - arr.get_offset();
 		for (int j = 0; j < num_vertices; j++, id++) {
 			sub_page_byte_array sub_arr(arr, off);
-			page_undirected_vertex pg_v(sub_arr);
+			page_row pg_v(sub_arr);
 			assert(pg_v.get_id() == id);
 			compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
 			start_run(v);
