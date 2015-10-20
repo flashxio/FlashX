@@ -23,7 +23,7 @@
 #include <gperftools/profiler.h>
 #endif
 
-#define PRUNE 1
+#define PRUNE 0 // FIXME: BUG : TODO: When active prunes on kmeans++ as well!!
 #define KM_TEST 0
 #define VERBOSE 0
 #define INVALID_CLUST_ID -1
@@ -75,13 +75,19 @@ namespace {
         std::cout << "\n";
     }
 
-    static void print_sample(vertex_id_t my_id, data_seq_iterator& count_it, edge_seq_iterator& id_it) {
+    static void print_sample(vertex_id_t my_id, data_seq_iter& count_it, edge_seq_iterator& id_it) {
         std::vector<std::string> v;
+        vertex_id_t nid = 0;
         while (count_it.has_next()) {
+            char buffer [50];
+#ifdef PAGE_ROW
+            double e = count_it.next();
+            assert(sprintf(buffer, "%u:%.3f", nid++, e));
+#else
             edge_count e = count_it.next();
             vertex_id_t nid = id_it.next();
-            char buffer [50];
             assert(sprintf(buffer, "%u:%i",nid, e.get_count()));
+#endif
             v.push_back(std::string(buffer));
         }
         printf("V%u's vector: ", my_id); print_vector<std::string>(v);
@@ -138,17 +144,26 @@ namespace {
 
         // Set a cluster to have the same mean as this sample
         void set_as_mean(const page_vertex &vertex, vertex_id_t my_id, unsigned to_cluster_id) {
+#ifndef PAGE_ROW
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
-                get_data_seq_it<edge_count>(OUT_EDGE);
+#endif
+
+            vertex_id_t nid = 0;
+            data_seq_iter count_it = ((const page_row&)vertex).
+                get_data_seq_it<double>();
 
             // Build the setter vector that we assign to a cluster center
             std::vector<double> setter;
             setter.assign(NUM_COLS, 0);
-            while (id_it.has_next()) {
-                vertex_id_t nid = id_it.next();
+            while (count_it.has_next()) {
+#ifdef PAGE_ROW
+                double e = count_it.next();
+                setter[nid++] = e;
+#else
                 edge_count e = count_it.next();
+                nid = id_it.next();
                 setter[nid] = (double) e.get_count();
+#endif
             }
             g_clusters[to_cluster_id]->set_mean(setter);
         }
@@ -156,7 +171,7 @@ namespace {
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex &vertex);
-        double get_distance(unsigned cl, edge_seq_iterator& id_it, data_seq_iterator& count_it);
+        double get_distance(unsigned cl, edge_seq_iterator& id_it, data_seq_iter& count_it);
     };
 
     /* Used in per thread cluster formation */
@@ -187,7 +202,7 @@ namespace {
             return pt_clusters;
         }
 
-        void add_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iterator& count_it) {
+        void add_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iter& count_it) {
             pt_clusters[id]->add_member(id_it, count_it);
         }
 
@@ -262,9 +277,9 @@ namespace {
                     printf("Random init: v%u assigned to cluster: c%x\n", prog.get_vertex_id(*this), new_cluster_id);
 #endif
                     this->cluster_id = new_cluster_id;
-                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE); // TODO: Make sure OUT_EDGE has data
-                    data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
-                        get_data_seq_it<edge_count>(OUT_EDGE); //TODO: Make sure we have a directed graph
+                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+                    data_seq_iter count_it = ((const page_row&)vertex).
+                        get_data_seq_it<double>(); //TODO: Make sure we have a directed graph
                     vprog.add_member(cluster_id, id_it, count_it);
                 }
                 break;
@@ -280,13 +295,15 @@ namespace {
             case PLUSPLUS:
                 {
                     edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-                    data_seq_iterator count_it = ((const page_directed_vertex&)vertex).
-                        get_data_seq_it<edge_count>(OUT_EDGE);
+                    data_seq_iter count_it = ((const page_row&)vertex).
+                        get_data_seq_it<double>();
 
                     if (g_kmspp_stage == ADDMEAN) {
+#ifndef PAGE_ROW
 #if KM_TEST
                         vertex_id_t my_id = prog.get_vertex_id(*this);
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
+#endif
 #endif
                         g_clusters[g_kmspp_cluster_idx]->add_member(id_it, count_it);
                     } else {
@@ -308,13 +325,20 @@ namespace {
     }
 
     double kmeans_vertex::get_distance(unsigned cl, edge_seq_iterator& id_it,
-         data_seq_iterator& count_it) {
+         data_seq_iter& count_it) {
         double dist = 0;
         double diff;
-        while(id_it.has_next()) {
-            vertex_id_t nid = id_it.next();
+        vertex_id_t nid = 0;
+
+        while(count_it.has_next()) {
+#ifdef PAGE_ROW
+            double e = count_it.next();
+            diff = e - (*g_clusters[cl])[nid++]; // TODO: Do we need to take the abs value here?
+#else
+            nid = id_it.next();
             edge_count e = count_it.next();
             diff = e.get_count() - (*g_clusters[cl])[nid]; // TODO: Do we need to take the abs value here?
+#endif
             dist += diff*diff;
         }
         return dist;
@@ -328,8 +352,8 @@ namespace {
         for (unsigned cl = 0; cl < K; cl++) {
             // TODO: Better access pattern than getting a new iterator every time
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iterator count_it =
-                ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
+            data_seq_iter count_it =
+                ((const page_row&)vertex).get_data_seq_it<double>();
 
             double dist = get_distance(cl, id_it, count_it);
             if (dist < best) { // Get the distance to cluster `cl'
@@ -343,8 +367,8 @@ namespace {
 #if VERBOSE
             vertex_id_t my_id = prog.get_vertex_id(*this);
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iterator count_it =
-                ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
+            data_seq_iter count_it =
+                ((const page_row&)vertex).get_data_seq_it<double>();
             printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
                     my_id, cluster_id, new_cluster_id, best);
             print_sample(my_id, count_it, id_it);
@@ -354,8 +378,8 @@ namespace {
         this->cluster_id = new_cluster_id;
 
         edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-        data_seq_iterator count_it =
-            ((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
+        data_seq_iter count_it =
+            ((const page_row&)vertex).get_data_seq_it<double>();
         vprog.add_member(cluster_id, id_it, count_it);
         vprog.update_bounds(cluster_id, best);
         this->dist = best;
@@ -441,6 +465,9 @@ namespace {
         g_kmspp_cluster_idx++;
 
         for (unsigned row = 0; row < NUM_ROWS; row++) {
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "cuml_sum = " << cuml_sum;
+#endif
             cuml_sum -= g_kmspp_distance[row];
             if (cuml_sum <= 0) {
 #if KM_TEST
@@ -464,7 +491,8 @@ namespace {
 namespace fg
 {
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned max_iters, const double tolerance, const double comp_thresh) {
+            const unsigned max_iters, const double tolerance, const double comp_thresh,
+            const unsigned num_rows, const unsigned num_cols) {
 #ifdef PROFILER
         ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
 #endif
@@ -474,7 +502,9 @@ namespace fg
 
         K = k;
         NUM_ROWS = mat->get_max_vertex_id() + 1;
-        NUM_COLS = NUM_ROWS;
+        NUM_COLS = num_cols;
+
+        BOOST_VERIFY(num_cols > 0);
 
 #if KM_TEST
         BOOST_LOG_TRIVIAL(info) << "We have rows = " << NUM_ROWS << ", cols = " <<
@@ -545,11 +575,18 @@ namespace fg
 
             g_kmspp_cluster_idx = 0;
             g_kmspp_next_cluster = random() % NUM_ROWS;
+#if KM_TEST
+            BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
+#endif
             g_kmspp_distance[g_kmspp_next_cluster] = 0;
 
             // Fire up K engines with 2 iters/engine
             while (true) {
-                // Start 1 vertex which will activate all
+#if KM_TEST
+                BOOST_LOG_TRIVIAL(info) << "Printing updated distances";
+                print_vector<double>(g_kmspp_distance);
+#endif
+                // TODO: Start 1 vertex which will activate all
                 g_kmspp_stage = ADDMEAN;
                 mat->start(&g_kmspp_next_cluster, 1, vertex_initializer::ptr(),
                     vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
@@ -562,10 +599,6 @@ namespace fg
                 g_kmspp_stage = DIST;
                 mat->start_all(); // Only need a vanilla vertex_program
                 mat->wait4complete();
-#if KM_TEST
-                BOOST_LOG_TRIVIAL(info) << "Printing updated distances";
-                print_vector<double>(g_kmspp_distance);
-#endif
 
                 g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
             }
@@ -575,7 +608,7 @@ namespace fg
         BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
         print_clusters(g_clusters);
         BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
-        get_membership(mat)->print(NUM_COLS);
+        get_membership(mat)->print(NUM_ROWS);
 #endif
 
         g_stage = ESTEP;
@@ -604,7 +637,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
             print_clusters(g_clusters);
             BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
-            get_membership(mat)->print(NUM_COLS);
+            get_membership(mat)->print(NUM_ROWS);
             BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
 #endif
 
@@ -640,6 +673,10 @@ namespace fg
         std::vector<std::vector<double>> means;
         get_means(means);
         cluster_assignments = get_membership(mat);
+#if KM_TEST
+                BOOST_LOG_TRIVIAL(info) << "Printing updated distances";
+                print_vector<double>(g_kmspp_distance);
+#endif
 
         return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
     }

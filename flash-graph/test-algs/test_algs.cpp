@@ -689,11 +689,12 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
 	int num_opts = 0;
     unsigned k = 0;
     unsigned max_iters = std::numeric_limits<unsigned>::max();
-    std::string init = "";
+    std::string init = "kmeanspp";
     double tolerance = -1;
     double comp_thresh = 0;
+    unsigned num_col = 0;
 
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:")) != -1) {
+	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -710,8 +711,12 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 tolerance = atof(optarg);
                 num_opts++;
                 break;
-            case 'c':
+            case 'C':
                 comp_thresh = atof(optarg);
+                num_opts++;
+                break;
+            case 'c':
+                num_col = atof(optarg);
                 num_opts++;
                 break;
 			default:
@@ -720,7 +725,7 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
 		}
 	}
 
-    compute_sem_kmeans(graph, k, init, max_iters, tolerance, comp_thresh);
+    compute_sem_kmeans(graph, k, init, max_iters, tolerance, comp_thresh, 0, num_col);
 }
 
 std::string supported_algs[] = {
@@ -811,6 +816,7 @@ void print_usage()
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
 	fprintf(stderr, "-c: computation threshold (defualt: 1 = all compute)\n");
+	fprintf(stderr, "-C: number of columns in your on disk matrix\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");

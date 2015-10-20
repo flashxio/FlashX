@@ -29,11 +29,12 @@
 #include "graph_config.h"
 #include "FGlib.h"
 #include "save_result.h"
+#define PAGE_ROW
 
 using namespace fg;
 
 namespace {
-    typedef safs::page_byte_array::seq_const_iterator<edge_count> data_seq_iterator;
+    typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;
     class cluster
     {
         private:
@@ -113,11 +114,17 @@ namespace {
                 this->div(this->num_members);
             }
 
-            void add_member(edge_seq_iterator& id_it, data_seq_iterator& count_it) {
-                while(id_it.has_next()) {
-                    vertex_id_t nid = id_it.next();
+            void add_member(edge_seq_iterator& id_it, data_seq_iter& count_it) {
+                vertex_id_t nid = 0;
+                while(count_it.has_next()) {
+#ifdef PAGE_ROW
+                    double e = count_it.next();
+                    mean[nid++] += e;
+#else
+                    nid = id_it.next();
                     edge_count e = count_it.next();
                     mean[nid] += e.get_count();
+#endif
                 }
                 num_members++;
             }
@@ -202,6 +209,7 @@ namespace fg
      * \param comp_thresh Used to prune computation if specified. TODO: Explain.
      */
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned max_iters, const double tolerance, const double comp_thresh=0);
+            const unsigned max_iters, const double tolerance, const double comp_thresh=0,
+            const unsigned num_rows=0, const unsigned num_cols=0);
 }
 #endif
