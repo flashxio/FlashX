@@ -338,12 +338,18 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 
 void test_gemm_simple(bool in_mem, size_t dim1, size_t dim2)
 {
-	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
-			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat1;
+	if (in_mem)
+		mat1 = dense_matrix::create_randu<double>(0, 1, long_dim, dim1,
+				matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	else
+		mat1 = get_EM_matrices(long_dim, dim1, 1).front();
 	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, dim1,
 			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), true);
 
+	printf("simple gemm starts\n");
 	struct timeval start, end;
+	// Multiply on the entire matrix.
 	gettimeofday(&start, NULL);
 
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
