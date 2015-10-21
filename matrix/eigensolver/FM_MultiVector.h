@@ -190,12 +190,14 @@ public:
 
 	void sync_fm2ep() {
 #ifdef FM_VERIFY
-		BOOST_LOG_TRIVIAL(info) << boost::format(
-				"There are %1% blocks and each block has %2% cols")
-			% mat->get_num_blocks() % mat->get_block(0)->get_num_cols();
+		BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% blocks")
+			% mat->get_num_blocks();
 		size_t ep_col_idx = 0;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			dense_matrix::ptr block = mat->get_block(i);
+			if (block == NULL)
+				continue;
+
 			detail::local_matrix_store::const_ptr portion
 				= block->get_data().get_portion(0);
 			assert(block->get_num_rows() == portion->get_num_rows());
@@ -415,6 +417,11 @@ public:
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
+		fm_A.verify();
+		this->verify();
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "gemm takes " << time_diff(start, end)
+			<< " seconds";
 		// In KrylovSchur, if the input MV isn't in the subspace, we can drop
 		// the dense matrix in MV to save memory.
 		if (solver == "KrylovSchur" && fm_A.mat->get_num_blocks() == 1
@@ -423,11 +430,6 @@ public:
 			BOOST_LOG_TRIVIAL(info) << "Drop the matrix to save space";
 			fm_A.mat->set_block(0, fm::dense_matrix::const_ptr());
 		}
-		fm_A.verify();
-		this->verify();
-		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << "gemm takes " << time_diff(start, end)
-			<< " seconds";
 	}
 
 	//! Replace \c *this with \c alpha * \c A + \c beta * \c B.
@@ -639,11 +641,11 @@ public:
 		num_col_reads_concept += index.size();
 		num_col_writes_concept += index.size();
 
-		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
 				"this(%1%)[%2%] = A(%3%)") % name % vec2str(index) % fm_A.name;
+		sync_fm2ep();
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
