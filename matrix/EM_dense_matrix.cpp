@@ -916,25 +916,30 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 
 	std::vector<local_matrix_store::const_ptr> bufs(ranges.size());
 	size_t collected_cols = 0;
+	size_t num_ready = 0;
 	for (size_t i = 0; i < ranges.size(); i++) {
 		size_t local_num_cols = ranges[i].second - ranges[i].first;
 		collected_cols += local_num_cols;
 		async_cres_t res = EM_matrix_store::get_portion_async(
 				start_fetched_row, ranges[i].first, num_fetched_rows,
 				local_num_cols, collect_compute);
-		// We assume the requested portion doesn't have data, so the callback
-		// function is invoked when the data is ready.
-		assert(!res.first);
+		if (res.first)
+			num_ready++;
 		bufs[i] = res.second;
 	}
 	assert(collected_cols == num_cols);
 	collect_compute->set_bufs(bufs);
+	// Here we tell the collected compute how many of its buffers are ready.
+	for (size_t i = 0; i < num_ready; i++)
+		collect_compute->run(NULL, 0);
 	if (is_cache_portion())
 		local_mem_buffer::cache_portion(data_id, ret);
+
+	bool ready = num_ready == bufs.size();
 	if (num_fetched_rows == num_rows)
-		return async_cres_t(false, ret);
+		return async_cres_t(ready, ret);
 	else
-		return async_cres_t(false, ret->get_portion(
+		return async_cres_t(ready, ret->get_portion(
 					start_row - start_fetched_row, 0, num_rows, num_cols));
 }
 
