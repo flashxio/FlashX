@@ -48,10 +48,7 @@ public:
 	typedef std::shared_ptr<in_mem_graph> ptr;
 
 	static ptr create(const std::string &graph_name, std::shared_ptr<char> buf,
-			size_t size) {
-		fprintf(stderr, "This isn't supported\n");
-		return ptr();
-	}
+			size_t size);
 	/*
 	 * in_mem_graph takes the memory buffer and is responsible to free it
 	 * afterwards.
@@ -59,6 +56,7 @@ public:
 	static ptr create(const std::string &graph_name, safs::NUMA_buffer::ptr buf,
 			size_t size) {
 		in_mem_graph *g = new in_mem_graph();
+		assert(buf->get_length() >= size);
 		g->graph_size = size;
 		g->graph_data = buf;
 		// TODO we don't init graph_file_id here.

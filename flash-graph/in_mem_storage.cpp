@@ -48,6 +48,15 @@ struct deleter
 	}
 };
 
+in_mem_graph::ptr in_mem_graph::create(const std::string &graph_name,
+		std::shared_ptr<char> data, size_t size)
+{
+	// TODO It only supports one NUMA node in this setting right now.
+	NUMA_mapper mapper(1, GRAPH_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr buf = safs::NUMA_buffer::create(data, size, mapper);
+	return create(graph_name, buf, size);
+}
+
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
 	NUMA_mapper mapper(params.get_num_nodes(), GRAPH_CHUNK_SIZE_LOG);
