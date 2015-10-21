@@ -51,6 +51,7 @@ class NUMA_buffer
 	};
 	data_loc_info get_data_loc(off_t off, size_t size) const;
 
+	NUMA_buffer(std::shared_ptr<char>, size_t length, const NUMA_mapper &mapper);
 	NUMA_buffer(size_t length, const NUMA_mapper &mapper);
 public:
 	typedef std::pair<const char *, size_t> cdata_info;
@@ -63,6 +64,8 @@ public:
 	static ptr load(const std::string &file, const NUMA_mapper &mapper);
 	static ptr load_safs(const std::string &file, const NUMA_mapper &mapper);
 
+	static ptr create(std::shared_ptr<char>, size_t length,
+			const NUMA_mapper &mapper);
 	static ptr create(size_t length, const NUMA_mapper &mapper) {
 		return ptr(new NUMA_buffer(length, mapper));
 	}

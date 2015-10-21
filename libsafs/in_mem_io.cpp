@@ -45,6 +45,17 @@ public:
 
 }
 
+NUMA_buffer::NUMA_buffer(std::shared_ptr<char> data, size_t length,
+		const NUMA_mapper &_mapper): mapper(_mapper)
+{
+	assert(mapper.get_num_nodes() == 1);
+	this->length = length;
+	bufs.resize(1);
+	buf_lens.resize(1);
+	bufs[0] = data;
+	buf_lens[0] = length;
+}
+
 NUMA_buffer::NUMA_buffer(size_t length,
 		const NUMA_mapper &_mapper): mapper(_mapper)
 {
@@ -268,6 +279,16 @@ NUMA_buffer::ptr NUMA_buffer::load_safs(const std::string &file_name,
 			assert(off % MAX_IO_SIZE == 0);
 	}
 	return numa_buf;
+}
+
+NUMA_buffer::ptr NUMA_buffer::create(std::shared_ptr<char> data, size_t length,
+		const NUMA_mapper &mapper)
+{
+	if (mapper.get_num_nodes() != 1) {
+		throw io_exception(
+				"can't create a NUMA buffer from a raw byte array on multiple nodes");
+	}
+	return NUMA_buffer::ptr(new NUMA_buffer(data, length, mapper));
 }
 
 class in_mem_byte_array: public page_byte_array
