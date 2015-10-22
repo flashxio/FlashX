@@ -521,7 +521,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 std::atomic<size_t> num_spmm;
 
 void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
-		const block_multi_vector &X, block_multi_vector &Y)
+		const block_multi_vector &X, block_multi_vector &Y, bool out_mat_in_mem)
 {
 	assert(multiply.get_num_cols() == X.get_num_rows());
 	assert(multiply.get_num_rows() == Y.get_num_rows());
@@ -594,7 +594,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// EM matrix.
 		if (!in_mem)
 			num_col_writes_concept += res->get_num_cols();
-		if (!in_mem && num_cached_mats == 0) {
+		if (!out_mat_in_mem) {
 			BOOST_LOG_TRIVIAL(info) << "write the output matrix of SpMM to disks";
 			num_col_writes += res->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;

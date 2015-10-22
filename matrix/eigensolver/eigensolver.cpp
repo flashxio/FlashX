@@ -28,6 +28,14 @@ using std::endl;
 
 using namespace fm::eigen;
 
+namespace fm
+{
+namespace eigen
+{
+extern size_t num_cached_mats;
+}
+}
+
 namespace Anasazi
 {
 
@@ -44,7 +52,13 @@ public:
 				"SpMM: y(%1%) = A * x(%2%)") % y.get_name() % x.get_name();
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data());
+		bool out_mat_in_mem;
+		if (x.get_data()->is_in_mem())
+			out_mat_in_mem = true;
+		else
+			out_mat_in_mem = num_cached_mats > 0;
+		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data(),
+				out_mat_in_mem);
 		gettimeofday(&end, NULL);
 		BOOST_LOG_TRIVIAL(info) << "SpMM takes " << time_diff(start, end)
 			<< " seconds";
@@ -236,7 +250,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 			T(i,i) = evals[i].realpart;
 		}
 		block_multi_vector::sparse_matrix_multiply(*A, *evecs->get_data(),
-				*tempAevec.get_data());
+				*tempAevec.get_data(), evecs->get_data()->is_in_mem());
 		MVT::MvTimesMatAddMv (-1.0, *evecs, T, 1.0, tempAevec);
 		MVT::MvNorm (tempAevec, normR);
 	}
