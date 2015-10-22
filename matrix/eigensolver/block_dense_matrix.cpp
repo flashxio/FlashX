@@ -460,7 +460,11 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 				detail::matrix_stats.print_diff(orig_stats);
 			}
 			// We only need to cache matrices in the EM mode.
-			if (!in_mem && num_cached_mats > 0 && mats[0]->is_in_mem()) {
+			if (!in_mem && num_cached_mats > 0
+					// We should keep the new matrix in the matrix cache if
+					// there is still space in the cache. The new matrix
+					// might be on disks, but we don't care.
+					&& cached_mats.size() < num_cached_mats) {
 				cached_mats.push_back(mats[0]);
 			}
 		}
