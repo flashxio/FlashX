@@ -32,6 +32,7 @@ namespace eigen
 
 size_t num_cached_mats = 1;
 std::deque<dense_matrix::ptr> cached_mats;
+bool verify_correct = false;
 
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
@@ -41,6 +42,78 @@ size_t num_multiply_concept = 0;
 void set_num_cached_mats(size_t num)
 {
 	num_cached_mats = num;
+}
+
+/*
+ * This is to verify that the eigensolver never uses an uninitialized matrix.
+ */
+class uninit_matrix_store: public detail::matrix_store
+{
+public:
+	uninit_matrix_store(size_t nrow, size_t ncol,
+			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
+	}
+
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		throw unsupported_exception();
+	}
+	virtual std::string get_name() const {
+		return "uninitialized matrix";
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		throw unsupported_exception();
+	}
+
+	virtual void reset_data() {
+		throw unsupported_exception();
+	}
+	virtual void set_data(const set_operate &op) {
+		throw unsupported_exception();
+	}
+
+	virtual detail::matrix_store::const_ptr transpose() const {
+		throw unsupported_exception();
+	}
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		throw unsupported_exception();
+	}
+	virtual detail::async_cres_t get_portion_async(size_t start_row,
+			size_t start_col, size_t num_rows, size_t num_cols,
+			std::shared_ptr<detail::portion_compute> compute) const {
+		throw unsupported_exception();
+	}
+	virtual detail::async_res_t get_portion_async(size_t start_row,
+			size_t start_col, size_t num_rows, size_t num_cols,
+			std::shared_ptr<detail::portion_compute> compute) {
+		throw unsupported_exception();
+	}
+	virtual std::shared_ptr<const detail::local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const {
+		throw unsupported_exception();
+	}
+	virtual std::shared_ptr<detail::local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) {
+		throw unsupported_exception();
+	}
+	virtual void write_portion_async(
+			std::shared_ptr<const detail::local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		throw unsupported_exception();
+	}
+};
+
+static dense_matrix::ptr create_uninit(size_t nrow, size_t ncol,
+		const scalar_type &type, int num_nodes)
+{
+	if (verify_correct)
+		return dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_COL, type, num_nodes, true);
+	else
+		return dense_matrix::create(detail::matrix_store::ptr(
+					new uninit_matrix_store(nrow, ncol, type)));
 }
 
 class mirror_block_multi_vector: public block_multi_vector
@@ -247,8 +320,7 @@ block_multi_vector::block_multi_vector(size_t nrow, size_t ncol,
 	this->is_subspace = is_subspace;
 	mats.resize(ncol / block_size);
 	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = dense_matrix::create(nrow, block_size,
-				matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
+		mats[i] = create_uninit(nrow, block_size, type, get_num_nodes());
 }
 
 dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
@@ -1517,6 +1589,8 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 {
 	// We have to set the entire block.
 	if (index[0] % get_block_size() == 0 && index.size() % get_block_size() == 0) {
+		// Because some of the matrices in the subspace are cached in memory,
+		// we may now need to delete them.
 		// Normally, the KrylovSchur eigensolver only sets a single block.
 		// It needs to assign more than one block in restart.
 		// TODO This method of detecting restart may not reliable.
@@ -1525,8 +1599,8 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 			// When restarting the subspace, we can delete all vectors
 			// in the subspace.
 			for (size_t i = 0; i < mats.size(); i++)
-				mats[i] = dense_matrix::create(num_rows, block_size,
-						matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
+				mats[i] = create_uninit(num_rows, block_size, type,
+						get_num_nodes());
 		}
 		size_t num_blocks = index.size() / get_block_size();
 		size_t block_start = index[0] / get_block_size();
