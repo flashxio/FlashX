@@ -24,7 +24,7 @@ using namespace fg;
 int main(int argc, char* argv[]) {
 
     if (argc < 4) {
-        fprintf(stderr, "usage: ./index_util outfilename num_vertices num_cols\n");
+        fprintf(stderr, "usage: ./test_fake_index outfilename num_vertices num_cols\n");
         exit(EXIT_FAILURE);
     }
 
