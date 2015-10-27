@@ -23,9 +23,8 @@
 #include <gperftools/profiler.h>
 #endif
 
-#define PRUNE 0 // FIXME: BUG : TODO: When active prunes on kmeans++ as well!!
 #define KM_TEST 0
-#define VERBOSE 0
+#define VERBOSE 1
 #define INVALID_CLUST_ID -1
 
 using namespace fg;
@@ -42,11 +41,6 @@ namespace {
     static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
     static unsigned g_iter;
-    static bool g_even_iter;
-#if PRUNE
-    static double g_COMP_THRESH;
-    static std::vector<double> g_comp_thresh_v; // To prune computation
-#endif
 
     enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
 
@@ -114,17 +108,6 @@ namespace {
         }
 
         void run(vertex_program &prog) {
-#if PRUNE
-            if (g_even_iter) {
-                if (this->dist < g_comp_thresh_v[cluster_id]) {
-#if VERBOSE
-                    printf("No work for v:%u with dist=%.3f < comp_thresh=%.3f\n",
-                            prog.get_vertex_id(*this), this->dist,  g_comp_thresh_v[cluster_id]);
-#endif
-                    return; // No work for you!
-                }
-            }
-#endif
             vertex_id_t id = prog.get_vertex_id(*this);
             request_vertices(&id, 1);
         }
@@ -401,48 +384,20 @@ namespace {
         clear_clusters();
         std::vector<vertex_program::ptr> kms_clust_progs;
         mat->get_vertex_programs(kms_clust_progs);
-#if PRUNE
-        std::vector<distpair> bounds;
-        std::vector<distpair> tmp_g_bounds;
-#endif
 
         for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
             kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
             std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
-#if PRUNE
-            if (!g_even_iter) {
-                bounds = kms_prog->get_bounds();
-                if (thd == 0) { tmp_g_bounds = bounds; } // Avoid loc to init tmp_g_bounds
-            }
-#endif
             g_num_changed += kms_prog->get_pt_changed();
             /* Merge the per-thread clusters */
             for (unsigned cl = 0; cl < K; cl++) {
                 *(g_clusters[cl]) += *(pt_clusters[cl]);
-#if PRUNE
-                if (!g_even_iter) {
-                    if (bounds[cl].first < tmp_g_bounds[cl].first) {
-                        tmp_g_bounds[cl].first = bounds[cl].first;
-                    }
-                    if (bounds[cl].second > tmp_g_bounds[cl].second) {
-                        tmp_g_bounds[cl].second = bounds[cl].second;
-                    }
-                }
-#endif
                 if (thd == kms_clust_progs.size()-1) {
                     g_clusters[cl]->finalize();
                     num_members_v[cl] = g_clusters[cl]->get_num_members();
                 }
             }
         }
-#if PRUNE
-        if (!g_even_iter) {
-            for (unsigned cl = 0; cl < K; cl++) {
-                g_comp_thresh_v[cl] = (fabs(tmp_g_bounds[cl].first -
-                            tmp_g_bounds[cl].second) * g_COMP_THRESH) + tmp_g_bounds[cl].first;
-            }
-        }
-#endif
     }
 
     /* During kmeans++ we select a new cluster each iteration
@@ -534,10 +489,6 @@ namespace fg
         for (size_t cl = 0; cl < k; cl++)
             g_clusters.push_back(cluster::create(NUM_COLS));
 
-#if PRUNE
-        g_comp_thresh_v.assign(K, 0); // Init g_COMP_THRESH for each cluster to 0
-        g_COMP_THRESH = comp_thresh;
-#endif
         std::vector<unsigned> num_members_v;
         num_members_v.resize(K);
         /*** End VarInit ***/
@@ -623,7 +574,6 @@ namespace fg
         g_iter = 1;
 
         while (g_iter < max_iters) {
-            g_even_iter = true ? (g_iter % 2 == 0) : false;
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
                 " . Computing cluster assignments ...";
 
@@ -640,6 +590,8 @@ namespace fg
             get_membership(mat)->print(NUM_ROWS);
             BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
 #endif
+
+            BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
 
             if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
                 converged = true;
