@@ -48,15 +48,15 @@ class set_col_operate: public type_set_operate<double>
 };
 
 int main (int argc, char* argv[]) {
-	if (argc < 2) {
-		fprintf(stderr, "usage: ./create_matrix [row/col/rrow/rcol]");
+	if (argc < 4) {
+		fprintf(stderr, "usage: ./create_matrix nrow ncol [row/col/rrow/rcol]");
 		exit(911);
 	}
 
-	const size_t nrow = 7;
-	const size_t ncol = 5;
-	std::string outfn = "data/tiny/testmat";
-	std::string argv1 = std::string(argv[1]);
+	const size_t nrow = atol(argv[1]);
+	const size_t ncol = atol(argv[2]);
+	std::string outfn = "matrix_r"+ std::to_string(nrow)+"_c"+std::to_string(ncol);
+	std::string argv1 = std::string(argv[3]);
 
 	const conv_layout lay = argv1 == "row" ? ROW
 		: argv1 == "col" ? COL
@@ -91,16 +91,16 @@ int main (int argc, char* argv[]) {
 			mms->write2file(outfn+"_dm_cw.bin");
 
 	} else if (lay == RAWROW || lay == RAWCOL) {
-		int min = 1; int max = 50;
+		int min = 1; int max = 5;
 
 		double* dmat = new double [nrow*ncol];
 		for (size_t i = 0; i < nrow*ncol; i++) {
-			dmat[i] = ceil(min + ((double)random() / (double)RAND_MAX * (max - min)));
+			dmat[i] = min + ((double)random() / (double)RAND_MAX * (max - min));
 		}
 
 #if 1
 		if (lay == RAWCOL) 
-			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
+			BOOST_LOG_TRIVIAL(info) << "Printing row-wise matrix for verification";
 		else
 			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
 		print_mat(dmat, nrow, ncol, lay); 
@@ -118,7 +118,7 @@ int main (int argc, char* argv[]) {
 		outfile.close();
 		delete [] dmat;
 
-#if 1
+#if 0
 		BOOST_LOG_TRIVIAL(info) << "Test read of matrix";
 		double* read_mat;
 		if (lay == RAWCOL) 
@@ -131,7 +131,7 @@ int main (int argc, char* argv[]) {
 		delete [] read_mat;
 #endif
 	} else {
-		fprintf(stderr, "Unknown matrix type '%s'", argv[1]);
+		fprintf(stderr, "Unknown matrix type '%s'", argv[3]);
 	}
 
 	return EXIT_SUCCESS;
