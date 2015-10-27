@@ -28,12 +28,8 @@
 #include "safs_file.h"
 #include "utils.h"
 
-#define GRAPH_AS_MATRIX 1
-
 #if GRAPH_AS_MATRIX
 #include "fake_index.h"
-#define GRAPH_MAT_ROWS 7
-#define GRAPH_MAT_COLS 5
 #endif
 
 using namespace safs;
@@ -74,7 +70,7 @@ FG_graph::FG_graph(const std::string &graph_file,
 		const RAID_config &raid_conf = get_sys_RAID_conf();
 		safs_file safs_graph(raid_conf, graph_file);
 		safs_file safs_index(raid_conf, index_file);
-		exist_in_safs = safs_graph.exist() && safs_index.exist();
+		exist_in_safs = safs_graph.exist(); // && safs_index.exist();
 	}
 
 	if (graph_conf.use_in_mem_graph() && exist_in_safs)
@@ -84,6 +80,11 @@ FG_graph::FG_graph(const std::string &graph_file,
 		// in the local filesystem.
 		graph_data = in_mem_graph::load_graph(graph_file);
 	}
+
+#if GRAPH_AS_MATRIX
+        index_data = get_index_data();
+		header = index_data->get_graph_header();
+#else
 
 	if (graph_conf.use_in_mem_index() && exist_in_safs) {
 		index_data = vertex_index::safs_load(index_file);
@@ -108,6 +109,7 @@ FG_graph::FG_graph(const std::string &graph_file,
 		io->wait4complete(1);
 		memcpy(&header, buf, sizeof(header));
 	}
+#endif
 }
 
 FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
@@ -143,15 +145,17 @@ file_io_factory::shared_ptr FG_graph::get_graph_io_factory(int access_option)
 
 vertex_index::ptr FG_graph::get_index_data() const
 {
+    if (index_data) {
+        return index_data;
+    } else {
 #if GRAPH_AS_MATRIX
-    BOOST_LOG_TRIVIAL(info) << "In memory faked index!\n";
-    return make_index(GRAPH_MAT_ROWS, GRAPH_MAT_COLS);
+        BOOST_LOG_TRIVIAL(info) << "Creating in-memory faked index!\n";
+        return make_index(GRAPH_MAT_ROWS, GRAPH_MAT_COLS);
 #else
-	if (index_data)
-		return index_data;
-	else
-		return vertex_index::safs_load(index_file);
+        BOOST_LOG_TRIVIAL(info) << "Looking for fake index on disk!\n";
+        return vertex_index::safs_load(index_file);
 #endif
+    }
 }
 
 /******************* Implementation of fetching a subgraph *********************/
