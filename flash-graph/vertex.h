@@ -35,6 +35,9 @@
 #include "FG_basic_types.h"
 #include "graph_file_header.h"
 
+#define GRAPH_AS_MATRIX 1
+#define GRAPH_MAT_ROWS 1000 // 500 // 65608366 // 7 //  FIXME: DM hardcoded
+#define GRAPH_MAT_COLS 10 //10 // 8 // 5 // 5 // FIXME: DM hardcoded
 namespace fg
 {
 
@@ -1183,8 +1186,8 @@ public:
 	page_row(const safs::page_byte_array &arr): page_vertex(
 			false), array(arr) {
 
-    num_edges = 5;  // FIXME: Faked
-    const off_t end = num_edges*sizeof(double); // FIXME: Faked
+    num_edges = GRAPH_MAT_COLS;  // FIXME: DM Faked
+    const off_t end = num_edges*sizeof(double); // FIXME: DM Faked
 #ifdef VERBOSE
     safs::page_byte_array::seq_const_iterator<double> it =
       array.get_seq_iterator<double>(0, end);
@@ -1196,7 +1199,7 @@ public:
 #endif
 
     vertex_size = end;
-    id = (arr.get_offset() - graph_header::HEADER_SIZE)/end; // Faked
+    id = (arr.get_offset() - graph_header::HEADER_SIZE)/end; // FIXME: Faked
 	}
 
 	size_t get_size() const {
