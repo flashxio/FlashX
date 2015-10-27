@@ -815,8 +815,8 @@ void print_usage()
 	fprintf(stderr, "-i: max number of iterations\n");
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
-	fprintf(stderr, "-c: computation threshold (defualt: 1 = all compute)\n");
-	fprintf(stderr, "-C: number of columns in your on disk matrix\n");
+	fprintf(stderr, "-C: computation threshold (defualt: 1 = all compute)\n");
+	fprintf(stderr, "-c: number of columns in your on disk matrix\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
