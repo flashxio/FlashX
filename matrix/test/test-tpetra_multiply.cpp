@@ -15,7 +15,8 @@ void test_tpetra(const std::string graph_file, fg::vertex_index::ptr index)
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	RCP<crs_matrix_type> A = create_crs(graph_file, index,
-			fg::edge_type::OUT_EDGE, Map, myRank);
+			fg::edge_type::OUT_EDGE, Map, myRank,
+			index->get_graph_header().get_edge_data_size());
 	gettimeofday(&end, NULL);
 	printf("conversion takes %.3f seconds\n", time_diff(start, end));
 

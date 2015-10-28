@@ -26,7 +26,6 @@
 #include "in_mem_storage.h"
 #include "vertex_index.h"
 #include "safs_file.h"
-#include "utils.h"
 
 #if GRAPH_AS_MATRIX
 #include "fake_index.h"

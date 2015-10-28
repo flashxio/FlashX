@@ -31,6 +31,8 @@
 namespace fm
 {
 
+static const size_t MAT_CHUNK_SIZE_LOG = 30;
+
 void sparse_block_2d::verify(const block_2d_size &block_size) const
 {
 	size_t rel_row_id = 0;
@@ -57,22 +59,6 @@ void sparse_block_2d::verify(const block_2d_size &block_size) const
 	assert(num_rows <= block_size.get_num_rows());
 }
 
-size_t sparse_block_2d::get_nnz() const
-{
-	size_t nnz = 0;
-	if (has_rparts()) {
-		rp_edge_iterator it = get_first_edge_iterator();
-		while (!is_rparts_end(it)) {
-			while (it.has_next()) {
-				nnz++;
-				it.next();
-			}
-			it = get_next_edge_iterator(it);
-		}
-	}
-	return nnz + get_num_coo_vals();
-}
-
 std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 		const block_2d_size &block_size) const
 {
@@ -93,8 +79,8 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 	}
 	const local_coo_t *lcoo_start = get_coo_start();
 	for (size_t i = 0; i < get_num_coo_vals(); i++) {
-		uint16_t rel_row_idx = lcoo_start[i].first;
-		uint16_t rel_col_idx = lcoo_start[i].second;
+		uint16_t rel_row_idx = lcoo_start[i].get_row_idx();
+		uint16_t rel_col_idx = lcoo_start[i].get_col_idx();
 		ret.push_back(coo_nz_t(row_begin + rel_row_idx,
 					col_begin + rel_col_idx));
 	}
@@ -103,29 +89,45 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 
 void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 {
-	char *end = row_parts + rparts_size;
-
-	memcpy(end, &part, part_size);
-	assert(((size_t) rparts_size) + part_size
-			<= std::numeric_limits<uint32_t>::max());
-	rparts_size += part_size;
+	assert(num_coo_vals == 0);
+	memcpy(get_rpart_end(), &part, part_size);
+	size_t num_entries = part.get_num_entries(part_size);
+	if (num_entries > 0) {
+		nrow++;
+		nnz += num_entries;
+	}
 }
 
-void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nnz,
+void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nz,
 		const block_2d_size &block_size)
 {
-	if (rparts_size > 0) {
+	// This function should only be called once.
+	assert(num_coo_vals == 0);
+
+	// Add an empty row part to indicate the end of the row-part region.
+	sparse_row_part end(std::numeric_limits<uint16_t>::max());
+	append(end, sparse_row_part::get_size(0));
+
+	local_coo_t *lcoo = get_coo_start();
+	for (size_t i = 0; i < nz.size(); i++)
+		lcoo[i] = local_coo_t(nz[i].first & block_size.get_nrow_mask(),
+				nz[i].second & block_size.get_ncol_mask());
+	num_coo_vals = nz.size();
+	nrow += nz.size();
+	nnz += nz.size();
+}
+
+void sparse_block_2d::finalize(const char *data, size_t num_bytes)
+{
+	// If there are row parts but we haven't added the empty row to indicate
+	// the end of the row part region.
+	if (num_coo_vals == 0) {
 		sparse_row_part end(std::numeric_limits<uint16_t>::max());
 		append(end, sparse_row_part::get_size(0));
 	}
-	// This function should only be called once.
-	assert(num_coo_vals == 0);
-	num_coo_vals = nnz.size();
-	local_coo_t *lcoo = get_coo_start();
-	for (size_t i = 0; i < nnz.size(); i++) {
-		lcoo[i].first = nnz[i].first & block_size.get_nrow_mask();
-		lcoo[i].second = nnz[i].second & block_size.get_ncol_mask();
-	}
+
+	if (data)
+		memcpy(get_nz_data(), data, num_bytes);
 }
 
 void SpM_2d_index::verify() const
@@ -284,6 +286,7 @@ void SpM_2d_storage::verify() const
 {
 	matrix_header *header = (matrix_header *) data.get();
 	header->verify();
+#if 0
 	block_2d_size block_size = index->get_header().get_2d_block_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
@@ -291,7 +294,7 @@ void SpM_2d_storage::verify() const
 		long prev_block_col_idx = -1;
 		size_t num_blocks = 0;
 		while (brow_it.has_next()) {
-			const sparse_block_2d &block = brow_it.next();
+			const sparse_block_2d &block = brow_it.next(header->get_entry_size());
 			assert(block.get_block_row_idx() == i);
 			assert((long) block.get_block_col_idx() > prev_block_col_idx);
 			prev_block_col_idx = block.get_block_col_idx();
@@ -299,6 +302,7 @@ void SpM_2d_storage::verify() const
 			num_blocks++;
 		}
 	}
+#endif
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
@@ -309,60 +313,25 @@ SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 
-	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
-			mat_file, safs::REMOTE_ACCESS);
-	if (io_fac == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io factory for %1%") % mat_file;
-		return SpM_2d_storage::ptr();
-	}
-	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
-	if (io == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io instance for %1%") % mat_file;
-		return SpM_2d_storage::ptr();
-	}
-
-	size_t size = io_fac->get_file_size();
-	char *data = NULL;
-	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
-	BOOST_VERIFY(mret == 0);
-
-	safs::data_loc_t loc(io->get_file_id(), 0);
-	safs::io_request req(data, loc, size, READ);
-	io->access(&req, 1);
-	io->wait4complete(1);
-	matrix_header *header = (matrix_header *) data;
+	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::load_safs(mat_file, mapper);
+	safs::NUMA_buffer::cdata_info header_data = data->get_data(0, PAGE_SIZE);
+	assert(header_data.first);
+	matrix_header *header = (matrix_header *) header_data.first;
 	header->verify();
-	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
-				index, mat_file));
+	return ptr(new SpM_2d_storage(data, index, mat_file));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 			SpM_2d_index::ptr index)
 {
-	size_t size = safs::native_file(mat_file).get_size();
-	char *data = NULL;
-	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
-	BOOST_VERIFY(mret == 0);
-	FILE *f = fopen(mat_file.c_str(), "r");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
-			% mat_file % strerror(errno);
-		return SpM_2d_storage::ptr();
-	}
-	size_t ret = fread(data, size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
-			% mat_file % strerror(errno);
-		fclose(f);
-		return SpM_2d_storage::ptr();
-	}
-	fclose(f);
-	matrix_header *header = (matrix_header *) data;
+	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::load(mat_file, mapper);
+	safs::NUMA_buffer::cdata_info header_data = data->get_data(0, PAGE_SIZE);
+	assert(header_data.first);
+	matrix_header *header = (matrix_header *) header_data.first;
 	header->verify();
-	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
-				index, mat_file));
+	return ptr(new SpM_2d_storage(data, index, mat_file));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
@@ -384,16 +353,14 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 	// The sparse matrix multiplication accesses data in pages. We have to
 	// make sure the array that stores the sparse matrix is aligned to
 	// page size.
-	char *data = NULL;
-	int ret = posix_memalign((void **) &data, PAGE_SIZE,
-			ROUNDUP(size, PAGE_SIZE));
-	BOOST_VERIFY(ret == 0);
-	*(matrix_header *) data = header;
-	memcpy(data + sizeof(header),
+	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::create(
+			ROUNDUP(size, PAGE_SIZE), mapper);
+	data->copy_from((const char *) &header, sizeof(header), 0);
+	data->copy_from(
 			dynamic_cast<const detail::mem_vec_store &>(vec->get_data()).get_raw_arr(),
-			vec->get_length());
-	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
-				index, "anonymous"));
+			vec->get_length(), sizeof(header));
+	return ptr(new SpM_2d_storage(data, index, "anonymous"));
 }
 
 safs::file_io_factory::shared_ptr SpM_2d_storage::create_io_factory() const
@@ -434,9 +401,10 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 		block_row_iterator it((const sparse_block_2d *) data,
 				(const sparse_block_2d *) (((char *) data) + size));
 		size_t tot_brow_size = 0;
+		size_t entry_size = index->get_header().get_entry_size();
 		while (it.has_next()) {
-			const sparse_block_2d &block = it.next();
-			tot_brow_size += block.get_size();
+			const sparse_block_2d &block = it.next(entry_size);
+			tot_brow_size += block.get_size(entry_size);
 			if (block.is_empty())
 				continue;
 			block.verify(block_size);

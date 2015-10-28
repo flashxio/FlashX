@@ -127,7 +127,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (A->get_num_cols(), blockSize, blockSize,
-				opts.in_mem, opts.solver));
+				numBlocks * blockSize, opts.in_mem, opts.solver));
 	ivec->Random ();
 
 	// Create the eigenproblem.  This object holds all the stuff about
@@ -230,7 +230,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	if (sol.numVecs > 0) {
 		Teuchos::SerialDenseMatrix<int,double> T (sol.numVecs, sol.numVecs);
 		MV tempAevec (A->get_num_rows(), sol.numVecs, evecs->get_block_size(),
-				opts.in_mem, opts.solver);
+				numBlocks * blockSize, opts.in_mem, opts.solver);
 		T.putScalar (0.0);
 		for (int i=0; i<sol.numVecs; ++i) {
 			T(i,i) = evals[i].realpart;
@@ -275,7 +275,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		<< endl;
 	cout << "#double float-point multiplies: "
 		<< detail::matrix_stats.get_multiplies() << endl;
-	cached_mat = NULL;
+	cached_mats.clear();
 
 	return res;
 }

@@ -106,7 +106,7 @@ public:
 class matrix_header
 {
 	static const int64_t MAGIC_NUMBER = 0x123456789FFFFFFL;
-	static const int CURR_VERSION = 1;
+	static const int CURR_VERSION = 2;
 
 	union {
 		struct info {

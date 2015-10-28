@@ -321,16 +321,17 @@ int main (int argc, char *argv[])
 	int my_rank = comm->getRank();
 
 	RCP<OP> A;
+	size_t edge_data_size = index->get_graph_header().get_edge_data_size();
 	if (index->get_graph_header().is_directed_graph()) {
 		RCP<crs_matrix_type> mat = create_crs(graph_file, index,
-				fg::edge_type::OUT_EDGE, Map, my_rank);
+				fg::edge_type::OUT_EDGE, Map, my_rank, edge_data_size);
 		RCP<crs_matrix_type> t_mat = create_crs(graph_file, index,
-				fg::edge_type::IN_EDGE, Map, my_rank);
+				fg::edge_type::IN_EDGE, Map, my_rank, edge_data_size);
 		A = rcp(new SVD_operator(mat, t_mat));
 	}
 	else {
 		RCP<crs_matrix_type> mat = create_crs(graph_file, index,
-				fg::edge_type::OUT_EDGE, Map, my_rank);
+				fg::edge_type::OUT_EDGE, Map, my_rank, edge_data_size);
 		A = mat;
 //		A = rcp(new eigen_operator(mat));
 	}

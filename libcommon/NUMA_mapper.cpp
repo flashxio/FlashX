@@ -19,12 +19,6 @@
 
 #include "NUMA_mapper.h"
 
-namespace fm
-{
-
-namespace detail
-{
-
 std::vector<size_t> NUMA_mapper::cal_local_lengths(size_t len) const
 {
 	std::vector<size_t> ret(get_num_nodes());
@@ -42,6 +36,9 @@ std::vector<size_t> NUMA_mapper::cal_local_lengths(size_t len) const
 	return ret;
 }
 
-}
-
+NUMA_mapper::NUMA_mapper(size_t num_nodes, size_t rs_log): range_size_log(
+		rs_log), range_size(1 << range_size_log), range_mask(range_size - 1),
+	numa_log(log2(num_nodes)), numa_mask((1 << numa_log) - 1)
+{
+	assert(num_nodes == 1UL << numa_log);
 }

@@ -547,6 +547,10 @@ public:
 		return neighbors[idx];
 	}
 
+	char *get_raw_edge_data(size_t idx) const {
+		return this->get_edge_data_addr() + idx * edge_data_size;
+	}
+
 	template<class edge_data_type = empty_data>
 	const edge_data_type &get_edge_data(size_t idx) const {
 		return ((edge_data_type *) this->get_edge_data_addr())[idx];

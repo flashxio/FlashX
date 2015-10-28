@@ -52,20 +52,22 @@ fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
  * The matrix and its index are kept in memory.
  */
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::ptr df, const block_2d_size &block_size);
+		data_frame::ptr df, const block_2d_size &block_size,
+		const scalar_type *entry_type);
 /*
  * This function creates a 2D-partitioned matrix from a vector of adjacency
  * lists. The matrix and its index are kept in memory.
  */
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		vector_vector::ptr adjs, const block_2d_size &block_size);
+		vector_vector::ptr adjs, const block_2d_size &block_size,
+		const scalar_type *entry_type);
 /*
  * This function creates a 2D-partitioned matrix from a vector of adjacency
  * lists and stores the matrix and its index in files.
  */
 void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file,
-		bool to_safs);
+		const scalar_type *entry_type, const std::string &mat_file,
+		const std::string &mat_idx_file, bool to_safs);
 
 /*
  * A set of functions that change the parameters in the matrix generator.

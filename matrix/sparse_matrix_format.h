@@ -20,14 +20,12 @@
  * limitations under the License.
  */
 
+#include "in_mem_io.h"
+#include "io_interface.h"
+
 #include "vertex.h"
 #include "matrix_header.h"
 #include "vector_vector.h"
-
-namespace safs
-{
-	class file_io_factory;
-}
 
 namespace fm
 {
@@ -38,13 +36,41 @@ namespace fm
 class rp_edge_iterator
 {
 	uint16_t rel_row_idx;
+	// This always points to the beginning of the row part.
 	uint16_t *rel_col_idx_start;
+	// This points to the current location of the iterator on the row part.
 	uint16_t *rel_col_idx_p;
+	// This points to the first non-zero entry in the row part.
+	const char *data_start;
+	size_t entry_size;
 public:
+	rp_edge_iterator() {
+		rel_row_idx = 0;
+		rel_col_idx_start = NULL;
+		rel_col_idx_p = NULL;
+		data_start = NULL;
+		entry_size = 0;
+	}
+
 	rp_edge_iterator(uint16_t rel_row_idx, uint16_t *rel_col_idx_start) {
 		this->rel_row_idx = rel_row_idx;
 		this->rel_col_idx_start = rel_col_idx_start;
 		this->rel_col_idx_p = rel_col_idx_start;
+		this->data_start = NULL;
+		this->entry_size = 0;
+	}
+
+	rp_edge_iterator(uint16_t rel_row_idx, uint16_t *rel_col_idx_start,
+			const char *data_start, size_t entry_size) {
+		this->rel_row_idx = rel_row_idx;
+		this->rel_col_idx_start = rel_col_idx_start;
+		this->rel_col_idx_p = rel_col_idx_start;
+		this->data_start = data_start;
+		this->entry_size = entry_size;
+	}
+
+	bool is_valid() const {
+		return rel_col_idx_start != NULL;
 	}
 
 	size_t get_rel_row_idx() const {
@@ -55,6 +81,10 @@ public:
 		return rel_col_idx_p - rel_col_idx_start;
 	}
 
+	size_t get_entry_size() const {
+		return entry_size;
+	}
+
 	bool has_next() const {
 		// The highest bit of the relative col idx has to be 0.
 		return *rel_col_idx_p <= (size_t) std::numeric_limits<int16_t>::max();
@@ -63,6 +93,12 @@ public:
 	// This returns the relative column index.
 	size_t get_curr() const {
 		return *rel_col_idx_p;
+	}
+
+	template<class T>
+	T get_curr_data() const {
+		assert(data_start && entry_size == sizeof(T));
+		return *(((const T *) data_start) + (rel_col_idx_p - rel_col_idx_start));
 	}
 
 	// This returns the relative column index.
@@ -81,13 +117,16 @@ public:
 	const char *get_curr_addr() const {
 		return (const char *) rel_col_idx_p;
 	}
+
+	const char *get_curr_data() const {
+		return data_start + (rel_col_idx_p - rel_col_idx_start) * entry_size;
+	}
 };
 
-typedef std::pair<uint16_t, uint16_t> local_coo_t;
 typedef std::pair<size_t, size_t> coo_nz_t;
 
 /*
- * This stores part of a row. It doesn't contain any attributes.
+ * This stores the header of a row part. It doesn't contain any attributes.
  */
 class sparse_row_part
 {
@@ -101,6 +140,15 @@ class sparse_row_part
 public:
 	static size_t get_size(size_t num_non_zeros) {
 		return sizeof(sparse_row_part) + sizeof(uint16_t) * num_non_zeros;
+	}
+
+	static size_t get_num_entries(size_t size) {
+		assert((size - sizeof(sparse_row_part)) % sizeof(uint16_t) == 0);
+		return (size - sizeof(sparse_row_part)) / sizeof(uint16_t);
+	}
+
+	static size_t get_row_id_size() {
+		return sizeof(rel_row_idx);
 	}
 
 	static size_t get_col_entry_size() {
@@ -125,6 +173,38 @@ public:
 	rp_edge_iterator get_edge_iterator() {
 		return rp_edge_iterator(get_rel_row_idx(), rel_col_idxs);
 	}
+
+	rp_edge_iterator get_edge_iterator(const char *data, size_t entry_size) {
+		return rp_edge_iterator(get_rel_row_idx(), rel_col_idxs, data,
+				entry_size);
+	}
+};
+
+/*
+ * This is used to store the rows with a single non-zero entry.
+ */
+class local_coo_t
+{
+	static const int num_bits = sizeof(uint16_t) * 8;
+	// A block has at most 2^15 rows and cols.
+	// The most significant bit in the row index is always 1, so this can
+	// be interpreted as a row part as well.
+	uint16_t row_idx;
+	uint16_t col_idx;
+public:
+	local_coo_t(uint16_t row_idx, uint16_t col_idx) {
+		this->row_idx = row_idx | (1 << (num_bits - 1));
+		this->col_idx = col_idx;
+	}
+
+	uint16_t get_row_idx() const {
+		static const int mask = (1 << (num_bits - 1)) - 1;
+		return row_idx & mask;
+	}
+
+	uint16_t get_col_idx() const {
+		return col_idx;
+	}
 };
 
 /*
@@ -135,10 +215,12 @@ class sparse_block_2d
 {
 	uint32_t block_row_idx;
 	uint32_t block_col_idx;
-	// TODO I need to make sure 32-bits are enough. Normally, they should be.
-	// This is the total size of all row parts in the block.
-	uint32_t rparts_size;
-	uint32_t num_coo_vals;
+	// The total number of non-zero entries.
+	uint32_t nnz;
+	// The number of rows with non-zero entries.
+	uint16_t nrow;
+	// The number of rows with a single non-zero entry.
+	uint16_t num_coo_vals;
 	// This is where the row parts are serialized.
 	char row_parts[0];
 
@@ -146,14 +228,59 @@ class sparse_block_2d
 	// constructor doesn't make sense for it.
 	sparse_block_2d(const sparse_block_2d &block) = delete;
 
+	/*
+	 * Row header size including the COO region.
+	 */
+	size_t get_rindex_size() const {
+		// The space used by row ids.
+		return nrow * sparse_row_part::get_row_id_size()
+			// The space used by col index entries in the row part.
+			+ nnz * sparse_row_part::get_col_entry_size()
+			// The empty row part that indicates the end of row-part region.
+			+ sparse_row_part::get_row_id_size();
+		// TODO should I align to the size of non-zero entry type?
+	}
+
+	/*
+	 * The row header size excluding the COO region.
+	 */
+	size_t get_rheader_size() const {
+		// The space used by row ids. The empty row part is also included.
+		return (nrow - num_coo_vals) * sparse_row_part::get_row_id_size()
+			// The space used by col index entries in the row part.
+			+ (nnz - num_coo_vals) * sparse_row_part::get_col_entry_size()
+			// The empty row part that indicates the end of row-part region.
+			+ sparse_row_part::get_row_id_size();
+	}
+
+	sparse_row_part *get_rpart_end() {
+		return (sparse_row_part *) (row_parts + get_rheader_size()
+				// Let's exclude the last empty row part.
+				- sparse_row_part::get_row_id_size());
+	}
+	const sparse_row_part *get_rpart_end() const {
+		return (sparse_row_part *) (row_parts + get_rheader_size()
+				// Let's exclude the last empty row part.
+				- sparse_row_part::get_row_id_size());
+	}
+
 	local_coo_t *get_coo_start() {
-		return (local_coo_t *) (row_parts + rparts_size);
+		return (local_coo_t *) (row_parts + get_rheader_size());
+	}
+
+	char *get_nz_data() {
+		return (char *) (row_parts + get_rindex_size());
+	}
+
+	const char *get_nz_data() const {
+		return (char *) (row_parts + get_rindex_size());
 	}
 public:
 	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx) {
 		this->block_row_idx = block_row_idx;
 		this->block_col_idx = block_col_idx;
-		rparts_size = 0;
+		nnz = 0;
+		nrow = 0;
 		num_coo_vals = 0;
 	}
 
@@ -166,27 +293,22 @@ public:
 	}
 
 	bool is_empty() const {
-		return !has_rparts() && num_coo_vals == 0;
+		return nnz == 0;
 	}
 
-	size_t get_size() const {
-		return sizeof(*this) + rparts_size + num_coo_vals * sizeof(local_coo_t);
+	size_t get_size(size_t entry_size) const {
+		if (entry_size == 0)
+			return sizeof(*this) + get_rindex_size();
+		else
+			return sizeof(*this) + get_rindex_size() + entry_size * nnz;
 	}
 
+	/*
+	 * This doesn't count the COO entries even though they also follow
+	 * the row part format.
+	 */
 	bool has_rparts() const {
-		return rparts_size > 0;
-	}
-
-	bool is_rparts_end(const rp_edge_iterator &it) const {
-		// If the block doesn't have data, it's always true.
-		if (!has_rparts())
-			return true;
-
-		size_t off = it.get_curr_addr() - row_parts;
-		return off
-			// There is an empty row in the end of a block to indicate
-			// the end of the block. We should subtract it.
-			>= rparts_size - sparse_row_part::get_size(0);
+		return nnz - num_coo_vals > 0;
 	}
 
 	rp_edge_iterator get_first_edge_iterator() const {
@@ -197,6 +319,17 @@ public:
 		return rp->get_edge_iterator();
 	}
 
+	rp_edge_iterator get_first_edge_iterator(size_t entry_size) const {
+		assert(has_rparts());
+		// Discard the const qualifier
+		// TODO I should make a const edge iterator
+		sparse_row_part *rp = (sparse_row_part *) row_parts;
+		if (entry_size == 0)
+			return rp->get_edge_iterator();
+		else
+			return rp->get_edge_iterator(get_nz_data(), entry_size);
+	}
+
 	rp_edge_iterator get_next_edge_iterator(const rp_edge_iterator &it) const {
 		assert(!it.has_next());
 		// TODO I should make a const edge iterator
@@ -204,33 +337,59 @@ public:
 		return rp->get_edge_iterator();
 	}
 
-	void append(const sparse_row_part &part, size_t part_size);
+	rp_edge_iterator get_next_edge_iterator(const rp_edge_iterator &it,
+			size_t entry_size) const {
+		assert(!it.has_next());
+		// TODO I should make a const edge iterator
+		sparse_row_part *rp = (sparse_row_part *) it.get_curr_addr();
+		if (entry_size == 0)
+			return rp->get_edge_iterator();
+		else
+			return rp->get_edge_iterator(it.get_curr_data(), entry_size);
+	}
 
-	void add_coo(const std::vector<coo_nz_t> &nnz,
-			const block_2d_size &block_size);
+	bool is_rparts_end(const rp_edge_iterator &it) const {
+		// If the block doesn't have non-zero entries or there aren't non-zero
+		// entries in the row parts.
+		if (nnz == 0 || nnz - num_coo_vals == 0)
+			return true;
+
+		return it.get_curr_addr() - sparse_row_part::get_row_id_size()
+			== (const char *) get_rpart_end();
+	}
 
 	size_t get_num_coo_vals() const {
 		return num_coo_vals;
 	}
 	const local_coo_t *get_coo_start() const {
-		return (const local_coo_t *) (row_parts + rparts_size);
+		return (local_coo_t *) (row_parts + get_rheader_size());
+	}
+	const char *get_coo_val_start(size_t entry_size) const {
+		return get_nz_data() + (nnz - num_coo_vals) * entry_size;
 	}
 
-	std::vector<coo_nz_t> get_non_zeros(const block_2d_size &block_size) const;
+	void append(const sparse_row_part &part, size_t part_size);
+
+	void add_coo(const std::vector<coo_nz_t> &nnz,
+			const block_2d_size &block_size);
 
 	/*
-	 * We need to add an empty row in the end, so the edge iterator can
-	 * notice the end of the last row.
+	 * Finalize the construction of the block.
+	 * We need to add an empty row in the end if there aren't COO entries
+	 * in the block, so the edge iterator can notice the end of the last row.
+	 * We also need to add the non-zero values.
 	 */
-	void finalize() {
-		// If there are row parts but there aren't coo values.
-		if (rparts_size > 0 && num_coo_vals == 0) {
-			sparse_row_part end(std::numeric_limits<uint16_t>::max());
-			append(end, sparse_row_part::get_size(0));
-		}
-	}
+	void finalize(const char *data, size_t num_bytes);
 
-	size_t get_nnz() const;
+	/*
+	 * Get all non-zero entries in the block.
+	 * This is used for testing only.
+	 */
+	std::vector<coo_nz_t> get_non_zeros(const block_2d_size &block_size) const;
+
+	size_t get_nnz() const {
+		return nnz;
+	}
 
 	void verify(const block_2d_size &block_size) const;
 };
@@ -260,10 +419,10 @@ public:
 		return *block;
 	}
 
-	const sparse_block_2d &next() {
+	const sparse_block_2d &next(size_t entry_size) {
 		const sparse_block_2d *orig = block;
 		block = (const sparse_block_2d *) (((const char *) block)
-			+ block->get_size());
+			+ block->get_size(entry_size));
 		return *orig;
 	}
 };
@@ -330,10 +489,10 @@ class SpM_2d_storage
 	std::string mat_name;
 	int mat_file_id;
 
-	std::shared_ptr<char> data;
+	safs::NUMA_buffer::ptr data;
 	SpM_2d_index::ptr index;
 
-	SpM_2d_storage(std::shared_ptr<char> data,
+	SpM_2d_storage(safs::NUMA_buffer::ptr data,
 			SpM_2d_index::ptr index, const std::string mat_name) {
 		this->data = data;
 		this->index = index;
@@ -351,13 +510,6 @@ public:
 			SpM_2d_index::ptr index);
 
 	static void verify(SpM_2d_index::ptr index, const std::string &mat_file);
-
-	block_row_iterator get_block_row_it(size_t idx) const {
-		char *start = data.get() + index->get_block_row_off(idx);
-		char *end = data.get() + index->get_block_row_off(idx + 1);
-		return block_row_iterator((const sparse_block_2d *) start,
-				(const sparse_block_2d *) end);
-	}
 
 	size_t get_num_block_rows() const {
 		return index->get_num_block_rows();

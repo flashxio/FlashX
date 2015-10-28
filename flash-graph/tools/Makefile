@@ -18,13 +18,10 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) $(LDFLAGS) -lz
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: el2al rmat-gen graph-stat print_graph
-
-el2al: el2al.o ../libgraph.a
-	$(CXX) -o el2al el2al.o $(LDFLAGS)
+all: rmat-gen graph-stat print_graph
 
 print_ts_graph: print_ts_graph.o ../libgraph.a
 	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)
@@ -42,7 +39,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f el2al
 	rm -f print_ts_graph
 	rm -f rmat-gen
 	rm -f graph-stat

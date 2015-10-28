@@ -52,8 +52,15 @@ NUMA_vec_store::ptr NUMA_vec_store::cast(vec_store::ptr vec)
 	return std::static_pointer_cast<NUMA_vec_store>(vec);
 }
 
+NUMA_vec_store::NUMA_vec_store(const NUMA_vec_store &vec): mem_vec_store(
+		vec.get_length(), vec.get_type()), mapper(vec.mapper)
+{
+	data = vec.data;
+}
+
 NUMA_vec_store::NUMA_vec_store(size_t length, size_t num_nodes,
-		const scalar_type &type): mem_vec_store(length, type), mapper(num_nodes)
+		const scalar_type &type): mem_vec_store(length, type), mapper(num_nodes,
+			NUMA_range_size_log)
 {
 	data.resize(num_nodes);
 	size_t num_eles_per_node = ceil_divide(length, num_nodes);
@@ -74,10 +81,10 @@ namespace
 class set_ele_operate: public detail::set_range_operate
 {
 	const set_vec_operate &op;
-	const detail::NUMA_mapper &mapper;
+	const NUMA_mapper &mapper;
 	size_t entry_size;
 public:
-	set_ele_operate(const set_vec_operate &_op, const detail::NUMA_mapper &_mapper,
+	set_ele_operate(const set_vec_operate &_op, const NUMA_mapper &_mapper,
 			size_t entry_size): op(_op), mapper(_mapper) {
 		this->entry_size = entry_size;
 	}
@@ -171,9 +178,9 @@ class copy_operate: public detail::set_range_operate
 {
 	const char *from_buf;
 	size_t entry_size;
-	const detail::NUMA_mapper &mapper;
+	const NUMA_mapper &mapper;
 public:
-	copy_operate(const detail::NUMA_mapper &_mapper, size_t entry_size,
+	copy_operate(const NUMA_mapper &_mapper, size_t entry_size,
 			const char *from_buf): mapper(_mapper) {
 		this->entry_size = entry_size;
 		this->from_buf = from_buf;

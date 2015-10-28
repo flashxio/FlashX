@@ -24,13 +24,11 @@
 #include <string>
 #include <memory>
 
+#include "io_interface.h"
+#include "in_mem_io.h"
+
 class in_mem_io;
 class thread_safe_page;
-
-namespace safs
-{
-	class file_io_factory;
-}
 
 namespace fg
 {
@@ -38,10 +36,7 @@ namespace fg
 class in_mem_graph
 {
 	size_t graph_size;
-	// This data structure owns the byte array. Due to the API compatibility,
-	// we use a raw pointer.
-	// in the future.
-	std::shared_ptr<char> graph_data;
+	safs::NUMA_buffer::ptr graph_data;
 	int graph_file_id;
 	std::string graph_file_name;
 
@@ -52,11 +47,16 @@ class in_mem_graph
 public:
 	typedef std::shared_ptr<in_mem_graph> ptr;
 
+	static ptr create(const std::string &graph_name, std::shared_ptr<char> buf,
+			size_t size) {
+		fprintf(stderr, "This isn't supported\n");
+		return ptr();
+	}
 	/*
 	 * in_mem_graph takes the memory buffer and is responsible to free it
 	 * afterwards.
 	 */
-	static ptr create(const std::string &graph_name, std::shared_ptr<char> buf,
+	static ptr create(const std::string &graph_name, safs::NUMA_buffer::ptr buf,
 			size_t size) {
 		in_mem_graph *g = new in_mem_graph();
 		g->graph_size = size;

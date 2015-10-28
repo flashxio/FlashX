@@ -26,12 +26,6 @@
 
 #include <vector>
 
-namespace fm
-{
-
-namespace detail
-{
-
 /*
  * This class maps elements in a container to multiple physical containers.
  * The number of physical containers has to be 2^n.
@@ -39,18 +33,14 @@ namespace detail
  */
 class NUMA_mapper
 {
-	// TODO We need to try different range size to get better performance.
-	static const size_t range_size_log = 20;
-	static const size_t range_size = 1 << range_size_log;
-	static const size_t range_mask = range_size - 1;
+	const size_t range_size_log;
+	const size_t range_size;
+	const size_t range_mask;
 
 	const size_t numa_log;
 	const size_t numa_mask;
 public:
-	NUMA_mapper(size_t num_nodes): numa_log(log2(num_nodes)), numa_mask(
-				(1 << numa_log) - 1) {
-		assert(num_nodes == 1UL << numa_log);
-	}
+	NUMA_mapper(size_t num_nodes, size_t range_size_log);
 
 	size_t get_num_nodes() const {
 		return 1 << numa_log;
@@ -104,9 +94,5 @@ public:
 		return this->numa_log != map.numa_log;
 	}
 };
-
-}
-
-}
 
 #endif
