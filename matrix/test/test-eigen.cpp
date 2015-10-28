@@ -24,6 +24,7 @@
 #include "EM_dense_matrix.h"
 
 #include "eigensolver.h"
+#include "block_dense_matrix.h"
 
 using namespace fm;
 using namespace fm::eigen;
@@ -43,7 +44,8 @@ public:
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *res);
 		return dense_matrix::create(res);
 	}
 
@@ -87,17 +89,19 @@ public:
 	NA_eigen_Operator(sparse_matrix::ptr mat) {
 		this->mat = mat;
 		// Get V = 1
-		vector::ptr vec = create_vector<double>(mat->get_num_cols(), 1);
+		dense_matrix::ptr vec = dense_matrix::create(mat->get_num_cols(), 1,
+				matrix_layout_t::L_COL, get_scalar_type<double>(),
+				const_set_operate<double>(1), matrix_conf.get_num_nodes());
 		// Get degree of each row.
-		detail::mem_vec_store::ptr deg = detail::mem_vec_store::create(
-				mat->get_num_rows(), matrix_conf.get_num_nodes(),
-				get_scalar_type<double>());
-		printf("len1: %ld, len2: %ld\n", vec->get_length(), deg->get_length());
-		mat->multiply<double>(dynamic_cast<const detail::mem_vec_store &>(
-					vec->get_data()), *deg);
-		vec = vector::create(deg);
+		detail::matrix_store::ptr deg = detail::matrix_store::create(
+				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
+				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(vec->get_data(), *deg);
+		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
-		deg_vec1_2 = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
+		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
+		deg_vec1_2 = vec->get_col(0);
 	}
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
@@ -110,7 +114,8 @@ public:
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_COL, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *res);
 		dense_matrix::ptr tmp2 = dense_matrix::create(res);
 		return tmp2->scale_rows(deg_vec1_2);
 	}
@@ -139,14 +144,16 @@ public:
 		detail::mem_matrix_store::ptr tmp = detail::mem_matrix_store::create(
 				mat->get_num_rows(), mem_in.get_num_cols(),
 				matrix_layout_t::L_ROW, mem_in.get_type(), mem_in.get_num_nodes());
-		mat->multiply<double>(mem_in, *tmp);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(mem_in, *tmp);
 		x = NULL;
 		mat->transpose();
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				mat->get_num_rows(), tmp->get_num_cols(),
 				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
-		mat->multiply<double>(*tmp, *res);
+		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
+		mat->multiply<double, float>(*tmp, *res);
 		mat->transpose();
 		return dense_matrix::create(res);
 	}
@@ -170,6 +177,7 @@ void print_usage()
 	fprintf(stderr, "-e: the external memory mode.\n");
 	fprintf(stderr, "-o file: output eigenvectors\n");
 	fprintf(stderr, "-T type: eigen, SVD, NA_eigen (normalized adjacency)\n");
+	fprintf(stderr, "-c num: The number of cached matrices\n");
 }
 
 int main (int argc, char *argv[])
@@ -183,7 +191,8 @@ int main (int argc, char *argv[])
 	std::string solver;
 	double tol = -1;
 	bool in_mem = true;
-	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:")) != -1) {
+	size_t num_cached = 1;
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -213,6 +222,10 @@ int main (int argc, char *argv[])
 				type = optarg;
 				num_opts++;
 				break;
+			case 'c':
+				num_cached = atoi(optarg);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 				abort();
@@ -240,6 +253,7 @@ int main (int argc, char *argv[])
 	else
 		nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
+	set_num_cached_mats(num_cached);
 	struct eigen_options opts(nev, solver);
 	if (block_size > 0)
 		opts.block_size = block_size;

@@ -21,7 +21,7 @@ CFLAGS = -g -I../../include -I../../libcommon $(TRACE_FLAGS)
 LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
-		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close test-io
+		   safs_file_unit_test timer_unit_test test_open_close test-io test-NUMA_buffer
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -55,9 +55,6 @@ native_file_unit_test: native_file_unit_test.o $(LIBFILE)
 safs_file_unit_test: safs_file_unit_test.o $(LIBFILE)
 	$(CXX) -o safs_file_unit_test safs_file_unit_test.o $(LDFLAGS)
 
-unique_ptr_unit_test: unique_ptr_unit_test.o $(LIBFILE)
-	$(CXX) -o unique_ptr_unit_test unique_ptr_unit_test.o $(LDFLAGS)
-
 timer_unit_test: timer_unit_test.o $(LIBFILE)
 	$(CXX) -o timer_unit_test timer_unit_test.o $(LDFLAGS)
 
@@ -69,6 +66,9 @@ test_open_close: test_open_close.o $(LIBFILE)
 
 test-io: test-io.o $(LIBFILE)
 	$(CXX) -o test-io test-io.o $(LDFLAGS)
+
+test-NUMA_buffer: test-NUMA_buffer.o $(LIBFILE)
+	$(CXX) -o test-NUMA_buffer test-NUMA_buffer.o $(LDFLAGS)
 
 clean:
 	rm -f *.o

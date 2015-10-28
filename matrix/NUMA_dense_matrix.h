@@ -128,16 +128,11 @@ class NUMA_row_wide_matrix_store;
 class NUMA_row_tall_matrix_store: public NUMA_row_matrix_store
 {
 	// This is to map rows to different NUMA nodes.
-	detail::NUMA_mapper mapper;
+	NUMA_mapper mapper;
 	std::vector<detail::raw_data_array> data;
 
 	// The copy constructor performs shallow copy.
-	NUMA_row_tall_matrix_store(
-			const NUMA_row_tall_matrix_store &mat): NUMA_row_matrix_store(
-			mat.get_num_rows(), mat.get_num_cols(),
-			mat.get_type(), mat.get_data_id()), mapper(mat.get_num_nodes()) {
-		this->data = mat.data;
-	}
+	NUMA_row_tall_matrix_store(const NUMA_row_tall_matrix_store &mat);
 
 	NUMA_row_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);

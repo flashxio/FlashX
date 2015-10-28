@@ -140,6 +140,7 @@ void print_usage()
 	fprintf(stderr, "-w width: the width of a 2D-partitioned matrix block\n");
 	fprintf(stderr, "-v: verify the generated matrix image\n");
 	fprintf(stderr, "-g size: the groupby buffer size on vector vectors\n");
+	fprintf(stderr, "-t type: the type of non-zero entries\n");
 }
 
 int main(int argc, char *argv[])
@@ -150,7 +151,8 @@ int main(int argc, char *argv[])
 	bool verify = false;
 	int opt;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "h:w:vg:")) != -1) {
+	std::string entry_type;
+	while ((opt = getopt(argc, argv, "h:w:vg:t:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'w':
@@ -166,6 +168,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'g':
 				vv_groupby_buf_size = str2size(optarg);
+				num_opts++;
+				break;
+			case 't':
+				entry_type = optarg;
 				num_opts++;
 				break;
 			default:
@@ -198,11 +204,31 @@ int main(int argc, char *argv[])
 	printf("The graph has %ld vertices and %ld edges\n",
 			vindex->get_num_vertices(), vindex->get_graph_header().get_num_edges());
 
+	const scalar_type *type = NULL;
+	if (entry_type.empty())
+		type = NULL;
+	else if (entry_type == "I")
+		type = &get_scalar_type<int>();
+	else if (entry_type == "L")
+		type = &get_scalar_type<long>();
+	else if (entry_type == "F")
+		type = &get_scalar_type<float>();
+	else if (entry_type == "D")
+		type = &get_scalar_type<double>();
+	else {
+		fprintf(stderr, "unsupported entry type\n");
+		exit(1);
+	}
+
+	if (type)
+		assert(type->get_size()
+				== (size_t) vindex->get_graph_header().get_edge_data_size());
 	vector_vector::ptr out_adjs = load_graph(graph_file, vindex, true);
 	bool to_safs = !out_adjs->is_in_mem();
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
-	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file, to_safs);
+	export_2d_matrix(out_adjs, block_size, type, mat_file, mat_idx_file,
+			to_safs);
 	if (verify) {
 		printf("verify 2d matrix for the out-adjacency lists\n");
 		verify_2d_matrix(mat_file, mat_idx_file, to_safs);
@@ -216,7 +242,8 @@ int main(int argc, char *argv[])
 		vector_vector::ptr in_adjs = load_graph(graph_file, vindex, false);
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
-		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file, to_safs);
+		export_2d_matrix(in_adjs, block_size, type,
+				t_mat_file, t_mat_idx_file, to_safs);
 		if (verify) {
 			printf("verify 2d matrix for the in-adjacency lists\n");
 			verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);

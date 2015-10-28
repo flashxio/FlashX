@@ -39,6 +39,8 @@ using namespace safs;
 namespace fg
 {
 
+static const size_t GRAPH_CHUNK_SIZE_LOG = 30;
+
 struct deleter
 {
 	void operator()(char *buf) const {
@@ -48,29 +50,19 @@ struct deleter
 
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
-	native_file local_f(file_name);
-	if (!local_f.exist())
-		throw io_exception(file_name + std::string(" doesn't exist"));
-
-	ssize_t size = local_f.get_size();
-	assert(size > 0);
-
+	NUMA_mapper mapper(params.get_num_nodes(), GRAPH_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr numa_buf = safs::NUMA_buffer::load(file_name, mapper);
+	assert(numa_buf);
 	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
-	graph->graph_size = size;
-	graph->graph_data = std::shared_ptr<char>((char *) malloc(size), deleter());
-	assert(graph->graph_data);
+	graph->graph_size = numa_buf->get_length();
+	graph->graph_data = numa_buf;
 	graph->graph_file_name = file_name;
 	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
 		% graph->graph_size;
 
-	FILE *fd = fopen(file_name.c_str(), "r");
-	if (fd == NULL)
-		throw io_exception(std::string("can't open ") + file_name);
-	if (fread(graph->graph_data.get(), size, 1, fd) != 1)
-		throw io_exception(std::string("can't read from ") + file_name);
-	fclose(fd);
-
-	graph_header *header = (graph_header *) graph->graph_data.get();
+	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
+	assert(data.first);
+	graph_header *header = (graph_header *) data.first;
 	header->verify();
 
 	return graph;
@@ -78,17 +70,12 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 
 in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 {
-	file_io_factory::shared_ptr io_factory = ::create_io_factory(file_name,
-			REMOTE_ACCESS);
-
+	NUMA_mapper mapper(params.get_num_nodes(), GRAPH_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr numa_buf = safs::NUMA_buffer::load_safs(file_name,
+			mapper);
 	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
-	graph->graph_size = io_factory->get_file_size();
-	size_t num_pages = ROUNDUP_PAGE(graph->graph_size) / PAGE_SIZE;
-	char *graph_buf = NULL;
-	int ret = posix_memalign((void **) &graph_buf, PAGE_SIZE,
-			num_pages * PAGE_SIZE);
-	graph->graph_data = std::shared_ptr<char>(graph_buf);
-	BOOST_VERIFY(ret == 0);
+	graph->graph_size = numa_buf->get_length();
+	graph->graph_data = numa_buf;
 	graph->graph_file_name = file_name;
 
 	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
@@ -96,17 +83,10 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 #if 0
 	graph->graph_file_id = io_factory->get_file_id();
 #endif
-	io_interface::ptr io = create_io(io_factory, thread::get_curr_thread());
-	const size_t MAX_IO_SIZE = 256 * 1024 * 1024;
-	for (off_t off = 0; (size_t) off < graph->graph_size; off += MAX_IO_SIZE) {
-		data_loc_t loc(io_factory->get_file_id(), off);
-		size_t req_size = min(MAX_IO_SIZE, graph->graph_size - off);
-		io_request req(graph_buf + off, loc, req_size, READ);
-		io->access(&req, 1);
-		io->wait4complete(1);
-	}
 
-	graph_header *header = (graph_header *) graph_buf;
+	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
+	assert(data.first);
+	graph_header *header = (graph_header *) data.first;
 	header->verify();
 
 	return graph;
@@ -120,14 +100,7 @@ file_io_factory::shared_ptr in_mem_graph::create_io_factory() const
 
 void in_mem_graph::dump(const std::string &file) const
 {
-	FILE *f = fopen(file.c_str(), "w");
-	if (f == NULL) {
-		perror("fopen");
-		abort();
-	}
-	BOOST_VERIFY(fwrite(graph_data.get(), graph_size, 1, f));
-
-	fclose(f);
+	graph_data->dump(file);
 }
 
 }

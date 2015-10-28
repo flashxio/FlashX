@@ -31,6 +31,6 @@ typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_m
 
 RCP<crs_matrix_type> create_crs(const std::string &graph_file,
 		fg::vertex_index::ptr index, fg::edge_type type,
-		RCP<map_type> map, int my_rank);
+		RCP<map_type> map, int my_rank, size_t edge_data_size);
 
 #endif

@@ -18,14 +18,14 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
 CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-UNITTEST = test-bitmap test-partitioner test-large_io test-vertex_index
+UNITTEST = test-bitmap test-partitioner test-vertex_index
 
 all: $(UNITTEST)
 
@@ -34,9 +34,6 @@ test-bitmap: test-bitmap.o ../libgraph.a
 
 test-partitioner: test-partitioner.o ../libgraph.a
 	$(CXX) -o test-partitioner test-partitioner.o $(LDFLAGS)
-
-test-large_io: test-large_io.o ../libgraph.a
-	$(CXX) -o test-large_io test-large_io.o $(LDFLAGS)
 
 test-vertex_index: test-vertex_index.o ../libgraph.a
 	$(CXX) -o test-vertex_index test-vertex_index.o $(LDFLAGS)

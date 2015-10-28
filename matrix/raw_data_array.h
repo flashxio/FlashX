@@ -26,6 +26,8 @@
 #include <memory>
 #include <vector>
 
+#include "NUMA_mapper.h"
+
 namespace fm
 {
 
@@ -102,8 +104,6 @@ public:
 
 	void expand(size_t min);
 };
-
-class NUMA_mapper;
 
 /*
  * This interface is to set the data in the vector of arrays.

@@ -69,6 +69,7 @@ static std::string get_curr_time_str()
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
+	size_t subspace_size;
 	std::string solver;
 	bool in_mem;
 	std::string name;
@@ -77,22 +78,29 @@ class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 	std::shared_ptr<Anasazi::EpetraMultiVec> ep_mat;
 #endif
 
+	bool is_subspace(size_t num_cols) const {
+		// This works for KrylovSchur. TODO I need to test other eigensolvers.
+		return solver == "KrylovSchur" && num_cols >= subspace_size;
+	}
+
 	FM_MultiVector(const std::string &extra, bool in_mem,
-			const std::string &solver) {
+			const std::string &solver, size_t subspace_size) {
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
 		this->name = std::string(name_buf) + " " + extra;
 		this->in_mem = in_mem;
 		this->solver = solver;
+		this->subspace_size = subspace_size;
 	}
 public:
 	FM_MultiVector(size_t num_rows, size_t num_cols, size_t block_size,
-			bool in_mem, const std::string &solver) {
+			size_t subspace_size, bool in_mem, const std::string &solver) {
+		this->subspace_size = subspace_size;
 		this->solver = solver;
 		this->in_mem = in_mem;
 		// We don't materialize the column matrix.
 		mat = block_multi_vector::create(num_rows, num_cols, block_size,
-				fm::get_scalar_type<ScalarType>(), in_mem);
+				fm::get_scalar_type<ScalarType>(), in_mem, is_subspace(num_cols));
 
 #ifdef FM_VERIFY
 		Epetra_SerialComm Comm;
@@ -213,10 +221,11 @@ public:
 		FM_MultiVector<ScalarType> *ret;
 		if (numvecs % mat->get_block_size() == 0)
 			ret = new FM_MultiVector<ScalarType>(mat->get_num_rows(), numvecs,
-					mat->get_block_size(), in_mem, solver);
+					mat->get_block_size(), subspace_size, in_mem, solver);
 		else
 			ret = new FM_MultiVector<ScalarType>(
-					mat->get_num_rows(), numvecs, numvecs, in_mem, solver);
+					mat->get_num_rows(), numvecs, numvecs, subspace_size,
+					in_mem, solver);
 		BOOST_LOG_TRIVIAL(info) << boost::format("create new %1% (#cols: %2%)")
 			% ret->get_name() % numvecs;
 		return ret;
@@ -232,7 +241,7 @@ public:
 			% name % mat->get_num_cols();
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem, solver);
+				in_mem, solver, subspace_size);
 		ret->mat = this->mat->clone();
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -258,7 +267,7 @@ public:
 			% name % index.size();
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem, solver);
+				in_mem, solver, subspace_size);
 		ret->mat = mat->get_cols(index);
 #ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
@@ -279,7 +288,7 @@ public:
 			const std::vector<int>& index) {
 		std::string extra = std::string("(") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem, solver);
+				in_mem, solver, subspace_size);
 		BOOST_LOG_TRIVIAL(info) << boost::format("view %1% (#cols: %2%)")
 			% ret->name % index.size();
 		ret->mat = mat->get_cols_mirror(index);
@@ -324,8 +333,8 @@ public:
 			const std::vector<int>& index) const {
 		std::string extra = std::string("(const ") + get_name() + "[" + vec2str(index) + "])";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra,
-				in_mem, solver);
-		if (index.size() == 1
+				in_mem, solver, subspace_size);
+		if (index.size() == 1 && mat->get_block_size() > 1
 				&& (solver == "KrylovSchur" || solver == "Davidson")) {
 			fm::detail::matrix_stats_t orig_stats = detail::matrix_stats;
 			size_t block_idx = index[0] / mat->get_block_size();
@@ -406,6 +415,14 @@ public:
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
+		// In KrylovSchur, if the input MV isn't in the subspace, we can drop
+		// the dense matrix in MV to save memory.
+		if (solver == "KrylovSchur" && fm_A.mat->get_num_blocks() == 1
+				&& fm_A.mat->get_block(0) != NULL
+				&& fm_A.mat->get_block(0)->is_in_mem() && beta == 0) {
+			BOOST_LOG_TRIVIAL(info) << "Drop the matrix to save space";
+			fm_A.mat->set_block(0, fm::dense_matrix::const_ptr());
+		}
 		fm_A.verify();
 		this->verify();
 		gettimeofday(&end, NULL);

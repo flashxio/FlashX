@@ -54,11 +54,7 @@ class NUMA_vec_store: public mem_vec_store
 	std::vector<raw_data_array> data;
 
 	// The copy constructor performs shallow copy.
-	NUMA_vec_store(const NUMA_vec_store &vec): mem_vec_store(vec.get_length(),
-			vec.get_type()), mapper(vec.mapper) {
-		data = vec.data;
-	}
-
+	NUMA_vec_store(const NUMA_vec_store &vec);
 	NUMA_vec_store(size_t length, size_t num_nodes, const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_vec_store> ptr;
