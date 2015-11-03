@@ -55,7 +55,7 @@ namespace {
         }
         vertices.push_back(header_offset + (num_vert*(sizeof(double)*num_cols)));
 
-#if 1
+#if 0
         // Test print
         printf("Test print of vertices index ..\n[");
         for (std::vector<vertex_offset>::iterator it = vertices.begin();
