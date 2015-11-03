@@ -30,6 +30,9 @@
 #include "FGlib.h"
 #include "save_result.h"
 #define PAGE_ROW
+#define INVALID_CLUST_ID -1
+
+#define PRUNE 0
 
 using namespace fg;
 
@@ -41,6 +44,9 @@ namespace {
             std::vector<double> mean; // cluster mean
             unsigned num_members; // cluster assignment count
             bool complete; // Have we already divided by num_members
+#if PRUNE
+            double s_val;
+#endif
 
             void div(const unsigned val) {
                 if (num_members > 0) {
@@ -64,6 +70,17 @@ namespace {
             }
 
         public:
+#if PRUNE
+            void set_s_val(double val) {
+                s_val = val;
+            }
+
+            double get_s_val() { return s_val; }
+
+            void finalize_s_val() {
+                s_val /= 2.0;
+            }
+#endif
             typedef typename std::shared_ptr<cluster> ptr;
 
             static ptr create(const unsigned len) {
