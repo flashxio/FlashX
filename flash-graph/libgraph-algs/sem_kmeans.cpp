@@ -173,9 +173,7 @@ namespace {
                 dist = std::numeric_limits<double>::max(); // Start @ max
 #if PRUNE
                 uppr_bnd = dist;
-                printf("Resizing lwr_bnd to K = %u\n", K);
                 lwr_bnd.resize(K); // Set K items to 0
-                printf("init lwr_bnd ==> "); print_vector(lwr_bnd);
                 nxt_clstr = 0;
                 r = false;
 #endif
@@ -190,8 +188,8 @@ namespace {
         }
 
         void run(vertex_program &prog) {
-            // FIXME: Consider nxt_clstr = 0;
 #if PRUNE
+            this->nxt_clstr = 0;
             if (g_prune_init) {
                 for (nxt_clstr = 0; nxt_clstr < K; nxt_clstr++) {
                     // Prunes `some cluster subset' but still needs to
@@ -201,12 +199,15 @@ namespace {
                         break; // Because d(this,cl) >= d(this,this->cluster_id)
                     }
                 }
-                if (nxt_clstr == (K-1)) { return; } // No I/O  
+                if (nxt_clstr == (K-1)) {
+                    BOOST_LOG_TRIVIAL(info) << "No I/O for v:" << prog.get_vertex_id(*this);
+                    return;
+                } // No I/O
             } else if (uppr_bnd <= g_clusters[cluster_id]->get_s_val()) { // #2
                 // These may still be prunable
                 for (nxt_clstr = 0; nxt_clstr < K; nxt_clstr++) {
                     if (nxt_clstr != cluster_id) { // #3
-                        if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd > 
+                        if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd >
                                 (g_cluster_dist->get(cluster_id, nxt_clstr)*.5)) {
                             // #3a
                             if (r) {
@@ -536,7 +537,7 @@ namespace {
     static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
         double dist = 0;
         BOOST_VERIFY(l_clust->size() == r_clust->size());
-        
+
         for (unsigned col = 0; col < NUM_COLS; col++) {
             double diff = (*l_clust)[col] - (*r_clust)[col];
             dist += diff * diff;

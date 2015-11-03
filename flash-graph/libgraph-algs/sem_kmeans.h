@@ -32,7 +32,7 @@
 #define PAGE_ROW
 #define INVALID_CLUST_ID -1
 
-#define PRUNE 0
+#define PRUNE 1
 
 using namespace fg;
 
