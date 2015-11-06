@@ -41,11 +41,13 @@ namespace {
     class cluster
     {
         private:
-            std::vector<double> mean; // cluster mean
-            unsigned num_members; // cluster assignment count
+            std::vector<double> mean; // Cluster mean
+            int num_members; // Cluster assignment count
             bool complete; // Have we already divided by num_members
 #if PRUNE
             double s_val;
+            std::vector<double> prev_mean; // For lwr_bnd
+            double prev_dist; // Distance to prev mean
 #endif
 
             void div(const unsigned val) {
@@ -61,12 +63,18 @@ namespace {
                 mean.assign(len, 0);
                 num_members = 0;
                 complete = false;
+#if PRUNE
+                prev_mean.assign(len, 0);
+#endif
             }
 
             cluster(const std::vector<double>& mean) {
                 set_mean(mean);
                 num_members = 1;
                 complete = true;
+#if PRUNE
+                prev_mean.assign(mean.size(), 0);
+#endif
             }
 
         public:
@@ -75,10 +83,31 @@ namespace {
                 s_val = val;
             }
 
-            double get_s_val() { return s_val; }
+            double const get_s_val() { return s_val; }
 
             void finalize_s_val() {
                 s_val /= 2.0;
+            }
+
+            const std::vector<double>& get_prev_mean() const {
+                return prev_mean;
+            }
+
+            void set_prev_mean() {
+                if (!is_complete()) {
+                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Doing nothing for "
+                        "unfinalized mean. Permissible once";
+                    return;
+                }
+                prev_mean = mean;
+            }
+
+            void set_prev_dist(double dist) {
+                this->prev_dist = dist;
+            }
+
+            double get_prev_dist() {
+                return this->prev_dist;
             }
 #endif
             typedef typename std::shared_ptr<cluster> ptr;
@@ -96,12 +125,8 @@ namespace {
                 num_members = 0;
             }
 
-            void assign(const double val) {
-                mean.assign(mean.size(), val);
-            }
-
             void clear() {
-                this->assign(0);
+                std::fill(this->mean.begin(), this->mean.end(), 0);
                 this->num_members = 0;
                 complete = false;
             }
@@ -114,7 +139,7 @@ namespace {
                 this->mean = mean;
             }
 
-            const unsigned get_num_members() const {
+            const int get_num_members() const {
                 return num_members;
             }
 
@@ -127,8 +152,25 @@ namespace {
             }
 
             void finalize() {
-                assert(!complete);
+                if (is_complete()) {
+                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling finalize() on a"
+                        " finalized object";
+                    return;
+                }
                 this->div(this->num_members);
+            }
+
+            void unfinalize() {
+                if (!is_complete()) {
+                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling unfinalize() on an"
+                        " unfinalized object";
+                    return;
+                }
+                complete = false;
+
+                for (unsigned i = 0; i < size(); i++) {
+                    this->mean[i] *= num_members;
+                }
             }
 
             void add_member(edge_seq_iterator& id_it, data_seq_iter& count_it) {
@@ -145,6 +187,23 @@ namespace {
                 }
                 num_members++;
             }
+
+#if PRUNE
+            void remove_member(edge_seq_iterator& id_it, data_seq_iter& count_it) {
+                vertex_id_t nid = 0;
+                while(count_it.has_next()) {
+#ifdef PAGE_ROW
+                    double e = count_it.next();
+                    mean[nid++] -= e;
+#else
+                    nid = id_it.next();
+                    edge_count e = count_it.next();
+                    mean[nid] -= e.get_count();
+#endif
+                }
+                num_members--;
+            }
+#endif
 
             cluster& operator=(const cluster& other) {
                 this->mean = other.get_mean();
@@ -167,7 +226,6 @@ namespace {
                 return *this;
             }
     };
-
 }
 
 namespace fg
