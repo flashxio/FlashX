@@ -501,13 +501,14 @@ RcppExport SEXP R_FM_transpose(SEXP pmat)
 {
 	Rcpp::List matrix_obj(pmat);
 	if (is_sparse(matrix_obj)) {
-		fprintf(stderr, "We don't support transpose a sparse matrix yet\n");
-		return R_NilValue;
+		sparse_matrix::ptr m = get_matrix<sparse_matrix>(matrix_obj);
+		return create_FMR_matrix(m->transpose(), "");
 	}
-
-	dense_matrix::ptr m = get_matrix<dense_matrix>(matrix_obj);
-	dense_matrix::ptr tm = m->transpose();
-	return create_FMR_matrix(tm, "");
+	else {
+		dense_matrix::ptr m = get_matrix<dense_matrix>(matrix_obj);
+		dense_matrix::ptr tm = m->transpose();
+		return create_FMR_matrix(tm, "");
+	}
 }
 
 RcppExport SEXP R_FM_get_basic_op(SEXP pname)
