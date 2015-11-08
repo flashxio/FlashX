@@ -892,6 +892,8 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (m->is_type<bool>())
+		m = m->cast_ele_type(get_scalar_type<int>());
 	// For aggregation, the left and right operands have the same type.
 	const bulk_operate *op = get_op(pfun, m->get_type().get_type(),
 			m->get_type().get_type());
