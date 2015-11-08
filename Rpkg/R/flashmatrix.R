@@ -79,9 +79,13 @@ fm.get.matrix <- function(fg)
 }
 
 #' @rdname fm.get.matrix
-fm.load.matrix <- function(mat.file, index.file)
+fm.load.matrix <- function(mat, index, t.mat = NULL, t.index = NULL)
 {
-	.Call("R_FM_load_matrix", mat.file, index.file, PACKAGE="FlashGraphR")
+	if (is.null(t.mat) || is.null(t.index))
+		.Call("R_FM_load_matrix_sym", mat, index, PACKAGE="FlashGraphR")
+	else
+		.Call("R_FM_load_matrix_asym", mat, index, t.mat, t.index,
+			  PACKAGE="FlashGraphR")
 }
 
 #' Create a FlashMatrixR vector with replicated elements.
