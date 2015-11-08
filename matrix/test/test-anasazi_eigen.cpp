@@ -33,7 +33,7 @@ public:
 	virtual void run(const MV& x, MV& y) const = 0;
 };
 
-class eigen_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type, Node>
+class eigen_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type>
 {
 	RCP<crs_matrix_type> A;
 public:
@@ -59,7 +59,7 @@ public:
 	}
 };
 
-class SVD_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type, Node>
+class SVD_operator: public Tpetra::Operator<double, local_ordinal_type, global_ordinal_type>
 {
 	RCP<crs_matrix_type> A;
 	RCP<crs_matrix_type> tA;
@@ -89,7 +89,7 @@ public:
 	}
 };
 
-typedef Tpetra::Operator<double, global_ordinal_type, global_ordinal_type, Node> OP;
+typedef Tpetra::Operator<double, global_ordinal_type, global_ordinal_type> OP;
 typedef Anasazi::OperatorTraits<double, MV, OP> OPT;
 
 void compute_eigen(RCP<OP> A, int nev, const std::string &solver,
