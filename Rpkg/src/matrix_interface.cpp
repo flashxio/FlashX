@@ -126,7 +126,8 @@ RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 	Rcpp::List graph = Rcpp::List(pgraph);
 	Rcpp::LogicalVector res(1);
 	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
-	sparse_matrix::ptr m = sparse_matrix::create(fg);
+	// TODO does this work if this isn't a binary matrix?
+	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
 	std::string name = graph["name"];
 	return create_FMR_matrix(m, name);
 }
@@ -185,12 +186,14 @@ static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 	detail::mem_vec_store::ptr out_vec = detail::mem_vec_store::create(
 			matrix->get_num_rows(), in_vec.get_num_nodes(),
 			in_vec.get_type());
+	// TODO it only supports a binary matrix right now.
+	assert(matrix->get_entry_size() == 0);
 	if (vec->is_type<double>()) {
-		matrix->multiply<double>(in_vec, *out_vec);
+		matrix->multiply<double, bool>(in_vec, *out_vec);
 		return create_FMR_vector(out_vec, "");
 	}
 	else if (vec->is_type<int>()) {
-		matrix->multiply<int>(in_vec, *out_vec);
+		matrix->multiply<int, bool>(in_vec, *out_vec);
 		return create_FMR_vector(out_vec, "");
 	}
 	else {
@@ -206,6 +209,8 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
 	}
 
+	// TODO it only supports a binary matrix right now.
+	assert(matrix->get_entry_size() == 0);
 	if (right_mat->is_type<double>()) {
 		const detail::mem_matrix_store &in_mat
 			= static_cast<const detail::mem_matrix_store &>(right_mat->get_data());
@@ -213,7 +218,7 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat.get_num_nodes());
-		matrix->multiply<double>(right_mat->get_data(), *out_mat);
+		matrix->multiply<double, bool>(right_mat->get_data(), *out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else if (right_mat->is_type<int>()) {
@@ -223,7 +228,7 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat.get_num_nodes());
-		matrix->multiply<int>(right_mat->get_data(), *out_mat);
+		matrix->multiply<int, bool>(right_mat->get_data(), *out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else {
