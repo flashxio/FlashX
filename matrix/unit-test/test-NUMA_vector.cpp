@@ -1,6 +1,8 @@
 #include "NUMA_vector.h"
+#include "NUMA_dense_matrix.h"
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
+#include "matrix_store.h"
 
 const size_t num_eles = 1024 * 1024 * 10;
 size_t num_nodes = 1;
@@ -107,6 +109,86 @@ void test_sort()
 		assert(raw_arr[i] == vec->get<long>(i));
 }
 
+void test_conv2mat()
+{
+	printf("test converting a NUMA vector to a matrix\n");
+	size_t nrow = (random() % num_eles) + num_eles;
+	size_t ncol = 3;
+	NUMA_vec_store::ptr vec = NUMA_vec_store::create(nrow * ncol, num_nodes,
+			get_scalar_type<long>());
+	matrix_store::const_ptr mat = vec->conv2mat(nrow * ncol, 1, true);
+	assert(mat->get_num_rows() == nrow * ncol);
+	assert(mat->get_num_cols() == 1);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+
+	mat = vec->conv2mat(nrow * ncol, 1, false);
+	assert(mat->get_num_rows() == nrow * ncol);
+	assert(mat->get_num_cols() == 1);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+
+	mat = vec->conv2mat(1, nrow * ncol, true);
+	assert(mat->get_num_rows() == 1);
+	assert(mat->get_num_cols() == nrow * ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+
+	mat = vec->conv2mat(1, nrow * ncol, false);
+	assert(mat->get_num_rows() == 1);
+	assert(mat->get_num_cols() == nrow * ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+
+	mat = vec->conv2mat(nrow, ncol, true);
+	assert(mat->get_num_rows() == nrow);
+	assert(mat->get_num_cols() == ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+	{
+		NUMA_row_tall_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_row_tall_matrix_store>(mat);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				assert(*(long *) numa_mat->get(i, j) == vec->get<long>(
+							i * ncol + j));
+	}
+
+	mat = vec->conv2mat(nrow, ncol, false);
+	assert(mat->get_num_rows() == nrow);
+	assert(mat->get_num_cols() == ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+	{
+		NUMA_col_tall_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_col_tall_matrix_store>(mat);
+		for (size_t i = 0; i < ncol; i++)
+			for (size_t j = 0; j < nrow; j++)
+				assert(*(long *) numa_mat->get(j, i) == vec->get<long>(
+							i * nrow + j));
+	}
+
+	mat = vec->conv2mat(ncol, nrow, true);
+	assert(mat->get_num_rows() == ncol);
+	assert(mat->get_num_cols() == nrow);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+	{
+		NUMA_row_wide_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_row_wide_matrix_store>(mat);
+		for (size_t i = 0; i < ncol; i++)
+			for (size_t j = 0; j < nrow; j++)
+				assert(*(long *) numa_mat->get(i, j) == vec->get<long>(
+							i * nrow + j));
+	}
+
+	mat = vec->conv2mat(ncol, nrow, false);
+	assert(mat->get_num_rows() == ncol);
+	assert(mat->get_num_cols() == nrow);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+	{
+		NUMA_col_wide_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_col_wide_matrix_store>(mat);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				assert(*(long *) numa_mat->get(j, i) == vec->get<long>(
+							i * ncol + j));
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc >= 3) {
@@ -123,4 +205,5 @@ int main(int argc, char *argv[])
 	test_copy();
 	test_deep_copy();
 	test_sort();
+	test_conv2mat();
 }
