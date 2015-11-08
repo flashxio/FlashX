@@ -132,10 +132,11 @@ RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 	return create_FMR_matrix(m, name);
 }
 
-RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file)
+RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
 
 	SpM_2d_index::ptr index;
 	safs::native_file index_f(index_file);
@@ -148,32 +149,39 @@ RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file)
 		return R_NilValue;
 	}
 
-	SpM_2d_storage::ptr store;
-	safs::native_file mat_f(mat_file);
-	if (mat_f.exist())
-		store = SpM_2d_storage::load(mat_file, index);
+	sparse_matrix::ptr mat;
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
+	if (!mat_f.exist()) {
+		SpM_2d_storage::ptr store = SpM_2d_storage::load(mat_file, index);
+		if (store)
+			mat = sparse_matrix::create(index, store);
+	}
+	else if (in_mem) {
+		SpM_2d_storage::ptr store = SpM_2d_storage::safs_load(mat_file, index);
+		if (store)
+			mat = sparse_matrix::create(index, store);
+	}
 	else
-		store = SpM_2d_storage::safs_load(mat_file, index);
-	if (store == NULL) {
+		mat = sparse_matrix::create(index, safs::create_io_factory(
+					mat_file, safs::REMOTE_ACCESS));
+	if (mat == NULL) {
 		fprintf(stderr, "can't load matrix file\n");
 		return R_NilValue;
 	}
-	sparse_matrix::ptr mat = sparse_matrix::create(index, store);
 	return create_FMR_matrix(mat, "mat_file");
 }
 
 RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
-		SEXP ptmat_file, SEXP ptindex_file)
+		SEXP ptmat_file, SEXP ptindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	std::string tmat_file = CHAR(STRING_ELT(ptmat_file, 0));
 	std::string tindex_file = CHAR(STRING_ELT(ptindex_file, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
 
 	SpM_2d_index::ptr index;
-	SpM_2d_storage::ptr store;
 	SpM_2d_index::ptr tindex;
-	SpM_2d_storage::ptr tstore;
 
 	safs::native_file index_f(index_file);
 	if (index_f.exist())
@@ -194,25 +202,40 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 		return R_NilValue;
 	}
 
-	safs::native_file mat_f(mat_file);
-	if (mat_f.exist())
-		store = SpM_2d_storage::load(mat_file, index);
-	else
-		store = SpM_2d_storage::safs_load(mat_file, index);
-	if (store == NULL) {
-		fprintf(stderr, "can't load matrix file\n");
-		return R_NilValue;
+	sparse_matrix::ptr mat;
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
+	safs::safs_file tmat_f(safs::get_sys_RAID_conf(), tmat_file);
+	// If one of the data matrices doesn't exist in SAFS or the user wants
+	// to load the sparse matrix to memory.
+	if (!mat_f.exist() || !tmat_f.exist() || in_mem) {
+		SpM_2d_storage::ptr store;
+		SpM_2d_storage::ptr tstore;
+		if (!mat_f.exist())
+			store = SpM_2d_storage::load(mat_file, index);
+		else
+			store = SpM_2d_storage::safs_load(mat_file, index);
+		if (store == NULL) {
+			fprintf(stderr, "can't load matrix file\n");
+			return R_NilValue;
+		}
+		if (!tmat_f.exist())
+			tstore = SpM_2d_storage::load(tmat_file, tindex);
+		else
+			tstore = SpM_2d_storage::safs_load(tmat_file, tindex);
+		if (tstore == NULL) {
+			fprintf(stderr, "can't load matrix file\n");
+			return R_NilValue;
+		}
+		mat = sparse_matrix::create(index, store, tindex, tstore);
 	}
-	safs::native_file tmat_f(tmat_file);
-	if (tmat_f.exist())
-		tstore = SpM_2d_storage::load(tmat_file, tindex);
-	else
-		tstore = SpM_2d_storage::safs_load(tmat_file, tindex);
-	if (tstore == NULL) {
-		fprintf(stderr, "can't load matrix file\n");
-		return R_NilValue;
+	// Here both data matrices exist in SAFS.
+	else {
+		safs::file_io_factory::shared_ptr io_fac
+			= safs::create_io_factory(mat_file, safs::REMOTE_ACCESS);
+		safs::file_io_factory::shared_ptr tio_fac
+			= safs::create_io_factory(tmat_file, safs::REMOTE_ACCESS);
+		mat = sparse_matrix::create(index, io_fac, tindex, tio_fac);
 	}
-	sparse_matrix::ptr mat = sparse_matrix::create(index, store, tindex, tstore);
 	return create_FMR_matrix(mat, "mat_file");
 }
 

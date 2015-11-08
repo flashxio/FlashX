@@ -79,12 +79,12 @@ fm.get.matrix <- function(fg)
 }
 
 #' @rdname fm.get.matrix
-fm.load.matrix <- function(mat, index, t.mat = NULL, t.index = NULL)
+fm.load.matrix <- function(mat, index, t.mat=NULL, t.index=NULL, in.mem=TRUE)
 {
 	if (is.null(t.mat) || is.null(t.index))
-		.Call("R_FM_load_matrix_sym", mat, index, PACKAGE="FlashGraphR")
+		.Call("R_FM_load_matrix_sym", mat, index, in.mem, PACKAGE="FlashGraphR")
 	else
-		.Call("R_FM_load_matrix_asym", mat, index, t.mat, t.index,
+		.Call("R_FM_load_matrix_asym", mat, index, t.mat, t.index, in.mem,
 			  PACKAGE="FlashGraphR")
 }
 
