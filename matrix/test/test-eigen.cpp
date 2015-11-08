@@ -97,7 +97,9 @@ public:
 				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(vec->get_data(), *deg);
+		mat->multiply<double, float>(
+				dynamic_cast<const detail::mem_matrix_store &>(vec->get_data()),
+				dynamic_cast<detail::mem_matrix_store &>(*deg));
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
