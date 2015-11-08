@@ -36,8 +36,6 @@ using namespace fm;
 
 fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
 
-int num_nodes = -1;
-
 template<class EntryType>
 dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, EntryType initv)
@@ -49,11 +47,15 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 {
 	size_t len = REAL(plen)[0];
 
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
 	vector::ptr vec;
 	if (R_is_real(pinitv))
-		vec = create_vector<double>(len, REAL(pinitv)[0]);
+		vec = create_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
 	else if (R_is_integer(pinitv))
-		vec = create_vector<int>(len, INTEGER(pinitv)[0]);
+		vec = create_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
 		return Rcpp::List();
@@ -98,8 +100,12 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 
 	// TODO let's just use in-memory dense matrix first.
 	GetRNGstate();
-	vector::ptr v = vector::create(n, get_scalar_type<double>(), true,
-			rand_set_operate<double>(min, max));
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
+	vector::ptr v = vector::create(n, get_scalar_type<double>(), num_nodes,
+			true, rand_set_operate<double>(min, max));
 	PutRNGstate();
 	return create_FMR_vector(v->get_raw_store(), "");
 }
@@ -117,7 +123,11 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 		return R_NilValue;
 	}
 
-	vector::ptr vec = create_vector<double>(from, to, by);
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
+	vector::ptr vec = create_vector<double>(from, to, by, num_nodes, true);
 	return create_FMR_vector(vec->get_raw_store(), "");
 }
 
@@ -508,6 +518,7 @@ RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
 
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
+	int num_nodes = matrix_conf.get_num_nodes();
 	if (R_is_real(pobj)) {
 		Rcpp::NumericVector vec(pobj);
 		// TODO Is there a way of avoiding the extra memory copy?
@@ -546,6 +557,7 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 	bool byrow = LOGICAL(pbyrow)[0];
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	int num_nodes = matrix_conf.get_num_nodes();
 	if (R_is_real(pobj)) {
 		Rcpp::NumericMatrix mat(pobj);
 		size_t nrow = mat.nrow();
