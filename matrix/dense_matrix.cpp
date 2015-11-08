@@ -701,6 +701,24 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout, bool use_blas) const
 {
 	if (get_type() == get_scalar_type<double>() && use_blas) {
+		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
+		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
+		// We prefer to perform computation on the larger matrix.
+		// If the matrix in the right operand is larger, we transpose
+		// the entire computation.
+		if (long_dim2 > long_dim1) {
+			dense_matrix::ptr t_mat1 = this->transpose();
+			dense_matrix::ptr t_mat2 = mat.transpose();
+			matrix_layout_t t_layout = out_layout;
+			if (t_layout == matrix_layout_t::L_ROW)
+				t_layout = matrix_layout_t::L_COL;
+			else if (t_layout == matrix_layout_t::L_COL)
+				t_layout = matrix_layout_t::L_ROW;
+			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout,
+					use_blas);
+			return t_res->transpose();
+		}
+
 		if (is_wide())
 			return blas_multiply_wide(*this, mat, out_layout);
 		else
@@ -2215,6 +2233,24 @@ dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
 {
 	if (!verify_inner_prod(m, *left_op, *right_op))
 		return dense_matrix::ptr();
+
+	size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
+	size_t long_dim2 = std::max(m.get_num_rows(), m.get_num_cols());
+	// We prefer to perform computation on the larger matrix.
+	// If the matrix in the right operand is larger, we transpose
+	// the entire computation.
+	if (long_dim2 > long_dim1) {
+		dense_matrix::ptr t_mat1 = this->transpose();
+		dense_matrix::ptr t_mat2 = m.transpose();
+		matrix_layout_t t_layout = out_layout;
+		if (t_layout == matrix_layout_t::L_ROW)
+			t_layout = matrix_layout_t::L_COL;
+		else if (t_layout == matrix_layout_t::L_COL)
+			t_layout = matrix_layout_t::L_ROW;
+		dense_matrix::ptr t_res = t_mat2->inner_prod(*t_mat1,
+				left_op, right_op, t_layout);
+		return t_res->transpose();
+	}
 
 	if (out_layout == matrix_layout_t::L_NONE) {
 		if (this->store_layout() == matrix_layout_t::L_ROW)
