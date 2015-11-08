@@ -36,13 +36,13 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.pmin2 <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.min, o1, o2)
+	fm.ele.wise.op(fm.bo.min, o1, o2)
 }
 
 #' @name minmax
 fm.pmax2 <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.max, o1, o2)
+	fm.ele.wise.op(fm.bo.max, o1, o2)
 }
 
 `+.fm` <- function(o1, o2)
