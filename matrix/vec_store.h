@@ -20,7 +20,10 @@
  * limitations under the License.
  */
 
+#include "log.h"
+
 #include "generic_type.h"
+#include "bulk_operate.h"
 
 namespace fm
 {
@@ -44,7 +47,8 @@ public:
 	typedef std::shared_ptr<vec_store> ptr;
 	typedef std::shared_ptr<const vec_store> const_ptr;
 
-	static ptr create(size_t length, const scalar_type &_type, bool in_mem);
+	static ptr create(size_t length, const scalar_type &_type, int num_nodes,
+			bool in_mem);
 
 	vec_store(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
 		this->length = length;
@@ -121,6 +125,67 @@ public:
 	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
 			size_t ncol, bool byrow) const = 0;
 };
+
+template<class T>
+class seq_set_vec_operate: public type_set_vec_operate<T>
+{
+	long n;
+	T from;
+	T by;
+public:
+	seq_set_vec_operate(long n, T from, T by) {
+		this->n = n;
+		this->from = from;
+		this->by = by;
+	}
+
+	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
+		// We are initializing a single-column matrix.
+		T v = from + start_idx * by;
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = v;
+			v += by;
+		}
+	}
+};
+
+/*
+ * Create a sequence of values in [start, end]. `end' is inclusive.
+ */
+template<class EntryType>
+vec_store::ptr create_vec_store(EntryType start, EntryType end, EntryType stride,
+		int num_nodes = -1, bool in_mem = true)
+{
+	if ((end < start && stride > 0) || (end > stride && stride < 0)) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "There are a negative number of elements in the sequence";
+		return vec_store::ptr();
+	}
+	long n = (end - start) / stride;
+	// We need to count the start element.
+	n++;
+	detail::vec_store::ptr v = detail::vec_store::create(n,
+			get_scalar_type<EntryType>(), num_nodes, in_mem);
+	v->set_data(seq_set_vec_operate<EntryType>(n, start, stride));
+	return v;
+}
+
+/*
+ * Create a vector filled with a constant value.
+ */
+template<class EntryType>
+vec_store::ptr create_vec_store(size_t length, EntryType initv,
+		int num_nodes = -1, bool in_mem = true)
+{
+	detail::vec_store::ptr v = detail::vec_store::create(length,
+			get_scalar_type<EntryType>(), num_nodes, in_mem);
+	v->set_data(const_set_vec_operate<EntryType>(initv));
+	return v;
+}
+
+template<>
+vec_store::ptr create_vec_store<double>(double start, double end, double stride,
+		int num_nodes, bool in_mem);
 
 }
 

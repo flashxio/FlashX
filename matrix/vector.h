@@ -50,7 +50,7 @@ public:
 	static ptr create(detail::vec_store::const_ptr store) {
 		return ptr(new vector(store));
 	}
-	static ptr create(size_t length, const scalar_type &type,
+	static ptr create(size_t length, const scalar_type &type, int num_nodes,
 			bool in_mem, const set_vec_operate &op);
 
 	~vector() {
@@ -136,9 +136,11 @@ public:
  * Create a sequence of values in [start, end]. `end' is inclusive.
  */
 template<class EntryType>
-vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
+vector::ptr create_vector(EntryType start, EntryType end, EntryType stride,
+		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(start, end, stride);
+	detail::vec_store::ptr store = detail::create_vec_store(start, end, stride,
+			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();
 	return vector::create(store);
@@ -148,9 +150,11 @@ vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
  * Create a vector filled with a constant value.
  */
 template<class EntryType>
-vector::ptr create_vector(size_t length, EntryType initv)
+vector::ptr create_vector(size_t length, EntryType initv,
+		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(length, initv);
+	detail::vec_store::ptr store = detail::create_vec_store(length, initv,
+			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();
 	return vector::create(store);

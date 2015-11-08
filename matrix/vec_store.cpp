@@ -19,6 +19,7 @@
 
 #include "vec_store.h"
 #include "mem_vec_store.h"
+#include "NUMA_vector.h"
 #include "EM_vector.h"
 
 namespace fm
@@ -28,10 +29,12 @@ namespace detail
 {
 
 vec_store::ptr vec_store::create(size_t length, const scalar_type &type,
-		bool in_mem)
+		int num_nodes, bool in_mem)
 {
-	if (in_mem)
+	if (in_mem && num_nodes < 0)
 		return smp_vec_store::create(length, type);
+	else if (in_mem)
+		return NUMA_vec_store::create(length, num_nodes, type);
 	else
 		return EM_vec_store::create(length, type);
 }
@@ -48,6 +51,30 @@ size_t vec_store::copy_to(char *data, size_t num_eles) const
 		memcpy(data + idx * entry_size, store->get_raw_arr(), len * entry_size);
 	}
 	return num_copy_eles;
+}
+
+template<>
+vec_store::ptr create_vec_store<double>(double start, double end,
+		double stride, int num_nodes, bool in_mem)
+{
+	// The result of division may generate a real number slightly smaller than
+	// what we want because of the representation precision in the machine.
+	// When we convert the real number to an integer, we may find the number
+	// is smaller than exepcted. We need to add a very small number to
+	// the real number to correct the problem.
+	// TODO is it the right way to correct the problem?
+	long n = (end - start) / stride + 1e-9;
+	if (n < 0) {
+		BOOST_LOG_TRIVIAL(error) <<"wrong sign in 'by' argument";
+		return vec_store::ptr();
+	}
+	// We need to count the start element.
+	n++;
+
+	detail::vec_store::ptr v = detail::vec_store::create(n,
+			get_scalar_type<double>(), num_nodes, in_mem);
+	v->set_data(seq_set_vec_operate<double>(n, start, stride));
+	return v;
 }
 
 }

@@ -170,7 +170,7 @@ dense_matrix::ptr test_scale_cols(size_t nrow, size_t ncol, bool in_mem = true)
 		= dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), set_col_operate(ncol), num_nodes,
 				in_mem);
-	vector::ptr v = vector::create(ncol, get_scalar_type<double>(), true,
+	vector::ptr v = vector::create(ncol, get_scalar_type<double>(), -1, true,
 			init_vec());
 
 	gettimeofday(&start, NULL);

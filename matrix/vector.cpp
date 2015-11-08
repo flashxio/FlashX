@@ -31,10 +31,10 @@ namespace fm
 {
 
 vector::ptr vector::create(size_t length, const scalar_type &type,
-		bool in_mem, const set_vec_operate &op)
+		int num_nodes, bool in_mem, const set_vec_operate &op)
 {
-	// TODO I should allow users to create a NUMA vector store as well.
-	detail::vec_store::ptr vec = detail::vec_store::create(length, type, in_mem);
+	detail::vec_store::ptr vec = detail::vec_store::create(length, type,
+			num_nodes, in_mem);
 	vec->set_data(op);
 	return ptr(new vector(vec));
 }

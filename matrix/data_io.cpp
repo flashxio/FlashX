@@ -361,7 +361,7 @@ static data_frame::ptr create_data_frame(const line_parser &parser, bool in_mem)
 	data_frame::ptr df = data_frame::create();
 	for (size_t i = 0; i < parser.get_num_cols(); i++)
 		df->add_vec(parser.get_col_name(i),
-				detail::vec_store::create(0, parser.get_col_type(i), in_mem));
+				detail::vec_store::create(0, parser.get_col_type(i), -1, in_mem));
 	return df;
 }
 
@@ -458,10 +458,11 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 		return read_lines(files[0], parser, in_mem);
 
 	data_frame::ptr df = data_frame::create();
+	// TODO should I make these NUMA vectors?
 	df->add_vec(parser.get_col_name(0),
-			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
+			detail::vec_store::create(0, parser.get_col_type(0), -1, in_mem));
 	df->add_vec(parser.get_col_name(1),
-			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
+			detail::vec_store::create(0, parser.get_col_type(1), -1, in_mem));
 
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
