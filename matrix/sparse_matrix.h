@@ -696,6 +696,16 @@ public:
 					sizeof(DenseType) * in.get_num_cols()));
 		return true;
 	}
+
+	template<class DenseType, class SparseType>
+	bool multiply(const detail::vec_store &in, detail::vec_store &out) const {
+		detail::matrix_store::const_ptr in_mat = in.conv2mat(in.get_length(),
+				1, true);
+		detail::matrix_store::const_ptr out_mat = out.conv2mat(out.get_length(),
+				1, true);
+		return multiply<DenseType, SparseType>(*in_mat,
+				const_cast<detail::matrix_store &>(*out_mat));
+	}
 };
 
 template<class DenseType, class SparseType>
