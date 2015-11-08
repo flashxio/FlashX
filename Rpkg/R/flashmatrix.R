@@ -537,6 +537,13 @@ fm.get.cols <- function(fm, idxs)
 	.Call("R_FM_get_cols", fm, as.integer(idxs), PACKAGE="FlashGraphR")
 }
 
+fm.materialize <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	.Call("R_FM_materialize", fm, PACKAGE="FlashGraphR")
+}
+
 #' Write a FlashMatrixR object (vector/matrix) to a file
 #'
 #' @param fm a FlashMatrixR object.

@@ -1261,3 +1261,19 @@ RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
 	}
 	return create_FMR_matrix(res, "scale");
 }
+
+RcppExport SEXP R_FM_materialize(SEXP pmat)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
+		return R_NilValue;
+	}
+	if (is_vector(pmat)) {
+		fprintf(stderr, "Doesn't support materializing a vector yet\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	// I think it's OK to materialize on the original matrix.
+	mat->materialize_self();
+	return create_FMR_matrix(mat, "");
+}
