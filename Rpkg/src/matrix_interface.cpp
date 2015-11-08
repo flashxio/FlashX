@@ -208,27 +208,30 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 	if (right_mat->store_layout() != matrix_layout_t::L_ROW) {
 		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
 	}
+	// The input matrix in the right operand might be a virtual matrix originally.
+	// When we convert its data layout, it's definitely a virtual matrix.
+	right_mat->materialize_self();
 
 	// TODO it only supports a binary matrix right now.
 	assert(matrix->get_entry_size() == 0);
 	if (right_mat->is_type<double>()) {
 		const detail::mem_matrix_store &in_mat
-			= static_cast<const detail::mem_matrix_store &>(right_mat->get_data());
+			= dynamic_cast<const detail::mem_matrix_store &>(right_mat->get_data());
 		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat.get_num_nodes());
-		matrix->multiply<double, bool>(right_mat->get_data(), *out_mat);
+		matrix->multiply<double, bool>(in_mat, *out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else if (right_mat->is_type<int>()) {
 		const detail::mem_matrix_store &in_mat
-			= static_cast<const detail::mem_matrix_store &>(right_mat->get_data());
+			= dynamic_cast<const detail::mem_matrix_store &>(right_mat->get_data());
 		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat.get_num_nodes());
-		matrix->multiply<int, bool>(right_mat->get_data(), *out_mat);
+		matrix->multiply<int, bool>(in_mat, *out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else {
