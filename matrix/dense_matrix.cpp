@@ -147,12 +147,6 @@ bool dense_matrix::verify_mapply2(const dense_matrix &m,
 		return false;
 	}
 
-	if (this->store_layout() != m.store_layout()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "two matrices in mapply2 don't have the same data layout";
-		return false;
-	}
-
 	if (get_entry_size() != op.left_entry_size()
 			|| m.get_entry_size() != op.right_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -2076,7 +2070,12 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 
 	std::vector<detail::matrix_store::const_ptr> ins(2);
 	ins[0] = this->get_raw_store();
-	ins[1] = m.get_raw_store();
+	if (this->store_layout() == m.store_layout())
+		ins[1] = m.get_raw_store();
+	else {
+		dense_matrix::ptr m1 = m.conv2(this->store_layout());
+		ins[1] = m1->get_raw_store();
+	}
 	mapply2_op::const_ptr mapply_op(new mapply2_op(op, get_num_rows(),
 				get_num_cols()));
 	return dense_matrix::create(__mapply_portion_virtual(ins, mapply_op,
