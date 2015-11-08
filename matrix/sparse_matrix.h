@@ -552,6 +552,12 @@ protected:
 		this->ncols = ncols;
 		this->entry_type = entry_type;
 	}
+
+	void _transpose() {
+		size_t tmp = nrows;
+		nrows = ncols;
+		ncols = tmp;
+	}
 public:
 	typedef std::shared_ptr<sparse_matrix> ptr;
 
@@ -659,11 +665,7 @@ public:
 		return symmetric;
 	}
 
-	virtual void transpose() {
-		size_t tmp = nrows;
-		nrows = ncols;
-		ncols = tmp;
-	}
+	virtual sparse_matrix::ptr transpose() const = 0;
 
 	/*
 	 * This version of SpMM allows users to provide the output matrix.
