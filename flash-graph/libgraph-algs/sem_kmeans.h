@@ -169,7 +169,7 @@ namespace {
                 complete = false;
 
                 for (unsigned i = 0; i < size(); i++) {
-                    this->mean[i] *= num_members;
+                    this->mean[i] *= (double)num_members;
                 }
             }
 
