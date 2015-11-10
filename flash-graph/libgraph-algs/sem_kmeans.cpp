@@ -25,7 +25,6 @@
 
 #define KM_TEST 1
 #define VERBOSE 0
-#define INVALID_CLUST_ID -1
 
 // TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
 
@@ -49,6 +48,7 @@ namespace {
     enum kms_stage_t { INIT, ESTEP } g_stage; // What phase of the algo we're in
 
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
+    static const unsigned INVALID_CLUST_ID = -1;
 
     // Begin Helpers //
     template <typename T>
@@ -201,9 +201,10 @@ namespace {
         kmeans_vertex(vertex_id_t id):
             compute_vertex(id) {
                 dist = std::numeric_limits<double>::max(); // Start @ max
+                cluster_id = INVALID_CLUST_ID;
 #if PRUNE
                 uppr_bnd = dist;
-                lwr_bnd.resize(K); // Set K items to 0
+                lwr_bnd.assign(K, 0); // Set K items to 0
                 nxt_clstr = 0;
                 r = false;
                 in_x_prev_iter = false;
@@ -284,7 +285,7 @@ namespace {
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
 
-        //TODO: Optimize only add cluster when a vertex joins it
+        //TODO: Opt only add cluster when a vertex joins it
         kmeans_vertex_program() {
             for (unsigned thd = 0; thd < K; thd++) {
                 pt_clusters.push_back(cluster::create(NUM_COLS));
@@ -305,11 +306,11 @@ namespace {
         }
 
 #if PRUNE
+        // TODO: Opt add swap operation
         void remove_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iter& count_it) {
             pt_clusters[id]->remove_member(id_it, count_it);
         }
 #endif
-
         const unsigned get_pt_changed() {
             return pt_changed;
         }
@@ -366,83 +367,73 @@ namespace {
         vertex_id_t my_id = prog.get_vertex_id(*this);
 #endif
 #if PRUNE
-        this->nxt_clstr = 0;
+        this->nxt_clstr = 0; // reset
 
-        if (g_prune_init) {
-            for (nxt_clstr = 0; nxt_clstr < K; nxt_clstr++) {
-                // Prunes `some cluster subset' but still needs to
-                //  do I/O because `some other subset' of clusters needs to be computed :(
-                // Use Lemma 1 to prune
-                if (g_cluster_dist->get(this->cluster_id, nxt_clstr) < (2*this->dist)) {
-#if KM_TEST
-                    printf("Lemma 1 failed for v:%u at nxt_clstr = %u in init\n", my_id, nxt_clstr);
+        if (get_in_x_prev_iter()) {
+            // #5
+            for (unsigned cl = 0; cl < K; cl++) {
+                std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
+            }
+#if 1
+            BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " lwr_bnd = ";
+            print_vector(lwr_bnd);
 #endif
-                    break; // Because d(this,cl) >= d(this,this->cluster_id)
+            // #6
+            uppr_bnd = uppr_bnd + g_clusters[cluster_id]->get_prev_dist();
+#if 1
+            BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " uppr_bnd = " << uppr_bnd;
+#endif
+            r = true;
+        }
+
+        if (cluster_id != INVALID_CLUST_ID && uppr_bnd <= g_clusters[cluster_id]->get_s_val()) { // #2
+            set_in_x_prev_iter();
+            // These may still be prunable
+            for (nxt_clstr = 0; nxt_clstr < K; nxt_clstr++) {
+                if (nxt_clstr != cluster_id) { // #3
+                    if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd >
+                            (g_cluster_dist->get(cluster_id, nxt_clstr)*.5)) {
+                        // #3a
+                        if (r) {
+                            r = false;
+#if KM_TEST
+                            BOOST_LOG_TRIVIAL(info) << "3a failed for v:" << my_id
+                                << " at nxt_clstr = " << nxt_clstr;
+#endif
+                            break; // do I/O request and compute d(x,c(x))
+                        } else {
+                            BOOST_VERIFY(dist >= uppr_bnd);
+                            BOOST_LOG_TRIVIAL(info) << "Setting v:" << my_id <<
+                                "dist to uppr_bnd:" << uppr_bnd;
+                            this->dist = uppr_bnd; // d(x,c(x)) = u(x)
+                        }
+
+                        // #3b
+                        if (this->dist > lwr_bnd[nxt_clstr] ||
+                                this->dist > (.5*g_cluster_dist->get(this->cluster_id,nxt_clstr))) {
+#if KM_TEST
+                            BOOST_LOG_TRIVIAL(info) << "3b failed for v:" << my_id
+                                << " at nxt_clstr = " << nxt_clstr;
+#endif
+                            break; // do I/O request and compute this d(x,c)
+                        }
+                    } else { // Fail prune #3
+#if KM_TEST
+                            printf("#3 Failed for v:%u at nxt_clstr = %u", my_id, nxt_clstr);
+#endif
+                        break;
+                    }
                 }
             }
         } else {
-            if (get_in_x_prev_iter()) {
-                // #5
-                for (unsigned cl = 0; cl < K; cl++) {
-                    std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
-                }
-#if 1
-                BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " lwr_bnd = ";
-                print_vector(lwr_bnd);
-#endif
-                // #6
-                uppr_bnd = uppr_bnd + g_clusters[cluster_id]->get_prev_dist();
-#if 1
-                BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " uppr_bnd = " << uppr_bnd;
-#endif
-                r = true;
-            } else if (uppr_bnd <= g_clusters[cluster_id]->get_s_val()) {
-                set_in_x_prev_iter();
-                // These may still be prunable
-                for (nxt_clstr = 0; nxt_clstr < K; nxt_clstr++) {
-                    if (nxt_clstr != cluster_id) { // #3
-                        if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd >
-                                (g_cluster_dist->get(cluster_id, nxt_clstr)*.5)) {
-                            // #3a
-                            if (r) {
-                                r = false;
-#if KM_TEST
-                                BOOST_LOG_TRIVIAL(info) << "3a failed for v:" << my_id
-                                    << " at nxt_clstr = " << nxt_clstr;
-#endif
-                                break; // do I/O request and compute d(x,c(x))
-                            } else {
-                                BOOST_VERIFY(dist >= uppr_bnd);
-                                this->dist = uppr_bnd; // d(x,c(x)) = u(x)
-                            }
-
-                            // #3b
-                            if (this->dist > lwr_bnd[nxt_clstr] ||
-                                    this->dist > (.5*g_cluster_dist->get(this->cluster_id,nxt_clstr))) {
-#if KM_TEST
-                                BOOST_LOG_TRIVIAL(info) << "3b failed for v:" << my_id
-                                    << " at nxt_clstr = " << nxt_clstr;
-#endif
-                                break; // do I/O request and compute this d(x,c)
-#if 0
-                                double _dist = get_distance(nxt_clstr, id_it, count_it);
-                                if (_dist < this->dist or best) {
-                                    this->cluster_id = nxt_clstr;
-                                }
-#endif
-                            }
-                        }
-                    }
-                }
-            } else {
-                set_in_x_prev_iter(false);
-            }
+            set_in_x_prev_iter(false);
+            BOOST_LOG_TRIVIAL(info) << "Setting in x prev iter = FALSE for v:" << my_id;
         }
 
         // No I/O
         if (nxt_clstr == K) {
 #if KM_TEST
-            printf("No I/O for v:%u\n", my_id);
+            printf("No I/O for v:%u with nxt_clstr = %u\n", my_id, nxt_clstr);
 #endif
             return;
         }
@@ -454,7 +445,6 @@ namespace {
         vertex_id_t id = prog.get_vertex_id(*this);
         request_vertices(&id, 1);
     }
-
 
     void kmeans_vertex::run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
@@ -538,89 +528,91 @@ namespace {
     void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
         kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
         double best = std::numeric_limits<double>::max();
-        unsigned new_cluster_id = cluster_id;
+        unsigned new_cluster_id = INVALID_CLUST_ID;
 
+        vertex_id_t my_id = prog.get_vertex_id(*this);
 #if PRUNE
 #if KM_TEST
-        vertex_id_t my_id = prog.get_vertex_id(*this);
         BOOST_LOG_TRIVIAL(info) << "Restarting v:" << my_id << " prune from cl:" << nxt_clstr;
 #endif
         for (unsigned cl = nxt_clstr; cl < K; cl++) {
             // Prunes `some cluster subset' but still needs to
             //  do I/O because `some other subset' of clusters needs to be computed :(
-            if (g_prune_init) {
+            if (g_prune_init && cl > 0) { // NOTE: Can't do anything with the cl == 0
                 // Use Lemma 1 to prune
-                if (g_cluster_dist->get(this->cluster_id, cl) >= (2*this->dist)) {
+                if (g_cluster_dist->get(new_cluster_id, cl) >= (2*this->dist)) {
+                    BOOST_LOG_TRIVIAL(info) << "  => Skipping dist comp for c:" << cl <<
+                        " for v:" << my_id;
                     continue; // Because d(this,cl) >= d(this,this->cluster_id)
                 }
             }
 #else
-            for (unsigned cl = 0; cl < K; cl++) {
+        for (unsigned cl = 0; cl < K; cl++) {
 #endif
-                // TODO: Better access pattern than getting a new iterator every time
-                edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-                data_seq_iter count_it =
-                    ((const page_row&)vertex).get_data_seq_it<double>();
-
-                double dist = get_distance(cl, id_it, count_it);
-                if (dist < best) { // Get the distance to cluster `cl'
-                    new_cluster_id = cl;
-                    best = dist;
-                }
-#if PRUNE
-                if (g_prune_init) {
-                    lwr_bnd[cl] = dist;
-                    uppr_bnd = best;
-                }
-#endif
-            }
-
-            BOOST_VERIFY(new_cluster_id >= 0 && new_cluster_id < K);
-            // TODO: Optmize by making local
+            // TODO: Better access pattern than getting a new iterator every time
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            data_seq_iter count_it = ((const page_row&)vertex).get_data_seq_it<double>();
+            data_seq_iter count_it =
+                ((const page_row&)vertex).get_data_seq_it<double>();
 
+            double dist = get_distance(cl, id_it, count_it);
+            if (dist < best) { // Get the distance to cluster `cl'
+                new_cluster_id = cl;
+                best = dist;
+            }
 #if PRUNE
             if (g_prune_init) {
-#if KM_TEST
-                printf("v%u lwr_bnd = ", my_id); print_vector<double>(lwr_bnd);
-#endif
-                vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-                this->cluster_id = new_cluster_id;
-                vprog.add_member(cluster_id, id_it, count_it);
-            } else if (new_cluster_id != this->cluster_id) {
-#if KM_TEST
-                printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
-                        my_id, cluster_id, new_cluster_id, best);
-#endif
-                vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-                vprog.remove_member(cluster_id, id_it, count_it);
-
-                this->cluster_id = new_cluster_id;
-                id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-                count_it = ((const page_row&)vertex).get_data_seq_it<double>();
-                vprog.add_member(cluster_id, id_it, count_it);
-            } else {
-                // Not g_prune init & my_cluster remained the same .. Do nothing
-#if KM_TEST
-                printf("\tVertex%u stayed in c%u\n", my_id, cluster_id);
-#endif
+                lwr_bnd[cl] = dist;
+                uppr_bnd = best;
             }
-#else
-            if (this->cluster_id != new_cluster_id) {
-#if KM_TEST
-                printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
-                        my_id, cluster_id, new_cluster_id, best);
 #endif
-                vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-            }
+        }
 
+        BOOST_VERIFY(new_cluster_id >= 0 && new_cluster_id < K);
+        // TODO: Optmize by making local
+        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+        data_seq_iter count_it = ((const page_row&)vertex).get_data_seq_it<double>();
+
+#if PRUNE
+        if (g_prune_init) {
+#if KM_TEST
+            printf("v%u lwr_bnd = ", my_id); print_vector<double>(lwr_bnd);
+#endif
+            vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
             this->cluster_id = new_cluster_id;
             vprog.add_member(cluster_id, id_it, count_it);
+        } else if (new_cluster_id != this->cluster_id) {
+#if KM_TEST
+            printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
+                    my_id, cluster_id, new_cluster_id, best);
 #endif
-            // Done by all : TODO: Verify I really need this
-            this->dist = best;
+            vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
+            vprog.remove_member(cluster_id, id_it, count_it);
+
+            this->cluster_id = new_cluster_id;
+            id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+            count_it = ((const page_row&)vertex).get_data_seq_it<double>();
+            vprog.add_member(cluster_id, id_it, count_it);
+        } else {
+            // Not g_prune init & my_cluster remained the same .. Do nothing
+#if KM_TEST
+            printf("\tVertex%u stayed in c%u\n", my_id, cluster_id);
+#endif
         }
+#else
+        if (this->cluster_id != new_cluster_id) {
+#if KM_TEST
+            printf("Vertex%u changed membership from c%u to c%u with best-dist: %.4f\n",
+                    my_id, cluster_id, new_cluster_id, best);
+#endif
+            vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
+        }
+
+        this->cluster_id = new_cluster_id;
+        vprog.add_member(cluster_id, id_it, count_it);
+#endif
+        // Done by all : TODO: Verify I really need this
+        this->dist = best;
+    }
 
         static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
             FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
@@ -686,7 +678,7 @@ namespace {
         // This ignore the cluster_id == cluster_id & any repetitive computations
 #if PRUNE
         static void compute_cluster_dist() {
-            //#pragma omp parallel for collapse(2) // FIXME: Coalese perhaps
+            //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
             for (unsigned i = 0; i < K; i++) {
                 for (unsigned j = i+1; j < K-1; j++) {
                     double dist = eucl_dist<std::vector<double>>(&(g_clusters[i]->get_mean()),

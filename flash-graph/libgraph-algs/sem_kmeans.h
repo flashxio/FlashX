@@ -30,7 +30,6 @@
 #include "FGlib.h"
 #include "save_result.h"
 #define PAGE_ROW
-#define INVALID_CLUST_ID -1
 
 #define PRUNE 1
 
