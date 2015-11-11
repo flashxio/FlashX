@@ -160,8 +160,7 @@ RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_
 	}
 
 	sparse_matrix::ptr mat;
-	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
-	if (!mat_f.exist()) {
+	if (!safs::exist_safs_file(mat_file)) {
 		SpM_2d_storage::ptr store = SpM_2d_storage::load(mat_file, index);
 		if (store)
 			mat = sparse_matrix::create(index, store);
@@ -213,14 +212,13 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 	}
 
 	sparse_matrix::ptr mat;
-	safs::safs_file mat_f(safs::get_sys_RAID_conf(), mat_file);
-	safs::safs_file tmat_f(safs::get_sys_RAID_conf(), tmat_file);
 	// If one of the data matrices doesn't exist in SAFS or the user wants
 	// to load the sparse matrix to memory.
-	if (!mat_f.exist() || !tmat_f.exist() || in_mem) {
+	if (!safs::exist_safs_file(mat_file) || !safs::exist_safs_file(tmat_file)
+			|| in_mem) {
 		SpM_2d_storage::ptr store;
 		SpM_2d_storage::ptr tstore;
-		if (!mat_f.exist())
+		if (!safs::exist_safs_file(mat_file))
 			store = SpM_2d_storage::load(mat_file, index);
 		else
 			store = SpM_2d_storage::safs_load(mat_file, index);
@@ -228,7 +226,7 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 			fprintf(stderr, "can't load matrix file\n");
 			return R_NilValue;
 		}
-		if (!tmat_f.exist())
+		if (!safs::exist_safs_file(tmat_file))
 			tstore = SpM_2d_storage::load(tmat_file, tindex);
 		else
 			tstore = SpM_2d_storage::safs_load(tmat_file, tindex);
