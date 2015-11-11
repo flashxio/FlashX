@@ -411,4 +411,22 @@ safs_file_group::ptr safs_file_group::create(const RAID_config &conf,
 	}
 }
 
+bool exist_safs_file(const std::string &name)
+{
+	if (!is_safs_init())
+		return false;
+
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), name);
+	return mat_f.exist();
+}
+
+ssize_t get_safs_size(const std::string &name)
+{
+	if (!is_safs_init())
+		return -1;
+
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), name);
+	return mat_f.get_size();
+}
+
 }
