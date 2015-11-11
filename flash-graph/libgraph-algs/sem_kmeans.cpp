@@ -374,13 +374,13 @@ namespace {
             for (unsigned cl = 0; cl < K; cl++) {
                 std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
             }
-#if 1
+#if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " lwr_bnd = ";
             print_vector(lwr_bnd);
 #endif
             // #6
             uppr_bnd = uppr_bnd + g_clusters[cluster_id]->get_prev_dist();
-#if 1
+#if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " uppr_bnd = " << uppr_bnd;
 #endif
             r = true;
@@ -420,7 +420,7 @@ namespace {
                         }
                     } else { // Fail prune #3
 #if KM_TEST
-                            printf("#3 Failed for v:%u at nxt_clstr = %u", my_id, nxt_clstr);
+                            printf("#3 Failed for v:%u at nxt_clstr = %u\n", my_id, nxt_clstr);
 #endif
                         break;
                     }
@@ -434,14 +434,14 @@ namespace {
         // No I/O
         if (nxt_clstr == K) {
 #if KM_TEST
-            printf("No I/O for v:%u with nxt_clstr = %u\n", my_id, nxt_clstr);
+            //printf("No I/O for v:%u with nxt_clstr = %u\n", my_id, nxt_clstr);
 #endif
             return;
         }
 #endif
 
 #if KM_TEST
-        printf("I/O for v:%u\n", my_id);
+        //printf("I/O for v:%u\n", my_id);
 #endif
         vertex_id_t id = prog.get_vertex_id(*this);
         request_vertices(&id, 1);
@@ -550,6 +550,7 @@ namespace {
 #else
         for (unsigned cl = 0; cl < K; cl++) {
 #endif
+#if PRUNE
             // May have dropped out failing 3a, 3b
             if (cluster_id != INVALID_CLUST_ID && get_in_x_prev_iter()) { // Actually same iter
                 if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd >
@@ -581,6 +582,7 @@ namespace {
                     }
                 }
             }
+#endif
 dist_comp:
             // TODO: Better access pattern than getting a new iterator every time
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
@@ -713,7 +715,7 @@ dist_comp:
         static void compute_cluster_dist() {
             //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
             for (unsigned i = 0; i < K; i++) {
-                for (unsigned j = i+1; j < K-1; j++) {
+                for (unsigned j = i+1; j < K; j++) {
                     double dist = eucl_dist<std::vector<double>>(&(g_clusters[i]->get_mean()),
                             &(g_clusters[j]->get_mean()));
                     g_cluster_dist->set(i,j, dist);

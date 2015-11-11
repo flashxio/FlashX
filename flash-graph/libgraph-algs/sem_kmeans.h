@@ -31,7 +31,7 @@
 #include "save_result.h"
 #define PAGE_ROW
 
-#define PRUNE 1
+#define PRUNE 0
 
 using namespace fg;
 
