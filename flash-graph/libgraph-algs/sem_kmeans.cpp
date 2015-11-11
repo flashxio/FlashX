@@ -384,6 +384,7 @@ namespace {
             BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " uppr_bnd = " << uppr_bnd;
 #endif
             r = true;
+            set_in_x_prev_iter(false); // Reset for this iteration
         }
 
         if (cluster_id != INVALID_CLUST_ID && uppr_bnd <= g_clusters[cluster_id]->get_s_val()) { // #2
@@ -549,6 +550,38 @@ namespace {
 #else
         for (unsigned cl = 0; cl < K; cl++) {
 #endif
+            // May have dropped out failing 3a, 3b
+            if (cluster_id != INVALID_CLUST_ID && get_in_x_prev_iter()) { // Actually same iter
+                if (uppr_bnd > lwr_bnd[nxt_clstr] && uppr_bnd >
+                        (g_cluster_dist->get(cluster_id, nxt_clstr)*.5)) {
+                    // #3a
+                    if (r) {
+                        r = false; // TODO: Verify since it matters what order we do dists to c_x
+#if KM_TEST
+                        BOOST_LOG_TRIVIAL(info) << "#3a v:" << my_id
+                            << " jumping to dist_comp ";
+#endif
+                        goto dist_comp; // compute d(x,c(x))
+                    } else {
+                        BOOST_VERIFY(dist >= uppr_bnd);
+                        BOOST_LOG_TRIVIAL(info) << "run_distance Setting v:" << my_id <<
+                            "dist to uppr_bnd:" << uppr_bnd;
+                        this->dist = uppr_bnd; // d(x,c(x)) = u(x)
+                        continue; // TODO: Verify -- skip the dist comp
+                    }
+
+                    // #3b
+                    if (this->dist > lwr_bnd[nxt_clstr] ||
+                            this->dist > (.5*g_cluster_dist->get(this->cluster_id,nxt_clstr))) {
+#if KM_TEST
+                        BOOST_LOG_TRIVIAL(info) << "#3b v:" << my_id
+                            << " jumping to dist_comp"; 
+#endif
+                        goto dist_comp; // compute d(x,c(x))
+                    }
+                }
+            }
+dist_comp:
             // TODO: Better access pattern than getting a new iterator every time
             edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
             data_seq_iter count_it =
