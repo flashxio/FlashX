@@ -415,10 +415,10 @@ fm.init.basic.op <- function()
 #' This function accepts a basic operator and perform aggregation on
 #' the FlashMatrixR object with the basic operator.
 #'
-#' @param bop a basic operator
 #' @param fm a FlashMatrixR object
+#' @param bop a basic operator
 #' @return a scalar
-fm.agg <- function(bop, fm)
+fm.agg <- function(fm, bop)
 {
 	stopifnot(!is.null(fm) && !is.null(bop))
 	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
@@ -437,7 +437,7 @@ fm.agg <- function(bop, fm)
 #' @param o1, o2 a FlashMatrixR vector/matrix.
 #' @return a FlashMatrixR vector/matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.mapply2 <- function(FUN, o1, o2)
+fm.mapply2 <- function(o1, o2, FUN)
 {
 	stopifnot(!is.null(FUN))
 	stopifnot(!is.null(o1) && !is.null(o2))
@@ -457,7 +457,7 @@ fm.mapply2 <- function(FUN, o1, o2)
 	.Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
 }
 
-fm.sapply <- function(FUN, o)
+fm.sapply <- function(o, FUN)
 {
 	stopifnot(!is.null(FUN) && !is.null(o))
 	stopifnot(class(FUN) == "fm.bo")
@@ -468,7 +468,7 @@ fm.sapply <- function(FUN, o)
 	.Call("R_FM_sapply", FUN, o, PACKAGE="FlashGraphR")
 }
 
-fm.ele.wise.op <- function(FUN, o1, o2)
+fm.ele.wise.op <- function(o1, o2, FUN)
 {
 	stopifnot(!is.null(FUN))
 	stopifnot(!is.null(o1) && !is.null(o2))
@@ -494,7 +494,7 @@ fm.ele.wise.op <- function(FUN, o1, o2)
 		.Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashGraphR")
 	}
 	else
-		fm.mapply2(FUN, o1, o2)
+		fm.mapply2(o1, o2, FUN)
 }
 
 #' Transpose a FlashMatrixR matrix.

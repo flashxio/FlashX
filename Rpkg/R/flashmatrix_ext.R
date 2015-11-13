@@ -36,123 +36,123 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.pmin2 <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.min, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.min)
 }
 
 #' @name minmax
 fm.pmax2 <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.max, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.max)
 }
 
 `+.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.add, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.add)
 }
 
 `+.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.add, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.add)
 }
 
 `-.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.sub, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.sub)
 }
 
 `-.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.sub, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.sub)
 }
 
 `*.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.mul, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.mul)
 }
 
 `*.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.mul, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.mul)
 }
 
 `/.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.div, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.div)
 }
 
 `/.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.div, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.div)
 }
 
 `==.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.eq, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.eq)
 }
 
 `==.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.eq, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.eq)
 }
 
 `!=.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.eq)
 }
 
 `!=.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.eq)
 }
 
 `>.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.gt, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.gt)
 }
 
 `>.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.gt, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.gt)
 }
 
 `>=.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.ge, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.ge)
 }
 
 `>=.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.ge, o1, o2)
+	fm.ele.wise.op(o1, o2, fm.bo.ge)
 }
 
 `<=.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.gt)
 }
 
 `<=.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.gt)
 }
 
 `<.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.ge, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.ge)
 }
 
 `<.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.ge, o1, o2)
+	!fm.ele.wise.op(o1, o2, fm.bo.ge)
 }
 
 `!.fm` <- function(o)
 {
-	fm.sapply(fm.buo.not, o)
+	fm.sapply(o, fm.buo.not)
 }
 
 `!.fmV` <- function(o)
 {
-	fm.sapply(fm.buo.not, o)
+	fm.sapply(o, fm.buo.not)
 }
 
 #' Aggregation on a FlashMatrixR vector/matrix.
@@ -170,19 +170,19 @@ fm.pmax2 <- function(o1, o2)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.sum <- function(m)
 {
-	fm.agg(fm.bo.add, m)
+	fm.agg(m, fm.bo.add)
 }
 
 #' @name fm.agg.impl
 fm.min <- function(m)
 {
-	fm.agg(fm.bo.min, m)
+	fm.agg(m, fm.bo.min)
 }
 
 #' @name fm.agg.impl
 fm.max <- function(m)
 {
-	fm.agg(fm.bo.max, m)
+	fm.agg(m, fm.bo.max)
 }
 
 #' Miscellaneous Mathematical Functions
@@ -202,23 +202,23 @@ fm.max <- function(m)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.abs <- function(m)
 {
-	fm.sapply(fm.buo.abs, m)
+	fm.sapply(m, fm.buo.abs)
 }
 
 #' @name misc.math
 fm.sqrt <- function(m)
 {
-	fm.sapply(fm.buo.sqrt, m)
+	fm.sapply(m, fm.buo.sqrt)
 }
 
 #' @name misc.math
 fm.ceil <- function(m)
 {
-	fm.sapply(fm.buo.ceil, m);
+	fm.sapply(m, fm.buo.ceil)
 }
 
 #' @name misc.math
 fm.floor <- function(m)
 {
-	fm.sapply(fm.buo.floor, m);
+	fm.sapply(m, fm.buo.floor)
 }
