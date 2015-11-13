@@ -187,8 +187,13 @@ fm.max <- function(m)
 
 #' Miscellaneous Mathematical Functions
 #'
-#' `abs(x)' computes the absolute value of x, `sqrt(x)' computes the
-#' square root of x.
+#' `abs(x)' computes the absolute value of x,
+#'
+#' `sqrt(x)' computes the square root of x.
+#'
+#' `fm.ceil' returns the ceiling of all values in the input vector/matrix.
+#'
+#' `fm.floor' returns the floor of all values in the input vector/matrix.
 #'
 #' @param m a numeric vector or matrix.
 #' @return `abs' returns a vector/matrix of the same type as the input
@@ -204,4 +209,16 @@ fm.abs <- function(m)
 fm.sqrt <- function(m)
 {
 	fm.sapply(fm.buo.sqrt, m)
+}
+
+#' @name misc.math
+fm.ceil <- function(m)
+{
+	fm.sapply(fm.buo.ceil, m);
+}
+
+#' @name misc.math
+fm.floor <- function(m)
+{
+	fm.sapply(fm.buo.floor, m);
 }

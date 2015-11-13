@@ -656,6 +656,10 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 		idx = basic_uops::op_idx::ABS;
 	else if (name == "not")
 		idx = basic_uops::op_idx::NOT;
+	else if (name == "ceil")
+		idx = basic_uops::op_idx::CEIL;
+	else if (name == "floor")
+		idx = basic_uops::op_idx::FLOOR;
 	else {
 		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
 		return R_NilValue;

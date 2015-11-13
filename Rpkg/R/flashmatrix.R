@@ -366,6 +366,10 @@ fm.multiply <- function(fm, mat)
 #' `fm.buo.sqrt' is the predefined basic unary operator for square root.
 #' `fm.buo.abs' is the predefined basic unary operator for absolute value.
 #' `fm.buo.not' is the predefined logical NOT Operator.
+#' `fm.buo.ceil' is the predefined basic unary Operator of computing a ceiling
+#' of a number.
+#' `fm.buo.floor' is the predefined basic unary Operator of computing a floor
+#' of a number.
 #'
 #' @param name the name of the basic operator.
 #' @return a reference to the specified basic operator.
@@ -402,6 +406,8 @@ fm.init.basic.op <- function()
 	fm.buo.sqrt <<- fm.get.basic.uop("sqrt")
 	fm.buo.abs <<- fm.get.basic.uop("abs")
 	fm.buo.not <<- fm.get.basic.uop("not")
+	fm.buo.ceil <<- fm.get.basic.uop("ceil")
+	fm.buo.floor <<- fm.get.basic.uop("floor")
 }
 
 #' Aggregation on a FlashMatrixR object.
