@@ -32,6 +32,7 @@
 #include "bulk_operate.h"
 #include "matrix_store.h"
 #include "mem_matrix_store.h"
+#include "factor.h"
 
 namespace fm
 {
@@ -322,6 +323,16 @@ public:
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 	std::shared_ptr<scalar_variable> aggregate(const bulk_operate &op) const;
+
+	/*
+	 * This operator groups rows based on the labels in the factor vector
+	 * and aggregate the elements of each column.
+	 * It outputs a dense matrix whose #cols == this->#cols and #rows == #levels.
+	 * Each row of the output dense matrix is the aggregation of all rows in
+	 * the input dense matrix that have the same factor.
+	 */
+	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
+			bulk_operate::const_ptr) const;
 
 	dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;

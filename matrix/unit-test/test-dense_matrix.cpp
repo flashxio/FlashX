@@ -1632,6 +1632,61 @@ void test_conv_store()
 	}
 }
 
+class rand_vec_set: public type_set_vec_operate<factor_value_t>
+{
+	factor f;
+public:
+	rand_vec_set(const factor &_f): f(_f) {
+	}
+
+	void set(factor_value_t *arr, size_t num_eles, off_t start_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = random() % f.get_num_levels();
+			assert(f.is_valid_level(arr[i]));
+		}
+	}
+};
+
+void test_groupby()
+{
+	dense_matrix::ptr mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
+			-1, get_scalar_type<int>());
+	factor f(10);
+	factor_vector::ptr rand_vec = factor_vector::create(f, mat->get_num_rows(),
+			-1, true, rand_vec_set(f));
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			mat->get_type().get_basic_ops().get_add());
+	dense_matrix::ptr group_sum = mat->groupby_row(rand_vec, add);
+	printf("groupby finishes\n");
+
+	detail::mem_matrix_store::const_ptr mem_mat
+		= detail::mem_matrix_store::cast(mat->get_raw_store());
+	detail::mem_vec_store::const_ptr mem_vec
+		= detail::mem_vec_store::cast(rand_vec->get_raw_store());
+	std::vector<std::vector<int> > agg_res(f.get_num_levels());
+	for (size_t i = 0; i < f.get_num_levels(); i++)
+		agg_res[i].resize(mat->get_num_cols());
+	printf("compute groupby manually\n");
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		factor_value_t label = *(const factor_value_t *) mem_vec->get_sub_arr(i, i + 1);
+		assert(agg_res.size() > label);
+		assert(agg_res[label].size() == mat->get_num_cols());
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			agg_res[label][j] += mem_mat->get<factor_value_t>(i, j);
+	}
+
+	printf("check groupby\n");
+	detail::mem_matrix_store::const_ptr mem_res
+		= detail::mem_matrix_store::cast(group_sum->get_raw_store());
+	assert(group_sum->get_num_rows() == agg_res.size());
+	for (size_t i = 0; i < mem_res->get_num_rows(); i++) {
+		assert(agg_res[i].size() == group_sum->get_num_cols());
+		for (size_t j = 0; j < mem_res->get_num_cols(); j++) {
+			assert(agg_res[i][j] == mem_res->get<int>(i, j));
+		}
+	}
+}
+
 void test_bmv_multiply_tall()
 {
 	bool in_mem = false;
@@ -1806,6 +1861,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_groupby();
 	test_block_mv();
 	test_conv_store();
 	test_mapply_mixed(num_nodes);

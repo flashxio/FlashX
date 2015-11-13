@@ -3053,4 +3053,152 @@ dense_matrix::ptr dense_matrix::deep_copy() const
 				store->store_layout()));
 }
 
+namespace
+{
+
+class groupby_row_mapply_op: public detail::portion_mapply_op
+{
+	// This contains a bool vector for each thread.
+	// The bool vector indicates whether a label gets partially aggregated data.
+	std::vector<std::vector<bool> > part_agg;
+	// This contains a local matrix for each thread.
+	// Each row of a local matrix contains partially aggregated data for a label.
+	std::vector<detail::local_row_matrix_store::ptr> part_results;
+	size_t num_levels;
+	bulk_operate::const_ptr op;
+public:
+	groupby_row_mapply_op(size_t num_levels,
+			bulk_operate::const_ptr op): detail::portion_mapply_op(0, 0,
+				op->get_output_type()) {
+		detail::mem_thread_pool::ptr threads
+			= detail::mem_thread_pool::get_global_mem_threads();
+		size_t num_threads = threads->get_num_threads();
+		part_results.resize(num_threads);
+		part_agg.resize(num_threads);
+		this->num_levels = num_levels;
+		this->op = op;
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		throw unsupported_exception(
+				"Don't support transpose of groupby_row_mapply_op");
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		throw unsupported_exception(
+				"Don't support to_string of groupby_row_mapply_op");
+	}
+
+	detail::matrix_store::ptr get_agg() const;
+};
+
+detail::matrix_store::ptr groupby_row_mapply_op::get_agg() const
+{
+	size_t first_idx;
+	for (first_idx = 0; first_idx < part_results.size(); first_idx++)
+		if (part_results[first_idx] != NULL)
+			break;
+	assert(first_idx < part_results.size());
+
+	size_t nrow = part_results[first_idx]->get_num_rows();
+	size_t ncol = part_results[first_idx]->get_num_cols();
+	const scalar_type &type = part_results[first_idx]->get_type();
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(nrow,
+			ncol, matrix_layout_t::L_ROW, type, -1);
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		memcpy(res->get_row(i), part_results[first_idx]->get_row(i),
+				res->get_num_cols() * res->get_entry_size());
+		for (size_t j = first_idx + 1; j < part_results.size(); j++) {
+			if (part_results[j] != NULL)
+				op->runAA(res->get_num_cols(), part_results[j]->get_row(i),
+						res->get_row(i), res->get_row(i));
+		}
+	}
+	return res;
+}
+
+void groupby_row_mapply_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
+	assert(ins.size() == 2);
+	detail::local_matrix_store::const_ptr labels = ins[0];
+	detail::local_row_matrix_store::const_ptr in;
+	if (ins[1]->store_layout() == matrix_layout_t::L_COL)
+		in = std::dynamic_pointer_cast<const detail::local_row_matrix_store>(
+				ins[1]->conv2(matrix_layout_t::L_ROW));
+	else
+		in = std::dynamic_pointer_cast<const detail::local_row_matrix_store>(
+				ins[1]);
+	size_t num_local_rows = in->get_num_rows();
+
+	groupby_row_mapply_op *mutable_this = const_cast<groupby_row_mapply_op *>(
+			this);
+	// Prepare for the output result.
+	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
+			thread::get_curr_thread());
+	int thread_id = thread->get_pool_thread_id();
+	if (part_results[thread_id] == NULL) {
+		assert(part_agg[thread_id].empty());
+		mutable_this->part_results[thread_id] = detail::local_row_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(0, 0, num_levels,
+					in->get_num_cols(), op->get_output_type(), -1));
+		mutable_this->part_agg[thread_id].resize(num_levels);
+	}
+
+	for (size_t i = 0; i < num_local_rows; i++) {
+		factor_value_t label_id = labels->get<factor_value_t>(i, 0);
+		// If we never get partially aggregated result for a label, we should
+		// copy the data to the corresponding row.
+		if (!part_agg[thread_id][label_id])
+			memcpy(part_results[thread_id]->get_row(label_id), in->get_row(i),
+					in->get_num_cols() * in->get_entry_size());
+		else
+			op->runAA(in->get_num_cols(), in->get_row(i),
+					part_results[thread_id]->get_row(label_id),
+					part_results[thread_id]->get_row(label_id));
+		mutable_this->part_agg[thread_id].assign(label_id, true);
+	}
+}
+
+}
+
+dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
+		bulk_operate::const_ptr op) const
+{
+	if (is_wide()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "groupby_row can't run on a wide dense matrix";
+		return dense_matrix::ptr();
+	}
+	if (labels->get_length() != get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "groupby_row: there should be the same #labels as #rows";
+		return dense_matrix::ptr();
+	}
+	if (get_type() != op->get_left_type() || get_type() != op->get_right_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "groupby_row: the agg op requires diff element types";
+		return dense_matrix::ptr();
+	}
+	if (op->get_output_type() != op->get_left_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "groupby_row doesn't support an operator that outputs a diff type from its input type";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<detail::matrix_store::const_ptr> mats(2);
+	mats[0] = labels->get_data().conv2mat(labels->get_length(), 1, false);
+	mats[1] = store;
+	groupby_row_mapply_op *_groupby_op = new groupby_row_mapply_op(
+			labels->get_factor().get_num_levels(), op);
+	detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
+	__mapply_portion(mats, groupby_op, matrix_layout_t::L_ROW);
+
+	return dense_matrix::create(_groupby_op->get_agg());
+}
+
 }

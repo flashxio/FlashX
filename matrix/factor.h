@@ -67,6 +67,7 @@ class factor_vector: public vector
 	}
 public:
 	typedef std::shared_ptr<factor_vector> ptr;
+	typedef std::shared_ptr<const factor_vector> const_ptr;
 
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_vec_operate &op) {
