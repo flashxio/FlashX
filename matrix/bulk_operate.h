@@ -240,6 +240,8 @@ public:
 		ABS,
 		NOT,
 		SQ,
+		CEIL,
+		FLOOR,
 		NUM_OPS,
 	};
 
@@ -282,11 +284,25 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct ceil {
+		OutType operator()(const InType &e) const {
+			return std::ceil(e);
+		}
+	};
+
+	struct floor {
+		OutType operator()(const InType &e) const {
+			return std::floor(e);
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
 	bulk_uoperate_impl<uop_not, bool, bool> not_op;
 	bulk_uoperate_impl<sq, InType, OutType> sq_op;
+	bulk_uoperate_impl<ceil, InType, OutType> ceil_op;
+	bulk_uoperate_impl<floor, InType, OutType> floor_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -296,6 +312,8 @@ public:
 		ops.push_back(&abs_op);
 		ops.push_back(&not_op);
 		ops.push_back(&sq_op);
+		ops.push_back(&ceil_op);
+		ops.push_back(&floor_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {
