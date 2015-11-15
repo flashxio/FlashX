@@ -377,7 +377,7 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 
 RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 {
-	Rcpp::List vec_obj(pvec);
+	Rcpp::S4 vec_obj(pvec);
 	if (!is_vector(vec_obj)) {
 		fprintf(stderr, "The input object isn't a vector\n");
 		return R_NilValue;
@@ -386,7 +386,7 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	size_t nrow = REAL(pnrow)[0];
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
-	vector::ptr vec = get_vector(pvec);
+	vector::ptr vec = get_vector(vec_obj);
 	return create_FMR_matrix(vec->conv2mat(nrow, ncol, byrow), "");
 }
 
@@ -589,7 +589,7 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 
 RcppExport SEXP R_FM_transpose(SEXP pmat)
 {
-	Rcpp::List matrix_obj(pmat);
+	Rcpp::S4 matrix_obj(pmat);
 	if (is_sparse(matrix_obj)) {
 		sparse_matrix::ptr m = get_matrix<sparse_matrix>(matrix_obj);
 		return create_FMR_matrix(m->transpose(), "");
@@ -632,14 +632,13 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	}
 
 	Rcpp::List ret;
-	Rcpp::IntegerVector r_info(1);
+	Rcpp::IntegerVector r_info(2);
 	// The index
 	r_info[0] = idx;
 	// The number of operands
 	r_info[1] = 2;
 	ret["info"] = r_info;
 	ret["name"] = pname;
-	ret.attr("class") = "fm.bo";
 	return ret;
 }
 
@@ -666,26 +665,25 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	}
 
 	Rcpp::List ret;
-	Rcpp::IntegerVector r_info(1);
+	Rcpp::IntegerVector r_info(2);
 	// The index
 	r_info[0] = idx;
 	// The number of operands
 	r_info[1] = 1;
 	ret["info"] = r_info;
 	ret["name"] = pname;
-	ret.attr("class") = "fm.bo";
 	return ret;
 }
 
-static int get_op_idx(const Rcpp::List &fun_obj)
+static int get_op_idx(const Rcpp::S4 &fun_obj)
 {
-	Rcpp::IntegerVector info = fun_obj["info"];
+	Rcpp::IntegerVector info = fun_obj.slot("info");
 	return info[0];
 }
 
-static int get_op_nop(const Rcpp::List &fun_obj)
+static int get_op_nop(const Rcpp::S4 &fun_obj)
 {
-	Rcpp::IntegerVector info = fun_obj["info"];
+	Rcpp::IntegerVector info = fun_obj.slot("info");
 	return info[1];
 }
 
@@ -694,7 +692,7 @@ static int get_op_nop(const Rcpp::List &fun_obj)
  */
 static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
 {
-	Rcpp::List fun_obj(pfun);
+	Rcpp::S4 fun_obj(pfun);
 	basic_ops::op_idx bo_idx = (basic_ops::op_idx) get_op_idx(fun_obj);
 	int noperands = get_op_nop(fun_obj);
 	if (noperands != 2) {
@@ -729,7 +727,7 @@ static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
  */
 static const bulk_uoperate *get_uop(SEXP pfun, prim_type type)
 {
-	Rcpp::List fun_obj(pfun);
+	Rcpp::S4 fun_obj(pfun);
 	basic_uops::op_idx bo_idx = (basic_uops::op_idx) get_op_idx(fun_obj);
 	int noperands = get_op_nop(fun_obj);
 	if (noperands != 1) {
@@ -769,8 +767,8 @@ static prim_type get_prim_type(SEXP obj)
 
 RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 {
-	Rcpp::List obj1(po1);
-	Rcpp::List obj2(po2);
+	Rcpp::S4 obj1(po1);
+	Rcpp::S4 obj2(po2);
 	if (is_sparse(obj1) || is_sparse(obj2)) {
 		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
 		return R_NilValue;
@@ -826,7 +824,7 @@ public:
 
 RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 {
-	Rcpp::List obj1(po1);
+	Rcpp::S4 obj1(po1);
 	if (is_sparse(obj1)) {
 		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
 		return R_NilValue;
@@ -897,7 +895,7 @@ public:
 
 RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 {
-	Rcpp::List obj2(po2);
+	Rcpp::S4 obj2(po2);
 	if (is_sparse(obj2)) {
 		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
 		return R_NilValue;
@@ -939,7 +937,7 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 
 RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 {
-	Rcpp::List obj(pobj);
+	Rcpp::S4 obj(pobj);
 	if (is_sparse(obj)) {
 		fprintf(stderr, "sapply doesn't support sparse matrix\n");
 		return R_NilValue;
@@ -980,7 +978,7 @@ ReturnType matrix_agg(const dense_matrix &mat, const bulk_operate &op)
 
 RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 {
-	Rcpp::List obj1(pobj);
+	Rcpp::S4 obj1(pobj);
 	if (is_sparse(obj1)) {
 		fprintf(stderr, "agg doesn't support sparse matrix\n");
 		return R_NilValue;

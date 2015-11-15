@@ -70,8 +70,6 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
 
-	ret.attr("class") = "fm";
-
 	return ret;
 }
 
@@ -93,8 +91,6 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	Rcpp::NumericVector ncol(1);
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
-
-	ret.attr("class") = "fm";
 
 	return ret;
 }
@@ -125,16 +121,14 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 		len[0] = m->get_num_cols();
 	ret["len"] = len;
 
-	ret.attr("class") = "fmV";
-
 	return ret;
 }
 
-vector::ptr get_vector(const Rcpp::List &vec)
+vector::ptr get_vector(const Rcpp::S4 &vec)
 {
 	assert(is_vector(vec));
 	object_ref<dense_matrix> *ref
-		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec["pointer"]);
+		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec.slot("pointer"));
 	dense_matrix::ptr mat = ref->get_object();
 	// This should be a column matrix.
 	assert(mat->store_layout == matrix_layout_t::L_COL
