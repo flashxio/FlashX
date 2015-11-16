@@ -23,6 +23,7 @@
 #include "mem_vv_store.h"
 #include "mem_vec_store.h"
 #include "matrix_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -137,7 +138,7 @@ data_frame::ptr local_vec_store::groupby(
 		size_t curr_length = get_length() - loc;
 		const char *curr_ptr = get_raw_arr() + get_entry_size() * loc;
 		size_t rel_end;
-		find_next.run(curr_length, curr_ptr, &rel_end);
+		find_next.runAgg(curr_length, curr_ptr, NULL, &rel_end);
 		local_cref_vec_store lcopy(curr_ptr, init_global_start + loc, rel_end,
 				get_type(), get_node_id());
 		op.run(curr_ptr, lcopy, one_agg);

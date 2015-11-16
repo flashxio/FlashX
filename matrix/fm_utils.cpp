@@ -218,23 +218,6 @@ void attr_adj_apply_operate<AttrType>::run(const void *key,
 			fg::edge_type::OUT_EDGE);
 }
 
-class count_agg_operate: public agg_operate
-{
-public:
-	virtual void run(size_t num_eles, const void *in, void *output) const {
-		fg::vsize_t *out = (fg::vsize_t *) output;
-		out[0] = num_eles - 1;
-	}
-
-	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<fg::vertex_id_t>();
-	}
-
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<fg::vsize_t>();
-	}
-};
-
 namespace
 {
 

@@ -217,25 +217,6 @@ public:
 };
 
 /*
- * This is the interface for aggregating elements into a single element.
- */
-class agg_operate
-{
-public:
-	virtual void run(size_t num_eles, const void *in, void *output) const = 0;
-	virtual const scalar_type &get_input_type() const = 0;
-	virtual const scalar_type &get_output_type() const = 0;
-
-	size_t input_entry_size() const {
-		return get_input_type().get_size();
-	}
-
-	size_t output_entry_size() const {
-		return get_output_type().get_size();
-	}
-};
-
-/*
  * This interface defines a collection of basic unary operators.
  */
 class basic_uops
@@ -369,86 +350,6 @@ public:
 
 	virtual const bulk_operate &get_divide() const {
 		return *get_op(DIV);
-	}
-};
-
-/*
- * Find the first location where its element is different from the first
- * element in the array.
- */
-template<class T>
-class find_next_impl: public agg_operate
-{
-public:
-	/*
-	 * The first element in the array is pointed by `left_arr' and there are
-	 * `num_eles' in the array.
-	 * If all elements are the same, it returns the number of elements
-	 * in the array.
-	 */
-	virtual void run(size_t num_eles, const void *left_arr,
-			void *output) const {
-		const T *curr = (const T *) left_arr;
-		T val = *curr;
-		size_t loc = 1;
-		for (; loc < num_eles && curr[loc] == val; loc++);
-		*(size_t *) output = loc;
-	}
-
-	virtual const scalar_type &get_input_type() const;
-	virtual const scalar_type &get_output_type() const;
-};
-
-/*
- * Search backwards and find the first location where its element is different
- * from the last element in the array.
- */
-template<class T>
-class find_prev_impl: public agg_operate
-{
-public:
-	/*
-	 * The end of the array is indicated by `arr_end'. The last element
-	 * is right before `arr_end'. There are `num_eles' elements in the array.
-	 * If all elements are the same, it returns the number of elements
-	 * in the array.
-	 */
-	virtual void run(size_t num_eles, const void *arr_end,
-			void *output) const {
-		const T *curr = ((const T *) arr_end) - 1;
-		T val = *curr;
-		const T *first = ((const T *) arr_end) - num_eles;
-		for (; curr > first && *curr == val; curr--);
-		if (*curr != val)
-			curr++;
-		assert(*curr == val);
-		*(size_t *) output = ((const T *) arr_end) - curr;
-	}
-
-	virtual const scalar_type &get_input_type() const;
-	virtual const scalar_type &get_output_type() const;
-};
-
-class agg_ops
-{
-public:
-	typedef std::shared_ptr<agg_ops> ptr;
-
-	virtual const agg_operate &get_find_next() const = 0;
-	virtual const agg_operate &get_find_prev() const = 0;
-};
-
-template<class InType, class OutType>
-class agg_ops_impl: public agg_ops
-{
-	find_next_impl<InType> find_next;
-	find_prev_impl<InType> find_prev;
-public:
-	virtual const agg_operate &get_find_next() const {
-		return find_next;
-	}
-	virtual const agg_operate &get_find_prev() const {
-		return find_prev;
 	}
 };
 
@@ -686,30 +587,6 @@ template<class OpType, class LeftType, class RightType, class ResType>
 const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_output_type() const
 {
 	return get_scalar_type<ResType>();
-}
-
-template<class T>
-const scalar_type &find_next_impl<T>::get_input_type() const
-{
-	return get_scalar_type<T>();
-}
-
-template<class T>
-const scalar_type &find_next_impl<T>::get_output_type() const
-{
-	return get_scalar_type<size_t>();
-}
-
-template<class T>
-const scalar_type &find_prev_impl<T>::get_input_type() const
-{
-	return get_scalar_type<T>();
-}
-
-template<class T>
-const scalar_type &find_prev_impl<T>::get_output_type() const
-{
-	return get_scalar_type<size_t>();
 }
 
 class local_vec_store;

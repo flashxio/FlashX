@@ -26,6 +26,7 @@
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
 #include "dense_matrix.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -94,9 +95,9 @@ std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = sorted_vec.get_length() / num_parts * i;
 		// This returns the relative start location of the next value.
-		find_next.run(sorted_vec.get_length() - start,
+		find_next.runAgg(sorted_vec.get_length() - start,
 				sorted_vec.get_raw_arr() + sorted_vec.get_entry_size() * start,
-				&par_starts[i]);
+				NULL, &par_starts[i]);
 		// This is the absolute start location of this partition.
 		par_starts[i] += start;
 	}

@@ -34,6 +34,7 @@
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
 #include "matrix_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -982,9 +983,9 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 				if ((size_t) leftover_start < tot_len && min_val->equals(start
 							+ leftover_start * entry_size)) {
 					size_t rel_loc;
-					type.get_agg_ops().get_find_next().run(
+					type.get_agg_ops().get_find_next().runAgg(
 							tot_len - leftover_start,
-							start + leftover_start * entry_size, &rel_loc);
+							start + leftover_start * entry_size, NULL, &rel_loc);
 					// There is at least one element with the same value as
 					// `min_val'.
 					assert(rel_loc > 0 && rel_loc <= tot_len - leftover_start);

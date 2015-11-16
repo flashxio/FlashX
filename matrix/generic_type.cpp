@@ -25,6 +25,7 @@
 #include "generic_type.h"
 #include "rand_gen.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
