@@ -31,7 +31,7 @@
 #include "save_result.h"
 #define PAGE_ROW
 
-#define PRUNE 0
+#define PRUNE 1
 
 using namespace fg;
 
@@ -73,11 +73,16 @@ namespace {
                 complete = true;
 #if PRUNE
                 prev_mean.assign(mean.size(), 0);
+                s_val = std::numeric_limits<double>::max();
 #endif
             }
 
         public:
 #if PRUNE
+            void reset_s_val() {
+                s_val = std::numeric_limits<double>::max();
+            }
+
             void set_s_val(double val) {
                 s_val = val;
             }
