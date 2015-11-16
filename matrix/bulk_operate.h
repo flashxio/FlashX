@@ -129,10 +129,10 @@ public:
 			const void *right_arr, void *output_arr) const = 0;
 
 	/*
-	 * This performs aggregation on the input array and stores the result
-	 * on output.
+	 * This performs aggregation on the input array, combines the agg result
+	 * with the original agg result and stores the result on output.
 	 */
-	virtual void runA(size_t num_eles, const void *left_arr,
+	virtual void runAgg(size_t num_eles, const void *left_arr, const void *orig,
 			void *output) const = 0;
 
 	virtual const scalar_type &get_left_type() const = 0;
@@ -189,15 +189,24 @@ public:
 			output_arr[i] = op(entry, right_arr[i]);
 	}
 
-	virtual void runA(size_t num_eles, const void *left_arr1,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *left_arr1,
+			const void *orig, void *output) const {
 		const LeftType *left_arr = (const LeftType *) left_arr1;
 		if (num_eles == 0)
 			return;
 
-		ResType res = left_arr[0];
+		size_t i;
+		ResType res;
+		if (orig) {
+			i = 0;
+			res = *(const ResType *) orig;
+		}
+		else {
+			i = 1;
+			res = left_arr[0];
+		}
 		OpType op;
-		for (size_t i = 1; i < num_eles; i++)
+		for (; i < num_eles; i++)
 			res = op(left_arr[i], res);
 		*(ResType *) output = res;
 	}

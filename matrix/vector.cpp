@@ -192,7 +192,7 @@ public:
 	}
 
 	void run() {
-		op.runA(sub_vec->get_length(), sub_vec->get_raw_arr(), agg_res);
+		op.runAgg(sub_vec->get_length(), sub_vec->get_raw_arr(), NULL, agg_res);
 	}
 };
 
@@ -222,7 +222,7 @@ scalar_variable::ptr vector::aggregate(const bulk_operate &op) const
 	}
 	mem_threads->wait4complete();
 	char final_res[res->get_size()];
-	op.runA(num_portions, raw_res.get(), final_res);
+	op.runAgg(num_portions, raw_res.get(), NULL, final_res);
 	res->set_raw(final_res, res->get_size());
 	return res;
 }
