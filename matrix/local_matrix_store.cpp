@@ -536,7 +536,6 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 void aggregate(const local_matrix_store &store, const bulk_operate &op,
 		agg_margin margin, local_vec_store &res)
 {
-	size_t output_size = op.output_entry_size();
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
 	if (margin == agg_margin::BOTH) {
