@@ -26,9 +26,24 @@
 #include "rand_gen.h"
 #include "bulk_operate.h"
 #include "bulk_operate_ext.h"
+#include "generic_hashtable.h"
 
 namespace fm
 {
+
+template<class T>
+generic_hashtable::ptr scalar_type_impl<T>::create_hashtable(
+		const scalar_type &val_type) const
+{
+	switch(val_type.get_size()) {
+		case 4: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 4>(val_type));
+		case 8: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 8>(val_type));
+		default: BOOST_LOG_TRIVIAL(error) << "Can't create a generic hashtable";
+				 return generic_hashtable::ptr();
+	}
+}
 
 template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const

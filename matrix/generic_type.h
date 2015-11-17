@@ -130,6 +130,7 @@ class scatter_gather;
 class scalar_variable;
 class rand_gen;
 class set_operate;
+class generic_hashtable;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -140,6 +141,8 @@ public:
 	/**
 	 * The operators that work on this type.
 	 */
+	virtual std::shared_ptr<generic_hashtable> create_hashtable(
+			const scalar_type &val_type) const = 0;
 	virtual const basic_uops &get_basic_uops() const = 0;
 	virtual const basic_ops &get_basic_ops() const = 0;
 	virtual const agg_ops &get_agg_ops() const = 0;
@@ -178,6 +181,8 @@ template<class T>
 class scalar_type_impl: public scalar_type
 {
 public:
+	virtual std::shared_ptr<generic_hashtable> create_hashtable(
+			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const;
 	virtual const basic_ops &get_basic_ops() const;
 	virtual const agg_ops &get_agg_ops() const;
