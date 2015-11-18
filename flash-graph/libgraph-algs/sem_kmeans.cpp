@@ -188,10 +188,10 @@ namespace {
     static bool g_prune_init = false;
     static dist_matrix::ptr g_cluster_dist;
 
+#if KM_TEST
     // Class to hold stats on the effectiveness of pruning
     class prune_stats
     {
-        // % pruned per iter and finally
         private:
             // Counts per iteration
             volatile std::atomic<unsigned> lemma1, _3a, _3b;
@@ -200,8 +200,8 @@ namespace {
             unsigned tot_lemma1, tot_3a, tot_3b, iter;
 
             prune_stats() {
-            _3a = _3b = lemma1 = 0;
-            tot_lemma1 = tot_3a = tot_3b = iter = 0;
+                _3a = _3b = lemma1 = 0;
+                tot_lemma1 = tot_3a = tot_3b = iter = 0;
             }
 
         public:
@@ -235,7 +235,7 @@ namespace {
                 tot_3a += (unsigned)_3a;
                 tot_3a += (unsigned)_3b;
 
-                lemma1 =  _3a = _3b = 0;
+                lemma1 =  _3a = _3b = 0; // reset
             }
 
             std::vector<double> get_stats() {
@@ -254,6 +254,7 @@ namespace {
     };
 
     static prune_stats::ptr g_prune_stats = prune_stats::create();
+#endif
 #endif
 
     class kmeans_vertex: public compute_vertex
@@ -283,7 +284,7 @@ namespace {
 
 #if PRUNE
         void set_in_x_prev_iter(bool in=true) {
-            in_x_prev_iter = false;
+            in_x_prev_iter = in;
         }
 
         bool const get_in_x_prev_iter() {
@@ -444,17 +445,19 @@ namespace {
         if (get_in_x_prev_iter()) {
             // #5
             for (unsigned cl = 0; cl < K; cl++) {
-                std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
+                lwr_bnd[cl] = std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
             }
 #if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " lwr_bnd = ";
             print_vector(lwr_bnd);
 #endif
             // #6
-            uppr_bnd = uppr_bnd + g_clusters[cluster_id]->get_prev_dist();
-#if VERBOSE
-            BOOST_LOG_TRIVIAL(info) << "After #5 v:" << my_id << " uppr_bnd = " << uppr_bnd;
+#if KM_TEST
+            printf("After #5 v: %u uppr_bnd = %.3f, dist = %.3f, get_prev_dist() = %.3f\n",
+                    my_id, uppr_bnd, dist, g_clusters[cluster_id]->get_prev_dist());
 #endif
+
+            uppr_bnd += g_clusters[cluster_id]->get_prev_dist();
             r = true;
             set_in_x_prev_iter(false); // Reset for this iteration
         }
@@ -553,12 +556,12 @@ namespace {
             if (dist < *best) { // Get the distance to cluster `cl'
                 *new_cluster_id = cl;
                 *best = dist;
+#if PRUNE
+                uppr_bnd = *best;
+#endif
             }
 #if PRUNE
-            if (g_prune_init) { // FIXME: Check
-                lwr_bnd[cl] = dist;
-                uppr_bnd = *best;
-            }
+            lwr_bnd[cl] = dist;
 #endif
     }
 
@@ -579,51 +582,49 @@ namespace {
                     BOOST_LOG_TRIVIAL(info) << "  => Lemmma 1 pass dist comp for c:" << cl <<
                         " for v:" << my_id;
 #endif
+#if KM_TEST
                     g_prune_stats->pp_lemma1();
-
+#endif
                     continue; // Because d(this,cl) >= d(this,this->cluster_id)
                 }
             }
+
 #else
         for (unsigned cl = 0; cl < K; cl++) {
 #endif
 #if PRUNE
             if (cluster_id != INVALID_CLUST_ID && uppr_bnd <= g_clusters[cluster_id]->get_s_val()) { // #2
+                printf("Setting in prev x\n");
                 set_in_x_prev_iter();
 
-                if (cl != cluster_id && uppr_bnd > lwr_bnd[cl] && uppr_bnd >
-                        (g_cluster_dist->get(cluster_id, cl)*.5)) {
+                if ((cl != cluster_id) && (uppr_bnd > lwr_bnd[cl]) && (uppr_bnd >
+                        (g_cluster_dist->get(cluster_id, cl)*.5))) {
                     // #3a
                     if (r) {
 #if KM_TEST
                         BOOST_LOG_TRIVIAL(info) << "#3a v:" << my_id
-                            << " jumping to dist_comp and breaking";
+                            << " jumping to dist_comp";
 #endif
-                        //dist_comp(vertex, &best, &new_cluster_id, cl); // compute d(x,c(x))
+                        dist_comp(vertex, &best, &new_cluster_id, cl); // compute d(x,c(x))
                         r = false; // FIXME: Verify since it matters what order we do dists to c_x
-                        // FIXME: break?
-
+                        continue;// FIXME: break?
                     } else {
                         BOOST_VERIFY(dist <= uppr_bnd);
-                        BOOST_LOG_TRIVIAL(info) << "run_distance Setting v:" << my_id <<
-                            "best to uppr_bnd:" << uppr_bnd;
-                        this->dist = uppr_bnd; 
-                        new_cluster_id = cluster_id;
+                        BOOST_LOG_TRIVIAL(info) << "run_distance testing v:" << my_id <<
+                            "best ?= uppr_bnd:" << uppr_bnd;
+                        if (uppr_bnd < best) {
+                            best = uppr_bnd;
+                            new_cluster_id = cl;
+                        }
+#if KM_TEST
+
                         g_prune_stats->pp_3a();
-
-                        //break; // FIXME: Verify -- skip the dist comp
-
-                        //BOOST_VERIFY(uppr_bnd <= best);
-                        //best = uppr_bnd; // d(x,c(x)) = u(x)
-                        //new_cluster_id = cl; 
-                        continue; // FIXME: Verify -- skip the dist comp
-
-                        // TODO: Add stats
+#endif
+                        continue;
                     }
-
                     // #3b
-                    if (this->dist > lwr_bnd[cl] ||
-                            this->dist > (.5*g_cluster_dist->get(this->cluster_id, cl))) {
+                    if ((this->dist > lwr_bnd[cl]) ||
+                            (this->dist > (.5*g_cluster_dist->get(this->cluster_id, cl)))) {
 #if KM_TEST
                         BOOST_LOG_TRIVIAL(info) << "#3b v:" << my_id
                             << " jumping to dist_comp"; 
@@ -631,17 +632,20 @@ namespace {
                         // goto dist_comp; // compute d(x,c(x))
                     } else {
                         BOOST_LOG_TRIVIAL(info) << "#3b failed: dist > lwr_bnd: " << dist << ">"  << lwr_bnd[cl] ;
+#if KM_TEST
                         g_prune_stats->pp_3b();
+#endif
                         continue;
                     }
                 } else {
-#if VERBOSE
-                    printf("Failed the test of 3\n");
+#if KM_TEST
+                    if (!(uppr_bnd > (g_cluster_dist->get(cluster_id, cl)*.5)))
+                        printf("uppr_bnd <= 1/2 dist: %.2f <= %.2f",
+                                uppr_bnd, (g_cluster_dist->get(cluster_id, cl)*.5));
+                    if (cluster_id != INVALID_CLUST_ID)
+                        printf("\n");
 #endif
                 }
-            } else {
-                if (cluster_id <= K)
-                set_in_x_prev_iter(false);
             }
 #endif
             dist_comp(vertex, &best, &new_cluster_id, cl);
@@ -687,6 +691,11 @@ namespace {
         // Done by all : TODO: Verify I really need this
         this->dist = best;
 
+#if KM_TEST
+        std::string str = get_in_x_prev_iter() ? "true" : "false";
+        printf("Exiting run_distance v:%u => uppr_bnd = "
+                "best = %.3f = %.3f, in_prev_x = %s\n", my_id, dist, uppr_bnd, str.c_str());
+#endif
     }
         static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
             FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
@@ -742,7 +751,7 @@ namespace {
                         BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                             << cl << " is " << dist;
 #endif
-                        g_clusters[thd]->set_prev_dist(dist);
+                        g_clusters[cl]->set_prev_dist(dist);
 #endif
                     }
                 }
@@ -1027,12 +1036,12 @@ namespace {
                 }
                 g_iter++;
 
-#if PRUNE
+#if PRUNE && KM_TEST
                 g_prune_stats->finalize();
 #endif
             }
 
-#if PRUNE
+#if PRUNE && KM_TEST
             g_prune_stats->get_stats();
 #endif
             gettimeofday(&end, NULL);
