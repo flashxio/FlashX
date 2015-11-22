@@ -120,23 +120,6 @@ bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 	return true;
 }
 
-bool dense_matrix::verify_aggregate(const bulk_operate &op) const
-{
-	if (op.left_entry_size() != op.right_entry_size()
-			|| op.left_entry_size() != op.output_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The input and output type of the operator is different";
-		return false;
-	}
-
-	if (this->get_entry_size() != op.left_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The matrix entry size is different from the operator";
-		return false;
-	}
-	return true;
-}
-
 bool dense_matrix::verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const
 {
@@ -293,7 +276,8 @@ double dense_matrix::norm2() const
 		dense_matrix::ptr sq_mat
 			= this->sapply(bulk_uoperate::const_ptr(new double_square()));
 		assert(sq_mat->get_type() == get_scalar_type<long double>());
-		scalar_variable::ptr res = sq_mat->aggregate(sum_agg());
+		scalar_variable::ptr res = sq_mat->aggregate(
+				bulk_operate::const_ptr(new sum_agg()));
 		assert(res->get_type() == get_scalar_type<long double>());
 		ret = sqrtl(*(long double *) res->get_raw());
 	}
@@ -301,8 +285,8 @@ double dense_matrix::norm2() const
 		const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 				basic_uops::op_idx::SQ);
 		dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));
-		scalar_variable::ptr res = sq_mat->aggregate(
-				sq_mat->get_type().get_basic_ops().get_add());
+		scalar_variable::ptr res = sq_mat->aggregate(bulk_operate::conv2ptr(
+					sq_mat->get_type().get_basic_ops().get_add()));
 		res->get_type().get_basic_uops().get_op(
 				basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
 	}
@@ -2502,12 +2486,13 @@ namespace
 class matrix_short_agg_op: public detail::portion_mapply_op
 {
 	detail::agg_margin margin;
-	const bulk_operate &op;
+	agg_operate::const_ptr op;
 public:
-	matrix_short_agg_op(detail::agg_margin margin, const bulk_operate &_op,
+	matrix_short_agg_op(detail::agg_margin margin, agg_operate::const_ptr op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, _op.get_output_type()), op(_op) {
+				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->margin = margin;
+		this->op = op;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -2519,7 +2504,7 @@ public:
 			local_ref_vec_store res(
 					static_cast<detail::local_row_matrix_store &>(out).get_row(0),
 					0, out.get_num_cols(), out.get_type(), -1);
-			aggregate(*ins[0], op, margin, res);
+			aggregate(*ins[0], op->get_agg(), margin, res);
 		}
 		else {
 			assert(out.store_layout() == matrix_layout_t::L_COL);
@@ -2527,7 +2512,7 @@ public:
 			local_ref_vec_store res(
 					static_cast<detail::local_col_matrix_store &>(out).get_col(0),
 					0, out.get_num_rows(), out.get_type(), -1);
-			aggregate(*ins[0], op, margin, res);
+			aggregate(*ins[0], op->get_agg(), margin, res);
 		}
 	}
 
@@ -2552,7 +2537,7 @@ public:
 class matrix_long_agg_op: public detail::portion_mapply_op
 {
 	detail::agg_margin margin;
-	const bulk_operate &op;
+	agg_operate::const_ptr op;
 	// Each row stores the local aggregation results on a thread.
 	detail::mem_row_matrix_store::ptr partial_res;
 	std::vector<local_vec_store::ptr> local_bufs;
@@ -2561,10 +2546,12 @@ class matrix_long_agg_op: public detail::portion_mapply_op
 	std::vector<size_t> num_aggs;
 public:
 	matrix_long_agg_op(detail::mem_row_matrix_store::ptr partial_res,
-			detail::agg_margin margin, const bulk_operate &_op): detail::portion_mapply_op(
-				0, 0, partial_res->get_type()), op(_op) {
+			detail::agg_margin margin,
+			agg_operate::const_ptr &op): detail::portion_mapply_op(
+				0, 0, partial_res->get_type()) {
 		this->partial_res = partial_res;
 		this->margin = margin;
+		this->op = op;
 		local_bufs.resize(partial_res->get_num_rows());
 		num_aggs.resize(partial_res->get_num_rows());
 	}
@@ -2607,7 +2594,7 @@ void matrix_long_agg_op::run(
 			= local_vec_store::ptr(new local_buf_vec_store(0,
 						partial_res->get_num_cols(), partial_res->get_type(),
 						ins[0]->get_node_id()));
-	detail::aggregate(*ins[0], op, margin, *local_bufs[thread_id]);
+	detail::aggregate(*ins[0], op->get_agg(), margin, *local_bufs[thread_id]);
 
 	// If this is the first time, we should copy the local results to
 	// the corresponding row.
@@ -2616,7 +2603,8 @@ void matrix_long_agg_op::run(
 				local_bufs[thread_id]->get_raw_arr(),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
 	else
-		op.runAA(partial_res->get_num_cols(), partial_res->get_row(thread_id),
+		op->get_combine().runAA(partial_res->get_num_cols(),
+				partial_res->get_row(thread_id),
 				local_bufs[thread_id]->get_raw_arr(),
 				partial_res->get_row(thread_id));
 	const_cast<matrix_long_agg_op *>(this)->num_aggs[thread_id]++;
@@ -2625,7 +2613,7 @@ void matrix_long_agg_op::run(
 }
 
 vector::ptr aggregate(detail::matrix_store::const_ptr store,
-		detail::agg_margin margin, const bulk_operate &op)
+		detail::agg_margin margin, agg_operate::const_ptr op)
 {
 	/*
 	 * If we aggregate on the shorter dimension.
@@ -2668,15 +2656,15 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 	detail::mem_row_matrix_store::ptr partial_res;
 	if (margin == detail::agg_margin::BOTH)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				1, op.get_output_type());
+				1, op->get_output_type());
 	// For the next two cases, I assume the partial result is small enough
 	// to be kept in memory.
 	else if (margin == detail::agg_margin::MAR_ROW)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				store->get_num_rows(), op.get_output_type());
+				store->get_num_rows(), op->get_output_type());
 	else if (margin == detail::agg_margin::MAR_COL)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				store->get_num_cols(), op.get_output_type());
+				store->get_num_cols(), op->get_output_type());
 	else
 		// This shouldn't happen.
 		assert(0);
@@ -2716,19 +2704,28 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 			partial_res->get_num_cols(), partial_res->get_type());
 	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_length(),
 			res->get_type(), -1);
-	detail::aggregate(*local_res, op, detail::agg_margin::MAR_COL, local_vec);
+	detail::aggregate(*local_res, op->get_combine(),
+			detail::agg_margin::MAR_COL, local_vec);
 	return vector::create(res);
 }
 
-scalar_variable::ptr dense_matrix::aggregate(const bulk_operate &op) const
+scalar_variable::ptr dense_matrix::aggregate(bulk_operate::const_ptr op) const
 {
-	if (!verify_aggregate(op))
+	return aggregate(agg_operate::create(op));
+}
+
+scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
+{
+	if (this->get_type() != op->get_input_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrix element type is different from the operator";
 		return scalar_variable::ptr();
+	}
 	vector::ptr res_vec = fm::aggregate(store, detail::agg_margin::BOTH, op);
 	assert(res_vec->get_length() == 1);
 	assert(res_vec->is_in_mem());
 
-	scalar_variable::ptr res = op.get_output_type().create_scalar();
+	scalar_variable::ptr res = op->get_output_type().create_scalar();
 	res->set_raw(dynamic_cast<const detail::mem_vec_store &>(
 				res_vec->get_data()).get_raw_arr(), res->get_size());
 	return res;
@@ -2922,14 +2919,18 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 
 vector::ptr dense_matrix::row_sum() const
 {
+	bulk_operate::const_ptr add
+		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 	return fm::aggregate(store, detail::agg_margin::MAR_ROW,
-			get_type().get_basic_ops().get_add());
+			agg_operate::create(add));
 }
 
 vector::ptr dense_matrix::col_sum() const
 {
+	bulk_operate::const_ptr add
+		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 	return fm::aggregate(store, detail::agg_margin::MAR_COL,
-			get_type().get_basic_ops().get_add());
+			agg_operate::create(add));
 }
 
 vector::ptr dense_matrix::row_norm2() const

@@ -41,4 +41,15 @@ agg_operate::const_ptr agg_operate::create(bulk_operate::const_ptr agg,
 	return const_ptr(new agg_operate(agg, combine));
 }
 
+agg_operate::const_ptr agg_operate::create(bulk_operate::const_ptr agg)
+{
+	if (agg->get_left_type() != agg->get_right_type()
+			|| agg->get_left_type() != agg->get_output_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The agg operator needs to have the same input and output type";
+		return const_ptr();
+	}
+	return const_ptr(new agg_operate(agg, agg));
+}
+
 }

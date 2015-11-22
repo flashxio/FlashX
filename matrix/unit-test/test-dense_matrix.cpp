@@ -355,8 +355,8 @@ void test_agg_col(int num_nodes)
 	printf("Test aggregation on tall matrix stored column wise\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
-	const bulk_operate &op
-		= m1->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			m1->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = m1->aggregate(op);
 	assert(res->get_type() == m1->get_type());
 	assert(res->get_type() == get_scalar_type<size_t>());
@@ -571,8 +571,8 @@ void test_agg_row(int num_nodes)
 	printf("Test aggregation on tall matrix stored row wise\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_ROW, num_nodes, get_scalar_type<size_t>());
-	const bulk_operate &op
-		= m1->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			m1->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = m1->aggregate(op);
 	assert(res->get_type() == m1->get_type());
 	size_t sum = *(size_t *) res->get_raw();
@@ -596,7 +596,8 @@ void test_agg_sub_col(int num_nodes)
 	dense_matrix::ptr sub_m = col_m->get_cols(idxs);
 	assert(sub_m != NULL);
 
-	const bulk_operate &op = sub_m->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			sub_m->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = sub_m->aggregate(op);
 	assert(res->get_type() == sub_m->get_type());
 	size_t sum = *(size_t *) res->get_raw();
@@ -625,7 +626,8 @@ void test_agg_sub_row(int num_nodes)
 	dense_matrix::ptr sub_col_m = col_m->get_cols(idxs);
 	dense_matrix::ptr sub_row_m = sub_col_m->transpose();
 
-	const bulk_operate &op = sub_col_m->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			sub_col_m->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr col_res = sub_col_m->aggregate(op);
 	assert(col_res->get_type() == sub_col_m->get_type());
 	scalar_variable::ptr row_res = sub_row_m->aggregate(op);
@@ -1184,11 +1186,11 @@ void test_mul_output(int num_nodes)
 	dense_matrix::ptr out_mat1 = dense_matrix::create(out[1]);
 	dense_matrix::ptr in_mat = dense_matrix::create(in[0]);
 	scalar_variable::ptr agg0 = out_mat0->aggregate(
-			out[0]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
 	scalar_variable::ptr agg1 = out_mat1->aggregate(
-			out[1]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[1]->get_type().get_basic_ops().get_add()));
 	scalar_variable::ptr agg = in_mat->aggregate(
-			out[0]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
 	assert(*(double *) agg1->get_raw() - *(double *) agg0->get_raw()
 			== out[0]->get_num_cols() * out[0]->get_num_cols() * out[0]->get_num_rows());
 	assert(*(double *) agg0->get_raw() + *(double *) agg1->get_raw()
@@ -1213,8 +1215,9 @@ public:
 void test_min()
 {
 	printf("test min\n");
-	const bulk_operate &op = *get_scalar_type<int>().get_basic_ops().get_op(
-			basic_ops::op_idx::MIN);
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			*get_scalar_type<int>().get_basic_ops().get_op(
+			basic_ops::op_idx::MIN));
 
 	dense_matrix::ptr mat = dense_matrix::create(2000, 1,
 			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate1(4));

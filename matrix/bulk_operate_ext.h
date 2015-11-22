@@ -41,11 +41,21 @@ class agg_operate
 public:
 	typedef std::shared_ptr<const agg_operate> const_ptr;
 
+	static const_ptr create(bulk_operate::const_ptr agg);
+
 	static const_ptr create(bulk_operate::const_ptr agg,
 			bulk_operate::const_ptr combine);
 
 	bool has_combine() const {
 		return combine != NULL;
+	}
+
+	const bulk_operate &get_agg() const {
+		return *agg;
+	}
+
+	const bulk_operate &get_combine() const {
+		return *combine;
 	}
 
 	void runAgg(size_t num_eles, const void *left_arr, const void *orig,
