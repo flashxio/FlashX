@@ -141,6 +141,8 @@ void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();
 }
 
+void init_flashmatrixr();
+
 /**
  * Initialize FlashGraphR.
  */
@@ -181,6 +183,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		fprintf(stderr, "Can't enable the SAFS mode of FlashGraphR\n");
 		res[0] = false;
 	}
+	init_flashmatrixr();
 	return res;
 }
 

@@ -31,6 +31,7 @@
 
 #include "rutils.h"
 #include "fm_utils.h"
+#include "matrix_ops.h"
 
 using namespace fm;
 
@@ -246,23 +247,6 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 	}
 	return create_FMR_matrix(mat, "mat_file");
 }
-
-/*
- * R has only two data types in matrix multiplication: integer and numeric.
- * So we only need to predefine a small number of basic operations with
- * different types.
- */
-
-static basic_ops_impl<int, int, int> R_basic_ops_II;
-// This is a special version, used by multiplication in R.
-static basic_ops_impl<int, int, double> R_basic_ops_IID;
-static basic_ops_impl<double, int, double> R_basic_ops_DI;
-static basic_ops_impl<int, double, double> R_basic_ops_ID;
-static basic_ops_impl<double, double, double> R_basic_ops_DD;
-
-static basic_uops_impl<int, int> R_basic_uops_I;
-static basic_uops_impl<double, double> R_basic_uops_D;
-static basic_uops_impl<bool, bool> R_basic_uops_B;
 
 static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 {
@@ -605,28 +589,8 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 {
 	std::string name = CHAR(STRING_ELT(pname, 0));
 
-	basic_ops::op_idx idx;
-	if (name == "add")
-		idx = basic_ops::op_idx::ADD;
-	else if (name == "sub")
-		idx = basic_ops::op_idx::SUB;
-	else if (name == "mul")
-		idx = basic_ops::op_idx::MUL;
-	else if (name == "div")
-		idx = basic_ops::op_idx::DIV;
-	else if (name == "min")
-		idx = basic_ops::op_idx::MIN;
-	else if (name == "max")
-		idx = basic_ops::op_idx::MAX;
-	else if (name == "pow")
-		idx = basic_ops::op_idx::POW;
-	else if (name == "eq")
-		idx = basic_ops::op_idx::EQ;
-	else if (name == "gt")
-		idx = basic_ops::op_idx::GT;
-	else if (name == "ge")
-		idx = basic_ops::op_idx::GE;
-	else {
+	fmr::op_id_t id = fmr::get_op_id(name);
+	if (id < 0) {
 		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
 		return R_NilValue;
 	}
@@ -634,7 +598,7 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	Rcpp::List ret;
 	Rcpp::IntegerVector r_info(2);
 	// The index
-	r_info[0] = idx;
+	r_info[0] = id;
 	// The number of operands
 	r_info[1] = 2;
 	ret["info"] = r_info;
@@ -646,20 +610,8 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 {
 	std::string name = CHAR(STRING_ELT(pname, 0));
 
-	basic_uops::op_idx idx;
-	if (name == "neg")
-		idx = basic_uops::op_idx::NEG;
-	else if (name == "sqrt")
-		idx = basic_uops::op_idx::SQRT;
-	else if (name == "abs")
-		idx = basic_uops::op_idx::ABS;
-	else if (name == "not")
-		idx = basic_uops::op_idx::NOT;
-	else if (name == "ceil")
-		idx = basic_uops::op_idx::CEIL;
-	else if (name == "floor")
-		idx = basic_uops::op_idx::FLOOR;
-	else {
+	fmr::op_id_t id = fmr::get_uop_id(name);
+	if (id < 0) {
 		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
 		return R_NilValue;
 	}
@@ -667,92 +619,12 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	Rcpp::List ret;
 	Rcpp::IntegerVector r_info(2);
 	// The index
-	r_info[0] = idx;
+	r_info[0] = id;
 	// The number of operands
 	r_info[1] = 1;
 	ret["info"] = r_info;
 	ret["name"] = pname;
 	return ret;
-}
-
-static int get_op_idx(const Rcpp::S4 &fun_obj)
-{
-	Rcpp::IntegerVector info = fun_obj.slot("info");
-	return info[0];
-}
-
-static int get_op_nop(const Rcpp::S4 &fun_obj)
-{
-	Rcpp::IntegerVector info = fun_obj.slot("info");
-	return info[1];
-}
-
-/*
- * Get a binary operator.
- */
-static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
-{
-	Rcpp::S4 fun_obj(pfun);
-	basic_ops::op_idx bo_idx = (basic_ops::op_idx) get_op_idx(fun_obj);
-	int noperands = get_op_nop(fun_obj);
-	if (noperands != 2) {
-		fprintf(stderr, "This isn't a binary operator\n");
-		return NULL;
-	}
-
-	basic_ops *ops = NULL;
-	if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_DOUBLE)
-		ops = &R_basic_ops_DD;
-	else if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_INTEGER)
-		ops = &R_basic_ops_DI;
-	else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_DOUBLE)
-		ops = &R_basic_ops_ID;
-	else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_INTEGER)
-		ops = &R_basic_ops_II;
-	else {
-		fprintf(stderr, "wrong type\n");
-		return NULL;
-	}
-
-	const bulk_operate *op = ops->get_op(bo_idx);
-	if (op == NULL) {
-		fprintf(stderr, "invalid basic binary operator\n");
-		return NULL;
-	}
-	return op;
-}
-
-/*
- * Get a unary operator.
- */
-static const bulk_uoperate *get_uop(SEXP pfun, prim_type type)
-{
-	Rcpp::S4 fun_obj(pfun);
-	basic_uops::op_idx bo_idx = (basic_uops::op_idx) get_op_idx(fun_obj);
-	int noperands = get_op_nop(fun_obj);
-	if (noperands != 1) {
-		fprintf(stderr, "This isn't a unary operator\n");
-		return NULL;
-	}
-
-	basic_uops *ops = NULL;
-	if (type == prim_type::P_DOUBLE)
-		ops = &R_basic_uops_D;
-	else if (type == prim_type::P_INTEGER)
-		ops = &R_basic_uops_I;
-	else if (type == prim_type::P_BOOL)
-		ops = &R_basic_uops_B;
-	else {
-		fprintf(stderr, "wrong type\n");
-		return NULL;
-	}
-
-	const bulk_uoperate *op = ops->get_op(bo_idx);
-	if (op == NULL) {
-		fprintf(stderr, "invalid basic unary operator\n");
-		return NULL;
-	}
-	return op;
 }
 
 static prim_type get_prim_type(SEXP obj)
@@ -779,12 +651,12 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
-	const bulk_operate *op = get_op(pfun, m1->get_type().get_type(),
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
 			m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
-	dense_matrix::ptr out = m1->mapply2(*m2, bulk_operate::conv2ptr(*op));
+	dense_matrix::ptr out = m1->mapply2(*m2, op);
 	if (out == NULL)
 		return R_NilValue;
 	else if (is_vec)
@@ -800,25 +672,26 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 template<class T>
 class AE_operator: public bulk_uoperate
 {
-	const bulk_operate &op;
+	bulk_operate::const_ptr op;
 	T v;
 public:
-	AE_operator(const bulk_operate &_op, T v): op(_op) {
+	AE_operator(bulk_operate::const_ptr op, T v) {
+		this->op = op;
 		this->v = v;
-		assert(sizeof(v) == op.right_entry_size());
+		assert(sizeof(v) == op->right_entry_size());
 	}
 
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const {
-		op.runAE(num_eles, in_arr, &v, out_arr);
+		op->runAE(num_eles, in_arr, &v, out_arr);
 	}
 
 	virtual const scalar_type &get_input_type() const {
-		return op.get_left_type();
+		return op->get_left_type();
 	}
 
 	virtual const scalar_type &get_output_type() const {
-		return op.get_output_type();
+		return op->get_output_type();
 	}
 };
 
@@ -833,7 +706,7 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 
-	const bulk_operate *op = get_op(pfun, m1->get_type().get_type(),
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
 			get_prim_type(po2));
 	if (op == NULL)
 		return R_NilValue;
@@ -843,13 +716,13 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 		double res;
 		R_get_number<double>(po2, res);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<double>(*op, res)));
+					new AE_operator<double>(op, res)));
 	}
 	else if (R_is_integer(po2)) {
 		int res;
 		R_get_number<int>(po2, res);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<int>(*op, res)));
+					new AE_operator<int>(op, res)));
 	}
 	else {
 		fprintf(stderr, "wrong type of the right input\n");
@@ -871,25 +744,26 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 template<class T>
 class EA_operator: public bulk_uoperate
 {
-	const bulk_operate &op;
+	bulk_operate::const_ptr op;
 	T v;
 public:
-	EA_operator(const bulk_operate &_op, T v): op(_op) {
+	EA_operator(bulk_operate::const_ptr op, T v) {
+		this->op = op;
 		this->v = v;
-		assert(sizeof(v) == op.left_entry_size());
+		assert(sizeof(v) == op->left_entry_size());
 	}
 
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const {
-		op.runEA(num_eles, &v, in_arr, out_arr);
+		op->runEA(num_eles, &v, in_arr, out_arr);
 	}
 
 	virtual const scalar_type &get_input_type() const {
-		return op.get_right_type();
+		return op->get_right_type();
 	}
 
 	virtual const scalar_type &get_output_type() const {
-		return op.get_output_type();
+		return op->get_output_type();
 	}
 };
 
@@ -904,7 +778,7 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj2);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
 
-	const bulk_operate *op = get_op(pfun, get_prim_type(po1),
+	bulk_operate::const_ptr op = fmr::get_op(pfun, get_prim_type(po1),
 			m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -914,13 +788,13 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		double res;
 		R_get_number<double>(po1, res);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<double>(*op, res)));
+					new EA_operator<double>(op, res)));
 	}
 	else if (R_is_integer(po1)) {
 		int res;
 		R_get_number<int>(po1, res);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<int>(*op, res)));
+					new EA_operator<int>(op, res)));
 	}
 	else {
 		fprintf(stderr, "wrong type of the left input\n");
@@ -947,11 +821,11 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 	bool is_vec = is_vector(obj);
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
 
-	const bulk_uoperate *op = get_uop(pfun, m->get_type().get_type());
+	bulk_uoperate::const_ptr op = fmr::get_uop(pfun, m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
-	dense_matrix::ptr out = m->sapply(bulk_uoperate::conv2ptr(*op));
+	dense_matrix::ptr out = m->sapply(op);
 	if (out == NULL)
 		return R_NilValue;
 	else if (is_vec)
@@ -961,7 +835,7 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 }
 
 template<class T, class ReturnType>
-ReturnType matrix_agg(const dense_matrix &mat, const bulk_operate &op)
+ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 {
 	ReturnType ret(1);
 	scalar_variable::ptr res = mat.aggregate(op);
@@ -987,16 +861,14 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
 	if (m->is_type<bool>())
 		m = m->cast_ele_type(get_scalar_type<int>());
-	// For aggregation, the left and right operands have the same type.
-	const bulk_operate *op = get_op(pfun, m->get_type().get_type(),
-			m->get_type().get_type());
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	if (m->is_type<double>())
-		return matrix_agg<double, Rcpp::NumericVector>(*m, *op);
+		return matrix_agg<double, Rcpp::NumericVector>(*m, op);
 	else if (m->is_type<int>())
-		return matrix_agg<int, Rcpp::IntegerVector>(*m, *op);
+		return matrix_agg<int, Rcpp::IntegerVector>(*m, op);
 	else {
 		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
 		return R_NilValue;
@@ -1311,4 +1183,9 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	// I think it's OK to materialize on the original matrix.
 	mat->materialize_self();
 	return create_FMR_matrix(mat, "");
+}
+
+void init_flashmatrixr()
+{
+	fmr::init_udf_ext();
 }

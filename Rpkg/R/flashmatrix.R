@@ -21,6 +21,8 @@ setClass("fm", representation(pointer = "externalptr", name = "character",
 setClass("fmV", representation(pointer = "externalptr", name = "character",
 							   len = "numeric", type="character"))
 setClass("fm.bo", representation(info = "integer", name = "character"))
+setClass("fm.agg.op", representation(agg = "integer", combine = "integer",
+									 name = "character"))
 
 new.fm <- function(fm)
 {
@@ -394,22 +396,48 @@ fm.get.basic.uop <- function(name)
 fm.init.basic.op <- function()
 {
 	fm.bo.add <<- fm.get.basic.op("add")
+	stopifnot(!is.null(fm.bo.add))
 	fm.bo.sub <<- fm.get.basic.op("sub")
+	stopifnot(!is.null(fm.bo.sub))
 	fm.bo.mul <<- fm.get.basic.op("mul")
+	stopifnot(!is.null(fm.bo.mul))
 	fm.bo.div <<- fm.get.basic.op("div")
+	stopifnot(!is.null(fm.bo.div))
 	fm.bo.min <<- fm.get.basic.op("min")
+	stopifnot(!is.null(fm.bo.min))
 	fm.bo.max <<- fm.get.basic.op("max")
+	stopifnot(!is.null(fm.bo.max))
 	fm.bo.pow <<- fm.get.basic.op("pow")
+	stopifnot(!is.null(fm.bo.pow))
 	fm.bo.eq <<- fm.get.basic.op("eq")
+	stopifnot(!is.null(fm.bo.eq))
 	fm.bo.gt <<- fm.get.basic.op("gt")
+	stopifnot(!is.null(fm.bo.gt))
 	fm.bo.ge <<- fm.get.basic.op("ge")
+	stopifnot(!is.null(fm.bo.ge))
+
+	fm.bo.count <<- fm.get.basic.op("count")
+	stopifnot(!is.null(fm.bo.count))
 
 	fm.buo.neg <<- fm.get.basic.uop("neg")
+	stopifnot(!is.null(fm.buo.neg))
 	fm.buo.sqrt <<- fm.get.basic.uop("sqrt")
+	stopifnot(!is.null(fm.buo.sqrt))
 	fm.buo.abs <<- fm.get.basic.uop("abs")
+	stopifnot(!is.null(fm.buo.abs))
 	fm.buo.not <<- fm.get.basic.uop("not")
+	stopifnot(!is.null(fm.buo.not))
 	fm.buo.ceil <<- fm.get.basic.uop("ceil")
+	stopifnot(!is.null(fm.buo.ceil))
 	fm.buo.floor <<- fm.get.basic.uop("floor")
+	stopifnot(!is.null(fm.buo.floor))
+}
+
+fm.create.agg.op <- function(agg, combine, name)
+{
+	stopifnot(class(agg) == "fm.bo")
+	stopifnot(class(combine) == "fm.bo")
+	new("fm.agg.op", agg=agg@info, combine=combine@info, name=name)
 }
 
 #' Aggregation on a FlashMatrixR object.
@@ -418,14 +446,16 @@ fm.init.basic.op <- function()
 #' the FlashMatrixR object with the basic operator.
 #'
 #' @param fm a FlashMatrixR object
-#' @param bop a basic operator
+#' @param op a basic operator
 #' @return a scalar
-fm.agg <- function(fm, bop)
+fm.agg <- function(fm, op)
 {
-	stopifnot(!is.null(fm) && !is.null(bop))
+	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
-	stopifnot(class(bop) == "fm.bo")
-	.Call("R_FM_agg", bop, fm, PACKAGE="FlashGraphR")
+	if (class(op) == "fm.bo")
+		op <- fm.create.agg.op(op, op, op@name)
+	stopifnot(class(op) == "fm.agg.op")
+	.Call("R_FM_agg", op, fm, PACKAGE="FlashGraphR")
 }
 
 #' Apply a Function to two FlashMatrixR vectors/matrices.
@@ -494,7 +524,6 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
 			  ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashGraphR")
 			  new.fmV(ret)
 		  })
-
 
 #' Transpose a FlashMatrixR matrix.
 #'
