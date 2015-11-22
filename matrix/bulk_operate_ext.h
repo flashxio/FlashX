@@ -29,13 +29,57 @@ namespace fm
 /*
  * This is the interface for aggregating elements into a single element.
  */
-class agg_operate: public bulk_operate
+class agg_operate
 {
-	struct empty_deleter {
-		void operator()(const agg_operate *addr) {
-		}
-	};
+	bulk_operate::const_ptr agg;
+	bulk_operate::const_ptr combine;
 
+	agg_operate(bulk_operate::const_ptr agg, bulk_operate::const_ptr combine) {
+		this->agg = agg;
+		this->combine = combine;
+	}
+public:
+	typedef std::shared_ptr<const agg_operate> const_ptr;
+
+	static const_ptr create(bulk_operate::const_ptr agg,
+			bulk_operate::const_ptr combine);
+
+	bool has_combine() const {
+		return combine != NULL;
+	}
+
+	void runAgg(size_t num_eles, const void *left_arr, const void *orig,
+			void *output) const {
+		agg->runAgg(num_eles, left_arr, orig, output);
+	}
+
+	/*
+	 * This combines the partially aggregated result.
+	 * The input and output types of this method are both the output type of
+	 * the aggregation.
+	 */
+	void runCombine(size_t num_eles, const void *in, const void *orig,
+			void *out) const {
+		assert(combine);
+		combine->runAgg(num_eles, in, orig, out);
+	}
+
+	const scalar_type &get_input_type() const {
+		return agg->get_left_type();
+	}
+	const scalar_type &get_output_type() const {
+		return combine->get_output_type();
+	}
+};
+
+/*
+ * Find the first location where its element is different from the first
+ * element in the array.
+ */
+template<class T>
+class find_next_impl: public bulk_operate
+{
+public:
 	virtual void runAA(size_t num_eles, const void *left_arr,
 			const void *right_arr, void *output_arr) const {
 		throw unsupported_exception();
@@ -48,33 +92,7 @@ class agg_operate: public bulk_operate
 			const void *right_arr, void *output_arr) const {
 		throw unsupported_exception();
 	}
-public:
-	typedef std::shared_ptr<const agg_operate> const_ptr;
 
-	static const_ptr conv2ptr(const agg_operate &op) {
-		return const_ptr(&op, empty_deleter());
-	}
-
-	/*
-	 * This combines the partially aggregated result.
-	 * The input and output types of this method are both the output type of
-	 * the aggregation.
-	 */
-	virtual void runCombine(size_t num_eles, const void *in, const void *orig,
-			void *out) const = 0;
-	const scalar_type &get_input_type() const {
-		return get_left_type();
-	}
-};
-
-/*
- * Find the first location where its element is different from the first
- * element in the array.
- */
-template<class T>
-class find_next_impl: public agg_operate
-{
-public:
 	/*
 	 * The first element in the array is pointed by `left_arr' and there are
 	 * `num_eles' in the array.
@@ -88,10 +106,6 @@ public:
 		size_t loc = 1;
 		for (; loc < num_eles && curr[loc] == val; loc++);
 		*(size_t *) output = loc;
-	}
-	virtual void runCombine(size_t num_eles, const void *in, const void *orig,
-			void *out) const {
-		throw unsupported_exception();
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -110,9 +124,22 @@ public:
  * from the last element in the array.
  */
 template<class T>
-class find_prev_impl: public agg_operate
+class find_prev_impl: public bulk_operate
 {
 public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
 	/*
 	 * The end of the array is indicated by `arr_end'. The last element
 	 * is right before `arr_end'. There are `num_eles' elements in the array.
@@ -130,10 +157,6 @@ public:
 		assert(*curr == val);
 		*(size_t *) output = ((const T *) arr_end) - curr;
 	}
-	virtual void runCombine(size_t num_eles, const void *in, const void *orig,
-			void *out) const {
-		throw unsupported_exception();
-	}
 
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
@@ -147,9 +170,22 @@ public:
 };
 
 template<class T>
-class count_operate: public agg_operate
+class count_operate: public bulk_operate
 {
 public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
 	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
 			void *output) const {
 		size_t *t_out = (size_t *) output;
@@ -157,24 +193,6 @@ public:
 			t_out[0] = num_eles;
 		else
 			t_out[0] = (*(const size_t *) orig) + num_eles;
-	}
-	virtual void runCombine(size_t num_eles, const void *in, const void *orig,
-			void *out) const {
-		assert(num_eles > 0);
-		const size_t *t_in = (const size_t *) in;
-		size_t res;
-		size_t i;
-		if (orig == NULL) {
-			i = 1;
-			res = t_in[0];
-		}
-		else {
-			i = 0;
-			res = *(const size_t *) orig;
-		}
-		for (; i < num_eles; i++)
-			res += t_in[i];
-		*(size_t *) out = res;
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -190,29 +208,40 @@ public:
 
 class agg_ops
 {
+protected:
+	agg_operate::const_ptr count;
+	agg_operate::const_ptr find_next;
+	agg_operate::const_ptr find_prev;
 public:
 	typedef std::shared_ptr<agg_ops> ptr;
 
-	virtual const agg_operate &get_count() const = 0;
-	virtual const agg_operate &get_find_next() const = 0;
-	virtual const agg_operate &get_find_prev() const = 0;
+	agg_operate::const_ptr get_count() const {
+		return count;
+	}
+	agg_operate::const_ptr get_find_next() const {
+		return find_next;
+	}
+	agg_operate::const_ptr get_find_prev() const {
+		return find_prev;
+	}
 };
 
 template<class InType, class OutType>
 class agg_ops_impl: public agg_ops
 {
-	count_operate<InType> count;
-	find_next_impl<InType> find_next;
-	find_prev_impl<InType> find_prev;
 public:
-	virtual const agg_operate &get_count() const {
-		return count;
-	}
-	virtual const agg_operate &get_find_next() const {
-		return find_next;
-	}
-	virtual const agg_operate &get_find_prev() const {
-		return find_prev;
+	agg_ops_impl() {
+		bulk_operate::const_ptr count_agg
+			= bulk_operate::const_ptr(new count_operate<InType>());
+		count = agg_operate::create(count_agg,
+				bulk_operate::conv2ptr(
+					count_agg->get_output_type().get_basic_ops().get_add()));
+		find_next = agg_operate::create(
+				bulk_operate::const_ptr(new find_next_impl<InType>()),
+				bulk_operate::const_ptr());
+		find_prev = agg_operate::create(
+				bulk_operate::const_ptr(new find_prev_impl<InType>()),
+				bulk_operate::const_ptr());
 	}
 };
 

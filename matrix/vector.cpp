@@ -92,13 +92,13 @@ public:
 std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 		int num_parts)
 {
-	const agg_operate &find_next
+	agg_operate::const_ptr find_next
 		= sorted_vec.get_type().get_agg_ops().get_find_next();
 	std::vector<off_t> par_starts(num_parts + 1);
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = sorted_vec.get_length() / num_parts * i;
 		// This returns the relative start location of the next value.
-		find_next.runAgg(sorted_vec.get_length() - start,
+		find_next->runAgg(sorted_vec.get_length() - start,
 				sorted_vec.get_raw_arr() + sorted_vec.get_entry_size() * start,
 				NULL, &par_starts[i]);
 		// This is the absolute start location of this partition.
@@ -170,7 +170,7 @@ namespace
 
 class agg_vec_portion_op: public detail::portion_mapply_op
 {
-	const agg_operate &find_next;
+	agg_operate::const_ptr find_next;
 	agg_operate::const_ptr agg_op;
 	std::vector<generic_hashtable::ptr> tables;
 	std::vector<local_vec_store::ptr> lvec_bufs;
@@ -178,8 +178,8 @@ class agg_vec_portion_op: public detail::portion_mapply_op
 	std::vector<local_vec_store::ptr> lagg_bufs;
 public:
 	agg_vec_portion_op(agg_operate::const_ptr agg_op): detail::portion_mapply_op(
-			0, 0, agg_op->get_output_type()), find_next(
-			agg_op->get_input_type().get_agg_ops().get_find_next()) {
+			0, 0, agg_op->get_output_type()) {
+		this->find_next = agg_op->get_input_type().get_agg_ops().get_find_next();
 		this->agg_op = agg_op;
 		detail::mem_thread_pool::ptr mem_threads
 			= detail::mem_thread_pool::get_global_mem_threads();
@@ -249,7 +249,7 @@ void agg_vec_portion_op::run(
 	size_t key_idx = 0;
 	while (llength > 0) {
 		size_t num_same = 0;
-		find_next.runAgg(llength, arr, NULL, &num_same);
+		find_next->runAgg(llength, arr, NULL, &num_same);
 		assert(num_same <= llength);
 		memcpy(lkeys->get(key_idx), arr, lvec->get_entry_size());
 		agg_op->runAgg(num_same, arr, NULL, laggs->get(key_idx));

@@ -48,8 +48,8 @@ void test_groupby()
 	vector::ptr vec = vector::create(store);
 	count_impl<int> count;
 	data_frame::ptr res1 = vec->groupby(count, true);
-	data_frame::ptr res2 = vec->groupby(agg_operate::conv2ptr(
-				vec->get_type().get_agg_ops().get_count()), true);
+	agg_operate::const_ptr count_agg = vec->get_type().get_agg_ops().get_count();
+	data_frame::ptr res2 = vec->groupby(count_agg, true);
 	printf("#entries in res1: %ld\n", res1->get_num_entries());
 	printf("#entries in res2: %ld\n", res2->get_num_entries());
 

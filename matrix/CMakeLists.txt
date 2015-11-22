@@ -43,6 +43,7 @@ add_library(FMatrix STATIC
 	vv_store.cpp
 	EM_object.cpp
 	local_mem_buffer.cpp
+	bulk_operate.cpp
 )
 
 subdirs(eigensolver)
