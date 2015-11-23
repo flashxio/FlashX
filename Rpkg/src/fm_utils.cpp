@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 
+#include "data_frame.h"
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
 
@@ -136,4 +137,14 @@ vector::ptr get_vector(const Rcpp::S4 &vec)
 	detail::vec_store::const_ptr store = mat->get_data().get_col_vec(0);
 	assert(store);
 	return vector::create(store);
+}
+
+SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)
+{
+	Rcpp::List ret;
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		std::string vec_name = df->get_vec_name(i);
+		ret[vec_name] = create_FMR_vector(df->get_vec(i), vec_name);
+	}
+	return ret;
 }

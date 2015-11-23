@@ -24,8 +24,10 @@
 #include "safs_file.h"
 
 #include "FGlib.h"
+#include "data_frame.h"
 #include "sparse_matrix.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
 #include "generic_type.h"
 #include "eigensolver/eigensolver.h"
 
@@ -873,6 +875,18 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
 		return R_NilValue;
 	}
+}
+
+RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
+{
+	if (!is_vector(pvec)) {
+		fprintf(stderr, "Doesn't support sgroupby on a matrix\n");
+		return R_NilValue;
+	}
+	vector::ptr vec = get_vector(pvec);
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
+	data_frame::ptr groupby_res = vec->groupby(op, true);
+	return create_FMR_data_frame(groupby_res, "");
 }
 
 RcppExport SEXP R_FM_matrix_layout(SEXP pmat)

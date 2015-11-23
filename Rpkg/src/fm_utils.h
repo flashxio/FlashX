@@ -63,5 +63,6 @@ SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const s
 SEXP create_FMR_vector(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m, const std::string &name);
+SEXP create_FMR_data_frame(std::shared_ptr<fm::data_frame> df, const std::string &name);
 
 #endif

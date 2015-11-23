@@ -525,6 +525,37 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
 			  new.fmV(ret)
 		  })
 
+#' Groupby on a FlashMatrixR vector.
+#'
+#' `fm.sgroupby' groups elements in a vector based on corresponding `labels'
+#' and applies `FUN' to the elements in each group. `FUN' is an aggregation
+#' operator.
+#'
+#' `fm.groupby' groups rows/columns of a matrix based on corresponding `labels'
+#' and applies `FUN' to the rows/columns in each group. `FUN' is an aggregation
+#' operator.
+#'
+#' @param obj a FlashMatrixR vector or matrix
+#' @param margin the subscript which the function will be applied over.
+#' E.g., for a matrix, `1' indicates rows, `2' indicates columns.
+#' @param labels a FlashMatrixR vector that indicates the labels of
+#' each element in `obj'.
+#' @param FUN an aggregation operator returned by `fm.get.basic.op'.
+#' @return `fm.sgroupby' returns a data frame, where the column `val' stores
+#' all of the unique values in the original data container, and the column
+#' `agg' stores the aggregate result of the corresponding value.
+#' @name fm.groupby
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.sgroupby <- function(obj, FUN)
+{
+	stopifnot(class(obj) == "fmV")
+	stopifnot(class(FUN) == "fm.agg.op")
+	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashGraphR")
+	if (is.null(res))
+		return(NULL)
+	list(val=new.fmV(res$val), Freq=new.fmV(res$agg))
+}
+
 #' Transpose a FlashMatrixR matrix.
 #'
 #' @param m a FlashMatrixR matrix
