@@ -776,7 +776,7 @@ void print_usage()
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l time: the length of time interval\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "k-core\n");
+	fprintf(stderr, "kcore\n");
 	fprintf(stderr, "-k k: the minimum k value to compute\n");
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");
