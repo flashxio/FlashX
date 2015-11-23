@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -29,7 +29,7 @@
 
 static const int NUM_BITS_LONG = sizeof(long) * 8;
 
-/**
+/*
  * The functionality of this bitmap is very similar to std::vector<bool>
  * in STL. But this one is optimized for extra operations such as merge
  * and iterating on true values or on false values.
@@ -152,7 +152,7 @@ public:
 		num_set_bits = 0;
 	}
 
-	/**
+	/*
 	 * This method collects all bits that have been set to 1.
 	 */
 	template<class T>
@@ -180,7 +180,7 @@ public:
 		return v.size();
 	}
 
-	/**
+	/*
 	 * This method collects a specified number of bits that have been
 	 * set to 1.
 	 */
@@ -235,7 +235,7 @@ public:
 	}
 };
 
-/**
+/*
  * This is a thread-safe bitmap.
  * All set/clear operations on the bitmap is atomic. However, users of
  * the bitmap need to insert memory barrier themselves.

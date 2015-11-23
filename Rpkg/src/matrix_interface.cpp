@@ -56,9 +56,9 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 		num_nodes = -1;
 	vector::ptr vec;
 	if (R_is_real(pinitv))
-		vec = create_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
+		vec = create_rep_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
 	else if (R_is_integer(pinitv))
-		vec = create_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
+		vec = create_rep_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
 		return Rcpp::List();
@@ -130,7 +130,7 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	vector::ptr vec = create_vector<double>(from, to, by, num_nodes, true);
+	vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes, true);
 	return create_FMR_vector(vec->get_raw_store(), "");
 }
 

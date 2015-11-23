@@ -1,7 +1,7 @@
 #ifndef __SCAN_GRAPH_H__
 #define __SCAN_GRAPH_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -25,7 +25,7 @@
 #include "graphlab/cuckoo_set_pow2.hpp"
 #include "graph_engine.h"
 
-/**
+/*
  * The edge has two attributes:
  * The number of duplicated edges with the neighbor;
  * The number of edges that contributes to the neighbor's neighborhood.
@@ -299,7 +299,7 @@ public:
 		return neighbors.size();
 	}
 
-	/**
+	/*
 	 * This return the vertex Id that the neighbor list belongs to.
 	 */
 	fg::vertex_id_t get_id() const {
@@ -329,7 +329,7 @@ public:
 			std::vector<fg::vertex_id_t> *common_neighs) const;
 };
 
-/**
+/*
  * This data structure contains all data required when the vertex is
  * computing local scan.
  * It doesn't need to exist before or after the vertex computes local scan.
@@ -389,7 +389,7 @@ public:
 		value = 0;
 	}
 
-	/**
+	/*
 	 * Estimated local scan.
 	 */
 
@@ -407,7 +407,7 @@ public:
 		return value & FLAGS_MASK;
 	}
 
-	/**
+	/*
 	 * Real local scan.
 	 */
 
@@ -430,7 +430,7 @@ public:
 		return value & FLAGS_MASK;
 	}
 
-	/**
+	/*
 	 * Pointer to the runtime data.
 	 */
 
