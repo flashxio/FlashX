@@ -190,3 +190,9 @@ setMethod("print", signature(x = "fmV"), function(x)
 	cat("FlashVectorR vector ", x@name, ": length: ", length(x), "\n", sep=""))
 setMethod("print", signature(x = "fm.bo"), function(x)
 	cat("FLashMatrixR basic operator:", x@name, "\n"))
+
+fm.table <- function(x)
+{
+	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
+	fm.sgroupby(x, count)
+}
