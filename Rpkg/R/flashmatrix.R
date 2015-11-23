@@ -455,6 +455,10 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.buo.ceil))
 	fm.buo.floor <<- fm.get.basic.uop("floor")
 	stopifnot(!is.null(fm.buo.floor))
+	fm.buo.as.int <<- fm.get.basic.uop("as.int")
+	stopifnot(!is.null(fm.buo.as.int))
+	fm.buo.as.numeric <<- fm.get.basic.uop("as.numeric")
+	stopifnot(!is.null(fm.buo.as.numeric))
 }
 
 fm.create.agg.op <- function(agg, combine, name)

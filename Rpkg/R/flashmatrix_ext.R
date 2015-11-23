@@ -196,3 +196,6 @@ fm.table <- function(x)
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
 	fm.sgroupby(x, count)
 }
+
+fm.as.integer <- function(x) fm.sapply(x, fm.buo.as.int)
+fm.as.numeric <- function(x) fm.sapply(x, fm.buo.as.numeric)

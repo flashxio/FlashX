@@ -359,6 +359,20 @@ void init_udf_ext()
 	ops.push_back(bulk_operate::const_ptr(new r_count_operate<int>()));
 	ops.push_back(bulk_operate::const_ptr(new r_count_operate<double>()));
 	register_udf(ops, "count");
+
+	std::vector<bulk_uoperate::const_ptr> uops;
+	uops.push_back(bulk_uoperate::conv2ptr(
+				get_scalar_type<bool>().get_type_cast(get_scalar_type<int>())));
+	uops.push_back(bulk_uoperate::conv2ptr(
+				get_scalar_type<double>().get_type_cast(get_scalar_type<int>())));
+	register_udf(uops, "as.int");
+
+	uops.clear();
+	uops.push_back(bulk_uoperate::conv2ptr(
+				get_scalar_type<bool>().get_type_cast(get_scalar_type<double>())));
+	uops.push_back(bulk_uoperate::conv2ptr(
+				get_scalar_type<int>().get_type_cast(get_scalar_type<double>())));
+	register_udf(uops, "as.numeric");
 }
 
 }
