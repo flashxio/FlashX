@@ -54,7 +54,7 @@ size_t vec_store::copy_to(char *data, size_t num_eles) const
 }
 
 template<>
-vec_store::ptr create_vec_store<double>(double start, double end,
+vec_store::ptr create_seq_vec_store<double>(double start, double end,
 		double stride, int num_nodes, bool in_mem)
 {
 	// The result of division may generate a real number slightly smaller than

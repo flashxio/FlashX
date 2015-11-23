@@ -371,19 +371,19 @@ int main(int argc, char *argv[])
 				time_diff(start, end));
 		printf("max id: %d\n", max_vid);
 
-		detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
+		detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
 				0, max_vid, 1);
-		detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
+		detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
 				max_vid + 1, fg::INVALID_VERTEX_ID);
 		detail::vec_store::ptr attr_vec;
 		if (edge_attr_type == "I")
-			attr_vec = detail::create_vec_store<int>(max_vid + 1, 0);
+			attr_vec = detail::create_rep_vec_store<int>(max_vid + 1, 0);
 		else if (edge_attr_type == "L")
-			attr_vec = detail::create_vec_store<long>(max_vid + 1, 0);
+			attr_vec = detail::create_rep_vec_store<long>(max_vid + 1, 0);
 		else if (edge_attr_type == "F")
-			attr_vec = detail::create_vec_store<float>(max_vid + 1, 0);
+			attr_vec = detail::create_rep_vec_store<float>(max_vid + 1, 0);
 		else if (edge_attr_type == "D")
-			attr_vec = detail::create_vec_store<double>(max_vid + 1, 0);
+			attr_vec = detail::create_rep_vec_store<double>(max_vid + 1, 0);
 		assert(seq_vec->get_length() == rep_vec->get_length());
 
 		fg::FG_graph::ptr graph;

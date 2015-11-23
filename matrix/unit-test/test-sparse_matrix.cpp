@@ -117,9 +117,9 @@ void test_multiply_block(data_frame::ptr df)
 
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
-	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
+	detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
 			0, max_vid, 1);
-	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
+	detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	new_df = data_frame::create();
@@ -129,7 +129,7 @@ void test_multiply_block(data_frame::ptr df)
 	size_t entry_size = 0;
 	const scalar_type *entry_type = NULL;
 	if (df->get_num_vecs() == 3) {
-		val_vec = detail::create_vec_store<float>(max_vid + 1, 0);
+		val_vec = detail::create_rep_vec_store<float>(max_vid + 1, 0);
 		new_df->add_vec(df->get_vec_name(2), val_vec);
 		entry_size = val_vec->get_entry_size();
 		entry_type = &val_vec->get_type();
@@ -196,9 +196,9 @@ void test_multiply_fg(data_frame::ptr df)
 
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
-	detail::vec_store::ptr seq_vec = detail::create_vec_store<fg::vertex_id_t>(
+	detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
 			0, max_vid, 1);
-	detail::vec_store::ptr rep_vec = detail::create_vec_store<fg::vertex_id_t>(
+	detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
 			max_vid + 1, fg::INVALID_VERTEX_ID);
 	assert(seq_vec->get_length() == rep_vec->get_length());
 	new_df = data_frame::create();
@@ -206,7 +206,7 @@ void test_multiply_fg(data_frame::ptr df)
 	new_df->add_vec(df->get_vec_name(1), rep_vec);
 	detail::vec_store::ptr val_vec;
 	if (df->get_num_vecs() == 3) {
-		val_vec = detail::create_vec_store<float>(max_vid + 1, 0);
+		val_vec = detail::create_rep_vec_store<float>(max_vid + 1, 0);
 		new_df->add_vec(df->get_vec_name(2), val_vec);
 	}
 	df->append(new_df);

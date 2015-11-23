@@ -156,10 +156,10 @@ public:
  * Create a sequence of values in [start, end]. `end' is inclusive.
  */
 template<class EntryType>
-vector::ptr create_vector(EntryType start, EntryType end, EntryType stride,
+vector::ptr create_seq_vector(EntryType start, EntryType end, EntryType stride,
 		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(start, end, stride,
+	detail::vec_store::ptr store = detail::create_seq_vec_store(start, end, stride,
 			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();
@@ -170,10 +170,10 @@ vector::ptr create_vector(EntryType start, EntryType end, EntryType stride,
  * Create a vector filled with a constant value.
  */
 template<class EntryType>
-vector::ptr create_vector(size_t length, EntryType initv,
+vector::ptr create_rep_vector(size_t length, EntryType initv,
 		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(length, initv,
+	detail::vec_store::ptr store = detail::create_rep_vec_store(length, initv,
 			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();

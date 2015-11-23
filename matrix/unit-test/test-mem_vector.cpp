@@ -156,7 +156,7 @@ void test_max()
 void test_resize()
 {
 	printf("test resize\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	const detail::smp_vec_store &vstore
 		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
 	smp_vec_store::ptr copy = smp_vec_store::cast(vec->get_data().deep_copy());
@@ -180,7 +180,7 @@ void test_resize()
 void test_get_sub()
 {
 	printf("test get sub\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	smp_vec_store::ptr idxs = smp_vec_store::create(1000, get_scalar_type<off_t>());
 	for (size_t i = 0; i < idxs->get_length(); i++)
 		idxs->set<off_t>(i, random() % idxs->get_length());
@@ -208,7 +208,7 @@ void test_copy_from()
 void test_conv2std()
 {
 	printf("test convert to a std vector\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	std::vector<int> stl_vec = vec->conv2std<int>();
 	assert(stl_vec.size() == vec->get_length());
 	for (size_t i = 0; i < stl_vec.size(); i++)
