@@ -1,7 +1,7 @@
 #ifndef __MY_THREAD_H__
 #define __MY_THREAD_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -164,14 +164,14 @@ public:
 	virtual void cleanup() {
 	}
 
-	/**
+	/*
 	 * This is to initialize the thread class instead of a single thread.
 	 */
 	static void thread_class_init();
 
 	static thread *get_curr_thread();
 
-	/**
+	/*
 	 * This creates a thread instance to represent the current thread context.
 	 * It is used when the current thread isn't created by the thread class.
 	 */

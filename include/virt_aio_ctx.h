@@ -1,7 +1,7 @@
 #ifndef __VIRT_AIO_CTX_H__
 #define __VIRT_AIO_CTX_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -31,7 +31,7 @@ struct req_entry {
 	struct timeval issue_time;
 };
 
-/**
+/*
  * This class defines the data inside the virtual SSDs.
  */
 class virt_data
@@ -48,7 +48,7 @@ public:
 	virtual long get_write_delay(off_t off, size_t size) = 0;
 };
 
-/**
+/*
  * This emulates an SSD and provides the interface of an AIO context.
  * It is used for performance evaluation and debugging.
  * It accepts requests and returns them after a certain period of time.

@@ -1,7 +1,7 @@
 #ifndef __SLAB_ALLOCATOR_H__
 #define __SLAB_ALLOCATOR_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -95,7 +95,7 @@ public:
 			}
 		}
 
-		/**
+		/*
 		 * It removes the specified number of objects from the list
 		 * and returns them in a form of linked list..
 		 */

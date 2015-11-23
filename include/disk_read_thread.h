@@ -1,7 +1,7 @@
 #ifndef __DISK_READ_THREAD_H__
 #define __DISK_READ_THREAD_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *

@@ -828,6 +828,8 @@ void gemm_op<T>::run(
 
 	T *res_mat;
 	res_mat = (T *) out.get_raw_arr();
+	// Indicate whether we need to copy the result back.
+	bool copy_res = false;
 	if (res_mat == NULL) {
 		if (res_bufs[thread_id] == NULL
 				|| res_bufs[thread_id]->get_num_rows() != out.get_num_rows()
@@ -843,6 +845,9 @@ void gemm_op<T>::run(
 			copy_from_blocks(ins.begin() + A_num_blocks, ins.end(),
 					*res_bufs[thread_id]);
 		res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
+		// If the data is stored in the buffer, we need to copy
+		// the data back to the output store.
+		copy_res = true;
 	}
 	else {
 		if (beta && C_num_blocks == 1)
@@ -900,8 +905,10 @@ void gemm_op<T>::run(
 			Astore->get_num_cols(), alpha, Amat,
 			Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
 			beta, res_mat, out.get_num_rows());
-	if (res_bufs[thread_id])
+	if (copy_res) {
+		assert(res_bufs[thread_id]);
 		out.copy_from(*res_bufs[thread_id]);
+	}
 }
 
 /*
