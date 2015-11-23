@@ -452,7 +452,7 @@ namespace {
             print_vector(lwr_bnd);
 #endif
             // #6
-#if KM_TEST
+#if VERBOSE
             printf("After #5 v: %u uppr_bnd = %.3f, dist = %.3f, get_prev_dist() = %.3f\n",
                     my_id, uppr_bnd, dist, g_clusters[cluster_id]->get_prev_dist());
 #endif
@@ -575,7 +575,7 @@ namespace {
         for (unsigned cl = nxt_clstr; cl < K; cl++) {
             // Prunes `some cluster subset' but still needs to
             //  do I/O because `some other subset' of clusters needs to be computed :(
-            if (new_cluster_id != INVALID_CLUST_ID) { // NOTE: Can't do anything with the cl == 0
+            if (new_cluster_id != INVALID_CLUST_ID && g_prune_init) { // NOTE: Can't do anything with the cl == 0
                 // Use Lemma 1 to prune
                 if (g_cluster_dist->get(new_cluster_id, cl) >= (2*best)) {
 #if VERBOSE
@@ -594,14 +594,13 @@ namespace {
 #endif
 #if PRUNE
             if (cluster_id != INVALID_CLUST_ID && uppr_bnd <= g_clusters[cluster_id]->get_s_val()) { // #2
-                printf("Setting in prev x\n");
                 set_in_x_prev_iter();
 
                 if ((cl != cluster_id) && (uppr_bnd > lwr_bnd[cl]) && (uppr_bnd >
                         (g_cluster_dist->get(cluster_id, cl)*.5))) {
                     // #3a
                     if (r) {
-#if KM_TEST
+#if VERBOSE
                         BOOST_LOG_TRIVIAL(info) << "#3a v:" << my_id
                             << " jumping to dist_comp";
 #endif
@@ -617,7 +616,6 @@ namespace {
                             new_cluster_id = cl;
                         }
 #if KM_TEST
-
                         g_prune_stats->pp_3a();
 #endif
                         continue;
@@ -629,7 +627,6 @@ namespace {
                         BOOST_LOG_TRIVIAL(info) << "#3b v:" << my_id
                             << " jumping to dist_comp"; 
 #endif
-                        // goto dist_comp; // compute d(x,c(x))
                     } else {
                         BOOST_LOG_TRIVIAL(info) << "#3b failed: dist > lwr_bnd: " << dist << ">"  << lwr_bnd[cl] ;
 #if KM_TEST
@@ -638,7 +635,7 @@ namespace {
                         continue;
                     }
                 } else {
-#if KM_TEST
+#if VERBOSE
                     if (!(uppr_bnd > (g_cluster_dist->get(cluster_id, cl)*.5)))
                         printf("uppr_bnd <= 1/2 dist: %.2f <= %.2f",
                                 uppr_bnd, (g_cluster_dist->get(cluster_id, cl)*.5));
@@ -691,7 +688,7 @@ namespace {
         // Done by all : TODO: Verify I really need this
         this->dist = best;
 
-#if KM_TEST
+#if KM_TEST && 0
         std::string str = get_in_x_prev_iter() ? "true" : "false";
         printf("Exiting run_distance v:%u => uppr_bnd = "
                 "best = %.3f = %.3f, in_prev_x = %s\n", my_id, dist, uppr_bnd, str.c_str());
@@ -712,7 +709,7 @@ namespace {
                     g_clusters[cl]->clear();
                 } else {
                     g_clusters[cl]->unfinalize();
-#if KM_TEST
+#if VERBOSE
                     std::cout << "Unfinalized g_clusters[thd] ==> ";
                     print_vector<double>(g_clusters[cl]->get_mean());
 #endif
@@ -736,7 +733,7 @@ namespace {
                 BOOST_VERIFY(g_num_changed <= NUM_ROWS);
                 /* Merge the per-thread clusters */
                 for (unsigned cl = 0; cl < K; cl++) {
-#if KM_TEST
+#if KM_TEST && 0
                     std::cout << "pt_clusters[" << cl << "] #" << pt_clusters[cl]->get_num_members() << " ==> ";
                     print_vector<double>(pt_clusters[cl]->get_mean());
 #endif
@@ -933,7 +930,7 @@ namespace {
 
                 // Fire up K engines with 2 iters/engine
                 while (true) {
-#if KM_TEST
+#if KM_TEST && 0
                     BOOST_LOG_TRIVIAL(info) << "Printing updated distances";
                     print_vector<double>(g_kmspp_distance);
 #endif
@@ -972,17 +969,21 @@ namespace {
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
                 BOOST_LOG_TRIVIAL(info) << "Init: M-step Updating cluster means ...";
+
+                update_clusters(mat, num_members_v);
 #if KM_TEST
                 BOOST_LOG_TRIVIAL(info) << "Init: Printing cluster means:";
                 print_clusters(g_clusters);
+                BOOST_LOG_TRIVIAL(info) << "Init: Printing cluster counts:";
+                print_vector<unsigned>(num_members_v);
+                exit(EXIT_FAILURE);
 #endif
-                update_clusters(mat, num_members_v);
                 g_prune_init = false; // reset
                 g_num_changed = 0; // reset
             }
 #endif
 
-#if KM_TEST
+#if KM_TEST && 0
             BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
             print_clusters(g_clusters);
             BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
@@ -1017,7 +1018,7 @@ namespace {
                 BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating cluster means ...";
                 update_clusters(mat, num_members_v);
 
-#if KM_TEST
+#if KM_TEST && 0
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
                 print_clusters(g_clusters);
                 BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
@@ -1067,7 +1068,7 @@ namespace {
             std::vector<std::vector<double>> means;
             get_means(means);
             cluster_assignments = get_membership(mat);
-#if KM_TEST
+#if KM_TEST && 0
             BOOST_LOG_TRIVIAL(info) << "Printing updated distances";
             print_vector<double>(g_kmspp_distance);
 #endif
