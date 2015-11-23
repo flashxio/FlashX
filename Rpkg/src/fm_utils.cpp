@@ -125,6 +125,16 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
+SEXP create_FMR_factor_vector(dense_matrix::ptr m, int num_levels,
+		const std::string &name)
+{
+	Rcpp::List ret = create_FMR_vector(m, name);
+	Rcpp::NumericVector levels(1);
+	levels[0] = num_levels;
+	ret["levels"] = num_levels;
+	return ret;
+}
+
 vector::ptr get_vector(const Rcpp::S4 &vec)
 {
 	assert(is_vector(vec));

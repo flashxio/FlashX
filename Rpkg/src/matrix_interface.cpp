@@ -1003,6 +1003,34 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 		return R_NilValue;
 }
 
+RcppExport SEXP R_FM_as_factor_vector(SEXP pmat, SEXP plevels)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't a sparse matrix to a vector\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
+		fprintf(stderr, "can't convert a matrix to a factor vector\n");
+		return R_NilValue;
+	}
+	// TODO now I assume the elements in a factor vector are integers.
+	if (!mat->is_type<int>()) {
+		fprintf(stderr,
+				"can't convert a non-integer vector to a factor vector\n");
+		return R_NilValue;
+	}
+	Rcpp::IntegerVector num_levels(plevels);
+	int num_levels1 = num_levels[0];
+	if (num_levels1 <= 0) {
+		scalar_variable::ptr tmp = mat->max();
+		num_levels1 = *(int *) tmp->get_raw();
+	}
+	assert(num_levels1 > 0);
+	return create_FMR_factor_vector(mat, num_levels1, "");
+}
+
 RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
 {
 	if (is_sparse(pmat)) {

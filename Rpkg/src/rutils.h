@@ -50,10 +50,14 @@ static inline bool is_sparse(const Rcpp::S4 &matrix)
 	return type == "sparse";
 }
 
-static inline bool is_vector(const Rcpp::S4 &matrix)
+static inline bool is_vector(const Rcpp::S4 &vec)
 {
-	std::string type = matrix.slot("type");
-	return type == "vector";
+	return vec.is("fmV");
+}
+
+static inline bool is_factor_vector(const Rcpp::S4 &vec)
+{
+	return vec.is("fmFactorV");
 }
 
 void R_gc();

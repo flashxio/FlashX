@@ -20,6 +20,10 @@ setClass("fm", representation(pointer = "externalptr", name = "character",
 							  type="character"))
 setClass("fmV", representation(pointer = "externalptr", name = "character",
 							   len = "numeric", type="character"))
+setClass("fmFactorV", representation(num.levels = "integer"), contains = "fmV")
+# We use symbolic representation for UDFs.
+# We will select the right form and right element type for a UDF when
+# the UDF is used.
 setClass("fm.bo", representation(info = "integer", name = "character"))
 setClass("fm.agg.op", representation(agg = "integer", combine = "integer",
 									 name = "character"))
@@ -35,6 +39,13 @@ new.fmV <- function(fm)
 {
 	if (!is.null(fm))
 		new("fmV", pointer=fm$pointer, name=fm$name, len=fm$len, type=fm$type)
+}
+
+new.fmFactorV <- function(fm)
+{
+	if (!is.null(fm))
+		new("fmFactorV", num.levels=fm$levels, pointer=fm$pointer,
+			name=fm$name, len=fm$len, type=fm$type)
 }
 
 #' Reconfigure FlashMatrixR
@@ -305,6 +316,19 @@ fm.as.vector <- function(fm)
 	stopifnot(class(fm) == "fm")
 	vec <- .Call("R_FM_as_vector", fm, PACKAGE="FlashGraphR")
 	new.fmV(vec)
+}
+
+#' Convert a FlashMatrixR vector to a FlashMatrixR factor vector.
+#'
+#' @param fm a FlashMatrixR vector.
+#' @return a FlashMatrixR factor vector.
+fm.as.factor <- function(fm, num.levels = -1)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fmV")
+	vec <- .Call("R_FM_as_factor_vector", fm, as.integer(num.levels),
+				 PACKAGE="FlashGraphR")
+	new.fmFactorV(vec)
 }
 
 #' Matrix multiplication
