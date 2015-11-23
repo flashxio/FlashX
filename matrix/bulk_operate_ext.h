@@ -255,6 +255,24 @@ public:
 	}
 };
 
+template<class T1, class T2>
+class type_cast: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num, const void *in, void *out) const {
+		const T1 *t_in = (const T1 *) in;
+		T2 *t_out = (T2 *) out;
+		for (size_t i = 0; i < num; i++)
+			t_out[i] = t_in[i];
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T1>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T2>();
+	}
+};
+
 }
 
 #endif

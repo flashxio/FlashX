@@ -1958,76 +1958,13 @@ dense_matrix::ptr dense_matrix::scale_rows(vector::const_ptr vals) const
 
 //////////////////////////// Cast the element types ///////////////////////////
 
-namespace
-{
-
-class cast_type_op: public detail::portion_mapply_op
-{
-	vector::const_ptr vals;
-public:
-	cast_type_op(size_t out_num_rows, size_t out_num_cols,
-			const scalar_type &type): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, type) {
-	}
-
-	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &out) const;
-	virtual portion_mapply_op::const_ptr transpose() const {
-		return portion_mapply_op::const_ptr(new cast_type_op(get_out_num_cols(),
-					get_out_num_rows(), get_output_type()));
-	}
-	virtual std::string to_string(
-			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		assert(mats.size() == 1);
-		return std::string("cast(") + mats[0]->get_name() + ")";
-	}
-};
-
-void cast_type_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins,
-		detail::local_matrix_store &out) const
-{
-	const type_cast &cast = ins[0]->get_type().get_type_cast(out.get_type());
-	assert(ins[0]->store_layout() == out.store_layout());
-	if (ins[0]->get_raw_arr() && out.get_raw_arr())
-		cast.cast(ins[0]->get_num_rows() * ins[0]->get_num_cols(),
-				ins[0]->get_raw_arr(), out.get_raw_arr());
-	else if (ins[0]->store_layout() == matrix_layout_t::L_ROW) {
-		const detail::local_row_matrix_store &row_in
-			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
-		detail::local_row_matrix_store &row_out
-			= static_cast<detail::local_row_matrix_store &>(out);
-		for (size_t i = 0; i < row_in.get_num_rows(); i++)
-			cast.cast(row_in.get_num_cols(), row_in.get_row(i),
-					row_out.get_row(i));
-	}
-	else {
-		const detail::local_col_matrix_store &col_in
-			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
-		detail::local_col_matrix_store &col_out
-			= static_cast<detail::local_col_matrix_store &>(out);
-		for (size_t i = 0; i < col_in.get_num_cols(); i++)
-			cast.cast(col_in.get_num_rows(), col_in.get_col(i),
-					col_out.get_col(i));
-	}
-}
-
-}
-
 dense_matrix::ptr dense_matrix::cast_ele_type(const scalar_type &type) const
 {
-	if (!type_cast::require_cast(get_type(), type))
+	if (!require_cast(get_type(), type))
+		// TODO the returned matrix may not have the specified type.
 		return dense_matrix::create(get_raw_store());
-	else {
-		std::vector<detail::matrix_store::const_ptr> ins(1);
-		ins[0] = this->get_raw_store();
-		cast_type_op::const_ptr mapply_op(new cast_type_op(get_num_rows(),
-					get_num_cols(), type));
-		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
-				mapply_op, this->store_layout());
-		return dense_matrix::create(ret);
-	}
+	else
+		return sapply(bulk_uoperate::conv2ptr(get_type().get_type_cast(type)));
 }
 
 ///////////////////////////////////// mapply2 /////////////////////////////////

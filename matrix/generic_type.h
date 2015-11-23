@@ -27,7 +27,6 @@
 
 #include "sorter.h"
 #include "stl_algs.h"
-#include "type_cast.h"
 
 namespace fm
 {
@@ -131,6 +130,7 @@ class scalar_variable;
 class rand_gen;
 class set_operate;
 class generic_hashtable;
+class bulk_uoperate;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -163,7 +163,7 @@ public:
 			const scalar_variable &var) const = 0;
 	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
 			const scalar_variable &var, const scalar_variable &seed) const = 0;
-	virtual const type_cast &get_type_cast(const scalar_type &type) const = 0;
+	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -208,7 +208,7 @@ public:
 		return algs;
 	}
 	virtual const set_operate &get_set_const(const scalar_variable &val) const;
-	virtual const type_cast &get_type_cast(const scalar_type &type) const;
+	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();
@@ -304,6 +304,8 @@ public:
 		this->v = v;
 	}
 };
+
+bool require_cast(const scalar_type &t1, const scalar_type &t2);
 
 }
 

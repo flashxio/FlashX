@@ -36,7 +36,6 @@ add_library(FMatrix STATIC
 	matrix_store.cpp
 	mem_vv_store.cpp
 	local_vv_store.cpp
-	type_cast.cpp
 	vec_store.cpp
 	vector.cpp
 	vector_vector.cpp
