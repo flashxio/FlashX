@@ -355,8 +355,8 @@ void test_agg_col(int num_nodes)
 	printf("Test aggregation on tall matrix stored column wise\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
-	const bulk_operate &op
-		= m1->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			m1->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = m1->aggregate(op);
 	assert(res->get_type() == m1->get_type());
 	assert(res->get_type() == get_scalar_type<size_t>());
@@ -571,8 +571,8 @@ void test_agg_row(int num_nodes)
 	printf("Test aggregation on tall matrix stored row wise\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_ROW, num_nodes, get_scalar_type<size_t>());
-	const bulk_operate &op
-		= m1->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			m1->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = m1->aggregate(op);
 	assert(res->get_type() == m1->get_type());
 	size_t sum = *(size_t *) res->get_raw();
@@ -596,7 +596,8 @@ void test_agg_sub_col(int num_nodes)
 	dense_matrix::ptr sub_m = col_m->get_cols(idxs);
 	assert(sub_m != NULL);
 
-	const bulk_operate &op = sub_m->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			sub_m->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = sub_m->aggregate(op);
 	assert(res->get_type() == sub_m->get_type());
 	size_t sum = *(size_t *) res->get_raw();
@@ -625,7 +626,8 @@ void test_agg_sub_row(int num_nodes)
 	dense_matrix::ptr sub_col_m = col_m->get_cols(idxs);
 	dense_matrix::ptr sub_row_m = sub_col_m->transpose();
 
-	const bulk_operate &op = sub_col_m->get_type().get_basic_ops().get_add();
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			sub_col_m->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr col_res = sub_col_m->aggregate(op);
 	assert(col_res->get_type() == sub_col_m->get_type());
 	scalar_variable::ptr row_res = sub_row_m->aggregate(op);
@@ -1184,11 +1186,11 @@ void test_mul_output(int num_nodes)
 	dense_matrix::ptr out_mat1 = dense_matrix::create(out[1]);
 	dense_matrix::ptr in_mat = dense_matrix::create(in[0]);
 	scalar_variable::ptr agg0 = out_mat0->aggregate(
-			out[0]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
 	scalar_variable::ptr agg1 = out_mat1->aggregate(
-			out[1]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[1]->get_type().get_basic_ops().get_add()));
 	scalar_variable::ptr agg = in_mat->aggregate(
-			out[0]->get_type().get_basic_ops().get_add());
+			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
 	assert(*(double *) agg1->get_raw() - *(double *) agg0->get_raw()
 			== out[0]->get_num_cols() * out[0]->get_num_cols() * out[0]->get_num_rows());
 	assert(*(double *) agg0->get_raw() + *(double *) agg1->get_raw()
@@ -1213,8 +1215,9 @@ public:
 void test_min()
 {
 	printf("test min\n");
-	const bulk_operate &op = *get_scalar_type<int>().get_basic_ops().get_op(
-			basic_ops::op_idx::MIN);
+	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+			*get_scalar_type<int>().get_basic_ops().get_op(
+			basic_ops::op_idx::MIN));
 
 	dense_matrix::ptr mat = dense_matrix::create(2000, 1,
 			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate1(4));
@@ -1632,6 +1635,61 @@ void test_conv_store()
 	}
 }
 
+class rand_vec_set: public type_set_vec_operate<factor_value_t>
+{
+	factor f;
+public:
+	rand_vec_set(const factor &_f): f(_f) {
+	}
+
+	void set(factor_value_t *arr, size_t num_eles, off_t start_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = random() % f.get_num_levels();
+			assert(f.is_valid_level(arr[i]));
+		}
+	}
+};
+
+void test_groupby()
+{
+	dense_matrix::ptr mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
+			-1, get_scalar_type<int>());
+	factor f(10);
+	factor_vector::ptr rand_vec = factor_vector::create(f, mat->get_num_rows(),
+			-1, true, rand_vec_set(f));
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			mat->get_type().get_basic_ops().get_add());
+	dense_matrix::ptr group_sum = mat->groupby_row(rand_vec, add);
+	printf("groupby finishes\n");
+
+	detail::mem_matrix_store::const_ptr mem_mat
+		= detail::mem_matrix_store::cast(mat->get_raw_store());
+	detail::mem_vec_store::const_ptr mem_vec
+		= detail::mem_vec_store::cast(rand_vec->get_raw_store());
+	std::vector<std::vector<int> > agg_res(f.get_num_levels());
+	for (size_t i = 0; i < f.get_num_levels(); i++)
+		agg_res[i].resize(mat->get_num_cols());
+	printf("compute groupby manually\n");
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		factor_value_t label = *(const factor_value_t *) mem_vec->get_sub_arr(i, i + 1);
+		assert(agg_res.size() > label);
+		assert(agg_res[label].size() == mat->get_num_cols());
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			agg_res[label][j] += mem_mat->get<factor_value_t>(i, j);
+	}
+
+	printf("check groupby\n");
+	detail::mem_matrix_store::const_ptr mem_res
+		= detail::mem_matrix_store::cast(group_sum->get_raw_store());
+	assert(group_sum->get_num_rows() == agg_res.size());
+	for (size_t i = 0; i < mem_res->get_num_rows(); i++) {
+		assert(agg_res[i].size() == group_sum->get_num_cols());
+		for (size_t j = 0; j < mem_res->get_num_cols(); j++) {
+			assert(agg_res[i][j] == mem_res->get<int>(i, j));
+		}
+	}
+}
+
 void test_bmv_multiply_tall()
 {
 	bool in_mem = false;
@@ -1806,6 +1864,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_groupby();
 	test_block_mv();
 	test_conv_store();
 	test_mapply_mixed(num_nodes);

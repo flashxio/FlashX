@@ -90,7 +90,7 @@ void test_groupby()
 
 	factor f(50);
 	factor_vector::ptr labels = factor_vector::create(f, res->get_num_entries(),
-			true, set_label_operate(f, res->get_num_entries()));
+			-1, true, set_label_operate(f, res->get_num_entries()));
 	labels->sort();
 	vector_vector::ptr gr_res = vv->groupby(*labels, part_apply_operate());
 	const detail::mem_vv_store &res_store

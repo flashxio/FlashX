@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 
+#include "data_frame.h"
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
 
@@ -70,8 +71,6 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
 
-	ret.attr("class") = "fm";
-
 	return ret;
 }
 
@@ -93,8 +92,6 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	Rcpp::NumericVector ncol(1);
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
-
-	ret.attr("class") = "fm";
 
 	return ret;
 }
@@ -125,23 +122,39 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 		len[0] = m->get_num_cols();
 	ret["len"] = len;
 
-	ret.attr("class") = "fmV";
-
 	return ret;
 }
 
-vector::ptr get_vector(const Rcpp::List &vec)
+SEXP create_FMR_factor_vector(dense_matrix::ptr m, int num_levels,
+		const std::string &name)
+{
+	Rcpp::List ret = create_FMR_vector(m, name);
+	Rcpp::NumericVector levels(1);
+	levels[0] = num_levels;
+	ret["levels"] = num_levels;
+	return ret;
+}
+
+vector::ptr get_vector(const Rcpp::S4 &vec)
 {
 	assert(is_vector(vec));
 	object_ref<dense_matrix> *ref
-		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec["pointer"]);
+		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec.slot("pointer"));
 	dense_matrix::ptr mat = ref->get_object();
 	// This should be a column matrix.
 	assert(mat->store_layout == matrix_layout_t::L_COL
 			&& mat->get_num_cols() == 1);
-	const detail::mem_matrix_store &col_mat
-		= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
-	detail::vec_store::const_ptr store = col_mat.get_col_vec(0);
+	detail::vec_store::const_ptr store = mat->get_data().get_col_vec(0);
 	assert(store);
 	return vector::create(store);
+}
+
+SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)
+{
+	Rcpp::List ret;
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		std::string vec_name = df->get_vec_name(i);
+		ret[vec_name] = create_FMR_vector(df->get_vec(i), vec_name);
+	}
+	return ret;
 }

@@ -423,7 +423,7 @@ void inner_prod_row_wide(const local_row_matrix_store &m1,
 			for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
 				left_op.runAA(sub_ncol, sub_left.get_row(i),
 						sub_right.get_col(j), tmp_res.get());
-				right_op.runA(sub_ncol, tmp_res.get(),
+				right_op.runAgg(sub_ncol, tmp_res.get(), NULL,
 						tmp_res2.get() + res.get_entry_size() * j);
 			}
 			// This is fine because we assume the input type of the right operator
@@ -469,7 +469,7 @@ void inner_prod_col_wide(const local_col_matrix_store &m1,
 			for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
 				left_op.runAA(sub_ncol, tmp_row.get(),
 						sub_right.get_col(j), tmp_res.get());
-				right_op.runA(sub_ncol, tmp_res.get(),
+				right_op.runAgg(sub_ncol, tmp_res.get(), NULL,
 						tmp_res2.get() + res.get_entry_size() * j);
 			}
 			// This is fine because we assume the input type of the right operator
@@ -496,7 +496,7 @@ void inner_prod_row_tall(const local_row_matrix_store &m1,
 	for (size_t i = 0; i < nrow; i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			left_op.runAA(ncol, m1.get_row(i), m2.get_col(j), tmp_res);
-			right_op.runA(ncol, tmp_res, res.get(i, j));
+			right_op.runAgg(ncol, tmp_res, NULL, res.get(i, j));
 		}
 	}
 	free(tmp_res);
@@ -536,33 +536,32 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 void aggregate(const local_matrix_store &store, const bulk_operate &op,
 		agg_margin margin, local_vec_store &res)
 {
-	size_t output_size = op.output_entry_size();
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
 	if (margin == agg_margin::BOTH) {
 		assert(res.get_length() == 1);
 		// If the store has data stored contiguously.
 		if (store.get_raw_arr())
-			op.runA(ncol * nrow, store.get_raw_arr(), res.get_raw_arr());
+			op.runAgg(ncol * nrow, store.get_raw_arr(), NULL, res.get_raw_arr());
 		// For row-major matrix.
 		else if (store.store_layout() == matrix_layout_t::L_ROW) {
 			const local_row_matrix_store &row_store
 				= static_cast<const local_row_matrix_store &>(store);
-			std::unique_ptr<char []> raw_arr(new char[output_size * nrow]);
-			for (size_t i = 0; i < nrow; i++)
-				op.runA(ncol, row_store.get_row(i),
-						raw_arr.get() + output_size * i);
-			op.runA(nrow, raw_arr.get(), res.get_raw_arr());
+			// We need to initialize the result first.
+			op.runAgg(ncol, row_store.get_row(0), NULL, res.get_raw_arr());
+			for (size_t i = 1; i < nrow; i++)
+				op.runAgg(ncol, row_store.get_row(i), res.get_raw_arr(),
+						res.get_raw_arr());
 		}
 		else {
 			assert(store.store_layout() == matrix_layout_t::L_COL);
 			const local_col_matrix_store &col_store
 				= static_cast<const local_col_matrix_store &>(store);
-			std::unique_ptr<char []> raw_arr(new char[output_size * ncol]);
-			for (size_t i = 0; i < ncol; i++)
-				op.runA(nrow, col_store.get_col(i),
-						raw_arr.get() + output_size * i);
-			op.runA(ncol, raw_arr.get(), res.get_raw_arr());
+			// We need to initialize the result first.
+			op.runAgg(nrow, col_store.get_col(0), NULL, res.get_raw_arr());
+			for (size_t i = 1; i < ncol; i++)
+				op.runAgg(nrow, col_store.get_col(i), res.get_raw_arr(),
+						res.get_raw_arr());
 		}
 	}
 	else if (margin == agg_margin::MAR_ROW) {
@@ -578,7 +577,7 @@ void aggregate(const local_matrix_store &store, const bulk_operate &op,
 			row_store = static_cast<const local_row_matrix_store *>(&store);
 		assert(res.get_length() == store.get_num_rows());
 		for (size_t i = 0; i < nrow; i++)
-			op.runA(ncol, row_store->get_row(i), res.get(i));
+			op.runAgg(ncol, row_store->get_row(i), NULL, res.get(i));
 	}
 	else if (margin == agg_margin::MAR_COL) {
 		local_matrix_store::const_ptr buf_mat;
@@ -592,7 +591,7 @@ void aggregate(const local_matrix_store &store, const bulk_operate &op,
 			col_store = static_cast<const local_col_matrix_store *>(&store);
 		assert(res.get_length() == store.get_num_cols());
 		for (size_t i = 0; i < ncol; i++)
-			op.runA(nrow, col_store->get_col(i), res.get(i));
+			op.runAgg(nrow, col_store->get_col(i), NULL, res.get(i));
 	}
 	else {
 		// This shouldn't happen.
@@ -796,8 +795,8 @@ public:
 		cblas_dcopy(num_eles, x, 1, c, 1);
 		cblas_dscal(num_eles, a, c, 1);
 	}
-	virtual void runA(size_t num_eles, const void *left_arr,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *left_arr,
+			const void *orig, void *output) const {
 		assert(0);
 	}
 

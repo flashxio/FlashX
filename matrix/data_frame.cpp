@@ -29,6 +29,7 @@
 #include "mem_vv_store.h"
 #include "vector_vector.h"
 #include "EM_vv_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -270,7 +271,7 @@ void local_groupby_task::run()
 	detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
 			op.get_output_type());
 	sub_results[idx] = ret;
-	const agg_operate &find_next
+	agg_operate::const_ptr find_next
 		= sub_sorted_col->get_type().get_agg_ops().get_find_next();
 	size_t loc = 0;
 	size_t col_len = sub_sorted_col->get_length();
@@ -282,7 +283,7 @@ void local_groupby_task::run()
 		size_t curr_length = col_len - loc;
 		const char *curr_ptr = start + entry_size * loc;
 		size_t rel_end;
-		find_next.run(curr_length, curr_ptr, &rel_end);
+		find_next->runAgg(curr_length, curr_ptr, NULL, &rel_end);
 		// This expose a portion of the data frame.
 		expose_portion(sub_df, loc, rel_end);
 		// The first argument is the key and the second one is the value
@@ -424,11 +425,12 @@ bool EM_df_groupby_dispatcher::issue_task()
 	// the sorted vector that all elements with the same values in the vector
 	// are guaranteed in the part.
 	if (!last_part) {
-		const agg_operate &find_prev
+		agg_operate::const_ptr find_prev
 			= vec->get_type().get_agg_ops().get_find_prev();
 		size_t off;
 		size_t entry_size = vec->get_type().get_size();
-		find_prev.run(read_len, vec->get_raw_arr() + read_len * entry_size, &off);
+		find_prev->runAgg(read_len, vec->get_raw_arr() + read_len * entry_size,
+				NULL, &off);
 		assert(off < read_len);
 		real_len = read_len - off;
 		// The local buffer may already be a sub vector.

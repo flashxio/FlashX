@@ -311,12 +311,91 @@ local_vec_store::ptr NUMA_vec_store::get_portion(off_t start, size_t length)
 				start, length, get_type(), data[loc.first].get_node_id()));
 }
 
+namespace
+{
+
+class vec2mat_set_operate: public set_operate
+{
+	const NUMA_vec_store &vec;
+	bool byrow;
+	// #rows and cols of the output matrix.
+	size_t num_rows;
+	size_t num_cols;
+public:
+	vec2mat_set_operate(const NUMA_vec_store &_vec, bool byrow,
+			size_t num_rows, size_t num_cols): vec(_vec) {
+		this->byrow = byrow;
+		this->num_rows = num_rows;
+		this->num_cols = num_cols;
+	}
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const;
+	virtual const scalar_type &get_type() const {
+		return vec.get_type();
+	}
+};
+
+void vec2mat_set_operate::set(void *arr, size_t num_eles,
+		off_t row_idx, off_t col_idx) const
+{
+	// The start offset in the vector.
+	off_t vec_off;
+	if (byrow)
+		vec_off = num_cols * row_idx + col_idx;
+	else
+		vec_off = num_rows * col_idx + row_idx;
+
+	while (num_eles > 0) {
+		off_t next_range_start = ROUNDUP(vec_off + 1,
+				vec.get_mapper().get_range_size());
+		off_t end = std::min(next_range_start, (off_t) vec.get_length());
+		size_t num_avails = end - vec_off;
+		num_avails = std::min(num_eles, num_avails);
+		const void *sub_arr = vec.get_sub_arr(vec_off, end);
+		assert(sub_arr);
+		memcpy(arr, sub_arr, num_avails * vec.get_entry_size());
+
+		arr = ((char *) arr) +  num_avails * vec.get_entry_size();
+		vec_off += num_avails;
+		num_eles -= num_avails;
+	}
+}
+
+}
+
 matrix_store::const_ptr NUMA_vec_store::conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const
 {
-	std::vector<NUMA_vec_store::ptr> cols(1);
-	cols[0] = NUMA_vec_store::ptr(new NUMA_vec_store(*this));
-	return NUMA_col_tall_matrix_store::create(cols);
+	if (nrow > 1 && ncol > 1) {
+		matrix_store::ptr res;
+		if (byrow)
+			res = NUMA_matrix_store::create(nrow, ncol, get_num_nodes(),
+					matrix_layout_t::L_ROW, get_type());
+		else
+			res = NUMA_matrix_store::create(nrow, ncol, get_num_nodes(),
+					matrix_layout_t::L_COL, get_type());
+		res->set_data(vec2mat_set_operate(*this, byrow, nrow, ncol));
+		return res;
+	}
+
+	matrix_store::const_ptr mat;
+	if ((ncol == 1 && !byrow) || (nrow == 1 && byrow)) {
+		std::vector<NUMA_vec_store::ptr> cols(1);
+		cols[0] = NUMA_vec_store::ptr(new NUMA_vec_store(*this));
+		mat = NUMA_col_tall_matrix_store::create(cols);
+	}
+	else if (ncol == 1 && byrow)
+		mat = NUMA_row_tall_matrix_store::create(data, nrow, ncol, mapper,
+				get_type());
+	else {
+		assert(nrow == 1 && !byrow);
+		// We rely on transpose to get the right matrix.
+		mat = NUMA_row_tall_matrix_store::create(data, ncol, nrow, mapper,
+				get_type());
+	}
+	if (nrow == 1)
+		mat = mat->transpose();
+	return mat;
 }
 
 }

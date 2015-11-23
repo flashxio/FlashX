@@ -30,8 +30,10 @@
 #include "generic_type.h"
 #include "matrix_header.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
 #include "matrix_store.h"
 #include "mem_matrix_store.h"
+#include "factor.h"
 
 namespace fm
 {
@@ -183,7 +185,6 @@ protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
 	}
-	bool verify_aggregate(const bulk_operate &op) const;
 	bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	bool verify_mapply2(const dense_matrix &m,
@@ -321,7 +322,18 @@ public:
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
-	std::shared_ptr<scalar_variable> aggregate(const bulk_operate &op) const;
+	std::shared_ptr<scalar_variable> aggregate(agg_operate::const_ptr op) const;
+	std::shared_ptr<scalar_variable> aggregate(bulk_operate::const_ptr op) const;
+
+	/*
+	 * This operator groups rows based on the labels in the factor vector
+	 * and aggregate the elements of each column.
+	 * It outputs a dense matrix whose #cols == this->#cols and #rows == #levels.
+	 * Each row of the output dense matrix is the aggregation of all rows in
+	 * the input dense matrix that have the same factor.
+	 */
+	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
+			bulk_operate::const_ptr) const;
 
 	dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
@@ -374,12 +386,13 @@ public:
 			return tmp->sum();
 		}
 		else
-			return aggregate(get_type().get_basic_ops().get_add());
+			return aggregate(bulk_operate::conv2ptr(
+						get_type().get_basic_ops().get_add()));
 	}
 
 	std::shared_ptr<scalar_variable> max() const {
-		return aggregate(*get_type().get_basic_ops().get_op(
-					basic_ops::op_idx::MAX));
+		return aggregate(bulk_operate::conv2ptr(
+					*get_type().get_basic_ops().get_op(basic_ops::op_idx::MAX)));
 	}
 
 	template<class T>

@@ -22,7 +22,6 @@ add_library(FMatrix STATIC
 	hilbert_curve.cpp
 	NUMA_dense_matrix.cpp
 	NUMA_vector.cpp
-	NUMA_mapper.cpp
 	raw_data_array.cpp
 	mem_worker_thread.cpp
 	local_matrix_store.cpp
@@ -37,13 +36,13 @@ add_library(FMatrix STATIC
 	matrix_store.cpp
 	mem_vv_store.cpp
 	local_vv_store.cpp
-	type_cast.cpp
 	vec_store.cpp
 	vector.cpp
 	vector_vector.cpp
 	vv_store.cpp
 	EM_object.cpp
 	local_mem_buffer.cpp
+	bulk_operate.cpp
 )
 
 subdirs(eigensolver)

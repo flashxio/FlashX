@@ -130,10 +130,10 @@ void test_EM_groupby()
 	data_frame::ptr df = data_frame::create();
 	size_t length = 4000000;
 	detail::vec_store::ptr vec1 = detail::vec_store::create(length,
-			get_scalar_type<int>(), false);
+			get_scalar_type<int>(), -1, false);
 	vec1->set_data(rand_set_vec());
 	detail::vec_store::ptr vec2 = detail::vec_store::create(length,
-			get_scalar_type<int>(), false);
+			get_scalar_type<int>(), -1, false);
 	vec2->set_data(rand_set_vec());
 	df->add_vec("vec1", vec1);
 	df->add_vec("vec2", vec2);
@@ -193,10 +193,10 @@ void test_EM_sort()
 data_frame::ptr create_data_frame(bool in_mem)
 {
 	detail::vec_store::ptr vec1 = detail::vec_store::create(1024 * 1024,
-			get_scalar_type<int>(), in_mem);
+			get_scalar_type<int>(), -1, in_mem);
 	vec1->set_data(rand_set_vec());
 	detail::vec_store::ptr vec2 = detail::vec_store::create(1024 * 1024,
-			get_scalar_type<int>(), in_mem);
+			get_scalar_type<int>(), -1, in_mem);
 	vec2->set_data(rand_set_vec());
 	std::vector<named_vec_t> vecs(2);
 	vecs[0].first = "1";

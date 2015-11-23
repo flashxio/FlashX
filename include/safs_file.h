@@ -129,6 +129,9 @@ public:
 
 size_t get_all_safs_files(std::set<std::string> &files);
 
+bool exist_safs_file(const std::string &name);
+ssize_t get_safs_size(const std::string &name);
+
 }
 
 #endif

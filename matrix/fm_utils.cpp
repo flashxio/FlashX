@@ -218,23 +218,6 @@ void attr_adj_apply_operate<AttrType>::run(const void *key,
 			fg::edge_type::OUT_EDGE);
 }
 
-class count_agg_operate: public agg_operate
-{
-public:
-	virtual void run(size_t num_eles, const void *in, void *output) const {
-		fg::vsize_t *out = (fg::vsize_t *) output;
-		out[0] = num_eles - 1;
-	}
-
-	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<fg::vertex_id_t>();
-	}
-
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<fg::vsize_t>();
-	}
-};
-
 namespace
 {
 
@@ -298,9 +281,10 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 {
 	struct timeval start, end;
 	// Leave the space for graph header.
+	// TODO I should make this a NUMA vector.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(
 			fg::graph_header::get_header_size(),
-			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+			get_scalar_type<char>(), -1, df->get_vec(0)->is_in_mem());
 	size_t edge_data_size = 0;
 	if (df->get_num_vecs() == 3) {
 		auto vec = df->get_vec("attr");
@@ -425,8 +409,9 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 {
 	struct timeval start, end;
 	// Leave the space for graph header.
+	// TODO I should make this a NUMA vector.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(0,
-			get_scalar_type<char>(), df->get_vec(0)->is_in_mem());
+			get_scalar_type<char>(), -1, df->get_vec(0)->is_in_mem());
 	size_t edge_data_size = 0;
 	if (df->get_num_vecs() == 3) {
 		auto vec = df->get_vec("attr");
@@ -809,7 +794,8 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 		entry_size = entry_type->get_size();
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+	// TODO I should make this a NUMA vector.
+	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
@@ -855,7 +841,8 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 		entry_size = entry_type->get_size();
 	size_t num_rows = adjs->get_num_vecs();
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_rows,
+	// TODO I should make this a NUMA vector.
+	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_rows, entry_size));

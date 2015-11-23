@@ -97,7 +97,9 @@ public:
 				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(vec->get_data(), *deg);
+		mat->multiply<double, float>(
+				dynamic_cast<const detail::mem_matrix_store &>(vec->get_data()),
+				dynamic_cast<detail::mem_matrix_store &>(*deg));
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
@@ -132,9 +134,11 @@ public:
 class SVD_Operator: public spm_function
 {
 	sparse_matrix::ptr mat;
+	sparse_matrix::ptr t_mat;
 public:
 	SVD_Operator(sparse_matrix::ptr mat) {
 		this->mat = mat;
+		this->t_mat = mat->transpose();
 	}
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
@@ -147,14 +151,12 @@ public:
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
 		mat->multiply<double, float>(mem_in, *tmp);
 		x = NULL;
-		mat->transpose();
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-				mat->get_num_rows(), tmp->get_num_cols(),
+				t_mat->get_num_rows(), tmp->get_num_cols(),
 				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
-		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(*tmp, *res);
-		mat->transpose();
+		assert(t_mat->get_entry_size() == 0 || t_mat->is_type<float>());
+		t_mat->multiply<double, float>(*tmp, *res);
 		return dense_matrix::create(res);
 	}
 

@@ -86,6 +86,21 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 	this->data = mat.data;
 }
 
+NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
+		const std::vector<detail::raw_data_array> &data, size_t nrow, size_t ncol,
+		const NUMA_mapper &_mapper, const scalar_type &type): NUMA_row_matrix_store(
+			nrow, ncol, type, mat_counter++), mapper(_mapper)
+{
+	this->data = data;
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
+	assert(data.size() == mapper.get_num_nodes());
+	for (int node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
+		assert(data[node_id].get_node_id() == node_id);
+		assert(data[node_id].get_num_bytes()
+				>= local_lens[node_id] * ncol * get_entry_size());
+	}
+}
+
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
 			type, mat_counter++), mapper(num_nodes, NUMA_range_size_log)

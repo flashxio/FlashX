@@ -303,30 +303,6 @@ matrix_store::const_ptr smp_vec_store::conv2mat(size_t nrow, size_t ncol,
 		return mem_col_matrix_store::create(data, nrow, ncol, get_type());
 }
 
-template<>
-vec_store::ptr create_vec_store<double>(double start, double end,
-		double stride)
-{
-	// The result of division may generate a real number slightly smaller than
-	// what we want because of the representation precision in the machine.
-	// When we convert the real number to an integer, we may find the number
-	// is smaller than exepcted. We need to add a very small number to
-	// the real number to correct the problem.
-	// TODO is it the right way to correct the problem?
-	long n = (end - start) / stride + 1e-9;
-	if (n < 0) {
-		BOOST_LOG_TRIVIAL(error) <<"wrong sign in 'by' argument";
-		return vec_store::ptr();
-	}
-	// We need to count the start element.
-	n++;
-
-	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
-			get_scalar_type<double>());
-	v->set_data(seq_set_vec_operate<double>(n, start, stride));
-	return v;
-}
-
 }
 
 }

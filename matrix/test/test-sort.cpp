@@ -22,7 +22,7 @@ public:
 void test_sort()
 {
 	size_t len = (random() % num_eles) + num_eles;
-	vector::ptr mem_vec = vector::create(len, get_scalar_type<long>(), true,
+	vector::ptr mem_vec = vector::create(len, get_scalar_type<long>(), -1, true,
 			rand_set());
 	detail::NUMA_vec_store::ptr numa_vec = detail::NUMA_vec_store::create(len,
 			num_nodes, get_scalar_type<long>());

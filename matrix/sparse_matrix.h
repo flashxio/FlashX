@@ -552,6 +552,12 @@ protected:
 		this->ncols = ncols;
 		this->entry_type = entry_type;
 	}
+
+	void _transpose() {
+		size_t tmp = nrows;
+		nrows = ncols;
+		ncols = tmp;
+	}
 public:
 	typedef std::shared_ptr<sparse_matrix> ptr;
 
@@ -659,27 +665,20 @@ public:
 		return symmetric;
 	}
 
-	virtual void transpose() {
-		size_t tmp = nrows;
-		nrows = ncols;
-		ncols = tmp;
-	}
+	virtual sparse_matrix::ptr transpose() const = 0;
 
 	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
 	template<class DenseType, class SparseType>
-	bool multiply(const detail::matrix_store &in, detail::matrix_store &out) const {
+	bool multiply(const detail::mem_matrix_store &in,
+			detail::mem_matrix_store &out) const {
 		if (in.get_num_rows() != ncols
 				|| in.get_num_cols() != out.get_num_cols()
 				|| out.get_num_rows() != this->get_num_rows()) {
 			BOOST_LOG_TRIVIAL(error) <<
 					"the input and output matrix have incompatible dimensions";
-			return false;
-		}
-		else if (!in.is_in_mem() || !out.is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
 			return false;
 		}
 		// We allow the output matrix in column major.
@@ -689,12 +688,25 @@ public:
 			return false;
 		}
 
-		compute(get_multiply_creator<DenseType, SparseType>(
-					dynamic_cast<const detail::mem_matrix_store &>(in),
-					dynamic_cast<detail::mem_matrix_store &>(out)),
+		compute(get_multiply_creator<DenseType, SparseType>(in, out),
 				cal_super_block_size(get_block_size(),
 					sizeof(DenseType) * in.get_num_cols()));
 		return true;
+	}
+
+	template<class DenseType, class SparseType>
+	bool multiply(const detail::mem_vec_store &in,
+			detail::mem_vec_store &out) const {
+		detail::matrix_store::const_ptr in_mat = in.conv2mat(in.get_length(),
+				1, true);
+		detail::matrix_store::const_ptr out_mat = out.conv2mat(out.get_length(),
+				1, true);
+		const detail::mem_matrix_store &mem_in
+			= dynamic_cast<const detail::mem_matrix_store &>(*in_mat);
+		const detail::mem_matrix_store &mem_out
+			= dynamic_cast<const detail::mem_matrix_store &>(*out_mat);
+		return multiply<DenseType, SparseType>(mem_in,
+				const_cast<detail::mem_matrix_store &>(mem_out));
 	}
 };
 

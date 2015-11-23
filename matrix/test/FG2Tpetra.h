@@ -23,10 +23,9 @@ using std::endl;
 typedef size_t local_ordinal_type;
 typedef size_t global_ordinal_type;
 
-typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType  Node;
-typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, Node> MV;
+typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type> MV;
 
-typedef Tpetra::Map<local_ordinal_type, global_ordinal_type, Node> map_type;
+typedef Tpetra::Map<local_ordinal_type, global_ordinal_type> map_type;
 typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_matrix_type;
 
 RCP<crs_matrix_type> create_crs(const std::string &graph_file,

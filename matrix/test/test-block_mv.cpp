@@ -338,12 +338,18 @@ void test_MvTransMv(bool in_mem, size_t block_size,
 
 void test_gemm_simple(bool in_mem, size_t dim1, size_t dim2)
 {
-	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(0, 0, long_dim,
-			dim1, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	dense_matrix::ptr mat1;
+	if (in_mem)
+		mat1 = dense_matrix::create_randu<double>(0, 1, long_dim, dim1,
+				matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), in_mem);
+	else
+		mat1 = get_EM_matrices(long_dim, dim1, 1).front();
 	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 0, dim1,
 			dim2, matrix_layout_t::L_COL, matrix_conf.get_num_nodes(), true);
 
+	printf("simple gemm starts\n");
 	struct timeval start, end;
+	// Multiply on the entire matrix.
 	gettimeofday(&start, NULL);
 
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
@@ -371,6 +377,57 @@ void test_MvTransMv_simple(bool in_mem, size_t dim1, size_t dim2)
 
 	gettimeofday(&end, NULL);
 	printf("simple MvTransMv takes %.3f seconds\n", time_diff(start, end));
+}
+
+void test_gemm_simul(size_t block_size, size_t num_blocks)
+{
+	std::vector<dense_matrix::ptr> mats1 = get_EM_matrices(long_dim,
+			block_size, num_blocks);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 1,
+			block_size * num_blocks, block_size, matrix_layout_t::L_COL,
+			-1, true);
+	detail::mem_col_matrix_store::const_ptr B
+		= detail::mem_col_matrix_store::cast(mat2->get_raw_store());
+
+	eigen::block_multi_vector::ptr mv = eigen::block_multi_vector::create(
+			long_dim, block_size * num_blocks, block_size,
+			get_scalar_type<double>(), false, false);
+	for (size_t i = 0; i < mats1.size(); i++)
+		mv->set_block(i, mats1[i]);
+
+	eigen::block_multi_vector::ptr mv1 = eigen::block_multi_vector::create(
+			long_dim, block_size, block_size,
+			get_scalar_type<double>(), false, false);
+	{
+		dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+				long_dim, block_size, matrix_layout_t::L_COL,
+				matrix_conf.get_num_nodes(), true);
+
+		detail::smp_vec_store::ptr vstore = detail::smp_vec_store::create(
+				block_size, get_scalar_type<double>());
+		for (size_t i = 0; i < vstore->get_length(); i++)
+			vstore->set<double>(i, i);
+		vector::ptr vec = vector::create(vstore);
+
+		dense_matrix::ptr small_mat = dense_matrix::create_randu<double>(
+				0, 1, block_size, block_size, matrix_layout_t::L_COL);
+
+		mat = mat->scale_cols(vec);
+		mat = mat->multiply(*small_mat, matrix_layout_t::L_NONE, true);
+		mat = mat->scale_cols(vec);
+		mv1->set_block(0, mat);
+	}
+
+	// Multiply on the merged matrix.
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	scalar_variable_impl<double> alpha(2);
+	scalar_variable_impl<double> beta(1);
+	detail::matrix_stats_t orig_stats2 = detail::matrix_stats;
+	eigen::block_multi_vector::ptr res = mv1->gemm(*mv, B, alpha, beta);
+	detail::matrix_stats.print_diff(orig_stats2);
+	gettimeofday(&end, NULL);
+	printf("simulated gemm takes %.3f seconds\n", time_diff(start, end));
 }
 
 int main(int argc, char *argv[])

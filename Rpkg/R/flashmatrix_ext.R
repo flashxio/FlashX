@@ -36,172 +36,166 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.pmin2 <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.min, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.min)
 }
 
 #' @name minmax
 fm.pmax2 <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.max, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.max)
 }
 
 `+.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.add, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.add)
 }
 
 `+.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.add, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.add)
 }
 
 `-.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.sub, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.sub)
 }
 
 `-.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.sub, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.sub)
 }
 
 `*.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.mul, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.mul)
 }
 
 `*.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.mul, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.mul)
 }
 
 `/.fm` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.div, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.div)
 }
 
 `/.fmV` <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.div, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.div)
 }
 
 `==.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.eq, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.eq)
 }
 
 `==.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.eq, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.eq)
 }
 
 `!=.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.eq)
 }
 
 `!=.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.eq)
 }
 
 `>.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.gt, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.gt)
 }
 
 `>.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.gt, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.gt)
 }
 
 `>=.fm`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.ge, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.ge)
 }
 
 `>=.fmV`  <- function(o1, o2)
 {
-	fm.ele.wise.op(fm.bo.ge, o1, o2)
+	fm.mapply2(o1, o2, fm.bo.ge)
 }
 
 `<=.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.gt)
 }
 
 `<=.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.gt)
 }
 
 `<.fm`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.ge, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.ge)
 }
 
 `<.fmV`  <- function(o1, o2)
 {
-	!fm.ele.wise.op(fm.bo.ge, o1, o2)
+	!fm.mapply2(o1, o2, fm.bo.ge)
 }
 
 `!.fm` <- function(o)
 {
-	fm.sapply(fm.buo.not, o)
+	fm.sapply(o, fm.buo.not)
 }
 
 `!.fmV` <- function(o)
 {
-	fm.sapply(fm.buo.not, o)
+	fm.sapply(o, fm.buo.not)
 }
 
-#' Aggregation on a FlashMatrixR vector/matrix.
-#'
-#' `fm.sum' returns the sum of all the values in the input vector/matrix.
-#'
-#' `fm.min' returns the minimum of all values in the input vector/matrix.
-#'
-#' `fm.max' returns the maximum of all values in the input vector/matrix.
-#'
-#' @param m The input vector/matrix
-#' @return an integer if the input is an integer vector/matrix; a numeric
-#' value if the input is a numeric vector/matrix.
-#' @name fm.agg.impl
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.sum <- function(m)
+setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
+setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
+
+setMethod("dim", signature(x = "fm"), function(x) c(x@nrow, x@ncol))
+setMethod("length", signature(x = "fmV"), function(x) x@len)
+setMethod("typeof", signature(x = "fm"), function(x) fm.typeof(x))
+setMethod("typeof", signature(x = "fmV"), function(x) fm.typeof(x))
+setMethod("t", signature(x = "fm"), function(x) fm.t(x))
+
+# Aggregation on a FlashMatrixR vector/matrix.
+setMethod("sum", signature(x = "fm"), function(x) fm.agg(x, fm.bo.add))
+setMethod("sum", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.add))
+setMethod("min", signature(x = "fm"), function(x) fm.agg(x, fm.bo.min))
+setMethod("min", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.min))
+setMethod("max", signature(x = "fm"), function(x) fm.agg(x, fm.bo.max))
+setMethod("max", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.max))
+
+# Miscellaneous Mathematical Functions
+setMethod("abs", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.abs))
+setMethod("abs", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.abs))
+setMethod("sqrt", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.sqrt))
+setMethod("sqrt", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.sqrt))
+setMethod("ceiling", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.ceil))
+setMethod("ceiling", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.ceil))
+setMethod("floor", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.floor))
+setMethod("floor", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.floor))
+
+# Print FlashMatrix objects.
+setMethod("print", signature(x = "fm"), function(x)
+		  cat("FlashMatrixR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
+			  " columns, is sparse: ", fm.is.sparse(x), "\n", sep=""))
+setMethod("print", signature(x = "fmV"), function(x)
+	cat("FlashVectorR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+setMethod("print", signature(x = "fm.bo"), function(x)
+	cat("FLashMatrixR basic operator:", x@name, "\n"))
+
+fm.table <- function(x)
 {
-	fm.agg(fm.bo.add, m)
+	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
+	fm.sgroupby(x, count)
 }
 
-#' @name fm.agg.impl
-fm.min <- function(m)
-{
-	fm.agg(fm.bo.min, m)
-}
-
-#' @name fm.agg.impl
-fm.max <- function(m)
-{
-	fm.agg(fm.bo.max, m)
-}
-
-#' Miscellaneous Mathematical Functions
-#'
-#' `abs(x)' computes the absolute value of x, `sqrt(x)' computes the
-#' square root of x.
-#'
-#' @param m a numeric vector or matrix.
-#' @return `abs' returns a vector/matrix of the same type as the input
-#' vector/matrix; `sqrt' returns a numeric vector/matrix.
-#' @name misc.math
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.abs <- function(m)
-{
-	fm.sapply(fm.buo.abs, m)
-}
-
-#' @name misc.math
-fm.sqrt <- function(m)
-{
-	fm.sapply(fm.buo.sqrt, m)
-}
+fm.as.integer <- function(x) fm.sapply(x, fm.buo.as.int)
+fm.as.numeric <- function(x) fm.sapply(x, fm.buo.as.numeric)

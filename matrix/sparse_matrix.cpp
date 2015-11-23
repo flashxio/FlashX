@@ -392,7 +392,8 @@ public:
 	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
+	virtual sparse_matrix::ptr transpose() const {
+		return sparse_matrix::ptr(new fg_sparse_sym_matrix(*this));
 	}
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
@@ -479,17 +480,19 @@ class fg_sparse_asym_matrix: public sparse_matrix
 	block_2d_size block_size;
 	// These work like the index of the sparse matrix.
 	// out_blocks index the original matrix.
-	std::vector<row_block> out_blocks;
+	std::shared_ptr<std::vector<row_block> > out_blocks;
 	// in_blocks index the transpose of the matrix.
-	std::vector<row_block> in_blocks;
+	std::shared_ptr<std::vector<row_block> > in_blocks;
 	safs::file_io_factory::shared_ptr factory;
-	bool transposed;
 
 	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
 			size_t nrows, const scalar_type *entry_type): sparse_matrix(
 				nrows, entry_type, false) {
-		transposed = false;
 		this->factory = factory;
+		out_blocks = std::shared_ptr<std::vector<row_block> >(
+				new std::vector<row_block>());
+		in_blocks = std::shared_ptr<std::vector<row_block> >(
+				new std::vector<row_block>());
 	}
 public:
 	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
@@ -498,9 +501,12 @@ public:
 		return factory;
 	}
 
-	virtual void transpose() {
-		transposed = !transposed;
-		sparse_matrix::transpose();
+	virtual sparse_matrix::ptr transpose() const {
+		fg_sparse_asym_matrix *ret = new fg_sparse_asym_matrix(*this);
+		ret->sparse_matrix::_transpose();
+		ret->out_blocks = this->in_blocks;
+		ret->in_blocks = this->out_blocks;
+		return sparse_matrix::ptr(ret);
 	}
 
 	virtual void init_io_gens(size_t num_block_rows,
@@ -543,13 +549,13 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 		for (size_t i = 0; i < num_vertices;
 				i += matrix_conf.get_row_block_size()) {
 			fg::directed_vertex_entry ventry = dindex->get_vertex(i);
-			m->out_blocks.emplace_back(ventry.get_out_off());
-			m->in_blocks.emplace_back(ventry.get_in_off());
+			m->out_blocks->emplace_back(ventry.get_out_off());
+			m->in_blocks->emplace_back(ventry.get_in_off());
 		}
 		fg::directed_vertex_entry ventry = dindex->get_vertex(num_vertices - 1);
-		m->out_blocks.emplace_back(ventry.get_out_off()
+		m->out_blocks->emplace_back(ventry.get_out_off()
 				+ dindex->get_out_size(num_vertices - 1));
-		m->in_blocks.emplace_back(ventry.get_in_off()
+		m->in_blocks->emplace_back(ventry.get_in_off()
 				+ dindex->get_in_size(num_vertices - 1));
 	}
 	else {
@@ -559,16 +565,16 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 		for (size_t i = 0; i < num_vertices;
 				i += matrix_conf.get_row_block_size()) {
 			fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
-			m->out_blocks.emplace_back(info.get_off());
+			m->out_blocks->emplace_back(info.get_off());
 
 			info = dindex->get_vertex_info_in(i);
-			m->in_blocks.emplace_back(info.get_off());
+			m->in_blocks->emplace_back(info.get_off());
 		}
 		fg::ext_mem_vertex_info info
 			= dindex->get_vertex_info_out(num_vertices - 1);
-		m->out_blocks.emplace_back(info.get_off() + info.get_size());
+		m->out_blocks->emplace_back(info.get_off() + info.get_size());
 		info = dindex->get_vertex_info_in(num_vertices - 1);
-		m->in_blocks.emplace_back(info.get_off() + info.get_size());
+		m->in_blocks->emplace_back(info.get_off() + info.get_size());
 	}
 
 	return sparse_matrix::ptr(m);
@@ -578,10 +584,9 @@ void fg_sparse_asym_matrix::init_io_gens(size_t num_block_rows,
 		std::vector<matrix_io_generator::ptr> &io_gens) const
 {
 	for (size_t i = 0; i < io_gens.size(); i++) {
-		row_block_mapper mapper(transposed ? in_blocks : out_blocks,
-				i, io_gens.size(), matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(
-				transposed ? in_blocks : out_blocks, get_num_rows(),
+		row_block_mapper mapper(*out_blocks, i, io_gens.size(),
+				matrix_conf.get_rb_io_size());
+		io_gens[i] = matrix_io_generator::create(*out_blocks, get_num_rows(),
 				get_num_cols(), factory->get_file_id(), mapper);
 	}
 }
@@ -631,7 +636,8 @@ public:
 	}
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
+	virtual sparse_matrix::ptr transpose() const {
+		return sparse_matrix::ptr(new block_sparse_matrix(*this));
 	}
 
 	virtual void init_io_gens(size_t num_block_rows,
@@ -710,11 +716,12 @@ public:
 	}
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
-		block_sparse_matrix::ptr tmp = mat;
-		mat = t_mat;
-		t_mat = tmp;
-		sparse_matrix::transpose();
+	virtual sparse_matrix::ptr transpose() const {
+		block_sparse_asym_matrix *ret = new block_sparse_asym_matrix(*this);
+		ret->mat = this->t_mat;
+		ret->t_mat = this->mat;
+		ret->sparse_matrix::_transpose();
+		return sparse_matrix::ptr(ret);
 	}
 
 	virtual void init_io_gens(size_t num_block_rows,

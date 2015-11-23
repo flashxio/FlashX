@@ -2,6 +2,7 @@
 
 #include "vector.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
 #include "data_frame.h"
 #include "local_vec_store.h"
 #include "dense_matrix.h"
@@ -46,8 +47,11 @@ void test_groupby()
 		store->set<int>(i, random() % 1000);
 	vector::ptr vec = vector::create(store);
 	count_impl<int> count;
-	data_frame::ptr res = vec->groupby(count, true);
-	printf("size: %ld\n", res->get_num_entries());
+	data_frame::ptr res1 = vec->groupby(count, true);
+	agg_operate::const_ptr count_agg = vec->get_type().get_agg_ops().get_count();
+	data_frame::ptr res2 = vec->groupby(count_agg, true);
+	printf("#entries in res1: %ld\n", res1->get_num_entries());
+	printf("#entries in res2: %ld\n", res2->get_num_entries());
 
 	std::map<int, size_t> ele_counts;
 	const detail::smp_vec_store &vstore
@@ -61,14 +65,25 @@ void test_groupby()
 			it->second++;
 	}
 
-	smp_vec_store::ptr vals = smp_vec_store::cast(res->get_vec("val"));
-	smp_vec_store::ptr aggs = smp_vec_store::cast(res->get_vec("agg"));
-	for (size_t i = 0; i < vals->get_length(); i++) {
-		int val = vals->get<int>(i);
-		size_t count = aggs->get<size_t>(i);
+	smp_vec_store::ptr vals1 = smp_vec_store::cast(res1->get_vec("val"));
+	smp_vec_store::ptr aggs1 = smp_vec_store::cast(res1->get_vec("agg"));
+	assert(vals1->get_length() == aggs1->get_length());
+	for (size_t i = 0; i < vals1->get_length(); i++) {
+		int val = vals1->get<int>(i);
+		size_t count = aggs1->get<size_t>(i);
 		auto it = ele_counts.find(val);
 		assert(it != ele_counts.end());
 		assert(it->second == count);
+	}
+
+	smp_vec_store::ptr vals2 = smp_vec_store::cast(res2->get_vec("val"));
+	smp_vec_store::ptr aggs2 = smp_vec_store::cast(res2->get_vec("agg"));
+	assert(vals2->get_length() == aggs2->get_length());
+	assert(vals1->get_length() == vals2->get_length());
+	assert(aggs2->get_type() == get_scalar_type<size_t>());
+	for (size_t i = 0; i < vals1->get_length(); i++) {
+		assert(vals1->get<int>(i) == vals2->get<int>(i));
+		assert(aggs1->get<int>(i) == aggs2->get<size_t>(i));
 	}
 }
 

@@ -136,8 +136,18 @@ class NUMA_row_tall_matrix_store: public NUMA_row_matrix_store
 
 	NUMA_row_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
+	NUMA_row_tall_matrix_store(const std::vector<detail::raw_data_array> &data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_row_tall_matrix_store> ptr;
+
+	static ptr create(const std::vector<detail::raw_data_array> &data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type) {
+		return ptr(new NUMA_row_tall_matrix_store(data, nrow, ncol,
+					mapper, type));
+	}
 
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type) {

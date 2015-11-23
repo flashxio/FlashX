@@ -34,6 +34,7 @@
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
 #include "matrix_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -961,6 +962,7 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		size_t merge_size = 0;
 		local_buf_vec_store::const_ptr prev_leftover
 			= dispatcher.get_prev_leftover(0);
+		agg_operate::const_ptr find_next = type.get_agg_ops().get_find_next();
 		// We go through all the buffers to be merged and merge elements
 		// that are smaller than `min_val' and keep all elements in the `leftover'
 		// buffer, which have been read from the disks but are larger than
@@ -982,9 +984,8 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 				if ((size_t) leftover_start < tot_len && min_val->equals(start
 							+ leftover_start * entry_size)) {
 					size_t rel_loc;
-					type.get_agg_ops().get_find_next().run(
-							tot_len - leftover_start,
-							start + leftover_start * entry_size, &rel_loc);
+					find_next->runAgg(tot_len - leftover_start,
+							start + leftover_start * entry_size, NULL, &rel_loc);
 					// There is at least one element with the same value as
 					// `min_val'.
 					assert(rel_loc > 0 && rel_loc <= tot_len - leftover_start);

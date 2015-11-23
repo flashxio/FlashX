@@ -25,9 +25,25 @@
 #include "generic_type.h"
 #include "rand_gen.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
+#include "generic_hashtable.h"
 
 namespace fm
 {
+
+template<class T>
+generic_hashtable::ptr scalar_type_impl<T>::create_hashtable(
+		const scalar_type &val_type) const
+{
+	switch(val_type.get_size()) {
+		case 4: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 4>(val_type));
+		case 8: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 8>(val_type));
+		default: BOOST_LOG_TRIVIAL(error) << "Can't create a generic hashtable";
+				 return generic_hashtable::ptr();
+	}
+}
 
 template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
@@ -239,8 +255,20 @@ const agg_ops &scalar_type_impl<T>::get_agg_ops() const
 	return aops;
 }
 
+namespace
+{
+
+template<class T1, class T2>
+const bulk_uoperate &get_type_cast()
+{
+	static type_cast<T1, T2> cast;
+	return cast;
+}
+
+}
+
 template<class T>
-const type_cast &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
+const bulk_uoperate &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
 {
 	switch(type.get_type()) {
 		case P_CHAR:
@@ -298,6 +326,35 @@ const scalar_type &get_scalar_type(prim_type type)
 		default:
 			throw invalid_arg_exception("invalid prim type");
 	}
+}
+
+bool require_cast(const scalar_type &t1, const scalar_type &t2)
+{
+	if (t1 == t2)
+		return false;
+	// If the two types require different memory storage size, we definitely
+	// need to cast them.
+	if (t1.get_size() != t2.get_size())
+		return true;
+
+	if ((t1.get_type() == prim_type::P_SHORT
+				&& t2.get_type() == prim_type::P_USHORT)
+			|| (t1.get_type() == prim_type::P_INTEGER
+				&& t2.get_type() == prim_type::P_UINT)
+			|| (t1.get_type() == prim_type::P_LONG
+				&& t2.get_type() == prim_type::P_ULONG))
+		return false;
+
+	if ((t2.get_type() == prim_type::P_SHORT
+				&& t1.get_type() == prim_type::P_USHORT)
+			|| (t2.get_type() == prim_type::P_INTEGER
+				&& t1.get_type() == prim_type::P_UINT)
+			|| (t2.get_type() == prim_type::P_LONG
+				&& t1.get_type() == prim_type::P_ULONG))
+		return false;
+
+	// We need to cast the rest of the type pairs.
+	return true;
 }
 
 }

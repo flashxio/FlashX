@@ -43,7 +43,8 @@ vv_store::ptr vv_store::create(const scalar_type &type, bool in_mem)
 vv_store::vv_store(const scalar_type &type, bool in_mem): vec_store(
 		0, 0, type, in_mem)
 {
-	store = vec_store::create(0, type, in_mem);
+	// TODO it's hard to store a vv in a NUMA vector.
+	store = vec_store::create(0, type, -1, in_mem);
 	// The offset of the first vector in the vector vector is 0.
 	vec_offs.push_back(0);
 }

@@ -194,66 +194,6 @@ public:
 	}
 };
 
-template<class T>
-class seq_set_vec_operate: public type_set_vec_operate<T>
-{
-	long n;
-	T from;
-	T by;
-public:
-	seq_set_vec_operate(long n, T from, T by) {
-		this->n = n;
-		this->from = from;
-		this->by = by;
-	}
-
-	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
-		// We are initializing a single-column matrix.
-		T v = from + start_idx * by;
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = v;
-			v += by;
-		}
-	}
-};
-
-/*
- * Create a sequence of values in [start, end]. `end' is inclusive.
- */
-template<class EntryType>
-vec_store::ptr create_vec_store(EntryType start, EntryType end, EntryType stride)
-{
-	if ((end < start && stride > 0) || (end > stride && stride < 0)) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "There are a negative number of elements in the sequence";
-		return vec_store::ptr();
-	}
-	// TODO let's just use in-memory dense matrix first.
-	long n = (end - start) / stride;
-	// We need to count the start element.
-	n++;
-	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
-			get_scalar_type<EntryType>());
-	v->set_data(seq_set_vec_operate<EntryType>(n, start, stride));
-	return v;
-}
-
-/*
- * Create a vector filled with a constant value.
- */
-template<class EntryType>
-vec_store::ptr create_vec_store(size_t length, EntryType initv)
-{
-	// TODO let's just use in-memory dense matrix first.
-	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(length,
-			get_scalar_type<EntryType>());
-	v->set_data(const_set_vec_operate<EntryType>(initv));
-	return v;
-}
-
-template<>
-vec_store::ptr create_vec_store<double>(double start, double end, double stride);
-
 }
 
 }
