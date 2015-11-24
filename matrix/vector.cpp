@@ -286,6 +286,9 @@ generic_hashtable::ptr agg_vec_portion_op::get_agg() const
 data_frame::ptr vector::groupby(agg_operate::const_ptr op, bool with_val) const
 {
 	dense_matrix::ptr mat = conv2mat(get_length(), 1, true);
+	if (mat == NULL)
+		return data_frame::ptr();
+
 	std::vector<detail::matrix_store::const_ptr> stores(1);
 	stores[0] = mat->get_raw_store();
 	agg_vec_portion_op *_portion_op = new agg_vec_portion_op(op);
@@ -437,6 +440,8 @@ dense_matrix::ptr vector::conv2mat(size_t nrow, size_t ncol,
 		bool byrow) const
 {
 	detail::matrix_store::const_ptr mat = get_data().conv2mat(nrow, ncol, byrow);
+	if (mat == NULL)
+		return dense_matrix::ptr();
 	return dense_matrix::create(mat);
 }
 
@@ -462,6 +467,8 @@ bool vector::export2(FILE *f) const
 vector::ptr vector::sapply(bulk_uoperate::const_ptr op) const
 {
 	dense_matrix::ptr tmp = conv2mat(get_length(), 1, false);
+	if (tmp == NULL)
+		return vector::ptr();
 	dense_matrix::ptr tmp1 = tmp->sapply(op);
 	return tmp1->get_col(0);
 }
