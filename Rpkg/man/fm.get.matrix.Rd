@@ -7,7 +7,7 @@
 \usage{
 fm.get.matrix(fg)
 
-fm.load.matrix(mat.file, index.file)
+fm.load.matrix(mat, index, t.mat = NULL, t.index = NULL, in.mem = TRUE)
 }
 \arguments{
 \item{fg}{A FlashGraphR object.}

@@ -4,12 +4,12 @@
 \alias{fm.agg}
 \title{Aggregation on a FlashMatrixR object.}
 \usage{
-fm.agg(bop, fm)
+fm.agg(fm, op)
 }
 \arguments{
-\item{bop}{a basic operator}
-
 \item{fm}{a FlashMatrixR object}
+
+\item{op}{a basic operator}
 }
 \value{
 a scalar
