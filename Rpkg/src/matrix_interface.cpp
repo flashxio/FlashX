@@ -373,7 +373,16 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
 	vector::ptr vec = get_vector(vec_obj);
-	return create_FMR_matrix(vec->conv2mat(nrow, ncol, byrow), "");
+	if (vec == NULL) {
+		fprintf(stderr, "Can't get the vector\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = vec->conv2mat(nrow, ncol, byrow);
+	if (mat == NULL) {
+		fprintf(stderr, "can't convert a vector to a matrix\n");
+		return R_NilValue;
+	}
+	return create_FMR_matrix(mat, "");
 }
 
 template<class T, class RType>
