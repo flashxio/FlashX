@@ -19,8 +19,6 @@
 
 #include <Rinternals.h>
 
-#include "rutils.h"
-
 /*
  * We need to implement these two functions here because Rinternals.h masses
  * up with other C++ header files.
