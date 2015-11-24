@@ -6,29 +6,17 @@ Description:
 
 Usage:
 
-     fm.nrow(fm)
-     
-     fm.ncol(fm)
-     
-     fm.is.sym(fm)
-     
      fm.matrix.layout(fm)
      
      fm.is.sparse(fm)
      
-     fm.length(fm)
-     
-     fm.typeof(fm)
+     fm.is.vector(fm)
      
 Arguments:
 
       fm: The FlashMatrixR object
 
 Details:
-
-     `fm.nrow' gets the number of rows in a matrix.
-
-     `fm.ncol' gets the number of columns in a matrix.
 
      `fm.is.sym' indicates whether a matrix is symmetric.
 
@@ -38,15 +26,9 @@ Details:
      `fm.is.vector' indicates whether a FlashMatrixR object is a
      vector.
 
-     `fm.length' gets the length of a FlashMatrixR vector
-
-     `fm.typeof' gets the type of the element in a FlashMatrixR object.
-
 Value:
 
-     `fm.nrow' and `fm.ncol' returns numeric constants. `fm.is.sym' and
-     `fm.is.sparse' returns boolean constants. `fm.length' returns a
-     numeric constant. `fm.typeof' returns a string.
+     `fm.is.sym' and `fm.is.sparse' returns boolean constants.
 
 Author(s):
 
