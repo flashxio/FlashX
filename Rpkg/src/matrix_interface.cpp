@@ -1074,8 +1074,9 @@ public:
 		// doesn't work frequently, so it won't clean up the existing
 		// dense matrices and use a lot of memory.
 		R_gc();
-		SEXP r_mat = create_FMR_matrix(x, "x");
-		SEXP pret = fun(r_mat, pextra);
+		SEXP s4_mat = R_create_s4fm(create_FMR_matrix(x, "x"));
+		SEXP pret = fun(s4_mat, pextra);
+		UNPROTECT(2);
 		return get_matrix<dense_matrix>(pret);
 	}
 
