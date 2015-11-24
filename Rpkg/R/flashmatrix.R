@@ -474,7 +474,7 @@ fm.create.agg.op <- function(agg, combine, name)
 #' the FlashMatrixR object with the basic operator.
 #'
 #' @param fm a FlashMatrixR object
-#' @param op a basic operator
+#' @param op a basic operator or an aggregation operator
 #' @return a scalar
 fm.agg <- function(fm, op)
 {
@@ -483,7 +483,26 @@ fm.agg <- function(fm, op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
-	.Call("R_FM_agg", op, fm, PACKAGE="FlashGraphR")
+	.Call("R_FM_agg", fm, op, PACKAGE="FlashGraphR")
+}
+
+#' Aggregation on a FlashMatrixR matrix.
+#'
+#' This function accepts a basic operator and perform aggregation on
+#' the rows/columns of a FlashMatrixR matrix with the basic operator.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @param margin the subscript which the function will be applied over.
+#' @param op a basic operator or an aggregation operator
+#' @return a FlashMatrixR vector.
+fm.agg.mat <- function(fm, margin, op)
+{
+	stopifnot(!is.null(fm) && !is.null(op))
+	stopifnot(class(fm) == "fm")
+	if (class(op) == "fm.bo")
+		op <- fm.create.agg.op(op, op, op@name)
+	stopifnot(class(op) == "fm.agg.op")
+	.Call("R_FM_agg_mat", fm, margin, op, PACKAGE="FlashGraphR")
 }
 
 #' Apply a Function to two FlashMatrixR vectors/matrices.

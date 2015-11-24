@@ -852,7 +852,7 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 	}
 }
 
-RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
+RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 {
 	Rcpp::S4 obj1(pobj);
 	if (is_sparse(obj1)) {
@@ -875,6 +875,30 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
 		return R_NilValue;
 	}
+}
+
+RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg_mat doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (m->is_type<bool>())
+		m = m->cast_ele_type(get_scalar_type<int>());
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+	vector::ptr res = m->aggregate((matrix_margin) margin, op);
+	return create_FMR_vector(res->get_raw_store(), "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
