@@ -140,7 +140,7 @@ bool dense_matrix::verify_mapply2(const dense_matrix &m,
 	return true;
 }
 
-bool dense_matrix::verify_apply(apply_margin margin, const arr_apply_operate &op) const
+bool dense_matrix::verify_apply(matrix_margin margin, const arr_apply_operate &op) const
 {
 	if (get_entry_size() != op.input_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -2422,10 +2422,10 @@ namespace
  */
 class matrix_short_agg_op: public detail::portion_mapply_op
 {
-	detail::agg_margin margin;
+	matrix_margin margin;
 	agg_operate::const_ptr op;
 public:
-	matrix_short_agg_op(detail::agg_margin margin, agg_operate::const_ptr op,
+	matrix_short_agg_op(matrix_margin margin, agg_operate::const_ptr op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->margin = margin;
@@ -2454,9 +2454,8 @@ public:
 	}
 
 	virtual portion_mapply_op::const_ptr transpose() const {
-		detail::agg_margin new_margin
-			= (this->margin == detail::agg_margin::MAR_ROW ?
-			detail::agg_margin::MAR_COL : detail::agg_margin::MAR_ROW);
+		matrix_margin new_margin = (this->margin == matrix_margin::MAR_ROW ?
+			matrix_margin::MAR_COL : matrix_margin::MAR_ROW);
 		return portion_mapply_op::const_ptr(new matrix_short_agg_op(
 					new_margin, op, get_out_num_cols(), get_out_num_rows()));
 	}
@@ -2473,7 +2472,7 @@ public:
  */
 class matrix_long_agg_op: public detail::portion_mapply_op
 {
-	detail::agg_margin margin;
+	matrix_margin margin;
 	agg_operate::const_ptr op;
 	// Each row stores the local aggregation results on a thread.
 	detail::mem_row_matrix_store::ptr partial_res;
@@ -2483,7 +2482,7 @@ class matrix_long_agg_op: public detail::portion_mapply_op
 	std::vector<size_t> num_aggs;
 public:
 	matrix_long_agg_op(detail::mem_row_matrix_store::ptr partial_res,
-			detail::agg_margin margin,
+			matrix_margin margin,
 			agg_operate::const_ptr &op): detail::portion_mapply_op(
 				0, 0, partial_res->get_type()) {
 		this->partial_res = partial_res;
@@ -2550,18 +2549,18 @@ void matrix_long_agg_op::run(
 }
 
 vector::ptr aggregate(detail::matrix_store::const_ptr store,
-		detail::agg_margin margin, agg_operate::const_ptr op)
+		matrix_margin margin, agg_operate::const_ptr op)
 {
 	/*
 	 * If we aggregate on the shorter dimension.
 	 */
-	if ((margin == detail::agg_margin::MAR_ROW && !store->is_wide())
-			|| (margin == detail::agg_margin::MAR_COL && store->is_wide())) {
+	if ((margin == matrix_margin::MAR_ROW && !store->is_wide())
+			|| (margin == matrix_margin::MAR_COL && store->is_wide())) {
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = store;
 		size_t out_num_rows;
 		size_t out_num_cols;
-		if (margin == detail::agg_margin::MAR_ROW) {
+		if (margin == matrix_margin::MAR_ROW) {
 			out_num_rows = store->get_num_rows();
 			out_num_cols = 1;
 		}
@@ -2571,7 +2570,7 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 		}
 		matrix_short_agg_op::const_ptr agg_op(new matrix_short_agg_op(
 					margin, op, out_num_rows, out_num_cols));
-		matrix_layout_t output_layout = (margin == detail::agg_margin::MAR_ROW
+		matrix_layout_t output_layout = (margin == matrix_margin::MAR_ROW
 				? matrix_layout_t::L_COL : matrix_layout_t::L_ROW);
 		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 				agg_op, output_layout);
@@ -2591,15 +2590,15 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 		= detail::mem_thread_pool::get_global_mem_threads();
 	size_t num_threads = threads->get_num_threads();
 	detail::mem_row_matrix_store::ptr partial_res;
-	if (margin == detail::agg_margin::BOTH)
+	if (margin == matrix_margin::BOTH)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				1, op->get_output_type());
 	// For the next two cases, I assume the partial result is small enough
 	// to be kept in memory.
-	else if (margin == detail::agg_margin::MAR_ROW)
+	else if (margin == matrix_margin::MAR_ROW)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				store->get_num_rows(), op->get_output_type());
-	else if (margin == detail::agg_margin::MAR_COL)
+	else if (margin == matrix_margin::MAR_COL)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
 				store->get_num_cols(), op->get_output_type());
 	else
@@ -2642,8 +2641,19 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_length(),
 			res->get_type(), -1);
 	detail::aggregate(*local_res, op->get_combine(),
-			detail::agg_margin::MAR_COL, local_vec);
+			matrix_margin::MAR_COL, local_vec);
 	return vector::create(res);
+}
+
+vector::ptr dense_matrix::aggregate(matrix_margin margin,
+			agg_operate::const_ptr op) const
+{
+	if (this->get_type() != op->get_input_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrix element type is different from the operator";
+		return vector::ptr();
+	}
+	return fm::aggregate(store, margin, op);
 }
 
 scalar_variable::ptr dense_matrix::aggregate(bulk_operate::const_ptr op) const
@@ -2658,7 +2668,7 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 			<< "The matrix element type is different from the operator";
 		return scalar_variable::ptr();
 	}
-	vector::ptr res_vec = fm::aggregate(store, detail::agg_margin::BOTH, op);
+	vector::ptr res_vec = fm::aggregate(store, matrix_margin::BOTH, op);
 	assert(res_vec->get_length() == 1);
 	assert(res_vec->is_in_mem());
 
@@ -2673,10 +2683,10 @@ namespace
 
 class matrix_margin_apply_op: public detail::portion_mapply_op
 {
-	apply_margin margin;
+	matrix_margin margin;
 	arr_apply_operate::const_ptr op;
 public:
-	matrix_margin_apply_op(apply_margin margin, arr_apply_operate::const_ptr op,
+	matrix_margin_apply_op(matrix_margin margin, arr_apply_operate::const_ptr op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->margin = margin;
@@ -2688,8 +2698,8 @@ public:
 		detail::apply(margin, *op, *ins[0], out);
 	}
 	virtual portion_mapply_op::const_ptr transpose() const {
-		apply_margin new_margin = this->margin == apply_margin::MAR_ROW ?
-			apply_margin::MAR_COL : apply_margin::MAR_ROW;
+		matrix_margin new_margin = this->margin == matrix_margin::MAR_ROW ?
+			matrix_margin::MAR_COL : matrix_margin::MAR_ROW;
 		return portion_mapply_op::const_ptr(new matrix_margin_apply_op(
 					new_margin, op, get_out_num_cols(), get_out_num_rows()));
 	}
@@ -2702,7 +2712,7 @@ public:
 
 }
 
-dense_matrix::ptr dense_matrix::apply(apply_margin margin,
+dense_matrix::ptr dense_matrix::apply(matrix_margin margin,
 		arr_apply_operate::const_ptr op) const
 {
 	assert(op->get_num_out_eles() > 0);
@@ -2710,13 +2720,13 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 	// before we can apply the function to the matrix.
 	detail::matrix_store::const_ptr this_mat;
 	if (is_wide() && store_layout() == matrix_layout_t::L_COL
-			&& margin == apply_margin::MAR_ROW) {
+			&& margin == matrix_margin::MAR_ROW) {
 		dense_matrix::ptr mat = conv2(matrix_layout_t::L_ROW);
 		mat->materialize_self();
 		this_mat = mat->get_raw_store();
 	}
 	else if (!is_wide() && store_layout() == matrix_layout_t::L_ROW
-			&& margin == apply_margin::MAR_COL) {
+			&& margin == matrix_margin::MAR_COL) {
 		dense_matrix::ptr mat = conv2(matrix_layout_t::L_COL);
 		mat->materialize_self();
 		this_mat = mat->get_raw_store();
@@ -2729,7 +2739,7 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 	// dimension. The previous two cases are handled as one of the two cases
 	// after the matrix layout conversion from the previous cases.
 	if (is_wide() && this_mat->store_layout() == matrix_layout_t::L_ROW
-			&& margin == apply_margin::MAR_ROW) {
+			&& margin == matrix_margin::MAR_ROW) {
 #if 0
 		// In this case, it's very difficult to make it work for NUMA matrix.
 		assert(get_num_nodes() == -1);
@@ -2752,7 +2762,7 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 		return dense_matrix::ptr();
 	}
 	else if (!is_wide() && this_mat->store_layout() == matrix_layout_t::L_COL
-			&& margin == apply_margin::MAR_COL) {
+			&& margin == matrix_margin::MAR_COL) {
 #if 0
 		assert(get_num_nodes() == -1);
 		detail::mem_col_matrix_store::const_ptr col_mat
@@ -2781,7 +2791,7 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 		ins[0] = this->get_raw_store();
 		size_t out_num_rows;
 		size_t out_num_cols;
-		if (margin == apply_margin::MAR_ROW) {
+		if (margin == matrix_margin::MAR_ROW) {
 			out_num_rows = this->get_num_rows();
 			out_num_cols = op->get_num_out_eles();
 		}
@@ -2791,7 +2801,7 @@ dense_matrix::ptr dense_matrix::apply(apply_margin margin,
 		}
 		matrix_margin_apply_op::const_ptr apply_op(new matrix_margin_apply_op(
 					margin, op, out_num_rows, out_num_cols));
-		matrix_layout_t output_layout = (margin == apply_margin::MAR_ROW
+		matrix_layout_t output_layout = (margin == matrix_margin::MAR_ROW
 				? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
 		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 				apply_op, output_layout);
@@ -2858,16 +2868,14 @@ vector::ptr dense_matrix::row_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return fm::aggregate(store, detail::agg_margin::MAR_ROW,
-			agg_operate::create(add));
+	return fm::aggregate(store, matrix_margin::MAR_ROW, agg_operate::create(add));
 }
 
 vector::ptr dense_matrix::col_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return fm::aggregate(store, detail::agg_margin::MAR_COL,
-			agg_operate::create(add));
+	return fm::aggregate(store, matrix_margin::MAR_COL, agg_operate::create(add));
 }
 
 vector::ptr dense_matrix::row_norm2() const

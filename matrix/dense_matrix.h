@@ -44,10 +44,11 @@ class set_operate;
 class arr_apply_operate;
 class vector;
 
-enum apply_margin
+enum matrix_margin
 {
 	MAR_ROW = 1,
 	MAR_COL = 2,
+	BOTH,
 };
 
 class dense_matrix;
@@ -189,7 +190,7 @@ protected:
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	bool verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
-	bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
+	bool verify_apply(matrix_margin margin, const arr_apply_operate &op) const;
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
@@ -322,6 +323,7 @@ public:
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
+	vector::ptr aggregate(matrix_margin margin, agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(bulk_operate::const_ptr op) const;
 
@@ -338,7 +340,7 @@ public:
 	dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
 	dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
-	dense_matrix::ptr apply(apply_margin margin,
+	dense_matrix::ptr apply(matrix_margin margin,
 			arr_apply_operate::const_ptr op) const;
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;

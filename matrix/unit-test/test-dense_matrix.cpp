@@ -852,7 +852,7 @@ void test_apply1(dense_matrix::ptr mat)
 	printf("Test apply on rows of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
-	res = mat->apply(apply_margin::MAR_ROW,
+	res = mat->apply(matrix_margin::MAR_ROW,
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	if (res) {
 		assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
@@ -869,7 +869,7 @@ void test_apply1(dense_matrix::ptr mat)
 	printf("Test apply on columns of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
-	res = mat->apply(apply_margin::MAR_COL,
+	res = mat->apply(matrix_margin::MAR_COL,
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	if (res) {
 		assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());

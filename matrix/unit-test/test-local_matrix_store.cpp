@@ -1,5 +1,6 @@
 #include "bulk_operate.h"
 #include "local_matrix_store.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 using namespace fm::detail;
@@ -238,7 +239,7 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 	const bulk_operate &op = store->get_type().get_basic_ops().get_add();
 	int sum = 0;
 	local_ref_vec_store res((char *) &sum, 0, 1, get_scalar_type<int>(), -1);
-	aggregate(*store, op, agg_margin::BOTH, res);
+	aggregate(*store, op, matrix_margin::BOTH, res);
 	int num_eles = store->get_num_rows() * store->get_num_cols();
 	assert(sum == (num_eles - 1) * num_eles / 2);
 }
