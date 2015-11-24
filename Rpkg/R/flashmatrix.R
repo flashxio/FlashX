@@ -707,9 +707,13 @@ fm.read.obj <- function(file)
 #'         vectors: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.eigen <- function(func, extra=NULL, sym=FALSE, options=NULL,
+fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 					 env = parent.frame())
 {
+	if (!sym) {
+		print("fm.eigen only supports symmetric matrices")
+		return(NULL)
+	}
 	ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
 		  as.list(options), PACKAGE="FlashGraphR")
 	ret$vecs <- new.fm(ret$vecs)
