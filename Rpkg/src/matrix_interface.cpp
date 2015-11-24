@@ -1110,7 +1110,11 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	if (options.containsElementNamed("solver"))
 		solver = CHAR(STRING_ELT(options["solver"], 0));
 
-	eigen::eigen_options opts(nev, solver);
+	eigen::eigen_options opts;
+	if (!opts.init(nev, solver)) {
+		fprintf(stderr, "can't init eigen options\n");
+		return R_NilValue;
+	}
 	if (options.containsElementNamed("tol"))
 		opts.tol = REAL(options["tol"])[0];
 	if (options.containsElementNamed("num_blocks"))
