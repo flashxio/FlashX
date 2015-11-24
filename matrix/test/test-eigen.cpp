@@ -256,7 +256,11 @@ int main (int argc, char *argv[])
 		nev = atoi(argv[3]); // number of eigenvalues for which to solve;
 
 	set_num_cached_mats(num_cached);
-	struct eigen_options opts(nev, solver);
+	struct eigen_options opts;
+	if (!opts.init(nev, solver)) {
+		fprintf(stderr, "can't init eigen options\n");
+		exit(1);
+	}
 	if (block_size > 0)
 		opts.block_size = block_size;
 	if (num_blocks > 0)

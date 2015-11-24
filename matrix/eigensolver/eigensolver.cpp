@@ -75,16 +75,21 @@ namespace fm
 namespace eigen
 {
 
-eigen_options::eigen_options(int nev, std::string solver)
+eigen_options::eigen_options()
 {
 	tol = 1.0e-8;
 	max_restarts = 100;
 	max_iters = 500;
-	this->nev = nev;
-	this->solver = solver;
+	this->nev = 1;
+	this->solver = "KrylovSchur";
 	which="LM";
 	in_mem = true;
+}
 
+bool eigen_options::init(int nev, std::string solver)
+{
+	this->nev = nev;
+	this->solver = solver;
 	if (solver == "KrylovSchur") {
 		block_size = 1;
 		// The KrylovSchur solver wants the number of blocks to be at least 3.
@@ -100,8 +105,10 @@ eigen_options::eigen_options(int nev, std::string solver)
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "Unknown solver: " << solver;
-		exit(1);
+		return false;
 	}
+
+	return true;
 }
 
 eigen_res compute_eigen(spm_function *func, bool sym,
