@@ -502,7 +502,9 @@ fm.agg.mat <- function(fm, margin, op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
-	.Call("R_FM_agg_mat", fm, margin, op, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op,
+				 PACKAGE="FlashGraphR")
+	new.fmV(ret)
 }
 
 #' Apply a Function to two FlashMatrixR vectors/matrices.
