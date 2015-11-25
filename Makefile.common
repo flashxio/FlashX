@@ -22,15 +22,22 @@ CXX = g++
 #MEMTRACE=1
 #BOOST_LOG=1
 #RELEASE=1
+HWLOC=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -fsanitize=address
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 endif
+ifeq ($(HWLOC), 1)
+CFLAGS += -DUSE_HWLOC
+CXXFLAGS += -DUSE_HWLOC
+LDFLAGS += -lhwloc
+endif
+
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt -fopenmp -lhwloc
-CXXFLAGS = -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK -fopenmp
+LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt -fopenmp
+CXXFLAGS += -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK -fopenmp
 ifdef PROF
 	LDFLAGS +=-lprofiler
 	CXXFLAGS += -DPROFILER
