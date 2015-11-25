@@ -310,6 +310,14 @@ op_id_t get_uop_id(const std::string &name)
 		return basic_uops::op_idx::CEIL;
 	else if (name == "floor")
 		return basic_uops::op_idx::FLOOR;
+	else if (name == "round")
+		return basic_uops::op_idx::ROUND;
+	else if (name == "log")
+		return basic_uops::op_idx::LOG;
+	else if (name == "log2")
+		return basic_uops::op_idx::LOG2;
+	else if (name == "log10")
+		return basic_uops::op_idx::LOG10;
 	else
 		return _get_uop_id(name);
 }
