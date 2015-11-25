@@ -1,0 +1,41 @@
+Groupby on a FlashMatrixR vector.
+
+Description:
+
+     `fm.sgroupby' groups elements in a vector based on corresponding
+     `labels' and applies `FUN' to the elements in each group. `FUN' is
+     an aggregation operator.
+
+Usage:
+
+     fm.sgroupby(obj, FUN)
+     
+Arguments:
+
+     obj: a FlashMatrixR vector or matrix
+
+     FUN: an aggregation operator returned by `fm.get.basic.op'.
+
+  margin: the subscript which the function will be applied over. E.g.,
+          for a matrix, `1' indicates rows, `2' indicates columns.
+
+  labels: a FlashMatrixR vector that indicates the labels of each
+          element in `obj'.
+
+Details:
+
+     `fm.groupby' groups rows/columns of a matrix based on
+     corresponding `labels' and applies `FUN' to the rows/columns in
+     each group. `FUN' is an aggregation operator.
+
+Value:
+
+     `fm.sgroupby' returns a data frame, where the column `val' stores
+     all of the unique values in the original data container, and the
+     column `agg' stores the aggregate result of the corresponding
+     value.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
