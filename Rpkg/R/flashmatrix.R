@@ -164,6 +164,11 @@ fm.runif <- function(n, min=0, max=1)
 	new.fmV(vec)
 }
 
+setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
+setMethod("is.vector", signature(x = "fmV"), function(x) TRUE)
+setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
+setMethod("is.matrix", signature(x = "fm"), function(x) TRUE)
+
 #' Convert a regular R object to a FlashMatrixR object.
 #'
 #' If the R object is a matrix, `byrow' determines how data in the generated
