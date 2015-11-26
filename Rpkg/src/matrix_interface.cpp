@@ -931,6 +931,54 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 	return create_FMR_data_frame(groupby_res, "");
 }
 
+RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
+{
+	if (is_vector(pmat)) {
+		fprintf(stderr, "Doesn't support groupby on a vector\n");
+		return R_NilValue;
+	}
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support groupby on a sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "invalid margin in groupby\n");
+		return R_NilValue;
+	}
+
+	factor_vector::ptr factor = get_factor_vector(pfactor);
+	if (factor == NULL) {
+		fprintf(stderr, "groupby needs a factor vector\n");
+		return R_NilValue;
+	}
+	if (margin == matrix_margin::MAR_ROW
+			&& factor->get_length() != mat->get_num_cols()) {
+		fprintf(stderr,
+				"the factor vector needs to have the length as #columns");
+		return R_NilValue;
+	}
+	else if (margin == matrix_margin::MAR_COL
+			&& factor->get_length() != mat->get_num_rows()) {
+		fprintf(stderr,
+				"the factor vector needs to have the length as #rows");
+		return R_NilValue;
+	}
+
+	if (margin == matrix_margin::MAR_ROW) {
+		fprintf(stderr, "doesn't support grouping columns\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, mat->get_type());
+	dense_matrix::ptr groupby_res = mat->groupby_row(factor, op);
+	if (groupby_res == NULL)
+		return R_NilValue;
+	else
+		return create_FMR_matrix(groupby_res, "");
+}
+
 RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
 {
 	Rcpp::StringVector ret(1);

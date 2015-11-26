@@ -624,6 +624,16 @@ fm.sgroupby <- function(obj, FUN)
 	list(val=new.fmV(res$val), Freq=new.fmV(res$agg))
 }
 
+fm.groupby <- function(fm, margin, factor, FUN)
+{
+	stopifnot(class(fm) == "fm")
+	stopifnot(class(FUN) == "fm.agg.op")
+	stopifnot(class(factor) == "fmFactorV")
+	res <- .Call("R_FM_groupby", fm, as.integer(margin), factor, FUN,
+				 PACKAGE="FlashGraphR")
+	new.fm(res)
+}
+
 #' Transpose a FlashMatrixR matrix.
 #'
 #' @param m a FlashMatrixR matrix
