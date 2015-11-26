@@ -3025,10 +3025,10 @@ class groupby_row_mapply_op: public detail::portion_mapply_op
 	// Each row of a local matrix contains partially aggregated data for a label.
 	std::vector<detail::local_row_matrix_store::ptr> part_results;
 	size_t num_levels;
-	bulk_operate::const_ptr op;
+	agg_operate::const_ptr op;
 public:
 	groupby_row_mapply_op(size_t num_levels,
-			bulk_operate::const_ptr op): detail::portion_mapply_op(0, 0,
+			agg_operate::const_ptr op): detail::portion_mapply_op(0, 0,
 				op->get_output_type()) {
 		detail::mem_thread_pool::ptr threads
 			= detail::mem_thread_pool::get_global_mem_threads();
@@ -3074,8 +3074,9 @@ detail::matrix_store::ptr groupby_row_mapply_op::get_agg() const
 				res->get_num_cols() * res->get_entry_size());
 		for (size_t j = first_idx + 1; j < part_results.size(); j++) {
 			if (part_results[j] != NULL)
-				op->runAA(res->get_num_cols(), part_results[j]->get_row(i),
-						res->get_row(i), res->get_row(i));
+				op->get_combine().runAA(res->get_num_cols(),
+						part_results[j]->get_row(i), res->get_row(i),
+						res->get_row(i));
 		}
 	}
 	return res;
@@ -3117,7 +3118,7 @@ void groupby_row_mapply_op::run(
 			memcpy(part_results[thread_id]->get_row(label_id), in->get_row(i),
 					in->get_num_cols() * in->get_entry_size());
 		else
-			op->runAA(in->get_num_cols(), in->get_row(i),
+			op->get_agg().runAA(in->get_num_cols(), in->get_row(i),
 					part_results[thread_id]->get_row(label_id),
 					part_results[thread_id]->get_row(label_id));
 		mutable_this->part_agg[thread_id].assign(label_id, true);
@@ -3127,7 +3128,7 @@ void groupby_row_mapply_op::run(
 }
 
 dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
-		bulk_operate::const_ptr op) const
+		agg_operate::const_ptr op) const
 {
 	if (is_wide()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -3139,14 +3140,13 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
 			<< "groupby_row: there should be the same #labels as #rows";
 		return dense_matrix::ptr();
 	}
-	if (get_type() != op->get_left_type() || get_type() != op->get_right_type()) {
+	if (get_type() != op->get_input_type()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "groupby_row: the agg op requires diff element types";
 		return dense_matrix::ptr();
 	}
-	if (op->get_output_type() != op->get_left_type()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "groupby_row doesn't support an operator that outputs a diff type from its input type";
+	if (!op->has_combine()) {
+		BOOST_LOG_TRIVIAL(error) << "agg op needs to have combine";
 		return dense_matrix::ptr();
 	}
 
@@ -3158,7 +3158,20 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
 	detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
 	__mapply_portion(mats, groupby_op, matrix_layout_t::L_ROW);
 
-	return dense_matrix::create(_groupby_op->get_agg());
+	detail::matrix_store::ptr agg = _groupby_op->get_agg();
+	if (agg == NULL)
+		return dense_matrix::ptr();
+	else
+		return dense_matrix::create(agg);
+}
+
+dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
+		bulk_operate::const_ptr op) const
+{
+	agg_operate::const_ptr agg = agg_operate::create(op);
+	if (agg == NULL)
+		return dense_matrix::ptr();
+	return groupby_row(labels, agg);
 }
 
 }

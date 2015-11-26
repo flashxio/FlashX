@@ -335,6 +335,8 @@ public:
 	 * the input dense matrix that have the same factor.
 	 */
 	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
+			agg_operate::const_ptr) const;
+	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
 			bulk_operate::const_ptr) const;
 
 	dense_matrix::ptr mapply2(const dense_matrix &m,
