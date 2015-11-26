@@ -3137,7 +3137,8 @@ void groupby_row_mapply_op::run(
 			op->get_agg().runAA(in->get_num_cols(), in->get_row(i),
 					part_results[thread_id]->get_row(label_id),
 					part_results[thread_id]->get_row(label_id));
-		mutable_this->part_agg[thread_id].assign(label_id, true);
+		auto bit = mutable_this->part_agg[thread_id][label_id];
+		bit = true;
 	}
 }
 
