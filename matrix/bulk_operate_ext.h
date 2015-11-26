@@ -78,7 +78,7 @@ public:
 		return agg->get_left_type();
 	}
 	const scalar_type &get_output_type() const {
-		return combine->get_output_type();
+		return agg->get_output_type();
 	}
 };
 

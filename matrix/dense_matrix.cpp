@@ -2582,6 +2582,11 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 		else
 			return vector::create(ret->get_row_vec(0));
 	}
+	if (!op->has_combine()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "aggregation on the long dimension requires combine";
+		return vector::ptr();
+	}
 
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
@@ -2669,6 +2674,7 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 		return scalar_variable::ptr();
 	}
 	vector::ptr res_vec = fm::aggregate(store, matrix_margin::BOTH, op);
+	assert(res_vec != NULL);
 	assert(res_vec->get_length() == 1);
 	assert(res_vec->is_in_mem());
 
