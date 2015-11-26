@@ -3024,6 +3024,7 @@ class groupby_row_mapply_op: public detail::portion_mapply_op
 	// This contains a local matrix for each thread.
 	// Each row of a local matrix contains partially aggregated data for a label.
 	std::vector<detail::local_row_matrix_store::ptr> part_results;
+	std::vector<bool> part_status;
 	size_t num_levels;
 	agg_operate::const_ptr op;
 public:
@@ -3035,6 +3036,7 @@ public:
 		size_t num_threads = threads->get_num_threads();
 		part_results.resize(num_threads);
 		part_agg.resize(num_threads);
+		part_status.resize(num_threads, true);
 		this->num_levels = num_levels;
 		this->op = op;
 	}
@@ -3058,6 +3060,12 @@ public:
 
 detail::matrix_store::ptr groupby_row_mapply_op::get_agg() const
 {
+	for (size_t i = 0; i < part_status.size(); i++) {
+		if (!part_status[i]) {
+			BOOST_LOG_TRIVIAL(error) << "groupby fails on a partition";
+			return detail::matrix_store::ptr();
+		}
+	}
 	size_t first_idx;
 	for (first_idx = 0; first_idx < part_results.size(); first_idx++)
 		if (part_results[first_idx] != NULL)
@@ -3109,9 +3117,17 @@ void groupby_row_mapply_op::run(
 					in->get_num_cols(), op->get_output_type(), -1));
 		mutable_this->part_agg[thread_id].resize(num_levels);
 	}
+	// If there was a failure in this thread, we don't need to perform more
+	// computation.
+	if (!part_status[thread_id])
+		return;
 
 	for (size_t i = 0; i < num_local_rows; i++) {
 		factor_value_t label_id = labels->get<factor_value_t>(i, 0);
+		if (label_id >= part_agg[thread_id].size()) {
+			mutable_this->part_status[thread_id] = false;
+			break;
+		}
 		// If we never get partially aggregated result for a label, we should
 		// copy the data to the corresponding row.
 		if (!part_agg[thread_id][label_id])
