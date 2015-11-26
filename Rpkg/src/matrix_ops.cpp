@@ -139,6 +139,10 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 		fprintf(stderr, "This isn't a binary operator\n");
 		return bulk_operate::const_ptr();
 	}
+	if (bo_idx < 0) {
+		fprintf(stderr, "invalid operator index\n");
+		return bulk_operate::const_ptr();
+	}
 
 	bulk_operate::const_ptr op;
 	if (bo_idx < basic_ops::op_idx::NUM_OPS) {
@@ -197,10 +201,11 @@ agg_operate::const_ptr get_agg_op(SEXP pfun, const scalar_type &mat_type)
 	bulk_operate::const_ptr agg_op = _get_op((basic_ops::op_idx) agg_info[0],
 			agg_info[1], mat_type.get_type(), mat_type.get_type());
 	Rcpp::IntegerVector combine_info = sym_op.slot("combine");
-	bulk_operate::const_ptr combine_op = _get_op(
-			(basic_ops::op_idx) combine_info[0],
-			combine_info[1], agg_op->get_output_type().get_type(),
-			agg_op->get_output_type().get_type());
+	bulk_operate::const_ptr combine_op;
+	if (combine_info[0] >= 0)
+		combine_op = _get_op((basic_ops::op_idx) combine_info[0],
+				combine_info[1], agg_op->get_output_type().get_type(),
+				agg_op->get_output_type().get_type());
 	return agg_operate::create(agg_op, combine_op);
 }
 

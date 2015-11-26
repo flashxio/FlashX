@@ -442,6 +442,10 @@ fm.init.basic.op <- function()
 
 	fm.bo.count <<- fm.get.basic.op("count")
 	stopifnot(!is.null(fm.bo.count))
+	fm.bo.which.max <<- fm.get.basic.op("which.max")
+	stopifnot(!is.null(fm.bo.which.max))
+	fm.bo.which.min <<- fm.get.basic.op("which.min")
+	stopifnot(!is.null(fm.bo.which.min))
 
 	fm.buo.neg <<- fm.get.basic.uop("neg")
 	stopifnot(!is.null(fm.buo.neg))
@@ -472,8 +476,15 @@ fm.init.basic.op <- function()
 fm.create.agg.op <- function(agg, combine, name)
 {
 	stopifnot(class(agg) == "fm.bo")
-	stopifnot(class(combine) == "fm.bo")
-	new("fm.agg.op", agg=agg@info, combine=combine@info, name=name)
+	# It's OK if combine doesn't exist.
+	if (is.null(combine)) {
+		invalid <- c(as.integer(-1), as.integer(0))
+		new("fm.agg.op", agg=agg@info, combine=invalid, name=name)
+	}
+	else {
+		stopifnot(class(combine) == "fm.bo")
+		new("fm.agg.op", agg=agg@info, combine=combine@info, name=name)
+	}
 }
 
 #' Aggregation on a FlashMatrixR object.

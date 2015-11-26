@@ -850,6 +850,10 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 {
 	ReturnType ret(1);
 	scalar_variable::ptr res = mat.aggregate(op);
+	if (res == NULL) {
+		fprintf(stderr, "can't aggregate on the matrix\n");
+		return R_NilValue;
+	}
 	assert(res->get_type() == get_scalar_type<T>());
 	if (res != NULL) {
 		ret[0] = *(const T *) res->get_raw();
@@ -907,7 +911,12 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 		return R_NilValue;
 	}
 	vector::ptr res = m->aggregate((matrix_margin) margin, op);
-	return create_FMR_vector(res->get_raw_store(), "");
+	if (res == NULL) {
+		fprintf(stderr, "can't aggregate on the matrix\n");
+		return R_NilValue;
+	}
+	else
+		return create_FMR_vector(res->get_raw_store(), "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
