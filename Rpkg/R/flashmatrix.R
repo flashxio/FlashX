@@ -648,7 +648,7 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.sgroupby <- function(obj, FUN)
 {
-	stopifnot(class(obj) == "fmV")
+	stopifnot(class(obj) == "fmV" || class(obj) == "fmFactorV")
 	stopifnot(class(FUN) == "fm.agg.op")
 	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashGraphR")
 	if (is.null(res))
