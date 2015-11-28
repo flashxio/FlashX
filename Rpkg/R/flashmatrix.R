@@ -315,12 +315,39 @@ fm.typeof <- function(fm)
 #'
 #' @param fm a FlashMatrixR matrix
 #' @return a FlashMatrixR vector
-fm.as.vector <- function(fm)
+fm.as.vector <- function(obj)
 {
-	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm")
-	vec <- .Call("R_FM_as_vector", fm, PACKAGE="FlashGraphR")
-	new.fmV(vec)
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fmV")
+		vec
+	else if (class(obj) == "fm") {
+		vec <- .Call("R_FM_as_vector", obj, PACKAGE="FlashGraphR")
+		if (!is.null(vec))
+			new.fmV(vec)
+		else
+			NULL
+	}
+	else if (is.vector(obj))
+		fm.conv.R2FM(obj)
+	else
+		NULL
+}
+
+fm.as.matrix <- function(obj)
+{
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fm")
+		obj
+	else if (class(obj) == "fmV") {
+		# A FlashMatrixR vector is actually stored in a dense matrix.
+		# We only need to construct the fm object in R.
+		new("fm", pointer=obj@pointer, name=obj@name, nrow=obj@length,
+			ncol=1, type=obj@type)
+	}
+	else if (is.matrix(obj))
+		fm.conv.R2FM(obj)
+	else
+		NULL
 }
 
 #' Convert a FlashMatrixR vector to a FlashMatrixR factor vector.
