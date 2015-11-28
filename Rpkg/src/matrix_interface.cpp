@@ -361,6 +361,41 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 		return R_NilValue;
 }
 
+RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
+		SEXP pfun1, SEXP pfun2)
+{
+	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	bulk_operate::const_ptr op1 = fmr::get_op(pfun1,
+			matrix->get_type().get_type(),
+			right_mat->get_type().get_type());
+	if (op1 == NULL) {
+		fprintf(stderr, "can't find a right form for the left operator\n");
+		return R_NilValue;
+	}
+	bulk_operate::const_ptr op2 = fmr::get_op(pfun2,
+			op1->get_output_type().get_type(),
+			op1->get_output_type().get_type());
+	if (op2 == NULL) {
+		fprintf(stderr, "can't find a right form for the right operator\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr res = matrix->inner_prod(*right_mat, op1, op2);
+	if (res == NULL)
+		return R_NilValue;
+
+	bool is_vec = is_vector(pmat);
+	if (res && is_vec) {
+		return create_FMR_vector(res, "");
+	}
+	else if (res && !is_vec) {
+		return create_FMR_matrix(res, "");
+	}
+	else
+		return R_NilValue;
+}
+
 RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 {
 	Rcpp::S4 vec_obj(pvec);

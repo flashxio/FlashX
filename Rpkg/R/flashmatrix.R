@@ -395,6 +395,43 @@ fm.multiply <- function(fm, mat)
 		new.fm(o)
 }
 
+#' Matrix inner product
+#'
+#' Inner product of a dense matrix with a dense vector/matrix.
+#'
+#' @param fm A FlashMatrixR matrix
+#' @param mat A FlashMatrixR dense matrix.
+#' @return a FlashMatrixR vector if the second argument is a vector;
+#' a FlashMatrixR matrix if the second argument is a matrix.
+#' @name fm.inner.prod
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.inner.prod <- function(fm, mat, Fun1, Fun2)
+{
+	stopifnot(!is.null(fm) && !is.null(mat))
+	stopifnot(class(fm) == "fm")
+	if (class(mat) == "fmV") {
+		stopifnot(dim(fm)[2] == length(mat))
+	}
+	else {
+		stopifnot(!fm.is.sparse(mat))
+		stopifnot(dim(fm)[2] == dim(mat)[1])
+	}
+	stopifnot(class(Fun1) == "fm.bo")
+	stopifnot(class(Fun2) == "fm.bo")
+
+	if (fm.is.sparse(fm)) {
+		print("inner product doesn't support sparse matrices yet")
+		return(NULL)
+	}
+	else
+		o <- .Call("R_FM_inner_prod_dense", fm, mat, Fun1, Fun2,
+				   PACKAGE="FlashGraphR")
+	if (class(mat) == "fmV")
+		new.fmV(o)
+	else
+		new.fm(o)
+}
+
 #' The basic operators supported by FlashMatrixR.
 #'
 #'
