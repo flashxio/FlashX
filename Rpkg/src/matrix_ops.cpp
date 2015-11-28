@@ -454,6 +454,51 @@ public:
 	}
 };
 
+template<class T>
+class r_euclidean_operate: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const T *arr1 = (const T *) left_arr;
+		const T *arr2 = (const T *) right_arr;
+		T *out = (T *) output_arr;
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = (arr1[i] - arr2[i]) * (arr1[i] - arr2[i]);
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		const T *arr1 = (const T *) left_arr;
+		const T v = *(const T *) right;
+		T *out = (T *) output_arr;
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = (arr1[i] - v) * (arr1[i] - v);
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		const T v = *(const T *) left;
+		const T *arr2 = (const T *) right_arr;
+		T *out = (T *) output_arr;
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = (v - arr2[i]) * (v - arr2[i]);
+	}
+
+	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
+			void *output) const {
+		throw unsupported_exception();
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
 void init_udf_ext()
 {
 	std::vector<bulk_operate::const_ptr> ops;
@@ -472,6 +517,11 @@ void init_udf_ext()
 	ops.push_back(bulk_operate::const_ptr(new r_which_min_operate<int>()));
 	ops.push_back(bulk_operate::const_ptr(new r_which_min_operate<double>()));
 	register_udf(ops, "which.min");
+
+	ops.clear();
+	ops.push_back(bulk_operate::const_ptr(new r_euclidean_operate<int>()));
+	ops.push_back(bulk_operate::const_ptr(new r_euclidean_operate<double>()));
+	register_udf(ops, "euclidean");
 
 	std::vector<bulk_uoperate::const_ptr> uops;
 	uops.push_back(bulk_uoperate::conv2ptr(

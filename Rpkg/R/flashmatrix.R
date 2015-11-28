@@ -515,6 +515,8 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.bo.which.max))
 	fm.bo.which.min <<- fm.get.basic.op("which.min")
 	stopifnot(!is.null(fm.bo.which.min))
+	fm.bo.euclidean <<- fm.get.basic.op("euclidean")
+	stopifnot(!is.null(fm.bo.euclidean))
 
 	fm.buo.neg <<- fm.get.basic.uop("neg")
 	stopifnot(!is.null(fm.buo.neg))
