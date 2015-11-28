@@ -1087,8 +1087,10 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->get_num_rows() == 1 || mat->get_num_cols() == 1)
+	if (mat->get_num_cols() == 1)
 		return create_FMR_vector(mat, "");
+	else if (mat->get_num_rows() == 1)
+		return create_FMR_vector(mat->transpose(), "");
 	else
 		return R_NilValue;
 }
