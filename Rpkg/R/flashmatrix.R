@@ -169,6 +169,40 @@ setMethod("is.vector", signature(x = "fmV"), function(x) TRUE)
 setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
 setMethod("is.matrix", signature(x = "fm"), function(x) TRUE)
 
+#' Convert the data layout of a FlashMatrixR matrix.
+#'
+#' A FMR matrix can store elements in a row-major or column-major order.
+#' By changing the data layout, we can improve efficiency of some matrix
+#' operations.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @param byrow a logical value to determine the data layout of a FlashMatrixR
+#' matrix.
+#' @return a FlashMatrixR matrix
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.conv.layout <- function(fm, byrow=FALSE)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_conv_layout", fm, as.logical(byrow), PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+#' Get the data layout of a FlashMatrixR matrix.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @return a string that indicates the data layout.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.get.layout <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	.Call("R_FM_get_layout", fm, PACKAGE="FlashGraphR")
+}
+
 #' Convert a regular R object to a FlashMatrixR object.
 #'
 #' If the R object is a matrix, `byrow' determines how data in the generated

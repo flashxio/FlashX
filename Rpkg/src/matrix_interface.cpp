@@ -1359,6 +1359,38 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	return create_FMR_matrix(mat, "");
 }
 
+RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
+{
+	bool byrow = LOGICAL(pbyrow)[0];
+	if (is_sparse(pmat)) {
+		fprintf(stderr,
+				"Doesn't support convert the layout of a sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr ret;
+	if (byrow)
+		ret = mat->conv2(matrix_layout_t::L_ROW);
+	else
+		ret = mat->conv2(matrix_layout_t::L_COL);
+	return create_FMR_matrix(ret, "");
+}
+
+RcppExport SEXP R_FM_get_layout(SEXP pmat)
+{
+	Rcpp::StringVector ret(1);
+	if (is_sparse(pmat))
+		ret[0] = Rcpp::String("row-oriented");
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		if (mat->store_layout() == matrix_layout_t::L_ROW)
+			ret[0] = Rcpp::String("row-oriented");
+		else
+			ret[0] = Rcpp::String("col-oriented");
+	}
+	return ret;
+}
+
 void init_flashmatrixr()
 {
 	fmr::init_udf_ext();
