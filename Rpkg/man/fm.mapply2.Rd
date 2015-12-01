@@ -4,12 +4,12 @@
 \alias{fm.mapply2}
 \title{Apply a Function to two FlashMatrixR vectors/matrices.}
 \usage{
-fm.mapply2(FUN, o1, o2)
+fm.mapply2(o1, o2, FUN)
 }
 \arguments{
-\item{FUN}{the user-defined operators.}
-
 \item{o1,}{o2 a FlashMatrixR vector/matrix.}
+
+\item{FUN}{the user-defined operators.}
 }
 \value{
 a FlashMatrixR vector/matrix.

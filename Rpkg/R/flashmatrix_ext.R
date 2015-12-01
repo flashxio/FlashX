@@ -127,22 +127,22 @@ fm.pmax2 <- function(o1, o2)
 
 `<=.fm`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.gt)
+	fm.mapply2(o1, o2, fm.bo.le)
 }
 
 `<=.fmV`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.gt)
+	fm.mapply2(o1, o2, fm.bo.le)
 }
 
 `<.fm`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.ge)
+	fm.mapply2(o1, o2, fm.bo.lt)
 }
 
 `<.fmV`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.ge)
+	fm.mapply2(o1, o2, fm.bo.lt)
 }
 
 `!.fm` <- function(o)
@@ -159,7 +159,10 @@ setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y)
 setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
 
 setMethod("dim", signature(x = "fm"), function(x) c(x@nrow, x@ncol))
+setMethod("nrow", signature(x = "fm"), function(x) x@nrow)
+setMethod("ncol", signature(x = "fm"), function(x) x@ncol)
 setMethod("length", signature(x = "fmV"), function(x) x@len)
+setMethod("length", signature(x = "fm"), function(x) x@nrow * x@ncol)
 setMethod("typeof", signature(x = "fm"), function(x) fm.typeof(x))
 setMethod("typeof", signature(x = "fmV"), function(x) fm.typeof(x))
 setMethod("t", signature(x = "fm"), function(x) fm.t(x))
@@ -167,10 +170,22 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 # Aggregation on a FlashMatrixR vector/matrix.
 setMethod("sum", signature(x = "fm"), function(x) fm.agg(x, fm.bo.add))
 setMethod("sum", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.add))
+setMethod("mean", signature(x = "fm"), function(x) sum(x)/length(x))
+setMethod("mean", signature(x = "fmV"), function(x) sum(x)/length(x))
 setMethod("min", signature(x = "fm"), function(x) fm.agg(x, fm.bo.min))
 setMethod("min", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.min))
 setMethod("max", signature(x = "fm"), function(x) fm.agg(x, fm.bo.max))
 setMethod("max", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.max))
+setMethod("sd", signature(x = "fmV"), function(x) {
+		  n <- length(x)
+		  avg <- mean(x)
+		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+})
+setMethod("sd", signature(x = "fm"), function(x) {
+		  n <- length(x)
+		  avg <- mean(x)
+		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+})
 
 # Miscellaneous Mathematical Functions
 setMethod("abs", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.abs))
@@ -181,6 +196,34 @@ setMethod("ceiling", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.ceil))
 setMethod("ceiling", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.ceil))
 setMethod("floor", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.floor))
 setMethod("floor", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.floor))
+setMethod("round", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.round))
+setMethod("round", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.round))
+setMethod("log", signature(x = "fm"), function(x, base) fm.sapply(x, fm.buo.log))
+setMethod("log", signature(x = "fmV"), function(x, base) fm.sapply(x, fm.buo.log))
+setMethod("log10", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log10))
+setMethod("log10", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log10))
+setMethod("log2", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log2))
+setMethod("log2", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log2))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
+
+setMethod("rowSums", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
+		  function(x, na.rm, dims) {
+			  fm.agg.mat(x, 1, fm.bo.add)
+		  })
+setMethod("colSums", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
+		  function(x, na.rm, dims) {
+			  fm.agg.mat(x, 2, fm.bo.add)
+		  })
+setMethod("rowMeans", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
+		  function(x, na.rm, dims) {
+			  rowSums(x, na.rm, dims) / dim(x)[2]
+		  })
+
+setMethod("colMeans", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
+		  function(x, na.rm, dims) {
+			  colSums(x, na.rm, dims) / dim(x)[1]
+		  })
 
 # Print FlashMatrix objects.
 setMethod("print", signature(x = "fm"), function(x)

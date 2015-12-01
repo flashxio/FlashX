@@ -534,11 +534,11 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 }
 
 void aggregate(const local_matrix_store &store, const bulk_operate &op,
-		agg_margin margin, local_vec_store &res)
+		int margin, local_vec_store &res)
 {
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	if (margin == agg_margin::BOTH) {
+	if (margin == matrix_margin::BOTH) {
 		assert(res.get_length() == 1);
 		// If the store has data stored contiguously.
 		if (store.get_raw_arr())
@@ -564,7 +564,7 @@ void aggregate(const local_matrix_store &store, const bulk_operate &op,
 						res.get_raw_arr());
 		}
 	}
-	else if (margin == agg_margin::MAR_ROW) {
+	else if (margin == matrix_margin::MAR_ROW) {
 		local_matrix_store::const_ptr buf_mat;
 		const local_row_matrix_store *row_store;
 		if (store.store_layout() == matrix_layout_t::L_COL) {
@@ -579,7 +579,7 @@ void aggregate(const local_matrix_store &store, const bulk_operate &op,
 		for (size_t i = 0; i < nrow; i++)
 			op.runAgg(ncol, row_store->get_row(i), NULL, res.get(i));
 	}
-	else if (margin == agg_margin::MAR_COL) {
+	else if (margin == matrix_margin::MAR_COL) {
 		local_matrix_store::const_ptr buf_mat;
 		const local_col_matrix_store *col_store;
 		if (store.store_layout() == matrix_layout_t::L_ROW) {
@@ -660,17 +660,17 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 void apply(int margin, const arr_apply_operate &op,
 		const local_matrix_store &in_mat, local_matrix_store &out_mat)
 {
-	assert(margin == apply_margin::MAR_ROW || margin == apply_margin::MAR_COL);
+	assert(margin == matrix_margin::MAR_ROW || margin == matrix_margin::MAR_COL);
 	// In these two cases, we need to convert the matrix store layout
 	// before we can apply the function to the matrix.
 	local_matrix_store::const_ptr buf_mat;
 	if (in_mat.store_layout() == matrix_layout_t::L_COL
-			&& margin == apply_margin::MAR_ROW) {
+			&& margin == matrix_margin::MAR_ROW) {
 		buf_mat = in_mat.conv2(matrix_layout_t::L_ROW);
 		assert(buf_mat);
 	}
 	else if (in_mat.store_layout() == matrix_layout_t::L_ROW
-			&& margin == apply_margin::MAR_COL) {
+			&& margin == matrix_margin::MAR_COL) {
 		buf_mat = in_mat.conv2(matrix_layout_t::L_COL);
 		assert(buf_mat);
 	}
@@ -681,7 +681,7 @@ void apply(int margin, const arr_apply_operate &op,
 	else
 		this_mat = &in_mat;
 
-	if (margin == apply_margin::MAR_ROW) {
+	if (margin == matrix_margin::MAR_ROW) {
 		assert(this_mat->store_layout() == matrix_layout_t::L_ROW);
 		assert(out_mat.store_layout() == matrix_layout_t::L_ROW);
 		const local_row_matrix_store &row_mat
@@ -815,14 +815,17 @@ double_multiply_operate dm_op;
 
 }
 
-void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
-		local_matrix_store &res)
+void mapply_rows(const local_matrix_store &store, const local_vec_store &vals,
+		const bulk_operate &_op, local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
+	assert(store.get_num_rows() == res.get_num_rows());
+	assert(store.get_num_cols() == res.get_num_cols());
+	assert(store.get_num_cols() == vals.get_length());
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
-	if (store.get_type() == get_scalar_type<double>())
+	const bulk_operate *op = &_op;
+	if (op == &get_scalar_type<double>().get_basic_ops().get_multiply())
 		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store
@@ -845,14 +848,17 @@ void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
 	}
 }
 
-void scale_rows(const local_matrix_store &store, const local_vec_store &vals,
-		local_matrix_store &res)
+void mapply_cols(const local_matrix_store &store, const local_vec_store &vals,
+		const bulk_operate &_op, local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
+	assert(store.get_num_rows() == res.get_num_rows());
+	assert(store.get_num_cols() == res.get_num_cols());
+	assert(store.get_num_rows() == vals.get_length());
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
-	if (store.get_type() == get_scalar_type<double>())
+	const bulk_operate *op = &_op;
+	if (op == &get_scalar_type<double>().get_basic_ops().get_multiply())
 		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store

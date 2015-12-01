@@ -109,11 +109,11 @@ static dense_matrix::ptr create_uninit(size_t nrow, size_t ncol,
 		const scalar_type &type, int num_nodes)
 {
 	if (verify_correct)
-		return dense_matrix::create(nrow, ncol,
-				matrix_layout_t::L_COL, type, num_nodes, true);
-	else
 		return dense_matrix::create(detail::matrix_store::ptr(
 					new uninit_matrix_store(nrow, ncol, type)));
+	else
+		return dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_COL, type, num_nodes, true);
 }
 
 class mirror_block_multi_vector: public block_multi_vector

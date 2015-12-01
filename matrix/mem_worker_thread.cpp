@@ -32,6 +32,7 @@ namespace fm
 namespace detail
 {
 
+#ifdef USE_HWLOC
 std::vector<int> get_cpus(int node_id)
 {
 	std::vector<int> io_cpus = safs::get_io_cpus();
@@ -42,6 +43,7 @@ std::vector<int> get_cpus(int node_id)
 		cpu_set.erase(io_cpus[j]);
 	return std::vector<int>(cpu_set.begin(), cpu_set.end());
 }
+#endif
 
 mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 {
@@ -49,11 +51,14 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 	threads.resize(num_nodes);
 	for (int i = 0; i < num_nodes; i++) {
 		// Get the CPU cores that are in node i.
+#ifdef USE_HWLOC
 		std::vector<int> cpus = get_cpus(i);
+#endif
 		threads[i].resize(nthreads_per_node);
 		for (int j = 0; j < nthreads_per_node; j++) {
 			std::string name
 				= std::string("mem-worker-") + itoa(i) + "-" + itoa(j);
+#ifdef USE_HWLOC
 			if (safs::get_io_cpus().empty())
 				threads[i][j] = std::shared_ptr<pool_task_thread>(
 						new pool_task_thread(i * nthreads_per_node + j, name, i));
@@ -61,6 +66,10 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 				threads[i][j] = std::shared_ptr<pool_task_thread>(
 						new pool_task_thread(i * nthreads_per_node + j, name,
 							cpus, i));
+#else
+			threads[i][j] = std::shared_ptr<pool_task_thread>(
+					new pool_task_thread(i * nthreads_per_node + j, name, i));
+#endif
 			threads[i][j]->start();
 		}
 	}

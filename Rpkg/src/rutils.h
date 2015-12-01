@@ -61,5 +61,6 @@ static inline bool is_factor_vector(const Rcpp::S4 &vec)
 }
 
 void R_gc();
+SEXP R_create_s4fm(SEXP fm);
 
 #endif

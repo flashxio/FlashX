@@ -7,13 +7,13 @@ Description:
 
 Usage:
 
-     fm.agg(bop, fm)
+     fm.agg(fm, op)
      
 Arguments:
 
-     bop: a basic operator
-
       fm: a FlashMatrixR object
+
+      op: a basic operator
 
 Value:
 

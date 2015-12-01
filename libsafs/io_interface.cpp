@@ -265,6 +265,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 					disks[j] = it->second[i * disks.size() + j];
 				logical_file_partition partition(disks, mapper);
 
+#ifdef USE_HWLOC
 				if (params.is_bind_io_thread()) {
 					// If we bind an I/O thread to a specific CPU core, the CPU
 					// core will be used by the thread exclusively.
@@ -276,6 +277,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 								units[0], it->first, flags));
 				}
 				else
+#endif
 					ts[i] = disk_io_thread::ptr(new disk_io_thread(partition,
 								it->first, flags));
 				for (size_t j = 0; j < disks.size(); j++) {

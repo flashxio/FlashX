@@ -61,11 +61,6 @@ public:
 		return ret;
 	}
 
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		assert(0);
-		return matrix_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		assert(0);
@@ -175,6 +170,8 @@ public:
 	}
 
 
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -253,6 +250,8 @@ public:
 	}
 
 
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -273,8 +272,6 @@ public:
 			<< "Can't get a row from a NUMA tall column matrix";
 		return vec_store::const_ptr();
 	}
-
-	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;

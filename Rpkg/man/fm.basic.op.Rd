@@ -45,6 +45,10 @@ logical operators to compare two elements: ==, >, >=.
 `fm.buo.sqrt' is the predefined basic unary operator for square root.
 `fm.buo.abs' is the predefined basic unary operator for absolute value.
 `fm.buo.not' is the predefined logical NOT Operator.
+`fm.buo.ceil' is the predefined basic unary Operator of computing a ceiling
+of a number.
+`fm.buo.floor' is the predefined basic unary Operator of computing a floor
+of a number.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>
