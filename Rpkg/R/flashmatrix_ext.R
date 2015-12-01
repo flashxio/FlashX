@@ -176,6 +176,16 @@ setMethod("min", signature(x = "fm"), function(x) fm.agg(x, fm.bo.min))
 setMethod("min", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.min))
 setMethod("max", signature(x = "fm"), function(x) fm.agg(x, fm.bo.max))
 setMethod("max", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.max))
+setMethod("sd", signature(x = "fmV"), function(x) {
+		  n <- length(x)
+		  avg <- mean(x)
+		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+})
+setMethod("sd", signature(x = "fm"), function(x) {
+		  n <- length(x)
+		  avg <- mean(x)
+		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+})
 
 # Miscellaneous Mathematical Functions
 setMethod("abs", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.abs))
