@@ -368,6 +368,8 @@ public:
 		EQ,
 		GT,
 		GE,
+		LT,
+		LE,
 		NUM_OPS,
 	};
 
@@ -477,6 +479,18 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct lt {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 < e2;
+		}
+	};
+
+	struct le {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 <= e2;
+		}
+	};
+
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
 	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
@@ -488,6 +502,8 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<eq, LeftType, RightType, bool> eq_op;
 	bulk_operate_impl<gt, LeftType, RightType, bool> gt_op;
 	bulk_operate_impl<ge, LeftType, RightType, bool> ge_op;
+	bulk_operate_impl<lt, LeftType, RightType, bool> lt_op;
+	bulk_operate_impl<le, LeftType, RightType, bool> le_op;
 
 	std::vector<bulk_operate *> ops;
 public:
@@ -503,6 +519,8 @@ public:
 		ops[EQ] = &eq_op;
 		ops[GT] = &gt_op;
 		ops[GE] = &ge_op;
+		ops[LT] = &lt_op;
+		ops[LE] = &le_op;
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {
