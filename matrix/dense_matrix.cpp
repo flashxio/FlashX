@@ -3116,7 +3116,7 @@ void groupby_row_mapply_op::run(
 
 	for (size_t i = 0; i < num_local_rows; i++) {
 		factor_value_t label_id = labels->get<factor_value_t>(i, 0);
-		if (label_id >= part_agg[thread_id].size()) {
+		if ((size_t) label_id >= part_agg[thread_id].size()) {
 			mutable_this->part_status[thread_id] = false;
 			break;
 		}
