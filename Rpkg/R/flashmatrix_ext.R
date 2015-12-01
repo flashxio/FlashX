@@ -127,22 +127,22 @@ fm.pmax2 <- function(o1, o2)
 
 `<=.fm`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.gt)
+	fm.mapply2(o1, o2, fm.bo.le)
 }
 
 `<=.fmV`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.gt)
+	fm.mapply2(o1, o2, fm.bo.le)
 }
 
 `<.fm`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.ge)
+	fm.mapply2(o1, o2, fm.bo.lt)
 }
 
 `<.fmV`  <- function(o1, o2)
 {
-	!fm.mapply2(o1, o2, fm.bo.ge)
+	fm.mapply2(o1, o2, fm.bo.lt)
 }
 
 `!.fm` <- function(o)

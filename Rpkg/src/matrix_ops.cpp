@@ -297,6 +297,10 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::GT;
 	else if (name == "ge")
 		return basic_ops::op_idx::GE;
+	else if (name == "lt")
+		return basic_ops::op_idx::LT;
+	else if (name == "le")
+		return basic_ops::op_idx::LE;
 	else
 		return _get_op_id(name);
 }
