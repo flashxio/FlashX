@@ -642,7 +642,7 @@ fm.agg.mat <- function(fm, margin, op)
 #' @param o1, o2 a FlashMatrixR vector/matrix.
 #' @return a FlashMatrixR vector/matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.mapply2", function(o1, o2, FUN) 0)
+setGeneric("fm.mapply2", function(o1, o2, FUN) NULL)
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "fm.bo"),
 		  function(o1, o2, FUN) {
 			  stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
@@ -675,6 +675,30 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "fm.bo"),
 			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashGraphR")
 			  new.fm(ret)
 		  })
+
+fm.mapply.row <- function(o1, o2, FUN)
+{
+	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	stopifnot(class(FUN) == "fm.bo")
+	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(1), FUN,
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+fm.mapply.col <- function(o1, o2, FUN)
+{
+	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	stopifnot(class(FUN) == "fm.bo")
+	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(2), FUN,
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
 
 #' Apply a Function to a FlashMatrixR vector/matrix.
 #'

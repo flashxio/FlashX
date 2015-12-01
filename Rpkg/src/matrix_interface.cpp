@@ -855,6 +855,35 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		return create_FMR_matrix(out, "");
 }
 
+RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
+{
+	if (is_sparse(po1)) {
+		fprintf(stderr, "mapply2_MV doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr m = get_matrix<dense_matrix>(po1);
+	vector::ptr v = get_vector(po2);
+	int margin = INTEGER(pmargin)[0];
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type(),
+			v->get_type().get_type());
+	if (op == NULL)
+		return R_NilValue;
+	dense_matrix::ptr res;
+	if (margin == matrix_margin::MAR_ROW)
+		res = m->mapply_rows(v, op);
+	else if (margin == matrix_margin::MAR_COL)
+		res = m->mapply_cols(v, op);
+	else {
+		fprintf(stderr, "a wrong margin\n");
+		return R_NilValue;
+	}
+
+	if (res != NULL)
+		return create_FMR_matrix(res, "");
+	else
+		return R_NilValue;
+}
+
 RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 {
 	Rcpp::S4 obj(pobj);
