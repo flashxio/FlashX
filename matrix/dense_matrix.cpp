@@ -2125,26 +2125,18 @@ vector::ptr dense_matrix::get_row(off_t idx) const
 
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
-	if (store_layout() == matrix_layout_t::L_COL) {
-		const detail::matrix_store::const_ptr ret = get_data().get_cols(idxs);
-		if (ret)
-			return dense_matrix::ptr(new dense_matrix(ret));
-		else
-			return dense_matrix::ptr();
-	}
+	detail::matrix_store::const_ptr ret = get_data().get_cols(idxs);
+	if (ret)
+		return dense_matrix::ptr(new dense_matrix(ret));
 	else
 		return dense_matrix::ptr();
 }
 
 dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
-	if (store_layout() == matrix_layout_t::L_ROW) {
-		const detail::matrix_store::const_ptr ret = get_data().get_rows(idxs);
-		if (ret)
-			return dense_matrix::ptr(new dense_matrix(ret));
-		else
-			return dense_matrix::ptr();
-	}
+	detail::matrix_store::const_ptr ret = get_data().get_rows(idxs);
+	if (ret)
+		return dense_matrix::ptr(new dense_matrix(ret));
 	else
 		return dense_matrix::ptr();
 }

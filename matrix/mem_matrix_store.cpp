@@ -75,12 +75,12 @@ vec_store::const_ptr mem_sub_col_matrix_store::get_row_vec(off_t row) const
 vec_store::const_ptr mem_sub_col_matrix_store::get_col_vec(off_t col) const
 {
 	// The original column matrix has at least this many columns.
-	size_t orig_num_cols = orig_col_idxs[col] + 1;
+	size_t orig_num_cols = orig_col_idxs->at(col) + 1;
 	assert(get_data().get_num_bytes()
 			>= get_num_rows() * orig_num_cols * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
 			get_type());
-	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
+	ret->expose_sub_vec(orig_col_idxs->at(col) * get_num_rows(), get_num_rows());
 	return ret;
 }
 
@@ -110,12 +110,12 @@ vec_store::const_ptr mem_row_matrix_store::get_col_vec(off_t col) const
 vec_store::const_ptr mem_sub_row_matrix_store::get_row_vec(off_t row) const
 {
 	// The original row matrix has at least this many rows.
-	size_t orig_num_rows = orig_row_idxs[row] + 1;
+	size_t orig_num_rows = orig_row_idxs->at(row) + 1;
 	assert(get_data().get_num_bytes()
 			>= get_num_cols() * orig_num_rows * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
 			get_type());
-	ret->expose_sub_vec(orig_row_idxs[row] * get_num_cols(), get_num_cols());
+	ret->expose_sub_vec(orig_row_idxs->at(row) * get_num_cols(), get_num_cols());
 	return ret;
 }
 
@@ -363,6 +363,22 @@ matrix_store::const_ptr mem_col_matrix_store::get_cols(
 	return mem_sub_col_matrix_store::create(*this, idxs);
 }
 
+matrix_store::const_ptr mem_col_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	mem_col_matrix_store::ptr res = mem_col_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		const char *src_col = get_col(i);
+		for (size_t j = 0; j < idxs.size(); j++)
+			src_data[j] = src_col + idxs[j] * get_entry_size();
+		char *dst_col = res->get_col(i);
+		get_type().get_sg().gather(src_data, dst_col);
+	}
+	return res;
+}
+
 matrix_store::const_ptr mem_row_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
@@ -375,11 +391,10 @@ matrix_store::const_ptr mem_sub_col_matrix_store::get_cols(
 	std::vector<off_t> direct_idxs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_cols()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "a column index is out of bounds";
+			BOOST_LOG_TRIVIAL(error) << "a column index is out of bounds";
 			return matrix_store::ptr();
 		}
-		direct_idxs[i] = orig_col_idxs[idxs[i]];
+		direct_idxs[i] = orig_col_idxs->at(idxs[i]);
 	}
 
 	return mem_sub_col_matrix_store::create(*this, direct_idxs);
@@ -391,11 +406,10 @@ matrix_store::const_ptr mem_sub_row_matrix_store::get_rows(
 	std::vector<off_t> direct_idxs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "a row index is out of bounds";
+			BOOST_LOG_TRIVIAL(error) << "a row index is out of bounds";
 			return matrix_store::ptr();
 		}
-		direct_idxs[i] = orig_row_idxs[idxs[i]];
+		direct_idxs[i] = orig_row_idxs->at(idxs[i]);
 	}
 
 	return mem_sub_row_matrix_store::create(*this, direct_idxs);
