@@ -1093,10 +1093,16 @@ RcppExport SEXP R_FM_set_cols(SEXP pmat, SEXP pidxs, SEXP pvs)
 }
 #endif
 
-RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
+RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 {
 	if (is_sparse(pmat)) {
-		fprintf(stderr, "can't get columns from a sparse matrix\n");
+		fprintf(stderr, "can't get a submatrix from a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "the margin has invalid value\n");
 		return R_NilValue;
 	}
 
@@ -1107,11 +1113,34 @@ RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
 		c_idxs[i] = r_idxs[i] - 1;
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	dense_matrix::ptr sub_m = mat->get_cols(c_idxs);
-	if (sub_m == NULL)
+	dense_matrix::ptr sub_m;
+	if (margin == matrix_margin::MAR_COL)
+		sub_m = mat->get_cols(c_idxs);
+	else
+		sub_m = mat->get_rows(c_idxs);
+	if (sub_m == NULL) {
+		fprintf(stderr, "can't get a submatrix from the matrix\n");
 		return R_NilValue;
+	}
 	else
 		return create_FMR_matrix(sub_m, "");
+}
+
+RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "We don't support get rows from a sparse matrix yet\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	Rcpp::IntegerVector tmp(pidxs);
+	std::vector<off_t> idxs(tmp.begin(), tmp.end());
+	dense_matrix::ptr res = mat->get_rows(idxs);
+	if (res == NULL) {
+		fprintf(stderr, "can't get rows from the matrix\n");
+		return R_NilValue;
+	}
+	return create_FMR_matrix(res, "");
 }
 
 RcppExport SEXP R_FM_as_vector(SEXP pmat)

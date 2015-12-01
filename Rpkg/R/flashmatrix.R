@@ -769,22 +769,39 @@ fm.set.cols <- function(fm, idxs, m2)
 #	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashGraphR")
 }
 
-#' Get a submatrix composed of some columns from a FlashMatrixR matrix
+#' Get a submatrix from a FlashMatrixR matrix
 #'
-#' This only works on a column-wise matrix. The submatrix is also organized
-#' column-wise. The submatrix shares the same data as the input matrix, so
-#' there is no memory copy.
+#' `fm.get.rows' gets specified rows in a FM matrix.
+#' `fm.get.cols' gets specified columns in a FM matrix.
 #'
 #' @param fm A FlashMatrixR matrix
 #' @param idxs an array of column indices in fm.
 #' @return a submatrix
+#' @name fm.get.eles
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_cols", fm, as.integer(idxs), PACKAGE="FlashGraphR")
-	new.fm(ret)
+	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.integer(idxs),
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+#' @rdname fm.get.eles
+fm.get.rows <- function(fm, idxs)
+{
+	stopifnot(!is.null(fm) && !is.null(idxs))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.integer(idxs),
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
 }
 
 fm.materialize <- function(fm)
