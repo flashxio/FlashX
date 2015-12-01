@@ -1800,14 +1800,16 @@ dense_matrix::ptr mapply_portion(
 namespace
 {
 
-class scale_col_op: public detail::portion_mapply_op
+class mapply_col_op: public detail::portion_mapply_op
 {
 	detail::mem_vec_store::const_ptr vals;
+	bulk_operate::const_ptr op;
 public:
-	scale_col_op(detail::mem_vec_store::const_ptr vals, size_t out_num_rows,
-			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, type) {
+	mapply_col_op(detail::mem_vec_store::const_ptr vals, bulk_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->vals = vals;
+		this->op = op;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1817,18 +1819,21 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return std::string("(") + mats[0]->get_name() + "* vec" + std::string(")");
+		return std::string("mapply_col(") + mats[0]->get_name() + ", vec"
+			+ std::string(")");
 	}
 };
 
-class scale_row_op: public detail::portion_mapply_op
+class mapply_row_op: public detail::portion_mapply_op
 {
 	detail::mem_vec_store::const_ptr vals;
+	bulk_operate::const_ptr op;
 public:
-	scale_row_op(detail::mem_vec_store::const_ptr vals, size_t out_num_rows,
-			size_t out_num_cols, const scalar_type &type): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, type) {
+	mapply_row_op(detail::mem_vec_store::const_ptr vals, bulk_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->vals = vals;
+		this->op = op;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1838,18 +1843,18 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return std::string("(") + std::string("vec *")
-			+ mats[0]->get_name() + std::string(")");
+		return std::string("mapply_row(") + mats[0]->get_name() + ", vec"
+			+ std::string(")");
 	}
 };
 
-detail::portion_mapply_op::const_ptr scale_col_op::transpose() const
+detail::portion_mapply_op::const_ptr mapply_col_op::transpose() const
 {
-	return detail::portion_mapply_op::const_ptr(new scale_row_op(vals,
-				get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	return detail::portion_mapply_op::const_ptr(new mapply_row_op(vals, op,
+				get_out_num_cols(), get_out_num_rows()));
 }
 
-void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+void mapply_row_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
 	assert(ins.size() == 1);
@@ -1865,21 +1870,20 @@ void scale_col_op::run(const std::vector<detail::local_matrix_store::const_ptr> 
 		assert(arr);
 		local_cref_vec_store lvals(arr, 0, vals->get_length(),
 				vals->get_type(), -1);
-		detail::scale_cols(*ins[0], lvals, out);
+		detail::mapply_rows(*ins[0], lvals, *op, out);
 	}
 	// We divide the matrix vertically.
 	else {
-		assert(vals->get_length() == get_out_num_cols());
 		off_t global_start = ins[0]->get_global_start_col();
 		size_t len = ins[0]->get_num_cols();
 		local_vec_store::const_ptr portion = vals->get_portion(global_start,
 				len);
 		assert(portion);
-		detail::scale_cols(*ins[0], *portion, out);
+		detail::mapply_rows(*ins[0], *portion, *op, out);
 	}
 }
 
-void scale_row_op::run(
+void mapply_col_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
@@ -1896,51 +1900,32 @@ void scale_row_op::run(
 		assert(arr);
 		local_cref_vec_store lvals(arr, 0, vals->get_length(),
 				vals->get_type(), -1);
-		detail::scale_rows(*ins[0], lvals, out);
+		detail::mapply_cols(*ins[0], lvals, *op, out);
 	}
 	// We divide the tall matrix horizontally.
 	else {
-		assert(vals->get_length() == get_out_num_rows());
 		off_t global_start = ins[0]->get_global_start_row();
 		size_t len = ins[0]->get_num_rows();
 		local_vec_store::const_ptr portion = vals->get_portion(global_start,
 				len);
 		assert(portion);
-		detail::scale_rows(*ins[0], *portion, out);
+		detail::mapply_cols(*ins[0], *portion, *op, out);
 	}
 }
 
-detail::portion_mapply_op::const_ptr scale_row_op::transpose() const
+detail::portion_mapply_op::const_ptr mapply_row_op::transpose() const
 {
-	return detail::portion_mapply_op::const_ptr(new scale_col_op(vals,
-				get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	return detail::portion_mapply_op::const_ptr(new mapply_col_op(vals, op,
+				get_out_num_cols(), get_out_num_rows()));
 }
 
 }
 
-dense_matrix::ptr dense_matrix::scale_cols(vector::const_ptr vals) const
+dense_matrix::ptr dense_matrix::mapply_cols(vector::const_ptr vals,
+		bulk_operate::const_ptr op) const
 {
 	if (!vals->is_in_mem()) {
 		BOOST_LOG_TRIVIAL(error) << "Can't scale columns with an EM vector";
-		return dense_matrix::ptr();
-	}
-
-	assert(get_num_cols() == vals->get_length());
-	assert(get_type() == vals->get_type());
-	std::vector<detail::matrix_store::const_ptr> ins(1);
-	ins[0] = this->get_raw_store();
-	scale_col_op::const_ptr mapply_op(new scale_col_op(
-				detail::mem_vec_store::cast(vals->get_raw_store()),
-				get_num_rows(), get_num_cols(), get_type()));
-	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
-			mapply_op, this->store_layout());
-	return dense_matrix::create(ret);
-}
-
-dense_matrix::ptr dense_matrix::scale_rows(vector::const_ptr vals) const
-{
-	if (!vals->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error) << "Can't scale rows with an EM vector";
 		return dense_matrix::ptr();
 	}
 
@@ -1948,9 +1933,29 @@ dense_matrix::ptr dense_matrix::scale_rows(vector::const_ptr vals) const
 	assert(get_type() == vals->get_type());
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
-	scale_row_op::const_ptr mapply_op(new scale_row_op(
+	mapply_col_op::const_ptr mapply_op(new mapply_col_op(
 				detail::mem_vec_store::cast(vals->get_raw_store()),
-				get_num_rows(), get_num_cols(), get_type()));
+				op, get_num_rows(), get_num_cols()));
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, this->store_layout());
+	return dense_matrix::create(ret);
+}
+
+dense_matrix::ptr dense_matrix::mapply_rows(vector::const_ptr vals,
+		bulk_operate::const_ptr op) const
+{
+	if (!vals->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error) << "Can't scale rows with an EM vector";
+		return dense_matrix::ptr();
+	}
+
+	assert(get_num_cols() == vals->get_length());
+	assert(get_type() == vals->get_type());
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
+	mapply_row_op::const_ptr mapply_op(new mapply_row_op(
+				detail::mem_vec_store::cast(vals->get_raw_store()),
+				op, get_num_rows(), get_num_cols()));
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 			mapply_op, this->store_layout());
 	return dense_matrix::create(ret);

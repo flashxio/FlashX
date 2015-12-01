@@ -815,14 +815,17 @@ double_multiply_operate dm_op;
 
 }
 
-void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
-		local_matrix_store &res)
+void mapply_rows(const local_matrix_store &store, const local_vec_store &vals,
+		const bulk_operate &_op, local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
+	assert(store.get_num_rows() == res.get_num_rows());
+	assert(store.get_num_cols() == res.get_num_cols());
+	assert(store.get_num_cols() == vals.get_length());
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
-	if (store.get_type() == get_scalar_type<double>())
+	const bulk_operate *op = &_op;
+	if (op == &get_scalar_type<double>().get_basic_ops().get_multiply())
 		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store
@@ -845,14 +848,17 @@ void scale_cols(const local_matrix_store &store, const local_vec_store &vals,
 	}
 }
 
-void scale_rows(const local_matrix_store &store, const local_vec_store &vals,
-		local_matrix_store &res)
+void mapply_cols(const local_matrix_store &store, const local_vec_store &vals,
+		const bulk_operate &_op, local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
+	assert(store.get_num_rows() == res.get_num_rows());
+	assert(store.get_num_cols() == res.get_num_cols());
+	assert(store.get_num_rows() == vals.get_length());
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
-	if (store.get_type() == get_scalar_type<double>())
+	const bulk_operate *op = &_op;
+	if (op == &get_scalar_type<double>().get_basic_ops().get_multiply())
 		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store

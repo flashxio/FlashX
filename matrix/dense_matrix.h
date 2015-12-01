@@ -339,6 +339,10 @@ public:
 	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
 			bulk_operate::const_ptr) const;
 
+	dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,
+			bulk_operate::const_ptr op) const;
+	dense_matrix::ptr mapply_rows(std::shared_ptr<const vector> vals,
+			bulk_operate::const_ptr op) const;
 	dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
 	dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
@@ -347,10 +351,22 @@ public:
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;
 
-	dense_matrix::ptr scale_cols(std::shared_ptr<const vector> vals) const;
-	dense_matrix::ptr scale_rows(std::shared_ptr<const vector> vals) const;
 	dense_matrix::ptr cast_ele_type(const scalar_type &type) const;
 
+	dense_matrix::ptr scale_cols(std::shared_ptr<const vector> vals) const {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale columns, it's the same as applying the vector to
+		// each row.
+		return mapply_rows(vals, multiply);
+	}
+	dense_matrix::ptr scale_rows(std::shared_ptr<const vector> vals) const {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale rows, it's the same as applying the vector to
+		// each column.
+		return mapply_cols(vals, multiply);
+	}
 	dense_matrix::ptr multiply(const dense_matrix &mat,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE,
 			bool use_blas = false) const;
