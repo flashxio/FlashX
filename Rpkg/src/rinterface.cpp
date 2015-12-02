@@ -1049,8 +1049,8 @@ RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pmax_threa
 	return ret;
 }
 
-RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit, 
-        SEXP pmax_iters, SEXP ptolerance, SEXP pcomp_thresh)
+RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit,
+        SEXP pmax_iters, SEXP ptolerance)
 {
     // Argparse
 	FG_graph::ptr fg = R_FG_get_graph(graph);
@@ -1058,22 +1058,18 @@ RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit,
 	std::string init = CHAR(STRING_ELT(pinit,0));
 	vsize_t max_iters = INTEGER(pmax_iters)[0];
 	double tolerance = REAL(ptolerance)[0];
-	double comp_thresh = REAL(pcomp_thresh)[0];
 
     Rcpp::List ret;
-    sem_kmeans_ret::ptr fg_ret = compute_sem_kmeans(fg, k, init, max_iters, tolerance, comp_thresh);
+    sem_kmeans_ret::ptr fg_ret = compute_sem_kmeans(fg, k, init, max_iters, tolerance);
 
 	Rcpp::IntegerVector res0(fg_ret->get_cluster_assignments()->get_size());
 	fg_ret->get_cluster_assignments()->copy_to(res0.begin(), fg_ret->get_cluster_assignments()->get_size());
     ret["cluster"] = res0;
     ret["iter"] = fg_ret->get_iters();
 
-    //Rcpp::IntegerVector res1(fg_ret->get_size().size());
     Rcpp::IntegerVector res1(fg_ret->get_size().begin(), fg_ret->get_size().end());
     ret["size"] = res1;
 
-    // TODO: Make a matrix out of centers
-    //std::vector<std::vector<double>> fg_centers = fg_ret->get_centers;
     const unsigned NUM_COLS = fg_ret->get_centers()[0].size();
 	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);
 #pragma omp parallel for firstprivate(fg_ret) shared(centers)
