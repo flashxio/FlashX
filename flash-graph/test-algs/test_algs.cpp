@@ -689,9 +689,8 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
 	int num_opts = 0;
     unsigned k = 0;
     unsigned max_iters = std::numeric_limits<unsigned>::max();
-    std::string init = "";
+    std::string init = "kmeanspp";
     double tolerance = -1;
-    double comp_thresh = 0;
 
 	while ((opt = getopt(argc, argv, "k:i:t:l:c:")) != -1) {
 		num_opts++;
@@ -710,17 +709,13 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 tolerance = atof(optarg);
                 num_opts++;
                 break;
-            case 'c':
-                comp_thresh = atof(optarg);
-                num_opts++;
-                break;
 			default:
 				print_usage();
 				abort();
 		}
 	}
 
-    compute_sem_kmeans(graph, k, init, max_iters, tolerance, comp_thresh);
+    compute_sem_kmeans(graph, k, init, max_iters, tolerance);
 }
 
 std::string supported_algs[] = {
@@ -808,9 +803,8 @@ void print_usage()
 	fprintf(stderr, "sem_kmeans\n");
 	fprintf(stderr, "-k: the number of clusters to use\n");
 	fprintf(stderr, "-i: max number of iterations\n");
-	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
+	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]. Default: kmeanspp\n");
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
-	fprintf(stderr, "-c: computation threshold (defualt: 1 = all compute)\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
