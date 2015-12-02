@@ -28,7 +28,7 @@ using namespace fm::detail;
 enum conv_layout{ROW, COL, RAWROW, RAWCOL};
 
 template <typename T>
-static void print_vector(typename std::vector<T>& v) 
+static void print_vector(typename std::vector<T>& v)
 {
 	std::cout << "[";
 
@@ -40,7 +40,7 @@ static void print_vector(typename std::vector<T>& v)
 }
 
 template <typename T>
-static void print_mat(T* matrix, const unsigned rows, const unsigned cols, 
+static void print_mat(T* matrix, const unsigned rows, const unsigned cols,
 		conv_layout lay=RAWROW) {
 	for (unsigned row = 0; row < rows; row++) {
 		if (lay == RAWROW) { std::cout << "["; }
@@ -104,7 +104,7 @@ static double* read_fg(std::string filename, conv_layout lay,
 	BOOST_LOG_TRIVIAL(info) << "Printing read matrix as vector ...";
 	std::cout << "[ ";
 	for (size_t i = 0; i < NUM_ROWS*NUM_COLS; i++) {
-		std::cout << outmat[i] << " ";	
+		std::cout << outmat[i] << " ";
 	}
 	std::cout << "]\n";
 #endif

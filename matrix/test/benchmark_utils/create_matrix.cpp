@@ -68,7 +68,7 @@ int main (int argc, char* argv[]) {
 		const set_col_operate sco(ncol);
 
 		// L_COL because I expect to get this layout form eigensolver
-		dense_matrix::ptr dmat = dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL, 
+		dense_matrix::ptr dmat = dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), sco, -1, true);
 
 		if (lay == ROW) {
@@ -87,7 +87,7 @@ int main (int argc, char* argv[]) {
 
 		if (lay == ROW)
 			mms->write2file(outfn+"_dm_rw.bin");
-		else 
+		else
 			mms->write2file(outfn+"_dm_cw.bin");
 
 	} else if (lay == RAWROW || lay == RAWCOL) {
@@ -99,17 +99,16 @@ int main (int argc, char* argv[]) {
 		}
 
 #if 1
-		if (lay == RAWCOL) 
+		if (lay == RAWCOL)
 			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
 		else
 			BOOST_LOG_TRIVIAL(info) << "Printing col-wise matrix for verification";
-		print_mat(dmat, nrow, ncol, lay); 
-
+		print_mat(dmat, nrow, ncol, lay);
 #endif
 
 		BOOST_LOG_TRIVIAL(info) << "Writing the matrix";
 		std::ofstream outfile;
-		if (lay == RAWCOL) 
+		if (lay == RAWCOL)
 			outfile.open(outfn+"_rcw.bin", std::ios::binary | std::ios::trunc | std::ios::out);
 		else
 			outfile.open(outfn+"_rrw.bin", std::ios::binary | std::ios::trunc | std::ios::out);
@@ -121,13 +120,13 @@ int main (int argc, char* argv[]) {
 #if 1
 		BOOST_LOG_TRIVIAL(info) << "Test read of matrix";
 		double* read_mat;
-		if (lay == RAWCOL) 
-			read_mat = read_fg(outfn+"_cw.bin", RAWCOL, nrow, ncol); 
+		if (lay == RAWCOL)
+			read_mat = read_fg(outfn+"_cw.bin", RAWCOL, nrow, ncol);
 		else
 			read_mat = read_fg(outfn+"_rrw.bin", RAWROW, nrow, ncol);
-		
+
 		std::cout << "Read matrix: \n";
-		print_mat(read_mat, nrow, ncol, lay); 
+		print_mat(read_mat, nrow, ncol, lay);
 		delete [] read_mat;
 #endif
 	} else {
