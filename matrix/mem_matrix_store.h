@@ -195,10 +195,7 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
-	virtual matrix_store::const_ptr get_rows(
-			const std::vector<off_t> &idxs) const {
-		return matrix_store::const_ptr();
-	}
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -278,10 +275,6 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		return matrix_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -298,23 +291,23 @@ public:
  */
 class mem_sub_col_matrix_store: public mem_col_matrix_store
 {
-	std::vector<off_t> orig_col_idxs;
+	std::shared_ptr<const std::vector<off_t> > orig_col_idxs;
 
 	mem_sub_col_matrix_store(const mem_col_matrix_store &store,
-			const std::vector<off_t> &col_idxs): mem_col_matrix_store(
-				store.get_num_rows(), col_idxs.size(), store.get_type(),
+			std::shared_ptr<const std::vector<off_t> > col_idxs): mem_col_matrix_store(
+				store.get_num_rows(), col_idxs->size(), store.get_type(),
 				store.get_data()) {
 		this->orig_col_idxs = col_idxs;
 	}
 	mem_sub_col_matrix_store(const raw_data_array &data,
-			const std::vector<off_t> &col_idxs, size_t nrow,
-			const scalar_type &type): mem_col_matrix_store(nrow, col_idxs.size(),
+			std::shared_ptr<const std::vector<off_t> > col_idxs, size_t nrow,
+			const scalar_type &type): mem_col_matrix_store(nrow, col_idxs->size(),
 				type, data) {
 		this->orig_col_idxs = col_idxs;
 	}
 public:
 	static ptr create(const raw_data_array &data,
-			const std::vector<off_t> &col_idxs, size_t nrow,
+			std::shared_ptr<const std::vector<off_t> > col_idxs, size_t nrow,
 			const scalar_type &type) {
 		return ptr(new mem_sub_col_matrix_store(data, col_idxs, nrow, type));
 	}
@@ -324,15 +317,17 @@ public:
 	 */
 	static ptr create(const mem_col_matrix_store &store,
 			const std::vector<off_t> &abs_col_idxs) {
-		return ptr(new mem_sub_col_matrix_store(store, abs_col_idxs));
+		std::shared_ptr<std::vector<off_t> > idxs(new std::vector<off_t>());
+		*idxs = abs_col_idxs;
+		return ptr(new mem_sub_col_matrix_store(store, idxs));
 	}
 
 	virtual char *get_col(size_t col) {
-		return mem_col_matrix_store::get_col(orig_col_idxs[col]);
+		return mem_col_matrix_store::get_col(orig_col_idxs->at(col));
 	}
 
 	virtual const char *get_col(size_t col) const {
-		return mem_col_matrix_store::get_col(orig_col_idxs[col]);
+		return mem_col_matrix_store::get_col(orig_col_idxs->at(col));
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
@@ -345,10 +340,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
-	virtual matrix_store::const_ptr get_rows(
-			const std::vector<off_t> &idxs) const {
-		return matrix_store::const_ptr();
-	}
 
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
@@ -360,23 +351,23 @@ public:
  */
 class mem_sub_row_matrix_store: public mem_row_matrix_store
 {
-	std::vector<off_t> orig_row_idxs;
+	std::shared_ptr<const std::vector<off_t> > orig_row_idxs;
 
 	mem_sub_row_matrix_store(const mem_row_matrix_store &store,
-			const std::vector<off_t> &row_idxs): mem_row_matrix_store(
-				row_idxs.size(), store.get_num_cols(), store.get_type(),
+			std::shared_ptr<const std::vector<off_t> > row_idxs): mem_row_matrix_store(
+				row_idxs->size(), store.get_num_cols(), store.get_type(),
 				store.get_data()) {
 		this->orig_row_idxs = row_idxs;
 	}
 	mem_sub_row_matrix_store(const raw_data_array &data,
-			const std::vector<off_t> &row_idxs, size_t ncol,
-			const scalar_type &type): mem_row_matrix_store(row_idxs.size(),
+			std::shared_ptr<const std::vector<off_t> > row_idxs, size_t ncol,
+			const scalar_type &type): mem_row_matrix_store(row_idxs->size(),
 				ncol, type, data) {
 		this->orig_row_idxs = row_idxs;
 	}
 public:
 	static ptr create(const raw_data_array &data,
-			const std::vector<off_t> &row_idxs, size_t ncol,
+			std::shared_ptr<const std::vector<off_t> > row_idxs, size_t ncol,
 			const scalar_type &type) {
 		return ptr(new mem_sub_row_matrix_store(data, row_idxs, ncol, type));
 	}
@@ -385,15 +376,17 @@ public:
 	 */
 	static ptr create(const mem_row_matrix_store &store,
 			const std::vector<off_t> &abs_row_idxs) {
-		return ptr(new mem_sub_row_matrix_store(store, abs_row_idxs));
+		std::shared_ptr<std::vector<off_t> > idxs(new std::vector<off_t>());
+		*idxs = abs_row_idxs;
+		return ptr(new mem_sub_row_matrix_store(store, idxs));
 	}
 
 	virtual char *get_row(size_t row) {
-		return mem_row_matrix_store::get_row(orig_row_idxs[row]);
+		return mem_row_matrix_store::get_row(orig_row_idxs->at(row));
 	}
 
 	virtual const char *get_row(size_t row) const {
-		return mem_row_matrix_store::get_row(orig_row_idxs[row]);
+		return mem_row_matrix_store::get_row(orig_row_idxs->at(row));
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
@@ -405,10 +398,6 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		return matrix_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
 	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;

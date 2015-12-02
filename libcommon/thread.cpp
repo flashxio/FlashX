@@ -25,6 +25,8 @@
 #include "thread.h"
 #include "common.h"
 
+#ifdef USE_HWLOC
+
 std::vector<hwloc_obj_t> get_objs_by_type(hwloc_obj_t obj, hwloc_obj_type_t type)
 {
 	if (obj->arity > 0 && obj->first_child->type == type) {
@@ -121,6 +123,8 @@ std::vector<int> CPU_hierarchy::lus2node(const std::vector<int> &lus) const
 }
 
 CPU_hierarchy cpus;
+
+#endif
 
 static void bind2node_id(int node_id)
 {
@@ -226,10 +230,14 @@ thread::thread(std::string name, const std::vector<int> &cpu_affinity,
 	thread_class_init();
 	construct_init();
 
+#ifdef USE_HWLOC
 	std::vector<int> node_ids = cpus.lus2node(cpu_affinity);
 	this->node_id = node_ids.front();
 	for (size_t i = 1; i < cpu_affinity.size(); i++)
 		assert(node_id == node_ids[i]);
+#else
+	this->node_id = 0;
+#endif
 	this->cpu_affinity = cpu_affinity;
 	this->name = name + "-" + itoa(thread_idx);
 	this->blocking = blocking;

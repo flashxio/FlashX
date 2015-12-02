@@ -3,55 +3,32 @@
 \name{fm.info}
 \alias{fm.info}
 \alias{fm.is.sparse}
-\alias{fm.is.sym}
-\alias{fm.length}
+\alias{fm.is.vector}
 \alias{fm.matrix.layout}
-\alias{fm.ncol}
-\alias{fm.nrow}
-\alias{fm.typeof}
 \title{The information of a FlashMatrixR object}
 \usage{
-fm.nrow(fm)
-
-fm.ncol(fm)
-
-fm.is.sym(fm)
-
 fm.matrix.layout(fm)
 
 fm.is.sparse(fm)
 
-fm.length(fm)
-
-fm.typeof(fm)
+fm.is.vector(fm)
 }
 \arguments{
 \item{fm}{The FlashMatrixR object}
 }
 \value{
-`fm.nrow' and `fm.ncol' returns numeric constants.
 `fm.is.sym' and `fm.is.sparse' returns boolean constants.
-`fm.length' returns a numeric constant. `fm.typeof' returns
-a string.
 }
 \description{
 Functions for providing the basic information of a matrix.
 }
 \details{
-`fm.nrow' gets the number of rows in a matrix.
-
-`fm.ncol' gets the number of columns in a matrix.
-
 `fm.is.sym' indicates whether a matrix is symmetric.
 
 `fm.matrix.layout' indicates how data in a matrix is organized.
 `fm.is.sparse' indicates whether a matrix is sparse.
 
 `fm.is.vector' indicates whether a FlashMatrixR object is a vector.
-
-`fm.length' gets the length of a FlashMatrixR vector
-
-`fm.typeof' gets the type of the element in a FlashMatrixR object.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

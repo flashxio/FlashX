@@ -852,7 +852,7 @@ void test_apply1(dense_matrix::ptr mat)
 	printf("Test apply on rows of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
-	res = mat->apply(apply_margin::MAR_ROW,
+	res = mat->apply(matrix_margin::MAR_ROW,
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	if (res) {
 		assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
@@ -869,7 +869,7 @@ void test_apply1(dense_matrix::ptr mat)
 	printf("Test apply on columns of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_ROW ? "row" : "column");
-	res = mat->apply(apply_margin::MAR_COL,
+	res = mat->apply(matrix_margin::MAR_COL,
 			arr_apply_operate::const_ptr(new sum_apply_op()));
 	if (res) {
 		assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());
@@ -1690,6 +1690,88 @@ void test_groupby()
 	}
 }
 
+dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
+{
+	std::vector<off_t> idxs;
+	idxs.resize(std::max(mat->get_num_rows() / 5, 1UL));
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % mat->get_num_rows();
+	dense_matrix::ptr res = mat->get_rows(idxs);
+	detail::mem_matrix_store::const_ptr orig_store
+		= detail::mem_matrix_store::cast(mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= detail::mem_matrix_store::cast(res->get_raw_store());
+	assert(res != NULL);
+	for (size_t i = 0; i < res->get_num_rows(); i++)
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(res_store->get<int>(i, j) == orig_store->get<int>(idxs[i], j));
+	return res;
+}
+
+dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
+{
+	std::vector<off_t> idxs;
+	idxs.resize(std::max(mat->get_num_cols() / 5, 1UL));
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % mat->get_num_cols();
+	dense_matrix::ptr res = mat->get_cols(idxs);
+	detail::mem_matrix_store::const_ptr orig_store
+		= detail::mem_matrix_store::cast(mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= detail::mem_matrix_store::cast(res->get_raw_store());
+	assert(res != NULL);
+	for (size_t i = 0; i < res->get_num_rows(); i++)
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(res_store->get<int>(i, j) == orig_store->get<int>(i, idxs[j]));
+	return res;
+}
+
+void test_get_rowcols(int num_nodes)
+{
+	dense_matrix::ptr mat;
+	std::vector<off_t> idxs;
+
+	printf("test on row-major tall dense matrix in SMP\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, -1,
+			get_scalar_type<int>());
+	test_get_rows(mat);
+	test_get_cols(mat);
+	printf("test on row-major tall dense submatrix in SMP\n");
+	mat = test_get_rows(mat);
+	test_get_rows(mat);
+	test_get_cols(mat);
+
+	printf("test on col-major tall dense matrix in SMP\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	test_get_rows(mat);
+	test_get_cols(mat);
+	printf("test on col-major tall dense submatrix in SMP\n");
+	mat = test_get_cols(mat);
+	test_get_rows(mat);
+	test_get_cols(mat);
+
+	printf("test on row-major tall dense matrix in NUMA\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<int>());
+	test_get_rows(mat);
+	test_get_cols(mat);
+	printf("test on row-major tall dense submatrix in NUMA\n");
+	mat = test_get_rows(mat);
+	test_get_rows(mat);
+	test_get_cols(mat);
+
+	printf("test on col-major tall dense matrix in NUMA\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<int>());
+	test_get_rows(mat);
+	test_get_cols(mat);
+	printf("test on col-major tall dense submatrix in NUMA\n");
+	mat = test_get_cols(mat);
+	test_get_rows(mat);
+	test_get_cols(mat);
+}
+
 void test_bmv_multiply_tall()
 {
 	bool in_mem = false;
@@ -1864,6 +1946,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_get_rowcols(num_nodes);
 	test_groupby();
 	test_block_mv();
 	test_conv_store();

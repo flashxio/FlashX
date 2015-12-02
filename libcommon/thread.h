@@ -21,7 +21,9 @@
  */
 
 #include <pthread.h>
+#ifdef USE_HWLOC
 #include <hwloc.h>
+#endif
 
 #include <atomic>
 #include <string>
@@ -257,6 +259,8 @@ public:
 	}
 };
 
+#ifdef USE_HWLOC
+
 class CPU_core
 {
 	std::vector<int> logical_units;
@@ -331,5 +335,7 @@ public:
 };
 
 extern CPU_hierarchy cpus;
+
+#endif
 
 #endif

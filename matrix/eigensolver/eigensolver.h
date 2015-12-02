@@ -64,7 +64,9 @@ struct eigen_options
 	std::string which;
 	bool in_mem;
 
-	eigen_options(int nev, std::string solver = "KrylovSchur");
+	eigen_options();
+
+	bool init(int nev, std::string solver = "KrylovSchur");
 };
 
 /*

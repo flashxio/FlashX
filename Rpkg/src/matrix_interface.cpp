@@ -361,6 +361,41 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 		return R_NilValue;
 }
 
+RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
+		SEXP pfun1, SEXP pfun2)
+{
+	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	bulk_operate::const_ptr op1 = fmr::get_op(pfun1,
+			matrix->get_type().get_type(),
+			right_mat->get_type().get_type());
+	if (op1 == NULL) {
+		fprintf(stderr, "can't find a right form for the left operator\n");
+		return R_NilValue;
+	}
+	bulk_operate::const_ptr op2 = fmr::get_op(pfun2,
+			op1->get_output_type().get_type(),
+			op1->get_output_type().get_type());
+	if (op2 == NULL) {
+		fprintf(stderr, "can't find a right form for the right operator\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr res = matrix->inner_prod(*right_mat, op1, op2);
+	if (res == NULL)
+		return R_NilValue;
+
+	bool is_vec = is_vector(pmat);
+	if (res && is_vec) {
+		return create_FMR_vector(res, "");
+	}
+	else if (res && !is_vec) {
+		return create_FMR_matrix(res, "");
+	}
+	else
+		return R_NilValue;
+}
+
 RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 {
 	Rcpp::S4 vec_obj(pvec);
@@ -373,7 +408,16 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
 	vector::ptr vec = get_vector(vec_obj);
-	return create_FMR_matrix(vec->conv2mat(nrow, ncol, byrow), "");
+	if (vec == NULL) {
+		fprintf(stderr, "Can't get the vector\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = vec->conv2mat(nrow, ncol, byrow);
+	if (mat == NULL) {
+		fprintf(stderr, "can't convert a vector to a matrix\n");
+		return R_NilValue;
+	}
+	return create_FMR_matrix(mat, "");
 }
 
 template<class T, class RType>
@@ -811,6 +855,35 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		return create_FMR_matrix(out, "");
 }
 
+RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
+{
+	if (is_sparse(po1)) {
+		fprintf(stderr, "mapply2_MV doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr m = get_matrix<dense_matrix>(po1);
+	vector::ptr v = get_vector(po2);
+	int margin = INTEGER(pmargin)[0];
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type(),
+			v->get_type().get_type());
+	if (op == NULL)
+		return R_NilValue;
+	dense_matrix::ptr res;
+	if (margin == matrix_margin::MAR_ROW)
+		res = m->mapply_rows(v, op);
+	else if (margin == matrix_margin::MAR_COL)
+		res = m->mapply_cols(v, op);
+	else {
+		fprintf(stderr, "a wrong margin\n");
+		return R_NilValue;
+	}
+
+	if (res != NULL)
+		return create_FMR_matrix(res, "");
+	else
+		return R_NilValue;
+}
+
 RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 {
 	Rcpp::S4 obj(pobj);
@@ -841,6 +914,10 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 {
 	ReturnType ret(1);
 	scalar_variable::ptr res = mat.aggregate(op);
+	if (res == NULL) {
+		fprintf(stderr, "can't aggregate on the matrix\n");
+		return R_NilValue;
+	}
 	assert(res->get_type() == get_scalar_type<T>());
 	if (res != NULL) {
 		ret[0] = *(const T *) res->get_raw();
@@ -852,7 +929,7 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 	}
 }
 
-RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
+RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 {
 	Rcpp::S4 obj1(pobj);
 	if (is_sparse(obj1)) {
@@ -877,6 +954,35 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 	}
 }
 
+RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg_mat doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (m->is_type<bool>())
+		m = m->cast_ele_type(get_scalar_type<int>());
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+	vector::ptr res = m->aggregate((matrix_margin) margin, op);
+	if (res == NULL) {
+		fprintf(stderr, "can't aggregate on the matrix\n");
+		return R_NilValue;
+	}
+	else
+		return create_FMR_vector(res->get_raw_store(), "");
+}
+
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 {
 	if (!is_vector(pvec)) {
@@ -887,6 +993,54 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
 	data_frame::ptr groupby_res = vec->groupby(op, true);
 	return create_FMR_data_frame(groupby_res, "");
+}
+
+RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
+{
+	if (is_vector(pmat)) {
+		fprintf(stderr, "Doesn't support groupby on a vector\n");
+		return R_NilValue;
+	}
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support groupby on a sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "invalid margin in groupby\n");
+		return R_NilValue;
+	}
+
+	factor_vector::ptr factor = get_factor_vector(pfactor);
+	if (factor == NULL) {
+		fprintf(stderr, "groupby needs a factor vector\n");
+		return R_NilValue;
+	}
+	if (margin == matrix_margin::MAR_ROW
+			&& factor->get_length() != mat->get_num_cols()) {
+		fprintf(stderr,
+				"the factor vector needs to have the length as #columns");
+		return R_NilValue;
+	}
+	else if (margin == matrix_margin::MAR_COL
+			&& factor->get_length() != mat->get_num_rows()) {
+		fprintf(stderr,
+				"the factor vector needs to have the length as #rows");
+		return R_NilValue;
+	}
+
+	if (margin == matrix_margin::MAR_ROW) {
+		fprintf(stderr, "doesn't support grouping columns\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, mat->get_type());
+	dense_matrix::ptr groupby_res = mat->groupby_row(factor, op);
+	if (groupby_res == NULL)
+		return R_NilValue;
+	else
+		return create_FMR_matrix(groupby_res, "");
 }
 
 RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
@@ -968,10 +1122,16 @@ RcppExport SEXP R_FM_set_cols(SEXP pmat, SEXP pidxs, SEXP pvs)
 }
 #endif
 
-RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
+RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 {
 	if (is_sparse(pmat)) {
-		fprintf(stderr, "can't get columns from a sparse matrix\n");
+		fprintf(stderr, "can't get a submatrix from a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "the margin has invalid value\n");
 		return R_NilValue;
 	}
 
@@ -982,11 +1142,34 @@ RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
 		c_idxs[i] = r_idxs[i] - 1;
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	dense_matrix::ptr sub_m = mat->get_cols(c_idxs);
-	if (sub_m == NULL)
+	dense_matrix::ptr sub_m;
+	if (margin == matrix_margin::MAR_COL)
+		sub_m = mat->get_cols(c_idxs);
+	else
+		sub_m = mat->get_rows(c_idxs);
+	if (sub_m == NULL) {
+		fprintf(stderr, "can't get a submatrix from the matrix\n");
 		return R_NilValue;
+	}
 	else
 		return create_FMR_matrix(sub_m, "");
+}
+
+RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "We don't support get rows from a sparse matrix yet\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	Rcpp::IntegerVector tmp(pidxs);
+	std::vector<off_t> idxs(tmp.begin(), tmp.end());
+	dense_matrix::ptr res = mat->get_rows(idxs);
+	if (res == NULL) {
+		fprintf(stderr, "can't get rows from the matrix\n");
+		return R_NilValue;
+	}
+	return create_FMR_matrix(res, "");
 }
 
 RcppExport SEXP R_FM_as_vector(SEXP pmat)
@@ -997,8 +1180,10 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->get_num_rows() == 1 || mat->get_num_cols() == 1)
+	if (mat->get_num_cols() == 1)
 		return create_FMR_vector(mat, "");
+	else if (mat->get_num_rows() == 1)
+		return create_FMR_vector(mat->transpose(), "");
 	else
 		return R_NilValue;
 }
@@ -1074,8 +1259,9 @@ public:
 		// doesn't work frequently, so it won't clean up the existing
 		// dense matrices and use a lot of memory.
 		R_gc();
-		SEXP r_mat = create_FMR_matrix(x, "x");
-		SEXP pret = fun(r_mat, pextra);
+		SEXP s4_mat = R_create_s4fm(create_FMR_matrix(x, "x"));
+		SEXP pret = fun(s4_mat, pextra);
+		UNPROTECT(2);
 		return get_matrix<dense_matrix>(pret);
 	}
 
@@ -1109,7 +1295,11 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	if (options.containsElementNamed("solver"))
 		solver = CHAR(STRING_ELT(options["solver"], 0));
 
-	eigen::eigen_options opts(nev, solver);
+	eigen::eigen_options opts;
+	if (!opts.init(nev, solver)) {
+		fprintf(stderr, "can't init eigen options\n");
+		return R_NilValue;
+	}
 	if (options.containsElementNamed("tol"))
 		opts.tol = REAL(options["tol"])[0];
 	if (options.containsElementNamed("num_blocks"))
@@ -1225,6 +1415,38 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	// I think it's OK to materialize on the original matrix.
 	mat->materialize_self();
 	return create_FMR_matrix(mat, "");
+}
+
+RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
+{
+	bool byrow = LOGICAL(pbyrow)[0];
+	if (is_sparse(pmat)) {
+		fprintf(stderr,
+				"Doesn't support convert the layout of a sparse matrix\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr ret;
+	if (byrow)
+		ret = mat->conv2(matrix_layout_t::L_ROW);
+	else
+		ret = mat->conv2(matrix_layout_t::L_COL);
+	return create_FMR_matrix(ret, "");
+}
+
+RcppExport SEXP R_FM_get_layout(SEXP pmat)
+{
+	Rcpp::StringVector ret(1);
+	if (is_sparse(pmat))
+		ret[0] = Rcpp::String("row-oriented");
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		if (mat->store_layout() == matrix_layout_t::L_ROW)
+			ret[0] = Rcpp::String("row-oriented");
+		else
+			ret[0] = Rcpp::String("col-oriented");
+	}
+	return ret;
 }
 
 void init_flashmatrixr()

@@ -10,13 +10,13 @@ Description:
 
 Usage:
 
-     fm.mapply2(FUN, o1, o2)
+     fm.mapply2(o1, o2, FUN)
      
 Arguments:
 
-     FUN: the user-defined operators.
-
      o1,: o2 a FlashMatrixR vector/matrix.
+
+     FUN: the user-defined operators.
 
 Value:
 

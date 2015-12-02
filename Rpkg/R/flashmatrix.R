@@ -164,6 +164,45 @@ fm.runif <- function(n, min=0, max=1)
 	new.fmV(vec)
 }
 
+setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
+setMethod("is.vector", signature(x = "fmV"), function(x) TRUE)
+setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
+setMethod("is.matrix", signature(x = "fm"), function(x) TRUE)
+
+#' Convert the data layout of a FlashMatrixR matrix.
+#'
+#' A FMR matrix can store elements in a row-major or column-major order.
+#' By changing the data layout, we can improve efficiency of some matrix
+#' operations.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @param byrow a logical value to determine the data layout of a FlashMatrixR
+#' matrix.
+#' @return a FlashMatrixR matrix
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.conv.layout <- function(fm, byrow=FALSE)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_conv_layout", fm, as.logical(byrow), PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+#' Get the data layout of a FlashMatrixR matrix.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @return a string that indicates the data layout.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.get.layout <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	.Call("R_FM_get_layout", fm, PACKAGE="FlashGraphR")
+}
+
 #' Convert a regular R object to a FlashMatrixR object.
 #'
 #' If the R object is a matrix, `byrow' determines how data in the generated
@@ -310,12 +349,39 @@ fm.typeof <- function(fm)
 #'
 #' @param fm a FlashMatrixR matrix
 #' @return a FlashMatrixR vector
-fm.as.vector <- function(fm)
+fm.as.vector <- function(obj)
 {
-	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm")
-	vec <- .Call("R_FM_as_vector", fm, PACKAGE="FlashGraphR")
-	new.fmV(vec)
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fmV")
+		vec
+	else if (class(obj) == "fm") {
+		vec <- .Call("R_FM_as_vector", obj, PACKAGE="FlashGraphR")
+		if (!is.null(vec))
+			new.fmV(vec)
+		else
+			NULL
+	}
+	else if (is.vector(obj))
+		fm.conv.R2FM(obj)
+	else
+		NULL
+}
+
+fm.as.matrix <- function(obj)
+{
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fm")
+		obj
+	else if (class(obj) == "fmV") {
+		# A FlashMatrixR vector is actually stored in a dense matrix.
+		# We only need to construct the fm object in R.
+		new("fm", pointer=obj@pointer, name=obj@name, nrow=obj@length,
+			ncol=1, type=obj@type)
+	}
+	else if (is.matrix(obj))
+		fm.conv.R2FM(obj)
+	else
+		NULL
 }
 
 #' Convert a FlashMatrixR vector to a FlashMatrixR factor vector.
@@ -357,6 +423,43 @@ fm.multiply <- function(fm, mat)
 		o <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashGraphR")
 	else
 		o <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashGraphR")
+	if (class(mat) == "fmV")
+		new.fmV(o)
+	else
+		new.fm(o)
+}
+
+#' Matrix inner product
+#'
+#' Inner product of a dense matrix with a dense vector/matrix.
+#'
+#' @param fm A FlashMatrixR matrix
+#' @param mat A FlashMatrixR dense matrix.
+#' @return a FlashMatrixR vector if the second argument is a vector;
+#' a FlashMatrixR matrix if the second argument is a matrix.
+#' @name fm.inner.prod
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.inner.prod <- function(fm, mat, Fun1, Fun2)
+{
+	stopifnot(!is.null(fm) && !is.null(mat))
+	stopifnot(class(fm) == "fm")
+	if (class(mat) == "fmV") {
+		stopifnot(dim(fm)[2] == length(mat))
+	}
+	else {
+		stopifnot(!fm.is.sparse(mat))
+		stopifnot(dim(fm)[2] == dim(mat)[1])
+	}
+	stopifnot(class(Fun1) == "fm.bo")
+	stopifnot(class(Fun2) == "fm.bo")
+
+	if (fm.is.sparse(fm)) {
+		print("inner product doesn't support sparse matrices yet")
+		return(NULL)
+	}
+	else
+		o <- .Call("R_FM_inner_prod_dense", fm, mat, Fun1, Fun2,
+				   PACKAGE="FlashGraphR")
 	if (class(mat) == "fmV")
 		new.fmV(o)
 	else
@@ -439,9 +542,19 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.bo.gt))
 	fm.bo.ge <<- fm.get.basic.op("ge")
 	stopifnot(!is.null(fm.bo.ge))
+	fm.bo.lt <<- fm.get.basic.op("lt")
+	stopifnot(!is.null(fm.bo.lt))
+	fm.bo.le <<- fm.get.basic.op("le")
+	stopifnot(!is.null(fm.bo.le))
 
 	fm.bo.count <<- fm.get.basic.op("count")
 	stopifnot(!is.null(fm.bo.count))
+	fm.bo.which.max <<- fm.get.basic.op("which.max")
+	stopifnot(!is.null(fm.bo.which.max))
+	fm.bo.which.min <<- fm.get.basic.op("which.min")
+	stopifnot(!is.null(fm.bo.which.min))
+	fm.bo.euclidean <<- fm.get.basic.op("euclidean")
+	stopifnot(!is.null(fm.bo.euclidean))
 
 	fm.buo.neg <<- fm.get.basic.uop("neg")
 	stopifnot(!is.null(fm.buo.neg))
@@ -455,6 +568,14 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.buo.ceil))
 	fm.buo.floor <<- fm.get.basic.uop("floor")
 	stopifnot(!is.null(fm.buo.floor))
+	fm.buo.log <<- fm.get.basic.uop("log")
+	stopifnot(!is.null(fm.buo.log))
+	fm.buo.log2 <<- fm.get.basic.uop("log2")
+	stopifnot(!is.null(fm.buo.log2))
+	fm.buo.log10 <<- fm.get.basic.uop("log10")
+	stopifnot(!is.null(fm.buo.log10))
+	fm.buo.round <<- fm.get.basic.uop("round")
+	stopifnot(!is.null(fm.buo.round))
 	fm.buo.as.int <<- fm.get.basic.uop("as.int")
 	stopifnot(!is.null(fm.buo.as.int))
 	fm.buo.as.numeric <<- fm.get.basic.uop("as.numeric")
@@ -464,8 +585,15 @@ fm.init.basic.op <- function()
 fm.create.agg.op <- function(agg, combine, name)
 {
 	stopifnot(class(agg) == "fm.bo")
-	stopifnot(class(combine) == "fm.bo")
-	new("fm.agg.op", agg=agg@info, combine=combine@info, name=name)
+	# It's OK if combine doesn't exist.
+	if (is.null(combine)) {
+		invalid <- c(as.integer(-1), as.integer(0))
+		new("fm.agg.op", agg=agg@info, combine=invalid, name=name)
+	}
+	else {
+		stopifnot(class(combine) == "fm.bo")
+		new("fm.agg.op", agg=agg@info, combine=combine@info, name=name)
+	}
 }
 
 #' Aggregation on a FlashMatrixR object.
@@ -474,7 +602,7 @@ fm.create.agg.op <- function(agg, combine, name)
 #' the FlashMatrixR object with the basic operator.
 #'
 #' @param fm a FlashMatrixR object
-#' @param op a basic operator
+#' @param op a basic operator or an aggregation operator
 #' @return a scalar
 fm.agg <- function(fm, op)
 {
@@ -483,7 +611,28 @@ fm.agg <- function(fm, op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
-	.Call("R_FM_agg", op, fm, PACKAGE="FlashGraphR")
+	.Call("R_FM_agg", fm, op, PACKAGE="FlashGraphR")
+}
+
+#' Aggregation on a FlashMatrixR matrix.
+#'
+#' This function accepts a basic operator and perform aggregation on
+#' the rows/columns of a FlashMatrixR matrix with the basic operator.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @param margin the subscript which the function will be applied over.
+#' @param op a basic operator or an aggregation operator
+#' @return a FlashMatrixR vector.
+fm.agg.mat <- function(fm, margin, op)
+{
+	stopifnot(!is.null(fm) && !is.null(op))
+	stopifnot(class(fm) == "fm")
+	if (class(op) == "fm.bo")
+		op <- fm.create.agg.op(op, op, op@name)
+	stopifnot(class(op) == "fm.agg.op")
+	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op,
+				 PACKAGE="FlashGraphR")
+	new.fmV(ret)
 }
 
 #' Apply a Function to two FlashMatrixR vectors/matrices.
@@ -497,7 +646,7 @@ fm.agg <- function(fm, op)
 #' @param o1, o2 a FlashMatrixR vector/matrix.
 #' @return a FlashMatrixR vector/matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.mapply2", function(o1, o2, FUN) 0)
+setGeneric("fm.mapply2", function(o1, o2, FUN) NULL)
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "fm.bo"),
 		  function(o1, o2, FUN) {
 			  stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
@@ -530,6 +679,30 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "fm.bo"),
 			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashGraphR")
 			  new.fm(ret)
 		  })
+
+fm.mapply.row <- function(o1, o2, FUN)
+{
+	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	stopifnot(class(FUN) == "fm.bo")
+	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(1), FUN,
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+fm.mapply.col <- function(o1, o2, FUN)
+{
+	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	stopifnot(class(FUN) == "fm.bo")
+	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(2), FUN,
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
 
 #' Apply a Function to a FlashMatrixR vector/matrix.
 #'
@@ -576,12 +749,22 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.sgroupby <- function(obj, FUN)
 {
-	stopifnot(class(obj) == "fmV")
+	stopifnot(class(obj) == "fmV" || class(obj) == "fmFactorV")
 	stopifnot(class(FUN) == "fm.agg.op")
 	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashGraphR")
 	if (is.null(res))
 		return(NULL)
 	list(val=new.fmV(res$val), Freq=new.fmV(res$agg))
+}
+
+fm.groupby <- function(fm, margin, factor, FUN)
+{
+	stopifnot(class(fm) == "fm")
+	stopifnot(class(FUN) == "fm.agg.op")
+	stopifnot(class(factor) == "fmFactorV")
+	res <- .Call("R_FM_groupby", fm, as.integer(margin), factor, FUN,
+				 PACKAGE="FlashGraphR")
+	new.fm(res)
 }
 
 #' Transpose a FlashMatrixR matrix.
@@ -614,22 +797,39 @@ fm.set.cols <- function(fm, idxs, m2)
 #	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashGraphR")
 }
 
-#' Get a submatrix composed of some columns from a FlashMatrixR matrix
+#' Get a submatrix from a FlashMatrixR matrix
 #'
-#' This only works on a column-wise matrix. The submatrix is also organized
-#' column-wise. The submatrix shares the same data as the input matrix, so
-#' there is no memory copy.
+#' `fm.get.rows' gets specified rows in a FM matrix.
+#' `fm.get.cols' gets specified columns in a FM matrix.
 #'
 #' @param fm A FlashMatrixR matrix
 #' @param idxs an array of column indices in fm.
 #' @return a submatrix
+#' @name fm.get.eles
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_cols", fm, as.integer(idxs), PACKAGE="FlashGraphR")
-	new.fm(ret)
+	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.integer(idxs),
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
+}
+
+#' @rdname fm.get.eles
+fm.get.rows <- function(fm, idxs)
+{
+	stopifnot(!is.null(fm) && !is.null(idxs))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.integer(idxs),
+				 PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		new.fm(ret)
+	else
+		NULL
 }
 
 fm.materialize <- function(fm)
@@ -707,9 +907,13 @@ fm.read.obj <- function(file)
 #'         vectors: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.eigen <- function(func, extra=NULL, sym=FALSE, options=NULL,
+fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 					 env = parent.frame())
 {
+	if (!sym) {
+		print("fm.eigen only supports symmetric matrices")
+		return(NULL)
+	}
 	ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
 		  as.list(options), PACKAGE="FlashGraphR")
 	ret$vecs <- new.fm(ret$vecs)

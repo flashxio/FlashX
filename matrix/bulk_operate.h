@@ -232,6 +232,10 @@ public:
 		SQ,
 		CEIL,
 		FLOOR,
+		ROUND,
+		LOG,
+		LOG2,
+		LOG10,
 		NUM_OPS,
 	};
 
@@ -286,6 +290,30 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct round {
+		OutType operator()(const InType &e) const {
+			return std::round(e);
+		}
+	};
+
+	struct log {
+		OutType operator()(const InType &e) const {
+			return std::log(e);
+		}
+	};
+
+	struct log2 {
+		OutType operator()(const InType &e) const {
+			return std::log2(e);
+		}
+	};
+
+	struct log10 {
+		OutType operator()(const InType &e) const {
+			return std::log10(e);
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
@@ -293,6 +321,10 @@ class basic_uops_impl: public basic_uops
 	bulk_uoperate_impl<sq, InType, OutType> sq_op;
 	bulk_uoperate_impl<ceil, InType, OutType> ceil_op;
 	bulk_uoperate_impl<floor, InType, OutType> floor_op;
+	bulk_uoperate_impl<round, InType, OutType> round_op;
+	bulk_uoperate_impl<log, InType, OutType> log_op;
+	bulk_uoperate_impl<log2, InType, OutType> log2_op;
+	bulk_uoperate_impl<log10, InType, OutType> log10_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -304,6 +336,10 @@ public:
 		ops.push_back(&sq_op);
 		ops.push_back(&ceil_op);
 		ops.push_back(&floor_op);
+		ops.push_back(&round_op);
+		ops.push_back(&log_op);
+		ops.push_back(&log2_op);
+		ops.push_back(&log10_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {
@@ -332,6 +368,8 @@ public:
 		EQ,
 		GT,
 		GE,
+		LT,
+		LE,
 		NUM_OPS,
 	};
 
@@ -441,6 +479,18 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct lt {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 < e2;
+		}
+	};
+
+	struct le {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 <= e2;
+		}
+	};
+
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
 	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
@@ -452,6 +502,8 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<eq, LeftType, RightType, bool> eq_op;
 	bulk_operate_impl<gt, LeftType, RightType, bool> gt_op;
 	bulk_operate_impl<ge, LeftType, RightType, bool> ge_op;
+	bulk_operate_impl<lt, LeftType, RightType, bool> lt_op;
+	bulk_operate_impl<le, LeftType, RightType, bool> le_op;
 
 	std::vector<bulk_operate *> ops;
 public:
@@ -467,6 +519,8 @@ public:
 		ops[EQ] = &eq_op;
 		ops[GT] = &gt_op;
 		ops[GE] = &ge_op;
+		ops[LT] = &lt_op;
+		ops[LE] = &le_op;
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {

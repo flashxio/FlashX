@@ -149,6 +149,34 @@ char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
 	return (char *) get_row(row_start);
 }
 
+matrix_store::const_ptr NUMA_row_tall_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	// I assume we only need to get a small number of rows from the matrix.
+	// So it's sufficient to output a SMP matrix to store the result.
+	mem_row_matrix_store::ptr ret = mem_row_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(ret->get_row(i), get_row(idxs[i]),
+				get_entry_size() * get_num_cols());
+	return ret;
+}
+
+matrix_store::const_ptr NUMA_row_tall_matrix_store::get_cols(
+		const std::vector<off_t> &idxs) const
+{
+	NUMA_row_tall_matrix_store::ptr ret = NUMA_row_tall_matrix_store::create(
+			get_num_rows(), idxs.size(), get_num_nodes(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_rows(); i++) {
+		const char *src_row = get_row(i);
+		for (size_t j = 0; j < src_data.size(); j++)
+			src_data[j] = src_row + idxs[j] * get_entry_size();
+		get_type().get_sg().gather(src_data, ret->get_row(i));
+	}
+	return ret;
+}
+
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
 		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
 			nrow, ncol, type, mat_counter++)
@@ -267,6 +295,23 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
+}
+
+matrix_store::const_ptr NUMA_col_tall_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	// I assume we only need to get a small number of rows from the matrix.
+	// So it's sufficient to output a SMP matrix to store the result.
+	mem_col_matrix_store::ptr res = mem_col_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		for (size_t j = 0; j < idxs.size(); j++)
+			src_data[j] = get(idxs[j], i);
+		char *dst_col = res->get_col(i);
+		get_type().get_sg().gather(src_data, dst_col);
+	}
+	return res;
 }
 
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(

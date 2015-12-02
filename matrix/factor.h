@@ -60,6 +60,10 @@ class factor_vector: public vector
 {
 	factor f;
 
+	factor_vector(const factor &_f,
+			detail::vec_store::const_ptr store): vector(store), f(_f) {
+	}
+
 	factor_vector(const factor &_f, size_t len, int num_nodes, bool in_mem,
 			const set_vec_operate &op): vector(detail::vec_store::create(len,
 				get_scalar_type<factor_value_t>(), num_nodes, in_mem)), f(_f) {
@@ -68,6 +72,10 @@ class factor_vector: public vector
 public:
 	typedef std::shared_ptr<factor_vector> ptr;
 	typedef std::shared_ptr<const factor_vector> const_ptr;
+
+	static ptr create(const factor &f, detail::vec_store::const_ptr vec) {
+		return ptr(new factor_vector(f, vec));
+	}
 
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_vec_operate &op) {
