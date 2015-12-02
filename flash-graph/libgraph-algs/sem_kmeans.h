@@ -199,9 +199,8 @@ namespace fg
      * \param init Initialization type [random, forgy, kmeanspp].
      * \param max_iters The max number of iterations to compute for.
      * \param tolerance The min fraction of changes from 1 iter to next required to converge.
-     * \param comp_thresh Used to prune computation if specified. TODO: Explain.
      */
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned max_iters, const double tolerance, const double comp_thresh=0);
+            const unsigned max_iters, const double tolerance);
 }
 #endif
