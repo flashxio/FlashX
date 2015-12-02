@@ -82,7 +82,14 @@ namespace {
 			}
 		}
 
-    // TODO: Doc
+    /**
+      * \Internal
+      * \brief compute the euclidean distance between two arrays
+      * \param row The row of interest in the `matrix`
+      * \param clust_idx The cluster index of interest
+      * \param matrix The data matrix
+      * \param clusters The cluster center data matrix
+    */
     static double const eucl_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double dist = 0;
@@ -92,11 +99,15 @@ namespace {
         }
         return  dist;
     }
-    
 
     /**
-      * TODO: Doc
-      */
+      * \Internal
+      * \brief compute the cosine distance between two arrays
+      * \param row The row of interest in the `matrix`
+      * \param clust_idx The cluster index of interest
+      * \param matrix The data matrix
+      * \param clusters The cluster center data matrix
+    */
     static double const cos_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double numr, ldenom, rdenom;
@@ -115,7 +126,7 @@ namespace {
 
     // TODO: Doc
 #if KM_ENABLE_DIST_TYPE
-    static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters, 
+    static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters,
             double (const *dist_func) (const unsigned, const unsigned, const double*, const double*)) {
 #else
     static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters) {
@@ -183,7 +194,7 @@ namespace {
 	 *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
 	 */
 #if KM_ENABLE_DIST_TYPE
-	static void kmeanspp_init(const double* matrix, double* clusters, 
+	static void kmeanspp_init(const double* matrix, double* clusters,
             double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
 #else
 	static void kmeanspp_init(const double* matrix, double* clusters) {
