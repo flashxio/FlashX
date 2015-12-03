@@ -691,7 +691,6 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
     unsigned max_iters = std::numeric_limits<unsigned>::max();
     std::string init = "kmeanspp";
     double tolerance = -1;
-    double comp_thresh = 0;
     unsigned num_col = 0;
 
 	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:")) != -1) {
@@ -711,10 +710,6 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 tolerance = atof(optarg);
                 num_opts++;
                 break;
-            case 'C':
-                comp_thresh = atof(optarg);
-                num_opts++;
-                break;
             case 'c':
                 num_col = atof(optarg);
                 num_opts++;
@@ -725,7 +720,7 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
 		}
 	}
 
-    compute_sem_kmeans(graph, k, init, max_iters, tolerance, comp_thresh, 0, num_col);
+    compute_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
 }
 
 std::string supported_algs[] = {
