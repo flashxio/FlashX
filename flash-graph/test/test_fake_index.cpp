@@ -19,7 +19,6 @@
 
 #include "fake_index.h"
 
-// This also tests fake
 using namespace fg;
 
 int main(int argc, char* argv[]) {

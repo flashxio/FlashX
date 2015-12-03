@@ -33,7 +33,7 @@ test_fake_index: test_fake_index.o ../libgraph.a
 	$(CXX) -o test_fake_index test_fake_index.o $(LDFLAGS)
 
 make_page_row_header: make_page_row_header.o ../libgraph.a
-	$(CXX) -o make_page_row_header.cpp make_page_row_header.o $(LDFLAGS)
+	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
