@@ -46,6 +46,7 @@ namespace {
         graph_header header = make_graph_header(num_vert, num_cols);
 
         off_t header_offset = sizeof(header);
+        std::cout << "The graph_header is: " << header_offset << "bytes ...";
 
         std::cout << "Creating index vertices vector" << std::endl;
         std::vector<vertex_offset> vertices;
@@ -55,7 +56,9 @@ namespace {
         }
         vertices.push_back(header_offset + (num_vert*(sizeof(double)*num_cols)));
 
-#if 0
+        std::cout << "The vertex_index is: " << sizeof(vertex_offset)*
+           vertices.size() << "bytes ...";
+#if 1
         // Test print
         printf("Test print of vertices index ..\n[");
         for (std::vector<vertex_offset>::iterator it = vertices.begin();

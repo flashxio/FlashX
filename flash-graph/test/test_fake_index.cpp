@@ -19,19 +19,13 @@
 
 #include "fake_index.h"
 
+// This also tests fake
 using namespace fg;
 
 int main(int argc, char* argv[]) {
 
-    if (argc < 4) {
-        fprintf(stderr, "usage: ./test_fake_index outfilename num_vertices num_cols\n");
-        exit(EXIT_FAILURE);
-    }
-
-#if 0
-    make_graph_header(atol(argv[2]), atol(argv[3]), argv[1]);
-#else
+    printf("Testing fake index ...\n");
     make_index(atol(argv[2]), atol(argv[3]), argv[1]);
-#endif 
+    printf("Fake index tested correctly!\n");
     return EXIT_SUCCESS;
 }
