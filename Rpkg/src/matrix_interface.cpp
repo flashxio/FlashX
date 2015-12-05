@@ -1463,6 +1463,18 @@ RcppExport SEXP R_FM_get_layout(SEXP pmat)
 	return ret;
 }
 
+RcppExport SEXP R_FM_is_sym(SEXP pmat)
+{
+	Rcpp::LogicalVector res(1);
+	if (is_sparse(pmat)) {
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		res[0] = mat->is_symmetric();
+	}
+	else
+		res[0] = false;
+	return res;
+}
+
 void init_flashmatrixr()
 {
 	fmr::init_udf_ext();

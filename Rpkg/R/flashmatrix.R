@@ -305,12 +305,12 @@ fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 
 #' @rdname fm.info
-#fm.is.sym <- function(fm)
-#{
-#	stopifnot(!is.null(fm))
-#	stopifnot(class(fm) == "fm")
-#	fm@sym
-#}
+fm.is.sym <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	.Call("R_FM_is_sym", fm, PACKAGE="FlashGraphR")
+}
 
 #' @rdname fm.info
 fm.matrix.layout <- function(fm)
