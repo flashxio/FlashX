@@ -1260,9 +1260,21 @@ public:
 		// dense matrices and use a lot of memory.
 		R_gc();
 		SEXP s4_mat = R_create_s4fm(create_FMR_matrix(x, "x"));
-		SEXP pret = fun(s4_mat, pextra);
+		SEXP pret;
+		bool success;
+		try {
+			pret = fun(s4_mat, pextra);
+			success = true;
+		} catch (Rcpp::eval_error e) {
+			std::cerr << "can't eval the multiply function" << std::endl;
+			std::cerr << e.what() << std::endl;
+			success = false;
+		}
 		UNPROTECT(2);
-		return get_matrix<dense_matrix>(pret);
+		if (success)
+			return get_matrix<dense_matrix>(pret);
+		else
+			return dense_matrix::ptr();
 	}
 
 	virtual size_t get_num_cols() const {
@@ -1321,6 +1333,8 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	size_t n = get_scalar<size_t>(options["n"]);
 	eigen::eigen_res res = eigen::compute_eigen(new R_spm_function(pfunc,
 				pextra, penv, n), sym[0], opts);
+	if (res.vals.empty())
+		return R_NilValue;
 
 	// Return the options.
 
@@ -1447,6 +1461,18 @@ RcppExport SEXP R_FM_get_layout(SEXP pmat)
 			ret[0] = Rcpp::String("col-oriented");
 	}
 	return ret;
+}
+
+RcppExport SEXP R_FM_is_sym(SEXP pmat)
+{
+	Rcpp::LogicalVector res(1);
+	if (is_sparse(pmat)) {
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		res[0] = mat->is_symmetric();
+	}
+	else
+		res[0] = false;
+	return res;
 }
 
 void init_flashmatrixr()

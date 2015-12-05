@@ -7,7 +7,7 @@ Description:
 
 Usage:
 
-     fm.as.vector(fm)
+     fm.as.vector(obj)
      
 Arguments:
 

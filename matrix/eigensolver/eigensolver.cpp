@@ -194,7 +194,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "KrylovSchur") {
 		anasaziPL.set ("Num Blocks", numBlocks);
@@ -209,7 +214,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "LOBPCG") {
 		anasaziPL.set ("Maximum Iterations", maxIters);
@@ -225,7 +235,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "a wrong solver: " << solver;
@@ -245,6 +260,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	// eigenvalues, since the matrix pencil is symmetric.
 	std::vector<Anasazi::Value<double> > evals = sol.Evals;
 	RCP<MV> evecs = sol.Evecs;
+	if (evecs.is_null() || evecs->get_data() == NULL)
+		return eigen_res();
 
 	// Compute residuals.
 	std::vector<double> normR (sol.numVecs);
@@ -277,25 +294,24 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	res.vals.resize(sol.numVecs);
 	for (int i=0; i<sol.numVecs; ++i) {
 		res.vals[i] = evals[i].realpart;
-		cout << std::setw(16) << evals[i].realpart
-			<< std::setw(18) << normR[i] / evals[i].realpart
-			<< endl;
+		BOOST_LOG_TRIVIAL(error) << std::setw(16) << evals[i].realpart
+			<< std::setw(18) << normR[i] / evals[i].realpart;
 	}
-	cout << "------------------------------------------------------" << endl;
-	cout << "#col writes: " << num_col_writes << endl;
-	cout << "#col reads: " << num_col_reads_concept << " in concept" << endl;
-	cout << "#col writes: " << num_col_writes_concept << " in concept" << endl;
-	cout << "#multiply: " << num_multiply_concept << " in concept" << endl;
-	cout << "#mem read bytes: " << detail::matrix_stats.get_read_bytes(true)
-		<< endl;
-	cout << "#mem write bytes: " << detail::matrix_stats.get_write_bytes(true)
-		<< endl;
-	cout << "#EM read bytes: " << detail::matrix_stats.get_read_bytes(false)
-		<< endl;
-	cout << "#EM write bytes: " << detail::matrix_stats.get_write_bytes(false)
-		<< endl;
-	cout << "#double float-point multiplies: "
-		<< detail::matrix_stats.get_multiplies() << endl;
+	BOOST_LOG_TRIVIAL(error) << "---------------------------------------------";
+	BOOST_LOG_TRIVIAL(error) << "#col writes: " << num_col_writes;
+	BOOST_LOG_TRIVIAL(error) << "#col reads: " << num_col_reads_concept << " in concept";
+	BOOST_LOG_TRIVIAL(error) << "#col writes: " << num_col_writes_concept << " in concept";
+	BOOST_LOG_TRIVIAL(error) << "#multiply: " << num_multiply_concept << " in concept";
+	BOOST_LOG_TRIVIAL(error) << "#mem read bytes: "
+		<< detail::matrix_stats.get_read_bytes(true);
+	BOOST_LOG_TRIVIAL(error) << "#mem write bytes: "
+		<< detail::matrix_stats.get_write_bytes(true);
+	BOOST_LOG_TRIVIAL(error) << "#EM read bytes: "
+		<< detail::matrix_stats.get_read_bytes(false);
+	BOOST_LOG_TRIVIAL(error) << "#EM write bytes: "
+		<< detail::matrix_stats.get_write_bytes(false);
+	BOOST_LOG_TRIVIAL(error) << "#double float-point multiplies: "
+		<< detail::matrix_stats.get_multiplies();
 	cached_mats.clear();
 
 	return res;

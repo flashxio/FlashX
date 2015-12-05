@@ -9,7 +9,7 @@ fm.agg(fm, op)
 \arguments{
 \item{fm}{a FlashMatrixR object}
 
-\item{op}{a basic operator}
+\item{op}{a basic operator or an aggregation operator}
 }
 \value{
 a scalar

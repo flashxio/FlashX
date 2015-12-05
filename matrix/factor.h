@@ -79,7 +79,7 @@ public:
 
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_vec_operate &op) {
-		return ptr(new factor_vector(f, length, in_mem, num_nodes, op));
+		return ptr(new factor_vector(f, length, num_nodes, in_mem, op));
 	}
 
 	const factor &get_factor() const {
