@@ -1333,6 +1333,8 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	size_t n = get_scalar<size_t>(options["n"]);
 	eigen::eigen_res res = eigen::compute_eigen(new R_spm_function(pfunc,
 				pextra, penv, n), sym[0], opts);
+	if (res.vals.empty())
+		return R_NilValue;
 
 	// Return the options.
 
