@@ -103,7 +103,7 @@ public:
 	}
 };
 
-/**
+/*
  * It is an object container used for message passing.
  * Instead of sending objects to another thread directly, we add objects
  * to a message, and send the message to the thread.

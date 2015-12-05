@@ -5,6 +5,6 @@ mkdir -p docs/FlashGraphR
 for file in `ls Rpkg/man/`
 do
 	input_file="Rpkg/man/$file"
-	output_file="docs/FlashGraphR/${file}.txt"
-	echo "tools::Rd2txt(\"$input_file\", out=\"$output_file\", options=list(underline_titles=FALSE))" | R --no-save
+	output_file="docs/FlashGraphR/${file}.html"
+	echo "tools::Rd2HTML(\"$input_file\", out=\"$output_file\")" | R --no-save
 done

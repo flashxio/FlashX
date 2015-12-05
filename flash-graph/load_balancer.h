@@ -33,7 +33,7 @@ class graph_engine;
 class compute_vertex;
 class compute_vertex_pointer;
 
-/**
+/*
  * This class is to help balance the load.
  * If the owner thread has finished the work originally assigned to it,
  * it can steal work from other threads through this class.
