@@ -260,6 +260,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	// eigenvalues, since the matrix pencil is symmetric.
 	std::vector<Anasazi::Value<double> > evals = sol.Evals;
 	RCP<MV> evecs = sol.Evecs;
+	if (evecs.is_null() || evecs->get_data() == NULL)
+		return eigen_res();
 
 	// Compute residuals.
 	std::vector<double> normR (sol.numVecs);
