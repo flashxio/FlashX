@@ -884,23 +884,30 @@ fm.read.obj <- function(file)
 #' Anasazi parameters:
 #'
 #' nev Numeric scalar. The number of eigenvalues to be computed.
+#'
 #' solver String. The name of the eigensolver to solve the eigenproblems.
 #'				Currently, it supports three eigensolvers: KrylovSchur,
 #'				Davidson and LOBPCG. KrylovSchur is the default eigensolver.
+#'
 #' tol Numeric scalar. Stopping criterion: the relative accuracy of
 #'				the Ritz value is considered acceptable if its error is less
 #'				than `tol' times its estimated value.
+#'
 #' block_size Numeric scalar. The eigensolvers use a block extension of an
 #'				eigensolver algorithm. The block size determines the number
 #'				of the vectors that operate together.
+#'
 #' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
+#'
 #' which Specify which eigenvalues/vectors to compute, character
 #'              constant with exactly two characters.
 #' Possible values for symmetric input matrices:
-#' "LA' Compute 'nev' largest (algebraic) eigenvalues.
-#' "SA" Compute "nev" smallest (algebraic) eigenvalues.
-#' "LM" Compute `nev' largest (in magnitude) eigenvalues.
-#' "SM" Compute `nev' smallest (in magnitude) eigenvalues.
+#' \itemize{
+#' \item{"LA"}{Compute `nev' largest (algebraic) eigenvalues.}
+#' \item{"SA"}{Compute `nev' smallest (algebraic) eigenvalues.}
+#' \item{"LM"}{Compute `nev' largest (in magnitude) eigenvalues.}
+#' \item{"SM"}{Compute `nev' smallest (in magnitude) eigenvalues.}
+#' }
 #'
 #' @return A named list with the following members:
 #'         values: Numeric vector, the desired eigenvalues.
