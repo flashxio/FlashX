@@ -13,7 +13,7 @@ Arguments:
 
       fm: a FlashMatrixR object
 
-      op: a basic operator
+      op: a basic operator or an aggregation operator
 
 Value:
 
