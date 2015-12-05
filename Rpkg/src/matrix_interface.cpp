@@ -1260,9 +1260,21 @@ public:
 		// dense matrices and use a lot of memory.
 		R_gc();
 		SEXP s4_mat = R_create_s4fm(create_FMR_matrix(x, "x"));
-		SEXP pret = fun(s4_mat, pextra);
+		SEXP pret;
+		bool success;
+		try {
+			pret = fun(s4_mat, pextra);
+			success = true;
+		} catch (Rcpp::eval_error e) {
+			std::cerr << "can't eval the multiply function" << std::endl;
+			std::cerr << e.what() << std::endl;
+			success = false;
+		}
 		UNPROTECT(2);
-		return get_matrix<dense_matrix>(pret);
+		if (success)
+			return get_matrix<dense_matrix>(pret);
+		else
+			return dense_matrix::ptr();
 	}
 
 	virtual size_t get_num_cols() const {
