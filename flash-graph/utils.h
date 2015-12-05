@@ -52,7 +52,7 @@ enum {
 
 class serial_subgraph;
 
-/**
+/*
  * This class serializes a graph and stores it in contiguous memory.
  */
 class serial_graph
