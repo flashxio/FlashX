@@ -194,7 +194,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "KrylovSchur") {
 		anasaziPL.set ("Num Blocks", numBlocks);
@@ -209,7 +214,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "LOBPCG") {
 		anasaziPL.set ("Maximum Iterations", maxIters);
@@ -225,7 +235,12 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "a wrong solver: " << solver;

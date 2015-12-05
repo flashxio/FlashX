@@ -587,6 +587,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			detail::matrix_stats.print_diff(orig_stats);
 		}
 		res = multiply.run(row_in);
+		if (res == NULL)
+			throw std::runtime_error("can't perform sparse matrix multiplication");
 		row_in = NULL;
 		if (res->store_layout() == matrix_layout_t::L_ROW)
 			res = res->conv2(matrix_layout_t::L_COL);
