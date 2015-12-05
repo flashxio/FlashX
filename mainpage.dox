@@ -7,14 +7,37 @@
  * is now able to support a wide variety of data mining and machine learning
  * algorithms. We address the entire data analysis framework with FlashGraph-ng.
  *
- * The current implementation of FlashGraph-ng has three main components:
- * - _SAFS_: a user-space filesystem that achieves the maximal I/O throughput
- *   of large SSD arrays.
+ * The current implementation of FlashGraph-ng has four main components:
+ * - _SAFS_: a user-space filesystem designed for large SSD arrays.
+ *   It is capable of achieving the maximal I/O throughput from SSD arrays
+ *   (millions of I/O per second for random I/O and tens of gigabytes per second
+ *   for sequential I/O). The I/O performance is further magnified by
+ *   the light-weight page cache if the workload can generate cache hits.
+ *
  * - _FlashGraph_: a general-purpose graph analysis framework that exposes
- *   vertex-centric programming interface for users to express graph algorithms.
- * - _FlashMatrix_: a matrix computation engine that exposes a small set of
+ *   vertex-centric programming interface for users to express varieties of
+ *   graph algorithms. FlashGraph scales graph computation to large graphs
+ *   by keeping the edges of a graph on SSDs and computation state in memory.
+ *   With smart I/O scheduling, FlashGraph is able to achieve performance
+ *   comparable to state-of-art in-memory graph analysis frameworks and
+ *   significantly outperforms state-of-art distributed graph analysis
+ *   frameworks while being able to scale to graphs with billions of vertices
+ *   and hundreds of billions of edges.
+ *
+ * - _FlashMatrix_: a matrix computation engine that provides a small set of
  *   generalized matrix operations on sparse matrices and dense matrices to
  *   express varieties of data mining and machine learning algorithms.
+ *   For certain graph algorithms such as PageRank, which can be formulated as
+ *   sparse matrix multiplication, FlashMatrix is able to significantly
+ *   outperform FlashGraph.
+ *
+ * - _FlashR_: extends the existing R programming framework to process datasets
+ *   at a scale of terabytes. FlashR integrates the matrices and generalized
+ *   operators of FlashMatrix with R so that R users can implement many data
+ *   mining and machine learning algorithms completely in R with performance
+ *   comparable to optimized C implementations. FlashR reimplements
+ *   many existing R functions for matrices to provide users a familiar
+ *   R programming environment. FlashR is implemented as a regular R package.
  *
  * The figure below shows the architecture of FlashGraph-ng. At the bottem is
  * SAFS, which sits on top of an array of SSDs and exposes a unified asynchronous
@@ -22,13 +45,14 @@
  * which exposes a vertex-centric programming interface for users to express
  * a varieties of graph algorithms. FlashGraph contains a set of graph algorithm
  * library written in C++. The graph library is integrated with R so that
- * R users can invoke the graph algorithms in R directly. On the right is
- * FlashMatrix, which provides both in-memory and external-memory vector and
+ * R users can invoke the graph algorithms in R directly. On the right,
+ * FlashMatrix provides both in-memory and external-memory vector and
  * matrix implementations as well as a small set of generalized operators
  * to perform computation on the vectors and matrices. FlashMatrix has
  * an optimizer that optimizes a sequence of operations to achieve performance
  * of an application comparable to a manually optimized C/C++ implementation.
- * FlashMatrix also provides an R interface for the generalized operators.
+ * FlashR integrates the generalied operators in FlashMatrix to R and
+ * reimplements the existing R matrix operations with FlashMatrix.
  * In the future, we will provide an R compiler so that R users can implement
  * the user-defined functions in R and pass them to the generalized operators
  * to perform actual computation.
