@@ -4,7 +4,7 @@
 \alias{fm.as.vector}
 \title{Convert a FlashMatrixR matrix to a FlashMatrixR vector.}
 \usage{
-fm.as.vector(fm)
+fm.as.vector(obj)
 }
 \arguments{
 \item{fm}{a FlashMatrixR matrix}

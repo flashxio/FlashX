@@ -3,10 +3,13 @@
 \name{fm.info}
 \alias{fm.info}
 \alias{fm.is.sparse}
+\alias{fm.is.sym}
 \alias{fm.is.vector}
 \alias{fm.matrix.layout}
 \title{The information of a FlashMatrixR object}
 \usage{
+fm.is.sym(fm)
+
 fm.matrix.layout(fm)
 
 fm.is.sparse(fm)
