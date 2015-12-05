@@ -1606,7 +1606,6 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 		// It needs to assign more than one block in restart.
 		// TODO This method of detecting restart may not reliable.
 		if (is_subspace && index.size() > get_block_size()) {
-			printf("restart the subspace\n");
 			// When restarting the subspace, we can delete all vectors
 			// in the subspace.
 			for (size_t i = 0; i < mats.size(); i++)
