@@ -53,8 +53,10 @@ al2crs: al2crs.o fg_utils.o ../libFMatrix.a
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
-TRILINOSMPILIBPATH=-L/home/zhengda/trilinos-12.0.1-mpi/lib/
-TRILINOSMPIINCPATH=-I/home/zhengda/trilinos-12.0.1-mpi/include/
+#TRILINOSMPILIBPATH=-L/home/zhengda/trilinos-12.0.1-mpi/lib/
+#TRILINOSMPIINCPATH=-I/home/zhengda/trilinos-12.0.1-mpi/include/
+#TRILCC = mpic++
+TRILCC = g++
 
 TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
 				 -ltpetraclassicnodeapi -ltpetrakernels -lteuchoscomm \
@@ -63,19 +65,19 @@ TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
 				 -lteuchoskokkoscompat
 
 FG2Tpetra.o: FG2Tpetra.cpp
-	mpic++ -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_MV_multiply.o: test-tpetra_MV_multiply.cpp
-	mpic++ -c test-tpetra_MV_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-tpetra_MV_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_MV_multiply: test-tpetra_MV_multiply.o FG2Tpetra.o ../libFMatrix.a
-	mpic++ -o test-tpetra_MV_multiply test-tpetra_MV_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB) -llapack -lblas
+	$(TRILCC) -o test-tpetra_MV_multiply test-tpetra_MV_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB) -llapack -lblas
 
 test-tpetra_multiply.o: test-tpetra_multiply.cpp
-	mpic++ -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_multiply: test-tpetra_multiply.o FG2Tpetra.o ../libFMatrix.a
-	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB)
+	$(TRILCC) -o test-tpetra_multiply test-tpetra_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB)
 
 test-mkl_eigen.o: test-mkl_eigen.cpp
 	$(CXX) -O3 -c test-mkl_eigen.cpp -std=c++0x -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
@@ -86,10 +88,10 @@ test-mkl_eigen: test-mkl_eigen.o
 		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
 test-anasazi_eigen.o: test-anasazi_eigen.cpp
-	mpic++ -c test-anasazi_eigen.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-anasazi_eigen.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-anasazi_eigen: test-anasazi_eigen.o FG2Tpetra.o
-	mpic++ test-anasazi_eigen.o FG2Tpetra.o -o test-anasazi_eigen $(TRILINOSMPILIB) $(LDFLAGS) -llapack -lblas
+	$(TRILCC) test-anasazi_eigen.o FG2Tpetra.o -o test-anasazi_eigen $(TRILINOSMPILIB) $(LDFLAGS) -llapack -lblas
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
