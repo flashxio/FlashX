@@ -415,4 +415,9 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 	fclose(f);
 }
 
+void SpM_2d_storage::dump(const std::string &mat_file) const
+{
+	data->dump(mat_file);
+}
+
 }

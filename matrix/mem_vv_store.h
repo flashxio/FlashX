@@ -57,6 +57,11 @@ public:
 		return ptr(new mem_vv_store(type));
 	}
 
+	static ptr create(const std::vector<off_t> &offs, const scalar_type &type) {
+		smp_vec_store::ptr vec = smp_vec_store::create(offs.back(), type);
+		return ptr(new mem_vv_store(offs, vec));
+	}
+
 	static ptr create(const detail::raw_data_array &data,
 			const std::vector<off_t> &offs, const scalar_type &type) {
 		assert(offs.front() == 0 && (size_t) offs.back() == data.get_num_bytes());

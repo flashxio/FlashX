@@ -888,6 +888,7 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 	offsets[res->get_num_vecs()] = off;
 	SpM_2d_index::ptr idx = SpM_2d_index::create(mheader, offsets);
 
+	mheader.verify();
 	return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>(
 			idx, SpM_2d_storage::create(mheader, *res, idx));
 }

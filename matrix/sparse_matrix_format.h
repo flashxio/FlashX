@@ -516,6 +516,7 @@ public:
 	}
 
 	void verify() const;
+	void dump(const std::string &file) const;
 
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };

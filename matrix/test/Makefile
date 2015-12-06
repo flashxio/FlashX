@@ -23,11 +23,14 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm
+	el2al al22d al2crs test-sort test-eigen test-dgemm rand_mat_gen
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
 mkl: test-mkl_multiply test-mkl_dgemm
+
+rand_mat_gen: rand_mat_gen.o ../libFMatrix.a
+	$(CXX) -o rand_mat_gen rand_mat_gen.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 	$(CXX) -o test-2d_multiply test-2d_multiply.o $(LDFLAGS)
