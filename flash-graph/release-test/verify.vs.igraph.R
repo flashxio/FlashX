@@ -1,5 +1,5 @@
 require(igraph)
-library("FlashGraphR")
+library("FlashR")
 
 ig.local.scan <- function(g, order)
 {

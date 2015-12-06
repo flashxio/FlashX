@@ -1,4 +1,4 @@
-library(FlashGraphR)
+library(FlashR)
 
 fg.set.conf("run_test_large.txt")
 
