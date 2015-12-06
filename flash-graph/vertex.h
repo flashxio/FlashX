@@ -543,6 +543,10 @@ public:
 		return neighbors[idx];
 	}
 
+	void set_neighbor(size_t idx, vertex_id_t id) {
+		neighbors[idx] = id;
+	}
+
 	char *get_raw_edge_data(size_t idx) const {
 		return this->get_edge_data_addr() + idx * edge_data_size;
 	}
