@@ -284,7 +284,7 @@ SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 
 void SpM_2d_storage::verify() const
 {
-	matrix_header *header = (matrix_header *) data.get();
+	matrix_header *header = (matrix_header *) data->get_data(0, PAGE_SIZE).first;
 	header->verify();
 #if 0
 	block_2d_size block_size = index->get_header().get_2d_block_size();
