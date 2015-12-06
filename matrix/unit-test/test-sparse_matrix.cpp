@@ -136,9 +136,10 @@ void test_multiply_block(data_frame::ptr df)
 	}
 	df->append(new_df);
 
-	vector_vector::ptr adj = create_1d_matrix(df);
+	auto oned_mat = create_1d_matrix(df);
+	vector_vector::ptr adj = oned_mat.first;
 	std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> mat
-		= create_2d_matrix(adj, block_size, entry_type);
+		= create_2d_matrix(adj, oned_mat.second, block_size, entry_type);
 	assert(mat.first);
 	assert(mat.second);
 	mat.second->verify();

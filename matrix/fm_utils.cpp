@@ -51,7 +51,20 @@ void set_remove_self_edge(bool v)
  */
 class adj_apply_operate: public gr_apply_operate<sub_data_frame>
 {
+	std::vector<size_t> max_col_idxs;
 public:
+	adj_apply_operate() {
+		int num_threads = detail::mem_thread_pool::get_global_num_threads();
+		max_col_idxs.resize(num_threads);
+	}
+
+	size_t get_max_col_idx() const {
+		size_t max = max_col_idxs[0];
+		for (size_t i = 1; i < max_col_idxs.size(); i++)
+			max = std::max(max, max_col_idxs[i]);
+		return max;
+	}
+
 	void run(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
 
@@ -94,7 +107,11 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 	std::unique_ptr<fg::vertex_id_t[]> edge_buf
 		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
 	size_t edge_idx = 0;
+	size_t max_col_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
+		if (vec.get<fg::vertex_id_t>(i) != fg::INVALID_VERTEX_ID)
+			max_col_idx = std::max(max_col_idx,
+					(size_t) vec.get<fg::vertex_id_t>(i));
 		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID
 				// skip self-edges.
 				|| (remove_selfe && vec.get<fg::vertex_id_t>(i) == vid))
@@ -113,6 +130,14 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 			edge_data_size);
 	out.resize(size);
+
+	// Here is the max column index I have found so far.
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	int thread_id = curr->get_pool_thread_id();
+	adj_apply_operate *mutable_this = const_cast<adj_apply_operate *>(this);
+	mutable_this->max_col_idxs[thread_id] = std::max(max_col_idx,
+			mutable_this->max_col_idxs[thread_id]);
 
 	// Even if we generate a directed, we still can use undirected vertex to
 	// store one type of edges of a vertex.
@@ -141,7 +166,20 @@ class attr_adj_apply_operate: public gr_apply_operate<sub_data_frame>
 			return e1.first == e2.first;
 		}
 	};
+	std::vector<size_t> max_col_idxs;
 public:
+	attr_adj_apply_operate() {
+		int num_threads = detail::mem_thread_pool::get_global_num_threads();
+		max_col_idxs.resize(num_threads);
+	}
+
+	size_t get_max_col_idx() const {
+		size_t max = max_col_idxs[0];
+		for (size_t i = 1; i < max_col_idxs.size(); i++)
+			max = std::max(max, max_col_idxs[i]);
+		return max;
+	}
+
 	void run(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
 
@@ -183,7 +221,11 @@ void attr_adj_apply_operate<AttrType>::run(const void *key,
 	std::unique_ptr<edge_type[]> edge_buf
 		= std::unique_ptr<edge_type[]>(new edge_type[num_edges]);
 	size_t edge_idx = 0;
+	size_t max_col_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
+		if (vec.get<fg::vertex_id_t>(i) != fg::INVALID_VERTEX_ID)
+			max_col_idx = std::max(max_col_idx,
+					(size_t) vec.get<fg::vertex_id_t>(i));
 		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID
 				// skip self-edges.
 				|| (remove_selfe && vec.get<fg::vertex_id_t>(i) == vid))
@@ -205,6 +247,15 @@ void attr_adj_apply_operate<AttrType>::run(const void *key,
 	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 			edge_data_size);
 	out.resize(size);
+
+	// Here is the max column index I have found so far.
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	int thread_id = curr->get_pool_thread_id();
+	attr_adj_apply_operate<AttrType> *mutable_this
+		= const_cast<attr_adj_apply_operate<AttrType> *>(this);
+	mutable_this->max_col_idxs[thread_id] = std::max(max_col_idx,
+			mutable_this->max_col_idxs[thread_id]);
 
 	// Even if we generate a directed, we still can use undirected vertex to
 	// store one type of edges of a vertex.
@@ -233,12 +284,12 @@ struct unit8
 
 }
 
-vector_vector::ptr create_1d_matrix(data_frame::ptr df)
+std::pair<vector_vector::ptr, size_t> create_1d_matrix(data_frame::ptr df)
 {
 	if (df->get_num_vecs() < 2) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The data frame needs to contain at least 2 vectors";
-		return vector_vector::ptr();
+		return std::pair<vector_vector::ptr, size_t>();
 	}
 
 	struct timeval start, end;
@@ -256,24 +307,36 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 
 	gettimeofday(&start, NULL);
 	vector_vector::ptr ret;
-	if (df->get_num_vecs() == 2)
-		ret = sorted_df->groupby(sort_vec_name, adj_apply_operate());
+	size_t max_col_idx = 0;
+	if (df->get_num_vecs() == 2) {
+		std::unique_ptr<adj_apply_operate> op(new adj_apply_operate());
+		ret = sorted_df->groupby(sort_vec_name, *op);
+		max_col_idx = op->get_max_col_idx();
+	}
 	// Instead of giving the real data type, we give a type that indicates
 	// the size of the edge data size. Actually, we don't interpret data type
 	// here. Only the data size matters.
-	else if (df->get_vec(2)->get_entry_size() == 4)
-		ret = sorted_df->groupby(sort_vec_name, attr_adj_apply_operate<unit4>());
-	else if (df->get_vec(2)->get_entry_size() == 8)
-		ret = sorted_df->groupby(sort_vec_name, attr_adj_apply_operate<unit8>());
+	else if (df->get_vec(2)->get_entry_size() == 4) {
+		std::unique_ptr<attr_adj_apply_operate<unit4> > op(
+				new attr_adj_apply_operate<unit4>());
+		ret = sorted_df->groupby(sort_vec_name, *op);
+		max_col_idx = op->get_max_col_idx();
+	}
+	else if (df->get_vec(2)->get_entry_size() == 8) {
+		std::unique_ptr<attr_adj_apply_operate<unit8> > op(
+				new attr_adj_apply_operate<unit8>());
+		ret = sorted_df->groupby(sort_vec_name, *op);
+		max_col_idx = op->get_max_col_idx();
+	}
 	else {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The edge attribute has an unsupported type";
-		return vector_vector::ptr();
+		return std::pair<vector_vector::ptr, size_t>();
 	}
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to groupby the edge list.\n",
 			time_diff(start, end));
-	return ret;
+	return std::pair<vector_vector::ptr, size_t>(ret, max_col_idx + 1);
 }
 
 static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_directed_graph(
@@ -306,8 +369,12 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 		tmp->add_vec("attr", vec);
 	}
 	df = tmp;
-	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
+	auto oned_mat = fm::create_1d_matrix(df);
+	vector_vector::ptr in_adjs = oned_mat.first;
 	size_t num_vertices = in_adjs->get_num_vecs();
+	// A graph is stored in a square matrix, so the number of vertices should
+	// >= the number of columns.
+	assert(num_vertices >= oned_mat.second);
 	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
 	gettimeofday(&start, NULL);
@@ -346,9 +413,11 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 		tmp->add_vec("attr", vec);
 	}
 	df = tmp;
-	vector_vector::ptr out_adjs = create_1d_matrix(df);
+	oned_mat = create_1d_matrix(df);
+	vector_vector::ptr out_adjs = oned_mat.first;
 	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
+	assert(num_vertices >= oned_mat.second);
 	assert(out_adjs->get_num_vecs() == num_vertices);
 	// Get the number of out-edge for each vertex.
 	gettimeofday(&start, NULL);
@@ -419,12 +488,14 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 		edge_data_size = vec->get_entry_size();
 	}
 
-	vector_vector::ptr adjs = create_1d_matrix(df);
+	auto oned_mat = create_1d_matrix(df);
+	vector_vector::ptr adjs = oned_mat.first;
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
 
 	gettimeofday(&start, NULL);
 	size_t num_vertices = adjs->get_num_vecs();
+	assert(num_vertices >= oned_mat.second);
 	detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 			num_vertices, get_scalar_type<fg::vsize_t>());
 	size_t num_edges = 0;
@@ -786,7 +857,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		vector_vector::ptr adjs, const block_2d_size &block_size,
+		vector_vector::ptr adjs, size_t num_cols, const block_2d_size &block_size,
 		const scalar_type *entry_type)
 {
 	size_t entry_size = 0;
@@ -799,12 +870,12 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
 	vector_vector::ptr res = adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_rows, entry_size));
+			part_2d_apply_operate(block_size, num_cols, entry_size));
 
 	prim_type type = prim_type::P_BOOL;
 	if (entry_type)
 		type = entry_type->get_type();
-	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
+	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_cols,
 			matrix_layout_t::L_ROW_2D, type, block_size);
 
 	// Construct the index file of the adjacency matrix.
@@ -825,16 +896,17 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 		data_frame::ptr df, const block_2d_size &block_size,
 		const scalar_type *entry_type)
 {
-	vector_vector::ptr vv = create_1d_matrix(df);
-	if (vv == NULL)
+	auto ret = create_1d_matrix(df);
+	if (ret.first == NULL)
 		return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>();
 	else
-		return create_2d_matrix(vv, block_size, entry_type);
+		return create_2d_matrix(ret.first, ret.second, block_size, entry_type);
 }
 
-void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const scalar_type *entry_type, const std::string &mat_file,
-		const std::string &mat_idx_file, bool to_safs)
+void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
+		const block_2d_size &block_size, const scalar_type *entry_type,
+		const std::string &mat_file, const std::string &mat_idx_file,
+		bool to_safs)
 {
 	size_t entry_size = 0;
 	if (entry_type)
@@ -845,12 +917,12 @@ void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
 	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	vector_vector::ptr res = adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_rows, entry_size));
+			part_2d_apply_operate(block_size, num_cols, entry_size));
 
 	prim_type type = prim_type::P_BOOL;
 	if (entry_type)
 		type = entry_type->get_type();
-	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_rows,
+	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_cols,
 			matrix_layout_t::L_ROW_2D, type, block_size);
 	if (!to_safs) {
 		FILE *f_2d = fopen(mat_file.c_str(), "w");
