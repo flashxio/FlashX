@@ -1,4 +1,4 @@
-library(FlashGraphR)
+library(FlashR)
 #fg.set.conf("flash-graph/conf/run_test.txt")
 
 print("Test sequence generator")
