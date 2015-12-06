@@ -5,7 +5,7 @@
 \title{Perform semi-extenal memory k-means clustering on a data matrix in FG format.}
 \usage{
 fg.sem.kmeans(mat, k, max.iters = 10, init = c("random", "forgy",
-  "kmeanspp"), tol = -1, comp.thresh = 0)
+  "kmeanspp"), tol = -1)
 }
 \arguments{
 \item{mat}{A numeric matrix of data in FG format.}
@@ -21,9 +21,6 @@ http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.}
 \item{tol}{The tolerance for convergence. Between 0 and 1 and is the minimum fraction
 of cluster changes necessary to cause non-convergence. Default is -1 which
 represents no cluster changes.}
-
-\item{comp.thresh}{(0-1) Anything under this fraction from the min distance will not
-             not be computed every other iteration. This prunes computation.}
 }
 \value{
 A named list with the following members:

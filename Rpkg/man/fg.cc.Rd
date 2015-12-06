@@ -8,7 +8,7 @@
 fg.clusters(graph, mode = c("weak", "strong"))
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{mode}{Character string, either "weak" or "strong". For directed
 graphs "weak" implies weakly, "strong" strongly c

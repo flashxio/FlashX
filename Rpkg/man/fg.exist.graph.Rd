@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashgraph.R
 \name{fg.exist.graph}
 \alias{fg.exist.graph}
-\title{Indicate whether a graph has been loaded to FlashGraphR}
+\title{Indicate whether a graph has been loaded to FlashR}
 \usage{
 fg.exist.graph(graph)
 }
@@ -10,10 +10,10 @@ fg.exist.graph(graph)
 \item{graph}{A graph name.}
 }
 \value{
-A boolean value: true if the graph has been loaded to FlashGraphR.
+A boolean value: true if the graph has been loaded to FlashR.
 }
 \description{
-This function indicates whether a graph has been loaded to FlashGraphR.
+This function indicates whether a graph has been loaded to FlashR.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

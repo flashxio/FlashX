@@ -3,7 +3,7 @@
 \name{fg.list.graph}
 \alias{fg.list.graph}
 \alias{fg.list.graphs}
-\title{List graphs loaded to FlashGraphR}
+\title{List graphs loaded to FlashR}
 \usage{
 fg.list.graphs()
 }
@@ -13,7 +13,7 @@ frame is the graph name. The second column indicates whether a graph
 is stored in memory or on disks.
 }
 \description{
-This function lists all graphs that have been loaded to FlashGraphR.
+This function lists all graphs that have been loaded to FlashR.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

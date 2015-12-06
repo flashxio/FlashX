@@ -8,7 +8,7 @@
 fg.spectral.clusters(fg, k, ase)
 }
 \arguments{
-\item{fg}{The FlashGraphR object of the undirected graph.}
+\item{fg}{The FlashGraph object of the undirected graph.}
 
 \item{k}{The number of clusters.}
 

@@ -8,7 +8,7 @@
 fg.triangles(graph, type = "cycle")
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{type}{The type of triangles. It is ignored for undirected graphs.}
 }

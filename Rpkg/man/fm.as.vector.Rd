@@ -2,15 +2,15 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.as.vector}
 \alias{fm.as.vector}
-\title{Convert a FlashMatrixR matrix to a FlashMatrixR vector.}
+\title{Convert a FlashMatrix matrix to a FlashMatrix vector.}
 \usage{
 fm.as.vector(obj)
 }
 \arguments{
-\item{fm}{a FlashMatrixR matrix}
+\item{fm}{a FlashMatrix matrix}
 }
 \value{
-a FlashMatrixR vector
+a FlashMatrix vector
 }
 \description{
 The matrix must have only one row or one column. Otherwise, the function

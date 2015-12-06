@@ -7,13 +7,13 @@
 fm.multiply(fm, mat)
 }
 \arguments{
-\item{fm}{A FlashMatrixR matrix}
+\item{fm}{A FlashMatrix matrix}
 
-\item{mat}{A FlashMatrixR dense matrix.}
+\item{mat}{A FlashMatrix dense matrix.}
 }
 \value{
-a FlashMatrixR vector if the second argument is a vector;
-a FlashMatrixR matrix if the second argument is a matrix.
+a FlashMatrix vector if the second argument is a vector;
+a FlashMatrix matrix if the second argument is a matrix.
 }
 \description{
 Multiply a sparse/dense matrix with a dense vector/matrix.

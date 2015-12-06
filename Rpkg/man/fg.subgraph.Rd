@@ -12,12 +12,12 @@ fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""),
   compress = TRUE)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{vertices}{A numeric vector that contains the ids of vertices in
 the induced subgraph.}
 
-\item{name}{The name of the FlashGraphR object.}
+\item{name}{The name of the FlashGraph object.}
 }
 \value{
 `fg.fetch.subgraph.igraph' returns an iGraph object,
@@ -32,7 +32,7 @@ the input given graph.
 it into an iGraph object
 
 `fg.fetch.subgraph' generates the induced subgraph and returns
-a FlashGraphR object.
+a FlashGraph object.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

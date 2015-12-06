@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.set.cols}
 \alias{fm.set.cols}
-\title{Set the specified column of a FlashMatrixR matrix.}
+\title{Set the specified column of a FlashMatrix matrix.}
 \usage{
 fm.set.cols(fm, idxs, m2)
 }
@@ -17,7 +17,7 @@ fm.set.cols(fm, idxs, m2)
 a logical value that indicates whether the operation is successful.
 }
 \description{
-Set the specified column of a FlashMatrixR matrix.
+Set the specified column of a FlashMatrix matrix.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

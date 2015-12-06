@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.set.conf}
 \alias{fm.set.conf}
-\title{Reconfigure FlashMatrixR}
+\title{Reconfigure FlashMatrix}
 \usage{
 fm.set.conf(conf.file)
 }
@@ -10,7 +10,7 @@ fm.set.conf(conf.file)
 \item{conf.file}{The configuration file.}
 }
 \description{
-This reconfigures FlashMatrixR with the settings in the configuration file.
+This reconfigures FlashMatrix with the settings in the configuration file.
 The configuration file contains a list of key-value pairs. Each line in
 the file is a key-value pair in the form of "key_name=value".
 }

@@ -10,7 +10,7 @@ fg.multiply(graph, vec, transpose = FALSE)
 fg.multiply.matrix(graph, m, transpose = FALSE)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{vec}{A numueric vector}
 

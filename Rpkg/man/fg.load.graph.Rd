@@ -4,7 +4,7 @@
 \alias{fg.get.graph}
 \alias{fg.load.graph}
 \alias{fg.load.igraph}
-\title{Load a graph to FlashGraphR.}
+\title{Load a graph to FlashR.}
 \usage{
 fg.load.graph(graph, index.file = NULL, graph.name = graph,
   directed = TRUE, nthreads = 1)
@@ -22,7 +22,7 @@ to provide an index file if the input graph uses
 the FlashGraph format.}
 
 \item{graph.name}{The graph name a user provides when a graph is
-loaded to FlashGraphR.}
+loaded to FlashR.}
 
 \item{directed}{Indicate whether the input graph is directed. This is
 only used if the input graph use the edge list format.}
@@ -31,10 +31,10 @@ only used if the input graph use the edge list format.}
 the FlashGraph format.}
 }
 \value{
-a FlashGraphR object.
+a FlashGraph object.
 }
 \description{
-Load a graph to FlashGraphR from difference sources.
+Load a graph to FlashR from difference sources.
 }
 \details{
 `fg.load.graph' loads a graph from the following sources: an edge list
@@ -43,11 +43,11 @@ file in the text format and an adjacency list file in the FlashGraph format.
 `fg.load.igraph' loads a graph from an iGraph object.
 
 `fg.get.graph' gets a FlashGraph object that references a graph
-that has been loaded to FlashGraphR.
+that has been loaded to FlashR.
 
-Once a graph is loaded to FlashGraphR, FlashGraphR will maintain it.
+Once a graph is loaded to FlashR, FlashR will maintain it.
 A user can use fg.list.graphs() to list all graphs that have been loaded
-FlashGraphR and use fg.get.graph() to get a reference to a graph. A user
+FlashR and use fg.get.graph() to get a reference to a graph. A user
 should provide a name for the graph so later on he or she will be able
 to identify the graph more easily. By default, the graph name is
 the input graph file name.
@@ -57,12 +57,12 @@ adjacency list file and a FlashGraph index file. When a user provides
 an index file, the input graph file is considered as an adjacency list
 file, otherwise, an edge list file.
 
-When loading a graph from an edge list file, FlashGraphR will construct
+When loading a graph from an edge list file, FlashR will construct
 it into the FlashGraph format. A user needs to indicate whether the edge
 list represents a directed graph. A user can also use multiple threads
 to accelerate constructing a graph.
 
-When loading a graph from iGraph, FlashGraphR
+When loading a graph from iGraph, FlashR
 will construct it into the FlashGraph format. A user can use multiple
 threads to accelerate graph construction.
 }

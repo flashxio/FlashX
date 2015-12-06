@@ -3,30 +3,30 @@
 \name{fm.get.matrix}
 \alias{fm.get.matrix}
 \alias{fm.load.matrix}
-\title{Load a sparse matrix to FlashMatrixR.}
+\title{Load a sparse matrix to FlashR.}
 \usage{
 fm.get.matrix(fg)
 
 fm.load.matrix(mat, index, t.mat = NULL, t.index = NULL, in.mem = TRUE)
 }
 \arguments{
-\item{fg}{A FlashGraphR object.}
+\item{fg}{A FlashGraph object.}
 
 \item{mat.file}{The file that stores the sparse matrix.}
 
 \item{index.file}{The file that stores the index of the sparse matrix.}
 }
 \value{
-a FlashMatrixR matrix.
+a FlashMatrix matrix.
 }
 \description{
-Load a sparse matrix to FlashMatrixR from difference sources.
+Load a sparse matrix to FlashR from difference sources.
 }
 \details{
-`fm.get.matrix' gets a FlashMatrixR matrix that references a matrix
-represented by a FlashGraphR object.
+`fm.get.matrix' gets a FlashMatrix matrix that references a matrix
+represented by a FlashGraph object.
 
-`fm.load.matrix' loads a FlashMatrixR matrix from files.
+`fm.load.matrix' loads a FlashMatrix matrix from files.
 The matrix in the file is in the FlashMatrix format.
 }
 \examples{

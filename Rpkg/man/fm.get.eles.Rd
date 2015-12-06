@@ -4,14 +4,14 @@
 \alias{fm.get.cols}
 \alias{fm.get.eles}
 \alias{fm.get.rows}
-\title{Get a submatrix from a FlashMatrixR matrix}
+\title{Get a submatrix from a FlashMatrix matrix}
 \usage{
 fm.get.cols(fm, idxs)
 
 fm.get.rows(fm, idxs)
 }
 \arguments{
-\item{fm}{A FlashMatrixR matrix}
+\item{fm}{A FlashMatrix matrix}
 
 \item{idxs}{an array of column indices in fm.}
 }

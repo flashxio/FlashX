@@ -6,7 +6,7 @@
 \alias{fm.is.sym}
 \alias{fm.is.vector}
 \alias{fm.matrix.layout}
-\title{The information of a FlashMatrixR object}
+\title{The information of a FlashMatrix object}
 \usage{
 fm.is.sym(fm)
 
@@ -17,7 +17,7 @@ fm.is.sparse(fm)
 fm.is.vector(fm)
 }
 \arguments{
-\item{fm}{The FlashMatrixR object}
+\item{fm}{The FlashMatrix object}
 }
 \value{
 `fm.is.sym' and `fm.is.sparse' returns boolean constants.
@@ -31,7 +31,7 @@ Functions for providing the basic information of a matrix.
 `fm.matrix.layout' indicates how data in a matrix is organized.
 `fm.is.sparse' indicates whether a matrix is sparse.
 
-`fm.is.vector' indicates whether a FlashMatrixR object is a vector.
+`fm.is.vector' indicates whether a FlashMatrix object is a vector.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

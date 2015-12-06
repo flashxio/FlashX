@@ -10,7 +10,7 @@ fg.topK.scan(graph, order = 1, K = 1)
 fg.local.scan(graph, order = 1)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{order}{An integer scalar, the size of the local neighborhood for
 each vertex. Should be non-negative.}

@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.rep.int}
 \alias{fm.rep.int}
-\title{Create a FlashMatrixR vector with replicated elements.}
+\title{Create a FlashMatrix vector with replicated elements.}
 \usage{
 fm.rep.int(x, times)
 }
@@ -12,10 +12,10 @@ fm.rep.int(x, times)
 \item{times}{The length of the vector to be generated.}
 }
 \value{
-A FlashMatrixR vector
+A FlashMatrix vector
 }
 \description{
-Create a FlashMatrixR vector with replicated elements.
+Create a FlashMatrix vector with replicated elements.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

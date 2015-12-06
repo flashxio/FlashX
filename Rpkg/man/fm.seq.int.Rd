@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.seq.int}
 \alias{fm.seq.int}
-\title{Create a FlashMatrixR vector with a sequence of numbers.}
+\title{Create a FlashMatrix vector with a sequence of numbers.}
 \usage{
 fm.seq.int(from, to, by)
 }
@@ -17,7 +17,7 @@ fm.seq.int(from, to, by)
 a sequence of numbers that belongs to [from, to]
 }
 \description{
-Create a FlashMatrixR vector with a sequence of numbers.
+Create a FlashMatrix vector with a sequence of numbers.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

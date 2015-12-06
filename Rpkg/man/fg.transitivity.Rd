@@ -7,7 +7,7 @@
 fg.transitivity(graph, type = c("global", "local"))
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{type}{The type of the transitivity measure}
 }

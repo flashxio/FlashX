@@ -2,17 +2,17 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.as.factor}
 \alias{fm.as.factor}
-\title{Convert a FlashMatrixR vector to a FlashMatrixR factor vector.}
+\title{Convert a FlashMatrix vector to a FlashMatrix factor vector.}
 \usage{
 fm.as.factor(fm, num.levels = -1)
 }
 \arguments{
-\item{fm}{a FlashMatrixR vector.}
+\item{fm}{a FlashMatrix vector.}
 }
 \value{
-a FlashMatrixR factor vector.
+a FlashMatrix factor vector.
 }
 \description{
-Convert a FlashMatrixR vector to a FlashMatrixR factor vector.
+Convert a FlashMatrix vector to a FlashMatrix factor vector.
 }
 

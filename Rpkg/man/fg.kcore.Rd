@@ -7,7 +7,7 @@
 fg.kcore(graph, k.start = 2, k.end = 10)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{k.start}{The lowest core that should be computed. Must be >= 2.}
 

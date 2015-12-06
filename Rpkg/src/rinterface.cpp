@@ -46,7 +46,7 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 #endif
 
 /*
- * A global configuration of FlashGraphR.
+ * A global configuration of FlashGraph.
  */
 static config_map::ptr configs;
 
@@ -91,7 +91,7 @@ public:
 
 typedef std::unordered_map<std::string, graph_ref *> graph_map_t;
 /*
- * This contains all in-memory graphs loaded to FlashGraphR.
+ * This contains all in-memory graphs loaded to FlashR.
  */
 static graph_map_t graphs;
 
@@ -145,7 +145,7 @@ void destroy_flash_matrix();
 void init_flashmatrixr();
 
 /**
- * Initialize FlashGraphR.
+ * Initialize FlashGraph.
  */
 RcppExport SEXP R_FG_init(SEXP pconf)
 {
@@ -169,7 +169,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		standalone = false;
 		res[0] = true;
 	} catch (init_error &e) {
-		fprintf(stderr, "init FlashGraphR: %s\n", e.what());
+		fprintf(stderr, "init FlashGraph: %s\n", e.what());
 		res[0] = true;
 	} catch (std::exception &e) {
 		fprintf(stderr, "exception in init: %s\n", e.what());
@@ -177,11 +177,11 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 	}
 
 	if (standalone)
-		printf("Run FlashGraphR in standalone mode\n");
+		printf("Run FlashR in standalone mode\n");
 	else if (is_safs_init())
-		printf("Run FlashGraphR\n");
+		printf("Run FlashR\n");
 	else {
-		fprintf(stderr, "Can't enable the SAFS mode of FlashGraphR\n");
+		fprintf(stderr, "Can't enable the SAFS mode of FlashR\n");
 		res[0] = false;
 	}
 	init_flashmatrixr();
@@ -189,7 +189,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 }
 
 /**
- * Destroy FlashGraphR
+ * Destroy FlashR
  */
 RcppExport SEXP R_FG_destroy()
 {
@@ -228,7 +228,7 @@ static bool exist_graph(std::string &graph_name)
 	if (it != graphs.end())
 		return true;
 
-	// If FlashGraphR runs in the standalone mode, we can't search in SAFS.
+	// If FlashR runs in the standalone mode, we can't search in SAFS.
 	if (standalone)
 		return false;
 
@@ -302,7 +302,7 @@ RcppExport SEXP R_FG_get_params(SEXP psys)
 	if (sys_name == "SAFS") {
 		if (standalone) {
 			fprintf(stderr,
-					"Can't get SAFS parameters. FlashGraphR runs in standalone mode\n");
+					"Can't get SAFS parameters. FlashR runs in standalone mode\n");
 			return R_NilValue;
 		}
 		else
@@ -317,7 +317,7 @@ RcppExport SEXP R_FG_get_params(SEXP psys)
 }
 
 /**
- * This test whether a graph has been loaded to FlashGraphR.
+ * This test whether a graph has been loaded to FlashR.
  */
 RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 {
@@ -342,7 +342,7 @@ static std::string extract_graph_name(const std::string &file_name)
 }
 
 /**
- * This lists all graphs that have been loaded to FlashGraphR.
+ * This lists all graphs that have been loaded to FlashR.
  */
 RcppExport SEXP R_FG_list_graphs()
 {

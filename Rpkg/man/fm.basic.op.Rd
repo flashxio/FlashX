@@ -5,7 +5,7 @@
 \alias{fm.get.basic.op}
 \alias{fm.get.basic.uop}
 \alias{fm.init.basic.op}
-\title{The basic operators supported by FlashMatrixR.}
+\title{The basic operators supported by FlashMatrix.}
 \usage{
 fm.get.basic.op(name)
 
@@ -20,7 +20,7 @@ fm.init.basic.op()
 a reference to the specified basic operator.
 }
 \description{
-The basic operators are mainly used by the FlashMatrixR functions that
+The basic operators are mainly used by the FlashMatrix functions that
 accept operators as arguments. Such a function includes `fm.mapply',
 `fm.inner.prod', etc.
 }

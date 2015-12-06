@@ -7,7 +7,7 @@
 fg.degree(graph, mode = c("both", "in", "out"))
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{mode}{Character string. "out" for out-degree, "in" for in-degree,
 "both" for the sum of the two. This argument is ignored for

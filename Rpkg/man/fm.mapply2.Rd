@@ -2,17 +2,17 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.mapply2}
 \alias{fm.mapply2}
-\title{Apply a Function to two FlashMatrixR vectors/matrices.}
+\title{Apply a Function to two FlashMatrix vectors/matrices.}
 \usage{
 fm.mapply2(o1, o2, FUN)
 }
 \arguments{
-\item{o1,}{o2 a FlashMatrixR vector/matrix.}
+\item{o1,}{o2 a FlashMatrix vector/matrix.}
 
 \item{FUN}{the user-defined operators.}
 }
 \value{
-a FlashMatrixR vector/matrix.
+a FlashMatrix vector/matrix.
 }
 \description{
 `mapply' applies `FUN' to the first elements of each vector, the second

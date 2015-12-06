@@ -2,17 +2,17 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.sapply}
 \alias{fm.sapply}
-\title{Apply a Function to a FlashMatrixR vector/matrix.}
+\title{Apply a Function to a FlashMatrix vector/matrix.}
 \usage{
 fm.sapply(o, FUN)
 }
 \arguments{
-\item{o}{a FlashMatrixR vector/matrix.}
+\item{o}{a FlashMatrix vector/matrix.}
 
 \item{FUN}{the user-defined operators.}
 }
 \value{
-a FlashMatrixR vector/matrix.
+a FlashMatrix vector/matrix.
 }
 \description{
 `sapply' applies `FUN' to every element of a vector/matrix.

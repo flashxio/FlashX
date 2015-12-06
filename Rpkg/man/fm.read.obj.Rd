@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.read.obj}
 \alias{fm.read.obj}
-\title{Read a FlashMatrixR object (vector/matrix) from a file.}
+\title{Read a FlashMatrix object (vector/matrix) from a file.}
 \usage{
 fm.read.obj(file)
 }
@@ -10,10 +10,10 @@ fm.read.obj(file)
 \item{file}{a file in the local filesystem.}
 }
 \value{
-a FlashMatrixR object (vector/matrix)
+a FlashMatrix object (vector/matrix)
 }
 \description{
-Read a FlashMatrixR object (vector/matrix) from a file.
+Read a FlashMatrix object (vector/matrix) from a file.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

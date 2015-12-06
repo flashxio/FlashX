@@ -7,13 +7,13 @@
 fm.inner.prod(fm, mat, Fun1, Fun2)
 }
 \arguments{
-\item{fm}{A FlashMatrixR matrix}
+\item{fm}{A FlashMatrix matrix}
 
-\item{mat}{A FlashMatrixR dense matrix.}
+\item{mat}{A FlashMatrix dense matrix.}
 }
 \value{
-a FlashMatrixR vector if the second argument is a vector;
-a FlashMatrixR matrix if the second argument is a matrix.
+a FlashMatrix vector if the second argument is a vector;
+a FlashMatrix matrix if the second argument is a matrix.
 }
 \description{
 Inner product of a dense matrix with a dense vector/matrix.

@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.exist.matrix}
 \alias{fm.exist.matrix}
-\title{Indicate whether a matrix has been loaded to FlashMatrixR}
+\title{Indicate whether a matrix has been loaded to FlashR}
 \usage{
 fm.exist.matrix(name)
 }
@@ -10,10 +10,10 @@ fm.exist.matrix(name)
 \item{name}{A matrix name.}
 }
 \value{
-A boolean value: true if the matrix has been loaded to FlashMatrixR.
+A boolean value: true if the matrix has been loaded to FlashR.
 }
 \description{
-This function indicates whether a matrix has been loaded to FlashMatrixR.
+This function indicates whether a matrix has been loaded to FlashR.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

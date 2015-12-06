@@ -2,18 +2,18 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.get.layout}
 \alias{fm.get.layout}
-\title{Get the data layout of a FlashMatrixR matrix.}
+\title{Get the data layout of a FlashMatrix matrix.}
 \usage{
 fm.get.layout(fm)
 }
 \arguments{
-\item{fm}{a FlashMatrixR matrix}
+\item{fm}{a FlashMatrix matrix}
 }
 \value{
 a string that indicates the data layout.
 }
 \description{
-Get the data layout of a FlashMatrixR matrix.
+Get the data layout of a FlashMatrix matrix.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

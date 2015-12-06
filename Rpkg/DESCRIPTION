@@ -1,12 +1,18 @@
-Package: FlashGraphR
+Package: FlashR
 Version: 0.3-0
 Date: 2014-11-12
 Title: Massive Graph Analysis
 Author: See AUTHORS file.
 Maintainer: Da Zheng <dzheng5@jhu.edu>
-Description: Routines for massive graph analysis. FlashGraphR can process
-    graphs of billions of vertices and hundreds of billions edges very
-    efficiently in a single machine.
+Description: FlashR extends the R programming framework. It executes R code
+	in parallel automatically and stores and accesses arrays in the R code on
+	disks automatically to scale R to large datasets that can't fit in memory.
+	The core of FlashR is a small set of generalized operators to express data
+	mining and machine learning algorithms in an array-oriented fashion.
+	In addition to the generalized operators, FlashR reimplements many commonly
+	used R functions to provide users a familiar R programming environment to
+	reduce the learning curve. Furthermore, FlashR provides many R wrapper
+	functions for graph algorithms implemented in FlashGraph.
 Depends:
     R (>= 3.0),
     igraph,

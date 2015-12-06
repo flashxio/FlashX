@@ -2,12 +2,12 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.agg}
 \alias{fm.agg}
-\title{Aggregation on a FlashMatrixR object.}
+\title{Aggregation on a FlashMatrix object.}
 \usage{
 fm.agg(fm, op)
 }
 \arguments{
-\item{fm}{a FlashMatrixR object}
+\item{fm}{a FlashMatrix object}
 
 \item{op}{a basic operator or an aggregation operator}
 }
@@ -16,6 +16,6 @@ a scalar
 }
 \description{
 This function accepts a basic operator and perform aggregation on
-the FlashMatrixR object with the basic operator.
+the FlashMatrix object with the basic operator.
 }
 

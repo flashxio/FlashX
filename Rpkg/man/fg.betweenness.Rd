@@ -7,7 +7,7 @@
 fg.betweenness(fg, vids = 0:(fg$vcount - 1))
 }
 \arguments{
-\item{fg}{The FlashGraphR object.}
+\item{fg}{The FlashGraph object.}
 
 \item{vids}{A vector of vertex IDs. Default runs it on the entire
         graph.}

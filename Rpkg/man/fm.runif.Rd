@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.runif}
 \alias{fm.runif}
-\title{Create a FlashMatrixR vector with uniformly random numbers.}
+\title{Create a FlashMatrix vector with uniformly random numbers.}
 \usage{
 fm.runif(n, min = 0, max = 1)
 }
@@ -14,7 +14,7 @@ fm.runif(n, min = 0, max = 1)
 \item{max}{upper limits of the distribution.}
 }
 \description{
-Create a FlashMatrixR vector with uniformly random numbers.
+Create a FlashMatrix vector with uniformly random numbers.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

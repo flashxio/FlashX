@@ -2,7 +2,7 @@
 % Please edit documentation in R/flashgraph.R
 \name{fg.set.conf}
 \alias{fg.set.conf}
-\title{Reconfigure FlashGraphR}
+\title{Reconfigure FlashR}
 \usage{
 fg.set.conf(conf.file)
 }
@@ -10,7 +10,7 @@ fg.set.conf(conf.file)
 \item{conf.file}{The configuration file.}
 }
 \description{
-This reconfigures FlashGraphR with the settings in the configuration file.
+This reconfigures FlashR with the settings in the configuration file.
 The configuration file contains a list of key-value pairs. Each line in
 the file is a key-value pair in the form of "key_name=value".
 }

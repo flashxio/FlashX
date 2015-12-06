@@ -8,7 +8,7 @@
 fg.page.rank(graph, no.iters = 1000, damping = 0.85)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{no.iters}{The number of iterations}
 

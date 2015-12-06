@@ -2,18 +2,18 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.t}
 \alias{fm.t}
-\title{Transpose a FlashMatrixR matrix.}
+\title{Transpose a FlashMatrix matrix.}
 \usage{
 fm.t(m)
 }
 \arguments{
-\item{m}{a FlashMatrixR matrix}
+\item{m}{a FlashMatrix matrix}
 }
 \value{
-a FlashMatrixR matrix
+a FlashMatrix matrix
 }
 \description{
-Transpose a FlashMatrixR matrix.
+Transpose a FlashMatrix matrix.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

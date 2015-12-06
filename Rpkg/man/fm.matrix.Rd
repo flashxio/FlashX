@@ -17,9 +17,9 @@ fm.matrix(vec, nrow, ncol, byrow = FALSE)
 columns, otherwise the matrix is filled by rows.}
 }
 \value{
-a FlashMatrixR matrix
+a FlashMatrix matrix
 }
 \description{
-The given set has to be a FlashGraphR matrix or FlashGraphR vector.
+The given set has to be a FlashMatrix vector.
 }
 

@@ -7,7 +7,7 @@
 fg.export.graph(graph, graph.file, index.file)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{graph.file}{The graph file in the local filesystem to which
 the adjacency lists of the graph is exported to.}
@@ -20,6 +20,6 @@ true if the graph is exported to the local filesystem correctly;
 false, otherwise.
 }
 \description{
-This function exports a graph image in FlashGraphR to the local filesystem.
+This function exports a graph image in FlashR to the local filesystem.
 }
 

@@ -1,6 +1,6 @@
 num.clusters <- 1000
 num.eigens <- 40
-library(FlashGraphR)
+library(FlashR)
 fg.set.conf("flash-graph/conf/run_ssds.txt")
 vecs <- fm.read.obj(file="/mnt/store_raid/zhengda/friendster-lcc.acd.LM40.1e-6.evecs")
 col3 <- fm.get.cols(vecs, 1:3)

@@ -2,22 +2,22 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.agg.mat}
 \alias{fm.agg.mat}
-\title{Aggregation on a FlashMatrixR matrix.}
+\title{Aggregation on a FlashMatrix matrix.}
 \usage{
 fm.agg.mat(fm, margin, op)
 }
 \arguments{
-\item{fm}{a FlashMatrixR matrix}
+\item{fm}{a FlashMatrix matrix}
 
 \item{margin}{the subscript which the function will be applied over.}
 
 \item{op}{a basic operator or an aggregation operator}
 }
 \value{
-a FlashMatrixR vector.
+a FlashMatrix vector.
 }
 \description{
 This function accepts a basic operator and perform aggregation on
-the rows/columns of a FlashMatrixR matrix with the basic operator.
+the rows/columns of a FlashMatrix matrix with the basic operator.
 }
 

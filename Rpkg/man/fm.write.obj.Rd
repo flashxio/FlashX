@@ -2,12 +2,12 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.write.obj}
 \alias{fm.write.obj}
-\title{Write a FlashMatrixR object (vector/matrix) to a file}
+\title{Write a FlashMatrix object (vector/matrix) to a file}
 \usage{
 fm.write.obj(fm, file)
 }
 \arguments{
-\item{fm}{a FlashMatrixR object.}
+\item{fm}{a FlashMatrix object.}
 
 \item{file}{a file in the local filesystem.}
 }
@@ -16,7 +16,7 @@ a logical value. True if the object is written to a file
 successfully. Otherwise, FALSE.
 }
 \description{
-Write a FlashMatrixR object (vector/matrix) to a file
+Write a FlashMatrix object (vector/matrix) to a file
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

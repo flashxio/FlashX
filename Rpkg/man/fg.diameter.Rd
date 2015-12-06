@@ -7,7 +7,7 @@
 fg.diameter(graph, directed = FALSE)
 }
 \arguments{
-\item{graph}{The FlashGraphR object}
+\item{graph}{The FlashGraph object}
 
 \item{directed}{Indicates whether or not to respect the direction of edges
 in a graph when traversing the graph. It is ignored for
