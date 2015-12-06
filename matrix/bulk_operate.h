@@ -613,6 +613,15 @@ public:
 	}
 };
 
+class set_vv_operate
+{
+public:
+	typedef std::shared_ptr<const set_vv_operate> const_ptr;
+
+	virtual void set(off_t arr_idx, void *arr, size_t num_eles) const = 0;
+	virtual const scalar_type &get_type() const = 0;
+};
+
 template<class OpType, class InType, class OutType>
 const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_input_type() const
 {

@@ -64,11 +64,17 @@ public:
 		return ptr(new mem_vv_store(offs, vec));
 	}
 
+	virtual void set_data(const set_vv_operate &op);
+
 	char *get_raw_arr() {
 		return get_mem_data().get_raw_arr();
 	}
 	const char *get_raw_arr() const {
 		return get_mem_data().get_raw_arr();
+	}
+
+	char*get_raw_arr(off_t idx) {
+		return get_raw_arr() + get_vec_off(idx);
 	}
 
 	const char*get_raw_arr(off_t idx) const {

@@ -121,6 +121,9 @@ public:
 	virtual void set_data(const set_vec_operate &op) {
 		assert(0);
 	}
+	virtual void set_data(const set_vv_operate &op) {
+		assert(0);
+	}
 	virtual bool set_portion(std::shared_ptr<const local_vec_store> store,
 			off_t off) {
 		assert(0);

@@ -41,6 +41,13 @@ mem_vv_store::ptr mem_vv_store::cast(vec_store::ptr store)
 	return std::static_pointer_cast<mem_vv_store>(store);
 }
 
+void mem_vv_store::set_data(const set_vv_operate &op)
+{
+#pragma omp parallel for
+	for (size_t i = 0; i < get_num_vecs(); i++)
+		op.set(i, get_raw_arr(i), get_length(i));
+}
+
 }
 
 }
