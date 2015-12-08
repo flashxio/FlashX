@@ -76,7 +76,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes)
 #endif
 	printf("Start SpMM\n");
 	gettimeofday(&start, NULL);
-	mat->multiply<double, float>(*in, *out);
+	mat->multiply<double, float>(in, out);
 	gettimeofday(&end, NULL);
 	printf("SpMM completes\n");
 #ifdef PROFILER

@@ -52,6 +52,8 @@ public:
 	typedef std::shared_ptr<task_creator> ptr;
 
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
+	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
+			detail::matrix_store::ptr out) = 0;
 };
 
 /*
@@ -185,7 +187,7 @@ public:
 };
 
 /*
- * A compute task runs on a 2D-partitioned block of a sparse matrix.
+ * A compute task runs on a 2D-partitioned block row of a sparse matrix.
  */
 class block_compute_task: public compute_task
 {
@@ -226,7 +228,7 @@ class block_spmm_task: public block_compute_task
 	size_t entry_size;
 
 	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	detail::matrix_store &output;
 
 	/*
 	 * A task is responsible for processing the entire block rows.
@@ -235,13 +237,13 @@ class block_spmm_task: public block_compute_task
 	detail::local_row_matrix_store::ptr out_part;
 public:
 	block_spmm_task(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const matrix_io &io,
+			detail::matrix_store &_output, const matrix_io &io,
 			const sparse_matrix &mat, block_exec_order::ptr order);
 
-	const detail::mem_matrix_store &get_in_matrix() const {
+	const detail::matrix_store &get_in_matrix() const {
 		return input;
 	}
-	const detail::mem_matrix_store &get_out_matrix() const {
+	const detail::matrix_store &get_out_matrix() const {
 		return output;
 	}
 
@@ -385,7 +387,7 @@ class block_spmm_task_impl: public block_spmm_task
 {
 public:
 	block_spmm_task_impl(const detail::mem_matrix_store &input,
-			detail::mem_matrix_store &output, const matrix_io &io,
+			detail::matrix_store &output, const matrix_io &io,
 			const sparse_matrix &mat,
 			block_exec_order::ptr order): block_spmm_task(input,
 				output, io, mat, order) {
@@ -426,13 +428,12 @@ public:
 template<class DenseType, class SparseType>
 class spmm_creator: public task_creator
 {
-	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	detail::mem_matrix_store::const_ptr input;
+	detail::matrix_store::ptr output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	spmm_creator(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const sparse_matrix &_mat);
+	spmm_creator(const sparse_matrix &_mat, size_t num_in_cols);
 
 	template<int ROW_WIDTH>
 	compute_task::ptr create_block_compute_task(const matrix_io &io) const {
@@ -440,23 +441,30 @@ class spmm_creator: public task_creator
 		typedef coo_func<DenseType, SparseType, ROW_WIDTH> width_coo_func;
 		return compute_task::ptr(
 				new block_spmm_task_impl<width_rp_func,  width_coo_func>(
-					input, output, io, mat, order));
+					*input, *output, io, mat, order));
 	}
 public:
-	static task_creator::ptr create(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const sparse_matrix &mat) {
-		if (_input.get_type() != get_scalar_type<DenseType>()
-				|| _output.get_type() != get_scalar_type<DenseType>()) {
-			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
-			return task_creator::ptr();
-		}
+	static task_creator::ptr create(const sparse_matrix &mat,
+			size_t num_in_cols) {
 		return task_creator::ptr(new spmm_creator<DenseType, SparseType>(
-					_input, _output, mat));
+					mat, num_in_cols));
+	}
+
+	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
+			detail::matrix_store::ptr out) {
+		if (in->get_type() != get_scalar_type<DenseType>()
+				|| out->get_type() != get_scalar_type<DenseType>()) {
+			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
+			return false;
+		}
+		this->input = in;
+		this->output = out;
+		return true;
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		if (order) {
-			switch (output.get_num_cols()) {
+			switch (output->get_num_cols()) {
 				case 1: return create_block_compute_task<1>(io);
 				case 2: return create_block_compute_task<2>(io);
 				case 4: return create_block_compute_task<4>(io);
@@ -466,19 +474,21 @@ public:
 			}
 		}
 		else {
-			switch (output.get_num_cols()) {
+			detail::mem_matrix_store &mem_out
+				= dynamic_cast<detail::mem_matrix_store &>(*output);
+			switch (output->get_num_cols()) {
 				case 1: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 1>(input, output, io));
+								SparseType, 1>(*input, mem_out, io));
 				case 2: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 2>(input, output, io));
+								SparseType, 2>(*input, mem_out, io));
 				case 4: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 4>(input, output, io));
+								SparseType, 4>(*input, mem_out, io));
 				case 8: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 8>(input, output, io));
+								SparseType, 8>(*input, mem_out, io));
 				case 16: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 16>(input, output, io));
+								 SparseType, 16>(*input, mem_out, io));
 				default: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 0>(input, output, io));
+								 SparseType, 0>(*input, mem_out, io));
 			}
 		}
 	}
@@ -528,9 +538,8 @@ class sparse_matrix
 	bool symmetric;
 
 	template<class DenseType, class SparseType>
-	task_creator::ptr get_multiply_creator(const detail::mem_matrix_store &in,
-			detail::mem_matrix_store &out) const {
-		return spmm_creator<DenseType, SparseType>::create(in, out, *this);
+	task_creator::ptr get_multiply_creator(size_t num_in_cols) const {
+		return spmm_creator<DenseType, SparseType>::create(*this, num_in_cols);
 	}
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -667,53 +676,32 @@ public:
 
 	virtual sparse_matrix::ptr transpose() const = 0;
 
+	bool multiply(detail::matrix_store::const_ptr in,
+			detail::matrix_store::ptr out, task_creator::ptr create) const;
+
 	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
 	template<class DenseType, class SparseType>
-	bool multiply(const detail::mem_matrix_store &in,
-			detail::mem_matrix_store &out) const {
-		if (in.get_num_rows() != ncols
-				|| in.get_num_cols() != out.get_num_cols()
-				|| out.get_num_rows() != this->get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error) <<
-					"the input and output matrix have incompatible dimensions";
-			return false;
-		}
-		// We allow the output matrix in column major.
-		// TODO we should also allow the input matrix to be column-major.
-		else if (in.store_layout() != matrix_layout_t::L_ROW) {
-			BOOST_LOG_TRIVIAL(error) << "the dense matrix isn't row major.";
-			return false;
-		}
-
-		compute(get_multiply_creator<DenseType, SparseType>(in, out),
-				cal_super_block_size(get_block_size(),
-					sizeof(DenseType) * in.get_num_cols()));
-		return true;
+	bool multiply(detail::matrix_store::const_ptr in,
+			detail::matrix_store::ptr out) const {
+		return multiply(in, out, get_multiply_creator<DenseType, SparseType>(
+					in->get_num_cols()));
 	}
 
 	template<class DenseType, class SparseType>
-	bool multiply(const detail::mem_vec_store &in,
-			detail::mem_vec_store &out) const {
-		detail::matrix_store::const_ptr in_mat = in.conv2mat(in.get_length(),
-				1, true);
-		detail::matrix_store::const_ptr out_mat = out.conv2mat(out.get_length(),
-				1, true);
-		const detail::mem_matrix_store &mem_in
-			= dynamic_cast<const detail::mem_matrix_store &>(*in_mat);
-		const detail::mem_matrix_store &mem_out
-			= dynamic_cast<const detail::mem_matrix_store &>(*out_mat);
-		return multiply<DenseType, SparseType>(mem_in,
-				const_cast<detail::mem_matrix_store &>(mem_out));
+	bool multiply(detail::vec_store::const_ptr in,
+			detail::vec_store::ptr out) const {
+		return multiply<DenseType, SparseType>(
+				in->conv2mat(in->get_length(), 1, true),
+				out->conv2mat(out->get_length(), 1, true));
 	}
 };
 
 template<class DenseType, class SparseType>
-spmm_creator<DenseType, SparseType>::spmm_creator(
-		const detail::mem_matrix_store &_input, detail::mem_matrix_store &_output,
-		const sparse_matrix &_mat): input(_input), output(_output), mat(_mat)
+spmm_creator<DenseType, SparseType>::spmm_creator(const sparse_matrix &_mat,
+		size_t num_in_cols): mat(_mat)
 {
 	// This initialization only for 2D partitioned sparse matrix.
 	if (!mat.is_fg_matrix()) {
@@ -724,11 +712,10 @@ spmm_creator<DenseType, SparseType>::spmm_creator(
 		// of 2^n that is close to the number of columns in the input matrix
 		// to calculate the super block size, so that the super block has 2^n
 		// block rows and columns.
-		size_t num_cols = input.get_num_cols();
+		size_t num_cols = num_in_cols;
 		num_cols = 1 << ((size_t) log2(num_cols));
 		size_t sb_size = cal_super_block_size(mat.get_block_size(),
 				sizeof(DenseType) * num_cols);
-		assert(input.get_num_cols() == output.get_num_cols());
 		order = mat.get_multiply_order(sb_size, sb_size);
 	}
 }

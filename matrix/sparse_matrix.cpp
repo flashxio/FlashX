@@ -256,7 +256,7 @@ void block_compute_task::run(char *buf, size_t size)
 }
 
 block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
-		detail::mem_matrix_store &_output, const matrix_io &io,
+		detail::matrix_store &_output, const matrix_io &io,
 		const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
 			io, mat, order), input(_input), output(_output)
 {
@@ -771,6 +771,42 @@ sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 {
 	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat_io_fac,
 				t_index, t_mat_io_fac));
+}
+
+bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
+		detail::matrix_store::ptr out, task_creator::ptr create) const
+{
+	if (in->get_num_rows() != ncols
+			|| in->get_num_cols() != out->get_num_cols()
+			|| out->get_num_rows() != this->get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) <<
+			"the input and output matrix have incompatible dimensions";
+		return false;
+	}
+
+	dense_matrix::ptr in_tmp;
+	if (in->store_layout() != matrix_layout_t::L_ROW) {
+		in_tmp = dense_matrix::create(in);
+		in_tmp = in_tmp->conv2(matrix_layout_t::L_ROW);
+	}
+	if (!in->is_in_mem()) {
+		if (in_tmp == NULL)
+			in_tmp = dense_matrix::create(in);
+		in_tmp = in_tmp->conv_store(true, matrix_conf.get_num_nodes());
+	}
+	in_tmp->materialize_self();
+
+	size_t sblock_size = cal_super_block_size(get_block_size(),
+			in->get_entry_size() * in->get_num_cols());
+	detail::mem_matrix_store::const_ptr mem_in;
+	if (in_tmp)
+		mem_in = detail::mem_matrix_store::cast(in_tmp->get_raw_store());
+	else
+		mem_in = detail::mem_matrix_store::cast(in);
+	bool ret = create->set_data(mem_in, out);
+	if (ret)
+		compute(create, sblock_size);
+	return ret;
 }
 
 static std::atomic<size_t> init_count;

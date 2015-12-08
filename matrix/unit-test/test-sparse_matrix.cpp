@@ -90,12 +90,12 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	detail::mem_matrix_store::ptr out
 		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<float>());
-	spm->multiply<float, float>(*in_mat, *out);
+	spm->multiply<float, float>(in_mat, out);
 	print_cols(out);
 
 	out = detail::NUMA_col_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<float>());
-	spm->multiply<float, float>(*in_mat, *out);
+	spm->multiply<float, float>(in_mat, out);
 	print_cols(out);
 }
 
@@ -176,7 +176,7 @@ void test_spmm_fg(fg::FG_graph::ptr fg)
 		= detail::mem_row_matrix_store::create(num_rows, 10,
 				get_scalar_type<float>());
 	out->reset_data();
-	spm->multiply<float, float>(*in_mat, *out);
+	spm->multiply<float, float>(in_mat, out);
 	print_cols(out);
 }
 
