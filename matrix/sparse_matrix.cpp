@@ -312,15 +312,32 @@ void block_spmm_task::notify_complete()
 		size_t block_row_start = get_io().get_top_left().get_row_idx();
 		size_t block_num_rows = std::min(get_io().get_num_rows(),
 				output.get_num_rows() - block_row_start);
-		detail::local_matrix_store::ptr tmp = output.get_portion(
-				block_row_start, 0, block_num_rows, output.get_num_cols());
-		assert(tmp);
-		tmp->reset_data();
+		if (output.is_in_mem()) {
+			detail::local_matrix_store::ptr tmp = output.get_portion(
+					block_row_start, 0, block_num_rows, output.get_num_cols());
+			assert(tmp);
+			tmp->reset_data();
+		}
+		else {
+			detail::local_matrix_store::ptr out_part(
+					new detail::local_buf_row_matrix_store(block_row_start, 0,
+						block_num_rows, output.get_num_cols(), output.get_type(),
+						// we allocate the buffer in the local node.
+						-1));
+			out_part->reset_data();
+			output.write_portion_async(out_part, block_row_start, 0);
+		}
 	}
-	else
-		output.get_portion(out_part->get_global_start_row(),
-				out_part->get_global_start_col(), out_part->get_num_rows(),
-				out_part->get_num_cols())->copy_from(*out_part);
+	else {
+		if (output.is_in_mem())
+			output.get_portion(out_part->get_global_start_row(),
+					out_part->get_global_start_col(), out_part->get_num_rows(),
+					out_part->get_num_cols())->copy_from(*out_part);
+		else
+			output.write_portion_async(out_part,
+					out_part->get_global_start_row(),
+					out_part->get_global_start_col());
+	}
 }
 
 void sparse_matrix::compute(task_creator::ptr creator,
