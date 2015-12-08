@@ -130,9 +130,9 @@ public:
 		return false;
 	}
 
-	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
-			size_t ncol, bool byrow) const {
-		return std::shared_ptr<const matrix_store>();
+	virtual std::shared_ptr<matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) {
+		return std::shared_ptr<matrix_store>();
 	}
 };
 

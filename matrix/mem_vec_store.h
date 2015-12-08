@@ -172,8 +172,8 @@ public:
 				get_length(), false);
 	}
 
-	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
-			size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow);
 
 	char *get(off_t idx) {
 		return arr + idx * get_entry_size();

@@ -126,8 +126,8 @@ public:
 	virtual void sort();
 	virtual bool is_sorted() const;
 
-	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
-			size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow);
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 

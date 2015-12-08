@@ -122,8 +122,8 @@ public:
 		return data.size();
 	}
 
-	virtual std::shared_ptr<const matrix_store> conv2mat(
-			size_t nrow, size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow);
 
 	char *get(off_t idx) {
 		std::pair<int, size_t> loc = mapper.map2physical(idx);

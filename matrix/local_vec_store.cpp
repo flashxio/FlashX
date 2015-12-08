@@ -168,8 +168,8 @@ local_vec_store::ptr local_vec_store::get(std::vector<off_t> &idxs) const
 	return ret;
 }
 
-detail::matrix_store::const_ptr local_vec_store::conv2mat(size_t nrow,
-		size_t ncol, bool byrow) const
+detail::matrix_store::ptr local_vec_store::conv2mat(size_t nrow,
+		size_t ncol, bool byrow)
 {
 	BOOST_LOG_TRIVIAL(error)
 		<< "can't convert a local vector to a matrix";

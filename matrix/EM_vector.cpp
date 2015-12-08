@@ -1451,8 +1451,8 @@ void EM_vec_store::set_data(const set_vec_operate &op)
 	threads->wait4complete();
 }
 
-matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
-			bool byrow) const
+matrix_store::ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
+			bool byrow)
 {
 	BOOST_LOG_TRIVIAL(error)
 		<< "can't convert an EM vector to a matrix";

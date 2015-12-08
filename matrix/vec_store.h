@@ -123,7 +123,9 @@ public:
 	virtual void sort() = 0;
 	virtual bool is_sorted() const = 0;
 	virtual std::shared_ptr<const matrix_store> conv2mat(size_t nrow,
-			size_t ncol, bool byrow) const = 0;
+			size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<matrix_store> conv2mat(size_t nrow,
+			size_t ncol, bool byrow) = 0;
 };
 
 template<class T>

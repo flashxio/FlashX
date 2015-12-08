@@ -21,6 +21,7 @@
 #include "mem_vec_store.h"
 #include "NUMA_vector.h"
 #include "EM_vector.h"
+#include "matrix_store.h"
 
 namespace fm
 {
@@ -51,6 +52,12 @@ size_t vec_store::copy_to(char *data, size_t num_eles) const
 		memcpy(data + idx * entry_size, store->get_raw_arr(), len * entry_size);
 	}
 	return num_copy_eles;
+}
+
+matrix_store::const_ptr vec_store::conv2mat(size_t nrow, size_t ncol,
+		bool byrow) const
+{
+	return const_cast<vec_store *>(this)->conv2mat(nrow, ncol, byrow);
 }
 
 template<>

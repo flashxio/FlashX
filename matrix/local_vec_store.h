@@ -127,8 +127,8 @@ public:
 	virtual detail::vec_store::ptr sort_with_index();
 	virtual void sort();
 	virtual bool is_sorted() const;
-	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
-			size_t nrow, size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<detail::matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow);
 
 	local_vec_store::ptr get(std::vector<off_t> &idxs) const;
 
