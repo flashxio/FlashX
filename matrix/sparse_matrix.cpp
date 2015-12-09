@@ -811,13 +811,14 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 			in_tmp = dense_matrix::create(in);
 		in_tmp = in_tmp->conv_store(true, matrix_conf.get_num_nodes());
 	}
-	in_tmp->materialize_self();
 
 	size_t sblock_size = cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
 	detail::mem_matrix_store::const_ptr mem_in;
-	if (in_tmp)
+	if (in_tmp) {
+		in_tmp->materialize_self();
 		mem_in = detail::mem_matrix_store::cast(in_tmp->get_raw_store());
+	}
 	else
 		mem_in = detail::mem_matrix_store::cast(in);
 	bool ret = create->set_data(mem_in, out);
