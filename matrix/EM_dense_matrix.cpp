@@ -435,19 +435,12 @@ void EM_matrix_store::write_portion_async(
 	assert(start_row % CHUNK_SIZE == 0 && start_col % CHUNK_SIZE == 0);
 	assert(start_row + portion->get_num_rows() <= get_num_rows()
 			&& start_col + portion->get_num_cols() <= get_num_cols());
-	// Make sure the portion is stored contiguously on disks.
-	// Otherwise, we need to read data from the disk first, modify it and
-	// write it back.
-	if (portion->get_global_start_row() + CHUNK_SIZE > get_num_rows())
-		assert(portion->get_num_rows()
-				== get_num_rows() - portion->get_global_start_row());
-	else
-		assert(portion->get_num_rows() == CHUNK_SIZE);
-	if (portion->get_global_start_col() + CHUNK_SIZE > get_num_cols())
-		assert(portion->get_num_cols()
-				== get_num_cols() - portion->get_global_start_col());
-	else
-		assert(portion->get_num_cols() == CHUNK_SIZE);
+	// If the portion to be read isn't aligned with the portion size,
+	// this porition must be at the end of the matrix.
+	if (portion->get_num_rows() % CHUNK_SIZE > 0)
+		assert(portion->get_num_rows() == get_num_rows() - start_row);
+	if (portion->get_num_cols() % CHUNK_SIZE > 0)
+		assert(portion->get_num_cols() == get_num_cols() - start_col);
 
 	// And data in memory is also stored contiguously.
 	// This constraint can be relaxed in the future.
