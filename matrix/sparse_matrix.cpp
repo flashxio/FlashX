@@ -25,6 +25,7 @@
 #include "matrix_config.h"
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
@@ -221,6 +222,7 @@ void block_compute_task::run(char *buf, size_t size)
 	do {
 		has_blocks = false;
 		// Get a super block.
+		// TODO this process might be computationally expensive itself.
 		for (size_t i = 0; i < num_blocks; i++) {
 			for (size_t j = 0; j < num_blocks; j++) {
 				size_t idx = i * num_blocks + j;
@@ -279,12 +281,6 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 	size_t block_num_rows = std::min(get_io().get_num_rows(),
 			output.get_num_rows() - block_row_start);
 	if (out_part == NULL) {
-		size_t out_part_size = output.get_portion_size().first;
-		size_t out_part_id = block_row_start / out_part_size;
-		// It's guaranteed that all output rows are stored contiguously together.
-		assert((block_row_start + block_num_rows - 1) / out_part_size
-				== out_part_id);
-
 		// We maintain a local buffer for the corresponding part of
 		// the output matrix.
 		out_part = detail::local_row_matrix_store::ptr(
@@ -328,10 +324,14 @@ void block_spmm_task::notify_complete()
 		}
 	}
 	else {
-		if (output.is_in_mem())
-			output.get_portion(out_part->get_global_start_row(),
+		if (output.is_in_mem()) {
+			detail::local_matrix_store::ptr tmp = output.get_portion(
+					out_part->get_global_start_row(),
 					out_part->get_global_start_col(), out_part->get_num_rows(),
-					out_part->get_num_cols())->copy_from(*out_part);
+					out_part->get_num_cols());
+			assert(tmp);
+			tmp->copy_from(*out_part);
+		}
 		else
 			output.write_portion_async(out_part,
 					out_part->get_global_start_row(),
@@ -877,6 +877,11 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 
 	size_t sblock_size = cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
+	if (!out->is_in_mem()) {
+		sblock_size = std::max(sblock_size,
+				detail::EM_matrix_store::CHUNK_SIZE * 2 / get_block_size(
+					).get_num_rows());
+	}
 	detail::mem_matrix_store::const_ptr mem_in;
 	if (in_tmp) {
 		in_tmp->materialize_self();

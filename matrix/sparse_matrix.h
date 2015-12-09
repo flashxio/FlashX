@@ -185,7 +185,7 @@ public:
 };
 
 /*
- * A compute task runs on a 2D-partitioned block row of a sparse matrix.
+ * A compute task runs on multiple 2D-partitioned block rows of a sparse matrix.
  */
 class block_compute_task: public compute_task
 {
