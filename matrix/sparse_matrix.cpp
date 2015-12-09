@@ -21,7 +21,6 @@
 #endif
 
 #include "sparse_matrix.h"
-#include "matrix_worker_thread.h"
 #include "matrix_io.h"
 #include "matrix_config.h"
 #include "hilbert_curve.h"
@@ -340,30 +339,94 @@ void block_spmm_task::notify_complete()
 	}
 }
 
+/*
+ * This is shared by all threads.
+ */
+class spm_dispatcher: public detail::task_dispatcher
+{
+	std::vector<matrix_io_generator::ptr> io_gens;
+	std::vector<size_t> steal_io_ids;
+	detail::EM_object::io_set::ptr ios;
+	task_creator::ptr tcreator;
+public:
+	spm_dispatcher(const std::vector<matrix_io_generator::ptr> &io_gens,
+			detail::EM_object::io_set::ptr ios, task_creator::ptr tcreator) {
+		this->io_gens = io_gens;
+		this->steal_io_ids.resize(io_gens.size());
+		this->ios = ios;
+		this->tcreator = tcreator;
+	}
+
+	virtual bool issue_task();
+};
+
+bool spm_dispatcher::issue_task()
+{
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	int thread_id = curr->get_pool_thread_id();
+
+	matrix_io_generator::ptr this_io_gen = io_gens[thread_id];
+	matrix_io mio;
+	if (this_io_gen->has_next_io())
+		mio = this_io_gen->get_next_io();
+	else {
+		size_t steal_io_id = steal_io_ids[thread_id];
+		for (size_t i = 0; i < io_gens.size(); i++) {
+			if (io_gens[steal_io_id]->has_next_io()) {
+				mio = io_gens[steal_io_id]->steal_io();
+				if (mio.is_valid())
+					break;
+			}
+			steal_io_id = (steal_io_id + 1) % io_gens.size();
+		}
+		steal_io_ids[thread_id] = steal_io_id;
+	}
+
+	if (!mio.is_valid())
+		return false;
+
+	compute_task::ptr task = tcreator->create(mio);
+	safs::io_request req = task->get_request();
+	safs::io_interface &io = ios->get_curr_io();
+	detail::portion_callback &cb = static_cast<detail::portion_callback &>(
+			io.get_callback());
+	cb.add(req, task);
+	io.access(&req, 1);
+	return true;
+}
+
 void sparse_matrix::compute(task_creator::ptr creator,
 		size_t num_block_rows) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
 	// allocation. We should delete them all before running SpMM.
 	detail::local_mem_buffer::clear_bufs();
-	int num_workers = matrix_conf.get_num_SpM_threads();
-	int num_nodes = safs::params.get_num_nodes();
-	std::vector<matrix_worker_thread::ptr> workers(num_workers);
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_workers = threads->get_num_threads();
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	init_io_gens(num_block_rows, io_gens);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
-	for (int i = 0; i < num_workers; i++) {
-		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
-				get_io_factory(), io_gens, creator);
-		t->start();
-		workers[i] = t;
+	if (ios == NULL) {
+		sparse_matrix *mutable_this = const_cast<sparse_matrix *>(this);
+		mutable_this->ios = detail::EM_object::io_set::ptr(
+				new detail::EM_object::io_set(get_io_factory()));
 	}
-	for (int i = 0; i < num_workers; i++)
-		workers[i]->join();
+	spm_dispatcher::ptr dispatcher(new spm_dispatcher(io_gens, ios, creator));
+	for (int i = 0; i < num_workers; i++) {
+		detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
+		const detail::EM_object *sp_obj = this;
+		task->register_EM_obj(const_cast<detail::EM_object *>(sp_obj));
+		std::vector<detail::EM_object *> em_objs = creator->get_EM_objs();
+		for (size_t i = 0; i < em_objs.size(); i++)
+			task->register_EM_obj(em_objs[i]);
+		threads->process_task(i % threads->get_num_nodes(), task);
+	}
+	threads->wait4complete();
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -824,6 +887,14 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	bool ret = create->set_data(mem_in, out);
 	if (ret)
 		compute(create, sblock_size);
+	return ret;
+}
+
+std::vector<safs::io_interface::ptr> sparse_matrix::create_ios() const
+{
+	std::vector<safs::io_interface::ptr> ret(1);
+	assert(ios);
+	ret[0] = ios->create_io();
 	return ret;
 }
 

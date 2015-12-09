@@ -226,6 +226,7 @@ void test_multiply_fg(data_frame::ptr df)
 
 int main()
 {
+	init_flash_matrix(NULL);
 	data_frame::ptr df = create_rand_el(false);
 	test_multiply_fg(df);
 	test_multiply_block(df);

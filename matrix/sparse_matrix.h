@@ -30,19 +30,16 @@
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
 #include "local_mem_buffer.h"
+#include "EM_object.h"
 
 namespace fm
 {
 
-class compute_task
+class compute_task: public detail::portion_compute
 {
 public:
 	typedef std::shared_ptr<compute_task> ptr;
 
-	virtual ~compute_task() {
-	}
-
-	virtual void run(char *buf, size_t size) = 0;
 	virtual safs::io_request get_request() const = 0;
 };
 
@@ -54,6 +51,7 @@ public:
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
 	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
 			detail::matrix_store::ptr out) = 0;
+	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
 };
 
 /*
@@ -462,6 +460,16 @@ public:
 		return true;
 	}
 
+	virtual std::vector<detail::EM_object *> get_EM_objs() {
+		std::vector<detail::EM_object *> ret;
+		if (!output->is_in_mem()) {
+			const detail::EM_object *obj
+				= dynamic_cast<const detail::EM_object *>(output.get());
+			ret.push_back(const_cast<detail::EM_object *>(obj));
+		}
+		return ret;
+	}
+
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		if (order) {
 			switch (output->get_num_cols()) {
@@ -527,7 +535,7 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
  * is in memory, we can use in_mem_io to access the sparse matrix in memory
  * while reusing all the existing code for computation.
  */
-class sparse_matrix
+class sparse_matrix: public detail::EM_object
 {
 	// Whether the matrix is represented by the FlashGraph format.
 	bool is_fg;
@@ -536,6 +544,7 @@ class sparse_matrix
 	// The type of a non-zero entry.
 	const scalar_type *entry_type;
 	bool symmetric;
+	detail::EM_object::io_set::ptr ios;
 
 	template<class DenseType, class SparseType>
 	task_creator::ptr get_multiply_creator(size_t num_in_cols) const {
@@ -603,6 +612,8 @@ public:
 	bool is_fg_matrix() const {
 		return is_fg;
 	}
+
+	std::vector<safs::io_interface::ptr> create_ios() const;
 
 	/*
 	 * When customizing computatin on a sparse matrix (regardless of
