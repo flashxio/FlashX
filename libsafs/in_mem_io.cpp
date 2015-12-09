@@ -486,4 +486,23 @@ in_mem_io::in_mem_io(NUMA_buffer::ptr data, int file_id,
 	comp_io_sched->set_io(this);
 }
 
+class in_mem_io_select: public io_select
+{
+public:
+	virtual bool add_io(io_interface::ptr io) {
+		return true;
+	}
+	virtual int num_pending_ios() const {
+		return 0;
+	}
+	virtual int wait4complete(int num_to_complete) {
+		return 0;
+	}
+};
+
+io_select::ptr in_mem_io::create_io_select() const
+{
+	return io_select::ptr(new in_mem_io_select());
+}
+
 }

@@ -147,6 +147,7 @@ public:
 	virtual int wait4complete(int) {
 		return 0;
 	}
+	virtual std::shared_ptr<io_select> create_io_select() const;
 };
 
 class in_mem_io_factory: public file_io_factory
