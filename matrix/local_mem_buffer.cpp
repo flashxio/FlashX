@@ -243,9 +243,13 @@ local_mem_buffer::irreg_buf_t local_mem_buffer::get_irreg()
 	void *addr = pthread_getspecific(mem_key);
 	if (addr) {
 		local_mem_buffer *local_buf = (local_mem_buffer *) addr;
-		irreg_buf_t ret = local_buf->irreg_bufs.front();
-		local_buf->irreg_bufs.pop_front();
-		return ret;
+		if (local_buf->irreg_bufs.empty())
+			return irreg_buf_t();
+		else {
+			irreg_buf_t ret = local_buf->irreg_bufs.front();
+			local_buf->irreg_bufs.pop_front();
+			return ret;
+		}
 	}
 	else
 		return irreg_buf_t();
