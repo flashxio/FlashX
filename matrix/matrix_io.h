@@ -141,17 +141,15 @@ public:
 private:
 	std::vector<rb_range> ranges;
 
-	void init(size_t num_rbs, int gen_id, int num_gens, size_t range_size);
+	void init(size_t num_rbs, size_t range_size);
 public:
-	row_block_mapper(const std::vector<row_block> &rblocks, int gen_id,
-			int num_gens, size_t range_size) {
+	row_block_mapper(const std::vector<row_block> &rblocks, size_t range_size) {
 		// The last row block in the vector indicates the end of the row block
 		// vector, so the true number of row blocks is one fewer.
 		size_t num_rbs = rblocks.size() - 1;
-		init(num_rbs, gen_id, num_gens, range_size);
+		init(num_rbs, range_size);
 	}
-	row_block_mapper(const SpM_2d_index &index, int gen_id, int num_gens,
-			size_t range_size);
+	row_block_mapper(const SpM_2d_index &index, size_t range_size);
 
 	size_t get_num_ranges() const {
 		return ranges.size();
@@ -188,10 +186,6 @@ public:
 
 	// Get the next I/O access in the current worker thread.
 	virtual matrix_io get_next_io() = 0;
-	// Get an I/O access from a worker thread that doesn't own the I/O generator.
-	// The I/O size returned from this method is typically much smaller than
-	// the one returned by get_next_io().
-	virtual matrix_io steal_io() = 0;
 	virtual bool has_next_io() = 0;
 };
 

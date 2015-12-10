@@ -628,12 +628,9 @@ public:
 	void compute(task_creator::ptr creator, size_t num_block_rows) const;
 	/*
 	 * This method defines how data in the matrix is accessed.
-	 * Since we need to perform computation in parallel, we need to have
-	 * a matrix I/O generator for each thread.
 	 * `num_block_rows' defines how many block rows are accessed in an I/O.
 	 */
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const = 0;
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const = 0;
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
 	/*

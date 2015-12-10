@@ -118,6 +118,8 @@ public:
 	 * to get I/O requests.
 	 */
 	virtual matrix_io get_next_io() {
+		// TODO it should return a smaller I/O to improve load balancing at
+		// the end of SpMM.
 		matrix_io ret;
 		pthread_spin_lock(&lock);
 		// It's possible that all IOs have been stolen.
@@ -129,24 +131,6 @@ public:
 		}
 		pthread_spin_unlock(&lock);
 		return ret;
-	}
-
-	/*
-	 * This method is called by other worker threads. It's used for load
-	 * balancing.
-	 */
-	virtual matrix_io steal_io() {
-		matrix_io ret;
-		pthread_spin_lock(&lock);
-		if ((size_t) curr_io_off < ios.size()) {
-			assert(ios[curr_io_off].has_data());
-			ret = ios[curr_io_off].get_sub_io(tot_num_cols, file_id);
-			if (!ios[curr_io_off].has_data())
-				curr_io_off++;
-			assert(ret.is_valid());
-		}
-		pthread_spin_unlock(&lock);
-		return ret; 
 	}
 
 	virtual bool has_next_io() {
@@ -220,7 +204,6 @@ public:
 			const row_block_mapper &mapper);
 
 	virtual matrix_io get_next_io();
-	virtual matrix_io steal_io();
 
 	virtual bool has_next_io() {
 		return brow_off < num_brows;
@@ -250,30 +233,14 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 
 matrix_io b2d_io_generator::get_next_io()
 {
+	// TODO it should return a smaller I/O to improve load balancing at
+	// the end of SpMM.
 	matrix_io ret;
 	pthread_spin_lock(&lock);
 	// It's possible that all IOs have been stolen.
 	// We have to check it.
 	if (brow_off < num_brows) {
 		block_row brow = brows[brow_off++];
-		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
-		safs::data_loc_t data_loc(file_id, brow.off);
-		ret = matrix_io(mat_loc, block_size.get_num_rows() * brow.num_block_rows,
-				tot_num_cols, data_loc, brow.size);
-	}
-	pthread_spin_unlock(&lock);
-	return ret;
-}
-
-matrix_io b2d_io_generator::steal_io()
-{
-	matrix_io ret;
-	pthread_spin_lock(&lock);
-	// It's possible that all IOs have been stolen.
-	// We have to check it.
-	if (brow_off < num_brows) {
-		block_row brow = brows[num_brows - 1];
-		num_brows--;
 		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
 		safs::data_loc_t data_loc(file_id, brow.off);
 		ret = matrix_io(mat_loc, block_size.get_num_rows() * brow.num_block_rows,
@@ -297,13 +264,11 @@ matrix_io_generator::ptr matrix_io_generator::create(SpM_2d_index::ptr idx,
 	return matrix_io_generator::ptr(new b2d_io_generator(idx, file_id, mapper));
 }
 
-void row_block_mapper::init(size_t num_rbs, int gen_id, int num_gens,
-		size_t range_size)
+void row_block_mapper::init(size_t num_rbs, size_t range_size)
 {
-	size_t i = gen_id * range_size;
 	// We now need to jump to the next row block that belongs to
 	// the current I/O generator.
-	for (; i < num_rbs; i += range_size * num_gens) {
+	for (size_t i = 0; i < num_rbs; i += range_size) {
 		struct rb_range range;
 		range.idx = i;
 		range.num = std::min(range_size, num_rbs - i);
@@ -311,10 +276,9 @@ void row_block_mapper::init(size_t num_rbs, int gen_id, int num_gens,
 	}
 }
 
-row_block_mapper::row_block_mapper(const SpM_2d_index &index, int gen_id,
-		int num_gens, size_t range_size)
+row_block_mapper::row_block_mapper(const SpM_2d_index &index, size_t range_size)
 {
-	init(index.get_num_block_rows(), gen_id, num_gens, range_size);
+	init(index.get_num_block_rows(), range_size);
 }
 
 }

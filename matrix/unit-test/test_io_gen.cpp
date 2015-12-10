@@ -26,24 +26,11 @@ void run_test()
 
 	int num_gens = 32;
 	std::vector<matrix_io> ios;
-	std::vector<matrix_io_generator::ptr> io_gens(num_gens);
-	for (int i = 0; i < num_gens; i++) {
-		row_block_mapper mapper(blocks, i, num_gens,
-				matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(blocks,
-				num_rows, 1000, 0, mapper);
-	}
-	while (!io_gens.empty()) {
-		int idx = random() % io_gens.size();
-		if (io_gens[idx]->has_next_io()) {
-			if (random() % 10 == 0)
-				ios.push_back(io_gens[idx]->steal_io());
-			else
-				ios.push_back(io_gens[idx]->get_next_io());
-		}
-		else
-			io_gens.erase(io_gens.begin() + idx);
-	}
+	row_block_mapper mapper(blocks, matrix_conf.get_rb_io_size());
+	matrix_io_generator::ptr io_gen = matrix_io_generator::create(blocks,
+			num_rows, 1000, 0, mapper);
+	while (io_gen->has_next_io())
+		ios.push_back(io_gen->get_next_io());
 	std::sort(ios.begin(), ios.end(), comp_io());
 	printf("There are %ld ios\n", ios.size());
 	off_t prev_off = ios[0].get_loc().get_offset();

@@ -344,15 +344,13 @@ void block_spmm_task::notify_complete()
  */
 class spm_dispatcher: public detail::task_dispatcher
 {
-	std::vector<matrix_io_generator::ptr> io_gens;
-	std::vector<size_t> steal_io_ids;
+	matrix_io_generator::ptr io_gen;
 	detail::EM_object::io_set::ptr ios;
 	task_creator::ptr tcreator;
 public:
-	spm_dispatcher(const std::vector<matrix_io_generator::ptr> &io_gens,
+	spm_dispatcher(matrix_io_generator::ptr io_gen,
 			detail::EM_object::io_set::ptr ios, task_creator::ptr tcreator) {
-		this->io_gens = io_gens;
-		this->steal_io_ids.resize(io_gens.size());
+		this->io_gen = io_gen;
 		this->ios = ios;
 		this->tcreator = tcreator;
 	}
@@ -362,27 +360,7 @@ public:
 
 bool spm_dispatcher::issue_task()
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
-
-	matrix_io_generator::ptr this_io_gen = io_gens[thread_id];
-	matrix_io mio;
-	if (this_io_gen->has_next_io())
-		mio = this_io_gen->get_next_io();
-	else {
-		size_t steal_io_id = steal_io_ids[thread_id];
-		for (size_t i = 0; i < io_gens.size(); i++) {
-			if (io_gens[steal_io_id]->has_next_io()) {
-				mio = io_gens[steal_io_id]->steal_io();
-				if (mio.is_valid())
-					break;
-			}
-			steal_io_id = (steal_io_id + 1) % io_gens.size();
-		}
-		steal_io_ids[thread_id] = steal_io_id;
-	}
-
+	matrix_io mio = io_gen->get_next_io();
 	if (!mio.is_valid())
 		return false;
 
@@ -405,8 +383,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_workers = threads->get_num_threads();
-	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
-	init_io_gens(num_block_rows, io_gens);
+	matrix_io_generator::ptr io_gen = create_io_gen(num_block_rows);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
@@ -416,7 +393,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 		mutable_this->ios = detail::EM_object::io_set::ptr(
 				new detail::EM_object::io_set(get_io_factory()));
 	}
-	spm_dispatcher::ptr dispatcher(new spm_dispatcher(io_gens, ios, creator));
+	spm_dispatcher::ptr dispatcher(new spm_dispatcher(io_gen, ios, creator));
 	for (int i = 0; i < num_workers; i++) {
 		detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
 		const detail::EM_object *sp_obj = this;
@@ -480,8 +457,11 @@ public:
 		return factory;
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const;
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+		row_block_mapper mapper(blocks, matrix_conf.get_rb_io_size());
+		return matrix_io_generator::create(blocks, get_num_rows(),
+				get_num_cols(), factory->get_file_id(), mapper);
+	}
 
 	virtual const block_2d_size &get_block_size() const {
 		return block_size;
@@ -541,17 +521,6 @@ sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg,
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_sym_matrix::init_io_gens(size_t num_block_rows,
-		std::vector<matrix_io_generator::ptr> &io_gens) const
-{
-	for (size_t i = 0; i < io_gens.size(); i++) {
-		row_block_mapper mapper(blocks, i, io_gens.size(),
-				matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
-}
-
 /*
  * Sparse asymmetric square matrix. It is partitioned in rows.
  */
@@ -589,8 +558,11 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const;
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+		row_block_mapper mapper(*out_blocks, matrix_conf.get_rb_io_size());
+		return matrix_io_generator::create(*out_blocks, get_num_rows(),
+				get_num_cols(), factory->get_file_id(), mapper);
+	}
 
 	virtual const block_2d_size &get_block_size() const {
 		return block_size;
@@ -660,17 +632,6 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_asym_matrix::init_io_gens(size_t num_block_rows,
-		std::vector<matrix_io_generator::ptr> &io_gens) const
-{
-	for (size_t i = 0; i < io_gens.size(); i++) {
-		row_block_mapper mapper(*out_blocks, i, io_gens.size(),
-				matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(*out_blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
-}
-
 sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg,
 		const scalar_type *entry_type)
 {
@@ -720,13 +681,9 @@ public:
 		return sparse_matrix::ptr(new block_sparse_matrix(*this));
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const {
-		for (size_t i = 0; i < io_gens.size(); i++) {
-			row_block_mapper mapper(*index, i, io_gens.size(), num_block_rows);
-			io_gens[i] = matrix_io_generator::create(index,
-					factory->get_file_id(), mapper);
-		}
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+		row_block_mapper mapper(*index, num_block_rows);
+		return matrix_io_generator::create(index, factory->get_file_id(), mapper);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -804,9 +761,8 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const {
-		mat->init_io_gens(num_block_rows, io_gens);
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+		return mat->create_io_gen(num_block_rows);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
