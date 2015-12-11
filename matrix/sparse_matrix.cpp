@@ -33,6 +33,11 @@ namespace fm
 matrix_config matrix_conf;
 
 /*
+ * The minimum write I/O size (in bytes).
+ */
+static const size_t MIN_WRITE_SIZE = 4 * 1024 * 1024;
+
+/*
  * This processes the blocks in the their original order.
  * It can process an arbitrary number of blocks.
  */
@@ -831,12 +836,35 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 		in_tmp = in_tmp->conv_store(true, matrix_conf.get_num_nodes());
 	}
 
+	// The super block size should be CPU-cache friendly as well as I/O
+	// friendly. That is, the super block size should be large enough to
+	// fill the rows from the dense matrices involed in the computation
+	// should fill the entire CPU cache. If the output matrix is written
+	// to disks, the super block should also be large enough so that
+	// each write to disks is large enough to have high I/O throughput.
 	size_t sblock_size = cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
 	if (!out->is_in_mem()) {
-		sblock_size = std::max(sblock_size,
-				detail::EM_matrix_store::CHUNK_SIZE * 2 / get_block_size(
-					).get_num_rows());
+		// The number of block rows required to have the write I/O size
+		// to meet the minimum write size.
+		size_t tmp = MIN_WRITE_SIZE / out->get_entry_size() / out->get_num_cols()
+			/ get_block_size().get_num_rows();
+		size_t block_nrow = get_block_size().get_num_rows();
+		const size_t CHUNK_NBLOCK = detail::EM_matrix_store::CHUNK_SIZE / block_nrow;
+		// We don't need an I/O size to be larger than a portion size in
+		// an EM dense matrix.
+		tmp = std::min(CHUNK_NBLOCK, tmp);
+		if (tmp < CHUNK_NBLOCK && out->get_num_cols() > 1
+				&& out->store_layout() == matrix_layout_t::L_COL) {
+			BOOST_LOG_TRIVIAL(warning)
+				<< "The output size can't be smaller than matrix portion size";
+			BOOST_LOG_TRIVIAL(warning)
+				<< "if the output matrix is stored in column-major order";
+			BOOST_LOG_TRIVIAL(warning)
+				<< "set the output size to the matrix portion size";
+			tmp = CHUNK_NBLOCK;
+		}
+		sblock_size = std::max(sblock_size, tmp);
 	}
 	detail::mem_matrix_store::const_ptr mem_in;
 	if (in_tmp) {
