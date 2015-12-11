@@ -52,6 +52,7 @@ public:
 	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
 			detail::matrix_store::ptr out) = 0;
 	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
+	virtual bool is_complete() const = 0;
 };
 
 /*
@@ -220,6 +221,64 @@ public:
 	virtual void notify_complete() = 0;
 };
 
+/*
+ * This class helps to stream data to the output dense matrix from SpMM
+ * on disks, so the dense matrix is a very tall and skinny matrix.
+ * This assumes that the data comes from multiple threads without a specific
+ * order. But once we order the incoming data, we can stream data to disks
+ * sequentially.
+ * This data structure is shared by multiple threads.
+ */
+class EM_matrix_stream
+{
+	detail::matrix_store::ptr mat;
+
+	class filled_local_store
+	{
+		detail::local_matrix_store::ptr data;
+		std::atomic<size_t> num_filled_rows;
+	public:
+		typedef std::shared_ptr<filled_local_store> ptr;
+
+		filled_local_store(detail::local_matrix_store::ptr data) {
+			this->data = data;
+			num_filled_rows = 0;
+		}
+		// If the write completely fill the local buffer, it returns true.
+		bool write(detail::local_matrix_store::const_ptr portion,
+				off_t global_start_row, off_t global_start_col);
+
+		detail::local_matrix_store::const_ptr get_whole_portion() const {
+			return data;
+		}
+
+		off_t get_global_start_row() const {
+			return data->get_global_start_row();
+		}
+	};
+
+	pthread_spinlock_t lock;
+	// This keeps the buffers with partial data in EM matrix portions.
+	// If an EM matrix portion is complete, the portion is flushed to disks
+	// and it is deleted from the hashtable.
+	std::unordered_map<off_t, filled_local_store::ptr> portion_bufs;
+
+	EM_matrix_stream(detail::matrix_store::ptr mat) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		this->mat = mat;
+	}
+public:
+	typedef std::shared_ptr<EM_matrix_stream> ptr;
+
+	static ptr create(detail::matrix_store::ptr mat) {
+		return ptr(new EM_matrix_stream(mat));
+	}
+
+	void write_async(detail::local_matrix_store::const_ptr portion,
+			off_t start_row, off_t start_col);
+	bool is_complete() const;
+};
+
 class block_spmm_task: public block_compute_task
 {
 	// The size of the non-zero entries.
@@ -227,6 +286,7 @@ class block_spmm_task: public block_compute_task
 
 	const detail::mem_matrix_store &input;
 	detail::matrix_store &output;
+	EM_matrix_stream::ptr output_stream;
 
 	/*
 	 * A task is responsible for processing the entire block rows.
@@ -235,8 +295,9 @@ class block_spmm_task: public block_compute_task
 	detail::local_row_matrix_store::ptr out_part;
 public:
 	block_spmm_task(const detail::mem_matrix_store &_input,
-			detail::matrix_store &_output, const matrix_io &io,
-			const sparse_matrix &mat, block_exec_order::ptr order);
+			detail::matrix_store &_output, EM_matrix_stream::ptr stream,
+			const matrix_io &io, const sparse_matrix &mat,
+			block_exec_order::ptr order);
 
 	const detail::matrix_store &get_in_matrix() const {
 		return input;
@@ -385,10 +446,10 @@ class block_spmm_task_impl: public block_spmm_task
 {
 public:
 	block_spmm_task_impl(const detail::mem_matrix_store &input,
-			detail::matrix_store &output, const matrix_io &io,
-			const sparse_matrix &mat,
+			detail::matrix_store &output, EM_matrix_stream::ptr stream
+			, const matrix_io &io, const sparse_matrix &mat,
 			block_exec_order::ptr order): block_spmm_task(input,
-				output, io, mat, order) {
+				output, stream, io, mat, order) {
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
@@ -428,6 +489,7 @@ class spmm_creator: public task_creator
 {
 	detail::mem_matrix_store::const_ptr input;
 	detail::matrix_store::ptr output;
+	EM_matrix_stream::ptr output_stream;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
@@ -439,13 +501,20 @@ class spmm_creator: public task_creator
 		typedef coo_func<DenseType, SparseType, ROW_WIDTH> width_coo_func;
 		return compute_task::ptr(
 				new block_spmm_task_impl<width_rp_func,  width_coo_func>(
-					*input, *output, io, mat, order));
+					*input, *output, output_stream, io, mat, order));
 	}
 public:
 	static task_creator::ptr create(const sparse_matrix &mat,
 			size_t num_in_cols) {
 		return task_creator::ptr(new spmm_creator<DenseType, SparseType>(
 					mat, num_in_cols));
+	}
+
+	virtual bool is_complete() const {
+		if (output_stream == NULL)
+			return true;
+		else
+			return output_stream->is_complete();
 	}
 
 	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
@@ -457,6 +526,8 @@ public:
 		}
 		this->input = in;
 		this->output = out;
+		if (!output->is_in_mem())
+			output_stream = EM_matrix_stream::create(output);
 		return true;
 	}
 

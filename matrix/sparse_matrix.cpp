@@ -133,6 +133,76 @@ bool hilbert_exec_order::exec(block_compute_task &task,
 	return true;
 }
 
+bool EM_matrix_stream::filled_local_store::write(
+		detail::local_matrix_store::const_ptr portion,
+		off_t global_start_row, off_t global_start_col)
+{
+	detail::local_matrix_store::ptr part = data->get_portion(
+			global_start_row - data->get_global_start_row(),
+			global_start_col - data->get_global_start_col(),
+			portion->get_num_rows(), portion->get_num_cols());
+	part->copy_from(*portion);
+	size_t ret = num_filled_rows.fetch_add(portion->get_num_rows());
+	// I assume that no region is filled multiple times.
+	return ret + portion->get_num_rows() == data->get_num_rows();
+}
+
+void EM_matrix_stream::write_async(detail::local_matrix_store::const_ptr portion,
+		off_t start_row, off_t start_col)
+{
+	assert(!mat->is_wide());
+	assert(portion->get_num_cols() == mat->get_num_cols());
+	const size_t CHUNK_SIZE = detail::EM_matrix_store::CHUNK_SIZE;
+	// If the portion is aligned with the default EM matrix portion size.
+	if (!mat->is_wide() && start_row % CHUNK_SIZE == 0
+			&& portion->get_num_rows() % CHUNK_SIZE == 0) {
+		mat->write_portion_async(portion, start_row, start_col);
+		return;
+	}
+
+	off_t EM_portion_row_start;
+	EM_portion_row_start = (start_row / CHUNK_SIZE) * CHUNK_SIZE;
+	// TODO we might want to a thread-safe hashtable.
+	pthread_spin_lock(&lock);
+	auto it = portion_bufs.find(EM_portion_row_start);
+	filled_local_store::ptr buf;
+	if (it == portion_bufs.end()) {
+		size_t portion_num_rows = std::min(CHUNK_SIZE,
+				mat->get_num_rows() - EM_portion_row_start);
+		detail::local_matrix_store::ptr tmp(
+				new detail::local_buf_row_matrix_store(EM_portion_row_start,
+					start_col, portion_num_rows, portion->get_num_cols(),
+					mat->get_type(), -1));
+		buf = filled_local_store::ptr(new filled_local_store(tmp));
+		auto ret = portion_bufs.insert(std::pair<off_t, filled_local_store::ptr>(
+					EM_portion_row_start, buf));
+		assert(ret.second);
+	}
+	else
+		buf = it->second;
+	pthread_spin_unlock(&lock);
+	assert(buf->get_global_start_row() == EM_portion_row_start);
+	bool ret = buf->write(portion, start_row, start_col);
+	// If we fill the buffer, we should flush it to disks.
+	if (ret) {
+		detail::local_matrix_store::const_ptr data = buf->get_whole_portion();
+		mat->write_portion_async(data, data->get_global_start_row(),
+				data->get_global_start_col());
+		pthread_spin_lock(&lock);
+		portion_bufs.erase(EM_portion_row_start);
+		pthread_spin_unlock(&lock);
+	}
+}
+
+bool EM_matrix_stream::is_complete() const
+{
+	EM_matrix_stream *mutable_this = const_cast<EM_matrix_stream *>(this);
+	pthread_spin_lock(&mutable_this->lock);
+	bool ret = portion_bufs.empty();
+	pthread_spin_unlock(&mutable_this->lock);
+	return ret;
+}
+
 namespace
 {
 struct buf_deleter {
@@ -262,10 +332,12 @@ void block_compute_task::run(char *buf, size_t size)
 }
 
 block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
-		detail::matrix_store &_output, const matrix_io &io,
-		const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
+		detail::matrix_store &_output, EM_matrix_stream::ptr stream,
+		const matrix_io &io, const sparse_matrix &mat,
+		block_exec_order::ptr order): block_compute_task(
 			io, mat, order), input(_input), output(_output)
 {
+	this->output_stream = stream;
 	entry_size = mat.get_entry_size();
 	// We have to make sure the task processes the entire block rows.
 	assert(io.get_num_cols() == mat.get_num_cols());
@@ -325,7 +397,7 @@ void block_spmm_task::notify_complete()
 						// we allocate the buffer in the local node.
 						-1));
 			out_part->reset_data();
-			output.write_portion_async(out_part, block_row_start, 0);
+			output_stream->write_async(out_part, block_row_start, 0);
 		}
 	}
 	else {
@@ -338,7 +410,7 @@ void block_spmm_task::notify_complete()
 			tmp->copy_from(*out_part);
 		}
 		else
-			output.write_portion_async(out_part,
+			output_stream->write_async(out_part,
 					out_part->get_global_start_row(),
 					out_part->get_global_start_col());
 	}
@@ -410,6 +482,7 @@ void sparse_matrix::compute(task_creator::ptr creator,
 		threads->process_task(i % threads->get_num_nodes(), task);
 	}
 	threads->wait4complete();
+	assert(creator->is_complete());
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
