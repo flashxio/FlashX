@@ -687,8 +687,8 @@ public:
 	}
 
 	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
-		row_block_mapper mapper(*index, num_block_rows);
-		return matrix_io_generator::create(index, factory->get_file_id(), mapper);
+		return matrix_io_generator::create(index, factory->get_file_id(),
+				num_block_rows);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
