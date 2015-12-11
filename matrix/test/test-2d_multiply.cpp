@@ -39,26 +39,31 @@ public:
 };
 
 void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes,
-		bool ext_mem_out)
+		bool ext_mem)
 {
 	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
-	detail::mem_matrix_store::ptr in
-		= detail::mem_matrix_store::create(mat->get_num_cols(), mat_width,
+	detail::matrix_store::ptr in;
+	if (ext_mem)
+		in = detail::EM_matrix_store::create(mat->get_num_cols(), mat_width,
+				matrix_layout_t::L_ROW, get_scalar_type<double>());
+	else
+		in = detail::mem_matrix_store::create(mat->get_num_cols(), mat_width,
 				matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
-	if (num_nodes < 0) {
+	if (!ext_mem && num_nodes < 0) {
+		detail::mem_matrix_store::ptr mem_in = detail::mem_matrix_store::cast(in);
 		// This forces all memory is allocated in a single NUMA node.
 		for (size_t i = 0; i < in->get_num_rows(); i++)
 			for (size_t j = 0; j < in->get_num_cols(); j++)
-				in->set<double>(i, j, (i % 100) * (j + 1));
+				mem_in->set<double>(i, j, (i % 100) * (j + 1));
 	}
 	else
 		in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 	printf("set input data\n");
 
-	// Initialize the output matrix and allocate pages for it.
 	detail::matrix_store::ptr out;
-	if (ext_mem_out)
+	// Initialize the output matrix and allocate pages for it.
+	if (ext_mem)
 		out = detail::EM_matrix_store::create(mat->get_num_rows(), mat_width,
 				matrix_layout_t::L_ROW, get_scalar_type<double>());
 	else
@@ -181,7 +186,7 @@ int main(int argc, char *argv[])
 	size_t repeats = 1;
 	bool use_fg = false;
 	int num_nodes = 0;
-	bool ext_mem_out = false;
+	bool ext_mem = false;
 	std::string entry_type;
 	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:e")) != -1) {
 		switch (opt) {
@@ -210,7 +215,7 @@ int main(int argc, char *argv[])
 				entry_type = optarg;
 				break;
 			case 'e':
-				ext_mem_out = true;
+				ext_mem = true;
 				break;
 			default:
 				print_usage();
@@ -230,7 +235,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	if (ext_mem_out && !safs::is_safs_init()) {
+	if (ext_mem && !safs::is_safs_init()) {
 		fprintf(stderr,
 				"SAFS must be enabled if output matrix is in external memory\n");
 		return -1;
@@ -249,11 +254,11 @@ int main(int argc, char *argv[])
 	if (mat_width == 0) {
 		for (size_t i = 1; i <= 16; i *= 2)
 			for (size_t k = 0; k < repeats; k++)
-				test_SpMM(mat, i, num_nodes, ext_mem_out);
+				test_SpMM(mat, i, num_nodes, ext_mem);
 	}
 	else {
 		for (size_t k = 0; k < repeats; k++)
-			test_SpMM(mat, mat_width, num_nodes, ext_mem_out);
+			test_SpMM(mat, mat_width, num_nodes, ext_mem);
 	}
 
 	destroy_flash_matrix();
