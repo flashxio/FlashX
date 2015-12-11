@@ -923,31 +923,6 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	size_t sblock_size = cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
 	size_t min_num_brows = 1;
-	if (!out->is_in_mem()) {
-		// The number of block rows required to have the write I/O size
-		// to meet the minimum write size.
-		size_t tmp = MIN_WRITE_SIZE / out->get_entry_size() / out->get_num_cols()
-			/ get_block_size().get_num_rows();
-		size_t block_nrow = get_block_size().get_num_rows();
-		const size_t CHUNK_NBLOCK = detail::EM_matrix_store::CHUNK_SIZE / block_nrow;
-		// We don't need an I/O size to be larger than a portion size in
-		// an EM dense matrix.
-		tmp = std::min(CHUNK_NBLOCK, tmp);
-		if (tmp < CHUNK_NBLOCK && out->get_num_cols() > 1
-				&& out->store_layout() == matrix_layout_t::L_COL) {
-			BOOST_LOG_TRIVIAL(warning)
-				<< "The output size can't be smaller than matrix portion size";
-			BOOST_LOG_TRIVIAL(warning)
-				<< "if the output matrix is stored in column-major order";
-			BOOST_LOG_TRIVIAL(warning)
-				<< "set the output size to the matrix portion size";
-			tmp = CHUNK_NBLOCK;
-		}
-		if (out->get_num_cols() > 1
-				&& out->store_layout() == matrix_layout_t::L_COL)
-			min_num_brows = CHUNK_NBLOCK;
-		sblock_size = std::max(sblock_size, tmp);
-	}
 	detail::mem_matrix_store::const_ptr mem_in;
 	if (in_tmp) {
 		in_tmp->materialize_self();
