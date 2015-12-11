@@ -432,15 +432,26 @@ void EM_matrix_store::write_portion_async(
 		off_t start_col)
 {
 	assert(store_layout() == portion->store_layout());
-	assert(start_row % CHUNK_SIZE == 0 && start_col % CHUNK_SIZE == 0);
 	assert(start_row + portion->get_num_rows() <= get_num_rows()
 			&& start_col + portion->get_num_cols() <= get_num_cols());
-	// If the portion to be read isn't aligned with the portion size,
-	// this porition must be at the end of the matrix.
-	if (portion->get_num_rows() % CHUNK_SIZE > 0)
-		assert(portion->get_num_rows() == get_num_rows() - start_row);
-	if (portion->get_num_cols() % CHUNK_SIZE > 0)
-		assert(portion->get_num_cols() == get_num_cols() - start_col);
+	// If this is a tall column-major matrix with more than one column,
+	// we need to make sure that the portion to be written is either aligned
+	// with the portion size or is at the end of the matrix.
+	if (!is_wide() && store_layout() == matrix_layout_t::L_COL
+			&& get_num_cols() > 1) {
+		assert(start_row % CHUNK_SIZE == 0 && start_col % CHUNK_SIZE == 0);
+		if (portion->get_num_rows() % CHUNK_SIZE > 0)
+			assert(portion->get_num_rows() == get_num_rows() - start_row);
+	}
+	// If this is a wide row-major matrix with more than one row,
+	// we need to make sure that the portion to be written is either aligned
+	// with the portion size or is at the end of the matrix.
+	if (is_wide() && store_layout() == matrix_layout_t::L_ROW
+			&& get_num_rows() > 1) {
+		assert(start_row % CHUNK_SIZE == 0 && start_col % CHUNK_SIZE == 0);
+		if (portion->get_num_cols() % CHUNK_SIZE > 0)
+			assert(portion->get_num_cols() == get_num_cols() - start_col);
+	}
 
 	// And data in memory is also stored contiguously.
 	// This constraint can be relaxed in the future.
@@ -454,6 +465,7 @@ void EM_matrix_store::write_portion_async(
 	// the size of a portion later.
 	off_t off = (get_num_cols() * portion->get_global_start_row()
 		+ portion->get_num_rows() * portion->get_global_start_col()) * entry_size;
+	assert(off % PAGE_SIZE == 0);
 
 	size_t num_bytes
 		= portion->get_num_rows() * portion->get_num_cols() * entry_size;
