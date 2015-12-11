@@ -170,14 +170,19 @@ class b2d_io_generator: public matrix_io_generator
 {
 	pthread_spinlock_t lock;
 	size_t brow_idx;
+	size_t min_num_brows;
 	size_t io_num_brows;
+	// This is the starting point where we give a single block row for
+	// each assignment for load balancing. This points to a block row.
+	size_t balance_point;
 
 	SpM_2d_index::ptr idx;
 	block_2d_size block_size;
 	int file_id;
 	size_t tot_num_cols;
 public:
-	b2d_io_generator(SpM_2d_index::ptr idx, int file_id, size_t io_num_brows);
+	b2d_io_generator(SpM_2d_index::ptr idx, int file_id, size_t io_num_brows,
+			size_t min_num_brows);
 
 	virtual matrix_io get_next_io();
 
@@ -187,10 +192,23 @@ public:
 };
 
 b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
-		size_t io_num_brows): block_size(idx->get_header().get_2d_block_size())
+		size_t io_num_brows, size_t min_num_brows): block_size(
+			idx->get_header().get_2d_block_size())
 {
 	this->idx = idx;
 	this->io_num_brows = io_num_brows;
+	this->min_num_brows = min_num_brows;
+	if (io_num_brows > min_num_brows) {
+		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
+		// We reserve some block rows in the matrix that are assigned one blow
+		// row at a time.
+		if (idx->get_num_block_rows() > io_num_brows * num_threads)
+			balance_point = idx->get_num_block_rows() - num_threads;
+		else
+			balance_point = 0;
+	}
+	else
+		balance_point = idx->get_num_block_rows();
 	this->tot_num_cols = idx->get_header().get_num_cols();
 	this->file_id = file_id;
 	this->brow_idx = 0;
@@ -199,13 +217,16 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 
 matrix_io b2d_io_generator::get_next_io()
 {
-	// TODO it should return a smaller I/O to improve load balancing at
-	// the end of SpMM.
 	matrix_io ret;
 	pthread_spin_lock(&lock);
 	// It's possible that all IOs have been stolen.
 	// We have to check it.
 	if (has_next_io()) {
+		// If we have passed the balancing point, we now assign one block row
+		// to a thread each time.
+		if (brow_idx >= balance_point)
+			io_num_brows = min_num_brows;
+
 		matrix_loc mat_loc(brow_idx * block_size.get_num_rows(), 0);
 		safs::data_loc_t data_loc(file_id, idx->get_block_row_off(brow_idx));
 		size_t num_brows = std::min(io_num_brows,
@@ -229,10 +250,10 @@ matrix_io_generator::ptr matrix_io_generator::create(
 }
 
 matrix_io_generator::ptr matrix_io_generator::create(SpM_2d_index::ptr idx,
-		int file_id, size_t io_num_brows)
+		int file_id, size_t io_num_brows, size_t min_num_brows)
 {
 	return matrix_io_generator::ptr(new b2d_io_generator(idx, file_id,
-				io_num_brows));
+				io_num_brows, min_num_brows));
 }
 
 void row_block_mapper::init(size_t num_rbs, size_t range_size)

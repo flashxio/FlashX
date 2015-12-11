@@ -380,7 +380,7 @@ bool spm_dispatcher::issue_task()
 }
 
 void sparse_matrix::compute(task_creator::ptr creator,
-		size_t num_block_rows) const
+		size_t num_block_rows, size_t min_num_brows) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
 	// allocation. We should delete them all before running SpMM.
@@ -388,7 +388,8 @@ void sparse_matrix::compute(task_creator::ptr creator,
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_workers = threads->get_num_threads();
-	matrix_io_generator::ptr io_gen = create_io_gen(num_block_rows);
+	matrix_io_generator::ptr io_gen = create_io_gen(num_block_rows,
+			min_num_brows);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
@@ -462,7 +463,8 @@ public:
 		return factory;
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
+			size_t min_num_brows) const {
 		row_block_mapper mapper(blocks, matrix_conf.get_rb_io_size());
 		return matrix_io_generator::create(blocks, get_num_rows(),
 				get_num_cols(), factory->get_file_id(), mapper);
@@ -563,7 +565,8 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
+			size_t min_num_brows) const {
 		row_block_mapper mapper(*out_blocks, matrix_conf.get_rb_io_size());
 		return matrix_io_generator::create(*out_blocks, get_num_rows(),
 				get_num_cols(), factory->get_file_id(), mapper);
@@ -686,9 +689,10 @@ public:
 		return sparse_matrix::ptr(new block_sparse_matrix(*this));
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
+			size_t min_num_brows) const {
 		return matrix_io_generator::create(index, factory->get_file_id(),
-				num_block_rows);
+				num_block_rows, min_num_brows);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -766,8 +770,9 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows) const {
-		return mat->create_io_gen(num_block_rows);
+	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
+			size_t min_num_brows) const {
+		return mat->create_io_gen(num_block_rows, min_num_brows);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -844,6 +849,7 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	// each write to disks is large enough to have high I/O throughput.
 	size_t sblock_size = cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
+	size_t min_num_brows = 1;
 	if (!out->is_in_mem()) {
 		// The number of block rows required to have the write I/O size
 		// to meet the minimum write size.
@@ -864,6 +870,9 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 				<< "set the output size to the matrix portion size";
 			tmp = CHUNK_NBLOCK;
 		}
+		if (out->get_num_cols() > 1
+				&& out->store_layout() == matrix_layout_t::L_COL)
+			min_num_brows = CHUNK_NBLOCK;
 		sblock_size = std::max(sblock_size, tmp);
 	}
 	detail::mem_matrix_store::const_ptr mem_in;
@@ -875,7 +884,7 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 		mem_in = detail::mem_matrix_store::cast(in);
 	bool ret = create->set_data(mem_in, out);
 	if (ret)
-		compute(create, sblock_size);
+		compute(create, sblock_size, min_num_brows);
 	return ret;
 }
 

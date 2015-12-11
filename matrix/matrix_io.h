@@ -182,7 +182,7 @@ public:
 	 * into blocks.
 	 */
 	static matrix_io_generator::ptr create(SpM_2d_index::ptr idx, int file_id,
-			size_t io_num_brows);
+			size_t io_num_brows, size_t min_num_brows);
 
 	// Get the next I/O access in the current worker thread.
 	virtual matrix_io get_next_io() = 0;
