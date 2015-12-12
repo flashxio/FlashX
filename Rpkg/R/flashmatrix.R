@@ -683,70 +683,113 @@ fm.agg.mat <- function(fm, margin, op)
 	new.fmV(ret)
 }
 
-#' Apply a Function to two FlashMatrix vectors/matrices.
-#'
-#' `mapply' applies `FUN' to the first elements of each vector, the second
-#' elements, the third elements, and so on. Two vectors/matrices should have
-#' the same shape. Currently, `mapply' only accepts predefined basic operators
-#' returned by `fm.get.basic.op'.
-#'
-#' @param o1, o2 a FlashMatrix vector/matrix.
-#' @param FUN the reference or the name of one of the predefined basic binary
-#' operators.
-#' @return a FlashMatrix vector/matrix.
-#' @name fm.mapply2
-#' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.mapply2", function(o1, o2, FUN) NULL)
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
-			  ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fm(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  stopifnot(length(o1) == length(o2))
-			  ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fm(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fm(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV", FUN = "ANY"),
-		  function(o1, o2, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.op(FUN)
-			  stopifnot(class(FUN) == "fm.bo")
-			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
+fm.mapply2.fm <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	new.fm(ret)
+}
+
+fm.mapply2.fmV <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(length(o1) == length(o2))
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	new.fmV(ret)
+}
+
+fm.mapply2.fm.m <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(nrow(o1) == nrow(o2))
+	stopifnot(ncol(o1) == ncol(o2))
+	o2 <- fm.conv.R2FM(o2)
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	new.fm(ret)
+}
+
+fm.mapply2.m.fm <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(nrow(o1) == nrow(o2))
+	stopifnot(ncol(o1) == ncol(o2))
+	o1 <- fm.conv.R2FM(o1)
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	new.fm(ret)
+}
+
+fm.mapply2.fm.ANY <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(is.vector(o2))
+	if (length(o2) > 1) {
+		o2 <- fm.conv.R2FM(o2)
+		fm.mapply.col(o1, o2, FUN)
+	}
+	else {
+		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
+		new.fm(ret)
+	}
+}
+
+fm.mapply2.ANY.fm <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(is.vector(o1))
+	if (length(o1) > 1) {
+		print("don't support this operation yet.")
+		NULL
+	}
+	else {
+		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
+		new.fm(ret)
+	}
+}
+
+fm.mapply2.fmV.ANY <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(is.vector(o2))
+	if (length(o2) > 1) {
+		stopifnot(length(o2) == length(o1))
+		o2 <- fm.conv.R2FM(o2)
+		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	}
+	else
+		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
+	new.fmV(ret)
+}
+
+fm.mapply2.ANY.fmV <- function(o1, o2, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(is.vector(o1))
+	if (length(o1) == 1)
+		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
+	else {
+		stopifnot(length(o1) == length(o2))
+		o1 <- fm.conv.R2FM(o1)
+		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
+	}
+	new.fmV(ret)
+}
 
 fm.mapply.row <- function(o1, o2, FUN)
 {
@@ -775,6 +818,36 @@ fm.mapply.col <- function(o1, o2, FUN)
 	else
 		NULL
 }
+
+#' Apply a Function to two FlashMatrix vectors/matrices.
+#'
+#' `mapply' applies `FUN' to the first elements of each vector, the second
+#' elements, the third elements, and so on. Two vectors/matrices should have
+#' the same shape. Currently, `mapply' only accepts predefined basic operators
+#' returned by `fm.get.basic.op'.
+#'
+#' @param o1, o2 a FlashMatrix vector/matrix.
+#' @param FUN the reference or the name of one of the predefined basic binary
+#' operators.
+#' @return a FlashMatrix vector/matrix.
+#' @name fm.mapply2
+#' @author Da Zheng <dzheng5@@jhu.edu>
+setGeneric("fm.mapply2", function(o1, o2, FUN) NULL)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "ANY"), fm.mapply2.fm)
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV", FUN = "ANY"), fm.mapply2.fmV)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fmV", FUN = "ANY"),
+		  function(o1, o2, FUN) fm.mapply.col(o1, o2, FUN))
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fm", FUN = "ANY"),
+		  function(o1, o2, FUN) {
+			  print("This isn't supported currently.")
+			  NULL
+		  })
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "matrix", FUN = "ANY"), fm.mapply2.fm.m)
+setMethod("fm.mapply2", signature(o1 = "matrix", o2 = "fm", FUN = "ANY"), fm.mapply2.m.fm)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY", FUN = "ANY"), fm.mapply2.fm.ANY)
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "ANY"), fm.mapply2.ANY.fm)
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY", FUN = "ANY"), fm.mapply2.fmV.ANY)
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV", FUN = "ANY"), fm.mapply2.ANY.fmV)
 
 #' Apply a Function to a FlashMatrix vector/matrix.
 #'
