@@ -431,10 +431,15 @@ fm.multiply <- function(fm, mat)
 
 #' Matrix inner product
 #'
-#' Inner product of a dense matrix with a dense vector/matrix.
+#' It takes two operators and performs inner product on a dense matrix
+#" and a dense vector/matrix.
 #'
 #' @param fm A FlashMatrix matrix
 #' @param mat A FlashMatrix dense matrix.
+#' @param Fun1 The reference or the name of one of the predefined basic binary
+#' operators.
+#' @param Fun2 The reference or the name of one of the predefined basic binary
+#' operators.
 #' @return a FlashMatrix vector if the second argument is a vector;
 #' a FlashMatrix matrix if the second argument is a matrix.
 #' @name fm.inner.prod
@@ -450,7 +455,11 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2)
 		stopifnot(!fm.is.sparse(mat))
 		stopifnot(dim(fm)[2] == dim(mat)[1])
 	}
+	if (class(Fun1) == "character")
+		Fun1 <- fm.get.basic.op(Fun1)
 	stopifnot(class(Fun1) == "fm.bo")
+	if (class(Fun2) == "character")
+		Fun2 <- fm.get.basic.op(Fun2)
 	stopifnot(class(Fun2) == "fm.bo")
 
 	if (fm.is.sparse(fm)) {
@@ -474,29 +483,62 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2)
 #' `fm.inner.prod', etc.
 #'
 #' `fm.get.basic.op' gets the predefined basic binary operator specified by a user.
+#' The supported basic binary operators are:
+#' \itemize{
+#' \item{"add" or "+"}{compute addition.}
+#' \item{"sub" or "-"}{compute subtraction;}
+#' \item{"mul" or "*"}{compute multiplication;}
+#' \item{"div" or "/"}{compute division;}
+#' \item{"min" and "max"}{compute minimum and maximum, respectively;}
+#' \item{"pow"}{compute exponential;}
+#' \item{"eq" or "=="}{compute equality;}
+#' \item{"gt" or ">"}{compute greater than;}
+#' \item{"ge" or ">="}{compute greater than or equal to;}
+#' \item{"lt" or "<"}{compute less than;}
+#' \item{"le" or "<="}{compute less than or equal to;}
+#' }
 #'
 #' `fm.get.basic.uop' gets the predefined basic unary operator specified by a user.
+#' The supported basic unary operators are:
+#' \itemize{
+#' \item{"neg"}{compute negate;}
+#' \item{"sqrt"}{compute square root;}
+#' \item{"abs"}{compute absolute value;}
+#' \item{"not"}{compute logical NOT;}
+#' \item{"ceil" and "floor"}{compute a ceiling and a floor, respectively;}
+#' \item{"log", "log2" and "log10"}{compute log with different bases;}
+#' \item{"round"}{round a number;}
+#' \item{"as.int" and "as.numeric"}{cast a number to an integer and a numeric
+#' value, respectively.}
+#' }
 #'
-#' `fm.init.basic.op' defines the basic operators.
-#'
-#' `fm.bo.add' is the predifined basic binary operator for addition.
-#' `fm.bo.sub' is the predifined basic binary operator for subtraction.
-#' `fm.bo.mul' is the predifined basic binary operator for multiplication.
-#' `fm.bo.div' is the predifined basic binary operator for division.
-#' `fm.bo.min' is the predifined basic binary operator for computing minimum.
-#' `fm.bo.max' is the predifined basic binary operator for computing maximum.
-#' `fm.bo.pow' is the predifined basic binary operator for computing exponential.
-#' `fm.bo.eq', `fm.bo.gt' and `fm.bo.ge' are the predefined basic
-#' logical operators to compare two elements: ==, >, >=.
-#'
-#' `fm.buo.neg' is the predefined basic unary operator for negate.
-#' `fm.buo.sqrt' is the predefined basic unary operator for square root.
-#' `fm.buo.abs' is the predefined basic unary operator for absolute value.
-#' `fm.buo.not' is the predefined logical NOT Operator.
-#' `fm.buo.ceil' is the predefined basic unary Operator of computing a ceiling
-#' of a number.
-#' `fm.buo.floor' is the predefined basic unary Operator of computing a floor
-#' of a number.
+#' `fm.init.basic.op' initializes the following basic operators.
+#' \itemize{
+#' \item{`fm.bo.add'}{the predifined basic binary operator for addition.}
+#' \item{`fm.bo.sub'}{the predifined basic binary operator for subtraction.}
+#' \item{`fm.bo.mul'}{the predifined basic binary operator for multiplication.}
+#' \item{`fm.bo.div'}{the predifined basic binary operator for division.}
+#' \item{`fm.bo.min'}{the predifined basic binary operator for computing minimum.}
+#' \item{`fm.bo.max'}{the predifined basic binary operator for computing maximum.}
+#' \item{`fm.bo.pow'}{the predifined basic binary operator for computing exponential.}
+#' \item{`fm.bo.eq', `fm.bo.gt', `fm.bo.ge', `fm.bo.lt' and `fm.bo.le'}
+#' {the predefined basic logical operators to compare two elements: ==, >, >=, <, <=.}
+#' \item{`fm.buo.neg'}{the predefined basic unary operator for negate.}
+#' \item{`fm.buo.sqrt'}{the predefined basic unary operator for square root.}
+#' \item{`fm.buo.abs'}{the predefined basic unary operator for absolute value.}
+#' \item{`fm.buo.not'}{the predefined logical NOT operator.}
+#' \item{`fm.buo.ceil'}{the predefined basic unary operator of computing a ceiling
+#' of a number.}
+#' \item{`fm.buo.floor'}{the predefined basic unary operator of computing a floor
+#' of a number.}
+#' \item{`fm.buo.log', `fm.buo.log2' and `fm.buo.log10'}{the predefined basic unary
+#' operators of computing log with different bases.}
+#' \item{`fm.buo.round'}{the predefined basic unary operator of rounding a value.}
+#' \item{`fm.buo.as.int'}{the predefined basic unary operator of casting a numeric
+#' value to an integer.}
+#' \item{`fm.buo.as.numeric'}{the predefined basic unary operator of casting
+#' an integer to a numeric value.}
+#' }
 #'
 #' @param name the name of the basic operator.
 #' @return a reference to the specified basic operator.
@@ -602,12 +644,15 @@ fm.create.agg.op <- function(agg, combine, name)
 #' the FlashMatrix object with the basic operator.
 #'
 #' @param fm a FlashMatrix object
-#' @param op a basic operator or an aggregation operator
+#' @param op the reference or the name of a predefined basic operator or
+#' the reference to an aggregation operator returned by `fm.create.agg.op'.
 #' @return a scalar
 fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
+	if (class(op) == "character")
+		op <- fm.get.basic.op(op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
@@ -621,12 +666,15 @@ fm.agg <- function(fm, op)
 #'
 #' @param fm a FlashMatrix matrix
 #' @param margin the subscript which the function will be applied over.
-#' @param op a basic operator or an aggregation operator
+#' @param op the reference or the name of a predefined basic operator or
+#' the reference to an aggregation operator returned by `fm.create.agg.op'
 #' @return a FlashMatrix vector.
 fm.agg.mat <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fm")
+	if (class(op) == "character")
+		op <- fm.get.basic.op(op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
@@ -642,47 +690,69 @@ fm.agg.mat <- function(fm, margin, op)
 #' the same shape. Currently, `mapply' only accepts predefined basic operators
 #' returned by `fm.get.basic.op'.
 #'
-#' @param FUN the user-defined operators.
 #' @param o1, o2 a FlashMatrix vector/matrix.
+#' @param FUN the reference or the name of one of the predefined basic binary
+#' operators.
 #' @return a FlashMatrix vector/matrix.
+#' @name fm.mapply2
 #' @author Da Zheng <dzheng5@@jhu.edu>
 setGeneric("fm.mapply2", function(o1, o2, FUN) NULL)
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "fm.bo"),
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm", FUN = "ANY"),
 		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
 			  stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
 			  ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 			  new.fm(ret)
 		  })
-setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV", FUN = "fm.bo"),
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV", FUN = "ANY"),
 		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
 			  stopifnot(length(o1) == length(o2))
 			  ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 			  new.fmV(ret)
 		  })
-setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY", FUN = "fm.bo"),
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY", FUN = "ANY"),
 		  function(o1, o2, FUN) {
-			  ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY", FUN = "fm.bo"),
-		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
 			  ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
 			  new.fm(ret)
 		  })
-setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV", FUN = "fm.bo"),
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "ANY"),
 		  function(o1, o2, FUN) {
-			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
-setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm", FUN = "fm.bo"),
-		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
 			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
 			  new.fm(ret)
+		  })
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY", FUN = "ANY"),
+		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
+			  ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
+			  new.fmV(ret)
+		  })
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV", FUN = "ANY"),
+		  function(o1, o2, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.op(FUN)
+			  stopifnot(class(FUN) == "fm.bo")
+			  ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
+			  new.fmV(ret)
 		  })
 
 fm.mapply.row <- function(o1, o2, FUN)
 {
 	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(1), FUN,
 				 PACKAGE="FlashR")
@@ -695,6 +765,8 @@ fm.mapply.row <- function(o1, o2, FUN)
 fm.mapply.col <- function(o1, o2, FUN)
 {
 	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(2), FUN,
 				 PACKAGE="FlashR")
@@ -710,18 +782,23 @@ fm.mapply.col <- function(o1, o2, FUN)
 #' Currently, `sapply' only accepts predefined basic operators
 #' returned by `fm.get.basic.uop'.
 #'
-#' @param FUN the user-defined operators.
 #' @param o a FlashMatrix vector/matrix.
+#' @param FUN the reference or the name of a predefined uniary operator.
 #' @return a FlashMatrix vector/matrix.
+#' @name fm.sapply
 #' @author Da Zheng <dzheng5@@jhu.edu>
 setGeneric("fm.sapply", function(o, FUN) 0)
-setMethod("fm.sapply", signature(o = "fm", FUN = "fm.bo"),
+setMethod("fm.sapply", signature(o = "fm", FUN = "ANY"),
 		  function(o, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.uop(FUN)
 			  ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 			  new.fm(ret)
 		  })
-setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
+setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY"),
 		  function(o, FUN) {
+			  if (class(FUN) == "character")
+				  FUN <- fm.get.basic.uop(FUN)
 			  ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 			  new.fmV(ret)
 		  })
@@ -741,7 +818,7 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "fm.bo"),
 #' E.g., for a matrix, `1' indicates rows, `2' indicates columns.
 #' @param labels a FlashMatrix vector that indicates the labels of
 #' each element in `obj'.
-#' @param FUN an aggregation operator returned by `fm.get.basic.op'.
+#' @param FUN an aggregation operator returned by `fm.create.agg.op'.
 #' @return `fm.sgroupby' returns a data frame, where the column `val' stores
 #' all of the unique values in the original data container, and the column
 #' `agg' stores the aggregate result of the corresponding value.
@@ -757,6 +834,7 @@ fm.sgroupby <- function(obj, FUN)
 	list(val=new.fmV(res$val), Freq=new.fmV(res$agg))
 }
 
+#' @name fm.groupby
 fm.groupby <- function(fm, margin, factor, FUN)
 {
 	stopifnot(class(fm) == "fm")

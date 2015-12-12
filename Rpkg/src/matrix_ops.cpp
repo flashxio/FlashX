@@ -277,13 +277,22 @@ static int _get_uop_id(const std::string &name)
 
 op_id_t get_op_id(const std::string &name)
 {
+	// TODO I should use a hashtable.
 	if (name == "add")
+		return basic_ops::op_idx::ADD;
+	else if (name == "+")
 		return basic_ops::op_idx::ADD;
 	else if (name == "sub")
 		return basic_ops::op_idx::SUB;
+	else if (name == "-")
+		return basic_ops::op_idx::SUB;
 	else if (name == "mul")
 		return basic_ops::op_idx::MUL;
+	else if (name == "*")
+		return basic_ops::op_idx::MUL;
 	else if (name == "div")
+		return basic_ops::op_idx::DIV;
+	else if (name == "/")
 		return basic_ops::op_idx::DIV;
 	else if (name == "min")
 		return basic_ops::op_idx::MIN;
@@ -293,13 +302,23 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::POW;
 	else if (name == "eq")
 		return basic_ops::op_idx::EQ;
+	else if (name == "==")
+		return basic_ops::op_idx::EQ;
 	else if (name == "gt")
+		return basic_ops::op_idx::GT;
+	else if (name == ">")
 		return basic_ops::op_idx::GT;
 	else if (name == "ge")
 		return basic_ops::op_idx::GE;
+	else if (name == ">=")
+		return basic_ops::op_idx::GE;
 	else if (name == "lt")
 		return basic_ops::op_idx::LT;
+	else if (name == "<")
+		return basic_ops::op_idx::LT;
 	else if (name == "le")
+		return basic_ops::op_idx::LE;
+	else if (name == "<=")
 		return basic_ops::op_idx::LE;
 	else
 		return _get_op_id(name);

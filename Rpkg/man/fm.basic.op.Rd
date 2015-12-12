@@ -26,29 +26,62 @@ accept operators as arguments. Such a function includes `fm.mapply',
 }
 \details{
 `fm.get.basic.op' gets the predefined basic binary operator specified by a user.
+The supported basic binary operators are:
+\itemize{
+\item{"add" or "+"}{compute addition.}
+\item{"sub" or "-"}{compute subtraction;}
+\item{"mul" or "*"}{compute multiplication;}
+\item{"div" or "/"}{compute division;}
+\item{"min" and "max"}{compute minimum and maximum, respectively;}
+\item{"pow"}{compute exponential;}
+\item{"eq" or "=="}{compute equality;}
+\item{"gt" or ">"}{compute greater than;}
+\item{"ge" or ">="}{compute greater than or equal to;}
+\item{"lt" or "<"}{compute less than;}
+\item{"le" or "<="}{compute less than or equal to;}
+}
 
 `fm.get.basic.uop' gets the predefined basic unary operator specified by a user.
+The supported basic unary operators are:
+\itemize{
+\item{"neg"}{compute negate;}
+\item{"sqrt"}{compute square root;}
+\item{"abs"}{compute absolute value;}
+\item{"not"}{compute logical NOT;}
+\item{"ceil" and "floor"}{compute a ceiling and a floor, respectively;}
+\item{"log", "log2" and "log10"}{compute log with different bases;}
+\item{"round"}{round a number;}
+\item{"as.int" and "as.numeric"}{cast a number to an integer and a numeric
+value, respectively.}
+}
 
-`fm.init.basic.op' defines the basic operators.
-
-`fm.bo.add' is the predifined basic binary operator for addition.
-`fm.bo.sub' is the predifined basic binary operator for subtraction.
-`fm.bo.mul' is the predifined basic binary operator for multiplication.
-`fm.bo.div' is the predifined basic binary operator for division.
-`fm.bo.min' is the predifined basic binary operator for computing minimum.
-`fm.bo.max' is the predifined basic binary operator for computing maximum.
-`fm.bo.pow' is the predifined basic binary operator for computing exponential.
-`fm.bo.eq', `fm.bo.gt' and `fm.bo.ge' are the predefined basic
-logical operators to compare two elements: ==, >, >=.
-
-`fm.buo.neg' is the predefined basic unary operator for negate.
-`fm.buo.sqrt' is the predefined basic unary operator for square root.
-`fm.buo.abs' is the predefined basic unary operator for absolute value.
-`fm.buo.not' is the predefined logical NOT Operator.
-`fm.buo.ceil' is the predefined basic unary Operator of computing a ceiling
-of a number.
-`fm.buo.floor' is the predefined basic unary Operator of computing a floor
-of a number.
+`fm.init.basic.op' initializes the following basic operators.
+\itemize{
+\item{`fm.bo.add'}{the predifined basic binary operator for addition.}
+\item{`fm.bo.sub'}{the predifined basic binary operator for subtraction.}
+\item{`fm.bo.mul'}{the predifined basic binary operator for multiplication.}
+\item{`fm.bo.div'}{the predifined basic binary operator for division.}
+\item{`fm.bo.min'}{the predifined basic binary operator for computing minimum.}
+\item{`fm.bo.max'}{the predifined basic binary operator for computing maximum.}
+\item{`fm.bo.pow'}{the predifined basic binary operator for computing exponential.}
+\item{`fm.bo.eq', `fm.bo.gt', `fm.bo.ge', `fm.bo.lt' and `fm.bo.le'}
+{the predefined basic logical operators to compare two elements: ==, >, >=, <, <=.}
+\item{`fm.buo.neg'}{the predefined basic unary operator for negate.}
+\item{`fm.buo.sqrt'}{the predefined basic unary operator for square root.}
+\item{`fm.buo.abs'}{the predefined basic unary operator for absolute value.}
+\item{`fm.buo.not'}{the predefined logical NOT operator.}
+\item{`fm.buo.ceil'}{the predefined basic unary operator of computing a ceiling
+of a number.}
+\item{`fm.buo.floor'}{the predefined basic unary operator of computing a floor
+of a number.}
+\item{`fm.buo.log', `fm.buo.log2' and `fm.buo.log10'}{the predefined basic unary
+operators of computing log with different bases.}
+\item{`fm.buo.round'}{the predefined basic unary operator of rounding a value.}
+\item{`fm.buo.as.int'}{the predefined basic unary operator of casting a numeric
+value to an integer.}
+\item{`fm.buo.as.numeric'}{the predefined basic unary operator of casting
+an integer to a numeric value.}
+}
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>
