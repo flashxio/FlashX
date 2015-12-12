@@ -252,19 +252,19 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 
 static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
 {
-	const detail::mem_vec_store &in_vec
-		= dynamic_cast<const detail::mem_vec_store &>(vec->get_data());
-	detail::mem_vec_store::ptr out_vec = detail::mem_vec_store::create(
-			matrix->get_num_rows(), in_vec.get_num_nodes(),
-			in_vec.get_type());
+	detail::mem_vec_store::const_ptr in_vec
+		= detail::mem_vec_store::cast(vec->get_raw_store());
+	detail::vec_store::ptr out_vec = detail::mem_vec_store::create(
+			matrix->get_num_rows(), in_vec->get_num_nodes(),
+			in_vec->get_type());
 	// TODO it only supports a binary matrix right now.
 	assert(matrix->get_entry_size() == 0);
 	if (vec->is_type<double>()) {
-		matrix->multiply<double, bool>(in_vec, *out_vec);
+		matrix->multiply<double, bool>(in_vec, out_vec);
 		return create_FMR_vector(out_vec, "");
 	}
 	else if (vec->is_type<int>()) {
-		matrix->multiply<int, bool>(in_vec, *out_vec);
+		matrix->multiply<int, bool>(in_vec, out_vec);
 		return create_FMR_vector(out_vec, "");
 	}
 	else {
@@ -286,23 +286,23 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 	// TODO it only supports a binary matrix right now.
 	assert(matrix->get_entry_size() == 0);
 	if (right_mat->is_type<double>()) {
-		const detail::mem_matrix_store &in_mat
-			= dynamic_cast<const detail::mem_matrix_store &>(right_mat->get_data());
-		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
+		detail::mem_matrix_store::const_ptr in_mat
+			= detail::mem_matrix_store::cast(right_mat->get_raw_store());
+		detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
-				in_mat.get_num_nodes());
-		matrix->multiply<double, bool>(in_mat, *out_mat);
+				in_mat->get_num_nodes());
+		matrix->multiply<double, bool>(in_mat, out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else if (right_mat->is_type<int>()) {
-		const detail::mem_matrix_store &in_mat
-			= dynamic_cast<const detail::mem_matrix_store &>(right_mat->get_data());
-		detail::mem_matrix_store::ptr out_mat = detail::mem_matrix_store::create(
+		detail::mem_matrix_store::const_ptr in_mat
+			= detail::mem_matrix_store::cast(right_mat->get_raw_store());
+		detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
-				in_mat.get_num_nodes());
-		matrix->multiply<int, bool>(in_mat, *out_mat);
+				in_mat->get_num_nodes());
+		matrix->multiply<int, bool>(in_mat, out_mat);
 		return create_FMR_matrix(dense_matrix::create(out_mat), "");
 	}
 	else {
