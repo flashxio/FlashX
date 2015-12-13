@@ -1928,9 +1928,17 @@ dense_matrix::ptr dense_matrix::mapply_cols(vector::const_ptr vals,
 		BOOST_LOG_TRIVIAL(error) << "Can't scale columns with an EM vector";
 		return dense_matrix::ptr();
 	}
+	if (get_num_rows() != vals->get_length()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector's length needs to equal to #rows";
+		return dense_matrix::ptr();
+	}
+	if (get_type() != vals->get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector needs to have the same type as the matrix";
+		return dense_matrix::ptr();
+	}
 
-	assert(get_num_rows() == vals->get_length());
-	assert(get_type() == vals->get_type());
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	mapply_col_op::const_ptr mapply_op(new mapply_col_op(
@@ -1948,9 +1956,17 @@ dense_matrix::ptr dense_matrix::mapply_rows(vector::const_ptr vals,
 		BOOST_LOG_TRIVIAL(error) << "Can't scale rows with an EM vector";
 		return dense_matrix::ptr();
 	}
+	if (get_num_cols() != vals->get_length()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector's length needs to equal to #columns";
+		return dense_matrix::ptr();
+	}
+	if (get_type() != vals->get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector needs to have the same type as the matrix";
+		return dense_matrix::ptr();
+	}
 
-	assert(get_num_cols() == vals->get_length());
-	assert(get_type() == vals->get_type());
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	mapply_row_op::const_ptr mapply_op(new mapply_row_op(
