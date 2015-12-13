@@ -45,105 +45,222 @@ fm.pmax2 <- function(o1, o2)
 	fm.mapply2(o1, o2, fm.bo.max)
 }
 
-`+.fm` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.add)
-}
+setMethod("+", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.add))
+setMethod("+", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.add))
+setMethod("+", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.add))
+setMethod("+", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.add))
 
-`+.fmV` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.add)
-}
+setMethod("-", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  -fm.mapply.col(e2, e1, fm.bo.sub))
+setMethod("-", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  -fm.mapply2.fm.ANY(e2, e1, fm.bo.sub))
+setMethod("-", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.sub))
+setMethod("-", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.sub))
 
-`-.fm` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.sub)
-}
+setMethod("*", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.mul))
+setMethod("*", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.mul))
+setMethod("*", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.mul))
+setMethod("*", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.mul))
 
-`-.fmV` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.sub)
-}
+setMethod("/", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+		  print("don't support fmV/fm")
+		  NULL
+		  })
+setMethod("/", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.ANY.fm(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.div))
 
-`*.fm` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.mul)
-}
+setMethod("==", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.eq))
+setMethod("==", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.eq))
+setMethod("==", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.eq))
+setMethod("==", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.eq))
 
-`*.fmV` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.mul)
-}
+setMethod("!=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  !fm.mapply2.fm(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  !fm.mapply2.fmV(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  !fm.mapply.col(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  !fm.mapply.col(e2, e1, fm.bo.eq))
+setMethod("!=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  !fm.mapply2.fm.m(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  !fm.mapply2.m.fm(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  !fm.mapply2.fm.ANY(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  !fm.mapply2.fm.ANY(e2, e1, fm.bo.eq))
+setMethod("!=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  !fm.mapply2.fmV.ANY(e1, e2, fm.bo.eq))
+setMethod("!=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  !fm.mapply2.ANY.fmV(e1, e2, fm.bo.eq))
 
-`/.fm` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.div)
-}
+setMethod(">", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.le))
+setMethod(">", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.le))
+setMethod(">", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.gt))
+setMethod(">", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.gt))
 
-`/.fmV` <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.div)
-}
+setMethod(">=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.lt))
+setMethod(">=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.lt))
+setMethod(">=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.ge))
+setMethod(">=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.ge))
 
-`==.fm`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.eq)
-}
+setMethod("<=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.gt))
+setMethod("<=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.gt))
+setMethod("<=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.le))
+setMethod("<=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.le))
 
-`==.fmV`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.eq)
-}
+setMethod("<", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.fmV(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.ge))
+setMethod("<", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  fm.mapply2.fm.m(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.m.fm(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e2, e1, fm.bo.ge))
+setMethod("<", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.lt))
+setMethod("<", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.lt))
 
-`!=.fm`  <- function(o1, o2)
-{
-	!fm.mapply2(o1, o2, fm.bo.eq)
-}
-
-`!=.fmV`  <- function(o1, o2)
-{
-	!fm.mapply2(o1, o2, fm.bo.eq)
-}
-
-`>.fm`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.gt)
-}
-
-`>.fmV`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.gt)
-}
-
-`>=.fm`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.ge)
-}
-
-`>=.fmV`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.ge)
-}
-
-`<=.fm`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.le)
-}
-
-`<=.fmV`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.le)
-}
-
-`<.fm`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.lt)
-}
-
-`<.fmV`  <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.lt)
-}
+setMethod("-", signature(e1 = "fm", e2 = "missing"), function(e1)
+		  fm.sapply(e1, fm.buo.neg))
+setMethod("-", signature(e1 = "fmV", e2 = "missing"), function(e1)
+		  fm.sapply(e1, fm.buo.neg))
 
 `!.fm` <- function(o)
 {
