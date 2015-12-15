@@ -840,6 +840,7 @@ public:
 		ret->mat = this->t_mat;
 		ret->t_mat = this->mat;
 		ret->sparse_matrix::_transpose();
+		ret->reset_ios();
 		return sparse_matrix::ptr(ret);
 	}
 

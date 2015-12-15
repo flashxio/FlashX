@@ -642,6 +642,10 @@ protected:
 		this->entry_type = entry_type;
 	}
 
+	void reset_ios() {
+		ios = NULL;
+	}
+
 	void _transpose() {
 		size_t tmp = nrows;
 		nrows = ncols;
