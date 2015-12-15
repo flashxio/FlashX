@@ -473,4 +473,20 @@ vector::ptr vector::sapply(bulk_uoperate::const_ptr op) const
 	return tmp1->get_col(0);
 }
 
+vector::ptr vector::get(const std::vector<off_t> &idxs) const
+{
+	detail::matrix_store::const_ptr mat = get_data().conv2mat(get_length(),
+			1, false);
+	if (mat == NULL)
+		return vector::ptr();
+	mat = mat->get_rows(idxs);
+	if (mat == NULL)
+		return vector::ptr();
+	detail::vec_store::const_ptr vec = mat->get_col_vec(0);
+	if (vec)
+		return vector::create(vec);
+	else
+		return vector::ptr();
+}
+
 }

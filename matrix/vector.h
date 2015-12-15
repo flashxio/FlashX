@@ -72,6 +72,8 @@ public:
 		return ret;
 	}
 
+	vector::ptr get(const std::vector<off_t> &offs) const;
+
 	bool is_in_mem() const {
 		return store->is_in_mem();
 	}
