@@ -571,6 +571,20 @@ bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
 	return true;
 }
 
+vec_store::const_ptr NUMA_row_tall_matrix_store::get_col_vec(off_t idx) const
+{
+	if (idx >= get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "get_col_vec: column index is out of range";
+		return vec_store::const_ptr();
+	}
+	if (idx == 0 && get_num_cols())
+		return NUMA_vec_store::create(get_num_rows(), get_type(), data, mapper);
+
+	BOOST_LOG_TRIVIAL(error)
+		<< "Can't get a column from a NUMA tall row matrix";
+	return vec_store::const_ptr();
+}
+
 }
 
 }

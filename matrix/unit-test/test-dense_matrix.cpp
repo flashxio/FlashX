@@ -1690,6 +1690,18 @@ void test_groupby()
 	}
 }
 
+void test_get_col(dense_matrix::ptr mat)
+{
+	assert(mat->get_num_cols() == 1);
+	vector::ptr vec = mat->get_col(0);
+	assert(vec->get_length() == mat->get_num_rows());
+	std::vector<int> std_vec = vec->conv2std<int>();
+	detail::mem_matrix_store::const_ptr mem_store
+		= detail::mem_matrix_store::cast(mat->get_raw_store());
+	for (size_t i = 0; i < std_vec.size(); i++)
+		assert(std_vec[i] == mem_store->get<int>(i, 0));
+}
+
 dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 {
 	std::vector<off_t> idxs;
@@ -1730,6 +1742,23 @@ void test_get_rowcols(int num_nodes)
 {
 	dense_matrix::ptr mat;
 	std::vector<off_t> idxs;
+
+	printf("get a column from a row-major tall matrix in SMP\n");
+	mat = create_matrix(long_dim, 1, matrix_layout_t::L_ROW, -1,
+			get_scalar_type<int>());
+	test_get_col(mat);
+	printf("get a column from a col-major tall matrix in SMP\n");
+	mat = create_matrix(long_dim, 1, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	test_get_col(mat);
+	printf("get a column from a row-major tall matrix in NUMA\n");
+	mat = create_matrix(long_dim, 1, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<int>());
+	test_get_col(mat);
+	printf("get a column from a col-major tall matrix in NUMA\n");
+	mat = create_matrix(long_dim, 1, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<int>());
+	test_get_col(mat);
 
 	printf("test on row-major tall dense matrix in SMP\n");
 	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, -1,

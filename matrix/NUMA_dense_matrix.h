@@ -186,11 +186,7 @@ public:
 			<< "Can't get a row from a NUMA tall row matrix";
 		return vec_store::const_ptr();
 	}
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA tall row matrix";
-		return vec_store::const_ptr();
-	}
+	virtual vec_store::const_ptr get_col_vec(off_t idx) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;

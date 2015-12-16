@@ -42,6 +42,31 @@ T ceil_divide(T v1, T v2)
 	return ceil(((double) v1) / v2);
 }
 
+NUMA_vec_store::ptr NUMA_vec_store::create(size_t length, const scalar_type &type,
+		const std::vector<raw_data_array> &data, const NUMA_mapper &mapper)
+{
+	if (mapper.get_num_nodes() != data.size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't create a NUMA vector. Each NUMA node should have a data array";
+		return ptr();
+	}
+	size_t off = length - 1;
+	// We should check if the last ranges can be mapped to the data arrays.
+	for (size_t i = 0; i < data.size(); i++) {
+		auto phy_off = mapper.map2physical(off);
+		if (phy_off.second * type.get_size() >= data[phy_off.first].get_num_bytes()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"Data array %ld doesn't have enough bytes") % phy_off.first;
+			return ptr();
+		}
+
+		if (off < mapper.get_range_size())
+			break;
+		off -= mapper.get_range_size();
+	}
+	return ptr(new NUMA_vec_store(length, type, data, mapper));
+}
+
 NUMA_vec_store::ptr NUMA_vec_store::cast(vec_store::ptr vec)
 {
 	if (!vec->is_in_mem()
