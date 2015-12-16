@@ -854,12 +854,42 @@ file_io_factory::file_io_factory(const std::string _name): name(_name)
 	}
 }
 
+namespace
+{
+
+class empty_io_select: public io_select
+{
+public:
+	virtual bool add_io(io_interface::ptr io) {
+		return true;
+	}
+	virtual int num_pending_ios() const {
+		return 0;
+	}
+	virtual int wait4complete(int num_to_complete) {
+		return 0;
+	}
+};
+
+}
+
 io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios)
 {
 	if (ios.empty())
 		return io_select::ptr();
 
-	io_select::ptr select = ios.front()->create_io_select();
+	// Let's try to find a valid I/O select from the I/O objects.
+	io_select::ptr select;
+	for (size_t i = 0; i < ios.size(); i++) {
+		select = ios[i]->create_io_select();
+		if (select)
+			break;
+	}
+	// If none of the I/O objects can create a valid I/O object, it means
+	// none of them actually need to access data from disks. We only need
+	// to create an empty I/O select.
+	if (select == NULL)
+		select = io_select::ptr(new empty_io_select());
 	for (size_t i = 0; i < ios.size(); i++)
 		select->add_io(ios[i]);
 	return select;
