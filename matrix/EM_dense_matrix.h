@@ -141,6 +141,9 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols);
+	virtual int get_portion_node_id(size_t id) const {
+		return -1;
+	}
 
 	virtual std::pair<size_t, size_t> get_portion_size() const;
 	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,

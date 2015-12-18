@@ -297,6 +297,14 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 				get_type(), phy_loc.first));
 }
 
+int NUMA_row_tall_matrix_store::get_portion_node_id(size_t id) const
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
+	auto phy_loc = mapper.map2physical(start_row);
+	return phy_loc.first;
+}
+
 matrix_store::const_ptr NUMA_col_tall_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
@@ -432,6 +440,13 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 	return local_matrix_store::ptr(new local_ref_col_matrix_store(
 				cols, start_row, start_col, num_rows, num_cols, get_type(),
 				node_id));
+}
+
+int NUMA_col_tall_matrix_store::get_portion_node_id(size_t id) const
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
+	return data.front()->get_node_id(start_row);
 }
 
 local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(

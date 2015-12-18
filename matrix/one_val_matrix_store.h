@@ -65,6 +65,7 @@ public:
 	}
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 

@@ -653,6 +653,22 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	return get_portion(start_row, start_col, num_rows, num_cols);
 }
 
+int mapply_matrix_store::get_portion_node_id(size_t id) const
+{
+	int node_id = -1;
+	for (size_t i = 0; i < in_mats.size(); i++) {
+		if (node_id < 0)
+			node_id = in_mats[i]->get_portion_node_id(id);
+		// We assume that all portions are either in the same node
+		// or aren't associated with a node.
+		// It might be expensive to compute if mapply matrix has
+		// a deep hierarchy, so depth-first search can reduce the cost.
+		if (node_id >= 0)
+			break;
+	}
+	return node_id;
+}
+
 async_cres_t mapply_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr orig_compute) const

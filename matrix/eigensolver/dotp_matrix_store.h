@@ -98,6 +98,9 @@ public:
 					store->get_num_rows() * store->get_entry_size());
 		return detail::local_matrix_store::const_ptr(store);
 	}
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_store->get_portion_node_id(id);
+	}
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(!orig_store->is_wide());
@@ -200,6 +203,9 @@ public:
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		return orig_store->get_portion(start_row, start_col, num_rows, num_cols);
+	}
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_store->get_portion_node_id(id);
 	}
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		return orig_store->get_portion_size();

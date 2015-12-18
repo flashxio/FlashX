@@ -99,6 +99,21 @@ matrix_store::const_ptr one_val_matrix_store::get_rows(
 				idxs.size(), get_num_cols(), layout, get_num_nodes()));
 }
 
+int one_val_matrix_store::get_portion_node_id(size_t id) const
+{
+	if (get_num_nodes() < 0)
+		return -1;
+
+	if (is_wide()) {
+		size_t start_col = mem_matrix_store::CHUNK_SIZE * id;
+		return mapper->map2physical(start_col).first;
+	}
+	else {
+		size_t start_row = mem_matrix_store::CHUNK_SIZE * id;
+		return mapper->map2physical(start_row).first;
+	}
+}
+
 local_matrix_store::const_ptr one_val_matrix_store::get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const

@@ -309,6 +309,9 @@ public:
 	virtual local_matrix_store::ptr get_portion(
 			size_t local_start_row, size_t local_start_col, size_t num_rows,
 			size_t num_cols);
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_data_ref.get_node_id();
+	}
 };
 
 class local_row_matrix_store: public local_matrix_store
@@ -387,6 +390,9 @@ public:
 	virtual local_matrix_store::ptr get_portion(
 			size_t local_start_row, size_t local_start_col, size_t num_rows,
 			size_t num_cols);
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_data_ref.get_node_id();
+	}
 };
 
 /*

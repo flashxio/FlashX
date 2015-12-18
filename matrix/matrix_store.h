@@ -164,6 +164,10 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	/*
+	 * This gets the node Id of the specified portion.
+	 */
+	virtual int get_portion_node_id(size_t id) const = 0;
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col) = 0;

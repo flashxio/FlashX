@@ -98,6 +98,9 @@ public:
 			size_t num_cols) {
 		throw unsupported_exception();
 	}
+	virtual int get_portion_node_id(size_t id) const {
+		throw unsupported_exception();
+	}
 	virtual void write_portion_async(
 			std::shared_ptr<const detail::local_matrix_store> portion,
 			off_t start_row, off_t start_col) {

@@ -80,6 +80,9 @@ public:
 		assert(merged_mat);
 		return merged_mat->get_portion(start_row, start_col, num_rows, num_cols);
 	}
+	virtual int get_portion_node_id(size_t id) const {
+		return merged_mat->get_portion_node_id(id);
+	}
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(merged_mat);
 		return merged_mat->get_portion_size();
