@@ -284,25 +284,51 @@ setMethod("typeof", signature(x = "fm"), function(x) fm.typeof(x))
 setMethod("typeof", signature(x = "fmV"), function(x) fm.typeof(x))
 setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 
+fm.cls <- list("fm", "fmV")
+
 # Aggregation on a FlashMatrixR vector/matrix.
-setMethod("sum", signature(x = "fm"), function(x) fm.agg(x, fm.bo.add))
-setMethod("sum", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.add))
-setMethod("mean", signature(x = "fm"), function(x) sum(x)/length(x))
-setMethod("mean", signature(x = "fmV"), function(x) sum(x)/length(x))
-setMethod("min", signature(x = "fm"), function(x) fm.agg(x, fm.bo.min))
-setMethod("min", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.min))
-setMethod("max", signature(x = "fm"), function(x) fm.agg(x, fm.bo.max))
-setMethod("max", signature(x = "fmV"), function(x) fm.agg(x, fm.bo.max))
-setMethod("sd", signature(x = "fmV"), function(x) {
-		  n <- length(x)
-		  avg <- mean(x)
-		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
-})
-setMethod("sd", signature(x = "fm"), function(x) {
-		  n <- length(x)
-		  avg <- mean(x)
-		  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
-})
+for (cl in fm.cls) {
+	# TODO we need to handle na.rm for all of the functions here properly.
+	setMethod("sum", cl, function(x, ..., na.rm) {
+			  args <- as.list(match.call())
+			  nargs <- length(args)
+			  res <- fm.agg(x, fm.bo.add)
+			  if (nargs >= 4) {
+				  for (arg in args[3:(nargs - 1)])
+					  res <- res + fm.agg(arg, fm.bo.add)
+			  }
+			  res
+		  })
+	setMethod("min", cl, function(x, ..., na.rm) {
+			  args <- as.list(match.call())
+			  nargs <- length(args)
+			  res <- fm.agg(x, fm.bo.min)
+			  if (nargs >= 4) {
+				  for (arg in args[3:(nargs - 1)])
+					  res <- min(res, fm.agg(arg, fm.bo.min))
+			  }
+			  res
+		  })
+	setMethod("max", cl, function(x, ..., na.rm) {
+			  args <- as.list(match.call())
+			  nargs <- length(args)
+			  res <- fm.agg(x, fm.bo.max)
+			  if (nargs >= 4) {
+				  for (arg in args[3:(nargs - 1)])
+					  res <- max(res, fm.agg(arg, fm.bo.max))
+			  }
+			  res
+		  })
+	setMethod("sd", cl, function(x, na.rm) {
+			  n <- length(x)
+			  avg <- mean(x)
+			  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+		  })
+	# TODO I need to implemented trimmed mean
+	setMethod("mean", cl, function(x, trim, na.rm) {
+			  sum(x)/length(x)
+		  })
+}
 
 # Miscellaneous Mathematical Functions
 setMethod("abs", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.abs))
@@ -315,15 +341,26 @@ setMethod("floor", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.floor))
 setMethod("floor", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.floor))
 setMethod("round", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.round))
 setMethod("round", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.round))
-setMethod("log", signature(x = "fm"), function(x, base) fm.sapply(x, fm.buo.log))
-setMethod("log", signature(x = "fmV"), function(x, base) fm.sapply(x, fm.buo.log))
 setMethod("log10", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log10))
 setMethod("log10", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log10))
 setMethod("log2", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log2))
 setMethod("log2", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log2))
 setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
 setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
+setMethod("log", "fm", function(x, base=exp(1)) {
+		  if (base == exp(1))
+			  fm.sapply(x, fm.buo.log)
+		  else
+			  fm.sapply(x, fm.buo.log) / log(base)
+})
+setMethod("log", "fmV", function(x, base=exp(1)) {
+		  if (base == exp(1))
+			  fm.sapply(x, fm.buo.log)
+		  else
+			  fm.sapply(x, fm.buo.log) / log(base)
+})
 
+# TODO I need to handle na.rm and dims here as well.
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
 		  function(x, na.rm, dims) {
 			  fm.agg.mat(x, 1, fm.bo.add)
