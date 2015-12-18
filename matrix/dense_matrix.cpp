@@ -952,27 +952,46 @@ namespace
 
 class mapply_task: public thread_task
 {
-	std::vector<detail::local_matrix_store::const_ptr> local_stores;
-	std::vector<detail::local_matrix_store::ptr> local_res;
+	const std::vector<matrix_store::const_ptr> &mats;
+	const std::vector<matrix_store::ptr> &out_mats;
+	size_t portion_idx;
 	const portion_mapply_op &op;
 public:
-	mapply_task(
-			const std::vector<detail::local_matrix_store::const_ptr> &local_stores,
-			const portion_mapply_op &_op,
-			const std::vector<detail::local_matrix_store::ptr> &local_res): op(_op) {
-		this->local_stores = local_stores;
-		this->local_res = local_res;
+	mapply_task(const std::vector<matrix_store::const_ptr> &_mats,
+			size_t portion_idx, const portion_mapply_op &_op,
+			const std::vector<matrix_store::ptr> &_out_mats): mats(
+				_mats), out_mats(_out_mats), op(_op) {
+		this->portion_idx = portion_idx;
 	}
 
-	void run() {
-		if (local_res.empty())
-			op.run(local_stores);
-		else if (local_res.size() == 1)
-			op.run(local_stores, *local_res[0]);
-		else
-			op.run(local_stores, local_res);
-	}
+	void run();
 };
+
+void mapply_task::run()
+{
+	std::vector<detail::local_matrix_store::const_ptr> local_stores(
+			mats.size());
+	std::vector<detail::local_matrix_store::ptr> local_out_stores(
+			out_mats.size());
+	int node_id = thread::get_curr_thread()->get_node_id();
+	for (size_t j = 0; j < mats.size(); j++) {
+		local_stores[j] = mats[j]->get_portion(portion_idx);
+		if (local_stores[j]->get_node_id() >= 0)
+			assert(node_id == local_stores[j]->get_node_id());
+	}
+	for (size_t j = 0; j < out_mats.size(); j++) {
+		local_out_stores[j] = out_mats[j]->get_portion(portion_idx);
+		if (local_out_stores[j]->get_node_id() >= 0)
+			assert(node_id == local_out_stores[j]->get_node_id());
+	}
+
+	if (local_out_stores.empty())
+		op.run(local_stores);
+	else if (local_out_stores.size() == 1)
+		op.run(local_stores, *local_out_stores[0]);
+	else
+		op.run(local_stores, local_out_stores);
+}
 
 /*
  * This local write buffer helps to write data to part of a portion and
@@ -1701,35 +1720,29 @@ bool __mapply_portion(
 	all_in_mem = all_in_mem && out_in_mem;
 
 	if (all_in_mem) {
-		std::vector<detail::local_matrix_store::const_ptr> local_stores(
-				mats.size());
-		std::vector<detail::local_matrix_store::ptr> local_out_stores(
-				out_mats.size());
 		detail::mem_thread_pool::ptr mem_threads
 			= detail::mem_thread_pool::get_global_mem_threads();
 		for (size_t i = 0; i < num_chunks; i++) {
 			int node_id = -1;
-			for (size_t j = 0; j < local_stores.size(); j++) {
-				local_stores[j] = mats[j]->get_portion(i);
+			for (size_t j = 0; j < mats.size(); j++) {
 				if (node_id < 0)
-					node_id = local_stores[j]->get_node_id();
-				else if (local_stores[j]->get_node_id() >= 0)
-					assert(node_id == local_stores[j]->get_node_id());
+					node_id = mats[j]->get_portion_node_id(i);
+				else if (mats[j]->get_portion_node_id(i) >= 0)
+					assert(node_id == mats[j]->get_portion_node_id(i));
 			}
 			for (size_t j = 0; j < out_mats.size(); j++) {
-				local_out_stores[j] = out_mats[j]->get_portion(i);
 				if (node_id < 0)
-					node_id = local_out_stores[j]->get_node_id();
-				else if (local_out_stores[j]->get_node_id() >= 0)
-					assert(node_id == local_out_stores[j]->get_node_id());
+					node_id = out_mats[j]->get_portion_node_id(i);
+				else if (out_mats[j]->get_portion_node_id(i) >= 0)
+					assert(node_id == out_mats[j]->get_portion_node_id(i));
 			}
 
 			// If the local matrix portion is not assigned to any node, 
 			// assign the tasks in round robin fashion.
 			if (node_id < 0)
 				node_id = i % mem_threads->get_num_nodes();
-			mem_threads->process_task(node_id,
-					new mapply_task(local_stores, *op, local_out_stores));
+			mem_threads->process_task(node_id, new mapply_task(mats, i, *op,
+						out_mats));
 		}
 		mem_threads->wait4complete();
 	}
