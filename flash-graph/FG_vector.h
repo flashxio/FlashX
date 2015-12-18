@@ -155,7 +155,6 @@ class FG_vector
 	 * \param other An `FG_vector` smart pointer.
 	 */
     bool operator==(const FG_vector<T>& rhs){
-        printf("Comparing!\n");
         return std::equal(eles.begin(), eles.end(), rhs.get_data());
     }
 
@@ -169,6 +168,16 @@ class FG_vector
 		for (size_t i = 0; i < eles.size(); i++)
 			eles[i] = random() % max;
 	}
+
+    std::unique_ptr<std::vector<size_t> >  where_nequal(FG_vector<T>::ptr other) {
+        std::unique_ptr<std::vector<size_t> > idx(new std::vector<size_t>);
+        for (size_t i = 0; i < get_size(); i++) {
+            if (get(i) != other->get(i)) {
+                idx->push_back(i);
+            }
+        }
+        return idx;
+    }
 
 	/**
 	 * \brief  Populate an [STL set](http://www.cplusplus.com/reference/set/set/)
@@ -408,22 +417,28 @@ class FG_vector
 	void to_file(std::string fn) {
         FILE* f;
         f = fopen(fn.c_str(), "wb");
-        size_t len = get_size(); 
-        fwrite(&len, sizeof(len), 1, f); // Write the length first
-        fwrite(&(eles.front()), len*sizeof(T), 1, f);
+        size_t len = get_size();
+        size_t bytes = fwrite(&len, sizeof(len), 1, f); // Write the length first
+        BOOST_VERIFY(bytes == 1);
+
+        bytes = fwrite(&(eles.front()), sizeof(T), len, f);
+        BOOST_VERIFY(bytes == len);
+
         fclose(f);
 	}
 
     static ptr from_file(std::string fn) {
-        FILE* f; 
+        FILE* f;
         BOOST_VERIFY(f);
         f = fopen(fn.c_str(), "rb");
         size_t len;
-        fread(&len, sizeof(len), 1, f);
+        size_t bytes = fread(&len, sizeof(len), 1, f);
+        BOOST_VERIFY(bytes == 1);
 
-        std::vector<T> _eles; 
+        std::vector<T> _eles;
         _eles.resize(len);
-        fread(&(_eles.front()), len*sizeof(T), len, f);
+        bytes = fread(&(_eles.front()), sizeof(T), len, f);
+        BOOST_VERIFY(bytes == len);
         fclose(f);
 
         return ptr(new FG_vector<T>(_eles));
@@ -431,6 +446,7 @@ class FG_vector
 
 	void neg_in_place() {
 		for (size_t i = 0; i < get_size(); i++)
+#pragma omp parallel for
 			eles[i] = -eles[i];
 	}
 
