@@ -165,9 +165,7 @@ fm.runif <- function(n, min=0, max=1)
 }
 
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
-setMethod("is.vector", signature(x = "fmV"), function(x) TRUE)
 setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
-setMethod("is.matrix", signature(x = "fm"), function(x) TRUE)
 
 #' Convert the data layout of a FlashMatrix matrix.
 #'
@@ -298,6 +296,7 @@ fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 #' `fm.is.sparse' indicates whether a matrix is sparse.
 #'
 #' `fm.is.vector' indicates whether a FlashMatrix object is a vector.
+#' `fm.is.matrix' indicates whether a FlashMatrix object is a matrix.
 #'
 #' @param fm The FlashMatrix object
 #' @return `fm.is.sym' and `fm.is.sparse' returns boolean constants.
@@ -333,6 +332,13 @@ fm.is.vector <- function(fm)
 {
 	stopifnot(!is.null(fm))
 	class(fm) == "fmV"
+}
+
+#' @rdname fm.info
+fm.is.matrix <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	class(fm) == "fm"
 }
 
 fm.typeof <- function(fm)
@@ -732,7 +738,7 @@ fm.mapply2.fm.ANY <- function(o1, o2, FUN)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o2))
+	stopifnot(is.vector(o2) || fm.is.vector(o2))
 	if (length(o2) > 1) {
 		o2 <- fm.conv.R2FM(o2)
 		fm.mapply.col(o1, o2, FUN)
@@ -748,7 +754,7 @@ fm.mapply2.ANY.fm <- function(o1, o2, FUN)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o1))
+	stopifnot(is.vector(o1) || fm.is.vector(o1))
 	if (length(o1) > 1) {
 		print("don't support this operation yet.")
 		NULL
@@ -764,7 +770,7 @@ fm.mapply2.fmV.ANY <- function(o1, o2, FUN)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o2))
+	stopifnot(is.vector(o2) || fm.is.vector(o2))
 	if (length(o2) > 1) {
 		stopifnot(length(o2) == length(o1))
 		o2 <- fm.conv.R2FM(o2)
@@ -780,7 +786,7 @@ fm.mapply2.ANY.fmV <- function(o1, o2, FUN)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o1))
+	stopifnot(is.vector(o1) || fm.is.vector(o1))
 	if (length(o1) == 1)
 		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
 	else {
