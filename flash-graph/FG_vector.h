@@ -51,6 +51,10 @@ class FG_vector
 		eles.resize(size);
 	}
 
+    FG_vector(std::vector<T>& eles) {
+        this->eles = eles;
+    }
+
 	public:
 	typedef typename std::shared_ptr<FG_vector<T> > ptr; /** Smart pointer for object access */
 
@@ -89,15 +93,30 @@ class FG_vector
 	}
 
 	/**
-	 * \brief Equivalent to += operator. Element by element
-	 *     addition of one `FG_vector` to another.
-	 * \param other An `FG_vector` smart pointer object.
-	 *
+	 * \brief Element by element addition of one `FG_vector` to another.
+	 * \param other Another `FG_vector` object.
+     * \return The `FG_vector' object.
+     * **parallel**
 	 */
-	void plus_eq(FG_vector<T>::ptr other) {
-		assert(get_size() == other->get_size());
+	FG_vector<T>& operator+=(const FG_vector<T>& other) {
+		assert(get_size() == other.get_size());
+#pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++) {
-			eles[i] += other->get(i);
+			eles[i] += other.get(i);
+		}
+	}
+
+	/**
+	 * \brief Element by element subtraction of one `FG_vector` to another.
+	 * \param other Another `FG_vector` object.
+     * \return The `FG_vector' object.
+     * **parallel**
+	 */
+	FG_vector<T>& operator-=(const FG_vector<T>& other) {
+		assert(get_size() == other.get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++) {
+			eles[i] -= other.get(i);
 		}
 	}
 
@@ -135,10 +154,10 @@ class FG_vector
 	 *   element.
 	 * \param other An `FG_vector` smart pointer.
 	 */
-	// TODO DM: Make parallel / smarter 
-	bool eq_all(FG_vector<T>::ptr other) {
-		return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
-	}
+    bool operator==(const FG_vector<T>& rhs){
+        printf("Comparing!\n");
+        return std::equal(eles.begin(), eles.end(), rhs.get_data());
+    }
 
 	void init_rand(long max = std::numeric_limits<T>::max(),
 			unsigned int seed = 0) {
@@ -385,14 +404,30 @@ class FG_vector
 	 * \brief Write the space separated vector to file.
 	 * \param fn The file name you wish written to file.
 	 */
+
 	void to_file(std::string fn) {
-		std::ofstream f;
-		f.open(fn);
-		for (vsize_t i=0; i < get_size(); i++) {
-			f << get(i) << " ";
-		}
-		f.close();
+        FILE* f;
+        f = fopen(fn.c_str(), "wb");
+        size_t len = get_size(); 
+        fwrite(&len, sizeof(len), 1, f); // Write the length first
+        fwrite(&(eles.front()), len*sizeof(T), 1, f);
+        fclose(f);
 	}
+
+    static ptr from_file(std::string fn) {
+        FILE* f; 
+        BOOST_VERIFY(f);
+        f = fopen(fn.c_str(), "rb");
+        size_t len;
+        fread(&len, sizeof(len), 1, f);
+
+        std::vector<T> _eles; 
+        _eles.resize(len);
+        fread(&(_eles.front()), len*sizeof(T), len, f);
+        fclose(f);
+
+        return ptr(new FG_vector<T>(_eles));
+    }
 
 	void neg_in_place() {
 		for (size_t i = 0; i < get_size(); i++)
