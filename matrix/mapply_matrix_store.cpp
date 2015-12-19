@@ -82,12 +82,13 @@ public:
 	}
 
 	const char *get_raw_arr() const {
+		const char *ret = NULL;
 		if (whole_res)
-			return whole_res->get_raw_arr();
+			ret = whole_res->get_raw_arr();
 		else if (!lstore->is_whole() && res_bufs[get_part_idx()])
-			return res_bufs[get_part_idx()]->get_raw_arr();
-		else
-			return NULL;
+			ret = res_bufs[get_part_idx()]->get_raw_arr();
+		assert(ret);
+		return ret;
 	}
 
 	const local_matrix_store &get_materialized_res() const {
