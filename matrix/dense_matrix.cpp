@@ -2887,6 +2887,20 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 	if (store_layout() == layout)
 		return dense_matrix::create(get_raw_store());
 
+	// If the dense matrix has only one row or one column, it's very easy
+	// to convert its layout. We don't need to copy data or run computation
+	// at all.
+	if (get_num_cols() == 1) {
+		detail::vec_store::const_ptr vec = get_data().get_col_vec(0);
+		return dense_matrix::create(vec->conv2mat(get_num_rows(),
+					get_num_cols(), layout == matrix_layout_t::L_ROW));
+	}
+	else if (get_num_rows() == 1) {
+		detail::vec_store::const_ptr vec = get_data().get_row_vec(0);
+		return dense_matrix::create(vec->conv2mat(get_num_rows(),
+					get_num_cols(), layout == matrix_layout_t::L_ROW));
+	}
+
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	conv_layout_op::const_ptr mapply_op(new conv_layout_op(layout,
