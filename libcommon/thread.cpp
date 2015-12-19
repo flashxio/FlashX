@@ -297,4 +297,47 @@ thread *thread::represent_thread(int node_id)
 	return curr;
 }
 
+void task_thread::run()
+{
+	const int TASK_BUF_SIZE = 128;
+	thread_task *local_tasks[TASK_BUF_SIZE];
+	size_t tot_num = 0;
+	pthread_mutex_lock(&mutex);
+	while (!tasks.is_empty()) {
+		int num_tasks = tasks.fetch(local_tasks, TASK_BUF_SIZE);
+		pthread_mutex_unlock(&mutex);
+		for (int i = 0; i < num_tasks; i++) {
+			local_tasks[i]->run();
+			delete local_tasks[i];
+			num_pending--;
+		}
+		pthread_mutex_lock(&mutex);
+		tot_num += num_tasks;
+	}
+	all_complete = true;
+	pthread_mutex_unlock(&mutex);
+	pthread_cond_signal(&cond);
+}
+
+void task_thread::wait4complete()
+{
+	pthread_mutex_lock(&mutex);
+	while (!all_complete) {
+		pthread_cond_wait(&cond, &mutex);
+	}
+	pthread_mutex_unlock(&mutex);
+}
+
+void task_thread::add_task(thread_task *t)
+{
+	pthread_mutex_lock(&mutex);
+	all_complete = false;
+	if (tasks.is_full())
+		tasks.expand_queue(tasks.get_size() * 2);
+	tasks.push_back(t);
+	pthread_mutex_unlock(&mutex);
+	activate();
+	num_pending++;
+}
+
 atomic_integer thread::num_threads;
