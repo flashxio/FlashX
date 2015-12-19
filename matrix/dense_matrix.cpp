@@ -779,7 +779,10 @@ void apply_scalar_op::run(
 	assert(ins[0]->store_layout() == out.store_layout());
 	assert(ins[0]->get_num_rows() == out.get_num_rows());
 	assert(ins[0]->get_num_cols() == out.get_num_cols());
-	if (out.store_layout() == matrix_layout_t::L_COL) {
+	if (ins[0]->get_raw_arr() && out.get_raw_arr())
+		op->runAE(out.get_num_rows() * out.get_num_cols(),
+				ins[0]->get_raw_arr(), var->get_raw(), out.get_raw_arr());
+	else if (out.store_layout() == matrix_layout_t::L_COL) {
 		const detail::local_col_matrix_store &col_in
 			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
 		detail::local_col_matrix_store &col_out
