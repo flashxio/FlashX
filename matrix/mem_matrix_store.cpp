@@ -490,7 +490,6 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 
 	FILE *f = fopen(file_name.c_str(), "r");
 	if (f == NULL) {
-		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% file_name % strerror(errno);
 		return mem_matrix_store::ptr();
