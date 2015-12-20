@@ -80,6 +80,7 @@ public:
 	static size_t get_global_num_threads();
 	static int get_curr_thread_id();
 	static void init_global_mem_threads(int num_nodes, int nthreads_per_node);
+	static void destroy();
 
 	static ptr create(int num_nodes, int nthreads_per_node) {
 		return ptr(new mem_thread_pool(num_nodes, nthreads_per_node));

@@ -975,7 +975,7 @@ void destroy_flash_matrix()
 	if (init_count.fetch_sub(1) == 1) {
 		safs::destroy_io_system();
 		detail::local_mem_buffer::destroy();
-		// TODO I should also destroy the worker thread here.
+		detail::mem_thread_pool::destroy();
 	}
 }
 

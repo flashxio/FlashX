@@ -154,6 +154,11 @@ void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
 }
 
+void mem_thread_pool::destroy()
+{
+	global_threads = NULL;
+}
+
 static size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios)
 {
 	size_t num_pending;
