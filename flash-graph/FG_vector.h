@@ -445,8 +445,8 @@ class FG_vector
     }
 
 	void neg_in_place() {
-		for (size_t i = 0; i < get_size(); i++)
 #pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
 			eles[i] = -eles[i];
 	}
 
