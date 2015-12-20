@@ -652,8 +652,98 @@ void test_copy_from(size_t long_dim)
 	test_copy_from1(*m1, *m2);
 }
 
+void test_get_raw(size_t long_dim)
+{
+	// Test local buffer matrix store.
+	local_matrix_store::ptr store(new local_buf_col_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<int>(), -1));
+	store->set_data(set_col_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
+	assert(store->get_raw_arr() == NULL);
+	store->reset_size();
+	store->resize(0, 1, store->get_num_rows(), store->get_num_cols() - 1);
+	assert(store->get_raw_arr());
+
+	store = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				long_dim, 1, get_scalar_type<int>(), -1));
+	store->set_data(set_col_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
+	assert(store->get_raw_arr());
+	assert(*(int *) store->get_raw_arr() == 100);
+
+	store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				10, long_dim, get_scalar_type<int>(), -1));
+	store->set_data(set_row_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
+	assert(store->get_raw_arr() == NULL);
+	store->reset_size();
+	store->resize(1, 0, store->get_num_rows() - 1, store->get_num_cols());
+	assert(store->get_raw_arr());
+
+	store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				1, long_dim, get_scalar_type<int>(), -1));
+	store->set_data(set_row_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
+	assert(store->get_raw_arr());
+	assert(*(int *) store->get_raw_arr() == 100);
+
+	// Test local refernece matrix store.
+	local_matrix_store::ptr buf(new local_buf_col_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<int>(), -1));
+	store = local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
+				buf->get_type(), buf->get_node_id()));
+	store->set_data(set_col_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
+	assert(store->get_raw_arr() == NULL);
+	store->reset_size();
+	store->resize(0, 1, store->get_num_rows(), store->get_num_cols() - 1);
+	assert(store->get_raw_arr());
+
+	buf = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				long_dim, 1, get_scalar_type<int>(), -1));
+	store = local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
+				buf->get_type(), buf->get_node_id()));
+	store->set_data(set_col_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
+	assert(store->get_raw_arr());
+	assert(*(int *) store->get_raw_arr() == 100);
+
+	buf = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				10, long_dim, get_scalar_type<int>(), -1));
+	store = local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
+				buf->get_type(), buf->get_node_id()));
+	store->set_data(set_row_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
+	assert(store->get_raw_arr() == NULL);
+	store->reset_size();
+	store->resize(1, 0, store->get_num_rows() - 1, store->get_num_cols());
+	assert(store->get_raw_arr());
+
+	buf = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				1, long_dim, get_scalar_type<int>(), -1));
+	store = local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
+				buf->get_type(), buf->get_node_id()));
+	store->set_data(set_row_operate(store->get_num_cols()));
+	assert(store->get_raw_arr());
+	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
+	assert(store->get_raw_arr());
+	assert(*(int *) store->get_raw_arr() == 100);
+}
+
 int main()
 {
+	test_get_raw(1000);
 	test_reset(1000);
 	test_reset(10000);
 	test_set(1000);

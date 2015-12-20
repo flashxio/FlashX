@@ -429,14 +429,20 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
+		// If this matrix has only one column, then all data is stored
+		// contigously.
+		if (get_num_cols() > 1 && (get_local_start_row() > 0
+					|| get_num_rows() < get_orig_num_rows()))
 			return NULL;
 		else
 			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
+		// If this matrix has only one column, then all data is stored
+		// contigously.
+		if (get_num_cols() > 1 && (get_local_start_row() > 0
+					|| get_num_rows() < get_orig_num_rows()))
 			return NULL;
 		else
 			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
@@ -486,14 +492,20 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
+		// If this matrix has only one row, then all data is stored
+		// contigously.
+		if (get_num_rows() > 1 && (get_local_start_col() > 0
+					|| get_num_cols() < get_orig_num_cols()))
 			return NULL;
 		else
 			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
+		// If this matrix has only one row, then all data is stored
+		// contigously.
+		if (get_num_rows() > 1 && (get_local_start_col() > 0
+					|| get_num_cols() < get_orig_num_cols()))
 			return NULL;
 		else
 			return data.get_raw() + get_orig_offset(0, 0) * get_entry_size();
@@ -559,14 +571,20 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
+		// If this matrix has only one column, then all data is stored
+		// contigously.
+		if (get_num_cols() > 1 && (get_local_start_row() > 0
+					|| get_num_rows() < get_orig_num_rows()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
+		// If this matrix has only one column, then all data is stored
+		// contigously.
+		if (get_num_cols() > 1 && (get_local_start_row() > 0
+					|| get_num_rows() < get_orig_num_rows()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
@@ -618,14 +636,18 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
+		// If this matrix has only one row, then all data is stored contigously.
+		if (get_num_rows() > 1 && (get_local_start_col() > 0
+					|| get_num_cols() < get_orig_num_cols()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
 	virtual char *get_raw_arr() {
-		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
+		// If this matrix has only one row, then all data is stored contigously.
+		if (get_num_rows() > 1 && (get_local_start_col() > 0
+					|| get_num_cols() < get_orig_num_cols()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
@@ -815,7 +837,10 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_row() > 0 || get_num_rows() < get_orig_num_rows())
+		// If this matrix has only one column, then all data is stored
+		// contigously.
+		if (get_num_cols() > 1 && (get_local_start_row() > 0
+					|| get_num_rows() < get_orig_num_rows()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
@@ -868,7 +893,9 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		if (get_local_start_col() > 0 || get_num_cols() < get_orig_num_cols())
+		// If this matrix has only one row, then all data is stored contigously.
+		if (get_num_rows() > 1 && (get_local_start_col() > 0
+					|| get_num_cols() < get_orig_num_cols()))
 			return NULL;
 		else
 			return data + get_orig_offset(0, 0) * get_entry_size();
