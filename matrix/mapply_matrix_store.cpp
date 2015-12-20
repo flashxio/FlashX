@@ -174,43 +174,79 @@ void mapply_store::materialize_whole()
 		whole_res = local_matrix_store::ptr(tmp);
 	}
 
-	std::vector<local_matrix_store *> mutable_ins(ins.size());
-	for (size_t i = 0; i < ins.size(); i++)
-		mutable_ins[i] = const_cast<local_matrix_store *>(ins[i].get());
+	// If all parts in the local matrix store have been materialized,
+	// we can merge them.
+	if (num_materialized_parts == res_bufs.size() && res_bufs[0]) {
+		for (size_t i = 0; i < res_bufs.size(); i++)
+			assert(res_bufs[i]);
 
-	if (is_wide) {
-		for (size_t local_start_col = 0; local_start_col < lstore->get_num_cols();
-				local_start_col += SUB_CHUNK_SIZE) {
-			size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
-					lstore->get_num_cols() - local_start_col);
-			for (size_t i = 0; i < mutable_ins.size(); i++) {
-				mutable_ins[i]->resize(0, local_start_col,
-						mutable_ins[i]->get_num_rows(), local_num_cols);
+		// Copy all the parts
+		if (is_wide) {
+			for (size_t local_start_col = 0; local_start_col < orig_num_cols;
+					local_start_col += SUB_CHUNK_SIZE) {
+				size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
+						orig_num_cols - local_start_col);
+				whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
+						local_num_cols);
+				off_t part_idx = local_start_col / SUB_CHUNK_SIZE;
+				assert(res_bufs[part_idx]);
+				whole_res->copy_from(*res_bufs[part_idx]);
 			}
-			whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
-					local_num_cols);
-			op.run(ins, *whole_res);
 		}
+		else {
+			// If this is a tall matrix.
+			for (size_t local_start_row = 0; local_start_row < orig_num_rows;
+					local_start_row += SUB_CHUNK_SIZE) {
+				size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
+						orig_num_rows - local_start_row);
+				whole_res->resize(local_start_row, 0, local_num_rows,
+						whole_res->get_num_cols());
+				off_t part_idx = local_start_row / SUB_CHUNK_SIZE;
+				assert(res_bufs[part_idx]);
+				whole_res->copy_from(*res_bufs[part_idx]);
+			}
+		}
+		whole_res->reset_size();
 	}
 	else {
-		// If this is a tall matrix.
-		for (size_t local_start_row = 0; local_start_row < lstore->get_num_rows();
-				local_start_row += SUB_CHUNK_SIZE) {
-			size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
-					lstore->get_num_rows() - local_start_row);
-			for (size_t i = 0; i < mutable_ins.size(); i++) {
-				mutable_ins[i]->resize(local_start_row, 0, local_num_rows,
-						mutable_ins[i]->get_num_cols());
+		std::vector<local_matrix_store *> mutable_ins(ins.size());
+		for (size_t i = 0; i < ins.size(); i++)
+			mutable_ins[i] = const_cast<local_matrix_store *>(ins[i].get());
+
+		if (is_wide) {
+			for (size_t local_start_col = 0; local_start_col < lstore->get_num_cols();
+					local_start_col += SUB_CHUNK_SIZE) {
+				size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
+						lstore->get_num_cols() - local_start_col);
+				for (size_t i = 0; i < mutable_ins.size(); i++) {
+					mutable_ins[i]->resize(0, local_start_col,
+							mutable_ins[i]->get_num_rows(), local_num_cols);
+				}
+				whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
+						local_num_cols);
+				op.run(ins, *whole_res);
 			}
-			whole_res->resize(local_start_row, 0, local_num_rows,
-					whole_res->get_num_cols());
-			op.run(ins, *whole_res);
 		}
+		else {
+			// If this is a tall matrix.
+			for (size_t local_start_row = 0; local_start_row < lstore->get_num_rows();
+					local_start_row += SUB_CHUNK_SIZE) {
+				size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
+						lstore->get_num_rows() - local_start_row);
+				for (size_t i = 0; i < mutable_ins.size(); i++) {
+					mutable_ins[i]->resize(local_start_row, 0, local_num_rows,
+							mutable_ins[i]->get_num_cols());
+				}
+				whole_res->resize(local_start_row, 0, local_num_rows,
+						whole_res->get_num_cols());
+				op.run(ins, *whole_res);
+			}
+		}
+		for (size_t i = 0; i < mutable_ins.size(); i++)
+			mutable_ins[i]->reset_size();
+		whole_res->reset_size();
+		num_materialized_parts = res_bufs.size();
 	}
-	for (size_t i = 0; i < mutable_ins.size(); i++)
-		mutable_ins[i]->reset_size();
-	whole_res->reset_size();
-	num_materialized_parts = res_bufs.size();
 
 	// We can clean up all the parts now if there is any. We'll always access
 	// data from `whole_res' from now on.
@@ -251,65 +287,9 @@ void mapply_store::materialize() const
 					lstore->get_num_cols(), lstore->get_type(), -1));
 	op.run(ins, *res_bufs[part_idx]);
 
-	// If we have materialized all parts, we should copy all parts to
-	// `whole_res'.
-	if (num_materialized_parts == res_bufs.size()) {
-		if (lstore->store_layout() == matrix_layout_t::L_COL) {
-			local_buf_col_matrix_store *tmp = new local_buf_col_matrix_store(
-					orig_global_start_row, orig_global_start_col,
-					orig_num_rows, orig_num_cols, lstore->get_type(), -1);
-			mutable_this->whole_res = local_matrix_store::ptr(tmp);
-		}
-		else {
-			local_buf_row_matrix_store *tmp = new local_buf_row_matrix_store(
-					orig_global_start_row, orig_global_start_col,
-					orig_num_rows, orig_num_cols, lstore->get_type(), -1);
-			mutable_this->whole_res = local_matrix_store::ptr(tmp);
-		}
-		// Copy all the parts
-		if (is_wide) {
-			for (size_t local_start_col = 0; local_start_col < orig_num_cols;
-					local_start_col += SUB_CHUNK_SIZE) {
-				size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
-						orig_num_cols - local_start_col);
-				whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
-						local_num_cols);
-				off_t part_idx = local_start_col / SUB_CHUNK_SIZE;
-				assert(res_bufs[part_idx]);
-				whole_res->copy_from(*res_bufs[part_idx]);
-			}
-		}
-		else {
-			// If this is a tall matrix.
-			for (size_t local_start_row = 0; local_start_row < orig_num_rows;
-					local_start_row += SUB_CHUNK_SIZE) {
-				size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
-						orig_num_rows - local_start_row);
-				whole_res->resize(local_start_row, 0, local_num_rows,
-						whole_res->get_num_cols());
-				off_t part_idx = local_start_row / SUB_CHUNK_SIZE;
-				if (res_bufs[part_idx] == NULL) {
-					printf("There are %ld parts and part %ld is empty\n",
-							res_bufs.size(), part_idx);
-					printf("start row: %ld, orig #rows: %ld\n",
-							local_start_row, orig_num_rows);
-				}
-				assert(res_bufs[part_idx]);
-				whole_res->copy_from(*res_bufs[part_idx]);
-			}
-		}
-		whole_res->resize(lstore->get_local_start_row(),
-				lstore->get_local_start_col(), lstore->get_num_rows(),
-				lstore->get_num_cols());
-
-		// We can clean up all the parts now. We'll always access data from
-		// `whole_res' from now on.
-		for (size_t i = 0; i < res_bufs.size(); i++)
-			mutable_this->res_bufs[i] = NULL;
-
+	if (num_materialized_parts == res_bufs.size())
 		// We don't need the input matrix portions any more.
 		mutable_this->ins.clear();
-	}
 }
 
 /*
