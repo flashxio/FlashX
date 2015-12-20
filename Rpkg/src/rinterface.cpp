@@ -215,6 +215,7 @@ RcppExport SEXP R_FG_destroy()
 RcppExport SEXP R_FG_set_conf(SEXP pconf)
 {
 	graph_engine::destroy_flash_graph();
+	fm::destroy_flash_matrix();
 	return R_FG_init(pconf);
 }
 
