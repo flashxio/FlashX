@@ -951,36 +951,32 @@ void init_flash_matrix(config_map::ptr configs)
 {
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {
-		if (configs) {
+		if (configs)
 			matrix_conf.init(configs);
-			try {
-				safs::init_io_system(configs);
-			} catch (std::exception &e) {
-				// If SAFS fails to initialize, we should remove the count
-				// increase at the beginning of the function.
-				init_count--;
-				throw e;
-			}
-		}
 		size_t num_nodes = matrix_conf.get_num_nodes();
 		size_t num_threads = matrix_conf.get_num_DM_threads();
 		detail::local_mem_buffer::init();
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);
+
+		try {
+			safs::init_io_system(configs);
+		} catch (std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning)
+				<< "FlashMatrix: fail to initialize SAFS";
+		}
 	}
 }
 
 void destroy_flash_matrix()
 {
 	long count = init_count.fetch_sub(1);
+	assert(count > 0);
 	if (count == 1) {
-		safs::destroy_io_system();
 		detail::local_mem_buffer::destroy();
 		detail::mem_thread_pool::destroy();
+		safs::destroy_io_system();
 	}
-	// FlashMatrix hasn't been initialized.
-	else if (count == 0)
-		init_count++;
 }
 
 }
