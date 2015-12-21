@@ -53,6 +53,9 @@ public:
 			void *out_arr) const = 0;
 	virtual const scalar_type &get_input_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
+	virtual std::string get_name() const {
+		return std::string("uop");
+	}
 
 	size_t input_entry_size() const {
 		return get_input_type().get_size();
@@ -87,6 +90,9 @@ public:
 
 	virtual const scalar_type &get_input_type() const;
 	virtual const scalar_type &get_output_type() const;
+	virtual std::string get_name() const {
+		return OpType::get_name();
+	}
 };
 
 /**
@@ -138,6 +144,9 @@ public:
 	virtual const scalar_type &get_left_type() const = 0;
 	virtual const scalar_type &get_right_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
+	virtual std::string get_name() const {
+		return std::string("op");
+	}
 
 	size_t left_entry_size() const {
 		return get_left_type().get_size();
@@ -214,6 +223,9 @@ public:
 	virtual const scalar_type &get_left_type() const;
 	virtual const scalar_type &get_right_type() const;
 	virtual const scalar_type &get_output_type() const;
+	virtual std::string get_name() const {
+		return OpType::get_name();
+	}
 };
 
 /*
@@ -249,66 +261,99 @@ template<class InType, class OutType>
 class basic_uops_impl: public basic_uops
 {
 	struct uop_neg {
+		static std::string get_name() {
+			return "-";
+		}
 		OutType operator()(const InType &e) const {
 			return -e;
 		}
 	};
 
 	struct uop_sqrt {
+		static std::string get_name() {
+			return "sqrt";
+		}
 		double operator()(const InType &e) const {
 			return std::sqrt(e);
 		}
 	};
 
 	struct uop_abs {
+		static std::string get_name() {
+			return "abs";
+		}
 		OutType operator()(const InType &e) const {
 			return (OutType) std::abs(e);
 		}
 	};
 
 	struct uop_not {
+		static std::string get_name() {
+			return "not";
+		}
 		bool operator()(const bool &e) const {
 			return !e;
 		}
 	};
 
 	struct sq {
+		static std::string get_name() {
+			return "sq";
+		}
 		OutType operator()(const InType &e) const {
 			return e * e;
 		}
 	};
 
 	struct ceil {
+		static std::string get_name() {
+			return "ceil";
+		}
 		OutType operator()(const InType &e) const {
 			return std::ceil(e);
 		}
 	};
 
 	struct floor {
+		static std::string get_name() {
+			return "floor";
+		}
 		OutType operator()(const InType &e) const {
 			return std::floor(e);
 		}
 	};
 
 	struct round {
+		static std::string get_name() {
+			return "round";
+		}
 		OutType operator()(const InType &e) const {
 			return std::round(e);
 		}
 	};
 
 	struct log {
+		static std::string get_name() {
+			return "log";
+		}
 		OutType operator()(const InType &e) const {
 			return std::log(e);
 		}
 	};
 
 	struct log2 {
+		static std::string get_name() {
+			return "log2";
+		}
 		OutType operator()(const InType &e) const {
 			return std::log2(e);
 		}
 	};
 
 	struct log10 {
+		static std::string get_name() {
+			return "log10";
+		}
 		OutType operator()(const InType &e) const {
 			return std::log10(e);
 		}
@@ -394,6 +439,9 @@ public:
 template<class LeftType1, class RightType1, class ResType1>
 struct multiply
 {
+	static std::string get_name() {
+		return "*";
+	}
 	ResType1 operator()(const LeftType1 &e1, const RightType1 &e2) const {
 		return e1 * e2;
 	}
@@ -402,6 +450,9 @@ struct multiply
 template<>
 struct multiply<double, double, double>
 {
+	static std::string get_name() {
+		return "*";
+	}
 	double operator()(const double &e1, const double &e2) const {
 		long double first = e1;
 		long double second = e2;
@@ -416,12 +467,18 @@ template<class LeftType, class RightType, class ResType>
 class basic_ops_impl: public basic_ops
 {
 	struct add {
+		static std::string get_name() {
+			return "+";
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 + e2;
 		}
 	};
 
 	struct sub {
+		static std::string get_name() {
+			return "-";
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 - e2;
 		}
@@ -430,6 +487,9 @@ class basic_ops_impl: public basic_ops
 	// Division is special. Its output should be float point.
 	// Therefore, we convert both input values to float point.
 	struct divide {
+		static std::string get_name() {
+			return "/";
+		}
 		double operator()(const LeftType &e1, const RightType &e2) const {
 			double d1 = e1;
 			double d2 = e2;
@@ -438,6 +498,9 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct min {
+		static std::string get_name() {
+			return "min";
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			if (e1 < e2)
 				return e1;
@@ -447,6 +510,9 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct max {
+		static std::string get_name() {
+			return "max";
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			if (e1 > e2)
 				return e1;
@@ -456,36 +522,54 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct pow {
+		static std::string get_name() {
+			return "pow";
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return (ResType) std::pow(e1, e2);
 		}
 	};
 
 	struct eq {
+		static std::string get_name() {
+			return "==";
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 == e2;
 		}
 	};
 
 	struct gt {
+		static std::string get_name() {
+			return ">";
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 > e2;
 		}
 	};
 
 	struct ge {
+		static std::string get_name() {
+			return ">=";
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 >= e2;
 		}
 	};
 
 	struct lt {
+		static std::string get_name() {
+			return "<";
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 < e2;
 		}
 	};
 
 	struct le {
+		static std::string get_name() {
+			return "<=";
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 <= e2;
 		}

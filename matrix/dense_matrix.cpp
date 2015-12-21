@@ -763,8 +763,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return std::string("(") + mats[0]->get_name()
-			+ " apply scalar" + std::string(")");
+		return (boost::format("apply_scalar(%1%, %2%)") % mats[0]->get_name()
+				% var->get_name()).str();
 	}
 };
 
@@ -2025,7 +2025,8 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 2);
-		return std::string("op(") + mats[0]->get_name() + ", " + mats[1]->get_name() + ")";
+		return op->get_name() + std::string("(") + mats[0]->get_name()
+			+ ", " + mats[1]->get_name() + ")";
 	}
 };
 
@@ -2085,7 +2086,7 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
-		return std::string("uop(") + mats[0]->get_name() + ")";
+		return op->get_name() + std::string("(") + mats[0]->get_name() + ")";
 	}
 };
 

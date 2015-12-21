@@ -23,6 +23,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <sstream>
+#include <string>
 #include <memory>
 
 #include "sorter.h"
@@ -255,6 +257,11 @@ public:
 	 */
 	virtual bool equals(const char *addr) const = 0;
 
+	/*
+	 * Get the text representation of the variable.
+	 */
+	virtual std::string get_name() const = 0;
+
 	virtual size_t get_size() const {
 		return get_type().get_size();
 	}
@@ -302,6 +309,12 @@ public:
 
 	void set(T v) {
 		this->v = v;
+	}
+
+	virtual std::string get_name() const {
+		std::ostringstream conv;
+		conv << v;
+		return conv.str();
 	}
 };
 
