@@ -452,9 +452,8 @@ public:
 	dense_matrix::ptr lt_scalar(T val) const {
 		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
 		bulk_operate::const_ptr op = bulk_operate::conv2ptr(
-				*var->get_type().get_basic_ops().get_op(basic_ops::op_idx::GE));
-		dense_matrix::ptr tmp = apply_scalar(var, op);
-		return tmp->logic_not();
+				*var->get_type().get_basic_ops().get_op(basic_ops::op_idx::LT));
+		return apply_scalar(var, op);
 	}
 
 	double norm2() const;
