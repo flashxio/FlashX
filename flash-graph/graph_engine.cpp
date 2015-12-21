@@ -933,10 +933,8 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 		try {
 			init_io_system(configs);
 		} catch (safs::init_error &e) {
-			// If SAFS fails to initialize, we should remove the count
-			// increase at the beginning of the function.
-			init_count--;
-			throw e;
+			BOOST_LOG_TRIVIAL(warning)
+				<< "FlashGraph: fail to initialize SAFS";
 		}
 	}
 }
@@ -944,10 +942,8 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 void graph_engine::destroy_flash_graph()
 {
 	long count = init_count.fetch_sub(1);
-	// SAFS wasn't initialized
-	if (count == 0)
-		init_count++;
-	else if (count == 1)
+	assert(count > 0);
+	if (count == 1)
 		destroy_io_system();
 }
 
