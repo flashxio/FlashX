@@ -181,6 +181,13 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
 #endif
+	long count = global_data.init_count.fetch_add(1);
+	// If the I/O system has been initialized before, even if the previous
+	// init failed, we still require users to destroy the I/O system before
+	// they can initialize it again.
+	if (count > 0)
+		return;
+
 	if (configs == NULL)
 		throw init_error("config map doesn't contain any options");
 	
@@ -189,7 +196,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	// The I/O system has been initialized.
 	if (is_safs_init()) {
-		global_data.init_count++;
 		assert(!global_data.read_thread_set.empty());
 		return;
 	}
@@ -205,7 +211,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		throw init_error("can't create RAID config");
 	}
 
-	global_data.init_count++;
 	int num_files = raid_conf->get_num_disks();
 	global_data.raid_conf = raid_conf;
 
