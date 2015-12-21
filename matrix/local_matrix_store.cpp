@@ -207,9 +207,21 @@ void local_row_matrix_store::set_data(const set_operate &op)
 	assert(op.get_type() == get_type());
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
-	for (size_t i = 0; i < nrow; i++)
-		op.set(get_row(i), ncol, get_global_start_row() + i,
-				get_global_start_col());
+	char *raw_arr = get_raw_arr();
+	if (raw_arr) {
+		// If data is stored in contiguous memory, we can calculate
+		// the address of each row directly.
+		for (size_t i = 0; i < nrow; i++) {
+			char *row = raw_arr + ncol * i * get_entry_size();
+			op.set(row, ncol, get_global_start_row() + i,
+					get_global_start_col());
+		}
+	}
+	else {
+		for (size_t i = 0; i < nrow; i++)
+			op.set(get_row(i), ncol, get_global_start_row() + i,
+					get_global_start_col());
+	}
 }
 
 bool local_row_matrix_store::copy_from(const local_matrix_store &store)
@@ -272,9 +284,21 @@ void local_col_matrix_store::set_data(const set_operate &op)
 	assert(op.get_type() == get_type());
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
-	for (size_t i = 0; i < ncol; i++)
-		op.set(get_col(i), nrow, get_global_start_row(),
-				get_global_start_col() + i);
+	char *raw_arr = get_raw_arr();
+	if (raw_arr) {
+		// If data is stored in contiguous memory, we can calculate
+		// the address of each row directly.
+		for (size_t i = 0; i < ncol; i++) {
+			char *col = raw_arr + nrow * i * get_entry_size();
+			op.set(col, nrow, get_global_start_row(),
+					get_global_start_col() + i);
+		}
+	}
+	else {
+		for (size_t i = 0; i < ncol; i++)
+			op.set(get_col(i), nrow, get_global_start_row(),
+					get_global_start_col() + i);
+	}
 }
 
 bool local_col_matrix_store::copy_from(const local_matrix_store &store)
