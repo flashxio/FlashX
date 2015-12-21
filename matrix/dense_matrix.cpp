@@ -2247,17 +2247,23 @@ namespace
 
 class inner_prod_tall_op: public detail::portion_mapply_op
 {
+	// I need to keep the right matrix to make sure the memory isn't deallocated.
+	detail::matrix_store::const_ptr right;
 	detail::local_matrix_store::const_ptr local_right;
 	bulk_operate::const_ptr left_op;
 	bulk_operate::const_ptr right_op;
 public:
-	inner_prod_tall_op(detail::local_matrix_store::const_ptr local_right,
+	inner_prod_tall_op(detail::matrix_store::const_ptr right,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, right_op->get_output_type()) {
+		this->right = right;
+		// We assume the right matrix is small, so we don't need to partition it.
+		this->local_right = right->get_portion(0);
+		assert(local_right->get_num_rows() == right->get_num_rows()
+				&& local_right->get_num_cols() == right->get_num_cols());
 		this->left_op = left_op;
 		this->right_op = right_op;
-		this->local_right = local_right;
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -2326,20 +2332,28 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 		const dense_matrix &m, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op, matrix_layout_t out_layout) const
 {
-	// We assume the right matrix is small, so we don't need to partition it.
-	detail::local_matrix_store::const_ptr local_right = m.get_data().get_portion(0);
-	assert(local_right->get_num_rows() == m.get_num_rows()
-			&& local_right->get_num_cols() == m.get_num_cols());
+	detail::matrix_store::const_ptr right = m.get_raw_store();
 	// If the left matrix is row-major, the right matrix should be
 	// column-major. When the left matrix is tall, the right matrix should
 	// be small. It makes sense to convert the right matrix to column major
 	// before we break up the left matrix for parallel processing.
-	if (!is_wide() && this->store_layout() == matrix_layout_t::L_ROW)
-		local_right = local_right->conv2(matrix_layout_t::L_COL);
+	if (!is_wide() && this->store_layout() == matrix_layout_t::L_ROW) {
+		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
+		tmp->materialize_self();
+		right = tmp->get_raw_store();
+	}
+	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
+		dense_matrix::ptr tmp = dense_matrix::create(right);
+		tmp = tmp->conv_store(true, -1);
+		right = tmp->get_raw_store();
+	}
+	assert(right->is_in_mem());
+	assert(right->get_num_nodes() == -1);
+	assert(!right->is_virtual());
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
-	inner_prod_tall_op::const_ptr mapply_op(new inner_prod_tall_op(local_right,
+	inner_prod_tall_op::const_ptr mapply_op(new inner_prod_tall_op(right,
 				left_op, right_op, get_num_rows(), m.get_num_cols()));
 	return __mapply_portion_virtual(ins, mapply_op, out_layout);
 }
