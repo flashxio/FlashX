@@ -945,7 +945,7 @@ std::vector<safs::io_interface::ptr> sparse_matrix::create_ios() const
 	return ret;
 }
 
-static std::atomic<size_t> init_count;
+static std::atomic<long> init_count;
 
 void init_flash_matrix(config_map::ptr configs)
 {
@@ -972,11 +972,15 @@ void init_flash_matrix(config_map::ptr configs)
 
 void destroy_flash_matrix()
 {
-	if (init_count.fetch_sub(1) == 1) {
+	long count = init_count.fetch_sub(1);
+	if (count == 1) {
 		safs::destroy_io_system();
 		detail::local_mem_buffer::destroy();
 		detail::mem_thread_pool::destroy();
 	}
+	// FlashMatrix hasn't been initialized.
+	else if (count == 0)
+		init_count++;
 }
 
 }
