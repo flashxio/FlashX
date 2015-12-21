@@ -299,11 +299,11 @@ namespace
 template<class T>
 class multiply_tall_op: public detail::portion_mapply_op
 {
-	detail::local_matrix_store::const_ptr Bstore;
+	detail::mem_matrix_store::const_ptr Bstore;
 	std::vector<detail::local_matrix_store::ptr> Abufs;
 	std::vector<detail::local_matrix_store::ptr> res_bufs;
 public:
-	multiply_tall_op(detail::local_matrix_store::const_ptr Bstore,
+	multiply_tall_op(detail::mem_matrix_store::const_ptr Bstore,
 			size_t num_threads, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, get_scalar_type<T>()) {
@@ -585,35 +585,29 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 
 	assert(m1.get_type() == get_scalar_type<double>());
 	assert(m2.get_type() == get_scalar_type<double>());
-	// We assume the right matrix is small, so we don't need to partition it.
-	detail::local_matrix_store::const_ptr local_right
-		= m2.get_data().get_portion(0);
-	assert(local_right->get_num_rows() == m2.get_num_rows()
-			&& local_right->get_num_cols() == m2.get_num_cols());
-	// Although all data in local_right is stored in contiguous memory,
-	// get_raw_arr() may still return NULL. I have to make sure get_raw_arr()
-	// works in any way.
-	detail::local_matrix_store::ptr tmp;
-	if (out_layout == matrix_layout_t::L_COL)
-		tmp = detail::local_matrix_store::ptr(
-				new detail::local_buf_col_matrix_store(0, 0,
-					local_right->get_num_rows(), local_right->get_num_cols(),
-					local_right->get_type(), -1));
-	else
-		tmp = detail::local_matrix_store::ptr(
-				new detail::local_buf_row_matrix_store(0, 0,
-					local_right->get_num_rows(), local_right->get_num_cols(),
-					local_right->get_type(), -1));
-	tmp->copy_from(*local_right);
-	local_right = tmp;
+	detail::matrix_store::const_ptr right = m2.get_raw_store();
+	if (out_layout != m2.store_layout()) {
+		dense_matrix::ptr tmp = m2.conv2(out_layout);
+		tmp->materialize_self();
+		right = tmp->get_raw_store();
+	}
+	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
+		dense_matrix::ptr tmp = dense_matrix::create(right);
+		tmp = tmp->conv_store(true, -1);
+		right = tmp->get_raw_store();
+	}
+	assert(right->store_layout() == out_layout);
+	assert(!right->is_virtual());
+	assert(right->get_num_nodes() == -1);
+	assert(right->is_in_mem());
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = m1.get_raw_store();
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	multiply_tall_op<double>::const_ptr mapply_op(new multiply_tall_op<double>(
-				local_right, threads->get_num_threads(), m1.get_num_rows(),
-				m2.get_num_cols()));
+				detail::mem_matrix_store::cast(right), threads->get_num_threads(),
+				m1.get_num_rows(), m2.get_num_cols()));
 	return dense_matrix::create(__mapply_portion_virtual(ins, mapply_op,
 				out_layout));
 }
