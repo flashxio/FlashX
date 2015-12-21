@@ -194,8 +194,9 @@ void local_row_matrix_store::reset_data()
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
 	// If the store has data stored contiguously.
-	if (get_raw_arr())
-		memset(get_raw_arr(), 0, nrow * ncol * get_entry_size());
+	char *raw_arr = get_raw_arr();
+	if (raw_arr)
+		memset(raw_arr, 0, nrow * ncol * get_entry_size());
 	else {
 		for (size_t i = 0; i < nrow; i++)
 			memset(get_row(i), 0, ncol * get_entry_size());
@@ -271,8 +272,9 @@ void local_col_matrix_store::reset_data()
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
 	// If the store has data stored contiguously.
-	if (get_raw_arr())
-		memset(get_raw_arr(), 0, nrow * ncol * get_entry_size());
+	char *raw_arr = get_raw_arr();
+	if (raw_arr)
+		memset(raw_arr, 0, nrow * ncol * get_entry_size());
 	else {
 		for (size_t i = 0; i < ncol; i++)
 			memset(get_col(i), 0, nrow * get_entry_size());
