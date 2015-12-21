@@ -33,6 +33,7 @@
 #include "bulk_operate_ext.h"
 #include "matrix_store.h"
 #include "mem_matrix_store.h"
+#include "virtual_matrix_store.h"
 #include "factor.h"
 
 namespace fm
@@ -276,6 +277,7 @@ public:
 	}
 
 	void materialize_self() const;
+	void set_materialize_level(materialize_level level);
 
 	template<class T>
 	bool is_type() const {

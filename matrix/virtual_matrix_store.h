@@ -27,6 +27,25 @@
 namespace fm
 {
 
+enum materialize_level
+{
+	// Materialize in the CPU cache.
+	// This delivers the best performance when materializing a sequence of
+	// matrix operations. However, if a virtual matrix appears in multiple
+	// operands, it requires to materialize the virtual matrix multiple times.
+	// This is the default level for materialization.
+	MATER_CPU,
+	// Materialize the entire portion of a virtual matrix.
+	// This requires to allocate a much larger memory buffer to keep
+	// the materialization result, but it can avoid recomputation if a virtual
+	// matrix is used in multiple operands of a function.
+	MATER_MEM,
+	// Materialize the entire matrix.
+	// This is especially expensive if the matrix is stored on disks.
+	// We should avoid it as much as possible.
+	MATER_FULL,
+};
+
 namespace detail
 {
 
@@ -37,6 +56,7 @@ namespace detail
  */
 class virtual_matrix_store: public matrix_store
 {
+	materialize_level mater_level;
 public:
 	typedef std::shared_ptr<const virtual_matrix_store> const_ptr;
 
@@ -47,6 +67,15 @@ public:
 
 	virtual_matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &type): matrix_store(nrow, ncol, in_mem, type) {
+		this->mater_level = materialize_level::MATER_CPU;
+	}
+
+	void set_materialize_level(materialize_level level) {
+		this->mater_level = level;
+	}
+
+	materialize_level get_materialize_level() const {
+		return mater_level;
 	}
 
 	virtual bool is_virtual() const {
