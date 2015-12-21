@@ -162,20 +162,39 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		configs = config_map::create();
 	}
 
-	Rcpp::LogicalVector res(1);
+	bool safs_success;
 	try {
-		graph_engine::init_flash_graph(configs);
-		fm::init_flash_matrix(configs);
+		safs::init_io_system(configs);
 		standalone = false;
-		res[0] = true;
+		safs_success = true;
 	} catch (init_error &e) {
-		fprintf(stderr, "init FlashGraph: %s\n", e.what());
-		res[0] = true;
+		fprintf(stderr, "init SAFS: %s\n", e.what());
+		safs_success = true;
 	} catch (std::exception &e) {
 		fprintf(stderr, "exception in init: %s\n", e.what());
-		res[0] = false;
+		safs_success = false;
 	}
 
+	bool fg_success;
+	try {
+		graph_engine::init_flash_graph(configs);
+		fg_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		fg_success = false;
+	}
+
+	bool fm_success;
+	try {
+		fm::init_flash_matrix(configs);
+		fm_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		fm_success = false;
+	}
+
+	Rcpp::LogicalVector res(1);
+	res[0] = safs_success && fg_success && fm_success;
 	if (standalone)
 		printf("Run FlashR in standalone mode\n");
 	else if (is_safs_init())
@@ -209,6 +228,7 @@ RcppExport SEXP R_FG_destroy()
 		graphs.clear();
 	fm::destroy_flash_matrix();
 	graph_engine::destroy_flash_graph();
+	safs::destroy_io_system();
 	return R_NilValue;
 }
 
@@ -216,6 +236,7 @@ RcppExport SEXP R_FG_set_conf(SEXP pconf)
 {
 	graph_engine::destroy_flash_graph();
 	fm::destroy_flash_matrix();
+	safs::destroy_io_system();
 	return R_FG_init(pconf);
 }
 
