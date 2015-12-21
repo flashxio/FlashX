@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 
 	size_t out_size = get_out_size(vindex);
 	off_t out_off = get_out_off(vindex);
-	detail::raw_data_array out_data(out_size);
+	detail::raw_data_array out_data(out_size, -1, false);
 	read_data(out_data.get_raw(), out_size, 1, out_off, f);
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
 	init_out_offs(vindex, out_offs);
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 
 		size_t in_size = get_in_size(vindex);
 		off_t in_off = get_in_off(vindex);
-		detail::raw_data_array in_data(in_size);
+		detail::raw_data_array in_data(in_size, -1, false);
 		read_data(in_data.get_raw(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
 		init_in_offs(vindex, in_offs);

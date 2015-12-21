@@ -92,7 +92,7 @@ NUMA_vec_store::NUMA_vec_store(size_t length, size_t num_nodes,
 	num_eles_per_node = ROUNDUP(num_eles_per_node, mapper.get_range_size());
 	size_t size_per_node = num_eles_per_node * type.get_size();
 	for (size_t node_id = 0; node_id < num_nodes; node_id++)
-		data[node_id] = detail::raw_data_array(size_per_node, node_id);
+		data[node_id] = detail::raw_data_array(size_per_node, node_id, false);
 }
 
 void NUMA_vec_store::reset_data()

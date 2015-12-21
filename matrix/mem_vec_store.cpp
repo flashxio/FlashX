@@ -55,7 +55,7 @@ bool mem_vec_store::copy_from(const char *buf, size_t num_bytes)
 }
 
 smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_store(
-		length, type), data(length * type.get_size())
+		length, type), data(length * type.get_size(), -1, false)
 {
 	this->arr = data.get_raw();
 }
@@ -192,7 +192,7 @@ bool smp_vec_store::resize(size_t new_length)
 	if (real_length == 0)
 		real_length = 1;
 	for (; real_length < new_length; real_length *= 2);
-	this->data = detail::raw_data_array(real_length * get_type().get_size());
+	this->data = detail::raw_data_array(real_length * get_type().get_size(), -1, false);
 	this->arr = this->data.get_raw();
 	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
 	return vec_store::resize(new_length);

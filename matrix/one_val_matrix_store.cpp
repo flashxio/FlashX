@@ -55,13 +55,13 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 	const set_operate &set = get_type().get_set_const(*val);
 	if (num_nodes < 0) {
 		this->portion_bufs.resize(1);
-		this->portion_bufs[0] = raw_data_array(buf_size, -1);
+		this->portion_bufs[0] = raw_data_array(buf_size, -1, false);
 		set.set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
 	}
 	else {
 		this->portion_bufs.resize(num_nodes);
 		for (int i = 0; i < num_nodes; i++) {
-			this->portion_bufs[i] = raw_data_array(buf_size, i);
+			this->portion_bufs[i] = raw_data_array(buf_size, i, false);
 			set.set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
 		}
 	}

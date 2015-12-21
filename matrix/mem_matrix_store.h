@@ -143,7 +143,7 @@ class mem_col_matrix_store: public mem_matrix_store
 	mem_col_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 		if (nrow * ncol > 0)
-			data = raw_data_array(nrow * ncol * type.get_size());
+			data = raw_data_array(nrow * ncol * type.get_size(), -1, false);
 	}
 protected:
 	mem_col_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
@@ -220,7 +220,7 @@ class mem_row_matrix_store: public mem_matrix_store
 	mem_row_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 		if (nrow * ncol > 0)
-			data = raw_data_array(nrow * ncol * type.get_size());
+			data = raw_data_array(nrow * ncol * type.get_size(), -1, false);
 	}
 protected:
 	mem_row_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,

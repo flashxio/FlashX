@@ -109,7 +109,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
 	for (int node_id = 0; node_id < num_nodes; node_id++)
 		data[node_id] = detail::raw_data_array(
-				local_lens[node_id] * ncol * get_entry_size(), node_id);
+				local_lens[node_id] * ncol * get_entry_size(), node_id, false);
 }
 
 char *NUMA_row_tall_matrix_store::get_row(size_t row_idx)

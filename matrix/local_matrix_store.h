@@ -407,7 +407,7 @@ public:
 			int node_id): local_col_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = raw_data_array(nrow * ncol * type.get_size());
+			data = raw_data_array(nrow * ncol * type.get_size(), -1, true);
 			set_orig_data(data);
 		}
 	}
@@ -471,7 +471,7 @@ public:
 			int node_id): local_row_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = raw_data_array(nrow * ncol * type.get_size());
+			data = raw_data_array(nrow * ncol * type.get_size(), -1, true);
 			set_orig_data(data);
 		}
 	}

@@ -514,7 +514,7 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 	size_t ncol = header.get_num_cols();
 	const scalar_type &type = header.get_data_type();
 	size_t mat_size = nrow * ncol * type.get_size();
-	detail::raw_data_array data(mat_size);
+	detail::raw_data_array data(mat_size, -1, false);
 	ret = fread(data.get_raw(), mat_size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error)

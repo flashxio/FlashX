@@ -101,7 +101,7 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 					strerror(errno));
 			return vector_vector::ptr();
 		}
-		detail::raw_data_array data(size);
+		detail::raw_data_array data(size, -1, false);
 		printf("load adjacency lists of the graph data.\n");
 		read_data(data.get_raw(), size, 1, off, f);
 		fclose(f);

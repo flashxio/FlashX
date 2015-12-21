@@ -65,7 +65,7 @@ public:
 	}
 };
 
-std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
+std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes)
 {
 	if (num_bytes == 0)
 		return std::shared_ptr<char>();
@@ -76,7 +76,10 @@ std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
 		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
 	else {
-		ret = local_mem_buffer::alloc(num_bytes);
+		// We allocate memory for the local buffer differently to reduce
+		// overhead.
+		if (is_local)
+			ret = local_mem_buffer::alloc(num_bytes);
 		if (ret == NULL)
 			ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
 					aligned_deleter());
@@ -131,17 +134,18 @@ public:
 
 }
 
-raw_data_array::raw_data_array(size_t num_bytes, int node_id)
+raw_data_array::raw_data_array(size_t num_bytes, int node_id, bool is_local)
 {
+	this->is_local = is_local;
 	this->node_id = node_id;
 	this->num_bytes = num_bytes;
-	data = memalloc_node(node_id, num_bytes);
+	data = memalloc_node(node_id, is_local, num_bytes);
 }
 
 raw_data_array raw_data_array::deep_copy() const
 {
 	raw_data_array ret(*this);
-	ret.data = memalloc_node(get_node_id(), num_bytes);
+	ret.data = memalloc_node(get_node_id(), is_local, num_bytes);
 	memcpy(ret.data.get(), this->data.get(), num_bytes);
 	return ret;
 }
@@ -161,7 +165,7 @@ void raw_data_array::expand(size_t min)
 	size_t new_num_bytes = num_bytes;
 	for (; new_num_bytes < min; new_num_bytes *= 2);
 	std::shared_ptr<char> new_data;
-	new_data = memalloc_node(get_node_id(), new_num_bytes);
+	new_data = memalloc_node(get_node_id(), is_local, new_num_bytes);
 	memcpy(new_data.get(), data.get(), num_bytes);
 	num_bytes = new_num_bytes;
 	data = new_data;

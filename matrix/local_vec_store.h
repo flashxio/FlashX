@@ -248,7 +248,7 @@ public:
 	local_buf_vec_store(off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(NULL,
 				NULL, global_start, length, type, node_id),
-			arr(length * type.get_size()) {
+			arr(length * type.get_size(), -1, true) {
 		set_data(arr.get_raw(), arr.get_raw());
 	}
 
