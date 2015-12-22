@@ -429,8 +429,8 @@ class FG_vector
 
     static ptr from_file(std::string fn) {
         FILE* f;
-        BOOST_VERIFY(f);
         f = fopen(fn.c_str(), "rb");
+        BOOST_VERIFY(f);
         size_t len;
         size_t bytes = fread(&len, sizeof(len), 1, f);
         BOOST_VERIFY(bytes == 1);

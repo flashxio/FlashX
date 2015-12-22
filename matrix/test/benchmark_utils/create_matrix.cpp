@@ -76,7 +76,7 @@ int main (int argc, char* argv[]) {
 			dmat = dmat->transpose();
 		} // else leave as col-wise
 
-#if 1
+#if 0
 		BOOST_LOG_TRIVIAL(info) << "Printing row-wise matrix for verification!\n";
 		print_dmat(dmat);
 #endif

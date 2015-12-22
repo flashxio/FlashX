@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
         std::cout << "nequal test ...";
         std::unique_ptr<std::vector<size_t> > neq = test_out->where_nequal(test_in);
         BOOST_VERIFY(std::equal(change_idx.begin(), change_idx.end(), neq->begin()));
-        std::cout " SUCCESS! ...\n";
+        std::cout << " SUCCESS! ...\n";
 
         std::vector<size_t>::iterator it = neq->begin();
         for (; it != neq->end(); ++it) {
