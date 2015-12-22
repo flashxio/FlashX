@@ -73,7 +73,7 @@ namespace {
                 complete = true;
 #if PRUNE
                 prev_mean.assign(mean.size(), 0);
-                s_val = std::numeric_limits<double>::max();
+                reset_s_val();
 #endif
             }
 
@@ -155,6 +155,10 @@ namespace {
                 return mean.size();
             }
 
+            void num_members_peq(const int val) {
+                num_members += val;
+            }
+
             void finalize() {
                 if (is_complete()) {
                     BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling finalize() on a"
@@ -167,7 +171,7 @@ namespace {
             void unfinalize() {
                 if (!is_complete()) {
                     BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling unfinalize() on an"
-                        " unfinalized object";
+                        " UNfinalized object";
                     return;
                 }
                 complete = false;
@@ -177,36 +181,38 @@ namespace {
                 }
             }
 
-            void add_member(edge_seq_iterator& id_it, data_seq_iter& count_it) {
-                vertex_id_t nid = 0;
-                while(count_it.has_next()) {
+            template <typename T, typename U>
+                void add_member(T& id_it, U& count_it) {
+                    vertex_id_t nid = 0;
+                    while(count_it.has_next()) {
 #ifdef PAGE_ROW
-                    double e = count_it.next();
-                    mean[nid++] += e;
+                        double e = count_it.next();
+                        mean[nid++] += e;
 #else
-                    nid = id_it.next();
-                    edge_count e = count_it.next();
-                    mean[nid] += e.get_count();
+                        nid = id_it.next();
+                        edge_count e = count_it.next();
+                        mean[nid] += e.get_count();
 #endif
+                    }
+                    num_members++;
                 }
-                num_members++;
-            }
 
 #if PRUNE
-            void remove_member(edge_seq_iterator& id_it, data_seq_iter& count_it) {
-                vertex_id_t nid = 0;
-                while(count_it.has_next()) {
+            template <typename T, typename U>
+                void remove_member(T& id_it, U& count_it) {
+                    vertex_id_t nid = 0;
+                    while(count_it.has_next()) {
 #ifdef PAGE_ROW
-                    double e = count_it.next();
-                    mean[nid++] -= e;
+                        double e = count_it.next();
+                        mean[nid++] -= e;
 #else
-                    nid = id_it.next();
-                    edge_count e = count_it.next();
-                    mean[nid] -= e.get_count();
+                        nid = id_it.next();
+                        edge_count e = count_it.next();
+                        mean[nid] -= e.get_count();
 #endif
+                    }
+                    num_members--;
                 }
-                num_members--;
-            }
 #endif
 
             cluster& operator=(const cluster& other) {
@@ -288,7 +294,12 @@ namespace fg
      * \param comp_thresh Used to prune computation if specified. TODO: Explain.
      */
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned max_iters, const double tolerance, const double comp_thresh=0,
-            const unsigned num_rows=0, const unsigned num_cols=0);
+            const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
+            const unsigned num_cols=0);
+
+    /* Testing functions  */
+    void test_eucl();
+    void test_dist_matrix();
+    void test_cluster();
 }
 #endif
