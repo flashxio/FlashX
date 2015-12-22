@@ -72,44 +72,6 @@ public:
 	}
 };
 
-class NUMA_row_matrix_store: public NUMA_matrix_store
-{
-protected:
-	NUMA_row_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
-	}
-public:
-	typedef std::shared_ptr<NUMA_row_matrix_store> ptr;
-
-	static ptr cast(matrix_store::ptr store) {
-		// TODO check store type.
-		return std::static_pointer_cast<NUMA_row_matrix_store>(store);
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_ROW;
-	}
-};
-
-class NUMA_col_matrix_store: public NUMA_matrix_store
-{
-protected:
-	NUMA_col_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
-	}
-public:
-	typedef std::shared_ptr<NUMA_col_matrix_store> ptr;
-
-	static ptr cast(matrix_store::ptr store) {
-		// TODO check store type.
-		return std::static_pointer_cast<NUMA_col_matrix_store>(store);
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_COL;
-	}
-};
-
 class NUMA_col_wide_matrix_store;
 class NUMA_row_wide_matrix_store;
 
@@ -120,7 +82,7 @@ class NUMA_row_wide_matrix_store;
  * NUMA node. Multiple adjacent rows are stored in contiguous memory and
  * a single row is guaranteed to be stored together.
  */
-class NUMA_row_tall_matrix_store: public NUMA_row_matrix_store
+class NUMA_row_tall_matrix_store: public NUMA_matrix_store
 {
 	// This is to map rows to different NUMA nodes.
 	NUMA_mapper mapper;
@@ -192,6 +154,10 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
 
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_ROW;
+	}
+
 	friend class NUMA_col_wide_matrix_store;
 };
 
@@ -201,12 +167,12 @@ public:
  * for a NUMA machine. Each column in the matrix are distributed across multiple
  * NUMA nodes.
  */
-class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
+class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 {
 	std::vector<NUMA_vec_store::ptr> data;
 
 	NUMA_col_tall_matrix_store(
-			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_col_matrix_store(
+			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_matrix_store(
 				cols.front()->get_length(), cols.size(),
 				cols.front()->get_type(), mat_counter++) {
 		this->data = cols;
@@ -214,7 +180,7 @@ class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 
 	// The copy constructor performs shallow copy.
 	NUMA_col_tall_matrix_store(
-			const NUMA_col_tall_matrix_store &mat): NUMA_col_matrix_store(
+			const NUMA_col_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
 			mat.get_data_id()) {
 		this->data = mat.data;
@@ -274,15 +240,19 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
 
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_COL;
+	}
+
 	friend class NUMA_row_wide_matrix_store;
 };
 
-class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
+class NUMA_row_wide_matrix_store: public NUMA_matrix_store
 {
 	NUMA_col_tall_matrix_store store;
 
 	NUMA_row_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
@@ -290,7 +260,7 @@ class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
 	 * The constructed matrix store will be the transpose of _store.
 	 */
 	NUMA_row_wide_matrix_store(
-			const NUMA_col_tall_matrix_store &_store): NUMA_row_matrix_store(
+			const NUMA_col_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
 				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
@@ -344,14 +314,18 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
+
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_ROW;
+	}
 };
 
-class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
+class NUMA_col_wide_matrix_store: public NUMA_matrix_store
 {
 	NUMA_row_tall_matrix_store store;
 
 	NUMA_col_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_col_matrix_store(nrow, ncol,
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
@@ -359,7 +333,7 @@ class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
 	 * The constructed matrix store will be the transpose of _store.
 	 */
 	NUMA_col_wide_matrix_store(
-			const NUMA_row_tall_matrix_store &_store): NUMA_col_matrix_store(
+			const NUMA_row_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
 				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
@@ -425,6 +399,10 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "Can't get a row from a NUMA wide col matrix";
 		return vec_store::const_ptr();
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_COL;
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

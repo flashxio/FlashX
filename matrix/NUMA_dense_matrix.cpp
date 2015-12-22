@@ -78,7 +78,7 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 }
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
-		const NUMA_row_tall_matrix_store &mat): NUMA_row_matrix_store(
+		const NUMA_row_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(),
 			mat.get_type(), mat.get_data_id()), mapper(mat.get_num_nodes(),
 			NUMA_range_size_log)
@@ -88,7 +88,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 		const std::vector<detail::raw_data_array> &data, size_t nrow, size_t ncol,
-		const NUMA_mapper &_mapper, const scalar_type &type): NUMA_row_matrix_store(
+		const NUMA_mapper &_mapper, const scalar_type &type): NUMA_matrix_store(
 			nrow, ncol, type, mat_counter++), mapper(_mapper)
 {
 	this->data = data;
@@ -102,7 +102,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 }
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
-		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
+		int num_nodes, const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 			type, mat_counter++), mapper(num_nodes, NUMA_range_size_log)
 {
 	data.resize(num_nodes);
@@ -154,6 +154,7 @@ matrix_store::const_ptr NUMA_row_tall_matrix_store::get_rows(
 {
 	// I assume we only need to get a small number of rows from the matrix.
 	// So it's sufficient to output a SMP matrix to store the result.
+	// TODO this might be slow
 	mem_row_matrix_store::ptr ret = mem_row_matrix_store::create(
 			idxs.size(), get_num_cols(), get_type());
 	for (size_t i = 0; i < idxs.size(); i++)
@@ -178,7 +179,7 @@ matrix_store::const_ptr NUMA_row_tall_matrix_store::get_cols(
 }
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
-		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
+		size_t ncol, int num_nodes, const scalar_type &type): NUMA_matrix_store(
 			nrow, ncol, type, mat_counter++)
 {
 	data.resize(ncol);
