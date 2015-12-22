@@ -32,6 +32,9 @@ namespace fm
 
 matrix_config matrix_conf;
 
+namespace detail
+{
+
 /*
  * The minimum write I/O size (in bytes).
  */
@@ -134,10 +137,10 @@ bool hilbert_exec_order::exec(block_compute_task &task,
 }
 
 bool EM_matrix_stream::filled_local_store::write(
-		detail::local_matrix_store::const_ptr portion,
+		local_matrix_store::const_ptr portion,
 		off_t global_start_row, off_t global_start_col)
 {
-	detail::local_matrix_store::ptr part = data->get_portion(
+	local_matrix_store::ptr part = data->get_portion(
 			global_start_row - data->get_global_start_row(),
 			global_start_col - data->get_global_start_col(),
 			portion->get_num_rows(), portion->get_num_cols());
@@ -147,12 +150,12 @@ bool EM_matrix_stream::filled_local_store::write(
 	return ret + portion->get_num_rows() == data->get_num_rows();
 }
 
-void EM_matrix_stream::write_async(detail::local_matrix_store::const_ptr portion,
+void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 		off_t start_row, off_t start_col)
 {
 	assert(!mat->is_wide());
 	assert(portion->get_num_cols() == mat->get_num_cols());
-	const size_t CHUNK_SIZE = detail::EM_matrix_store::CHUNK_SIZE;
+	const size_t CHUNK_SIZE = EM_matrix_store::CHUNK_SIZE;
 	// If the portion is aligned with the default EM matrix portion size.
 	if (!mat->is_wide() && start_row % CHUNK_SIZE == 0
 			&& portion->get_num_rows() % CHUNK_SIZE == 0) {
@@ -169,8 +172,8 @@ void EM_matrix_stream::write_async(detail::local_matrix_store::const_ptr portion
 	if (it == portion_bufs.end()) {
 		size_t portion_num_rows = std::min(CHUNK_SIZE,
 				mat->get_num_rows() - EM_portion_row_start);
-		detail::local_matrix_store::ptr tmp(
-				new detail::local_buf_row_matrix_store(EM_portion_row_start,
+		local_matrix_store::ptr tmp(
+				new local_buf_row_matrix_store(EM_portion_row_start,
 					start_col, portion_num_rows, portion->get_num_cols(),
 					mat->get_type(), -1));
 		buf = filled_local_store::ptr(new filled_local_store(tmp));
@@ -185,7 +188,7 @@ void EM_matrix_stream::write_async(detail::local_matrix_store::const_ptr portion
 	bool ret = buf->write(portion, start_row, start_col);
 	// If we fill the buffer, we should flush it to disks.
 	if (ret) {
-		detail::local_matrix_store::const_ptr data = buf->get_whole_portion();
+		local_matrix_store::const_ptr data = buf->get_whole_portion();
 		mat->write_portion_async(data, data->get_global_start_row(),
 				data->get_global_start_col());
 		pthread_spin_lock(&lock);
@@ -227,13 +230,13 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 	off_t orig_off = io.get_loc().get_offset();
 	off = ROUND_PAGE(orig_off);
 	real_io_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
-	buf = detail::local_mem_buffer::get_irreg();
+	buf = local_mem_buffer::get_irreg();
 	// If there isn't a buffer available in the local thread or the local buffer
 	// is smaller than required, we allocate a new buffer.
 	// The smaller buffer will be deallocated if it exists.
 	if (buf.second == NULL || buf.first < real_io_size) {
 		std::shared_ptr<char> tmp((char *) valloc(real_io_size), buf_deleter());
-		buf = detail::local_mem_buffer::irreg_buf_t(real_io_size, tmp);
+		buf = local_mem_buffer::irreg_buf_t(real_io_size, tmp);
 	}
 
 	// The last entry in the vector indicates the end of the last block row.
@@ -259,7 +262,7 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 
 block_compute_task::~block_compute_task()
 {
-	detail::local_mem_buffer::cache_irreg(buf);
+	local_mem_buffer::cache_irreg(buf);
 }
 
 /*
@@ -331,8 +334,8 @@ void block_compute_task::run(char *buf, size_t size)
 	notify_complete();
 }
 
-block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
-		detail::matrix_store &_output, EM_matrix_stream::ptr stream,
+block_spmm_task::block_spmm_task(const mem_matrix_store &_input,
+		matrix_store &_output, EM_matrix_stream::ptr stream,
 		const matrix_io &io, const sparse_matrix &mat,
 		block_exec_order::ptr order): block_compute_task(
 			io, mat, order), input(_input), output(_output)
@@ -360,8 +363,8 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 	if (out_part == NULL) {
 		// We maintain a local buffer for the corresponding part of
 		// the output matrix.
-		out_part = detail::local_row_matrix_store::ptr(
-				new detail::local_buf_row_matrix_store(block_row_start, 0,
+		out_part = local_row_matrix_store::ptr(
+				new local_buf_row_matrix_store(block_row_start, 0,
 					block_num_rows, output.get_num_cols(), output.get_type(),
 					// we allocate the buffer in the local node.
 					-1));
@@ -385,14 +388,14 @@ void block_spmm_task::notify_complete()
 		size_t block_num_rows = std::min(get_io().get_num_rows(),
 				output.get_num_rows() - block_row_start);
 		if (output.is_in_mem()) {
-			detail::local_matrix_store::ptr tmp = output.get_portion(
+			local_matrix_store::ptr tmp = output.get_portion(
 					block_row_start, 0, block_num_rows, output.get_num_cols());
 			assert(tmp);
 			tmp->reset_data();
 		}
 		else {
-			detail::local_matrix_store::ptr out_part(
-					new detail::local_buf_row_matrix_store(block_row_start, 0,
+			local_matrix_store::ptr out_part(
+					new local_buf_row_matrix_store(block_row_start, 0,
 						block_num_rows, output.get_num_cols(), output.get_type(),
 						// we allocate the buffer in the local node.
 						-1));
@@ -402,7 +405,7 @@ void block_spmm_task::notify_complete()
 	}
 	else {
 		if (output.is_in_mem()) {
-			detail::local_matrix_store::ptr tmp = output.get_portion(
+			local_matrix_store::ptr tmp = output.get_portion(
 					out_part->get_global_start_row(),
 					out_part->get_global_start_col(), out_part->get_num_rows(),
 					out_part->get_num_cols());
@@ -419,14 +422,14 @@ void block_spmm_task::notify_complete()
 /*
  * This is shared by all threads.
  */
-class spm_dispatcher: public detail::task_dispatcher
+class spm_dispatcher: public task_dispatcher
 {
 	matrix_io_generator::ptr io_gen;
-	detail::EM_object::io_set::ptr ios;
+	EM_object::io_set::ptr ios;
 	task_creator::ptr tcreator;
 public:
 	spm_dispatcher(matrix_io_generator::ptr io_gen,
-			detail::EM_object::io_set::ptr ios, task_creator::ptr tcreator) {
+			EM_object::io_set::ptr ios, task_creator::ptr tcreator) {
 		this->io_gen = io_gen;
 		this->ios = ios;
 		this->tcreator = tcreator;
@@ -444,14 +447,15 @@ bool spm_dispatcher::issue_task()
 	compute_task::ptr task = tcreator->create(mio);
 	safs::io_request req = task->get_request();
 	safs::io_interface &io = ios->get_curr_io();
-	detail::portion_callback &cb = static_cast<detail::portion_callback &>(
-			io.get_callback());
+	portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
 	cb.add(req, task);
 	io.access(&req, 1);
 	return true;
 }
 
-void sparse_matrix::compute(task_creator::ptr creator,
+}
+
+void sparse_matrix::compute(detail::task_creator::ptr creator,
 		size_t num_block_rows, size_t min_num_brows) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
@@ -471,7 +475,8 @@ void sparse_matrix::compute(task_creator::ptr creator,
 		mutable_this->ios = detail::EM_object::io_set::ptr(
 				new detail::EM_object::io_set(get_io_factory()));
 	}
-	spm_dispatcher::ptr dispatcher(new spm_dispatcher(io_gen, ios, creator));
+	detail::spm_dispatcher::ptr dispatcher(new detail::spm_dispatcher(io_gen,
+				ios, creator));
 	for (int i = 0; i < num_workers; i++) {
 		detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
 		const detail::EM_object *sp_obj = this;
@@ -491,6 +496,9 @@ void sparse_matrix::compute(task_creator::ptr creator,
 }
 
 ///////////// The code for sparse matrix of the FlashGraph format //////////////
+
+namespace detail
+{
 
 void fg_row_compute_task::run(char *buf, size_t size)
 {
@@ -713,17 +721,22 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 	return sparse_matrix::ptr(m);
 }
 
+}
+
 sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg,
 		const scalar_type *entry_type)
 {
 	const fg::graph_header &header = fg->get_graph_header();
 	if (header.is_directed_graph())
-		return fg_sparse_asym_matrix::create(fg, entry_type);
+		return detail::fg_sparse_asym_matrix::create(fg, entry_type);
 	else
-		return fg_sparse_sym_matrix::create(fg, entry_type);
+		return detail::fg_sparse_sym_matrix::create(fg, entry_type);
 }
 
 /////////////// The code for native 2D-partitioned sparse matrix ///////////////
+
+namespace detail
+{
 
 class block_sparse_matrix: public sparse_matrix
 {
@@ -864,24 +877,27 @@ public:
 	}
 };
 
+}
+
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 		SpM_2d_storage::ptr mat)
 {
-	return sparse_matrix::ptr(new block_sparse_matrix(index, mat));
+	return sparse_matrix::ptr(new detail::block_sparse_matrix(index, mat));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 		SpM_2d_storage::ptr mat, SpM_2d_index::ptr t_index,
 		SpM_2d_storage::ptr t_mat)
 {
-	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat,
+	return sparse_matrix::ptr(new detail::block_sparse_asym_matrix(index, mat,
 				t_index, t_mat));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 			safs::file_io_factory::shared_ptr mat_io_fac)
 {
-	return sparse_matrix::ptr(new block_sparse_matrix(index, mat_io_fac));
+	return sparse_matrix::ptr(new detail::block_sparse_matrix(index,
+				mat_io_fac));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
@@ -889,12 +905,12 @@ sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 			SpM_2d_index::ptr t_index,
 			safs::file_io_factory::shared_ptr t_mat_io_fac)
 {
-	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat_io_fac,
-				t_index, t_mat_io_fac));
+	return sparse_matrix::ptr(new detail::block_sparse_asym_matrix(index,
+				mat_io_fac, t_index, t_mat_io_fac));
 }
 
 bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
-		detail::matrix_store::ptr out, task_creator::ptr create) const
+		detail::matrix_store::ptr out, detail::task_creator::ptr create) const
 {
 	if (in->get_num_rows() != ncols
 			|| in->get_num_cols() != out->get_num_cols()
@@ -921,7 +937,7 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	// should fill the entire CPU cache. If the output matrix is written
 	// to disks, the super block should also be large enough so that
 	// each write to disks is large enough to have high I/O throughput.
-	size_t sblock_size = cal_super_block_size(get_block_size(),
+	size_t sblock_size = detail::cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
 	size_t min_num_brows = 1;
 	detail::mem_matrix_store::const_ptr mem_in;
