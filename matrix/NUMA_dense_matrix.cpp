@@ -94,8 +94,8 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 	this->data = data;
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
 	assert(data.size() == mapper.get_num_nodes());
-	for (int node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
-		assert(data[node_id].get_node_id() == node_id);
+	for (size_t node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
+		assert(data[node_id].get_node_id() == (size_t) node_id);
 		assert(data[node_id].get_num_bytes()
 				>= local_lens[node_id] * ncol * get_entry_size());
 	}
@@ -589,7 +589,7 @@ bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
 
 vec_store::const_ptr NUMA_row_tall_matrix_store::get_col_vec(off_t idx) const
 {
-	if (idx >= get_num_cols()) {
+	if ((size_t) idx >= get_num_cols()) {
 		BOOST_LOG_TRIVIAL(error) << "get_col_vec: column index is out of range";
 		return vec_store::const_ptr();
 	}
