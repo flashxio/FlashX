@@ -69,14 +69,6 @@ void test_copy()
 	vec->copy_from((char *) raw_arr.get(), vec->get_length() * sizeof(long));
 	for (size_t i = 0; i < vec->get_length(); i++)
 		assert(raw_arr[i] == vec->get<long>(i));
-
-	NUMA_vec_store::ptr vec1 = NUMA_vec_store::create(vec->get_length(), num_nodes,
-			get_scalar_type<long>());
-	bool ret = vec1->copy_from(*vec);
-	assert(ret);
-	assert(vec1->get_length() == vec->get_length());
-	for (size_t i = 0; i < vec->get_length(); i++)
-		assert(vec1->get<long>(i) == vec->get<long>(i));
 }
 
 void test_deep_copy()

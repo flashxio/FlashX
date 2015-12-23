@@ -39,7 +39,7 @@ class data_frame;
 
 namespace detail
 {
-class raw_data_array;
+class simple_raw_array;
 }
 
 /*
@@ -69,7 +69,7 @@ public:
 		return ptr(new vector_vector(store));
 	}
 
-	static ptr create(const detail::raw_data_array &data,
+	static ptr create(const detail::simple_raw_array &data,
 			const std::vector<off_t> &offs, const scalar_type &type);
 
 	virtual size_t get_entry_size() const {

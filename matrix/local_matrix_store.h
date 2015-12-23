@@ -237,10 +237,10 @@ public:
 class local_col_matrix_store: public local_matrix_store
 {
 	// This is to hold the pointer to the original data so it won't be free'd.
-	raw_data_array orig_data_ref;
+	local_raw_array orig_data_ref;
 
 protected:
-	void set_orig_data(const raw_data_array &data_ref) {
+	void set_orig_data(const local_raw_array &data_ref) {
 		this->orig_data_ref = data_ref;
 	}
 public:
@@ -267,7 +267,7 @@ public:
 			int node_id): local_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 	}
-	local_col_matrix_store(const raw_data_array &data_ref, off_t global_start_row,
+	local_col_matrix_store(const local_raw_array &data_ref, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_matrix_store(
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -275,7 +275,7 @@ public:
 	}
 
 	bool hold_orig_data() const {
-		return orig_data_ref.get_raw_data() != NULL;
+		return orig_data_ref.get_raw() != NULL;
 	}
 
 	// Get the offset of the entry in the original local matrix store.
@@ -317,10 +317,10 @@ public:
 class local_row_matrix_store: public local_matrix_store
 {
 	// This is to hold the pointer to the original data so it won't be free'd.
-	raw_data_array orig_data_ref;
+	local_raw_array orig_data_ref;
 
 protected:
-	void set_orig_data(const raw_data_array &data_ref) {
+	void set_orig_data(const local_raw_array &data_ref) {
 		this->orig_data_ref = data_ref;
 	}
 public:
@@ -347,7 +347,7 @@ public:
 			int node_id): local_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 	}
-	local_row_matrix_store(const raw_data_array &data_ref, off_t global_start_row,
+	local_row_matrix_store(const local_raw_array &data_ref, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_matrix_store(
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -355,7 +355,7 @@ public:
 	}
 
 	bool hold_orig_data() const {
-		return orig_data_ref.get_raw_data() != NULL;
+		return orig_data_ref.get_raw() != NULL;
 	}
 
 	// Get the offset of the entry in the original local matrix store.
@@ -400,19 +400,19 @@ public:
  */
 class local_buf_col_matrix_store: public local_col_matrix_store
 {
-	raw_data_array data;
+	local_raw_array data;
 public:
 	local_buf_col_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_col_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = raw_data_array(nrow * ncol * type.get_size(), -1, true);
+			data = local_raw_array(nrow * ncol * type.get_size());
 			set_orig_data(data);
 		}
 	}
 
-	local_buf_col_matrix_store(const raw_data_array &data,
+	local_buf_col_matrix_store(const local_raw_array &data,
 			off_t global_start_row, off_t global_start_col, size_t nrow,
 			size_t ncol, const scalar_type &type,
 			int node_id): local_col_matrix_store(data, global_start_row,
@@ -420,7 +420,7 @@ public:
 		this->data = data;
 	}
 
-	const raw_data_array &get_data() const {
+	const local_raw_array &get_data() const {
 		return data;
 	}
 
@@ -464,26 +464,26 @@ public:
  */
 class local_buf_row_matrix_store: public local_row_matrix_store
 {
-	raw_data_array data;
+	local_raw_array data;
 public:
 	local_buf_row_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row, global_start_col,
 				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = raw_data_array(nrow * ncol * type.get_size(), -1, true);
+			data = local_raw_array(nrow * ncol * type.get_size());
 			set_orig_data(data);
 		}
 	}
 
-	local_buf_row_matrix_store(const raw_data_array &data, off_t global_start_row,
+	local_buf_row_matrix_store(const local_raw_array &data, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_row_matrix_store(data,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
-	const raw_data_array &get_data() const {
+	const local_raw_array &get_data() const {
 		return data;
 	}
 
@@ -551,7 +551,7 @@ public:
 		this->data = data;
 	}
 
-	local_ref_contig_col_matrix_store(const raw_data_array &data_ref, char *data,
+	local_ref_contig_col_matrix_store(const local_raw_array &data_ref, char *data,
 			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_col_matrix_store(data_ref,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -616,7 +616,7 @@ public:
 		this->data = data;
 	}
 
-	local_ref_contig_row_matrix_store(const raw_data_array &data_ref, char *data,
+	local_ref_contig_row_matrix_store(const local_raw_array &data_ref, char *data,
 			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_row_matrix_store(data_ref,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -695,7 +695,7 @@ public:
 		assert(cols.size() == ncol);
 	}
 
-	local_ref_col_matrix_store(const raw_data_array &data_ref,
+	local_ref_col_matrix_store(const local_raw_array &data_ref,
 			const std::vector<char *> &cols, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_col_matrix_store(
@@ -755,7 +755,7 @@ public:
 		assert(rows.size() == nrow);
 	}
 
-	local_ref_row_matrix_store(const raw_data_array &data_ref,
+	local_ref_row_matrix_store(const local_raw_array &data_ref,
 			const std::vector<char *> &rows, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_row_matrix_store(
@@ -821,7 +821,7 @@ public:
 		this->data = data;
 	}
 
-	local_cref_contig_col_matrix_store(const raw_data_array &data_ref, const char *data,
+	local_cref_contig_col_matrix_store(const local_raw_array &data_ref, const char *data,
 			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_col_matrix_store(data_ref,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -877,7 +877,7 @@ public:
 		this->data = data;
 	}
 
-	local_cref_contig_row_matrix_store(const raw_data_array &data_ref, const char *data,
+	local_cref_contig_row_matrix_store(const local_raw_array &data_ref, const char *data,
 			off_t global_start_row, off_t global_start_col, size_t nrow, size_t ncol,
 			const scalar_type &type, int node_id): local_row_matrix_store(data_ref,
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
@@ -944,7 +944,7 @@ public:
 		assert(cols.size() == ncol);
 	}
 
-	local_cref_col_matrix_store(const raw_data_array &data_ref,
+	local_cref_col_matrix_store(const local_raw_array &data_ref,
 			const std::vector<const char *> &cols, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_col_matrix_store(data_ref, global_start_row,
@@ -999,7 +999,7 @@ public:
 		assert(rows.size() == nrow);
 	}
 
-	local_cref_row_matrix_store(const raw_data_array &data_ref,
+	local_cref_row_matrix_store(const local_raw_array &data_ref,
 			const std::vector<const char *> &rows, off_t global_start_row,
 			off_t global_start_col, size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(data_ref, global_start_row,

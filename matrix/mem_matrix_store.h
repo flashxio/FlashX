@@ -36,7 +36,6 @@ class vec_store;
 
 /*
  * This is the base class that represents an in-memory complete matrix.
- * It is used for SMP.
  */
 class mem_matrix_store: public matrix_store
 {
@@ -136,21 +135,27 @@ public:
 };
 
 /*
+ * mem_row_matrix_store and mem_col_matrix_store are two simple implementations
+ * of in-memory matrix stores. They store all data in a single piece of
+ * contiguous memory. They are mainly used for storing small matrices.
+ */
+
+/*
  * This represents a column-major matrix. All columns are stored
  * in contiguous memory.
  */
 class mem_col_matrix_store: public mem_matrix_store
 {
-	raw_data_array data;
+	simple_raw_array data;
 
 	mem_col_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 		if (nrow * ncol > 0)
-			data = raw_data_array(nrow * ncol * type.get_size(), -1, false);
+			data = simple_raw_array(nrow * ncol * type.get_size(), -1);
 	}
 protected:
 	mem_col_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			const raw_data_array &data): mem_matrix_store(nrow, ncol,
+			const simple_raw_array &data): mem_matrix_store(nrow, ncol,
 				type) {
 		this->data = data;
 	}
@@ -158,7 +163,7 @@ public:
 	typedef std::shared_ptr<mem_col_matrix_store> ptr;
 	typedef std::shared_ptr<const mem_col_matrix_store> const_ptr;
 
-	static ptr create(const raw_data_array &data, size_t nrow, size_t ncol,
+	static ptr create(const simple_raw_array &data, size_t nrow, size_t ncol,
 			const scalar_type &type) {
 		return ptr(new mem_col_matrix_store(nrow, ncol, type, data));
 	}
@@ -170,7 +175,7 @@ public:
 	static const_ptr cast(matrix_store::const_ptr store);
 	static ptr cast(matrix_store::ptr store);
 
-	const raw_data_array &get_data() const {
+	const simple_raw_array &get_data() const {
 		return data;
 	}
 	virtual const char *get_raw_arr() const {
@@ -221,16 +226,16 @@ public:
  */
 class mem_row_matrix_store: public mem_matrix_store
 {
-	raw_data_array data;
+	simple_raw_array data;
 
 	mem_row_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 		if (nrow * ncol > 0)
-			data = raw_data_array(nrow * ncol * type.get_size(), -1, false);
+			data = simple_raw_array(nrow * ncol * type.get_size(), -1);
 	}
 protected:
 	mem_row_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			const raw_data_array &data): mem_matrix_store(nrow, ncol,
+			const simple_raw_array &data): mem_matrix_store(nrow, ncol,
 				type) {
 		this->data = data;
 	}
@@ -238,7 +243,7 @@ public:
 	typedef std::shared_ptr<mem_row_matrix_store> ptr;
 	typedef std::shared_ptr<const mem_row_matrix_store> const_ptr;
 
-	static ptr create(const raw_data_array &data, size_t nrow, size_t ncol,
+	static ptr create(const simple_raw_array &data, size_t nrow, size_t ncol,
 			const scalar_type &type) {
 		return ptr(new mem_row_matrix_store(nrow, ncol, type, data));
 	}
@@ -250,7 +255,7 @@ public:
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
 
-	const raw_data_array &get_data() const {
+	const simple_raw_array &get_data() const {
 		return data;
 	}
 	virtual const char *get_raw_arr() const {
@@ -314,14 +319,14 @@ class mem_sub_col_matrix_store: public mem_col_matrix_store
 				store.get_data()) {
 		this->orig_col_idxs = col_idxs;
 	}
-	mem_sub_col_matrix_store(const raw_data_array &data,
+	mem_sub_col_matrix_store(const simple_raw_array &data,
 			std::shared_ptr<const std::vector<off_t> > col_idxs, size_t nrow,
 			const scalar_type &type): mem_col_matrix_store(nrow, col_idxs->size(),
 				type, data) {
 		this->orig_col_idxs = col_idxs;
 	}
 public:
-	static ptr create(const raw_data_array &data,
+	static ptr create(const simple_raw_array &data,
 			std::shared_ptr<const std::vector<off_t> > col_idxs, size_t nrow,
 			const scalar_type &type) {
 		return ptr(new mem_sub_col_matrix_store(data, col_idxs, nrow, type));
@@ -374,14 +379,14 @@ class mem_sub_row_matrix_store: public mem_row_matrix_store
 				store.get_data()) {
 		this->orig_row_idxs = row_idxs;
 	}
-	mem_sub_row_matrix_store(const raw_data_array &data,
+	mem_sub_row_matrix_store(const simple_raw_array &data,
 			std::shared_ptr<const std::vector<off_t> > row_idxs, size_t ncol,
 			const scalar_type &type): mem_row_matrix_store(row_idxs->size(),
 				ncol, type, data) {
 		this->orig_row_idxs = row_idxs;
 	}
 public:
-	static ptr create(const raw_data_array &data,
+	static ptr create(const simple_raw_array &data,
 			std::shared_ptr<const std::vector<off_t> > row_idxs, size_t ncol,
 			const scalar_type &type) {
 		return ptr(new mem_sub_row_matrix_store(data, row_idxs, ncol, type));

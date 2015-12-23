@@ -33,7 +33,7 @@ class one_val_matrix_store: public virtual_matrix_store
 {
 	scalar_variable::ptr val;
 	matrix_layout_t layout;
-	std::vector<raw_data_array> portion_bufs;
+	std::vector<simple_raw_array> portion_bufs;
 	int num_nodes;
 	std::shared_ptr<NUMA_mapper> mapper;
 public:

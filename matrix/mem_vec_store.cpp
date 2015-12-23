@@ -55,12 +55,12 @@ bool mem_vec_store::copy_from(const char *buf, size_t num_bytes)
 }
 
 smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_store(
-		length, type), data(length * type.get_size(), -1, false)
+		length, type), data(length * type.get_size(), -1)
 {
 	this->arr = data.get_raw();
 }
 
-smp_vec_store::smp_vec_store(const detail::raw_data_array &data,
+smp_vec_store::smp_vec_store(const detail::simple_raw_array &data,
 		const scalar_type &type): mem_vec_store(
 			data.get_num_bytes() / type.get_size(), type)
 {
@@ -69,7 +69,7 @@ smp_vec_store::smp_vec_store(const detail::raw_data_array &data,
 	this->arr = this->data.get_raw();
 }
 
-smp_vec_store::ptr smp_vec_store::create(const detail::raw_data_array &data,
+smp_vec_store::ptr smp_vec_store::create(const detail::simple_raw_array &data,
 			const scalar_type &type)
 {
 	if (data.get_num_bytes() % type.get_size() != 0) {
@@ -184,7 +184,7 @@ bool smp_vec_store::resize(size_t new_length)
 	}
 
 	// Keep the old information of the vector.
-	detail::raw_data_array old_data = data;
+	detail::simple_raw_array old_data = data;
 	char *old_arr = arr;
 	size_t old_length = get_length();
 
@@ -192,7 +192,7 @@ bool smp_vec_store::resize(size_t new_length)
 	if (real_length == 0)
 		real_length = 1;
 	for (; real_length < new_length; real_length *= 2);
-	this->data = detail::raw_data_array(real_length * get_type().get_size(), -1, false);
+	this->data = detail::simple_raw_array(real_length * get_type().get_size(), -1);
 	this->arr = this->data.get_raw();
 	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
 	return vec_store::resize(new_length);
@@ -215,7 +215,7 @@ bool smp_vec_store::expose_sub_vec(off_t start, size_t length)
 vec_store::ptr smp_vec_store::deep_copy() const
 {
 	assert(get_raw_arr() == data.get_raw());
-	detail::raw_data_array copy = this->data.deep_copy();
+	detail::simple_raw_array copy = this->data.deep_copy();
 	smp_vec_store::ptr ret = smp_vec_store::create(copy, get_type());
 	ret->resize(this->get_length());
 	return ret;

@@ -243,12 +243,12 @@ public:
 
 class local_buf_vec_store: public local_vec_store
 {
-	detail::raw_data_array arr;
+	detail::local_raw_array arr;
 public:
 	local_buf_vec_store(off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(NULL,
 				NULL, global_start, length, type, node_id),
-			arr(length * type.get_size(), -1, true) {
+			arr(length * type.get_size()) {
 		set_data(arr.get_raw(), arr.get_raw());
 	}
 

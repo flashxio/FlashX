@@ -42,8 +42,128 @@ T ceil_divide(T v1, T v2)
 	return ceil(((double) v1) / v2);
 }
 
+/*
+ * This interface is to set the data in the vector of arrays.
+ */
+class set_range_operate
+{
+public:
+	/*
+	 * @buf: the buffer where to initialize data.
+	 * @size: the size of the buffer (the number of bytes).
+	 * @local_off: the offset of the buffer in an array (the number of bytes).
+	 * @arr_id: the id of the array where the buffer is.
+	 */
+	virtual void set(char *buf, size_t size, off_t local_off,
+			int arr_id) const = 0;
+};
+
+class reset_data_task: public thread_task
+{
+	chunked_raw_array arr;
+public:
+	reset_data_task(chunked_raw_array &_arr): arr(_arr) {
+	}
+
+	void run() {
+		arr.reset_data();
+	}
+};
+
+class set_data_task: public thread_task
+{
+	chunked_raw_array &to_buf;
+	off_t to_off;
+	size_t to_size;
+	int node_id;
+	const set_range_operate &set_range;
+	size_t range_size;
+public:
+	// `to_off', `to_size' and `range_size' are in the number of bytes.
+	set_data_task(chunked_raw_array &_arr, off_t to_off, size_t to_size, int node_id,
+			const set_range_operate &_set_range, size_t range_size): to_buf(
+				_arr), set_range(_set_range) {
+		this->to_off = to_off;
+		this->to_size = to_size;
+		this->node_id = node_id;
+		this->range_size = range_size;
+	}
+
+	void run() {
+		for (size_t rel_off = 0; rel_off < to_size; rel_off += range_size) {
+			size_t size = std::min(to_size - rel_off, range_size);
+			off_t off = to_off + rel_off;
+			set_range.set(to_buf.get_raw(off), size, off, node_id);
+		}
+	}
+};
+
+/*
+ * Reset all elements in the arrays.
+ */
+void reset_arrays(std::vector<chunked_raw_array> &arrs);
+/*
+ * Set the elements in the arrays.
+ * @mapper: defines how the elements are distributed in the arrays.
+ * @length: the total number of elements in the arrays.
+ * @entry_size: the size of an element.
+ * @set_range: the function to set elements.
+ * @arrs: the arrays.
+ */
+void set_array_ranges(const NUMA_mapper &mapper, size_t length,
+		size_t entry_size, const set_range_operate &set_range,
+		std::vector<chunked_raw_array> &arrs);
+
+void reset_arrays(std::vector<chunked_raw_array> &arrs)
+{
+	// TODO This only runs a thread for each NUMA node.
+	mem_thread_pool::ptr mem_threads
+		= mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < arrs.size(); i++) {
+		assert(arrs[i].get_node_id() >= 0);
+		mem_threads->process_task(arrs[i].get_node_id(),
+				new reset_data_task(arrs[i]));
+	}
+	mem_threads->wait4complete();
+}
+
+void set_array_ranges(const NUMA_mapper &mapper, size_t length,
+		size_t entry_size, const set_range_operate &set_range,
+		std::vector<chunked_raw_array> &arrs)
+{
+	// The number of threads per NUMA node.
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	size_t nthreads_per_node
+		= mem_threads->get_num_threads() / matrix_conf.get_num_nodes();
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(length);
+	for (size_t i = 0; i < arrs.size(); i++) {
+		size_t num_local_bytes = local_lens[i] * entry_size;
+		// The number of ranges in array of the node.
+		size_t nranges = ceil_divide(local_lens[i], mapper.get_range_size());
+		// The number of ranges a thread should get.
+		size_t nranges_per_thread = ceil_divide(nranges, nthreads_per_node);
+		// The number of bytes a thread should get.
+		size_t nbytes_per_thread
+			= nranges_per_thread * mapper.get_range_size() * entry_size;
+		for (size_t j = 0; j < nthreads_per_node; j++) {
+			if (num_local_bytes <= nbytes_per_thread * j)
+				continue;
+			// The number of bytes a thread actually gets.
+			size_t local_nbytes = std::min(nbytes_per_thread,
+					num_local_bytes - nbytes_per_thread * j);
+			assert(arrs[i].get_node_id() >= 0);
+			mem_threads->process_task(arrs[i].get_node_id(),
+					new set_data_task(arrs[i], nbytes_per_thread * j,
+						local_nbytes, arrs[i].get_node_id(), set_range,
+						mapper.get_range_size() * entry_size));
+		}
+	}
+	mem_threads->wait4complete();
+}
+
 NUMA_vec_store::ptr NUMA_vec_store::create(size_t length, const scalar_type &type,
-		const std::vector<raw_data_array> &data, const NUMA_mapper &mapper)
+		const std::vector<chunked_raw_array> &data, const NUMA_mapper &mapper)
 {
 	if (mapper.get_num_nodes() != data.size()) {
 		BOOST_LOG_TRIVIAL(error)
@@ -91,8 +211,10 @@ NUMA_vec_store::NUMA_vec_store(size_t length, size_t num_nodes,
 	size_t num_eles_per_node = ceil_divide(length, num_nodes);
 	num_eles_per_node = ROUNDUP(num_eles_per_node, mapper.get_range_size());
 	size_t size_per_node = num_eles_per_node * type.get_size();
+	size_t block_bytes = mapper.get_range_size() * type.get_size();
 	for (size_t node_id = 0; node_id < num_nodes; node_id++)
-		data[node_id] = detail::raw_data_array(size_per_node, node_id, false);
+		data[node_id] = detail::chunked_raw_array(size_per_node, block_bytes,
+				node_id);
 }
 
 void NUMA_vec_store::reset_data()
@@ -149,7 +271,7 @@ const char *NUMA_vec_store::get_sub_arr(off_t start, off_t end) const
 
 	std::pair<int, size_t> loc = mapper.map2physical(start);
 	size_t off = loc.second * get_entry_size();
-	return data[loc.first].get_raw() + off;
+	return data[loc.first].get_raw(off);
 }
 
 char *NUMA_vec_store::get_sub_arr(off_t start, off_t end)
@@ -230,27 +352,23 @@ void NUMA_vec_store::sort()
 	std::vector<arr_pair> arrs;
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t nthreads_per_node
-		= mem_threads->get_num_threads() / matrix_conf.get_num_nodes();
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
 	// We first split data into multiple partitions and sort each partition
 	// independently.
+	size_t entry_size = get_type().get_size();
 	for (size_t i = 0; i < data.size(); i++) {
-		// The average number of elements processed in a thread.
-		size_t len_per_thread = ceil_divide(local_lens[i], nthreads_per_node);
-		for (size_t j = 0; j < nthreads_per_node; j++) {
-			char *start = data[i].get_raw() + len_per_thread * j * get_entry_size();
-			assert(local_lens[i] >= len_per_thread * j);
-			// The number of elements processed in this thread.
-			size_t local_len = std::min(len_per_thread,
-					local_lens[i] - len_per_thread * j);
-			arrs.push_back(arr_pair(start, start + local_len * get_entry_size()));
+		for (size_t j = 0; j < data[i].get_num_chunks(); j++) {
+			auto chunk = data[i].get_chunk(j);
+			assert(chunk.second % entry_size == 0);
+			size_t size = std::min(local_lens[i] * entry_size, chunk.second);
+			local_lens[i] -= size / entry_size;
+			arrs.push_back(arr_pair(chunk.first, chunk.first + size));
 			mem_threads->process_task(data[i].get_node_id(),
-					new sort_task(start, local_len, get_type()));
+					new sort_task(chunk.first, size / entry_size, get_type()));
 		}
+		assert(local_lens[i] == 0);
 	}
 	mem_threads->wait4complete();
-	assert(arrs.size() <= (size_t) mem_threads->get_num_threads());
 
 	// Now we should merge the array parts together.
 	size_t tot_num_bytes = get_length() * get_entry_size();
@@ -272,26 +390,6 @@ bool NUMA_vec_store::copy_from(const char *buf, size_t num_bytes)
 	return true;
 }
 
-bool NUMA_vec_store::copy_from(const NUMA_vec_store &vec)
-{
-	if (get_type() != vec.get_type()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't copy from a vector of different type";
-		return false;
-	}
-
-	if (mapper != vec.mapper) {
-		BOOST_LOG_TRIVIAL(error) << "The vector has different NUMA setup";
-		return false;
-	}
-
-	// TODO we should do it in parallel.
-	for (size_t i = 0; i < data.size(); i++)
-		if (!data[i].copy_from(vec.data[i]))
-			return false;
-	return true;
-}
-
 vec_store::ptr NUMA_vec_store::sort_with_index()
 {
 	assert(!is_sub_vec());
@@ -307,6 +405,7 @@ bool NUMA_vec_store::is_sorted() const
 
 vec_store::ptr NUMA_vec_store::deep_copy() const
 {
+	// TODO I need to make it in parallel.
 	NUMA_vec_store *ret = new NUMA_vec_store(*this);
 	for (size_t i = 0; i < data.size(); i++)
 		ret->data[i] = data[i].deep_copy();

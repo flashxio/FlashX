@@ -393,7 +393,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 		return async_cres_t(valid_data, ret);
 	}
 
-	raw_data_array data_arr(num_bytes, -1, true);
+	local_raw_array data_arr(num_bytes);
 	// Read the portion in a single I/O request.
 	local_matrix_store::ptr buf;
 	if (store_layout() == matrix_layout_t::L_ROW)
@@ -472,8 +472,7 @@ void EM_matrix_store::write_portion_async(
 	// If this is the very last portion (the bottom right portion), the data
 	// size may not be aligned with the page size.
 	if (num_bytes % PAGE_SIZE != 0) {
-		raw_data_array data_arr(ROUNDUP(num_bytes, PAGE_SIZE),
-				portion->get_node_id(), true);
+		local_raw_array data_arr(ROUNDUP(num_bytes, PAGE_SIZE));
 		// if the data layout is row wise, we should align the number of
 		// rows, so the rows are still stored contiguously.
 		if (store_layout() == matrix_layout_t::L_ROW) {

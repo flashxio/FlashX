@@ -33,6 +33,20 @@ namespace fm
 namespace detail
 {
 
+/*
+ * NUMA_matrix_store is optimized for storing large matrices. It mainly targets
+ * large NUMA machines, but it should also be used to for large matrices in
+ * a SMP machine. It has the same format as the external-memory dense matrix.
+ * It chunks a dense matrix into portions horizontally for tall matrices and
+ * vertically for wide matrices and stores all elements in a portion
+ * contiguously. In this way, we can allocate memory in chunks to store
+ * a matrix and memory chunks can be reused when the matrix is destroyed.
+ * The reason that we want to reuse memory chunks is that it is expensive
+ * to allocate large memory chunks. When we allocate large memory chunks
+ * and populate them with pages, we keep them and reuse them to avoid
+ * the overhead of populating memory with pages.
+ */
+
 class NUMA_matrix_store: public mem_matrix_store
 {
 	const size_t data_id;
@@ -86,20 +100,20 @@ class NUMA_row_tall_matrix_store: public NUMA_matrix_store
 {
 	// This is to map rows to different NUMA nodes.
 	NUMA_mapper mapper;
-	std::vector<detail::raw_data_array> data;
+	std::vector<detail::chunked_raw_array> data;
 
 	// The copy constructor performs shallow copy.
 	NUMA_row_tall_matrix_store(const NUMA_row_tall_matrix_store &mat);
 
 	NUMA_row_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
-	NUMA_row_tall_matrix_store(const std::vector<detail::raw_data_array> &data,
+	NUMA_row_tall_matrix_store(const std::vector<detail::chunked_raw_array> &data,
 			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
 			const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_row_tall_matrix_store> ptr;
 
-	static ptr create(const std::vector<detail::raw_data_array> &data,
+	static ptr create(const std::vector<detail::chunked_raw_array> &data,
 			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
 			const scalar_type &type) {
 		return ptr(new NUMA_row_tall_matrix_store(data, nrow, ncol,

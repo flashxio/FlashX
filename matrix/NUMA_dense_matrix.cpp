@@ -87,7 +87,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 }
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
-		const std::vector<detail::raw_data_array> &data, size_t nrow, size_t ncol,
+		const std::vector<detail::chunked_raw_array> &data, size_t nrow, size_t ncol,
 		const NUMA_mapper &_mapper, const scalar_type &type): NUMA_matrix_store(
 			nrow, ncol, type, mat_counter++), mapper(_mapper)
 {
@@ -107,23 +107,25 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
+	size_t block_bytes = mapper.get_range_size() * ncol * get_entry_size();
 	for (int node_id = 0; node_id < num_nodes; node_id++)
-		data[node_id] = detail::raw_data_array(
-				local_lens[node_id] * ncol * get_entry_size(), node_id, false);
+		data[node_id] = detail::chunked_raw_array(
+				local_lens[node_id] * ncol * get_entry_size(), block_bytes,
+				node_id);
 }
 
 char *NUMA_row_tall_matrix_store::get_row(size_t row_idx)
 {
 	auto phy_loc = mapper.map2physical(row_idx);
-	return data[phy_loc.first].get_raw()
-		+ phy_loc.second * get_num_cols() * get_entry_size();
+	return data[phy_loc.first].get_raw(
+			phy_loc.second * get_num_cols() * get_entry_size());
 }
 
 const char *NUMA_row_tall_matrix_store::get_row(size_t row_idx) const
 {
 	auto phy_loc = mapper.map2physical(row_idx);
-	return data[phy_loc.first].get_raw()
-		+ phy_loc.second * get_num_cols() * get_entry_size();
+	return data[phy_loc.first].get_raw(
+			phy_loc.second * get_num_cols() * get_entry_size());
 }
 
 const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,

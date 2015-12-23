@@ -33,7 +33,7 @@
 namespace fm
 {
 
-vector_vector::ptr vector_vector::create(const detail::raw_data_array &data,
+vector_vector::ptr vector_vector::create(const detail::simple_raw_array &data,
 		const std::vector<off_t> &offs, const scalar_type &type)
 {
 	detail::mem_vv_store::ptr vec = detail::mem_vv_store::create(data,
