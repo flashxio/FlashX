@@ -1,0 +1,45 @@
+/*Wrapping element for Sticky-Footer*/
+html {
+  	min-height: 100%;
+  	position: relative;
+}
+
+body {
+  	/* Margin bottom by footer height */
+  	margin-bottom: 60px;
+}
+
+/*404 Error Page V3
+------------------------------------*/
+.error-v3 {
+	text-align: center;	
+}
+
+.error-v3 h2 {
+	color: #eee;	
+	font-size: 200px;
+	line-height: 200px;
+	padding-bottom: 10px;
+}
+
+.error-v3 p {
+	color: #eee;
+	font-size: 25px;
+	margin-bottom: 50px;
+}
+
+/*Sticky-Footer
+------------------------------------*/
+.sticky-footer {
+  	position: absolute;
+  	bottom: 0;
+  	width: 100%;
+  	padding: 20px;
+  	/* Set the fixed height of the footer here */
+  	height: 60px;
+}
+
+.sticky-footer .copyright-space {
+	color: #eee;
+	text-align: center;
+}

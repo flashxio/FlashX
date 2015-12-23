@@ -1,0 +1,224 @@
+/*Pricing Page
+------------------------------------*/
+/*Pricing Head*/
+.pricing-bg-colored .no-space-pricing [class^="col-"],
+.pricing-bg-colored .no-space-pricing [class*=" col-"] {
+	padding: 0;
+}
+.pricing-bg-colored .pricing {
+	position:relative;
+	box-shadow:0 0 5px #eee;
+}
+.pricing-bg-colored .pricing:hover {
+	box-shadow:0 0 15px #b5b5b5;
+}
+.pricing-bg-colored .pricing:hover h4 {
+	color:#74C52C;
+}
+.pricing-bg-colored .pricing-head {
+	text-align:center;
+}
+.pricing-bg-colored .pricing h3,
+.pricing-bg-colored .pricing h4 {
+	margin:0;
+	line-height:normal;
+	font-weight:bold;
+}
+
+.pricing-bg-colored .pricing p {
+	padding-top: 10px;
+	font-size: 11px;
+}
+.pricing-bg-colored .pricing-head h3 span, 
+.pricing-bg-colored .pricing-head h4 span {
+	display:block;
+	margin-top:5px;
+	font-size:12px;
+	font-style:italic;
+}
+.pricing-bg-colored .pricing-head h3 {
+	color:#fafafa;
+	padding:12px 0;
+	font-size:35px;
+	font-family:Arial;
+	background:#74C52C;
+	border-radius:3px 3px 0 0;
+	text-shadow:0 1px 0 #32a20f;
+}
+	
+/*Pricing Content*/
+
+.pricing-bg-colored .pricing-content  {
+	margin-bottom: 0px;
+}
+.pricing-bg-colored .pricing-content li {
+	color:#888;
+	font-size:12px;
+	padding:7px 15px;
+	border-bottom:solid 1px #f5f9e7;
+}
+.pricing-bg-colored .pricing-content li i {
+	color:#72c02c;
+	font-size:16px;
+	margin-right:5px;
+	position:relative;
+}
+
+/*Pricing Footer*/
+.pricing-bg-colored .pricing-footer {
+	color:#777;
+	font-size:11px;
+	line-height:17px;
+	text-align:center;
+	padding:0 20px 19px;
+	border-radius:0 0 3px 3px;
+}
+
+/*Pricing Active*/
+.pricing-bg-colored .price-active,
+.pricing-bg-colored .pricing:hover {
+	z-index:9;
+	margin-top: -15px;
+}
+.pricing-bg-colored .price-active h4 {
+	color:#74C52C;
+}
+
+/*Pricing Extra*/
+.pricing-bg-colored .bg-color {
+	background-color: #f9f9f9;	
+}
+.pricing-bg-colored .no-space-pricing {
+	padding: 0 15px;
+}
+.pricing-bg-colored .sticker-right,
+.pricing-bg-colored .sticker-left {
+  	color: #fff;
+	width: 150px;
+	padding: 5px;
+	font-size: 13px;
+	font-weight: bold;
+	font-family: Arial;
+	position: absolute;
+	text-align: center;
+	letter-spacing: 2px;
+	}
+
+ .pricing-bg-colored .sticker-right {
+    top: 13px;
+    right: -49px;
+    background: rgba(231, 76, 60, 1);
+    transform: rotate(45deg);   
+	-o-transform: rotate(45deg);
+	-ms-transform: rotate(45deg);
+	-moz-transform: rotate(45deg);
+	-webkit-transform: rotate(45deg);
+}
+ .pricing-bg-colored .sticker-left {
+    top: 9px;
+    left: -48px;
+   	background: rgba(116, 197, 44, 1);
+    transform: rotate(-45deg);   
+	-o-transform: rotate(-45deg);
+	-ms-transform: rotate(-45deg);
+	-moz-transform: rotate(-45deg);
+	-webkit-transform: rotate(-45deg);
+}
+
+/*Pricing Table Colored Background Version 
+------------------------------------*/
+.price-active, 
+.pricing-bg-colored	.pricing:hover {
+	margin-top: 0;
+}
+.pricing-bg-colored .pricing {
+	overflow: hidden;
+}
+.pricing-bg-colored .pricing {
+	border: 1px solid #EEEEEE;
+}
+.pricing-bg-colored .pricing:hover {	
+	background: #74C52C; 
+}
+.pricing-bg-colored .pricing:hover li,
+.pricing-bg-colored .pricing:hover li i, 
+.pricing-bg-colored .pricing:hover .pricing-head p {
+	color: #fff; 
+}
+.pricing-bg-colored .pricing-head i {
+	color: #74C52C;
+	padding-top: 20px;	
+	margin-top: 10px 0px;
+}
+.pricing-bg-colored .pricing-head p {
+	color: #777;
+	line-height: 17px;
+	text-align:center;
+	padding: 0px 20px 19px;
+	border-radius: 0 0 3px 3px;
+	border-bottom: 1px solid #F5F9E7;
+}
+
+.pricing-bg-colored ul {
+	margin-top: -8px;
+}
+.pricing-bg-colored .pricing-footer {
+	padding: 2px 0px 19px;
+}
+.pricing-bg-colored .pricing-footer h4 {
+	color: #999;
+	font-size: 70px;
+	padding: 5px 0px;
+	margin-top: -2px;
+	font-family: Arial;
+	background: #F7F7F7;
+	margin-bottom: 20px;
+	text-shadow: 0 1px 0 #fff;
+}
+.pricing-bg-colored .pricing:hover h4 {
+	background: #fff;
+}
+.pricing-bg-colored h4 i {
+	top: -8px;
+	font-size: 28px;
+	font-style: normal;
+	position: relative;
+}
+.pricing-bg-colored h4 span {
+	top: -10px;
+	display: block;
+	margin-top: 5px;
+	font-size: 14px;
+	font-style: normal;
+	position: relative;
+}
+
+
+/* Devices (Desktop Mode) */
+@media (min-width: 992px) and (max-width: 1200px) {
+	 .sticker-right {
+		top: 10px;
+	    right: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}	
+	 .sticker-left {
+		top: 10px;
+	    left: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}
+}
+
+/* Medium Devices (Desktops, 992px and less) */
+@media (max-width: 991px) {
+	/*Pricing Page*/
+	.price-active,
+	.pricing:hover {
+		margin-top: 0;
+	}
+	.no-space-pricing [class^="col-"],
+	.no-space-pricing [class*=" col-"] {
+		padding: 10px;
+	}
+}

@@ -1,0 +1,75 @@
+/*Portfolio v2
+------------------------------------*/
+.sorting-block ul {
+	margin: 0;
+	padding: 0;
+}
+
+/*Sorting Navigation*/
+.sorting-block .sorting-nav {
+	margin-bottom: 30px;
+}
+
+.sorting-block .sorting-nav li {
+	padding: 0 2px;
+	font-size: 14px;
+	cursor: pointer;
+	list-style: none;
+	display: inline-block;
+}
+
+.sorting-block .sorting-nav li.active {
+	color: #72c02c;
+	border-bottom: solid 1px #72c02c;
+}
+
+/*Sorting Navigation v1*/
+.sorting-block .sorting-nav-v1 li {
+	margin: 0 5px;
+	font-size: 17px;
+	font-style: italic;
+}
+
+/*Sorting Grid*/
+.sorting-block .sorting-grid {
+	list-style: none;
+}
+
+.sorting-block .sorting-grid .mix {
+    opacity: 0;
+    display: none;
+    margin-bottom: 30px;
+}
+
+/*Sorting Grid with Text*/
+.sorting-block .sorting-grid li a:hover  {
+	text-decoration: none;
+}
+
+.sorting-block .sorting-grid li .sorting-cover {	
+	padding: 8px;
+	display: block;
+	margin-top: 1px;
+	background: #fcfcfc;
+}
+
+.sorting-block .sorting-grid li .sorting-cover p {	
+	margin-bottom: 0;
+}
+
+.sorting-block .sorting-grid li .sorting-cover span {	
+	font-size: 16px;
+}
+
+.sorting-block .sorting-grid li a:hover .sorting-cover {
+	background: #72c02c;
+    -webkit-transition: all 0.4s ease;
+    -moz-transition: all 0.4s ease;
+    -o-transition: all 0.4s ease;
+    transition: all 0.4s ease;	
+}
+
+.sorting-block .sorting-grid li a:hover .sorting-cover p,
+.sorting-block .sorting-grid li a:hover .sorting-cover span {
+	color: #fff;
+}

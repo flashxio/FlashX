@@ -1,0 +1,66 @@
+/* 
+* Version: 1.6
+* Default Color 	  : #72c02c;
+* Default Hover Color : #5fb611;
+*/
+
+/*If you are using default Unify color (green - #72c02c), you do not need to link (use) default.css*/
+.header-v8 .dropdown-menu {
+	border-top: solid 3px #72c02c;
+}
+.header-v8 .dropdown-menu .active > a,
+.header-v8 .dropdown-menu li > a:hover {
+	color: #72c02c;
+}
+.header-v8 .navbar-nav .open .dropdown-menu > li > a:hover,
+.header-v8 .navbar-nav .open .dropdown-menu > li > a:focus {
+	color: #72c02c;
+}
+.header-v8 .navbar-nav .open .dropdown-menu > .active > a,
+.header-v8 .navbar-nav .open .dropdown-menu > .active > a:hover,
+.header-v8 .navbar-nav .open .dropdown-menu > .active > a:focus {
+	color: #72c02c;
+}
+
+.header-v8 .navbar-nav .open .dropdown-menu > .disabled > a,
+.header-v8 .navbar-nav .open .dropdown-menu > .disabled > a:hover,
+.header-v8 .navbar-nav .open .dropdown-menu > .disabled > a:focus {
+	color: #72c02c;
+}
+.header-v8 .navbar-nav > li > a:hover {
+	color: #72c02c;
+}
+.header-v8 .navbar-nav > .active > a,
+.header-v8 .navbar-nav > .active > a:hover,
+.header-v8 .navbar-nav > .active > a:focus {
+	color: #72c02c !important;
+}
+.header-v8 .mega-menu .mega-menu-fullwidth .dropdown-link-list li a:hover {
+	color: #72c02c;
+}
+.footer-v8 .footer .column-one a:hover {
+	color: #72c02c;
+}
+.footer-v8 .footer .tags-v4 a:hover {
+	border-color: #72c02c;
+	background-color: #72c02c;
+}
+.footer-v8 .footer .footer-lists li a:hover {
+	color: #72c02c;
+}
+.footer-v8 .footer .latest-news h3 a:hover {
+	color: #72c02c;
+}
+.footer-v8 .footer .input-group-btn .input-btn {
+	background: #72c02c;
+}
+.footer-v8 .footer .social-icon-list li i:hover {
+	background: #72c02c;
+	border-color: #72c02c;
+}
+.blog-thumb .blog-thumb-hover:hover:after {
+	background: rgba(114,192,44,0.9);
+}
+.blog-grid .blog-grid-grad i:hover {
+	background: rgba(114,192,44,1);
+}

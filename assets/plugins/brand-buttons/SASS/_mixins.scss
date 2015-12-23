@@ -1,0 +1,21 @@
+@mixin btn($color) {
+  background-color: transparent;
+  border-color: $color;
+  color: $color;
+
+  &:hover {
+    background-color: $color;
+    color: rgb(255, 255, 255);
+  }
+}
+
+@mixin btn-inversed($color) {
+  background-color: $color;
+  border-color: $color;
+  color: rgb(255, 255, 255);
+
+  &:hover {
+    background-color: transparent;
+    color: $color;
+  }
+}

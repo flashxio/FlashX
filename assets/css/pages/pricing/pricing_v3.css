@@ -1,0 +1,423 @@
+/*
+Green:       	#74C52C    rgba(116,197,44, 1);
+Blue:        	#3498db    rgba(52,152,219, 1);
+Orange:      	#e67e22    rgba(230,126,34, 1);
+Red:         	#e74c3c	   rgba(231,76,60, 1);
+Grey:        	#bdc3c7	   rgba(189,195,199, 1);
+Purple:      	#9b6bcc	   rgba(155,107,204, 1);	
+Aqua:        	#27d7e7    rgba(39,215,231, 1);
+Brown:       	#9c8061    rgba(156,128,97, 1);
+Dark Blue:   	#4765a0    rgba(71,101,160, 1);
+Light Green: 	#79d5b3    rgba(121,213,179, 1);
+*/
+
+
+/*Pricing Page v3
+------------------------------------*/
+.pricing-table-v3 .sticker-right,
+.pricing-table-v3 .sticker-left {
+  	color: #fff;
+	width: 150px;
+	padding: 1px;
+	font-size: 10px;
+	font-weight: bold;
+	font-family: Arial;
+	position: absolute;
+	text-align: center;
+	letter-spacing: 2px;
+	background-color: rgba(116,197,44, 0.9);
+}
+
+ .pricing-table-v3 .sticker-right {
+    top: 10px;
+    right: -59px;
+    transform: rotate(45deg);   
+	-o-transform: rotate(45deg);
+	-ms-transform: rotate(45deg);
+	-moz-transform: rotate(45deg);
+	-webkit-transform: rotate(45deg);
+}
+
+ .pricing-table-v3 .sticker-left {
+    top: 10px;
+    left: -58px;
+    transform: rotate(-45deg);   
+	-o-transform: rotate(-45deg);
+	-ms-transform: rotate(-45deg);
+	-moz-transform: rotate(-45deg);
+	-webkit-transform: rotate(-45deg);
+}
+
+.pricing-table-v3 .bg-green {
+	background-color: rgba(116,197,44, 0.9);
+}
+
+.pricing-table-v3 .bg-blue {
+	background-color: rgba(52, 152, 219, 1);
+}
+
+.pricing-table-v3 .bg-orange {
+	background-color: rgba(230,126,34, 1);
+}
+
+.pricing-table-v3 .bg-red {
+	background-color: rgba(231,76,60, 1);
+}
+
+.pricing-table-v3 .bg-grey {
+	background-color: rgba(189,195,199, 1);
+}
+
+.pricing-table-v3 .bg-purple {
+	background-color: rgba(155,107,204, 1);
+}
+
+.pricing-table-v3 .bg-aqua {
+	background-color: rgba(39,215,231, 1);
+}
+
+.pricing-table-v3 .bg-brown {
+	background-color: rgba(156,128,97, 1);
+}
+
+.pricing-table-v3 .bg-dark-blue {
+	background-color: rgba(71,101,160, 1);
+}
+
+.pricing-table-v3 .bg-light-green {
+	background-color: rgba(121,213,179, 1);
+}
+
+.pricing-table-v3 .pricing-v3 {
+	overflow: hidden;
+	position: relative;
+	margin-bottom: 30px;
+	background: rgba(116,197,44, 0.1);
+	border: 2px solid rgba(116,197,44, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-head {
+	overflow: hidden;
+	border-bottom: 1px rgba(116,197,44, 0.1);
+}
+
+.pricing-table-v3 .pricing-v3-head h4,
+.pricing-table-v3 .pricing-v3-head h5 {
+	margin: 0;
+	font-family: Arial;
+	letter-spacing: 1px;
+	color: rgba(116,197,44, 1);
+}
+
+.pricing-table-v3 .pricing-v3-head h4 {
+	font-size: 20px;
+	padding: 20px 0;
+}
+
+.pricing-table-v3 .pricing-v3-head h5 {
+	color: #fff;
+	font-size: 50px;
+	padding: 30px 0 20px 34px;
+	background: rgba(116,197,44, 1);
+}
+
+.pricing-table-v3 .pricing-v3-head h5 i {
+	display: inline;
+	font-size: 13px;
+	padding-left: 2px;
+    position: relative;
+	font-style: normal;
+}
+
+.pricing-table-v3 .pricing-v3-head h5 span {
+	top: -2px;
+	font-size: 23px;
+	position: relative;
+	padding-right: 2px;
+}
+
+.pricing-table-v3  .pricing-v3-content {
+	margin-bottom: 0;
+}
+
+
+.pricing-table-v3 .pricing-v3-content li {
+	margin: 0;
+	font-size: 14px;
+	padding: 12px 20px;
+	color: rgba(116,197,44, 1);
+	border-bottom: 1px solid rgba(116,197,44, 0.2);
+}
+
+.pricing-table-v3 .pricing-v3-content li i {
+	display: inherit;
+	float: right;
+	font-style: normal;
+	margin-right: 10px;
+	color: rgba(116,197,44, 1);
+}
+
+.pricing-table-v3 .pricing-v3-blue {
+	background: rgba(52, 152, 219, 0.1);
+	border: 2px solid rgba(52, 152, 219, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-blue .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-blue .pricing-v3-content li {
+	border-bottom: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-blue h5 {
+	background: rgba(52, 152, 219, 1);
+}
+
+.pricing-table-v3 .pricing-v3-blue h4,
+.pricing-table-v3 .pricing-v3-blue .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-blue .pricing-v3-content li i {
+	color: rgba(52, 152, 219, 1);
+}
+
+.pricing-table-v3 .pricing-v3-orange {
+	background: rgba(230,126,34, 0.1);
+	border: 2px solid rgba(230,126,34, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-orange .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-orange .pricing-v3-content li {
+	border-bottom: 1px solid rgba(230,126,34,0.32)
+}
+
+.pricing-table-v3 .pricing-v3-orange h5 {
+	background: rgba(230,126,34, 1);
+}
+
+.pricing-table-v3 .pricing-v3-orange h4,
+.pricing-table-v3 .pricing-v3-orange .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-orange .pricing-v3-content li i {
+	color: rgba(230,126,34, 1);
+}
+
+.pricing-table-v3 .pricing-v3-red {
+	background: rgba(231,76,60, 0.1);
+	border: 2px solid rgba(231,76,60, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-red .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-red .pricing-v3-content li {
+	border-bottom: 1px solid rgba(231,76,60, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-red h5 {
+	background: rgba(231,76,60, 1);
+}
+
+.pricing-table-v3 .pricing-v3-red h4,
+.pricing-table-v3 .pricing-v3-red .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-red .pricing-v3-content li i {
+	color: rgba(231,76,60, 1);
+}
+
+.pricing-table-v3 .pricing-v3-grey {
+	background: #f9f9f9;
+	border: 2px solid #888;
+}
+
+.pricing-table-v3 .pricing-v3-grey .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-grey .pricing-v3-content li {
+	border-bottom: 1px solid #eee;
+}
+
+.pricing-table-v3 .pricing-v3-grey h5 {
+	background: #999;
+}
+
+.pricing-table-v3 .pricing-v3-grey h4,
+.pricing-table-v3 .pricing-v3-grey .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-grey .pricing-v3-content li i {
+	color: #888;
+}
+
+.pricing-table-v3 .pricing-v3-purple {
+	background: rgba(155,107,204, 0.1);
+	border: 2px solid rgba(155,107,204, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-purple .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-purple .pricing-v3-content li {
+	border-bottom: 1px solid rgba(155,107,204, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-purple h5 {
+	background: rgba(155,107,204, 1);
+}
+
+.pricing-table-v3 .pricing-v3-purple h4,
+.pricing-table-v3 .pricing-v3-purple .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-purple .pricing-v3-content li i {
+	color: rgba(155,107,204, 1);
+}
+
+.pricing-table-v3 .pricing-v3-aqua {
+	background: rgba(39,215,231, 0.1);
+	border: 2px solid rgba(39,215,231, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-aqua .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-aqua .pricing-v3-content li {
+	border-bottom: 1px solid rgba(39,215,231, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-aqua h5 {
+	background: rgba(39,215,231, 1);
+}
+
+.pricing-table-v3 .pricing-v3-aqua h4,
+.pricing-table-v3 .pricing-v3-aqua .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-aqua .pricing-v3-content li i {
+	color: rgba(39,215,231, 1);
+}
+
+.pricing-table-v3 .pricing-v3-brown {
+	background: rgba(156,128,97, 0.1);
+	border: 2px solid rgba(156,128,97, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-brown .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-brown .pricing-v3-content li {
+	border-bottom: 1px solid rgba(156,128,97, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-brown h5 {
+	background: rgba(156,128,97, 1);
+}
+
+.pricing-table-v3 .pricing-v3-brown h4,
+.pricing-table-v3 .pricing-v3-brown .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-brown .pricing-v3-content li i {
+	color: rgba(156,128,97, 1);
+}
+
+.pricing-table-v3 .pricing-v3-dark-blue {
+	background: rgba(71,101,160, 0.1);
+	border: 2px solid rgba(71,101,160, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-dark-blue .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-dark-blue .pricing-v3-content li {
+	border-bottom: 1px solid rgba(71,101,160, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-dark-blue h5 {
+	background: rgba(71,101,160, 1);
+}
+
+.pricing-table-v3 .pricing-v3-dark-blue h4,
+.pricing-table-v3 .pricing-v3-dark-blue .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-dark-blue .pricing-v3-content li i {
+	color: rgba(71,101,160, 1);
+}
+
+.pricing-table-v3 .pricing-v3-light-green {
+	background: rgba(121,213,179, 0.1);
+	border: 2px solid rgba(121,213,179, 0.6);
+}
+
+.pricing-table-v3 .pricing-v3-light-green .pricing-v3-head,
+.pricing-table-v3 .pricing-v3-light-green .pricing-v3-content li {
+	border-bottom: 1px solid rgba(121,213,179, 0.3);
+}
+
+.pricing-table-v3 .pricing-v3-light-green h5 {
+	background: rgba(121,213,179, 1);
+}
+
+.pricing-table-v3 .pricing-v3-light-green h4,
+.pricing-table-v3 .pricing-v3-light-green .pricing-v3-content li,
+.pricing-table-v3 .pricing-v3-light-green .pricing-v3-content li i {
+	color: rgba(121,213,179, 1);
+}
+
+
+ /* Devices (Large Screen Mode, 1200px more) */
+@media (min-width: 1200px) {
+	/* Can be modefied if needed*/
+}
+
+/* Devices (Desktop Mode, 992px and 1200px) */
+@media (min-width: 992px) and (max-width: 1200px) {
+	/* Can be modefied if needed*/
+}
+
+/* Devices (Tablet Mode, 768px and 991px) */
+@media (min-width: 767px) and (max-width: 991px) {
+	
+	.no-space-pricing [class^="col-"],
+	.no-space-pricing [class*=" col-"] {
+		padding: 5px;
+	}
+	
+	.pricing-table-v3 .pricing-v3-head h4 {
+		font-size: 17px;
+	}
+
+	.pricing-table-v3 .pricing-v3-content li {
+		padding: 12px 7px;
+	}
+
+}
+
+/* Medium Devices (Phone Mode, 768px and less) */
+@media (max-width: 767px) {
+	/*Pricing Page*/
+	
+	.no-space-pricing [class^="col-"],
+	.no-space-pricing [class*=" col-"] {
+		padding: 10px;
+	}
+
+	.pricing-table-v3 .sticker-right,
+	.pricing-table-v3 .sticker-left {
+		top: 109px;
+		padding: 0;
+		float: left;
+		left: -43px;
+		width: 104px;
+		border: none;
+		background: #585F69;
+	    transform: rotate(270deg);   
+		-o-transform: rotate(270deg);
+		-ms-transform: rotate(270deg);
+		-moz-transform: rotate(270deg);
+		-webkit-transform: rotate(270deg);
+	}
+
+	.pricing-table-v3 .pricing-v3-content {
+		text-align: center;
+	}
+
+	.pricing-table-v3 .pricing-v3-head h4 {
+		font-size: 14px;
+	}
+
+	.pricing-table-v3 .pricing-v3-head h5 {
+		font-size: 43px;
+		padding-left: 10px;
+	}
+
+	.pricing-table-v3 .pricing-v3-head h5 span {
+		font-size: 16px;
+	}
+
+	.pricing-table-v3 .pricing-v3-head h5 i {
+		display: block;
+		font-size: 12px;
+		margin-top: 5px;
+		padding-left: 10px;
+	}
+
+	.pricing-table-v3 .pricing-v3-content li i {
+		float: none;
+		display: block;
+		margin-top: 5px; 
+	}
+}

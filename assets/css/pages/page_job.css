@@ -1,0 +1,82 @@
+/*Job
+------------------------------------*/
+.job-img {
+	overflow: hidden;
+	position: relative;
+	min-height: 300px;
+	background: url(../../img/bg/11.jpg) 70% 40% no-repeat;
+}
+
+.job-img .job-banner {
+	padding: 20px;
+	max-width: 450px;
+	margin: 60px auto 100px;	
+	background: rgba(255,255,255,0.8);
+}
+
+.job-img .job-banner h2 {
+	font-size: 20px;
+	line-height: 27px;
+	text-align: center;
+	text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+	.job-img .job-banner {
+		padding: 10px;
+		margin: 30px auto 100px;	
+	}
+}
+
+.job-img .job-img-inputs {
+	left: 0;
+	right: 0;
+	bottom: -7px;
+	padding: 20px 0;
+	position: absolute;
+	background: rgba(0,0,0,0.9);
+}
+
+/*Job-Content
+------------------------------------*/
+.job-content .categories li {
+	padding: 6px 0;
+	border-bottom: 1px dotted #eee;
+}
+
+.job-content .hex {
+	color: #999
+}
+
+/*High-Rated
+------------------------------------*/
+.high-rated .carousel-indicators {
+	top: 10px;
+	left: 65%;
+	text-align: right;
+}
+
+.high-rated .carousel-indicators .active {
+	background: #555;
+}
+
+.high-rated .carousel-indicators li {
+	border-color: #555;
+}
+
+.high-rated .carousel-inner > .item {
+	margin: 0;
+}
+
+.high-rated .star-vote {
+	float: right;
+	margin-top: 8px;
+}
+
+.high-rated .star-vote ul {
+	margin-bottom: 0;
+}
+
+.high-rated .star-vote li {
+	padding: 0;
+}

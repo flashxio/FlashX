@@ -1,0 +1,246 @@
+/*Pricing Page
+------------------------------------*/
+/*Pricing Head*/
+.pricing-rounded .no-space-pricing [class^="col-"],
+.pricing-rounded .no-space-pricing [class*=" col-"] {
+	padding: 0;
+}
+
+.pricing-rounded .pricing {
+	position:relative;
+	border-radius:3px;
+	margin-bottom:15px;
+	box-shadow:0 0 5px #eee;
+}
+
+.pricing-rounded .pricing:hover {
+	box-shadow:0 0 15px #b5b5b5;
+}
+
+.pricing-rounded .pricing:hover h4 {
+	color:#74C52C;
+}
+
+.pricing-rounded .pricing-head {
+	text-align:center;
+}
+
+.pricing-rounded .pricing h3,
+.pricing-rounded .pricing h4 {
+	margin:0;
+	line-height:normal;
+	font-weight:bold;
+}
+
+.pricing-rounded .pricing p {
+	padding-top: 10px;
+	font-size: 11px;
+}
+
+.pricing-rounded .pricing-head h3 span, 
+.pricing-rounded .pricing-head h4 span {
+	display:block;
+	margin-top:5px;
+	font-size:12px;
+	font-style:italic;
+}
+
+.pricing-rounded .pricing-head h3 {
+	color:#fafafa;
+	padding:12px 0;
+	font-size:35px;
+	font-family:Arial;
+	background:#74C52C;
+	border-radius:3px 0 0 3px;
+	text-shadow:0 1px 0 #32a20f;
+}
+.pricing-rounded .pricing-head h4 {
+	color: #888;
+	padding:5px 0;
+	font-size:70px;
+	text-shadow:0 1px 0 #fff;
+	border-bottom:solid 1px #f5f9e7;
+}
+.pricing-rounded .pricing-head h4 i {
+	top:-8px;
+	font-size:28px;
+	font-style:normal;
+	position:relative;
+}
+
+.pricing-rounded .pricing-head h4 span {
+	top:-10px;
+	font-size:14px;
+	font-style:normal;
+	position:relative;
+}
+	
+/*Pricing Content*/
+
+.pricing-rounded .pricing-content  {
+	margin-bottom: 0px;
+}
+
+.pricing-rounded .pricing-content li {
+	color:#888;
+	font-size:12px;
+	padding:7px 15px;
+	border-bottom:solid 1px #f5f9e7;
+}
+
+.pricing-rounded .pricing-content li i {
+	color:#72c02c;
+	font-size:16px;
+	margin-left:5px;
+	position:relative;
+}
+
+/*Pricing Footer*/
+.pricing-rounded .pricing-footer {
+	color:#777;
+	font-size:11px;
+	line-height:17px;
+	text-align:center;
+	padding:0 20px 19px;
+	border-radius:0 3px 3px 0;
+}
+
+/*Pricing Active*/
+.pricing-rounded .price-active,
+.pricing-rounded .pricing:hover {
+	z-index:9;
+	margin-top: -15px;
+}
+
+.pricing-rounded .price-active h4 {
+	color:#74C52C;
+}
+
+/*Pricing Extra*/
+
+ .pricing-rounded .bg-color {
+	background-color: #f9f9f9;	
+}
+
+.pricing-rounded .no-space-pricing {
+	padding: 0 15px;
+}
+
+.pricing-rounded .sticker-right,
+.pricing-rounded .sticker-left {
+  	color: #fff;
+	width: 150px;
+	padding: 5px;
+	font-size: 13px;
+	font-weight: bold;
+	font-family: Arial;
+	position: absolute;
+	text-align: center;
+	letter-spacing: 2px;
+}
+
+ .pricing-rounded .sticker-right {
+    top: 13px;
+    left: -49px;
+    background: rgba(231, 76, 60, 1);
+    transform: rotate(45deg);   
+	-o-transform: rotate(45deg);
+	-ms-transform: rotate(45deg);
+	-moz-transform: rotate(45deg);
+	-webkit-transform: rotate(45deg);
+}
+
+ .pricing-rounded .sticker-left {
+    top: 9px;
+    right: -48px;
+   	background: rgba(116, 197, 44, 1);
+    transform: rotate(-45deg);   
+	-o-transform: rotate(-45deg);
+	-ms-transform: rotate(-45deg);
+	-moz-transform: rotate(-45deg);
+	-webkit-transform: rotate(-45deg);
+}
+
+/*Pricing Table Rounded Version
+------------------------------------*/
+.price-active, 
+.pricing-rounded .pricing:hover {
+	margin-top: 0;
+}
+
+.pricing-rounded .pricing {
+	overflow: hidden;
+	box-shadow: none;
+	border: 1px solid #eee;
+}
+
+.pricing-rounded .easy-bg-v2 {
+	letter-spacing: 1px;
+	border: 1px solid #fff;
+	background-color:rgba(255, 255, 255, 0.1);
+}	
+
+.pricing-rounded .pricing-head h3 {
+	padding-bottom: 80px;
+	padding-top: 15px; 
+}
+
+.pricing-rounded .pricing-head  h4 {
+	width: 140px;
+	height: 140px;
+	padding-top: 22px;
+	padding-right: 6px;
+	font-size: 55px;
+	margin: -75px auto 20px;
+	border-radius: 140px !important;
+	font-weight: normal !important;
+	background: #fff url("../../../img/breadcrumbs.png") !important;
+}
+
+.pricing-rounded .pricing-head h4 i{
+	margin-left: 2px;
+}
+
+.pricing-rounded h6 {
+	color: #888;
+	font-size: 13px;
+	font-style: normal;
+	padding-bottom: 5px;
+}
+
+.pricing-rounded .pricing-content span {
+	float: left;
+}
+
+.pricing-rounded .pricing-content span i {
+	font-size: 13px;
+}
+
+/* Devices (Desktop Mode) */
+@media (min-width: 992px) and (max-width: 1200px) {
+	 .sticker-right {
+		top: 10px;
+	    left: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}	
+	 .sticker-left {
+		top: 10px;
+	    right: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}
+}
+
+/* Medium Devices (Desktops, 992px and less) */
+@media (max-width: 991px) {
+	/*Pricing Page*/
+	.price-active,
+	.pricing:hover {
+		margin-top: 0;
+	}
+	.no-space-pricing [class^="col-"],
+	.no-space-pricing [class*=" col-"] {
+		padding: 10px;
+	}
+}

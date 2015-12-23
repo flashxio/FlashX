@@ -1,0 +1,274 @@
+/*Pricing Page
+------------------------------------*/
+/*Pricing Head*/
+.no-space-pricing [class^="col-"],
+.no-space-pricing [class*=" col-"] {
+	padding: 0;
+}
+.pricing {
+	position:relative;
+	border-radius:3px;
+	margin-bottom:15px;
+	box-shadow:0 0 5px #eee;
+}
+.pricing:hover {
+	box-shadow:0 0 15px #b5b5b5;
+}
+.pricing:hover h4 {
+	color:#74C52C;
+}
+.pricing-head {
+	text-align:center;
+}
+.pricing h3,
+.pricing h4 {
+	margin:0;
+	line-height:normal;
+	font-weight:bold;
+}
+.pricing p {
+	padding-top: 10px;
+	font-size: 11px;
+}
+.pricing-head h3 span, 
+.pricing-head h4 span {
+	display:block;
+	margin-top:5px;
+	font-size:12px;
+	font-style:italic;
+}
+.pricing-head h3 {
+	color:#fafafa;
+	padding:12px 0;
+	font-size:35px;
+	font-family:Arial;
+	background:#74C52C;
+	border-radius:3px 0 0 3px;
+	text-shadow:0 1px 0 #32a20f;
+}
+.pricing-head h4 {
+	color: #888;
+	padding:5px 0;
+	font-size:70px;
+	text-shadow:0 1px 0 #fff;
+	border-bottom:solid 1px #f5f9e7;
+}
+.pricing-head h4 i {
+	top:-8px;
+	font-size:28px;
+	font-style:normal;
+	position:relative;
+}
+.pricing-head h4 span {
+	top:-10px;
+	font-size:14px;
+	font-style:normal;
+	position:relative;
+}
+	
+/*Pricing Content*/
+
+.pricing-content  {
+	margin-bottom: 0px;
+}
+.pricing-content li {
+	color:#888;
+	font-size:12px;
+	padding:7px 15px;
+	border-bottom:solid 1px #f5f9e7;
+}
+.pricing-content li i {
+	color:#72c02c;
+	font-size:16px;
+	margin-left:5px;
+	position:relative;
+}
+
+/*Pricing Footer*/
+.pricing-footer {
+	color:#777;
+	font-size:11px;
+	line-height:17px;
+	text-align:center;
+	padding:0 20px 19px;
+	border-radius:0 3px 3px 0;
+}
+
+
+.price-active h4 {
+	color:#74C52C;
+}
+
+/*Pricing Extra*/
+
+ .bg-color {
+	background-color: #f9f9f9;	
+}
+.no-space-pricing {
+	padding: 0 15px;
+}
+
+.sticker-right,
+.sticker-left {
+  	color: #fff;
+	width: 150px;
+	padding: 5px;
+	font-size: 13px;
+	font-weight: bold;
+	font-family: Arial;
+	position: absolute;
+	text-align: center;
+	letter-spacing: 2px;
+	}
+
+ .sticker-right {
+    top: 13px;
+    left: -49px;
+    background: rgba(231, 76, 60, 1);
+    transform: rotate(45deg);   
+	-o-transform: rotate(45deg);
+	-ms-transform: rotate(45deg);
+	-moz-transform: rotate(45deg);
+	-webkit-transform: rotate(45deg);
+}
+ .sticker-left {
+    top: 9px;
+    right: -48px;
+   	background: rgba(116, 197, 44, 1);
+    transform: rotate(-45deg);   
+	-o-transform: rotate(-45deg);
+	-ms-transform: rotate(-45deg);
+	-moz-transform: rotate(-45deg);
+	-webkit-transform: rotate(-45deg);
+}
+
+/*Pricing Table Mega v2 
+------------------------------------*/
+
+.pricing-mega-v2 .pricing {
+	position: relative;
+	border-radius: 3px;
+	margin-bottom: 15px;
+	margin-bottom: 100px;
+	box-shadow: 0 0 0px #eee;
+	border: 1px solid #eee;
+	margin: 40px 0;
+}
+.pricing-mega-v2 .pricing-head  h3 {
+	font-size: 25px;
+	min-height: 75px;
+}
+.pricing-mega-v2 .pricing-head h4{
+	font-size: 20px;
+}
+.pricing-mega-v2 .pricing-head h4 i {
+	color: #888888;
+}
+.pricing-mega-v2 .pricing:hover h4 i {
+	color: #74C52C;
+}
+
+.pricing-mega-v2 .pricing-head h4 span,
+.pricing-mega-v2 .pricing-content li span,
+.padding-mega-v2 .pricing-head .price span {
+	display: block; 
+	padding: 10px 0px 0px;
+}
+.pricing-mega-v2 .pricing-head .price {
+	font-size: 70px;
+	font-style: normal;
+	padding-bottom: 0px;
+	background-color: #fff;
+}
+.pricing-mega-v2 .pricing-head h3, 
+.pricing-mega-v2 .pricing-head h4 {
+	font-style: normal;
+	font-weight: normal !important;
+}
+.pricing-mega-v2 .hidden-area {
+	margin-top: 115px;
+}
+.pricing-mega-v2 .hidden-area:hover {
+	margin-top: 115px;
+}
+.pricing-mega-v2 .hidden-area .pricing-head h4 {
+    font-size: 28px;
+    min-height: 103px;
+    padding: 31px 0;
+}
+.pricing-mega-v2 .hidden-area:hover .pricing-head h4 {
+	color: #888;
+}  
+.pricing-mega-v2 .hidden-area li:hover  i{
+	color: #74C52C;
+} 
+
+.pricing-mega-v2 .block li {
+	text-align: center;
+}
+.pricing-mega-v2 .block li i {
+	font-size: 13px;
+}
+
+.pricing-mega-v2 .pricing-content li {
+	padding: 10px;
+	font-size: 12px;
+	font-style: normal;
+	min-height: 41px;
+}
+.pricing-mega-v2 .hidden-area li {
+	font-size: 12px;
+}
+.pricing-mega-v2 .pricing-content li i {
+	color: #888; 
+}
+.pricing-mega-v2 .bg-color {
+	background-color: #f9f9f9;	
+}
+.pricing-mega-v2 .block:hover .bg-color {
+	background: #74C52C;
+}
+.pricing-mega-v2 .block:hover h3,
+.pricing-mega-v2 .block:hover h4, 
+.pricing-mega-v2 .block:hover li, 
+.pricing-mega-v2 .block:hover li i,
+.pricing-mega-v2 .block:hover h4 i {
+	color: #fff !important;
+	background: #74C52C;
+}
+.pricing-mega-v2 .hidden-area:hover li i {
+	color: #888;
+}
+.pricing-mega-v2 a{
+	padding: 8px 0 ;
+}
+
+/* Devices (Desktop Mode) */
+@media (min-width: 992px) and (max-width: 1200px) {
+	 .sticker-right {
+		top: 10px;
+	    left: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}	
+	 .sticker-left {
+		top: 10px;
+	    right: -58px;
+	    font-size: 10px;
+	    padding: 3px;
+	}
+}
+
+/* Medium Devices (Desktops, 992px and less) */
+@media (max-width: 991px) {
+	/*Pricing Page*/
+	.price-active,
+	.pricing:hover {
+		margin-top: 0;
+	}
+	.no-space-pricing [class^="col-"],
+	.no-space-pricing [class*=" col-"] {
+		padding: 10px;
+	}
+	/*End Pricing Page*/
+}

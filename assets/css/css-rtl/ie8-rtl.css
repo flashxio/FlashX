@@ -1,0 +1,77 @@
+/*   
+ * Template Name: Unify - Responsive Bootstrap Template
+ * Description: Business, Corporate, Portfolio, E-commerce, Blog and One Page Template.
+ * Version: 1.7
+ * Author: @htmlstream
+ * Website: http://htmlstream.com
+*/
+
+/*Header Fixed
+------------------------------------*/
+.ie8 .header-fixed .header.header-fixed-shrink {
+	background: #fff;
+}
+
+/*Blog Latest Tweets
+------------------------------------*/
+.ie8 .blog-twitter .blog-twitter-inner:after,
+.ie8 .blog-twitter .blog-twitter-inner:before {
+	border: none;
+}
+
+.ie8 .our-clients img {
+	width: 100%;
+	height: 100px;
+	vertical-align: inherit;
+}
+
+.ie8 .our-clients .img-hover {
+	display: none;
+}
+
+/*Pricing Stickers*/
+.ie8 .sticker-left {
+	width: 90px;
+	text-align: left;
+	background: #72c02c;
+}
+
+.ie8 .sticker-right {
+	width: 100px;
+	text-align: right;
+	background: #e74c3c;
+}
+
+/*Easy Block*/
+.ie8 .easy-bg-v2 {
+	width: 75px;
+	text-align: right;
+}
+
+.ie8 .rgba-red {background: #e74c3c;}
+.ie8 .rgba-blue {background: #3498db;}
+.ie8 .rgba-default {background: #72c02c;}
+.ie8 .rgba-purple {background: #9b6bcc;}
+.ie8 .rgba-aqua {background: #27d7e7;}
+.ie8 .rgba-yellow {background: #f1c40f;}
+
+/*Sky-Forms*/
+.ie8 .sky-form .icon-append {
+	left: 5px !important;
+	padding-right: 0;
+}
+
+/*Background Opacity*/
+.ie8 .service-block-v2 .service-block-in {
+	background: url(../../img/transparent/white.png) repeat;
+}
+
+.ie8 .job-img .job-banner, 
+.ie8 .job-img .job-img-inputs,
+.ie8 .parallax-team:before, 
+.ie8 .image-block .company-description,
+.ie8 .search-block:before,
+.ie8 .parallax-counter .counters,
+.ie8 .carousel-v1 .carousel-caption {
+	background: url(../../img/transparent/black.png) repeat;	
+}

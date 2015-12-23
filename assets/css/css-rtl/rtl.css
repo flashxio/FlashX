@@ -1,0 +1,231 @@
+* {
+	direction: rtl;
+	unicode-bidi: embed; /* bidi-override */
+}
+
+/* Parallax Slider */
+.da-arrows span.da-arrows-prev{
+	background-position: 0 1px;
+}
+.da-arrows span.da-arrows-next{
+	background-position: 0 -68px;	
+}
+
+/* Arrows */
+.fa-angle-left::before {
+  content: "\f105";
+}
+.fa-angle-right::before {
+  content: "\f104";
+}
+
+.header .dropdown > a:after, .header .dropdown-submenu > a:after,
+.header-v1 .dropdown > a::after, .header-v1 .dropdown-submenu > a::after,
+.header-v2 .dropdown > a::after, .header-v2 .dropdown-submenu > a::after,
+.header-v3 .dropdown > a::after, .header-v3 .dropdown-submenu > a::after,
+.header-v4 .dropdown > a::after, .header-v4 .dropdown-submenu > a::after,
+.header-v5 .dropdown-submenu > a::after,
+.header-v6 .dropdown-submenu > a::after,
+.header-v7 .navbar-default .navbar-nav > li > a::after {
+	content: "\f104";
+}
+.header .dropdown > a:after,
+.header-v1 .dropdown > a:after,
+.header-v2 .dropdown > a:after,
+.header-v3 .dropdown > a:after,
+.header-v4 .dropdown > a:after {
+  content: "\f107";
+}
+
+.link-list li i {
+  float: left;
+  margin-top: 7px;
+}
+
+.box-shadow::after, .box-shadow::before {
+	left: 5px;
+	right: auto;
+}
+.shadow-effect-2::after, .shadow-effect-4::after {
+	right: 5px;
+	left: auto;
+}
+
+.posts .dl-horizontal dt {
+	float: right;
+}
+.posts .dl-horizontal dd {
+	margin-right: 70px;
+	margin-left: 0;
+}
+
+.tparrows.tp-rightarrow .tp-arr-titleholder  {
+	text-align: right;
+}
+
+.who li i {
+	margin-left: 8px;
+	margin-right: 0;
+}
+.info-blocks i.icon-info-blocks {
+	float: right;
+}
+.easy-block-v1 .easy-block-v1-badge {
+	right: 0;
+	left: auto;
+}
+.testimonials-v3 .owl-nav .owl-next::after {
+  content: "\f104";
+}
+.testimonials-v3 .owl-nav .owl-prev::after {
+  content: "\f105";
+}
+
+.fa-chevron-circle-left::before {
+	content:"\f138"
+}
+.fa-chevron-circle-right::before {
+	content:"\f137"
+}
+.header-v6 .search-open .form-control {
+	padding: 0 14% 0 13%;
+}
+
+.content-boxes-v3.content-boxes-v3-right i.icon-custom {
+	margin-left: 0;
+}
+.service-info i.service-info-icon {
+	float: right;
+	margin-left: 20px;
+}
+
+.quote-v2 {
+	padding: 85px 10% 40px;
+}
+.high-rated .carousel-indicators {
+	text-align: left;
+	left: 10px;
+	right: auto;
+}
+.easy-block-v1 .overflow-h h3 {
+	float: right;
+}
+.high-rated .star-vote {
+	float: left;
+}
+.style-swticher-header .theme-close {
+	left: 6px;
+	right: auto;
+}
+
+.share-list li {
+  padding-right: 20px;
+  padding-left: 0;
+}
+.share-list li:first-child {
+  padding-right: 0;
+}
+.share-list li i {
+	padding-right: 0;
+	padding-left: 5px;
+}
+
+.profile .timeline-v2.timeline-me > li .cbp_tmlabel {
+	margin: 0 23% 20px 0;
+}
+.timeline-v2 > li .cbp_tmlabel {
+	margin: 0 25% 40px 0;	
+}
+.cube-portfolio .link-captions {
+	padding: 0;
+}
+
+.cbp-popup-wrap {
+	left: -15px;
+	overflow: hidden;
+}
+.cbp-popup-lightbox .cbp-popup-close {
+	left: 25px;
+	right: auto;
+}
+
+.banner-info i {
+	float: right;
+	margin: 7px 0 0 20px;
+}
+
+.easy-block-v3 {
+	text-align: right;
+}
+.easy-block-v3 i {
+	float: right;
+}
+
+.sticker-right,
+.pricing-table-v3 .sticker-right {
+  transform: rotate(-45deg);
+}
+.sticker-left,
+.pricing-table-v1 .sticker-left {
+	transform: rotate(45deg);
+}
+.pricing-table-v6 ul li span {
+	margin-right: 5px;
+	margin-left: 0;
+}
+
+.list-toggle::after {
+	content: "\f104";
+}
+
+.shadow-effect-1 {
+  box-shadow: 0 10px 6px -6px #bbb;
+  -moz-box-shadow: 0 10px 6px -6px #bbb;
+  -webkit-box-shadow: 0 10px 6px -6px #bbb;
+}
+
+.icon-page-fa .item-box {
+	float: right;
+}
+
+ul.bs-glyphicons,
+.line-icon-page {
+	padding-right: 1px;
+	padding-left: 0;
+}
+ul.bs-glyphicons li {
+	float: right;
+}
+
+.owl-carousel .owl-item .avatar-of-reviewer,
+.owl-carousel .owl-item .owl-img-auto {
+	width: auto;
+	display: inline-block;
+}
+
+.owl-carousel .owl-stage-outer {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+.owl-carousel-v4 .owl-stage-outer,
+.owl-carousel-v5 .owl-stage-outer,
+.owl-carousel-v6 .owl-stage-outer {
+  margin-bottom: 20px;
+}
+.link-effects .tag-box a {
+	margin: 0 0 10px 10px;
+}
+
+.search-block form.page-search-form .radio,
+.search-block form.page-search-form .checkbox {
+  margin: 0 4% 0 3%;
+}
+
+.promo-service a.btn-u {
+  margin: 0 0 10px 20px;
+}
+
+.owl-video img {
+	width: auto !important;
+}

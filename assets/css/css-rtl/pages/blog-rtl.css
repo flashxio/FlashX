@@ -1,0 +1,122 @@
+/*Blog Large
+------------------------------------*/
+/*Blog Page*/
+.blog h2 {
+	color: #555;
+	font-size: 21px;
+	line-height: 32px;
+	margin-bottom: 10px;
+}
+
+.blog h2 a {
+	color: #585f69;
+	line-height: 32px;
+}
+
+.blog h2 a:hover {
+	color: #72c02c;
+	text-decoration: none;
+}
+
+.blog .blog-img { 
+	margin: 20px 0;
+}
+
+.headline-md {
+	margin-top: 9px;
+}
+
+/*Blog Content Tags*/
+.blog-post-tags {
+	padding: 5px 0 8px;
+	margin-bottom: 10px;
+	border-top: solid 1px #eee;
+	border-bottom: solid 1px #eee;
+}
+
+.blog-post-tags ul {
+	margin-bottom: 0;
+}
+
+.blog-post-tags li {
+	font-size: 12px;
+}
+
+.blog-post-tags li i {
+	color: #777;
+}
+
+.blog-post-tags ul.blog-info {
+	color: #eee;
+	margin-bottom: 3px;
+}
+
+.blog-post-tags ul.blog-tags a {
+	color: #555;
+	font-size: 11px;
+	display: inline;
+	padding: 3px 7px;
+	margin-left: 2px;
+	background: #f4f4f4;
+}
+
+.blog-post-tags ul.blog-tags a:hover {
+	background: #72c02c;
+}
+
+/*Blog Item Page
+------------------------------------*/
+.blog-item .media img {
+	top: 3px;
+	width: 54px;
+	height: 54px;
+	position: relative;
+}
+
+.post-comment h3,
+.blog-item .media h3 {
+	color: #72c02c;
+	font-size: 21px;
+	margin-bottom: 25px;
+}
+
+.blog-item .media h4.media-heading {
+	color: #555;
+	font-size: 17px;
+	position: relative;
+}
+
+.blog-item .media h4.media-heading span {
+	top: 3px; 
+	left: 0;
+	color: #777;
+	font-size: 12px;
+	position: absolute;
+}
+
+.blog-item .media h4.media-heading span a {
+	color: #72c02c;
+}
+
+/*Blog Medium
+------------------------------------*/
+.blog-medium .blog-info li,
+.blog-medium .blog-info li a {
+	color: #777;
+}
+
+/* Medium devices (desktops, 992px and up) */
+@media (max-width: 992px) {
+	.blog-medium img {
+		margin-bottom: 20px;
+	}
+}
+
+/*Blog Full Wisth
+------------------------------------*/
+.blog-full-width .blog-post-tags {
+	padding: 5px 0;
+}
+.blog-full-width ul.blog-info {
+	margin-bottom: 0;
+}

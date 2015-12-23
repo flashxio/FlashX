@@ -1,1 +1,505 @@
-My Page
+<!DOCTYPE html>
+<!--[if IE 8]> <html lang="en" class="ie8"> <![endif]-->
+<!--[if IE 9]> <html lang="en" class="ie9"> <![endif]-->
+<!--[if !IE]><!--> <html lang="en"> <!--<![endif]-->
+<head>
+    <title>FlashX</title>
+
+    <!-- Meta -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Favicon -->
+	<!--
+    <link rel="shortcut icon" href="favicon.ico">
+	-->
+
+    <!-- Web Fonts -->
+    <link rel='stylesheet' type='text/css' href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600&amp;subset=cyrillic,latin'>
+
+    <!-- CSS Global Compulsory -->
+    <link rel="stylesheet" href="assets/plugins/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+
+    <!-- CSS Header and Footer -->
+    <link rel="stylesheet" href="assets/css/headers/header-default.css">
+    <link rel="stylesheet" href="assets/css/footers/footer-v1.css">
+
+    <!-- CSS Implementing Plugins -->
+    <link rel="stylesheet" href="assets/plugins/animate.css">
+    <link rel="stylesheet" href="assets/plugins/line-icons/line-icons.css">
+    <link rel="stylesheet" href="assets/plugins/font-awesome/css/font-awesome.min.css">
+    <link rel="stylesheet" href="assets/plugins/parallax-slider/css/parallax-slider.css">
+    <link rel="stylesheet" href="assets/plugins/owl-carousel/owl-carousel/owl.carousel.css">
+
+    <!-- CSS Customization -->
+    <link rel="stylesheet" href="assets/css/custom.css">
+</head>
+
+<body>
+<div class="wrapper">
+    <!--=== Header ===-->
+    <div class="header">
+        <div class="container">
+            <!-- Logo -->
+            <a class="logo" href="index.html">
+                <img src="logo.png" alt="Logo">
+            </a>
+            <!-- End Logo -->
+
+            <!-- Topbar -->
+			<!--
+            <div class="topbar">
+                <ul class="loginbar pull-right">
+                    <li class="hoverSelector">
+                        <i class="fa fa-globe"></i>
+                        <a>Languages</a>
+                        <ul class="languages hoverSelectorBlock">
+                            <li class="active">
+                                <a href="#">English <i class="fa fa-check"></i></a>
+                            </li>
+                            <li><a href="#">Spanish</a></li>
+                            <li><a href="#">Russian</a></li>
+                            <li><a href="#">German</a></li>
+                        </ul>
+                    </li>
+                    <li class="topbar-devider"></li>
+                    <li><a href="page_faq.html">Help</a></li>
+                    <li class="topbar-devider"></li>
+                </ul>
+            </div>
+			-->
+            <!-- End Topbar -->
+
+            <!-- Toggle get grouped for better mobile display -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-responsive-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="fa fa-bars"></span>
+            </button>
+            <!-- End Toggle -->
+        </div><!--/end container-->
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div class="collapse navbar-collapse mega-menu navbar-responsive-collapse">
+            <div class="container">
+                <ul class="nav navbar-nav">
+                    <!-- Home -->
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                            Home
+                        </a>
+                    </li>
+                    <!-- End Home -->
+
+                    <!-- Docs -->
+                    <li>
+                        <a href="http://www.flashgraph.net/documents/get_started">
+                            Installation
+                        </a>
+                    </li>
+                    <!-- End Docs -->
+
+                    <!-- Tutorials -->
+                    <li class="dropdown">
+                        <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown">
+                            Docs
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a href="http://www.flashgraph.net/documents/tutorials/flashgraph-programming">FlashGraph programming</a>
+                                <a href="http://www.flashgraph.net/documents/tutorials/flashr-programming">FlashR programming</a>
+								<a href="http://icoming.github.io/FlashGraph/docs/html/">C++ API</a>
+								<a href="">R API</a>
+                            </li>
+                        </ul>
+                    </li>
+                    <!-- End Tutorials -->
+
+                    <!-- Blog -->
+                    <li>
+                        <a href="http://www.flashgraph.net/blog">
+                            Blog
+                        </a>
+                    </li>
+                    <!-- End Blog -->
+
+                    <!-- Search Block -->
+                    <li>
+                        <i class="search fa fa-search search-btn"></i>
+                        <div class="search-open">
+                            <div class="input-group animated fadeInDown">
+                                <input type="text" class="form-control" placeholder="Search">
+                                <span class="input-group-btn">
+                                    <button class="btn-u" type="button">Go</button>
+                                </span>
+                            </div>
+                        </div>
+                    </li>
+                    <!-- End Search Block -->
+                </ul>
+            </div><!--/end container-->
+        </div><!--/navbar-collapse-->
+    </div>
+    <!--=== End Header ===-->
+
+    <!--=== Slider ===-->
+    <div class="slider-inner">
+        <div id="da-slider" class="da-slider">
+            <div class="da-slide">
+                <h2><i style="text-transform:none;">FlashGraph</i></h2>
+                <p></p>
+                <div class="da-img"><img class="img-responsive" src="graph-small.png" alt=""></div>
+            </div>
+            <div class="da-slide">
+                <h2><i style="text-transform:none;">FlashMatrix</i></h2>
+                <p></p>
+                <div class="da-img"><img class="img-responsive" src="matrix.gif" alt=""></div>
+            </div>
+            <div class="da-slide">
+                <h2><i style="text-transform:none;">FlashR</i></h2>
+                <p></p>
+                <div class="da-img"><img src="R-Programming-small.png" alt="" /></div>
+            </div>
+            <div class="da-arrows">
+                <span class="da-arrows-prev"></span>
+                <span class="da-arrows-next"></span>
+            </div>
+        </div>
+    </div><!--/slider-->
+    <!--=== End Slider ===-->
+
+    <!--=== Purchase Block ===-->
+    <div class="purchase">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-9 animated fadeInLeft">
+                    <span>FlashX is a collection of big data analytics tools.</span>
+					FlashX performs data analytics in the form of graphs and matrices
+					and utilize solid-state drives (SSDs) to scale to large datasets
+					in a single machine. It has three main components:
+					FlashGraph is a general-purpose graph analysis framework that allows
+					users to write graph algorithms to analyze billion-node graphs in
+					a single machine; FlashMatrix is a matrix computation engine with
+					a small set of generalized matrix operations to express varieties
+					of data mining and machine learning algorithms; FlashR is an extended
+					R programming framework to process datasets at a scale of terabytes
+					in parallel.
+                </div>
+                <div class="col-md-3 btn-buy animated fadeInRight">
+                    <a href="https://github.com/icoming/FlashGraph/archive/graph-release.zip" class="btn-u btn-u-lg"><i class="fa fa-cloud-download"></i> Download Now</a>
+                </div>
+            </div>
+        </div>
+    </div><!--/row-->
+    <!-- End Purchase Block -->
+
+    <!--=== Content Part ===-->
+    <div class="container content-sm">
+    	<!-- Service Blocks -->
+    	<div class="row margin-bottom-30">
+        	<div class="col-md-4">
+        		<div class="service">
+                    <i class="fa fa-rocket service-icon"></i>
+        			<div class="desc">
+        				<h4>Performance</h4>
+                        <p> Each of FlashX components has lightning-fast speed when they
+						run in memory. While running on SSDs, they have performance
+						comparable to the state-of-art in-memory performance. FlashR has
+						performance comparable to the optimized parallel C code. </p>
+        			</div>
+        		</div>
+        	</div>
+        	<div class="col-md-4">
+        		<div class="service">
+                    <i class="fa fa-compress service-icon"></i>
+        			<div class="desc">
+        				<h4>Scalability</h4>
+                        <p>All FlashX components can scales beyond memory capacity. They
+						process graphs with hundreds of billions of edges or even trillions
+						of edges or datasets with terabytes in a single commodity machine.</p>
+        			</div>
+        		</div>
+        	</div>
+        	<div class="col-md-4">
+        		<div class="service">
+                    <i class="fa fa-cogs service-icon"></i>
+        			<div class="desc">
+        				<h4>Flexibility and ease of programming</h4>
+                        <p>FlashR provides a unified R programming interface for users.
+						It mimics the original R programming environment and also provides
+						a set of generalized matrix operations to express varieties machine
+						learning and data mining algorithms. Users do not need to explicitly
+						handle parallelization and external-memory access.</p>
+        			</div>
+        		</div>
+        	</div>
+    	</div>
+    	<!-- End Service Blokcs -->
+
+    	<!-- Recent Works -->
+        <div class="headline"><h2>Components</h2></div>
+        <div class="row margin-bottom-20">
+            <div class="col-md-3 col-sm-6">
+                <div class="thumbnails thumbnail-style thumbnail-kenburn">
+                	<div class="thumbnail-img">
+                        <div class="overflow-hidden">
+                            <img class="img-responsive" src="assets/img/main/img1.jpg" alt="">
+                        </div>
+                        <a class="btn-more hover-effect" href="SAFS.html">read more +</a>
+                    </div>
+                    <div class="caption">
+                        <h3><a class="hover-effect" href="SAFS.html">SAFS</a></h3>
+                        <p>A user-space filesystem designed for large SSD arrays. It is
+						capable of achieving the maximal I/O throughput from SSD arrays
+						(millions of I/O per second for random I/O and tens of gigabytes
+						per second for sequential I/O).</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="thumbnails thumbnail-style thumbnail-kenburn">
+                    <div class="thumbnail-img">
+                        <div class="overflow-hidden">
+                            <img class="img-responsive" src="assets/img/main/img12.jpg" alt="">
+                        </div>
+                        <a class="btn-more hover-effect" href="http://www.flashgraph.net/">read more +</a>
+                    </div>
+                    <div class="caption">
+                        <h3><a class="hover-effect" href="http://www.flashgraph.net/">FlashGraph</a></h3>
+                        <p>A general-purpose programming framework for large-scale graph analysis.
+						FlashGraph is able to scale to billion-node graphs
+						and significantly outperforms state-of-art distributed graph analysis
+						frameworks at this scale.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="thumbnails thumbnail-style thumbnail-kenburn">
+                    <div class="thumbnail-img">
+                        <div class="overflow-hidden">
+                            <img class="img-responsive" src="assets/img/main/img3.jpg" alt="">
+                        </div>
+                        <a class="btn-more hover-effect" href="FlashMatrix.html">read more +</a>
+                    </div>
+                    <div class="caption">
+                        <h3><a class="hover-effect" href="FlashMatrix.html">FlashMatrix</a></h3>
+                        <p>A matrix computation engine that provides a small set of generalized
+						matrix operations to express varieties of data mining and machine learning
+						algorithms.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="thumbnails thumbnail-style thumbnail-kenburn">
+                    <div class="thumbnail-img">
+                        <div class="overflow-hidden">
+                            <img class="img-responsive" src="assets/img/main/img17.jpg" alt="">
+                        </div>
+                        <a class="btn-more hover-effect" href="FlashR.html">read more +</a>
+                    </div>
+                    <div class="caption">
+                        <h3><a class="hover-effect" href="FlashR.html">FlashR</a></h3>
+                        <p>An extension of the R programming framework to process datasets
+						at a scale of terabytes with the speed of optimized C code. FlashR integrates
+						FlashMatrix with R. It provides users a familiar R programming environment
+						as well as generalized matrix operators to express many machine learning
+						algorithms completely in R.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    	<!-- End Recent Works -->
+
+    	<!-- Info Blokcs
+    	<div class="row margin-bottom-30">
+    		<div class="col-md-8 md-margin-bottom-40">
+    			<div class="headline"><h2>Welcome To Unify</h2></div>
+                <div class="row">
+                    <div class="col-sm-4">
+                        <img class="img-responsive margin-bottom-20" src="assets/img/main/img18.jpg" alt="">
+                    </div>
+                    <div class="col-sm-8">
+                        <p>Unify is an incredibly beautiful responsive Bootstrap Template for corporate and creative professionals. It works on all major web browsers, tablets and phone.</p>
+                        <ul class="list-unstyled margin-bottom-20">
+                            <li><i class="fa fa-check color-green"></i> Donec id elit non mi porta gravida</li>
+                            <li><i class="fa fa-check color-green"></i> Corporate and Creative</li>
+                            <li><i class="fa fa-check color-green"></i> Responsive Bootstrap Template</li>
+                            <li><i class="fa fa-check color-green"></i> Corporate and Creative</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <blockquote class="hero-unify">
+                    <p>Award winning digital agency. We bring a personal and effective approach to every project we work on, which is why. Unify is an incredibly beautiful responsive Bootstrap Template for corporate professionals.</p>
+                    <small>CEO, Jack Bour</small>
+                </blockquote>
+            </div>
+
+            <div class="col-md-4">
+    			<div class="headline"><h2>Latest Shots</h2></div>
+    			<div id="myCarousel" class="carousel slide carousel-v1">
+                    <div class="carousel-inner">
+                        <div class="item active">
+                            <img src="assets/img/main/img4.jpg" alt="">
+                            <div class="carousel-caption">
+                                <p>Facilisis odio, dapibus ac justo acilisis gestinas.</p>
+                            </div>
+                        </div>
+                        <div class="item">
+                            <img src="assets/img/main/img2.jpg" alt="">
+                            <div class="carousel-caption">
+                                <p>Cras justo odio, dapibus ac facilisis into egestas.</p>
+                            </div>
+                            </div>
+                        <div class="item">
+                            <img src="assets/img/main/img24.jpg" alt="">
+                            <div class="carousel-caption">
+                                <p>Justo cras odio apibus ac afilisis lingestas de.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="carousel-arrow">
+                        <a class="left carousel-control" href="#myCarousel" data-slide="prev">
+                            <i class="fa fa-angle-left"></i>
+                        </a>
+                        <a class="right carousel-control" href="#myCarousel" data-slide="next">
+                            <i class="fa fa-angle-right"></i>
+                        </a>
+                    </div>
+    			</div>
+            </div>
+    	</div>
+		 -->
+    	<!-- End Info Blokcs -->
+    </div><!--/container-->
+    <!-- End Content Part -->
+
+    <!--=== Footer Version 1 ===-->
+    <div class="footer-v1">
+        <div class="footer">
+            <div class="container">
+                <div class="row">
+                    <!-- About
+                    <div class="col-md-3 md-margin-bottom-40">
+                        <a href="index.html"><img id="logo-footer" class="footer-logo" src="assets/img/logo2-default.png" alt=""></a>
+                        <p>About Unify dolor sit amet, consectetur adipiscing elit. Maecenas eget nisl id libero tincidunt sodales.</p>
+                        <p>Duis eleifend fermentum ante ut aliquam. Cras mi risus, dignissim sed adipiscing ut, placerat non arcu.</p>
+                    </div>
+					 -->
+                    <!-- End About -->
+
+                    <!-- Latest -->
+                    <div class="col-md-3 md-margin-bottom-40">
+                        <div class="posts">
+                            <div class="headline"><h2>Latest Posts</h2></div>
+                            <ul class="list-unstyled latest-list">
+                            </ul>
+                        </div>
+                    </div><!--/col-md-3-->
+                    <!-- End Latest -->
+
+                    <!-- Address -->
+                    <div class="col-md-3 map-img md-margin-bottom-40">
+                        <div class="headline"><h2>Contact Us</h2></div>
+                        <address class="md-margin-bottom-40">
+                            Email: <a href="mailto:flashgraph-user@googlegroups.com" class="">
+								flashgraph-user@googlegroups.com</a>
+                        </address>
+                    </div><!--/col-md-3-->
+                    <!-- End Address -->
+                </div>
+            </div>
+        </div><!--/footer-->
+
+        <div class="copyright">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p>
+                            2015 &copy; All Rights Reserved.
+                           <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a>
+                        </p>
+                    </div>
+
+                    <!-- Social Links -->
+                    <div class="col-md-6">
+                        <ul class="footer-socials list-inline">
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Facebook">
+                                    <i class="fa fa-facebook"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Skype">
+                                    <i class="fa fa-skype"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Google Plus">
+                                    <i class="fa fa-google-plus"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Linkedin">
+                                    <i class="fa fa-linkedin"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Pinterest">
+                                    <i class="fa fa-pinterest"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Twitter">
+                                    <i class="fa fa-twitter"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="tooltips" data-toggle="tooltip" data-placement="top" title="" data-original-title="Dribbble">
+                                    <i class="fa fa-dribbble"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <!-- End Social Links -->
+                </div>
+            </div>
+        </div><!--/copyright-->
+    </div>
+    <!--=== End Footer Version 1 ===-->
+</div><!--/wrapper-->
+
+<!-- JS Global Compulsory -->
+<script type="text/javascript" src="assets/plugins/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="assets/plugins/jquery/jquery-migrate.min.js"></script>
+<script type="text/javascript" src="assets/plugins/bootstrap/js/bootstrap.min.js"></script>
+<!-- JS Implementing Plugins -->
+<script type="text/javascript" src="assets/plugins/back-to-top.js"></script>
+<script type="text/javascript" src="assets/plugins/smoothScroll.js"></script>
+<script type="text/javascript" src="assets/plugins/parallax-slider/js/modernizr.js"></script>
+<script type="text/javascript" src="assets/plugins/parallax-slider/js/jquery.cslider.js"></script>
+<script type="text/javascript" src="assets/plugins/owl-carousel/owl-carousel/owl.carousel.js"></script>
+<!-- JS Customization -->
+<script type="text/javascript" src="assets/js/custom.js"></script>
+<!-- JS Page Level -->
+<script type="text/javascript" src="assets/js/app.js"></script>
+<script type="text/javascript" src="assets/js/plugins/owl-carousel.js"></script>
+<script type="text/javascript" src="assets/js/plugins/parallax-slider.js"></script>
+<script type="text/javascript">
+    jQuery(document).ready(function() {
+      	App.init();
+        OwlCarousel.initOwlCarousel();
+        ParallaxSlider.initParallaxSlider();
+    });
+</script>
+<!--[if lt IE 9]>
+    <script src="assets/plugins/respond.js"></script>
+    <script src="assets/plugins/html5shiv.js"></script>
+    <script src="assets/plugins/placeholder-IE-fixes.js"></script>
+<![endif]-->
+
+</body>
+</html>

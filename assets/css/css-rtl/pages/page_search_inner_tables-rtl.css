@@ -1,0 +1,166 @@
+/*Page Search Block
+------------------------------------*/
+.search-block {
+	padding: 40px 0 50px;
+	border-bottom: 1px solid #eee;
+	background: url(../../../img/patterns/breadcrumbs.png) repeat;
+}
+
+.search-block h2 {
+	font-size: 24px;
+	font-weight: 200;
+	text-align: center;
+	margin-bottom: 18px;
+	text-transform: uppercase;
+}
+
+
+/*Table Search v1
+------------------------------------*/
+.table-search-v1 .btn-u.dropdown-toggle {
+	border-right: none;
+}
+
+.table-search-v1 .btn-group .btn-u {
+	top: 4px;
+	padding: 0 6px;
+	position: relative;
+}
+
+.table-search-v1 thead {
+	border-bottom: solid 1px #ddd;
+}
+
+.table-search-v1 td {
+	vertical-align: middle !important;
+}
+
+.table-search-v1 td a {
+	color: #555;
+}
+
+.table-search-v1 td span {
+	display: block;
+}
+
+.table-search-v1 .star-vote {
+	margin: 5px 0 0px;
+}
+
+.table-search-v1 .star-vote li {
+	padding: 0;
+}
+
+.table-search-v1 .progress {
+	margin-bottom: 0;
+}
+
+.table-search-v1 .m-marker a {
+	font-size: 11px;
+}
+
+.table-search-v1 .m-marker i {
+	float: right;
+	min-width: 20px;
+	font-size: 26px;
+}
+
+.table-search-v1 .m-marker .display-b {
+	top: 3px;
+	display: block;
+	line-height: 10px;
+	position: relative;
+}
+
+.table-search-v1 .td-width {
+	width: 40%;
+}
+
+/*Table Search v2
+------------------------------------*/
+.table-search-v2 .btn-u.dropdown-toggle {
+	border-right: none;
+}
+
+.table-search-v2 .btn-group .btn-u {
+	top: 4px;
+	padding: 0 6px;
+	position: relative;
+}
+
+.table-search-v2 thead {
+	border-bottom: solid 1px #ddd;
+}
+
+.table-search-v2 td {
+	vertical-align: middle !important;
+}
+
+.table-search-v2 td img {
+	width: 70px;
+	height: 70px;
+	margin: 0 auto;
+	display: block;
+}
+
+.table-search-v2 .user-names span,
+.table-search-v2 .user-names small {
+	display: block;
+	text-align: center;
+}
+
+.table-search-v2 .user-names span {
+	color: #555;
+	font-size: 16px;
+	position: relative;
+}
+
+.table-search-v2 .user-names small {
+	color: #999;
+	font-size: 13px;
+}
+
+.table-search-v2 td h3 {
+	font-size: 16px;
+	margin: 0 0 2px;
+}
+
+.table-search-v2 td a {
+	color: #555;
+}
+
+.table-search-v2 td p {
+	margin-bottom: 0;
+}
+
+.table-search-v2 td span {
+	display: block;
+}
+
+.table-search-v2 td small {
+	font-style: italic;
+}
+
+.table-search-v2 .s-icons {
+	margin-bottom: 0;
+}
+
+.table-search-v2 .s-icons li {
+	padding: 2px;
+}
+
+.table-search-v2 .table-buttons {
+	margin: 0;
+}
+
+.table-search-v2 .table-buttons li {
+	padding: 0;
+}
+
+.table-search-v2 .table-buttons .btn-u-sm {
+	padding: 3px 6px;
+}
+
+.table-search-v2 .td-width {
+	width: 55%;
+}

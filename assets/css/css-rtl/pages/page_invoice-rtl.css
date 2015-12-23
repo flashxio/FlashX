@@ -1,0 +1,64 @@
+/*Invoice Page
+------------------------------------*/
+@media print {
+	* { -webkit-print-color-adjust: exact; }
+	
+	.btn-u,
+	.header,
+	.footer-v1, 
+	.breadcrumbs,
+	#topcontrol {
+		display: none; 
+	}
+
+	.panel {
+		border: none;
+	}
+}
+
+/*Invoice Header*/
+.invoice-header {
+	color: #555;
+	overflow: hidden;
+	margin-bottom: 40px;
+}
+
+.invoice-header h2 {
+	font-size: 30px;
+}
+
+.invoice-header .invoice-numb {
+	font-size: 16px;
+	text-align: left;
+}
+
+.invoice-header .invoice-numb span {
+	color: 777;
+	display: block;
+	font-size: 13px;
+}
+
+/*Invoice Info*/
+.invoice-info {
+	margin-bottom: 10px;
+}
+
+.invoice-info h2 {
+	color: #555;
+	font-size: 18px;
+}
+
+/*Invoice Footer*/
+address {
+	line-height: 20px;
+}
+
+.invoice-total-info {
+	margin-bottom: 30px;
+}
+
+.invoice-total-info li {
+	font-size: 14px;
+	margin-bottom: 5px;
+	font-family: 'Open Sans'; 
+}

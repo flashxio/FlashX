@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg">
+<metadata>Copyright (C) 2012 by original authors @ fontello.com</metadata>
+<defs>
+<font id="km-docs" horiz-adv-x="1000" >
+<font-face font-family="km-docs" font-weight="400" font-stretch="normal" units-per-em="1000" ascent="850" descent="-150" />
+<missing-glyph horiz-adv-x="1000" />
+<glyph glyph-name="attention" unicode="&#xe803;" d="M571 83l0 106q0 8-5 13t-13 5l-107 0q-7 0-13-5t-5-13l0-106q0-8 5-13t13-5l107 0q7 0 13 5t5 13z m-1 209l10 256q0 7-6 11-7 6-13 6l-123 0q-6 0-13-6-6-4-6-12l9-255q0-6 6-9t13-4l103 0q8 0 13 4t6 9z m-8 521l429-786q20-35-1-70-9-16-26-26t-35-9l-857 0q-19 0-35 9t-26 26q-21 35-1 70l429 786q9 17 26 27t36 10 36-10 26-27z" horiz-adv-x="1000" />
+<glyph glyph-name="cancel" unicode="&#xe804;" d="M724 112q0-22-16-38l-76-76q-16-16-38-16t-38 16l-164 164-164-164q-16-16-38-16t-38 16l-76 76q-16 16-16 38t16 38l164 164-164 164q-16 16-16 38t16 38l76 76q16 16 38 16t38-16l164-164 164 164q16 16 38 16t38-16l76-76q16-16 16-38t-16-38l-164-164 164-164q16-16 16-38z" horiz-adv-x="785.714" />
+<glyph glyph-name="info-circled" unicode="&#xe806;" d="M454 810q190 2 326-130t140-322q2-190-131-327t-323-141q-190-2-327 131t-139 323q-4 190 130 327t324 139z m52-152q-42 0-65-24t-23-50q-2-28 15-44t49-16q38 0 61 22t23 54q0 58-60 58z m-120-594q30 0 84 26t106 78l-18 24q-48-36-72-36-14 0-4 38l42 160q26 96-22 96-30 0-89-29t-115-75l16-26q52 34 74 34 12 0 0-34l-36-152q-26-104 34-104z" horiz-adv-x="920" />
+</font>
+</defs>
+</svg>

@@ -1,0 +1,157 @@
+/*Sidebar Features
+------------------------------------*/
+/*Page Styles*/
+.magazine-page h3,
+.magazine-page h3 a {
+	color: #555;
+	font-size: 18px;
+	line-height: 28px;
+	margin-bottom: 1px;
+	text-decoration: none;
+}
+
+.magazine-page h3 a:hover {
+	color: #72c02c;
+}
+
+.magazine-page span.magazine-badge {
+	top: 0;
+	left: 0;
+	color: #fff;
+	font-size: 14px;
+	padding: 2px 8px;
+	position: absolute;
+	font-style: inherit;
+}
+
+.magazine-page span.magazine-badge-default {
+	background: #7f8c8d;
+}
+.magazine-page span.magazine-badge-red {
+	background: #e74c3c;
+}
+.magazine-page span.magazine-badge-green {
+	background: #2ecc71;
+}
+.magazine-page span.magazine-badge-blue {
+	background: #3498db;
+}
+
+/*Magazine News*/
+.magazine-news {
+	margin-bottom: 20px;
+}
+
+.magazine-news h3 {
+	margin: 15px 0 10px;
+}
+
+.magazine-news .by-author strong {
+	color: #72c02c;
+}
+
+.magazine-news .by-author span {
+	color: #777;
+}
+
+.magazine-news a.read-more {
+	color: #72c02c;
+}
+
+.magazine-news .by-author {
+	margin-bottom: 8px;
+}
+
+.magazine-news-img {
+	overflow: hidden;
+	max-height: 200px;
+	position: relative;
+}
+
+/*Magazine Mini News*/
+.magazine-mini-news .post-author {
+	font-size: 11px;
+}
+
+.magazine-mini-news h3,
+.magazine-mini-news h3 a {
+	font-size: 16px;
+	line-height: 22px;
+	margin-bottom: 6px;
+}
+
+.magazine-mini-news .post-author {
+	margin-bottom: 8px;
+}
+
+.magazine-mini-news .post-author span {
+	color: #555;
+}
+
+.magazine-mini-news .post-author strong {
+	color: #72c02c;
+}
+
+.news-read-more {
+	margin: 20px 0; 
+}
+
+.news-read-more a {
+	font-size: 14px;
+}
+
+.news-read-more a:hover {
+	text-decoration: none;
+}
+
+.news-read-more i {
+	color: #fff;
+	padding: 2px 3px;
+	font-size: 14px;
+	background: #72c02c;
+}
+
+/*Sidebar Posts*/
+.magazine-posts h2,
+.magazine-posts h3 {
+	margin-top: -5px;
+}
+
+.magazine-posts span {
+	color: #777;
+	display: block;
+	font-size: 12px;
+	/*font-style: italic;*/
+	margin-bottom: 7px;
+}
+
+.magazine-posts span i {
+	font-style: normal;
+}
+
+.magazine-posts .magazine-posts-img {
+	overflow: hidden;
+	max-height: 105px;
+	position: relative;
+}
+
+.magazine-posts .magazine-posts-img:hover img {
+	opacity: 0.9;
+}
+
+/*Sidebar Categories*/
+.magazine-sb-categories ul li {
+	font-size: 14px;
+	margin-bottom: 5px;
+}
+
+.magazine-sb-categories ul i {
+	color: #72c02c;
+	font-size: 14px;
+}
+
+/*Sidebar Social*/
+.magazine-sb-social .social-icons li {
+	margin-bottom: 0;
+	margin-right: 1px;
+}

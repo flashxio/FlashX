@@ -1,0 +1,72 @@
+/*One Page
+------------------------------------*/
+.one-page {
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.one-page h1,
+.one-page h2 {
+	color: #fff;
+	font-size: 23px;
+	line-height: 28px;
+	text-shadow: none;
+	margin-bottom: 25px;
+}
+
+.one-page h3.heading-sm {
+	font-size: 19px;
+}
+
+.one-page p {
+	color: #fff;
+}
+
+.one-grey hr {
+	border-color: #bbb;
+}
+
+.one-page .one-default p,
+.one-page .one-default h1,
+.one-page .one-default h2,
+.one-page .one-grey p,
+.one-page .one-grey h1,
+.one-page .one-grey h2 {
+	color: #555;
+}
+
+.one-page .one-page-inner {
+	padding: 30px 0;
+	min-height: 300px;
+}
+
+.one-page .one-page-btn {
+	margin-bottom: 15px;
+	font-size: 18px;
+	font-weight: 200;
+	padding-left: 30px;
+	padding-right: 30px;  
+}
+
+.one-page .btn-u {
+	margin-bottom: 15px;	
+}
+
+.one-page .one-default {
+	background: #fff;
+}
+.one-page .one-grey {
+	background: #eee;
+}
+.one-page .one-blue {
+	background: #3498db;
+}
+.one-page .one-red {
+	background: #e74c3c;
+}
+.one-page .one-orange {
+	background: #e67e22;
+}
+.one-page .one-green {
+	background: #2ecc71;
+}

@@ -1,0 +1,96 @@
+/*Parallax Block
+------------------------------------*/
+.parallax-bg {
+  position: relative;
+  background: url(../../../img/bg/25.jpg) 50% no-repeat fixed;
+}
+
+.parallax-bg:before {
+  width: 100%;
+  height: 100%;
+  content: " ";
+  position: absolute;
+  background: rgba(255,255,255,0.85); 
+}
+
+.parallax-about .info-blocks-v2 {
+    margin-bottom: 5px;
+}
+
+.parallax-about .title-box-v2 p,
+.parallax-about .title-box-v2 h2 {
+    color: #585f69;
+    position: relative;
+}
+
+/*Contacts
+------------------------------------*/
+.contacts h3 {
+    margin-top: 0;
+}
+
+.contacts hr {
+    margin: 10px 0;
+}
+
+/*Our-Location
+------------------------------------*/
+.our-location .map {
+    height: 220px;
+}
+
+/* important! bootstrap sets max-width on img to 100% which conflicts with google map canvas*/
+.our-location .map img {
+    max-width: none;
+}
+
+.our-location h3 {
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+/*Our-clients*/
+.our-location .our-clients {
+    margin-bottom: 0;
+    text-align: center;
+}
+
+.our-location .our-clients li {
+    padding: 0;
+    margin: 1px -1px;
+    border: 1px solid #eee;
+}
+
+.our-location .our-clients img {
+    width: 121px;
+    height: auto;
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.our-location .our-clients li:hover {
+    border-color: #ccc;
+    -webkit-transition: all 0.4s ease-in-out;
+    -moz-transition: all 0.4s ease-in-out;
+    -o-transition: all 0.4s ease-in-out;
+    transition: all 0.4s ease-in-out;
+}
+
+.about-list-style li {
+    margin-bottom: 7px;
+}
+
+.about-list-style li i.fa,
+.about-list-style li i.icon {
+    margin-left: 5px;
+}
+
+/*Check-style in Responsive*/
+@media (max-width: 500px) {
+    .our-location .about-list-style-in {
+        width: 100% !important;
+    }
+}
+
+
+

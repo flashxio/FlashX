@@ -1,0 +1,389 @@
+/*----------------------------------------------------------------------
+
+[-----*** TABLE OF CONTENT ***-----]
+
+1. Header - Navbar
+2. Header - Responsive Navbar Style
+3. Header - Socials
+4. Header - Content Sides
+-----------------------------------------------------------------------*/
+
+
+/*--------------------------------------------------
+    [1. Header - Navbar]
+----------------------------------------------------*/
+
+/*Navbar*/
+.header-v7 .navbar {
+    margin-bottom: 0;
+    background: #fff;
+}
+
+.header-v7 .navbar-default {
+    border: none;
+    border-radius: 0;
+}
+
+/*Containers
+------------------------------------*/
+@media (min-width: 768px) and (max-width: 991px) {
+    .header-v7 .menu-container {
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+    }
+}
+
+@media (max-width: 991px) {
+    .header-v7 .menu-container:before,
+    .header-v7 .menu-container:after {
+        content: " ";
+        display: table;
+    }
+
+    .header-v7 .menu-container:after {
+        clear: both;
+    }
+
+    .header-v7 .menu-container {
+        margin-right: auto;
+        margin-left: auto;
+        padding-right: 30px;
+        padding-left: 30px;
+    }
+}
+
+/*Navbar Toggle
+------------------------------------*/
+.header-v7 .navbar-toggle {
+    border: none;
+    margin: 15px 15px 15px 0;
+}
+
+.header-v7 .navbar-toggle .icon-bar {
+    height: 1px;
+    width: 20px;
+    font-size: 20px;
+    background: #555;
+    margin-bottom: 5px;
+}
+
+.header-v7 .navbar-toggle .icon-bar:last-child {
+    margin-bottom: 0;
+}
+
+.header-v7 .navbar-toggle,
+.header-v7 .navbar-toggle:hover, 
+.header-v7 .navbar-toggle:focus {
+    background: inherit;
+}
+
+/*Logo
+------------------------------------*/
+.header-v7 .logo img {
+    width: 100px;
+}
+
+@media (min-width: 768px) {
+    .header-v7 .logo {
+        padding: 40px 20px;
+    }
+
+    .header-v7 .logo img {
+        height: auto;
+        display: block;
+        margin: 0 auto;
+        text-align: center;
+    }
+}
+
+@media (max-width: 767px) {
+    .header-v7 .logo img {
+        margin: 12px 0 11px;
+    }
+}
+
+/*Navbar Menu
+------------------------------------*/
+.header-v7 .navbar-default .navbar-nav > li > a {
+    color: #555;
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+}
+
+.header-v7 .navbar-default .navbar-nav > li > a:after {
+    top: 8px;
+    left: 10px;
+    color: #444;
+    font-size: 14px;
+    content: "\f105";
+    position: absolute;
+    font-weight: normal;
+    display: inline-block;
+    font-family: FontAwesome;
+}
+
+.header-v7 .navbar-default .navbar-nav > li.open > a:after {
+    content: "\f107";
+}
+
+.header-v7 .navbar-default .navbar-nav > li > a:hover,
+.header-v7 .navbar-default .navbar-nav > li.active > a {
+    color: #72c02c !important;
+}
+
+/*Dropdown Menu
+------------------------------------*/
+.header-v7 .dropdown-menu li a { 
+    color: #666; 
+    font-size: 14px; 
+    font-weight: 400; 
+    padding: 4px 10px;
+}
+
+.header-v7 .dropdown-menu .active > a,
+.header-v7 .dropdown-menu li > a:focus,
+.header-v7 .dropdown-menu li > a:hover {
+    filter: none !important;
+    color: #72c02c !important;
+    background: inherit !important;
+}
+
+
+/*--------------------------------------------------
+    [2. Header - Responsive Navbar Style]
+----------------------------------------------------*/
+
+/*Responsive Navbar*/
+@media (max-width: 767px) {
+    /*Navbar Header*/
+    .header-v7 .navbar-brand {
+        margin-top: 0;
+    }
+
+    /*Navbar Collapse*/
+    .header-v7 .navbar-collapse {
+        padding: 0;
+        background: #f7f7f7;
+        border-bottom: 1px solid #eee;
+    }
+
+    /*Navbar Nav*/
+    .header-v7 .navbar-default .navbar-nav {
+        padding: 25px 0;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li > a {
+        color: #444;
+        padding: 10px 15px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li:last-child > a {
+        border-bottom: none !important;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li > a,
+    .header-v7 .navbar-default .navbar-nav > li > a:hover,
+    .header-v7 .navbar-default .navbar-nav > li > a:focus {
+        background: inherit;
+    }
+
+    /*Dropdown Menu Slide Down Effect*/
+    .header-v7 .navbar-nav .open .dropdown-menu {
+        border: 0;
+        float: none;
+        width: auto;
+        margin-top: 0;
+        position: static;
+        box-shadow: none;
+    }
+
+    .header-v7 .navbar-default .navbar-nav .open .dropdown-menu > .active > a,
+    .header-v7 .navbar-default .navbar-nav .open .dropdown-menu > .active > a:hover,
+    .header-v7 .navbar-default .navbar-nav .open .dropdown-menu > .active > a:focus {
+        color: #72c02c;
+        background: inherit;
+    }
+}
+
+/*Vertical Sidebar Nav
+------------------------------------*/
+@media (min-width: 768px) {
+    .header-v7 .navbar-default {
+        top: 0;
+        width: 270px;
+        height: 100%;
+        z-index: 999;
+        position: fixed;
+        padding-top: 30px;
+        border-right: 1px solid rgba(218,218,218,0.2);
+        border-left: 1px solid rgba(218,218,218,0.2);
+    }
+
+    /*Header Left*/
+    .header-v7.header-left-v7 .navbar-default {
+        right: 0;
+    }
+
+    /*Header Right*/
+    .header-v7.header-right-v7 .navbar-default {
+        left: 0;
+    }
+
+    /*Navbar Brand*/
+    .header-v7 .navbar-brand {
+        float: none;
+        height: auto;
+        display: block;
+        margin: 65px 0 30px;
+    }
+
+    .header-v7 .navbar-brand img {
+        width: 80px;
+        height: auto;
+        margin: 0 auto;
+        display: block;
+        text-align: center;
+    }
+
+    /*Navbar Collapse*/
+    .header-v7 .navbar-collapse {
+        height: auto;
+        border-top: 0;
+        padding: 10px 0;
+        box-shadow: none;
+        max-height: none;
+        margin: 0 20px 25px;
+    }
+    
+    .header-v7 .navbar-collapse.collapse {
+        width: auto !important;
+        display: block !important;
+        overflow: visible !important;
+    }
+    
+    .header-v7 .navbar-collapse.in {
+        overflow-x: visible;
+    }
+
+    .header-v7 .navbar-nav,
+    .header-v7 .navbar-nav > li,
+    .header-v7 .navbar-left,
+    .header-v7 .navbar-right,
+    .header-v7 .navbar-header {
+        float: none !important;
+    }
+
+    /*Navbar Nav*/
+    .header-v7 .navbar-default .navbar-nav {
+        margin-bottom: 40px;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li > a {
+        padding: 10px;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li > a,
+    .header-v7 .navbar-default .navbar-nav > li > a:hover,
+    .header-v7 .navbar-default .navbar-nav > li > a:focus {
+        color: #555;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li > a,
+    .header-v7 .navbar-default .navbar-nav > li > a:hover,
+    .header-v7 .navbar-default .navbar-nav > li > a:focus, 
+    .header-v7 .navbar-default .navbar-nav > .active > a, 
+    .header-v7 .navbar-default .navbar-nav > .active > a:hover, 
+    .header-v7 .navbar-default .navbar-nav > .active > a:focus {
+        background: none;
+    }
+
+    .header-v7 .navbar-default .navbar-nav > li:hover > a {
+        color: #72c02c;
+    }
+
+    .header-v7 .navbar-collapse .navbar-nav.navbar-right:last-child {
+        margin-left: 0;
+    }
+
+    /*Dropdown Menu*/
+    .header-v7 .dropdown-menu { 
+        top: 100%;
+        right: auto;
+        width: 100%;
+        float: none;
+        border: none;
+        z-index: 1000;
+        border-radius: 0;
+        box-shadow: none;
+        position: static;
+        padding: 0 10px 0 0;
+    }    
+
+    .header-v7 .dropdown-menu > li > a {
+        color: #555;
+        font-weight: 200;
+    }
+}
+
+
+/*--------------------------------------------------
+    [3. Header - Socials]
+----------------------------------------------------*/
+
+/*Header Socials*/
+.header-socials {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.header-socials li a {
+    color: #555;
+}
+
+.header-socials li i {
+    font-size: 16px;
+}
+
+.header-socials li a:hover {
+    color: #72c02c;
+}
+
+/*Copyright Text*/
+.header-v7 .copyright-text {
+    color: #555;
+    font-size: 12px;
+    text-align: center;
+}
+
+
+/*--------------------------------------------------
+    [4. Header - Content Sides]
+----------------------------------------------------*/
+
+/*Content Side Right*/
+@media (min-width: 768px) {
+    .content-side-right {
+        margin-right: 270px;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1440px) {
+    .content-side-right .container {
+        width: 95%;
+    }
+}
+
+/*Content Side Left*/
+@media (min-width: 768px) {
+    .content-side-left {
+        margin-left: 270px;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1440px) {
+    .content-side-left .container {
+        width: 95%;
+    }
+}

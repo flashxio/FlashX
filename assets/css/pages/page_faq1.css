@@ -1,0 +1,82 @@
+/*FAQ-page
+------------------------------------*/
+.faq-breadcrumb {
+	text-align: center;
+	position: relative;
+	background: url(../../img/bg/19.jpg) no-repeat center;
+}
+
+.faq-breadcrumb:before {
+	left: 0;
+	width: 100%;
+	height: 100%;
+	content: " ";
+	position: absolute;
+	background: rgba(0,0,0,0.3);
+}
+
+.faq-page .tab-v1 {
+	margin-top: 19px;
+}
+
+.faq-page .tab-v1  .panel-title {
+	text-transform: uppercase;
+}
+
+/*Check-style*/
+.faq-page .check-style {
+	margin-bottom: 0;
+}
+
+.faq-page .check-style li {
+	margin-bottom: 10px;
+}
+.faq-page .check-style li:last-child {
+	margin-bottom: 0;
+}
+
+.faq-page .check-style i {
+	font-size: 18px;
+	font-weight: 600;
+	vertical-align: middle;
+}
+
+/*Check-style in Responsive*/
+@media (max-width: 450px) {
+	.faq-page .main-check .col-xs-6 {
+		width: 100%;
+	}
+}
+
+/*Faq-add*/
+.faq-page .faq-add {
+	padding: 15px;
+	margin-bottom: 20px;
+	border: 2px solid #eee;
+}
+
+.faq-page .top-part i {
+	float: left;
+	color: #777;
+	font-size: 20px;
+	padding-top: 3px;
+	margin-right: 10px;
+}
+
+.faq-page .new-title {
+	color: #72c02c;
+	font-size: 18px;
+	margin-bottom: 5px;
+}
+
+.faq-page .faq-add p {
+	line-height: 1.5;
+}
+
+/*ParallaxBg6
+------------------------------------*/
+/*Title-Box*/
+.faq-bg .title-box-v2 h2,
+.faq-bg .title-box-v2 p {
+	color: #fff;
+}

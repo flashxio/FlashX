@@ -1,0 +1,36 @@
+/*Import Ladda Button Plugin*/
+@import url(ladda.min.css);
+
+.ladda-btn .btn-u {
+	font-weight: 600;
+	font-family: sans-serif;
+}
+.ladda-button[data-style=expand-down] .ladda-spinner {
+	top:65%;
+}
+.ladda-button[data-style=contract] {
+	width:130px;
+}
+.ladda-button {
+	padding:6px 13px;
+	font-size:14px;
+}
+.ladda-button.btn-u-lg {
+	padding:10px 25px;
+}
+.ladda-button.btn-u-lg .ladda-label {
+	font-size:18px;
+}
+.ladda-button.btn-u-xs {
+	padding:2px 12px;
+	line-height:18px;
+}
+.ladda-button.btn-u-xs.ladda-label {
+	font-size:12px;
+}
+.ladda-button.btn-u-sm {
+	padding:3px 12px;
+}
+.ladda-button.btn-u-sm .ladda-label {
+	font-size:14px;
+}

@@ -1,0 +1,2538 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>LayerSlider documentation</title>
+	<link rel="stylesheet" href="assets/css/doc.css">
+	<link rel="stylesheet" href="assets/css/font.css">
+	<link rel="stylesheet" href="../layerslider/css/layerslider.css">
+	<link rel="stylesheet" href="assets/js/syntaxhighlighter/styles/shCoreKreatura.css">
+	<link rel="stylesheet" href="assets/js/syntaxhighlighter/styles/shThemeKreatura.css">
+	<link href="http://fonts.googleapis.com/css?family=Oswald:300,400,700" rel="stylesheet" type="text/css">
+	<link href="http://fonts.googleapis.com/css?family=Open+Sans:300italic,300,400italic,400,600italic,600,700italic,700,800italic,800" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]>
+		<script src="assets/js/html5.js"></script>
+	<![endif]-->
+</head>
+<body>
+	<div id="wrapper">
+
+		<header>
+			<h1>LayerSlider</h1>
+			<h2>
+				Responsive jQuery Slider Plugin
+				<p>
+					Version: 5.3.0 | Released: 19th September 2014 |
+					<a data-goto="whats-new" href="#whats-new">What's new?</a>
+				</p>
+			</h2>
+			<div class="clear"></div>
+		</header>
+
+		<div class="km-box">
+			<div class="header">
+				<h3>Table of Contents</h3>
+				<h3>Current Chapter: <span id="curnav" class="light">Overview</span></h3>
+			</div>
+			<div class="inner">
+				<ul id="sidebar">
+					<li class="active">
+						<span>Introduction</span>
+						<ul>
+							<li data-deeplink="overview" class="active">Overview</li>
+							<li data-deeplink="features">Features</li>
+							<li data-deeplink="third-party">Third party credits</li>
+						</ul>
+					</li>
+					<li>
+						<span>Quick start &amp; Slider setup</span>
+						<ul>
+							<li data-deeplink="slider-resources">Including resource files</li>
+							<li data-deeplink="slider-element">Creating slider element</li>
+							<li data-deeplink="slider-initializing">Initializing the slider</li>
+							<li data-deeplink="slider-options">List of slider options</li>
+							<li data-deeplink="slider-layout">Slider layout</li>
+						</ul>
+					</li>
+					<li>
+						<span>Slides</span>
+						<ul>
+							<li data-deeplink="creating-slides">Creating slides</li>
+							<li data-deeplink="configuring-slides">Configuring slides</li>
+							<li data-deeplink="slide-contents">Addig slide contents</li>
+							<li data-deeplink="linking-slides">Linking slides</li>
+							<li data-deeplink="deep-linking-slides">Using deep links</li>
+							<li data-deeplink="slide-transitions">Slide transition gallery</li>
+							<li data-deeplink="custom-transitions">Custom slide transitions</li>
+						</ul>
+					</li>
+					<li>
+						<span>Layers</span>
+						<ul>
+							<li data-deeplink="adding-layers">Adding layers</li>
+							<li data-deeplink="positioning-layers">Positioning layers</li>
+							<li data-deeplink="linking-layers">Linking layers</li>
+ 							<li data-deeplink="adding-media">Embedding video / audio</li>
+							<li data-deeplink="layer-transitions">Layer transitions</li>
+ 							<li data-deeplink="parallax-layers">Parallax layers</li>
+						</ul>
+					</li>
+					<li data-deeplink="slider-examples">
+						Examples <span></span>
+					</li>
+					<li>
+						<span>API reference</span>
+						<ul>
+							<li data-deeplink="event-reference">Event reference</li>
+							<li data-deeplink="api-methods">API methods</li>
+							<li data-deeplink="api-examples">Examples</li>
+						</ul>
+					</li>
+					<li>
+						<span>Troubleshooting</span>
+						<ul>
+							<li data-deeplink="video-isses">Video issues</li>
+							<li data-deeplink="jquery-issues">Issues related to jQuery</li>
+							<li data-deeplink="loading-problems">Loading problems</li>
+							<li data-deeplink="known-incompatibilities">Known incompatibilities</li>
+						</ul>
+					</li>
+					<li data-deeplink="changes">
+						<span>Upgrading to version 5</span>
+					</li>
+					<li data-deeplink="release-log">
+						<span>Release log</span>
+						<ul>
+							<li data-deeplink="whats-new">What's new?</li>
+							<li data-deeplink="previous-versions">Previous versions</li>
+						</ul>
+					</li>
+					<li class="hl" data-deeplink="support">
+						<span>SUPPORT</span>
+					</li>
+				</ul>
+
+				<div id="content">
+
+					<!-- Introduction -->
+					<section class="active">
+
+						<!-- Overview -->
+						<article class="active">
+							<h4>Thank you</h4>
+							<p>Thank you for purchasing this product. If you have any questions that are beyond the scope of this documentation, please feel free to email us.</p>
+							<h4>About the item</h4>
+							<p>
+								<strong>LayerSlider is a premium multi-purpose slider</strong> for creating image galleries, content sliders, and mind-blowing slideshows <strong>with must-see effects</strong>. It uses <strong>cutting edge technologies</strong> to provide the smoothest experience that’s possible, and it comes <strong>with more than 200 preset 2D and 3D slide transitions</strong>. It’s device friendly by <strong>supporting responsive mode, multiple layouts, touch gestures</strong> on mobile devices, and uses techniques like <strong>lazy load</strong> for optimal performance. You can add any content, including images, text, custom HTML, <strong>YouTube and Vimeo videos or HTML5</strong> self-hosted multimedia contents. It’s also <strong>SEO friendly</strong> by allowing you to build semantic markup with custom attributes that search engines can index easily. LayerSlider comes <strong>with 13 built-in skins</strong>, and it has <strong>tons of options to entirely customize</strong> the appearance and behavior of your sliders at the smallest detail.
+							</p>
+							<h4>Upgrading to version 5 - important changes compared to earlier versions!</h4>
+							<p>
+								If you upgraded from any earlier version, please <a data-goto="changes" href="#">read this article about the changes carefully</a>. If you purchased this version newly, you can skit this part.
+							</p>
+						</article>
+
+						<!-- Features -->
+						<article>
+							<h4>Features</h4>
+							<ul>
+								<li>
+									<p>General Features</p>
+									<ul class="nomargin">
+										<li>Super smooth hardware accelerated CSS3 transitions with jQuery fallback</li>
+										<li>Fully responsive &amp; multiple layouts support</li>
+										<li>High compatibility with many fallback features for old browsers</li>
+										<li>Lazy loading images for beter performance</li>
+										<li>Unlimited layers with image, video, audio, text or custom HTML content</li>
+										<li>Powerful API for more customization</li>
+										<li>SEO friendly</li>
+										<li>Multiple sliders can be added on the same page</li>
+										<li>Included free slide transition gallery</li>
+										<li>Very detailed documentation with examples</li>
+										<li>Unlimited variations of usage (image slider, image slider with text, content slider, video gallery slider, mixed content slider, banner rotator, carousel, etc.)</li>
+										<li>Free updates &amp; support</li>
+									</ul>
+								</li>
+								<li>
+									<p>Slider Layout &amp; Appearance</p>
+									<ul class="nomargin">
+										<li>Responsive, full-width, full size or fixed dimensions layout</li>
+										<li>Responsive under &amp; Layers container features for full-width sliders</li>
+										<li>13 skins included</li>
+										<li>Skins PSD file included for easily creating your own skins</li>
+										<li>Option for specifying a global background color or image to the slider</li>
+									</ul>
+								</li>
+								<li>
+									<p>Slideshow</p>
+									<ul class="nomargin">
+										<li>Auto-start slideshow (can be disabled)</li>
+										<li>Pause slideshow on hover feature</li>
+										<li>Starting with specified slide</li>
+										<li>Optional random slideshow feature</li>
+										<li>Option for fade in the first slide without animating the layers</li>
+										<li>Option for backwards-slideshow (Two way slideshow)</li>
+										<li>Loops feature</li>
+									</ul>
+								</li>
+								<li>
+									<p>Navigation</p>
+									<ul class="nomargin">
+										<li>Bullets, hover thumbnails or thumbnails</li>
+										<li>Touch navigation on mobile browsers</li>
+										<li>Keyboard navigation</li>
+										<li>Option for disabling prev / next buttons or bullets</li>
+										<li>Option for showing prev / next buttons or bullets on hover</li>
+										<li>Two types of timers: bar timer and circle timer</li>
+										<li>Option for customizing the thumbnail area and the size of thumbnails</li>
+									</ul>
+								</li>
+								<li>
+									<p>Slide Options</p>
+									<ul class="nomargin">
+										<li>More than 200 2D &amp; 3D transitions</li>
+										<li>Option for create your own slide transitions</li>
+										<li>Option linking the whole slide</li>
+										<li>Option for adding a deep link to a specified slide</li>
+									</ul>
+								</li>
+								<li>
+									<p>Layer Options</p>
+									<ul class="nomargin">
+										<li>Layers can slide (axis-free), fade, rotate (in 2D or 3D), scale and skew, or mixed of these</li>
+										<li>Option for setting the transform origin of transition</li>
+										<li>Option for linking layers</li>
+										<li>Option for adding a link to layers which will change the slider to a specific slide</li>
+										<li>Optional parallax effect on layers</li>
+									</ul>
+								</li>
+								<li>
+									<p>Video &amp; Audio</p>
+									<ul class="nomargin">
+										<li>Easy to use with YouTube, Vimeo or HTML5 videos or audios</li>
+										<li>Auto-pause slideshow while videos or audios are playing</li>
+										<li>Auto-play videos and audios (optional)</li>
+										<li>YouTube and Vimeo thumbnail images</li>
+									</ul>
+								</li>
+								<li>
+									<p>YourLogo</p>
+									<ul class="nomargin">
+										<li>Option for adding a fixed image over the slider</li>
+										<li>Option for styling and adding a link to this image</li>
+									</ul>
+								</li>
+								<li>
+									<p>Compatibility</p>
+									<ul class="nomargin">
+										<li>Requires jQuery 1.7 (working with 1.10.x or 2.x versions, please note that jQuery 2.x is no more compatible with IE7 and 8!) &amp; Greensock Animation Engine</li>
+										<li>Working in Chrome, Firefox, Safari, IE7-11, Opera</li>
+										<li>Working in mobile browsers</li>
+										<li>Most of the 2D slide transitons are working under all browsers</li>
+										<li>The 3D slide transitions are working under Chrome, Firefox, Safari, Opera, iOS and the latest Android versions (2D fallback mode under other browsers)</li>
+									</ul>
+								</li>
+							</ul>
+
+						</article>
+
+						<!-- Third party -->
+						<article>
+							<h4>Third party credits</h4>
+							<p>We are extremely grateful for the people working on the projects below. These guys are making our lives much easier, thus we can focus on building high quality products.</p>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Project</th>
+											<th>Homepage</th>
+											<th>Comment</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>jQuery</td>
+											<td><a href="http://jquery.com/" target="_blank">jquery.com</a></td>
+											<td>The most popular JavaScript library for building complex web apps.</td>
+										</tr>
+										<tr>
+											<td>GreenSock</td>
+											<td><a href="http://www.greensock.com/" target="_blank">greensock.com</a></td>
+											<td>The most advanced web animation library to build spectacular transitions.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+					</section>
+
+
+					<!-- Slider setup -->
+					<section>
+
+						<!-- Resources -->
+						<article>
+							<h4>Including resource files</h4>
+							<p>To get started you need to copy the necessary resource files to your assets folder and include them to your pages. You can use the following example, you need to insert these lines in the <code>&lt;head&gt;</code> section of your site.</p>
+							<p>Considering performance, you can put the script tags at the footer of your pages before the closing &lt;/body&gt; tag.</p>
+							<pre name="code" class="brush: xml">
+								&lt;!-- LayerSlider stylesheet --&gt;
+								&lt;link rel=&quot;stylesheet&quot; href=&quot;/layerslider/css/layerslider.css&quot; type=&quot;text/css&quot;&gt;
+
+								&lt;!-- External libraries: jQuery &amp; GreenSock --&gt;
+								&lt;script src=&quot;/layerslider/js/jquery.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+								&lt;script src=&quot;/layerslider/js/greensock.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+
+								&lt;!-- LayerSlider script files --&gt;
+								&lt;script src=&quot;/layerslider/js/layerslider.transitions.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+								&lt;script src=&quot;/layerslider/js/layerslider.kreaturamedia.jquery.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;</pre>
+							<figure>Including resources</figure>
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								Make sure to enter the corrent path for these files depending the layerslider folder location on your server.
+							</div>
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								jQuery and GreenSock are external libraries. Make sure to not insert a duplicate version if your site already uses them.
+							</div>
+						</article>
+
+						<!-- Slider element -->
+						<article>
+							<h4>Creating the slider element</h4>
+							<p>Next, you have to define an element for the slider within the <code>&lt;body&gt;</code> section of a page. The example code below won't do much, it's just a containment element, and it will be filled with its contents later in this guide.</p>
+
+							<pre name="code" class="brush: xml">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+								&lt;!-- The contents on your slider will be here --&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding a slider on a page</figure>
+
+							<p>The initial size of the slider is defined in the <code>style</code> attribute. You can change those values to specify your preferred dimensions. Also, notice the <code>id</code> attribute. We will use its value (layerslider) as a reference throughout this guide. </p>
+
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								It is important to use the <code>style</code> attribute to define the slider dimensions.
+							</div>
+						</article>
+
+
+						<!-- Initializing -->
+						<article>
+							<h4>Slider setup</h4>
+							<p>You should initialize the slider plugin by calling the <code>layerslider()</code> method on the target element. Since we used the "layerslider" ID in our sample markup, we get that by jQuery and initialize LayerSlider on that element. See the following example:</p>
+							<pre name="code" class="brush: js">
+							&lt;script type="text/javascript"&gt;
+
+								// Running the code when the document is ready
+								$(document).ready(function(){
+
+									// Calling LayerSlider on the target element
+									$('#layerslider').layerSlider({
+
+										// Slider options goes here,
+										// please check the 'List of slider options' section in the documentation
+									});
+								});
+
+							&lt;/script&gt;</pre>
+							<figure>Initializing the plugin</figure>
+							<p>
+								This code is placed usually after the closing &lt;/body&gt; tag but the most important thing is that it must be placed after the included resource script files.
+							</p>
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								Remove the <code>&lt;script&gt;</code> wrapper element if you will use this code in an external JavaScript file.
+							</div>
+						</article>
+
+
+						<!-- List of slider settings -->
+						<article>
+							<h4>Configuring the slider</h4>
+							<p>LayerSlider has several options to customize your sliders. These options can be defined by passing an object with your changed values. The nex example shows how to include some custom properties.</p>
+							<pre name="code" class="brush: js">
+							&lt;script type="text/javascript"&gt;
+
+								// Running the code when the document is ready
+								$(document).ready(function(){
+
+									// Calling LayerSlider on the target element with adding custom slider options
+									$('#layerslider').layerSlider({
+										autoStart: false,
+										firstLayer: 2,
+										skin: 'borderlesslight',
+										skinsPath: '/static/layerslider/skins/'
+
+										// Please make sure that you didn't forget to add a comma to the line endings
+										// except the last line!
+									});
+								});
+
+							&lt;/script&gt;</pre>
+							<figure>Initializing the plugin with custom slider options</figure>
+							<h4>List of the available slider options</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Layout properties</th>
+											<th class="c">Values</th>
+											<th class="c">Defaults</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>responsive</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Responsive mode provides optimal viewing experience across a wide range of devices (from desktop to mobile) by adapting and scaling your sliders for the viewing environment.</td>
+										</tr>
+										<tr>
+											<td>responsiveUnder</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0 (disabled)</td>
+											<td>Turns on responsiveness under a specified value of width. Useful on full width sliders. If using this, the normal responsive property should be set to false!</td>
+										</tr>
+										<tr>
+											<td>layersContainer</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0 (disabled)</td>
+											<td>Creates an invisible inner container with the given dimension in pixels to hold and center your layers.</td>
+										</tr>
+										<tr>
+											<td>hideOnMobile</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">false</td>
+											<td>Hides the slider on mobile devices.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0</td>
+											<td>Hides the slider under the given value of browser width in pixels.</td>
+										</tr>
+										<tr>
+											<td>hideOver</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">100000</td>
+											<td>Hides the slider over the given value of browser width in pixel.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">Slideshow properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autoStart</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Slideshow will automatically start after pages have loaded.</td>
+										</tr>
+										<tr>
+											<td>startInViewport</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>The slider will start only if it enters into the viewport.</td>
+										</tr>
+										<tr>
+											<td>pauseOnHover</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Slideshow will temporally pause when someone moves the mouse cursor over the slider.</td>
+										</tr>
+										<tr>
+											<td>firstSlide</td>
+											<td class="c"> number<br>'random' </td>
+											<td class="c">1</td>
+											<td>The slider will start with the specified slide.</td>
+										</tr>
+										<tr>
+											<td>animateFirstSlide</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Disabling this option will result a static starting slide for the fisrt time on page load.</td>
+										</tr>
+										<tr>
+											<td>sliderFadeInDuration</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">350</td>
+											<td>The duration of the fade transition (in ms) when the slider is showing up for the first time on page load.</td>
+										</tr>
+										<tr>
+											<td>loops</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0</td>
+											<td>Number of loops if automatically start slideshow is enabled (0 means infinite!)</td>
+										</tr>
+										<tr>
+											<td>forceLoopNum</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>The slider will always stop at the given number of loops, even if someone restarts slideshow.</td>
+										</tr>
+										<tr>
+											<td>twoWaySlideshow</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">false</td>
+											<td>Slideshow can go backwards if someone switch to a previous slide.</td>
+										</tr>
+										<tr>
+											<td>randomSlideshow</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">false</td>
+											<td>If true, LayerSlider will change to a random slide. Please note that 'loops' feature won't work with randomSlideshow!.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">Appearance properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>skin</td>
+											<td class="c"> 'skin_name' </td>
+											<td class="c">'v5'</td>
+											<td>You can change the skin of the slider. The 'noskin' skin is a border- and buttonless skin. Your custom skins will appear in the list when you create their folders as well.</td>
+										</tr>
+										<tr>
+											<td>skinsPath</td>
+											<td class="c"> 'skins_folder_path' </td>
+											<td class="c">'/layerslider/skins/'</td>
+											<td>You can change the default path of the skins folder. Note, that you must use the slash at the end of the path.</td>
+										</tr>
+										<tr>
+											<td>globalBGColor</td>
+											<td class="c"> 'color_name'  </td>
+											<td class="c">'transparent'</td>
+											<td>Global background color of the slider. Slides with non-transparent background will cover this one. You can use all CSS methods such as HEX or RGB(A) values.</td>
+										</tr>
+										<tr>
+											<td>globalBGImage</td>
+											<td class="c"> 'image_url'<br>false </td>
+											<td class="c">false</td>
+											<td>Global background image of the slider.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">Navigation properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>navPrevNext</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Disabling this option will hide the Prev and Next buttons.
+</td>
+										</tr>
+										<tr>
+											<td>navStartStop</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Disabling this option will hide the Start and Stop buttons.
+</td>
+										</tr>
+										<tr>
+											<td>navButtons</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Disabling this option will hide slide navigation buttons or thumbnails.</td>
+										</tr>
+										<tr>
+											<td>hoverPrevNext</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Show the buttons only when someone moves the mouse cursor over the slider. This option depends on the previous setting.</td>
+										</tr>
+										<tr>
+											<td>hoverBottomNav</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">false</td>
+											<td>Slide navigation buttons (including thumbnails) will be shown on mouse hover only.</td>
+										</tr>
+										<tr>
+											<td>keybNav</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>You can navigate through slides with the left and right arrow keys.</td>
+										</tr>
+										<tr>
+											<td>touchNav</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Gesture-based navigation with swiping on touch-enabled devices.</td>
+										</tr>
+										<tr>
+											<td>showBarTimer</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">false</td>
+											<td>Show the bar timer to indicate slideshow progression. (Not working under IE7 and 8.)</td>
+										</tr>
+										<tr>
+											<td>showCircleTimer</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Use circle timer to indicate slideshow progression.</td>
+										</tr>
+										<tr>
+											<td>thumbnailNavigation</td>
+											<td class="c"> 'disabled'<br>'hover'<br>'always' </td>
+											<td class="c">'hover'</td>
+											<td>Type of the thumbnail navigation. Note, that 'hover' setting needs navButtons property set to true!</td>
+										</tr>
+										<tr>
+											<td>tnContainerWidth</td>
+											<td class="c"> 'percentage_value' </td>
+											<td class="c">'60%'</td>
+											<td>The width of the thumbnail container according to the width of the slider.</td>
+										</tr>
+										<tr>
+											<td>tnWidth</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">100</td>
+											<td>The width of the thumbnails in pixels.</td>
+										</tr>
+										<tr>
+											<td>tnHeight</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">60</td>
+											<td>The height of the thumbnails in pixels.</td>
+										</tr>
+										<tr>
+											<td>tnActiveOpacity</td>
+											<td class="c"> 0 - 100 </td>
+											<td class="c">35</td>
+											<td>Opacity in percents of thumbnail of the active slide.</td>
+										</tr>
+										<tr>
+											<td>tnInactiveOpacity</td>
+											<td class="c"> 0 - 100 </td>
+											<td class="c">100</td>
+											<td>Opacity in percents of thumbnails of the inactive slides.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">Video properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autoPlayVideos</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Videos (and HTML5 audios) will be automatically started on the active slide.</td>
+										</tr>
+										<tr>
+											<td>autoPauseSlideshow</td>
+											<td class="c"> 'auto'<br>true<br>false </td>
+											<td class="c">'auto'</td>
+											<td>The slideshow can temporally paused while videos are plaing. You can choose to permanently stop the pause until manual restarting.</td>
+										</tr>
+										<tr>
+											<td>youtubePreview</td>
+											<td class="c"> 'maxresdefault.jpg'<br>'hqdefault.jpg'<br>'mqdefault.jpg'<br>'default.jpg' </td>
+											<td class="c">'maxresdefault.jpg'</td>
+											<td>The preview image quaility for YouTube videos. Note, some videos do not have HD previews, and you may need to choose a lower quaility.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">Image preload properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>imgPreload</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Preloads images used in the next slides for seamless animations.</td>
+										</tr>
+										<tr>
+											<td>lazyLoad</td>
+											<td class="c"> true<br>false </td>
+											<td class="c">true</td>
+											<td>Loads images only when needed to save bandwidth and server resouces. Relies on the preload feature.</td>
+										</tr>
+									</tbody>
+									<thead>
+										<tr>
+											<th colspan="4">YourLogo properties</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>yourLogo</td>
+											<td class="c"> 'image_url'<br>false </td>
+											<td class="c">false</td>
+											<td>A fixed image layer can be shown above the slider that remains still during slide progression. Can be used to display logos or watermarks.</td>
+										</tr>
+										<tr>
+											<td>yourLogoStyle</td>
+											<td class="c"> 'CSS properties' </td>
+											<td class="c">'left: -10px; top: -10px;'</td>
+											<td>CSS properties to control the image placement and appearance.</td>
+										</tr>
+										<tr>
+											<td>yourLogoLink</td>
+											<td class="c"> 'url'<br>false </td>
+											<td class="c">false</td>
+											<td>Enter an URL to link the YourLogo image.</td>
+										</tr>
+										<tr>
+											<td>yourLogoTarget</td>
+											<td class="c">  'self'<br>'_blank'</td>
+											<td class="c">'_blank'</td>
+											<td></td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+						<!-- Slider layout -->
+						<article>
+							<h4>Slider layout</h4>
+							<p>
+								There are some different layouts of LayerSlider
+							</p>
+							<ul class="nomargin">
+								<li>Rersponsive mode</li>
+								<li>Fixed dimensions mode</li>
+								<li>Full-width mode</li>
+								<li>Full size (background mode)</li>
+							</ul>
+							<h4>Responsive mode</h4>
+							<p>
+								Responsive mode is a web design approach aimed at crafting themes, plugins and other kind of web contents to provide an optimal viewing experience across a wide range of devices (from mobile phones to desktop computers). With enabled responsive mode, your sliders will adapt the layout of the viewing environment by scaling your content proportionally.
+							</p>
+							<p>
+								This is the default layout of the slider.
+							</p>
+							<h4>Fixed dimensions mode</h4>
+							<p>
+								If you need to switch off responsiveness in special cases, you can do it by adding the following property into the slider init code:
+							</p>
+							<pre name="code" class="brush: js">
+							&lt;script type="text/javascript"&gt;
+
+								// Running the code when the document is ready
+								$(document).ready(function(){
+
+									// Calling LayerSlider on the target element
+									$('#layerslider').layerSlider({
+										responsive : false
+									});
+								});
+
+							&lt;/script&gt;</pre>
+							<figure>Fixed dimensions mode</figure>
+
+							<h4>Full-width mode</h4>
+							<p>
+								To create a full-width slider, please set the width of the slider to 100% and make sure that all the container elements of the slider have also 100% width. The normal responsive mode is not working here but there are two useful properties in full-width sliders:
+							</p>
+							<pre name="code" class="brush: js">
+							&lt;script type="text/javascript"&gt;
+
+								// Running the code when the document is ready
+								$(document).ready(function(){
+
+									// Calling LayerSlider on the target element
+									$('#layerslider').layerSlider({
+										responsiveUnder : 960,
+										layersContainer : 960
+									});
+								});
+
+							&lt;/script&gt;</pre>
+							<figure>Full.width slider smart features</figure>
+
+							<p>
+								As mentioned in the previous entries, responsive mode needs an initial proportion to calculate new dimensions for scaling. A full-width slider will always be as wide as your browser window, so your slider initial size depends on the viewing environment, and the plugin cannot identify an exact proportion to work with. Another aspect is to control how scaling should work with large screens, you most likely want to enable it below a certain amount of size, and prevent any action above that. This is why we have a feature called <code>responsiveUnder</code>. It enables you to specify imaginary borders that is dynamically enable or disable responsive layout depending on the size of your browser window.
+							</p>
+							<p>
+								The <code>layersContainer</code> feature will create an inner area inside your sliders to have invisible borders you can position your content relative to. This area will be as wide as you specify in pixels, and will always be centered. While this feature can be used with any layout, it is made for full-width sliders. Using this feature will result a resized canvas in slider builder that has the new dimensions you have specified.
+							</p>
+							<h4>Full size (background mode)</h4>
+							<p>
+								To use the slider in full size mode you will need to add width: 100%; and height: 100; style settings to the slider element as well as you html and body elements and please make sure that the first element after the <code>&lt;body&gt;</code> should be the slider in your HTML markup.
+							</p>
+							<pre name="code" class="brush: xml;">
+							&lt;html&gt;
+								&lt;head&gt;
+
+									&lt;style&gt;
+
+										body, html {
+											width: 100%;
+											height: 100%;
+										}
+
+									&lt;/style&gt;
+
+								&lt;/head&gt;
+								&lt;body&gt;
+									&lt;div id="layerslider" style="width: 100%; height: 100%;"&gt;
+
+										&lt;!-- slider data --&gt;
+
+									&lt;/div&gt;
+
+
+									&lt;!-- other site data --&gt;
+
+
+								&lt;/body&gt;
+							&lt;/html&gt;</pre>
+							<figure>Full size slider markup</figure>
+
+						</article>
+
+					</section>
+
+					<!-- Slides -->
+					<section>
+
+						<!-- Creating slides -->
+						<article>
+							<h4>Creating slides</h4>
+							<p>You can create slides by adding a <code>&lt;div&gt;</code> element into the slider with the class of <code>ls-slide</code> as can be seen in the below example. The highlighted lines are indicating new additions to our previous examples.</p>
+							<pre name="code" class="brush: xml; highlight: [4,6];">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- this is a slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+									&lt;!-- slide contents goes here --&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding a slide</figure>
+
+							<p>Naturally, you can add multiple slides in the same way.</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- first slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+									&lt;!-- slide contents goes here --&gt;
+								&lt;/div&gt;
+
+								&lt;!-- second slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+									&lt;!-- slide contents goes here --&gt;
+								&lt;/div&gt;
+
+								&lt;!-- third slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+									&lt;!-- slide contents goes here --&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding multiple slides</figure>
+						</article>
+
+						<!-- Configuring slides -->
+						<article>
+							<h4>Configuring slides</h4>
+							<p>You can configure slide-related settings by entering them in an attribute called <code>data-ls</code> on the slide element. This makes possible to change the timings, transition options and other common settings.</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide with custom settings --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000;&quot;&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide background&quot;&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>A slide with specified settings</figure>
+
+							<h4>Slide options</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Options</th>
+											<th>Defaults</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>slidedelay</td>
+											<td>4000</td>
+											<td>The total duration in milliseconds while slides are being displayed.</td>
+										</tr>
+										<tr>
+											<td>transition2d</td>
+											<td>1</td>
+											<td>2D transitions to be used.</td>
+										</tr>
+										<tr>
+											<td>transition3d</td>
+											<td>Not set</td>
+											<td>3D transitions to be used.</td>
+										</tr>
+										<tr>
+											<td>timeshift</td>
+											<td>0</td>
+											<td>Advance or postpone layer timings relative to slide transitions.</td>
+										</tr>
+										<tr>
+											<td>deeplink</td>
+											<td>Not set</td>
+											<td>A deeplink alias. See the <a data-goto="deep-linking-slides" href="#">Using deep links</a> chapter for more details.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<h4>Timing slides</h4>
+							<p>
+								We are using the <code>slidedelay</code> option to change the total duration of slides while they will be shown. This value is in milliseconds, so the default value <code>4000</code> means 4 seconds.</p>
+							<p>
+								Later in this guide we will add layers and other slide contents with having their own timing settings. Keep in mind that the <code>slidedelay</code> setting will always overrule other timings and the slider won't wait for other elements if they are exceeding the time interval set with <code>slidedelay.</code>
+							</p>
+
+							<h4>Slide Transitions</h4>
+							<p>
+								Transitions can be defined in the same way we did in the example. with the option names of <code>transition2d</code> and <code>transition3d</code>. You can use 2D and 3D transitions separately or together depending on your needs.
+							</p>
+							 <p>
+							 	There are more than 200 2D &amp; 3D preset transitions, so we have created a <a data-goto="slide-transitions" href="#">transition galley</a> that you can view in a separate chapter of this section. You will need to enter their IDs.
+							 </p>
+							<p>
+								You can choose multiple transitions by entering a comma separated list. In that case the slider will use them in random order. or you can use the <code>all</code> value.
+							</p>
+							<p>
+								If you do not specify any transitions, the slider will use a simple slide transition.
+							</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide with custom settings --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition2d: 2,7,9;&quot;&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide background&quot;&gt;
+								&lt;/div&gt;
+
+								&lt;!-- slide with custom settings --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition3d: all;&quot;&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide background&quot;&gt;
+								&lt;/div&gt;
+
+							&lt;/div&gt;</pre>
+							<figure>Using some 2D transitions on a slide</figure>
+
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								Slide transitions between two slides are working only if slide background images (with class=&quot;ls-bg&quot;) are added to both slides.
+							</div>
+
+
+						</article>
+
+						<!-- Slide contents -->
+
+						<article>
+							<h4>Slide contents</h4>
+							<p>
+								There are four types of slide contents
+							</p>
+							<ul class="nomargin">
+								<li>slide background image</li>
+								<li>slide thumbnail</li>
+								<li>special slide data (for example slide link)</li>
+								<li>layers</li>
+							</ul>
+							<p>
+								A slide can contain one slide background image, one slide thumbnail and unlimited number of layers. In this section you will see how to use the slide background images and slide thumbnails. You can read a complete chapter about layers <a datal-goto="adding-layers" href="#">here</a>.
+							</p>
+							<h4>Adding a slide background image</h4>
+							<p>Add a standard <code>&lt;img&gt;</code> element into your slides with the <code>ls-bg</code> class for setting a slide background.</p>
+							<pre name="code" class="brush: xml; highlight: 7;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+
+									&lt;!-- slide background --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide background&quot;&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding a slide background image</figure>
+
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								Slide transitions will work only if a slide background image is added.
+							</div>
+
+
+							<h4>Adding a slide thumbnail</h4>
+							<p>The slider can show a preview image of slides if you are using thumbnail navigation. You can specify your preferred  thumbnail image by adding an <code>&lt;img&gt;</code> element with the <code>ls-tn</code> class in the same manner as we did with slide backgrounds above.</p>
+							<pre name="code" class="brush: xml; highlight: 7;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- This is a slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+
+									&lt;!-- This is a slide thumbnail --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-tn&quot; alt=&quot;Slide thumbnail&quot;&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding a slide thumbnail</figure>
+
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								The slider will use the slide background if you don't specify a thumbnail image.
+							</div>
+						</article>
+
+						<!-- Linking slides -->
+						<article>
+							<h4>Linking slides</h4>
+							<p>You can link the entire surface of slides by adding an HTML <code>&lt;a&gt;</code> element as one of your layers in slides with the special class of <code>ls-link</code>. See the example below.</p>
+							<p class="b">
+								Please note, that the anchor element with the <code>ls-link</code> class must be the last layer of the actual slide so you should place it directly before the closing <code>div</code> tag of the slide.
+							</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- This will link the whole slide to &quot;example.com&quot; --&gt;
+								&lt;a href=&quot;http://example.com&quot; class=&quot;ls-link&quot;&gt;&lt;/a&gt;
+							&lt;/div&gt;</pre>
+							<figure>Linking the whole slide</figure>
+
+						</article>
+
+						<!-- Deeplinks -->
+						<article>
+							<h4>Deep linking slides</h4>
+							<p>You can specify a slide name/alias, which can be used to start the slideshow with the corresponding slide referencing from the URL.</p>
+							<p>The following example will start the slider with the second slide if we are using the slide alias <code>cakes</code> in the URL <code>example.com/page/#cakes</code>.</p>
+							<pre name="code" class="brush: xml">
+							&lt;div id=&quot;slider&quot;&gt;
+
+								&lt;!-- normal slide --&gt;
+								&lt;div class=&quot;ls-slide&quot;&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+								&lt;/div&gt;
+
+								&lt;!-- deep linked slide --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls="deeplink: cakes;"&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+								&lt;/div&gt;
+
+							&lt;/div&gt;</pre>
+							<figure>Deep-linking a slide</figure>
+
+						</article>
+
+						<!-- List of transitions -->
+						<article>
+							<h4>List of transitions</h4>
+							<p>
+								Below there are the available preset 2D / 3D transitions that you can use. Remember, you need to specify the ID of your selected transitions instead of their names.
+							</p>
+							<p>
+								<strong>Move your mouse over the transition names to view them in real-time.</strong>
+							</p>
+							<h4>2D slide transitions</h4>
+							<div class="table ls-transition-list" id="slide-transitions-2d">
+								<table>
+									<thead>
+										<tr>
+											<th class="c">ID</th>
+											<th>Transition name</th>
+											<th class="c">ID</th>
+											<th>Transition name</th>
+										</tr>
+									</thead>
+									<tbody></tbody>
+								</table>
+							</div>
+
+							<h4>3D slide transitions</h4>
+							<div class="table ls-transition-list" id="slide-transitions-3d">
+								<table>
+									<thead>
+										<tr>
+											<th class="c">ID</th>
+											<th>Transition name</th>
+											<th class="c">ID</th>
+											<th>Transition name</th>
+										</tr>
+									</thead>
+									<tbody></tbody>
+								</table>
+							</div>
+						</article>
+
+						<!-- Custom slide transitions -->
+						<article>
+							<h4>Custom slide transitions</h4>
+							<p>
+								All the available preset transitions are stored in the <code>layerslider.transitions.js</code> file. You can modify this file to add your own transitions or change the default ones. It is storing a complex JSON object, thus modifying that file is not recommended for users without web development experience.
+							</p>
+
+							<p>
+								Please note, we have more than 200 slide transitions, which takes advantage of every capability of the plugin. You will most likely find a transition within the default ones that you are wanted to use custom transitions in the first place.
+							</p>
+
+							<h4>See the source</h4>
+							<p>
+								We are assuming your have programming experience since it is needed for making custom transitions, therefore we don't have any guides for this particular topic. See the source code of the <code>layerslider.transitions.js</code> file. It is pretty straightforward for people with web development experience, and we are using mostly the same properties that are available at many other places.
+							</p>
+						</article>
+					</section>
+
+					<!-- Layers -->
+					<section>
+
+						<!-- Adding a layer -->
+						<article>
+							<h4>What is a layer?</h4>
+							<p>
+								Layers are the contents of slides. Unlike with conventional slider plugins, you can use multiple contents in a slide. These can be images, text, custom HTML, video and audio contents.
+							</p>
+
+							<h4>Adding a layer</h4>
+							<p>
+								You can add layers by appending standard HTML elements  into slides with the <code>ls-l</code> class name. For image layers use the &lt;img&gt; element. For text/HTML layers use the appropriate element like &lt;div&gt;, &lt;p&gt;, &lt;h1&gt;, &lt;h2&gt;, &lt;h3&gt; etc. The highlighted lines are indicating new additions to our previous examples.
+							</p>
+							<pre name="code" class="brush: xml; highlight: [10,13];">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition2d: 2,7,9;&quot;&gt;
+
+									&lt;!-- slide background --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide thumbnail&quot;&gt;
+
+									&lt;!-- image layer --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-l&quot; alt=&quot;Image layer&quot;&gt;
+
+									&lt;!-- text layer --&gt;
+									&lt;h3 class=&quot;ls-l&quot;&gt;I&#039;m a text layer!&lt;/h3&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding different types of layers into a slide</figure>
+						</article>
+
+						<!-- Positioning layers -->
+						<article>
+							<h4>Positioning layers</h4>
+							<p>
+								Layers are standard HTML elements, and you can set their initial positions with the <code>style</code> attribute.
+							</p>
+							<p>
+								One difference is, however, is that LayerSlider involves animations, and all your layers needs to be positioned manually with the <code>top</code> and <code>left</code> style properties. In the example below you can see the same layers with some style formatting added.
+							</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition2d: 2,7,9;&quot;&gt;
+
+									&lt;!-- slide background --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide thumbnail&quot;&gt;
+
+									&lt;!-- image layer --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-l&quot; style=&quot;top: 10px; left: 10px;&quot; alt=&quot;Image layer&quot;&gt;
+
+									&amp;lt;!-- text layer --&amp;gt;
+									&lt;h3 class=&quot;ls-l&quot; style=&quot;top: 50%; left: 50%; font-size: 18px;&quot;&gt;I&#039;m a text layer!&lt;/h3&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Positioning layers with using of style attributes</figure>
+
+							<h4>Additional notes</h4>
+							<p>Notice the second layer with using percents. Percentage values in LayerSlider works a bit differently than web standards; LayerSlider will always place the center of layers to the given position instead of their sides. This makes easy to position layers exactly to the center by setting the values 50% 50%.</p>
+
+							<h4>Sizing and wrapping text layers</h4>
+							<p>
+								By default text layers don't have fixed width so there could be strange anomalies while a text layer with lots of text is sliding in. In this case please add a width (in pixels or in percentage) to the layer.
+							</p>
+							<p>
+								Add the <code>white-space: nowrap;</code> style property to the layer if you don't want the slider to wrap the text into multiple lines.
+							</p>
+						</article>
+
+						<!-- Linking layers -->
+						<article>
+							<h4>Linking layers</h4>
+							<p>
+								You can link layers by wrapping them with a regular HTML <code>&lt;a&gt;</code> element. In this case, the <code>&lt;a&gt;</code> element becomes the layer itself, and you need to apply all the layer settings on that element instead of your "actual" layer.
+							</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- Slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- A regular slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- Linking an image --&gt;
+								&lt;a href=&quot;http://example.com&quot; class=&quot;ls-l&quot; data-ls=&quot;offsetxin: -100; fadein: false; rotatein: 90;&quot;&gt;
+									&lt;img src=&quot;...&quot; alt=&quot;layer image&quot;&gt;
+								&lt;/a&gt;
+							&lt;/div&gt;</pre>
+							<figure>Linking a layer</figure>
+
+							<h4>Creating a link to another slide in the slider</h4>
+							<p>You can link layers pointing to slides with the <code>ls-linkto-&lt;n&gt;</code> special class. Replace the &lt;n&gt; placeholder in the class name with the slider number you want to switch. When these layers are clicked the slider will immediately switch to the corresponding slide you are referencing for in the class name. See the example below.</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- the slider will switch to the third slide when clicked --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-l ls-linkto-3&quot; data-ls=&quot;offsetxin: -100; fadein: false; rotatein: 90;&quot; alt=&quot;layer image&quot;&gt;
+							&lt;/div&gt;</pre>
+							<figure>Creating a link to another slide</figure>
+
+						</article>
+
+						<!-- Embedding video/audio -->
+						<article>
+							<h4>Embedding YouTube and Vimeo videos</h4>
+							<p>You can include YouTube and Vimeo videos in slides by inserting their embed code into <code>&lt;div&gt;</code> layer. The embed code can be found on the corresponding video page on YouTube/Vimeo. LayerSlider will follow the dimensions specified in the embed code, thus you can also set them there. Alternatively, you can override it within your CSS stylesheets.</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- Slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- A regular slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- YouTube/Vimeo video --&gt;
+								&lt;div class=&quot;ls-l&quot; data-ls=&quot;offsetxin: 0; offsetyin: 0;&quot;&gt;
+									&lt;iframe width=&quot;560&quot; height=&quot;315&quot; src=&quot;//www.youtube.com/embed/lX6JcybgDFo&quot; frameborder=&quot;0&quot; allowfullscreen&gt;&lt;/iframe&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Embedding YouTube video</figure>
+
+							<h4>Embedding (optionally self-hosted) HTML5 videos</h4>
+							<p>Embedding self-hosted videos involves the HTML5 <code>&lt;video&gt;</code> element. You can find a detailed guide on <a href="https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Using_HTML5_audio_and_video" target="_blank">this</a> MDN page. The principal is the same described above. Here is a modified example:</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- Slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- A regular slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- Self-hosted HTML5 video --&gt;
+								&lt;div class=&quot;ls-l&quot; data-ls=&quot;offsetxin: 0; offsetyin: 0;&quot;&gt;
+									&lt;video src=&quot;http://v2v.cc/~j/theora_testsuite/320x240.ogg&quot; controls&gt;&lt;/video&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Embedding HTML5 video</figure>
+
+							<h4>Adding (optionally self-hosted) HTML5 audio</h4>
+							<p>You can include self-hosted audio with the HTML5 <code>&lt;audio&gt;</code> element. You can find a detailed guide on <a href="https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Using_HTML5_audio_and_video" target="_blank">this</a> MDN page. The principal is the same described above. Here is a modified example:</p>
+							<pre name="code" class="brush: xml">
+							&lt;!-- Slide --&gt;
+							&lt;div class=&quot;ls-slide&quot;&gt;
+
+								&lt;!-- A regular slide background --&gt;
+								&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;&quot;&gt;
+
+								&lt;!-- Self-hosted HTML5 audio --&gt;
+								&lt;div class=&quot;ls-l&quot; data-ls=&quot;offsetxin: 0; offsetyin: 0;&quot;&gt;
+									&lt;audio src=&quot;/test/audio.ogg&quot;&gt;&lt;/audio&gt;
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding HTML5 audio</figure>
+
+						</article>
+
+						<!-- Layer transitions -->
+						<article>
+							<h4>Layer transitions</h4>
+							<p>
+								The transition options can be set with the <code>data-ls</code> attribute in the same way as we used it for slides. Layers don't have any specific settings; all options are responsible for making unique transitions.
+							</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition2d: 2,7,9;&quot;&gt;
+
+									&lt;!-- slide background --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide thumbnail&quot;&gt;
+
+									&lt;!-- image layer --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-l&quot; data-ls=&quot;offsetxin: left; rotatein: 90;&quot; style=&quot;top: 10px; left: 10px;&quot; alt=&quot;Image layer&quot;&gt;
+
+									&lt;!-- text layer --&gt;
+									&lt;h3 class=&quot;ls-l&quot; data-ls=&quot;offsetxin: 0; offsetyin: -30;&quot; style=&quot;top: 50%; left: 50%;&quot;&gt;I&#039;m a text layer!&lt;/h3&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Adding transition options to layers</figure>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Option</th>
+											<th class="c">Values</th>
+											<th class="c">Defaults</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>
+												offsetxin<br>
+												offsetxout
+											</td>
+											<td class="c">left, right or a &lt;num&gt;</td>
+											<td class="c">80<br>-80</td>
+											<td>The horizontal offset to align the starting position of layers. Positive and negative numbers are allowed. Set left or right to position layers out of the slider.</td>
+										</tr>
+										<tr>
+											<td>
+												offsetyin<br>
+												offsetyout
+											</td>
+											<td class="c">top, bottom or a &lt;num&gt;</td>
+											<td class="c">0</td>
+											<td>The vertical offset to align the starting position of layers. Positive and negative numbers are allowed. Set top or bottom to position layers out of the slider.</td>
+										</tr>
+										<tr>
+											<td>
+												delayin
+											</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0</td>
+											<td>Delays the layer transitions with the specified amount of time in milliseconds.</td>
+										</tr>
+										<tr>
+											<td>showuntil</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">0</td>
+											<td>After animating in, the layer will be visible for the time you specify here, then it will animate out. You can use this setting for layers to leave the slide before the slide change or for example before other layers will slide in or out. This value in millisecs, so the value 1000 means 1 second.</td>
+										</tr>
+										<tr>
+											<td>
+												durationin<br>
+												durationout
+											</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">1000</td>
+											<td>The duration of layer transitions.</td>
+										</tr>
+										<tr>
+											<td>
+												easingin<br>
+												easingout
+											</td>
+											<td class="c">easing_name</td>
+											<td class="c">easeInOutQuint</td>
+											<td>The timing function used for transitions. See <a href="http://easings.net/">easings.net</a> for more information.</td>
+										</tr>
+										<tr>
+											<td>
+												fadein<br>
+												fadeout
+											</td>
+											<td class="c">true, false</td>
+											<td class="c">true</td>
+											<td>Fades in / out the layer during the transition.</td>
+										</tr>
+										<tr>
+											<td>
+												rotatein<br>
+												rotateout
+											</td>
+											<td class="c">&lt;angle&gt;</td>
+											<td class="c">0</td>
+											<td>Rotates the layer clockwise from the given angle to zero degree. Negative values are allowed for anticlockwise rotation.</td>
+										</tr>
+										<tr>
+											<td>
+												rotatexin<br>
+												rotatexout
+											</td>
+											<td class="c">&lt;angle&gt;</td>
+											<td class="c">0</td>
+											<td>Rotates the layer along the X (horizontal) axis from the given angle to zero degree. Negative values are allowed for reverse direction.</td>
+										</tr>
+										<tr>
+											<td>
+												rotateyin<br>
+												rotateyout
+											</td>
+											<td class="c">&lt;angle&gt;</td>
+											<td class="c">0</td>
+											<td>Rotates the layer along the Y (vertical) axis from the given angle to zero degree. Negative values are allowed for reverse direction.</td>
+										</tr>
+										<tr>
+											<td>
+												scalexin<br>
+												scalexout
+											</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">1</td>
+											<td>Scales the layer's width from the given value to its original size.</td>
+										</tr>
+										<tr>
+											<td>
+												scaleyin<br>
+												scaleyout
+											</td>
+											<td class="c">&lt;num&gt;</td>
+											<td class="c">1</td>
+											<td>Scales the layer's height from the given value to its original size.</td>
+										</tr>
+										<tr>
+											<td>
+												skewxin<br>
+												skewxout
+											</td>
+											<td class="c">&lt;angle&gt;</td>
+											<td class="c">0</td>
+											<td>Skews the layer along the X (horizontal) axis from the given angle to 0 degree. Negative values are allowed for reverse direction.</td>
+										</tr>
+										<tr>
+											<td>
+												skewyin<br>
+												skewyout
+											</td>
+											<td class="c">&lt;angle&gt;</td>
+											<td class="c">0</td>
+											<td>Skews the layer along the Y (vertical) axis from the given angle to 0 degree. Negative values are allowed for reverse direction.</td>
+										</tr>
+										<tr>
+											<td>
+												transformoriginin
+												transformoriginout
+											</td>
+											<td class="c">x y z</td>
+											<td class="c">50% 50% 0</td>
+											<td>This option allows you to modify the origin for transformations of the layer according to its position. The three values represent the X, Y and Z axis in 3D space. OriginX can be left, center, right, a number or a percentage value. OriginY can be top, center, bottom, a number or a percentage value. OriginZ can be a number and corresponds the depth in 3D space.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+						<!-- Parallax layers -->
+
+						<article>
+							<h4>Parallax layers</h4>
+							<p>
+								We added this nice feature to create a fancy parallax effect by moving your mouse over the slider. To use, you will need to add a special property called <code>parallaxlevel</code> to the layer.
+							</p>
+							<pre name="code" class="brush: xml;">
+							&lt;div id="layerslider" style="width: 800px; height: 400px;"&gt;
+
+								&lt;!-- slide --&gt;
+								&lt;div class=&quot;ls-slide&quot; data-ls=&quot;slidedelay: 4000; transition2d: 2,7,9;&quot;&gt;
+
+									&lt;!-- slide background --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-bg&quot; alt=&quot;Slide thumbnail&quot;&gt;
+
+									&lt;!-- image layer --&gt;
+									&lt;img src=&quot;...&quot; class=&quot;ls-l&quot; data-ls=&quot;parallaxlevel: 5;&quot; alt=&quot;Image layer&quot;&gt;
+
+									&lt;!-- text layer --&gt;
+									&lt;h3 class=&quot;ls-l&quot; data-ls=&quot;parallaxlevel: -1;&quot; style=&quot;top: 50%; left: 50%;&quot;&gt;I&#039;m a text layer!&lt;/h3&gt;
+
+								&lt;/div&gt;
+							&lt;/div&gt;</pre>
+							<figure>Using parallax layers</figure>
+
+							<div class="km-notification info cf">
+								<span class="icon-info-circled"></span>
+								You can use both positive or negative values (for opposite directions).
+							</div>
+						</article>
+
+					</section>
+
+					<!-- Examples -->
+					<section>
+						<p>
+							Click on the names of examples to open them.
+						</p>
+						<div class="table">
+							<table>
+								<thead>
+									<tr>
+										<th>Example</th>
+										<th>Description</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td><a href="../examples/simplest-example.html">Simple example</a></td>
+										<td>
+											This is a a really simple example slider that focuses on the main HTML markup for easier understanding. It containes only two slides and two layers in each slides. Please open the <code>simplest-example.html</code> file in a text editor to see the commented HTML markup of the slider.
+										</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/responsive-demo-slider.html">Responsive demo slider</a></td>
+										<td>The new demo slider made for version 5.0.0</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/full-width-demo-slider.html">Full width demo slider</a></td>
+										<td>Full width demo slider</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/carousel-demo-slider.html">Carousel</a></td>
+										<td>Carousel demo slider</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/previous-version-2d-demo-slider.html">Previous version 2D demo slider</a></td>
+										<td>One of our previous demo sliders with 2D transitions</td>
+									</tr>
+									<tr>
+										<td class="nw"><a href="../examples/previous-version-3d-demo-slider.html">Previous version 3D demo slider</a></td>
+										<td>One of our previous demo sliders with 3D transitions</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/content-slider.html">Content slider</a></td>
+										<td>Content slider example</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/full-size-example.html">Full size example</a></td>
+										<td>Full size slider example</td>
+									</tr>
+									<tr>
+										<td><a href="../examples/api-demo.html">API demo</a></td>
+										<td>This example show the main capabilities of LayerSlider API</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+
+
+					<!-- API reference -->
+					<section>
+
+						<!-- Event reference -->
+						<article>
+							<h4>Event reference</h4>
+							<p>Event callbacks can be used to modify the slider behavior, or wire it up with external solutions. The following events can be defined in the slider initialization JavaScript code.</p>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Event</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>cbInit</td>
+											<td>Fires when LayerSlider has loaded</td>
+										</tr>
+										<tr>
+											<td>cbStart</td>
+											<td>Calling when the slideshow has started.</td>
+										</tr>
+										<tr>
+											<td>cbStop</td>
+											<td>Calling when the slideshow is stopped by the user.</td>
+										</tr>
+										<tr>
+											<td>cbPause</td>
+											<td>Firing when the slideshow is temporary on hold (e.g.: "Pause on hover" feature).</td>
+										</tr>
+										<tr>
+											<td>cbAnimStart</td>
+											<td>Calling when the slider commencing slide change (animation start).</td>
+										</tr>
+										<tr>
+											<td>cbAnimStop</td>
+											<td>Firing when the slider finished a slide change (animation end).</td>
+										</tr>
+										<tr>
+											<td>cbPrev</td>
+											<td>Calling when the slider will change to the previous slide by the user.</td>
+										</tr>
+										<tr>
+											<td>cbNext</td>
+											<td>Calling when the slider will change to the next slide by the user.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<h4>Passed variables</h4>
+							<p>You can add a custom named variable in the function definition that will be filled up with data provided by the plugin. The <code>cbInit</code> callback will receive the slider DOM element itself, while all of the other events will have the data object of the slider. The data object can be used to have access all of the settings that the working is working with, and it also make possible to override some of them on-the-fly. Usually it is used to get the information related to slides and slideshow progression.</p>
+
+							<h4>Example</h4>
+							<p>Callback functions can be defined by passing them in the JavaScript initialization code.</p>
+							<pre name="code" class="brush: js">
+							//Initialize the slider as usual
+							$('#slider').layerSlider({
+								autoStart : false,
+								firstSlide : 3,
+
+								// Adding callbacks
+								cbInit : function() {
+
+									// Custom code
+								},
+								cbAnimStop : function() {
+
+									// Custom code
+								}
+							});</pre>
+							<figure>Setting custom API callback functions</figure>
+
+						</article>
+
+						<!-- API methods -->
+						<article>
+							<h4>API methods</h4>
+							<p>The below API methods can be used to control sliders externally, and wire them up with 3rd party solutions.</p>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Method</th>
+											<th>Description</th>
+											<th>Example</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>(integer)</td>
+											<td>The slider will change to the specified slide. It starts with 1.</td>
+											<td>$('#slider').layerSlider(3);</td>
+										</tr>
+										<tr>
+											<td>next</td>
+											<td>The slider will change the next layer.</td>
+											<td>$('#slider').layerSlider('next');</td>
+										</tr>
+										<tr>
+											<td>prev</td>
+											<td>The slider will change the previous layer.</td>
+											<td>$('#slider').layerSlider('prev');</td>
+										</tr>
+										<tr>
+											<td>stop</td>
+											<td>Will stop the slideshow.</td>
+											<td>$('#slider').layerSlider('stop');</td>
+										</tr>
+										<tr>
+											<td>start</td>
+											<td>Will continue or start the slideshow.</td>
+											<td>$('#slider').layerSlider('start');</td>
+										</tr>
+										<tr>
+											<td>data</td>
+											<td>Returns the slider data object</td>
+											<td>var data = $('#slider').layerSlider('data');</td>
+										</tr>
+										<tr>
+											<td>userInitData</td>
+											<td>Returns the object of the slider options which has been set by the user in the init code</td>
+											<td>var data = $('#slider').layerSlider('userInitData');</td>
+										</tr>
+										<tr>
+											<td>defaultInitData</td>
+											<td>Returns the full list of the default slider options</td>
+											<td>var data = $('#slider').layerSlider('defaultInitData');</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+						<!-- Examples -->
+						<article>
+							<h4>Switch slides with custom controls</h4>
+							<pre name="code" class="brush: xml">
+							&lt;a href=&quot;javascript:void(0);&quot; onclick=&quot;$(&#039;#layerslider&#039;).layerSlider(2);&quot;&gt;Change to slide 2&lt;/a&gt;</pre>
+							<figure>Switching to a specified slide</figure>
+
+
+							<h4>List of data object properties</h4>
+							<p>Paste this code snippet into a callback function to see the contents of the LayerSlider data object in the console of your browser.</p>
+							<pre name="code" class="brush: js">
+							for(key in data) {
+								console.log(key + ' = ' + data[key]);
+							}</pre>
+							<figure>Getting the slider data object</figure>
+							<p>
+								The most important properties are the following:
+							</p>
+							<ul class="nomargin">
+								<li>
+									data['prevLayerIndex'] = returns the index of the previous slide (not the layer)
+								</li>
+								<li>
+									data['curLayer']  = returns the jQuery object of the current slide (not the layer)
+								</li>
+								<li>
+									data['curLayerIndex'] = returns the index of the current slide (not the layer)
+								</li>
+								<li>
+									data['nextLayer'] = returns the jQuery object of the next slide (not the layer)
+								</li>
+								<li>
+									data['nextLayerIndex'] = returns the index of the next slide (not the layer)
+								</li>
+								<li>
+									data['isAnimating'] = returns true or false
+								</li>
+								<li>
+									data['layersNum'] = returns the number of slides (not the layers) in the slider
+								</li>
+								<li>
+									data['autoSlideshow'] = returns true or false
+								</li>
+								<li>
+									data['paused'] = returns true or false
+								</li>
+							</ul>
+
+							<h4>Combining callbacks and API methods</h4>
+							<p>The following example will bring up a message after every slide change with the current slider number. It can be used with the <code>cbAnimStop</code> event callback.</p>
+							<pre name="code" class="brush: js">
+							// ...
+							cbAnimStop : function(data) {
+								alert('The current slide is: ' + data['curLayerIndex']);
+							}
+							// ...</pre>
+							<figure>Callback with an API method</figure>
+
+							<h4>Custom navigation area</h4>
+							<p>On <a href="http://pastebin.com/YHBFk1CR">this page</a> you can find a complete example for building a custom navigation area. Please note, this example involves other programming languages such as CSS, HTML and DOM manipulation, and it requires web development experience.</p>
+						</article>
+					</section>
+
+					<!-- Troubleshooting -->
+					<section>
+
+						<!-- Video issues -->
+						<article>
+							<h4>Video issues</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Symptom</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+									<tr>
+										<td class="nw">Grey preview image</td>
+										<td>Some videos don't have HD preview images, and you might need to lower the preview quality in your slider settings if it shows a grey image with 3 dots.</td>
+									</tr>
+									<tr>
+										<td>No preview image</td>
+										<td>Vimeo treats Pro/Plus videos as private, even if you make them publicly available. This causes the preview image not appearing in the slider.</td>
+									</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+						<!-- Issues related to jQuery -->
+						<article>
+							<h4>Issues related to jQuery</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Symptom</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+									<tr>
+										<td class="nw">Multiple jQuery issue</td>
+										<td>Your site has including the jQuery library twice or more. Please make sure that you removed the unnecessary versions.</td>
+									</tr>
+									<tr>
+										<td>Old jQuery issue</td>
+										<td>To maintain compatibility with new software versions and their new features, our plugins requires newer versions of the jQuery library. Usually, you can use them with jQuery 1.7, but we strongly recommend you to have at least version 1.8 or newer as some of the features of our plugins only works with those versions.
+										</td>
+									</tr>
+									<tr>
+										<td>jQuery transit issue</td>
+										<td>Your site has including the jQuery Transit library twice or more. Please make sure that you removed the unnecessary versions.
+										</td>
+									</tr>
+									</tbody>
+								</table>
+							</div>
+
+						</article>
+
+						<!-- Loading problems -->
+						<article>
+							<h4>Loading problems</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Symptom</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+									<tr>
+										<td class="nw">The slider is not starting<br>(no loading indicator)</td>
+										<td>There are maybe some JS errors on your site. Please check the slider init code and the code of the other scripts.</td>
+									</tr>
+									<tr>
+										<td>The slider is not starting<br>(loading indicator)</td>
+										<td>One or more images are missing from the slider. Please make sure that you didn't mistype the image URLs.
+										</td>
+									</tr>
+									</tbody>
+								</table>
+
+						</article>
+
+						<!-- Known incompatibilities -->
+						<article>
+							<h4>Known incompatibilities</h4>
+							<div class="table">
+								<table>
+									<thead>
+										<tr>
+											<th>Cause</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>FitVids JS</td>
+											<td>Your videos will have wrong dimensions if you apply FitVids on them within the slider.</td>
+										</tr>
+										<tr>
+											<td>
+												<strong>Isotope</strong>
+											</td>
+											<td><strong>[SOLVED]</strong> Using Isotope and jQuery Transit on the same page caused some glitchy transitions.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+					</section>
+
+					<!-- Upgrading -->
+					<section>
+						<h4>Upgrading to version 5</h4>
+						<p>
+							LayerSlider had many changes and improvements since we released the first version two years ago. We always focused on the backwards compatibility but we had to make some decisions to get more professional.
+						</p>
+						<h4>Important changes</h4>
+						<p>
+							We made a lot of changes in version 5 and - as always - we tried to keep the slider compatible with the earlier versions (and when we say 'earlier versions' we are thinking mostly of the static HTML markup / init code of your sliders built in the past).
+						</p>
+						<p>
+							<strong>It is important to know that your existing sliders should work 99% the same as before (except the included resource files) but there could be differences in some special cases,</strong> but even of the backwards compatibility we recommend you to make your slider 100% version 5 compatible with the following guide.
+						</p>
+						<h4>Changes in the resource files</h4>
+						<p>
+							<strong>This is the only step that you must follow to get your existing sliders work with LayerSlider v5.</strong>
+						</p>
+						<p>
+							From version 5 LayerSlider is using the powerful Greensock Animation Engine for transitons so we removed jquery transit and easing.js
+						</p>
+
+						<pre name="code" class="brush: xml">
+							&lt;!-- LayerSlider stylesheet --&gt;
+							&lt;link rel=&quot;stylesheet&quot; href=&quot;/layerslider/css/layerslider.css&quot; type=&quot;text/css&quot;&gt;
+
+							&lt;!-- External libraries: jQuery, easing.js &amp; jQuery Transit --&gt;
+							&lt;script src="/layerslider/jQuery/jquery.js" type="text/javascript"&gt;&lt;/script&gt;
+							&lt;script src="/layerslider/jQuery/jquery-easing-1.3.js" type="text/javascript"&gt;&lt;/script&gt;
+							&lt;script src="/layerslider/jQuery/jquery-transit-modified.js" type="text/javascript"&gt;&lt;/script&gt;
+
+							&lt;!-- LayerSlider script files --&gt;
+							&lt;script src=&quot;/layerslider/js/layerslider.transitions.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+							&lt;script src=&quot;/layerslider/js/layerslider.kreaturamedia.jquery.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;</pre>
+						<figure>Including resources in earlier versions</figure>
+						<pre name="code" class="brush: xml">
+							&lt;!-- LayerSlider stylesheet --&gt;
+							&lt;link rel=&quot;stylesheet&quot; href=&quot;/layerslider/css/layerslider.css&quot; type=&quot;text/css&quot;&gt;
+
+							&lt;!-- External libraries: jQuery &amp; GreenSock --&gt;
+							&lt;script src=&quot;/layerslider/js/jquery.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+							&lt;script src=&quot;/layerslider/js/greensock.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+
+							&lt;!-- LayerSlider script files --&gt;
+							&lt;script src=&quot;/layerslider/js/layerslider.transitions.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;
+							&lt;script src=&quot;/layerslider/js/layerslider.kreaturamedia.jquery.js&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;</pre>
+						<figure>Including resources from version 5</figure>
+						<p>
+							We made the slider more compatible and much faster with this change.
+						</p>
+						<h4>Changes in naming</h4>
+						<p>
+							From version 5 we are calling the slides to slides and the layers to layers. In earlier versions we called the slides to layers and the layers to sublayers. We know that the old naming was a little confusing (in the WordPress version of the plugin we are using the new namings for a long time ago).
+						</p>
+						<h4>Changes in the slider markup</h4>
+						<p>
+							Regarding to the name changes we changed some things in the slider markup.
+						</p>
+						<pre name="code" class="brush: xml">
+						&lt;div id="layerslider" style="width: 1000px; height: 500px;"&gt;
+
+							&lt;div class="ls-layer" style="transition2d: 2,5,23; slidedelay: 5000;"&gt;
+
+								&lt;img class="ls-bg" src="..." /&gt;
+								&lt;a class="ls-s-1" href="..." style="top: 20px; left: 100px; slidedirection: fade; durationin: 3000; easingin: linear;"&gt;some linked text&lt;/a&gt;
+								&lt;img class="ls-s-3" src="..." style="top: 50%; left: 20%; slideoutdirection: top; durationout: 1670; easingout: easeinoutquad;" /&gt;
+
+							&lt;/div&gt;
+
+							&lt;div class="ls-layer" style="transition3d: 33,15; slidedelay: 4000;"&gt;
+
+								&lt;img class="ls-bg" src="..." /&gt;
+								&lt;p class="ls-s-2" style="top: 40px; left: 600px; width: 200px; slideoutdirection: bottom; durationout: 500; easingout: easeinback;"&gt;some text&lt;/p&gt;
+								&lt;a class="ls-link" href="..."&gt;&lt;/a&gt;
+
+							&lt;/div&gt;
+
+						&lt;/div&gt;</pre>
+						<figure>Slider markup in earlier versions</figure>
+						<pre name="code" class="brush: xml">
+						&lt;div id="layerslider" style="width: 1000px; height: 500px;"&gt;
+
+							<!-- First slide -->
+							&lt;div class="ls-slide" data-ls="transition2d: 2,5,23; slidedelay: 5000;"&gt;
+
+								<!-- Slide background -->
+								&lt;img class="ls-bg" src="..." /&gt;
+								<!-- First layer -->
+								&lt;a class="ls-l" href="..." style="top: 20px; left: 100px;" data-ls="offsetxin: 0; offsetyin: 0; fadein: true; durationin: 3000; easingin: linear;"&gt;some linked text&lt;/a&gt;
+								<!-- Second layer -->
+								&lt;img class="ls-l" src="..." style="top: 50%; left: 20%;" data-ls="offsetyout: top; durationout: 1670; easingout: easeinoutquad;" /&gt;
+
+							&lt;/div&gt;
+
+							<!-- Second slide -->
+							&lt;div class="ls-slide" data-ls="transition3d: 33,15; slidedelay: 4000;"&gt;
+
+								<!-- Slide background -->
+								&lt;img class="ls-bg" src="..." /&gt;
+								<!-- First layer -->
+								&lt;p class="ls-l" style="top: 40px; left: 600px; width: 200px;" data-ls="offsetxout: 0; offsetyout: bottom; fadeout: false; durationout: 500; easingout: easeinback;"&gt;some text&lt;/p&gt;
+								<!-- Linking the whole slide -->
+								&lt;a class="ls-link" href="..."&gt;&lt;/a&gt;
+
+							&lt;/div&gt;
+
+						&lt;/div&gt;</pre>
+						<figure>Slider markup from version 5</figure>
+						<p>
+							As you can see we changed the class name of the slides from 'ls-layer' to 'ls-slide' and also the class names of the layers from 'ls-s .. ' to 'ls-l'. It is important to know that you don't need to add numbers in the layer class names any more (you can set the starting / ending distance in different way), just use 'ls-l' in any cases. The class names of the slide backgrounds and the slide linking elements didn't change.
+						</p>
+						<p>
+							The second improvement that we moved the slide- and layer-specific properties out of the style attribute. You can use the style attribute for positioning and styling like in normal cases but you should use the new 'data-ls' attribute (both on slides and layers) for adding transition properties. We think that the slider markup became cleaner and it is easier to work with.
+						</p>
+						<h4>Changed properties in the slider init code</h4>
+						<div class="table">
+							<table>
+								<thead>
+									<tr>
+										<th>earlier property name</th>
+										<th>new property name</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td class="light">sublayerContainer</td>
+										<td class="b">layersContainer</td>
+									</tr>
+									<tr>
+										<td class="light">firstLayer</td>
+										<td class="b">firstSlide</td>
+									</tr>
+									<tr>
+										<td class="light">animateFirstLayer</td>
+										<td class="b">animateFirstSlide</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<h4>Changes in slide transitions</h4>
+						<p>
+							<strong>The slider will not animate out the layers before the slide change so layer and slide transitions can happen at the same time.</strong> Many of our users will like this feature.
+						</p>
+						<h4>Changes in layer transitions</h4>
+						<p>
+							With the new Greensock Animation Engine layers can be animating with really unlimited ways. <strong>Layers can now fade + slide at the same time</strong> and they can rotate (in 2D or 3D), skew or scale too and you can set even the transform origin of the layer transitions if you like.
+						</p>
+						<p>
+						 	You can see the earlier transition options with the version 5 compatible equivalent side by side in the following list.
+						</p>
+						<div class="table">
+							<table>
+								<thead>
+									<tr>
+										<th>earlier options</th>
+										<th>values</th>
+										<th>new options</th>
+										<th>values</th>
+										<th class="c">defaults</th>
+									</tr>
+								</thead>
+								<tbody class="nw">
+									<tr>
+										<td>slidedirection</td>
+										<td>left, right<br>top, bottom<br>fade</td>
+										<td class="b">offsetxin<br>offsetyin<br>fade</td>
+										<td>left, right or a &lt;num&gt;<br>top, bottom or a &lt;num&gt;<br>true, false</td>
+										<td class="c">80<br>0<br>true</td>
+									</tr>
+									<tr>
+										<td>slideoutdirection</td>
+										<td>left, right<br>top, bottom<br>fade</td>
+										<td class="b">offsetxout<br>offsetyout<br>fadeout</td>
+										<td>left, right or a &lt;num&gt;<br>top, bottom or a &lt;num&gt;<br>true, false</td>
+										<td class="c">-80<br>0<br>true</td>
+									</tr>
+									<tr>
+										<td>durationin</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">durationin</td>
+										<td>&lt;num&gt;</td>
+										<td class="c">1000</td>
+									</tr>
+									<tr>
+										<td>durationout</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">durationout</td>
+										<td>&lt;num&gt;</td>
+										<td class="c">1000</td>
+									</tr>
+									<tr>
+										<td>delayin</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">delayin</td>
+										<td>&lt;num&gt;</td>
+										<td class="c">0</td>
+									</tr>
+									<tr>
+										<td>delayout</td>
+										<td>&lt;num&gt;</td>
+										<td class="i" colspan="3"><strong>removed</strong> (with showuntil you can control<br>the out-animations of layers regarding to each other)</td>
+									</tr>
+									<tr>
+										<td>showuntil</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">showuntil</td>
+										<td>&lt;num&gt;</td>
+										<td class="c">0</td>
+									</tr>
+									<tr>
+										<td>easingin</td>
+										<td>easing_name</td>
+										<td class="b">easingin</td>
+										<td>easing_name</td>
+										<td class="c"></td>
+									</tr>
+									<tr>
+										<td>easingout</td>
+										<td>easing_name</td>
+										<td class="b">easingout</td>
+										<td>easing_name</td>
+										<td class="c"></td>
+									</tr>
+									<tr>
+										<td>rotatein</td>
+										<td>&lt;angle&gt;</td>
+										<td class="b">
+											rotatein<br>
+											rotateXin<br>
+											rotateYin<br>
+										</td>
+										<td>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;
+										</td>
+										<td class="c">
+											0<br>
+											0<br>
+											0
+										</td>
+									</tr>
+									<tr>
+										<td>rotateout</td>
+										<td>&lt;angle&gt;</td>
+										<td class="b">
+											rotateout<br>
+											rotateXout<br>
+											rotateYout<br>
+										</td>
+										<td>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;
+										</td>
+										<td class="c">
+											0<br>
+											0<br>
+											0
+										</td>
+									</tr>
+									<tr>
+										<td>scalein</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">
+											scalexin<br>
+											scaleyin
+										</td>
+										<td>
+											&lt;num&gt;<br>
+											&lt;num&gt;
+										</td>
+										<td class="c">
+											1<br>
+											1
+										</td>
+									</tr>
+									<tr>
+										<td>scaleout</td>
+										<td>&lt;num&gt;</td>
+										<td class="b">
+											scalexout<br>
+											scaleyout
+										</td>
+										<td>
+											&lt;num&gt;<br>
+											&lt;num&gt;
+										</td>
+										<td class="c">
+											1<br>
+											1
+										</td>
+									</tr>
+									<tr>
+										<td colspan="2" class="i c light">N / A</td>
+										<td class="b">
+											skewxin<br>
+											skewyin
+										</td>
+										<td>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;
+										</td>
+										<td class="c">
+											0<br>
+											0
+										</td>
+									</tr>
+									<tr>
+										<td colspan="2" class="i c light">N / A</td>
+										<td class="b">
+											skewxout<br>
+											skewyout
+										</td>
+										<td>
+											&lt;angle&gt;<br>
+											&lt;angle&gt;
+										</td>
+										<td class="c">
+											0<br>
+											0
+										</td>
+									</tr>
+									<tr>
+										<td colspan="2" class="i c light">N / A</td>
+										<td class="b">
+											transformoriginin
+										</td>
+										<td>
+											x y z
+										</td>
+										<td class="c">
+											50% 50% 0
+										</td>
+									</tr>
+									<tr>
+										<td colspan="2" class="i c light">N / A</td>
+										<td class="b">
+											transformoriginout
+										</td>
+										<td>
+											x y z
+										</td>
+										<td class="c">
+											50% 50% 0
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<p>
+							You have a lot more transition options in the new version. The most important thing is that you can set the starting and ending offset positions (X,Y) of layers.
+						</p>
+						<pre name="code" class="brush: xml">
+
+							&lt;div class="ls-slide"&gt;
+
+								&lt;img class="ls-l" src="..."
+									style="left: 350px; top: 230px;"
+									data-ls="offsetxin: 100; offsetyin: 40; offsetxout: -150; offsetyout: 100;" /&gt;
+
+							&lt;/div&gt;</pre>
+						<figure>Using the offset layer transition options</figure>
+						<p>
+							Description of the transition of the layer in this example:
+						</p>
+						<p>
+							<strong>Transition IN</strong><br>
+							starting position X : 450px <i>(initial left property + offsetxin)</i><br>
+							starting position Y : 270px <i>(initial left property + offsetyin)</i><br>
+							ending position X : 350px <i>(initial left property)</i><br>
+							ending position Y : 230px <i>(initial top property)</i>
+						</p>
+						<p>
+							The layer will stay at the initial position until transition out.
+						</p>
+						<p>
+							<strong>Transition OUT</strong><br>
+							starting position X : 350px <i>(initial left property)</i><br>
+							starting position Y : 230px <i>(initial top property)</i><br>
+							ending position X : 200px <i>(initial left property + offsetxout)</i><br>
+							ending position Y : 330px <i>(initial left property + offsetyout)</i>
+						</p>
+						<p>
+							With these options you can create complete <strong>axis-free</strong> slide transitions!
+						</p>
+						<p>
+							<strong>Please note, that fade is enabled by true so in the example above the layer will fade + slide at the same time.</strong> If you need the layer to slide only, you can use the fadein: false; fadeout: false; options. If you want the layer to fade only, you should use only the offsetxin: 0; offsetyin: 0; options (because fading is enabled and offsetyin / out are 0 by default).
+						</p>
+						<p>
+							<strong>If you want to start / end the transitions from / to outside of the slider, you can use the left / right values on the offsetxin / offsetxout, and top / bottom values on the offsetyin / offsetyout properties.</strong>
+						</p>
+					</section>
+
+					<!-- Release log -->
+					<section>
+
+						<!-- What's new -->
+						<article>
+							<div class="km-notification warning">
+								<span class="icon-attention"></span>
+								If you upgraded from earlier (1.x - 4.x) versions, please <a data-goto="changes" href="#">read this article about the changes carefully</a>!
+							</div>
+
+							<h4>Changes in version 5.3.0</h4>
+							<ul class="nomargin">
+								<li>Added new API method 'redraw' to update the slider's layout and contents.</li>
+								<li>Fixed Javascript error if a slider doesn't have any slide.</li>
+								<li>Fixed several issues related to self-hosted HTML5 video playback.</li>
+								<li>Fixed responsive mode of full width sliders not detecting viewport changes in some cases, especially while changing orientation on mobile devices.</li>
+							</ul>
+
+							<h4>Changes in version 5.2.0</h4>
+							<ul class="nomargin">
+								<li>Fixed some appearance issues</li>
+								<li>Fixed broken autoplay feature of HTML5 videos</li>
+								<li>Fixed an issue that caused background flickering in some cases</li>
+								<li>Video layers are ignoring showUntil parameter while playing</li>
+								<li>The slider won't hang up if an image layer couldn't be loaded</li>
+								<li>The duration of a layer cannot be 0ms (this value will be automatically changed to 1ms)</li>
+							</ul>
+							<ul>
+								<li>Added new options into the LayerSlider API:
+									<ul>
+										<li><span class="b">prevLayerIndex</span> - The index of the previous slide (curLayerIndex is also fixed)</li>
+										<li><span class="b">userInitData</span> - Returns the object of the slider options which has been set by the user in the init code</li>
+										<li><span class="b">defaultInitData</span> - Returns the full list of the default slider options</li>
+									</ul>
+								</li>
+								<li>Added new slider options, which can be used in the init code:
+									<ul>
+										<li><span class="b">sliderFadeInDuration</span> - The duration of the fade transition when the slider is showing up for the first time on page load</li>
+										<li><span class="b">startInViewport</span> - The slider will start only if it enters into the viewport</li>
+										<li><span class="b">hideOnMobile</span> - Hides the slider on mobile devices</li>
+										<li><span class="b">hideUnder</span> - Hides the slider under the given value of browser width in pixels</li>
+										<li><span class="b">hideOver</span> - Hides the slider over the given value of browser width in pixel</li>
+									</ul>
+
+								</li>
+							</ul>
+							<h4>Changes in version 5.1.2</h4>
+							<ul class="nomargin">
+								<li>Fixed 3D transitions in the latest versions of Chrome</li>
+							</ul>
+							<h4>Changes in version 5.1.0</h4>
+							<ul class="nomargin">
+								<li>Fixed several issues with embedded videos (mostly under Firefox and IE)</li>
+								<li>Fixed the autoplay parameter in embedded youtube videos</li>
+								<li>Fixed another HTML5 video sizing issue</li>
+							</ul>
+							<h4>Changes in version 5.0.2</h4>
+							<ul class="nomargin">
+								<li>Fixed HTML5 video sizing issue</li>
+							</ul>
+							<h4>Changes in version 5.0.1</h4>
+							<ul class="nomargin">
+								<li>Fixed layer transitions if there are no slide background images</li>
+								<li>Fixed the starting position of layers with percentage value of width</li>
+							</ul>
+							<h4>What's new in version 5.0.0?</h4>
+							<ul>
+								<li>
+									<strong>New features</strong>
+									<ul class="nomargin">
+										<li>Parallax Layers - a fancy parallax effect by mouse move</li>
+										<li>New layer transitions: rotateX, rotateY and skew with option to set transformOrigin</li>
+										<li>Added (self-hosted) HTML5 video and audio support</li>
+										<li>Added a new skin</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Changes</strong>
+									<ul class="nomargin">
+										<li>Using Greensock Animation Engine instead of jQuery Transit + easings.js</li>
+										<li>Changes the naming of layers and slides</li>
+										<li>Changes in the HTML markup of the slider</li>
+										<li>Changed some properties in the init code</li>
+										<li>Slides and layers can now animating at the same time</li>
+										<li>Layers can now fade + slide at the same time</li>
+										<li>Changed some properties in the layer transitions</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Improvements</strong>
+									<ul class="nomargin">
+										<li>Super smooth transitions with the Greensock engine</li>
+										<li>Improved some layer transitions like fade, slide (axis-free), scale, etc.</li>
+										<li>Improved crossfading slide transition with semi-transparent PNG files</li>
+										<li>Smarter preloading images with lazy load</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Fixes</strong>
+									<ul class="nomargin">
+										<li>Fixed the '1px slide transition bug'</li>
+									</ul>
+								</li>
+							</ul>
+						</article>
+
+						<!-- Previous versions -->
+						<article>
+							<h4>Changes in previous versions</h4>
+							<p class="b">4.6.1</p>
+							<ul>
+								<li>Fixed flashing PNG backgrounds</li>
+							</ul>
+							<p class="b">
+								4.6.0
+							</p>
+							<ul class="nomargin">
+								<li>Fixed the jQuery version check issue with 1.10+ releases</li>
+								<li>Fixed responsiveness with only one slide in the slider</li>
+								<li>Resolved the Isotope and jQuery Transit incompatibility</li>
+								<li>Fixed linked layers in older versions of Internet Explorer</li>
+								<li>Fixed the 'Video Quality' settings field</li>
+								<li>The slider is now skipping transitions if there is no background image to animate</li>
+								<li>Lots of minor fixes and other improvements</li>
+							</ul>
+							<p class="b">
+								4.5.5
+							</p>
+							<ul class="nomargin">
+								<li>Improvement: fixed issues in responsiveness when you resize the browser during a transition</li>
+								<li>Improvement: the circle timer now uses a cool hiding animation</li>
+								<li>Improvement: the thumbnail navigation now always stays visible no matter what transition you use</li>
+								<li>Improvement: Improved HTTPS support with videos</li>
+								<li>Bug fix: Fixed the tiled layers with older versions of jQuery</li>
+								<li>Bug fix: Fixed the shadow position in some cases</li>
+							</ul>
+							<p class="b">
+								4.5.0
+							</p>
+							<ul>
+								<li>
+									<strong>New features</strong>
+									<ul class="nomargin">
+										<li>Added 4 new skins</li>
+										<li>Added 41 additional 2D transitions with semi-3D effects</li>
+										<li>Added bar and circle timers</li>
+										<li>Added scale and rotate options for sublayers animations</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Improvements</strong>
+									<ul class="nomargin">
+										<li>Major performance improvements</li>
+										<li>The new transitions now can animate to the opposite direction depending on the user interaction and the "two way slideshow" feature</li>
+										<li>Responsiveness now can handle images with custom dimensions</li>
+										<li>A full-width slider now will enlarge the background image if needed</li>
+										<li>In older versions of Internet Explorer we are now allow fade effects</li>
+										<li>Improvements in the LayerSlider Debug Mode</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Fixes</strong>
+									<ul class="nomargin">
+										<li>Fixed the "link the whole slide" issue under older versions of Internet Explorer</li>
+										<li>Fixed an issue which resulted the loading indicator to appear during slide changes</li>
+										<li>Several fixes with the navigation area</li>
+										<li>Several fixes with the old and new transitions</li>
+									</ul>
+								</li>
+							</ul>
+							<p class="b">
+								4.1.0
+							</p>
+							<ul class="nomargin">
+								<li>Fixed video issues in Firefox</li>
+								<li>Fixed an issue that caused slowness in the transition gallery</li>
+								<li>Fixed an issue with the "animateFirstLayer" that caused the slideshow to stop</li>
+								<li>Fixed an issue with the cbAnimStop if there is only one layer</li>
+								<li>Added jQuery version number check</li>
+								<li>Fixed an issue that caused the LayerSlider notices to embed each other</li>
+								<li>Fixed some style settings</li>
+								<li>Improved documentation</li>
+							</ul>
+							<p class="b">
+								4.0.1
+							</p>
+							<ul class="nomargin">
+								<li>Improved CSS overrides to prevent the theme applying global CSS style settings on the slider and its elements</li>
+								<li>Fixed an issue which caused the slider to freeze if the navigation area was set to hidden</li>
+							</ul>
+							<p class="b">
+								4.0
+							</p>
+							<ul>
+								<li>
+									<strong>New features</strong>
+									<ul class="nomargin">
+										<li>We added new transition feature with more than 200 predefined 2D and 3D transitions</li>
+										<li>We are now using hardware acceleration to give you killer performance on mobile devices</li>
+										<li>Added loading indicator</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Improvements</strong>
+									<ul class="nomargin">
+										<li>Improved "Animate first layer" feature, it doesn't animate the background now</li>
+										<li>We are now support the value "-1" for distance level to position your sublayers exactly outside of the layer (class="ls-s-1")</li>
+										<li>You can add percentage values of the width and height of your sublayers</li>
+										<li>Full jQuery 1.9 compatibility</li>
+										<li>Improved various style settings</li>
+									</ul>
+								</li>
+								<li>
+									<strong>Fixes</strong>
+									<ul class="nomargin">
+										<lI>Fixed an issue in linked sublayers with fade effect which resulted the sublayer disappearance</li>
+										<li>Fixed an issue on mobile devices regarding the thumbnail images touch detection</li>
+										<li>Fixed an issue in the LayerSlider API when the "data" object wasn't passed for some callback functions</li>
+										<li>Fixed an issue in the cbAnimStop() callback function of the LayerSlider API which contained some invalid values regarding the slides</li>
+									</ul>
+								</li>
+							</ul>
+
+						</article>
+					</section>
+
+					<!-- SUPPORT -->
+					<section>
+						<h4>If you get stuck...</h4>
+						<p>
+							Before contacting us, please make sure that you:
+						</p>
+						<ul class="nomargin">
+							<li>read this documentation carefully</li>
+							<li>and browsed the <a href="http://support.kreaturamedia.com/faq/1/layerslider/" target="_blank">FAQ of the item.</a></li>
+
+						</ul>
+						<p>
+							If you didn't find answer to your problem, please ask your question on <a href="http://codecanyon.net/item/layerslider-responsive-jquery-slider-plugin/922100/comments?ref=kreatura" target="_blank">the item discussion page</a> or send us a private message from our <a href="http://codecanyon.net/user/kreatura?ref=kreatura" target="_blank">Codecanyon profile page</a> (Search for the "Email kreatura" box on the bottom right - in this case we will reply via email). <strong>We can answer your support questions only in these ways (please do not send us email directly).</strong>
+						</p>
+						<p>
+							<strong>
+							IMPORTANT!</strong> For the fast troubleshooting, please send us detailed informations about the issue and make sure that you don't forget to <strong>send us your site url</strong> where you are using / want to use the item. Please note, that we cannot troubleshoot from screencast videos or screenshots.
+						</p>
+						<p>
+							Please take some time until we respond (usually in 24 - 48 hours).
+						</p>
+						<h4>Useful pages</h4>
+						<div class="table">
+							<table>
+								<thead>
+									<tr>
+										<th>site</th>
+										<th>you can find here...</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td>
+											<a href="http://kreaturamedia.com/layerslider-responsive-jquery-slider-plugin/" target="_blank">The website of the item</a>
+										</td>
+										<td>demo sliders and examples</td>
+									</tr>
+									<tr>
+										<td>
+											<a href="http://codecanyon.net/item/layerslider-responsive-jquery-slider-plugin/922100?ref=kreatura" target="_blank">Codecanyon item page</a>
+										</td>
+										<td>the latest version of the plugin</td>
+									</tr>
+									<tr>
+										<td>
+											<a href="http://codecanyon.net/item/layerslider-responsive-jquery-slider-plugin/922100/comments?ref=kreatura" target="_blank">Codecanyon discussion</a>
+										</td>
+										<td>an item discussion topic where you can ask your questions if you get stuck</td>
+									</tr>
+									<tr>
+										<td><a href="http://support.kreaturamedia.com/faq/1/layerslider/" target="_blank">FAQ of the item</a></td>
+										<td>a detailed FAQ with answers for the most commonly asked questions and reported issues</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				</div>
+				<div class="clear"></div>
+			</div>
+		</div>
+
+		<footer>
+			<p>
+				Copyright &copy; 2011-2014 <a target="_blank" href="http://kreaturamedia.com">Kreatura Media</a>, All Rights Reserved!
+			</p>
+		</footer>
+	</div>
+
+	<script src="assets/js/jquery.js"></script>
+
+	<script src="assets/js/syntaxhighlighter/scripts/shCore.js" type="text/javascript"></script>
+	<script src="assets/js/syntaxhighlighter/scripts/shBrushJScript.js" type="text/javascript"></script>
+	<script src="assets/js/syntaxhighlighter/scripts/shBrushXml.js" type="text/javascript"></script>
+	<script src="assets/js/syntaxhighlighter/scripts/shBrushCss.js" type="text/javascript"></script>
+
+	<script src="../layerslider/js/greensock.js"></script>
+	<script src="../layerslider/js/layerslider.transitions.js"></script>
+	<script src="../layerslider/js/layerslider.kreaturamedia.jquery.js"></script>
+	<script src="assets/js/layerslider.transition.gallery.js"></script>
+
+	<script src="assets/js/doc.js"></script>
+
+</body>
+</html>

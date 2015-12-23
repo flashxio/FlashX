@@ -1,0 +1,186 @@
+Master Slider 2.15.0, 2015-6-24
+-------------------------------
+- [Added] Added compatibility with new version of Facebook API
+
+Master Slider 2.14.7, 2015-6-15
+-------------------------------
+- [Fixed] layers was disappear in IE9
+- [Fixed] Youtube/Vimeo's fullscreen didn't work in Firefox
+
+Master Slider 2.14.6, 2015-5-21
+-------------------------------
+- [Fixed] Hotspot layer custom attributes didn't work.
+
+Master Slider 2.14.5, 2015-5-8
+-------------------------------
+- [Fixed] A JavaScript error in scroll parallax module fixed.
+
+Master Slider 2.14.4, 2015-4-29
+-------------------------------
+- [Added] Flickr and Facebook gallery templates.
+- [Added] `scrolTo(duration, target)` layer action.
+- [Added] `autoFillTarget` option. Specifies the parent element of slider width jQuery selector, it used for sizing slider with autofill layout.
+- [Added] `minHeight` option. Specifies min height value for the slider, it prevents slider to shows too narrow in small screens.
+- [Improved] Slider sizing with autofill or fullscreen layout.
+- [Fixed] Controls auto hide didn't work in touch devices
+- [Fixed] Scroll parallax effect did not work.
+- [Fixed] Preload value larger than slides number caused js errors.
+
+Master Slider 2.12.3, 2015-4-14
+-------------------------------
+- [Added] Fixed layers.
+- [Added] Static layers.
+- [Added] CSS3 filters option, now you can add css filters to slider transitions like grayscale, blur, ..
+- [Added] Stack slide transition view.
+- [Added] New template for Fixed layers.
+- [Added] New template for Static layers.
+- [Added] New template for Stack transition view.
+- [Added] New template for CSS3 filters option.
+- [Added] Change on hover option to thumblist control.
+- [Added] Arrows style for the thumblist control.
+- [Improved] startOnAppear option functionality.
+- [Improved] slider performance.
+- [Fixed] A conflict with startOnAppear in Facebook gallery.
+- [Fixed] An issue in calculating thumbnails width.
+- [Fixed] An issue in aligning thumbnails which doesn't have fillMode option.
+
+Master Slider 2.9.8, 2015-3-20
+-------------------------------
+- [Fixed] a js error regarding start on appear option.
+
+Master Slider 2.9.7, 2015-3-18
+-------------------------------
+- [Added] startOnAppear option to slider. It initializes slider when slider comes inside of browser window when scrolling.
+- [Improved] API update method.
+- [Fixed] Some minor js errors.
+
+Master Slider 2.9.5, 2015-3-3
+-------------------------------
+- [Added] Keyboard navigation option. (keyboard:true)
+- [Fixed] Throwing error after destroying slider with API destroy method,
+- [Fixed] A JS error in IE9.
+
+Master Slider 2.9.4, 2015-2-24
+-------------------------------
+- [Fixed] Rendering issue in Firefox.
+- [Fixed] Mouse wheel not working in latest version of Firefox.
+- [Fixed] Missing map file.
+
+Master Slider 2.9.3, 2015-1-20
+-------------------------------
+- [Fixed] Partial view version 2 not working.
+- [Fixed] Image layers over first slider not aligning correctly in Chrome for iOS.
+- [Improved] Gallery template style.
+
+Master Slider 2.9.1, 2014-12-22
+-------------------------------
+- [Improved] Slide linking. Now it's possible to add light-box to slides.
+- [Fixed] Linked slides not working correctly.
+- [Fixed] Problems with 3D transitions in FireFox.
+- [Fixed] Video background paused in "mask" transition view when window resized.
+- [Improved] Lots of improvement in slider performance.
+
+Master Slider 2.9.0, 2014-12-13
+-------------------------------
+- Added new transition view "parallaxMask".
+- Added new direction styles to tab's arrow (left and top).
+- Improved wheel navigation by Magic Mouse or Trackpad in OS X.
+- Improved parallax effect by mouse movement.
+- Fixed links and buttons not working with "mask" transition.
+- Fixed instant start layers and load nearby preloading conflict.
+- Fixed wheel navigation with non-loop slider.
+- Fixed unexpected horizontal page scroll bar when fullscreen is enabled.
+- Fixed unexpected js errors when swipe navigation is disabled.
+- Fixed removeEventListener method.
+- Fixed not showing layers with "with-limit" attribute when window resizes.
+- Updated slider base style.
+- Improved slider performance.
+
+Master Slider 2.1.0, 2014-8-31
+-----------------------------
+- Added deep linking feature.
+- Added vertical direction to bullets UI control.
+- Added option to disable swipe over layers, now it's possible to insert HTML form elements over slides.
+- Improved slider UI controls responsiveness.
+- Updated slider documentation.
+- Fixed an issue with fullscreen slider in IE8.
+- Fixed an issue with playing/pausing Youtube and Vimeo videos in some browsers.
+- Fixed some minor bugs.
+
+Master Slider 1.7.2, 2014-7-2
+-----------------------------
+- Added new layer type for adding buttons to slides.
+- Added layer action. Now you can set special action for layers (go to next slide, go to previous, pause slider, ..)
+- Fixed an issue with Flickr API fixed.
+
+Master Slider 1.7.0, 2014-6-21
+-----------------------------
+- Added content slider feature, now you can add any html content in an auto height slider.
+- Added new templates (Slider in tablet, Slider in iPhone, ...)
+- Added fixed layer positioning option.
+- Added touch events for desktop IE11 browser.
+- Fixed aligning layers in blank slide.
+- Fixed video layer sizing issue.
+- Fixed z-sorting issue in 3D transition views.
+- Fixed an issue with autoplay slider and video background slides.
+
+Master Slider 1.6.1, 2014-5-26
+-----------------------------
+- Added layers parallax effect
+- Added new aligning method for layers
+- Added option to enable mouse over hotspot's tooltips.
+- Fixed destroying controls issues
+- Fixed sequence loading in looped slider
+
+Master Slider 1.5.7, 2014-3-31
+-----------------------------
+- Added "align" and "margin" options to thumblist, sliderinfo, scrollbar, bullets and timebar controls.
+- Added new option "hideUnder" to controls, now you can specify window width in pixel for each control and hides control in smaller window size.
+- Added thumb width and height and space between thumbs options to thumblist control.
+- Added "color" option to scrollbar and timebar control.
+- Added Ajax sample in download package.
+- Fixed auto height slider resizing.
+- Improved slide changing transition.
+- Improved layer transitions.
+
+Master Slider 1.5.6, 2014-3-20
+-----------------------------
+- Added new option "layout", now you can change layout of slider (fullwidth, fullscreen, partial, boxed, ...) by one option in slider options.
+- Added links for hotspots.
+- Added new option "instantStartLayers" which starts layer before slide transition complete.
+- Added new destroy method with reset parameter.
+- Fixed accessing to slider api before slider init.
+- Fixed background sizing problem with not cached images.
+
+Master Slider 1.5.0, 2014-2-8
+-----------------------------
+- Added HD background videos.
+- Added autofill option.
+- Added fullheight option.
+- Added fullscreen template.
+- Added Masterslider's homepage slider in download package.
+- Added smart memory management, now slider works with over 150 slides in touch devices.
+- Added dynamic speed to swipe gesture.
+- Added update method in slider API.
+- Fixed tooltip positioning in Firefox and Opera.
+- Improved slide changing transition.
+
+Master Slider 1.2, 2013-12-28
+-----------------------------
+- Fixed video close button in touch devices.
+- Fixed layers z-sorting in Safari.
+- Fixed linking layers.
+- Fixed video cover image positioning.
+- Improved timer functionality.
+
+
+Master Slider 1.1, 2013-12-14
+-----------------------------
+- Added scrolling speed option to thumbnails/tabs UI control.
+- Fixed positioning of tooltips in mobile and tablet view.
+- Improved sliding performance.
+
+
+Master Slider 1.0, 2013-12-9
+-----------------------------
+- Initial release

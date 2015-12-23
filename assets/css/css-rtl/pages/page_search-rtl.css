@@ -1,0 +1,93 @@
+/*Page Search
+------------------------------------*/
+/*Search Block*/
+.search-block {
+	padding: 80px 0;
+	text-align: center;
+	position: relative;
+	margin-bottom: 20px;
+	background: url(../../../img/bg/7.jpg) 50% 0 repeat fixed;		
+}
+
+.search-block:before {
+	top: 0;
+	right: 0;
+	width: 100%;
+	height: 100%; 
+	content: " ";
+	position: absolute;
+	background: rgba(0,0,0,0.3);
+}
+
+.search-block h1 {
+	color: #fff;
+	font-size: 34px;
+	font-weight: 200;
+	text-align: center;
+	margin-bottom: 30px;
+	text-transform: uppercase;	
+}
+
+.search-block .input-group {
+	margin-bottom: 10px;
+}
+
+.search-block .form-control {
+	border: none;
+	height: 48px;
+	font-size: 16px;
+	font-weight: 200;
+}
+
+/*Checkbox*/
+.search-block form.page-search-form {
+	border: none;
+}
+
+.search-block form.page-search-form .radio,
+.search-block form.page-search-form .checkbox {
+	margin: 0 96% 0 3%;
+}
+
+.search-block form.page-search-form .checkbox {
+	color: #fff;
+	font-weight: 200;
+}
+
+.search-block form.page-search-form .radio i,
+.search-block form.page-search-form .checkbox i {
+	top: 6px;
+	width: 15px;
+	height: 15px;
+	border: none;
+}
+
+/*Category
+------------------------------------*/
+/*Section-Block*/
+.section-block {
+	padding: 20px;
+	border: 1px solid #eee;
+	box-shadow: 0 0 3px #eee;
+}
+
+.section-block h2 {
+	color: #333; 
+	font-size: 28px; 
+	font-weight: 200; 
+	margin: 10px 0 15px;
+}
+
+.section-block .text-center p {
+	margin-bottom: 0;
+}
+
+.section-block .section-block-info {
+	margin-top: 5px;
+	padding-top: 20px;
+	border-top: solid 1px #eee;
+}
+
+.section-block .section-block-info ul {
+	margin-bottom: 0;
+}

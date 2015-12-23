@@ -1,0 +1,112 @@
+
+/*Pricing Page v5
+------------------------------------*/
+ .no-space-pricing-v6 [class^="col-"],
+ .no-space-pricing-v6 [class*=" col-"] {
+	padding: 1px;
+}
+.row.no-space-pricing-v6 {
+	padding: 0 14px;
+}
+
+.pricing-table-v6 i.icon-custom {
+    width: 80px;
+    height: 80px;
+    font-size: 40px;
+    padding-top: 17px;
+}
+
+.pricing-table-v6 h3 {
+	font-size: 40px;
+	padding: 10px 0 0 0;
+}
+
+.pricing-table-v6 h3,
+.pricing-table-v6 h3 i,
+.pricing-table-v6 h3 span {
+	color: #fff;
+	font-style: normal;
+	font-weight: 200 !important;
+}
+
+.pricing-table-v6 h3 span {
+	font-size: 25px;
+}
+
+.pricing-table-v6 h3 i {
+	font-size: 20px;
+	margin: 10px 0 0 4px;
+	display: inline-block;
+}
+
+.pricing-table-v6 ul {
+	padding-bottom: 10px;
+}
+
+.pricing-table-v6 ul li {
+	color: #fff;
+	padding: 5px 0;
+	font-size: 13px;
+}
+.pricing-table-v6 ul li span {
+	margin-right: 5px;
+}
+
+.pricing-table-v6 .btn-u.btn-brd {
+	color: #fff;
+	display: block;
+	border-color: #fff;
+}
+
+.pricing-table-v6 .btn-u.btn-brd:hover {
+	color: #555;
+	background: #fff;
+	border-color: transparent;
+}
+
+.pricing-table-v6.v6-plus {
+	font-weight: 200;
+}
+
+.pricing-table-v6.v6-plus ul li {
+	font-weight: 300;
+}
+.pricing-table-v6.v6-plus ul li span {
+	margin-right: 5px;
+}
+
+.pricing-table-v6 .service-block-u {
+    background-color: #72c02c !important;
+} 
+
+}
+/* Devices (Large Screen Mode, 1200px more) */
+@media (min-width: 1200px) {
+	
+}
+
+/* Devices (Desktop Mode, 992px and 1200px) */
+@media (min-width: 992px) and (max-width: 1200px) {	
+
+.pricing-table-v6 .service-block {
+    margin-bottom: 20px;
+    padding: 20px 15px;
+    text-align: center;
+}
+
+/* Devices (Tablet Mode, 768px and 991px) */
+@media (min-width: 767px) and (max-width: 991px) {
+
+}
+
+/* Medium Devices (Phone Mode, 768px and less) */
+@media (max-width: 767px) {
+
+}
+
+/* Medium Devices (Phone Mode, 768px and less) */
+@media (max-width: 550px) {
+	 .col-width-full {
+		width: 100%;
+	}
+}

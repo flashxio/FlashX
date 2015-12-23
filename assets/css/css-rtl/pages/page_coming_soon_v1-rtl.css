@@ -1,0 +1,150 @@
+/*Wrapping element for Sticky-Footer*/
+html {
+  	min-height: 100%;
+  	position: relative;
+}
+
+body {
+  	margin-bottom: 60px; /* Margin bottom by footer height */
+}
+
+/*Coming Soon Page
+------------------------------------*/
+/*Background Cover*/
+.coming-soon-bg-cover:before {
+	top: 0;
+	bottom: 30px;
+	z-index: -1;
+	width: 100%;
+	content: " ";
+	height: 100%;
+	position: absolute;
+	background: rgba(0,0,0,0.5);
+}
+
+/*Content*/
+.coming-soon-page {
+	background: #585f69;
+}
+
+.coming-soon {
+	margin-top: 100px;
+}
+
+.coming-soon {
+	padding: 20px;
+	text-align: center;
+}  
+
+
+.coming-soon h1,
+.coming-soon h2,
+.coming-soon h3 {
+	color: #fff;
+	margin-bottom: 20px;
+}
+
+.coming-soon h2,
+.coming-soon h3 {
+	font-weight: 400;
+	display: inline-block;
+}
+
+.coming-soon h1 {
+	font-size: 45px;
+	line-height: 65px;
+}
+
+.coming-soon h2 {
+	font-size: 55px;
+	line-height: 60px;
+	padding: 15px 30px;
+	border: solid 4px #fff;
+}
+
+.coming-soon h3 {
+	font-size: 16px;
+	margin-bottom: 30px;	
+}
+
+/* Small devices (tablets, 768px and less) */
+@media (max-width: 768px) { 
+	.coming-soon h1 {
+		font-size: 40px;
+	}
+
+	.coming-soon h2 {
+		font-size: 45px;
+	}
+}
+
+/*Social*/
+.coming-soon-social {
+	margin-bottom: 0;
+}
+
+.coming-soon-social li {
+	margin: 0 5px;
+}
+
+.coming-soon-social li i {
+	color: #fff;
+	font-size: 18px;
+}
+
+/*Sticky-Footer
+------------------------------------*/
+.sticky-footer {
+  	bottom: 0;
+  	width: 100%;
+  	padding-top: 25px;
+  	position: absolute;
+  	height: 60px; /* Set the fixed height of the footer here */
+}
+
+@media (max-width: 767px) {
+	.sticky-footer {
+  		padding-top: 0;
+	}
+
+	.sticky-footer .text-left,
+	.sticky-footer .text-right {
+		text-align: center;
+	}
+}
+
+/*Countdown
+------------------------------------*/
+#defaultCountdown { 
+	width: 100%;
+	margin: 10px 0; 
+	overflow: hidden;
+}
+
+#defaultCountdown span.countdown_row {
+	overflow: hidden;
+}
+
+#defaultCountdown span.countdown-section {
+	margin: 2px;
+	width: 150px;
+	margin-bottom: 20px;
+	text-align: center;
+	display: inline-block;
+}
+
+#defaultCountdown span.countdown-amount {
+	color: #fff;
+	display: block;
+	font-weight: 200;
+	font-size: 45px !important;
+	line-height: 45px !important;
+  	font-family: 'Open Sans', sans-serif;	
+}
+
+#defaultCountdown span.countdown-period {
+	color: #fff;
+	display: block;
+	font-weight: 200;
+	font-size: 14px !important;
+}

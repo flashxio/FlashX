@@ -1,0 +1,2613 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Master Slider jQuery Version Documentation</title>
+		
+		<link rel="stylesheet" href="bootstrap/css/bootstrap.min.css" type="text/css" media="screen" title="no title" charset="utf-8"/>
+		<link rel="stylesheet" type="text/css" href="syntax-highlighter/styles/shCore.css" media="all">
+		<link rel="stylesheet" type="text/css" href="syntax-highlighter/styles/shThemeDefault.css" media="all">
+		<link rel="stylesheet" href="assets/css/main.css" type="text/css" media="screen"/>
+		
+		<link rel="icon" type="image/png" href="assets/images/fav.png" />
+	</head>
+	
+	<body>
+		
+		<header class="header">
+			<img src="assets/images/ms-logo.gif" class="logo"/>
+			<nav class="navbar mainnav" >
+				<ul class="nav">
+					<li><a href="http://www.masterslider.com/">HOME</a></li>
+					<li><a href="http://www.masterslider.com/transition-gallery/">TRANSITION GALLERY</a></li>
+					<li><a href="http://support.averta.net/envato/support/master-slider/">SUPPORT FORUM</a></li>
+					<li><a href="http://support.averta.net/envato/faq/master-slider/">FAQ</a></li>
+				</ul>
+			</nav>
+		</header>
+		
+		<div id="loading">
+			Loading data ...
+		</div>
+		
+		<div id="main-container" role="main">
+			<aside id="sidebar">
+				<nav class="toc">
+					
+					<ul class="nav nav-list">
+						<li class="nav-header">
+							Table of Contents
+						</li>
+						<li>
+							<a href="#intro">Intro</a>
+						</li>
+						<li>
+							<a href="#quickstart">Quick Start</a>
+						</li>
+						<li>
+							<a href="#slider-options">Slider Options</a>
+						</li>
+						<li>
+							<a href="#jq-plugin">Using jQuery Plugin</a>
+						</li>
+						<li>
+							<a href="#slider-html">Slider HTML Element</a>
+						</li>
+						<li>
+							<a href="#slides">Slides</a>
+						</li>
+						<li>
+							<a href="#video-bg">Video Backgrounds</a>
+						</li>
+						<li>
+							<a href="#slide-contents">Slide Contents</a>
+						</li>
+						<li>
+							<a href="#slide-layers">Slide Layers</a>
+						</li>
+						<li>
+							<a href="#layer-effects">Layer Transition Effects</a>
+						</li>
+						<li>
+							<a href="#slider-ui">Slider UI Controls</a>
+						</li>
+						<li>
+							<a href="#views">Slide Changing Transitions</a>
+						</li>
+						<li>
+							<a href="#filters">Adding CSS3 Filters</a>
+						</li>
+						<li>
+							<a href="#api">Slider API</a>
+						</li>
+						<li>
+							<a href="#skins">Slider Skins</a>
+						</li>
+						<li>
+							<a href="#flickr-plugin">Flickr Plugin</a>
+						</li>
+						<li>
+							<a href="#scroll-parallax">Adding Scroll Parallax Effect</a>
+						</li>
+						<li>
+							<a href="#ease-func">Easing Functions</a>
+						</li>
+						<li>
+							<a href="#embed-url">Finding YouTube/Viemo Embed URL</a>
+						</li>
+						<li>
+							<a href="#rate">Rate Master Slider</a>
+						</li>
+						<li>
+							<a href="#support">Support</a>
+						</li>
+						<li>
+							<a href="#credits">Credits</a>
+						</li>
+					</ul>
+				</nav>
+				<div class="update-cont">
+					<p class="cpr">
+						Version 2.12.3, Last update: 4/14/2015
+						<br/>
+						&copy; <a href="http://www.averta.net/" target="_blank">Averta Ltd.</a> All rights reserved.
+					</p>
+				</div>
+				<div class="toggle"> </div>
+			</aside><!-- sidebar -->
+			<section class="container" id="content">
+				
+				<article class="content-section float" id="intro" style="opacity: 1; position: relative; top: 0px; left: 0px; -webkit-transform: translateX(0px);">
+					<h4>Thank you</h4>
+					<p>At first we would like to say thank you for choosing Master Slider jQuery. In this documentation you will find everything you need to use Master Slider.
+					<br> If you have any questions which are not covered in this documentation, please take a look at <a href="http://support.averta.net/envato/support/" target="_blank">support</a> section. </p>
+					<hr>
+					<h4>About the Master Slider jQuery</h4>
+					<p>Master Slider jQuery is a premium high quality designed image and content slider for any purposes, with super smooth hardware accelerated transitions. It supports touch navigation with pure swipe gesture that you have never experienced before. It is a truly responsive and device friendly slider which works perfect in all major devices. Master Slider is an awesome layer slider as well, with the ability of adding any HTML contents (texts, images, …) in layers. It is easy to use, plus there are ready to use templates available for you. You almost have everything in Master slider which is the most complete among the best, hotspots, thumbnails, variety of effects, Video support and much more. </p>
+					<hr>
+				</article>
+				<article class="content-section" id="quickstart">
+					<h3><strong>Quick Start</strong></h3>
+					<h5><strong>Step 1: Link required files</strong></h5>
+					<p>
+						At first you need to insert required files into your page. Go to "quick-start" folder in downloaded package and upload "masterslider" folder to your server then add required files into your page like following (usually in &lt;head&gt; section):
+						<pre class="brush: html">
+						&lt;!-- Base MasterSlider style sheet --&gt;
+						&lt;link rel=&quot;stylesheet&quot; href=&quot;masterslider/style/masterslider.css&quot; /&gt;
+						
+						&lt;!-- MasterSlider default skin --&gt;
+						&lt;link rel=&quot;stylesheet&quot; href=&quot;masterslider/skins/default/style.css&quot; /&gt;
+						
+						&lt;!-- Latest version of jQuery from Google CDN --&gt;
+						&lt;!-- You can remove it if jQuery is already included. --&gt;
+						&lt;script src=&quot;http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js&quot;&gt;&lt;/script&gt;
+						
+						&lt;!-- MasterSlider main JS file --&gt;
+						&lt;script src=&quot;masterslider/masterslider.min.js&quot;&gt;&lt;/script&gt;</pre>
+					</p>
+					<h5><strong>Step 2: Slider HTML</strong></h5>
+					<p>
+						Insert following HTML to the &lt;body&gt; section. This HTML defines your slider content. The "ms-skin-default" CSS class name means that the slider uses default skin, you need to change it if you've included a different skin CSS file in Step 1.
+						<pre class="brush: html">
+					&lt;!-- masterslider --&gt;
+					&lt;div class="master-slider ms-skin-default" id="masterslider"&gt;
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/1.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide text layer --&gt;
+							&lt;div class="ms-layer ms-caption" style="top:10px; left:30px;"&gt;
+								Lorem ipsum dolor sit amet 
+							&lt;/div&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+						
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/2.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide text layer --&gt;
+							&lt;div class="ms-layer ms-caption" style="top:10px; left:30px;"&gt;
+								Lorem ipsum dolor sit amet 
+							&lt;/div&gt;
+							
+							&lt;!-- linked slide --&gt;
+							&lt;a href="http://codecanyon.net/user/averta"&gt;Averta&lt;/a&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+						
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide text layer --&gt;
+							&lt;div class="ms-layer ms-caption" style="top:10px; left:30px;"&gt;
+								Lorem ipsum dolor sit amet 
+							&lt;/div&gt;
+							
+							&lt;!-- youtube video --&gt;
+							&lt;a href="http://www.youtube.com/embed/YHWkro9-e9Q?hd=1&amp;wmode=opaque&amp;controls=1&amp;showinfo=0" data-type="video"&gt;Youtube video&lt;/a&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					
+					&lt;/div&gt;
+					&lt;!-- end of masterslider --&gt;
+				</pre>
+					</p>
+					<h5><strong>Step 3: Initialize</strong></h5>
+					<p>
+						Insert the following JavaScript after slider HTML (usually after &lt;body&gt; section).
+						<pre class="brush: js">
+					&lt;script&gt;
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {
+								width:800,    // slider standard width
+								height:350,   // slider standard height
+								space:5
+								// more slider options goes here...
+								// check slider options section in documentation for more options.
+							});
+						// adds Arrows navigation control to the slider.
+						slider.control('arrows');
+					&lt;/script&gt;
+				</pre>
+					</p>
+					<p>Looking for jQuery plugin style initialization? check <a href="#jq-plugin">Using jQuery Plugin.</a></p>
+					<hr/>
+				</article>
+				<article class="content-section" id="slider-options">
+					<h3><strong>Slider Options</strong></h3>
+					<p>
+						You can use/change following options in slider setup method.
+						For example:
+						<pre class="brush: js">
+						&lt;script&gt;
+							var slider = new MasterSlider();
+							slider.setup('masterslider' , {
+									width:800,    // slider standard width
+									height:350,   // slider standard height
+									space:5,
+									fullwidth:true,
+									autoHeight:true,
+									view:"mask"
+									// more slider options goes here...
+								});
+							// adds Arrows navigation control to the slider.
+							slider.control('arrows');
+						&lt;/script&gt;
+				</pre>
+					</p>
+					<table class="table table-striped table-bordered table-hover">
+						<thead>
+							<tr>
+								<th style="width:120px">Option Name</th>
+								<th style="width:120px">Default Value</th>
+								<th>Description</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>width</td>
+								<td>300</td>
+								<td>The base width of slides. It helps the slider to resize in correct ratio.</td>
+							</tr>
+							<tr>
+								<td>height</td>
+								<td>150</td>
+								<td>The base height of slides, It helps the slider to resize in correct ratio.</td>
+							</tr>
+							<tr>
+								<td>start</td>
+								<td>1</td>
+								<td>The slider starting slide number.</td>
+							</tr>
+							<tr>
+								<td>space</td>
+								<td>0</td>
+								<td>The spacing value between slides in pixels.</td>
+							</tr>
+							<tr>
+								<td>grabCursor</td>
+								<td>true</td>
+								<td>Whether the slider uses grab mouse cursor.</td>
+							</tr>
+							<tr>
+								<td>swipe</td>
+								<td>true</td>
+								<td>Whether the drag/swipe navigation is enabled.</td>
+							</tr>
+							<tr>
+								<td>mouse</td>
+								<td>true</td>
+								<td>Whether the user can use mouse drag navigation.</td>
+							</tr>
+							<tr>
+								<td>wheel</td>
+								<td>false</td>
+								<td>Enables mouse scroll wheel navigation.</td>
+							</tr>
+							<tr>
+								<td>keyboard</td>
+								<td>false</td>
+								<td>Enables keyboard navigation.</td>
+							</tr>
+							<tr>
+								<td>autoplay</td>
+								<td>false</td>
+								<td>Enables the autoplay slideshow.</td>
+							</tr>
+							<tr>
+								<td>loop</td>
+								<td>false</td>
+								<td>Enables the continuous sliding mode.</td>
+							</tr>
+							<tr>
+								<td>shuffle</td>
+								<td>false</td>
+								<td>Enables the shuffle slide order.</td>
+							</tr>
+							<tr>
+								<td>preload</td>
+								<td>0</td>
+								<td>Specifies number of slides which will be loaded by slider. 0 value means slider will load slides in sequence and "all" value means slider will load all of the slides at starting. This option is only effective for images which has "data-src" attribute.</td>
+							</tr>
+							<!-- <tr>
+								<td>fullwidth</td>
+								<td>false</td>
+								<td>It enables the slider to adapt width to its parent element. It's very useful for creating full-width sliders. In default it takes max width as its base width value.</td>
+							</tr>
+							<tr>
+								<td>fullheight</td>
+								<td>false</td>
+								<td>It enables the slider to adapt height to its parent element.</td>
+							</tr>
+							<tr>
+								<td>autofill</td>
+								<td>false</td>
+								<td>It enables the slider to adapt width and height to its parent element. It's very useful for creating fullscreen slider.</td>
+							</tr> -->
+							<tr>
+								<td>layout</td>
+								<td>"boxed"</td>
+								<td>
+									<em>Since v1.5.7</em> <br>
+									Specifies layout of the slider, it accepts following values:
+									<ul>
+										<li><strong>boxed: </strong>The default layout of slider, size of the slider does not exceed the specified width and height in slider options.</li>
+										<li><strong>fullwidth: </strong>Forces the slider to adapt width to the browser width.</li>
+										<li><strong>fullscreen: </strong>Forces the slider to adapt width and height to the browser window dimension.</li>
+										<li><strong>fillwidth: </strong>Enables the slider to adapt width to its parent element.</li>
+										<li><strong>autofill: </strong>Enables the slider to adapt width and height to its parent element.</li>
+										<li><strong>partialview: </strong>It's like the boxed layout but nearby slides are always visible.</li>
+									</ul>
+								</td>
+							</tr>
+							<tr>
+								<td>fullscreenMargin</td>
+								<td>0</td>
+								<td>Specifies margin space at the bottom of slider, it only affects with "fullscreen" layout.</td>
+							</tr><tr>
+								<td>heightLimit</td>
+								<td>false</td>
+								<td>It force the slide to use max height value as its base specified height value.</td>
+							</tr>
+							<tr>
+								<td>autoHeight</td>
+								<td>false</td>
+								<td>Whether the slider adapts its height to each slide height or not. It overrides heightLimit option.</td>
+							</tr>
+							<tr>
+								<td>smoothHeight</td>
+								<td>true</td>
+								<td>Whether the slider uses smooth animation while its height changes.</td>
+							</tr>
+							<tr>
+								<td>endPause</td>
+								<td>false</td>
+								<td>Whether the slider pauses slideshow when it reaches to last slide.</td>
+							</tr>
+							<tr>
+								<td>overPause</td>
+								<td>false</td>
+								<td>Whether the slider pauses slideshow on hover.</td>
+							</tr>
+							<tr>
+								<td>fillMode</td>
+								<td>"fill"</td>
+								<td>Specifies the slide background scaling method. Its acceptable values are "fill", "fit", "stretch", "center" and "tile".</td>
+							</tr>
+							<tr>
+								<td>centerControls</td>
+								<td>true</td>
+								<td>Whether the slider aligns UI controls to center. This option is only effective in full width mode.</td>
+							</tr>
+							<tr>
+								<td>layersMode</td>
+								<td>"center"</td>
+								<td>It accepts two values "center" and "full". The "center" value indicates that the slider aligns layers to the center. This option is only effective in full width mode.</td>
+							</tr>
+							<tr>
+								<td>instantStartLayers</td>
+								<td>false</td>
+								<td>Whether start show transition of layers before slide transition complete.</td>
+							</tr>
+							<tr>
+								<td>parallaxMode</td>
+								<td>"mouse"</td>
+								<td>
+									<em>Since v1.7.0</em> <br>
+									Specifies type of layers parallax move, it accepts below values:
+									<ul>
+										<li><strong>"mouse": </strong>It moves the layers while mouse is moving</li>
+										<li><strong>"swipe": </strong>It moves layers while slider is sliding or swiping.</li>
+										<li><strong>"mouse:x-only": </strong>It moves the layers only on X-axis while mouse is moving (horizontally moves).</li>
+										<li><strong>"mouse:y-only": </strong>It moves the layers only on Y-axis while mouse is moving (vertically moves).</li>
+									</ul>
+
+								</td>
+							</tr>
+							<tr>
+								<td>filters</td>
+								<td>null</td>
+								<td>Applys CSS3 filters to slide transition views. For more information check <a href="#filters"> Adding CSS3 filters.</a></td>
+							</tr>
+							<tr>
+								<td>hideLayers</td>
+								<td>false</td>
+								<td>Whether the slider hides all layers before changing slide. </td>
+							</tr>
+							<tr>
+								<td>speed</td>
+								<td>17</td>
+								<td>Specifies slide changing speed. It accepts float values between 0 and 100. </td>
+							</tr>
+							<tr>
+								<td>dir</td>
+								<td>"h"</td>
+								<td>Specifies slide changing direction. It accepts two values "h" (horizontal) and "v" (vertical). </td>
+							</tr>
+							<tr>
+								<td>view</td>
+								<td>"basic"</td>
+								<td>The slide changing transition. <a href="#views">More info here...</a></td>
+							</tr>
+							<tr>
+								<td>deepLink</td>
+								<td>null</td>
+								<td>A unique name for the slider which will be used in browser address bar you can enter your own name otherwise slider generates a unique one.</td>
+							</tr>
+							<tr>
+								<td>deepLinkType</td>
+								<td>"path"</td>
+								<td>Specifies the type of displaying slider deeplinking permalink in the address bar. acceptable values: "paht" and "query"</td>
+							</tr>
+							<tr>
+								<td>startOnAppear</td>
+								<td>false</td>
+								<td>It initializes slider when slider comes inside of browser window when scrolling.</td>
+							</tr>
+						</tbody>
+					</table>
+					<hr/>
+				</article>
+				<article class="content-section" id="jq-plugin">
+					<h3><strong>Using Master Slider jQuery Plugin</strong></h3>
+					<p>
+						Since version 2.0, you can setup slider by using Master Slider jQuery Plugin.
+						There is no difference between js pure slider setup and jQuery plugin setup you can use all options in both of them. 
+					</p>
+					<pre class="brush: js">
+						$('#slider').masterslider({
+							width: 700,
+							height: 560,
+							// more options...
+							controls : {
+								arrows : {autohide:false},
+								bullets : {}
+								// more slider controls...
+							}
+						});
+					</pre>
+					<p>You can see list of all options <a href="#slider-options">here...</a> <br><code>controls</code> options in plugin specifies slider controls for more information check <a href="#slider-ui">Slider UI Controls.</a> </p>
+					<p>In some cases, you may need to access to the slider js object from jQuery plugin instance, you can simply access to it like below code:</p>
+					<pre class="brush:js">
+						var slider_obj = $('#slider').masterslider('slider');
+					</pre>
+					<p>
+						Also you can simply use slider api methods:
+					</p>
+					<pre class="brush:js">
+						$('#slider').masterslider('gotoSlide' , 3); // moves to 4th slide.					
+						$('#slider').masterslider('destroy');
+					</pre>
+					<p>And you can bind slider events like:</p>
+					<pre class="brush:js">
+						$('#slider').on(MSSliderEvent.CHANGE_START, function(e){
+							// dispatches when the slider's current slide change starts.
+						});					
+					</pre>
+					<p>For more information about slider api methods and events check <a href="#api">Slider API.</a></p>
+					<hr/>
+				</article>
+				<article class="content-section" id="slider-html">
+					<h3><strong>Slider HTML Element</strong></h3>
+					<p>
+						MasterSlider defines with a &lt;div&gt; element which has "masterslider" as class name  and each slide must be added in it.
+					</p>
+					<pre class="brush: html">
+						&lt;!-- masterslider --&gt;
+						&lt;div class="master-slider ms-skin-default" id="masterslider"&gt;
+							&lt;!-- slides goes here --&gt;
+						&lt;/div&gt;
+						&lt;!-- end of masterslider --&gt;
+					</pre>
+					<div class="alert alert-info">
+						<strong>Note:</strong> The second class name in slider element specifies slider skin. <a href="#skins">More info here...</a>
+					</div>
+					<hr/>
+				</article>
+				<article class="content-section" id="slides">
+					<h3><strong>Slides</strong></h3>
+					<p>
+						Each slide in the slider HTML defines by a &lt;div&gt; element which has "ms-slide" as class name , like following:
+						<pre class="brush: html">
+						&lt;!-- masterslider --&gt;
+						&lt;div class="master-slider ms-skin-default" id="masterslider"&gt;
+							&lt;!-- new slide --&gt;
+							&lt;div class="ms-slide" data-fill-mode="fit" data-delay="5"&gt;
+								
+								&lt;!-- slide background --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/1.jpg" alt="lorem ipsum dolor sit"/&gt;		
+	
+							&lt;/div&gt; 
+							&lt;!-- end of slide --&gt;
+							
+							&lt;!-- new slide --&gt;
+							&lt;div class="ms-slide"&gt;
+								
+								&lt;!-- slide background --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/2.jpg" alt="lorem ipsum dolor sit"/&gt;		
+	
+							&lt;/div&gt; 
+							&lt;!-- end of slide --&gt;
+							
+							&lt;!-- new slide --&gt;
+							&lt;div class="ms-slide"&gt;
+								
+								&lt;!-- slide background --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+								
+							&lt;/div&gt; 
+							&lt;!-- end of slide --&gt;
+						
+						&lt;/div&gt;
+						&lt;!-- end of masterslider --&gt;
+					</pre>
+					</p>
+					<h4>Slide Parameters</h4>
+					<p>
+					<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default Value</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>data-delay</td>
+									<td>3</td>
+									<td>The time duration for moving to next slide in seconds</td>
+								</tr>
+								<tr>
+									<td>data-fill-mode</td>
+									<td>Value of fillMode in slider Options</td>
+									<td>Specifies the slide background scaling method. Its acceptable values are "fill", "fit", "stretch", "center" and "tile".</td>
+								</tr>
+							</tbody>
+						</table>
+					</p>
+					<hr/>
+				</article>
+				<article class="content-section" id="video-bg">
+					<h3><strong>Video Backgrounds</strong></h3>
+					<p>
+						Video backgrounds are supported in IE9+ and all other modern browsers and major touch devices.
+						<pre class="brush: html">
+						&lt;!-- masterslider --&gt;
+						&lt;div class="master-slider ms-skin-default" id="masterslider"&gt;
+							&lt;!-- new slide --&gt;
+							&lt;div class="ms-slide" data-fill-mode="fit" data-delay="5"&gt;
+								
+								&lt;!-- slide background --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/1.jpg" alt="lorem ipsum dolor sit"/&gt;		
+								
+								&lt;!-- slide background video --&gt;
+								&lt;video data-autopause="false" data-mute="true" data-loop="true" data-fill-mode="fill"&gt;
+									&lt;source id="mp4" src="http://media.w3.org/2010/05/bunny/trailer.mp4" type="video/mp4"/&gt;
+									&lt;source id="ogv" src="http://media.w3.org/2010/05/bunny/trailer.ogv" type="video/ogg"/&gt;
+								&lt;/video&gt;
+
+							&lt;/div&gt; 
+							&lt;!-- end of slide --&gt;						
+						&lt;/div&gt;
+						&lt;!-- end of masterslider --&gt;
+					</pre>
+					</p>
+					<h4>Video Parameters</h4>
+					<p>
+					<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default Value</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>data-mute</td>
+									<td>true</td>
+									<td>Whether the video is muted.</td>
+								</tr>
+								<tr>
+									<td>data-loop</td>
+									<td>true</td>
+									<td>Whether the video is looped.</td>
+								</tr>
+								<tr>
+									<td>data-autopause</td>
+									<td>false</td>
+									<td>Whether the slider pauses the video before changing slide then resume it or always starts it from beginning.</td>
+								</tr>
+								<tr>
+									<td>data-fill-mode</td>
+									<td>fill</td>
+									<td>Specifies the video scaling method. Its acceptable values are "fill", "fit", "none".</td>
+								</tr>
+							</tbody>
+						</table>
+					</p>
+					<hr/>
+				</article>
+				<article class="content-section" id="filters">
+					<h3><strong>Adding CSS3 Filters</strong></h3>
+					<p>
+						Since version 2.12.0 you can add CSS3 filters to slide transitions. <br>
+						You need to define filters as a object for <code>filters</code> option in slider options. Below is an example
+					</p>
+					<pre class="brush: javascript">
+							var slider = new MasterSlider();
+							slider.control('arrows'); 
+							slider.control('thumblist' , {autohide:false ,dir:'h',arrows:false});
+							slider.control('bullets');
+
+							slider.setup('masterslider' , {
+									width:900,
+									height:600,
+									space:5,
+									fillMode:'fit',
+									preload:0,
+									view:'basic',
+									filters: { 
+										grayscale: 1,
+										opacity: 0.5,
+										brightness: 2
+									}
+							});
+						</pre>
+					<p>You can specify filtering target with <code>filterTarget</code> option. It accpets "slide" and "bg" values</p>
+					<p>For more information about CSS3 Filters <a href="https://developer.mozilla.org/en/docs/Web/CSS/filter" target="_blank">please check this document.</a></p>
+					<p><span class="label label-info">Note</span> CSS3 Filters doesn't support in all browsers and in some it dosn't have good performance. <a href="http://caniuse.com/#feat=css-filters" target="_blank">You can check browser support here.</a></p>
+					<p><span class="label label-info">Note</span> Master Slider doesn't support "drop-shadow" filter.</a></p>
+					<hr/>
+				</article>
+				<article class="content-section" id="slide-contents">
+					<h3><strong>Slide Contents</strong></h3>
+					<ol>
+						<li>
+							<p>
+								<strong>Slide Background Image</strong>
+							</p>
+							<p>
+								The first &lt;img&gt; element in the slide specifies the slider background image. 	
+								<div class="alert alert-info"><strong>Note:</strong> This slider supports preloading feature (It helps slider to load faster). For using this feature you need to specify image path as "data-src" instead of "src".</div>							
+								<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background  --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					</pre>
+							</p>
+						</li>
+						<li>
+							<p>
+								<strong>Slide Thumbnail Image</strong>
+							</p>
+							<p>
+								It specifies by an &lt;img&gt; element which has "ms-thumb" as class name . 								<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide thumbnail Image --&gt;
+							&lt;img class="ms-thumb" src="masterslider/images/thumbs/5.jpg" alt="lorem ipsum dolor sit"/&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					</pre>
+							</p>
+						</li>
+						<li>
+							<p>
+								<strong>Slide Link</strong>
+							</p>
+							<p>
+								It specifies by an &lt;a&gt; element. 								<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide thumbnail Image --&gt;
+							&lt;img class="ms-thumb" src="masterslider/images/thumbs/5.jpg" alt="lorem ipsum dolor sit"/&gt;
+							
+							&lt;!-- linked slide --&gt;
+							&lt;a href="http://codecanyon.net/user/averta"&gt;Averta&lt;/a&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					</pre>
+							</p>
+						</li>
+						<li>
+							<p>
+								<strong>Slide Video</strong>
+							</p>
+
+							<p>
+								It specifies by an &lt;a&gt; element which has custom attribute data-type:"video". 								<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide thumbnail Image --&gt;
+							&lt;img class="ms-thumb" src="masterslider/images/thumbs/5.jpg" alt="lorem ipsum dolor sit"/&gt;
+							
+							&lt;!-- youtube video --&gt;
+							&lt;a href="http://www.youtube.com/embed/YHWkro9-e9Q?hd=1&amp;wmode=opaque&amp;controls=1&amp;showinfo=0" data-type="video"&gt;Youtube video&lt;/a&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					</pre>
+							</p>
+							<div class="alert alert-info">
+								<strong>Note:</strong> You can enable autplay video feature by adding data-autplay="true" attribute to the video element.</a>
+							</div>
+							<div class="alert alert-info">
+								<strong>Note:</strong> This Slider supports Vimeo and Youtube videos, Please note that you need to find the video embed URL for adding it into the slider. <a href="#embed-url">More info here...</a>
+							</div>
+						</li>
+						<li>
+							<p>
+								<strong>Slide Layers</strong>
+							</p>
+							<p>
+								This slider supports three different type of layers,
+								text layer (html), image layer and video layer (vimeo and youtube).
+								<br />
+								Check "Slide Layers" section for more information.
+							</p>
+							<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide thumbnail Image --&gt;
+							&lt;img class="ms-thumb" src="masterslider/images/thumbs/5.jpg" alt="lorem ipsum dolor sit"/&gt;
+							
+							&lt;!-- youtube video --&gt;
+							&lt;a href="http://www.youtube.com/embed/YHWkro9-e9Q?hd=1&amp;wmode=opaque&amp;controls=1&amp;showinfo=0" data-type="video"&gt;Youtube video&lt;/a&gt;
+							
+							&lt;!-- slide text layer --&gt;
+							&lt;div class="ms-layer ms-caption" style="top:10px; left:30px;"&gt;
+								Lorem ipsum dolor sit amet 
+							&lt;/div&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;
+					</pre>
+						</li>
+					</ol>
+					<hr/>
+				</article>
+				<article class="content-section" id="slide-layers">
+					<h3><strong>Slide Layers</strong></h3>
+					<p>
+						Each layer specifies by an element which has "ms-layer" as class name. <br>
+						Since V2.1.0 you can disable swipe guesture over each layer by adding "ms-no-swipe" class name to the layer element.
+					</p>
+					<h4>Layer custom attributes: </h4>
+					<p>
+						These parameters are supported in any type of layers.
+						<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default Value</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>data-type</td>
+									<td>"text"</td>
+									<td>Specifies the type of layer. It accepts three values "text", "image", "video".</td>
+								</tr>
+								<tr>
+									<td>data-offset-x</td>
+									<td>0</td>
+									<td>Specifies the X position of layer.</td>
+								</tr>
+								<tr>
+									<td>data-offset-y</td>
+									<td>0</td>
+									<td>Specifies the Y position of layer.</td>
+								</tr>
+								<tr>
+									<td>data-position</td>
+									<td>"normal"</td>
+									<td>
+										<em>Since V2.12.0</em><br>Specifies type of positioning layer over slide
+										<ul>
+											<li>"normal": layer adds over slide and moves with slide while swiping or chaning slide.</li>
+											<li>"static": it's like "normal" but it doesn't accept layer effect and it always visible over slide.</li>
+											<li>"fixed": layer adds over slider and doen't move while swiping or chaning slide.</li>
+										</ul>
+										<p><span class="label label-info">Note</span> Fixed layers in IE causes links on other layers with defferent type not working.</p>
+									</td>
+								</tr>		
+								<tr>
+									<td>data-origin</td>
+									<td>"tl"</td>
+									<td>
+										<em>Since V1.7.0</em><br>Specifies layer positioning origin over slide, it accepts below values:
+										<ul>
+											<li>"tl": Top left</li>
+											<li>"tc": Top center</li>
+											<li>"tr": Top right</li>
+											<li>"ml": Middle left</li>
+											<li>"mc": Middle center</li>
+											<li>"mr": Middle right</li>
+											<li>"bl": Bottom left</li>
+											<li>"bc": Bottom center</li>
+											<li>"br": Bottom right</li>
+										</ul>
+									</td>
+								</tr>						
+								<tr>
+									<td>data-widthlimit</td>
+									<td>-1</td>
+									<td>Specifies the minimum value of the slider width which layer can visible, under this value slider hides the layer.</td>
+								</tr>
+								<tr>
+									<td>data-resize</td>
+									<td>"true"</td>
+									<td>Whether the slider resizes the layer when slider resizes. ("true" or "false")</td>
+								</tr>
+								<tr>
+									<td>data-fixed</td>
+									<td>"false"</td>
+									<td>Whether the slider reposition the layer when slider resizes. ("true" or "false")</td>
+								</tr>
+								<tr>
+									<td>data-effect</td>
+									<td>"fade"</td>
+									<td>Specifies layer show transition effect. <a href="#layer-effects">More info here...</a></td>
+								</tr>
+								<tr>
+									<td>data-duration</td>
+									<td>1000</td>
+									<td>Specifies how many milliseconds a show transition effect takes to complete.</td>
+								</tr>
+								<tr>
+									<td>data-delay</td>
+									<td>0</td>
+									<td>Specifies when the show transition effect starts, in milliseconds.</td>
+								</tr>
+								<tr>
+									<td>data-ease</td>
+									<td>"linear"</td>
+									<td>Specifies the show transition effect timing method. You can find list of all functions <a href="#ease-func">here...</a></td>
+								</tr>
+								<tr>
+									<td>data-hide-effect</td>
+									<td>null</td>
+									<td>Specifies layer hide transition effect. <a href="#layer-effects">More info here...</a></td>
+								</tr>
+								<tr>
+									<td>data-hide-duration</td>
+									<td>null</td>
+									<td>Specifies how many milliseconds a hide transition effect takes to complete.</td>
+								</tr>
+								<tr>
+									<td>data-hide-time</td>
+									<td>null</td>
+									<td>Specifies when the hide transition effect starts, in milliseconds.</td>
+								</tr>
+								<tr>
+									<td>data-hide-ease</td>
+									<td>null</td>
+									<td>Specifies the hide transition effect timing method. You can find list of all functions <a href="#ease-func">here...</a></td>
+								</tr>
+								<tr>
+									<td>data-parallax</td>
+									<td>0</td>
+									<td>Specifies the intensity of parallax effect, higher values makes the layer more sensitive. Negative values are allowed.</td>
+								</tr>
+								<tr>
+									<td>data-action</td>
+									<td>null</td>
+									<td><em>Since V1.7.2</em><br>Specifies the action type of layer with will be called when user clicks layer. It accepts below values: <br> 
+										<ol>
+											<li>"next": Goto next slide.</li>
+											<li>"previous": Goto previous slide.</li>
+											<li>"gotoSlide(slideNum)": goto specified slide (slideNum).</li>
+											<li>"pause": Pause slider timer.</li>
+											<li>"resume" Resume slider timer.</li>
+										</ol>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</p>
+
+					<h4>Example: </h4>
+					<pre class="brush: html">
+						&lt;!-- new slide --&gt;
+						&lt;div class="ms-slide"&gt;
+							
+							&lt;!-- slide background --&gt;
+							&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+							
+							&lt;!-- slide text layer --&gt;
+							&lt;div class="ms-layer ms-caption" style="top:10px; left:30px;"&gt;
+								Lorem ipsum dolor sit amet 
+							&lt;/div&gt;
+							
+							&lt;!-- slide image layer --&gt;
+							&lt;img class="ms-layer" alt="lorem ipsum dolor sit" 
+								 data-offset-x		= "10"
+								 data-offset-y 		= "15"
+								 data-origin		= "tr"
+								 data-type 			= "image"
+								 data-widthlimit 	= "600"
+								 data-resize		= "false"
+								 data-effect   		= "right(90)"
+								 data-duration 		= "800"
+								 data-ease	   		= "easeOutQuart"
+							 
+								 src="masterslider/blank.gif"
+								 data-src="masterslider/images/layer_img.png"
+							/&gt;
+							
+						&lt;/div&gt; 
+						&lt;!-- end of slide --&gt;</pre>
+					<h4>Layer types:</h4>
+
+					<ol>
+						<li>
+							<p>
+								<strong>Text Layer / Captions</strong>
+							</p>
+							<p>
+								It can defines by any type of html elements like headings (h1, h2, h3, ...), &lt;p&gt;, &lt;div&gt; and you can easily style it by css.
+								<br />
+								<div class="alert alert-info"><strong>Note:</strong> It's important to add data-type = "text" attribute the layer element. </div>
+							<pre class="brush: html">
+								&lt;!-- slide text layer --&gt;
+								&lt;div class="ms-layer ms-caption" 
+									 data-offset-x		= "10"
+									 data-offset-y 		= "15"
+									 data-origin		= "tr"
+									 data-type 			= "text"
+									 data-effect   		= "bottom(90)"
+									 data-duration 		= "800"
+									 data-ease	   		= "easeOutQuart"
+
+								&gt;
+								 Lorem ipsum dolor sit amet 
+								&lt;/div&gt;
+								</pre>
+							</p>
+						</li>
+						<li>
+							<p>
+								<strong>Image Layer</strong>
+							</p>
+							<p>
+								<div class="alert alert-info"><strong>Note:</strong> It's important to add data-type = "image" attribute the layer element. </div>
+								<div class="alert alert-info"><strong>Note:</strong> This slider supports preloading feature (It helps slider to load faster). For using this feature you need to specify image path as "data-src" instead of "src".</div>		
+							<pre class="brush: html">
+							&lt;!-- slide image layer --&gt;
+							&lt;img class="ms-layer" alt="lorem ipsum dolor sit"
+								 data-offset-x		= "10"
+								 data-offset-y 		= "15"
+								 data-origin		= "tr"
+								 data-type 			= "image"
+								 data-effect   		= "right(90)"
+								 data-duration 		= "800"
+								 data-ease	   		= "easeOutQuart"
+							 
+								 src="masterslider/blank.gif"
+								 data-src="masterslider/images/layer_img.png"
+							/&gt;
+							</pre>
+							</p>
+
+						</li>
+						<li>
+							<p>
+								<strong>Button Layer</strong>
+							</p>
+							<p>
+								<div class="alert alert-info"><strong>Note:</strong> It's important to add data-type = "button" attribute the layer element. </div>	
+							<pre class="brush: html">
+							&lt;!-- slide button layer --&gt;
+							&lt;a class="ms-layer ms-btn myCustomBtn"
+								 data-offset-x		= "10"
+								 data-offset-y 		= "15"
+								 data-origin		= "tr"
+								 data-type 			= "button"
+								 data-effect   		= "right(90)"
+								 data-duration 		= "800"
+								 data-ease	   		= "easeOutQuart"
+							&gt;
+								Learn More..
+							&lt;/a&gt;
+
+							</pre>
+							</p>
+
+						</li>
+						<li>
+							<p>
+								<strong>Video Layer</strong>
+							</p>
+							Custom attributes:
+							<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default Value</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>data-autoplay</td>
+									<td>"false"</td>
+									<td>Whether auto play video or not.</td>
+								</tr>
+								</tbody>
+							</table>
+							<p>
+								<div class="alert alert-info"><strong>Note:</strong> It's important to add data-type = "video" attribute the layer element.</div>
+							<pre class="brush: html">
+							&lt;!-- slide video layer --&gt;
+							&lt;div class="ms-layer" style="width:460px; height:259px"
+								 data-offset-x		= "50"
+								 data-offset-y 		= "15"
+								 data-origin		= "tr"
+								 data-type 			= "video"
+								 data-effect   		= "bottom(90)"
+								 data-duration 		= "800"
+								 data-autoplay		= "true"
+								 data-ease	   		= "easeOutQuart"
+							&gt;
+								&lt;!-- this img element displays as the video cover image. It's optional you can remove it and slider will show video player. --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/cover_img.jpg" alt="lorem ipsum dolor sit" /&gt;
+								&lt;iframe src="http://www.youtube.com/embed/YHWkro9-e9Q?hd=1&wmode=opaque&controls=1&showinfo=0" width="460" height="259"&gt; &lt;/iframe&gt;
+							&lt;/div&gt;
+							</pre>
+							</p>
+
+							<div class="alert alert-info">
+								<strong>Note:</strong> This Slider supports Vimeo and Youtube videos, Please note that you need to find the video embed URL for adding it into the slider. <a href="#embed-url">More info here...</a>
+							</div>
+						</li>
+						<li>
+							<p>
+								<strong>Hotspot Layer</strong>
+							</p>
+							Custom attributes:
+							<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default Value</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>data-align</td>
+									<td>"bottom"</td>
+									<td>Specifies the aligning position of hotspot tooltip (left, right, top and bottom).</td>
+								</tr>
+								<tr>
+									<td>data-stay-hover</td>
+									<td>"false"</td>
+									<td>Whether shows tooltip while user mouse over it.</td>
+								</tr>
+								</tbody>
+							</table>
+
+								<div class="alert alert-info"><strong>Note:</strong> It's important to add data-type = "hotspot" attribute the layer element.</div>
+							<pre class="brush: html">
+								<div class="ms-layer" 
+									data-offset-x		= "250"
+								 	data-offset-y 		= "115"
+						        	data-delay			= "500"
+						        	data-type			= "hotspot"
+						        	data-align			= "bottom"
+						        >
+							    	<div class="product-tt">
+							    		<h3>LOREM IPSUM DOLOR</h3>
+							    		Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh euismod tincidunt.
+							    	</div>
+								</div>
+							</pre>
+
+						</li>
+					</ol>
+
+					<hr />
+				</article>
+				<article class="content-section" id="flickr-plugin">
+					<h3><strong>Flickr Plugin</strong></h3>
+					<h5><strong>Step 1: Link required files</strong></h5>
+					<p>
+						At first you need to insert Flickr plugin JS file into your page. Go to "quick-start/masterslider" folder in downloaded package and upload "masterslider.flickr.js" file to your server then add required file into your page like following (usually in &lt;head&gt; section)</br><span class="note">be informed all the Master Slider required files should be imported already.</span>
+						<pre class="brush: html">										
+						&lt;!-- MasterSlider Flickr plugin JS file --&gt;
+						&lt;script src=&quot;masterslider/masterslider.flickr.min.js&quot;&gt;&lt;/script&gt;</pre>
+					</p>
+					<h5><strong>Step 2: Slider HTML</strong></h5>
+					<p>
+						Insert following HTML to the &lt;body&gt; section. This HTML defines the main slider container.
+						<pre class="brush: html">
+					&lt;!-- masterslider Flickr--&gt;
+					<div class="master-slider ms-skin-default" id="masterslider"></div>
+					&lt;!-- end of masterslider Flickr--&gt;
+				</pre>
+					</p>
+					<h5><strong>Step 3: Initialize</strong></h5>
+					<p>
+						Insert the following JavaScript after slider HTML (usually after &lt;body&gt; section).
+						<pre class="brush: js">
+					&lt;script&gt;
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {
+								width:900,
+								height:600,
+								space:5,
+								fillMode:'fit',
+								preload:0,
+								view:'basic'
+						});
+
+						slider.control('arrows'); 
+						slider.control('thumblist' , {autohide:false ,dir:'h',arrows:false});
+						slider.control('bullets');
+
+						var flkr = new MSFlickr(slider , {key:'[Your Flickr API key]' , id:'[Photoset or User ID]' , desc:false , count:10});
+					&lt;/script&gt;
+						</pre>
+						<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Option Name</th>
+									<th style="width:120px">Default</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>slider</td>
+									<td>-</td>
+									<td>The Master Slider object for Flickr plugin.(required)</td>
+								</tr>
+								<tr>
+									<td>type</td>
+									<td>photoset</td>
+									<td> This option accepts two values "photoset" and "latest", "photoset" for showing photoset pictures and "latest" for showing latest pictures. </td>
+								</tr>
+								<tr>
+									<td>id</td>
+									<td>-</td>
+									<td>It depends to option type,it should be photoset's ID if type set to "photoset" and it should be user's ID if type set to "latest".</td>
+								</tr>
+								<tr>
+									<td>key</td>
+									<td>-</td>
+									<td>The Flickr api key.(required)</td>
+								</tr>
+								
+								<tr>
+									<td>imgSize</td>
+									<td>c</td>
+									<td>This option accepts four values "-", "z", "c" and "b"  ,<br> "-" for medium size with dimension of 500 on longest side,<br> "z" for medium size with dimension of 640 on longest side,<br> "c" for medium size with dimension of 800 on longest side,<br> and "b" for large size with dimension of 1024 on longest side.</td>
+								</tr>
+								<tr>
+									<td>count</td>
+									<td>10</td>
+									<td>The number of images. It helps the slider to put exact number of pictures.</td>
+								</tr>
+								<tr>
+									<td>autoplayDelay</td>
+									<td>4</td>
+									<td>This option determine the time of showing each slide in autoplay mood.</td>
+								</tr>
+								<tr>
+									<td>thumbs</td>
+									<td>true</td>
+									<td>It shows thumbs if it sets to "true", it doesn't show thumbs if it sets to "false".</td>
+								</tr>
+								 <tr>
+									<td>thumbSize</td>
+									<td>q</td>
+									<td>This option accepts three values "s", "q" and "t"  ,<br> "s" for small square with dimension of "75x75",<br> "q" for large square with dimension of "150x150"<br> and "t" for thumbnail with dimension of 100 on longest side.</td>
+								</tr>
+								<tr>
+									<td>title</td>
+									<td>true</td>
+									<td>It shows title of image if it sets to "true", it doesn't show title of image if it sets to "false".</td>
+								</tr>
+								<tr>
+									<td>author</td>
+									<td>true</td>
+									<td>It shows author of image if it sets to "true", it doesn't show author of image if it sets to "false".</td>
+								</tr>
+								<tr>
+									<td>desc</td>
+									<td>false</td>
+									<td>It shows the image description if it sets to "true", It doesn't show the image description if it sets to "false".</td>
+								</tr>
+								<tr>
+									<td>titleEff</td>
+									<td>fade</td>
+									<td>This option determine the effect of title on slider, please refer to <a href="#layer-effects" title="Master Slider transition effects" >Layer Transition Effects</a> for more information about the variety of effects.</td>
+								</tr>
+								<tr>
+									<td>authorEff</td>
+									<td>fade</td>
+									<td>This option determine the effect of author on slider, please refer to <a href="#layer-effects" title="Master Slider transition effects" >Layer Transition Effects</a> for more information about the variety of effects.</td>
+								</tr>				
+								
+								
+								<tr>
+									<td>descEff</td>
+									<td>fade</td>
+									<td>This option determine the effect of description on slider, please refer to <a href="#layer-effects" title="Master Slider transition effects" >Layer Transition Effects</a> for more information about the variety of effects.</td>
+								</tr>
+								
+								
+								
+							  
+								
+							</tbody>
+						</table>
+						Note: to achieve user's ID you can use this <a href="http://idgettr.com/" title="get flickr id" target="_blank"> Flickr get ID </a> and to achieve photoset's ID you can take it from photoset page url.
+					</p>
+				
+					
+					<hr/>
+				</article>
+				<article class="content-section" id="scroll-parallax">
+					<h3><strong>Adding Scroll Parallax Effect To The Slider</strong></h3>
+					<p>Since version 2.0 you can add parallax effect to the slider which will appears when user scrolls, you can simply enable it by adding one line js after slider setup js code like below example:</p>
+					<pre class="brush:js">
+						var slider = MasterSlider();
+						slider.setup('slider_id', {
+							width:700,
+							height:550
+							// more options ...
+						});
+
+						// add scroll parallax effect
+						MSScrollParallax.setup(slider,50,80,true);
+					</pre>
+					<h4>MSScrollPrallax Parameters</h4>
+					<pre class="brush:js">
+						MSScrollParallax.setup(slider_instance, layers_parallax_depth, background_parallax_depth, fade_layers);
+					</pre>
+					<h4>Parameters</h4>
+					<table class="table table-striped table-bordered table-hover">
+							<thead>
+								<tr>
+									<th style="width:120px">Name</th>
+									<th style="width:120px">Default</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Slider Instance</td>
+									<td>-</td>
+									<td>The Master Slider instance</td>
+								</tr>
+								<tr>
+									<td>Layers Parallax Depth</td>
+									<td>50</td>
+									<td>The intensity of parallax effect, higher values makes the layer more sensitive. Negative values are allowed.</td>
+								</tr>
+								<tr>
+									<td>Background Parallax Depth</td>
+									<td>40</td>
+									<td>The intensity of slide background parallax effect, higher values makes the background image more sensitive. Negative values are allowed.</td>
+								</tr>						  
+								<tr>
+									<td>Fade Layers</td>
+									<td>false</td>
+									<td>Whether fade layers while scrolling or not.</td>
+								</tr>		
+							</tbody>
+						</table>
+						<p><span class="label label-info">Note</span> If you are using <a href="#jq-plugin">Master Slider jQuery Plugin</a> setup you can access to the slider instance object with:</p>
+						<pre class="brush:js">var slider_instance = $('#slider').masterslider('slider');</pre>
+					<hr/>
+				</article>
+				<article class="content-section" id="layer-effects">
+					<h3><strong>Layer Transition Effects</strong></h3>
+					<div class="alert alert-info">
+						<strong>Note:</strong> We created a list of presset transitions and you can find it in <a href="http://www.masterslider.com/transition-gallery/" target="_blank" >transition effect gallery</a>.
+					</div>
+					<p>
+						You can create unlimited transition effects for layers by using slider preset effect functions.
+						<br />
+						Each function may have some parameters, here is some custom parameter values:
+						<ol>
+							<li>
+								<strong>short:</strong> equals to 30
+							</li>
+							<li>
+								<strong>long:</strong> equals to 300
+							</li>
+							<li>
+								<strong>random value:</strong> min|max for example 10|300 (it takes a random value between 10 and 300)
+							</li>
+						</ol>
+
+						Rotation origin:
+						<ol>
+							<li>
+								<strong>tl:</strong> equals to top left
+							</li>
+							<li>
+								<strong>tr:</strong> equals to top right
+							</li>
+							<li>
+								<strong>bl:</strong> equals to bottom left
+							</li>
+							<li>
+								<strong>br:</strong> equals to bottom right
+							</li>
+							<li>
+								<strong>t:</strong> equals to top
+							</li>
+							<li>
+								<strong>b:</strong> equals to bottom
+							</li>
+							<li>
+								<strong>r:</strong> equals to right
+							</li>
+							<li>
+								<strong>l:</strong> equals to left
+							</li>
+							<li>
+								<strong>c:</strong> equals to center
+							</li>
+						</ol>
+						<strong>Example:</strong> right(short)
+					</p>
+					<p>
+						Here is the list of all preset transition functions:
+					</p>
+					<table class="table table-striped table-bordered table-hover">
+						<thead>
+							<tr>
+								<th style="width:120px">Name</th>
+								<th style="width:120px">Parameters</th>
+								<th>Description</th>
+								<th>Example</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>fade</td>
+								<td>-</td>
+								<td><strong>show:</strong> fade in
+								<br/>
+								<strong>hide :</strong> fade out</td>
+								<td>fade()</td>
+							</tr>
+							<tr>
+								<td>left</td>
+								<td>distance , fade (true or false)</td>
+								<td><strong>show:</strong> moves from left
+								<br/>
+								<strong>hide :</strong> moves to left</td>
+								<td>left(short,false)</td>
+							</tr>
+							<tr>
+								<td>right</td>
+								<td>distance , fade (true or false)</td>
+								<td><strong>show:</strong> moves from right
+								<br/>
+								<strong>hide :</strong> moves to right</td>
+								<td>right(100,true)</td>
+							</tr>
+							<tr>
+								<td>top</td>
+								<td>distance , fade (true or false)</td>
+								<td><strong>show:</strong> moves from top
+								<br/>
+								<strong>hide :</strong> moves to top</td>
+								<td>top(100)</td>
+							</tr>
+							<tr>
+								<td>bottom</td>
+								<td>distance , fade (true or false)</td>
+								<td><strong>show:</strong> moves from bottom
+								<br/>
+								<strong>hide :</strong> moves to bottom</td>
+								<td>bottom(100|500 , true)</td>
+							</tr>
+							<tr>
+								<td>rotate</td>
+								<td>deg , orig</td>
+								<td><strong>show:</strong> rotate in
+								<br/>
+								<strong>hide :</strong> rotate out</td>
+								<td>rotate(300 , br)</td>
+							</tr>
+							<tr>
+								<td>rotateleft</td>
+								<td>deg , dist , orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from left
+								<br/>
+								<strong>hide :</strong> rotate to left</td>
+								<td>rotateleft(45|180,long,br,true)</td>
+							</tr>
+							<tr>
+								<td>rotateright</td>
+								<td>deg , dist , orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from right
+								<br/>
+								<strong>hide :</strong> rotate to right</td>
+								<td>rotateleft(45|180,long,br,true)</td>
+							</tr>
+							<tr>
+								<td>rotatetop</td>
+								<td>deg , dist , orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from top
+								<br/>
+								<strong>hide :</strong> rotate to top</td>
+								<td>rotatetop(45|180,long,br,true)</td>
+							</tr>
+							<tr>
+								<td>rotatebottom</td>
+								<td>deg , dist , orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from bottom
+								<br/>
+								<strong>hide :</strong> rotate to bottom</td>
+								<td>rotatebottom(45|180,long,br,true)</td>
+							</tr>
+							<tr>
+								<td>skewleft</td>
+								<td>deg , dist , fade (true or false)</td>
+								<td><strong>show:</strong> skew from left
+								<br/>
+								<strong>hide :</strong> skew to left</td>
+								<td>skewleft(18,35|100)</td>
+							</tr>
+							<tr>
+								<td>skewright</td>
+								<td>deg , dist , fade (true or false)</td>
+								<td><strong>show:</strong> skew from right
+								<br/>
+								<strong>hide :</strong> skew to right</td>
+								<td>skewright(18,35|100)</td>
+							</tr>
+							<tr>
+								<td>skewtop</td>
+								<td>deg , dist , fade (true or false)</td>
+								<td><strong>show:</strong> skews from right
+								<br/>
+								<strong>hide :</strong> skew to right</td>
+								<td>skewtop(18,35|100,false)</td>
+							</tr>
+							<tr>
+								<td>skewbottom</td>
+								<td>deg , dist , fade (true or false)</td>
+								<td><strong>show:</strong> skews from bottom
+								<br/>
+								<strong>hide :</strong> skew to bottom</td>
+								<td>skewbottom(18,35|100)</td>
+							</tr>
+							<tr>
+								<td>front</td>
+								<td> dist , fade (true or false)</td>
+								<td><strong>show:</strong> moves from front (3D)
+								<br/>
+								<strong>hide :</strong> moves to front (3D) </td>
+								<td>front(300)</td>
+							</tr>
+							<tr>
+								<td>back</td>
+								<td> dist , fade (true or false)</td>
+								<td><strong>show:</strong> moves from back (3D)
+								<br/>
+								<strong>hide :</strong> moves to back (3D) </td>
+								<td>back(300)</td>
+							</tr>
+							<tr>
+								<td>rotatefront</td>
+								<td> deg , dist, orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from front (3D)
+								<br/>
+								<strong>hide :</strong> rotate to front (3D) </td>
+								<td>rotatefront(300 , 500 ,c , true)</td>
+							</tr>
+							<tr>
+								<td>rotateback</td>
+								<td> deg , dist , orig , fade (true or false)</td>
+								<td><strong>show:</strong> rotate from back (3D)
+								<br/>
+								<strong>hide :</strong> rotate to back (3D) </td>
+								<td>rotateback(300 , 500 ,c , true)</td>
+							</tr>
+							<tr>
+								<td>rotate3dleft</td>
+								<td> x , y , z , dist , orig , fade</td>
+								<td><strong>show:</strong> 3D rotate from left
+								<br/>
+								<strong>hide :</strong> 3D rotate to left </td>
+								<td>rotate3dleft(50 , 0 , 10, short,c,true)</td>
+							</tr>
+							<tr>
+								<td>rotate3dright</td>
+								<td> x , y , z , dist , orig , fade</td>
+								<td><strong>show:</strong> 3D rotate from right
+								<br/>
+								<strong>hide :</strong> 3D rotate to right </td>
+								<td>rotate3dright(50 , 0 , 10, short,c,true)</td>
+							</tr>
+							<tr>
+								<td>rotate3dtop</td>
+								<td> x , y , z , dist , orig , fade</td>
+								<td><strong>show:</strong> 3D rotate from top
+								<br/>
+								<strong>hide :</strong> 3D rotate to top </td>
+								<td>rotate3dtop(50 , 0 , 10, short,c,true)</td>
+							</tr>
+							<tr>
+								<td>rotate3dbottom</td>
+								<td> x , y , z , dist , orig , fade</td>
+								<td><strong>show:</strong> 3D rotate from bottom
+								<br/>
+								<strong>hide :</strong> 3D rotate to bottom </td>
+								<td>rotate3dbottom(50 , 0 , 10, short,c,true)</td>
+							</tr>
+						</tbody>
+					</table>
+					<hr/>
+				</article>
+				<article class="content-section" id="slider-ui">
+					<h3><strong>Slider UI Controls</strong></h3>
+					<p>
+						UI Controls adds to the slide with "control" slider method.
+					</p>
+					<pre class="brush: javascript">
+					var slider = new MasterSlider();
+					slider.setup('masterslider' , {width:800, height:350});
+					slider.control('arrows'); // here we've added arrow control to the slider.
+					</pre>																				
+ 				<h4>UI Controls:</h4>
+					<ol>
+						<li>
+							<h5>arrows</h5>
+							<p>
+								Adds arrow navigation to the slider. css class names: "ms-nav-next" and "ms-nav-prev"
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>		
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('arrows' , {autohide:false}); // here we've added arrow control to the slider.
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>bullets</h5>
+							<p>
+								This UI control adds one bullet for each slide and user can change slide by clicking on each bullet.
+								<br/>
+								css class name: "ms-bullets"
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>	
+										<tr>
+											<td>dir</td>
+											<td>"h"</td>
+											<td>Specifies the direction of control. It accepts two values "h" (horizontal) and "v" (vertical)</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+										<tr>
+											<td>align</td>
+											<td>"bottom"</td>
+											<td>Aligns the control to in or out of slider. It accepts "top" and "bottom" values.</td>
+										</tr>	
+										<tr>
+											<td>margin</td>
+											<td>10</td>
+											<td>Specifies the space between the control and slider in pixel.</td>
+										</tr>
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('bullets' , {autohide:false  , dir:"v", align:"top"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>thumblist</h5>
+							<p>
+								This control searches for an element which has "ms-thumb" as class name in slider html then creates a list of thumbnails.
+								<br/>
+								css class name: "ms-thumb-list"
+								<br/>
+								<div class="alert alert-info"><strong>Note:</strong> You can create a div element with "ms-thumb" class name in each slide and use html instead of image in thumbnail list. Like following:</div>								<pre class="brush: html">
+							&lt;!-- new slide --&gt;
+							&lt;div class="ms-slide"&gt;
+								
+								&lt;!-- slide background --&gt;
+								&lt;img src="masterslider/blank.gif" data-src="masterslider/images/3.jpg" alt="lorem ipsum dolor sit"/&gt;		
+								
+								&lt;!-- slide text title it shows in thumbnail list. --&gt;
+								&lt;div class="ms-thumb"&gtlorem ipsum&lt;/div&gt;
+								
+							&lt;/div&gt; 
+							&lt;!-- end of slide --&gt;
+							</pre>
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>	
+										<tr>
+											<td>width</td>
+											<td>100</td>
+											<td>Specifies the width of each thumb in pixel.</td>
+										</tr>
+										<tr>
+											<td>height</td>
+											<td>100</td>
+											<td>Specifies the height of each thumb in pixel.</td>
+										</tr>
+										<tr>
+											<td>type</td>
+											<td>"thumbs"</td>
+											<td>Specifies the type of control, it can used as "thumbs" or "tabs".</td>
+										</tr>
+										<tr>
+											<td>dir</td>
+											<td>"h"</td>
+											<td>Specifies the direction of control. It accepts two values "h" (horizontal) and "v" (vertical)</td>
+										</tr>
+										<tr>
+											<td>speed</td>
+											<td>17</td>
+											<td>Specifies scrolling speed. It accepts float values between 0 and 100.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+										<tr>
+											<td>align</td>
+											<td>"bottom"</td>
+											<td>Aligns the control to in or out of slider. It accepts "top", "bottom", "left" and "right" values.</td>
+										</tr>	
+										<tr>
+											<td>hover</td>
+											<td>false</td>
+											<td>Whether change slides on hovering over thumbs.</td>
+										</tr>
+										<tr>
+											<td>arrows</td>
+											<td>false</td>
+											<td>Whether add arrows in thumblist</td>
+										</tr>
+										<tr>
+											<td>inset</td>
+											<td>false</td>
+											<td>Whether insert the control inside or outside of slider.</td>
+										</tr>
+										<tr>
+											<td>margin</td>
+											<td>10</td>
+											<td>Specifies the space between the control and slider in pixel.</td>
+										</tr>
+										<tr>
+											<td>space</td>
+											<td>10</td>
+											<td>Specifies the space between thumbs or tabs.</td>
+										</tr>
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('bullets');
+						slider.control('thumblist' , {autohide:false  , dir:"v"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>scrollbar</h5>
+							<p>
+								This UI control adds a scroll bar in slider which moves when each slide changes.
+								<br/>
+								css class name: "ms-sbar"
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>									
+										<tr>
+											<td>dir</td>
+											<td>"h"</td>
+											<td>Specifies the direction of control. It accepts two values "h" (horizontal) and "v" (vertical)</td>
+										</tr>
+										<tr>
+											<td>color</td>
+											<td>"#3D3D3D"</td>
+											<td>Specifies the color scrollbar handle color.</td>
+										</tr>
+										<tr>
+											<td>width</td>
+											<td>4</td>
+											<td>Specifies the width of scrollbar handle in pixel.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+										<tr>
+											<td>align</td>
+											<td>"bottom"</td>
+											<td>Aligns the control to in or out of slider. It accepts "top", "bottom", "left" and "right" values.</td>
+										</tr>	
+										<tr>
+											<td>inset</td>
+											<td>false</td>
+											<td>Whether insert the control inside or outside of slider.</td>
+										</tr>
+										<tr>
+											<td>margin</td>
+											<td>10</td>
+											<td>Specifies the space between the control and slider in pixel.</td>
+										</tr>
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('thumblist' , {autohide:false  , dir:"vertical"});
+						slider.control('scrollbar' , {dir:"v"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>circletimer</h5>
+							<p>
+								It adds a circle timer into slider. This control only works in modern browsers.
+								<br/>
+								css class name: "ms-ctimer"
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>	
+										<tr>
+											<td>color</td>
+											<td>"#A2A2A2"</td>
+											<td>Specifies the color of circle timer. </td>
+										</tr>
+										<tr>
+											<td>radius</td>
+											<td>4</td>
+											<td>Specifies the radius of circle timer in pixels. </td>
+										</tr>
+										<tr>
+											<td>stroke</td>
+											<td>10</td>
+											<td>Specifies the stroke of circle timer in pixels. </td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('thumblist' , {autohide:false  , dir:"v"});
+						slider.control('circletimer' , {color:"#FFDD00" , stroke:20});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>timebar</h5>
+							<p>
+								It adds a progress bar for timer in slider.
+								<br/>
+								css class name: "ms-timerbar"
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>
+										<tr>
+											<td>color</td>
+											<td>"#FFFFFF"</td>
+											<td>Specifies the color of timebar.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+										<tr>
+											<td>align</td>
+											<td>"bottom"</td>
+											<td>Aligns the control to in or out of slider. It accepts "top" and "bottom"  values.</td>
+										</tr>	
+										<tr>
+											<td>inset</td>
+											<td>false</td>
+											<td>Whether insert the control inside or outside of slider.</td>
+										</tr>
+										<tr>
+											<td>margin</td>
+											<td>0</td>
+											<td>Specifies the space between the control and slider in pixel.</td>
+										</tr>	
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('timebar');
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>slideinfo</h5>
+							<p>
+								With this control you can specify a HTML value to each slide and slider will show the value of slide while it selected.
+								<br /> This control searches for an element which has "ms-info" as class name in each slide.
+							</p>
+							<p>
+								<strong>Options:</strong>
+								<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:120px">Name</th>
+											<th style="width:120px">Default Value</th>
+											<th>Description</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>autohide</td>
+											<td>true</td>
+											<td>Whether the control hides when mouse leaves the slider.</td>
+										</tr>
+										<tr>
+											<td>overVideo</td>
+											<td>true</td>
+											<td>Whether the control visible over slide video while playing.</td>
+										</tr>
+										<tr>
+											<td>insertTo</td>
+											<td>-</td>
+											<td>The HTML element that the info will be added in it.</td>
+										</tr>
+										<tr>
+											<td>size</td>
+											<td>100</td>
+											<td>Specifies the width or height (based on specified direction) of slide info container in pixel.</td>
+										</tr>
+										<tr>
+											<td>hideUnder</td>
+											<td>null</td>
+											<td>Hides the control if width of slider comes less than specified.</td>
+										</tr>
+										<tr>
+											<td>align</td>
+											<td>"bottom"</td>
+											<td>Aligns the control to in or out of slider. It accepts "top", "bottom", "left" and "right" values.</td>
+										</tr>	
+										<tr>
+											<td>inset</td>
+											<td>false</td>
+											<td>Whether insert the control inside or outside of slider.</td>
+										</tr>
+										<tr>
+											<td>margin</td>
+											<td>10</td>
+											<td>Specifies the space between the control and slider in pixel.</td>
+										</tr>		
+									</tbody>
+								</table>
+							</p>
+							<p>
+								<h5>Example:</h5>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350});
+						slider.control('slideinfo',{insertTo:'#info'});
+					</pre>
+							</p>
+						</li>
+					</ol>
+
+					<hr/>
+				</article>
+				<article class="content-section" id="views">
+					<h3><strong>Slide Changing Transitions</strong></h3>
+					<p>
+						You can change type of slide transitions in slider options.
+					</p>
+					<h4>Transition Types:</h4>
+					<ol>
+						<li>
+							<h5>basic</h5>
+							<p>
+								<img src="assets/images/basic.gif"/>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350 , view:"basic"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>fade</h5>
+							<p>
+								<img src="assets/images/fade.gif"/>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350 , view:"fade"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>mask</h5>
+							<p>
+								<img src="assets/images/mask.gif"/>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350 , view:"mask"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>wave</h5>
+							<p>
+								<img src="assets/images/wave.gif"/>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350 , view:"wave"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>flow</h5>
+							<p>
+								<img src="assets/images/flow.gif"/>
+								<pre class="brush: javascript">
+						var slider = new MasterSlider();
+						slider.setup('masterslider' , {width:800, height:350 , view:"flow"});
+					</pre>
+							</p>
+						</li>
+						<li>
+							<h5>stack</h5>
+							<p>
+								<img src="assets/images/scale.gif"/>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"stack"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>scale</h5>
+							<p>
+								<img src="assets/images/scale.gif"/>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"scale"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>focus</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"focus"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>parallaxMask</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"parallaxMask"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>partialWave</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"partialWave"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>fadeBasic</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"fadeBasic"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>fadeWave</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"fadeWave"});
+								</pre>
+							</p>
+						</li>
+						<li>
+							<h5>fadeFlow</h5>
+							<p>
+								<pre class="brush: javascript">
+									var slider = new MasterSlider();
+									slider.setup('masterslider' , {width:800, height:350 , view:"scaleFlow"});
+								</pre>
+							</p>
+						</li>
+					</ol>
+					<hr/>
+				</article>
+				<article class="content-section" id="api">
+					<h3><strong>Slider API</strong></h3>
+					<h4> Methods </h4>
+					<pre class="brush: javascript">
+					var slider = new MasterSlider();
+					slider.setup('masterslider' , {width:800, height:350});
+					
+					slider.api.index(); 		// returns current slider index.
+					slider.api.count(); 		// returns total number of slides.
+					
+					slider.api.next();			// next slide.
+					slider.api.previous();  	// previous slide.
+					slider.api.gotoSlide(4);	// moves to 4th slide.
+					
+					slider.api.pause();	 		// pauses the slider timer.
+					slider.api.resume(); 		// resumes the slider timer.
+					slider.api.currentTime(); 	// returns the percentage of elapsed time.
+					
+					slider.api.destroy(); 		// removes the slider.
+				</pre>
+					<h4> Properties </h4>
+					<pre class="brush: javascript">
+					slider.api.so					// returns the object of slider options.
+					
+					slider.api.view					// returns the slider transition object.
+					slider.api.view.slideList 		// returns a array of all slides.
+					slider.api.viwe.currentSlide 	// returns the current slide object.
+				</pre>
+					<h4> Events </h4>
+					<pre class="brush: javascript">
+				
+					slider.api.addEventListener(MSSliderEvent.INIT , function(){
+						// dispatches when the slider's current slide change starts.
+					});
+
+					slider.api.addEventListener(MSSliderEvent.CHANGE_START , function(){
+						// dispatches when the slider's current slide change starts.
+					});
+					
+					slider.api.addEventListener(MSSliderEvent.CHANGE_END , function(){
+						// dispatches when the slider's current slide change ends.
+					});
+					
+					slider.api.addEventListener(MSSliderEvent.WAITING , function(){
+						// dispatches whenever the slider timer updates. 
+					});
+					
+					slider.api.addEventListener(MSSliderEvent.RESIZE , function(){
+						// dispatches when the slider is resized.
+					});
+					
+					slider.api.addEventListener(MSSliderEvent.VIDEO_PLAY , function(){
+						// dispatches when the slide video played.
+					});
+					
+					slider.api.addEventListener(MSSliderEvent.VIDEO_CLOSE , function(){
+						// dispatches when the slide video closed.
+					});
+					
+					slider.api.view.addEventListener(MSViewEvents.SWIPE_START , function(){
+						// dispatches when swipe dragging starts.
+					});
+					
+					slider.api.view.addEventListener(MSViewEvents.SWIPE_END , function(){
+						// dispatches when swipe dragging ends.
+					});
+					
+					slider.api.view.addEventListener(MSViewEvents.SWIPE_MOVE , function(){
+						// dispatches when swipe dragging moves.
+					});
+					
+					slider.api.view.addEventListener(MSViewEvents.SWIPE_CANCEL , function(){
+						// dispatches when swipe dragging cancels.
+					});
+				</pre>
+					<hr/>
+				</article>
+				<article class="content-section" id="skins">
+					<h3><strong>Slider Skins</strong></h3>
+					<p>
+						Here you can find a list of available skins which included in dowload package.
+						</p>
+						<p>
+						You can change the slider skin by following these steps:
+						</p>
+						<p>
+						<ol>
+							<li>Find and upload your preferred skin from "skins" folder.</li>
+							<li>
+								<p>Import "style.css" from the skin folder into your page like following:</p>
+								<pre class="brush: html">
+									&lt;link rel=&quot;stylesheet&quot; href=&quot;masterslider/skins/light-2/style.css&quot; /&gt;
+								</pre>
+							</li>
+							<li>
+								<p>Specify skin class name to your slider element.</p>
+								<pre class="brush: html">
+									&lt;!-- masterslider --&gt;
+									&lt;div class="master-slider ms-skin-light-2" id="masterslider"&gt;
+										&lt;!-- slides goes here --&gt;
+									&lt;/div&gt;
+									&lt;!-- end of masterslider --&gt;
+								</pre>
+							</li>
+						</ol>
+					</p>
+					<h4>Skins:</h4>
+					<table class="table table-striped table-bordered table-hover">
+									<thead>
+										<tr>
+											<th style="width:300px"> </th>
+											<th style="width:120px">Name</th>
+											<th>Class Name</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/default.gif"></td>
+											<td>default</td>
+											<td>ms-skin-default</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-2.gif"></td>
+											<td>Light 2</td>
+											<td>ms-skin-light-2</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-3.gif"></td>
+											<td>Light 3</td>
+											<td>ms-skin-light-3</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-4.gif"></td>
+											<td>Light 4</td>
+											<td>ms-skin-light-4</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-5.gif"></td>
+											<td>Light 5</td>
+											<td>ms-skin-light-5</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-6.gif"></td>
+											<td>Light 6</td>
+											<td>ms-skin-light-6</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/l-6-r.gif"></td>
+											<td>Light 6 Round</td>
+											<td>ms-skin-light-6 ms-skin-round</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/cont.gif"></td>
+											<td>Contrast</td>
+											<td>ms-skin-contrast</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/b-1.gif"></td>
+											<td>Black 1</td>
+											<td>ms-skin-black-1</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/b-2.gif"></td>
+											<td>Black 2</td>
+											<td>ms-skin-black-2</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/b-2-r.gif"></td>
+											<td>Black 2 Round</td>
+											<td>ms-skin-black-2 ms-skin-round</td>
+										</tr>
+										<tr>
+											<td><img alt="skin" src="assets/images/skins/metro.gif"></td>
+											<td>Metro</td>
+											<td>ms-skin-metro</td>
+										</tr>
+									</tbody>
+								</table>
+				</article>
+				<article class="content-section" id="ease-func">
+					<h3><strong>Easing Functions</strong></h3>
+					<div class="alert alert-block">
+						<strong>Important:</strong> This slider needs jQuery easing plugin for old browsers. You can include it into your page like following (in head section)
+					</div>
+					<p>
+						<pre class="brush: html">
+						&lt;script src=&quot;//cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.3/jquery.easing.min.js&quot;&gt;&lt;/script&gt;</pre>
+					</p>
+					<h4> Supported Easing Functions </h4>
+					<table class="table table-striped table-bordered table-hover">
+						<thead>
+							<tr>
+								<th style="width:250px">Name</th>
+								<th>Example</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>linear</td>
+								<td><div class="easedemo" data-ease="linear"></div></td>
+							</tr>
+							<tr>
+								<td>easeInCubic</td>
+								<td><div class="easedemo" data-ease="easeInCubic"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutCubic</td>
+								<td><div class="easedemo" data-ease="easeOutCubic"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutCubic</td>
+								<td><div class="easedemo" data-ease="easeInOutCubic"></div></td>
+							</tr>
+							<tr>
+								<td>easeInCirc</td>
+								<td><div class="easedemo" data-ease="easeInCirc"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutCirc</td>
+								<td><div class="easedemo" data-ease="easeOutCirc"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutCirc</td>
+								<td><div class="easedemo" data-ease="easeInOutCirc"></div></td>
+							</tr>
+							<tr>
+								<td>easeInExpo</td>
+								<td><div class="easedemo" data-ease="easeInExpo"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutExpo</td>
+								<td><div class="easedemo" data-ease="easeOutExpo"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutExpo</td>
+								<td><div class="easedemo" data-ease="easeInOutExpo"></div></td>
+							</tr>
+							<tr>
+								<td>easeInQuad</td>
+								<td><div class="easedemo" data-ease="easeInQuad"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutQuad</td>
+								<td><div class="easedemo" data-ease="easeOutQuad"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutQuad</td>
+								<td><div class="easedemo" data-ease="easeInOutQuad"></div></td>
+							</tr>
+							<tr>
+								<td>easeInQuart</td>
+								<td><div class="easedemo" data-ease="easeInQuart"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutQuart</td>
+								<td><div class="easedemo" data-ease="easeOutQuart"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutQuart</td>
+								<td><div class="easedemo" data-ease="easeInOutQuart"></div></td>
+							</tr>
+							<tr>
+								<td>easeInQuint</td>
+								<td><div class="easedemo" data-ease="easeInQuint"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutQuint</td>
+								<td><div class="easedemo" data-ease="easeOutQuint"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutQuint</td>
+								<td><div class="easedemo" data-ease="easeInOutQuint"></div></td>
+							</tr>
+							<tr>
+								<td>easeInSine</td>
+								<td><div class="easedemo" data-ease="easeInSine"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutSine</td>
+								<td><div class="easedemo" data-ease="easeOutSine"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutSine</td>
+								<td><div class="easedemo" data-ease="easeInOutSine"></div></td>
+							</tr>
+							<tr>
+								<td>easeInBack</td>
+								<td><div class="easedemo" data-ease="easeInBack"></div></td>
+							</tr>
+							<tr>
+								<td>easeOutBack</td>
+								<td><div class="easedemo" data-ease="easeOutBack"></div></td>
+							</tr>
+							<tr>
+								<td>easeInOutBack</td>
+								<td><div class="easedemo" data-ease="easeInOutBack"></div></td>
+							</tr>
+
+						</tbody>
+					</table>
+					<hr/>
+				</article>
+				<article class="content-section float" id="embed-url" style="opacity: 1; position: relative; top: 0px; left: 0px; -webkit-transform: translateX(0px);">
+					<h3><strong>Finding YouTube/Viemo Embed URL</strong></h3>
+					<p>Open the video in YouTube/Vimeo, play video and right-click on it, select <code>Copy embed code</code> then paste the embed code in a text editor</p><br>
+					<img src="assets/images/screenshots/get-embed-code.png" height="514" width="859" alt="Get YouTube/Viemo Embed Code">
+					<hr><br>
+					<p>Now you can see video embed URL in embed code which specified as iframe src.</p><br>
+					<img src="assets/images/screenshots/embed-url.png" height="112" width="915" alt="Get YouTube/Viemo Embed URL">
+					<hr>
+					<p>Finally in this example your embed url is : <code>//www.youtube.com/embed/lEdC-oDYTVD</code></p><br><br>
+				</article>
+				<article class="content-section" id="rate">
+					<h3><strong>Rate Master Slider</strong></h3>
+					<p>Please login to your CodeCanyon account and navigate to your <a href="http://codecanyon.net/downloads" target="_blank">Downloads page</a> and rate item as shown below. <br>Thanks in advance!</p>
+					<img src="assets/images/rate-master-slider.gif" alt="I want rate Master Slider" />
+					<hr />
+				</article>
+				<article class="content-section float" id="support" style="opacity: 1; position: relative; top: 0px; left: 0px; -webkit-transform: translateX(0px);">
+					<h3><strong>Support</strong></h3>
+					<hr>
+
+					<h4>If you have any questions please follow these steps:</h4>
+					<ol>
+						<li>Please read item's <a href="http://masterslider.com/doc/wp" target="_blank">Documentation </a> </li>
+						<li>Take a look in our <a href="http://support.averta.net/envato/faq/" target="_blank">FAQ</a> page</li>
+						<li>Take a look in <a href="http://support.averta.net/envato/videos/" target="_blank">Video Tutorials</a> page</li>
+						<li>Still have questions(s)? <a href="http://support.averta.net/envato/wp-login.php?action=register" target="_blank" rel="nofollow">Create an Account</a> in <a href="http://support.averta.net/envato/support/" rel="nofollow">Support Forums</a> (<a href="http://i44.tinypic.com/311rr4h.jpg" rel="nofollow">Find your “Item Purchase Code”</a>)</li>
+						<li>Use search field at the top of support forum for similar topics</li>
+						<li>If you still didn't find your answers please post your question(s) in the item’s <a href="http://support.averta.net/envato/support/" target="_blank">support forum</a>
+						Our support staff are there to help you as soon as possible.</li>
+					</ol>
+					<br>
+					<strong>Why support forum?</strong>
+					<ul>
+						<li>You can upload images and insert code with code-highlighting.</li>
+						<li>It is organized and searchable (that makes support easier and faster)</li>
+					</ul>
+					<br>
+
+					<strong>Supporting our Items INCLUDES</strong>:
+					<ul>
+					  <li>Responding to questions or problems regarding our item and its features</li>
+					  <li>Fixing bugs and reported issues</li>
+					  <li>Providing updates to ensure compatibility with new software versions</li>
+					</ul>
+					<br>
+
+					<strong>Item support does NOT include</strong>:
+					<ul>
+					  <li>Customization and installation services</li>
+					  <li>Support for third party software and plug-ins</li>
+					</ul>
+					<br>
+					
+					<p><span class="label label-info">Important Note</span> We <strong>CAN NOT</strong> provide support via email.
+					Please ask your support related questions only in our <a href="http://support.averta.net/envato/support/" target="_blank">support forum</a>.</p>
+					<br>
+					<p><span class="label label-info">Important Note</span> For the fast troubleshooting, please send us detailed informations about the issue and make sure that you don't forget to send us your site url where you are using or want to use the item. Please note, that we cannot troubleshoot from screencast videos or screenshots.</p>
+
+				</article>
+				<article class="content-section" id="credits">
+					<h3><strong>Credits</strong></h3>
+					<ul>
+						<li><a href="http://www.designdeck.co.uk/a/169/T-Shirt-Psd-Collection-by-design-deck" target="_blank">http://www.designdeck.co.uk/a/169/T-Shirt-Psd-Collection-by-design-deck</a></li>
+						<li><a href="http://www.pixeden.com/psd-mock-up-templates/macbook-pro-retina-psd-mockup" target="_blank">http://www.pixeden.com/psd-mock-up-templates/macbook-pro-retina-psd-mockup</a></li>
+						<li><a href="http://dribbble.com/shots/1121719-PSD-Macbook-Air-Thunderbolt-Display-Freebie?list=buckets&tag=vector" target="_blank">http://dribbble.com/shots/1121719-PSD-Macbook-Air-Thunderbolt-Display-Freebie?list=buckets&amp;tag=vector</a></li>
+						<li><a href="http://www.flickr.com/photos/thomasleuthard/" target="_blank">http://www.flickr.com/photos/thomasleuthard/</a></li>
+						<li><a href="http://www.flickr.com/photos/trysil/" target="_blank">http://www.flickr.com/photos/trysil/</a></li>
+						<li><a href="http://www.flickr.com/photos/coryschmitz/" target="_blank">http://www.flickr.com/photos/coryschmitz/</a></li>
+						<li><a href="http://www.flickr.com/photos/seeminglee/" target="_blank">http://www.flickr.com/photos/seeminglee/</a></li>
+					</ul>
+					<hr />
+				</article>
+			</section>
+		</div><!-- end div .container -->
+		
+		<script src="assets/js/jquery-1.8.2.js"></script>
+		<script src="assets/js/jquery.easing.min.js"></script>
+		<script src="assets/js/averta.csstweener.min.js"></script>
+		<script src="syntax-highlighter/scripts/shCore.js"></script>
+		<script src="syntax-highlighter/scripts/shBrushXml.js"></script>
+		<script src="syntax-highlighter/scripts/shBrushCss.js"></script>
+		<script src="syntax-highlighter/scripts/shBrushJScript.js"></script>
+		<script src="assets/js/main.js"></script>
+	</body>
+</html>

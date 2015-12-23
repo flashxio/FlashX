@@ -1,0 +1,180 @@
+/*Job-Description
+------------------------------------*/
+.job-description {
+	padding-bottom: 30px;
+	position: relative;
+	background: #f9f9f9;
+	border-top: 1px solid #eee;
+}
+
+/*Visit*/
+.job-description .visit {
+	text-align: center;
+	margin-bottom: 30px;
+}
+
+.job-description .visit h2 {
+	font-size: 25px;
+	text-transform: uppercase;
+}
+
+/*Left-Inner*/
+.job-description .left-inner {
+	padding: 20px;
+	background: #fff;
+	position: relative;
+}
+
+.job-description i.position-top {
+	color: #777;
+	top: 10px;
+	left: 10px;
+	font-size: 18px;
+	min-width: 28px;
+	padding: 5px 4px;
+	position: absolute;
+	text-align: center;
+}
+
+.job-description i.position-top:hover {
+	color: #fff;
+	background: #585f69;
+}
+
+.job-description .left-inner img {
+	float: right;
+	width: 80px;
+	height: auto;
+	padding: 3px;
+	margin: 0 0 10px 10px;
+	border: 1px solid #eee;
+}
+
+.job-description .left-inner h3 {
+	margin: 0 0 5px;
+}
+
+.job-description .left-inner p.hex {
+	margin-bottom: 5px;
+}
+
+.job-description .star-vote {
+	float: right;
+	margin-right: 5px;
+	margin-left: 10px;
+}
+
+.job-description .star-vote li {
+	padding: 0;
+}
+
+/*Progresses*/
+.job-description .progression span {
+	float: right;
+	width: 150px;
+	margin: -8px 0 0 15px;
+}
+
+/*Right-Inner*/
+.job-description .right-inner {
+	padding: 20px;
+	background: #fff;
+}
+
+.job-description .right-inner img {
+	float: right;
+	width: 90px;
+	height: auto;
+	margin-left: 10px;
+}
+
+.job-description .right-inner .font-s {
+	font-size: 18px;
+}
+
+.job-description .right-inner hr {
+	margin: 15px 0;
+}
+
+/*P-chart-v2*/
+.job-description .p-chart {
+	overflow: hidden;
+}
+
+.job-description .p-chart h3 {
+	font-size: 16px;
+}
+
+.job-description .p-chart .circle {
+	float: right;
+	margin-left: 10px;
+}
+
+.job-description .p-chart .overflow-h li i,
+.job-description .p-chart .overflow-h li a {
+	color: #72c02c;
+}
+
+.job-description .p-chart .overflow-h li a {
+	font-size: 11px;
+}
+
+/*Circle in Responsive*/
+@media (max-width: 450px) {
+	.job-description .p-chart.col-xs-6 {
+		width: 100%;
+	}
+}
+
+/*Save-Job*/
+.job-description .save-job li {
+	padding: 2px 0;
+}
+
+.job-description .save-job i {
+	color: #555;
+	min-width: 25px;
+	text-align: center;
+}
+
+.job-description .save-job a {
+	color: #555;
+}
+
+.job-description .save-job a:hover {
+	color: #72c02c;
+}
+
+/*Overview*/
+.job-description .overview i {
+	color: #fff;
+	float: right;
+	min-width: 38px;
+	font-size: 20px;
+	padding: 10px 3px;
+	text-align: center;
+	margin-left: 10px;
+	background: #585f69;
+}
+
+/*People-Say*/
+.job-description .people-say img {
+	float: right;
+	width: 40px;
+	height: auto;
+	margin: 6px 0 0 10px;
+}
+
+.job-description .people-say .overflow-h span {
+	font-weight: 700;
+}
+
+.job-description .people-say .overflow-h p {
+	font-style: italic;
+	line-height: 1.2;
+}
+
+.job-description .people-say .overflow-h small {
+	text-align: left;
+	font-style: italic;
+}
