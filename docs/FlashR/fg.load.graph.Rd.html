@@ -1,0 +1,115 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Load a graph to FlashR.</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.load.graph"><tr><td>fg.load.graph</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Load a graph to FlashR.</h2>
+
+<h3>Description</h3>
+
+<p>Load a graph to FlashR from difference sources.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.load.graph(graph, index.file = NULL, graph.name = graph,
+  directed = TRUE, nthreads = 1)
+
+fg.load.igraph(graph, graph.name = paste("igraph-v", vcount(graph), "-e",
+  ecount(graph), sep = ""), nthreads = 1)
+
+fg.get.graph(graph.name)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The input graph file or the input iGraph object.</p>
+</td></tr>
+<tr valign="top"><td><code>index.file</code></td>
+<td>
+<p>The input index file for the graph. A user only needs
+to provide an index file if the input graph uses
+the FlashGraph format.</p>
+</td></tr>
+<tr valign="top"><td><code>graph.name</code></td>
+<td>
+<p>The graph name a user provides when a graph is
+loaded to FlashR.</p>
+</td></tr>
+<tr valign="top"><td><code>directed</code></td>
+<td>
+<p>Indicate whether the input graph is directed. This is
+only used if the input graph use the edge list format.</p>
+</td></tr>
+<tr valign="top"><td><code>nthreads</code></td>
+<td>
+<p>The number of threads used to construct a graph to
+the FlashGraph format.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>&lsquo;fg.load.graph&rsquo; loads a graph from the following sources: an edge list
+file in the text format and an adjacency list file in the FlashGraph format.
+</p>
+<p>&lsquo;fg.load.igraph&rsquo; loads a graph from an iGraph object.
+</p>
+<p>&lsquo;fg.get.graph&rsquo; gets a FlashGraph object that references a graph
+that has been loaded to FlashR.
+</p>
+<p>Once a graph is loaded to FlashR, FlashR will maintain it.
+A user can use fg.list.graphs() to list all graphs that have been loaded
+FlashR and use fg.get.graph() to get a reference to a graph. A user
+should provide a name for the graph so later on he or she will be able
+to identify the graph more easily. By default, the graph name is
+the input graph file name.
+</p>
+<p>A graph in the FlashGraph format is stored in two files: a FlashGraph
+adjacency list file and a FlashGraph index file. When a user provides
+an index file, the input graph file is considered as an adjacency list
+file, otherwise, an edge list file.
+</p>
+<p>When loading a graph from an edge list file, FlashR will construct
+it into the FlashGraph format. A user needs to indicate whether the edge
+list represents a directed graph. A user can also use multiple threads
+to accelerate constructing a graph.
+</p>
+<p>When loading a graph from iGraph, FlashR
+will construct it into the FlashGraph format. A user can use multiple
+threads to accelerate graph construction.
+</p>
+
+
+<h3>Value</h3>
+
+<p>a FlashGraph object.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+fg &lt;- fg.load.graph("edge_list.txt")
+fg &lt;- fg.load.graph("graph.adj", "graph.index")
+ig &lt;- read.graph("edge_list.txt")
+fg &lt;- fg.load.igraph(ig)
+</pre>
+
+
+</body></html>

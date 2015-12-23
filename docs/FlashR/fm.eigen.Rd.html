@@ -1,0 +1,105 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Eigensolver</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fm.eigen"><tr><td>fm.eigen</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Eigensolver</h2>
+
+<h3>Description</h3>
+
+<p>Compute eigenvalues/vectors of the adjacency matrix of an undirected graph.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fm.eigen(func, extra = NULL, sym = TRUE, options = NULL,
+  env = parent.frame())
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>func</code></td>
+<td>
+<p>The function to perform the matrix-vector multiplication.</p>
+</td></tr>
+<tr valign="top"><td><code>extra</code></td>
+<td>
+<p>Extra argument to supply to &lsquo;func&rsquo;.</p>
+</td></tr>
+<tr valign="top"><td><code>sym</code></td>
+<td>
+<p>Logical scalar, whether the input matrix is symmetric.</p>
+</td></tr>
+<tr valign="top"><td><code>options</code></td>
+<td>
+<p>Options to Anasazi.
+</p>
+<p>The &lsquo;options&rsquo; argument specifies what kind of computation to perform.
+It is a list with the following members, which correspond directly to
+Anasazi parameters:
+</p>
+<p>nev Numeric scalar. The number of eigenvalues to be computed.
+</p>
+<p>solver String. The name of the eigensolver to solve the eigenproblems.
+Currently, it supports three eigensolvers: KrylovSchur,
+Davidson and LOBPCG. KrylovSchur is the default eigensolver.
+</p>
+<p>tol Numeric scalar. Stopping criterion: the relative accuracy of
+the Ritz value is considered acceptable if its error is less
+than &lsquo;tol&rsquo; times its estimated value.
+</p>
+<p>block_size Numeric scalar. The eigensolvers use a block extension of an
+eigensolver algorithm. The block size determines the number
+of the vectors that operate together.
+</p>
+<p>num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
+</p>
+<p>which Specify which eigenvalues/vectors to compute, character
+constant with exactly two characters.
+Possible values for symmetric input matrices:
+</p>
+
+<ul>
+<li><p>&quot;LA&quot;Compute &lsquo;nev&rsquo; largest (algebraic) eigenvalues.
+</p>
+</li>
+<li><p>&quot;SA&quot;Compute &lsquo;nev&rsquo; smallest (algebraic) eigenvalues.
+</p>
+</li>
+<li><p>&quot;LM&quot;Compute &lsquo;nev&rsquo; largest (in magnitude) eigenvalues.
+</p>
+</li>
+<li><p>&quot;SM&quot;Compute &lsquo;nev&rsquo; smallest (in magnitude) eigenvalues.
+</p>
+</li></ul>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>This eigensolver is powered by Anasazi package of Trilinos.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A named list with the following members:
+values: Numeric vector, the desired eigenvalues.
+vectors: Numeric matrix, the desired eigenvectors as columns.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+</body></html>

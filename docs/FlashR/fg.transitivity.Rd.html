@@ -1,0 +1,61 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Transitivity of a graph</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.transitivity"><tr><td>fg.transitivity</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Transitivity of a graph</h2>
+
+<h3>Description</h3>
+
+<p>Transitivity measures the probability that the adjacent vertices
+of a vertex are connected. This is sometimes also called the clustering
+coefficient.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.transitivity(graph, type = c("global", "local"))
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>type</code></td>
+<td>
+<p>The type of the transitivity measure</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>There are essentially two types of transitivity measures, one is
+a vertex-level, the other a graph level property. This function can compute
+both types of transitivity measures and works for both directed and
+undirected graphs.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A numeric vector that contains transitivity of each vertex if
+&lsquo;type&rsquo; is &quot;local&quot; and a single value if &lsquo;type&rsquo; is &quot;global&quot;.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+</body></html>

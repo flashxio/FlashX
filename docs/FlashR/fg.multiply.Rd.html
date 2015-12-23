@@ -1,0 +1,76 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Sparse matrix multiplication</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.multiply"><tr><td>fg.multiply</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Sparse matrix multiplication</h2>
+
+<h3>Description</h3>
+
+<p>Multiply a sparse matrix with a dense vector or a dense matrix.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.multiply(graph, vec, transpose = FALSE)
+
+fg.multiply.matrix(graph, m, transpose = FALSE)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>vec</code></td>
+<td>
+<p>A numueric vector</p>
+</td></tr>
+<tr valign="top"><td><code>transpose</code></td>
+<td>
+<p>Indicate whether or not to multiply with the transpose of
+the matrix. It is ignored by an undirected graph.</p>
+</td></tr>
+<tr valign="top"><td><code>m</code></td>
+<td>
+<p>A numeric dense matrix.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>&lsquo;fg.multiply&rsquo; multiplies a sparse matrix with a dense vector.
+</p>
+<p>&lsquo;fg.multiply.matrix&rsquo; multiplies a sparse matrix with a dense matrix.
+</p>
+<p>Note that the sparse matrix is represented by a graph. A symmetric matrix
+is represented by an undirected graph and an asymmetric matrix is
+represented by a directed graph. For an asymmetric matrix, we can multiply
+the vector with the transpose of the matrix without really transposing
+the matrix. Right now it only supports multiplication on the adjacency
+matrix of the graph.
+</p>
+
+
+<h3>Value</h3>
+
+<p>&lsquo;fg.multiply&rsquo; returns a numeric vector and &lsquo;fg.multiply.matrix&rsquo;
+returns a numeric dense matrix.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+</body></html>

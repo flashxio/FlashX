@@ -1,0 +1,73 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Load a sparse matrix to FlashR.</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fm.get.matrix"><tr><td>fm.get.matrix</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Load a sparse matrix to FlashR.</h2>
+
+<h3>Description</h3>
+
+<p>Load a sparse matrix to FlashR from difference sources.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fm.get.matrix(fg)
+
+fm.load.matrix(mat, index, t.mat = NULL, t.index = NULL, in.mem = TRUE)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>fg</code></td>
+<td>
+<p>A FlashGraph object.</p>
+</td></tr>
+<tr valign="top"><td><code>mat.file</code></td>
+<td>
+<p>The file that stores the sparse matrix.</p>
+</td></tr>
+<tr valign="top"><td><code>index.file</code></td>
+<td>
+<p>The file that stores the index of the sparse matrix.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>&lsquo;fm.get.matrix&rsquo; gets a FlashMatrix matrix that references a matrix
+represented by a FlashGraph object.
+</p>
+<p>&lsquo;fm.load.matrix&rsquo; loads a FlashMatrix matrix from files.
+The matrix in the file is in the FlashMatrix format.
+</p>
+
+
+<h3>Value</h3>
+
+<p>a FlashMatrix matrix.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+fg &lt;- fg.load.graph("graph.adj", "graph.index")
+fm &lt;- fm.get.matrix(fg)
+</pre>
+
+
+</body></html>

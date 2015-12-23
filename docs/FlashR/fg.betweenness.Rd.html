@@ -1,0 +1,60 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Vertex betweenness centrality.</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.betweenness"><tr><td>fg.betweenness</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Vertex betweenness centrality.</h2>
+
+<h3>Description</h3>
+
+<p>The vertex betweenness centrality can be defined as the
+number of geodesics (shortest paths) going through a vertex.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.betweenness(fg, vids = 0:(fg$vcount - 1))
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>fg</code></td>
+<td>
+<p>The FlashGraph object.</p>
+</td></tr>
+<tr valign="top"><td><code>vids</code></td>
+<td>
+<p>A vector of vertex IDs. Default runs it on the entire
+graph.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A vector with betweenness centrality values for all vertices
+with respect to 'vids'.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Disa Mhembere &lt;disa@jhu.edu&gt;
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+fg &lt;- fg.load.graph("edge_list.txt")
+res &lt;- fg.betweenness(fg, c(1,10))
+</pre>
+
+
+</body></html>

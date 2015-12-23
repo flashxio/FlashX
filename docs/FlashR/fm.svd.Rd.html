@@ -1,0 +1,71 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Compute the singular-value decomposition of a large sparse...</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fm.svd"><tr><td>fm.svd</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Compute the singular-value decomposition of a large sparse matrix.</h2>
+
+<h3>Description</h3>
+
+<p>Compute the singular-value decomposition of a large sparse matrix.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fm.svd(x, nu, nv, tol = 1e-08)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>x</code></td>
+<td>
+<p>a FlashMatrixR object</p>
+</td></tr>
+<tr valign="top"><td><code>nu</code></td>
+<td>
+<p>the number of left singluar vectors to be computed.</p>
+</td></tr>
+<tr valign="top"><td><code>nv</code></td>
+<td>
+<p>the number of right singluar vectors to be computed.</p>
+</td></tr>
+<tr valign="top"><td><code>tol</code></td>
+<td>
+<p>Stopping criterion: the relative accuracy of the Ritz value
+is considered acceptable if its error is less than 'tol' times its estimated
+value. If this is set to zero then machine precision is used.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>Returns a list with three entries
+</p>
+
+<ul>
+<li><p>d max(nu, nv) approximate singular values
+</p>
+</li>
+<li><p>u nu approximate left singular vectors (only when right_only=FALSE)
+</p>
+</li>
+<li><p>v nv approximate right singular vectors
+</p>
+</li></ul>
+
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+</body></html>

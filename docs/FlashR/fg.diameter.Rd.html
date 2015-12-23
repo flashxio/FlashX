@@ -1,0 +1,71 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Diameter estimation</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.diameter"><tr><td>fg.diameter</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Diameter estimation</h2>
+
+<h3>Description</h3>
+
+<p>Estimate the diameter of a graph, the longest distance between two vertices
+in a graph.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.diameter(graph, directed = FALSE)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>directed</code></td>
+<td>
+<p>Indicates whether or not to respect the direction of edges
+in a graph when traversing the graph. It is ignored for
+undirected graphs.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>This implementation uses the double sweep method described in the paper
+below to estimate the lower bound of the diameter.
+</p>
+<p>Cl茅mence Magnienand Matthieu Latapy and Michel Habib: Fast computation of
+empirically tight bounds for the diameter of massive graphs, Journal of
+Experimental Algorithmics (JEA), 2009
+</p>
+
+
+<h3>Value</h3>
+
+<p>A single number
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+<h3>References</h3>
+
+<p>Cl茅mence Magnienand Matthieu Latapy and Michel Habib: Fast computation of
+empirically tight bounds for the diameter of massive graphs, Journal of
+Experimental Algorithmics (JEA), 2009
+</p>
+
+
+</body></html>

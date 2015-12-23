@@ -1,0 +1,69 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Generate an induced subgraph</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.subgraph"><tr><td>fg.subgraph</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Generate an induced subgraph</h2>
+
+<h3>Description</h3>
+
+<p>Generate an induced subgraph that contains the specified vertices from
+the input given graph.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.fetch.subgraph.igraph(graph, vertices)
+
+fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""),
+  compress = TRUE)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>vertices</code></td>
+<td>
+<p>A numeric vector that contains the ids of vertices in
+the induced subgraph.</p>
+</td></tr>
+<tr valign="top"><td><code>name</code></td>
+<td>
+<p>The name of the FlashGraph object.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>&lsquo;fg.fetch.subgraph.igraph&rsquo; generates the induced subgraph and converts
+it into an iGraph object
+</p>
+<p>&lsquo;fg.fetch.subgraph&rsquo; generates the induced subgraph and returns
+a FlashGraph object.
+</p>
+
+
+<h3>Value</h3>
+
+<p>&lsquo;fg.fetch.subgraph.igraph&rsquo; returns an iGraph object,
+&lsquo;fg.fetch.subgraph&rsquo; returns a FlashGraph object
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+</body></html>

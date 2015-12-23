@@ -1,0 +1,71 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Locality statistic</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.local.scan"><tr><td>fg.local.scan</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Locality statistic</h2>
+
+<h3>Description</h3>
+
+<p>Compute locality statistic of vertices in a graph.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.topK.scan(graph, order = 1, K = 1)
+
+fg.local.scan(graph, order = 1)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>order</code></td>
+<td>
+<p>An integer scalar, the size of the local neighborhood for
+each vertex. Should be non-negative.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>&lsquo;fg.topK.scan&rsquo; finds the top K vertices with the largest locality
+statistics in a graph and computes their locality statistic.
+</p>
+<p>&lsquo;fg.local.scan&rsquo; computes locality statistic of each vertex in a graph.
+</p>
+<p>Locality statistic is defined as the number of edges in the neighborhood
+of a vertex.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A numeric vector that contains locality statistic of each vertex.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+<h3>References</h3>
+
+<p>C.E. Priebe, J.M. Conroy, D.J. Marchette, and Y. Park, Scan Statistics on
+Enron Graphs,&quot; Computational and Mathematical Organization Theory, 2005.
+</p>
+
+
+</body></html>

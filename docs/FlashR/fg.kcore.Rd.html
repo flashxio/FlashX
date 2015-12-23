@@ -1,0 +1,58 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: K-core decomposition of a graph.</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.kcore"><tr><td>fg.kcore</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>K-core decomposition of a graph.</h2>
+
+<h3>Description</h3>
+
+<p>The k-core of graph is a maximal subgraph in which each vertex has
+at least degree k. A vertex belongs to the k-th core if has degree &gt;= k
+when all connected vertices with degree &lt; k are recursively deleted.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.kcore(graph, k.start = 2, k.end = 10)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>graph</code></td>
+<td>
+<p>The FlashGraph object</p>
+</td></tr>
+<tr valign="top"><td><code>k.start</code></td>
+<td>
+<p>The lowest core that should be computed. Must be &gt;= 2.</p>
+</td></tr>
+<tr valign="top"><td><code>k.end</code></td>
+<td>
+<p>The highest core that should be computed. Must be &gt;= 2.
+default is 10.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A numeric vector that contains the core of each
+vertex up to 'k.end'. Vertices in cores higher than
+'k.end' will have entries with '-1' as their core.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Disa Mhembere &lt;disa@jhu.edu&gt;
+</p>
+
+
+</body></html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Perform semi-extenal memory k-means clustering on a data...</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.sem.kmeans"><tr><td>fg.sem.kmeans</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Perform semi-extenal memory k-means clustering on a data matrix in FG format.</h2>
+
+<h3>Description</h3>
+
+<p>Assign each row of a matrix to a cluster denoted by a numeric. The clusters
+are based on the distance metric of each row to one another. The assigned
+cluster will have the smallest distance from the cluster center mean.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.sem.kmeans(mat, k, max.iters = 10, init = c("random", "forgy",
+  "kmeanspp"), tol = -1)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>mat</code></td>
+<td>
+<p>A numeric matrix of data in FG format.</p>
+</td></tr>
+<tr valign="top"><td><code>k</code></td>
+<td>
+<p>The number of clusters.</p>
+</td></tr>
+<tr valign="top"><td><code>max.iters</code></td>
+<td>
+<p>The maximum number of iterations allowed.</p>
+</td></tr>
+<tr valign="top"><td><code>init</code></td>
+<td>
+<p>The form of initialization to use when the algorithm begins.
+The default is &quot;forgy&quot;. For a desciption of each see:
+http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.</p>
+</td></tr>
+<tr valign="top"><td><code>tol</code></td>
+<td>
+<p>The tolerance for convergence. Between 0 and 1 and is the minimum fraction
+of cluster changes necessary to cause non-convergence. Default is -1 which
+represents no cluster changes.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A named list with the following members:
+iters: The number of (outer) iterations performed.
+centers: A matrix of cluster centers.
+cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+sizes: The number of points in each cluster.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Disa Mhembere &lt;disa@jhu.edu&gt;
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+num.clusts &lt;- 5
+mat &lt;- fg.load.graph("mat-adj", "mat-index") # TODO: how to load
+kms &lt;- fg.kmeans(mat, num.clusts)
+</pre>
+
+
+</body></html>

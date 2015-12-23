@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Perform spectral clustering</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for fg.spectral"><tr><td>fg.spectral</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Perform spectral clustering</h2>
+
+<h3>Description</h3>
+
+<p>Spectral clustering partitions an undirected graph into k groups based on
+an embedding of the graph, which computes eigenvectors from a variant
+of the adjacency matrix of the graph. Spectral clustering runs
+KMeans clustering on eigenvectors.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+fg.spectral.clusters(fg, k, ase)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>fg</code></td>
+<td>
+<p>The FlashGraph object of the undirected graph.</p>
+</td></tr>
+<tr valign="top"><td><code>k</code></td>
+<td>
+<p>The number of clusters.</p>
+</td></tr>
+<tr valign="top"><td><code>ase</code></td>
+<td>
+<p>The function computes spectral embedding and generates
+eigenvectors.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A vector of integers (from '1:k') indicating the cluster to which
+each vertex belongs to.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Da Zheng &lt;dzheng5@jhu.edu&gt;
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+fg &lt;- fg.load.graph("edge_list.txt")
+res &lt;- fg.spectral.clusters(fg, 10)
+</pre>
+
+
+</body></html>
