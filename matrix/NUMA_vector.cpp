@@ -421,7 +421,7 @@ matrix_store::ptr NUMA_vec_store::conv2mat(size_t nrow, size_t ncol, bool byrow)
 	else {
 		assert(nrow == 1 && !byrow);
 		NUMA_row_tall_matrix_store::ptr tmp = NUMA_row_tall_matrix_store::create(
-				data, nrow, ncol, mapper, get_type());
+				data, ncol, nrow, mapper, get_type());
 		mat = NUMA_col_wide_matrix_store::create_transpose(*tmp);
 	}
 	return mat;
