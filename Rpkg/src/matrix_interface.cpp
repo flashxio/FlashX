@@ -1234,11 +1234,16 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
 RcppExport SEXP R_FM_read_obj(SEXP pfile)
 {
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
-	detail::mem_matrix_store::ptr mat = detail::mem_matrix_store::load(file_name);
-	if (mat == NULL)
+	detail::matrix_store::ptr store = detail::mem_matrix_store::load(file_name);
+	if (store == NULL)
 		return R_NilValue;
-	else
-		return create_FMR_matrix(dense_matrix::create(mat), "");
+	else {
+		int num_nodes = matrix_conf.get_num_nodes();
+		dense_matrix::ptr mat = dense_matrix::create(store);
+		if (num_nodes > 1)
+			mat = mat->conv_store(true, num_nodes);
+		return create_FMR_matrix(mat, "");
+	}
 }
 
 class R_spm_function: public eigen::spm_function
