@@ -18,33 +18,6 @@
 # This file contains the FlashR functions implemented with
 # the FlashR functions in flashmatrix.R.
 
-#' Maxima and Minima
-#'
-#' Returns the (parallel) maxima and minima of the input values.
-#'
-#' `fm.pmin2' and `fm.pmax2' works on two input vectors and returns
-#' return a single vector/matrix giving the 'parallel' maxima (or minima) of
-#' the vectors/matrices. The first element of the result is the maximum (minimum)
-#' of the first elements of all the arguments, the second element of
-#' the result is the maximum (minimum) of the second elements of all
-#' the arguments and so on.
-#'
-#' @param o1 the input vector/matrix.
-#' @param o2 the input vector/matrix.
-#' @return a vector/matrix.
-#' @name minmax
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.pmin2 <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.min)
-}
-
-#' @name minmax
-fm.pmax2 <- function(o1, o2)
-{
-	fm.mapply2(o1, o2, fm.bo.max)
-}
-
 setMethod("+", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 		  fm.mapply2.fm(e1, e2, fm.bo.add))
 setMethod("+", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
@@ -286,6 +259,30 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 
 fm.cls <- list("fm", "fmV")
 
+setGeneric("pmax", signature="...")
+setGeneric("pmin", signature="...")
+
+fm.mapply.list <- function(data, FUN, na.rm)
+{
+	n <- length(data)
+	res <- data[[1]]
+	if (n > 1) {
+		for (arg in data[2:n]) {
+			if (class(res) == class(arg))
+				res <- fm.mapply2(res, arg, FUN)
+			else if (class(res) == "fm" && class(arg) == "fmV")
+				res <- fm.mapply.col(res, arg, FUN)
+			# We assume that FUN is commutative.
+			# This function is used for pmin/pmax, so it's fine.
+			else if (class(res) == "fmV" && class(arg) == "fm")
+				res <- fm.mapply.col(arg, res, FUN)
+			else
+				stop("unknown arguments")
+		}
+	}
+	res
+}
+
 # Aggregation on a FlashMatrixR vector/matrix.
 for (cl in fm.cls) {
 	# TODO we need to handle na.rm for all of the functions here properly.
@@ -318,6 +315,18 @@ for (cl in fm.cls) {
 					  res <- max(res, fm.agg(arg, fm.bo.max))
 			  }
 			  res
+		  })
+	setMethod("pmin", cl, function(..., na.rm = FALSE) {
+			  args <- list(...)
+			  if (length(args) == 0)
+				  stop("no arguments")
+			  fm.mapply.list(args, fm.bo.min, na.rm)
+		  })
+	setMethod("pmax", cl, function(..., na.rm = FALSE) {
+			  args <- list(...)
+			  if (length(args) == 0)
+				  stop("no arguments")
+			  fm.mapply.list(args, fm.bo.max, na.rm)
 		  })
 	setMethod("sd", cl, function(x, na.rm) {
 			  n <- length(x)
