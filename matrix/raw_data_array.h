@@ -211,6 +211,9 @@ public:
 	chunked_raw_array deep_copy() const;
 };
 
+void init_memchunk_reserve(int num_nodes);
+void destroy_memchunk_reserve();
+
 }
 
 }

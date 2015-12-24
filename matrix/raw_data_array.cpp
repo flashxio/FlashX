@@ -151,6 +151,9 @@ bool simple_raw_array::set_sub_arr(off_t start, const char *buf, size_t size)
 	return true;
 }
 
+namespace
+{
+
 /*
  * We need the memory chunk size to be at least a certain size.
  * We partition a matrix in one dimension (either horizontally or vertically).
@@ -160,6 +163,98 @@ bool simple_raw_array::set_sub_arr(off_t start, const char *buf, size_t size)
  * a tall dense matrix with very few columns.
  */
 static const size_t ARR_CHUNK_SIZE = 64 * 1024 * 1024;
+
+typedef std::vector<char *> chunk_set_t;
+
+/*
+ * To avoid the overhead of memory allocation, we keep some memory chunks that
+ * have been populated with pages. These memory chunks were allocated previously.
+ * Instead of deallocating them after they are used, we keep them to serve
+ * next memory allocation requests. All memory chunks have the same size.
+ *
+ * smp_reserved_chunks maintains memory chunks without associating to any NUMA
+ * node.
+ * reserved_chunks maintains memory chunks for NUMA nodes. Each entry maintains
+ * memory chunks in the corresponding NUMA node.
+ * I would expect smp_reserved_chunks has very few memory chunks because
+ * this scheme is mainly used for NUMA data containers.
+ */
+static std::vector<chunk_set_t> reserved_chunks;
+static chunk_set_t smp_reserved_chunks;
+
+static std::atomic<size_t> reserved_bytes;
+static std::atomic<size_t> smp_reserved_bytes;
+
+class smp_reserved_deleter
+{
+public:
+	void operator()(char *addr) {
+		smp_reserved_chunks.push_back(addr);
+	}
+};
+
+class NUMA_reserved_deleter
+{
+	int node_id;
+public:
+	NUMA_reserved_deleter(int node_id) {
+		this->node_id = node_id;
+	}
+	void operator()(char *addr) {
+		reserved_chunks[node_id].push_back(addr);
+	}
+};
+
+static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
+{
+	if (num_bytes != ARR_CHUNK_SIZE)
+		return memalloc_node(node_id, false, num_bytes);
+	if (node_id < 0 && !smp_reserved_chunks.empty()) {
+		auto ret = smp_reserved_chunks.back();
+		smp_reserved_chunks.pop_back();
+		return std::shared_ptr<char>(ret, smp_reserved_deleter());
+	}
+	else if (node_id < 0) {
+		smp_reserved_bytes += num_bytes;
+		return std::shared_ptr<char>(
+				(char *) memalign(PAGE_SIZE, num_bytes), smp_reserved_deleter());
+	}
+
+	assert((size_t) node_id < reserved_chunks.size());
+	if (!reserved_chunks[node_id].empty()) {
+		auto ret = reserved_chunks[node_id].back();
+		reserved_chunks[node_id].pop_back();
+		return std::shared_ptr<char>(ret, NUMA_reserved_deleter(node_id));
+	}
+	else {
+		reserved_bytes += num_bytes;
+		void *addr = numa_alloc_onnode(num_bytes, node_id);
+		return std::shared_ptr<char>((char *) addr, NUMA_reserved_deleter(node_id));
+	}
+}
+
+}
+
+void destroy_memchunk_reserve()
+{
+	BOOST_LOG_TRIVIAL(error) << boost::format(
+			"reserved %ld bytes are associated with NUMA nodes and %ld bytes aren't\n")
+		% reserved_bytes.load() % smp_reserved_bytes.load();
+	for (size_t i = 0; i < smp_reserved_chunks.size(); i++)
+		free(smp_reserved_chunks[i]);
+	for (size_t i = 0; i < reserved_chunks.size(); i++)
+		for (size_t j = 0; j < reserved_chunks[i].size(); j++)
+			numa_free(reserved_chunks[i][j], ARR_CHUNK_SIZE);
+	reserved_bytes = 0;
+	smp_reserved_bytes = 0;
+}
+
+void init_memchunk_reserve(int num_nodes)
+{
+	destroy_memchunk_reserve();
+	if (num_nodes > 0)
+		reserved_chunks.resize(num_nodes);
+}
 
 chunked_raw_array::chunked_raw_array(size_t num_bytes, size_t block_size,
 		int node_id): raw_array(num_bytes, node_id)
@@ -176,14 +271,12 @@ chunked_raw_array::chunked_raw_array(size_t num_bytes, size_t block_size,
 			new std::vector<mem_chunk_t>(num_chunks));
 	size_t remain_size = num_bytes;
 	for (size_t i = 0; i < num_chunks; i++) {
-		data->at(i).first = memalloc_node(node_id, false, ARR_CHUNK_SIZE);
+		data->at(i).first = memchunk_alloc(node_id, ARR_CHUNK_SIZE);
 		assert(remain_size > 0);
 		data->at(i).second = std::min(chunk_data_size, remain_size);
 		assert(data->at(i).second <= ARR_CHUNK_SIZE);
 		remain_size -= data->at(i).second;
 	}
-	printf("actual bytes: %ld, alloc mem: %ld\n", num_bytes,
-			ARR_CHUNK_SIZE * num_chunks);
 }
 
 chunked_raw_array chunked_raw_array::deep_copy() const

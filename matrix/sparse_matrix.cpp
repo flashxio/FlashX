@@ -974,6 +974,7 @@ void init_flash_matrix(config_map::ptr configs)
 		detail::local_mem_buffer::init();
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);
+		detail::init_memchunk_reserve(num_nodes);
 
 		try {
 			safs::init_io_system(configs);
@@ -989,6 +990,7 @@ void destroy_flash_matrix()
 	long count = init_count.fetch_sub(1);
 	assert(count > 0);
 	if (count == 1) {
+		detail::destroy_memchunk_reserve();
 		detail::local_mem_buffer::destroy();
 		detail::mem_thread_pool::destroy();
 		safs::destroy_io_system();
