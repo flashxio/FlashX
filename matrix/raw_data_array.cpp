@@ -20,6 +20,8 @@
 #include <numa.h>
 #include <malloc.h>
 
+#include <boost/format.hpp>
+
 #include "thread.h"
 
 #include "mem_worker_thread.h"
