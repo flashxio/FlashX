@@ -70,6 +70,7 @@ matrix_stats_t matrix_stats;
 
 void matrix_stats_t::print_diff(const matrix_stats_t &orig) const
 {
+#ifdef MATRIX_DEBUG
 	if (this->mem_read_bytes != orig.mem_read_bytes)
 		BOOST_LOG_TRIVIAL(info) << "in-mem read "
 			<< (this->mem_read_bytes - orig.mem_read_bytes) << " bytes";
@@ -86,6 +87,7 @@ void matrix_stats_t::print_diff(const matrix_stats_t &orig) const
 		BOOST_LOG_TRIVIAL(info) << "multiply "
 			<< (this->double_multiplies - orig.double_multiplies)
 			<< " double float points";
+#endif
 }
 
 }
