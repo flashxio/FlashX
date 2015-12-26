@@ -177,9 +177,12 @@ class chunked_raw_array: public raw_array
 	std::shared_ptr<std::vector<mem_chunk_t> > data;
 	// The actual number of bytes stored in a chunk.
 	size_t chunk_data_size;
+	// The block size that data is guaranteed to be contiguous.
+	size_t contig_block_size;
 public:
 	chunked_raw_array() {
 		chunk_data_size = 0;
+		contig_block_size = 0;
 	}
 
 	chunked_raw_array(size_t num_bytes, size_t block_size, int node_id);
@@ -196,6 +199,24 @@ public:
 		return data->at(first_chunk).first.get() + (start % chunk_data_size);
 	}
 
+	char *get_raw(off_t start, off_t end) {
+		off_t first_chunk = start / chunk_data_size;
+		off_t last_chunk = (end - 1) / chunk_data_size;
+		// The data in the range isn't in the same memory chunk.
+		if (first_chunk != last_chunk)
+			return NULL;
+		return data->at(first_chunk).first.get() + (start % chunk_data_size);
+	}
+
+	const char *get_raw(off_t start, off_t end) const {
+		off_t first_chunk = start / chunk_data_size;
+		off_t last_chunk = (end - 1) / chunk_data_size;
+		// The data in the range isn't in the same memory chunk.
+		if (first_chunk != last_chunk)
+			return NULL;
+		return data->at(first_chunk).first.get() + (start % chunk_data_size);
+	}
+
 	std::pair<const char *, size_t> get_chunk(size_t off) const {
 		return std::pair<const char *, size_t>(data->at(off).first.get(),
 				data->at(off).second);
@@ -206,6 +227,10 @@ public:
 	}
 	size_t get_num_chunks() const {
 		return data->size();
+	}
+
+	size_t get_contig_block_size() const {
+		return contig_block_size;
 	}
 
 	chunked_raw_array deep_copy() const;

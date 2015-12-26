@@ -110,6 +110,10 @@ class NUMA_row_tall_matrix_store: public NUMA_matrix_store
 	NUMA_row_tall_matrix_store(const std::vector<detail::chunked_raw_array> &data,
 			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
 			const scalar_type &type);
+
+	bool get_portion_check(size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+
 public:
 	typedef std::shared_ptr<NUMA_row_tall_matrix_store> ptr;
 

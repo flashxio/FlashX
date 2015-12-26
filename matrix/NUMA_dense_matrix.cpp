@@ -94,10 +94,12 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 	this->data = data;
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
 	assert(data.size() == mapper.get_num_nodes());
+	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
 	for (size_t node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
 		assert(data[node_id].get_node_id() == (size_t) node_id);
 		assert(data[node_id].get_num_bytes()
 				>= local_lens[node_id] * ncol * get_entry_size());
+		assert(data[node_id].get_contig_block_size() == block_bytes);
 	}
 }
 
@@ -107,7 +109,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
-	size_t block_bytes = mapper.get_range_size() * ncol * get_entry_size();
+	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
 	for (int node_id = 0; node_id < num_nodes; node_id++)
 		data[node_id] = detail::chunked_raw_array(
 				local_lens[node_id] * ncol * get_entry_size(), block_bytes,
@@ -131,10 +133,10 @@ const char *NUMA_row_tall_matrix_store::get_row(size_t row_idx) const
 const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,
 		size_t row_end) const
 {
-	if (mapper.get_logical_range_id(row_start)
-			!= mapper.get_logical_range_id(row_end - 1)) {
+	if (ROUND(row_start, mem_matrix_store::CHUNK_SIZE)
+			!= ROUND((row_end - 1), mem_matrix_store::CHUNK_SIZE)) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same range") % row_start % row_end;
+				"[%1%, %2%) isn't in the same mem chunk") % row_start % row_end;
 		return NULL;
 	}
 	return get_row(row_start);
@@ -142,10 +144,10 @@ const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,
 
 char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
 {
-	if (mapper.get_logical_range_id(row_start)
-			!= mapper.get_logical_range_id(row_end - 1)) {
+	if (ROUND(row_start, mem_matrix_store::CHUNK_SIZE)
+			!= ROUND((row_end - 1), mem_matrix_store::CHUNK_SIZE)) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same range") % row_start % row_end;
+				"[%1%, %2%) isn't in the same mem chunk") % row_start % row_end;
 		return NULL;
 	}
 	return (char *) get_row(row_start);
@@ -209,64 +211,96 @@ matrix_store::const_ptr NUMA_col_wide_matrix_store::transpose() const
 	return matrix_store::const_ptr(new NUMA_row_tall_matrix_store(store));
 }
 
-local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols) const
+bool NUMA_row_tall_matrix_store::get_portion_check(size_t start_row,
+		size_t start_col, size_t num_rows, size_t num_cols) const
 {
 	if (start_row + num_rows > get_num_rows()) {
 		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
 	// We have to retrieve the entire rows.
 	if (num_cols != get_num_cols() || start_col != 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
 
-	// Let's only count read bytes from the const version of get_portion.
-	detail::matrix_stats.inc_read_bytes(
-			num_rows * num_cols * get_entry_size(), true);
 	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
 	size_t range_size = mapper.get_range_size();
 	if (ROUND(start_row, range_size)
 			!= ROUND(start_row + num_rows - 1, range_size)) {
 		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
-	auto phy_loc = mapper.map2physical(start_row);
-	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-				get_row(start_row), start_row, start_col, num_rows, num_cols,
-				get_type(), phy_loc.first));
+	return true;
+}
+
+local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (!get_portion_check(start_row, start_col, num_rows, num_cols))
+		return local_matrix_store::const_ptr();
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
+
+	auto phy_loc_start = mapper.map2physical(start_row);
+	auto phy_loc_end = mapper.map2physical(start_row + num_rows - 1);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	const char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	// If all rows are stored in contiguous memory, we can return them immediately.
+	if (addr)
+		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+					addr, start_row, start_col, num_rows, num_cols,
+					get_type(), phy_loc_start.first));
+
+	// If the required data isn't stored in contiguous memory, let's copy them
+	// to a piece of contiguous memory. This doesn't happen very frequently.
+	// Normally, it only happens when we perform operations on matrices with
+	// different portion sizes. so it should be fine.
+	// TODO In the future, we should avoid memory copy here.
+	size_t num_sub_portions
+		= ceil(((double) num_rows) / mem_matrix_store::CHUNK_SIZE);
+	size_t local_start_row = 0;
+	local_buf_row_matrix_store::ptr ret(new local_buf_row_matrix_store(
+				start_row, start_col, num_rows, num_cols, get_type(), -1));
+	for (size_t i = 0; i < num_sub_portions; i++) {
+		addr = get_row(start_row + local_start_row);
+		size_t local_num_rows = std::min(mem_matrix_store::CHUNK_SIZE,
+				num_rows - local_start_row);
+		local_cref_contig_row_matrix_store sub_portion(addr,
+				start_row + local_start_row, start_col, local_num_rows,
+				num_cols, get_type(), -1);
+		ret->resize(local_start_row, 0, local_num_rows, ret->get_num_cols());
+		ret->copy_from(sub_portion);
+		local_start_row += local_num_rows;
+	}
+	ret->reset_size();
+	return ret;
 }
 
 local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols)
 {
-	if (start_row + num_rows > get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
+	if (!get_portion_check(start_row, start_col, num_rows, num_cols))
 		return local_matrix_store::ptr();
-	}
-	// We have to retrieve the entire rows.
-	if (num_cols != get_num_cols() || start_col != 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::ptr();
-	}
-	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = mapper.get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
-		return local_matrix_store::ptr();
-	}
-	auto phy_loc = mapper.map2physical(start_row);
+
+	auto phy_loc_start = mapper.map2physical(start_row);
+	auto phy_loc_end = mapper.map2physical(start_row + num_rows - 1);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	// TODO let's hope all data is stored in contiguous memory.
+	assert(addr);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-				get_row(start_row), start_row, start_col, num_rows, num_cols,
-				get_type(), phy_loc.first));
+				addr, start_row, start_col, num_rows, num_cols,
+				get_type(), phy_loc_start.first));
 }
 
 local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
@@ -340,11 +374,10 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	}
 	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = data.front()->get_mapper().get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
+	size_t portion_size = data.front()->get_portion_size();
+	if (ROUND(start_row, portion_size)
+			!= ROUND(start_row + num_rows - 1, portion_size)) {
+		BOOST_LOG_TRIVIAL(error) << "data isn't in the same portion";
 		return local_matrix_store::const_ptr();
 	}
 
@@ -378,11 +411,10 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	}
 	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = data.front()->get_mapper().get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
+	size_t portion_size = data.front()->get_portion_size();
+	if (ROUND(start_row, portion_size)
+			!= ROUND(start_row + num_rows - 1, portion_size)) {
+		BOOST_LOG_TRIVIAL(error) << "data isn't in the same portion";
 		return local_matrix_store::ptr();
 	}
 

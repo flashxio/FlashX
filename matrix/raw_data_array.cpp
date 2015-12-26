@@ -261,6 +261,7 @@ void init_memchunk_reserve(int num_nodes)
 chunked_raw_array::chunked_raw_array(size_t num_bytes, size_t block_size,
 		int node_id): raw_array(num_bytes, node_id)
 {
+	this->contig_block_size = block_size;
 	assert(block_size <= ARR_CHUNK_SIZE);
 	// Total number of blocks to store data. We need to round it up.
 	size_t num_blocks = ceil(((double) num_bytes) / block_size);
