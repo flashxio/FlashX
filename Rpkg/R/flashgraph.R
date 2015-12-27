@@ -116,11 +116,11 @@ fg.get.params <- function(name)
 #' ig <- read.graph("edge_list.txt")
 #' fg <- fg.load.igraph(ig)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
-						  directed=TRUE, nthreads=1)
+						  directed=TRUE)
 {
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
-			  as.logical(directed), as.integer(nthreads), PACKAGE="FlashR")
+			  as.logical(directed), PACKAGE="FlashR")
 		if (is.null(ret))
 			ret
 		else
@@ -138,8 +138,7 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 
 #' @rdname fg.load.graph
 fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
-												  "-e", ecount(graph), sep = ""),
-						  nthreads=1)
+												  "-e", ecount(graph), sep = ""))
 {
 	stopifnot(is.igraph(graph))
 	df <- get.data.frame(graph)
@@ -148,8 +147,7 @@ fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 	df["from"] <- df["from"] - 1
 	df["to"] <- df["to"] - 1
 	ret <- .Call("R_FG_load_graph_el_df", graph.name, df,
-				 as.logical(is.directed(graph)), as.integer(nthreads),
-				 PACKAGE="FlashR")
+				 as.logical(is.directed(graph)), PACKAGE="FlashR")
 	if (is.null(ret))
 		ret
 	else

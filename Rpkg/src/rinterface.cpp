@@ -34,6 +34,11 @@
 #include "in_mem_storage.h"
 #include "rutils.h"
 
+#include "mem_vec_store.h"
+#include "data_frame.h"
+#include "fm_utils.h"
+#include "data_io.h"
+
 using namespace safs;
 using namespace fg;
 
@@ -586,42 +591,51 @@ RcppExport SEXP R_FG_export_graph(SEXP pgraph, SEXP pgraph_file, SEXP pindex_fil
  * Load a graph from edge lists in a data frame.
  */
 RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
-		SEXP pdirected, SEXP pnthreads)
+		SEXP pdirected)
 {
 	Rcpp::LogicalVector res(1);
 	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
 	Rcpp::DataFrame edge_lists = Rcpp::DataFrame(pedge_lists);
 	bool directed = INTEGER(pdirected)[0];
-	int num_threads = INTEGER(pnthreads)[0];
 
 	Rcpp::IntegerVector from = edge_lists["from"];
 	Rcpp::IntegerVector to = edge_lists["to"];
 	std::vector<vertex_id_t> from_vec(from.begin(), from.end());
 	std::vector<vertex_id_t> to_vec(to.begin(), to.end());
+	fm::detail::mem_vec_store::ptr from_store
+		= fm::detail::mem_vec_store::create(from.size(), -1,
+				fm::get_scalar_type<vertex_id_t>());
+	fm::detail::mem_vec_store::ptr to_store
+		= fm::detail::mem_vec_store::create(to.size(), -1,
+				fm::get_scalar_type<vertex_id_t>());
+	from_store->copy_from((const char *) from_vec.data(),
+			from_vec.size() * sizeof(vertex_id_t));
+	to_store->copy_from((const char *) to_vec.data(),
+			to_vec.size() * sizeof(vertex_id_t));
 
-	fprintf(stderr, "Don't support constructing a FG graph\n");
-	return R_NilValue;
+	fm::data_frame::ptr df = fm::data_frame::create();
+	df->add_vec("source", from_store);
+	df->add_vec("dest", to_store);
+	fm::edge_list::ptr el = fm::edge_list::create(df, directed);
+	fg::FG_graph::ptr fg = create_fg_graph("graph_name", el);
 
-#if 0
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
 		return create_FGR_obj(ref);
 	else
 		return create_FGR_obj(fg, graph_name);
-#endif
 }
 
 /*
  * Load a graph from edge lists in a file.
  */
 RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
-		SEXP pdirected, SEXP pnthreads)
+		SEXP pdirected)
 {
 	Rcpp::LogicalVector res(1);
 	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	bool directed = INTEGER(pdirected)[0];
-	int num_threads = INTEGER(pnthreads)[0];
 
 	native_file f(graph_file);
 	if (!f.exist()) {
@@ -631,17 +645,15 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 
 	std::vector<std::string> edge_list_files(1);
 	edge_list_files[0] = graph_file;
+	fm::data_frame::ptr df = fm::read_edge_list(edge_list_files, true, "");
+	fm::edge_list::ptr el = fm::edge_list::create(df, directed);
+	fg::FG_graph::ptr fg = create_fg_graph("graph_name", el);
 
-	fprintf(stderr, "Don't support constructing a FG graph\n");
-	return R_NilValue;
-
-#if 0
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
 		return create_FGR_obj(ref);
 	else
 		return create_FGR_obj(fg, graph_name);
-#endif
 }
 
 RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
