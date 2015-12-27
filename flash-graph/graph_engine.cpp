@@ -628,7 +628,6 @@ graph_engine::~graph_engine()
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 	graph_factory = file_io_factory::shared_ptr();
-	destroy_flash_graph();
 }
 
 static inline int get_node_id(int thread_idx, int num_nodes)

@@ -57,7 +57,6 @@ public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
 
 	~FG_graph() {
-		graph_engine::destroy_flash_graph();
 	}
 
 	/**
