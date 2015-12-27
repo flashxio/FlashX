@@ -99,8 +99,15 @@ local_raw_array::local_raw_array(size_t num_bytes): raw_array(num_bytes, -1)
 
 void local_raw_array::expand(size_t min)
 {
-	BOOST_LOG_TRIVIAL(error) << "local raw array doesn't support expanding";
-	assert(0);
+	size_t new_num_bytes = get_num_bytes();
+	for (; new_num_bytes < min; new_num_bytes *= 2);
+	std::shared_ptr<char> new_data;
+	// TODO should we allocate memory in the local buffer when we expand
+	// memory.
+	new_data = memalloc_node(-1, true, new_num_bytes);
+	memcpy(new_data.get(), data.get(), get_num_bytes());
+	resize(new_num_bytes);
+	data = new_data;
 }
 
 simple_raw_array::simple_raw_array(size_t num_bytes,
