@@ -28,27 +28,66 @@ namespace fm
 {
 
 /*
+ * The data frame that stores the edge list of a graph has at least two columns:
+ * the source vertices are stored in column "source";
+ * the destination vertices are stored in column "dest";
+ * if attributes exist, the attributes are stored in column "attr".
+ */
+class edge_list
+{
+	bool directed;
+	data_frame::const_ptr df;
+
+	edge_list(data_frame::const_ptr df, bool directed) {
+		this->df = df;
+		this->directed = directed;
+	}
+public:
+	typedef std::shared_ptr<edge_list> ptr;
+	typedef std::shared_ptr<const edge_list> const_ptr;
+
+	static ptr create(data_frame::ptr df, bool directed);
+
+	size_t get_num_vecs() const {
+		return df->get_num_vecs();
+	}
+	bool is_in_mem() const {
+		return df->get_vec(0)->is_in_mem();
+	}
+	bool is_directed() const {
+		return directed;
+	}
+	bool has_attr() const {
+		return df->get_num_vecs() > 2;
+	}
+	const scalar_type &get_attr_type() const {
+		assert(has_attr());
+		return df->get_vec(2)->get_type();
+	}
+	size_t get_attr_size() const;
+
+	edge_list::ptr sort_source() const;
+	vector_vector::ptr groupby_source(
+			const gr_apply_operate<sub_data_frame> &op) const;
+	edge_list::ptr reverse_edge() const;
+};
+
+/*
  * This function creates a row-major matrix from a data frame, which is stored
  * in a vector of vectors. Each row is stored in a byte vector with the FlashGraph
  * vertex format (ext_mem_undirected_vertex).
  *
- * The input data frame needs to contain at least two vectors: the first
- * vector contains the row indexes and the second vector contains the column
- * indexes. If the data frame contains a third vector, the third one contains
- * the value of non-zero entries.
- * The order of the rows in the input data frame may be changed.
- *
  * This function outputs a vector of vectors that contains the sparse matrix
  * and a scalar that indicates the number of columns in the sparse matrix.
  */
-std::pair<vector_vector::ptr, size_t> create_1d_matrix(data_frame::ptr df);
+std::pair<vector_vector::ptr, size_t> create_1d_matrix(edge_list::ptr el);
 
 /*
  * This function creates an edge list stored in the data frame and converts
  * it into the FlashGraph format stored in memory.
  */
 fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
-		data_frame::ptr df, bool directed);
+		edge_list::ptr el);
 
 /*
  * This function creates a 2D-partitioned matrix from a data frame that
@@ -56,7 +95,7 @@ fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
  * The matrix and its index are kept in memory.
  */
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::ptr df, const block_2d_size &block_size,
+		edge_list::ptr el, const block_2d_size &block_size,
 		const scalar_type *entry_type);
 /*
  * This function creates a 2D-partitioned matrix from a vector of adjacency

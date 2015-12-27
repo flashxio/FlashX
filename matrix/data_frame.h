@@ -78,6 +78,8 @@ public:
 		return ptr(new data_frame(named_vecs));
 	}
 
+	data_frame::const_ptr shuffle_vecs(const std::vector<off_t> &vec_idxs) const;
+
 	bool add_vec(const std::string &name, detail::vec_store::ptr vec);
 
 	/*

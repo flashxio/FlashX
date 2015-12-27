@@ -48,6 +48,8 @@ public:
 
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
+std::shared_ptr<data_frame> read_edge_list(const std::vector<std::string> &files,
+		bool in_mem, const std::string &attr_type);
 
 }
 

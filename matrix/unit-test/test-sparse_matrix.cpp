@@ -38,7 +38,7 @@ void print_cols(detail::mem_matrix_store::ptr store)
 	}
 }
 
-data_frame::ptr create_rand_el(bool with_attr)
+edge_list::ptr create_rand_el(bool with_attr)
 {
 	int num_rows = 1024 * 16;
 	int num_cols = 1024 * 16;
@@ -69,7 +69,7 @@ data_frame::ptr create_rand_el(bool with_attr)
 	df->add_vec("dest", dests);
 	if (with_attr)
 		df->add_vec("attr", vals);
-	return df;
+	return edge_list::create(df, true);
 }
 
 void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
@@ -99,45 +99,17 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	print_cols(out);
 }
 
-void test_multiply_block(data_frame::ptr df)
+void test_multiply_block(edge_list::ptr el)
 {
 	printf("Multiply on 2D-partitioned matrix\n");
 	const block_2d_size block_size(1024, 1024);
-	// Clone the original data frame.
-	data_frame::ptr new_df = data_frame::create();
-	for (size_t i = 0; i < df->get_num_vecs(); i++)
-		new_df->add_vec(df->get_vec_name(i), df->get_vec(i)->deep_copy());
-	df = new_df;
 
-	// Get the max ID.
-	vector::ptr vec = vector::create(df->get_vec(0));
-	fg::vertex_id_t max_vid = vec->max<fg::vertex_id_t>();
-	vec = vector::create(df->get_vec(1));
-	max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
-
-	// I artificially add an invalid out-edge for each vertex, so it's
-	// guaranteed that each vertex exists in the adjacency lists.
-	detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
-			0, max_vid, 1);
-	detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
-			max_vid + 1, fg::INVALID_VERTEX_ID);
-	assert(seq_vec->get_length() == rep_vec->get_length());
-	new_df = data_frame::create();
-	new_df->add_vec(df->get_vec_name(0), seq_vec);
-	new_df->add_vec(df->get_vec_name(1), rep_vec);
-	detail::vec_store::ptr val_vec;
-	size_t entry_size = 0;
-	const scalar_type *entry_type = NULL;
-	if (df->get_num_vecs() == 3) {
-		val_vec = detail::create_rep_vec_store<float>(max_vid + 1, 0);
-		new_df->add_vec(df->get_vec_name(2), val_vec);
-		entry_size = val_vec->get_entry_size();
-		entry_type = &val_vec->get_type();
-	}
-	df->append(new_df);
-
-	auto oned_mat = create_1d_matrix(df);
+	auto oned_mat = create_1d_matrix(el);
 	vector_vector::ptr adj = oned_mat.first;
+	size_t entry_size = el->get_attr_size();
+	const scalar_type *entry_type = NULL;
+	if (el->has_attr())
+		entry_type = &el->get_attr_type();
 	std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> mat
 		= create_2d_matrix(adj, oned_mat.second, block_size, entry_type);
 	assert(mat.first);
@@ -180,58 +152,21 @@ void test_spmm_fg(fg::FG_graph::ptr fg)
 	print_cols(out);
 }
 
-void test_multiply_fg(data_frame::ptr df)
+void test_multiply_fg(edge_list::ptr el)
 {
 	printf("Multiply on FlashGraph matrix\n");
-	// Clone the original data frame.
-	data_frame::ptr new_df = data_frame::create();
-	for (size_t i = 0; i < df->get_num_vecs(); i++)
-		new_df->add_vec(df->get_vec_name(i), df->get_vec(i)->deep_copy());
-	df = new_df;
-
-	// Get the max ID.
-	vector::ptr vec = vector::create(df->get_vec(0));
-	fg::vertex_id_t max_vid = vec->max<fg::vertex_id_t>();
-	vec = vector::create(df->get_vec(1));
-	max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
-
-	// I artificially add an invalid out-edge for each vertex, so it's
-	// guaranteed that each vertex exists in the adjacency lists.
-	detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
-			0, max_vid, 1);
-	detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
-			max_vid + 1, fg::INVALID_VERTEX_ID);
-	assert(seq_vec->get_length() == rep_vec->get_length());
-	new_df = data_frame::create();
-	new_df->add_vec(df->get_vec_name(0), seq_vec);
-	new_df->add_vec(df->get_vec_name(1), rep_vec);
-	detail::vec_store::ptr val_vec;
-	if (df->get_num_vecs() == 3) {
-		val_vec = detail::create_rep_vec_store<float>(max_vid + 1, 0);
-		new_df->add_vec(df->get_vec_name(2), val_vec);
-	}
-	df->append(new_df);
-
-	// I artificially add an invalid in-edge for each vertex.
-	new_df = data_frame::create();
-	new_df->add_vec(df->get_vec_name(1), seq_vec);
-	new_df->add_vec(df->get_vec_name(0), rep_vec);
-	if (df->get_num_vecs() == 3)
-		new_df->add_vec(df->get_vec_name(2), val_vec);
-	df->append(new_df);
-
-	fg::FG_graph::ptr fg = create_fg_graph("test", df, true);
+	fg::FG_graph::ptr fg = create_fg_graph("test", el);
 	test_spmm_fg(fg);
 }
 
 int main()
 {
 	init_flash_matrix(NULL);
-	data_frame::ptr df = create_rand_el(false);
-	test_multiply_fg(df);
-	test_multiply_block(df);
+	edge_list::ptr el = create_rand_el(false);
+	test_multiply_fg(el);
+	test_multiply_block(el);
 
-	df = create_rand_el(true);
-	test_multiply_fg(df);
-	test_multiply_block(df);
+	el = create_rand_el(true);
+	test_multiply_fg(el);
+	test_multiply_block(el);
 }

@@ -31,6 +31,137 @@
 namespace fm
 {
 
+edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
+{
+	if (df->get_num_vecs() < 2) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The data frame needs to contain at least 2 vectors";
+		return edge_list::ptr();
+	}
+
+	fg::vertex_id_t max_vid;
+	{
+		vector::ptr vec = vector::create(df->get_vec(0));
+		assert(vec->get_type() == get_scalar_type<fg::vertex_id_t>());
+		max_vid = vec->max<fg::vertex_id_t>();
+		vec = vector::create(df->get_vec(1));
+		assert(vec->get_type() == get_scalar_type<fg::vertex_id_t>());
+		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
+	}
+	printf("max id: %d\n", max_vid);
+
+	detail::vec_store::ptr seq_vec = detail::create_seq_vec_store<fg::vertex_id_t>(
+			0, max_vid, 1);
+	detail::vec_store::ptr rep_vec = detail::create_rep_vec_store<fg::vertex_id_t>(
+			max_vid + 1, fg::INVALID_VERTEX_ID);
+	detail::vec_store::ptr attr_extra;
+	detail::vec_store::ptr attr_vec;
+	if (df->get_num_vecs() > 2)
+		attr_vec = df->get_vec("attr");
+	if (attr_vec && attr_vec->get_type() == get_scalar_type<int>())
+		attr_extra = detail::create_rep_vec_store<int>(max_vid + 1, 0);
+	else if (attr_vec && attr_vec->get_type() == get_scalar_type<long>())
+		attr_extra = detail::create_rep_vec_store<long>(max_vid + 1, 0);
+	else if (attr_vec && attr_vec->get_type() == get_scalar_type<float>())
+		attr_extra = detail::create_rep_vec_store<float>(max_vid + 1, 0);
+	else if (attr_vec && attr_vec->get_type() == get_scalar_type<double>())
+		attr_extra = detail::create_rep_vec_store<double>(max_vid + 1, 0);
+	else if (attr_vec) {
+		BOOST_LOG_TRIVIAL(error) << "unknown attribute type";
+		return edge_list::ptr();
+	}
+	assert(seq_vec->get_length() == rep_vec->get_length());
+
+	if (directed) {
+		// I artificially add an invalid out-edge for each vertex, so it's
+		// guaranteed that each vertex exists in the adjacency lists.
+		data_frame::ptr new_df = data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), seq_vec);
+		new_df->add_vec(df->get_vec_name(1), rep_vec);
+		if (df->get_num_vecs() == 3) {
+			assert(attr_extra);
+			new_df->add_vec(df->get_vec_name(2), attr_extra);
+		}
+		df->append(new_df);
+
+		// I artificially add an invalid in-edge for each vertex.
+		new_df = data_frame::create();
+		new_df->add_vec(df->get_vec_name(1), seq_vec);
+		new_df->add_vec(df->get_vec_name(0), rep_vec);
+		if (df->get_num_vecs() == 3) {
+			assert(attr_extra);
+			new_df->add_vec(df->get_vec_name(2), attr_extra);
+		}
+		df->append(new_df);
+	}
+	else {
+		// I artificially add an invalid out-edge for each vertex, so it's
+		// guaranteed that each vertex exists in the adjacency lists.
+		data_frame::ptr new_df = data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), seq_vec);
+		new_df->add_vec(df->get_vec_name(1), rep_vec);
+		if (df->get_num_vecs() == 3) {
+			assert(attr_vec);
+			new_df->add_vec(df->get_vec_name(2), attr_vec);
+		}
+		df->append(new_df);
+
+		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
+		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
+		detail::vec_store::ptr vec2;
+		if (df->get_num_vecs() == 3)
+			vec2 = df->get_vec(2)->deep_copy();
+		vec0->append(df->get_vec_ref(1));
+		vec1->append(df->get_vec_ref(0));
+		if (df->get_num_vecs() == 3)
+			vec2->append(df->get_vec_ref(2));
+		new_df = data_frame::create();
+		new_df->add_vec(df->get_vec_name(0), vec0);
+		new_df->add_vec(df->get_vec_name(1), vec1);
+		if (df->get_num_vecs() == 3)
+			new_df->add_vec(df->get_vec_name(2), vec2);
+		df = new_df;
+	}
+	return edge_list::ptr(new edge_list(df, directed));
+}
+
+edge_list::ptr edge_list::sort_source() const
+{
+	std::string sort_name = df->get_vec_name(0);
+	return edge_list::ptr(new edge_list(df->sort(sort_name), directed));
+}
+
+vector_vector::ptr edge_list::groupby_source(
+		const gr_apply_operate<sub_data_frame> &op) const
+{
+	std::string name = df->get_vec_name(0);
+	return df->groupby(name, op);
+}
+
+size_t edge_list::get_attr_size() const
+{
+	if (get_num_vecs() > 2) {
+		auto vec = df->get_vec(2);
+		if (vec)
+			return vec->get_entry_size();
+		else
+			return 0;
+	}
+	else
+		return 0;
+}
+
+edge_list::ptr edge_list::reverse_edge() const
+{
+	std::vector<off_t> vec_idxs(df->get_num_vecs());
+	vec_idxs[0] = 1;
+	vec_idxs[1] = 0;
+	for (size_t i = 2; i < vec_idxs.size(); i++)
+		vec_idxs[i] = i;
+	data_frame::const_ptr new_df = df->shuffle_vecs(vec_idxs);
+	return edge_list::ptr(new edge_list(new_df, directed));
+}
+
 static bool deduplicate = false;
 // remove self edges. It's enabled by default.
 static bool remove_selfe = true;
@@ -284,48 +415,36 @@ struct unit8
 
 }
 
-std::pair<vector_vector::ptr, size_t> create_1d_matrix(data_frame::ptr df)
+std::pair<vector_vector::ptr, size_t> create_1d_matrix(edge_list::ptr el)
 {
-	if (df->get_num_vecs() < 2) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The data frame needs to contain at least 2 vectors";
-		return std::pair<vector_vector::ptr, size_t>();
-	}
-
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	std::string sort_vec_name = df->get_vec_name(0);
-	data_frame::const_ptr sorted_df = df->sort(sort_vec_name);
+	edge_list::const_ptr sorted_el = el->sort_source();
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to sort the edge list\n",
-			time_diff(start, end));
-	gettimeofday(&start, NULL);
-	assert(sorted_df->is_sorted(sort_vec_name));
-	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to test if the edge list is sorted\n",
 			time_diff(start, end));
 
 	gettimeofday(&start, NULL);
 	vector_vector::ptr ret;
 	size_t max_col_idx = 0;
-	if (df->get_num_vecs() == 2) {
+	if (!el->has_attr()) {
 		std::unique_ptr<adj_apply_operate> op(new adj_apply_operate());
-		ret = sorted_df->groupby(sort_vec_name, *op);
+		ret = sorted_el->groupby_source(*op);
 		max_col_idx = op->get_max_col_idx();
 	}
 	// Instead of giving the real data type, we give a type that indicates
 	// the size of the edge data size. Actually, we don't interpret data type
 	// here. Only the data size matters.
-	else if (df->get_vec(2)->get_entry_size() == 4) {
+	else if (el->get_attr_size() == 4) {
 		std::unique_ptr<attr_adj_apply_operate<unit4> > op(
 				new attr_adj_apply_operate<unit4>());
-		ret = sorted_df->groupby(sort_vec_name, *op);
+		ret = sorted_el->groupby_source(*op);
 		max_col_idx = op->get_max_col_idx();
 	}
-	else if (df->get_vec(2)->get_entry_size() == 8) {
+	else if (el->get_attr_size() == 8) {
 		std::unique_ptr<attr_adj_apply_operate<unit8> > op(
 				new attr_adj_apply_operate<unit8>());
-		ret = sorted_df->groupby(sort_vec_name, *op);
+		ret = sorted_el->groupby_source(*op);
 		max_col_idx = op->get_max_col_idx();
 	}
 	else {
@@ -340,36 +459,22 @@ std::pair<vector_vector::ptr, size_t> create_1d_matrix(data_frame::ptr df)
 }
 
 static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_directed_graph(
-		const std::string &graph_name, data_frame::ptr df)
+		const std::string &graph_name, edge_list::ptr el)
 {
 	struct timeval start, end;
 	// Leave the space for graph header.
 	// TODO I should make this a NUMA vector.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(
 			fg::graph_header::get_header_size(),
-			get_scalar_type<char>(), -1, df->get_vec(0)->is_in_mem());
-	size_t edge_data_size = 0;
-	if (df->get_num_vecs() == 3) {
-		auto vec = df->get_vec("attr");
-		assert(vec);
-		edge_data_size = vec->get_entry_size();
-	}
+			get_scalar_type<char>(), -1, el->is_in_mem());
+	size_t edge_data_size = el->get_attr_size();
 
 	/*
 	 * Construct the in-edge adjacency lists.
 	 * All edges share the same destination vertex should be stored together.
 	 */
 
-	data_frame::ptr tmp = data_frame::create();
-	tmp->add_vec("dest", df->get_vec("dest"));
-	tmp->add_vec("source", df->get_vec("source"));
-	if (df->get_num_vecs() == 3) {
-		auto vec = df->get_vec("attr");
-		assert(vec);
-		tmp->add_vec("attr", vec);
-	}
-	df = tmp;
-	auto oned_mat = fm::create_1d_matrix(df);
+	auto oned_mat = fm::create_1d_matrix(el->reverse_edge());
 	vector_vector::ptr in_adjs = oned_mat.first;
 	size_t num_vertices = in_adjs->get_num_vecs();
 	// A graph is stored in a square matrix, so the number of vertices should
@@ -404,16 +509,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 	 * All edges share the same source vertex should be stored together.
 	 */
 
-	tmp = data_frame::create();
-	tmp->add_vec("source", df->get_vec("source"));
-	tmp->add_vec("dest", df->get_vec("dest"));
-	if (df->get_num_vecs() == 3) {
-		auto vec = df->get_vec("attr");
-		assert(vec);
-		tmp->add_vec("attr", vec);
-	}
-	df = tmp;
-	oned_mat = create_1d_matrix(df);
+	oned_mat = create_1d_matrix(el);
 	vector_vector::ptr out_adjs = oned_mat.first;
 	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
@@ -428,6 +524,8 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 				fg::ext_mem_undirected_vertex::vsize2num_edges(
 					out_adjs->get_length(i), edge_data_size));
 	}
+	printf("#out edges: %d, #in edges: %ld\n",
+			vector::create(num_out_edges)->sum<fg::vsize_t>(), num_edges);
 	assert(vector::create(num_out_edges)->sum<fg::vsize_t>() == num_edges);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to get #out-edges\n", time_diff(start, end));
@@ -474,21 +572,16 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_direct
 }
 
 static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undirected_graph(
-		const std::string &graph_name, data_frame::ptr df)
+		const std::string &graph_name, edge_list::ptr el)
 {
 	struct timeval start, end;
 	// Leave the space for graph header.
 	// TODO I should make this a NUMA vector.
 	detail::vec_store::ptr graph_data = detail::vec_store::create(0,
-			get_scalar_type<char>(), -1, df->get_vec(0)->is_in_mem());
-	size_t edge_data_size = 0;
-	if (df->get_num_vecs() == 3) {
-		auto vec = df->get_vec("attr");
-		assert(vec);
-		edge_data_size = vec->get_entry_size();
-	}
+			get_scalar_type<char>(), -1, el->is_in_mem());
+	size_t edge_data_size = el->get_attr_size();
 
-	auto oned_mat = create_1d_matrix(df);
+	auto oned_mat = create_1d_matrix(el);
 	vector_vector::ptr adjs = oned_mat.first;
 	printf("There are %ld vertices and they use %ld bytes in total\n",
 			adjs->get_num_vecs(), adjs->get_tot_num_entries());
@@ -545,13 +638,13 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 }
 
 fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
-		data_frame::ptr df, bool directed)
+		edge_list::ptr el)
 {
 	std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> res;
-	if (directed)
-		res = create_fg_directed_graph(graph_name, df);
+	if (el->is_directed())
+		res = create_fg_directed_graph(graph_name, el);
 	else
-		res = create_fg_undirected_graph(graph_name, df);
+		res = create_fg_undirected_graph(graph_name, el);
 
 	if (res.second->is_in_mem()) {
 		fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
@@ -894,10 +987,10 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::ptr df, const block_2d_size &block_size,
+		edge_list::ptr el, const block_2d_size &block_size,
 		const scalar_type *entry_type)
 {
-	auto ret = create_1d_matrix(df);
+	auto ret = create_1d_matrix(el);
 	if (ret.first == NULL)
 		return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>();
 	else

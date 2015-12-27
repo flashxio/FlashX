@@ -45,6 +45,21 @@ data_frame::data_frame(const std::vector<named_vec_t> &named_vecs)
 	}
 }
 
+data_frame::const_ptr data_frame::shuffle_vecs(
+		const std::vector<off_t> &vec_idxs) const
+{
+	std::vector<named_vec_t> sub_vecs(vec_idxs.size());
+	for (size_t i = 0; i < sub_vecs.size(); i++) {
+		size_t idx = vec_idxs[i];
+		if (idx >= get_num_vecs()) {
+			BOOST_LOG_TRIVIAL(error) << "vec idx is out of bound";
+			return data_frame::const_ptr();
+		}
+		sub_vecs[i] = named_vecs[idx];
+	}
+	return data_frame::create(sub_vecs);
+}
+
 bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 		std::vector<data_frame::ptr>::const_iterator end)
 {
