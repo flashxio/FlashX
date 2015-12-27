@@ -32,7 +32,7 @@
 #include "eigensolver/eigensolver.h"
 
 #include "rutils.h"
-#include "fm_utils.h"
+#include "fmr_utils.h"
 #include "matrix_ops.h"
 
 using namespace fm;

@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#ifndef __FM_UTILS_H__
-#define __FM_UTILS_H__
+#ifndef __FMR_UTILS_H__
+#define __FMR_UTILS_H__
 
 #include <Rcpp.h>
 #include <memory>

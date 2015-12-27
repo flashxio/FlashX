@@ -23,7 +23,7 @@
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
 
-#include "fm_utils.h"
+#include "fmr_utils.h"
 #include "rutils.h"
 
 using namespace fm;
