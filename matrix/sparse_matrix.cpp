@@ -35,6 +35,22 @@ matrix_config matrix_conf;
 namespace detail
 {
 
+std::shared_ptr<std::vector<const char *> > spmm_get_row_portions(
+		mem_matrix_store::const_ptr input)
+{
+	assert(!input->is_wide());
+	std::shared_ptr<std::vector<const char *> > ret(
+			new std::vector<const char *>(input->get_num_portions()));
+	size_t portion_size = input->get_portion_size().first;
+	size_t row_idx = 0;
+	for (size_t i = 0; i < ret->size(); i++) {
+		ret->at(i) = input->get_row(row_idx);
+		assert(ret->at(i));
+		row_idx += portion_size;
+	}
+	return ret;
+}
+
 /*
  * The minimum write I/O size (in bytes).
  */
