@@ -140,8 +140,7 @@ public:
 
 	void register_EM_obj(EM_object *obj) {
 		pthread_spin_lock(&lock);
-		auto it = EM_objs.find(obj);
-		assert(it == EM_objs.end());
+		assert(EM_objs.find(obj) == EM_objs.end());
 		EM_objs.insert(obj);
 		pthread_spin_unlock(&lock);
 	}
