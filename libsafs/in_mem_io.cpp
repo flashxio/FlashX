@@ -43,17 +43,35 @@ public:
 	}
 };
 
+struct cfree
+{
+public:
+	void operator()(char *buf) const {
+		free(buf);
+	}
+};
+
 }
 
 NUMA_buffer::NUMA_buffer(std::shared_ptr<char> data, size_t length,
 		const NUMA_mapper &_mapper): mapper(_mapper)
 {
 	assert(mapper.get_num_nodes() == 1);
-	this->length = length;
 	bufs.resize(1);
 	buf_lens.resize(1);
-	bufs[0] = data;
-	buf_lens[0] = length;
+	if (length % PAGE_SIZE == 0) {
+		bufs[0] = data;
+		buf_lens[0] = length;
+		this->length = length;
+	}
+	else {
+		size_t aligned_len = ROUNDUP(length, PAGE_SIZE);
+		bufs[0] = std::shared_ptr<char>((char *) memalign(
+					PAGE_SIZE, aligned_len), cfree());
+		memcpy(bufs[0].get(), data.get(), length);
+		buf_lens[0] = aligned_len;
+		this->length = aligned_len;
+	}
 }
 
 NUMA_buffer::NUMA_buffer(size_t length,
