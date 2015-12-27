@@ -1264,20 +1264,51 @@ class add_portion_op: public detail::portion_mapply_op
 {
 public:
 	add_portion_op(size_t num_rows, size_t num_cols): detail::portion_mapply_op(
-			num_rows, num_cols, get_scalar_type<double>()) {
+			num_rows, num_cols, get_scalar_type<size_t>()) {
 	}
 
 	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			const std::vector<detail::local_matrix_store::const_ptr> &_ins,
 			detail::local_matrix_store &out) const {
-		out.reset_data();
+		std::vector<detail::local_matrix_store::const_ptr> ins(_ins.size());
 		for (size_t i = 0; i < ins.size(); i++) {
-			assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
-			detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
+			detail::local_buf_col_matrix_store::ptr in(
+					new detail::local_buf_col_matrix_store(
+						_ins[i]->get_global_start_row(),
+						_ins[i]->get_global_start_col(),
+						_ins[i]->get_num_rows(), _ins[i]->get_num_cols(),
+						_ins[i]->get_type(), _ins[i]->get_node_id()));
+			in->copy_from(*_ins[i]);
+			ins[i] = in;
+		}
+
+		assert(out.store_layout() == matrix_layout_t::L_COL);
+		if (ins.size() == 1) {
+			assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+			detail::local_matrix_store::const_ptr in = ins[0]->get_portion(0, 0,
 					out.get_num_rows(), out.get_num_cols());
 			assert(in);
-			detail::mapply2(out, *in,
-					out.get_type().get_basic_ops().get_add(), out);
+			out.copy_from(*in);
+		}
+		else {
+			assert(ins.size() >= 2);
+			assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+			assert(ins[1]->store_layout() == matrix_layout_t::L_COL);
+			detail::local_matrix_store::const_ptr in0 = ins[0]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			detail::local_matrix_store::const_ptr in1 = ins[1]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			assert(in0 && in1);
+			detail::mapply2(*in0, *in1, out.get_type().get_basic_ops().get_add(),
+					out);
+			for (size_t i = 2; i < ins.size(); i++) {
+				assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
+				detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
+						out.get_num_rows(), out.get_num_cols());
+				assert(in);
+				detail::mapply2(out, *in,
+						out.get_type().get_basic_ops().get_add(), out);
+			}
 		}
 	}
 
@@ -1288,26 +1319,99 @@ public:
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		return std::string();
 	}
+
+	virtual bool is_agg() const {
+		return true;
+	}
+};
+
+class t_add_portion_op: public detail::portion_mapply_op
+{
+public:
+	t_add_portion_op(size_t num_rows, size_t num_cols): detail::portion_mapply_op(
+			num_rows, num_cols, get_scalar_type<size_t>()) {
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &_ins,
+			detail::local_matrix_store &out) const {
+		std::vector<detail::local_matrix_store::const_ptr> ins(_ins.size());
+		for (size_t i = 0; i < ins.size(); i++) {
+			detail::local_buf_row_matrix_store::ptr in(
+					new detail::local_buf_row_matrix_store(
+						_ins[i]->get_global_start_row(),
+						_ins[i]->get_global_start_col(),
+						_ins[i]->get_num_rows(), _ins[i]->get_num_cols(),
+						_ins[i]->get_type(), _ins[i]->get_node_id()));
+			in->copy_from(*_ins[i]);
+			ins[i] = in;
+		}
+
+		assert(out.store_layout() == matrix_layout_t::L_ROW);
+		if (ins.size() == 1) {
+			assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+			detail::local_matrix_store::const_ptr in = ins[0]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			assert(in);
+			out.copy_from(*in);
+		}
+		else {
+			assert(ins.size() >= 2);
+			assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+			assert(ins[1]->store_layout() == matrix_layout_t::L_ROW);
+			detail::local_matrix_store::const_ptr in0 = ins[0]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			detail::local_matrix_store::const_ptr in1 = ins[1]->get_portion(0, 0,
+					out.get_num_rows(), out.get_num_cols());
+			assert(in0 && in1);
+			detail::mapply2(*in0, *in1, out.get_type().get_basic_ops().get_add(),
+					out);
+			for (size_t i = 2; i < ins.size(); i++) {
+				assert(ins[i]->store_layout() == matrix_layout_t::L_ROW);
+				detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
+						out.get_num_rows(), out.get_num_cols());
+				assert(in);
+				detail::mapply2(out, *in,
+						out.get_type().get_basic_ops().get_add(), out);
+			}
+		}
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+
+	virtual bool is_agg() const {
+		return true;
+	}
 };
 
 void test_mapply_mixed(int num_nodes)
 {
 	printf("test serial and parallel mapply\n");
-	std::vector<dense_matrix::ptr> mats(5);
-	mats[0] = dense_matrix::create_randu<size_t>(0, 1000,
-			long_dim, 10, matrix_layout_t::L_COL, -1, true);
-	mats[1] = dense_matrix::create_randu<size_t>(0, 1000,
-			long_dim, 11, matrix_layout_t::L_COL, -1, false);
-	mats[2] = dense_matrix::create_randu<size_t>(0, 1000,
-			long_dim, 12, matrix_layout_t::L_COL, -1, false);
-	mats[3] = dense_matrix::create_randu<size_t>(0, 1000,
-			long_dim, 13, matrix_layout_t::L_COL, num_nodes, true);
-	mats[4] = dense_matrix::create_randu<size_t>(0, 1000,
-			long_dim, 14, matrix_layout_t::L_COL, -1, false);
-
 	detail::portion_mapply_op::const_ptr op(new add_portion_op(
 				long_dim, 10));
-	std::vector<detail::matrix_store::const_ptr> stores(5);
+	detail::portion_mapply_op::const_ptr t_op(new t_add_portion_op(
+				10, long_dim));
+
+	// Test tall and col-major matrices.
+	std::vector<dense_matrix::ptr> mats;
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 10, matrix_layout_t::L_COL, -1, true));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 11, matrix_layout_t::L_COL, -1, false));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 12, matrix_layout_t::L_COL, -1, false));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 13, matrix_layout_t::L_COL, num_nodes, true));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 14, matrix_layout_t::L_COL, -1, false));
+
+	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
 	for (size_t i = 0; i < stores.size(); i++)
 		stores[i] = mats[i]->get_raw_store();
 	dense_matrix::ptr par_res = dense_matrix::create(detail::__mapply_portion(
@@ -1315,6 +1419,58 @@ void test_mapply_mixed(int num_nodes)
 	dense_matrix::ptr serial_res = dense_matrix::create(detail::__mapply_portion(
 				stores, op, matrix_layout_t::L_COL, false));
 	scalar_variable::ptr max_diff = par_res->minus(*serial_res)->abs()->max();
+	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
+	assert(*(size_t *) max_diff->get_raw() == 0);
+
+	// Test wide and row-major matrices.
+	for (size_t i = 0; i < mats.size(); i++)
+		mats[i] = mats[i]->transpose();
+	stores.resize(mats.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mats[i]->get_raw_store();
+	par_res = dense_matrix::create(detail::__mapply_portion(
+				stores, t_op, matrix_layout_t::L_ROW, true));
+	serial_res = dense_matrix::create(detail::__mapply_portion(
+				stores, t_op, matrix_layout_t::L_ROW, false));
+	max_diff = par_res->minus(*serial_res)->abs()->max();
+	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
+	assert(*(size_t *) max_diff->get_raw() == 0);
+
+	// Test tall and row-major matrices.
+	mats.clear();
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 10, matrix_layout_t::L_ROW, -1, true));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 11, matrix_layout_t::L_ROW, -1, false));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 12, matrix_layout_t::L_ROW, -1, false));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 13, matrix_layout_t::L_ROW, num_nodes, true));
+	mats.push_back(dense_matrix::create_randu<size_t>(0, 1000,
+				long_dim, 14, matrix_layout_t::L_ROW, -1, false));
+
+	stores.resize(mats.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mats[i]->get_raw_store();
+	par_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, true));
+	serial_res = dense_matrix::create(detail::__mapply_portion(
+				stores, op, matrix_layout_t::L_COL, false));
+	max_diff = par_res->minus(*serial_res)->abs()->max();
+	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
+	assert(*(size_t *) max_diff->get_raw() == 0);
+
+	// Test wide and col-major matrices.
+	for (size_t i = 0; i < mats.size(); i++)
+		mats[i] = mats[i]->transpose();
+	stores.resize(mats.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		stores[i] = mats[i]->get_raw_store();
+	par_res = dense_matrix::create(detail::__mapply_portion(
+				stores, t_op, matrix_layout_t::L_ROW, true));
+	serial_res = dense_matrix::create(detail::__mapply_portion(
+				stores, t_op, matrix_layout_t::L_ROW, false));
+	max_diff = par_res->minus(*serial_res)->abs()->max();
 	printf("max diff: %ld\n", *(size_t *) max_diff->get_raw());
 	assert(*(size_t *) max_diff->get_raw() == 0);
 }
