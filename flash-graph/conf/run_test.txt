@@ -18,7 +18,8 @@ root_conf=FG_TOP/flash-graph/conf/data_files.txt
 # whether or not to use Linux huge pages
 # huge_page=
 
-
+# The number of I/O threads per NUMA node.
+num_io_threads=1
 
 
 # Parameters for FlashGraph
