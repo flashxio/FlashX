@@ -242,11 +242,16 @@ int main(int argc, char *argv[])
 	}
 
 	sparse_matrix::ptr mat;
-	if (use_fg)
-		mat = load_fg_matrix(matrix_file, index_file, in_mem, configs,
-				entry_type);
-	else
-		mat = load_2d_matrix(matrix_file, index_file, in_mem);
+	try {
+		if (use_fg)
+			mat = load_fg_matrix(matrix_file, index_file, in_mem, configs,
+					entry_type);
+		else
+			mat = load_2d_matrix(matrix_file, index_file, in_mem);
+	} catch (std::exception &e) {
+		fprintf(stderr, "%s\n", e.what());
+		exit(-1);
+	}
 
 	if (num_nodes == 0)
 		num_nodes = matrix_conf.get_num_nodes();

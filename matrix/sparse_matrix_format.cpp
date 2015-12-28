@@ -227,25 +227,9 @@ off_t SpM_2d_index::get_block_row_off(size_t idx) const
 
 SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 {
-	if (!safs::is_safs_init()) {
-		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
-		return SpM_2d_index::ptr();
-	}
-
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			idx_file, safs::GLOBAL_CACHE_ACCESS);
-	if (io_fac == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io factory for %1%") % idx_file;
-		return SpM_2d_index::ptr();
-	}
-
 	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
-	if (io == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io instance for %1%") % idx_file;
-		return SpM_2d_index::ptr();
-	}
 
 	size_t size = safs::safs_file(safs::get_sys_RAID_conf(),
 			idx_file).get_size();
@@ -259,21 +243,18 @@ SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 {
 	FILE *f = fopen(idx_file.c_str(), "r");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
-			% idx_file % strerror(errno);
-		return SpM_2d_index::ptr();
-	}
+	if (f == NULL)
+		throw safs::io_exception(boost::str(boost::format("can't open %1%: %2%")
+					% idx_file % strerror(errno)));
 
 	size_t size = safs::native_file(idx_file).get_size();
 	char *data = (char *) malloc(size);
 	size_t ret = fread(data, size, 1, f);
 	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
-			% idx_file % strerror(errno);
 		fclose(f);
 		free(data);
-		return SpM_2d_index::ptr();
+		throw safs::io_exception(boost::str(boost::format("can't read %1%: %2%")
+					% idx_file % strerror(errno)));
 	}
 
 	fclose(f);
@@ -308,11 +289,6 @@ void SpM_2d_storage::verify() const
 SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		SpM_2d_index::ptr index)
 {
-	if (!safs::is_safs_init()) {
-		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
-		return SpM_2d_storage::ptr();
-	}
-
 	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
 	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::load_safs(mat_file, mapper);
 	safs::NUMA_buffer::cdata_info header_data = data->get_data(0, PAGE_SIZE);
