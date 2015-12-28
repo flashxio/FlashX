@@ -89,24 +89,11 @@ FG_graph::FG_graph(const std::string &graph_file, vertex_index::ptr index_data,
 	this->index_data = index_data;
 	this->configs = configs;
 	this->header = index_data->get_graph_header();
-
-	try {
-		if (configs)
-			graph_engine::init_flash_graph(configs);
-	} catch (init_error &e) {
-		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
-	}
 }
 
 FG_graph::FG_graph(in_mem_graph::ptr graph_data, vertex_index::ptr index_data,
 		const std::string &graph_name, config_map::ptr configs)
 {
-	try {
-		if (configs)
-			graph_engine::init_flash_graph(configs);
-	} catch (init_error &e) {
-		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
-	}
 	this->graph_data = graph_data;
 	this->index_data = index_data;
 	this->configs = configs;

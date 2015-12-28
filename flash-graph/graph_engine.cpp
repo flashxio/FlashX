@@ -593,12 +593,6 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 	struct timeval init_start, init_end;
 	gettimeofday(&init_start, NULL);
 
-	try {
-		init_flash_graph(graph.get_configs());
-	} catch(init_error &e) {
-		// We ignore the error.
-	}
-
 	// Init graph data.
 	graph_factory = graph.get_graph_io_factory(GLOBAL_CACHE_ACCESS);
 	// Construct the in-memory compressed vertex index.

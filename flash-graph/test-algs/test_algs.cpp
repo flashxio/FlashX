@@ -837,6 +837,7 @@ int main(int argc, char *argv[])
 		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
+	graph_engine::init_flash_graph(configs);
 	FG_graph::ptr graph;
 	try {
 		graph = FG_graph::create(graph_file, index_file, configs);
@@ -904,4 +905,5 @@ int main(int argc, char *argv[])
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
 	}
+	graph_engine::destroy_flash_graph();
 }
