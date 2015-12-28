@@ -557,7 +557,13 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		return R_NilValue;
 	}
 
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg;
+	try {
+		fg = FG_graph::create(graph_file, index_file, configs);
+	} catch(std::exception &e) {
+		fprintf(stderr, "%s\n", e.what());
+		return R_NilValue;
+	}
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
 		return create_FGR_obj(ref);
