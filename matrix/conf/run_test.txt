@@ -28,4 +28,3 @@ threads=32
 
 # Keep adjacency lists of vertices in memory
 in_mem_graph=
-in_mem_index=
