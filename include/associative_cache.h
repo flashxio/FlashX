@@ -31,7 +31,7 @@
 #include "container.h"
 #include "parameters.h"
 #include "shadow_cell.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "comm_exception.h"
 #include "compute_stat.h"
 

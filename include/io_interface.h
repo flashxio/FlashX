@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "config_map.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "common.h"
 #include "concurrency.h"
 #include "thread.h"

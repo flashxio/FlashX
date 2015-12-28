@@ -21,7 +21,7 @@
 
 #include "thread_private.h"
 #include "parameters.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "slab_allocator.h"
 
 bool align_req = false;

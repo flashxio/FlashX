@@ -1,5 +1,5 @@
-#ifndef __EXCEPTION_H__
-#define __EXCEPTION_H__
+#ifndef __SAFS_EXCEPTION_H__
+#define __SAFS_EXCEPTION_H__
 
 /*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)

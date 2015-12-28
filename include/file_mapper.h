@@ -26,7 +26,7 @@
 #include "common.h"
 #include "parameters.h"
 #include "concurrency.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "comm_exception.h"
 #include "safs_file.h"
 

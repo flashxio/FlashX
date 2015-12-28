@@ -25,7 +25,7 @@
 #include "io_interface.h"
 #include "associative_cache.h"
 #include "dirty_page_flusher.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "memory_manager.h"
 
 namespace safs

@@ -43,7 +43,7 @@
 #include "mem_tracker.h"
 #include "native_file.h"
 #include "safs_file.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "direct_comp_access.h"
 
 namespace safs
