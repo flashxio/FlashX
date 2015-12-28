@@ -747,6 +747,10 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 {
 	if (!safs::is_safs_init())
 		throw io_exception("safs isn't init");
+	safs_file f(get_sys_RAID_conf(), file_name);
+	if (!f.exist())
+		throw io_exception(boost::str(
+					boost::format("%1% doesn't exist") % file_name));
 
 	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf->get_disk(i).get_file_name()
