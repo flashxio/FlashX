@@ -18,7 +18,7 @@
  */
 
 #include "comm_exception.h"
-#include "exception.h"
+#include "safs_exception.h"
 
 #include "vertex_index_constructor.h"
 
