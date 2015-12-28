@@ -197,6 +197,15 @@ public:
 
 	~global_cached_io();
 
+	int get_block_size() const {
+		// The I/O issued by cached I/O is broken into pages. As a result,
+		// an I/O access reads data to multiple pages. Linux AIO doesn't
+		// support an I/O request with many buffers. In other words, the I/O
+		// request issued by cached I/O can't access very large data. So we
+		// have to set a hard maximal number of pages in an I/O request.
+		return std::min(io_interface::get_block_size(), 1024);
+	}
+
 	int preload(off_t start, long size);
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 	/**
