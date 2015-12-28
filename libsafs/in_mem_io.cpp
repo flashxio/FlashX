@@ -203,7 +203,8 @@ NUMA_buffer::ptr NUMA_buffer::load(const std::string &file_name,
 {
 	native_file local_f(file_name);
 	if (!local_f.exist())
-		throw io_exception(file_name + std::string(" doesn't exist"));
+		throw io_exception(boost::str(
+					boost::format("Linux file %1% doesn't exist") % file_name));
 
 	ssize_t file_size = local_f.get_size();
 	assert(file_size > 0);
