@@ -246,7 +246,7 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 
 void destroy_memchunk_reserve()
 {
-	BOOST_LOG_TRIVIAL(error) << boost::format(
+	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"reserved %ld bytes are associated with NUMA nodes and %ld bytes aren't\n")
 		% reserved_bytes.load() % smp_reserved_bytes.load();
 	for (size_t i = 0; i < smp_reserved_chunks.size(); i++)
