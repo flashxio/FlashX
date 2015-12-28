@@ -745,6 +745,9 @@ public:
 file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option)
 {
+	if (!safs::is_safs_init())
+		throw io_exception("safs isn't init");
+
 	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf->get_disk(i).get_file_name()
 			+ "/" + file_name;
