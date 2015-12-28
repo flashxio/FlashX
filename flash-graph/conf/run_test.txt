@@ -33,9 +33,6 @@ threads=1
 # This defines the range size of a partition.
 # part_range_size_log=10
 
-# Keep index in memory.
-# in_mem_index=
-
 # Keep adjacency lists of vertices in memory
 # in_mem_graph=
 

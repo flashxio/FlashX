@@ -42,7 +42,6 @@ class graph_config
 	int part_range_size_log;
 	bool _preload;
 	int index_file_weight;
-	bool _in_mem_index;
 	bool _in_mem_graph;
 	int num_vparts;
 	int min_vpart_degree;
@@ -61,7 +60,6 @@ public:
 		part_range_size_log = 10;
 		_preload = false;
 		index_file_weight = 10;
-		_in_mem_index = false;
 		_in_mem_graph = false;
 		num_vparts = 1;
 		min_vpart_degree = std::numeric_limits<int>::max();
@@ -156,14 +154,6 @@ public:
 	}
 
 	/**
-	 * \brief Determine whether to use in-mem vertex index.
-	 * \return true if the graph engine uses in-mem vertex index.
-	 */
-	bool use_in_mem_index() const {
-		return _in_mem_index;
-	}
-
-	/**
 	 * \brief Determine whether to use in-mem graph data.
 	 * \return true if the graph engine loads the entire graph data in memory
 	 * in advance.
@@ -219,7 +209,6 @@ inline void graph_config::print_help()
 	printf("\tpart_range_size_log: the log2 of the range size in range partitioning\n");
 	printf("\tpreload: preload the graph data to the page cache\n");
 	printf("\tindex_file_weight: the weight for the graph index file\n");
-	printf("\tin_mem_index: indicate whether to use in-mem vertex index\n");
 	printf("\tin_mem_graph: indicate whether to load the entire graph to memory in advance\n");
 	printf("\tnum_vparts: the number of vertical partitions\n");
 	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning\n");
@@ -238,7 +227,6 @@ inline void graph_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tpart_range_size_log: " << part_range_size_log;
 	BOOST_LOG_TRIVIAL(info) << "\tpreload: " << _preload;
 	BOOST_LOG_TRIVIAL(info) << "\tindex_file_weight: " << index_file_weight;
-	BOOST_LOG_TRIVIAL(info) << "\tin_mem_index: " << _in_mem_index;
 	BOOST_LOG_TRIVIAL(info) << "\tin_mem_graph: " << _in_mem_graph;
 	BOOST_LOG_TRIVIAL(info) << "\tnum_vparts: " << num_vparts;
 	BOOST_LOG_TRIVIAL(info) << "\tmin_vpart_degree: " << min_vpart_degree;
@@ -258,7 +246,6 @@ inline void graph_config::init(config_map::ptr map)
 	map->read_option_int("part_range_size_log", part_range_size_log);
 	map->read_option_bool("preload", _preload);
 	map->read_option_int("index_file_weight", index_file_weight);
-	map->read_option_bool("in_mem_index", _in_mem_index);
 	map->read_option_bool("in_mem_graph", _in_mem_graph);
 	map->read_option_int("num_vparts", num_vparts);
 	map->read_option_int("min_vpart_degree", min_vpart_degree);

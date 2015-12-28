@@ -596,8 +596,7 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 	// Init graph data.
 	graph_factory = graph.get_graph_io_factory(GLOBAL_CACHE_ACCESS);
 	// Construct the in-memory compressed vertex index.
-	vindex = in_mem_query_vertex_index::create(graph.get_index_data(),
-			!graph_conf.use_in_mem_index());
+	vindex = in_mem_query_vertex_index::create(graph.get_index_data(), true);
 
 	header = graph.get_graph_header();
 	header.verify();
