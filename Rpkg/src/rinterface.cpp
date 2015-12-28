@@ -312,7 +312,6 @@ static SEXP get_fg_params()
 	ret["part_range_size_log"] = graph_conf.get_part_range_size_log();
 	ret["preload"] = graph_conf.preload();
 	ret["index_file_weight"] = graph_conf.get_index_file_weight();
-	ret["in_mem_index"] = graph_conf.use_in_mem_index();
 	ret["in_mem_graph"] = graph_conf.use_in_mem_graph();
 	ret["serial_run"] = graph_conf.use_serial_run();
 	ret["num_vertical_parts"] = graph_conf.get_num_vparts();
