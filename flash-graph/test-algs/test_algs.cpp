@@ -714,6 +714,7 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 num_col = atof(optarg);
                 num_opts++;
                 break;
+#if 0
             case 'E':
                 test_eucl();
                 std::cout << "Test eucl Success ...\n";
@@ -726,6 +727,7 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 test_cluster();
                 std::cout << "Test cluster Success ...\n";
                 return;
+#endif
 			default:
 				print_usage();
 				abort();
