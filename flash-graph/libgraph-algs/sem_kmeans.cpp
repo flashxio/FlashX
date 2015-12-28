@@ -17,11 +17,13 @@
  * limitations under the License.
  */
 
-#include "sem_kmeans.h"
 #include <signal.h>
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+
+#include "sem_kmeans.h"
+#include "sem_kmeans_util.h"
 
 #define KM_TEST 1
 #define VERBOSE 0
@@ -57,12 +59,16 @@ namespace {
 
     // Begin Helpers //
     template <typename T>
-        static void print_vector(typename std::vector<T> v) {
+        static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
+            unsigned print_len = v.size() > max_print ? max_print : v.size();
+
             std::cout << "[";
             typename std::vector<T>::iterator itr = v.begin();
-            for (; itr != v.end(); itr++) {
+            for (; itr != v.begin()+print_len; itr++) {
                 std::cout << " "<< *itr;
             }
+
+            if (v.size() > print_len) std::cout << " ...";
             std::cout <<  " ]\n";
         }
 
@@ -110,14 +116,15 @@ namespace {
     template <typename T>
         static double const eucl_dist(const T* lhs, const T* rhs) {
             double dist = 0;
-
             BOOST_VERIFY(lhs->size() == rhs->size());
 
             for (unsigned col = 0; col < lhs->size(); col++) {
                 double diff = (*lhs)[col] - (*rhs)[col];
                 dist += diff * diff;
             }
-            return  dist;
+
+            BOOST_VERIFY(dist >= 0);
+            return dist;
         }
 #endif
 
@@ -168,7 +175,7 @@ namespace {
 
             /* Do a translation from raw id's to indexes in the distance matrix */
             double get(unsigned row, unsigned col) {
-                if (row == col) { return 0; }
+                if (row == col) { return std::numeric_limits<double>::max(); }
                 translate(row, col);
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Getting row=" << row << "col=" << col;
@@ -176,6 +183,7 @@ namespace {
                 return mat[row][col];
             }
 
+            // Testing purposes only
             double get_min_dist(const unsigned row) {
                 double best = std::numeric_limits<double>::max();
                 for (unsigned col = 0; col < rows+1; col++) {
@@ -248,9 +256,9 @@ namespace {
                     << ", 3b = " << _3b;
 
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
-                    "lemma1 = " << ((double)lemma1/(NUM_ROWS*K))*100 <<
-                    "\%, 3a = " << ((double)_3a/(NUM_ROWS*K))*100 <<
-                    "\%, 3b = " << ((double) _3b/(NUM_ROWS*K))*100 << "\%";
+                    "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(NUM_ROWS*K))*100) <<
+                    "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(NUM_ROWS*K))*100) <<
+                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(NUM_ROWS*K))*100) << "\%";
 
                 tot_lemma1 += (unsigned)lemma1;
                 tot_3a += (unsigned)_3a;
@@ -461,16 +469,13 @@ namespace {
 
 
     void kmeans_vertex::run(vertex_program &prog) {
-#if PRUNE
-        vertex_id_t my_id = prog.get_vertex_id(*this);
-        //this->nxt_clstr = 0; // reset
-
+#if 0
         if (cluster_id != INVALID_CLUST_ID) { //FIXME: Verify this condition -- should be if I changed my cluster last time
             for (unsigned cl = 0; cl < K; cl++) {
                 lwr_bnd[cl] = std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
             }
+
             uppr_bnd += g_clusters[cluster_id]->get_prev_dist();
-            r = true;
         }
 #endif
         vertex_id_t id = prog.get_vertex_id(*this);
@@ -584,38 +589,63 @@ namespace {
         unsigned new_cluster_id = INVALID_CLUST_ID;
 
         //vertex_id_t my_id = prog.get_vertex_id(*this);
+        //std::vector<bool> prune_it;
 
 #if PRUNE
+        unsigned qi = cluster_id;
+        bool tight = false;
+
         if (cluster_id != INVALID_CLUST_ID &&  // TODO: Move some of this logic to the run
-                uppr_bnd <= g_clusters[cluster_id]->get_s_val()) {
-            // recompute your distance to the current cluster since dist is iter-1 cluster
-            dist_comp(vertex, &best, &new_cluster_id, cluster_id);
+            uppr_bnd <= g_clusters[cluster_id]->get_s_val()) {
 #if KM_TEST
             g_prune_stats->pp_lemma1(K);
 #endif
+            new_cluster_id = cluster_id; best = uppr_bnd;
             goto organize;
         }
-#endif
 
+#endif
         for (unsigned cl = 0; cl < K; cl++) {
 #if PRUNE
-
-#if 0
-            if (cluster_id != INVALID_CLUST_ID && cl != cluster_id) {
-                if (uppr_bnd <= g_cluster_dist->get(cluster_id, cl) / 2.0) {
-                    g_prune_stats->pp_3a(); // 3.b)i.
-                    continue;
+            if (qi != INVALID_CLUST_ID && cl != qi) { // TODO: Move INV test out of loop
+                if (uppr_bnd <= g_cluster_dist->get(qi, cl) || uppr_bnd <= lwr_bnd[cl]) {
+                    //g_prune_stats->pp_3a(); // 3.b)i.
+                    //continue;
                 }
 
-                if (uppr_bnd <= g_clusters[cluster_id]->get_s_val() || uppr_bnd <= lwr_bnd[cl]) {
-                    g_prune_stats->pp_3a(); // 3.b)i.
-                    continue;
+                /* Tighten the upper bound */
+                // compute dist c_{qi} first if necessary:
+                if (!tight) {
+                    dist_comp(vertex, &best, &new_cluster_id, qi);
+                    uppr_bnd = lwr_bnd[qi]; // == ||x_i - c_{qi}||_2
+                    tight = true;
+                }
+
+                // Check again
+                if (uppr_bnd <= g_cluster_dist->get(qi, cl) || uppr_bnd <= lwr_bnd[cl]) {
+                    //g_prune_stats->pp_3a(); // 3.b)i.
+                    //continue;
                 }
             }
-#endif
-#endif
+
+            // Tighten lower bound (done is dist_comp)
+            dist_comp(vertex, &best, &new_cluster_id, cl); // 3.b) ii.
+
+            // Both uppr_bnd and lwr_bnd[cl] are tight
+            if (lwr_bnd[cl] < uppr_bnd) {
+                qi = cl;
+                uppr_bnd = lwr_bnd[qi];
+            }
+#else
             dist_comp(vertex, &best, &new_cluster_id, cl);
+#endif
         }
+
+        //if (prune_it && (cluster_id != new_cluster_id)) {
+        //    printf("ERROR: vid:%u new_cluster_id = %u, pruned said cluster_id = %u. Stats ==>"
+        //            " dist=%e, uppr_bnd=%e, best=%e, s(%u) = %e\n", my_id, new_cluster_id,
+        //            cluster_id, dist, uppr_bnd, best, cluster_id, g_clusters[cluster_id]->get_s_val());
+        //}
 
 organize:
         BOOST_VERIFY(new_cluster_id >= 0 && new_cluster_id < K);
@@ -707,10 +737,6 @@ organize:
 #if KM_TEST
                         BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                             << cl << " is " << dist;
-                        if (g_clusters[cl]->get_num_members() > (int)NUM_ROWS)
-                            BOOST_LOG_TRIVIAL(warning) << "Failure c:" << cl <<
-                                " has num_members=" << g_clusters[cl]->get_num_members();
-
                         BOOST_VERIFY(g_clusters[cl]->get_num_members() <= (int)NUM_ROWS);
 #endif
                         g_clusters[cl]->set_prev_dist(dist);
@@ -747,7 +773,7 @@ organize:
             for (unsigned i = 0; i < num_clust; i++) {
                 for (unsigned j = i+1; j < num_clust; j++) {
                     double dist = eucl_dist<std::vector<double>>(&(vcl[i]->get_mean()),
-                            &(vcl[j]->get_mean()));
+                            &(vcl[j]->get_mean())) / 2.0;
                     set(i,j, dist);
 
                     // Set s(x) for each cluster
@@ -760,14 +786,10 @@ organize:
                     }
                 }
             }
-
-            // Serial
-            for (unsigned cl = 0; cl < num_clust; cl++) {
-                vcl[cl]->finalize_s_val();
 #if KM_TEST
-                BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl)/2.0);
+            for (unsigned cl = 0; cl < num_clust; cl++)
+                BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl));
 #endif
-            }
         }
 #endif
 
@@ -864,9 +886,16 @@ organize:
 
             gettimeofday(&start , NULL);
             /*** Begin VarInit of data structures ***/
+            std::string init_centers_fn = "/mnt/nfs/disa/data/tiny/fkms_data/5c_128.bin";
+            bin_reader<double> br(init_centers_fn, 5, 57);
+
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-            for (size_t cl = 0; cl < k; cl++)
-                g_clusters.push_back(cluster::create(NUM_COLS));
+            for (size_t cl = 0; cl < k; cl++) {
+                //g_clusters.push_back(cluster::create(NUM_COLS));
+
+                std::vector<double> v = br.readline();
+                g_clusters.push_back(cluster::create(v));
+            }
 
             std::vector<unsigned> num_members_v;
             num_members_v.resize(K);
@@ -878,7 +907,7 @@ organize:
 #endif
             /*** End VarInit ***/
             g_stage = INIT;
-
+/*
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
                 g_init = RANDOM;
@@ -942,6 +971,7 @@ organize:
                     g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                 }
             }
+*/
 
 #if PRUNE
             if (init == "forgy" || init == "kmeanspp") {
@@ -974,8 +1004,6 @@ organize:
 #endif
 
 #if KM_TEST && 0
-            BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
-            print_clusters(g_clusters);
             BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
             get_membership(mat)->print(NUM_ROWS);
 #endif
@@ -994,23 +1022,22 @@ organize:
             while (g_iter < max_iters) {
 #if 0
 #if PRUNE
-                if (g_iter == 2) {
-                    if (!fexists(g_fn)) {
-                        get_membership(mat)->to_file(g_fn);
+                if (g_iter == 4) {
+                    if (fexists(g_fn)) {
+                        BOOST_LOG_TRIVIAL(warning) << "[WARNING]: overwriting " << g_fn;
                     }
+                    get_membership(mat)->to_file(g_fn);
                     exit(EXIT_FAILURE); // FIXME: Premature
                 }
 #else
-                if (g_iter == 3) {
+                if (g_iter == 5) {
                     FG_vector<unsigned>::ptr pruned_memb = get_membership(mat);
                     BOOST_VERIFY(fexists(g_fn));
                     std::unique_ptr<std::vector<size_t> > neq =
                         pruned_memb->where_nequal(FG_vector<unsigned>::from_file(g_fn));
 
-                    BOOST_LOG_TRIVIAL(info) << "Not equal indexes:";
                     printf("Size of not equal: %lu\n", neq->size());
-
-                    //print_vector<size_t>(*neq);
+                    print_vector<size_t>(*neq);
 
                     exit(EXIT_FAILURE); // FIXME: Premature
                 }
@@ -1234,7 +1261,7 @@ organize:
             printf("Printing s_vals:\n");
             for (unsigned i = 0; i < k; i++) {
                 BOOST_VERIFY(g_clusters[i]->get_s_val() ==
-                            test_mat->get_min_dist(i)/2.0);
+                            test_mat->get_min_dist(i));
             }
             printf("\n");
             printf("Exiting test_dist_matrix ==> ");
