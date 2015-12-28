@@ -31,7 +31,7 @@
 #include "save_result.h"
 #define PAGE_ROW
 
-#define PRUNE 1
+#define PRUNE 0
 
 using namespace fg;
 
@@ -67,9 +67,9 @@ namespace {
 #endif
             }
 
-            cluster(const std::vector<double>& mean) {
+            cluster(const std::vector<double> mean) {
                 set_mean(mean);
-                num_members = 1;
+                num_members = 0;
                 complete = true;
 #if PRUNE
                 prev_mean.assign(mean.size(), 0);
@@ -88,10 +88,6 @@ namespace {
             }
 
             double const get_s_val() { return s_val; }
-
-            void finalize_s_val() {
-                s_val /= 2.0;
-            }
 
             const std::vector<double>& get_prev_mean() const {
                 return prev_mean;
