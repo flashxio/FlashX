@@ -33,6 +33,7 @@
 
 #include "in_mem_storage.h"
 #include "graph_file_header.h"
+#include "graph_exception.h"
 
 using namespace safs;
 
@@ -72,8 +73,8 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
 	assert(data.first);
 	graph_header *header = (graph_header *) data.first;
-	header->verify();
-
+	if (!header->is_graph_file() || !header->is_right_version())
+		throw wrong_format("wrong graph file or format version");
 	return graph;
 }
 
@@ -96,8 +97,8 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
 	assert(data.first);
 	graph_header *header = (graph_header *) data.first;
-	header->verify();
-
+	if (!header->is_graph_file() || !header->is_right_version())
+		throw wrong_format("wrong graph file or format version");
 	return graph;
 }
 

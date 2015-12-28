@@ -21,11 +21,13 @@
 
 #include "log.h"
 #include "io_interface.h"
+#include "safs_file.h"
 
 #include "vertex_compute.h"
 #include "vertex_index.h"
 #include "vertex_index_reader.h"
 #include "vertex_index_constructor.h"
+#include "graph_exception.h"
 
 using namespace safs;
 
@@ -38,19 +40,25 @@ const size_t cdirected_vertex_index::ENTRY_SIZE;
 
 static void verify_index(vertex_index::ptr idx)
 {
-	idx->get_graph_header().verify();
+	if (!idx->get_graph_header().is_graph_file()
+			|| !idx->get_graph_header().is_right_version())
+		throw wrong_format("wrong index file or format version");
+
+	bool verify_format;
 	if (idx->get_graph_header().is_directed_graph()) {
 		if (idx->is_compressed())
-			cdirected_vertex_index::cast(idx)->verify();
+			verify_format = cdirected_vertex_index::cast(idx)->verify();
 		else
-			directed_vertex_index::cast(idx)->verify();
+			verify_format = directed_vertex_index::cast(idx)->verify();
 	}
 	else {
 		if (idx->is_compressed())
-			cundirected_vertex_index::cast(idx)->verify();
+			verify_format = cundirected_vertex_index::cast(idx)->verify();
 		else
-			undirected_vertex_index::cast(idx)->verify();
+			verify_format = undirected_vertex_index::cast(idx)->verify();
 	}
+	if (!verify_format)
+		throw wrong_format("wrong index format");
 }
 
 size_t vertex_index::get_index_size() const
@@ -76,25 +84,33 @@ size_t vertex_index::get_index_size() const
 vertex_index::ptr vertex_index::load(const std::string &index_file)
 {
 	native_file local_f(index_file);
+	if (!local_f.exist())
+		throw io_exception(boost::str(boost::format(
+						"the index file %1% doesn't exist") % index_file));
 	ssize_t size = local_f.get_size();
-	assert(size > 0);
-	assert((size_t) size >= sizeof(vertex_index));
+	if (size <= 0 || (size_t) size < sizeof(vertex_index)) {
+		throw wrong_format("the index file is smaller than expected");
+	}
 	char *buf = (char *) malloc(size);
-	assert(buf);
+	if (buf == NULL)
+		throw oom_exception("can't allocate memory for vertex index");
 	FILE *fd = fopen(index_file.c_str(), "r");
 	if (fd == NULL)
 		throw io_exception(std::string("can't open ") + index_file);
-	if (fread(buf, size, 1, fd) != 1)
+	if (fread(buf, size, 1, fd) != 1) {
+		fclose(fd);
 		throw io_exception(std::string("can't read from ") + index_file);
+	}
 	fclose(fd);
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
-	assert((size_t) size >= idx->get_index_size());
+	if ((size_t) size < idx->get_index_size())
+		throw wrong_format("the index file is smaller than expected");
 	verify_index(idx);
+
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("load vertex index: file size: %1%, index size: %2%")
 		% size % idx->get_index_size();
-
 	return idx;
 }
 
@@ -103,32 +119,43 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
 	const int READ_SIZE = 100 * 1024 * 1024;
 
+	safs_file safs_f(get_sys_RAID_conf(), index_file);
+	if (!safs_f.exist())
+		throw io_exception(boost::str(boost::format(
+						"the index file %1% doesn't exist") % index_file));
+
 	// Right now only the cached I/O can support async I/O
 	file_io_factory::shared_ptr factory = create_io_factory(index_file,
 			REMOTE_ACCESS);
-	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
+	if (factory->get_file_size() < INDEX_HEADER_SIZE)
+		throw wrong_format("the index file is smaller than expected");
 	io_interface::ptr io = create_io(factory, thread::get_curr_thread());
 
 	// Get the header of the index.
 	char *tmp = NULL;
 	int ret = posix_memalign((void **) &tmp, PAGE_SIZE, INDEX_HEADER_SIZE);
-	assert(ret == 0);
+	if (ret != 0)
+		throw oom_exception("can't allocate memory for vertex index");
 	data_loc_t loc(factory->get_file_id(), 0);
 	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ);
 	io->access(&req, 1);
 	io->wait4complete(1);
 	vertex_index *index = (vertex_index *) tmp;
-	index->get_graph_header().verify();
+	if (!index->get_graph_header().is_graph_file()
+			|| !index->get_graph_header().is_right_version())
+		throw wrong_format("wrong index file or format version");
 
 	// Initialize the buffer for containing the index.
 	size_t index_size = index->get_index_size();
-	assert((ssize_t) index_size <= factory->get_file_size());
+	if (factory->get_file_size() < (ssize_t) index_size)
+		throw wrong_format("the index file is smaller than expected");
 	char *buf = NULL;
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("allocate %1% bytes for vertex index") % index_size;
 	ret = posix_memalign((void **) &buf, PAGE_SIZE,
 			std::max(index_size, (size_t) INDEX_HEADER_SIZE));
-	assert(ret == 0);
+	if (ret != 0)
+		throw oom_exception("can't allocate memory for vertex index");
 	off_t off = 0;
 	memcpy(buf, tmp, INDEX_HEADER_SIZE);
 	off += INDEX_HEADER_SIZE;

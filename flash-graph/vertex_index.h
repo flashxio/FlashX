@@ -199,9 +199,9 @@ public:
 			+ h.data.num_entries * h.data.entry_size;
 	}
 
-	void verify() const {
-		assert(h.data.entry_size == sizeof(vertex_entry_type));
-		assert(h.data.header.num_vertices + 1 == h.data.num_entries);
+	bool verify() const {
+		return (h.data.entry_size == sizeof(vertex_entry_type))
+			&& (h.data.header.num_vertices + 1 == h.data.num_entries);
 	}
 };
 
@@ -245,16 +245,16 @@ public:
 	static undirected_vertex_index::ptr load(const std::string &index_file) {
 		undirected_vertex_index::ptr ret
 			= cast(vertex_index_temp<vertex_offset>::load(index_file));
-		ret->verify();
 		return ret;
 	}
 
-	void verify() const {
-		vertex_index_temp<vertex_offset>::verify();
+	bool verify() const {
+		if (!vertex_index_temp<vertex_offset>::verify())
+			return false;
 		// Right now all other types of graphs use the default vertex index.
-		assert(get_graph_header().get_graph_type() != graph_type::DIRECTED);
-		assert(get_vertex(0).get_off() == sizeof(graph_header));
-		assert(h.data.out_part_loc == 0);
+		return (get_graph_header().get_graph_type() != graph_type::DIRECTED)
+			&& (get_vertex(0).get_off() == sizeof(graph_header))
+			&& (h.data.out_part_loc == 0);
 	}
 
 	size_t get_graph_size() const {
@@ -323,7 +323,6 @@ public:
 	static directed_vertex_index::ptr load(const std::string &index_file) {
 		directed_vertex_index::ptr ret
 			= cast(vertex_index_temp<directed_vertex_entry>::load(index_file));
-		ret->verify();
 		return ret;
 	}
 
@@ -358,14 +357,15 @@ public:
 		fclose(f);
 	}
 
-	void verify() const {
-		vertex_index_temp<directed_vertex_entry>::verify();
-		TEST(get_graph_header().get_graph_type() == graph_type::DIRECTED);
-		TEST(get_vertex(0).get_in_off() == sizeof(graph_header));
-		// All out-part of vertices are stored behind the in-part of vertices.
-		TEST(get_vertex(0).get_out_off()
-				== get_vertex(get_num_vertices()).get_in_off());
-		TEST(h.data.out_part_loc == get_vertex(0).get_out_off());
+	bool verify() const {
+		if (!vertex_index_temp<directed_vertex_entry>::verify())
+			return false;
+		return (get_graph_header().get_graph_type() == graph_type::DIRECTED)
+			&& (get_vertex(0).get_in_off() == sizeof(graph_header))
+			// All out-part of vertices are stored behind the in-part of vertices.
+			&& (get_vertex(0).get_out_off()
+					== get_vertex(get_num_vertices()).get_in_off())
+			&& (h.data.out_part_loc == get_vertex(0).get_out_off());
 	}
 
 	size_t get_graph_size() const {
@@ -546,13 +546,13 @@ public:
 		return h.data.num_large_in_vertices;
 	}
 
-	void verify() const {
+	bool verify() const {
 		// We use num_large_in_vertices to store the number of large
 		// undirected vertices and set num_large_out_vertices to 0.
-		assert(h.data.num_large_out_vertices == 0);
-		assert(h.data.entry_size == sizeof(entry_type));
-		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
-				== h.data.num_entries);
+		return (h.data.num_large_out_vertices == 0)
+			&& (h.data.entry_size == sizeof(entry_type))
+			&& (ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
+					== h.data.num_entries);
 	}
 };
 
@@ -625,10 +625,10 @@ public:
 		return h.data.num_large_out_vertices;
 	}
 
-	void verify() const {
-		assert(h.data.entry_size == sizeof(entry_type));
-		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
-				== h.data.num_entries);
+	bool verify() const {
+		return (h.data.entry_size == sizeof(entry_type))
+			&& (ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
+					== h.data.num_entries);
 	}
 };
 

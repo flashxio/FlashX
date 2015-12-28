@@ -48,8 +48,11 @@ class FG_graph
 	std::shared_ptr<vertex_index> index_data;
 	config_map::ptr configs;
 
+	// In this case, the graph file is kept in SAFS and the index is read to
+	// memory.
 	FG_graph(const std::string &graph_file,
-			const std::string &index_file, config_map::ptr configs);
+			std::shared_ptr<vertex_index> index_data, config_map::ptr configs);
+	// In this case, both the graph and the index are read to memory.
 	FG_graph(std::shared_ptr<in_mem_graph> graph_data,
 			std::shared_ptr<vertex_index> index_data,
 			const std::string &graph_name, config_map::ptr configs);
@@ -69,9 +72,7 @@ public:
 	 * \param configs Configuration in configuration file.
 	 */
 	static ptr create(const std::string &graph_file,
-			const std::string &index_file, config_map::ptr configs) {
-		return ptr(new FG_graph(graph_file, index_file, configs));
-	}
+			const std::string &index_file, config_map::ptr configs);
 
 	/**
 	 * \brief  Method to instantiate a graph object.

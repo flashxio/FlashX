@@ -42,6 +42,22 @@ public:
 	}
 };
 
+class wrong_format: public std::exception
+{
+	std::string msg;
+public:
+	wrong_format(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~wrong_format() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
+
 }
 
 #endif

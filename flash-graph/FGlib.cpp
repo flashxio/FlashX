@@ -32,19 +32,9 @@ using namespace safs;
 namespace fg
 {
 
-FG_graph::FG_graph(const std::string &graph_file,
+FG_graph::ptr FG_graph::create(const std::string &graph_file,
 		const std::string &index_file, config_map::ptr configs)
 {
-	this->graph_file = graph_file;
-	this->index_file = index_file;
-	this->configs = configs;
-
-	try {
-		if (configs)
-			graph_engine::init_flash_graph(configs);
-	} catch (init_error &e) {
-		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
-	}
 	bool init_io = is_safs_init();
 
 	/*
@@ -60,49 +50,55 @@ FG_graph::FG_graph(const std::string &graph_file,
 	 * a in-memory copy.
 	 */
 
-	bool exist_in_safs = false;
+	bool graph_in_safs = false;
+	bool index_in_safs = false;
 	if (init_io) {
 		const RAID_config &raid_conf = get_sys_RAID_conf();
 		safs_file safs_graph(raid_conf, graph_file);
 		safs_file safs_index(raid_conf, index_file);
-		exist_in_safs = safs_graph.exist() && safs_index.exist();
+		graph_in_safs = safs_graph.exist();
+		index_in_safs = safs_index.exist();
 	}
 
-	if (graph_conf.use_in_mem_graph() && exist_in_safs)
+	in_mem_graph::ptr graph_data;
+	if (graph_conf.use_in_mem_graph() && graph_in_safs)
 		graph_data = in_mem_graph::load_safs_graph(graph_file);
-	else if (!exist_in_safs) {
+	else if (!graph_in_safs)
 		// If we can't initialize SAFS, we assume the graph file is
 		// in the local filesystem.
 		graph_data = in_mem_graph::load_graph(graph_file);
-	}
 
-	if (graph_conf.use_in_mem_index() && exist_in_safs) {
+	vertex_index::ptr index_data;
+	if (index_in_safs)
 		index_data = vertex_index::safs_load(index_file);
-		header = index_data->get_graph_header();
-	}
-	else if (!exist_in_safs) {
+	else
 		// If we can't initialize SAFS, we assume the index file is
 		// in the local filesystem.
 		index_data = vertex_index::load(index_file);
-		header = index_data->get_graph_header();
-	}
-	else {
-		file_io_factory::shared_ptr index_factory = create_io_factory(
-				index_file, REMOTE_ACCESS);
-		io_interface::ptr io = create_io(index_factory, thread::get_curr_thread());
-		char *buf = NULL;
-		int ret = posix_memalign((void **) &buf, 512, sizeof(header));
-		assert(ret == 0);
-		data_loc_t loc(io->get_file_id(), 0);
-		io_request req(buf, loc, sizeof(header), READ);
-		io->access(&req, 1);
-		io->wait4complete(1);
-		memcpy(&header, buf, sizeof(header));
+
+	if (graph_data)
+		return ptr(new FG_graph(graph_data, index_data, graph_file, configs));
+	else
+		return ptr(new FG_graph(graph_file, index_data, configs));
+}
+
+FG_graph::FG_graph(const std::string &graph_file, vertex_index::ptr index_data,
+		config_map::ptr configs)
+{
+	this->graph_file = graph_file;
+	this->index_data = index_data;
+	this->configs = configs;
+	this->header = index_data->get_graph_header();
+
+	try {
+		if (configs)
+			graph_engine::init_flash_graph(configs);
+	} catch (init_error &e) {
+		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
 	}
 }
 
-FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
-		std::shared_ptr<vertex_index> index_data,
+FG_graph::FG_graph(in_mem_graph::ptr graph_data, vertex_index::ptr index_data,
 		const std::string &graph_name, config_map::ptr configs)
 {
 	try {
