@@ -442,7 +442,7 @@ static void fg_clean_graph(SEXP p)
 
 	auto it = graphs.find(ref->get_name());
 	if (it == graphs.end()) {
-		fprintf(stderr, "%s doesn't exist\n", ref->get_name().c_str());
+		fprintf(stderr, "graph %s doesn't exist\n", ref->get_name().c_str());
 	}
 	else {
 		// If the graph is still registered in the graph table.
@@ -632,7 +632,7 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 
 	native_file f(graph_file);
 	if (!f.exist()) {
-		fprintf(stderr, "%s doesn't exist\n", graph_file.c_str());
+		fprintf(stderr, "edge list file %s doesn't exist\n", graph_file.c_str());
 		return R_NilValue;
 	}
 
@@ -653,7 +653,7 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 {
 	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
 	if (!exist_graph(graph_name)) {
-		fprintf(stderr, "%s doesn't exist\n", graph_name.c_str());
+		fprintf(stderr, "graph %s doesn't exist\n", graph_name.c_str());
 		return R_NilValue;
 	}
 
