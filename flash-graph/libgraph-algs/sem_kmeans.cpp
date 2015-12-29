@@ -294,8 +294,6 @@ namespace {
         std::vector<double> lwr_bnd;
 #if PRUNE
         unsigned nxt_clstr; // If prune fails .. which cluster do we start from?
-        bool r;
-        bool in_x_prev_iter;
 #endif
         public:
         kmeans_vertex(vertex_id_t id):
@@ -305,24 +303,9 @@ namespace {
 #if PRUNE
                 lwr_bnd.assign(K, 0); // Set K items to 0
                 nxt_clstr = 0;
-                r = false;
-                in_x_prev_iter = false;
 #endif
             }
 
-#if PRUNE
-        void set_in_x_prev_iter(bool in=true) {
-            if (in && in_x_prev_iter)
-                return;
-            else
-                in_x_prev_iter = in;
-        }
-
-        bool const get_in_x_prev_iter() {
-            return in_x_prev_iter;
-        }
-
-#endif
         unsigned get_result() const {
             return cluster_id;
         }
@@ -476,9 +459,7 @@ namespace {
             }
 
             /* #6 */
-            vertex_id_t my_id = prog.get_vertex_id(*this);
             dist += g_clusters[cluster_id]->get_prev_dist();
-            r = true;
         }
 #endif
         vertex_id_t id = prog.get_vertex_id(*this);
@@ -600,8 +581,8 @@ namespace {
 #if KM_TEST
             g_prune_stats->pp_lemma1(K);
 #endif
-            printf("Skipping v:%u, c:%u, dist: %.3f, iter= %u\n",
-                    my_id, cluster_id, dist, g_iter);
+            //printf("Skipping v:%u, c:%u, dist: %.3f, iter= %u\n",
+                   //my_id, cluster_id, dist, g_iter);
             new_cluster_id = cluster_id; best = dist;
         } else {
             for (unsigned cl = 0; cl < K; cl++) {
@@ -1024,9 +1005,9 @@ namespace {
             g_iter = 1;
 
             while (g_iter < max_iters) {
-#if 1
+#if 0
 #if PRUNE
-                if (g_iter == 2) {
+                if (g_iter == 4) {
                     if (fexists(g_fn)) {
                         BOOST_LOG_TRIVIAL(warning) << "[WARNING]: overwriting " << g_fn;
                     }
