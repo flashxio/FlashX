@@ -38,50 +38,61 @@ public:
 	}
 };
 
-void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes,
-		bool ext_mem)
+void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
+		int num_nodes, bool ext_mem)
 {
 	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
-	detail::matrix_store::ptr in;
-	if (ext_mem)
-		in = detail::EM_matrix_store::create(mat->get_num_cols(), mat_width,
-				matrix_layout_t::L_ROW, get_scalar_type<double>());
-	else
-		in = detail::mem_matrix_store::create(mat->get_num_cols(), mat_width,
-				matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
-	if (!ext_mem && num_nodes < 0) {
-		detail::mem_matrix_store::ptr mem_in = detail::mem_matrix_store::cast(in);
-		// This forces all memory is allocated in a single NUMA node.
-		for (size_t i = 0; i < in->get_num_rows(); i++)
-			for (size_t j = 0; j < in->get_num_cols(); j++)
-				mem_in->set<double>(i, j, (i % 100) * (j + 1));
+	std::vector<detail::matrix_store::ptr> ins(mat_width / indiv_mat_width);
+	for (size_t i = 0; i < ins.size(); i++) {
+		detail::matrix_store::ptr in;
+		if (ext_mem)
+			in = detail::EM_matrix_store::create(mat->get_num_cols(),
+					indiv_mat_width, matrix_layout_t::L_ROW,
+					get_scalar_type<double>());
+		else
+			in = detail::mem_matrix_store::create(mat->get_num_cols(),
+					indiv_mat_width, matrix_layout_t::L_ROW,
+					get_scalar_type<double>(), num_nodes);
+		if (!ext_mem && num_nodes < 0) {
+			detail::mem_matrix_store::ptr mem_in
+				= detail::mem_matrix_store::cast(in);
+			// This forces all memory is allocated in a single NUMA node.
+			for (size_t i = 0; i < in->get_num_rows(); i++)
+				for (size_t j = 0; j < in->get_num_cols(); j++)
+					mem_in->set<double>(i, j, (i % 100) * (j + 1));
+		}
+		else
+			in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
+		ins[i] = in;
 	}
-	else
-		in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 	printf("set input data\n");
 
-	detail::matrix_store::ptr out;
-	// Initialize the output matrix and allocate pages for it.
-	if (ext_mem)
-		out = detail::EM_matrix_store::create(mat->get_num_rows(), mat_width,
-				matrix_layout_t::L_ROW, get_scalar_type<double>());
-	else
-		out = detail::mem_matrix_store::create(mat->get_num_rows(), mat_width,
-				matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
-	if (num_nodes < 0 && out->is_in_mem()) {
-		detail::mem_matrix_store::ptr mem_out
-			= detail::mem_matrix_store::cast(out);
-		// This forces all memory is allocated in a single NUMA node.
-		for (size_t i = 0; i < in->get_num_rows(); i++)
-			for (size_t j = 0; j < in->get_num_cols(); j++)
-				mem_out->set<double>(i, j, 0);
+	std::vector<detail::matrix_store::ptr> outs(ins.size());
+	for (size_t i = 0; i < outs.size(); i++) {
+		detail::matrix_store::ptr out;
+		// Initialize the output matrix and allocate pages for it.
+		if (ext_mem)
+			out = detail::EM_matrix_store::create(mat->get_num_rows(), indiv_mat_width,
+					matrix_layout_t::L_ROW, get_scalar_type<double>());
+		else
+			out = detail::mem_matrix_store::create(mat->get_num_rows(), indiv_mat_width,
+					matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
+		if (num_nodes < 0 && out->is_in_mem()) {
+			detail::mem_matrix_store::ptr mem_out
+				= detail::mem_matrix_store::cast(out);
+			// This forces all memory is allocated in a single NUMA node.
+			for (size_t i = 0; i < out->get_num_rows(); i++)
+				for (size_t j = 0; j < out->get_num_cols(); j++)
+					mem_out->set<double>(i, j, 0);
+		}
+		else if (out->is_in_mem())
+			out->reset_data();
+		outs[i] = out;
 	}
-	else if (out->is_in_mem())
-		out->reset_data();
 	printf("reset output data\n");
 	printf("in mat is on %d nodes and out mat is on %d nodes\n",
-			in->get_num_nodes(), out->get_num_nodes());
+			ins[0]->get_num_nodes(), outs[0]->get_num_nodes());
 
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
@@ -89,7 +100,8 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes,
 #endif
 	printf("Start SpMM\n");
 	gettimeofday(&start, NULL);
-	mat->multiply<double, float>(in, out);
+	for (size_t i = 0; i < ins.size(); i++)
+		mat->multiply<double, float>(ins[i], outs[i]);
 	gettimeofday(&end, NULL);
 	printf("SpMM completes\n");
 #ifdef PROFILER
@@ -98,13 +110,15 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, int num_nodes,
 #endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
 
-	dense_matrix::ptr in_mat = dense_matrix::create(in);
-	dense_matrix::ptr out_mat = dense_matrix::create(out);
-	std::vector<double> in_col_sum = in_mat->col_sum()->conv2std<double>();
-	std::vector<double> out_col_sum = out_mat->col_sum()->conv2std<double>();
-	for (size_t k = 0; k < in->get_num_cols(); k++) {
-		printf("%ld: sum of input: %lf, sum of product: %lf\n",
-				k, in_col_sum[k], out_col_sum[k]);
+	for (size_t i = 0; i < ins.size(); i++) {
+		dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
+		dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
+		std::vector<double> in_col_sum = in_mat->col_sum()->conv2std<double>();
+		std::vector<double> out_col_sum = out_mat->col_sum()->conv2std<double>();
+		for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
+			printf("%ld: sum of input: %lf, sum of product: %lf\n",
+					k, in_col_sum[k], out_col_sum[k]);
+		}
 	}
 }
 
@@ -169,6 +183,7 @@ void print_usage()
 	fprintf(stderr, "-n number: the number of NUMA nodes\n");
 	fprintf(stderr, "-t type: the type of non-zero entries\n");
 	fprintf(stderr, "-e: output matrix in external memory\n");
+	fprintf(stderr, "-i width: the number of columns of the individual dense matrix\n");
 }
 
 int main(int argc, char *argv[])
@@ -178,7 +193,8 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	size_t mat_width = 0;
+	size_t mat_width = 1;
+	size_t indiv_mat_width = 0;
 	std::string exec_order = "hilbert";
 	size_t cpu_cache_size = 1024 * 1024;
 	int opt;
@@ -188,10 +204,13 @@ int main(int argc, char *argv[])
 	int num_nodes = 0;
 	bool ext_mem = false;
 	std::string entry_type;
-	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:e")) != -1) {
+	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:ei:")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
+				break;
+			case 'i':
+				indiv_mat_width = atoi(optarg);
 				break;
 			case 'o':
 				exec_order = optarg;
@@ -222,6 +241,9 @@ int main(int argc, char *argv[])
 				abort();
 		}
 	}
+
+	if (indiv_mat_width == 0)
+		indiv_mat_width = mat_width;
 
 	std::string conf_file = argv[argc - 3];
 	std::string matrix_file = argv[argc - 2];
@@ -256,15 +278,8 @@ int main(int argc, char *argv[])
 	if (num_nodes == 0)
 		num_nodes = matrix_conf.get_num_nodes();
 
-	if (mat_width == 0) {
-		for (size_t i = 1; i <= 16; i *= 2)
-			for (size_t k = 0; k < repeats; k++)
-				test_SpMM(mat, i, num_nodes, ext_mem);
-	}
-	else {
-		for (size_t k = 0; k < repeats; k++)
-			test_SpMM(mat, mat_width, num_nodes, ext_mem);
-	}
+	for (size_t k = 0; k < repeats; k++)
+		test_SpMM(mat, mat_width, indiv_mat_width, num_nodes, ext_mem);
 
 	destroy_flash_matrix();
 }
