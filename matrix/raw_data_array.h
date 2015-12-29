@@ -91,7 +91,12 @@ public:
 	local_raw_array() {
 	}
 
-	local_raw_array(size_t num_bytes);
+	/*
+	 * We can also decide where to allocate memory.
+	 * If cached is true, we allocate memory from local buffers.
+	 * Otherwise, we allocate memory with malloc.
+	 */
+	local_raw_array(size_t num_bytes, bool cached = true);
 
 	char *get_raw() {
 		return data.get();

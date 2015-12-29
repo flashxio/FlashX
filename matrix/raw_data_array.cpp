@@ -92,9 +92,10 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 
 }
 
-local_raw_array::local_raw_array(size_t num_bytes): raw_array(num_bytes, -1)
+local_raw_array::local_raw_array(size_t num_bytes,
+		bool cached): raw_array(num_bytes, -1)
 {
-	data = memalloc_node(-1, true, num_bytes);
+	data = memalloc_node(-1, cached, num_bytes);
 }
 
 void local_raw_array::expand(size_t min)

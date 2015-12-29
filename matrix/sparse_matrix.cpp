@@ -188,8 +188,13 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 	if (it == portion_bufs.end()) {
 		size_t portion_num_rows = std::min(CHUNK_SIZE,
 				mat->get_num_rows() - EM_portion_row_start);
+		size_t num_bytes
+			= portion_num_rows * portion->get_num_cols() * mat->get_type().get_size();
+		// We don't want to allocate memory from the local memory buffers
+		// because it's not clear which thread will destroy the raw array.
+		local_raw_array arr(num_bytes, false);
 		local_matrix_store::ptr tmp(
-				new local_buf_row_matrix_store(EM_portion_row_start,
+				new local_buf_row_matrix_store(arr, EM_portion_row_start,
 					start_col, portion_num_rows, portion->get_num_cols(),
 					mat->get_type(), -1));
 		buf = filled_local_store::ptr(new filled_local_store(tmp));
