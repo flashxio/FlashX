@@ -28,16 +28,6 @@ namespace alg
 namespace
 {
 
-class mat_init_one: public type_set_operate<float>
-{
-public:
-	virtual void set(float *arr, size_t num_eles, off_t row_idx,
-			            off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = 1;
-	}
-};
-
 class mat_init_operate: public type_set_operate<float>
 {
 	size_t num_vertices;
@@ -59,11 +49,9 @@ detail::matrix_store::ptr get_out_degree(sparse_matrix::ptr mat, bool in_mem)
 	detail::matrix_store::ptr out_deg = detail::matrix_store::create(
 			mat->get_num_rows(), 1, matrix_layout_t::L_ROW,
 			get_scalar_type<float>(), num_nodes, in_mem);
-	detail::matrix_store::ptr one = detail::matrix_store::create(
-			mat->get_num_cols(), 1, matrix_layout_t::L_ROW,
-			get_scalar_type<float>(), num_nodes, true);
-	one->set_data(mat_init_one());
-	mat->multiply<float, float>(one, out_deg);
+	dense_matrix::ptr one = dense_matrix::create_const<float>(1,
+			mat->get_num_cols(), 1, matrix_layout_t::L_ROW, num_nodes, true);
+	mat->multiply<float, float>(one->get_raw_store(), out_deg);
 	return out_deg;
 }
 
