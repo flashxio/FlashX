@@ -57,6 +57,7 @@ namespace {
     static const unsigned INVALID_CLUST_ID = -1;
     static unsigned g_iter;
 
+    static unsigned g_per_iter_3a = 0; //TODO: rm
     // Begin Helpers //
     template <typename T>
         static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
@@ -223,14 +224,14 @@ namespace {
     {
         private:
             // Counts per iteration
-            std::atomic<unsigned> lemma1, _3a, _3b;
+            std::atomic<unsigned> lemma1, _3a, _3b, _3c;
 
             // Total counts
-            unsigned tot_lemma1, tot_3a, tot_3b, iter;
+            unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, iter;
 
             prune_stats() {
-                _3a = _3b = lemma1 = 0;
-                tot_lemma1 = tot_3a = tot_3b = iter = 0;
+                _3a = _3b = lemma1 = _3c = 0;
+                tot_lemma1 = tot_3a = tot_3b = tot_3c = iter = 0;
             }
 
         public:
@@ -248,35 +249,44 @@ namespace {
             void pp_3b() {
                 _3b = _3b + 1;
             }
+
+            void pp_3c() {
+                _3c = _3c + 1;
+            }
+
             void finalize() {
                 iter++;
-                BOOST_VERIFY((lemma1 + _3a + _3b) <=  NUM_ROWS*K);
+                BOOST_VERIFY((lemma1 + _3a + _3b + _3c) <=  NUM_ROWS*K);
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats count:\n"
                     "lemma1 = " << lemma1 << ", 3a = " << _3a
-                    << ", 3b = " << _3b;
+                    << ", 3b = " << _3b << ", 3c = " << _3c;
 
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
                     "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(NUM_ROWS*K))*100) <<
                     "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(NUM_ROWS*K))*100) <<
-                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(NUM_ROWS*K))*100) << "\%";
+                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(NUM_ROWS*K))*100) <<
+                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(NUM_ROWS*K))*100) << "\%";
 
                 tot_lemma1 += (unsigned)lemma1;
                 tot_3a += (unsigned)_3a;
-                tot_3a += (unsigned)_3b;
+                tot_3b += (unsigned)_3b;
+                tot_3c += (unsigned)_3c;
 
-                lemma1 =  _3a = _3b = 0; // reset
+                lemma1 = _3a = _3b = _3c = 0; // reset
             }
 
             std::vector<double> get_stats() {
                 double perc_lemma1 = tot_lemma1 / ((double)(NUM_ROWS*this->iter*K))*100;
                 double perc_3a = tot_3a / ((double)(NUM_ROWS*this->iter*K))*100;
                 double perc_3b = tot_3b / ((double)(NUM_ROWS*this->iter*K))*100;
+                double perc_3c = tot_3c / ((double)(NUM_ROWS*this->iter*K))*100;
                 // Total percentage
-                double perc = ((tot_3b + tot_3a + tot_lemma1) /
+                double perc = ((tot_3b + tot_3a + tot_3c + tot_lemma1) /
                         ((double)((NUM_ROWS*this->iter*K)) + ((K*(K-1))/2.0)))*100;
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
                     "Tot = " << perc << "\%, 3a = " << perc_3a <<
-                    "\%, 3b = " << perc_3b << "\%, lemma1 = " << perc_lemma1 << "\%";
+                    "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c <<
+                    "\%, lemma1 = " << perc_lemma1 << "\%";
 
                 std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc};
                 return ret;
@@ -294,6 +304,7 @@ namespace {
         std::vector<double> lwr_bnd;
 #if PRUNE
         unsigned nxt_clstr; // If prune fails .. which cluster do we start from?
+        bool recalculated;
 #endif
         public:
         kmeans_vertex(vertex_id_t id):
@@ -302,7 +313,8 @@ namespace {
                 cluster_id = INVALID_CLUST_ID;
 #if PRUNE
                 lwr_bnd.assign(K, 0); // Set K items to 0
-                nxt_clstr = 0;
+                nxt_clstr = 0; // TODO: Use me!
+                recalculated = false;
 #endif
             }
 
@@ -359,8 +371,12 @@ namespace {
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex &vertex);
         double get_distance(unsigned cl, edge_seq_iterator& id_it, data_seq_iter& count_it);
+#if PRUNE
+        double dist_comp(const page_vertex &vertex, const unsigned cl);
+#else
         void dist_comp(const page_vertex &vertex, double* best,
                 unsigned* new_cluster_id, const unsigned cl);
+#endif
     };
 
     /* Used in per thread cluster formation */
@@ -452,6 +468,7 @@ namespace {
     void kmeans_vertex::run(vertex_program &prog) {
 
 #if PRUNE
+        recalculated = false;
         if (cluster_id != INVALID_CLUST_ID) { //FIXME: Verify this condition -- should be if I changed my cluster last time
             for (unsigned cl = 0; cl < K; cl++) {
                 // TODO: Test if (g_clusters[cl]->get_prev_dist()) > 0
@@ -545,6 +562,15 @@ namespace {
         return sqrt(dist);
     }
 
+#if PRUNE
+    double kmeans_vertex::dist_comp(const page_vertex &vertex, const unsigned cl) {
+        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
+        data_seq_iter count_it =
+            ((const page_row&)vertex).get_data_seq_it<double>();
+
+        return get_distance(cl, id_it, count_it);
+    }
+#else
     void kmeans_vertex::dist_comp(const page_vertex &vertex, double* best,
             unsigned* new_cluster_id, const unsigned cl) {
         edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
@@ -557,71 +583,117 @@ namespace {
             *new_cluster_id = cl;
             *best = dist;
         }
-#if PRUNE
-            lwr_bnd[cl] = dist;
+    }
 #endif
+
+    std::string p(double num) {
+        if (num == std::numeric_limits<double>::max())
+            return "Inf";
+
+        char str[10];
+        sprintf(str, "%.3f", num);
+        return std::string(str);
     }
 
     void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
         kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
-        double best = std::numeric_limits<double>::max();
-        unsigned new_cluster_id = INVALID_CLUST_ID;
-
 #if PRUNE
-        best = dist;
-        new_cluster_id = cluster_id;
-
         vertex_id_t my_id = prog.get_vertex_id(*this);
+        unsigned old_cluster_id = cluster_id;
 
-        if (!g_prune_init)
-            BOOST_VERIFY(cluster_id != INVALID_CLUST_ID && cluster_id < K);
-
-        if (!g_prune_init &&  // TODO: Move some of this logic to the run
-            dist <= g_clusters[cluster_id]->get_s_val()) {
-#if KM_TEST
-            g_prune_stats->pp_lemma1(K);
-#endif
-            //printf("Skipping v:%u, c:%u, dist: %.3f, iter= %u\n",
-                   //my_id, cluster_id, dist, g_iter);
-            new_cluster_id = cluster_id; best = dist;
-        } else {
+        if (g_prune_init) {
             for (unsigned cl = 0; cl < K; cl++) {
-                dist_comp(vertex, &best, &new_cluster_id, cl); // Computed
-                /*
-                if (false && (new_cluster_id != INVALID_CLUST_ID) && (cl != new_cluster_id) &&
-                        (dist > lwr_bnd[cl]) && (dist > g_cluster_dist->get(new_cluster_id, cl))) {
-
-                    // 3a)
-                    if (r) {
-                        dist_comp(vertex, &best, &new_cluster_id, cluster_id);
-                        r = false;
-                    } else if (best > dist) { // Added DM
-                        best = dist;
-                        new_cluster_id = cluster_id;
+                double udist = dist_comp(vertex, cl);
+                if (udist < dist) { // FIXME: Verify dist = std::max() in g_prune_init if not need `double best`
+                    dist = udist;
+                    cluster_id = cl;
+                }
+            }
+        } else {
+            if (dist <= g_clusters[cluster_id]->get_s_val()) { // TODO: Move some of this logic to the run
+#if KM_TEST
+                g_prune_stats->pp_lemma1(K);
+#endif
+                // Nothing changes!
+            } else {
+                for (unsigned cl = 0; cl < K; cl++) {
+                    if (dist <= g_cluster_dist->get(cluster_id, cl)) {
 #if KM_TEST
                         g_prune_stats->pp_3a();
+                        g_per_iter_3a++;
+#endif
+#if VERBOSE
+                        if (cl == 0) {
+                            printf("v:%u prune 3a for c:%u, dist = %.3f,"
+                                    "d(c:%u, c:%u) = %s\n", my_id, cl, dist, cluster_id, cl,
+                                    p(g_cluster_dist->get(cluster_id, cl)).c_str());
+                        }
 #endif
                         continue;
-                    }
-
-                    if (best > lwr_bnd[cl] || best > g_cluster_dist->get(new_cluster_id, cl)) {
-                        dist_comp(vertex, &best, &new_cluster_id, cl);
-                    } else {
+                    } else if (dist <= lwr_bnd[cl]) {
 #if KM_TEST
                         g_prune_stats->pp_3b();
+                        // g_per_iter_3a++; // TODO
+#endif
+#if VERBOSE
+                        if (cl == 0) {
+                            printf("v:%u prune 3b for c:%u, dist = %.3f, lwr_bnd[c:%u] = %s\n",
+                                    my_id, cl, dist, cl, p(lwr_bnd[cl]).c_str());
+                        }
 #endif
                         continue;
                     }
 
-                    dist_comp(vertex, &best, &new_cluster_id, cl); // TODO: RM
+                    // If not recalculated to my current cluster .. do so to tighten bounds
+                    if (!recalculated) {
+                        double udist = dist_comp(vertex, cluster_id);
+                        lwr_bnd[cluster_id] = udist;
+                        dist = udist; // NOTE: No more best!
+                        recalculated = true;
+                    }
 
-                } else {
-                    dist_comp(vertex, &best, &new_cluster_id, cl); // Computed
+                    if (dist <= g_cluster_dist->get(cluster_id, cl)) {
+#if KM_TEST
+                        g_prune_stats->pp_3c();
+#endif
+#if VERBOSE
+                        if (cl == 0) {
+                            printf("v:%u prune 3c for c:%u, dist = %.3f,"
+                                    "d(c:%u, c:%u) = %s\n", my_id, cl, dist, cluster_id, cl,
+                                    p(g_cluster_dist->get(cluster_id, cl)).c_str());
+                        }
+#endif
+                        continue;
+                    }
+
+                    // Track 4
+                    if (lwr_bnd[cl] >= dist) {
+#if KM_TEST
+                        // TODO: Add prune_stats
+#endif
+#if VERBOSE
+                        if (cl == 2) {
+                            printf("v:%u prune 4 for c:%u, dist = %.3f, lwr_bnd[c:%u] = %s\n"
+                                    , my_id, cl, dist, cl, p(lwr_bnd[cl]).c_str());
+                        }
+#endif
+                        continue;
+                    }
+
+                    // Track 5
+                    double jdist = dist_comp(vertex, cl);
+                    lwr_bnd[cl] = jdist;
+                    if (jdist < dist) {
+                        dist = jdist;
+                        cluster_id = cl;
+                    }
                 }
-                */
             }
         }
 #else
+        double best = std::numeric_limits<double>::max();
+        unsigned new_cluster_id = INVALID_CLUST_ID;
+
         for (unsigned cl = 0; cl < K; cl++) {
             dist_comp(vertex, &best, &new_cluster_id, cl);
         }
@@ -633,26 +705,25 @@ namespace {
         //            cluster_id, dist, best, cluster_id, g_clusters[cluster_id]->get_s_val());
         //}
 
+#if PRUNE
+        BOOST_VERIFY(cluster_id >= 0 && cluster_id < K);
+#else
         BOOST_VERIFY(new_cluster_id >= 0 && new_cluster_id < K);
+#endif
 
         edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
         data_seq_iter count_it = ((const page_row&)vertex).get_data_seq_it<double>();
 
 #if PRUNE
         if (g_prune_init) {
-#if VERBOSE
-            printf("v%u lwr_bnd = ", my_id); print_vector<double>(lwr_bnd);
-#endif
             vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-            this->cluster_id = new_cluster_id;
             vprog.add_member(cluster_id, id_it, count_it);
-        } else if (new_cluster_id != this->cluster_id) {
+        } else if (old_cluster_id != this->cluster_id) {
             vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-            vprog.remove_member(cluster_id, id_it, count_it);
+            vprog.remove_member(old_cluster_id, id_it, count_it);
 
             id_it = vertex.get_neigh_seq_it(OUT_EDGE);
             count_it = ((const page_row&)vertex).get_data_seq_it<double>();
-            this->cluster_id = new_cluster_id;
             vprog.add_member(this->cluster_id, id_it, count_it);
         }
 #else
@@ -662,9 +733,8 @@ namespace {
 
         this->cluster_id = new_cluster_id;
         vprog.add_member(cluster_id, id_it, count_it);
-#endif
-        // Done by all : TODO: Verify I really need this
         this->dist = best;
+#endif
     }
 
 
