@@ -224,14 +224,14 @@ namespace {
     {
         private:
             // Counts per iteration
-            std::atomic<unsigned> lemma1, _3a, _3b, _3c;
+            std::atomic<unsigned> lemma1, _3a, _3b, _3c, _4;
 
             // Total counts
-            unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, iter;
+            unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
 
             prune_stats() {
-                _3a = _3b = lemma1 = _3c = 0;
-                tot_lemma1 = tot_3a = tot_3b = tot_3c = iter = 0;
+                _3a = _3b = lemma1 = _3c = _4 = 0;
+                tot_lemma1 = tot_3a = tot_3b = tot_3c = tot_4 = iter = 0;
             }
 
         public:
@@ -249,30 +249,33 @@ namespace {
             void pp_3b() {
                 _3b = _3b + 1;
             }
-
             void pp_3c() {
                 _3c = _3c + 1;
             }
-
+            void pp_4() {
+                _4 = _4 + 1;
+            }
             void finalize() {
                 iter++;
-                BOOST_VERIFY((lemma1 + _3a + _3b + _3c) <=  NUM_ROWS*K);
+                BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  NUM_ROWS*K);
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats count:\n"
                     "lemma1 = " << lemma1 << ", 3a = " << _3a
-                    << ", 3b = " << _3b << ", 3c = " << _3c;
+                    << ", 3b = " << _3b << ", 3c = " << _3c << ", 4 = " << _4;
 
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
                     "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(NUM_ROWS*K))*100) <<
                     "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(NUM_ROWS*K))*100) <<
                     "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(NUM_ROWS*K))*100) <<
-                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(NUM_ROWS*K))*100) << "\%";
+                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(NUM_ROWS*K))*100) <<
+                    "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(NUM_ROWS*K))*100) << "\%";
 
                 tot_lemma1 += (unsigned)lemma1;
                 tot_3a += (unsigned)_3a;
                 tot_3b += (unsigned)_3b;
                 tot_3c += (unsigned)_3c;
+                tot_4 += (unsigned)_4;
 
-                lemma1 = _3a = _3b = _3c = 0; // reset
+                lemma1 = _3a = _3b = _3c = _4 = 0; // reset
             }
 
             std::vector<double> get_stats() {
@@ -280,15 +283,16 @@ namespace {
                 double perc_3a = tot_3a / ((double)(NUM_ROWS*this->iter*K))*100;
                 double perc_3b = tot_3b / ((double)(NUM_ROWS*this->iter*K))*100;
                 double perc_3c = tot_3c / ((double)(NUM_ROWS*this->iter*K))*100;
+                double perc_4 = tot_4 / ((double)(NUM_ROWS*this->iter*K))*100;
                 // Total percentage
-                double perc = ((tot_3b + tot_3a + tot_3c + tot_lemma1) /
+                double perc = ((tot_3b + tot_3a + tot_3c + tot_4 + tot_lemma1) /
                         ((double)((NUM_ROWS*this->iter*K)) + ((K*(K-1))/2.0)))*100;
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
                     "Tot = " << perc << "\%, 3a = " << perc_3a <<
-                    "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c <<
-                    "\%, lemma1 = " << perc_lemma1 << "\%";
+                    "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c
+                    << "\%, 4 = " << perc_4 << "\%, lemma1 = " << perc_lemma1 << "\%";
 
-                std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc};
+                std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc_3c, perc_4, perc};
                 return ret;
             }
     };
@@ -669,7 +673,7 @@ namespace {
                     // Track 4
                     if (lwr_bnd[cl] >= dist) {
 #if KM_TEST
-                        // TODO: Add prune_stats
+                        g_prune_stats->pp_4();
 #endif
 #if VERBOSE
                         if (cl == 2) {
