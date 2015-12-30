@@ -979,6 +979,8 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 		in_tmp = dense_matrix::create(in);
 		in_tmp = in_tmp->conv2(matrix_layout_t::L_ROW);
 	}
+	if (in->is_virtual() && in_tmp == NULL)
+		in_tmp = dense_matrix::create(in);
 	if (!in->is_in_mem()) {
 		if (in_tmp == NULL)
 			in_tmp = dense_matrix::create(in);
