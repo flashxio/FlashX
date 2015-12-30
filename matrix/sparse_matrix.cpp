@@ -35,20 +35,59 @@ matrix_config matrix_conf;
 namespace detail
 {
 
-std::shared_ptr<std::vector<const char *> > spmm_get_row_portions(
-		mem_matrix_store::const_ptr input)
+row_portions::row_portions()
 {
-	assert(!input->is_wide());
-	std::shared_ptr<std::vector<const char *> > ret(
-			new std::vector<const char *>(input->get_num_portions()));
-	size_t portion_size = input->get_portion_size().first;
-	size_t row_idx = 0;
-	for (size_t i = 0; i < ret->size(); i++) {
-		ret->at(i) = input->get_row(row_idx);
-		assert(ret->at(i));
-		row_idx += portion_size;
+	portion_size_log = 0;
+	portion_mask = 0;
+	num_cols = 0;
+	entry_size = 0;
+	tot_num_rows = 0;
+}
+
+row_portions::ptr row_portions::create(matrix_store::const_ptr mat)
+{
+	if (mat->is_wide()) {
+		BOOST_LOG_TRIVIAL(error) << "the matrix needs to be tall-and-skinny";
+		return row_portions::ptr();
+	}
+
+	row_portions::ptr ret(new row_portions());
+	ret->portion_size_log = log2(mat->get_portion_size().first);
+	ret->portion_mask = (1UL << ret->portion_size_log) - 1;
+	ret->num_cols = mat->get_num_cols();
+	ret->entry_size = mat->get_entry_size();
+	ret->tot_num_rows = mat->get_num_rows();
+	ret->portions.resize(mat->get_num_portions());
+	ret->raw_portions.resize(mat->get_num_portions());
+	for (size_t i = 0; i < ret->portions.size(); i++) {
+		ret->portions[i] = mat->get_portion(i);
+		if (ret->portions[i] == NULL) {
+			BOOST_LOG_TRIVIAL(error) << "Can't get row portions";
+			return row_portions::ptr();
+		}
+		ret->raw_portions[i] = ret->portions[i]->get_raw_arr();
+		if (ret->raw_portions[i] == NULL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Data in portions isn't stored contiguously";
+			return row_portions::ptr();
+		}
 	}
 	return ret;
+}
+
+const char *row_portions::get_rows(size_t start_row, size_t end_row) const
+{
+	size_t local_row_idx = start_row & portion_mask;
+	size_t portion_idx = start_row >> portion_size_log;
+	if (portion_idx != ((end_row - 1) >> portion_size_log)) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"The required rows [%1%, %2%) aren't in the same portion")
+			% start_row % end_row;
+		return NULL;
+	}
+	else
+		return raw_portions[portion_idx]
+			+ local_row_idx * num_cols * entry_size;
 }
 
 /*
@@ -355,23 +394,17 @@ void block_compute_task::run(char *buf, size_t size)
 	notify_complete();
 }
 
-block_spmm_task::block_spmm_task(const mem_matrix_store &_input,
+block_spmm_task::block_spmm_task(row_portions::ptr in_row_portions,
 		matrix_store &_output, EM_matrix_stream::ptr stream,
 		const matrix_io &io, const sparse_matrix &mat,
 		block_exec_order::ptr order): block_compute_task(
-			io, mat, order), input(_input), output(_output)
+			io, mat, order), output(_output)
 {
+	this->in_row_portions = in_row_portions;
 	this->output_stream = stream;
 	entry_size = mat.get_entry_size();
 	// We have to make sure the task processes the entire block rows.
 	assert(io.get_num_cols() == mat.get_num_cols());
-}
-
-const char *block_spmm_task::get_in_rows(size_t start_row, size_t num_rows)
-{
-	const char *ret = input.get_rows(start_row, start_row + num_rows);
-	assert(ret);
-	return ret;
 }
 
 char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
@@ -961,14 +994,11 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	size_t sblock_size = detail::cal_super_block_size(get_block_size(),
 			in->get_entry_size() * in->get_num_cols());
 	size_t min_num_brows = 1;
-	detail::mem_matrix_store::const_ptr mem_in;
 	if (in_tmp) {
 		in_tmp->materialize_self();
-		mem_in = detail::mem_matrix_store::cast(in_tmp->get_raw_store());
+		in = in_tmp->get_raw_store();
 	}
-	else
-		mem_in = detail::mem_matrix_store::cast(in);
-	bool ret = create->set_data(mem_in, out);
+	bool ret = create->set_data(in, out);
 	if (ret)
 		compute(create, sblock_size, min_num_brows);
 	return ret;

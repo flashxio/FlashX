@@ -52,10 +52,49 @@ public:
 	typedef std::shared_ptr<task_creator> ptr;
 
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
-	virtual bool set_data(detail::mem_matrix_store::const_ptr in,
+	virtual bool set_data(detail::matrix_store::const_ptr in,
 			detail::matrix_store::ptr out) = 0;
 	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
 	virtual bool is_complete() const = 0;
+};
+
+class row_portions
+{
+	size_t portion_size_log;
+	size_t portion_mask;
+	size_t num_cols;
+	size_t entry_size;
+	size_t tot_num_rows;
+	std::vector<local_matrix_store::const_ptr> portions;
+	std::vector<const char *> raw_portions;
+
+	row_portions();
+public:
+	typedef std::shared_ptr<row_portions> ptr;
+
+	static ptr create(matrix_store::const_ptr mat);
+
+	const scalar_type &get_type() const {
+		return portions[0]->get_type();
+	}
+
+	/*
+	 * This method is called very frequently. Let's avoid the overhead
+	 * of function calls by inlining the function.
+	 */
+	const char *get_row(size_t row_idx) const {
+		size_t local_row_idx = row_idx & portion_mask;
+		size_t portion_idx = row_idx >> portion_size_log;
+		return raw_portions[portion_idx]
+			+ local_row_idx * num_cols * entry_size;
+	}
+	const char *get_rows(size_t start_row, size_t end_row) const;
+	size_t get_num_cols() const {
+		return num_cols;
+	}
+	size_t get_tot_num_rows() const {
+		return tot_num_rows;
+	}
 };
 
 /*
@@ -69,25 +108,20 @@ class fg_row_compute_task: public compute_task
 	size_t buf_size;
 protected:
 	// rows in the input matrix.
-	size_t portion_size_log;
-	size_t portion_mask;
-	std::shared_ptr<std::vector<const char *> > in_row_portions;
+	row_portions::ptr in_row_portions;
 	// rows in the output matrix.
 	size_t out_start_row;
 	size_t out_num_rows;
 	char *out_rows;
 public:
 	fg_row_compute_task(mem_matrix_store &output, const matrix_io &_io,
-			std::shared_ptr<std::vector<const char *> > in_row_portions,
-			size_t portion_size_log): io(_io) {
+			row_portions::ptr in_row_portions): io(_io) {
 		off_t orig_off = io.get_loc().get_offset();
 		off = ROUND_PAGE(orig_off);
 		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
 		buf = (char *) valloc(buf_size);
 
 		this->in_row_portions = in_row_portions;
-		this->portion_size_log = portion_size_log;
-		this->portion_mask = (1UL << portion_size_log) - 1;
 		this->out_start_row = _io.get_top_left().get_row_idx();
 		this->out_num_rows = _io.get_num_rows();
 		this->out_rows = output.get_rows(out_start_row,
@@ -115,19 +149,15 @@ public:
 template<class DenseType, class SparseType, int ROW_WIDTH>
 class fg_row_spmm_task: public fg_row_compute_task
 {
-	const mem_matrix_store &input;
 	mem_matrix_store &output;
 public:
-	fg_row_spmm_task(const mem_matrix_store &_input,
-			mem_matrix_store &_output, const matrix_io &_io,
-			std::shared_ptr<std::vector<const char *> > in_row_portions,
-			size_t portion_size_log): fg_row_compute_task(_output, _io,
-				in_row_portions, portion_size_log),
-				input(_input), output(_output) {
-		assert(input.get_type() == get_scalar_type<DenseType>());
+	fg_row_spmm_task(row_portions::ptr in_row_portions,
+			mem_matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+				_output, _io, in_row_portions), output(_output) {
+		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
-		assert(input.get_num_cols() == output.get_num_cols());
-		assert(input.get_num_cols() == (size_t) ROW_WIDTH);
+		assert(in_row_portions->get_num_cols() == output.get_num_cols());
+		assert(in_row_portions->get_num_cols() == (size_t) ROW_WIDTH);
 	}
 
 	void run_on_row(const fg::ext_mem_undirected_vertex &v);
@@ -147,10 +177,7 @@ void fg_row_spmm_task<DenseType, SparseType, ROW_WIDTH>::run_on_row(
 		SparseType data = 1;
 		if (has_val)
 			data = v.get_edge_data<SparseType>(i);
-		off_t local_row_idx = id & portion_mask;
-		off_t portion_idx = id >> portion_size_log;
-		const DenseType *row = (const DenseType *) (in_row_portions->at(portion_idx)
-				+ local_row_idx * ROW_WIDTH * input.get_entry_size());
+		const DenseType *row = (const DenseType *) in_row_portions->get_row(id);
 		for (size_t j = 0; j < (size_t) ROW_WIDTH; j++)
 			res[j] += row[j] * data;
 	}
@@ -163,23 +190,19 @@ void fg_row_spmm_task<DenseType, SparseType, ROW_WIDTH>::run_on_row(
 template<class DenseType, class SparseType>
 class fg_row_spmm_task<DenseType, SparseType, 0>: public fg_row_compute_task
 {
-	const mem_matrix_store &input;
 	mem_matrix_store &output;
 public:
-	fg_row_spmm_task(const mem_matrix_store &_input,
-			mem_matrix_store &_output, const matrix_io &_io,
-			std::shared_ptr<std::vector<const char *> > in_row_portions,
-			size_t portion_size_log): fg_row_compute_task(_output, _io,
-				in_row_portions, portion_size_log),
-				input(_input), output(_output) {
-		assert(input.get_type() == get_scalar_type<DenseType>());
+	fg_row_spmm_task(row_portions::ptr in_row_portions,
+			mem_matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+				_output, _io, in_row_portions), output(_output) {
+		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
-		assert(input.get_num_cols() == output.get_num_cols());
+		assert(in_row_portions->get_num_cols() == output.get_num_cols());
 	}
 
 	void run_on_row(const fg::ext_mem_undirected_vertex &v) {
-		DenseType res[input.get_num_cols()];
-		for (size_t i = 0; i < input.get_num_cols(); i++)
+		DenseType res[in_row_portions->get_num_cols()];
+		for (size_t i = 0; i < in_row_portions->get_num_cols(); i++)
 			res[i] = 0;
 
 		bool has_val = v.has_edge_data();
@@ -188,11 +211,8 @@ public:
 			SparseType data = 1;
 			if (has_val)
 				data = v.get_edge_data<SparseType>(i);
-			off_t local_row_idx = id & portion_mask;
-			off_t portion_idx = id >> portion_size_log;
-			const DenseType *row = (const DenseType *) (in_row_portions->at(portion_idx)
-					+ local_row_idx * input.get_num_cols() * input.get_entry_size());
-			for (size_t j = 0; j < input.get_num_cols(); j++)
+			const DenseType *row = (const DenseType *) in_row_portions->get_row(id);
+			for (size_t j = 0; j < in_row_portions->get_num_cols(); j++)
 				res[j] += row[j] * data;
 		}
 		size_t rel_row_idx = v.get_id() - out_start_row;
@@ -319,7 +339,6 @@ class block_spmm_task: public block_compute_task
 	// The size of the non-zero entries.
 	size_t entry_size;
 
-	const mem_matrix_store &input;
 	matrix_store &output;
 	EM_matrix_stream::ptr output_stream;
 
@@ -328,15 +347,14 @@ class block_spmm_task: public block_compute_task
 	 * The result is stored in out_part.
 	 */
 	local_row_matrix_store::ptr out_part;
+protected:
+	row_portions::ptr in_row_portions;
 public:
-	block_spmm_task(const mem_matrix_store &_input,
+	block_spmm_task(row_portions::ptr in_row_portions,
 			matrix_store &_output, EM_matrix_stream::ptr stream,
 			const matrix_io &io, const sparse_matrix &mat,
 			block_exec_order::ptr order);
 
-	const matrix_store &get_in_matrix() const {
-		return input;
-	}
 	const matrix_store &get_out_matrix() const {
 		return output;
 	}
@@ -344,11 +362,6 @@ public:
 	size_t get_entry_size() const {
 		return entry_size;
 	}
-
-	/*
-	 * Get the rows in the input matrix required by SpMM.
-	 */
-	const char *get_in_rows(size_t in_row, size_t num_rows);
 
 	/*
 	 * Get the rows in the output matrix required by SpMM.
@@ -480,10 +493,10 @@ template<class RpFuncType, class COOFuncType>
 class block_spmm_task_impl: public block_spmm_task
 {
 public:
-	block_spmm_task_impl(const mem_matrix_store &input,
+	block_spmm_task_impl(row_portions::ptr in_row_portions,
 			matrix_store &output, EM_matrix_stream::ptr stream
 			, const matrix_io &io, const sparse_matrix &mat,
-			block_exec_order::ptr order): block_spmm_task(input,
+			block_exec_order::ptr order): block_spmm_task(in_row_portions,
 				output, stream, io, mat, order) {
 	}
 
@@ -493,8 +506,9 @@ public:
 
 		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
 		size_t num_in_rows = std::min(block_size.get_num_cols(),
-				get_in_matrix().get_num_rows() - in_row_start);
-		const char *in_rows = get_in_rows(in_row_start, num_in_rows);
+				in_row_portions->get_tot_num_rows() - in_row_start);
+		const char *in_rows = in_row_portions->get_rows(in_row_start,
+				in_row_start + num_in_rows);
 
 		size_t out_row_start = block.get_block_row_idx() * block_size.get_num_rows();
 		size_t num_out_rows = std::min(block_size.get_num_rows(),
@@ -522,14 +536,11 @@ public:
 template<class DenseType, class SparseType>
 class spmm_creator: public task_creator
 {
-	mem_matrix_store::const_ptr input;
+	row_portions::ptr in_row_portions;
 	matrix_store::ptr output;
 	EM_matrix_stream::ptr output_stream;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
-
-	std::shared_ptr<std::vector<const char *> > in_row_portions;
-	size_t portion_size_log;
 
 	spmm_creator(const sparse_matrix &_mat, size_t num_in_cols);
 
@@ -539,7 +550,7 @@ class spmm_creator: public task_creator
 		typedef coo_func<DenseType, SparseType, ROW_WIDTH> width_coo_func;
 		return compute_task::ptr(
 				new block_spmm_task_impl<width_rp_func,  width_coo_func>(
-					*input, *output, output_stream, io, mat, order));
+					in_row_portions, *output, output_stream, io, mat, order));
 	}
 public:
 	static task_creator::ptr create(const sparse_matrix &mat,
@@ -555,7 +566,7 @@ public:
 			return output_stream->is_complete();
 	}
 
-	virtual bool set_data(mem_matrix_store::const_ptr in,
+	virtual bool set_data(matrix_store::const_ptr in,
 			matrix_store::ptr out);
 
 	virtual std::vector<EM_object *> get_EM_objs() {
@@ -583,23 +594,17 @@ public:
 			assert(in_row_portions);
 			switch (output->get_num_cols()) {
 				case 1: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 1>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								SparseType, 1>(in_row_portions, mem_out, io));
 				case 2: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 2>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								SparseType, 2>(in_row_portions, mem_out, io));
 				case 4: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 4>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								SparseType, 4>(in_row_portions, mem_out, io));
 				case 8: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 8>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								SparseType, 8>(in_row_portions, mem_out, io));
 				case 16: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 16>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								 SparseType, 16>(in_row_portions, mem_out, io));
 				default: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 0>(*input, mem_out, io, in_row_portions,
-									portion_size_log));
+								 SparseType, 0>(in_row_portions, mem_out, io));
 			}
 		}
 	}
@@ -822,14 +827,10 @@ public:
 namespace detail
 {
 
-std::shared_ptr<std::vector<const char *> > spmm_get_row_portions(
-		mem_matrix_store::const_ptr input);
-
 template<class DenseType, class SparseType>
 spmm_creator<DenseType, SparseType>::spmm_creator(const sparse_matrix &_mat,
 		size_t num_in_cols): mat(_mat)
 {
-	portion_size_log = 0;
 	// This initialization only for 2D partitioned sparse matrix.
 	if (!mat.is_fg_matrix()) {
 		// We only handle the case the element size is 2^n.
@@ -849,19 +850,17 @@ spmm_creator<DenseType, SparseType>::spmm_creator(const sparse_matrix &_mat,
 
 template<class DenseType, class SparseType>
 bool spmm_creator<DenseType, SparseType>::set_data(
-		mem_matrix_store::const_ptr in, matrix_store::ptr out)
+		matrix_store::const_ptr in, matrix_store::ptr out)
 {
 	if (in->get_type() != get_scalar_type<DenseType>()
 			|| out->get_type() != get_scalar_type<DenseType>()) {
 		BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
 		return false;
 	}
-	this->input = in;
 	this->output = out;
-	if (mat.is_fg_matrix()) {
-		in_row_portions = spmm_get_row_portions(input);
-		portion_size_log = log2(input->get_portion_size().first);
-	}
+	this->in_row_portions = row_portions::create(in);
+	if (in_row_portions == NULL)
+		return false;
 	if (!output->is_in_mem())
 		output_stream = EM_matrix_stream::create(output);
 	return true;
