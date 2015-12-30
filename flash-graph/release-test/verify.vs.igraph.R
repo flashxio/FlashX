@@ -226,11 +226,11 @@ test.weighted <- function(fg, ig)
 # Test on a directed graph.
 ig <- read.graph("wiki-Vote1.txt")
 
-fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
+fg <- fg.load.graph("wiki-Vote.adj", index="wiki-Vote.index", graph.name="wiki")
 
 print("run in the standalone mode")
 print("load a graph in adjacency list")
-fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
+fg <- fg.load.graph("wiki-Vote.adj", index="wiki-Vote.index", graph.name="wiki")
 test.directed(fg, ig)
 
 cat("\n\n\n")
@@ -255,10 +255,10 @@ fg.list.graphs()
 # Now test on an undirected graph
 ig <- read.graph("facebook_combined1.txt", directed=FALSE)
 
-fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
+fg <- fg.load.graph("facebook.adj", index="facebook.index", graph.name="facebook")
 
 print("load a graph in adjacency list")
-fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
+fg <- fg.load.graph("facebook.adj", index="facebook.index", graph.name="facebook")
 test.undirected(fg, ig)
 
 cat("\n\n\n")
@@ -279,8 +279,8 @@ test.undirected(fg, ig)
 fg.list.graphs()
 
 # Now test on a weighted undirected graph
-print("load a weighted graph")
-fg <- fg.load.graph("fb-weighted.adj-v4", index="fb-weighted.index-v4", graph.name="fb-weighted")
-edges <- read.table("fb-weighted.txt")
-ig <- graph.data.frame(edges, directed=FALSE)
-test.weighted(fg, ig)
+#print("load a weighted graph")
+#fg <- fg.load.graph("fb-weighted.adj", index="fb-weighted.index", graph.name="fb-weighted")
+#edges <- read.table("fb-weighted.txt")
+#ig <- graph.data.frame(edges, directed=FALSE)
+#test.weighted(fg, ig)
