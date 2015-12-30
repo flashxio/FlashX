@@ -458,6 +458,14 @@ public:
 		return apply_scalar(var, op);
 	}
 
+	template<class T>
+	dense_matrix::ptr pmax_scalar(T val) const {
+		scalar_variable::ptr var(new scalar_variable_impl<T>(val));
+		bulk_operate::const_ptr op = bulk_operate::conv2ptr(
+				*var->get_type().get_basic_ops().get_op(basic_ops::op_idx::MAX));
+		return apply_scalar(var, op);
+	}
+
 	double norm2() const;
 };
 
