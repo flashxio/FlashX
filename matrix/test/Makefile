@@ -18,12 +18,12 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver -I../libmatrix-algs $(OMP_FLAG)
+LDFLAGS := $(OMP_FLAG) ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm rand_mat_gen test-pagerank
+	el2al al22d al2crs test-sort test-eigen test-dgemm rand_mat_gen test-algs
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
@@ -32,8 +32,8 @@ mkl: test-mkl_multiply test-mkl_dgemm
 rand_mat_gen: rand_mat_gen.o ../libFMatrix.a
 	$(CXX) -o rand_mat_gen rand_mat_gen.o $(LDFLAGS)
 
-test-pagerank: test-pagerank.o ../libFMatrix.a
-	$(CXX) -o test-pagerank test-pagerank.o $(LDFLAGS)
+test-algs: test-algs.o ../libFMatrix.a
+	$(CXX) -o test-algs test-algs.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 	$(CXX) -o test-2d_multiply test-2d_multiply.o $(LDFLAGS)

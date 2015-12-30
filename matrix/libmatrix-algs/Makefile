@@ -15,38 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include ../Makefile.common
+include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
+CXXFLAGS += -DUSE_GZIP -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libmatrix eigensolver test unit-test libmatrix-algs
+all: libmatrix-algs
 
-libmatrix: $(OBJS)
-	rm -f libFMatrix.a
-	ar -cvq libFMatrix.a $(OBJS)
-
-libmatrix-algs: libmatrix
-	$(MAKE) -C libmatrix-algs
-
-test: libmatrix eigensolver libmatrix-algs
-	$(MAKE) -C test
-
-unit-test: libmatrix eigensolver
-	$(MAKE) -C unit-test
-
-eigensolver: libmatrix
-	$(MAKE) -C eigensolver
+libmatrix-algs: $(OBJS)
+	rm -f libFMatrix-algs.a
+	ar -cvq libFMatrix-algs.a $(OBJS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f libFMatrix.a
+	rm -f libFMatrix-algs.a
 	find -name core -delete
-	$(MAKE) -C test clean
-	$(MAKE) -C unit-test clean
-	$(MAKE) -C eigensolver clean
 
 -include $(DEPS) 
