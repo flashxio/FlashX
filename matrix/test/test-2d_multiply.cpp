@@ -13,6 +13,8 @@
 
 using namespace fm;
 
+bool spmm_debug = false;
+
 void int_handler(int sig_num)
 {
 #ifdef PROFILER
@@ -108,14 +110,16 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 		ProfilerStop();
 #endif
 
-	for (size_t i = 0; i < ins.size(); i++) {
-		dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
-		dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
-		std::vector<double> in_col_sum = in_mat->col_sum()->conv2std<double>();
-		std::vector<double> out_col_sum = out_mat->col_sum()->conv2std<double>();
-		for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
-			printf("%ld: sum of input: %lf, sum of product: %lf\n",
-					k, in_col_sum[k], out_col_sum[k]);
+	if (spmm_debug) {
+		for (size_t i = 0; i < ins.size(); i++) {
+			dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
+			dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
+			std::vector<double> in_col_sum = in_mat->col_sum()->conv2std<double>();
+			std::vector<double> out_col_sum = out_mat->col_sum()->conv2std<double>();
+			for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
+				printf("%ld: sum of input: %lf, sum of product: %lf\n",
+						k, in_col_sum[k], out_col_sum[k]);
+			}
 		}
 	}
 }
@@ -182,6 +186,7 @@ void print_usage()
 	fprintf(stderr, "-t type: the type of non-zero entries\n");
 	fprintf(stderr, "-e: output matrix in external memory\n");
 	fprintf(stderr, "-i width: the number of columns of the individual dense matrix\n");
+	fprintf(stderr, "-d: enable debug\n");
 }
 
 int main(int argc, char *argv[])
@@ -202,7 +207,7 @@ int main(int argc, char *argv[])
 	int num_nodes = 0;
 	bool ext_mem = false;
 	std::string entry_type;
-	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:ei:")) != -1) {
+	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:ei:d")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -233,6 +238,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'e':
 				ext_mem = true;
+				break;
+			case 'd':
+				spmm_debug = true;
 				break;
 			default:
 				print_usage();
