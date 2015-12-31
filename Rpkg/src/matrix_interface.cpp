@@ -977,13 +977,13 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 		fprintf(stderr, "unknown margin\n");
 		return R_NilValue;
 	}
-	vector::ptr res = m->aggregate((matrix_margin) margin, op);
+	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
 	if (res == NULL) {
 		fprintf(stderr, "can't aggregate on the matrix\n");
 		return R_NilValue;
 	}
 	else
-		return create_FMR_vector(res->get_raw_store(), "");
+		return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
