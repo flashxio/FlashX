@@ -693,7 +693,7 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
     double tolerance = -1;
     unsigned num_col = 0;
 
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:EDC")) != -1) {
+	while ((opt = getopt(argc, argv, "k:i:t:l:c:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -714,20 +714,6 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
                 num_col = atof(optarg);
                 num_opts++;
                 break;
-#if 0
-            case 'E':
-                test_eucl();
-                std::cout << "Test eucl Success ...\n";
-                return;
-            case 'D':
-                test_dist_matrix();
-                std::cout << "Test distance matrix Success ...\n";
-                return;
-            case 'C':
-                test_cluster();
-                std::cout << "Test cluster Success ...\n";
-                return;
-#endif
 			default:
 				print_usage();
 				abort();
@@ -825,9 +811,6 @@ void print_usage()
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
 	fprintf(stderr, "-c: number of columns in your on disk matrix\n");
-	fprintf(stderr, "-E: test euclidean distance\n");
-	fprintf(stderr, "-D: test distance matrix\n");
-	fprintf(stderr, "-C: test cluster class\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
