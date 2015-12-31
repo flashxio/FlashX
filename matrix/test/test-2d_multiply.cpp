@@ -39,9 +39,8 @@ public:
 };
 
 void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
-		int num_nodes, bool ext_mem)
+		int num_nodes, bool ext_mem, size_t repeats)
 {
-	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
 	std::vector<detail::matrix_store::ptr> ins(mat_width / indiv_mat_width);
 	for (size_t i = 0; i < ins.size(); i++) {
@@ -66,7 +65,6 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 			in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 		ins[i] = in;
 	}
-	printf("set input data\n");
 
 	std::vector<detail::matrix_store::ptr> outs(ins.size());
 	for (size_t i = 0; i < outs.size(); i++) {
@@ -90,7 +88,6 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 			out->reset_data();
 		outs[i] = out;
 	}
-	printf("reset output data\n");
 	printf("in mat is on %d nodes and out mat is on %d nodes\n",
 			ins[0]->get_num_nodes(), outs[0]->get_num_nodes());
 
@@ -99,16 +96,17 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
 	printf("Start SpMM\n");
-	gettimeofday(&start, NULL);
-	for (size_t i = 0; i < ins.size(); i++)
-		mat->multiply<double, float>(ins[i], outs[i]);
-	gettimeofday(&end, NULL);
-	printf("SpMM completes\n");
+	for (size_t k = 0; k < repeats; k++) {
+		gettimeofday(&start, NULL);
+		for (size_t i = 0; i < ins.size(); i++)
+			mat->multiply<double, float>(ins[i], outs[i]);
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("it takes %.3f seconds\n", time_diff(start, end));
 
 	for (size_t i = 0; i < ins.size(); i++) {
 		dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
@@ -278,8 +276,8 @@ int main(int argc, char *argv[])
 	if (num_nodes == 0)
 		num_nodes = matrix_conf.get_num_nodes();
 
-	for (size_t k = 0; k < repeats; k++)
-		test_SpMM(mat, mat_width, indiv_mat_width, num_nodes, ext_mem);
+	printf("SpMM on %s with matrix width of %ld\n", matrix_file.c_str(), mat_width);
+	test_SpMM(mat, mat_width, indiv_mat_width, num_nodes, ext_mem, repeats);
 
 	destroy_flash_matrix();
 }
