@@ -1,48 +1,11 @@
-# Parameters for SAFS
-
-# How data blocks of a SAFS file are mapped to Linux filesystem.
 RAID_mapping=RAID0
-
-# The number of parallel I/Os is allowed in a single thread.
 io_depth=64
-
-# The page cache size in SAFS
 cache_size=512M
-
-# The number of NUMA nodes
 num_nodes=1
-
 # change FG_TOP to the path of the top directory of FlashGraph.
 root_conf=FG_TOP/flash-graph/conf/data_files.txt
 
-# whether or not to use Linux huge pages
-# huge_page=
-
-
-
-
-# Parameters for FlashGraph
-
-# The number of worker threads to process a graph.
 threads=1
-
-# The max number of vertices being processed in parallel in a worker thread
-# max_processing_vertices=1000
-
-# This defines the range size of a partition.
-# part_range_size_log=10
-
-# Keep index in memory.
-# in_mem_index=
-
-# Keep adjacency lists of vertices in memory
-# in_mem_graph=
-
-# Run the vertex program on a vertx serially regardless of load balancing.
-serial_run=
-
-# The number of vertical partitions on the graph.
-# num_vertical_parts=1
-
-# The minimal degree that a vertex is partitioned.
-# min_vpart_degree=1
+print_io_stat=
+prof_file=graph.prof
+merge_reqs=

@@ -1,26 +1,2 @@
 # change FG_TOP to the location of the top directory of FlashGraph.
-#0:FG_TOP/flash-graph/data
-0:/mnt/ssd1/
-0:/mnt/ssd2/
-0:/mnt/ssd3/
-0:/mnt/ssd4/
-0:/mnt/ssd5/
-0:/mnt/ssd6/
-0:/mnt/ssd7/
-0:/mnt/ssd8/
-1:/mnt/ssd9/
-1:/mnt/ssd10/
-1:/mnt/ssd11/
-1:/mnt/ssd12/
-1:/mnt/ssd13/
-1:/mnt/ssd14/
-1:/mnt/ssd15/
-1:/mnt/ssd16/
-2:/mnt/ssd17/
-2:/mnt/ssd18/
-2:/mnt/ssd19/
-2:/mnt/ssd20/
-2:/mnt/ssd21/
-2:/mnt/ssd22/
-2:/mnt/ssd23/
-2:/mnt/ssd24/
+0:FG_TOP/flash-graph/data
