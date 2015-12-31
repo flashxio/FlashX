@@ -110,11 +110,10 @@ protected:
 	// rows in the input matrix.
 	row_portions::ptr in_row_portions;
 	// rows in the output matrix.
-	size_t out_start_row;
-	size_t out_num_rows;
-	char *out_rows;
+	local_matrix_store::ptr out_rows;
+	char *raw_out_rows;
 public:
-	fg_row_compute_task(mem_matrix_store &output, const matrix_io &_io,
+	fg_row_compute_task(matrix_store &output, const matrix_io &_io,
 			row_portions::ptr in_row_portions): io(_io) {
 		off_t orig_off = io.get_loc().get_offset();
 		off = ROUND_PAGE(orig_off);
@@ -122,11 +121,11 @@ public:
 		buf = (char *) valloc(buf_size);
 
 		this->in_row_portions = in_row_portions;
-		this->out_start_row = _io.get_top_left().get_row_idx();
-		this->out_num_rows = _io.get_num_rows();
-		this->out_rows = output.get_rows(out_start_row,
-				out_start_row + out_num_rows);
+		this->out_rows = output.get_portion(_io.get_top_left().get_row_idx(),
+				0, _io.get_num_rows(), output.get_num_cols());
 		assert(out_rows);
+		this->raw_out_rows = out_rows->get_raw_arr();
+		assert(raw_out_rows);
 	}
 
 	~fg_row_compute_task() {
@@ -149,10 +148,10 @@ public:
 template<class DenseType, class SparseType, int ROW_WIDTH>
 class fg_row_spmm_task: public fg_row_compute_task
 {
-	mem_matrix_store &output;
+	matrix_store &output;
 public:
 	fg_row_spmm_task(row_portions::ptr in_row_portions,
-			mem_matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+			matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
 				_output, _io, in_row_portions), output(_output) {
 		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
@@ -181,19 +180,19 @@ void fg_row_spmm_task<DenseType, SparseType, ROW_WIDTH>::run_on_row(
 		for (size_t j = 0; j < (size_t) ROW_WIDTH; j++)
 			res[j] += row[j] * data;
 	}
-	size_t rel_row_idx = v.get_id() - out_start_row;
-	assert(rel_row_idx < out_num_rows);
-	char *row = out_rows + rel_row_idx * ROW_WIDTH * sizeof(DenseType);
+	size_t rel_row_idx = v.get_id() - out_rows->get_global_start_row();
+	assert(rel_row_idx < out_rows->get_num_rows());
+	char *row = raw_out_rows + rel_row_idx * ROW_WIDTH * sizeof(DenseType);
 	memcpy(row, res, sizeof(DenseType) * ROW_WIDTH);
 }
 
 template<class DenseType, class SparseType>
 class fg_row_spmm_task<DenseType, SparseType, 0>: public fg_row_compute_task
 {
-	mem_matrix_store &output;
+	matrix_store &output;
 public:
 	fg_row_spmm_task(row_portions::ptr in_row_portions,
-			mem_matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+			matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
 				_output, _io, in_row_portions), output(_output) {
 		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
@@ -215,9 +214,9 @@ public:
 			for (size_t j = 0; j < in_row_portions->get_num_cols(); j++)
 				res[j] += row[j] * data;
 		}
-		size_t rel_row_idx = v.get_id() - out_start_row;
-		assert(rel_row_idx < out_num_rows);
-		char *row = out_rows
+		size_t rel_row_idx = v.get_id() - out_rows->get_global_start_row();
+		assert(rel_row_idx < out_rows->get_num_rows());
+		char *row = raw_out_rows
 			+ rel_row_idx * output.get_num_cols() * sizeof(DenseType);
 		memcpy(row, res, sizeof(DenseType) * output.get_num_cols());
 	}
@@ -590,21 +589,20 @@ public:
 			}
 		}
 		else {
-			mem_matrix_store &mem_out = dynamic_cast<mem_matrix_store &>(*output);
 			assert(in_row_portions);
 			switch (output->get_num_cols()) {
 				case 1: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 1>(in_row_portions, mem_out, io));
+								SparseType, 1>(in_row_portions, *output, io));
 				case 2: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 2>(in_row_portions, mem_out, io));
+								SparseType, 2>(in_row_portions, *output, io));
 				case 4: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 4>(in_row_portions, mem_out, io));
+								SparseType, 4>(in_row_portions, *output, io));
 				case 8: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 8>(in_row_portions, mem_out, io));
+								SparseType, 8>(in_row_portions, *output, io));
 				case 16: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 16>(in_row_portions, mem_out, io));
+								 SparseType, 16>(in_row_portions, *output, io));
 				default: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 0>(in_row_portions, mem_out, io));
+								 SparseType, 0>(in_row_portions, *output, io));
 			}
 		}
 	}
