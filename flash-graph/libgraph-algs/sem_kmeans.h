@@ -239,6 +239,33 @@ namespace {
             }
     };
 
+#if 0
+    static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
+        double dist = 0;
+        BOOST_VERIFY(l_clust->size() == r_clust->size());
+
+        for (unsigned col = 0; col < NUM_COLS; col++) {
+            double diff = (*l_clust)[col] - (*r_clust)[col];
+            dist += diff * diff;
+        }
+        return sqrt(dist);
+    }
+#else
+    template <typename T>
+        static double const eucl_dist(const T* lhs, const T* rhs) {
+            double dist = 0;
+            BOOST_VERIFY(lhs->size() == rhs->size());
+
+            for (unsigned col = 0; col < lhs->size(); col++) {
+                double diff = (*lhs)[col] - (*rhs)[col];
+                dist += diff * diff;
+            }
+
+            BOOST_VERIFY(dist >= 0);
+            return sqrt(dist); // TODO: rm sqrt
+        }
+#endif
+
 #if PRUNE
     // NOTE: Creates a matrix like this e.g for K = 5
     /* - Don't store full matrix, don't store dist to myself -> space: (k*k-1)/2
@@ -319,9 +346,48 @@ namespace {
                 }
             }
 
-            void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust);
+            void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust) {
+                BOOST_VERIFY(get_num_rows() == vcl.size()-1); // -1 since the last item has no row
+
+                for (unsigned i = 0; i < num_clust; i++) {
+                    vcl[i]->reset_s_val();
+                }
+
+                //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
+                for (unsigned i = 0; i < num_clust; i++) {
+                    for (unsigned j = i+1; j < num_clust; j++) {
+                        double dist = eucl_dist<std::vector<double>>(&(vcl[i]->get_mean()),
+                                &(vcl[j]->get_mean())) / 2.0;
+                        set(i,j, dist);
+
+                        // Set s(x) for each cluster
+                        if (dist < vcl[i]->get_s_val()) {
+                            vcl[i]->set_s_val(dist);
+                        }
+
+                        if (dist < vcl[j]->get_s_val()) {
+                            vcl[j]->set_s_val(dist);
+                        }
+                    }
+                }
+#if KM_TEST
+                for (unsigned cl = 0; cl < num_clust; cl++)
+                    BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl));
+#endif
+            }
+
     };
 #endif
+
+    static void print_clusters(std::vector<cluster::ptr>& clusters) {
+        for (std::vector<cluster::ptr>::iterator it = clusters.begin();
+                it != clusters.end(); ++it) {
+            std::cout << "#memb = " << (*it)->get_num_members() << " ";
+            print_vector<double>((*it)->get_mean());
+        }
+        std::cout << "\n";
+    }
+
 }
 
 namespace fg
@@ -382,10 +448,5 @@ namespace fg
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
             const unsigned num_cols=0);
-
-    /* Testing functions  */
-    void test_eucl();
-    void test_dist_matrix();
-    void test_cluster();
 }
 #endif

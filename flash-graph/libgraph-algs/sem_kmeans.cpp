@@ -60,15 +60,6 @@ namespace {
     static unsigned g_iter;
 
     // Begin Helpers //
-    static void print_clusters(std::vector<cluster::ptr>& clusters) {
-        for (std::vector<cluster::ptr>::iterator it = clusters.begin();
-                it != clusters.end(); ++it) {
-            std::cout << "#memb = " << (*it)->get_num_members() << " ";
-            print_vector<double>((*it)->get_mean());
-        }
-        std::cout << "\n";
-    }
-
 #if VERBOSE
     static void print_sample(vertex_id_t my_id, data_seq_iter& count_it, edge_seq_iterator& id_it) {
         std::vector<std::string> v;
@@ -88,33 +79,6 @@ namespace {
     }
 #endif
     // End helpers //
-
-#if 0
-    static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
-        double dist = 0;
-        BOOST_VERIFY(l_clust->size() == r_clust->size());
-
-        for (unsigned col = 0; col < NUM_COLS; col++) {
-            double diff = (*l_clust)[col] - (*r_clust)[col];
-            dist += diff * diff;
-        }
-        return  dist;
-    }
-#else
-    template <typename T>
-        static double const eucl_dist(const T* lhs, const T* rhs) {
-            double dist = 0;
-            BOOST_VERIFY(lhs->size() == rhs->size());
-
-            for (unsigned col = 0; col < lhs->size(); col++) {
-                double diff = (*lhs)[col] - (*rhs)[col];
-                dist += diff * diff;
-            }
-
-            BOOST_VERIFY(dist >= 0);
-            return sqrt(dist); // TODO: rm sqrt
-        }
-#endif
 
     class kmeans_vertex: public compute_vertex
     {
@@ -587,40 +551,6 @@ namespace {
 #endif
         }
 
-        // This ignores the cluster_id == cluster_id & any repetitive computations
-#if PRUNE
-
-        void dist_matrix::compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust) {
-            BOOST_VERIFY(get_num_rows() == vcl.size()-1); // -1 since the last item has no row
-
-            for (unsigned i = 0; i < num_clust; i++) {
-                vcl[i]->reset_s_val();
-            }
-
-            //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
-            for (unsigned i = 0; i < num_clust; i++) {
-                for (unsigned j = i+1; j < num_clust; j++) {
-                    double dist = eucl_dist<std::vector<double>>(&(vcl[i]->get_mean()),
-                            &(vcl[j]->get_mean())) / 2.0;
-                    set(i,j, dist);
-
-                    // Set s(x) for each cluster
-                    if (dist < vcl[i]->get_s_val()) {
-                        vcl[i]->set_s_val(dist);
-                    }
-
-                    if (dist < vcl[j]->get_s_val()) {
-                        vcl[j]->set_s_val(dist);
-                    }
-                }
-            }
-#if KM_TEST
-            for (unsigned cl = 0; cl < num_clust; cl++)
-                BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl));
-#endif
-        }
-#endif
-
         /* During kmeans++ we select a new cluster each iteration
            This step get the next sample selected as a cluster center
            */
@@ -954,156 +884,4 @@ namespace {
 #endif
             return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
         }
-
-#if 0
-        /*********** Testing functions ******************/
-        // Any item with an iterator can be tested for equivalence
-        template <typename T>
-            bool all_equal(const T& arg0, const T& arg1) {
-                return std::equal(arg0.begin(), arg0.end(), arg1.begin());
-            }
-
-        std::vector<std::vector<double>> test_init_g_clusters(const size_t k=4) {
-            BOOST_LOG_TRIVIAL(info) << "Running init g_clusters";
-            BOOST_VERIFY(k == 4);
-
-            const std::vector<double> v1 {1, 2, 3, 4, 5};
-            const std::vector<double> v2 {6, 7, 8, 9, 10};
-            const std::vector<double> v3 {6E-12, -23423.7, .82342342432, 93., 10};
-            const std::vector<double> v4 {-.2342, -23.342, -.000003232, -3.234232, 1};
-
-            std::vector<std::vector<double>> means = {v1, v2, v3, v4};
-
-            for (size_t cl = 0; cl < k; cl++) {
-                g_clusters.push_back(cluster::create(means[cl])); // ctor & init
-
-                printf("c:%lu =>\n", cl);
-                print_vector(g_clusters[cl]->get_mean());
-                print_vector(means[cl]);
-
-                BOOST_VERIFY(all_equal(means[cl], g_clusters[cl]->get_mean()));
-            }
-            printf("Exiting test_init_g_clusters!\n");
-            return means;
-        }
-
-        void test_cluster() {
-            size_t k = 4;
-            std::vector<std::vector<double>> means = test_init_g_clusters(k);
-            /* test prev_mean */
-
-            // Rotate means clockwise: 0 => 1; 1 => 2; 2 => 3; 3 => 0
-            // dist(3,0), (1, 0), (1,2), (2,3)
-            const std::vector<double> pdists = {ceil(721.074), 125, ceil(549004845.992), ceil(547586097.288)};
-
-            std::vector<double> tmp;
-            std::vector<double> prev = g_clusters.back()->get_mean();
-            for (size_t cl = 0; cl < k; cl++) {
-                tmp = g_clusters[cl]->get_mean();
-                g_clusters[cl]->set_prev_mean();
-                g_clusters[cl]->set_mean(prev);
-
-                // Compute dist to prev
-                g_clusters[cl]->set_prev_dist(eucl_dist(&(g_clusters[cl]->get_mean()), &(g_clusters[cl]->get_prev_mean())));
-
-                /* test prev_dist */
-                BOOST_VERIFY(ceil(g_clusters[cl]->get_prev_dist()) == pdists[cl]);
-                prev = tmp;
-            }
-
-            /* Test operator [] */
-            for (unsigned i = 0; i < g_clusters[0]->size(); i++) {
-                BOOST_VERIFY((*(g_clusters[1]))[i]  == means[0][i]);
-            }
-
-            /* Test add member */
-            class data_seq_it {
-                private:
-                    std::vector<double> data;
-                    unsigned pos;
-                public:
-                    data_seq_it(std::vector<double>& data) {
-                        pos = 0;
-                        this->data = data;
-                    }
-                    bool has_next() { return pos < data.size(); }
-                    double next() { return data[pos++]; }
-            };
-
-            class edge_seq_it {
-                public:
-                    bool has_next() { return true; }
-                    unsigned next() { return 0; }
-            };
-
-            // Add 0 to 1
-            data_seq_it dsi0(means[0]);
-            data_seq_it dsi1(means[1]);
-            edge_seq_it esi;
-
-            g_clusters[2]->add_member(esi, dsi0);
-            g_clusters[1]->add_member(esi, dsi1);
-            BOOST_VERIFY(all_equal(g_clusters[2]->get_mean(), g_clusters[1]->get_mean()));
-            BOOST_VERIFY(g_clusters[2]->get_num_members() == 2);
-            BOOST_VERIFY(g_clusters[1]->get_num_members() == 2);
-
-            // Test remove member
-            dsi0 = data_seq_it(means[0]);
-            dsi1 = data_seq_it(means[1]);
-            g_clusters[1]->remove_member(esi, dsi1);
-            g_clusters[1]->remove_member(esi, dsi0);
-            std::vector<double> zeros {0,0,0,0,0};
-
-            BOOST_VERIFY(all_equal(g_clusters[1]->get_mean(), zeros));
-            BOOST_VERIFY(g_clusters[1]->get_num_members() == 0);
-            printf("Exiting test_cluster ==> ");
-        }
-
-        void test_eucl() {
-            // Positive
-            std::vector<double> v1 {1, 2, 3, 4, 5};
-            std::vector<double> v2 {6, 7, 8, 9, 10};
-            BOOST_VERIFY(eucl_dist(&v1, &v2) == 125.0);
-            BOOST_VERIFY(eucl_dist(&v2, &v1) == 125.0);
-
-            // Neg-pos, Pos-neg
-            std::vector<double> v3 {6E-12, -23423.7, .82342342432, 93., 10};
-            BOOST_VERIFY(ceil(eucl_dist(&v1, &v3)) == ceil(548771372.227));
-            BOOST_VERIFY(ceil(eucl_dist(&v3, &v1)) == ceil(548771372.227));
-
-            // No-op
-            std::vector<double> v4 {0, 0, 0, 0, 0};
-            BOOST_VERIFY(eucl_dist(&v1, &v4) == eucl_dist(&v4, &v1));
-            BOOST_VERIFY(eucl_dist(&v4, &v1) == 55);
-
-            // Neg-neg
-            std::vector<double> v5 {-.2342, -23.342, -.000003232, -3.234232, 1};
-            BOOST_VERIFY(ceil(eucl_dist(&v5, &v3)) == ceil(547586097.2884537));
-            BOOST_VERIFY(ceil(eucl_dist(&v3, &v5)) == ceil(547586097.2884537));
-
-            printf("Exiting test_eucl ==> ");
-        }
-
-        void test_dist_matrix() {
-            const unsigned k = 4;
-            test_init_g_clusters();
-            dist_matrix::ptr test_mat = dist_matrix::create(k);
-
-            /* Test compute_dist */
-            test_mat->compute_dist(g_clusters, k);
-
-            printf("Clusters:\n"); print_clusters(g_clusters);
-            printf("Cluster distance :\n"); test_mat->print();
-
-            /* Test s_val */
-            printf("Printing s_vals:\n");
-            for (unsigned i = 0; i < k; i++) {
-                BOOST_VERIFY(g_clusters[i]->get_s_val() ==
-                            test_mat->get_min_dist(i));
-            }
-            printf("\n");
-            printf("Exiting test_dist_matrix ==> ");
-        }
-        /*********** End Testing functions ****************/
-#endif
     }
