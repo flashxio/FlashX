@@ -89,6 +89,9 @@ public:
 	virtual const char *get_raw_arr() const {
 		return NULL;
 	}
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
 
 	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
 			size_t num_rows, size_t num_cols,
@@ -172,6 +175,9 @@ public:
 	virtual const char *get_raw_arr() const {
 		return data.get_raw();
 	}
+	virtual char *get_raw_arr() {
+		return data.get_raw();
+	}
 
 	virtual const char *get_col(size_t col) const {
 		return data.get_raw() + col * get_num_rows() * get_entry_size();
@@ -250,6 +256,9 @@ public:
 		return data;
 	}
 	virtual const char *get_raw_arr() const {
+		return data.get_raw();
+	}
+	virtual char *get_raw_arr() {
 		return data.get_raw();
 	}
 

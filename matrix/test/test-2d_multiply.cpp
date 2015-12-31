@@ -114,8 +114,12 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 		for (size_t i = 0; i < ins.size(); i++) {
 			dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
 			dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
-			std::vector<double> in_col_sum = in_mat->col_sum()->conv2std<double>();
-			std::vector<double> out_col_sum = out_mat->col_sum()->conv2std<double>();
+			dense_matrix::ptr sum = in_mat->col_sum();
+			vector::ptr sum_vec = sum->get_col(0);
+			std::vector<double> in_col_sum = sum_vec->conv2std<double>();
+			sum = out_mat->col_sum();
+			sum_vec = sum->get_col(0);
+			std::vector<double> out_col_sum = sum_vec->conv2std<double>();
 			for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
 				printf("%ld: sum of input: %lf, sum of product: %lf\n",
 						k, in_col_sum[k], out_col_sum[k]);

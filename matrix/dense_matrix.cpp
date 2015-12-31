@@ -2601,7 +2601,7 @@ void matrix_long_agg_op::run(
 
 }
 
-vector::ptr aggregate(detail::matrix_store::const_ptr store,
+detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 		matrix_margin margin, agg_operate::const_ptr op)
 {
 	/*
@@ -2609,36 +2609,21 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 	 */
 	if ((margin == matrix_margin::MAR_ROW && !store->is_wide())
 			|| (margin == matrix_margin::MAR_COL && store->is_wide())) {
+		// We can turn a wide matrix to a tall matrix to simplify implementation.
+		if (margin == matrix_margin::MAR_COL && store->is_wide()) {
+			margin = matrix_margin::MAR_ROW;
+			store = store->transpose();
+		}
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = store;
-		size_t out_num_rows;
-		size_t out_num_cols;
-		if (margin == matrix_margin::MAR_ROW) {
-			out_num_rows = store->get_num_rows();
-			out_num_cols = 1;
-		}
-		else {
-			out_num_rows = 1;
-			out_num_cols = store->get_num_cols();
-		}
 		matrix_short_agg_op::const_ptr agg_op(new matrix_short_agg_op(
-					margin, op, out_num_rows, out_num_cols));
-		matrix_layout_t output_layout = (margin == matrix_margin::MAR_ROW
-				? matrix_layout_t::L_COL : matrix_layout_t::L_ROW);
-		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
-				agg_op, output_layout);
-		ret->materialize_self();
-		// TODO if the result matrix is in external memory, getting
-		// the row/column will read the entire row/column into memory.
-		if (ret->get_num_cols() == 1)
-			return vector::create(ret->get_col_vec(0));
-		else
-			return vector::create(ret->get_row_vec(0));
+					margin, op, store->get_num_rows(), 1));
+		return __mapply_portion_virtual(ins, agg_op, matrix_layout_t::L_COL);
 	}
 	if (!op->has_combine()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "aggregation on the long dimension requires combine";
-		return vector::ptr();
+		return detail::matrix_store::ptr();
 	}
 
 	/*
@@ -2694,24 +2679,26 @@ vector::ptr aggregate(detail::matrix_store::const_ptr store,
 		assert(copy_row == num_valid_rows);
 		local_res = tmp;
 	}
-	detail::smp_vec_store::ptr res = detail::smp_vec_store::create(
-			partial_res->get_num_cols(), partial_res->get_type());
-	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_length(),
+
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
+			partial_res->get_type(), -1);
+	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_num_rows(),
 			res->get_type(), -1);
 	detail::aggregate(*local_res, op->get_combine(),
 			matrix_margin::MAR_COL, local_vec);
-	return vector::create(res);
+	return res;
 }
 
-vector::ptr dense_matrix::aggregate(matrix_margin margin,
+dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
 			agg_operate::const_ptr op) const
 {
 	if (this->get_type() != op->get_input_type()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The matrix element type is different from the operator";
-		return vector::ptr();
+		return dense_matrix::ptr();
 	}
-	return fm::aggregate(store, margin, op);
+	return dense_matrix::create(fm::aggregate(store, margin, op));
 }
 
 scalar_variable::ptr dense_matrix::aggregate(bulk_operate::const_ptr op) const
@@ -2726,14 +2713,15 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 			<< "The matrix element type is different from the operator";
 		return scalar_variable::ptr();
 	}
-	vector::ptr res_vec = fm::aggregate(store, matrix_margin::BOTH, op);
-	assert(res_vec != NULL);
-	assert(res_vec->get_length() == 1);
-	assert(res_vec->is_in_mem());
+	detail::matrix_store::ptr _res = fm::aggregate(store,
+			matrix_margin::BOTH, op);
+	assert(_res != NULL);
+	assert(_res->get_num_rows() == 1 && _res->get_num_cols() == 1);
+	assert(_res->is_in_mem());
 
 	scalar_variable::ptr res = op->get_output_type().create_scalar();
-	res->set_raw(dynamic_cast<const detail::mem_vec_store &>(
-				res_vec->get_data()).get_raw_arr(), res->get_size());
+	res->set_raw(dynamic_cast<const detail::mem_matrix_store &>(
+				*_res).get_raw_arr(), res->get_size());
 	return res;
 }
 
@@ -2937,46 +2925,44 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 	return dense_matrix::create(ret);
 }
 
-vector::ptr dense_matrix::row_sum() const
+dense_matrix::ptr dense_matrix::row_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return fm::aggregate(store, matrix_margin::MAR_ROW, agg_operate::create(add));
+	return dense_matrix::create(fm::aggregate(store, matrix_margin::MAR_ROW,
+				agg_operate::create(add)));
 }
 
-vector::ptr dense_matrix::col_sum() const
+dense_matrix::ptr dense_matrix::col_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return fm::aggregate(store, matrix_margin::MAR_COL, agg_operate::create(add));
+	return dense_matrix::create(fm::aggregate(store, matrix_margin::MAR_COL,
+				agg_operate::create(add)));
 }
 
-vector::ptr dense_matrix::row_norm2() const
+dense_matrix::ptr dense_matrix::row_norm2() const
 {
 	detail::matrix_stats.inc_multiplies(get_num_rows() * get_num_cols());
 
 	const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::SQ);
 	dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));
-	vector::ptr sums = sq_mat->row_sum();
+	dense_matrix::ptr sums = sq_mat->row_sum();
 	op = get_type().get_basic_uops().get_op(basic_uops::op_idx::SQRT);
-	dense_matrix::ptr sqrt_mat = sums->conv2mat(sums->get_length(), 1,
-			false)->sapply(bulk_uoperate::conv2ptr(*op));
-	return sqrt_mat->get_col(0);
+	return sums->sapply(bulk_uoperate::conv2ptr(*op));
 }
 
-vector::ptr dense_matrix::col_norm2() const
+dense_matrix::ptr dense_matrix::col_norm2() const
 {
 	detail::matrix_stats.inc_multiplies(get_num_rows() * get_num_cols());
 
 	const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::SQ);
 	dense_matrix::ptr sq_mat = this->sapply(bulk_uoperate::conv2ptr(*op));
-	vector::ptr sums = sq_mat->col_sum();
+	dense_matrix::ptr sums = sq_mat->col_sum();
 	op = get_type().get_basic_uops().get_op(basic_uops::op_idx::SQRT);
-	dense_matrix::ptr sqrt_mat = sums->conv2mat(sums->get_length(), 1,
-			false)->sapply(bulk_uoperate::conv2ptr(*op));
-	return sqrt_mat->get_col(0);
+	return sums->sapply(bulk_uoperate::conv2ptr(*op));
 }
 
 class copy_op: public detail::portion_mapply_op

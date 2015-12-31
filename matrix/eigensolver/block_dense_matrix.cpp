@@ -1529,8 +1529,9 @@ std::vector<double> block_multi_vector::MvDot(const block_multi_vector &mv) cons
 		dense_matrix::ptr mat1 = get_block(i);
 		dense_matrix::ptr mat2 = mv.get_block(i);
 		dense_matrix::ptr res = mat1->multiply_ele(*mat2);
-		vector::ptr sum = res->col_sum();
-		std::vector<double> tmp = sum->conv2std<double>();
+		dense_matrix::ptr sum = res->col_sum();
+		vector::ptr sum_vec = sum->get_col(0);
+		std::vector<double> tmp = sum_vec->conv2std<double>();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
 	return ret;

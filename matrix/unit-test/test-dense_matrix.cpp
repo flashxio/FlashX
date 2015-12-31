@@ -1012,7 +1012,7 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 {
 	printf("test row sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
-	vector::ptr vec = mat->row_sum();
+	vector::ptr vec = mat->row_sum()->get_col(0);
 	assert(vec->is_in_mem());
 	assert(vec->get_length() == mat->get_num_rows());
 
@@ -1034,7 +1034,7 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 
 	printf("test col sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
-	vec = mat->col_sum();
+	vec = mat->col_sum()->get_col(0);
 	assert(vec->is_in_mem());
 	assert(vec->get_length() == mat->get_num_cols());
 	mem_vec = detail::mem_vec_store::cast(vec->get_raw_store());

@@ -325,7 +325,7 @@ public:
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
-	vector::ptr aggregate(matrix_margin margin, agg_operate::const_ptr op) const;
+	dense_matrix::ptr aggregate(matrix_margin margin, agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(bulk_operate::const_ptr op) const;
 
@@ -406,10 +406,10 @@ public:
 
 	dense_matrix::ptr logic_not() const;
 
-	std::shared_ptr<vector> row_sum() const;
-	std::shared_ptr<vector> col_sum() const;
-	std::shared_ptr<vector> row_norm2() const;
-	std::shared_ptr<vector> col_norm2() const;
+	dense_matrix::ptr row_sum() const;
+	dense_matrix::ptr col_sum() const;
+	dense_matrix::ptr row_norm2() const;
+	dense_matrix::ptr col_norm2() const;
 
 	std::shared_ptr<scalar_variable> sum() const {
 		if (get_type() == get_scalar_type<bool>()) {
