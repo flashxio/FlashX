@@ -16,6 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef __SEM_KMEANS_H__
 #define __SEM_KMEANS_H__
 
@@ -29,12 +30,14 @@
 #include "graph_config.h"
 #include "FGlib.h"
 #include "save_result.h"
-#define PAGE_ROW
 
+#define PAGE_ROW
 #define PRUNE 1
 #define KM_TEST 1
 #define MAT_TEST 1
 #define VERBOSE 0
+
+#include "sem_kmeans_util.h"
 
 using namespace fg;
 
@@ -235,6 +238,90 @@ namespace {
                 return *this;
             }
     };
+
+#if PRUNE
+    // NOTE: Creates a matrix like this e.g for K = 5
+    /* - Don't store full matrix, don't store dist to myself -> space: (k*k-1)/2
+       0 ==> 1 2 3 4
+       1 ==> 2 3 4
+       2 ==> 3 4
+       3 ==> 4
+       (4 ==> not needed)
+       */
+    class dist_matrix
+    {
+        private:
+            std::vector<std::vector<double>> mat;
+            unsigned rows;
+
+            dist_matrix(const unsigned rows) {
+                BOOST_VERIFY(rows > 1);
+
+                this->rows = rows-1;
+                // Distance to everyone other than yourself
+                for (unsigned i = this->rows; i > 0; i--) {
+                    std::vector<double> dist_row;
+                    dist_row.assign(i, std::numeric_limits<double>::max());
+                    mat.push_back(dist_row);
+                }
+            }
+
+            void translate(unsigned& row, unsigned& col) {
+                // First make sure the smaller is the row
+                if (row > col) {
+                    std::swap(row, col);
+                }
+
+                BOOST_VERIFY(row < rows);
+                col = col - row - 1; // Translation
+                BOOST_VERIFY(col < (rows - row));
+            }
+
+        public:
+            typedef typename std::shared_ptr<dist_matrix> ptr;
+
+            static ptr create(const unsigned rows) {
+                return ptr(new dist_matrix(rows));
+            }
+
+            /* Do a translation from raw id's to indexes in the distance matrix */
+            double get(unsigned row, unsigned col) {
+                if (row == col) { return std::numeric_limits<double>::max(); }
+                translate(row, col);
+                return mat[row][col];
+            }
+
+            // Testing purposes only
+            double get_min_dist(const unsigned row) {
+                double best = std::numeric_limits<double>::max();
+                for (unsigned col = 0; col < rows+1; col++) {
+                    if (col != row) {
+                        double val = get(row, col);
+                        if (val < best) best = val;
+                    }
+                }
+                BOOST_VERIFY(best < std::numeric_limits<double>::max());
+                return best;
+            }
+
+            void set(unsigned row, unsigned col, double val) {
+                BOOST_VERIFY(row != col);
+                translate(row, col);
+                mat[row][col] = val;
+            }
+
+            const unsigned get_num_rows() { return rows; }
+
+            void print() {
+                for (unsigned row = 0; row < rows; row++) {
+                    std::cout << row << " ==> ";
+                    print_vector<double>(mat[row]);
+                }
+            }
+
+            void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust);
+    };
+#endif
 }
 
 namespace fg

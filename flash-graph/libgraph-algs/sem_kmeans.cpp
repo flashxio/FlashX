@@ -23,7 +23,6 @@
 #endif
 
 #include "sem_kmeans.h"
-#include "sem_kmeans_util.h"
 
 // TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
 
@@ -31,7 +30,13 @@ using namespace fg;
 
 #if KM_TEST
 static std::string g_fn = "";
+static prune_stats::ptr g_prune_stats;
 #endif
+#if PRUNE
+static bool g_prune_init = false;
+static dist_matrix::ptr g_cluster_dist;
+#endif
+
 
 namespace {
     typedef std::pair<double, double> distpair;
@@ -55,20 +60,6 @@ namespace {
     static unsigned g_iter;
 
     // Begin Helpers //
-    template <typename T>
-        static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
-            unsigned print_len = v.size() > max_print ? max_print : v.size();
-
-            std::cout << "[";
-            typename std::vector<T>::iterator itr = v.begin();
-            for (; itr != v.begin()+print_len; itr++) {
-                std::cout << " "<< *itr;
-            }
-
-            if (v.size() > print_len) std::cout << " ...";
-            std::cout <<  " ]\n";
-        }
-
     static void print_clusters(std::vector<cluster::ptr>& clusters) {
         for (std::vector<cluster::ptr>::iterator it = clusters.begin();
                 it != clusters.end(); ++it) {
@@ -123,175 +114,6 @@ namespace {
             BOOST_VERIFY(dist >= 0);
             return sqrt(dist); // TODO: rm sqrt
         }
-#endif
-
-#if PRUNE
-    // NOTE: Creates a matrix like this e.g for K = 5
-    /* - Don't store full matrix, don't store dist to myself -> space: (k*k-1)/2
-       0 ==> 1 2 3 4
-       1 ==> 2 3 4
-       2 ==> 3 4
-       3 ==> 4
-       (4 ==> not needed)
-       */
-    class dist_matrix
-    {
-        private:
-            std::vector<std::vector<double>> mat;
-            unsigned rows;
-
-            dist_matrix(const unsigned rows) {
-                BOOST_VERIFY(rows > 1);
-
-                this->rows = rows-1;
-                // Distance to everyone other than yourself
-                for (unsigned i = this->rows; i > 0; i--) {
-                    std::vector<double> dist_row;
-                    dist_row.assign(i, std::numeric_limits<double>::max());
-                    mat.push_back(dist_row);
-                }
-            }
-
-            void translate(unsigned& row, unsigned& col) {
-                // First make sure the smaller is the row
-                if (row > col) {
-                    std::swap(row, col);
-                }
-
-                BOOST_VERIFY(row < rows);
-                col = col - row - 1; // Translation
-                BOOST_VERIFY(col < (rows - row));
-            }
-
-        public:
-            typedef typename std::shared_ptr<dist_matrix> ptr;
-
-            static ptr create(const unsigned rows) {
-                return ptr(new dist_matrix(rows));
-            }
-
-            /* Do a translation from raw id's to indexes in the distance matrix */
-            double get(unsigned row, unsigned col) {
-                if (row == col) { return std::numeric_limits<double>::max(); }
-                translate(row, col);
-                return mat[row][col];
-            }
-
-            // Testing purposes only
-            double get_min_dist(const unsigned row) {
-                double best = std::numeric_limits<double>::max();
-                for (unsigned col = 0; col < rows+1; col++) {
-                    if (col != row) {
-                        double val = get(row, col);
-                        if (val < best) best = val;
-                    }
-                }
-                BOOST_VERIFY(best < std::numeric_limits<double>::max());
-                return best;
-            }
-
-            void set(unsigned row, unsigned col, double val) {
-                BOOST_VERIFY(row != col);
-                translate(row, col);
-                mat[row][col] = val;
-            }
-
-            const unsigned get_num_rows() { return rows; }
-
-            void print() {
-                for (unsigned row = 0; row < rows; row++) {
-                    std::cout << row << " ==> ";
-                    print_vector<double>(mat[row]);
-                }
-            }
-
-            void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust);
-    };
-
-    static bool g_prune_init = false;
-    static dist_matrix::ptr g_cluster_dist;
-
-#if KM_TEST
-    // Class to hold stats on the effectiveness of pruning
-    class prune_stats
-    {
-        private:
-            // Counts per iteration
-            std::atomic<unsigned> lemma1, _3a, _3b, _3c, _4;
-
-            // Total counts
-            unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
-
-            prune_stats() {
-                _3a = _3b = lemma1 = _3c = _4 = 0;
-                tot_lemma1 = tot_3a = tot_3b = tot_3c = tot_4 = iter = 0;
-            }
-
-        public:
-            typedef std::shared_ptr<prune_stats> ptr;
-
-            static ptr create() {
-                return ptr(new prune_stats());
-            }
-            void pp_lemma1(unsigned var=1) {
-                lemma1 = lemma1 + var;
-            }
-            void pp_3a() {
-                _3a = _3a + 1;
-            }
-            void pp_3b() {
-                _3b = _3b + 1;
-            }
-            void pp_3c() {
-                _3c = _3c + 1;
-            }
-            void pp_4() {
-                _4 = _4 + 1;
-            }
-            void finalize() {
-                iter++;
-                BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  NUM_ROWS*K);
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats count:\n"
-                    "lemma1 = " << lemma1 << ", 3a = " << _3a
-                    << ", 3b = " << _3b << ", 3c = " << _3c << ", 4 = " << _4;
-
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
-                    "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(NUM_ROWS*K))*100) <<
-                    "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(NUM_ROWS*K))*100) <<
-                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(NUM_ROWS*K))*100) <<
-                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(NUM_ROWS*K))*100) <<
-                    "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(NUM_ROWS*K))*100) << "\%";
-
-                tot_lemma1 += (unsigned)lemma1;
-                tot_3a += (unsigned)_3a;
-                tot_3b += (unsigned)_3b;
-                tot_3c += (unsigned)_3c;
-                tot_4 += (unsigned)_4;
-
-                lemma1 = _3a = _3b = _3c = _4 = 0; // reset
-            }
-
-            std::vector<double> get_stats() {
-                double perc_lemma1 = tot_lemma1 / ((double)(NUM_ROWS*this->iter*K))*100;
-                double perc_3a = tot_3a / ((double)(NUM_ROWS*this->iter*K))*100;
-                double perc_3b = tot_3b / ((double)(NUM_ROWS*this->iter*K))*100;
-                double perc_3c = tot_3c / ((double)(NUM_ROWS*this->iter*K))*100;
-                double perc_4 = tot_4 / ((double)(NUM_ROWS*this->iter*K))*100;
-                // Total percentage
-                double perc = ((tot_3b + tot_3a + tot_3c + tot_4 + tot_lemma1) /
-                        ((double)((NUM_ROWS*this->iter*K)) + ((K*(K-1))/2.0)))*100;
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
-                    "Tot = " << perc << "\%, 3a = " << perc_3a <<
-                    "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c
-                    << "\%, 4 = " << perc_4 << "\%, lemma1 = " << perc_lemma1 << "\%";
-
-                std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc_3c, perc_4, perc};
-                return ret;
-            }
-    };
-
-    static prune_stats::ptr g_prune_stats = prune_stats::create();
-#endif
 #endif
 
     class kmeans_vertex: public compute_vertex
@@ -588,19 +410,9 @@ namespace {
     }
 #endif
 
-    std::string p(double num) {
-        if (num == std::numeric_limits<double>::max())
-            return "Inf";
-
-        char str[10];
-        sprintf(str, "%.3f", num);
-        return std::string(str);
-    }
-
     void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
         kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
 #if PRUNE
-        vertex_id_t my_id = prog.get_vertex_id(*this);
         unsigned old_cluster_id = cluster_id;
 
         if (g_prune_init) {
@@ -894,6 +706,7 @@ namespace {
             BOOST_VERIFY(num_cols > 0);
 
 #if KM_TEST
+            g_prune_stats = prune_stats::create(NUM_ROWS, K);
             BOOST_LOG_TRIVIAL(info) << "We have rows = " << NUM_ROWS << ", cols = " <<
                 NUM_COLS;
             g_fn = "/mnt/nfs/disa/FlashGraph/flash-graph/test-algs/clusters_r"+std::to_string(NUM_ROWS)\
