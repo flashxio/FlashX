@@ -718,7 +718,6 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 
 .onLoad <- function(libname, pkgname)
 {
-	library(Rcpp)
 	library.dynam("FlashR", pkgname, libname, local=FALSE);
 	ret <- .Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashR")
 	stopifnot(ret)
