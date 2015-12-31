@@ -370,8 +370,6 @@ public:
 
 	virtual const char *get_row(size_t row) const = 0;
 	virtual char *get_row(size_t row) = 0;
-	virtual const char *get_rows(size_t row_start, size_t row_end) const = 0;
-	virtual char *get_rows(size_t row_start, size_t row_end) = 0;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -519,19 +517,6 @@ public:
 		return data.get_raw() + get_orig_offset(row, 0) * get_entry_size();
 	}
 
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		if (row_end > get_num_rows() || get_local_start_col() > 0)
-			return NULL;
-		else
-			return get_row(row_start);
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
-		if (row_end > get_num_rows() || get_local_start_col() > 0)
-			return NULL;
-		else
-			return get_row(row_start);
-	}
-
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::ptr transpose();
 };
@@ -653,19 +638,6 @@ public:
 			return data + get_orig_offset(0, 0) * get_entry_size();
 	}
 
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		if (row_end > get_num_rows() || get_local_start_col() > 0)
-			return NULL;
-		else
-			return get_row(row_start);
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
-		if (row_end > get_num_rows() || get_local_start_col() > 0)
-			return NULL;
-		else
-			return get_row(row_start);
-	}
-
 	virtual const char *get_row(size_t row) const {
 		return data + get_orig_offset(row, 0) * get_entry_size();
 	}
@@ -785,13 +757,6 @@ public:
 		return NULL;
 	}
 
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		return NULL;
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
-		return NULL;
-	}
-
 	virtual const char *get_row(size_t row) const {
 		return rows[row + get_local_start_row()]
 			+ get_local_start_col() * get_entry_size();
@@ -903,22 +868,11 @@ public:
 	virtual const char *get_row(size_t row) const {
 		return data + get_orig_offset(row, 0) * get_entry_size();
 	}
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		if (row_end > get_num_rows() || get_local_start_col() > 0)
-			return NULL;
-		else
-			return get_row(row_start);
-	}
-
 	virtual char *get_raw_arr() {
 		assert(0);
 		return NULL;
 	}
 	virtual char *get_row(size_t row) {
-		assert(0);
-		return NULL;
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
 		assert(0);
 		return NULL;
 	}
@@ -1020,9 +974,6 @@ public:
 		return rows[row + get_local_start_row()]
 			+ get_local_start_col() * get_entry_size();
 	}
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		return NULL;
-	}
 
 	virtual const char *get_raw_arr() const {
 		return NULL;
@@ -1032,10 +983,6 @@ public:
 		return NULL;
 	}
 	virtual char *get_row(size_t row) {
-		assert(0);
-		return NULL;
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
 		assert(0);
 		return NULL;
 	}
@@ -1139,9 +1086,6 @@ public:
 
 	using local_row_matrix_store::get_row;
 	virtual char *get_row(size_t row) {
-		return NULL;
-	}
-	virtual char *get_rows(size_t row_start, size_t row_end) {
 		return NULL;
 	}
 

@@ -130,29 +130,6 @@ const char *NUMA_row_tall_matrix_store::get_row(size_t row_idx) const
 			phy_loc.second * get_num_cols() * get_entry_size());
 }
 
-const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,
-		size_t row_end) const
-{
-	if (ROUND(row_start, mem_matrix_store::CHUNK_SIZE)
-			!= ROUND((row_end - 1), mem_matrix_store::CHUNK_SIZE)) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same mem chunk") % row_start % row_end;
-		return NULL;
-	}
-	return get_row(row_start);
-}
-
-char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
-{
-	if (ROUND(row_start, mem_matrix_store::CHUNK_SIZE)
-			!= ROUND((row_end - 1), mem_matrix_store::CHUNK_SIZE)) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same mem chunk") % row_start % row_end;
-		return NULL;
-	}
-	return (char *) get_row(row_start);
-}
-
 matrix_store::const_ptr NUMA_row_tall_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {

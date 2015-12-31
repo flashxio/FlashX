@@ -136,8 +136,6 @@ public:
 	const char *get_row(size_t row_idx) const;
 	char *get_row(size_t row_idx);
 	using NUMA_matrix_store::get_rows;
-	const char *get_rows(size_t row_start, size_t row_end) const;
-	char *get_rows(size_t row_start, size_t row_end);
 
 	const char *get(size_t row_idx, size_t col_idx) const {
 		const char *row = get_row(row_idx);
@@ -377,15 +375,6 @@ public:
 
 	char *get_col(size_t col_idx) {
 		return store.get_row(col_idx);
-	}
-
-	using NUMA_matrix_store::get_cols;
-	const char *get_cols(size_t col_start, size_t col_end) const {
-		return store.get_rows(col_start, col_end);
-	}
-
-	char *get_cols(size_t col_start, size_t col_end) {
-		return store.get_rows(col_start, col_end);
 	}
 
 	const char *get(size_t row_idx, size_t col_idx) const {

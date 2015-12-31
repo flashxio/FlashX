@@ -427,9 +427,9 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 
 	// Get the contiguous rows in the input and output matrices.
 	size_t local_start = start_row - out_part->get_global_start_row();
-	size_t local_end = std::min(local_start + num_rows,
-			out_part->get_num_rows());
-	return out_part->get_rows(local_start, local_end);
+	assert(local_start + num_rows <= out_part->get_num_rows());
+	return out_part->get_raw_arr()
+		+ local_start * out_part->get_num_cols() * out_part->get_entry_size();
 }
 
 void block_spmm_task::notify_complete()
