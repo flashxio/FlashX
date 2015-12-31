@@ -99,7 +99,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 		assert(data[node_id].get_node_id() == (size_t) node_id);
 		assert(data[node_id].get_num_bytes()
 				>= local_lens[node_id] * ncol * get_entry_size());
-		assert(data[node_id].get_contig_block_size() == block_bytes);
+		assert(data[node_id].get_contig_block_size() % block_bytes == 0);
 	}
 }
 
