@@ -15,14 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CC = clang
-CXX = clang++
+CC = gcc
+CXX = g++
 #MEMCHECK=1
 #PROF=1
 #MEMTRACE=1
 #BOOST_LOG=1
 #RELEASE=1
-CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
+#CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
+CFLAGS = -g -fno-inline-functions -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -fsanitize=address
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages

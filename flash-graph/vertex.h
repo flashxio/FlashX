@@ -36,8 +36,9 @@
 #include "graph_file_header.h"
 
 #define GRAPH_AS_MATRIX 1
-#define GRAPH_MAT_ROWS 1000 // 500 // 65608366 // 7 //  FIXME: DM hardcoded
-#define GRAPH_MAT_COLS 10 //10 // 8 // 5 // 5 // FIXME: DM hardcoded
+#define GRAPH_MAT_ROWS 128 // 65608366 // FIXME: DM hardcoded
+#define GRAPH_MAT_COLS 57 // 8 // FIXME: DM hardcoded
+
 namespace fg
 {
 

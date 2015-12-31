@@ -25,9 +25,6 @@
 #include "sem_kmeans.h"
 #include "sem_kmeans_util.h"
 
-#define KM_TEST 1
-#define VERBOSE 0
-
 // TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
 
 using namespace fg;
@@ -57,7 +54,6 @@ namespace {
     static const unsigned INVALID_CLUST_ID = -1;
     static unsigned g_iter;
 
-    static unsigned g_per_iter_3a = 0; //TODO: rm
     // Begin Helpers //
     template <typename T>
         static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
@@ -178,9 +174,6 @@ namespace {
             double get(unsigned row, unsigned col) {
                 if (row == col) { return std::numeric_limits<double>::max(); }
                 translate(row, col);
-#if VERBOSE
-                BOOST_LOG_TRIVIAL(info) << "Getting row=" << row << "col=" << col;
-#endif
                 return mat[row][col];
             }
 
@@ -305,9 +298,8 @@ namespace {
     {
         unsigned cluster_id;
         double dist;
-        std::vector<double> lwr_bnd;
 #if PRUNE
-        unsigned nxt_clstr; // If prune fails .. which cluster do we start from?
+        std::vector<double> lwr_bnd;
         bool recalculated;
 #endif
         public:
@@ -317,7 +309,6 @@ namespace {
                 cluster_id = INVALID_CLUST_ID;
 #if PRUNE
                 lwr_bnd.assign(K, 0); // Set K items to 0
-                nxt_clstr = 0; // TODO: Use me!
                 recalculated = false;
 #endif
             }
@@ -473,7 +464,7 @@ namespace {
 
 #if PRUNE
         recalculated = false;
-        if (cluster_id != INVALID_CLUST_ID) { //FIXME: Verify this condition -- should be if I changed my cluster last time
+        if (!g_prune_init) {
             for (unsigned cl = 0; cl < K; cl++) {
                 // TODO: Test if (g_clusters[cl]->get_prev_dist()) > 0
                 lwr_bnd[cl] = std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
@@ -481,6 +472,13 @@ namespace {
 
             /* #6 */
             dist += g_clusters[cluster_id]->get_prev_dist();
+
+            if (dist <= g_clusters[cluster_id]->get_s_val()) { // TODO: Move some of this logic to the run
+#if KM_TEST
+                g_prune_stats->pp_lemma1(K);
+#endif
+                return; // Nothing changes -- no I/O request!
+            }
         }
 #endif
         vertex_id_t id = prog.get_vertex_id(*this);
@@ -563,7 +561,7 @@ namespace {
 #endif
             dist += diff*diff;
         }
-        return sqrt(dist);
+        return sqrt(dist); // TODO: sqrt
     }
 
 #if PRUNE
@@ -608,89 +606,54 @@ namespace {
         if (g_prune_init) {
             for (unsigned cl = 0; cl < K; cl++) {
                 double udist = dist_comp(vertex, cl);
-                if (udist < dist) { // FIXME: Verify dist = std::max() in g_prune_init if not need `double best`
+                if (udist < dist) {
                     dist = udist;
                     cluster_id = cl;
                 }
             }
         } else {
-            if (dist <= g_clusters[cluster_id]->get_s_val()) { // TODO: Move some of this logic to the run
+            for (unsigned cl = 0; cl < K; cl++) {
+                if (dist <= g_cluster_dist->get(cluster_id, cl)) {
 #if KM_TEST
-                g_prune_stats->pp_lemma1(K);
+                    g_prune_stats->pp_3a();
 #endif
-                // Nothing changes!
-            } else {
-                for (unsigned cl = 0; cl < K; cl++) {
-                    if (dist <= g_cluster_dist->get(cluster_id, cl)) {
+                    continue;
+                } else if (dist <= lwr_bnd[cl]) {
 #if KM_TEST
-                        g_prune_stats->pp_3a();
-                        g_per_iter_3a++;
+                    g_prune_stats->pp_3b();
 #endif
-#if VERBOSE
-                        if (cl == 0) {
-                            printf("v:%u prune 3a for c:%u, dist = %.3f,"
-                                    "d(c:%u, c:%u) = %s\n", my_id, cl, dist, cluster_id, cl,
-                                    p(g_cluster_dist->get(cluster_id, cl)).c_str());
-                        }
-#endif
-                        continue;
-                    } else if (dist <= lwr_bnd[cl]) {
-#if KM_TEST
-                        g_prune_stats->pp_3b();
-                        // g_per_iter_3a++; // TODO
-#endif
-#if VERBOSE
-                        if (cl == 0) {
-                            printf("v:%u prune 3b for c:%u, dist = %.3f, lwr_bnd[c:%u] = %s\n",
-                                    my_id, cl, dist, cl, p(lwr_bnd[cl]).c_str());
-                        }
-#endif
-                        continue;
-                    }
+                    continue;
+                }
 
-                    // If not recalculated to my current cluster .. do so to tighten bounds
-                    if (!recalculated) {
-                        double udist = dist_comp(vertex, cluster_id);
-                        lwr_bnd[cluster_id] = udist;
-                        dist = udist; // NOTE: No more best!
-                        recalculated = true;
-                    }
+                // If not recalculated to my current cluster .. do so to tighten bounds
+                if (!recalculated) {
+                    double udist = dist_comp(vertex, cluster_id);
+                    lwr_bnd[cluster_id] = udist;
+                    dist = udist; // NOTE: No more best!
+                    recalculated = true;
+                }
 
-                    if (dist <= g_cluster_dist->get(cluster_id, cl)) {
+                if (dist <= g_cluster_dist->get(cluster_id, cl)) {
 #if KM_TEST
-                        g_prune_stats->pp_3c();
+                    g_prune_stats->pp_3c();
 #endif
-#if VERBOSE
-                        if (cl == 0) {
-                            printf("v:%u prune 3c for c:%u, dist = %.3f,"
-                                    "d(c:%u, c:%u) = %s\n", my_id, cl, dist, cluster_id, cl,
-                                    p(g_cluster_dist->get(cluster_id, cl)).c_str());
-                        }
-#endif
-                        continue;
-                    }
+                    continue;
+                }
 
-                    // Track 4
-                    if (lwr_bnd[cl] >= dist) {
+                // Track 4
+                if (lwr_bnd[cl] >= dist) {
 #if KM_TEST
-                        g_prune_stats->pp_4();
+                    g_prune_stats->pp_4();
 #endif
-#if VERBOSE
-                        if (cl == 2) {
-                            printf("v:%u prune 4 for c:%u, dist = %.3f, lwr_bnd[c:%u] = %s\n"
-                                    , my_id, cl, dist, cl, p(lwr_bnd[cl]).c_str());
-                        }
-#endif
-                        continue;
-                    }
+                    continue;
+                }
 
-                    // Track 5
-                    double jdist = dist_comp(vertex, cl);
-                    lwr_bnd[cl] = jdist;
-                    if (jdist < dist) {
-                        dist = jdist;
-                        cluster_id = cl;
-                    }
+                // Track 5
+                double jdist = dist_comp(vertex, cl);
+                lwr_bnd[cl] = jdist;
+                if (jdist < dist) {
+                    dist = jdist;
+                    cluster_id = cl;
                 }
             }
         }
@@ -702,12 +665,6 @@ namespace {
             dist_comp(vertex, &best, &new_cluster_id, cl);
         }
 #endif
-
-        //if (prune_it && (cluster_id != new_cluster_id)) {
-        //    printf("ERROR: vid:%u new_cluster_id = %u, pruned said cluster_id = %u. Stats ==>"
-        //            " dist=%e, best=%e, s(%u) = %e\n", my_id, new_cluster_id,
-        //            cluster_id, dist, best, cluster_id, g_clusters[cluster_id]->get_s_val());
-        //}
 
 #if PRUNE
         BOOST_VERIFY(cluster_id >= 0 && cluster_id < K);
@@ -945,15 +902,20 @@ namespace {
 
             gettimeofday(&start , NULL);
             /*** Begin VarInit of data structures ***/
+
+#if MAT_TEST
             std::string init_centers_fn = "/mnt/nfs/disa/data/tiny/fkms_data/5c_128.bin";
             bin_reader<double> br(init_centers_fn, 5, 57);
+#endif
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
             for (size_t cl = 0; cl < k; cl++) {
-                //g_clusters.push_back(cluster::create(NUM_COLS));
-
+#if MAT_TEST
                 std::vector<double> v = br.readline();
                 g_clusters.push_back(cluster::create(v));
+#else
+                g_clusters.push_back(cluster::create(NUM_COLS));
+#endif
             }
 
             std::vector<unsigned> num_members_v;
@@ -966,7 +928,8 @@ namespace {
 #endif
             /*** End VarInit ***/
             g_stage = INIT;
-/*
+
+#if !MAT_TEST
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
                 g_init = RANDOM;
@@ -1030,7 +993,7 @@ namespace {
                     g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                 }
             }
-*/
+#endif
 
 #if PRUNE
             if (init == "forgy" || init == "kmeanspp") {
@@ -1313,7 +1276,7 @@ namespace {
             test_init_g_clusters();
             dist_matrix::ptr test_mat = dist_matrix::create(k);
 
-            /* Test compute_dist */  //TODO: complete
+            /* Test compute_dist */
             test_mat->compute_dist(g_clusters, k);
 
             printf("Clusters:\n"); print_clusters(g_clusters);

@@ -31,7 +31,10 @@
 #include "save_result.h"
 #define PAGE_ROW
 
-#define PRUNE 0
+#define PRUNE 1
+#define KM_TEST 1
+#define MAT_TEST 1
+#define VERBOSE 0
 
 using namespace fg;
 
