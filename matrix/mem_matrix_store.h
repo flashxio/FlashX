@@ -110,10 +110,7 @@ public:
 	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
-			off_t start_row, off_t start_col) {
-		// TODO
-		assert(0);
-	}
+			off_t start_row, off_t start_col);
 
 	virtual bool write2file(const std::string &file_name) const = 0;
 
