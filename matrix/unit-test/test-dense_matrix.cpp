@@ -9,6 +9,7 @@
 #include "sparse_matrix.h"
 #include "EM_dense_matrix.h"
 #include "matrix_stats.h"
+#include "mapply_matrix_store.h"
 
 #include "eigensolver/block_dense_matrix.h"
 #include "eigensolver/collected_col_matrix_store.h"
@@ -1957,6 +1958,105 @@ void test_get_rowcols(int num_nodes)
 	test_get_cols(mat);
 }
 
+void test_materialize(int num_nodes)
+{
+	// Test in-memory tall matrix
+	printf("Test full materialization on in-mem tall matrix\n");
+	matrix_val_t matrix_val = matrix_val_t::SEQ;
+	dense_matrix::ptr m1 = create_matrix(long_dim, 1, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	dense_matrix::ptr tmp = m1->add(*m1);
+	tmp = tmp->cast_ele_type(get_scalar_type<size_t>());
+	tmp->set_materialize_level(materialize_level::MATER_FULL);
+	scalar_variable::ptr res = tmp->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	detail::mapply_matrix_store::const_ptr vstore
+		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+				tmp->get_raw_store());
+	assert(vstore);
+	assert(vstore->is_materialized());
+	dense_matrix::ptr materialize_res = dense_matrix::create(vstore->materialize(
+			vstore->is_in_mem(), vstore->get_num_nodes()));
+	res = materialize_res->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	// Test in-memory wide matrix
+	printf("Test full materialization on in-mem wide matrix\n");
+	m1 = create_matrix(1, long_dim, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	tmp = m1->add(*m1);
+	tmp = tmp->cast_ele_type(get_scalar_type<size_t>());
+	tmp->set_materialize_level(materialize_level::MATER_FULL);
+	res = tmp->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	vstore = std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+				tmp->get_raw_store());
+	assert(vstore);
+	assert(vstore->is_materialized());
+	materialize_res = dense_matrix::create(vstore->materialize(
+			vstore->is_in_mem(), vstore->get_num_nodes()));
+	res = materialize_res->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	// Test EM tall matrix
+	printf("Test full materialization on EM tall matrix\n");
+	bool orig_in_mem = in_mem;
+	in_mem = false;
+	m1 = create_matrix(long_dim, 1, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	dense_matrix::ptr m2 = create_matrix(long_dim, 1, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	tmp = m1->add(*m2);
+	tmp = tmp->cast_ele_type(get_scalar_type<size_t>());
+	assert(tmp->get_raw_store()->get_portion_size().first
+			== detail::EM_matrix_store::CHUNK_SIZE);
+	tmp->set_materialize_level(materialize_level::MATER_FULL);
+	res = tmp->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	vstore = std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+			tmp->get_raw_store());
+	assert(vstore->get_portion_size().first
+			== detail::EM_matrix_store::CHUNK_SIZE);
+	assert(vstore);
+	assert(!vstore->is_in_mem());
+	assert(vstore->is_materialized());
+	materialize_res = dense_matrix::create(vstore->materialize(
+			vstore->is_in_mem(), vstore->get_num_nodes()));
+	res = materialize_res->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	// Test EM wide matrix
+	printf("Test full materialization on EM wide matrix\n");
+	m1 = create_matrix(1, long_dim, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	m2 = create_matrix(1, long_dim, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	tmp = m1->add(*m2);
+	tmp = tmp->cast_ele_type(get_scalar_type<size_t>());
+	assert(tmp->get_raw_store()->get_portion_size().second
+			== detail::EM_matrix_store::CHUNK_SIZE);
+	tmp->set_materialize_level(materialize_level::MATER_FULL);
+	res = tmp->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	vstore = std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+			tmp->get_raw_store());
+	assert(vstore->get_portion_size().second
+			== detail::EM_matrix_store::CHUNK_SIZE);
+	assert(vstore);
+	assert(!vstore->is_in_mem());
+	assert(vstore->is_materialized());
+	materialize_res = dense_matrix::create(vstore->materialize(
+			vstore->is_in_mem(), vstore->get_num_nodes()));
+	res = materialize_res->sum();
+	assert(*(size_t *) res->get_raw() == ((long_dim - 1) * long_dim));
+
+	in_mem = orig_in_mem;
+}
+
 void test_bmv_multiply_tall()
 {
 	bool in_mem = false;
@@ -2131,6 +2231,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_materialize(num_nodes);
 	test_get_rowcols(num_nodes);
 	test_groupby();
 	test_block_mv();

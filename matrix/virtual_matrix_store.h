@@ -70,7 +70,7 @@ public:
 		this->mater_level = materialize_level::MATER_CPU;
 	}
 
-	void set_materialize_level(materialize_level level) {
+	virtual void set_materialize_level(materialize_level level) {
 		this->mater_level = level;
 	}
 
