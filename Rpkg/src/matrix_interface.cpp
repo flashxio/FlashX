@@ -1423,14 +1423,32 @@ RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
 	return create_FMR_matrix(res, "scale");
 }
 
+RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel)
+{
+	Rcpp::LogicalVector res(1);
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
+		res[0] = false;
+		return res;
+	}
+	Rcpp::IntegerVector level_vec(plevel);
+	int level = level_vec[0];
+	if (level < materialize_level::MATER_CPU
+			|| level > materialize_level::MATER_FULL) {
+		fprintf(stderr, "unknown materialization level: %d\n", level);
+		res[0] = false;
+		return res;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	mat->set_materialize_level((materialize_level) level);
+	res[0] = true;
+	return res;
+}
+
 RcppExport SEXP R_FM_materialize(SEXP pmat)
 {
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
-		return R_NilValue;
-	}
-	if (is_vector(pmat)) {
-		fprintf(stderr, "Doesn't support materializing a vector yet\n");
 		return R_NilValue;
 	}
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);

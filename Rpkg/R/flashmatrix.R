@@ -989,6 +989,13 @@ fm.get.rows <- function(fm, idxs)
 		NULL
 }
 
+fm.set.materialize.level <- function(fm, level)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	.Call("R_FM_set_materialize_level", fm, as.integer(level), PACKAGE="FlashR")
+}
+
 fm.materialize <- function(fm)
 {
 	stopifnot(!is.null(fm))
