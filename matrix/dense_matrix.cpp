@@ -33,6 +33,7 @@
 #include "mapply_matrix_store.h"
 #include "vector.h"
 #include "matrix_stats.h"
+#include "local_mem_buffer.h"
 
 namespace fm
 {
@@ -957,12 +958,14 @@ class mapply_task: public thread_task
 	const std::vector<matrix_store::ptr> &out_mats;
 	size_t portion_idx;
 	const portion_mapply_op &op;
+	bool one_portion;
 public:
 	mapply_task(const std::vector<matrix_store::const_ptr> &_mats,
 			size_t portion_idx, const portion_mapply_op &_op,
 			const std::vector<matrix_store::ptr> &_out_mats): mats(
 				_mats), out_mats(_out_mats), op(_op) {
 		this->portion_idx = portion_idx;
+		this->one_portion = mats.front()->get_num_portions() == 1;
 	}
 
 	void run();
@@ -977,12 +980,12 @@ void mapply_task::run()
 	int node_id = thread::get_curr_thread()->get_node_id();
 	for (size_t j = 0; j < mats.size(); j++) {
 		local_stores[j] = mats[j]->get_portion(portion_idx);
-		if (local_stores[j]->get_node_id() >= 0)
+		if (local_stores[j]->get_node_id() >= 0 && !one_portion)
 			assert(node_id == local_stores[j]->get_node_id());
 	}
 	for (size_t j = 0; j < out_mats.size(); j++) {
 		local_out_stores[j] = out_mats[j]->get_portion(portion_idx);
-		if (local_out_stores[j]->get_node_id() >= 0)
+		if (local_out_stores[j]->get_node_id() >= 0 && !one_portion)
 			assert(node_id == local_out_stores[j]->get_node_id());
 	}
 
@@ -1713,7 +1716,25 @@ bool __mapply_portion(
 	}
 	all_in_mem = all_in_mem && out_in_mem;
 
-	if (all_in_mem) {
+	// If all matrices are in memory and all matrices have only one portion,
+	// we should perform computation in the local thread.
+	if (all_in_mem && num_chunks == 1) {
+		detail::mem_thread_pool::disable_thread_pool();
+		mapply_task task(mats, 0, *op, out_mats);
+		task.run();
+		// After computation, some matrices buffer local portions in the thread,
+		// we should try to clean these local portions. These local portions
+		// may contain pointers to some matrices that don't exist any more.
+		// We also need to clean them to reduce memory consumption.
+		// We might want to keep the memory buffer for I/O on dense matrices.
+		if (matrix_conf.is_keep_mem_buf())
+			detail::local_mem_buffer::clear_bufs(
+					detail::local_mem_buffer::MAT_PORTION);
+		else
+			detail::local_mem_buffer::clear_bufs();
+		detail::mem_thread_pool::enable_thread_pool();
+	}
+	else if (all_in_mem) {
 		detail::mem_thread_pool::ptr mem_threads
 			= detail::mem_thread_pool::get_global_mem_threads();
 		for (size_t i = 0; i < num_chunks; i++) {

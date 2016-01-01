@@ -2239,6 +2239,8 @@ int main(int argc, char *argv[])
 	test_mapply_mixed(num_nodes);
 	test_mem_matrix(num_nodes);
 	test_EM_matrix(num_nodes);
+	long_dim = 9999;
+	test_mem_matrix(num_nodes);
 
 	destroy_flash_matrix();
 }

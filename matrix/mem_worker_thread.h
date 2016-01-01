@@ -76,6 +76,8 @@ class mem_thread_pool
 public:
 	typedef std::shared_ptr<mem_thread_pool> ptr;
 
+	static bool disable_thread_pool();
+	static bool enable_thread_pool();
 	static ptr get_global_mem_threads();
 	static size_t get_global_num_threads();
 	static int get_curr_thread_id();
