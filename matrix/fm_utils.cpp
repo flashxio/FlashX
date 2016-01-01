@@ -263,9 +263,7 @@ void adj_apply_operate::run(const void *key, const sub_data_frame &val,
 	out.resize(size);
 
 	// Here is the max column index I have found so far.
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	adj_apply_operate *mutable_this = const_cast<adj_apply_operate *>(this);
 	mutable_this->max_col_idxs[thread_id] = std::max(max_col_idx,
 			mutable_this->max_col_idxs[thread_id]);
@@ -380,9 +378,7 @@ void attr_adj_apply_operate<AttrType>::run(const void *key,
 	out.resize(size);
 
 	// Here is the max column index I have found so far.
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	attr_adj_apply_operate<AttrType> *mutable_this
 		= const_cast<attr_adj_apply_operate<AttrType> *>(this);
 	mutable_this->max_col_idxs[thread_id] = std::max(max_col_idx,

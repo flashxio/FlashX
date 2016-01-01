@@ -181,12 +181,11 @@ public:
 			0, 0, agg_op->get_output_type()) {
 		this->find_next = agg_op->get_input_type().get_agg_ops().get_find_next();
 		this->agg_op = agg_op;
-		detail::mem_thread_pool::ptr mem_threads
-			= detail::mem_thread_pool::get_global_mem_threads();
-		tables.resize(mem_threads->get_num_threads());
-		lvec_bufs.resize(mem_threads->get_num_threads());
-		lkey_bufs.resize(mem_threads->get_num_threads());
-		lagg_bufs.resize(mem_threads->get_num_threads());
+		size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
+		tables.resize(nthreads);
+		lvec_bufs.resize(nthreads);
+		lkey_bufs.resize(nthreads);
+		lagg_bufs.resize(nthreads);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -207,9 +206,7 @@ public:
 void agg_vec_portion_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	agg_vec_portion_op *mutable_this = const_cast<agg_vec_portion_op *>(this);
 	generic_hashtable::ptr ltable;
 	local_vec_store::ptr lvec;

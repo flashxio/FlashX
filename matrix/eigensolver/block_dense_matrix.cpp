@@ -826,10 +826,7 @@ void gemm_op<T>::run(
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
 	assert(A_num_blocks + C_num_blocks == ins.size());
-
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	T *res_mat;
 	res_mat = (T *) out.get_raw_arr();
@@ -1008,9 +1005,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		return block_multi_vector::ptr();
 	}
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -1281,9 +1276,7 @@ void multiply_wide_op<T>::run(
 			ins[0]->get_num_rows() * out.get_num_rows() * out.get_num_cols());
 
 	assert(ins.size() >= 2);
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	const T *Amat = NULL;
 	size_t num_Arows;
@@ -1365,9 +1358,7 @@ dense_matrix::ptr MvTransMv_wide(
 		const std::vector<detail::matrix_store::const_ptr> &blocks1,
 		detail::matrix_store::const_ptr in2, const size_t MAX_MUL_BLOCKS)
 {
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	std::vector<detail::matrix_store::const_ptr> tmp_res;
 	std::vector<detail::portion_mapply_op::const_ptr> mul_ops;
 	for (size_t i = 0; i < blocks1.size(); i += MAX_MUL_BLOCKS) {

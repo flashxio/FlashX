@@ -378,9 +378,7 @@ void multiply_tall_op<T>::run(
 	const T *Amat = (const T *) Astore->get_raw_arr();
 	// Let's make sure all matrices have the same data layout as the result matrix.
 	if (Amat == NULL || Astore->store_layout() != out.store_layout()) {
-		detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-				thread::get_curr_thread());
-		int thread_id = thread->get_pool_thread_id();
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 		if (Abufs[thread_id] == NULL
 				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
 				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
@@ -408,9 +406,7 @@ void multiply_tall_op<T>::run(
 	T *res_mat = (T *) out.get_raw_arr();
 	detail::local_matrix_store::ptr res_buf;
 	if (res_mat == NULL) {
-		detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-				thread::get_curr_thread());
-		int thread_id = thread->get_pool_thread_id();
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 		if (res_bufs[thread_id] == NULL
 				|| out.get_num_rows() != res_bufs[thread_id]->get_num_rows()
 				|| out.get_num_cols() != res_bufs[thread_id]->get_num_cols())
@@ -493,9 +489,7 @@ void multiply_wide_op<T>::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const T *Amat = (const T *) Astore->get_raw_arr();
@@ -605,10 +599,9 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = m1.get_raw_store();
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
 	multiply_tall_op<double>::const_ptr mapply_op(new multiply_tall_op<double>(
-				detail::mem_matrix_store::cast(right), threads->get_num_threads(),
+				detail::mem_matrix_store::cast(right),
+				detail::mem_thread_pool::get_global_num_threads(),
 				m1.get_num_rows(), m2.get_num_cols()));
 	return dense_matrix::create(__mapply_portion_virtual(ins, mapply_op,
 				out_layout));
@@ -636,10 +629,7 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 	assert(m1.get_type() == get_scalar_type<double>());
 	assert(m2.get_type() == get_scalar_type<double>());
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t nthreads = threads->get_num_threads();
-
+	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 	std::vector<detail::matrix_store::const_ptr> mats(2);
 	mats[0] = m1.get_data().transpose();
 	assert(mats[0]);
@@ -1280,10 +1270,7 @@ public:
 		this->res_mats = res_mats;
 		this->op = op;
 		this->min_portion_size = cal_min_portion_size(mats, res_mats);
-
-		detail::mem_thread_pool::ptr threads
-			= detail::mem_thread_pool::get_global_mem_threads();
-		part_states.resize(threads->get_num_threads());
+		part_states.resize(detail::mem_thread_pool::get_global_num_threads());
 	}
 
 	virtual void create_task(off_t global_start, size_t length);
@@ -1581,9 +1568,7 @@ void serial_read_portion_compute::fetch_portion(
 void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
 		size_t length)
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = mem_thread_pool::get_curr_thread_id();
 	assert(part_states[thread_id].first.empty());
 	assert(part_states[thread_id].second == NULL);
 
@@ -1599,9 +1584,7 @@ void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
 
 bool EM_mat_mapply_serial_dispatcher::issue_task()
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = mem_thread_pool::get_curr_thread_id();
 	// If the data of the matrices in the current partition hasn't been
 	// fetched, we fetch them first.
 	if (!part_states[thread_id].first.empty()) {
@@ -2396,22 +2379,19 @@ public:
 void inner_prod_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	int thread_id = curr->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	detail::local_matrix_store::ptr local_m = local_ms[thread_id];
 	if (local_m == NULL) {
-		int node_id = curr->get_node_id();
 		if (res->store_layout() == matrix_layout_t::L_COL)
 			local_m = detail::local_matrix_store::ptr(
 					new detail::local_buf_col_matrix_store(0, 0,
 						res->get_num_rows(), res->get_num_cols(),
-						right_op.get_output_type(), node_id));
+						right_op.get_output_type(), -1));
 		else
 			local_m = detail::local_matrix_store::ptr(
 					new detail::local_buf_row_matrix_store(0, 0,
 						res->get_num_rows(), res->get_num_cols(),
-						right_op.get_output_type(), node_id));
+						right_op.get_output_type(), -1));
 		local_m->reset_data();
 		assert((size_t) thread_id < local_ms.size());
 		const_cast<inner_prod_wide_op *>(this)->local_ms[thread_id] = local_m;
@@ -2433,9 +2413,7 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 			get_num_rows(), m.get_num_cols(), out_layout,
 			right_op->get_output_type(), -1, true);
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t nthreads = threads->get_num_threads();
+	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 
 	std::vector<detail::matrix_store::const_ptr> mats(2);
 	mats[0] = get_data().transpose();
@@ -2575,9 +2553,7 @@ void matrix_long_agg_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 1);
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	if (local_bufs[thread_id] == NULL)
 		const_cast<matrix_long_agg_op *>(this)->local_bufs[thread_id]
 			= local_vec_store::ptr(new local_buf_vec_store(0,
@@ -2629,9 +2605,7 @@ detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
 	 */
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	detail::mem_row_matrix_store::ptr partial_res;
 	if (margin == matrix_margin::BOTH)
 		partial_res = detail::mem_row_matrix_store::create(num_threads,
@@ -3084,9 +3058,7 @@ public:
 	groupby_row_mapply_op(size_t num_levels,
 			agg_operate::const_ptr op): detail::portion_mapply_op(0, 0,
 				op->get_output_type()) {
-		detail::mem_thread_pool::ptr threads
-			= detail::mem_thread_pool::get_global_mem_threads();
-		size_t num_threads = threads->get_num_threads();
+		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 		part_results.resize(num_threads);
 		part_agg.resize(num_threads);
 		part_status.resize(num_threads, true);
@@ -3160,9 +3132,7 @@ void groupby_row_mapply_op::run(
 	groupby_row_mapply_op *mutable_this = const_cast<groupby_row_mapply_op *>(
 			this);
 	// Prepare for the output result.
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	if (part_results[thread_id] == NULL) {
 		assert(part_agg[thread_id].empty());
 		mutable_this->part_results[thread_id] = detail::local_row_matrix_store::ptr(
