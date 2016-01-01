@@ -21,6 +21,7 @@
  */
 
 #include "vector.h"
+#include "col_vec.h"
 
 /*
  * This factor is the same as the one in R.
@@ -56,6 +57,14 @@ public:
 	}
 };
 
+/*
+ * There are two factor vectors. One is for vectors and the other is for
+ * dense matrices. Eventually, we should have only one factor vector.
+ */
+
+/*
+ * This is a factor vector for vectors.
+ */
 class factor_vector: public vector
 {
 	factor f;
@@ -80,6 +89,35 @@ public:
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_vec_operate &op) {
 		return ptr(new factor_vector(f, length, num_nodes, in_mem, op));
+	}
+
+	const factor &get_factor() const {
+		return f;
+	}
+};
+
+/*
+ * This is a factor vector for dense matrices.
+ */
+class factor_col_vector: public col_vec
+{
+	factor f;
+
+	factor_col_vector(const factor &_f,
+			detail::matrix_store::const_ptr store): col_vec(store), f(_f) {
+	}
+
+	factor_col_vector(const factor &_f, size_t len, int num_nodes, bool in_mem,
+			const set_operate &op);
+public:
+	typedef std::shared_ptr<factor_col_vector> ptr;
+	typedef std::shared_ptr<const factor_col_vector> const_ptr;
+
+	static ptr create(const factor &f, dense_matrix::ptr mat);
+
+	static ptr create(const factor &f, size_t length, int num_nodes,
+			bool in_mem, const set_operate &op) {
+		return ptr(new factor_col_vector(f, length, num_nodes, in_mem, op));
 	}
 
 	const factor &get_factor() const {

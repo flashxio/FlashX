@@ -10,6 +10,7 @@
 #include "EM_dense_matrix.h"
 #include "matrix_stats.h"
 #include "mapply_matrix_store.h"
+#include "factor.h"
 
 #include "eigensolver/block_dense_matrix.h"
 #include "eigensolver/collected_col_matrix_store.h"
@@ -1792,14 +1793,15 @@ void test_conv_store()
 	}
 }
 
-class rand_vec_set: public type_set_vec_operate<factor_value_t>
+class rand_set: public type_set_operate<factor_value_t>
 {
 	factor f;
 public:
-	rand_vec_set(const factor &_f): f(_f) {
+	rand_set(const factor &_f): f(_f) {
 	}
 
-	void set(factor_value_t *arr, size_t num_eles, off_t start_idx) const {
+	void set(factor_value_t *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = random() % f.get_num_levels();
 			assert(f.is_valid_level(arr[i]));
@@ -1812,23 +1814,23 @@ void test_groupby()
 	dense_matrix::ptr mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
 			-1, get_scalar_type<int>());
 	factor f(10);
-	factor_vector::ptr rand_vec = factor_vector::create(f, mat->get_num_rows(),
-			-1, true, rand_vec_set(f));
+	factor_col_vector::ptr rand_factors = factor_col_vector::create(f,
+			mat->get_num_rows(), -1, true, rand_set(f));
 	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
 			mat->get_type().get_basic_ops().get_add());
-	dense_matrix::ptr group_sum = mat->groupby_row(rand_vec, add);
+	dense_matrix::ptr group_sum = mat->groupby_row(rand_factors, add);
 	printf("groupby finishes\n");
 
 	detail::mem_matrix_store::const_ptr mem_mat
 		= detail::mem_matrix_store::cast(mat->get_raw_store());
-	detail::mem_vec_store::const_ptr mem_vec
-		= detail::mem_vec_store::cast(rand_vec->get_raw_store());
+	detail::mem_matrix_store::const_ptr mem_factors
+		= detail::mem_matrix_store::cast(rand_factors->get_raw_store());
 	std::vector<std::vector<int> > agg_res(f.get_num_levels());
 	for (size_t i = 0; i < f.get_num_levels(); i++)
 		agg_res[i].resize(mat->get_num_cols());
 	printf("compute groupby manually\n");
 	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		factor_value_t label = *(const factor_value_t *) mem_vec->get_sub_arr(i, i + 1);
+		factor_value_t label = mem_factors->get<factor_value_t>(i, 0);
 		assert(agg_res.size() > label);
 		assert(agg_res[label].size() == mat->get_num_cols());
 		for (size_t j = 0; j < mat->get_num_cols(); j++)

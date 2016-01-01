@@ -34,6 +34,7 @@
 #include "vector.h"
 #include "matrix_stats.h"
 #include "local_mem_buffer.h"
+#include "factor.h"
 
 namespace fm
 {
@@ -3186,7 +3187,7 @@ void groupby_row_mapply_op::run(
 
 }
 
-dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
+dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		agg_operate::const_ptr op) const
 {
 	if (is_wide()) {
@@ -3210,7 +3211,7 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
 	}
 
 	std::vector<detail::matrix_store::const_ptr> mats(2);
-	mats[0] = labels->get_data().conv2mat(labels->get_length(), 1, false);
+	mats[0] = labels->get_raw_store();
 	mats[1] = store;
 	groupby_row_mapply_op *_groupby_op = new groupby_row_mapply_op(
 			labels->get_factor().get_num_levels(), op);
@@ -3224,7 +3225,7 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
 		return dense_matrix::create(agg);
 }
 
-dense_matrix::ptr dense_matrix::groupby_row(factor_vector::const_ptr labels,
+dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		bulk_operate::const_ptr op) const
 {
 	agg_operate::const_ptr agg = agg_operate::create(op);

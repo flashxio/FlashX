@@ -34,7 +34,6 @@
 #include "matrix_store.h"
 #include "mem_matrix_store.h"
 #include "virtual_matrix_store.h"
-#include "factor.h"
 
 namespace fm
 {
@@ -44,6 +43,7 @@ class bulk_uoperate;
 class set_operate;
 class arr_apply_operate;
 class vector;
+class factor_col_vector;
 
 enum matrix_margin
 {
@@ -336,9 +336,9 @@ public:
 	 * Each row of the output dense matrix is the aggregation of all rows in
 	 * the input dense matrix that have the same factor.
 	 */
-	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
+	dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
 			agg_operate::const_ptr) const;
-	dense_matrix::ptr groupby_row(factor_vector::const_ptr labels,
+	dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
 			bulk_operate::const_ptr) const;
 
 	dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,
@@ -469,43 +469,6 @@ public:
 	double norm2() const;
 };
 
-class col_vec: public dense_matrix
-{
-	col_vec(detail::matrix_store::const_ptr mat): dense_matrix(mat) {
-		assert(mat->get_num_cols() == 1);
-	}
-public:
-	template<class T>
-	static ptr create_randn(size_t len) {
-		dense_matrix::ptr mat = dense_matrix::create_randn<T>(0, 1, len, 1,
-				matrix_layout_t::L_COL);
-		return ptr(new col_vec(mat->get_raw_store()));
-	}
-	template<class T>
-	static ptr create_randu(size_t len) {
-		dense_matrix::ptr mat = dense_matrix::create_randu<T>(0, 1, len, 1,
-				matrix_layout_t::L_COL);
-		return ptr(new col_vec(mat->get_raw_store()));
-	}
-
-	col_vec(): dense_matrix(NULL) {
-	}
-
-	col_vec(size_t len, const scalar_type &type): dense_matrix(len, 1,
-			matrix_layout_t::L_COL, type) {
-	}
-
-	size_t get_length() const {
-		return get_num_rows();
-	}
-
-	col_vec operator=(const dense_matrix &mat) {
-		assert(mat.get_num_cols() == 1);
-		assign(mat);
-		return *this;
-	}
-};
-
 template<class T>
 dense_matrix operator*(const dense_matrix &m, T val)
 {
@@ -527,15 +490,6 @@ dense_matrix operator*(T val, const dense_matrix &m)
 }
 
 inline dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
-{
-	dense_matrix::ptr ret = m1.multiply(m2);
-	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
-	return *ret;
-}
-
-inline dense_matrix operator*(const dense_matrix &m1, const col_vec &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
