@@ -584,7 +584,6 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 	detail::matrix_store::const_ptr right = m2.get_raw_store();
 	if (out_layout != m2.store_layout()) {
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
-		tmp->materialize_self();
 		right = tmp->get_raw_store();
 	}
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
@@ -2318,7 +2317,6 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 	// before we break up the left matrix for parallel processing.
 	if (!is_wide() && this->store_layout() == matrix_layout_t::L_ROW) {
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
-		tmp->materialize_self();
 		right = tmp->get_raw_store();
 	}
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
