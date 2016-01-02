@@ -30,6 +30,8 @@ factor_col_vector::ptr factor_col_vector::create(const factor &f,
 			<< "can't convert a matrix with more than one col to a vector";
 		return ptr();
 	}
+	if (mat->get_data().store_layout() == matrix_layout_t::L_ROW)
+		mat = mat->conv2(matrix_layout_t::L_COL);
 	return ptr(new factor_col_vector(f, mat->get_raw_store()));
 }
 

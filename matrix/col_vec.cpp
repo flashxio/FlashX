@@ -29,6 +29,8 @@ col_vec::ptr col_vec::create(dense_matrix::ptr mat)
 			<< "can't convert a matrix with more than one col to a vector";
 		return ptr();
 	}
+	if (mat->get_data().store_layout() == matrix_layout_t::L_ROW)
+		mat = mat->conv2(matrix_layout_t::L_COL);
 	return ptr(new col_vec(mat->get_raw_store()));
 }
 
