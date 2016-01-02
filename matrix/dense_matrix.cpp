@@ -2898,13 +2898,16 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 
 	// If the dense matrix has only one row or one column, it's very easy
 	// to convert its layout. We don't need to copy data or run computation
-	// at all.
-	if (get_num_cols() == 1) {
+	// at all. This only works if the matrix isn't virtual. If this is
+	// a virtual matrix, get a row/col from the matrix will trigger
+	// materialization.
+	// TODO It's a problem that an EM matrix may become in-memory.
+	if (get_num_cols() == 1 && !get_data().is_virtual()) {
 		detail::vec_store::const_ptr vec = get_data().get_col_vec(0);
 		return dense_matrix::create(vec->conv2mat(get_num_rows(),
 					get_num_cols(), layout == matrix_layout_t::L_ROW));
 	}
-	else if (get_num_rows() == 1) {
+	else if (get_num_rows() == 1 && !get_data().is_virtual()) {
 		detail::vec_store::const_ptr vec = get_data().get_row_vec(0);
 		return dense_matrix::create(vec->conv2mat(get_num_rows(),
 					get_num_cols(), layout == matrix_layout_t::L_ROW));

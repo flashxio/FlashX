@@ -984,9 +984,11 @@ void test_cast()
 void test_conv2(int num_nodes)
 {
 	// Test conv2
-	printf("conv2 layout\n");
 	dense_matrix::ptr mat = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
+
+	printf("conv2 layout of mem matrix of %ld, %ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
 	dense_matrix::ptr mat1 = mat->conv2(matrix_layout_t::L_ROW);
 	assert(mat1->is_virtual());
 	assert(mat1->is_in_mem() == mat->is_in_mem());
@@ -1006,6 +1008,29 @@ void test_conv2(int num_nodes)
 	mat = mat1->conv2(matrix_layout_t::L_COL);
 	assert(mat->get_num_rows() == mat1->get_num_rows());
 	assert(mat->get_num_cols() == mat1->get_num_cols());
+	verify_result(*mat, *mat1, equal_func<int>());
+
+	mat = create_matrix(long_dim, 1, matrix_layout_t::L_COL, num_nodes);
+	printf("conv2 layout of mem matrix of %ld, %ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
+	assert(!mat->is_virtual());
+	mat1 = mat->conv2(matrix_layout_t::L_ROW);
+	assert(!mat1->is_virtual());
+	assert(mat->get_num_rows() == mat1->get_num_rows());
+	assert(mat->get_num_cols() == mat1->get_num_cols());
+	assert(mat1->store_layout() == matrix_layout_t::L_ROW);
+	verify_result(*mat, *mat1, equal_func<int>());
+
+	mat = mat->add_scalar<int>(1);
+	assert(mat->is_virtual());
+	printf("conv2 layout of virtual matrix of %ld, %ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
+	mat1 = mat->conv2(matrix_layout_t::L_ROW);
+	assert(mat1->is_virtual());
+	assert(mat1->is_in_mem() == mat->is_in_mem());
+	assert(mat->get_num_rows() == mat1->get_num_rows());
+	assert(mat->get_num_cols() == mat1->get_num_cols());
+	assert(mat1->store_layout() == matrix_layout_t::L_ROW);
 	verify_result(*mat, *mat1, equal_func<int>());
 }
 

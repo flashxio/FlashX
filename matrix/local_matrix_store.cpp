@@ -227,17 +227,22 @@ void local_row_matrix_store::set_data(const set_operate &op)
 
 bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 {
-	assert(this->get_num_rows() == store.get_num_rows());
-	assert(this->get_num_cols() == store.get_num_cols());
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	assert(nrow == store.get_num_rows());
+	assert(ncol == store.get_num_cols());
 	assert(store.get_type() == this->get_type());
 
-	if (store.store_layout() == matrix_layout_t::L_ROW) {
-		size_t ncol = get_num_cols();
-		size_t nrow = get_num_rows();
+	char *this_arr = get_raw_arr();
+	const char *other_arr = store.get_raw_arr();
+	// If this is a one-row or one col matrix, and data is stored contiguously,
+	// we only need to copy data.
+	if ((nrow == 1 || ncol == 1) && (this_arr && other_arr))
+		memcpy(this_arr, other_arr, nrow * ncol * get_entry_size());
+	else if (store.store_layout() == matrix_layout_t::L_ROW) {
 		// If the store has data stored contiguously.
-		if (get_raw_arr() && store.get_raw_arr())
-			memcpy(get_raw_arr(), store.get_raw_arr(),
-					nrow * ncol * get_entry_size());
+		if (this_arr && other_arr)
+			memcpy(this_arr, other_arr, nrow * ncol * get_entry_size());
 		else {
 			const local_row_matrix_store &row_store
 				= static_cast<const local_row_matrix_store &>(store);
@@ -305,17 +310,22 @@ void local_col_matrix_store::set_data(const set_operate &op)
 
 bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 {
-	assert(this->get_num_rows() == store.get_num_rows());
-	assert(this->get_num_cols() == store.get_num_cols());
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	assert(nrow == store.get_num_rows());
+	assert(ncol == store.get_num_cols());
 	assert(store.get_type() == this->get_type());
 
-	if (store.store_layout() == matrix_layout_t::L_COL) {
-		size_t ncol = get_num_cols();
-		size_t nrow = get_num_rows();
+	char *this_arr = get_raw_arr();
+	const char *other_arr = store.get_raw_arr();
+	// If this is a one-row or one col matrix, and data is stored contiguously,
+	// we only need to copy data.
+	if ((nrow == 1 || ncol == 1) && (this_arr && other_arr))
+		memcpy(this_arr, other_arr, nrow * ncol * get_entry_size());
+	else if (store.store_layout() == matrix_layout_t::L_COL) {
 		// If the store has data stored contiguously.
-		if (get_raw_arr() && store.get_raw_arr())
-			memcpy(get_raw_arr(), store.get_raw_arr(),
-					nrow * ncol * get_entry_size());
+		if (this_arr && other_arr)
+			memcpy(this_arr, other_arr, nrow * ncol * get_entry_size());
 		else {
 			const local_col_matrix_store &col_store
 				= static_cast<const local_col_matrix_store &>(store);
