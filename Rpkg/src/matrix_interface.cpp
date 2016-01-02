@@ -30,6 +30,7 @@
 #include "bulk_operate_ext.h"
 #include "generic_type.h"
 #include "eigensolver/eigensolver.h"
+#include "factor.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -1016,7 +1017,7 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 		return R_NilValue;
 	}
 
-	factor_vector::ptr factor = get_factor_vector(pfactor);
+	factor_col_vector::ptr factor = get_factor_vector(pfactor);
 	if (factor == NULL) {
 		fprintf(stderr, "groupby needs a factor vector\n");
 		return R_NilValue;
