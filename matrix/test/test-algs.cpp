@@ -113,9 +113,16 @@ void test_pagerank(sparse_matrix::ptr mat, size_t max_niters, size_t num_in_mem)
 		printf("%ld: %f\n", std_vids[i], std_prs[i]);
 }
 
+void test_nmf(sparse_matrix::ptr mat, size_t k, size_t max_niters,
+		size_t num_in_mem)
+{
+	auto res = fm::alg::NMF(mat, k, max_niters, num_in_mem);
+}
+
 void print_usage()
 {
 	fprintf(stderr, "test-algs [options] conf_file matrix_file index_file [t_matrix_file t_index_file]\n");
+	fprintf(stderr, "-k rank: the rank of factorized matrices in NMF\n");
 	fprintf(stderr, "-a name: test algorithm\n");
 	fprintf(stderr, "-n number: the number of vectors in memory\n");
 	fprintf(stderr, "-i number: the max number of iterations\n");
@@ -129,10 +136,15 @@ int main(int argc, char *argv[])
 	size_t max_niters = std::numeric_limits<int>::max();
 	bool in_mem = false;
 	int num_opts = 0;
+	int rank = 1;
 	std::string alg;
-	while ((opt = getopt(argc, argv, "n:i:ma:")) != -1) {
+	while ((opt = getopt(argc, argv, "k:n:i:ma:")) != -1) {
 		num_opts++;
 		switch (opt) {
+			case 'k':
+				rank = atoi(optarg);
+				num_opts++;
+				break;
 			case 'n':
 				num_in_mem = atoi(optarg);
 				num_opts++;
@@ -179,6 +191,8 @@ int main(int argc, char *argv[])
 			t_matrix_file, t_index_file, in_mem);
 	if (alg == "pagerank")
 		test_pagerank(mat, max_niters, num_in_mem);
+	else if (alg == "nmf")
+		test_nmf(mat, rank, max_niters, num_in_mem);
 	else {
 		fprintf(stderr, "unknown algorithm %s\n", alg.c_str());
 	}
