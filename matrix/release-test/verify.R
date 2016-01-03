@@ -467,6 +467,8 @@ test.all.forms(function(x, y) x > y)
 test.all.forms(function(x, y) x >= y)
 test.all.forms(function(x, y) x <= y)
 test.all.forms(function(x, y) x < y)
+test.all.forms(function(x, y) pmin2(x, y))
+test.all.forms(function(x, y) pmax2(x, y))
 #test.all.forms(function(x, y) x / y)
 
 fm.vec1 <- fm.runif(2000, -1, 1)
