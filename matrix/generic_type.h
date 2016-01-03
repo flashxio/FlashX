@@ -239,6 +239,13 @@ class scalar_variable
 public:
 	typedef std::shared_ptr<scalar_variable> ptr;
 	typedef std::shared_ptr<const scalar_variable> const_ptr;
+
+	template<class T>
+	static T get_val(const scalar_variable &var) {
+		assert(var.get_type() == get_scalar_type<T>());
+		const T *val = reinterpret_cast<const T *>(var.get_raw());
+		return *val;
+	}
 	/**
 	 * Get the raw representation of the type.
 	 */
