@@ -188,11 +188,16 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	if (count > 0)
 		return;
 
+	// We should initialize threads even if there aren't configs.
+	thread::thread_class_init();
+	// Assign a thread object to the main thread.
+	if (thread::get_curr_thread() == NULL)
+		thread::represent_thread(-1);
+
 	if (configs == NULL)
 		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
-	thread::thread_class_init();
 
 	// The I/O system has been initialized.
 	if (is_safs_init()) {
@@ -297,10 +302,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		debug.register_task(new debug_global_data());
 #endif
 	}
-
-	// Assign a thread object to the current thread.
-	if (thread::get_curr_thread() == NULL)
-		thread::represent_thread(-1);
 
 	if (global_data.global_cache == NULL && with_cache
 			&& params.get_cache_size() > 0) {
