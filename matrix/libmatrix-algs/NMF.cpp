@@ -25,7 +25,7 @@ namespace fm
 namespace alg
 {
 
-size_t get_nnz(sparse_matrix::ptr mat)
+static size_t get_nnz(sparse_matrix::ptr mat)
 {
 	int num_nodes = matrix_conf.get_num_nodes();
 	detail::matrix_store::ptr out_store = detail::matrix_store::create(
@@ -36,7 +36,16 @@ size_t get_nnz(sparse_matrix::ptr mat)
 	mat->multiply<size_t, size_t>(one->get_raw_store(), out_store);
 	dense_matrix::ptr out_deg = dense_matrix::create(out_store);
 	scalar_variable::ptr v = out_deg->sum();
-	return *(const size_t *) v->get_raw();
+	return scalar_variable::get_val<size_t>(*v);
+}
+
+// trace of W %*% H
+static double trace_MM(dense_matrix::ptr W, dense_matrix::ptr H)
+{
+	dense_matrix::ptr tH = H->transpose();
+	dense_matrix::ptr tmp = W->multiply_ele(*tH);
+	scalar_variable::ptr res = tmp->sum();
+	return scalar_variable::get_val<double>(*res);
 }
 
 static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D)
@@ -46,6 +55,24 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D)
 			D->get_type(), D->get_raw_store()->get_num_nodes());
 	S->multiply<double, double>(D->get_raw_store(), res);
 	return dense_matrix::create(res);
+}
+
+// ||A - W %*% H||^2
+static double Fnorm(sparse_matrix::ptr A, size_t Annz, dense_matrix::ptr W,
+		dense_matrix::ptr H, dense_matrix::ptr tWW)
+{
+	// tAW <- t(A) %*% W
+	sparse_matrix::ptr tA = A->transpose();
+	dense_matrix::ptr tAW = multiply(tA, W);
+
+	// tHtWW <- t(H) %*% (t(W) %*% W)
+	dense_matrix::ptr tH = H->transpose();
+	dense_matrix::ptr tHtWW = tH->multiply(*tWW);
+
+	// sumA2 - 2 * trace.MM(tAW, H) + trace.MM(tHtWW, H)
+	// TODO H is read twice in this implementation.
+	// TODO tAW doesn't need to be materialized.
+	return Annz - 2 * trace_MM(tAW, H) + trace_MM(tHtWW, H);
 }
 
 struct nmf_state
@@ -131,6 +158,7 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 	}
 	size_t n = mat->get_num_rows();
 	size_t m = mat->get_num_cols();
+	size_t nnz = get_nnz(mat);
 	int num_nodes = matrix_conf.get_num_nodes();
 	dense_matrix::ptr W = dense_matrix::create_randu<double>(0, 1, n, k,
 			matrix_layout_t::L_ROW, num_nodes, true);
@@ -148,7 +176,12 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		gettimeofday(&start, NULL);
 		state = update_lee(mat, state.W, state.H, state.tWW);
 		gettimeofday(&end, NULL);
-		printf("iteration %ld takes %.3f seconds\n", i, time_diff(start, end));
+		double update_time = time_diff(start, end);
+		start = end;
+		double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW);
+		gettimeofday(&end, NULL);
+		printf("iteration %ld: distance: %f, update time: %.3fs, Fnorm: %.3f\n",
+				i, dist, update_time, time_diff(start, end));
 	}
 	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(state.W, state.H);
 }
