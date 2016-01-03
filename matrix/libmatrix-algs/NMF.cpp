@@ -48,21 +48,31 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D)
 	return dense_matrix::create(res);
 }
 
-static std::pair<dense_matrix::ptr, dense_matrix::ptr> update_lee(
-		sparse_matrix::ptr mat, dense_matrix::ptr W, dense_matrix::ptr H)
+struct nmf_state
+{
+	dense_matrix::ptr W;
+	dense_matrix::ptr H;
+	dense_matrix::ptr tWW;
+
+	nmf_state(dense_matrix::ptr W, dense_matrix::ptr H,
+			dense_matrix::ptr tWW) {
+		this->W = W;
+		this->H = H;
+		this->tWW = tWW;
+	}
+};
+
+static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
+		dense_matrix::ptr H, dense_matrix::ptr tWW)
 {
 	double eps = 10e-9;
 	// den <- (t(W) %*% W) %*% H
 	dense_matrix::ptr D;
 	{
-		// t(W)
-		dense_matrix::ptr tW = W->transpose();
-		// t(W) %*% W
-		dense_matrix::ptr tmp1 = tW->multiply(*W);
 		// t(H)
 		dense_matrix::ptr tH = H->transpose();
 		// t(H) %*% (t(W) %*% W)
-		dense_matrix::ptr tD = tH->multiply(*tmp1);
+		dense_matrix::ptr tD = tH->multiply(*tWW);
 		D = tD->transpose();
 	}
 
@@ -80,7 +90,7 @@ static std::pair<dense_matrix::ptr, dense_matrix::ptr> update_lee(
 		// den + eps
 		dense_matrix::ptr tmp3 = D->add_scalar(eps);
 		H = tmp1->div(*tmp3);
-		H->materialize_self();
+		H->set_materialize_level(materialize_level::MATER_FULL);
 	}
 
 	// den <- W %*% (H %*% t(H))
@@ -105,9 +115,11 @@ static std::pair<dense_matrix::ptr, dense_matrix::ptr> update_lee(
 		// den + eps
 		dense_matrix::ptr tmp2 = D->add_scalar(eps);
 		W = tmp1->div(*tmp2);
-		W->materialize_self();
+		W->set_materialize_level(materialize_level::MATER_FULL);
 	}
-	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(W, H);
+
+	dense_matrix::ptr tW = W->transpose();
+	return nmf_state(W, H, tW->multiply(*W));
 }
 
 std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
@@ -124,15 +136,21 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 			matrix_layout_t::L_ROW, num_nodes, true);
 	dense_matrix::ptr H = dense_matrix::create_randu<double>(0, 1, k, m,
 			matrix_layout_t::L_COL, num_nodes, true);
-	std::pair<dense_matrix::ptr, dense_matrix::ptr> res(W, H);
+
+	dense_matrix::ptr tWW;
+	{
+		dense_matrix::ptr tW = W->transpose();
+		tWW = tW->multiply(*W);
+	}
+	nmf_state state(W, H, tWW);
 	for (size_t i = 0; i < max_niters; i++) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		res = update_lee(mat, res.first, res.second);
+		state = update_lee(mat, state.W, state.H, state.tWW);
 		gettimeofday(&end, NULL);
 		printf("iteration %ld takes %.3f seconds\n", i, time_diff(start, end));
 	}
-	return res;
+	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(state.W, state.H);
 }
 
 }
