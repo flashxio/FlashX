@@ -897,6 +897,8 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 			op->transpose(), t_layout, get_num_cols(), get_num_rows(), data_id);
 	if (this->res)
 		ret->res = this->res->transpose();
+	// The transposed matrix should share the same materialization level.
+	ret->set_materialize_level(get_materialize_level());
 	return matrix_store::const_ptr(ret);
 }
 

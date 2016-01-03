@@ -127,6 +127,10 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		// H %*% t(H)
 		dense_matrix::ptr tmp1 = H->multiply(*tH);
 		D = W->multiply(*tmp1);
+
+		// TODO we should avoid doing this.
+		tH->materialize_self();
+		H = tH->transpose();
 	}
 
 	// W <- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
@@ -146,7 +150,11 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 	}
 
 	dense_matrix::ptr tW = W->transpose();
-	return nmf_state(W, H, tW->multiply(*W));
+	tWW = tW->multiply(*W);
+	// TODO we should avoid doing this.
+	tW->materialize_self();
+	W = tW->transpose();
+	return nmf_state(W, H, tWW);
 }
 
 std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
