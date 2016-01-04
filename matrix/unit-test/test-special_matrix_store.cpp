@@ -120,8 +120,7 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	detail::portion_mapply_op::const_ptr op(new mapply_add_op(
 				mat1->get_num_rows(), mat1->get_num_cols(), mat1->get_type()));
 	detail::mapply_matrix_store::const_ptr mapply_store(new detail::mapply_matrix_store(
-				in_stores, op, mat1->store_layout(),
-				mat1->get_num_rows(), mat1->get_num_cols()));
+				in_stores, op, mat1->store_layout()));
 	dense_matrix::ptr res2 = dense_matrix::create(mapply_store->materialize(
 				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	{
@@ -172,8 +171,7 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	op = detail::portion_mapply_op::const_ptr(new multiply_op(
 				local_mat, large_mat->get_num_rows(), large_mat->get_type()));
 	mapply_store = detail::mapply_matrix_store::const_ptr(new detail::mapply_matrix_store(
-				in_stores, op, large_mat->store_layout(),
-				large_mat->get_num_rows(), large_mat->get_num_cols()));
+				in_stores, op, large_mat->store_layout()));
 	res2 = dense_matrix::create(mapply_store->materialize(
 				mapply_store->is_in_mem(), mapply_store->get_num_nodes()));
 	verify_result(res1, res2);

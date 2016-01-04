@@ -76,8 +76,7 @@ public:
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op,
-			matrix_layout_t layout, size_t nrow, size_t ncol,
-			size_t data_id = mat_counter++);
+			matrix_layout_t layout, size_t data_id = mat_counter++);
 
 	bool is_materialized() const {
 		return res != NULL;

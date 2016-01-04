@@ -1799,8 +1799,7 @@ matrix_store::ptr __mapply_portion_virtual(
 		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
 		bool par_access)
 {
-	mapply_matrix_store *store = new mapply_matrix_store(stores, op,
-			out_layout, op->get_out_num_rows(), op->get_out_num_cols());
+	mapply_matrix_store *store = new mapply_matrix_store(stores, op, out_layout);
 	store->set_par_access(par_access);
 	return matrix_store::ptr(store);
 }
@@ -1813,8 +1812,7 @@ dense_matrix::ptr mapply_portion(
 	std::vector<matrix_store::const_ptr> stores(mats.size());
 	for (size_t i = 0; i < stores.size(); i++)
 		stores[i] = mats[i]->get_raw_store();
-	mapply_matrix_store *store = new mapply_matrix_store(stores, op,
-			out_layout, op->get_out_num_rows(), op->get_out_num_cols());
+	mapply_matrix_store *store = new mapply_matrix_store(stores, op, out_layout);
 	store->set_par_access(par_access);
 	matrix_store::const_ptr ret(store);
 	return dense_matrix::create(ret);

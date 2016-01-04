@@ -547,8 +547,8 @@ static inline int get_num_nodes(
 mapply_matrix_store::mapply_matrix_store(
 		const std::vector<matrix_store::const_ptr> &_in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
-		size_t nrow, size_t ncol, size_t _data_id): virtual_matrix_store(nrow,
-			ncol, is_all_in_mem(_in_mats), op->get_output_type()),
+		size_t _data_id): virtual_matrix_store(op->get_out_num_rows(),
+			op->get_out_num_cols(), is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
 	this->num_res_avails = 0;
@@ -894,7 +894,7 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 	else
 		t_layout = matrix_layout_t::L_COL;
 	mapply_matrix_store *ret = new mapply_matrix_store(t_in_mats,
-			op->transpose(), t_layout, get_num_cols(), get_num_rows(), data_id);
+			op->transpose(), t_layout, data_id);
 	if (this->res)
 		ret->res = this->res->transpose();
 	// The transposed matrix should share the same materialization level.
