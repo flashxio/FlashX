@@ -25,7 +25,6 @@
 #include "sem_kmeans.h"
 
 // TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
-
 using namespace fg;
 
 #if KM_TEST
@@ -35,6 +34,9 @@ static prune_stats::ptr g_prune_stats;
 #if PRUNE
 static bool g_prune_init = false;
 static dist_matrix::ptr g_cluster_dist;
+#endif
+#if IOTEST
+static unsigned g_io_reqs = 0;
 #endif
 
 
@@ -61,18 +63,12 @@ namespace {
 
     // Begin Helpers //
 #if VERBOSE
-    static void print_sample(vertex_id_t my_id, data_seq_iter& count_it, edge_seq_iterator& id_it) {
+    static void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
         std::vector<std::string> v;
         while (count_it.has_next()) {
             char buffer [1024];
-#ifdef PAGE_ROW
             double e = count_it.next();
             assert(sprintf(buffer, "%e", e));
-#else
-            edge_count e = count_it.next();
-            vertex_id_t nid = id_it.next();
-            assert(sprintf(buffer, "%u:%i",nid, e.get_count()));
-#endif
             v.push_back(std::string(buffer));
         }
         printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
@@ -124,10 +120,6 @@ namespace {
 
         // Set a cluster to have the same mean as this sample
         void set_as_mean(const page_vertex &vertex, vertex_id_t my_id, unsigned to_cluster_id) {
-#ifndef PAGE_ROW
-            edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-#endif
-
             vertex_id_t nid = 0;
             data_seq_iter count_it = ((const page_row&)vertex).
                 get_data_seq_it<double>();
@@ -136,14 +128,8 @@ namespace {
             std::vector<double> setter;
             setter.assign(NUM_COLS, 0);
             while (count_it.has_next()) {
-#ifdef PAGE_ROW
                 double e = count_it.next();
                 setter[nid++] = e;
-#else
-                edge_count e = count_it.next();
-                nid = id_it.next();
-                setter[nid] = (double) e.get_count();
-#endif
             }
             g_clusters[to_cluster_id]->set_mean(setter);
         }
@@ -151,7 +137,7 @@ namespace {
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex &vertex);
-        double get_distance(unsigned cl, edge_seq_iterator& id_it, data_seq_iter& count_it);
+        double get_distance(unsigned cl, data_seq_iter& count_it);
 #if PRUNE
         double dist_comp(const page_vertex &vertex, const unsigned cl);
 #else
@@ -163,18 +149,33 @@ namespace {
     /* Used in per thread cluster formation */
     class kmeans_vertex_program : public vertex_program_impl<kmeans_vertex>
     {
-        std::vector<cluster::ptr> pt_clusters;
+
         unsigned pt_changed;
+#if IOTEST
+        unsigned num_reqs;
+#endif
+
+        std::vector<cluster::ptr> pt_clusters;
+
+#if KM_TEST && PRUNE
+        prune_stats::ptr pt_ps;
+#endif
 
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
 
         //TODO: Opt only add cluster when a vertex joins it
-        kmeans_vertex_program() {
-            for (unsigned thd = 0; thd < K; thd++) {
-                pt_clusters.push_back(cluster::create(NUM_COLS));
-                pt_changed = 0;
-            }
+        kmeans_vertex_program(std::vector<cluster::ptr>& pt_clusters) {
+
+            this->pt_clusters = pt_clusters;
+            this->pt_changed = 0;
+#if IOTEST
+            this->num_reqs = 0;
+#endif
+
+#if KM_TEST && PRUNE
+            pt_ps = prune_stats::create(NUM_ROWS, K);
+#endif
         }
 
         static ptr cast2(vertex_program::ptr prog) {
@@ -185,30 +186,58 @@ namespace {
             return pt_clusters;
         }
 
-        void add_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iter& count_it) {
-            pt_clusters[id]->add_member(id_it, count_it);
+        void add_member(const unsigned id, data_seq_iter& count_it) {
+            pt_clusters[id]->add_member(count_it);
         }
 
 #if PRUNE
-        // TODO: Opt add swap operation
-        void remove_member(const unsigned id, edge_seq_iterator& id_it, data_seq_iter& count_it) {
-            pt_clusters[id]->remove_member(id_it, count_it);
+        void remove_member(const unsigned id, data_seq_iter& count_it) {
+            pt_clusters[id]->remove_member(count_it);
         }
+
+        template <typename T>
+            void swap_membership(const unsigned from_id, const unsigned to_id,
+                    T& count_it) {
+                vertex_id_t nid = 0;
+                while(count_it.has_next()) {
+                    double e = count_it.next();
+                    (*(pt_clusters[from_id]))[nid] -= e;
+                    (*(pt_clusters[to_id]))[nid++] += e;
+                }
+
+                pt_clusters[from_id]->num_members_peq(-1);
+                pt_clusters[to_id]->num_members_peq(1);
+            }
+
+#if KM_TEST
+        prune_stats::ptr get_ps() { return pt_ps; }
 #endif
-        const unsigned get_pt_changed() {
-            return pt_changed;
-        }
+#endif
+        const unsigned get_pt_changed() { return pt_changed; }
 
         void pt_changed_pp() {
             pt_changed++;
         }
+
+#if IOTEST
+        void num_requests_pp() {
+            num_reqs++;
+        }
+        const unsigned get_num_reqs() const { return num_reqs; }
+#endif
     };
 
     class kmeans_vertex_program_creater: public vertex_program_creater
     {
         public:
             vertex_program::ptr create() const {
-                return vertex_program::ptr(new kmeans_vertex_program());
+
+                std::vector<cluster::ptr> pt_clusters;
+                for (unsigned thd = 0; thd < K; thd++) {
+                    pt_clusters.push_back(cluster::create(NUM_COLS));
+                }
+
+                return vertex_program::ptr(new kmeans_vertex_program(pt_clusters));
             }
     };
 
@@ -221,7 +250,7 @@ namespace {
         typedef std::shared_ptr<kmeanspp_vertex_program> ptr;
 
         kmeanspp_vertex_program() {
-            pt_cuml_sum = 0;
+            pt_cuml_sum = 0.0;
         }
 
         static ptr cast2(vertex_program::ptr prog) {
@@ -245,7 +274,6 @@ namespace {
             }
     };
 
-
     void kmeans_vertex::run(vertex_program &prog) {
 
 #if PRUNE
@@ -259,13 +287,19 @@ namespace {
             /* #6 */
             dist += g_clusters[cluster_id]->get_prev_dist();
 
-            if (dist <= g_clusters[cluster_id]->get_s_val()) { // TODO: Move some of this logic to the run
+            if (dist <= g_clusters[cluster_id]->get_s_val()) {
 #if KM_TEST
-                g_prune_stats->pp_lemma1(K);
+                kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
+                vprog.get_ps()->pp_lemma1(K);
 #endif
                 return; // Nothing changes -- no I/O request!
             }
         }
+#endif
+
+#if IOTEST
+        kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
+        vprog.num_requests_pp();
 #endif
         vertex_id_t id = prog.get_vertex_id(*this);
         request_vertices(&id, 1);
@@ -282,10 +316,9 @@ namespace {
                             prog.get_vertex_id(*this), new_cluster_id);
 #endif
                     this->cluster_id = new_cluster_id;
-                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
                     data_seq_iter count_it = ((const page_row&)vertex).
                         get_data_seq_it<double>();
-                    vprog.add_member(cluster_id, id_it, count_it);
+                    vprog.add_member(cluster_id, count_it);
                 }
                 break;
             case FORGY:
@@ -299,22 +332,19 @@ namespace {
                 break;
             case PLUSPLUS:
                 {
-                    edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
                     data_seq_iter count_it = ((const page_row&)vertex).
                         get_data_seq_it<double>();
 
                     if (g_kmspp_stage == ADDMEAN) {
-#ifndef PAGE_ROW
 #if KM_TEST
                         vertex_id_t my_id = prog.get_vertex_id(*this);
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
 #endif
-#endif
-                        g_clusters[g_kmspp_cluster_idx]->add_member(id_it, count_it);
+                        g_clusters[g_kmspp_cluster_idx]->add_member(count_it);
                     } else {
                         // FIXME: Opt Test putting if (my_id != g_kmspp_next_cluster) test
                         vertex_id_t my_id = prog.get_vertex_id(*this);
-                        double dist = get_distance(g_kmspp_cluster_idx, id_it, count_it);
+                        double dist = get_distance(g_kmspp_cluster_idx, count_it);
                         if (dist < g_kmspp_distance[my_id]) {
 #if VERBOSE
                             printf("kms++ v%u updating dist from: %.3f to %.3f\n",
@@ -330,21 +360,15 @@ namespace {
         }
     }
 
-    double kmeans_vertex::get_distance(unsigned cl, edge_seq_iterator& id_it,
+    double kmeans_vertex::get_distance(unsigned cl,
             data_seq_iter& count_it) {
         double dist = 0;
         double diff;
         vertex_id_t nid = 0;
 
         while(count_it.has_next()) {
-#ifdef PAGE_ROW
             double e = count_it.next();
             diff = e - (*g_clusters[cl])[nid++];
-#else
-            nid = id_it.next();
-            edge_count e = count_it.next();
-            diff = e.get_count() - (*g_clusters[cl])[nid];
-#endif
             dist += diff*diff;
         }
         return sqrt(dist); // TODO: sqrt
@@ -352,20 +376,18 @@ namespace {
 
 #if PRUNE
     double kmeans_vertex::dist_comp(const page_vertex &vertex, const unsigned cl) {
-        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
         data_seq_iter count_it =
             ((const page_row&)vertex).get_data_seq_it<double>();
 
-        return get_distance(cl, id_it, count_it);
+        return get_distance(cl, count_it);
     }
 #else
     void kmeans_vertex::dist_comp(const page_vertex &vertex, double* best,
             unsigned* new_cluster_id, const unsigned cl) {
-        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
         data_seq_iter count_it =
             ((const page_row&)vertex).get_data_seq_it<double>();
 
-        double dist = get_distance(cl, id_it, count_it);
+        double dist = get_distance(cl, count_it);
 
         if (dist < *best) { // Get the distance to cluster `cl'
             *new_cluster_id = cl;
@@ -391,12 +413,12 @@ namespace {
             for (unsigned cl = 0; cl < K; cl++) {
                 if (dist <= g_cluster_dist->get(cluster_id, cl)) {
 #if KM_TEST
-                    g_prune_stats->pp_3a();
+                    vprog.get_ps()->pp_3a();
 #endif
                     continue;
                 } else if (dist <= lwr_bnd[cl]) {
 #if KM_TEST
-                    g_prune_stats->pp_3b();
+                    vprog.get_ps()->pp_3b();
 #endif
                     continue;
                 }
@@ -411,7 +433,7 @@ namespace {
 
                 if (dist <= g_cluster_dist->get(cluster_id, cl)) {
 #if KM_TEST
-                    g_prune_stats->pp_3c();
+                    vprog.get_ps()->pp_3c();
 #endif
                     continue;
                 }
@@ -419,7 +441,7 @@ namespace {
                 // Track 4
                 if (lwr_bnd[cl] >= dist) {
 #if KM_TEST
-                    g_prune_stats->pp_4();
+                    vprog.get_ps()->pp_4();
 #endif
                     continue;
                 }
@@ -447,21 +469,15 @@ namespace {
 #else
         BOOST_VERIFY(new_cluster_id >= 0 && new_cluster_id < K);
 #endif
-
-        edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
         data_seq_iter count_it = ((const page_row&)vertex).get_data_seq_it<double>();
 
 #if PRUNE
         if (g_prune_init) {
             vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-            vprog.add_member(cluster_id, id_it, count_it);
+            vprog.add_member(cluster_id, count_it);
         } else if (old_cluster_id != this->cluster_id) {
             vprog.pt_changed_pp(); // Add a vertex to the count of changed ones
-            vprog.remove_member(old_cluster_id, id_it, count_it);
-
-            id_it = vertex.get_neigh_seq_it(OUT_EDGE);
-            count_it = ((const page_row&)vertex).get_data_seq_it<double>();
-            vprog.add_member(this->cluster_id, id_it, count_it);
+            vprog.swap_membership(old_cluster_id, cluster_id, count_it);
         }
 #else
         if (this->cluster_id != new_cluster_id) {
@@ -469,7 +485,7 @@ namespace {
         }
 
         this->cluster_id = new_cluster_id;
-        vprog.add_member(cluster_id, id_it, count_it);
+        vprog.add_member(cluster_id, count_it);
         this->dist = best;
 #endif
     }
@@ -510,7 +526,12 @@ namespace {
                 kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
                 std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
-
+#if IOTEST
+                g_io_reqs += kms_prog->get_num_reqs();
+#endif
+#if PRUNE && KM_TEST
+                (*g_prune_stats) += (*kms_prog->get_ps());
+#endif
                 BOOST_VERIFY(g_num_changed <= NUM_ROWS);
                 /* Merge the per-thread clusters */
                 for (unsigned cl = 0; cl < K; cl++) {
@@ -647,7 +668,7 @@ namespace {
             /*** Begin VarInit of data structures ***/
 
 #if MAT_TEST
-            std::string init_centers_fn = "/mnt/nfs/disa/data/tiny/fkms_data/5c_128.bin";
+            std::string init_centers_fn = "/mnt/nfs/disa/data/tiny/fkms_data/5c_95413.bin";
             bin_reader<double> br(init_centers_fn, 5, 57);
 #endif
 
@@ -676,6 +697,7 @@ namespace {
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
                 g_init = RANDOM;
+
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
@@ -718,6 +740,7 @@ namespace {
 #endif
                     // TODO: Start 1 vertex which will activate all
                     g_kmspp_stage = ADDMEAN;
+
                     mat->start(&g_kmspp_next_cluster, 1, vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
                     mat->wait4complete();
@@ -758,8 +781,6 @@ namespace {
 
                 update_clusters(mat, num_members_v);
 #if KM_TEST
-                BOOST_LOG_TRIVIAL(info) << "Init: printing cluster means:";
-                print_clusters(g_clusters);
                 BOOST_LOG_TRIVIAL(info) << "Init: printing cluster counts:";
                 print_vector<unsigned>(num_members_v);
 #endif
@@ -786,7 +807,6 @@ namespace {
 
             while (g_iter < max_iters) {
 #if 0
-#if PRUNE
                 if (g_iter == 4) {
                     if (fexists(g_fn)) {
                         BOOST_LOG_TRIVIAL(warning) << "[WARNING]: overwriting " << g_fn;
@@ -794,7 +814,6 @@ namespace {
                     get_membership(mat)->to_file(g_fn);
                     exit(EXIT_FAILURE); // FIXME: Premature
                 }
-#else
                 if (g_iter == 3) {
                     FG_vector<unsigned>::ptr pruned_memb = get_membership(mat);
                     BOOST_VERIFY(fexists(g_fn));
@@ -807,7 +826,6 @@ namespace {
                     exit(EXIT_FAILURE); // FIXME: Premature
                 }
 #endif
-#endif
                 BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
                     " . Computing cluster assignments ...";
 #if PRUNE
@@ -816,7 +834,7 @@ namespace {
 
                 for (unsigned cl = 0; cl < K; cl++)
                     BOOST_LOG_TRIVIAL(info) << "cl:" << cl << " get_s_val: " << g_clusters[cl]->get_s_val();
-#if KM_TEST
+#if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix ...";
                 g_cluster_dist->print();
 #endif
@@ -827,10 +845,10 @@ namespace {
                 BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating cluster means ...";
                 update_clusters(mat, num_members_v);
 
+#if KM_TEST && 0
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
                 print_clusters(g_clusters);
 
-#if KM_TEST && 0
                 BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
                 get_membership(mat)->print(NUM_ROWS);
 #endif
@@ -863,6 +881,10 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
+#if IOTEST
+            printf("Total # of IO requests: %u\nTotal bytes requested: %lu\n\n",
+                    g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
+#endif
 
             if (converged) {
                 BOOST_LOG_TRIVIAL(info) <<

@@ -85,6 +85,11 @@ namespace {
                     return v;
                 }
 
+                void readline(T* v) {
+                    size_t num_read = fread(&v[0], sizeof(v[0])*ncol, 1, f);
+                    BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
+                }
+
                 ~bin_reader() {
                     fclose(f);
                 }
@@ -95,7 +100,7 @@ namespace {
     {
         private:
             // Counts per iteration
-            std::atomic<unsigned> lemma1, _3a, _3b, _3c, _4;
+            unsigned lemma1, _3a, _3b, _3c, _4;
 
             // Total counts
             unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
@@ -131,6 +136,22 @@ namespace {
             void pp_4() {
                 _4 = _4 + 1;
             }
+
+            const unsigned get_lemma1() const { return lemma1; }
+            const unsigned get_3a() const { return _3a; }
+            const unsigned get_3b() const { return _3b; }
+            const unsigned get_3c() const { return _3c; }
+            const unsigned get_4() const { return _4; }
+
+            prune_stats& operator+=(prune_stats& other) {
+                lemma1 += other.get_lemma1();
+                _3a += other.get_3a();
+                _3b += other.get_3b();
+                _3c += other.get_3c();
+                _4 += other.get_4();
+                return *this;
+            }
+
             void finalize() {
                 iter++;
                 BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  NUM_ROWS*K);
@@ -145,11 +166,11 @@ namespace {
                     "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(NUM_ROWS*K))*100) <<
                     "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(NUM_ROWS*K))*100) << "\%";
 
-                tot_lemma1 += (unsigned)lemma1;
-                tot_3a += (unsigned)_3a;
-                tot_3b += (unsigned)_3b;
-                tot_3c += (unsigned)_3c;
-                tot_4 += (unsigned)_4;
+                tot_lemma1 += lemma1;
+                tot_3a += _3a;
+                tot_3b += _3b;
+                tot_3c += _3c;
+                tot_4 += _4;
 
                 lemma1 = _3a = _3b = _3c = _4 = 0; // reset
             }
