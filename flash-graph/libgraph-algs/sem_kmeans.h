@@ -33,9 +33,10 @@
 
 #define PAGE_ROW
 #define PRUNE 1
-#define KM_TEST 1
+#define KM_TEST 0
 #define MAT_TEST 1
 #define VERBOSE 0
+#define IOTEST 0
 
 #include "sem_kmeans_util.h"
 
@@ -183,35 +184,23 @@ namespace {
                 }
             }
 
-            template <typename T, typename U>
-                void add_member(T& id_it, U& count_it) {
+            template <typename T>
+                void add_member(T& count_it) {
                     vertex_id_t nid = 0;
                     while(count_it.has_next()) {
-#ifdef PAGE_ROW
                         double e = count_it.next();
                         mean[nid++] += e;
-#else
-                        nid = id_it.next();
-                        edge_count e = count_it.next();
-                        mean[nid] += e.get_count();
-#endif
                     }
                     num_members++;
                 }
 
 #if PRUNE
-            template <typename T, typename U>
-                void remove_member(T& id_it, U& count_it) {
+            template <typename T>
+                void remove_member(T& count_it) {
                     vertex_id_t nid = 0;
                     while(count_it.has_next()) {
-#ifdef PAGE_ROW
                         double e = count_it.next();
                         mean[nid++] -= e;
-#else
-                        nid = id_it.next();
-                        edge_count e = count_it.next();
-                        mean[nid] -= e.get_count();
-#endif
                     }
                     num_members--;
                 }
@@ -224,12 +213,12 @@ namespace {
             }
 
             double& operator[](const unsigned index) {
-                assert(index < mean.size());
+                BOOST_VERIFY(index < mean.size());
                 return mean[index];
             }
 
             cluster& operator+=(cluster& rhs) {
-                assert(rhs.size() == size());
+                BOOST_VERIFY(rhs.size() == size());
                 // TODO vectorize perhaps
                 for (unsigned i = 0; i < mean.size(); i++) {
                     this->mean[i] += rhs[i];
@@ -379,7 +368,7 @@ namespace {
     };
 #endif
 
-    static void print_clusters(std::vector<cluster::ptr>& clusters) {
+    void print_clusters(std::vector<cluster::ptr>& clusters) {
         for (std::vector<cluster::ptr>::iterator it = clusters.begin();
                 it != clusters.end(); ++it) {
             std::cout << "#memb = " << (*it)->get_num_members() << " ";
