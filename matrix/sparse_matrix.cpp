@@ -232,10 +232,17 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 		// We don't want to allocate memory from the local memory buffers
 		// because it's not clear which thread will destroy the raw array.
 		local_raw_array arr(num_bytes, false);
-		local_matrix_store::ptr tmp(
-				new local_buf_row_matrix_store(arr, EM_portion_row_start,
-					start_col, portion_num_rows, portion->get_num_cols(),
-					mat->get_type(), -1));
+		local_matrix_store::ptr tmp;
+		if (mat->store_layout() == matrix_layout_t::L_ROW)
+			tmp = local_matrix_store::ptr(
+					new local_buf_row_matrix_store(arr, EM_portion_row_start,
+						start_col, portion_num_rows, portion->get_num_cols(),
+						mat->get_type(), -1));
+		else
+			tmp = local_matrix_store::ptr(
+					new local_buf_col_matrix_store(arr, EM_portion_row_start,
+						start_col, portion_num_rows, portion->get_num_cols(),
+						mat->get_type(), -1));
 		buf = filled_local_store::ptr(new filled_local_store(tmp));
 		auto ret = portion_bufs.insert(std::pair<off_t, filled_local_store::ptr>(
 					EM_portion_row_start, buf));
