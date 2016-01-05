@@ -169,10 +169,6 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		// H %*% t(H)
 		dense_matrix::ptr tmp1 = H->multiply(*tH);
 		D = W->multiply(*tmp1);
-
-		// TODO we should avoid doing this.
-		tH->materialize_self();
-		H = tH->transpose();
 	}
 
 	// W <- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
@@ -195,9 +191,10 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 
 	dense_matrix::ptr tW = W->transpose();
 	tWW = tW->multiply(*W);
-	// TODO we should avoid doing this.
-	tW->materialize_self();
-	W = tW->transpose();
+	// TODO We have to materialize these matrices here.
+	// Otherwise, we'll get segmentation fault. Why?
+	W->materialize_self();
+	H->materialize_self();
 	return nmf_state(W, H, tWW);
 }
 
