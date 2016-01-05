@@ -32,6 +32,7 @@ namespace detail
 {
 
 class portion_mapply_op;
+class materialized_mapply_tall_store;
 
 /*
  * This class represents the result matrix of mapply operations.
@@ -64,12 +65,7 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
 
-	// The materialized result matrix.
-	matrix_store::const_ptr res;
-	// The buffer matrix that keep the full materialization result.
-	matrix_store::ptr res_buf;
-	// The number of rows/columns that have data available.
-	std::atomic<size_t> num_res_avails;
+	std::shared_ptr<materialized_mapply_tall_store> res;
 public:
 	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
@@ -78,9 +74,7 @@ public:
 			portion_mapply_op::const_ptr op,
 			matrix_layout_t layout, size_t data_id = mat_counter++);
 
-	bool is_materialized() const {
-		return res != NULL;
-	}
+	bool is_materialized() const;
 
 	virtual void set_cache_portion(bool cache_portion);
 
