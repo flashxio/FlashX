@@ -389,11 +389,9 @@ void collect_portion_compute::run(char *buf, size_t size)
 		orig_computes.clear();
 
 		// If we want full materialization, we should write the result back.
-		if (global_res) {
-			assert(res->get_type() == get_scalar_type<size_t>());
+		if (global_res)
 			global_res->write_portion_async(res, res->get_global_start_row(),
 					res->get_global_start_col());
-		}
 
 		// We don't need to reference the result matrix portion any more.
 		res = NULL;
