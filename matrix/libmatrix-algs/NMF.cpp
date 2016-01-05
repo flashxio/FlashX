@@ -222,6 +222,12 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		H = dense_matrix::create_randu<double>(0, 1, k, m,
 				matrix_layout_t::L_ROW, num_nodes, false);
 	}
+	else if (num_in_mem == k) {
+		W = dense_matrix::create_randu<double>(0, 1, n, k,
+				matrix_layout_t::L_ROW, num_nodes, true);
+		H = dense_matrix::create_randu<double>(0, 1, k, m,
+				matrix_layout_t::L_COL, num_nodes, false);
+	}
 	else {
 		W = dense_matrix::create_randu<double>(0, 1, n, k,
 				matrix_layout_t::L_COL, num_nodes, false);
