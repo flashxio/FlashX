@@ -18,6 +18,7 @@
  */
 
 #include "matrix_algs.h"
+#include "combined_matrix_store.h"
 
 namespace fm
 {
@@ -48,22 +49,61 @@ static double trace_MM(dense_matrix::ptr W, dense_matrix::ptr H)
 	return scalar_variable::get_val<double>(*res);
 }
 
-static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D)
+static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
+		size_t num_in_mem)
 {
-	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-			S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
-			D->get_type(), D->get_raw_store()->get_num_nodes());
-	S->multiply<double, double>(D->get_raw_store(), res);
-	return dense_matrix::create(res);
+	size_t k = D->get_num_cols();
+	if (num_in_mem >= k * 2) {
+		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
+				D->get_type(), D->get_raw_store()->get_num_nodes());
+		S->multiply<double, double>(D->get_raw_store(), res);
+		return dense_matrix::create(res);
+	}
+	else if (num_in_mem > k) {
+		return dense_matrix::ptr();
+#if 0
+		detail::matrix_store::ptr res = detail::cached_col_matrix_store::create(
+				S->get_num_rows(), D->get_num_cols(), D->get_type(),
+				D->get_raw_store()->get_num_nodes(), num_in_mem - k);
+		S->multiply<double, double>(D->get_raw_store(), res);
+		return dense_matrix::create(res);
+#endif
+	}
+	else if (num_in_mem == k) {
+		detail::matrix_store::ptr res = detail::matrix_store::create(
+				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
+				D->get_type(), -1, false);
+		S->multiply<double, double>(D->get_raw_store(), res);
+		return dense_matrix::create(res);
+	}
+	else {
+		std::vector<detail::matrix_store::const_ptr> res_mats;
+		for (size_t i = 0; i < k; i += num_in_mem) {
+			size_t sub_ncol = std::min(num_in_mem, k - i);
+			std::vector<off_t> col_idxs(sub_ncol);
+			for (size_t j = 0; j < sub_ncol; j++)
+				col_idxs[j] = i + j;
+			dense_matrix::ptr sub_in = D->get_cols(col_idxs);
+			detail::matrix_store::ptr out = detail::matrix_store::create(
+					S->get_num_rows(), sub_in->get_num_cols(),
+					matrix_layout_t::L_COL, D->get_type(), -1, false);
+			S->multiply<double, double>(sub_in->get_raw_store(), out);
+			res_mats.push_back(out);
+		}
+		return dense_matrix::create(
+				detail::combined_matrix_store::create(res_mats,
+					matrix_layout_t::L_COL));
+	}
 }
 
 // ||A - W %*% H||^2
 static double Fnorm(sparse_matrix::ptr A, size_t Annz, dense_matrix::ptr W,
-		dense_matrix::ptr H, dense_matrix::ptr tWW)
+		dense_matrix::ptr H, dense_matrix::ptr tWW, size_t num_in_mem)
 {
 	// tAW <- t(A) %*% W
 	sparse_matrix::ptr tA = A->transpose();
-	dense_matrix::ptr tAW = multiply(tA, W);
+	dense_matrix::ptr tAW = multiply(tA, W, num_in_mem);
 
 	// tHtWW <- t(H) %*% (t(W) %*% W)
 	dense_matrix::ptr tH = H->transpose();
@@ -90,7 +130,7 @@ struct nmf_state
 };
 
 static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
-		dense_matrix::ptr H, dense_matrix::ptr tWW)
+		dense_matrix::ptr H, dense_matrix::ptr tWW, size_t num_in_mem)
 {
 	double eps = 10e-9;
 	// den <- (t(W) %*% W) %*% H
@@ -107,15 +147,17 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 	{
 		sparse_matrix::ptr tmat = mat->transpose();
 		// tA %*% W
-		dense_matrix::ptr tmp1 = multiply(tmat, W);
+		dense_matrix::ptr tmp1 = multiply(tmat, W, num_in_mem);
 		// t(tA %*% W)
 		tmp1 = tmp1->transpose();
 		// H * t(tA %*% W)
+		assert(tmp1->store_layout() == H->store_layout());
 		tmp1 = tmp1->multiply_ele(*H);
 		// fm.pmax2(H * t(tA %*% W), eps)
 		tmp1 = tmp1->pmax_scalar(eps);
 		// den + eps
 		dense_matrix::ptr tmp3 = D->add_scalar(eps);
+		assert(tmp1->store_layout() == tmp3->store_layout());
 		H = tmp1->div(*tmp3);
 		H->set_materialize_level(materialize_level::MATER_FULL);
 	}
@@ -138,13 +180,15 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		// t(H)
 		dense_matrix::ptr tH = H->transpose();
 		// A %*% t(H)
-		dense_matrix::ptr tmp1 = multiply(mat, tH);
+		dense_matrix::ptr tmp1 = multiply(mat, tH, num_in_mem);
 		// W * (A %*% t(H))
+		assert(W->store_layout() == tmp1->store_layout());
 		tmp1 = W->multiply_ele(*tmp1);
 		// fm.pmax2(W * (A %*% t(H)), eps)
 		tmp1 = tmp1->pmax_scalar(eps);
 		// den + eps
 		dense_matrix::ptr tmp2 = D->add_scalar(eps);
+		assert(tmp1->store_layout() == tmp2->store_layout());
 		W = tmp1->div(*tmp2);
 		W->set_materialize_level(materialize_level::MATER_FULL);
 	}
@@ -168,10 +212,25 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 	size_t m = mat->get_num_cols();
 	size_t nnz = get_nnz(mat);
 	int num_nodes = matrix_conf.get_num_nodes();
-	dense_matrix::ptr W = dense_matrix::create_randu<double>(0, 1, n, k,
-			matrix_layout_t::L_ROW, num_nodes, true);
-	dense_matrix::ptr H = dense_matrix::create_randu<double>(0, 1, k, m,
-			matrix_layout_t::L_COL, num_nodes, true);
+	dense_matrix::ptr W, H;
+	if (num_in_mem >= 2 * k) {
+		W = dense_matrix::create_randu<double>(0, 1, n, k,
+				matrix_layout_t::L_ROW, num_nodes, true);
+		H = dense_matrix::create_randu<double>(0, 1, k, m,
+				matrix_layout_t::L_COL, num_nodes, true);
+	}
+	else if (num_in_mem > k && num_in_mem < 2 * k) {
+		W = dense_matrix::create_randu<double>(0, 1, n, k,
+				matrix_layout_t::L_ROW, num_nodes, true);
+		H = dense_matrix::create_randu<double>(0, 1, k, m,
+				matrix_layout_t::L_ROW, num_nodes, false);
+	}
+	else {
+		W = dense_matrix::create_randu<double>(0, 1, n, k,
+				matrix_layout_t::L_COL, num_nodes, false);
+		H = dense_matrix::create_randu<double>(0, 1, k, m,
+				matrix_layout_t::L_ROW, num_nodes, false);
+	}
 
 	dense_matrix::ptr tWW;
 	{
@@ -182,11 +241,11 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 	for (size_t i = 0; i < max_niters; i++) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		state = update_lee(mat, state.W, state.H, state.tWW);
+		state = update_lee(mat, state.W, state.H, state.tWW, num_in_mem);
 		gettimeofday(&end, NULL);
 		double update_time = time_diff(start, end);
 		start = end;
-		double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW);
+		double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW, num_in_mem);
 		gettimeofday(&end, NULL);
 		printf("iteration %ld: distance: %f, update time: %.3fs, Fnorm: %.3f\n",
 				i, dist, update_time, time_diff(start, end));
