@@ -735,9 +735,12 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 		if (res->is_in_mem() == in_mem && res->get_num_nodes() == num_nodes)
 			return res;
 		else {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't materialize the mapply matrix to the specified storage";
-			return matrix_store::const_ptr();
+			BOOST_LOG_TRIVIAL(info) << boost::format(
+					"move materialized matrix from %d, %d to %d, %d")
+				% res->is_in_mem() % res->get_num_nodes() % in_mem % num_nodes;
+			dense_matrix::ptr mat = dense_matrix::create(res);
+			mat = mat->conv_store(in_mem, num_nodes);
+			return mat->get_raw_store();
 		}
 	}
 	else
