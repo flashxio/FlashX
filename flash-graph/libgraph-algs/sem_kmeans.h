@@ -25,6 +25,9 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#ifdef PROFILER
+#include <gperftools/profiler.h>
+#endif
 
 #include "graph_engine.h"
 #include "graph_config.h"
@@ -33,10 +36,10 @@
 
 #define PAGE_ROW
 #define PRUNE 1
-#define KM_TEST 0
+#define KM_TEST 1
 #define MAT_TEST 1
 #define VERBOSE 0
-#define IOTEST 0
+#define IOTEST 1
 
 #include "sem_kmeans_util.h"
 
@@ -255,7 +258,6 @@ namespace {
         }
 #endif
 
-#if PRUNE
     // NOTE: Creates a matrix like this e.g for K = 5
     /* - Don't store full matrix, don't store dist to myself -> space: (k*k-1)/2
        0 ==> 1 2 3 4
@@ -366,7 +368,6 @@ namespace {
             }
 
     };
-#endif
 
     void print_clusters(std::vector<cluster::ptr>& clusters) {
         for (std::vector<cluster::ptr>::iterator it = clusters.begin();
@@ -432,9 +433,21 @@ namespace fg
      * \param init Initialization type [random, forgy, kmeanspp].
      * \param max_iters The max number of iterations to compute for.
      * \param tolerance The min fraction of changes from 1 iter to next required to converge.
-     * \param comp_thresh Used to prune computation if specified. TODO: Explain.
      */
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+            const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
+            const unsigned num_cols=0);
+
+    /**
+     * \brief Compute Semi-External Memory Triangle Inequality pruned kmeans
+     * \param fg The FlashGraph graph object for which you want to compute.
+     * \param k The number of clusters.
+     * \param init Initialization type [random, forgy, kmeanspp].
+     * \param max_iters The max number of iterations to compute for.
+     * \param tolerance The min fraction of changes from 1 iter to next required to converge.
+     * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
+     */
+    sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
             const unsigned num_cols=0);
 }
