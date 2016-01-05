@@ -48,5 +48,6 @@ clean:
 	$(MAKE) -C test clean
 	$(MAKE) -C unit-test clean
 	$(MAKE) -C eigensolver clean
+	$(MAKE) -C libmatrix-algs clean
 
 -include $(DEPS) 
