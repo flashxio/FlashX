@@ -47,6 +47,13 @@ using namespace fg;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;
+    enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
+    enum init_type_t { RANDOM, FORGY, PLUSPLUS }; // May have to use
+    enum kmspp_stage_t { ADDMEAN, DIST }; // Either adding a mean / computing dist
+    enum kms_stage_t { INIT, ESTEP }; // What phase of the algo we're in
+
+    static const unsigned INVALID_CLUST_ID = -1;
+
     class cluster
     {
         private:
@@ -369,6 +376,36 @@ namespace {
 
     };
 
+    class base_kmeans_vertex: public compute_vertex
+    {
+        unsigned cluster_id;
+        double dist;
+
+        public:
+        base_kmeans_vertex(vertex_id_t id):
+            compute_vertex(id) {
+                dist = std::numeric_limits<double>::max(); // Start @ max
+                cluster_id = INVALID_CLUST_ID;
+            }
+
+        unsigned get_result() const {
+            return cluster_id;
+        }
+
+        const vsize_t get_cluster_id() const {
+            return cluster_id;
+        }
+
+        //const unsigned get_cluster_id() const { return cluster_id; }
+        void set_cluster_id(const unsigned id ) { cluster_id = id; }
+        const double get_dist() const { return dist; }
+        void set_dist(const double dist) { this->dist = dist; }
+
+        void run(vertex_program &prog) { }
+        void run(vertex_program& prog, const page_vertex &vertex) { }
+        void run_on_message(vertex_program& prog, const vertex_message& msg) { }
+    };
+
     void print_clusters(std::vector<cluster::ptr>& clusters) {
         for (std::vector<cluster::ptr>::iterator it = clusters.begin();
                 it != clusters.end(); ++it) {
@@ -377,7 +414,6 @@ namespace {
         }
         std::cout << "\n";
     }
-
 }
 
 namespace fg
