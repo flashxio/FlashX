@@ -219,6 +219,13 @@ matrix_store::const_ptr combined_matrix_store::transpose() const
 	return matrix_store::const_ptr(new combined_matrix_store(tmp, layout));
 }
 
+matrix_store::const_ptr combined_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	// TODO
+	return matrix_store::const_ptr();
+}
+
 }
 
 }

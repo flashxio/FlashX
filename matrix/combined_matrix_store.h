@@ -59,6 +59,7 @@ public:
 	virtual std::string get_name() const;
 
 	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
 	size_t get_num_mats() const {
 		return mats.size();
