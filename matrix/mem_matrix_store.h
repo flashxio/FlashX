@@ -69,9 +69,6 @@ public:
 			% get_num_cols()).str();
 	}
 
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
-
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
 	virtual const char *get_row(size_t row) const {

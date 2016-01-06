@@ -121,8 +121,8 @@ public:
 
 	virtual matrix_layout_t store_layout() const = 0;
 
-	virtual void reset_data() = 0;
-	virtual void set_data(const set_operate &op) = 0;
+	virtual void reset_data();
+	virtual void set_data(const set_operate &op);
 
 	virtual matrix_store::const_ptr transpose() const = 0;
 

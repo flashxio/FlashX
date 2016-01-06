@@ -41,21 +41,6 @@ const size_t EM_matrix_store::CHUNK_SIZE = 256 * 1024;
 
 static std::unordered_map<std::string, EM_object::file_holder::ptr> file_holders;
 
-/*
- * These two functions define the length and portion size for 1D partitioning
- * on a matrix.
- */
-
-static inline size_t get_tot_len(const matrix_store &mat)
-{
-	return mat.is_wide() ? mat.get_num_cols() : mat.get_num_rows();
-}
-
-static inline size_t get_portion_size(const matrix_store &mat)
-{
-	return mat.is_wide() ? mat.get_portion_size().second : mat.get_portion_size().first;
-}
-
 namespace
 {
 
@@ -154,75 +139,6 @@ EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 				// TODO we should save the data Id in the matrix header.
 				header->get_layout(), header->get_data_type(), mat_counter++));
 	return ret_mat;
-}
-
-void EM_matrix_store::reset_data()
-{
-	assert(0);
-}
-
-namespace
-{
-
-class EM_mat_setdata_dispatcher: public EM_portion_dispatcher
-{
-	const set_operate &op;
-	EM_matrix_store &to_mat;
-public:
-	EM_mat_setdata_dispatcher(EM_matrix_store &store, const set_operate &_op);
-
-	virtual void create_task(off_t global_start, size_t length);
-};
-
-EM_mat_setdata_dispatcher::EM_mat_setdata_dispatcher(EM_matrix_store &store,
-		const set_operate &_op): EM_portion_dispatcher(get_tot_len(store),
-			fm::detail::get_portion_size(store)), op(_op), to_mat(store)
-{
-}
-
-void EM_mat_setdata_dispatcher::create_task(off_t global_start,
-		size_t length)
-{
-	size_t global_start_row, global_start_col;
-	size_t num_rows, num_cols;
-	if (to_mat.is_wide()) {
-		global_start_row = 0;
-		global_start_col = global_start;
-		num_rows = to_mat.get_num_rows();
-		num_cols = length;
-	}
-	else {
-		global_start_row = global_start;
-		global_start_col = 0;
-		num_rows = length;
-		num_cols = to_mat.get_num_cols();
-	}
-	local_matrix_store::ptr buf;
-	if (to_mat.store_layout() == matrix_layout_t::L_COL)
-		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(
-					global_start_row, global_start_col, num_rows, num_cols,
-					to_mat.get_type(), -1));
-	else
-		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(
-					global_start_row, global_start_col, num_rows, num_cols,
-					to_mat.get_type(), -1));
-	buf->set_data(op);
-	to_mat.write_portion_async(buf, global_start_row, global_start_col);
-}
-
-}
-
-void EM_matrix_store::set_data(const set_operate &op)
-{
-	mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
-	EM_mat_setdata_dispatcher::ptr dispatcher(
-			new EM_mat_setdata_dispatcher(*this, op));
-	for (size_t i = 0; i < threads->get_num_threads(); i++) {
-		io_worker_task *task = new io_worker_task(dispatcher);
-		task->register_EM_obj(this);
-		threads->process_task(i % threads->get_num_nodes(), task);
-	}
-	threads->wait4complete();
 }
 
 std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
@@ -713,13 +629,6 @@ public:
 			off_t start_row, off_t start_col) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "Don't support write_portion_async in a sub EM matrix";
-	}
-	virtual void reset_data() {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Don't support reset_data in a sub EM matrix";
-	}
-	virtual void set_data(const set_operate &op) {
-		BOOST_LOG_TRIVIAL(error) << "Don't support set_data in a sub EM matrix";
 	}
 };
 

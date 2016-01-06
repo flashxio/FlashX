@@ -124,9 +124,6 @@ public:
 			% get_num_cols()).str();
 	}
 
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
-
 	virtual matrix_layout_t store_layout() const {
 		return layout;
 	}

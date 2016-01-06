@@ -1702,12 +1702,31 @@ void test_EM_persistent()
 	}
 }
 
+void test_setdata(int num_nodes)
+{
+	dense_matrix::ptr mat = create_seq_matrix(long_dim, 10,
+		matrix_layout_t::L_ROW, num_nodes, get_scalar_type<int>(), in_mem);
+	size_t num_portions = mat->get_data().get_num_portions();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part
+			= mat->get_data().get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++)
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = part->get_global_start_row() + i;
+				size_t col_idx = j;
+				int expected = row_idx * mat->get_num_cols() + col_idx;
+				assert(part->get<int>(i, j) == expected);
+			}
+	}
+}
+
 void test_EM_matrix(int num_nodes)
 {
 	printf("test EM matrix\n");
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_setdata(-1);
 	test_EM_persistent();
 	test_sub_matrix();
 	test_mapply_chain(-1, get_scalar_type<double>());
@@ -1743,6 +1762,8 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_setdata(-1);
+	test_setdata(num_nodes);
 	test_copy(-1, true);
 	test_apply_scalar();
 	test_min();
