@@ -27,57 +27,25 @@
 // TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
 using namespace fg;
 
+namespace {
+
 #if KM_TEST
-static prune_stats::ptr g_prune_stats;
+    static prune_stats::ptr g_prune_stats;
 #endif
 #if IOTEST
-static unsigned g_io_reqs = 0;
+    static unsigned g_io_reqs = 0;
 #endif
-static bool g_prune_init = false;
-static dist_matrix::ptr g_cluster_dist;
-
-
-namespace {
-    typedef std::pair<double, double> distpair;
-    static unsigned NUM_COLS;
-    static unsigned NUM_ROWS;
-    static unsigned K;
-    static unsigned g_num_changed = 0;
-    static struct timeval start, end;
-    static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
-    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
-    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
-    static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
-
-    init_type_t g_init; // May have to use
-    kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    kms_stage_t g_stage; // What phase of the algo we're in
-
+    static bool g_prune_init = false;
+    static dist_matrix::ptr g_cluster_dist;
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
-    static unsigned g_iter;
 
-    // Begin Helpers //
-#if VERBOSE
-    static void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
-        std::vector<std::string> v;
-        while (count_it.has_next()) {
-            char buffer [1024];
-            double e = count_it.next();
-            assert(sprintf(buffer, "%e", e));
-            v.push_back(std::string(buffer));
-        }
-        printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
-    }
-#endif
-    // End helpers //
-
-    class tri_kmeans_vertex: public base_kmeans_vertex
+    class kmeans_vertex: public base_kmeans_vertex
     {
         std::vector<double> lwr_bnd;
         bool recalculated;
 
         public:
-        tri_kmeans_vertex(vertex_id_t id):
+        kmeans_vertex(vertex_id_t id):
             base_kmeans_vertex(id) {
                 lwr_bnd.assign(K, 0); // Set K items to 0
                 recalculated = false;
@@ -124,7 +92,7 @@ namespace {
     };
 
     /* Used in per thread cluster formation */
-    class kmeans_vertex_program : public vertex_program_impl<tri_kmeans_vertex>
+    class kmeans_vertex_program : public vertex_program_impl<kmeans_vertex>
     {
 
         unsigned pt_changed;
@@ -216,7 +184,7 @@ namespace {
     };
 
     /* Used in kmeans++ initialization */
-    class kmeanspp_vertex_program : public vertex_program_impl<tri_kmeans_vertex>
+    class kmeanspp_vertex_program : public vertex_program_impl<kmeans_vertex>
     {
         double pt_cuml_sum;
 
@@ -248,7 +216,7 @@ namespace {
             }
     };
 
-    void tri_kmeans_vertex::run(vertex_program &prog) {
+    void kmeans_vertex::run(vertex_program &prog) {
         if (g_stage != INIT) {
             recalculated = false;
             if (!g_prune_init) {
@@ -276,7 +244,7 @@ namespace {
         request_vertices(&id, 1);
     }
 
-    void tri_kmeans_vertex::run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init) {
+    void kmeans_vertex::run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
             case RANDOM:
                 {
@@ -336,7 +304,7 @@ namespace {
         }
     }
 
-    double tri_kmeans_vertex::get_distance(unsigned cl,
+    double kmeans_vertex::get_distance(unsigned cl,
             data_seq_iter& count_it) {
         double dist = 0;
         double diff;
@@ -350,14 +318,14 @@ namespace {
         return sqrt(dist); // TODO: sqrt
     }
 
-    double tri_kmeans_vertex::dist_comp(const page_vertex &vertex, const unsigned cl) {
+    double kmeans_vertex::dist_comp(const page_vertex &vertex, const unsigned cl) {
         data_seq_iter count_it =
             ((const page_row&)vertex).get_data_seq_it<double>();
 
         return get_distance(cl, count_it);
     }
 
-    void tri_kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
+    void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
         kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
         unsigned old_cluster_id = get_cluster_id();
 
@@ -432,7 +400,7 @@ namespace {
 
         static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
             FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
-            mat->query_on_all(vertex_query::ptr(new save_query<unsigned, tri_kmeans_vertex>(vec)));
+            mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
             return vec;
         }
 
@@ -556,14 +524,14 @@ namespace {
     {
         sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
                 const unsigned max_iters, const double tolerance, const unsigned num_rows,
-                const unsigned num_cols) {
+                const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
             ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
 #endif
             K = k;
 
             // Check Initialization
-            if (init.compare("random") && init.compare("kmeanspp") &&
+            if ((NULL == centers) && init.compare("random") && init.compare("kmeanspp") &&
                     init.compare("forgy")) {
                 BOOST_LOG_TRIVIAL(fatal)
                     << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
@@ -571,7 +539,7 @@ namespace {
                 exit(EXIT_FAILURE);
             }
 
-            graph_index::ptr index = NUMA_graph_index<tri_kmeans_vertex>::create(
+            graph_index::ptr index = NUMA_graph_index<kmeans_vertex>::create(
                     fg->get_graph_header());
             graph_engine::ptr mat = fg->create_engine(index);
 

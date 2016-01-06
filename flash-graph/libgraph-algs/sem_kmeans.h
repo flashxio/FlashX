@@ -37,9 +37,9 @@
 #define PAGE_ROW
 #define PRUNE 1
 #define KM_TEST 1
-#define MAT_TEST 1
+#define MAT_TEST 0
 #define VERBOSE 0
-#define IOTEST 1
+#define IOTEST 0
 
 #include "sem_kmeans_util.h"
 
@@ -53,6 +53,20 @@ namespace {
     enum kms_stage_t { INIT, ESTEP }; // What phase of the algo we're in
 
     static const unsigned INVALID_CLUST_ID = -1;
+    static unsigned NUM_COLS;
+    static unsigned NUM_ROWS;
+    static unsigned K;
+    static unsigned g_num_changed = 0;
+    static struct timeval start, end;
+    static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
+    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
+    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
+    static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
+
+    static init_type_t g_init; // May have to use
+    static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
+    static kms_stage_t g_stage; // What phase of the algo we're in
+    static unsigned g_iter;
 
     class cluster
     {
@@ -392,7 +406,7 @@ namespace {
             return cluster_id;
         }
 
-        const vsize_t get_cluster_id() const {
+        const vsize_t get_cluster_id() const { // TODO: vsize_t --> unsigned
             return cluster_id;
         }
 
@@ -401,11 +415,12 @@ namespace {
         const double get_dist() const { return dist; }
         void set_dist(const double dist) { this->dist = dist; }
 
-        void run(vertex_program &prog) { }
-        void run(vertex_program& prog, const page_vertex &vertex) { }
+        void run(vertex_program &prog) { } // TODO: Raise if called
+        void run(vertex_program& prog, const page_vertex &vertex) { } // TODO: Raise if called
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
     };
 
+    // Begin Helpers //
     void print_clusters(std::vector<cluster::ptr>& clusters) {
         for (std::vector<cluster::ptr>::iterator it = clusters.begin();
                 it != clusters.end(); ++it) {
@@ -414,6 +429,18 @@ namespace {
         }
         std::cout << "\n";
     }
+
+    void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
+        std::vector<std::string> v;
+        while (count_it.has_next()) {
+            char buffer [1024];
+            double e = count_it.next();
+            assert(sprintf(buffer, "%e", e));
+            v.push_back(std::string(buffer));
+        }
+        printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
+    }
+    // End helpers //
 }
 
 namespace fg
@@ -469,22 +496,21 @@ namespace fg
      * \param init Initialization type [random, forgy, kmeanspp].
      * \param max_iters The max number of iterations to compute for.
      * \param tolerance The min fraction of changes from 1 iter to next required to converge.
+     * \param num_rows The # of rows in the dataset
+     * \param num_cols The # of columns in the dataset
+     * \param centers To skip any initialization use this to pass initialized centers 
      */
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
-            const unsigned num_cols=0);
+            const unsigned num_cols=0, std::vector<double>* centers=NULL);
 
     /**
      * \brief Compute Semi-External Memory Triangle Inequality pruned kmeans
-     * \param fg The FlashGraph graph object for which you want to compute.
-     * \param k The number of clusters.
-     * \param init Initialization type [random, forgy, kmeanspp].
-     * \param max_iters The max number of iterations to compute for.
-     * \param tolerance The min fraction of changes from 1 iter to next required to converge.
+     * see: `compute_sem_kmeans` for description of parameter list 
      * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
      */
     sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
-            const unsigned num_cols=0);
+            const unsigned num_cols=0, std::vector<double>* centers=NULL);
 }
 #endif

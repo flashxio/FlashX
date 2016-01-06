@@ -23,27 +23,10 @@
 using namespace fg;
 
 namespace {
-    typedef std::pair<double, double> distpair;
-    static unsigned NUM_COLS;
-    static unsigned NUM_ROWS;
-    static unsigned K;
-    static unsigned g_num_changed = 0;
-    static struct timeval start, end;
-    static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
-    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
-    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
-    static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
-
-    init_type_t g_init; // Initialization type
-    kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    kms_stage_t g_stage; // What phase of the algo we're in
-
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
-    static unsigned g_iter;
 
     class kmeans_vertex: public base_kmeans_vertex
     {
-
         public:
             kmeans_vertex(vertex_id_t id): base_kmeans_vertex(id) { }
 
@@ -361,7 +344,7 @@ namespace fg
 {
     sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows,
-            const unsigned num_cols) {
+            const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
         ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
 #endif
