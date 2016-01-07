@@ -406,7 +406,7 @@ namespace {
             return cluster_id;
         }
 
-        const vsize_t get_cluster_id() const { // TODO: vsize_t --> unsigned
+        const unsigned get_cluster_id() const {
             return cluster_id;
         }
 
@@ -415,9 +415,69 @@ namespace {
         const double get_dist() const { return dist; }
         void set_dist(const double dist) { this->dist = dist; }
 
-        void run(vertex_program &prog) { } // TODO: Raise if called
-        void run(vertex_program& prog, const page_vertex &vertex) { } // TODO: Raise if called
+        void run(vertex_program &prog) {
+            BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&) must not be called!");
+        }
+        void run(vertex_program& prog, const page_vertex &vertex) {
+            BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&, const page_vertex&) must not be called!");
+        }
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
+
+        // Set a cluster to have the same mean as this sample
+        void set_as_mean(const page_vertex &vertex, vertex_id_t my_id,
+                unsigned to_cluster_id, std::vector<cluster::ptr>& centers) {
+            vertex_id_t nid = 0;
+            data_seq_iter count_it = ((const page_row&)vertex).
+                get_data_seq_it<double>();
+
+            // Build the setter vector that we assign to a cluster center
+            std::vector<double> setter;
+            setter.assign(NUM_COLS, 0);
+            while (count_it.has_next()) {
+                double e = count_it.next();
+                setter[nid++] = e;
+            }
+
+            centers[to_cluster_id]->set_mean(setter);
+        }
+    };
+
+    /* Used in per thread cluster formation */
+    template <typename T>
+    class base_kmeans_vertex_program: public vertex_program_impl<T>
+    {
+        unsigned pt_changed;
+        std::vector<cluster::ptr> pt_clusters;
+
+        public:
+        typedef std::shared_ptr<base_kmeans_vertex_program<T> > ptr;
+
+        //TODO: Opt only add cluster when a vertex joins it
+        base_kmeans_vertex_program() {
+            this->pt_changed = 0;
+
+            for (unsigned thd = 0; thd < K; thd++) {
+                pt_clusters.push_back(cluster::create(NUM_COLS));
+            }
+        }
+
+        static ptr cast2(vertex_program::ptr prog) {
+            return std::static_pointer_cast<base_kmeans_vertex_program<T>, vertex_program>(prog);
+        }
+
+        std::vector<cluster::ptr>& get_pt_clusters() {
+            return pt_clusters;
+        }
+
+        void add_member(const unsigned id, data_seq_iter& count_it) {
+            pt_clusters[id]->add_member(count_it);
+        }
+
+        const unsigned get_pt_changed() { return pt_changed; }
+
+        void pt_changed_pp() {
+            pt_changed++;
+        }
     };
 
     // Begin Helpers //

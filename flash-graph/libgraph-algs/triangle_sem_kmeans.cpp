@@ -66,24 +66,6 @@ namespace {
             }
         }
 
-        // Set a cluster to have the same mean as this sample
-        void set_as_mean(const page_vertex &vertex, vertex_id_t my_id,
-                unsigned to_cluster_id, std::vector<cluster::ptr>& centers) {
-            vertex_id_t nid = 0;
-            data_seq_iter count_it = ((const page_row&)vertex).
-                get_data_seq_it<double>();
-
-            // Build the setter vector that we assign to a cluster center
-            std::vector<double> setter;
-            setter.assign(NUM_COLS, 0);
-            while (count_it.has_next()) {
-                double e = count_it.next();
-                setter[nid++] = e;
-            }
-
-            centers[to_cluster_id]->set_mean(setter);
-        }
-
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex &vertex);
@@ -91,17 +73,9 @@ namespace {
         double dist_comp(const page_vertex &vertex, const unsigned cl);
     };
 
-    /* Used in per thread cluster formation */
-    class kmeans_vertex_program : public vertex_program_impl<kmeans_vertex>
+    class kmeans_vertex_program: public base_kmeans_vertex_program<kmeans_vertex>
     {
-
-        unsigned pt_changed;
-#if IOTEST
         unsigned num_reqs;
-#endif
-
-        std::vector<cluster::ptr> pt_clusters;
-
 #if KM_TEST
         prune_stats::ptr pt_ps;
 #endif
@@ -109,14 +83,8 @@ namespace {
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
 
-        //TODO: Opt only add cluster when a vertex joins it
-        kmeans_vertex_program(std::vector<cluster::ptr>& pt_clusters) {
-
-            this->pt_clusters = pt_clusters;
-            this->pt_changed = 0;
-#if IOTEST
+        kmeans_vertex_program() {
             this->num_reqs = 0;
-#endif
 #if KM_TEST
             pt_ps = prune_stats::create(NUM_ROWS, K);
 #endif
@@ -126,16 +94,8 @@ namespace {
             return std::static_pointer_cast<kmeans_vertex_program, vertex_program>(prog);
         }
 
-        const std::vector<cluster::ptr>& get_pt_clusters() {
-            return pt_clusters;
-        }
-
-        void add_member(const unsigned id, data_seq_iter& count_it) {
-            pt_clusters[id]->add_member(count_it);
-        }
-
         void remove_member(const unsigned id, data_seq_iter& count_it) {
-            pt_clusters[id]->remove_member(count_it);
+            get_pt_clusters()[id]->remove_member(count_it);
         }
 
         template <typename T>
@@ -144,42 +104,28 @@ namespace {
                 vertex_id_t nid = 0;
                 while(count_it.has_next()) {
                     double e = count_it.next();
-                    (*(pt_clusters[from_id]))[nid] -= e;
-                    (*(pt_clusters[to_id]))[nid++] += e;
+                    (*(get_pt_clusters()[from_id]))[nid] -= e;
+                    (*(get_pt_clusters()[to_id]))[nid++] += e;
                 }
 
-                pt_clusters[from_id]->num_members_peq(-1);
-                pt_clusters[to_id]->num_members_peq(1);
+                get_pt_clusters()[from_id]->num_members_peq(-1);
+                get_pt_clusters()[to_id]->num_members_peq(1);
             }
 
 #if KM_TEST
         prune_stats::ptr get_ps() { return pt_ps; }
 #endif
-        const unsigned get_pt_changed() { return pt_changed; }
-
-        void pt_changed_pp() {
-            pt_changed++;
-        }
-
-#if IOTEST
         void num_requests_pp() {
             num_reqs++;
         }
         const unsigned get_num_reqs() const { return num_reqs; }
-#endif
     };
 
     class kmeans_vertex_program_creater: public vertex_program_creater
     {
         public:
             vertex_program::ptr create() const {
-
-                std::vector<cluster::ptr> pt_clusters;
-                for (unsigned thd = 0; thd < K; thd++) {
-                    pt_clusters.push_back(cluster::create(NUM_COLS));
-                }
-
-                return vertex_program::ptr(new kmeans_vertex_program(pt_clusters));
+                return vertex_program::ptr(new kmeans_vertex_program());
             }
     };
 

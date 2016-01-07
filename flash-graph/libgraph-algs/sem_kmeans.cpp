@@ -48,24 +48,6 @@ namespace {
                 }
             }
 
-            // Set a cluster to have the same mean as this sample
-            void set_as_mean(const page_vertex &vertex, vertex_id_t my_id,
-                    unsigned to_cluster_id, std::vector<cluster::ptr>& centers) {
-                vertex_id_t nid = 0;
-                data_seq_iter count_it = ((const page_row&)vertex).
-                    get_data_seq_it<double>();
-
-                // Build the setter vector that we assign to a cluster center
-                std::vector<double> setter;
-                setter.assign(NUM_COLS, 0);
-                while (count_it.has_next()) {
-                    double e = count_it.next();
-                    setter[nid++] = e;
-                }
-
-                centers[to_cluster_id]->set_mean(setter);
-            }
-
             void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
             void run_distance(vertex_program& prog, const page_vertex &vertex);
             double get_distance(unsigned cl, data_seq_iter& count_it);
@@ -73,44 +55,7 @@ namespace {
                     unsigned* new_cluster_id, const unsigned cl);
     };
 
-        /* Used in per thread cluster formation */
-    class kmeans_vertex_program : public vertex_program_impl<kmeans_vertex>
-    {
-        std::vector<cluster::ptr> pt_clusters;
-        unsigned pt_changed;
-
-        public:
-        typedef std::shared_ptr<kmeans_vertex_program> ptr;
-
-        //TODO: Opt only add cluster when a vertex joins it
-        kmeans_vertex_program() {
-            for (unsigned thd = 0; thd < K; thd++) {
-                pt_clusters.push_back(cluster::create(NUM_COLS));
-                pt_changed = 0;
-            }
-        }
-
-        static ptr cast2(vertex_program::ptr prog) {
-            return std::static_pointer_cast<kmeans_vertex_program, vertex_program>(prog);
-        }
-
-        const std::vector<cluster::ptr>& get_pt_clusters() {
-            return pt_clusters;
-        }
-
-        void add_member(const unsigned id, data_seq_iter& count_it) {
-            pt_clusters[id]->add_member(count_it);
-        }
-
-        const unsigned get_pt_changed() {
-            return pt_changed;
-        }
-
-        void pt_changed_pp() {
-            pt_changed++;
-        }
-    };
-
+    typedef base_kmeans_vertex_program<kmeans_vertex> kmeans_vertex_program;
     class kmeans_vertex_program_creater: public vertex_program_creater
     {
         public:
