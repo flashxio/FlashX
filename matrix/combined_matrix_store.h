@@ -60,6 +60,10 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::get_cols(idxs);
+	}
 
 	size_t get_num_mats() const {
 		return mats.size();

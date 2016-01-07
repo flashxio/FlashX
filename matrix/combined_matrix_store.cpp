@@ -230,8 +230,47 @@ matrix_store::const_ptr combined_matrix_store::transpose() const
 matrix_store::const_ptr combined_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	// TODO
-	return matrix_store::const_ptr();
+	if (!is_wide()) {
+		BOOST_LOG_TRIVIAL(error) << "Cannot get rows from a tall matrix";
+		return matrix_store::const_ptr();
+	}
+
+	off_t start_row = 0;
+	matrix_store::const_ptr mat;
+	// Find the right matrix.
+	for (size_t i = 0; i < mats.size(); i++) {
+		// We assume all required rows are from the same matrix.
+		if (idxs[0] >= start_row
+				&& (size_t) idxs[0] < start_row + mats[i]->get_num_rows()) {
+			mat = mats[i];
+			break;
+		}
+		start_row += mats[i]->get_num_rows();
+	}
+	if (mat == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "row idxs are out of bounds";
+		return matrix_store::const_ptr();
+	}
+
+	assert((size_t) start_row < get_num_rows()
+			&& start_row + mat->get_num_rows() <= get_num_rows());
+	std::vector<off_t> local_idxs(idxs.size());
+	for (size_t i = 0; i < idxs.size(); i++) {
+		if (idxs[i] < start_row
+				|| (size_t) idxs[i] >= start_row + mat->get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Not all rows are in the same physical matrix.";
+			return matrix_store::const_ptr();
+		}
+		local_idxs[i] = idxs[i] - start_row;
+	}
+	// If we want to access all rows of the matrix, we can return
+	// the entire matrix directly.
+	if (local_idxs.size() == mat->get_num_rows()
+			&& std::is_sorted(local_idxs.begin(), local_idxs.end()))
+		return mat;
+	else
+		return mat->get_rows(local_idxs);
 }
 
 }
