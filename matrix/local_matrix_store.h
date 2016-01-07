@@ -123,6 +123,13 @@ public:
 	typedef std::shared_ptr<local_matrix_store> ptr;
 	typedef std::shared_ptr<const local_matrix_store> const_ptr;
 
+	struct exposed_area {
+		off_t local_start_row;
+		off_t local_start_col;
+		size_t num_rows;
+		size_t num_cols;
+	};
+
 	static ptr cast(matrix_store::ptr store) {
 		// TODO do I need to check the store object.
 		return std::static_pointer_cast<local_matrix_store>(store);
@@ -177,6 +184,20 @@ public:
 	}
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		return std::unordered_map<size_t, size_t>();
+	}
+
+	exposed_area get_exposed_area() const {
+		exposed_area area;
+		area.local_start_row = get_local_start_row();
+		area.local_start_col = get_local_start_col();
+		area.num_rows = get_num_rows();
+		area.num_cols = get_num_cols();
+		return area;
+	}
+
+	void restore_size(const exposed_area &area) {
+		resize(area.local_start_row, area.local_start_col,
+				area.num_rows, area.num_cols);
 	}
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,

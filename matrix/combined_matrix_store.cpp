@@ -144,12 +144,16 @@ void combine_tall_op::run(const std::vector<local_matrix_store::const_ptr> &ins,
 		local_matrix_store &out) const
 {
 	size_t col_idx = 0;
+	local_matrix_store::exposed_area area = out.get_exposed_area();
+	off_t local_start_row = out.get_local_start_row();
+	off_t local_start_col = out.get_local_start_col();
 	for (size_t i = 0; i < ins.size(); i++) {
-		out.resize(0, col_idx, out.get_num_rows(), ins[i]->get_num_cols());
+		out.resize(local_start_row, local_start_col + col_idx,
+				out.get_num_rows(), ins[i]->get_num_cols());
 		out.copy_from(*ins[i]);
 		col_idx += ins[i]->get_num_cols();
 	}
-	out.reset_size();
+	out.restore_size(area);
 	assert(col_idx == out.get_num_cols());
 }
 
@@ -163,14 +167,18 @@ void combine_wide_op::run(const std::vector<local_matrix_store::const_ptr> &ins,
 		local_matrix_store &out) const
 {
 	size_t row_idx = 0;
+	local_matrix_store::exposed_area area = out.get_exposed_area();
+	off_t local_start_row = out.get_local_start_row();
+	off_t local_start_col = out.get_local_start_col();
 	for (size_t i = 0; i < ins.size(); i++) {
-		out.resize(row_idx, 0, ins[i]->get_num_rows(), out.get_num_cols());
+		out.resize(local_start_row + row_idx, local_start_col,
+				ins[i]->get_num_rows(), out.get_num_cols());
 		// TODO I need to test the performance of memory copy
 		// It might be slow.
 		out.copy_from(*ins[i]);
 		row_idx += ins[i]->get_num_rows();
 	}
-	out.reset_size();
+	out.restore_size(area);
 	assert(row_idx == out.get_num_rows());
 }
 
