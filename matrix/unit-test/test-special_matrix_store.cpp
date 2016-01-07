@@ -1,8 +1,13 @@
 #include "mapply_matrix_store.h"
 #include "local_matrix_store.h"
 #include "dense_matrix.h"
+#include "cached_matrix_store.h"
+#include "sparse_matrix.h"
+#include "combined_matrix_store.h"
 
 using namespace fm;
+
+size_t long_dim = 9999999;
 
 class mapply_add_op: public detail::portion_mapply_op
 {
@@ -194,8 +199,144 @@ void test_mapply_matrix_store(size_t num_rows, size_t num_cols,
 	verify_result(res1->transpose(), t_res);
 }
 
-int main()
+class set_col_long_operate: public type_set_operate<size_t>
 {
+	size_t num_cols;
+public:
+	set_col_long_operate(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(size_t *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = (row_idx + i) * num_cols + col_idx;
+		}
+	}
+};
+
+class set_row_long_operate: public type_set_operate<size_t>
+{
+	size_t num_cols;
+public:
+	set_row_long_operate(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(size_t *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = row_idx * num_cols + col_idx + i;
+		}
+	}
+};
+
+void test_cached_matrix_store()
+{
+	detail::matrix_store::ptr tmp(new detail::cached_matrix_store(
+				long_dim, 10, -1, get_scalar_type<size_t>(), 3));
+	tmp->set_data(set_col_long_operate(tmp->get_num_cols()));
+	detail::matrix_store::const_ptr mat = tmp;
+	printf("create a tall cached matrix: %s\n", tmp->get_name().c_str());
+
+	size_t num_portions = mat->get_num_portions();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = mat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++)
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = part->get_global_start_row() + i;
+				size_t col_idx = j;
+				size_t expected = row_idx * mat->get_num_cols() + col_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+	}
+
+	detail::matrix_store::const_ptr tmat = mat->transpose();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = tmat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++)
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = i;
+				size_t col_idx = part->get_global_start_col() + j;
+				size_t expected = col_idx * tmat->get_num_rows() + row_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+	}
+
+	tmp = detail::matrix_store::ptr(new detail::cached_matrix_store(
+				10, long_dim, -1, get_scalar_type<size_t>(), 3));
+	tmp->set_data(set_row_long_operate(tmp->get_num_cols()));
+	mat = tmp;
+	printf("create a wide cached matrix: %s\n", tmp->get_name().c_str());
+
+	num_portions = mat->get_num_portions();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = mat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++)
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = i;
+				size_t col_idx = part->get_global_start_col() + j;
+				size_t expected = row_idx * mat->get_num_cols() + col_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+	}
+
+	tmat = mat->transpose();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = tmat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++)
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = part->get_global_start_row() + i;
+				size_t col_idx = j;
+				size_t expected = col_idx * tmat->get_num_rows() + row_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+	}
+}
+
+void test_combined_matrix_store()
+{
+	detail::matrix_store::ptr mat1 = detail::matrix_store::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<size_t>(), -1, true);
+	mat1->set_data(set_col_long_operate(mat1->get_num_cols()));
+	detail::matrix_store::ptr mat2 = detail::matrix_store::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<size_t>(), -1, true);
+	mat2->set_data(set_col_long_operate(mat2->get_num_cols()));
+	std::vector<detail::matrix_store::const_ptr> mats(2);
+	mats[0] = mat1;
+	mats[1] = mat2;
+	detail::matrix_store::const_ptr mat = detail::combined_matrix_store::create(mats,
+			matrix_layout_t::L_COL);
+	assert(mat->get_num_rows() == mat1->get_num_rows());
+	assert(mat->get_num_cols() == mat1->get_num_cols() + mat2->get_num_cols());
+
+	size_t num_portions = mat->get_num_portions();
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = mat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++) {
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = part->get_global_start_row() + i;
+				size_t col_idx = j % mat1->get_num_cols();
+				size_t expected = row_idx * mat1->get_num_cols() + col_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+		}
+	}
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
+	}
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
+	test_combined_matrix_store();
+	test_cached_matrix_store();
 	test_mapply_matrix_store(100000, 10, matrix_layout_t::L_COL);
 	test_mapply_matrix_store(100000, 10, matrix_layout_t::L_ROW);
+
+	destroy_flash_matrix();
 }
