@@ -249,6 +249,17 @@ void test_cached_matrix_store()
 			}
 	}
 
+	printf("get the entire matrix\n");
+	std::vector<off_t> col_idxs(3);
+	col_idxs[0] = 0;
+	col_idxs[1] = 1;
+	col_idxs[2] = 2;
+	detail::matrix_store::const_ptr sub_mat = mat->get_cols(col_idxs);
+
+	printf("get the first two cols of the cached matrix\n");
+	col_idxs.resize(2);
+	sub_mat = mat->get_cols(col_idxs);
+
 	detail::matrix_store::const_ptr tmat = mat->transpose();
 	for (size_t k = 0; k < num_portions; k++) {
 		detail::local_matrix_store::const_ptr part = tmat->get_portion(k);
@@ -320,6 +331,38 @@ void test_combined_matrix_store()
 			}
 		}
 	}
+
+	printf("get the second entire matrix\n");
+	std::vector<off_t> col_idxs(mat1->get_num_cols());
+	for (size_t i = 0; i < col_idxs.size(); i++)
+		col_idxs[i] = i + col_idxs.size();
+	detail::matrix_store::const_ptr sub_mat = mat->get_cols(col_idxs);
+
+	printf("get three cols of the first matrix\n");
+	col_idxs.resize(3);
+	col_idxs[0] = 1;
+	col_idxs[1] = 8;
+	col_idxs[2] = 4;
+	sub_mat = mat->get_cols(col_idxs);
+	assert(sub_mat);
+	for (size_t k = 0; k < num_portions; k++) {
+		detail::local_matrix_store::const_ptr part = sub_mat->get_portion(k);
+		for (size_t i = 0; i < part->get_num_rows(); i++) {
+			for (size_t j = 0; j < part->get_num_cols(); j++) {
+				size_t row_idx = part->get_global_start_row() + i;
+				size_t col_idx = col_idxs[j];
+				size_t expected = row_idx * mat1->get_num_cols() + col_idx;
+				assert(part->get<size_t>(i, j) == expected);
+			}
+		}
+	}
+
+	printf("get three cols from both matrices. It should fail\n");
+	col_idxs[0] = 1;
+	col_idxs[1] = 10;
+	col_idxs[2] = 5;
+	sub_mat = mat->get_cols(col_idxs);
+	assert(sub_mat == NULL);
 }
 
 int main(int argc, char *argv[])
