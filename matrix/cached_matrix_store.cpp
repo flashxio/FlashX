@@ -163,7 +163,12 @@ matrix_store::const_ptr cached_matrix_store::get_rows(
 	for (size_t i = 0; i < idxs.size(); i++)
 		if ((size_t) idxs[i] >= num_cached)
 			all_cached = false;
-	if (all_cached)
+	// If we want to access all rows of the matrix, we can return
+	// the entire matrix directly.
+	if (all_cached && idxs.size() == cached->get_num_rows()
+			&& std::is_sorted(idxs.begin(), idxs.end()))
+		return cached;
+	else if (all_cached)
 		return cached->get_rows(idxs);
 
 	return mixed->get_rows(idxs);
