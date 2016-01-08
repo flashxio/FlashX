@@ -26,7 +26,6 @@
 #include "NUMA_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "generic_type.h"
-#include "rand_gen.h"
 #include "one_val_matrix_store.h"
 #include "local_matrix_store.h"
 #include "virtual_matrix_store.h"
@@ -807,111 +806,6 @@ dense_matrix::ptr dense_matrix::apply_scalar(
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(stores,
 			mapply_op, store_layout());
 	return dense_matrix::create(ret);
-}
-
-namespace
-{
-
-/*
- * This class set elements in a container randomly.
- * set_operate can't change its own state and has to be thread-safe when
- * running on multiple threads. However, random generators aren't
- * thread-safe, so we have to create a random generator for each thread.
- */
-class rand_init: public set_operate
-{
-public:
-	enum rand_dist_type {
-		NORM,
-		UNIF,
-		MAX_NUM,
-	};
-private:
-	class rand_gen_wrapper {
-		rand_gen::ptr gen;
-	public:
-		rand_gen_wrapper(rand_gen::ptr gen) {
-			this->gen = gen;
-		}
-
-		rand_gen &get_gen() {
-			return *gen;
-		}
-	};
-
-	pthread_key_t gen_key;
-	const scalar_type &type;
-	const scalar_variable &var1;
-	const scalar_variable &var2;
-	rand_dist_type rand_dist;
-
-	rand_gen &get_rand_gen() const {
-		void *addr = pthread_getspecific(gen_key);
-		if (addr == NULL) {
-			if (rand_dist == rand_dist_type::NORM)
-				addr = new rand_gen_wrapper(type.create_randn_gen(var1, var2));
-			else if (rand_dist == rand_dist_type::UNIF)
-				addr = new rand_gen_wrapper(type.create_randu_gen(var1, var2));
-			else
-				assert(0);
-			int ret = pthread_setspecific(gen_key, addr);
-			assert(ret == 0);
-		}
-		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) addr;
-		return wrapper->get_gen();
-	}
-
-	static void destroy_rand_gen(void *gen) {
-		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) gen;
-		delete wrapper;
-		printf("destroy rand gen\n");
-	}
-public:
-	rand_init(const scalar_variable &_var1, const scalar_variable &_var2,
-			rand_dist_type rand_dist): type(_var1.get_type()), var1(
-				_var1), var2(_var2) {
-		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
-		this->rand_dist = rand_dist;
-		assert(ret == 0);
-	}
-
-	~rand_init() {
-		pthread_key_delete(gen_key);
-	}
-
-	virtual void set(void *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		get_rand_gen().gen(arr, num_eles);
-	}
-	virtual const scalar_type &get_type() const {
-		return get_rand_gen().get_type();
-	}
-};
-
-}
-
-dense_matrix::ptr dense_matrix::_create_randu(const scalar_variable &min,
-		const scalar_variable &max, size_t nrow, size_t ncol,
-		matrix_layout_t layout, int num_nodes, bool in_mem,
-		safs::safs_file_group::ptr group)
-{
-	assert(min.get_type() == max.get_type());
-	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, min.get_type(), num_nodes, in_mem, group);
-	store->set_data(rand_init(min, max, rand_init::rand_dist_type::UNIF));
-	return dense_matrix::ptr(new dense_matrix(store));
-}
-
-dense_matrix::ptr dense_matrix::_create_randn(const scalar_variable &mean,
-		const scalar_variable &var, size_t nrow, size_t ncol,
-		matrix_layout_t layout, int num_nodes, bool in_mem,
-		safs::safs_file_group::ptr group)
-{
-	assert(mean.get_type() == var.get_type());
-	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, mean.get_type(), num_nodes, in_mem, group);
-	store->set_data(rand_init(mean, var, rand_init::rand_dist_type::NORM));
-	return dense_matrix::ptr(new dense_matrix(store));
 }
 
 dense_matrix::ptr dense_matrix::_create_const(scalar_variable::ptr val,

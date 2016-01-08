@@ -165,12 +165,6 @@ public:
 private:
 	detail::matrix_store::const_ptr store;
 
-	static ptr _create_randu(const scalar_variable &min, const scalar_variable &max,
-			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-			bool in_mem, safs::safs_file_group::ptr group);
-	static ptr _create_randn(const scalar_variable &mean, const scalar_variable &var,
-			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-			bool in_mem, safs::safs_file_group::ptr group);
 	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes, bool in_mem,
 			safs::safs_file_group::ptr group);
@@ -209,8 +203,11 @@ public:
 			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable_impl<T> min(_min);
 		scalar_variable_impl<T> max(_max);
-		return _create_randu(min, max, nrow, ncol, layout, num_nodes, in_mem,
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, layout, get_scalar_type<T>(), num_nodes, in_mem,
 				group);
+		store->init_randu(min, max);
+		return dense_matrix::ptr(new dense_matrix(store));
 	}
 	template<class T>
 	static ptr create_randn(T _mean, T _var, size_t nrow, size_t ncol,
@@ -218,8 +215,11 @@ public:
 			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable_impl<T> mean(_mean);
 		scalar_variable_impl<T> var(_var);
-		return _create_randn(mean, var, nrow, ncol, layout, num_nodes, in_mem,
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, layout, get_scalar_type<T>(), num_nodes, in_mem,
 				group);
+		store->init_randn(mean, var);
+		return dense_matrix::ptr(new dense_matrix(store));
 	}
 
 	template<class T>

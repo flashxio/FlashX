@@ -123,6 +123,8 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
+	void init_randu(const scalar_variable &min, const scalar_variable &max);
+	void init_randn(const scalar_variable &mean, const scalar_variable &var);
 
 	virtual matrix_store::const_ptr transpose() const = 0;
 
