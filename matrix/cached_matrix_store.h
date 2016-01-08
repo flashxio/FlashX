@@ -107,10 +107,21 @@ public:
 	virtual void set_cache_portion(bool cache_portion);
 
 	size_t get_num_cached_vecs() const {
-		if (is_wide())
+		if (cached == NULL)
+			return 0;
+		else if (is_wide())
 			return cached->get_num_rows();
 		else
 			return cached->get_num_cols();
+	}
+
+	void drop_cache() {
+		cached = NULL;
+		mixed = em_store;
+	}
+
+	EM_matrix_store::const_ptr get_underlying() const {
+		return em_store;
 	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {

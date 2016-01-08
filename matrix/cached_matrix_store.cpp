@@ -101,7 +101,8 @@ matrix_store::const_ptr cached_matrix_store::transpose() const
 	cached_matrix_store *store = new cached_matrix_store(get_num_cols(),
 			get_num_rows(), get_type());
 	store->mixed = mixed->transpose();
-	store->cached = cached->transpose();
+	if (cached)
+		store->cached = cached->transpose();
 	store->em_store = EM_matrix_store::cast(em_store->transpose());
 	// We don't need to set em_buf and cached_buf because these are only
 	// required for write data to the matrix store.

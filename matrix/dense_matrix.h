@@ -322,6 +322,12 @@ public:
 	dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
 	bool move_store(bool in_mem, int num_nodes) const;
 
+	/*
+	 * If the matrix store keeps data in cache, this method will remove
+	 * the cache and return true. Otherwise, it returns false.
+	 */
+	bool drop_cache();
+
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;

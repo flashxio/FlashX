@@ -34,6 +34,7 @@
 #include "matrix_stats.h"
 #include "local_mem_buffer.h"
 #include "factor.h"
+#include "cached_matrix_store.h"
 
 namespace fm
 {
@@ -2930,6 +2931,17 @@ bool dense_matrix::move_store(bool in_mem, int num_nodes) const
 		return false;
 	}
 	const_cast<dense_matrix *>(this)->store = store;
+	return true;
+}
+
+bool dense_matrix::drop_cache()
+{
+	detail::cached_matrix_store::const_ptr cached
+		= std::dynamic_pointer_cast<const detail::cached_matrix_store>(store);
+	if (cached == NULL)
+		return false;
+	const_cast<detail::cached_matrix_store &>(*cached).drop_cache();
+	this->store = cached->get_underlying();
 	return true;
 }
 
