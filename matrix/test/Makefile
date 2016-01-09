@@ -32,7 +32,7 @@ mkl: test-mkl_multiply test-mkl_dgemm
 rand_mat_gen: rand_mat_gen.o ../libFMatrix.a
 	$(CXX) -o rand_mat_gen rand_mat_gen.o $(LDFLAGS)
 
-test-algs: test-algs.o ../libFMatrix.a
+test-algs: test-algs.o ../libFMatrix.a ../libmatrix-algs/libFMatrix-algs.a
 	$(CXX) -o test-algs test-algs.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
