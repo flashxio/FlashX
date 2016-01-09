@@ -245,6 +245,32 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 
 }
 
+size_t get_reserved_bytes()
+{
+	return reserved_bytes + smp_reserved_bytes;
+}
+
+size_t get_reserved_bytes_inuse()
+{
+	size_t nbytes = get_reserved_bytes();
+	size_t num_unused_chunks = smp_reserved_chunks.size();
+	for (size_t i = 0; i < reserved_chunks.size(); i++)
+		num_unused_chunks += reserved_chunks[i].size();
+	assert(nbytes >= num_unused_chunks * ARR_CHUNK_SIZE);
+	return nbytes - num_unused_chunks * ARR_CHUNK_SIZE;
+}
+
+void print_reserve_status()
+{
+	printf("reserve %ld bytes for NUMA and %ld for SMP\n", reserved_bytes.load(),
+			smp_reserved_bytes.load());
+	for (size_t i = 0; i < reserved_chunks.size(); i++)
+		printf("%ld bytes for NUMA node %ld are unused\n",
+				reserved_chunks[i].size() * ARR_CHUNK_SIZE, i);
+	printf("%ld bytes for SMP are unused\n",
+			smp_reserved_chunks.size() * ARR_CHUNK_SIZE);
+}
+
 void destroy_memchunk_reserve()
 {
 	BOOST_LOG_TRIVIAL(info) << boost::format(

@@ -243,6 +243,18 @@ public:
 
 void init_memchunk_reserve(int num_nodes);
 void destroy_memchunk_reserve();
+/*
+ * The number of bytes reserved for storing vectors and matrices.
+ */
+size_t get_reserved_bytes();
+/*
+ * The number of bytes that are being used for storing vectors and matrices.
+ */
+size_t get_reserved_bytes_inuse();
+/*
+ * Print the status of the reserved memory.
+ */
+void print_reserve_status();
 
 }
 
