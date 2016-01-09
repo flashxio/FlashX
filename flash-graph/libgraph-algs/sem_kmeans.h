@@ -572,5 +572,14 @@ namespace fg
     sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
             const unsigned num_cols=0, std::vector<double>* centers=NULL);
+
+    /**
+     * \brief Minimized version of Semi-External Memory Triangle Inequality pruned kmeans
+     * see: `compute_sem_kmeans` for description of parameter list
+     * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
+     */
+    sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+            const unsigned max_iters, const double tolerance, const unsigned num_rows,
+            const unsigned num_cols, std::vector<double>* centers=NULL);
 }
 #endif

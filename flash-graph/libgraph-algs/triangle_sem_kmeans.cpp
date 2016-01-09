@@ -24,7 +24,6 @@
 
 #include "sem_kmeans.h"
 
-// TODO: Opt Assign cluster ID to kms++ selected vertices in ADDMEAN phase
 using namespace fg;
 
 namespace {
@@ -62,7 +61,7 @@ namespace {
                     run_distance(prog, vertex);
                     break;
                 default:
-                    assert(0);
+                    BOOST_ASSERT_MSG(0, "Unknown g_stage!");
             }
         }
 
@@ -303,6 +302,7 @@ namespace {
                     lwr_bnd[get_cluster_id()] = udist;
                     set_dist(udist);
                     recalculated = true;
+                    // TODO: Could be a prune here
                 }
 
                 if (get_dist() <= g_cluster_dist->get(get_cluster_id(), cl)) {

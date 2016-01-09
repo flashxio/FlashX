@@ -44,7 +44,7 @@ namespace {
                         run_distance(prog, vertex);
                         break;
                     default:
-                        assert(0);
+                        BOOST_ASSERT_MSG(0, "Unknown g_stage!");
                 }
             }
 
