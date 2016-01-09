@@ -19,6 +19,7 @@
 
 #include "matrix_algs.h"
 #include "combined_matrix_store.h"
+#include "cached_matrix_store.h"
 
 namespace fm
 {
@@ -61,14 +62,12 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		return dense_matrix::create(res);
 	}
 	else if (num_in_mem > k) {
-		return dense_matrix::ptr();
-#if 0
-		detail::matrix_store::ptr res = detail::cached_col_matrix_store::create(
-				S->get_num_rows(), D->get_num_cols(), D->get_type(),
-				D->get_raw_store()->get_num_nodes(), num_in_mem - k);
+		detail::matrix_store::ptr res = detail::cached_matrix_store::create(
+				S->get_num_rows(), D->get_num_cols(),
+				D->get_raw_store()->get_num_nodes(), D->get_type(),
+				num_in_mem - k);
 		S->multiply<double, double>(D->get_raw_store(), res);
 		return dense_matrix::create(res);
-#endif
 	}
 	else if (num_in_mem == k) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(
@@ -198,6 +197,17 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 	return nmf_state(W, H, tWW);
 }
 
+dense_matrix::ptr create_rand_cached(size_t num_rows, size_t num_cols,
+		int num_nodes, size_t num_cached, matrix_layout_t cached_layout)
+{
+	detail::matrix_store::ptr store = detail::cached_matrix_store::create(
+			num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+			num_cached);
+	store->init_randu(scalar_variable_impl<double>(0),
+			scalar_variable_impl<double>(1));
+	return dense_matrix::create(store);
+}
+
 std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		size_t k, size_t max_niters, size_t num_in_mem)
 {
@@ -217,20 +227,17 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 				matrix_layout_t::L_COL, num_nodes, true);
 	}
 	else if (num_in_mem > k && num_in_mem < 2 * k) {
-		W = dense_matrix::create_randu<double>(0, 1, n, k,
-				matrix_layout_t::L_ROW, num_nodes, true);
-		H = dense_matrix::create_randu<double>(0, 1, k, m,
-				matrix_layout_t::L_ROW, num_nodes, false);
+		W = create_rand_cached(n, k, num_nodes, k, matrix_layout_t::L_ROW);
+		H = create_rand_cached(k, m, num_nodes, num_in_mem - k,
+				matrix_layout_t::L_ROW);
 	}
 	else if (num_in_mem == k) {
-		W = dense_matrix::create_randu<double>(0, 1, n, k,
-				matrix_layout_t::L_ROW, num_nodes, true);
+		W = create_rand_cached(n, k, num_nodes, k, matrix_layout_t::L_ROW);
 		H = dense_matrix::create_randu<double>(0, 1, k, m,
 				matrix_layout_t::L_COL, num_nodes, false);
 	}
 	else {
-		W = dense_matrix::create_randu<double>(0, 1, n, k,
-				matrix_layout_t::L_COL, num_nodes, false);
+		W = create_rand_cached(n, k, num_nodes, num_in_mem, matrix_layout_t::L_ROW);
 		H = dense_matrix::create_randu<double>(0, 1, k, m,
 				matrix_layout_t::L_ROW, num_nodes, false);
 	}

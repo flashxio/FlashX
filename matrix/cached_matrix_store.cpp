@@ -30,6 +30,15 @@ namespace fm
 namespace detail
 {
 
+cached_matrix_store::ptr cached_matrix_store::create(size_t num_rows,
+		size_t num_cols, int num_nodes, const scalar_type &type,
+		size_t num_cached_vecs)
+{
+	cached_matrix_store::ptr ret(new cached_matrix_store(num_rows,
+				num_cols, num_nodes, type, num_cached_vecs));
+	return ret;
+}
+
 static inline matrix_layout_t decide_layout(size_t num_rows, size_t num_cols)
 {
 	if (num_rows < num_cols)
