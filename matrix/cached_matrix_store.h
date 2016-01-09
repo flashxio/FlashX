@@ -63,6 +63,8 @@ public:
 			const scalar_type &type, size_t num_cached_vecs,
 			matrix_layout_t cached_layout);
 
+	static void drop_all_cache();
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		return em_store->get_underlying_mats();
 	}

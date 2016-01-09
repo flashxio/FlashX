@@ -30,13 +30,26 @@ namespace fm
 namespace detail
 {
 
+static std::vector<std::weak_ptr<cached_matrix_store> > cached_mats;
+
 cached_matrix_store::ptr cached_matrix_store::create(size_t num_rows,
 		size_t num_cols, int num_nodes, const scalar_type &type,
 		size_t num_cached_vecs, matrix_layout_t cached_layout)
 {
 	cached_matrix_store::ptr ret(new cached_matrix_store(num_rows,
 				num_cols, num_nodes, type, num_cached_vecs, cached_layout));
+	cached_mats.push_back(ret);
 	return ret;
+}
+
+void cached_matrix_store::drop_all_cache()
+{
+	for (size_t i = 0; i < cached_mats.size(); i++) {
+		cached_matrix_store::ptr store = cached_mats[i].lock();
+		if (store)
+			store->drop_cache();
+	}
+	cached_mats.clear();
 }
 
 static inline matrix_layout_t decide_layout(size_t num_rows, size_t num_cols)
@@ -114,7 +127,10 @@ matrix_store::const_ptr cached_matrix_store::transpose() const
 	store->em_store = EM_matrix_store::cast(em_store->transpose());
 	// We don't need to set em_buf and cached_buf because these are only
 	// required for write data to the matrix store.
-	return matrix_store::const_ptr(store);
+	cached_matrix_store::ptr ret(store);
+	if (cached)
+		cached_mats.push_back(ret);
+	return ret;
 }
 
 void cached_matrix_store::write_portion_async(
