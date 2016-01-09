@@ -40,7 +40,7 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-enum kmeans_t { REG, TRI, MINI_TRI };
+enum kmeans_t { REG, TRI, MIN_TRI };
 
 void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
@@ -729,6 +729,9 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
         case TRI:
             compute_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
             break;
+        case MIN_TRI:
+            compute_min_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
+            break;
         default:
             print_usage();
             abort();
@@ -754,7 +757,8 @@ std::string supported_algs[] = {
 	"spmv",
 	"louvain",
     "sem_kmeans",
-    "sem_tri_kmeans"
+    "sem_tri_kmeans",
+    "min_sem_tri_kmeans"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -818,7 +822,7 @@ void print_usage()
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "sem_kmeans | sem_tri_kmeans\n");
+	fprintf(stderr, "sem_kmeans | sem_tri_kmeans | min_sem_tri_kmeans\n");
 	fprintf(stderr, "-k: the number of clusters to use\n");
 	fprintf(stderr, "-i: max number of iterations\n");
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
@@ -916,6 +920,9 @@ int main(int argc, char *argv[])
 	}
     else if (alg == "sem_tri_kmeans") {
 		run_sem_kmeans(graph, argc, argv, TRI);
+	}
+    else if (alg == "min_sem_tri_kmeans") {
+		run_sem_kmeans(graph, argc, argv, MIN_TRI);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
