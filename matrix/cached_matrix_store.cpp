@@ -32,10 +32,10 @@ namespace detail
 
 cached_matrix_store::ptr cached_matrix_store::create(size_t num_rows,
 		size_t num_cols, int num_nodes, const scalar_type &type,
-		size_t num_cached_vecs)
+		size_t num_cached_vecs, matrix_layout_t cached_layout)
 {
 	cached_matrix_store::ptr ret(new cached_matrix_store(num_rows,
-				num_cols, num_nodes, type, num_cached_vecs));
+				num_cols, num_nodes, type, num_cached_vecs, cached_layout));
 	return ret;
 }
 
@@ -54,8 +54,8 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 }
 
 cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
-		int num_nodes, const scalar_type &type,
-		size_t num_cached_vecs): matrix_store(num_rows, num_cols, false, type)
+		int num_nodes, const scalar_type &type, size_t num_cached_vecs,
+		matrix_layout_t cached_layout): matrix_store(num_rows, num_cols, false, type)
 {
 	assert(num_cached_vecs > 0);
 	em_buf = EM_matrix_store::create(num_rows, num_cols,
@@ -64,7 +64,7 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 	if (em_buf->is_wide()) {
 		num_cached_vecs = std::min(num_cached_vecs, num_rows);
 		cached_buf = mem_matrix_store::create(num_cached_vecs, num_cols,
-				em_buf->store_layout(), type, num_nodes);
+				cached_layout, type, num_nodes);
 		std::vector<off_t> row_offs(num_rows - num_cached_vecs);
 		for (size_t i = 0; i < row_offs.size(); i++)
 			row_offs[i] = num_cached_vecs + i;
@@ -76,7 +76,7 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 	else {
 		num_cached_vecs = std::min(num_cached_vecs, num_cols);
 		cached_buf = mem_matrix_store::create(num_rows, num_cached_vecs,
-				em_buf->store_layout(), type, num_nodes);
+				cached_layout, type, num_nodes);
 		std::vector<off_t> col_offs(num_cols - num_cached_vecs);
 		for (size_t i = 0; i < col_offs.size(); i++)
 			col_offs[i] = num_cached_vecs + i;
@@ -92,7 +92,6 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 		std::vector<matrix_store::const_ptr> mats(2);
 		mats[0] = cached_buf;
 		mats[1] = uncached;
-		assert(cached_buf->store_layout() == uncached->store_layout());
 		mixed = combined_matrix_store::create(mats, cached_buf->store_layout());
 	}
 	cached = cached_buf;

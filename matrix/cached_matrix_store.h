@@ -53,13 +53,15 @@ class cached_matrix_store: public matrix_store, public EM_object
 	cached_matrix_store(size_t num_rows, size_t num_cols,
 			const scalar_type &type);
 	cached_matrix_store(size_t num_rows, size_t num_cols, int num_nodes,
-			const scalar_type &type, size_t num_cached_vecs);
+			const scalar_type &type, size_t num_cached_vecs,
+			matrix_layout_t cached_layout);
 public:
 	typedef std::shared_ptr<cached_matrix_store> ptr;
 	typedef std::shared_ptr<const cached_matrix_store> const_ptr;
 
 	static ptr create(size_t num_rows, size_t num_cols, int num_nodes,
-			const scalar_type &type, size_t num_cached_vecs);
+			const scalar_type &type, size_t num_cached_vecs,
+			matrix_layout_t cached_layout);
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		return em_store->get_underlying_mats();

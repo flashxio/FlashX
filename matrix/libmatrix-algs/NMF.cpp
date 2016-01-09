@@ -65,7 +65,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		detail::matrix_store::ptr res = detail::cached_matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(),
 				D->get_raw_store()->get_num_nodes(), D->get_type(),
-				num_in_mem - k);
+				num_in_mem - k, matrix_layout_t::L_COL);
 		S->multiply<double, double>(D->get_raw_store(), res);
 		return dense_matrix::create(res);
 	}
@@ -202,7 +202,7 @@ dense_matrix::ptr create_rand_cached(size_t num_rows, size_t num_cols,
 {
 	detail::matrix_store::ptr store = detail::cached_matrix_store::create(
 			num_rows, num_cols, num_nodes, get_scalar_type<double>(),
-			num_cached);
+			num_cached, cached_layout);
 	store->init_randu(scalar_variable_impl<double>(0),
 			scalar_variable_impl<double>(1));
 	return dense_matrix::create(store);

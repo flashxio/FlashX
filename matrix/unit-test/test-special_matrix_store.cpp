@@ -232,7 +232,8 @@ public:
 void test_cached_matrix_store()
 {
 	detail::matrix_store::ptr tmp = detail::cached_matrix_store::create(
-			long_dim, 10, -1, get_scalar_type<size_t>(), 3);
+			long_dim, 10, -1, get_scalar_type<size_t>(), 3,
+			matrix_layout_t::L_COL);
 	tmp->set_data(set_col_long_operate(tmp->get_num_cols()));
 	detail::matrix_store::const_ptr mat = tmp;
 	printf("create a tall cached matrix: %s\n", tmp->get_name().c_str());
@@ -273,7 +274,7 @@ void test_cached_matrix_store()
 	}
 
 	tmp = detail::cached_matrix_store::create(10, long_dim, -1,
-			get_scalar_type<size_t>(), 3);
+			get_scalar_type<size_t>(), 3, matrix_layout_t::L_ROW);
 	tmp->set_data(set_row_long_operate(tmp->get_num_cols()));
 	mat = tmp;
 	printf("create a wide cached matrix: %s\n", tmp->get_name().c_str());
