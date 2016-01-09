@@ -74,6 +74,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), -1, false);
 		S->multiply<double, double>(D->get_raw_store(), res);
+		D->drop_cache();
 		return dense_matrix::create(res);
 	}
 	else {
@@ -88,6 +89,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 					S->get_num_rows(), sub_in->get_num_cols(),
 					matrix_layout_t::L_COL, D->get_type(), -1, false);
 			S->multiply<double, double>(sub_in->get_raw_store(), out);
+			D->drop_cache();
 			res_mats.push_back(out);
 		}
 		return dense_matrix::create(
