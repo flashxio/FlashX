@@ -243,6 +243,10 @@ public:
 		return ret;
 	}
 
+	const local_matrix_store &get_whole_res() const {
+		return *whole_res;
+	}
+
 	const local_matrix_store &get_materialized_res() const {
 		// No matter we are in the resized subchunk or in the whole portion,
 		// whole_res always has the right data if whole_res exists.
@@ -597,6 +601,15 @@ public:
 		return static_cast<const local_col_matrix_store &>(
 				store.get_materialized_res()).get_col(col);
 	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(is_whole());
+		store.materialize();
+		return store.get_whole_res().get_portion(local_start_row,
+				local_start_col, num_rows, num_cols);
+	}
 };
 
 class lmapply_row_matrix_store: public lvirtual_row_matrix_store
@@ -654,11 +667,13 @@ public:
 				store.get_materialized_res()).get_row(row);
 	}
 
-	using lvirtual_row_matrix_store::get_rows;
-	virtual const char *get_rows(size_t row_start, size_t row_end) const {
-		// TODO
-		assert(0);
-		return NULL;
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(is_whole());
+		store.materialize();
+		return store.get_whole_res().get_portion(local_start_row,
+				local_start_col, num_rows, num_cols);
 	}
 };
 
