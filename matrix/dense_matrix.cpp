@@ -2946,6 +2946,15 @@ bool dense_matrix::drop_cache()
 	return true;
 }
 
+size_t dense_matrix::get_num_cached() const
+{
+	detail::cached_matrix_store::const_ptr cached
+		= std::dynamic_pointer_cast<const detail::cached_matrix_store>(store);
+	if (cached == NULL)
+		return 0;
+	return cached->get_num_cached_vecs();
+}
+
 dense_matrix::ptr dense_matrix::logic_not() const
 {
 	if (get_type() != get_scalar_type<bool>()) {

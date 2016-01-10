@@ -329,6 +329,11 @@ public:
 	 */
 	bool drop_cache();
 
+	/*
+	 * This returns the number of cached rows/columns in a matrix.
+	 */
+	size_t get_num_cached() const;
+
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
