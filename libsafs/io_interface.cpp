@@ -123,6 +123,7 @@ void debug_global_data::run()
 
 const RAID_config &get_sys_RAID_conf()
 {
+	assert(global_data.raid_conf);
 	return *global_data.raid_conf;
 }
 
