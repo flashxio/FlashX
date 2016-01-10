@@ -827,7 +827,8 @@ void dense_matrix::materialize_self() const
 				store->is_in_mem(), store->get_num_nodes());
 }
 
-void dense_matrix::set_materialize_level(materialize_level level)
+void dense_matrix::set_materialize_level(materialize_level level,
+		detail::matrix_store::ptr materialize_buf)
 {
 	const detail::virtual_matrix_store *tmp
 		= dynamic_cast<const detail::virtual_matrix_store *>(store.get());
@@ -837,7 +838,7 @@ void dense_matrix::set_materialize_level(materialize_level level)
 
 	detail::virtual_matrix_store *tmp1
 		= const_cast<detail::virtual_matrix_store *>(tmp);
-	tmp1->set_materialize_level(level);
+	tmp1->set_materialize_level(level, materialize_buf);
 }
 
 /********************************* mapply ************************************/

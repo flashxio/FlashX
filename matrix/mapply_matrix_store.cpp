@@ -47,6 +47,7 @@ public:
 	materialized_mapply_tall_store(size_t num_rows, size_t num_cols,
 			matrix_layout_t layout, const scalar_type &type, int num_nodes,
 			bool in_mem);
+	materialized_mapply_tall_store(matrix_store::ptr res);
 	materialized_mapply_tall_store(matrix_store::const_ptr res) {
 		set_materialized(res);
 	}
@@ -109,6 +110,20 @@ materialized_mapply_tall_store::materialized_mapply_tall_store(
 			num_nodes, in_mem);
 	portion_size = res_buf->get_portion_size();
 	portion_avails.resize(div_ceil(num_rows, portion_size.first));
+	num_res_avails = 0;
+	tall_res = res_buf;
+	wide_res = res_buf->transpose();
+}
+
+materialized_mapply_tall_store::materialized_mapply_tall_store(
+		matrix_store::ptr buf)
+{
+	// We need to make sure the buffer matrix is tall.
+	assert(!buf->is_wide());
+	res_buf = buf;
+	portion_size = res_buf->get_portion_size();
+	portion_avails.resize(div_ceil(res_buf->get_num_rows(),
+				portion_size.first));
 	num_res_avails = 0;
 	tall_res = res_buf;
 	wide_res = res_buf->transpose();
@@ -691,9 +706,10 @@ bool mapply_matrix_store::is_materialized() const
 	return res != NULL && res->is_materialized();
 }
 
-void mapply_matrix_store::set_materialize_level(materialize_level level)
+void mapply_matrix_store::set_materialize_level(materialize_level level,
+		detail::matrix_store::ptr materialize_buf)
 {
-	virtual_matrix_store::set_materialize_level(level);
+	virtual_matrix_store::set_materialize_level(level, materialize_buf);
 	if (level != materialize_level::MATER_FULL) {
 		if (!is_materialized())
 			res = NULL;
@@ -704,9 +720,17 @@ void mapply_matrix_store::set_materialize_level(materialize_level level)
 	if (res)
 		return;
 
-	res = materialized_mapply_tall_store::ptr(
-			new materialized_mapply_tall_store(get_num_rows(), get_num_cols(),
-				store_layout(), get_type(), get_num_nodes(), is_in_mem()));
+	if (materialize_buf == NULL)
+		res = materialized_mapply_tall_store::ptr(
+				new materialized_mapply_tall_store(get_num_rows(), get_num_cols(),
+					store_layout(), get_type(), get_num_nodes(), is_in_mem()));
+	else {
+		res = materialized_mapply_tall_store::ptr(
+				new materialized_mapply_tall_store(materialize_buf));
+		const matrix_store &store = res->get_materialize_ref(is_wide());
+		assert(store.get_num_rows() == get_num_rows());
+		assert(store.get_num_cols() == get_num_cols());
+	}
 }
 
 void mapply_matrix_store::materialize_self() const
@@ -1032,7 +1056,7 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 			op->transpose(), t_layout, data_id);
 	ret->res = this->res;
 	// The transposed matrix should share the same materialization level.
-	ret->set_materialize_level(get_materialize_level());
+	ret->set_materialize_level(get_materialize_level(), NULL);
 	return matrix_store::const_ptr(ret);
 }
 

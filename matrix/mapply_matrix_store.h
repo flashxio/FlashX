@@ -82,7 +82,8 @@ public:
 		this->par_access = par_access;
 	}
 
-	virtual void set_materialize_level(materialize_level level);
+	virtual void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf);
 
 	virtual void materialize_self() const;
 

@@ -277,7 +277,8 @@ public:
 	}
 
 	void materialize_self() const;
-	void set_materialize_level(materialize_level level);
+	void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf = NULL);
 
 	template<class T>
 	bool is_type() const {
