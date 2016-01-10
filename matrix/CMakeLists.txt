@@ -41,6 +41,8 @@ add_library(FMatrix STATIC
 	bulk_operate.cpp
 	factor.cpp
 	col_vec.cpp
+	combined_matrix_store.cpp
+	cached_matrix_store.cpp
 )
 
 subdirs(eigensolver)
