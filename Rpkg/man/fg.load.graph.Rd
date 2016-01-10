@@ -7,10 +7,10 @@
 \title{Load a graph to FlashR.}
 \usage{
 fg.load.graph(graph, index.file = NULL, graph.name = graph,
-  directed = TRUE, nthreads = 1)
+  directed = TRUE)
 
 fg.load.igraph(graph, graph.name = paste("igraph-v", vcount(graph), "-e",
-  ecount(graph), sep = ""), nthreads = 1)
+  ecount(graph), sep = ""))
 
 fg.get.graph(graph.name)
 }

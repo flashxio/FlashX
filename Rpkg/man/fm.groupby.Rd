@@ -6,11 +6,13 @@
 \title{Groupby on a FlashMatrix vector.}
 \usage{
 fm.sgroupby(obj, FUN)
+
+fm.groupby(fm, margin, factor, FUN)
 }
 \arguments{
 \item{obj}{a FlashMatrix vector or matrix}
 
-\item{FUN}{an aggregation operator returned by `fm.get.basic.op'.}
+\item{FUN}{an aggregation operator returned by `fm.create.agg.op'.}
 
 \item{margin}{the subscript which the function will be applied over.
 E.g., for a matrix, `1' indicates rows, `2' indicates columns.}

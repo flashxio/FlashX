@@ -9,7 +9,7 @@ fm.sapply(o, FUN)
 \arguments{
 \item{o}{a FlashMatrix vector/matrix.}
 
-\item{FUN}{the user-defined operators.}
+\item{FUN}{the reference or the name of a predefined uniary operator.}
 }
 \value{
 a FlashMatrix vector/matrix.

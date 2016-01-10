@@ -2,6 +2,7 @@
 % Please edit documentation in R/flashmatrix.R
 \name{fm.info}
 \alias{fm.info}
+\alias{fm.is.matrix}
 \alias{fm.is.sparse}
 \alias{fm.is.sym}
 \alias{fm.is.vector}
@@ -15,6 +16,8 @@ fm.matrix.layout(fm)
 fm.is.sparse(fm)
 
 fm.is.vector(fm)
+
+fm.is.matrix(fm)
 }
 \arguments{
 \item{fm}{The FlashMatrix object}
@@ -32,6 +35,7 @@ Functions for providing the basic information of a matrix.
 `fm.is.sparse' indicates whether a matrix is sparse.
 
 `fm.is.vector' indicates whether a FlashMatrix object is a vector.
+`fm.is.matrix' indicates whether a FlashMatrix object is a matrix.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

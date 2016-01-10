@@ -11,7 +11,8 @@ fm.agg.mat(fm, margin, op)
 
 \item{margin}{the subscript which the function will be applied over.}
 
-\item{op}{a basic operator or an aggregation operator}
+\item{op}{the reference or the name of a predefined basic operator or
+the reference to an aggregation operator returned by `fm.create.agg.op'}
 }
 \value{
 a FlashMatrix vector.

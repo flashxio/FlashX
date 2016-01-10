@@ -9,7 +9,8 @@ fm.agg(fm, op)
 \arguments{
 \item{fm}{a FlashMatrix object}
 
-\item{op}{a basic operator or an aggregation operator}
+\item{op}{the reference or the name of a predefined basic operator or
+the reference to an aggregation operator returned by `fm.create.agg.op'.}
 }
 \value{
 a scalar

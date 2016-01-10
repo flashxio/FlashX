@@ -10,13 +10,19 @@ fm.inner.prod(fm, mat, Fun1, Fun2)
 \item{fm}{A FlashMatrix matrix}
 
 \item{mat}{A FlashMatrix dense matrix.}
+
+\item{Fun1}{The reference or the name of one of the predefined basic binary
+operators.}
+
+\item{Fun2}{The reference or the name of one of the predefined basic binary
+operators.}
 }
 \value{
 a FlashMatrix vector if the second argument is a vector;
 a FlashMatrix matrix if the second argument is a matrix.
 }
 \description{
-Inner product of a dense matrix with a dense vector/matrix.
+It takes two operators and performs inner product on a dense matrix
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

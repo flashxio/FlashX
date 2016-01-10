@@ -9,7 +9,8 @@ fm.mapply2(o1, o2, FUN)
 \arguments{
 \item{o1,}{o2 a FlashMatrix vector/matrix.}
 
-\item{FUN}{the user-defined operators.}
+\item{FUN}{the reference or the name of one of the predefined basic binary
+operators.}
 }
 \value{
 a FlashMatrix vector/matrix.
