@@ -150,7 +150,6 @@ bool safs_file::create_file(size_t file_size, int block_size,
 		// We store the metadata of the SAFS in the directory that
 		// stores the first part.
 		if (i == 0) {
-			printf("the first part is in %s\n", dir.get_name().c_str());
 			header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
