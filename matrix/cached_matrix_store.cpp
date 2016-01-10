@@ -32,12 +32,31 @@ namespace detail
 
 static std::vector<std::weak_ptr<cached_matrix_store> > cached_mats;
 
+static inline matrix_layout_t decide_layout(size_t num_rows, size_t num_cols)
+{
+	if (num_rows < num_cols)
+		return matrix_layout_t::L_ROW;
+	else
+		return matrix_layout_t::L_COL;
+}
+
 cached_matrix_store::ptr cached_matrix_store::create(size_t num_rows,
 		size_t num_cols, int num_nodes, const scalar_type &type,
-		size_t num_cached_vecs, matrix_layout_t cached_layout)
+		size_t num_cached_vecs, matrix_layout_t cached_layout,
+		matrix_layout_t em_layout)
 {
+	if (em_layout == matrix_layout_t::L_NONE)
+		em_layout = decide_layout(num_rows, num_cols);
+	size_t short_dim = std::min(num_rows, num_cols);
+	if (num_cached_vecs < short_dim
+			&& em_layout != decide_layout(num_rows, num_cols)) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Cannot create a cached matrix with this EM layout";
+		return cached_matrix_store::ptr();
+	}
 	cached_matrix_store::ptr ret(new cached_matrix_store(num_rows,
-				num_cols, num_nodes, type, num_cached_vecs, cached_layout));
+				num_cols, num_nodes, type, num_cached_vecs, cached_layout,
+				em_layout));
 	cached_mats.push_back(ret);
 	return ret;
 }
@@ -52,14 +71,6 @@ void cached_matrix_store::drop_all_cache()
 	cached_mats.clear();
 }
 
-static inline matrix_layout_t decide_layout(size_t num_rows, size_t num_cols)
-{
-	if (num_rows < num_cols)
-		return matrix_layout_t::L_ROW;
-	else
-		return matrix_layout_t::L_COL;
-}
-
 // This is created for transpose.
 cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 		const scalar_type &type): matrix_store(num_rows, num_cols, false, type)
@@ -68,11 +79,11 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 
 cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 		int num_nodes, const scalar_type &type, size_t num_cached_vecs,
-		matrix_layout_t cached_layout): matrix_store(num_rows, num_cols, false, type)
+		matrix_layout_t cached_layout, matrix_layout_t em_layout): matrix_store(
+			num_rows, num_cols, false, type)
 {
 	assert(num_cached_vecs > 0);
-	em_buf = EM_matrix_store::create(num_rows, num_cols,
-			decide_layout(num_rows, num_cols), type);
+	em_buf = EM_matrix_store::create(num_rows, num_cols, em_layout, type);
 	matrix_store::const_ptr uncached;
 	if (em_buf->is_wide()) {
 		num_cached_vecs = std::min(num_cached_vecs, num_rows);
