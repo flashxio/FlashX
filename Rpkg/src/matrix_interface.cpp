@@ -31,6 +31,7 @@
 #include "generic_type.h"
 #include "eigensolver/eigensolver.h"
 #include "factor.h"
+#include "EM_dense_matrix.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -144,6 +145,20 @@ RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
 	std::string name = graph["name"];
 	return create_FMR_matrix(m, name);
+}
+
+RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
+{
+	std::string mat_file = CHAR(STRING_ELT(pname, 0));
+	if (!safs::exist_safs_file(mat_file)) {
+		fprintf(stderr, "The dense matrix doesn't exist\n");
+		return R_NilValue;
+	}
+	detail::EM_matrix_store::ptr store = detail::EM_matrix_store::create(
+			mat_file);
+	if (store == NULL)
+		return R_NilValue;
+	return create_FMR_matrix(dense_matrix::create(store), "");
 }
 
 RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)

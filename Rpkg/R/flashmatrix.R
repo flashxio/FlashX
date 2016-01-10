@@ -88,10 +88,13 @@ fm.get.params <- function(name)
 #'
 #' Load a sparse matrix to FlashR from difference sources.
 #' 
-#' `fm.get.matrix' gets a FlashMatrix matrix that references a matrix
-#' represented by a FlashGraph object.
+#' `fm.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
+#' a matrix represented by a FlashGraph object.
 #'
-#' `fm.load.matrix' loads a FlashMatrix matrix from files.
+#' `fm.get.dense.matrix' gets a FlashMatrix dense matrix from the underlying
+#" filesystem.
+#'
+#' `fm.load.sparse.matrix' loads a FlashMatrix sparse matrix from files.
 #' The matrix in the file is in the FlashMatrix format.
 #'
 #' @param fg A FlashGraph object.
@@ -102,8 +105,8 @@ fm.get.params <- function(name)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 #' @examples
 #' fg <- fg.load.graph("graph.adj", "graph.index")
-#' fm <- fm.get.matrix(fg)
-fm.get.matrix <- function(fg)
+#' fm <- fm.get.sparse.matrix(fg)
+fm.get.sparse.matrix <- function(fg)
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
@@ -113,7 +116,16 @@ fm.get.matrix <- function(fg)
 }
 
 #' @rdname fm.get.matrix
-fm.load.matrix <- function(mat, index, t.mat=NULL, t.index=NULL, in.mem=TRUE)
+fm.get.dense.matrix <- function(name)
+{
+	stopifnot(!is.null(name))
+	stopifnot(class(name) == "character")
+	m <- .Call("R_FM_get_dense_matrix", name, PACKAGE="FlashR")
+	new.fm(m)
+}
+
+#' @rdname fm.get.matrix
+fm.load.sparse.matrix <- function(mat, index, t.mat=NULL, t.index=NULL, in.mem=TRUE)
 {
 	if (is.null(t.mat) || is.null(t.index))
 		m <- .Call("R_FM_load_matrix_sym", mat, index, in.mem, PACKAGE="FlashR")
