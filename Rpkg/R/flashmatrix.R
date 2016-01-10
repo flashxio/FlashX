@@ -33,12 +33,16 @@ new.fm <- function(fm)
 	if (!is.null(fm))
 		new("fm", pointer=fm$pointer, name=fm$name, nrow=fm$nrow, ncol=fm$ncol,
 			type=fm$type)
+	else
+		NULL
 }
 
 new.fmV <- function(fm)
 {
 	if (!is.null(fm))
 		new("fmV", pointer=fm$pointer, name=fm$name, len=fm$len, type=fm$type)
+	else
+		NULL
 }
 
 new.fmFactorV <- function(fm)
@@ -46,6 +50,8 @@ new.fmFactorV <- function(fm)
 	if (!is.null(fm))
 		new("fmFactorV", num.levels=fm$levels, pointer=fm$pointer,
 			name=fm$name, len=fm$len, type=fm$type)
+	else
+		NULL
 }
 
 #' Reconfigure FlashMatrix
