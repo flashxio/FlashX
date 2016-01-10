@@ -105,7 +105,7 @@ cached_matrix_store::cached_matrix_store(size_t num_rows, size_t num_cols,
 		std::vector<matrix_store::const_ptr> mats(2);
 		mats[0] = cached_buf;
 		mats[1] = uncached;
-		mixed = combined_matrix_store::create(mats, cached_buf->store_layout());
+		mixed = combined_matrix_store::create(mats, em_buf->store_layout());
 	}
 	cached = cached_buf;
 	em_store = em_buf;
