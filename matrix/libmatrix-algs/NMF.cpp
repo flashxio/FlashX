@@ -54,12 +54,13 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		size_t num_in_mem)
 {
 	size_t k = D->get_num_cols();
+	dense_matrix::ptr ret;
 	if (num_in_mem >= k * 2) {
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), D->get_raw_store()->get_num_nodes());
 		S->multiply<double, double>(D->get_raw_store(), res);
-		return dense_matrix::create(res);
+		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem > k) {
 		detail::matrix_store::ptr res = detail::cached_matrix_store::create(
@@ -67,7 +68,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 				D->get_raw_store()->get_num_nodes(), D->get_type(),
 				num_in_mem - k, matrix_layout_t::L_COL);
 		S->multiply<double, double>(D->get_raw_store(), res);
-		return dense_matrix::create(res);
+		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem == k) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(
@@ -75,7 +76,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 				D->get_type(), -1, false);
 		S->multiply<double, double>(D->get_raw_store(), res);
 		D->drop_cache();
-		return dense_matrix::create(res);
+		ret = dense_matrix::create(res);
 	}
 	else {
 		std::vector<detail::matrix_store::const_ptr> res_mats;
@@ -92,10 +93,12 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 			D->drop_cache();
 			res_mats.push_back(out);
 		}
-		return dense_matrix::create(
-				detail::combined_matrix_store::create(res_mats,
-					matrix_layout_t::L_COL));
+		ret = dense_matrix::create(detail::combined_matrix_store::create(
+					res_mats, matrix_layout_t::L_COL));
 	}
+	printf("reserve mem for %ld vecs\n",
+			detail::get_reserved_bytes() / D->get_num_rows() / D->get_entry_size());
+	return ret;
 }
 
 // ||A - W %*% H||^2
