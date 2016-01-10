@@ -417,6 +417,7 @@ void EM_matrix_store::write_portion_async(
 	safs::data_loc_t loc(io.get_file_id(), off);
 	safs::io_request req(const_cast<char *>(portion->get_raw_arr()),
 			loc, num_bytes, WRITE);
+	detail::matrix_stats.inc_write_bytes(num_bytes, false);
 	portion_compute::ptr compute(new portion_write_complete(portion));
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
