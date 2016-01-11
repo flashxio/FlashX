@@ -66,7 +66,7 @@ void verify_portion(const detail::local_matrix_store &portion,
 	}
 }
 
-void verify_matrix(detail::EM_matrix_store::ptr store)
+void verify_matrix(detail::EM_matrix_store::const_ptr store)
 {
 	std::pair<size_t, size_t> portion_size = store->get_portion_size();
 	if (store->is_wide()) {
@@ -74,7 +74,7 @@ void verify_matrix(detail::EM_matrix_store::ptr store)
 				off += portion_size.second) {
 			size_t num_cols = std::min(portion_size.second,
 					store->get_num_cols() - off);
-			detail::local_matrix_store::ptr portion = store->get_portion(
+			detail::local_matrix_store::const_ptr portion = store->get_portion(
 					0, off, store->get_num_rows(), num_cols);
 			verify_portion(*portion, store->get_num_cols());
 		}
@@ -84,7 +84,7 @@ void verify_matrix(detail::EM_matrix_store::ptr store)
 				off += portion_size.first) {
 			size_t num_rows = std::min(portion_size.first,
 					store->get_num_rows() - off);
-			detail::local_matrix_store::ptr portion = store->get_portion(
+			detail::local_matrix_store::const_ptr portion = store->get_portion(
 					off, 0, num_rows, store->get_num_cols());
 			verify_portion(*portion, store->get_num_cols());
 		}
