@@ -1,10 +1,7 @@
-FlashGraph is an SSD-based graph analysis framework that we designed to process
-graphs with billions of vertices and hundreds of billions of edges or even larger.
-We extend FlashGraph to support processing more data structures such as sparse
-matrices and dense matrices. As such, FlashGraph is now able to support a wide
-variety of data mining and machine learning algorithms. We address the entire
-data analysis framework with FlashGraph-ng. The current implementation of
-FlashGraph-ng has four main components:
+FlashX is a collection of big data analytics tools that perform data analytics
+in the form of graphs and matrices. They utilize solid-state drives (SSDs) to
+scale to large datasets in a single machine. It has five main components:
+SAFS, FlashGraph, FlashMatrix, FlashEigen and FlashR.
 
 SAFS
 ========
@@ -36,6 +33,14 @@ generalized matrix operations on sparse matrices and dense matrices to express
 varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
+
+FlashEigen
+==========
+FlashEigen is an eigensolver that extends the
+[Anasazi](https://trilinos.org/packages/anasazi/) eigensolvers with FlashMatrix.
+It computes eigenvalues of billion-node graphs efficiently and pricisely
+in a single machine. As such, FlashEigen enables users to perform spectral
+analysis on very large graphs in a single machine.
 
 FlashR
 ===========
