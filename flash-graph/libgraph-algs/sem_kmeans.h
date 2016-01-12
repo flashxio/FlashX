@@ -39,7 +39,7 @@
 #define KM_TEST 1
 #define MAT_TEST 0
 #define VERBOSE 0
-#define IOTEST 0
+#define IOTEST 1
 
 #include "sem_kmeans_util.h"
 
@@ -359,6 +359,8 @@ namespace {
             }
 
             void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust) {
+                if (num_clust <= 1) return;
+
                 BOOST_VERIFY(get_num_rows() == vcl.size()-1); // -1 since the last item has no row
 
                 for (unsigned i = 0; i < num_clust; i++) {

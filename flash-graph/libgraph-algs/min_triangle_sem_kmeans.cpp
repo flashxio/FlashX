@@ -31,9 +31,8 @@ namespace {
 #if KM_TEST
     static prune_stats::ptr g_prune_stats;
 #endif
-#if IOTEST
     static unsigned g_io_reqs = 0;
-#endif
+
     static bool g_prune_init = false;
     static dist_matrix::ptr g_cluster_dist;
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
@@ -159,7 +158,16 @@ namespace {
     };
 
     void kmeans_vertex::run(vertex_program &prog) {
-        if (g_stage != INIT) {
+        if (g_kmspp_stage == DIST) {
+            if (get_cluster_id() != INVALID_CLUST_ID) {
+                if (get_dist() <= g_cluster_dist->get(get_cluster_id(), g_kmspp_cluster_idx)) {
+                    // No dist comp, but add my mean
+                    ((kmeanspp_vertex_program&)prog).
+                        pt_cuml_sum_peq(get_dist());
+                    return;
+                }
+            }
+        } else if (g_stage != INIT) {
             recalculated = false;
             if (!g_prune_init) {
                 set_dist(get_dist() + g_clusters[get_cluster_id()]->get_prev_dist());
@@ -170,9 +178,7 @@ namespace {
 #endif
                     return; // Nothing changes -- no I/O request!
                 }
-#if IOTEST
                 ((kmeans_vertex_program&) prog).num_requests_pp();
-#endif
             }
         }
 
@@ -350,9 +356,9 @@ namespace {
                 kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
                 std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
-#if IOTEST
+
                 g_io_reqs += kms_prog->get_num_reqs();
-#endif
+
 #if KM_TEST
                 (*g_prune_stats) += (*kms_prog->get_ps());
 #endif
@@ -553,20 +559,22 @@ namespace {
                     // TODO: Start 1 vertex which will activate all
                     g_kmspp_stage = ADDMEAN;
 
-#if IOTEST
                     g_io_reqs++;
-#endif
+
                     mat->start(&g_kmspp_next_cluster, 1);
                     mat->wait4complete();
+
+                    // Compute distance matrix
+                    g_cluster_dist->compute_dist(g_clusters, g_kmspp_cluster_idx+1);
 #if VERBOSE
                     BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
                     print_clusters(g_clusters);
 #endif
                     if (g_kmspp_cluster_idx+1 == K) { break; } // skip distance comp since we picked clusters
                     g_kmspp_stage = DIST;
-#if IOTEST
+
                     g_io_reqs += NUM_ROWS;
-#endif
+
                     mat->start_all(vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
                     mat->wait4complete();
@@ -668,10 +676,8 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
-#if IOTEST
             printf("Total # of IO requests: %u\nTotal bytes requested: %lu\n\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
-#endif
 
             if (converged) {
                 BOOST_LOG_TRIVIAL(info) <<
