@@ -98,7 +98,7 @@ int main (int argc, char* argv[]) {
 			dmat[i] = min + ((double)random() / (double)RAND_MAX * (max - min));
 		}
 
-#if 1
+#if 0
 		if (lay == RAWCOL) 
 			BOOST_LOG_TRIVIAL(info) << "Printing row-wise matrix for verification";
 		else
