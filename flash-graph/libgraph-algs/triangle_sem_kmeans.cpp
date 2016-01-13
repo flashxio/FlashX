@@ -31,9 +31,7 @@ namespace {
 #if KM_TEST
     static prune_stats::ptr g_prune_stats;
 #endif
-#if IOTEST
     static unsigned g_io_reqs = 0;
-#endif
     static bool g_prune_init = false;
     static dist_matrix::ptr g_cluster_dist;
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
@@ -179,9 +177,7 @@ namespace {
 #endif
                     return; // Nothing changes -- no I/O request!
                 }
-#if IOTEST
                 ((kmeans_vertex_program&) prog).num_requests_pp();
-#endif
             }
         }
 
@@ -375,9 +371,7 @@ namespace {
                 kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
                 std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
-#if IOTEST
                 g_io_reqs += kms_prog->get_num_reqs();
-#endif
 #if KM_TEST
                 (*g_prune_stats) += (*kms_prog->get_ps());
 #endif
@@ -510,22 +504,13 @@ namespace {
 
             gettimeofday(&start , NULL);
             /*** Begin VarInit of data structures ***/
-
-#if MAT_TEST
-            std::string init_centers_fn = "/mnt/nfs/disa/data/tiny/fkms_data/5c_128.bin";
-            bin_reader<double> br(init_centers_fn, 5, 57);
-#endif
-
-            FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-            for (size_t cl = 0; cl < k; cl++) {
-#if MAT_TEST
-                std::vector<double> v = br.readline();
-                g_clusters.push_back(cluster::create(v));
-#else
-                g_clusters.push_back(cluster::create(NUM_COLS));
-#endif
+            if (centers) {
+                set_clusters(centers, g_clusters, K, NUM_COLS);
+            } else {
+                init_clusters(g_clusters, K, NUM_COLS);
             }
 
+            FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
             std::vector<unsigned> num_members_v;
             num_members_v.resize(K);
 
@@ -534,74 +519,71 @@ namespace {
             g_cluster_dist = dist_matrix::create(K);
             /*** End VarInit ***/
 
-            g_stage = INIT;
-#if !MAT_TEST
-            if (init == "random") {
-                BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
-                g_init = RANDOM;
+            if (!centers) {
+                g_stage = INIT;
 
-                mat->start_all(vertex_initializer::ptr(),
-                        vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
-                mat->wait4complete();
+                if (init == "random") {
+                    BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
+                    g_init = RANDOM;
 
-                update_clusters(mat, num_members_v);
-            }
-            if (init == "forgy") {
-                BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
-                g_init = FORGY;
-
-                // Select K in range NUM_ROWS
-                std::vector<vertex_id_t> init_ids; // Used to start engine
-                for (unsigned cl = 0; cl < K; cl++) {
-                    vertex_id_t id = random() % NUM_ROWS;
-                    g_init_hash[id] = cl; // <vertex_id, cluster_id>
-                    init_ids.push_back(id);
-                }
-                mat->start(&init_ids.front(), K);
-                mat->wait4complete();
-            } else if (init == "kmeanspp") {
-                BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
-                g_init = PLUSPLUS;
-
-                // Init g_kmspp_distance to max distance
-                g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
-
-                g_kmspp_cluster_idx = 0;
-                g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
-#if KM_TEST
-                BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
-#endif
-                g_kmspp_distance[g_kmspp_next_cluster] = 0;
-
-                // Fire up K engines with 2 iters/engine
-                while (true) {
-                    // TODO: Start 1 vertex which will activate all
-                    g_kmspp_stage = ADDMEAN;
-
-#if IOTEST
-                    g_io_reqs++;
-#endif
-                    mat->start(&g_kmspp_next_cluster, 1);
-                    mat->wait4complete();
-#if VERBOSE
-                    BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
-                    print_clusters(g_clusters);
-#endif
-                    if (g_kmspp_cluster_idx+1 == K) { break; } // skip distance comp since we picked clusters
-                    g_kmspp_stage = DIST;
-#if IOTEST
-                    g_io_reqs += NUM_ROWS;
-#endif
                     mat->start_all(vertex_initializer::ptr(),
-                            vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
+                            vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                     mat->wait4complete();
-                    g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
+
+                    update_clusters(mat, num_members_v);
+                }
+                if (init == "forgy") {
+                    BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
+                    g_init = FORGY;
+
+                    // Select K in range NUM_ROWS
+                    std::vector<vertex_id_t> init_ids; // Used to start engine
+                    for (unsigned cl = 0; cl < K; cl++) {
+                        vertex_id_t id = random() % NUM_ROWS;
+                        g_init_hash[id] = cl; // <vertex_id, cluster_id>
+                        init_ids.push_back(id);
+                    }
+                    mat->start(&init_ids.front(), K);
+                    mat->wait4complete();
+                } else if (init == "kmeanspp") {
+                    BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
+                    g_init = PLUSPLUS;
+
+                    // Init g_kmspp_distance to max distance
+                    g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
+
+                    g_kmspp_cluster_idx = 0;
+                    g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
+#if KM_TEST
+                    BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
+#endif
+                    g_kmspp_distance[g_kmspp_next_cluster] = 0;
+
+                    // Fire up K engines with 2 iters/engine
+                    while (true) {
+                        // TODO: Start 1 vertex which will activate all
+                        g_kmspp_stage = ADDMEAN;
+
+                        g_io_reqs++;
+                        mat->start(&g_kmspp_next_cluster, 1);
+                        mat->wait4complete();
+#if VERBOSE
+                        BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
+                        print_clusters(g_clusters);
+#endif
+                        if (g_kmspp_cluster_idx+1 == K) { break; } // skip distance comp since we picked clusters
+                        g_kmspp_stage = DIST;
+                        g_io_reqs += NUM_ROWS;
+                        mat->start_all(vertex_initializer::ptr(),
+                                vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
+                        mat->wait4complete();
+                        g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
+                    }
                 }
             }
-#endif
 
             // TODO: Add Pruning in here
-            if (init == "forgy" || init == "kmeanspp") {
+            if (init == "forgy" || init == "kmeanspp" || centers) {
                 g_prune_init = true; // set
                 g_stage = ESTEP;
                 BOOST_LOG_TRIVIAL(info) << "Init: Computing cluster distance matrix ...";
@@ -693,10 +675,8 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
-#if IOTEST
             printf("Total # of IO requests: %u\nTotal bytes requested: %lu\n\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
-#endif
 
             if (converged) {
                 BOOST_LOG_TRIVIAL(info) <<
