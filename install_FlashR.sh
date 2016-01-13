@@ -19,11 +19,6 @@ if [ -z "$path" ]; then
 fi
 
 fg_lib=`pwd`/build
-matrix_path=`find $fg_lib/flash-graph -name libmatrix.a`
-if [ -n "$matrix_path" ]; then
-	echo "find libmatrix.a"
-	export FG_EIGEN=1
-fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
