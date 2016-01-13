@@ -141,18 +141,17 @@ namespace {
                         g_clusters[g_kmspp_cluster_idx]->add_member(count_it);
                     } else if (g_kmspp_stage == DIST) {
                         vertex_id_t my_id = prog.get_vertex_id(*this);
-                        double _dist = get_distance(g_kmspp_cluster_idx, count_it);
-                        if (_dist < g_kmspp_distance[my_id]) {
+                        double dist = get_distance(g_kmspp_cluster_idx, count_it);
+                        if (dist < g_kmspp_distance[my_id]) {
 #if VERBOSE
                             printf("kms++ v%u updating dist from: %.3f to %.3f\n",
-                                    my_id, g_kmspp_distance[my_id], _dist);
+                                    my_id, g_kmspp_distance[my_id], dist);
 #endif
-                            g_kmspp_distance[my_id] = _dist;
+                            g_kmspp_distance[my_id] = dist;
                             set_cluster_id(g_kmspp_cluster_idx);
-                            set_dist(_dist);
+                            ((kmeanspp_vertex_program&)prog).
+                                pt_cuml_sum_peq(dist);
                         }
-                        ((kmeanspp_vertex_program&)prog).
-                            pt_cuml_sum_peq(g_kmspp_distance[my_id]);
                     } else {
                         BOOST_ASSERT_MSG(0, "Unknown g_kmspp_stage type");
                     }
@@ -164,16 +163,16 @@ namespace {
     }
 
     double kmeans_vertex::get_distance(unsigned cl, data_seq_iter& count_it) {
-        double _dist = 0;
+        double dist = 0;
         double diff;
         vertex_id_t nid = 0;
 
         while(count_it.has_next()) {
             double e = count_it.next();
             diff = e - (*g_clusters[cl])[nid++];
-            _dist += diff*diff;
+            dist += diff*diff;
         }
-        return sqrt(_dist); // TODO: rm sqrt
+        return sqrt(dist); // TODO: rm sqrt
     }
 
     void kmeans_vertex::dist_comp(const page_vertex &vertex, double* best,
@@ -181,11 +180,11 @@ namespace {
         data_seq_iter count_it =
             ((const page_row&)vertex).get_data_seq_it<double>();
 
-        double _dist = get_distance(cl, count_it);
+        double dist = get_distance(cl, count_it);
 
-        if (_dist < *best) { // Get the distance to cluster `cl'
+        if (dist < *best) { // Get the distance to cluster `cl'
             *new_cluster_id = cl;
-            *best = _dist;
+            *best = dist;
         }
     }
 
@@ -208,7 +207,6 @@ namespace {
 
         set_cluster_id(new_cluster_id);
         vprog.add_member(get_cluster_id(), count_it);
-        set_dist(best);
     }
 
     static void clear_clusters() {
@@ -373,9 +371,6 @@ namespace fg
 
                 g_kmspp_cluster_idx = 0;
                 g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
-#if KM_TEST
-                BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
-#endif
                 g_kmspp_distance[g_kmspp_next_cluster] = 0;
 
                 // Fire up K engines with 2 iters/engine
