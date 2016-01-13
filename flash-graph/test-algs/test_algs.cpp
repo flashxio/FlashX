@@ -694,8 +694,10 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
     std::string init = "kmeanspp";
     double tolerance = -1;
     unsigned num_col = 0;
+    std::vector<double>* centers = NULL;
+    std::string init_centers_fn = "";
 
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:")) != -1) {
+	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -716,26 +718,40 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
                 num_col = atof(optarg);
                 num_opts++;
                 break;
+            case 'C':
+                init_centers_fn = optarg;
+                num_opts++;
+                break;
 			default:
 				print_usage();
 				abort();
 		}
 	}
 
+    if (!init_centers_fn.empty()) {
+        BOOST_LOG_TRIVIAL(info) << "\nReading centers from disk at loc '" << init_centers_fn
+            << "' ...";
+        BOOST_VERIFY(centers = new std::vector<double>(k*num_col));
+        bin_reader<double> br(init_centers_fn, k, num_col);
+        br.read(centers);
+    }
+
     switch(type) {
         case REG:
-            compute_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
+            compute_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
             break;
         case TRI:
-            compute_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
+            compute_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
             break;
         case MIN_TRI:
-            compute_min_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col);
+            compute_min_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
             break;
         default:
             print_usage();
             abort();
     }
+
+    if (centers) { delete centers; }
 }
 
 std::string supported_algs[] = {
@@ -828,6 +844,7 @@ void print_usage()
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
 	fprintf(stderr, "-c: number of columns in your on disk matrix\n");
+	fprintf(stderr, "-C: path to a binary containing initial centers\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
