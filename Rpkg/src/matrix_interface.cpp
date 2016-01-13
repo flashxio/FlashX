@@ -1491,3 +1491,15 @@ void init_flashmatrixr()
 {
 	fmr::init_udf_ext();
 }
+
+RcppExport SEXP R_FM_print_conf()
+{
+	matrix_conf.print();
+	return R_NilValue;
+}
+
+RcppExport SEXP R_SAFS_print_conf()
+{
+	safs::params.print();
+	return R_NilValue;
+}

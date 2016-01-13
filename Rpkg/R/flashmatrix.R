@@ -67,6 +67,14 @@ fm.set.log.level <- function(level)
 	.Call("R_FM_set_log_level", level, PACKAGE="FlashR")
 }
 
+fm.print.conf <- function()
+{
+	fg.set.log.level("info")
+	.Call("R_SAFS_print_conf", PACKAGE="FlashR")
+	.Call("R_FM_print_conf", PACKAGE="FlashR")
+	fg.set.log.level("warning")
+}
+
 #' Indicate whether a matrix has been loaded to FlashR
 #'
 #' This function indicates whether a matrix has been loaded to FlashR.
