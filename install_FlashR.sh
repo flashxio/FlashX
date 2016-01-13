@@ -19,6 +19,11 @@ if [ -z "$path" ]; then
 fi
 
 fg_lib=`pwd`/build
+eigen_path=`find $fg_lib/matrix -name libeigen.a`
+if [ -n "$eigen_path" ]; then
+	echo "find libeigen.a"
+	export ENABLE_TRILINOS=1
+fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
