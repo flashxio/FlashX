@@ -3,6 +3,13 @@
 # How data blocks of a SAFS file are mapped to Linux filesystem.
 RAID_mapping=RAID0
 
+# Allow users to write data to SAFS.
+writable=
+
+# The RAID block size in SAFS is 8MB. FlashMatrix requires a large RAID block
+# size.
+RAID_block_size=8388608
+
 # The number of parallel I/Os is allowed in a single thread.
 io_depth=4
 
