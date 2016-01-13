@@ -103,16 +103,17 @@ namespace {
             unsigned lemma1, _3a, _3b, _3c, _4;
 
             // Total counts
-            unsigned tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
+            unsigned long tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
             unsigned nrow;
-            unsigned K;
+            unsigned nclust;
 
             prune_stats(const unsigned nrows, const unsigned nclust) {
-                _3a = _3b = lemma1 = _3c = _4 = 0;
-                tot_lemma1 = tot_3a = tot_3b = tot_3c = tot_4 = iter = 0;
+                _3a = 0; _3b = 0; lemma1 = 0; _3c = 0; _4 = 0;
+                tot_lemma1 = 0; tot_3a = 0; tot_3b = 0;
+                tot_3c = 0; tot_4 = 0; iter = 0;
 
                 this->nrow = nrows;
-                this->K = nclust;
+                this->nclust = nclust;
             }
 
         public:
@@ -122,19 +123,19 @@ namespace {
                 return ptr(new prune_stats(nrows, nclust));
             }
             void pp_lemma1(unsigned var=1) {
-                lemma1 = lemma1 + var;
+                lemma1 += var;
             }
             void pp_3a() {
-                _3a = _3a + 1;
+                _3a++;
             }
             void pp_3b() {
-                _3b = _3b + 1;
+                _3b++;
             }
             void pp_3c() {
-                _3c = _3c + 1;
+                _3c++;
             }
             void pp_4() {
-                _4 = _4 + 1;
+                _4++;
             }
 
             const unsigned get_lemma1() const { return lemma1; }
@@ -154,17 +155,17 @@ namespace {
 
             void finalize() {
                 iter++;
-                BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  nrow*K);
+                BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  nrow*nclust);
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats count:\n"
                     "lemma1 = " << lemma1 << ", 3a = " << _3a
                     << ", 3b = " << _3b << ", 3c = " << _3c << ", 4 = " << _4;
 
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
-                    "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(nrow*K))*100) <<
-                    "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(nrow*K))*100) <<
-                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(nrow*K))*100) <<
-                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(nrow*K))*100) <<
-                    "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(nrow*K))*100) << "\%";
+                    "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(nrow*nclust))*100) <<
+                    "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(nrow*nclust))*100) <<
+                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(nrow*nclust))*100) <<
+                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(nrow*nclust))*100) <<
+                    "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(nrow*nclust))*100) << "\%";
 
                 tot_lemma1 += lemma1;
                 tot_3a += _3a;
@@ -172,18 +173,22 @@ namespace {
                 tot_3c += _3c;
                 tot_4 += _4;
 
-                lemma1 = _3a = _3b = _3c = _4 = 0; // reset
+                lemma1 = 0; _3a = 0; _3b = 0; _3c = 0; _4 = 0; // reset
             }
 
             std::vector<double> get_stats() {
-                double perc_lemma1 = tot_lemma1 / ((double)(nrow*this->iter*K))*100;
-                double perc_3a = tot_3a / ((double)(nrow*this->iter*K))*100;
-                double perc_3b = tot_3b / ((double)(nrow*this->iter*K))*100;
-                double perc_3c = tot_3c / ((double)(nrow*this->iter*K))*100;
-                double perc_4 = tot_4 / ((double)(nrow*this->iter*K))*100;
+                double perc_lemma1 = (tot_lemma1 / ((double)(nrow*iter*nclust)))*100;
+                double perc_3a = (tot_3a / ((double)(nrow*iter*nclust)))*100;
+                double perc_3b = (tot_3b / ((double)(nrow*iter*nclust)))*100;
+                double perc_3c = (tot_3c / ((double)(nrow*iter*nclust)))*100;
+                double perc_4 = (tot_4 / ((double)(nrow*iter*nclust)))*100;
                 // Total percentage
                 double perc = ((tot_3b + tot_3a + tot_3c + tot_4 + tot_lemma1) /
-                        ((double)((nrow*this->iter*K)) + ((K*(K-1))/2.0)))*100;
+                        ((double)(nrow*iter*nclust)))*100;
+
+                printf("tot_lemma1 = %u, tot_3a = %u, tot_3b = %u, tot_3c = %u, tot_4 = %u\n",
+                        tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4);
+
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
                     "Tot = " << perc << "\%, 3a = " << perc_3a <<
                     "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c
