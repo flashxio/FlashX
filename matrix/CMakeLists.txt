@@ -41,5 +41,7 @@ add_library(FMatrix STATIC
 	bulk_operate.cpp
 )
 
-subdirs(eigensolver)
+if(ENABLE_TRILINOS)
+	subdirs(eigensolver)
+endif()
 subdirs(test)
