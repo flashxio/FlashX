@@ -281,6 +281,13 @@ inline void matrix_config::print()
 
 inline void matrix_config::init(config_map::ptr map)
 {
+	// `threads' sets #threads for sparse matrix and dense matrix operations.
+	// But users can customize #threads for sparse matrix and dense matrix
+	// separately.
+	if (map->has_option("threads")) {
+		map->read_option_int("threads", num_SpM_threads);
+		map->read_option_int("threads", num_DM_threads);
+	}
 	if (map->has_option("SpM_threads"))
 		map->read_option_int("SpM_threads", num_SpM_threads);
 	if (map->has_option("DM_threads"))
