@@ -23,7 +23,8 @@ With smart I/O scheduling, FlashGraph is able to achieve performance
 comparable to state-of-art in-memory graph analysis frameworks and
 significantly outperforms state-of-art distributed graph analysis frameworks
 while being able to scale to graphs with billions of vertices and hundreds
-of billions of edges.
+of billions of edges. Please see
+[the performance result](https://github.com/icoming/FlashX/wiki/FlashGraph-performance).
 
 FlashMatrix
 ===========
@@ -56,11 +57,11 @@ is implemented as a regular R package.
 Documentation
 ========
 
-[FlashGraph-ng Quick start guide](http://www.flashgraph.net/documents/get_started2)
+[FlashGraph-ng Quick start guide](https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide)
 
-[FlashGraph programming tutorial](http://www.flashgraph.net/documents/tutorials/flashgraph-programming).
+[FlashGraph programming tutorial](https://github.com/icoming/FlashX/wiki/FlashGraph-programming-tutorial).
 
-[FlashR programming tutorial](http://www.flashgraph.net/documents/tutorials/flashr-programming)
+[FlashR programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 
 [FlashGraph performance and scalability](https://github.com/icoming/FlashGraph/wiki/FlashGraph-performance)
 
