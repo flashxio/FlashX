@@ -29,7 +29,9 @@
 #include "bulk_operate.h"
 #include "bulk_operate_ext.h"
 #include "generic_type.h"
+#ifdef ENABLE_TRILINOS
 #include "eigensolver/eigensolver.h"
+#endif
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -1249,6 +1251,16 @@ RcppExport SEXP R_FM_read_obj(SEXP pfile)
 	}
 }
 
+template<class T>
+T get_scalar(SEXP val)
+{
+	if (R_is_integer(val))
+		return INTEGER(val)[0];
+	else
+		return REAL(val)[0];
+}
+
+#ifdef ENABLE_TRILINOS
 class R_spm_function: public eigen::spm_function
 {
 	Rcpp::Function fun;
@@ -1292,15 +1304,6 @@ public:
 		return n;
 	}
 };
-
-template<class T>
-T get_scalar(SEXP val)
-{
-	if (R_is_integer(val))
-		return INTEGER(val)[0];
-	else
-		return REAL(val)[0];
-}
 
 RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 		SEXP penv)
@@ -1385,6 +1388,7 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	ret["options"] = options;
 	return ret;
 }
+#endif
 
 RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
 {

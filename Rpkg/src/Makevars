@@ -16,11 +16,11 @@ PKG_LIBS = -L$(FG_LIB)/matrix -lFMatrix
 PKG_LIBS += -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs -L$(FG_LIB)/libcommon -lcommon
 PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem -lz -lhwloc
-ifdef FG_EIGEN
 PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
+ifdef ENABLE_TRILINOS
+	PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
+	PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
 endif
-PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
-PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
