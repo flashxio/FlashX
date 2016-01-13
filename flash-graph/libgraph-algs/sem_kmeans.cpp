@@ -328,70 +328,74 @@ namespace fg
 
         gettimeofday(&start , NULL);
         /*** Begin VarInit of data structures ***/
-        FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-        for (size_t cl = 0; cl < k; cl++)
-            g_clusters.push_back(cluster::create(NUM_COLS));
+        if (centers) {
+            set_clusters(centers, g_clusters, K, NUM_COLS);
+        } else {
+            init_clusters(g_clusters, K, NUM_COLS);
+        }
 
-        std::vector<unsigned> num_members_v;
-        num_members_v.resize(K);
+        FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
+        std::vector<unsigned> num_members_v(K);
 
         /*** End VarInit ***/
-        g_stage = INIT;
+        if (!centers) {
+            g_stage = INIT;
 
-        if (init == "random") {
-            BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
-            g_init = RANDOM;
-            mat->start_all(vertex_initializer::ptr(),
-                    vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
-            mat->wait4complete();
-
-            update_clusters(mat, num_members_v);
-        }
-        if (init == "forgy") {
-            BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
-            g_init = FORGY;
-
-            // Select K in range NUM_ROWS
-            std::vector<vertex_id_t> init_ids; // Used to start engine
-            for (unsigned cl = 0; cl < K; cl++) {
-                vertex_id_t id = random() % NUM_ROWS;
-                g_init_hash[id] = cl; // <vertex_id, cluster_id>
-                init_ids.push_back(id);
-            }
-            mat->start(&init_ids.front(), K);
-            mat->wait4complete();
-
-        } else if (init == "kmeanspp") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
-            g_init = PLUSPLUS;
-
-            // Init g_kmspp_distance to max distance
-            g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
-
-            g_kmspp_cluster_idx = 0;
-            g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
-#if KM_TEST
-            BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
-#endif
-            g_kmspp_distance[g_kmspp_next_cluster] = 0;
-
-            // Fire up K engines with 2 iters/engine
-            while (true) {
-                // TODO: Start 1 vertex which will activate all
-                g_kmspp_stage = ADDMEAN;
-                mat->start(&g_kmspp_next_cluster, 1);
-                mat->wait4complete();
-#if VERBOSE
-                BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
-                print_clusters(g_clusters);
-#endif
-                if (g_kmspp_cluster_idx+1 == K) { break; } // skip the distance comp since we picked clusters
-                g_kmspp_stage = DIST;
+            if (init == "random") {
+                BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
+                g_init = RANDOM;
                 mat->start_all(vertex_initializer::ptr(),
-                        vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
+                        vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
 
-                g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
+                update_clusters(mat, num_members_v);
+            }
+            if (init == "forgy") {
+                BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
+                g_init = FORGY;
+
+                // Select K in range NUM_ROWS
+                std::vector<vertex_id_t> init_ids; // Used to start engine
+                for (unsigned cl = 0; cl < K; cl++) {
+                    vertex_id_t id = random() % NUM_ROWS;
+                    g_init_hash[id] = cl; // <vertex_id, cluster_id>
+                    init_ids.push_back(id);
+                }
+                mat->start(&init_ids.front(), K);
+                mat->wait4complete();
+
+            } else if (init == "kmeanspp") {
+                BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
+                g_init = PLUSPLUS;
+
+                // Init g_kmspp_distance to max distance
+                g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
+
+                g_kmspp_cluster_idx = 0;
+                g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
+#if KM_TEST
+                BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster << " as first cluster";
+#endif
+                g_kmspp_distance[g_kmspp_next_cluster] = 0;
+
+                // Fire up K engines with 2 iters/engine
+                while (true) {
+                    // TODO: Start 1 vertex which will activate all
+                    g_kmspp_stage = ADDMEAN;
+                    mat->start(&g_kmspp_next_cluster, 1);
+                    mat->wait4complete();
+#if VERBOSE
+                    BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
+                    print_clusters(g_clusters);
+#endif
+                    if (g_kmspp_cluster_idx+1 == K) { break; } // skip the distance comp since we picked clusters
+                    g_kmspp_stage = DIST;
+                    mat->start_all(vertex_initializer::ptr(),
+                            vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
+                    mat->wait4complete();
+
+                    g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
+                }
             }
         }
 
