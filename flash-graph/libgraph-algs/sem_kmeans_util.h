@@ -90,6 +90,12 @@ namespace {
                     BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
                 }
 
+                // Read all the data!
+                void read(std::vector<T>* v) {
+                    size_t num_read = fread(&((*v)[0]), sizeof(T)*ncol*nrow, 1, f);
+                    BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
+                }
+
                 ~bin_reader() {
                     fclose(f);
                 }
@@ -186,7 +192,7 @@ namespace {
                 double perc = ((tot_3b + tot_3a + tot_3c + tot_4 + tot_lemma1) /
                         ((double)(nrow*iter*nclust)))*100;
 
-                printf("tot_lemma1 = %u, tot_3a = %u, tot_3b = %u, tot_3c = %u, tot_4 = %u\n",
+                printf("tot_lemma1 = %lu, tot_3a = %lu, tot_3b = %lu, tot_3c = %lu, tot_4 = %lu\n",
                         tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4);
 
                 BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
