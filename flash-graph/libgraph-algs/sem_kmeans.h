@@ -37,9 +37,7 @@
 #define PAGE_ROW
 #define PRUNE 1
 #define KM_TEST 1
-#define MAT_TEST 0
 #define VERBOSE 0
-#define IOTEST 1
 
 #include "sem_kmeans_util.h"
 
@@ -503,6 +501,23 @@ namespace {
         printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
     }
     // End helpers //
+
+    void set_clusters(std::vector<double>* centers, std::vector<cluster::ptr>& vcl,
+            unsigned nclust, unsigned ncol) {
+        for (size_t cl = 0; cl < nclust; cl++) {
+            std::vector<double> v(ncol);
+            std::copy(&((*centers)[cl*ncol]),
+                    &((*centers)[(cl*ncol)+ncol]), v.begin());
+            vcl.push_back(cluster::create(v));
+        }
+    }
+
+    void init_clusters(std::vector<cluster::ptr>& vcl,
+            unsigned nclust, unsigned ncol) {
+        for (size_t cl = 0; cl < nclust; cl++) {
+            vcl.push_back(cluster::create(ncol));
+        }
+    }
 }
 
 namespace fg
