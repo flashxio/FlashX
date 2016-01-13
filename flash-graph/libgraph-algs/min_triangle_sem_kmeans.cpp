@@ -40,10 +40,12 @@ namespace {
     class kmeans_vertex: public base_kmeans_vertex
     {
         bool recalculated;
+        double dist;
 
         public:
         kmeans_vertex(vertex_id_t id): base_kmeans_vertex(id) {
             recalculated = false;
+            dist = std::numeric_limits<double>::max(); // Start @ max
         }
 
         void run(vertex_program &prog);
@@ -60,6 +62,9 @@ namespace {
                     BOOST_ASSERT_MSG(0, "Unknown g_stage!");
             }
         }
+
+        const double get_dist() const { return dist; }
+        void set_dist(const double dist) { this->dist = dist; }
 
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
@@ -499,7 +504,6 @@ namespace {
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
             std::vector<unsigned> num_members_v(K);
-            //num_members_v.resize(K);
 
             BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
             // Distance to everyone other than yourself

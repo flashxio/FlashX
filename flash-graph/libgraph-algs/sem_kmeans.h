@@ -393,12 +393,10 @@ namespace {
     class base_kmeans_vertex: public compute_vertex
     {
         unsigned cluster_id;
-        double dist;
 
         public:
         base_kmeans_vertex(vertex_id_t id):
             compute_vertex(id) {
-                dist = std::numeric_limits<double>::max(); // Start @ max
                 cluster_id = INVALID_CLUST_ID;
             }
 
@@ -410,11 +408,7 @@ namespace {
             return cluster_id;
         }
 
-        //const unsigned get_cluster_id() const { return cluster_id; }
         void set_cluster_id(const unsigned id ) { cluster_id = id; }
-        const double get_dist() const { return dist; }
-        void set_dist(const double dist) { this->dist = dist; }
-
         void run(vertex_program &prog) {
             BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&) must not be called!");
         }
