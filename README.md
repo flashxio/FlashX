@@ -53,11 +53,13 @@ machine learning algorithms completely in R with performance comparable
 to optimized C implementations. FlashR reimplements many existing R functions
 for matrices to provide users a familiar R programming environment. FlashR
 is implemented as a regular R package.
+The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
+shows all of the features in FlashR.
 
 Documentation
 ========
 
-[FlashGraph-ng Quick start guide](https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide)
+[FlashX Quick start guide](https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide)
 
 [FlashGraph programming tutorial](https://github.com/icoming/FlashX/wiki/FlashGraph-programming-tutorial).
 
