@@ -1108,9 +1108,3 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 	ret$vecs <- new.fm(ret$vecs)
 	ret
 }
-
-fm.scale <- function(mat, vec, byrow)
-{
-	ret <- .Call("R_FM_scale", mat, vec, as.logical(byrow), PACKAGE="FlashR")
-	new.fm(ret)
-}

@@ -1402,43 +1402,6 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	return ret;
 }
 
-RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
-{
-	bool byrow = LOGICAL(pbyrow)[0];
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "Doesn't support scale rows/cols of a sparse matrix\n");
-		return R_NilValue;
-	}
-	if (!is_vector(pvec)) {
-		fprintf(stderr, "The second argument should be a vector\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	vector::ptr vec = get_vector(pvec);
-	if (vec == NULL) {
-		return R_NilValue;
-	}
-	dense_matrix::ptr res;
-	if (byrow) {
-		if (mat->get_num_rows() != vec->get_length()) {
-			fprintf(stderr,
-					"The length of the vector doesn't match the rows of the matrix\n");
-			return R_NilValue;
-		}
-		res = mat->scale_rows(vec);
-	}
-	else {
-		if (mat->get_num_cols() != vec->get_length()) {
-			fprintf(stderr,
-					"The length of the vector doesn't match the columns of the matrix\n");
-			return R_NilValue;
-		}
-		res = mat->scale_cols(vec);
-	}
-	return create_FMR_matrix(res, "scale");
-}
-
 RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel)
 {
 	Rcpp::LogicalVector res(1);
