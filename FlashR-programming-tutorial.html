@@ -1,0 +1,79 @@
+<p>FlashR is an extension of the R programming framework. It executes R code in parallel automatically and stores and accesses arrays in the R code on disks automatically to scale R to large datasets that can't fit in memory. The core of FlashR is a small set of generalized operators to perform computation in an array-oriented fashion. In addition to the generalized operators, FlashR reimplements many commonly used R functions to provide users a familiar R programming environment to reduce the learning curve. FlashR is completely implemented as an R package.</p>
+<p>FlashR is designed with goals in four aspects: * Efficiency: Comparable to optimized C code. * Scalability: Tera-scale or larger. * Generality: as many applications as possible in data mining and machine learning and more. * Productivity: the same productivity as R.</p>
+<p>Although FlashR tries to provide a familiar environment for R users, some operations in the traditional R are not supported in FlashR. The biggest difference is that FlashR does not allow users to modify individual elements in a vector or a matrix. FlashR intentionally chooses so for the sake of performance. FlashR stores vectors and matrices on SSDs. Modifying individual elements results in read-modify-write to SSDs, which causes many small random I/O. It causes efficiency issues and these operations are harmful to SSDs. By forbidding modifying individual elements, FlashR advocates array-oriented programming to achieve superior efficiency.</p>
+<h1 id="how-to-start">How to start</h1>
+<p>Users can follow the instructions here to install FlashR in Ubuntu. To load FlashR to R, run</p>
+<pre><code>&gt; library(FlashR)</code></pre>
+<h1 id="construct-flashr-vectors-and-matrices">Construct FlashR vectors and matrices</h1>
+<p>FlashR provides a set of functions to generate FlashR vectors and matrices. These functions have very similar interface as the R counterparts that generate vectors and matrices. * <code>fm.rep.int</code>: Create a vector with replicated elements. e.g., <code>fm.rep.int(1, 10)</code> creates a FlashR vector with 10 elements and each element is 1. * <code>fm.seq.int</code>: Create a vector with a sequence of numbers. e.g., <code>fm.seq.int(1, 10, 1)</code> creates a FlashR vector with a sequence of numbers between [1:10]. * <code>fm.runif</code>: Create a vector with uniformly random numbers. e.g., <code>fm.runif(10, 0, 1)</code> creates a FlashR vector with 10 uniformly random values between 0 and 1. * <code>fm.matrix</code>: Create a matrix from a FlashR vector. e.g., <code>fm.matrix(vec, 10, 2)</code> creates a 10x2 FlashR matrix from a FlashR vector.</p>
+<p>FlashR also provides functions to access vectors and matrices from the filesystem. * <code>fm.read.obj</code>: Read a FlashR object (vector/matrix) from a Linux file. * <code>fm.write.obj</code>: Write a FlashR object (vector/matrix) to a Linux file.</p>
+<h1 id="interact-with-native-r">Interact with native R</h1>
+<p>FlashR also provides functions to interact with the original R system. * <code>fm.as.vector</code>: convert an R vector to a FlashR vector. * <code>fm.as.matrix</code>: convert an R matrix to a FlashR matrix. * <code>as.vector</code>: convert a FlashR vector to a R vector. * <code>as.matrix</code>: convert a FlashR matrix to a R matrix.</p>
+<p>FlashR has the following functions for users to test if an object is a FlashR vector or matrix. * <code>fm.is.vector</code>: test if an object is a FlashR vector. * <code>fm.is.matrix</code>: test if an object is a FlashR matrix.</p>
+<h1 id="programming-interface">Programming interface</h1>
+<p>FlashR has two sets of programming API. It provides users a set of generalized operators, with which users can implement varieties of data mining and machine learning algorithms. On top of them, FlashR implements many commonly used &quot;small&quot; R functions with the generalized operators to mimic the original R programming environment. Generalized operators</p>
+<p>Generalized operators (GenOp) are the core of FlashR. There are a very small number of GenOps in FlashR. Each operator accepts a user-defined operator (UDO) or the name of a UDO to perform users' tasks. Currently, there are four GenOps, but some of them have multiple forms. There are many UDOs in FlashR such as addition and subtraction (see <code>?fm.basic.op</code> for details). Below lists all GenOps currently supported by FlashR.</p>
+<p><strong>Inner product</strong>: a generalized matrix multiplication. It replaces multiplication and addition in matrix multiplication with two user-defined functions, respectively. As such, we can define many operations with inner product. For example, we can use inner product to compute various pair-wise distance matrics of data points such as Euclidean distance and Hamming distance.</p>
+<pre><code>fm.inner.prod(fm, mat, FUN1, FUN2)</code></pre>
+<p>One example of using <code>fm.inner.prod</code> is to compute a pair-wise distance between every data point. <code>fm.bo.euclidean</code> and <code>fm.bo.add</code> are some UDOs written in C++. <code>fm.bo.euclidean</code> computes <code>(x-y)*(x-y)</code>. <code>fm.bo.add</code> computes <code>x + y</code>. <code>fm.inner.prod(data, t(data), fm.bo.euclidean, fm.bo.add)</code></p>
+<p><strong>Apply</strong>: a generalized form of element-wise operations and has multiple variants. * <code>fm.sapply</code>: a generalized element-wise unary operation whose UDO takes an element in a vector or a matrix at a time and outputs an element. * <code>fm.mapply2</code>: a generalized element-wise binary operation whose UDO takes an element from each vector or matrix and outputs a single element. * <code>fm.mapply.row</code> and <code>fm.mapply.col</code> are two variants of <code>fm.mapply2</code>. They are similar to <code>sweep()</code> in R and the broadcasting mechanism in Numpy. They are equivalent to mapply2 on every row or column of the matrix (in the first argument) with the vector (in the second argument). Currently, <code>fm.mapply.row</code> and <code>fm.mapply.col</code> only accept the cases that the vector has the same length as a row or a column of the matrix.</p>
+<pre><code>fm.sapply(o, FUN)
+fm.mapply2(o1, o2, FUN)
+fm.mapply.row(o1, o2, FUN)
+fm.mapply.col(o1, o2, FUN)</code></pre>
+<p>Many matrix operations in FlashR are implemented with <code>fm.sapply</code> and <code>fm.mapply2</code>. Example 1: compute m1 + m2 <code>fm.mapply2.fm(m1, m2, fm.bo.add)</code></p>
+<p>Example 2: compute -m1 <code>fm.sapply(m1, fm.buo.neg)</code></p>
+<p>These are some examples of using <code>fm.sapply</code> and <code>fm.mapply2</code>. Both matrix addition and matrix negation have been implemented in FlashR.</p>
+<p>Aggregation takes multiple elements and outputs a single element. * <code>fm.agg</code>: aggregates over the entire vector or matrix. * <code>fm.agg.mat</code>: aggregates over each individual row or column of a matrix.</p>
+<pre><code>fm.agg(fm, FUN)
+fm.agg.mat(fm, margin, FUN)</code></pre>
+<p>Example 1: compute sum(m) <code>fm.agg(x, fm.bo.add)</code></p>
+<p>Example 2: compute rowSums(m) <code>fm.agg.mat(x, 1, fm.bo.add)</code></p>
+<p>Again, both <code>sum()</code> and <code>rowSums()</code> have been implemented in FlashR.</p>
+<p>Groupby is similar to groupby in SQL. It groups multiple elements by their values and perform some computation on the elements. <code>fm.sgroupby</code>: groups elements by their values in a vector and invokes UDO on the elements associated with the same value <code>fm.groupby</code>: takes a matrix and a vector of categorical values, groups rows/columns of the matrix based on the corresponding categorical value and runs UDO on the rows/columns with the same categorical value.</p>
+<pre><code>fm.sgroupby(o, FUN)
+fm.groupby(fm, margin, factor, FUN)</code></pre>
+<p>The function passed to a groupby function can be a UDO or an aggregation operator. The current implementation only supports aggregation over the elements in the same group.</p>
+<p>In practice, groupby requires an aggregation operation over some of the original elements in a group and combine operation over the aggregation results. The reason is that groupby runs in parallel and each time it can only aggregate over some of the elements in a group. Essentially, the combine operation is an aggregation. Usually, it is sufficient to pass a UDO to a groupby function because a UDO can work as both aggregation and combine. In some cases, however, we need these operations to be different. As such, users can pass an aggregation operator to groupby. A user can create an aggregation operator themselves by calling fm.create.agg.op() and specify two UDOs for the aggregation and combine operation. fm.create.agg.op(agg, combine, name)</p>
+<h1 id="small-r-functions">&quot;Small&quot; R functions</h1>
+<p>FlashR provides many &quot;small&quot; R functions to mimic the R programming environment. Although we have a goal of having these functions as similar as possible to the original R functions, we do not provide 100% compatibility with the original R version for some functions. Overall, we try to provide similarity under the condition of not sacrificing performance. Below shows a list of &quot;small&quot; R functions currently supported by FlashR. In the future, more functions will be provided.</p>
+<p>The following functions have exactly the same interface as the original R function. * dim, nrow, ncol, length, typeof, t * abs, sqrt, ceiling, floor, round, log, log2, log10, exp</p>
+<p>The following functions have exactly the same interface as the original R functions. When they are applied to a matrix and a vector, it requires the vector has the same length as the columns in the matrix. * +, -, <em>, /, %</em>% * ==, !=, &gt;, &gt;=, &lt;, &lt;=, !</p>
+<p>The following functions have exactly the same interface as the original R functions, but currently we don't support some functionality such as removing missing values. * sum, min, max, mean, sd, pmin, pmax * rowSums, colSums, rowMeans, colMeans</p>
+<p>Some of them have slightly different interface and semantics. These slightly different functions always start with &quot;fm.&quot; to indicate that they are actually FlashR functions. In the future, we will provide implementations with exactly the same interface and semantics as the original R functions. * fm.table * fm.as.integer, fm.as.numeric</p>
+<h1 id="some-examples-of-using-flashr">Some examples of using FlashR</h1>
+<p>PageRank is the classical algorithm to rank Web pages originally used by Google search engine. PageRank is an iterative algorithm. In each iteration, the PageRank value of a vertex is updated as follow: PR(p_i) =  + d _{p_j M(p_i)}  As such, the PageRank algorithm is implemented as follows:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pr1 &lt;-<span class="st"> </span><span class="kw">fm.rep.int</span>(<span class="dv">1</span>/N, N)
+converge &lt;-<span class="st"> </span><span class="dv">0</span>
+while (converge &lt;<span class="st"> </span>N) {
+ pr2 &lt;-<span class="st"> </span>(<span class="dv">1</span>-d)/N+d*(A %*%<span class="st"> </span>(pr1/out.deg))
+ diff &lt;-<span class="st"> </span><span class="kw">abs</span>(pr1-pr2)
+ converge &lt;-<span class="st"> </span><span class="kw">sum</span>(diff &lt;<span class="st"> </span>epsilon)
+ pr1 &lt;-<span class="st"> </span>pr2
+}</code></pre></div>
+<p>Non-negative Matrix Factorization (NMF) factorizes a matrix to two non-negative matrices. The following code implements the algorithm described in the Lee's paper. The update rules described in Lee's paper are implemented as follow</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">den &lt;-<span class="st"> </span>(<span class="kw">t</span>(W) %*%<span class="st"> </span>W) %*%<span class="st"> </span>H
+H &lt;-<span class="st"> </span><span class="kw">fm.pmax2</span>(H *<span class="st"> </span><span class="kw">t</span>(tA %*%<span class="st"> </span>W), eps) /<span class="st"> </span>(den +<span class="st"> </span>eps)
+den &lt;-<span class="st"> </span>W %*%<span class="st"> </span>(H %*%<span class="st"> </span><span class="kw">t</span>(H))
+W &lt;-<span class="st"> </span><span class="kw">fm.pmax2</span>(W *<span class="st"> </span>(A %*%<span class="st"> </span><span class="kw">t</span>(H)), eps) /<span class="st"> </span>(den +<span class="st"> </span>eps)</code></pre></div>
+<p>One of the convergence condition is ||A - WH||2. It is computationally expensive to compute the Frobenius norm of (A-WH) directly. Suppose A is a n×m matrix, W is a n×k matrix and H is a k×m matrix. The computation complexity is O(n×k×m). Therefore, instead of computing the Frobenius norm, we compute trace((A-WH)T(A-WH)) = trace(ATA) -2<em>trace((ATW)H)+trace((HT(WTW))H). We need to order the matrix multiplication in a certain way to reduce computation complexity. The computation complexity of (ATW)H is O(l</em>k), where l is the number of non-zero entries in A. The computation complexity of (HT(WTW))H is O(k2×n+k2×m).</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># trace of W %*% H</span>
+trace.MM &lt;-<span class="st"> </span>function(W, H) {
+ X &lt;-<span class="st"> </span>W *<span class="st"> </span><span class="kw">t</span>(H)
+ <span class="kw">sum</span>(X)
+}
+
+<span class="co"># ||A - W %*% H||^2</span>
+Fnorm &lt;-<span class="st"> </span>function(A, W, H) {
+ <span class="kw">sum</span>(A*A) -<span class="st"> </span><span class="dv">2</span> *<span class="st"> </span><span class="kw">trace.MM</span>(<span class="kw">t</span>(A) %*%<span class="st"> </span>W, H) +<span class="st"> </span><span class="kw">trace.MM</span>(<span class="kw">t</span>(H) %*%<span class="st"> </span>(<span class="kw">t</span>(W) %*%<span class="st"> </span>W), H)
+}</code></pre></div>
+<p>KMeans is another iterative algorithm that cluster data pointers. In an iteration, it has three steps and below are the steps and the corresponding FlashR code. Step 1: calculate distances between all data points to all cluster centers.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m &lt;-<span class="st"> </span><span class="kw">fm.inner.prod</span>(data, <span class="kw">t</span>(centers), fm.bo.euclidean, fm.bo.add)</code></pre></div>
+<p>Step 2: find the closest cluster center for each data point.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">parts &lt;-<span class="st"> </span><span class="kw">fm.as.integer</span>(<span class="kw">fm.agg.mat</span>(m, <span class="dv">1</span>, agg.which.min) -<span class="st"> </span><span class="dv">1</span>)</code></pre></div>
+<p>Step 3: update all cluster centers.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">centers &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(<span class="kw">fm.groupby</span>(data, <span class="dv">2</span>, parts, agg.sum))
+cnts &lt;-<span class="st"> </span><span class="kw">fm.table</span>(parts)
+centers &lt;-<span class="st"> </span><span class="kw">diag</span>(<span class="dv">1</span>/cnts$Freq) %*%<span class="st"> </span>centers</code></pre></div>
+<h1 id="requirements-for-flashr-users">Requirements for FlashR users</h1>
+<p>There are two requirements for FlashR users to get the best performance out of FlashR: Array-oriented programming Understand space &amp; computation complexity</p>
