@@ -1,79 +1,453 @@
-<p>FlashR is an extension of the R programming framework. It executes R code in parallel automatically and stores and accesses arrays in the R code on disks automatically to scale R to large datasets that can't fit in memory. The core of FlashR is a small set of generalized operators to perform computation in an array-oriented fashion. In addition to the generalized operators, FlashR reimplements many commonly used R functions to provide users a familiar R programming environment to reduce the learning curve. FlashR is completely implemented as an R package.</p>
-<p>FlashR is designed with goals in four aspects: * Efficiency: Comparable to optimized C code. * Scalability: Tera-scale or larger. * Generality: as many applications as possible in data mining and machine learning and more. * Productivity: the same productivity as R.</p>
-<p>Although FlashR tries to provide a familiar environment for R users, some operations in the traditional R are not supported in FlashR. The biggest difference is that FlashR does not allow users to modify individual elements in a vector or a matrix. FlashR intentionally chooses so for the sake of performance. FlashR stores vectors and matrices on SSDs. Modifying individual elements results in read-modify-write to SSDs, which causes many small random I/O. It causes efficiency issues and these operations are harmful to SSDs. By forbidding modifying individual elements, FlashR advocates array-oriented programming to achieve superior efficiency.</p>
-<h1 id="how-to-start">How to start</h1>
-<p>Users can follow the instructions here to install FlashR in Ubuntu. To load FlashR to R, run</p>
-<pre><code>&gt; library(FlashR)</code></pre>
-<h1 id="construct-flashr-vectors-and-matrices">Construct FlashR vectors and matrices</h1>
-<p>FlashR provides a set of functions to generate FlashR vectors and matrices. These functions have very similar interface as the R counterparts that generate vectors and matrices. * <code>fm.rep.int</code>: Create a vector with replicated elements. e.g., <code>fm.rep.int(1, 10)</code> creates a FlashR vector with 10 elements and each element is 1. * <code>fm.seq.int</code>: Create a vector with a sequence of numbers. e.g., <code>fm.seq.int(1, 10, 1)</code> creates a FlashR vector with a sequence of numbers between [1:10]. * <code>fm.runif</code>: Create a vector with uniformly random numbers. e.g., <code>fm.runif(10, 0, 1)</code> creates a FlashR vector with 10 uniformly random values between 0 and 1. * <code>fm.matrix</code>: Create a matrix from a FlashR vector. e.g., <code>fm.matrix(vec, 10, 2)</code> creates a 10x2 FlashR matrix from a FlashR vector.</p>
-<p>FlashR also provides functions to access vectors and matrices from the filesystem. * <code>fm.read.obj</code>: Read a FlashR object (vector/matrix) from a Linux file. * <code>fm.write.obj</code>: Write a FlashR object (vector/matrix) to a Linux file.</p>
-<h1 id="interact-with-native-r">Interact with native R</h1>
-<p>FlashR also provides functions to interact with the original R system. * <code>fm.as.vector</code>: convert an R vector to a FlashR vector. * <code>fm.as.matrix</code>: convert an R matrix to a FlashR matrix. * <code>as.vector</code>: convert a FlashR vector to a R vector. * <code>as.matrix</code>: convert a FlashR matrix to a R matrix.</p>
-<p>FlashR has the following functions for users to test if an object is a FlashR vector or matrix. * <code>fm.is.vector</code>: test if an object is a FlashR vector. * <code>fm.is.matrix</code>: test if an object is a FlashR matrix.</p>
-<h1 id="programming-interface">Programming interface</h1>
-<p>FlashR has two sets of programming API. It provides users a set of generalized operators, with which users can implement varieties of data mining and machine learning algorithms. On top of them, FlashR implements many commonly used &quot;small&quot; R functions with the generalized operators to mimic the original R programming environment. Generalized operators</p>
-<p>Generalized operators (GenOp) are the core of FlashR. There are a very small number of GenOps in FlashR. Each operator accepts a user-defined operator (UDO) or the name of a UDO to perform users' tasks. Currently, there are four GenOps, but some of them have multiple forms. There are many UDOs in FlashR such as addition and subtraction (see <code>?fm.basic.op</code> for details). Below lists all GenOps currently supported by FlashR.</p>
-<p><strong>Inner product</strong>: a generalized matrix multiplication. It replaces multiplication and addition in matrix multiplication with two user-defined functions, respectively. As such, we can define many operations with inner product. For example, we can use inner product to compute various pair-wise distance matrics of data points such as Euclidean distance and Hamming distance.</p>
-<pre><code>fm.inner.prod(fm, mat, FUN1, FUN2)</code></pre>
-<p>One example of using <code>fm.inner.prod</code> is to compute a pair-wise distance between every data point. <code>fm.bo.euclidean</code> and <code>fm.bo.add</code> are some UDOs written in C++. <code>fm.bo.euclidean</code> computes <code>(x-y)*(x-y)</code>. <code>fm.bo.add</code> computes <code>x + y</code>. <code>fm.inner.prod(data, t(data), fm.bo.euclidean, fm.bo.add)</code></p>
-<p><strong>Apply</strong>: a generalized form of element-wise operations and has multiple variants. * <code>fm.sapply</code>: a generalized element-wise unary operation whose UDO takes an element in a vector or a matrix at a time and outputs an element. * <code>fm.mapply2</code>: a generalized element-wise binary operation whose UDO takes an element from each vector or matrix and outputs a single element. * <code>fm.mapply.row</code> and <code>fm.mapply.col</code> are two variants of <code>fm.mapply2</code>. They are similar to <code>sweep()</code> in R and the broadcasting mechanism in Numpy. They are equivalent to mapply2 on every row or column of the matrix (in the first argument) with the vector (in the second argument). Currently, <code>fm.mapply.row</code> and <code>fm.mapply.col</code> only accept the cases that the vector has the same length as a row or a column of the matrix.</p>
-<pre><code>fm.sapply(o, FUN)
-fm.mapply2(o1, o2, FUN)
-fm.mapply.row(o1, o2, FUN)
-fm.mapply.col(o1, o2, FUN)</code></pre>
-<p>Many matrix operations in FlashR are implemented with <code>fm.sapply</code> and <code>fm.mapply2</code>. Example 1: compute m1 + m2 <code>fm.mapply2.fm(m1, m2, fm.bo.add)</code></p>
-<p>Example 2: compute -m1 <code>fm.sapply(m1, fm.buo.neg)</code></p>
-<p>These are some examples of using <code>fm.sapply</code> and <code>fm.mapply2</code>. Both matrix addition and matrix negation have been implemented in FlashR.</p>
-<p>Aggregation takes multiple elements and outputs a single element. * <code>fm.agg</code>: aggregates over the entire vector or matrix. * <code>fm.agg.mat</code>: aggregates over each individual row or column of a matrix.</p>
-<pre><code>fm.agg(fm, FUN)
-fm.agg.mat(fm, margin, FUN)</code></pre>
-<p>Example 1: compute sum(m) <code>fm.agg(x, fm.bo.add)</code></p>
-<p>Example 2: compute rowSums(m) <code>fm.agg.mat(x, 1, fm.bo.add)</code></p>
-<p>Again, both <code>sum()</code> and <code>rowSums()</code> have been implemented in FlashR.</p>
-<p>Groupby is similar to groupby in SQL. It groups multiple elements by their values and perform some computation on the elements. <code>fm.sgroupby</code>: groups elements by their values in a vector and invokes UDO on the elements associated with the same value <code>fm.groupby</code>: takes a matrix and a vector of categorical values, groups rows/columns of the matrix based on the corresponding categorical value and runs UDO on the rows/columns with the same categorical value.</p>
-<pre><code>fm.sgroupby(o, FUN)
-fm.groupby(fm, margin, factor, FUN)</code></pre>
-<p>The function passed to a groupby function can be a UDO or an aggregation operator. The current implementation only supports aggregation over the elements in the same group.</p>
-<p>In practice, groupby requires an aggregation operation over some of the original elements in a group and combine operation over the aggregation results. The reason is that groupby runs in parallel and each time it can only aggregate over some of the elements in a group. Essentially, the combine operation is an aggregation. Usually, it is sufficient to pass a UDO to a groupby function because a UDO can work as both aggregation and combine. In some cases, however, we need these operations to be different. As such, users can pass an aggregation operator to groupby. A user can create an aggregation operator themselves by calling fm.create.agg.op() and specify two UDOs for the aggregation and combine operation. fm.create.agg.op(agg, combine, name)</p>
-<h1 id="small-r-functions">&quot;Small&quot; R functions</h1>
-<p>FlashR provides many &quot;small&quot; R functions to mimic the R programming environment. Although we have a goal of having these functions as similar as possible to the original R functions, we do not provide 100% compatibility with the original R version for some functions. Overall, we try to provide similarity under the condition of not sacrificing performance. Below shows a list of &quot;small&quot; R functions currently supported by FlashR. In the future, more functions will be provided.</p>
-<p>The following functions have exactly the same interface as the original R function. * dim, nrow, ncol, length, typeof, t * abs, sqrt, ceiling, floor, round, log, log2, log10, exp</p>
-<p>The following functions have exactly the same interface as the original R functions. When they are applied to a matrix and a vector, it requires the vector has the same length as the columns in the matrix. * +, -, <em>, /, %</em>% * ==, !=, &gt;, &gt;=, &lt;, &lt;=, !</p>
-<p>The following functions have exactly the same interface as the original R functions, but currently we don't support some functionality such as removing missing values. * sum, min, max, mean, sd, pmin, pmax * rowSums, colSums, rowMeans, colMeans</p>
-<p>Some of them have slightly different interface and semantics. These slightly different functions always start with &quot;fm.&quot; to indicate that they are actually FlashR functions. In the future, we will provide implementations with exactly the same interface and semantics as the original R functions. * fm.table * fm.as.integer, fm.as.numeric</p>
-<h1 id="some-examples-of-using-flashr">Some examples of using FlashR</h1>
-<p>PageRank is the classical algorithm to rank Web pages originally used by Google search engine. PageRank is an iterative algorithm. In each iteration, the PageRank value of a vertex is updated as follow: PR(p_i) =  + d _{p_j M(p_i)}  As such, the PageRank algorithm is implemented as follows:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pr1 &lt;-<span class="st"> </span><span class="kw">fm.rep.int</span>(<span class="dv">1</span>/N, N)
-converge &lt;-<span class="st"> </span><span class="dv">0</span>
-while (converge &lt;<span class="st"> </span>N) {
- pr2 &lt;-<span class="st"> </span>(<span class="dv">1</span>-d)/N+d*(A %*%<span class="st"> </span>(pr1/out.deg))
- diff &lt;-<span class="st"> </span><span class="kw">abs</span>(pr1-pr2)
- converge &lt;-<span class="st"> </span><span class="kw">sum</span>(diff &lt;<span class="st"> </span>epsilon)
- pr1 &lt;-<span class="st"> </span>pr2
-}</code></pre></div>
-<p>Non-negative Matrix Factorization (NMF) factorizes a matrix to two non-negative matrices. The following code implements the algorithm described in the Lee's paper. The update rules described in Lee's paper are implemented as follow</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">den &lt;-<span class="st"> </span>(<span class="kw">t</span>(W) %*%<span class="st"> </span>W) %*%<span class="st"> </span>H
-H &lt;-<span class="st"> </span><span class="kw">fm.pmax2</span>(H *<span class="st"> </span><span class="kw">t</span>(tA %*%<span class="st"> </span>W), eps) /<span class="st"> </span>(den +<span class="st"> </span>eps)
-den &lt;-<span class="st"> </span>W %*%<span class="st"> </span>(H %*%<span class="st"> </span><span class="kw">t</span>(H))
-W &lt;-<span class="st"> </span><span class="kw">fm.pmax2</span>(W *<span class="st"> </span>(A %*%<span class="st"> </span><span class="kw">t</span>(H)), eps) /<span class="st"> </span>(den +<span class="st"> </span>eps)</code></pre></div>
-<p>One of the convergence condition is ||A - WH||2. It is computationally expensive to compute the Frobenius norm of (A-WH) directly. Suppose A is a n×m matrix, W is a n×k matrix and H is a k×m matrix. The computation complexity is O(n×k×m). Therefore, instead of computing the Frobenius norm, we compute trace((A-WH)T(A-WH)) = trace(ATA) -2<em>trace((ATW)H)+trace((HT(WTW))H). We need to order the matrix multiplication in a certain way to reduce computation complexity. The computation complexity of (ATW)H is O(l</em>k), where l is the number of non-zero entries in A. The computation complexity of (HT(WTW))H is O(k2×n+k2×m).</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># trace of W %*% H</span>
-trace.MM &lt;-<span class="st"> </span>function(W, H) {
- X &lt;-<span class="st"> </span>W *<span class="st"> </span><span class="kw">t</span>(H)
- <span class="kw">sum</span>(X)
-}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-<span class="co"># ||A - W %*% H||^2</span>
-Fnorm &lt;-<span class="st"> </span>function(A, W, H) {
- <span class="kw">sum</span>(A*A) -<span class="st"> </span><span class="dv">2</span> *<span class="st"> </span><span class="kw">trace.MM</span>(<span class="kw">t</span>(A) %*%<span class="st"> </span>W, H) +<span class="st"> </span><span class="kw">trace.MM</span>(<span class="kw">t</span>(H) %*%<span class="st"> </span>(<span class="kw">t</span>(W) %*%<span class="st"> </span>W), H)
-}</code></pre></div>
-<p>KMeans is another iterative algorithm that cluster data pointers. In an iteration, it has three steps and below are the steps and the corresponding FlashR code. Step 1: calculate distances between all data points to all cluster centers.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m &lt;-<span class="st"> </span><span class="kw">fm.inner.prod</span>(data, <span class="kw">t</span>(centers), fm.bo.euclidean, fm.bo.add)</code></pre></div>
-<p>Step 2: find the closest cluster center for each data point.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">parts &lt;-<span class="st"> </span><span class="kw">fm.as.integer</span>(<span class="kw">fm.agg.mat</span>(m, <span class="dv">1</span>, agg.which.min) -<span class="st"> </span><span class="dv">1</span>)</code></pre></div>
-<p>Step 3: update all cluster centers.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">centers &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(<span class="kw">fm.groupby</span>(data, <span class="dv">2</span>, parts, agg.sum))
-cnts &lt;-<span class="st"> </span><span class="kw">fm.table</span>(parts)
-centers &lt;-<span class="st"> </span><span class="kw">diag</span>(<span class="dv">1</span>/cnts$Freq) %*%<span class="st"> </span>centers</code></pre></div>
-<h1 id="requirements-for-flashr-users">Requirements for FlashR users</h1>
-<p>There are two requirements for FlashR users to get the best performance out of FlashR: Array-oriented programming Understand space &amp; computation complexity</p>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Install FlashX &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="next" title="How to start" href="FlashR-programming-tutorial.html" />
+    <link rel="prev" title="Welcome to FlashX-docs’s documentation!" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <p>Although FlashX is designed to run on top of a high-speed SSD array, it
+can also run on magnetic disks and completely in memory. Intuitively,
+FlashX runs slower on magnetic disks than on SSDs. The guide below walks
+you through the steps to run FlashX on a magnetic disk and completely in
+memory for small graphs. In the following steps, we denote the top
+FlashX directory as <code class="docutils literal"><span class="pre">FG_TOP</span></code> and we assume we are in the top directory
+throughout this guide. The steps have been tested in Ubuntu 12.04 and
+Ubuntu 14.04.</p>
+<div class="section" id="install-flashx">
+<h1>Install FlashX<a class="headerlink" href="#install-flashx" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="step-0-library-dependency">
+<h2>Step 0: Library dependency<a class="headerlink" href="#step-0-library-dependency" title="Permalink to this headline">¶</a></h2>
+<div class="line-block">
+<div class="line">FlashX requires the following libraries:
+<code class="docutils literal"><span class="pre">libpthread,</span> <span class="pre">libaio,</span> <span class="pre">libnuma,</span> <span class="pre">librt,</span> <span class="pre">boost,</span> <span class="pre">libhwloc,</span> <span class="pre">BLAS,</span> <span class="pre">zlib</span></code>.</div>
+<div class="line">Users need to install these libraries before compiling the code of
+FlashX.</div>
+<div class="line">In Ubuntu, we install all tools and libraries for compiling FlashX as
+follows:</div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre>sudo apt-get install -y git cmake g++
+sudo apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+</pre></div>
+</div>
+</div>
+<div class="section" id="step-1-get-flashx-s-source-code">
+<h2>Step 1: Get FlashX&#8217;s source code<a class="headerlink" href="#step-1-get-flashx-s-source-code" title="Permalink to this headline">¶</a></h2>
+<p>Users can download FlashX&#8217;s source code from
+<a class="reference external" href="https://github.com/icoming/FlashX/releases">here</a> or clone it from
+the <a class="reference external" href="https://github.com/icoming/FlashX.git">github</a> repository.</p>
+</div>
+<div class="section" id="step-2-compile-flashx">
+<h2>Step 2: Compile FlashX<a class="headerlink" href="#step-2-compile-flashx" title="Permalink to this headline">¶</a></h2>
+<p>In the top directory of FlashX, run
+<code class="docutils literal"><span class="pre">mkdir</span> <span class="pre">build;</span> <span class="pre">cd</span> <span class="pre">build;</span> <span class="pre">cmake</span> <span class="pre">../;</span> <span class="pre">make</span></code> to create a new directory,
+enter the new directory and compile all code of FlashX. If you have
+multiple processing cores you may prefer to run <code class="docutils literal"><span class="pre">make</span> <span class="pre">-j</span> <span class="pre">#procs</span></code></p>
+<p>By default, FlashEigen is disabled because it requires users to install
+Trilinos in advance. FlashEigen was designed to compute eigenvalues of a
+graph with hundreds of millions of vertices or even billions of
+vertices. For smaller graphs, we can use <a class="reference external" href="https://github.com/icoming/FlashX/wiki/Use-FlashR-with-ARPACK">FlashR with
+ARPACK</a>
+to compute eigenvalues of graphs of multiple million vertices. As such,
+users who don&#8217;t need to compute eigenvalues of very large graphs can
+just to Step 3.</p>
+<div class="section" id="step-2-1-install-trilinos-optional">
+<h3>Step 2.1 Install Trilinos (optional)<a class="headerlink" href="#step-2-1-install-trilinos-optional" title="Permalink to this headline">¶</a></h3>
+<div class="line-block">
+<div class="line">To compile FlashX with FlashEigen, users need to install the Anasazi
+eigensolver in Trilinos first.</div>
+<div class="line">The Trilinos packages require a Fortran compiler and a BLAS and LAPACK
+package.</div>
+</div>
+<p><code class="docutils literal"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">gfortran</span> <span class="pre">libatlas-dev</span> <span class="pre">liblapack-dev</span></code></p>
+<p>Follow the
+<a class="reference external" href="https://trilinos.org/oldsite/TrilinosBuildQuickRef.html#configuring-makefile-generator">instructions</a>
+in Trilinos&#8217; website to compile it. Here summaries the steps:</p>
+<p>Inside the top directory of the Trilinos source code, create the
+following script named <code class="docutils literal"><span class="pre">do-configure</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre>#!/bin/sh
+EXTRA_ARGS=$@
+SOURCE_BASE=..
+cmake \
+    -D CMAKE_BUILD_TYPE:STRING=RELEASE \
+    -D BUILD_SHARED_LIBS:BOOL=ON \
+    -D Trilinos_ENABLE_TESTS=OFF \
+    $EXTRA_ARGS \
+    ${SOURCE_BASE}
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">Make the script executable.</div>
+<div class="line"><code class="docutils literal"><span class="pre">chmod</span> <span class="pre">u+x</span> <span class="pre">do-configure</span></code></div>
+</div>
+<p>Create a directory named <code class="docutils literal"><span class="pre">build</span></code> in the top directory and compile the
+Trilinos source code in the build directory.</p>
+<div class="highlight-python"><div class="highlight"><pre>mkdir build
+cd build/
+../do-configure -DTrilinos_ENABLE_Anasazi=ON
+make -j32
+make install
+</pre></div>
+</div>
+</div>
+<div class="section" id="step-2-2-compile-flashx-with-flasheigen-optional">
+<h3>Step 2.2: compile FlashX with FlashEigen (optional)<a class="headerlink" href="#step-2-2-compile-flashx-with-flasheigen-optional" title="Permalink to this headline">¶</a></h3>
+<p>In the top directory of FlashX, run
+<code class="docutils literal"><span class="pre">mkdir</span> <span class="pre">build;</span> <span class="pre">cd</span> <span class="pre">build;</span> <span class="pre">cmake</span> <span class="pre">-D</span> <span class="pre">ENABLE_TRILINOS:BOOL=ON</span> <span class="pre">..;</span> <span class="pre">make</span></code></p>
+</div>
+</div>
+<div class="section" id="step-3-compile-and-install-flashr">
+<h2>Step 3: compile and install FlashR<a class="headerlink" href="#step-3-compile-and-install-flashr" title="Permalink to this headline">¶</a></h2>
+<p>If users don&#8217;t have R installed, they can follow the
+<a class="reference external" href="https://cran.r-project.org/bin/linux/ubuntu/README">instruction</a> to
+install R in Ubuntu.</p>
+<p><code class="docutils literal"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">r-base-dev</span></code></p>
+<p>FlashR requires igraph and Rcpp packages. Before installing FlashR, a
+user needs to install igraph, which installs the Rcpp package
+automatically. Users should install the latest R in order to install
+igraph. In the R environment, run</p>
+<p><code class="docutils literal"><span class="pre">&gt;</span> <span class="pre">install.packages(&quot;igraph&quot;)</span></code></p>
+<p>In the top directory of FlashX, run <code class="docutils literal"><span class="pre">./install_FlashR.sh</span></code> to install
+FlashR. The script tests if FlashEigen is compiled in Step 2. If
+FlashEigen is compiled, the script will compile FlashR with FlashEigen
+automatically.</p>
+</div>
+</div>
+<div class="section" id="run-flashgraph">
+<h1>Run FlashGraph<a class="headerlink" href="#run-flashgraph" title="Permalink to this headline">¶</a></h1>
+<p>To run FlashGraph, users need to construct a graph in the FlashGraph
+format. Many small graphs are publicly available. Stanford&#8217;s
+<a class="reference external" href="http://snap.stanford.edu/data/">SNAP</a> project has a large collection
+of graphs. We currently require your graph be in <strong>edge list text
+format</strong>.</p>
+<p>Go to the top directory of FlashX.</p>
+<p><code class="docutils literal"><span class="pre">wget</span> <span class="pre">http://snap.stanford.edu/data/wiki-Vote.txt.gz</span></code></p>
+<p>FlashX provides a tool <code class="docutils literal"><span class="pre">el2al</span></code> to convert an edge list file in text
+format to the graph format supported by FlashGraph.</p>
+<div class="highlight-python"><div class="highlight"><pre>gunzip wiki-Vote.txt.gz
+build/matrix/test/el2al conf/run_test.txt wiki-Vote.txt wiki-Vote
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">This tool takes a configuration file, a graph file in text edge list
+and a user-specified graph name. It creates two files wiki-Vote.adj
+wiki-Vote.index.</div>
+<div class="line">For the purpose of demonstration, FlashGraph provides
+<code class="docutils literal"><span class="pre">flash-graph/conf/run_test.txt</span></code>. The details on the configuration
+file can be found
+<a class="reference external" href="https://github.com/icoming/FlashGraph/wiki/FlashGraph-tutorial#flashgraph-configuration-parameters">here</a>.</div>
+</div>
+<div class="section" id="run-flashgraph-in-the-standalone-mode">
+<h2>Run FlashGraph in the standalone mode<a class="headerlink" href="#run-flashgraph-in-the-standalone-mode" title="Permalink to this headline">¶</a></h2>
+<p>Although FlashGraph is designed to work with SAFS, it can also run in
+the standalone mode. In this mode, FlashGraph can load graphs in the
+FlashGraph format in memory and perform graph algorithms on the
+in-memory graphs. This is the simplest setup for FlashGraph.</p>
+<div class="line-block">
+<div class="line">FlashGraph provides a few built-in graph algorithm implementations.
+Users can run these implementations in
+flash-graph/test-algs/test_algs. test_algs takes three arguments: a
+FlashGraph config file, a graph file of the FlashGraph format and an
+index file for the graph file from the local Linux filesystem.</div>
+<div class="line">For example, the command below runs WCC (weakly connected components)
+on the wiki graph.</div>
+</div>
+<p><code class="docutils literal"><span class="pre">build/flash-graph/test-algs/test_algs</span> <span class="pre">flash-graph/conf/run_test.txt</span> <span class="pre">wiki-Vote.adj</span> <span class="pre">wiki-Vote.index</span> <span class="pre">wcc</span></code></p>
+</div>
+<div class="section" id="run-flashgraph-with-safs">
+<h2>Run FlashGraph with SAFS.<a class="headerlink" href="#run-flashgraph-with-safs" title="Permalink to this headline">¶</a></h2>
+<p>FlashGraph is designed to run with SAFS, so that it can run on top of an
+SSD array. When running FlashGraph with SAFS, we get the full power of
+FlashGraph. It requires us to configure SAFS properly.</p>
+<div class="section" id="step-1-configure-safs">
+<h3>Step 1: Configure SAFS<a class="headerlink" href="#step-1-configure-safs" title="Permalink to this headline">¶</a></h3>
+<p>It is fairly simple to configure SAFS for an SSD array in an SMP
+machine. Users only need to mount the SSDs and specify the paths to the
+mount points. SAFS also provides a script to automate the process. It
+becomes more complex to configure SAFS for an SSD array in a NUMA
+machine, where we need to take processor affinity into account to
+maximize the performance of the SSD array. We refer users to <a class="reference external" href="https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual#system-configurations-for-safs">SAFS
+configurations</a>
+for more details.</p>
+<p>To run SAFS, users need to provide a data config file that indicates the
+paths of the directories where SAFS files are stored. Users need to set
+up the SAFS parameter <code class="docutils literal"><span class="pre">root_conf</span></code> to specify the data config file.</p>
+<div class="line-block">
+<div class="line">To run FlashGraph with SAFS, we need to specify <code class="docutils literal"><span class="pre">root_conf</span></code> in the
+FlashGraph configuration file.</div>
+<div class="line">For the purpose of demonstration, FlashGraph provides <code class="docutils literal"><span class="pre">run_test.txt</span></code>
+and <code class="docutils literal"><span class="pre">data_files.txt</span></code> in <code class="docutils literal"><span class="pre">flash-graph/conf/</span></code>. <code class="docutils literal"><span class="pre">data_files.txt</span></code>
+specifies the directory where SAFS files are stored. Replace
+<code class="docutils literal"><span class="pre">FG_TOP</span></code> in the two configuration files with the location of the top
+directory of FlashGraph.</div>
+</div>
+</div>
+<div class="section" id="step-2-load-graph-files-to-safs">
+<h3>Step 2: Load graph files to SAFS<a class="headerlink" href="#step-2-load-graph-files-to-safs" title="Permalink to this headline">¶</a></h3>
+<p>We need to load graph files to SAFS before we run FlashGraph. We provide
+a tool called <code class="docutils literal"><span class="pre">SAFS-util</span></code> to load a file in the native filesystem to
+SAFS. The following commands load the graph files for <code class="docutils literal"><span class="pre">wiki-Vote</span></code> to
+SAFS.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote wiki-Vote.adj
+build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote-index wiki-Vote.index
+</pre></div>
+</div>
+</div>
+<div class="section" id="step-3-run-graph-algorithms">
+<h3>Step 3: Run graph algorithms<a class="headerlink" href="#step-3-run-graph-algorithms" title="Permalink to this headline">¶</a></h3>
+<p>The command below demonstrates how to run PageRank on wiki-Vote.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote wiki-Vote-index pagerank2
+...
+The sum of pagerank of all vertices: 3146.831787
+v5254: 6.384571
+v7553: 6.444084
+v4191: 6.734981
+v2237: 7.413904
+v2470: 7.496633
+v2398: 7.745999
+v2625: 9.750073
+v6634: 10.646951
+v15: 10.923159
+v4037: 13.684291
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="run-flashr">
+<h1>Run FlashR<a class="headerlink" href="#run-flashr" title="Permalink to this headline">¶</a></h1>
+<p>FlashR contains functions that call graph algorithms in FlashGraph, the
+eigensolvers in FlashEigen and matrix operations in FlashMatrix.</p>
+<div class="section" id="configure-flashr">
+<h2>Configure FlashR<a class="headerlink" href="#configure-flashr" title="Permalink to this headline">¶</a></h2>
+<p>FlashR uses the same configuration file as FlashGraph. Both FlashGraph
+and FlashMatrix provides a default configuration file:
+<code class="docutils literal"><span class="pre">flash-graph/conf/run_test.txt</span></code> and <code class="docutils literal"><span class="pre">matrix/conf/run_test.txt</span></code>.</p>
+<p>The important parameters that users need to configure for a specific
+machine are:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">num_nodes</span></code>: the number of NUMA nodes that FlashR can run on.</li>
+<li><code class="docutils literal"><span class="pre">threads</span></code>: the number of threads that FlashR uses.</li>
+<li><code class="docutils literal"><span class="pre">root_conf</span></code>: the data config file as explained above.
+In addition, users also need to specify the following parameters for
+FlashGraph.</li>
+<li><code class="docutils literal"><span class="pre">cache_size</span></code>: the page cache size in SAFS.</li>
+<li><code class="docutils literal"><span class="pre">num_io_threads</span></code>: the number of I/O threads per NUMA node.</li>
+</ul>
+<p>Users can use the following function to configure FlashR.</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
+</pre></div>
+</div>
+</div>
+<div class="section" id="run-flashgraph-in-flashr">
+<h2>Run FlashGraph in FlashR<a class="headerlink" href="#run-flashgraph-in-flashr" title="Permalink to this headline">¶</a></h2>
+<p>Users can run graph algorithms provided by FlashGraph in FlashR. Here
+shows an example of running PageRank.</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+&gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
+&gt; g &lt;- fg.load.graph(&quot;wiki.adj&quot;, &quot;wiki.index&quot;)
+&gt; res &lt;- fg.page.rank(g)
+&gt; res &lt;- sort(res, decreasing=FALSE, index.return=TRUE)
+&gt; tail(res$x, n=10)
+ [1]  6.354546  6.411633  6.703026  7.396998  7.483035  7.702387  9.680690
+ [8] 10.584648 10.879063 13.640081
+&gt; tail(res$ix, n=10)-1
+ [1] 5254 7553 4191 2237 2470 2398 2625 6634   15 4037
+</pre></div>
+</div>
+</div>
+<div class="section" id="compute-eigenvalues-in-flashr">
+<h2>Compute eigenvalues in FlashR<a class="headerlink" href="#compute-eigenvalues-in-flashr" title="Permalink to this headline">¶</a></h2>
+<p>There are two ways of computing eigenvalues on a large sparse graph.
+Users can compute eigenvalues with FlashEigen in FlashR if FlashEigen is
+installed. Otherwise, users can compute eigenvalues with ARPACK and
+FlashR for relatively smaller graphs (millions of vertices).</p>
+<div class="section" id="construct-a-sparse-matrix">
+<h3>Construct a sparse matrix<a class="headerlink" href="#construct-a-sparse-matrix" title="Permalink to this headline">¶</a></h3>
+<p>Users can construct a sparse matrix image from a graph image in
+FlashGraph format.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/matrix/test/al22d matrix/conf/run_test.txt ./wiki.adj ./wiki.index wiki
+</pre></div>
+</div>
+<p>The wiki graph is directed, so <code class="docutils literal"><span class="pre">al22d</span></code> outputs four files.</p>
+<div class="highlight-python"><div class="highlight"><pre>$ ls wiki*
+wiki.mat  wiki.mat_idx  wiki_t.mat  wiki_t.mat_idx
+</pre></div>
+</div>
+</div>
+<div class="section" id="load-a-sparse-matrix-in-flashr">
+<h3>Load a sparse matrix in FlashR<a class="headerlink" href="#load-a-sparse-matrix-in-flashr" title="Permalink to this headline">¶</a></h3>
+<p>There are multiple ways of loading a sparse matrix in FlashR.</p>
+<ul>
+<li><p class="first">Users can load a graph image in FlashGraph format and get a sparse
+matrix.</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; g &lt;- fg.load.graph(&quot;./wiki.adj&quot;, &quot;./wiki.index&quot;)
+&gt; m &lt;- fm.get.matrix(g)
+</pre></div>
+</div>
+</li>
+<li><p class="first">Users can load a sparse matrix image directly.</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.load.matrix(&quot;./wiki.mat&quot;, &quot;./wiki.mat_idx&quot;, &quot;./wiki_t.mat&quot;, &quot;./wiki_t.mat_idx&quot;)
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="run-flasheigen">
+<h3>Run FlashEigen<a class="headerlink" href="#run-flasheigen" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal"><span class="pre">fm.eigen</span></code> is the R wrapper of FlashEigen. It is designed to have a
+very similar interface to ARPACK in iGraph. Below shows an example of
+using <code class="docutils literal"><span class="pre">fm.eigen</span></code> to compute SVD on the asymmetric matrix. Currently,
+FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+&gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
+&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; multiply &lt;- function(x, extra) t(m) %*% (m %*% x)
+&gt; res &lt;- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
+&gt; res$vals
+ [1] 10647.6830  4489.1724  2999.1288  2272.7854  1608.5572  1285.5764
+ [7]  1149.1096   921.1726   826.9480   758.7215
+</pre></div>
+</div>
+</div>
+<div class="section" id="run-flashr-arpack">
+<h3>Run FlashR + ARPACK<a class="headerlink" href="#run-flashr-arpack" title="Permalink to this headline">¶</a></h3>
+<p>To compute eigenvalues with ARPACK and FlashR,</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+&gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
+&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; multiply &lt;- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
+&gt; res &lt;- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
+&gt; res$values
+ [1] 10647.6830  4489.1724  2999.1288  2272.7854  1608.5572  1285.5764
+ [7]  1149.1096   921.1726   826.9480   758.7215
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Install FlashX</a><ul>
+<li><a class="reference internal" href="#step-0-library-dependency">Step 0: Library dependency</a></li>
+<li><a class="reference internal" href="#step-1-get-flashx-s-source-code">Step 1: Get FlashX&#8217;s source code</a></li>
+<li><a class="reference internal" href="#step-2-compile-flashx">Step 2: Compile FlashX</a><ul>
+<li><a class="reference internal" href="#step-2-1-install-trilinos-optional">Step 2.1 Install Trilinos (optional)</a></li>
+<li><a class="reference internal" href="#step-2-2-compile-flashx-with-flasheigen-optional">Step 2.2: compile FlashX with FlashEigen (optional)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#step-3-compile-and-install-flashr">Step 3: compile and install FlashR</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#run-flashgraph">Run FlashGraph</a><ul>
+<li><a class="reference internal" href="#run-flashgraph-in-the-standalone-mode">Run FlashGraph in the standalone mode</a></li>
+<li><a class="reference internal" href="#run-flashgraph-with-safs">Run FlashGraph with SAFS.</a><ul>
+<li><a class="reference internal" href="#step-1-configure-safs">Step 1: Configure SAFS</a></li>
+<li><a class="reference internal" href="#step-2-load-graph-files-to-safs">Step 2: Load graph files to SAFS</a></li>
+<li><a class="reference internal" href="#step-3-run-graph-algorithms">Step 3: Run graph algorithms</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#run-flashr">Run FlashR</a><ul>
+<li><a class="reference internal" href="#configure-flashr">Configure FlashR</a></li>
+<li><a class="reference internal" href="#run-flashgraph-in-flashr">Run FlashGraph in FlashR</a></li>
+<li><a class="reference internal" href="#compute-eigenvalues-in-flashr">Compute eigenvalues in FlashR</a><ul>
+<li><a class="reference internal" href="#construct-a-sparse-matrix">Construct a sparse matrix</a></li>
+<li><a class="reference internal" href="#load-a-sparse-matrix-in-flashr">Load a sparse matrix in FlashR</a></li>
+<li><a class="reference internal" href="#run-flasheigen">Run FlashEigen</a></li>
+<li><a class="reference internal" href="#run-flashr-arpack">Run FlashR + ARPACK</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to FlashX-docs&#8217;s documentation!</a></li>
+      <li>Next: <a href="FlashR-programming-tutorial.html" title="next chapter">How to start</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashX-Quick-Start-Guide.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashX-Quick-Start-Guide.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
