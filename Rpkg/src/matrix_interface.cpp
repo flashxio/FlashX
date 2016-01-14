@@ -1525,6 +1525,140 @@ RcppExport SEXP R_FM_cbind(SEXP pmats)
 	return create_FMR_matrix(dense_matrix::create(combined), "");
 }
 
+template<class T>
+class ifelse2_op: public bulk_operate
+{
+	T no;
+
+	ifelse2_op(T no) {
+		this->no = no;
+	}
+public:
+	static const_ptr create(scalar_variable::ptr no) {
+		T val = scalar_variable::get_val<T>(*no);
+		return const_ptr(new ifelse2_op<T>(val));
+	}
+
+	/*
+	 * This performs element-wise operation on two input arrays, and stores
+	 * the result on the output array.
+	 */
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const bool *test = reinterpret_cast<const bool *>(left_arr);
+		const T *yes = reinterpret_cast<const T *>(right_arr);
+		T *output = reinterpret_cast<T *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++) {
+			if (test[i])
+				output[i] = yes[i];
+			else
+				output[i] = no;
+		}
+	}
+	/*
+	 * This performs operations on the left input array and the right element,
+	 * and stores the result on the output array.
+	 */
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception("ifelse2_op doesn't support runAE");
+	}
+	/*
+	 * This performs operations on the left element array and the right array,
+	 * and stores the result on the output array.
+	 */
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception("ifelse2_op doesn't support runEA");
+	}
+
+	/*
+	 * This performs aggregation on the input array, combines the agg result
+	 * with the original agg result and stores the result on output.
+	 */
+	virtual void runAgg(size_t num_eles, const void *left_arr, const void *orig,
+			void *output) const {
+		throw unsupported_exception("ifelse2_op doesn't support runAgg");
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<bool>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T>();
+	}
+
+	virtual std::string get_name() const {
+		return std::string("ifelse2_op");
+	}
+};
+
+/*
+ * This version of ifelse only requires test and yes to be FlashMatrix matrices.
+ */
+RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
+{
+	if (is_sparse(ptest) || is_sparse(pyes)) {
+		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr test = get_matrix<dense_matrix>(ptest);
+	dense_matrix::ptr yes = get_matrix<dense_matrix>(pyes);
+	if (test->get_num_rows() != yes->get_num_rows()
+			|| test->get_num_cols() != yes->get_num_cols()) {
+		fprintf(stderr, "the size of test and yes has to be the same\n");
+		return R_NilValue;
+	}
+
+	scalar_variable::ptr no;
+	if (R_is_integer(pno)) {
+		int val = INTEGER(pno)[0];
+		no = scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	}
+	else if (R_is_real(pno)) {
+		double val = REAL(pno)[0];
+		no = scalar_variable::ptr(new scalar_variable_impl<double>(val));
+	}
+	else {
+		fprintf(stderr,
+				"ifelse2 only works with integer and float currently\n");
+		return R_NilValue;
+	}
+	if (test->get_type() != get_scalar_type<bool>()) {
+		fprintf(stderr, "test must be boolean\n");
+		return R_NilValue;
+	}
+
+	// TODO we should cast type if they are different.
+	if (yes->get_type() != no->get_type()) {
+		fprintf(stderr,
+				"ifelse2 doesn't support yes and no of different types\n");
+		return R_NilValue;
+	}
+
+	// We need to cast type so that the type of yes and no matches.
+	bulk_operate::const_ptr op;
+	if (yes->get_type() == get_scalar_type<int>())
+		op = ifelse2_op<int>::create(no);
+	else if (yes->get_type() == get_scalar_type<double>())
+		op = ifelse2_op<double>::create(no);
+	else {
+		fprintf(stderr, "unsupported type in ifelse2\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr ret = test->mapply2(*yes, op);
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(ptest))
+		return create_FMR_vector(ret, "");
+	else
+		return create_FMR_matrix(ret, "");
+}
+
 void init_flashmatrixr()
 {
 	fmr::init_udf_ext();

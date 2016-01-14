@@ -1157,3 +1157,27 @@ fm.cbind <- function(...)
 	ret <- .Call("R_FM_cbind", args, PACKAGE="FlashR")
 	new.fm(ret)
 }
+
+setMethod("ifelse", signature(test = "fm", yes = "fm", no = "ANY"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse2", test, yes, no, PACKAGE="FlashR")
+			  new.fm(ret)
+		  })
+
+setMethod("ifelse", signature(test = "fm", yes = "ANY", no = "fm"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse2", !test, no, yes, PACKAGE="FlashR")
+			  new.fm(ret)
+		  })
+
+setMethod("ifelse", signature(test = "fmV", yes = "fmV", no = "ANY"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse2", test, yes, no, PACKAGE="FlashR")
+			  new.fmV(ret)
+		  })
+
+setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse2", !test, no, yes, PACKAGE="FlashR")
+			  new.fmV(ret)
+		  })
