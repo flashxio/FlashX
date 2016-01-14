@@ -493,7 +493,7 @@ local_vec_store::const_ptr EM_vec_store::get_portion(off_t loc, size_t size) con
 local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 {
 	if (orig_loc + orig_size > get_length()) {
-		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		BOOST_LOG_TRIVIAL(error) << "get_portion: out of boundary";
 		return local_vec_store::ptr();
 	}
 

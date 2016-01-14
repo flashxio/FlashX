@@ -434,7 +434,7 @@ std::vector<safs::io_interface::ptr> EM_matrix_store::create_ios() const
 vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 {
 	if ((size_t) idx >= get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		BOOST_LOG_TRIVIAL(error) << "get_col_vec: out of boundary";
 		return vec_store::const_ptr();
 	}
 
@@ -498,7 +498,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 vec_store::const_ptr EM_matrix_store::get_row_vec(off_t idx) const
 {
 	if ((size_t) idx >= get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		BOOST_LOG_TRIVIAL(error) << "get_row_vec: out of boundary";
 		return vec_store::const_ptr();
 	}
 	return transpose()->get_col_vec(idx);
