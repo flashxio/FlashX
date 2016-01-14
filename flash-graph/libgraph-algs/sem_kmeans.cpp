@@ -149,9 +149,9 @@ namespace {
 #endif
                             g_kmspp_distance[my_id] = dist;
                             set_cluster_id(g_kmspp_cluster_idx);
-                            ((kmeanspp_vertex_program&)prog).
-                                pt_cuml_sum_peq(dist);
                         }
+                        ((kmeanspp_vertex_program&)prog).
+                            pt_cuml_sum_peq(g_kmspp_distance[my_id]);
                     } else {
                         BOOST_ASSERT_MSG(0, "Unknown g_kmspp_stage type");
                     }
