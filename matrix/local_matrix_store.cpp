@@ -251,9 +251,10 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 						ncol * get_entry_size());
 		}
 	}
-	else {
-		// TODO I should handle wide matrix and tall matrix differently
-		// to minimize virtual function calls.
+	// We should handle wide matrix and tall matrix differently
+	// to minimize virtual function calls.
+	// The idea is to reduce cache misses.
+	else if (is_wide()) {
 		const local_col_matrix_store &col_store
 			= static_cast<const local_col_matrix_store &>(store);
 		std::vector<char *> dest_col(get_num_rows());
@@ -267,6 +268,22 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 			sg.scatter(src_col, dest_col);
 			for (size_t j = 0; j < store.get_num_rows(); j++)
 				dest_col[j] += entry_size;
+		}
+	}
+	else {
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		std::vector<const char *> src_row(get_num_cols());
+		size_t entry_size = store.get_type().get_size();
+		const scatter_gather &sg = store.get_type().get_sg();
+		for (size_t j = 0; j < store.get_num_cols(); j++)
+			src_row[j] = col_store.get_col(j);
+		// This copies from row by row.
+		for (size_t i = 0; i < store.get_num_rows(); i++) {
+			char *dst_row = get_row(i);
+			sg.gather(src_row, dst_row);
+			for (size_t j = 0; j < src_row.size(); j++)
+				src_row[j] += entry_size;
 		}
 	}
 	return true;
@@ -333,9 +350,9 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 				memcpy(get_col(i), col_store.get_col(i), nrow * get_entry_size());
 		}
 	}
-	else {
-		// TODO I should handle wide matrix and tall matrix differently
-		// to minimize virtual function calls.
+	// We should handle wide matrix and tall matrix differently
+	// to minimize virtual function calls.
+	else if (is_wide()) {
 		const local_row_matrix_store &row_store
 			= static_cast<const local_row_matrix_store &>(store);
 		std::vector<const char *> src_col(get_num_rows());
@@ -349,6 +366,23 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 			sg.gather(src_col, dest_col);
 			for (size_t j = 0; j < store.get_num_rows(); j++)
 				src_col[j] += entry_size;
+		}
+	}
+	else {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		std::vector<char *> dst_row(get_num_cols());
+		size_t entry_size = store.get_type().get_size();
+		const scatter_gather &sg = store.get_type().get_sg();
+		for (size_t j = 0; j < store.get_num_cols(); j++)
+			dst_row[j] = get_col(j);
+
+		// This copies from row by row.
+		for (size_t i = 0; i < store.get_num_rows(); i++) {
+			const char *src_row = row_store.get_row(i);
+			sg.scatter(src_row, dst_row);
+			for (size_t j = 0; j < dst_row.size(); j++)
+				dst_row[j] += entry_size;
 		}
 	}
 	return true;

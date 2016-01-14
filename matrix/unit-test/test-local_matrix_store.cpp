@@ -606,7 +606,7 @@ local_matrix_store::ptr get_rows(local_row_matrix_store::ptr store,
 				store->get_type(), store->get_node_id()));
 }
 
-void test_copy_from(size_t long_dim)
+void test_copy_from(size_t long_dim, bool is_tall)
 {
 	printf("test copy from on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
@@ -616,11 +616,19 @@ void test_copy_from(size_t long_dim)
 	local_matrix_store::ptr sub_m2;
 
 	// For the entire col-major matrix.
-	m1 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+	if (is_tall) {
+		m1 = local_matrix_store::ptr(new local_buf_col_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+		m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	}
+	else {
+		m1 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0,  10, long_dim,get_scalar_type<int>(), -1));
+		m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
+	}
 	m1->set_data(set_col_operate(m1->get_num_cols()));
-	m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_copy_from1(*m1, *m2);
 
 	// For the sub col-major matrix.
@@ -629,16 +637,28 @@ void test_copy_from(size_t long_dim)
 	test_copy_from1(*sub_m1, *sub_m2);
 
 	// For col-major 2 row-major.
-	m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+	if (is_tall)
+		m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	else
+		m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	test_copy_from1(*m1, *m2);
 
 	// For the entire row-major matrix.
-	m1 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+	if (is_tall) {
+		m1 = local_matrix_store::ptr(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+		m2 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	}
+	else {
+		m1 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
+		m2 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
+	}
 	m1->set_data(set_row_operate(m1->get_num_cols()));
-	m2 = local_matrix_store::ptr(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_copy_from1(*m1, *m2);
 
 	// For the sub row-major matrix.
@@ -647,9 +667,19 @@ void test_copy_from(size_t long_dim)
 	test_copy_from1(*sub_m1, *sub_m2);
 
 	// For row-major 2 col-major
-	m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+	if (is_tall)
+		m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	else
+		m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	test_copy_from1(*m1, *m2);
+}
+
+void test_copy_from(size_t long_dim)
+{
+	test_copy_from(long_dim, true);
+	test_copy_from(long_dim, false);
 }
 
 void test_get_raw(size_t long_dim)
