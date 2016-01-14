@@ -1,0 +1,148 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Convert graph format &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="convert-graph-format">
+<h1>Convert graph format<a class="headerlink" href="#convert-graph-format" title="Permalink to this headline">¶</a></h1>
+<p>el2al takes a file or multiple files of edge lists in the text format
+and converts them to the FlashGraph format, which is adjacency list in
+the binary format. The edge list file(s) can be gzip&#8217;d. The gzip&#8217;d file
+needs to have a filename extension <code class="docutils literal"><span class="pre">.gz</span></code> in order to be considered as
+a gzip&#8217;d file. el2al generates two binary files: a graph file that
+contains the adjacency lists of the graph and an index file that
+contains the locations of vertices in the graph file. By default, el2al
+keeps all intermediate data in memory.</p>
+<p>el2al [options] adj_list_file index_file edge_list_files (or
+directories)</p>
+<ul class="simple">
+<li>-u: undirected graph</li>
+<li>-v: verify the created adjacency list</li>
+<li>-t type: the type of edge data. Supported type: count, timestamp,</li>
+<li>-m: merge multiple edge lists into a single graph.</li>
+<li>-w: write the graph to a file</li>
+<li>-T: the number of threads to process in parallel</li>
+<li>-d: store intermediate data on disks</li>
+</ul>
+<p>An example:</p>
+<p>To convert a directed graph in the edge list format to the FlashGraph
+format, we can run the following command:</p>
+<p><code class="docutils literal"><span class="pre">flash-graph/tools/el2al</span> <span class="pre">-w</span> <span class="pre">wiki-Vote.adj</span>&nbsp; <span class="pre">wiki-Vote.index</span> <span class="pre">wiki-Vote.txt</span></code></p>
+<p>This converts an edge list in <code class="docutils literal"><span class="pre">wiki-Vote.txt</span></code> to the FlashGraph format
+and generate two files: <code class="docutils literal"><span class="pre">wiki-Vote.adj-v4</span></code> and <code class="docutils literal"><span class="pre">wiki-Vote.index-v4</span></code>.
+<code class="docutils literal"><span class="pre">wiki-Vote.adj-v4</span></code> contains the graph data and <code class="docutils literal"><span class="pre">wiki-Vote.index-v4</span></code>
+contains the index to the graph data.</p>
+<p>To convert an undirected graph in the edge list format to the FlashGraph
+format, we run:</p>
+<p><code class="docutils literal"><span class="pre">flash-graph/tools/el2al</span> <span class="pre">-w</span> <span class="pre">-u</span> <span class="pre">facebook.adj</span> <span class="pre">facebook.index</span> <span class="pre">facebook_combined.txt</span></code></p>
+<p>When converting a large graph, el2al uses a lot of memory if it keeps
+all intermediate data in memory, and takes a long time to convert a
+graph. el2al can keep intermediate data on disks and run in parallel.
+When <code class="docutils literal"><span class="pre">-d</span></code> flag is used, el2al uses stxxl to store intermediate data on
+disks. <strong>Note: users may need to create .stxxl in the current directory
+to configure the stxxl library where running el2al with -d flag.</strong> The
+<a class="reference external" href="http://stxxl.sourceforge.net/tags/master/install_config.html">page</a>
+describes how to configure stxxl. <code class="docutils literal"><span class="pre">-T</span></code> flag specifies the number of
+threads used for graph format conversion.</p>
+<p>For example, the following command converts a twitter graph with around
+60 million vertices in the text edge list format to the adjacency list
+format out of core and in parallel.</p>
+<p><code class="docutils literal"><span class="pre">el2al</span> <span class="pre">-w</span> <span class="pre">-T</span> <span class="pre">32</span> <span class="pre">-d</span> <span class="pre">twitter.adj</span> <span class="pre">twitter.index</span> <span class="pre">twitter_rv.net.gz</span></code></p>
+</div>
+<div class="section" id="flashgraph-configuration-parameters">
+<h1>FlashGraph configuration parameters<a class="headerlink" href="#flashgraph-configuration-parameters" title="Permalink to this headline">¶</a></h1>
+<p>FIXME</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Convert graph format</a></li>
+<li><a class="reference internal" href="#flashgraph-configuration-parameters">FlashGraph configuration parameters</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashGraph-tools.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashGraph-tools.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

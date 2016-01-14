@@ -1,0 +1,63 @@
+Comparison to PowerGraph
+========================
+
+Here are some performance results comparing FlashGraph and
+`PowerGraph <http://graphlab.org/projects/index.html>`__ on large graphs
+on a single machine. We choose PowerGraph for comparison because it is a
+highly adopted, distributed, in-memory graph framework that on-average
+performs well and is among the previous state of the art graph engines.
+We run five graph applications: breadth-first search (BFS), triangle
+counting (TC), weakly connected components (WCC), scan statistics (SS),
+and pagerank (PR). Each has a FlashGraph implementation and a
+corresponding PowerGraph implementation. We use these applications to
+compare the performance of FlashGraph to that of PowerGraph on the
+twitter graph (42M vertices and 1.5B edges) and the `subdomain
+graph <http://webdatacommons.org/hyperlinkgraph/>`__ (89M vertices and
+2B edges). Figure 8 shows the runtime of the applications in both graph
+engines and Figure 9 shows the memory consumption of FlashGraph and
+PowerGraph. Although FlashGraph runs in the semi-external memory mode,
+it can still significantly outperform PowerGraph in most graph
+applications and it uses a small fraction of the memory used by
+PowerGraph.
+
+|runtime on twitter and subdomain|
+
+|memory consumption|
+
+FlashGraph on a billion-node graph
+==================================
+
+FlashGraph enables us to process very large graphs in a single machine.
+Here we demonstrate that FlashGraph can process a real-world `hyperlink
+page graph <http://webdatacommons.org/hyperlinkgraph/>`__ (3.4B vertices
+and 129B edges) in a single machine. The table below shows the
+performance of the same graph applications as above. It also includes
+the performance of Betweenness centrality (BC) from a single vertex.
+
+|runtime on page graph|
+
+Comparison to other graph engines on large graphs
+=================================================
+
+| FlashGraph takes only eight minutes to traverse the page graph (3.5B
+  vertices and 128B edges) with a cache size of 4GB and less than six
+  minutes with a cache size of 256 GB.
+| `Pregel <http://dl.acm.org/citation.cfm?id=1807184>`__ used 300
+  multicore machines to
+| run the shortest path algorithm on their largest random graph (1B
+  vertices and 127B edges)
+| and took a little over ten minutes. More recently,
+| `Trinity <http://research.microsoft.com/en-us/projects/trinity/>`__
+| took over ten minutes to perform breadth-first search on a
+| graph of one billion vertices and 13 billion edges on 14 12-core
+| machines.
+
+FlashGraph takes 75 minutes to run 30 iterations of PageRank on the page
+graph. Based on a recent talk by the main developer of
+`Giraph <http://www.youtube.com/watch?v=b5Qmz4zPj-M>`__, Giraph running
+with 20 workers can run five iterations of PageRank on a graph with 5
+billion edges in approx. 75 minutes.
+
+.. |runtime on twitter and subdomain| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/perf1.png
+.. |memory consumption| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/perf2.png
+.. |runtime on page graph| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/pg-perf.png

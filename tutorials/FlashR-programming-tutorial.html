@@ -1,0 +1,431 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>How to start &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="prev" title="Install FlashX" href="FlashX-Quick-Start-Guide.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <p>FlashR is an extension of the R programming framework. It executes R
+code in parallel automatically and stores and accesses arrays in the R
+code on disks automatically to scale R to large datasets that can&#8217;t fit
+in memory. The core of FlashR is a small set of generalized operators to
+perform computation in an array-oriented fashion. In addition to the
+generalized operators, FlashR reimplements many commonly used R
+functions to provide users a familiar R programming environment to
+reduce the learning curve. FlashR is completely implemented as an R
+package.</p>
+<p>FlashR is designed with goals in four aspects:</p>
+<ul class="simple">
+<li>Efficiency: Comparable to optimized C code.</li>
+<li>Scalability: Tera-scale or larger.</li>
+<li>Generality: as many applications as possible in data mining and
+machine learning and more.</li>
+<li>Productivity: the same productivity as R.</li>
+</ul>
+<p>Although FlashR tries to provide a familiar environment for R users,
+some operations in the traditional R are not supported in FlashR. The
+biggest difference is that FlashR does not allow users to modify
+individual elements in a vector or a matrix. FlashR intentionally
+chooses so for the sake of performance. FlashR stores vectors and
+matrices on SSDs. Modifying individual elements results in
+read-modify-write to SSDs, which causes many small random I/O. It causes
+efficiency issues and these operations are harmful to SSDs. By
+forbidding modifying individual elements, FlashR advocates
+array-oriented programming to achieve superior efficiency.</p>
+<div class="section" id="how-to-start">
+<h1>How to start<a class="headerlink" href="#how-to-start" title="Permalink to this headline">¶</a></h1>
+<p>Users can follow the instructions here to install FlashR in Ubuntu. To
+load FlashR to R, run</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+</pre></div>
+</div>
+</div>
+<div class="section" id="construct-flashr-vectors-and-matrices">
+<h1>Construct FlashR vectors and matrices<a class="headerlink" href="#construct-flashr-vectors-and-matrices" title="Permalink to this headline">¶</a></h1>
+<p>FlashR provides a set of functions to generate FlashR vectors and
+matrices. These functions have very similar interface as the R
+counterparts that generate vectors and matrices.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">fm.rep.int</span></code>: Create a vector with replicated elements. e.g.,
+<code class="docutils literal"><span class="pre">fm.rep.int(1,</span> <span class="pre">10)</span></code> creates a FlashR vector with 10 elements and
+each element is 1.</li>
+<li><code class="docutils literal"><span class="pre">fm.seq.int</span></code>: Create a vector with a sequence of numbers. e.g.,
+<code class="docutils literal"><span class="pre">fm.seq.int(1,</span> <span class="pre">10,</span> <span class="pre">1)</span></code> creates a FlashR vector with a sequence of
+numbers between [1:10].</li>
+<li><code class="docutils literal"><span class="pre">fm.runif</span></code>: Create a vector with uniformly random numbers. e.g.,
+<code class="docutils literal"><span class="pre">fm.runif(10,</span> <span class="pre">0,</span> <span class="pre">1)</span></code> creates a FlashR vector with 10 uniformly
+random values between 0 and 1.</li>
+<li><code class="docutils literal"><span class="pre">fm.matrix</span></code>: Create a matrix from a FlashR vector. e.g.,
+<code class="docutils literal"><span class="pre">fm.matrix(vec,</span> <span class="pre">10,</span> <span class="pre">2)</span></code> creates a 10x2 FlashR matrix from a FlashR
+vector.</li>
+</ul>
+<p>FlashR also provides functions to access vectors and matrices from the
+filesystem.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">fm.read.obj</span></code>: Read a FlashR object (vector/matrix) from a Linux
+file.</li>
+<li><code class="docutils literal"><span class="pre">fm.write.obj</span></code>: Write a FlashR object (vector/matrix) to a Linux
+file.</li>
+</ul>
+</div>
+<div class="section" id="interact-with-native-r">
+<h1>Interact with native R<a class="headerlink" href="#interact-with-native-r" title="Permalink to this headline">¶</a></h1>
+<p>FlashR also provides functions to interact with the original R system.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">fm.as.vector</span></code>: convert an R vector to a FlashR vector.</li>
+<li><code class="docutils literal"><span class="pre">fm.as.matrix</span></code>: convert an R matrix to a FlashR matrix.</li>
+<li><code class="docutils literal"><span class="pre">as.vector</span></code>: convert a FlashR vector to a R vector.</li>
+<li><code class="docutils literal"><span class="pre">as.matrix</span></code>: convert a FlashR matrix to a R matrix.</li>
+</ul>
+<p>FlashR has the following functions for users to test if an object is a
+FlashR vector or matrix.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">fm.is.vector</span></code>: test if an object is a FlashR vector.</li>
+<li><code class="docutils literal"><span class="pre">fm.is.matrix</span></code>: test if an object is a FlashR matrix.</li>
+</ul>
+</div>
+<div class="section" id="programming-interface">
+<h1>Programming interface<a class="headerlink" href="#programming-interface" title="Permalink to this headline">¶</a></h1>
+<div class="line-block">
+<div class="line">FlashR has two sets of programming API. It provides users a set of
+generalized operators, with which users can implement varieties of
+data mining and machine learning algorithms. On top of them, FlashR
+implements many commonly used &#8220;small&#8221; R functions with the generalized
+operators to mimic the original R programming environment.</div>
+<div class="line">Generalized operators</div>
+</div>
+<p>Generalized operators (GenOp) are the core of FlashR. There are a very
+small number of GenOps in FlashR. Each operator accepts a user-defined
+operator (UDO) or the name of a UDO to perform users&#8217; tasks. Currently,
+there are four GenOps, but some of them have multiple forms. There are
+many UDOs in FlashR such as addition and subtraction (see
+<code class="docutils literal"><span class="pre">?fm.basic.op</span></code> for details). Below lists all GenOps currently
+supported by FlashR.</p>
+<p><strong>Inner product</strong>: a generalized matrix multiplication. It replaces
+multiplication and addition in matrix multiplication with two
+user-defined functions, respectively. As such, we can define many
+operations with inner product. For example, we can use inner product to
+compute various pair-wise distance matrics of data points such as
+Euclidean distance and Hamming distance.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">inner</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">mat</span><span class="p">,</span> <span class="n">FUN1</span><span class="p">,</span> <span class="n">FUN2</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">One example of using <code class="docutils literal"><span class="pre">fm.inner.prod</span></code> is to compute a pair-wise
+distance between every data point. <code class="docutils literal"><span class="pre">fm.bo.euclidean</span></code> and
+<code class="docutils literal"><span class="pre">fm.bo.add</span></code> are some UDOs written in C++. <code class="docutils literal"><span class="pre">fm.bo.euclidean</span></code>
+computes <code class="docutils literal"><span class="pre">(x-y)*(x-y)</span></code>. <code class="docutils literal"><span class="pre">fm.bo.add</span></code> computes <code class="docutils literal"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">y</span></code>.</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.inner.prod(data,</span> <span class="pre">t(data),</span> <span class="pre">fm.bo.euclidean,</span> <span class="pre">fm.bo.add)</span></code></div>
+</div>
+<p><strong>Apply</strong>: a generalized form of element-wise operations and has
+multiple variants.</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">fm.sapply</span></code>: a generalized element-wise unary operation whose UDO
+takes an element in a vector or a matrix at a time and outputs an
+element.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">fm.mapply2</span></code>: a generalized element-wise binary operation whose UDO
+takes an element from each vector or matrix and outputs a single
+element.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">fm.mapply.row</span></code> and <code class="docutils literal"><span class="pre">fm.mapply.col</span></code> are two variants of
+<code class="docutils literal"><span class="pre">fm.mapply2</span></code>. They are similar to <code class="docutils literal"><span class="pre">sweep()</span></code> in R and the
+broadcasting mechanism in Numpy. They are equivalent to mapply2 on
+every row or column of the matrix (in the first argument) with the
+vector (in the second argument). Currently, <code class="docutils literal"><span class="pre">fm.mapply.row</span></code> and
+<code class="docutils literal"><span class="pre">fm.mapply.col</span></code> only accept the cases that the vector has the same
+length as a row or a column of the matrix.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">sapply</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+<span class="n">fm</span><span class="o">.</span><span class="n">mapply2</span><span class="p">(</span><span class="n">o1</span><span class="p">,</span> <span class="n">o2</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+<span class="n">fm</span><span class="o">.</span><span class="n">mapply</span><span class="o">.</span><span class="n">row</span><span class="p">(</span><span class="n">o1</span><span class="p">,</span> <span class="n">o2</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+<span class="n">fm</span><span class="o">.</span><span class="n">mapply</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="n">o1</span><span class="p">,</span> <span class="n">o2</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<div class="line-block">
+<div class="line">Many matrix operations in FlashR are implemented with <code class="docutils literal"><span class="pre">fm.sapply</span></code>
+and <code class="docutils literal"><span class="pre">fm.mapply2</span></code>.</div>
+<div class="line">Example 1: compute m1 + m2</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.mapply2.fm(m1,</span> <span class="pre">m2,</span> <span class="pre">fm.bo.add)</span></code></div>
+</div>
+<div class="line-block">
+<div class="line">Example 2: compute -m1</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.sapply(m1,</span> <span class="pre">fm.buo.neg)</span></code></div>
+</div>
+<p>These are some examples of using <code class="docutils literal"><span class="pre">fm.sapply</span></code> and <code class="docutils literal"><span class="pre">fm.mapply2</span></code>. Both
+matrix addition and matrix negation have been implemented in FlashR.</p>
+<p>Aggregation takes multiple elements and outputs a single element.</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">fm.agg</span></code>: aggregates over the entire vector or matrix.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">fm.agg.mat</span></code>: aggregates over each individual row or column of a
+matrix.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+<span class="n">fm</span><span class="o">.</span><span class="n">agg</span><span class="o">.</span><span class="n">mat</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">margin</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<div class="line-block">
+<div class="line">Example 1: compute sum(m)</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.agg(x,</span> <span class="pre">fm.bo.add)</span></code></div>
+</div>
+<div class="line-block">
+<div class="line">Example 2: compute rowSums(m)</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.agg.mat(x,</span> <span class="pre">1,</span> <span class="pre">fm.bo.add)</span></code></div>
+</div>
+<p>Again, both <code class="docutils literal"><span class="pre">sum()</span></code> and <code class="docutils literal"><span class="pre">rowSums()</span></code> have been implemented in FlashR.</p>
+<div class="line-block">
+<div class="line">Groupby is similar to groupby in SQL. It groups multiple elements by
+their values and perform some computation on the elements.</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.sgroupby</span></code>: groups elements by their values in a vector and
+invokes UDO on the elements associated with the same value</div>
+<div class="line"><code class="docutils literal"><span class="pre">fm.groupby</span></code>: takes a matrix and a vector of categorical values,
+groups rows/columns of the matrix based on the corresponding
+categorical value and runs UDO on the rows/columns with the same
+categorical value.</div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">sgroupby</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+<span class="n">fm</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">margin</span><span class="p">,</span> <span class="n">factor</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The function passed to a groupby function can be a UDO or an aggregation
+operator. The current implementation only supports aggregation over the
+elements in the same group.</p>
+<div class="line-block">
+<div class="line">In practice, groupby requires an aggregation operation over some of
+the original elements in a group and combine operation over the
+aggregation results. The reason is that groupby runs in parallel and
+each time it can only aggregate over some of the elements in a group.
+Essentially, the combine operation is an aggregation. Usually, it is
+sufficient to pass a UDO to a groupby function because a UDO can work
+as both aggregation and combine. In some cases, however, we need these
+operations to be different. As such, users can pass an aggregation
+operator to groupby. A user can create an aggregation operator
+themselves by calling fm.create.agg.op() and specify two UDOs for the
+aggregation and combine operation.</div>
+<div class="line">fm.create.agg.op(agg, combine, name)</div>
+</div>
+</div>
+<div class="section" id="small-r-functions">
+<h1>&#8220;Small&#8221; R functions<a class="headerlink" href="#small-r-functions" title="Permalink to this headline">¶</a></h1>
+<p>FlashR provides many &#8220;small&#8221; R functions to mimic the R programming
+environment. Although we have a goal of having these functions as
+similar as possible to the original R functions, we do not provide 100%
+compatibility with the original R version for some functions. Overall,
+we try to provide similarity under the condition of not sacrificing
+performance. Below shows a list of &#8220;small&#8221; R functions currently
+supported by FlashR. In the future, more functions will be provided.</p>
+<p>The following functions have exactly the same interface as the original
+R function.</p>
+<ul class="simple">
+<li>dim, nrow, ncol, length, typeof, t</li>
+<li>abs, sqrt, ceiling, floor, round, log, log2, log10, exp</li>
+</ul>
+<p>The following functions have exactly the same interface as the original
+R functions. When they are applied to a matrix and a vector, it requires
+the vector has the same length as the columns in the matrix.</p>
+<ul class="simple">
+<li>+, -, <em>, /, %</em>%</li>
+<li>==, !=, &gt;, &gt;=, &lt;, &lt;=, !</li>
+</ul>
+<p>The following functions have exactly the same interface as the original
+R functions, but currently we don&#8217;t support some functionality such as
+removing missing values.</p>
+<ul class="simple">
+<li>sum, min, max, mean, sd, pmin, pmax</li>
+<li>rowSums, colSums, rowMeans, colMeans</li>
+</ul>
+<p>Some of them have slightly different interface and semantics. These
+slightly different functions always start with &#8220;fm.&#8221; to indicate that
+they are actually FlashR functions. In the future, we will provide
+implementations with exactly the same interface and semantics as the
+original R functions.</p>
+<ul class="simple">
+<li>fm.table</li>
+<li>fm.as.integer, fm.as.numeric</li>
+</ul>
+</div>
+<div class="section" id="some-examples-of-using-flashr">
+<h1>Some examples of using FlashR<a class="headerlink" href="#some-examples-of-using-flashr" title="Permalink to this headline">¶</a></h1>
+<div class="line-block">
+<div class="line">PageRank is the classical algorithm to rank Web pages originally used
+by Google search engine. PageRank is an iterative algorithm. In each
+iteration, the PageRank value of a vertex is updated as follow:</div>
+<div class="line">PR(p_i) = \frac{1-d}{N} + d \sum_{p_j \in M(p_i)} \frac{PR
+(p_j)}{L(p_j)}</div>
+<div class="line">As such, the PageRank algorithm is implemented as follows:</div>
+</div>
+<div class="code r highlight-python"><div class="highlight"><pre>pr1 &lt;- fm.rep.int(1/N, N)
+converge &lt;- 0
+while (converge &lt; N) {
+ pr2 &lt;- (1-d)/N+d*(A %*% (pr1/out.deg))
+ diff &lt;- abs(pr1-pr2)
+ converge &lt;- sum(diff &lt; epsilon)
+ pr1 &lt;- pr2
+}
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">Non-negative Matrix Factorization (NMF) factorizes a matrix to two
+non-negative matrices. The following code implements the algorithm
+described in the Lee&#8217;s paper.</div>
+<div class="line">The update rules described in Lee&#8217;s paper are implemented as follow</div>
+</div>
+<div class="code r highlight-python"><div class="highlight"><pre>den &lt;- (t(W) %*% W) %*% H
+H &lt;- fm.pmax2(H * t(tA %*% W), eps) / (den + eps)
+den &lt;- W %*% (H %*% t(H))
+W &lt;- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
+</pre></div>
+</div>
+<p>One of the convergence condition is ||A - WH||2. It is
+computationally expensive to compute the Frobenius norm of (A-WH)
+directly. Suppose A is a n×m matrix, W is a n×k matrix and H is a k×m
+matrix. The computation complexity is O(n×k×m). Therefore, instead of
+computing the Frobenius norm, we compute trace((A-WH)T(A-WH)) =
+trace(ATA) -2*trace((ATW)H)+trace((HT(WTW))H). We need to order the
+matrix multiplication in a certain way to reduce computation complexity.
+The computation complexity of (ATW)H is O(l*k), where l is the number
+of non-zero entries in A. The computation complexity of (HT(WTW))H is
+O(k2×n+k2×m).</p>
+<div class="code r highlight-python"><div class="highlight"><pre># trace of W %*% H
+trace.MM &lt;- function(W, H) {
+ X &lt;- W * t(H)
+ sum(X)
+}
+
+# ||A - W %*% H||^2
+Fnorm &lt;- function(A, W, H) {
+ sum(A*A) - 2 * trace.MM(t(A) %*% W, H) + trace.MM(t(H) %*% (t(W) %*% W), H)
+}
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">KMeans is another iterative algorithm that cluster data pointers. In
+an iteration, it has three steps and below are the steps and the
+corresponding FlashR code.</div>
+<div class="line">Step 1: calculate distances between all data points to all cluster
+centers.</div>
+</div>
+<div class="code r highlight-python"><div class="highlight"><pre><span class="n">m</span> <span class="o">&lt;-</span> <span class="n">fm</span><span class="o">.</span><span class="n">inner</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">(</span><span class="n">centers</span><span class="p">),</span> <span class="n">fm</span><span class="o">.</span><span class="n">bo</span><span class="o">.</span><span class="n">euclidean</span><span class="p">,</span> <span class="n">fm</span><span class="o">.</span><span class="n">bo</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Step 2: find the closest cluster center for each data point.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>parts &lt;- fm.as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
+</pre></div>
+</div>
+<p>Step 3: update all cluster centers.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>centers &lt;- as.matrix(fm.groupby(data, 2, parts, agg.sum))
+cnts &lt;- fm.table(parts)
+centers &lt;- diag(1/cnts$Freq) %*% centers
+</pre></div>
+</div>
+</div>
+<div class="section" id="requirements-for-flashr-users">
+<h1>Requirements for FlashR users<a class="headerlink" href="#requirements-for-flashr-users" title="Permalink to this headline">¶</a></h1>
+<div class="line-block">
+<div class="line">There are two requirements for FlashR users to get the best
+performance out of FlashR:</div>
+<div class="line">Array-oriented programming</div>
+<div class="line">Understand space &amp; computation complexity</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">How to start</a></li>
+<li><a class="reference internal" href="#construct-flashr-vectors-and-matrices">Construct FlashR vectors and matrices</a></li>
+<li><a class="reference internal" href="#interact-with-native-r">Interact with native R</a></li>
+<li><a class="reference internal" href="#programming-interface">Programming interface</a></li>
+<li><a class="reference internal" href="#small-r-functions">&#8220;Small&#8221; R functions</a></li>
+<li><a class="reference internal" href="#some-examples-of-using-flashr">Some examples of using FlashR</a></li>
+<li><a class="reference internal" href="#requirements-for-flashr-users">Requirements for FlashR users</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="FlashX-Quick-Start-Guide.html" title="previous chapter">Install FlashX</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashR-programming-tutorial.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashR-programming-tutorial.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

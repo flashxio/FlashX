@@ -1,0 +1,240 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Load a graph to FlashGraphR &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="load-a-graph-to-flashgraphr">
+<h1>Load a graph to FlashGraphR<a class="headerlink" href="#load-a-graph-to-flashgraphr" title="Permalink to this headline">¶</a></h1>
+<p>Before running any graph algorithms on a graph, users need to first load
+the graph to FlashGraphR. There are multiple ways of loading a graph to
+FlashGraphR.</p>
+<ul class="simple">
+<li>Load a graph from a file that contains an edge list in the text
+format in Linux filesystem:
+<code class="docutils literal"><span class="pre">g</span> <span class="pre">&lt;-</span> <span class="pre">fg.load.graph(&quot;edge_list_file&quot;)</span></code>. FlashGraphR reads the graph
+in the edge list file and converts it into the FlashGraph format. The
+graph is kept in memory. The function returns a FlashGraphR object.</li>
+<li>Load a graph from a file that contains a graph in the FlashGraph
+format:
+<code class="docutils literal"><span class="pre">g</span> <span class="pre">&lt;-</span> <span class="pre">fg.load.graph(&quot;adj_list_file&quot;,</span> <span class="pre">index=&quot;index_file&quot;)</span></code>. A graph
+in the FlashGraph format has two parts: the graph file and the index
+file. When users specify an index file, FlashGraphR assumes that the
+input graph file is in the FlashGraph format. FlashGraphR reads the
+graph and its index and keeps them in memory. The function returns a
+FlashGraphR object.</li>
+<li>Load a graph from iGraph.
+<code class="docutils literal"><span class="pre">g</span> <span class="pre">&lt;-</span> <span class="pre">fg.load.igraph(ig)</span></code>. FlashGraphR converts the iGraph object
+into the FlashGraph format and keeps it in memory. The function
+returns a FlashGraphR object.</li>
+<li>Load a graph in the FlashGraph format to SAFS. Users need to use a
+SAFS tool
+<a class="reference external" href="https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual#utility-tool-in-safs">SAFS-util</a>
+to load a graph in the FlashGraph format to SAFS. Later, FlashGraphR
+can perform graph algorithms on the graph without loading it to
+memory. Right now, this is the only way of realizing the full power
+of FlashGraph to perform graph analysis. After loading a graph to
+SAFS, users need to invoke <code class="docutils literal"><span class="pre">fg.get.graph</span></code> to get a FlashGraphR
+object to access a graph on SAFS.</li>
+</ul>
+</div>
+<div class="section" id="the-graph-algorithms">
+<h1>The graph algorithms<a class="headerlink" href="#the-graph-algorithms" title="Permalink to this headline">¶</a></h1>
+<p>Once a graph is loaded to FlashGraphR, users can perform graph
+algorithms on the graph. The graph applications supported by FlashGraph
+are listed below:</p>
+<ul class="simple">
+<li>weakly connected components: <code class="docutils literal"><span class="pre">fg.clusters(g,</span> <span class="pre">mode=&quot;weak&quot;)</span></code></li>
+<li>strongly connected components: <code class="docutils literal"><span class="pre">fg.clusters(g,</span> <span class="pre">mode=&quot;strong&quot;)</span></code></li>
+<li>graph transitivity: <code class="docutils literal"><span class="pre">fg.transitivity(g)</span></code></li>
+<li>PageRank: <code class="docutils literal"><span class="pre">fg.page.rank(g)</span></code></li>
+<li>triangle counting: <code class="docutils literal"><span class="pre">fg.directed.triangles(g)</span></code> and
+<code class="docutils literal"><span class="pre">fg.undirected.triangles(g)</span></code></li>
+<li>scan statistics: <code class="docutils literal"><span class="pre">fg.topK.scan(g)</span></code> and <code class="docutils literal"><span class="pre">fg.local.scan(g)</span></code></li>
+<li>coreness: <code class="docutils literal"><span class="pre">fg.coreness(g)</span></code></li>
+<li>diameter estimation: <code class="docutils literal"><span class="pre">fg.diameter(g)</span></code></li>
+<li>sparse matrix vector multiplication: <code class="docutils literal"><span class="pre">fg.multiply(g,</span> <span class="pre">input.vec)</span></code>
+and <code class="docutils literal"><span class="pre">fg.multiply(g,</span> <span class="pre">input.vec,</span> <span class="pre">transpose=TRUE)</span></code></li>
+<li>eigensolver: <code class="docutils literal"><span class="pre">fg.eigen(g)</span></code></li>
+<li>SVD: <code class="docutils literal"><span class="pre">fg.SVD(g)</span></code></li>
+<li>spectral clustering:
+<code class="docutils literal"><span class="pre">fg.spectral.clusters(g,</span> <span class="pre">num.clusters,</span> <span class="pre">which=&quot;adj&quot;)</span></code>. It supports
+performing spectral clustering on adjacency matrix, Laplacian matrix
+and normalized Laplacian matrix.</li>
+</ul>
+</div>
+<div class="section" id="other-functions">
+<h1>Other functions<a class="headerlink" href="#other-functions" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">fg.list.graphs</span></code>: list all graphs loaded to FlashGraphR.</li>
+<li><code class="docutils literal"><span class="pre">fg.exist.graph</span></code>: test if a graph has been loaded to FlashGraphR.</li>
+<li><code class="docutils literal"><span class="pre">fg.vcount</span></code>: get the number of vertices in a graph.</li>
+<li><code class="docutils literal"><span class="pre">fg.ecount</span></code>: get the number of edges in a graph.</li>
+<li><code class="docutils literal"><span class="pre">fg.in.mem</span></code>: whether a graph is stored in memory or on disks.</li>
+<li><code class="docutils literal"><span class="pre">fg.is.directed</span></code>: whether a graph is directed.</li>
+<li><code class="docutils literal"><span class="pre">fg.degree</span></code>: get the degrees of all vertices.</li>
+<li><code class="docutils literal"><span class="pre">fg.fetch.subgraph</span></code>: extract an induced subgraph.</li>
+</ul>
+<div class="section" id="examples-of-using-flashgraphr">
+<h2>Examples of using FlashGraphR<a class="headerlink" href="#examples-of-using-flashgraphr" title="Permalink to this headline">¶</a></h2>
+<p>Users can use R to further process the results returned from FlashGraph.
+Here are some examples how users process the results of the strongly
+connected components.</p>
+<pre>
+# Get the strongly connected components.
+# It returns an array whose elements are the component Ids of the vertices.
+cc &lt;- fg.cluster(fg, "strong")
+# Get the size of each component
+counts &lt;- as.data.frame(table(cc[cc >= 0]))
+# Get the largest component ID
+lcc.id &lt;- as.integer(levels(counts$Var1)[which.max(counts$Freq)])
+# Get all vertices in the largest component
+lcc.v &lt;- which(cc == lcc.id)
+# Get the induced subgraph with all vertices in the largest components
+# Right now, this function is implemented with all data in memory, so run this function with caution.
+sub.fg &lt;- fg.fetch.subgraph(fg, vertices=lcc.v - 1, compress=FALSE)
+</pre><p>Some of the graph algorithms in FlashGraphR are implemented in R by
+using other graph algorithms in FlashGraphR. Below show two examples of
+how to use existing graph algorithms in FlashGraphR to implement other
+graph algorithms.</p>
+<div class="line-block">
+<div class="line">One example is to compute graph transitivity. The code below computes
+both global and local graph transitivity for both directed and
+undirected graphs.</div>
+<div class="line"><br /></div>
+<div class="line">deg &lt;- fg.degree(graph)</div>
+<div class="line">if (type == &#8220;local&#8221;) {</div>
+<div class="line">if (graph$directed) {</div>
+<div class="line">(fg.local.scan(graph) - deg) / (deg * (deg - 1))</div>
+<div class="line">}</div>
+<div class="line">else {</div>
+<div class="line">2 * fg.undirected.triangles(graph) / (deg * (deg - 1))</div>
+<div class="line">}</div>
+<div class="line">}</div>
+<div class="line">else {</div>
+<div class="line">if (graph$directed) {</div>
+<div class="line">sum(fg.local.scan(graph) - deg) / sum(deg * (deg - 1))</div>
+<div class="line">}</div>
+<div class="line">else {</div>
+<div class="line">2 * sum(fg.undirected.triangles(graph)) / sum(deg * (deg - 1))</div>
+<div class="line">}</div>
+<div class="line">}</div>
+<div class="line"><br /></div>
+</div>
+<div class="line-block">
+<div class="line">Another example is to perform spectral clustering on the normalized
+Laplacian matrix of a graph.</div>
+<div class="line"><br /></div>
+<div class="line">d &lt;- fg.degree(fg)</div>
+<div class="line">d_.5 &lt;- 1/sqrt(d)</div>
+<div class="line"># multiply function on the normalized laplacian matrix.</div>
+<div class="line">multiply &lt;- function(x, extra)</div>
+<div class="line">{</div>
+<div class="line"># D^(-1/2) * L * D^(-1/2) * x</div>
+<div class="line">x - d_.5 * fg.multiply(fg, d_.5 * x)</div>
+<div class="line">}</div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre>eigen &amp;lt;- arpack(multiply, sym=TRUE,
+                options=list(n=fg.vcount(fg), which=&quot;LM&quot;,
+                             nev=num.eigen, ncv=2 * num.eigen))
+kmeans(eigen$vectors, num.clusters, algorithm=&quot;MacQueen&quot;)
+</pre></div>
+</div>
+</pre></div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Load a graph to FlashGraphR</a></li>
+<li><a class="reference internal" href="#the-graph-algorithms">The graph algorithms</a></li>
+<li><a class="reference internal" href="#other-functions">Other functions</a><ul>
+<li><a class="reference internal" href="#examples-of-using-flashgraphr">Examples of using FlashGraphR</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashGraphR-programming-tutorial.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashGraphR-programming-tutorial.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

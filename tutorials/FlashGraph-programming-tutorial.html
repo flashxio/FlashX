@@ -1,0 +1,299 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Vertex program &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <p>FlashGraph provides a flexible vertex-centric programming interface. In
+this programming model, each vertex performs user-defined tasks
+independently and interacts with other vertices as defined by program
+logic. A vertex affects the state of others by sending messages to them
+as well as activating them. Notably, FlashGraph allows a vertex to send
+messages to any vertex in the graph. A vertex can also read the vertex
+information of any vertex from SSDs as well as the state of any vertex
+in memory.</p>
+<p>A graph algorithm usually progresses in iterations. In each iteration,
+the graph engine executes a user-defined task on each activated vertex.
+An iteration ends when there are no more active vertices in the
+iteration and no vertices have pending requests in the graph engine. An
+algorithm ends when there aren’t active vertices in the next iteration.</p>
+<div class="section" id="vertex-program">
+<h1>Vertex program<a class="headerlink" href="#vertex-program" title="Permalink to this headline">¶</a></h1>
+<p>The most commonly way of implementing a graph algorithm in FlashGraph is
+to define computation vertices by inheriting the <code class="docutils literal"><span class="pre">compute_vertex</span></code>
+class . Users define vertex state and implement three <code class="docutils literal"><span class="pre">run</span></code> methods in
+the computation vertices, as shown below. FlashGraph executes the
+<code class="docutils literal"><span class="pre">run</span></code> method exactly once for each active vertex in an iteration; the
+order of execution of this method on vertices is subject to scheduling
+by FlashGraph. The execution of the <code class="docutils literal"><span class="pre">run_on_vertex</span></code> and
+<code class="docutils literal"><span class="pre">run_on_message</span></code> methods is event-driven. FlashGraph executes
+<code class="docutils literal"><span class="pre">run_on_vertex</span></code> when the edge list of a vertex requested by the
+current vertex is ready in the page cache. FlashGraph executes
+<code class="docutils literal"><span class="pre">run_on_message</span></code> if the vertex receives messages from other vertices.
+The <code class="docutils literal"><span class="pre">run_on_message</span></code> method may be executed even if a vertex is
+inactive in an iteration. All examples assume <code class="docutils literal"><span class="pre">using</span> <span class="pre">namespace</span> <span class="pre">fg;</span></code> is
+declared.</p>
+<p>Given the programming interface, breadth-first search can be simply
+expressed as the code below. If a vertex has not been visited, it issues
+a request to read its neighbor list in <code class="docutils literal"><span class="pre">run</span></code> and activates its
+neighbors in <code class="docutils literal"><span class="pre">run_on_vertex</span></code>. In this example, vertices do not need to
+send messages to one another so we do not need to implement
+<code class="docutils literal"><span class="pre">run_on_message</span></code>.</p>
+</div>
+<div class="section" id="initialize-vertex-state">
+<h1>Initialize vertex state<a class="headerlink" href="#initialize-vertex-state" title="Permalink to this headline">¶</a></h1>
+<p>There are two ways of initializing vertex state. Programmers can
+initialize vertex state in the constructor of the user-defined
+computation vertex. In the example of BFS, programmers only need to
+initialize <code class="docutils literal"><span class="pre">has_visited</span></code> in the constructor of bfs_vertex. For simple
+graph algorithms, this is usually enough.</p>
+<p>In a more complex case, a graph algorithm may require to execute the
+vertex program multiple times or execute multiple vertex programs.
+Therefore, it needs to set some vertices to a certain state or reset all
+vertices. FlashGraph provides another mechanism to initialize vertex
+state. Programmers need to implement the <code class="docutils literal"><span class="pre">vertex_initiator</span></code> interface,
+shown as below. Users can pass a customized vertex initializer to the
+graph engine by invoking its <code class="docutils literal"><span class="pre">init_all_vertices()</span></code> or its start
+function. An example of using a customized vertex initializer can be
+found in <a class="reference external" href="https://github.com/icoming/FlashGraph/blob/graph-release/flash-graph/sssp/sssp.cpp">single source shortest
+path</a>.</p>
+</div>
+<div class="section" id="interaction-with-other-vertices">
+<h1>Interaction with other vertices<a class="headerlink" href="#interaction-with-other-vertices" title="Permalink to this headline">¶</a></h1>
+<p>There are four ways for a vertex to interact with other vertices: a
+vertex can send messages to other vertices; a vertex can read in-memory
+vertex state of other vertices directly; a vertex can read the adjacency
+list of other vertices from SSDs.</p>
+<div class="section" id="message-passing">
+<h2>message passing<a class="headerlink" href="#message-passing" title="Permalink to this headline">¶</a></h2>
+<p>FlashGraph provides two methods for message passing:
+<code class="docutils literal"><span class="pre">vertex_program::send_msg()</span></code> and <code class="docutils literal"><span class="pre">vertex_program::multicast_msg()</span></code>.
+The former method is point-to-point communication between two vertices
+and the second method allows a vertex to send a message to multiple
+vertices. In most of the cases, multicast is used because multicast has
+much smaller overhead and most graph algorithms require a vertex to send
+the same message to all of its neighbors. A vertex gets notified of the
+messages sent from other vertices through <code class="docutils literal"><span class="pre">run_on_message()</span></code>.</p>
+<p>All messages need to be inherited from the <code class="docutils literal"><span class="pre">vertex_message</span></code> class. Its
+constructor takes two arguments: the size of the user-defined message
+and the <code class="docutils literal"><span class="pre">activate</span></code> flag. When the <code class="docutils literal"><span class="pre">activate</span></code> flag is set, the
+recipient vertices will be activated.</p>
+<p>To reduce memory consumption, FlashGraph delivers messages to vertices
+whenever it receives messages. Therefore, there is no guarantee of the
+execution order of the three run methods. It is programmers&#8217;
+responsibility of maintaining the correctness of vertex state. By
+delivering messages to vertices immediately, we enable asynchronous
+execution of graph algorithms. That is, an update to vertex state can be
+immediately exposed to other vertices. It has advantage for some graph
+algorithms because asynchronous execution can accelerate some graph
+algorithms. This is very different from Pregel, which only delivers
+messages to vertices at the end of an iteration.</p>
+</div>
+<div class="section" id="vertex-activation">
+<h2>Vertex activation<a class="headerlink" href="#vertex-activation" title="Permalink to this headline">¶</a></h2>
+<p>A vertex can activate other vertices to run in the next iteration. There
+are two ways of activating other vertices: with the dedicated methods
+<code class="docutils literal"><span class="pre">vertex_program::activate_vertex</span></code> and
+<code class="docutils literal"><span class="pre">vertex_program::activate_vertices</span></code>; with the activate flag in
+messages sent to other vertices.</p>
+</div>
+<div class="section" id="directed-memory-read">
+<h2>Directed memory read<a class="headerlink" href="#directed-memory-read" title="Permalink to this headline">¶</a></h2>
+<p>We can get a reference to a vertex of a specified ID with
+<code class="docutils literal"><span class="pre">graph_engine::get_vertex()</span></code>. This interface only works in a
+shared-memory machine and may cause significant random memory access.
+Therefore, this interface is not favored and should be used with
+caution.</p>
+</div>
+<div class="section" id="access-adjacency-list-from-ssds">
+<h2>Access adjacency list from SSDs<a class="headerlink" href="#access-adjacency-list-from-ssds" title="Permalink to this headline">¶</a></h2>
+<p>It takes two steps to read adjacency lists from SSDs: a vertex issues
+read requests; the user-defined computation vertex gets notified through
+its <code class="docutils literal"><span class="pre">run_on_vertex()</span></code>. A vertex can read entire adjacency lists with
+<code class="docutils literal"><span class="pre">compute_vertex::request_vertices()</span></code>. A directed vertex can read
+partial adjacency lists with
+<code class="docutils literal"><span class="pre">compute_directed_vertex::request_partial_vertices()</span></code>. In a partial
+request, a directed vertex can request an in-edge list or an out-edge
+list or both.</p>
+</div>
+<div class="section" id="data-iterators">
+<h2>Data iterators<a class="headerlink" href="#data-iterators" title="Permalink to this headline">¶</a></h2>
+<div class="line-block">
+<div class="line">FlashGraph defines very useful iterators for neighbor lists and edge
+attributes (for graphs that contain them).</div>
+<div class="line">FlashGraph implements both sequential (Java-style) iterators and
+traditional STL-style iterators. Java-style iterators will improve
+performance in sequential access tasks and can be parameterized with a
+<code class="docutils literal"><span class="pre">start</span></code> and <code class="docutils literal"><span class="pre">end</span></code> positions for partial edge list numeration. For
+both examples assume the vertex has requested it&#8217;s edge list in the
+<code class="docutils literal"><span class="pre">run(vertex_program</span> <span class="pre">&amp;prog)</span></code> method.</div>
+</div>
+<div class="section" id="java-style-iterators">
+<h3>Java-style iterators<a class="headerlink" href="#java-style-iterators" title="Permalink to this headline">¶</a></h3>
+<p>The code below shows how the Java-style iterators can be used to iterate
+an edge list and access a data item in an attributed graph.</p>
+</div>
+<div class="section" id="stl-style-iterators">
+<h3>STL-style iterators<a class="headerlink" href="#stl-style-iterators" title="Permalink to this headline">¶</a></h3>
+<div class="line-block">
+<div class="line">The code below shows how the STL-style iterators can be used to
+iterate an edge list and access a data item in an attributed graph.</div>
+<div class="line">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.cpp}</div>
+<div class="line">void nmf_vertex::run(vertex_program &amp;prog, const page_vertex
+&amp;vertex) {</div>
+<div class="line">// Iterator for neighbor IDs</div>
+<div class="line">edge_iterator neigh_it =
+vertex.get_neigh_begin(edge_type::OUT_EDGE);</div>
+<div class="line">edge_iterator neigh_end =
+vertex.get_neigh_end(edge_type::OUT_EDGE);</div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre>// Iterator for edge count (weight) attribute
+data_iterator count_it =
+      ((const page_directed_vertex&amp;)vertex).get_data_begin(OUT_EDGE);
+data_iterator count_end =
+         ((const page_directed_vertex&amp;)vertex).get_data_end(OUT_EDGE);
+
+for (; neigh_it != neigh_end; ++neigh_it) {
+    vertex_id_t nid = *it;
+    ++count_it;
+    edge_count e = *count_it;
+
+    // Make use of `nid` and `e`
+    std::cout &lt;&lt; &quot;Neighbor = &quot; &lt;&lt; nid &lt;&lt; &quot; Edge count = &quot;
+                          &lt;&lt; e.get_count() &lt;&lt; std::endl;
+}
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">}</div>
+<div class="line">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</div>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="execute-vertex-program">
+<h1>Execute vertex program<a class="headerlink" href="#execute-vertex-program" title="Permalink to this headline">¶</a></h1>
+<p>The code below executes the BFS program shown above. We create a
+<code class="docutils literal"><span class="pre">graph_index</span></code> object that contains the user-defined vertex state for
+all vertices and create a <code class="docutils literal"><span class="pre">graph_engine</span></code> object that executes the user
+code for the graph algorithm. In the case of BFS, the algorithm starts
+on a single vertex. When a graph engine starts, the user code runs in
+the worker threads inside the graph engine. We can invoke
+<code class="docutils literal"><span class="pre">wait4complete</span></code> to wait the graph algorithm to complete.</p>
+</div>
+<div class="section" id="synchronous-execution">
+<h1>Synchronous execution<a class="headerlink" href="#synchronous-execution" title="Permalink to this headline">¶</a></h1>
+<p>By default, FlashGraph executes user-defined vertex computation
+asynchronously. That is, the update to the vertex state is immediately
+exposed to all other vertices in the same iteration. The asynchronous
+execution can accelerate the convergence of many graph algorithms.
+However, it is not deterministic and some graph algorithms need to be
+executed synchronously.</p>
+<p>FlashGraph also allows synchronous execution. FIXME</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Vertex program</a></li>
+<li><a class="reference internal" href="#initialize-vertex-state">Initialize vertex state</a></li>
+<li><a class="reference internal" href="#interaction-with-other-vertices">Interaction with other vertices</a><ul>
+<li><a class="reference internal" href="#message-passing">message passing</a></li>
+<li><a class="reference internal" href="#vertex-activation">Vertex activation</a></li>
+<li><a class="reference internal" href="#directed-memory-read">Directed memory read</a></li>
+<li><a class="reference internal" href="#access-adjacency-list-from-ssds">Access adjacency list from SSDs</a></li>
+<li><a class="reference internal" href="#data-iterators">Data iterators</a><ul>
+<li><a class="reference internal" href="#java-style-iterators">Java-style iterators</a></li>
+<li><a class="reference internal" href="#stl-style-iterators">STL-style iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#execute-vertex-program">Execute vertex program</a></li>
+<li><a class="reference internal" href="#synchronous-execution">Synchronous execution</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashGraph-programming-tutorial.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashGraph-programming-tutorial.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

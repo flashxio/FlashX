@@ -1,0 +1,154 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Comparison to PowerGraph &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="comparison-to-powergraph">
+<h1>Comparison to PowerGraph<a class="headerlink" href="#comparison-to-powergraph" title="Permalink to this headline">¶</a></h1>
+<p>Here are some performance results comparing FlashGraph and
+<a class="reference external" href="http://graphlab.org/projects/index.html">PowerGraph</a> on large graphs
+on a single machine. We choose PowerGraph for comparison because it is a
+highly adopted, distributed, in-memory graph framework that on-average
+performs well and is among the previous state of the art graph engines.
+We run five graph applications: breadth-first search (BFS), triangle
+counting (TC), weakly connected components (WCC), scan statistics (SS),
+and pagerank (PR). Each has a FlashGraph implementation and a
+corresponding PowerGraph implementation. We use these applications to
+compare the performance of FlashGraph to that of PowerGraph on the
+twitter graph (42M vertices and 1.5B edges) and the <a class="reference external" href="http://webdatacommons.org/hyperlinkgraph/">subdomain
+graph</a> (89M vertices and
+2B edges). Figure 8 shows the runtime of the applications in both graph
+engines and Figure 9 shows the memory consumption of FlashGraph and
+PowerGraph. Although FlashGraph runs in the semi-external memory mode,
+it can still significantly outperform PowerGraph in most graph
+applications and it uses a small fraction of the memory used by
+PowerGraph.</p>
+<p><img alt="runtime on twitter and subdomain" src="http://www.cs.jhu.edu/~zhengda/FlashGraph/perf1.png" /></p>
+<p><img alt="memory consumption" src="http://www.cs.jhu.edu/~zhengda/FlashGraph/perf2.png" /></p>
+</div>
+<div class="section" id="flashgraph-on-a-billion-node-graph">
+<h1>FlashGraph on a billion-node graph<a class="headerlink" href="#flashgraph-on-a-billion-node-graph" title="Permalink to this headline">¶</a></h1>
+<p>FlashGraph enables us to process very large graphs in a single machine.
+Here we demonstrate that FlashGraph can process a real-world <a class="reference external" href="http://webdatacommons.org/hyperlinkgraph/">hyperlink
+page graph</a> (3.4B vertices
+and 129B edges) in a single machine. The table below shows the
+performance of the same graph applications as above. It also includes
+the performance of Betweenness centrality (BC) from a single vertex.</p>
+<p><img alt="runtime on page graph" src="http://www.cs.jhu.edu/~zhengda/FlashGraph/pg-perf.png" /></p>
+</div>
+<div class="section" id="comparison-to-other-graph-engines-on-large-graphs">
+<h1>Comparison to other graph engines on large graphs<a class="headerlink" href="#comparison-to-other-graph-engines-on-large-graphs" title="Permalink to this headline">¶</a></h1>
+<div class="line-block">
+<div class="line">FlashGraph takes only eight minutes to traverse the page graph (3.5B
+vertices and 128B edges) with a cache size of 4GB and less than six
+minutes with a cache size of 256 GB.</div>
+<div class="line"><a class="reference external" href="http://dl.acm.org/citation.cfm?id=1807184">Pregel</a> used 300
+multicore machines to</div>
+<div class="line">run the shortest path algorithm on their largest random graph (1B
+vertices and 127B edges)</div>
+<div class="line">and took a little over ten minutes. More recently,</div>
+<div class="line"><a class="reference external" href="http://research.microsoft.com/en-us/projects/trinity/">Trinity</a></div>
+<div class="line">took over ten minutes to perform breadth-first search on a</div>
+<div class="line">graph of one billion vertices and 13 billion edges on 14 12-core</div>
+<div class="line">machines.</div>
+</div>
+<p>FlashGraph takes 75 minutes to run 30 iterations of PageRank on the page
+graph. Based on a recent talk by the main developer of
+<a class="reference external" href="http://www.youtube.com/watch?v=b5Qmz4zPj-M">Giraph</a>, Giraph running
+with 20 workers can run five iterations of PageRank on a graph with 5
+billion edges in approx. 75 minutes.</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Comparison to PowerGraph</a></li>
+<li><a class="reference internal" href="#flashgraph-on-a-billion-node-graph">FlashGraph on a billion-node graph</a></li>
+<li><a class="reference internal" href="#comparison-to-other-graph-engines-on-large-graphs">Comparison to other graph engines on large graphs</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashGraph-performance.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashGraph-performance.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

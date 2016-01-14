@@ -1,0 +1,360 @@
+Although FlashX is designed to run on top of a high-speed SSD array, it
+can also run on magnetic disks and completely in memory. Intuitively,
+FlashX runs slower on magnetic disks than on SSDs. The guide below walks
+you through the steps to run FlashX on a magnetic disk and completely in
+memory for small graphs. In the following steps, we denote the top
+FlashX directory as ``FG_TOP`` and we assume we are in the top directory
+throughout this guide. The steps have been tested in Ubuntu 12.04 and
+Ubuntu 14.04.
+
+Install FlashX
+==============
+
+Step 0: Library dependency
+--------------------------
+
+| FlashX requires the following libraries:
+  ``libpthread, libaio, libnuma, librt, boost, libhwloc, BLAS, zlib``.
+| Users need to install these libraries before compiling the code of
+  FlashX.
+| In Ubuntu, we install all tools and libraries for compiling FlashX as
+  follows:
+
+::
+
+    sudo apt-get install -y git cmake g++
+    sudo apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+
+Step 1: Get FlashX's source code
+--------------------------------
+
+Users can download FlashX's source code from
+`here <https://github.com/icoming/FlashX/releases>`__ or clone it from
+the `github <https://github.com/icoming/FlashX.git>`__ repository.
+
+Step 2: Compile FlashX
+----------------------
+
+In the top directory of FlashX, run
+``mkdir build; cd build; cmake ../; make`` to create a new directory,
+enter the new directory and compile all code of FlashX. If you have
+multiple processing cores you may prefer to run ``make -j #procs``
+
+By default, FlashEigen is disabled because it requires users to install
+Trilinos in advance. FlashEigen was designed to compute eigenvalues of a
+graph with hundreds of millions of vertices or even billions of
+vertices. For smaller graphs, we can use `FlashR with
+ARPACK <https://github.com/icoming/FlashX/wiki/Use-FlashR-with-ARPACK>`__
+to compute eigenvalues of graphs of multiple million vertices. As such,
+users who don't need to compute eigenvalues of very large graphs can
+just to Step 3.
+
+Step 2.1 Install Trilinos (optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+| To compile FlashX with FlashEigen, users need to install the Anasazi
+  eigensolver in Trilinos first.
+| The Trilinos packages require a Fortran compiler and a BLAS and LAPACK
+  package.
+
+``sudo apt-get install gfortran libatlas-dev liblapack-dev``
+
+Follow the
+`instructions <https://trilinos.org/oldsite/TrilinosBuildQuickRef.html#configuring-makefile-generator>`__
+in Trilinos' website to compile it. Here summaries the steps:
+
+Inside the top directory of the Trilinos source code, create the
+following script named ``do-configure``:
+
+::
+
+    #!/bin/sh
+    EXTRA_ARGS=$@
+    SOURCE_BASE=..
+    cmake \
+        -D CMAKE_BUILD_TYPE:STRING=RELEASE \
+        -D BUILD_SHARED_LIBS:BOOL=ON \
+        -D Trilinos_ENABLE_TESTS=OFF \
+        $EXTRA_ARGS \
+        ${SOURCE_BASE}
+
+| Make the script executable.
+| ``chmod u+x do-configure``
+
+Create a directory named ``build`` in the top directory and compile the
+Trilinos source code in the build directory.
+
+::
+
+    mkdir build
+    cd build/
+    ../do-configure -DTrilinos_ENABLE_Anasazi=ON
+    make -j32
+    make install
+
+Step 2.2: compile FlashX with FlashEigen (optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the top directory of FlashX, run
+``mkdir build; cd build; cmake -D ENABLE_TRILINOS:BOOL=ON ..; make``
+
+Step 3: compile and install FlashR
+----------------------------------
+
+If users don't have R installed, they can follow the
+`instruction <https://cran.r-project.org/bin/linux/ubuntu/README>`__ to
+install R in Ubuntu.
+
+``sudo apt-get install r-base-dev``
+
+FlashR requires igraph and Rcpp packages. Before installing FlashR, a
+user needs to install igraph, which installs the Rcpp package
+automatically. Users should install the latest R in order to install
+igraph. In the R environment, run
+
+``> install.packages("igraph")``
+
+In the top directory of FlashX, run ``./install_FlashR.sh`` to install
+FlashR. The script tests if FlashEigen is compiled in Step 2. If
+FlashEigen is compiled, the script will compile FlashR with FlashEigen
+automatically.
+
+Run FlashGraph
+==============
+
+To run FlashGraph, users need to construct a graph in the FlashGraph
+format. Many small graphs are publicly available. Stanford's
+`SNAP <http://snap.stanford.edu/data/>`__ project has a large collection
+of graphs. We currently require your graph be in **edge list text
+format**.
+
+Go to the top directory of FlashX.
+
+``wget http://snap.stanford.edu/data/wiki-Vote.txt.gz``
+
+FlashX provides a tool ``el2al`` to convert an edge list file in text
+format to the graph format supported by FlashGraph.
+
+::
+
+    gunzip wiki-Vote.txt.gz
+    build/matrix/test/el2al conf/run_test.txt wiki-Vote.txt wiki-Vote
+
+| This tool takes a configuration file, a graph file in text edge list
+  and a user-specified graph name. It creates two files wiki-Vote.adj
+  wiki-Vote.index.
+| For the purpose of demonstration, FlashGraph provides
+  ``flash-graph/conf/run_test.txt``. The details on the configuration
+  file can be found
+  `here <https://github.com/icoming/FlashGraph/wiki/FlashGraph-tutorial#flashgraph-configuration-parameters>`__.
+
+Run FlashGraph in the standalone mode
+-------------------------------------
+
+Although FlashGraph is designed to work with SAFS, it can also run in
+the standalone mode. In this mode, FlashGraph can load graphs in the
+FlashGraph format in memory and perform graph algorithms on the
+in-memory graphs. This is the simplest setup for FlashGraph.
+
+| FlashGraph provides a few built-in graph algorithm implementations.
+  Users can run these implementations in
+  flash-graph/test-algs/test\_algs. test\_algs takes three arguments: a
+  FlashGraph config file, a graph file of the FlashGraph format and an
+  index file for the graph file from the local Linux filesystem.
+| For example, the command below runs WCC (weakly connected components)
+  on the wiki graph.
+
+``build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index wcc``
+
+Run FlashGraph with SAFS.
+-------------------------
+
+FlashGraph is designed to run with SAFS, so that it can run on top of an
+SSD array. When running FlashGraph with SAFS, we get the full power of
+FlashGraph. It requires us to configure SAFS properly.
+
+Step 1: Configure SAFS
+~~~~~~~~~~~~~~~~~~~~~~
+
+It is fairly simple to configure SAFS for an SSD array in an SMP
+machine. Users only need to mount the SSDs and specify the paths to the
+mount points. SAFS also provides a script to automate the process. It
+becomes more complex to configure SAFS for an SSD array in a NUMA
+machine, where we need to take processor affinity into account to
+maximize the performance of the SSD array. We refer users to `SAFS
+configurations <https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual#system-configurations-for-safs>`__
+for more details.
+
+To run SAFS, users need to provide a data config file that indicates the
+paths of the directories where SAFS files are stored. Users need to set
+up the SAFS parameter ``root_conf`` to specify the data config file.
+
+| To run FlashGraph with SAFS, we need to specify ``root_conf`` in the
+  FlashGraph configuration file.
+| For the purpose of demonstration, FlashGraph provides ``run_test.txt``
+  and ``data_files.txt`` in ``flash-graph/conf/``. ``data_files.txt``
+  specifies the directory where SAFS files are stored. Replace
+  ``FG_TOP`` in the two configuration files with the location of the top
+  directory of FlashGraph.
+
+Step 2: Load graph files to SAFS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We need to load graph files to SAFS before we run FlashGraph. We provide
+a tool called ``SAFS-util`` to load a file in the native filesystem to
+SAFS. The following commands load the graph files for ``wiki-Vote`` to
+SAFS.
+
+::
+
+    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote wiki-Vote.adj
+    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote-index wiki-Vote.index
+
+Step 3: Run graph algorithms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The command below demonstrates how to run PageRank on wiki-Vote.
+
+::
+
+    build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote wiki-Vote-index pagerank2
+    ...
+    The sum of pagerank of all vertices: 3146.831787
+    v5254: 6.384571
+    v7553: 6.444084
+    v4191: 6.734981
+    v2237: 7.413904
+    v2470: 7.496633
+    v2398: 7.745999
+    v2625: 9.750073
+    v6634: 10.646951
+    v15: 10.923159
+    v4037: 13.684291
+
+Run FlashR
+==========
+
+FlashR contains functions that call graph algorithms in FlashGraph, the
+eigensolvers in FlashEigen and matrix operations in FlashMatrix.
+
+Configure FlashR
+----------------
+
+FlashR uses the same configuration file as FlashGraph. Both FlashGraph
+and FlashMatrix provides a default configuration file:
+``flash-graph/conf/run_test.txt`` and ``matrix/conf/run_test.txt``.
+
+The important parameters that users need to configure for a specific
+machine are:
+
+-  ``num_nodes``: the number of NUMA nodes that FlashR can run on.
+-  ``threads``: the number of threads that FlashR uses.
+-  ``root_conf``: the data config file as explained above.
+   In addition, users also need to specify the following parameters for
+   FlashGraph.
+-  ``cache_size``: the page cache size in SAFS.
+-  ``num_io_threads``: the number of I/O threads per NUMA node.
+
+Users can use the following function to configure FlashR.
+
+::
+
+    > fg.set.conf("flash-graph/conf/run_test.txt")
+
+Run FlashGraph in FlashR
+------------------------
+
+Users can run graph algorithms provided by FlashGraph in FlashR. Here
+shows an example of running PageRank.
+
+::
+
+    > library(FlashR)
+    > fg.set.conf("flash-graph/conf/run_test.txt")
+    > g <- fg.load.graph("wiki.adj", "wiki.index")
+    > res <- fg.page.rank(g)
+    > res <- sort(res, decreasing=FALSE, index.return=TRUE)
+    > tail(res$x, n=10)
+     [1]  6.354546  6.411633  6.703026  7.396998  7.483035  7.702387  9.680690
+     [8] 10.584648 10.879063 13.640081
+    > tail(res$ix, n=10)-1
+     [1] 5254 7553 4191 2237 2470 2398 2625 6634   15 4037
+
+Compute eigenvalues in FlashR
+-----------------------------
+
+There are two ways of computing eigenvalues on a large sparse graph.
+Users can compute eigenvalues with FlashEigen in FlashR if FlashEigen is
+installed. Otherwise, users can compute eigenvalues with ARPACK and
+FlashR for relatively smaller graphs (millions of vertices).
+
+Construct a sparse matrix
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Users can construct a sparse matrix image from a graph image in
+FlashGraph format.
+
+::
+
+    build/matrix/test/al22d matrix/conf/run_test.txt ./wiki.adj ./wiki.index wiki
+
+The wiki graph is directed, so ``al22d`` outputs four files.
+
+::
+
+    $ ls wiki*
+    wiki.mat  wiki.mat_idx  wiki_t.mat  wiki_t.mat_idx
+
+Load a sparse matrix in FlashR
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are multiple ways of loading a sparse matrix in FlashR.
+
+-  Users can load a graph image in FlashGraph format and get a sparse
+   matrix.
+
+   ::
+
+       > g <- fg.load.graph("./wiki.adj", "./wiki.index")
+       > m <- fm.get.matrix(g)
+
+-  Users can load a sparse matrix image directly.
+
+   ::
+
+       > m <- fm.load.matrix("./wiki.mat", "./wiki.mat_idx", "./wiki_t.mat", "./wiki_t.mat_idx")
+
+Run FlashEigen
+~~~~~~~~~~~~~~
+
+``fm.eigen`` is the R wrapper of FlashEigen. It is designed to have a
+very similar interface to ARPACK in iGraph. Below shows an example of
+using ``fm.eigen`` to compute SVD on the asymmetric matrix. Currently,
+FlashEigen only supports computing eigenvalues on symmetric matrices.
+
+::
+
+    > library(FlashR)
+    > fg.set.conf("matrix/conf/run_test.txt")
+    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > multiply <- function(x, extra) t(m) %*% (m %*% x)
+    > res <- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
+    > res$vals
+     [1] 10647.6830  4489.1724  2999.1288  2272.7854  1608.5572  1285.5764
+     [7]  1149.1096   921.1726   826.9480   758.7215
+
+Run FlashR + ARPACK
+~~~~~~~~~~~~~~~~~~~
+
+To compute eigenvalues with ARPACK and FlashR,
+
+::
+
+    > library(FlashR)
+    > fg.set.conf("matrix/conf/run_test.txt")
+    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > multiply <- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
+    > res <- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
+    > res$values
+     [1] 10647.6830  4489.1724  2999.1288  2272.7854  1608.5572  1285.5764
+     [7]  1149.1096   921.1726   826.9480   758.7215
