@@ -266,21 +266,28 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tFM_prof_file: " << prof_file;
 	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
-	BOOST_LOG_TRIVIAL(info) << "\trb_io_size" << rb_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size" << rb_steal_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size" << cpu_cache_size;
-	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
-	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
-	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tgroupby_buf_size" << groupby_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tvv_groupby_buf_size" << vv_groupby_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size" << stream_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf" << keep_mem_buf;
+	BOOST_LOG_TRIVIAL(info) << "\trb_io_size: " << rb_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size: " << rb_steal_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size: " << cpu_cache_size;
+	BOOST_LOG_TRIVIAL(info) << "\thilbert_order: " << hilbert_order;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes: " << num_nodes;
+	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size: " << sort_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tgroupby_buf_size: " << groupby_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tvv_groupby_buf_size: " << vv_groupby_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size: " << write_io_buf_size;
+	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size: " << stream_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf: " << keep_mem_buf;
 }
 
 inline void matrix_config::init(config_map::ptr map)
 {
+	// `threads' sets #threads for sparse matrix and dense matrix operations.
+	// But users can customize #threads for sparse matrix and dense matrix
+	// separately.
+	if (map->has_option("threads")) {
+		map->read_option_int("threads", num_SpM_threads);
+		map->read_option_int("threads", num_DM_threads);
+	}
 	if (map->has_option("SpM_threads"))
 		map->read_option_int("SpM_threads", num_SpM_threads);
 	if (map->has_option("DM_threads"))

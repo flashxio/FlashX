@@ -19,10 +19,10 @@ if [ -z "$path" ]; then
 fi
 
 fg_lib=`pwd`/build
-matrix_path=`find $fg_lib/flash-graph -name libmatrix.a`
-if [ -n "$matrix_path" ]; then
-	echo "find libmatrix.a"
-	export FG_EIGEN=1
+eigen_path=`find $fg_lib/matrix -name libeigen.a`
+if [ -n "$eigen_path" ]; then
+	echo "find libeigen.a"
+	export ENABLE_TRILINOS=1
 fi
 if [ -n "$path" ]; then
 	path=`dirname $path`

@@ -3,6 +3,7 @@
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
 #include "matrix_store.h"
+#include "sparse_matrix.h"
 
 const size_t num_eles = 1024 * 1024 * 10;
 size_t num_nodes = 1;
@@ -183,19 +184,21 @@ void test_conv2mat()
 
 int main(int argc, char *argv[])
 {
-	if (argc >= 3) {
-		num_nodes = atoi(argv[1]);
-		nthreads = atoi(argv[2]);
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
 	}
 
-	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_DM_threads(nthreads);
-	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
-			nthreads / num_nodes);
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
 	test_init();
 	test_mapping();
 	test_copy();
 	test_deep_copy();
 	test_sort();
 	test_conv2mat();
+
+	destroy_flash_matrix();
 }

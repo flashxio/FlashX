@@ -3,6 +3,13 @@
 # How data blocks of a SAFS file are mapped to Linux filesystem.
 RAID_mapping=RAID0
 
+# Allow users to write data to SAFS.
+writable=
+
+# The RAID block size in SAFS is 8MB. FlashMatrix requires a large RAID block
+# size.
+RAID_block_size=8388608
+
 # The number of parallel I/Os is allowed in a single thread.
 io_depth=4
 
@@ -10,21 +17,19 @@ io_depth=4
 cache_size=512M
 
 # The number of NUMA nodes
-num_nodes=4
+num_nodes=1
 
 # change FG_TOP to the path of the top directory of FlashGraph.
-root_conf=conf/data_files.txt
+root_conf=FG_TOP/matrix/conf/data_files.txt
 
 # whether or not to use Linux huge pages
 # huge_page=
 
+# The number of I/O threads per NUMA node.
+num_io_threads=1
 
 
+# Parameters for FlashMatrix
 
-# Parameters for FlashGraph
-
-# The number of worker threads to process a graph.
-threads=32
-
-# Keep adjacency lists of vertices in memory
-in_mem_graph=
+# The number of worker threads to process a matrix.
+threads=1

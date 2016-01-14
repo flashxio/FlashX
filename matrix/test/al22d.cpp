@@ -61,8 +61,7 @@ void read_data(char *data, size_t size, size_t num, off_t off, FILE *stream)
 fg::vertex_index::ptr load_vertex_index(const std::string &index_file)
 {
 	fg::vertex_index::ptr vindex;
-	safs::safs_file f(safs::get_sys_RAID_conf(), index_file);
-	if (f.exist())
+	if (safs::exist_safs_file(index_file))
 		vindex = fg::vertex_index::safs_load(index_file);
 	else {
 		safs::native_file f(index_file);
@@ -111,9 +110,8 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 		vv = detail::mem_vv_store::create(data, offs, get_scalar_type<char>());
 	}
 	else {
-		safs::safs_file f(safs::get_sys_RAID_conf(), graph_file);
-		if (!f.exist()) {
-			fprintf(stderr, "The graph file %s doesn't exist\n",
+		if (!safs::exist_safs_file(graph_file)) {
+			fprintf(stderr, "The graph file %s doesn't exist in SAFS\n",
 					graph_file.c_str());
 			return vector_vector::ptr();
 		}

@@ -1,10 +1,7 @@
-FlashGraph is an SSD-based graph analysis framework that we designed to process
-graphs with billions of vertices and hundreds of billions of edges or even larger.
-We extend FlashGraph to support processing more data structures such as sparse
-matrices and dense matrices. As such, FlashGraph is now able to support a wide
-variety of data mining and machine learning algorithms. We address the entire
-data analysis framework with FlashGraph-ng. The current implementation of
-FlashGraph-ng has four main components:
+FlashX is a collection of big data analytics tools that perform data analytics
+in the form of graphs and matrices. They utilize solid-state drives (SSDs) to
+scale to large datasets in a single machine. It has five main components:
+SAFS, FlashGraph, FlashMatrix, FlashEigen and FlashR.
 
 SAFS
 ========
@@ -26,7 +23,8 @@ With smart I/O scheduling, FlashGraph is able to achieve performance
 comparable to state-of-art in-memory graph analysis frameworks and
 significantly outperforms state-of-art distributed graph analysis frameworks
 while being able to scale to graphs with billions of vertices and hundreds
-of billions of edges.
+of billions of edges. Please see
+[the performance result](https://github.com/icoming/FlashX/wiki/FlashGraph-performance).
 
 FlashMatrix
 ===========
@@ -36,6 +34,14 @@ generalized matrix operations on sparse matrices and dense matrices to express
 varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
+
+FlashEigen
+==========
+FlashEigen is an eigensolver that extends the
+[Anasazi](https://trilinos.org/packages/anasazi/) eigensolvers with FlashMatrix.
+It computes eigenvalues of billion-node graphs efficiently and pricisely
+in a single machine. As such, FlashEigen enables users to perform spectral
+analysis on very large graphs in a single machine.
 
 FlashR
 ===========
@@ -51,11 +57,11 @@ is implemented as a regular R package.
 Documentation
 ========
 
-[FlashGraph-ng Quick start guide](http://www.flashgraph.net/documents/get_started2)
+[FlashGraph-ng Quick start guide](https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide)
 
-[FlashGraph programming tutorial](http://www.flashgraph.net/documents/tutorials/flashgraph-programming).
+[FlashGraph programming tutorial](https://github.com/icoming/FlashX/wiki/FlashGraph-programming-tutorial).
 
-[FlashR programming tutorial](http://www.flashgraph.net/documents/tutorials/flashr-programming)
+[FlashR programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 
 [FlashGraph performance and scalability](https://github.com/icoming/FlashGraph/wiki/FlashGraph-performance)
 

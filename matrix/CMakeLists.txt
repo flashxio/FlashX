@@ -45,5 +45,7 @@ add_library(FMatrix STATIC
 	cached_matrix_store.cpp
 )
 
-subdirs(eigensolver)
+if(ENABLE_TRILINOS)
+	subdirs(eigensolver)
+endif()
 subdirs(test)

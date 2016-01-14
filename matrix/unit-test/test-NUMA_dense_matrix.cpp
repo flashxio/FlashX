@@ -3,6 +3,7 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
+#include "sparse_matrix.h"
 
 using namespace fm;
 using namespace fm::detail;
@@ -223,17 +224,19 @@ void test_write2file()
 
 int main(int argc, char *argv[])
 {
-	if (argc >= 3) {
-		num_nodes = atoi(argv[1]);
-		num_threads = atoi(argv[2]);
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
 	}
 
-	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_DM_threads(num_threads);
-	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
-			num_threads / num_nodes);
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
 	test_write2file();
 	test_portion();
 	test_init();
 	test_transpose();
+
+	destroy_flash_matrix();
 }
