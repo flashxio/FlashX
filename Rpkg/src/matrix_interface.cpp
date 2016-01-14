@@ -32,6 +32,7 @@
 #include "eigensolver/eigensolver.h"
 #include "factor.h"
 #include "EM_dense_matrix.h"
+#include "combined_matrix_store.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -1478,6 +1479,50 @@ RcppExport SEXP R_FM_is_sym(SEXP pmat)
 	else
 		res[0] = false;
 	return res;
+}
+
+RcppExport SEXP R_FM_rbind(SEXP pmats)
+{
+	Rcpp::List mats(pmats);
+	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
+	for (int i = 0; i < mats.size(); i++) {
+		if (is_sparse(mats[i])) {
+			fprintf(stderr, "can't bind sparse matrix\n");
+			return R_NilValue;
+		}
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(mats[i]);
+		if (!mat->is_wide()) {
+			fprintf(stderr, "can't rbind two tall matrix\n");
+			return R_NilValue;
+		}
+		stores[i] = mat->get_raw_store();
+	}
+	// TODO does it matter what layout is here?
+	detail::combined_matrix_store::ptr combined
+		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_ROW);
+	return create_FMR_matrix(dense_matrix::create(combined), "");
+}
+
+RcppExport SEXP R_FM_cbind(SEXP pmats)
+{
+	Rcpp::List mats(pmats);
+	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
+	for (int i = 0; i < mats.size(); i++) {
+		if (is_sparse(mats[i])) {
+			fprintf(stderr, "can't bind sparse matrix\n");
+			return R_NilValue;
+		}
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(mats[i]);
+		if (mat->is_wide()) {
+			fprintf(stderr, "can't cbind two wide matrix\n");
+			return R_NilValue;
+		}
+		stores[i] = mat->get_raw_store();
+	}
+	// TODO does it matter what layout is here?
+	detail::combined_matrix_store::ptr combined
+		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_COL);
+	return create_FMR_matrix(dense_matrix::create(combined), "");
 }
 
 void init_flashmatrixr()

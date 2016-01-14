@@ -1108,3 +1108,52 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 	ret$vecs <- new.fm(ret$vecs)
 	ret
 }
+
+#' Combine FlashR matrices by rows or columns.
+#'
+#' Take a list of FlashR matrices and combine them by Columns or rows
+#' respectively.
+#'
+#' @param ... A list of FlashR matrices.
+#'
+#' The function of these two functions is similar to the R counterparts:
+#' `rbind' and `cbind'. ' Currently, `fm.rbind' only supports combining
+#' a list of wide matrices. `fm.cbind' can only combine a list of tall matrices.
+#'
+#' @return A FlashR matrix.
+#' @name fm.bind
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.rbind <- function(...)
+{
+	args <- list(...)
+	nargs <- length(args)
+	if (nargs < 2) {
+		return(args[1])
+	}
+	for (fm in args) {
+		if (class(fm) != "fm") {
+			print("fm.rbind only works on FlashMatrix matrix")
+			return(NULL)
+		}
+	}
+	ret <- .Call("R_FM_rbind", args, PACKAGE="FlashR")
+	new.fm(ret)
+}
+
+#' @name fm.bind
+fm.cbind <- function(...)
+{
+	args <- list(...)
+	nargs <- length(args)
+	if (nargs < 2) {
+		return(args[1])
+	}
+	for (fm in args) {
+		if (class(fm) != "fm") {
+			print("fm.cbind only works on FlashMatrix matrix")
+			return(NULL)
+		}
+	}
+	ret <- .Call("R_FM_cbind", args, PACKAGE="FlashR")
+	new.fm(ret)
+}
