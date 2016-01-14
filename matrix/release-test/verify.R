@@ -732,6 +732,28 @@ stopifnot(sum(fm.conv.FM2R(fm.mapply2(vtmp, v, fm.bo.sub))
 stopifnot(sum(fm.conv.FM2R(fm.mapply2(1, v, fm.bo.sub))
 			  == 1 - fm.conv.FM2R(v)) == length(v))
 
+# test ifelse
+v1 <- fm.runif(1000)
+test <- v1 > 0.5
+res <- ifelse(test, 0, v1)
+rres <- ifelse(fm.conv.FM2R(test), 0, fm.conv.FM2R(v1))
+stopifnot(sum(rres == res) == length(v1))
+
+res <- ifelse(test, v1, 0)
+rres <- ifelse(fm.conv.FM2R(test), fm.conv.FM2R(v1), 0)
+stopifnot(sum(rres == res) == length(v1))
+
+m1 <- fm.matrix(v1, 100, 10)
+test <- m1 > 0.5
+res <- ifelse(test, 0, m1)
+rres <- ifelse(fm.conv.FM2R(test), 0, fm.conv.FM2R(m1))
+stopifnot(sum(rres == res) == length(m1))
+
+res <- ifelse(test, m1, 0)
+rres <- ifelse(fm.conv.FM2R(test), fm.conv.FM2R(m1), 0)
+stopifnot(sum(rres == res) == length(m1))
+
+
 fm <- fm.matrix(fm.runif(1000), 100, 10)
 
 # Test on a sparse matrix
