@@ -272,6 +272,8 @@ public:
 	virtual size_t get_size() const {
 		return get_type().get_size();
 	}
+
+	scalar_variable::ptr cast_type(const scalar_type &type) const;
 };
 
 template<class T>

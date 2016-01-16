@@ -45,6 +45,15 @@ generic_hashtable::ptr scalar_type_impl<T>::create_hashtable(
 	}
 }
 
+scalar_variable::ptr scalar_variable::cast_type(const scalar_type &type) const
+{
+	const scalar_type &vtype = get_type();
+	const bulk_uoperate &cast_op = vtype.get_type_cast(type);
+	scalar_variable::ptr ret = vtype.create_scalar();
+	cast_op.runA(1, get_raw(), ret->get_raw());
+	return ret;
+}
+
 template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 {
