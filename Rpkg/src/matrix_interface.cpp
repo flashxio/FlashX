@@ -44,6 +44,54 @@ using namespace fm;
 
 fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
 
+static inline bool is_supported_type(const scalar_type &type)
+{
+	return type == get_scalar_type<int>()
+		|| type == get_scalar_type<double>();
+}
+
+static inline const scalar_type &get_common_type(const scalar_type &left,
+		const scalar_type &right)
+{
+	if (left == right)
+		return left;
+	else if (left == get_scalar_type<int>())
+		return right;
+	else if (right == get_scalar_type<int>())
+		return left;
+	else {
+		fprintf(stderr, "left type: %d, right type: %d\n", left.get_type(),
+				right.get_type());
+		return get_scalar_type<double>();
+	}
+}
+
+static inline prim_type get_prim_type(SEXP obj)
+{
+	if (R_is_integer(obj))
+		return prim_type::P_INTEGER;
+	else if (R_is_real(obj))
+		return prim_type::P_DOUBLE;
+	else
+		return prim_type::NUM_TYPES;
+}
+
+static inline scalar_variable::ptr get_scalar(SEXP po)
+{
+	if (R_is_real(po)) {
+		return scalar_variable::ptr(
+				new scalar_variable_impl<double>(REAL(po)[0]));
+	}
+	else if (R_is_integer(po)) {
+		return scalar_variable::ptr(
+				new scalar_variable_impl<int>(INTEGER(po)[0]));
+	}
+	else {
+		fprintf(stderr, "The R variable has unsupported type\n");
+		return scalar_variable::ptr();
+	}
+}
+
 template<class EntryType>
 dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, EntryType initv)
@@ -388,15 +436,25 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 {
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(matrix->get_type())
+			|| !is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(matrix->get_type(),
+			right_mat->get_type());
+	if (common_type != matrix->get_type())
+		matrix = matrix->cast_ele_type(common_type);
+	if (common_type != right_mat->get_type())
+		right_mat = right_mat->cast_ele_type(common_type);
+
 	bulk_operate::const_ptr op1 = fmr::get_op(pfun1,
-			matrix->get_type().get_type(),
-			right_mat->get_type().get_type());
+			matrix->get_type().get_type());
 	if (op1 == NULL) {
 		fprintf(stderr, "can't find a right form for the left operator\n");
 		return R_NilValue;
 	}
 	bulk_operate::const_ptr op2 = fmr::get_op(pfun2,
-			op1->get_output_type().get_type(),
 			op1->get_output_type().get_type());
 	if (op2 == NULL) {
 		fprintf(stderr, "can't find a right form for the right operator\n");
@@ -695,16 +753,6 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	return ret;
 }
 
-static prim_type get_prim_type(SEXP obj)
-{
-	if (R_is_integer(obj))
-		return prim_type::P_INTEGER;
-	else if (R_is_real(obj))
-		return prim_type::P_DOUBLE;
-	else
-		return prim_type::NUM_TYPES;
-}
-
 RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 {
 	Rcpp::S4 obj1(po1);
@@ -719,8 +767,19 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
-			m2->get_type().get_type());
+	if (!is_supported_type(m1->get_type())
+			|| !is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(m1->get_type(),
+			m2->get_type());
+	if (common_type != m1->get_type())
+		m1 = m1->cast_ele_type(common_type);
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -773,28 +832,37 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m1->get_type())) {
+		fprintf(stderr, "The input matrix have unsupported type\n");
+		return R_NilValue;
+	}
 
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
-			get_prim_type(po2));
+	// Get the scalar.
+	scalar_variable::ptr o2 = get_scalar(po2);
+	if (o2 == NULL)
+		return R_NilValue;
+
+	const scalar_type &common_type = get_common_type(m1->get_type(),
+			o2->get_type());
+	if (common_type != m1->get_type())
+		m1 = m1->cast_ele_type(common_type);
+	if (common_type != o2->get_type())
+		o2 = o2->cast_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	dense_matrix::ptr out;
-	if (R_is_real(po2)) {
-		double res;
-		R_get_number<double>(po2, res);
+	if (m1->get_type() == get_scalar_type<double>()) {
+		double val = scalar_variable::get_val<double>(*o2);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<double>(op, res)));
+					new AE_operator<double>(op, val)));
 	}
-	else if (R_is_integer(po2)) {
-		int res;
-		R_get_number<int>(po2, res);
+	else if (m1->get_type() == get_scalar_type<int>()) {
+		int val = scalar_variable::get_val<int>(*o2);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<int>(op, res)));
-	}
-	else {
-		fprintf(stderr, "wrong type of the right input\n");
-		return R_NilValue;
+					new AE_operator<int>(op, val)));
 	}
 
 	if (out == NULL)
@@ -845,28 +913,36 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 
 	bool is_vec = is_vector(obj2);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
+	if (!is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrix have unsupported type\n");
+		return R_NilValue;
+	}
 
-	bulk_operate::const_ptr op = fmr::get_op(pfun, get_prim_type(po1),
-			m2->get_type().get_type());
+	scalar_variable::ptr o1 = get_scalar(po1);;
+	if (o1 == NULL)
+		return R_NilValue;
+
+	const scalar_type &common_type = get_common_type(m2->get_type(),
+			o1->get_type());
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+	if (common_type != o1->get_type())
+		o1 = o1->cast_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	dense_matrix::ptr out;
-	if (R_is_real(po1)) {
-		double res;
-		R_get_number<double>(po1, res);
+	if (m2->get_type() == get_scalar_type<double>()) {
+		double val = scalar_variable::get_val<double>(*o1);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<double>(op, res)));
+					new EA_operator<double>(op, val)));
 	}
-	else if (R_is_integer(po1)) {
-		int res;
-		R_get_number<int>(po1, res);
+	else if (m2->get_type() == get_scalar_type<int>()) {
+		int val = scalar_variable::get_val<int>(*o1);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<int>(op, res)));
-	}
-	else {
-		fprintf(stderr, "wrong type of the left input\n");
-		return R_NilValue;
+					new EA_operator<int>(op, val)));
 	}
 
 	if (out == NULL)
@@ -883,11 +959,32 @@ RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
 		fprintf(stderr, "mapply2_MV doesn't support sparse matrix\n");
 		return R_NilValue;
 	}
+	if (!is_vector(po2)) {
+		fprintf(stderr, "the second argument must be a vector\n");
+		return R_NilValue;
+	}
 	dense_matrix::ptr m = get_matrix<dense_matrix>(po1);
-	vector::ptr v = get_vector(po2);
+	dense_matrix::ptr m2 = get_matrix<dense_matrix>(po2);
+	if (!is_supported_type(m->get_type())
+			|| !is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(m2->get_type(),
+			m->get_type());
+	if (common_type != m->get_type())
+		m = m->cast_ele_type(common_type);
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+
+	vector::ptr v = m2->get_col(0);
+	if (v == NULL) {
+		fprintf(stderr, "can't get the vector\n");
+		return R_NilValue;
+	}
+
 	int margin = INTEGER(pmargin)[0];
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type(),
-			v->get_type().get_type());
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 	dense_matrix::ptr res;

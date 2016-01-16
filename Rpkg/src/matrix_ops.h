@@ -46,9 +46,13 @@ void register_udf(const std::vector<fm::bulk_uoperate::const_ptr> &ops,
  */
 void init_udf_ext();
 
-/* Get a binary operator. */
-fm::bulk_operate::const_ptr get_op(SEXP pfun, fm::prim_type type1,
-		fm::prim_type type2);
+/*
+ * Get a binary operator.
+ * Even though a binary operator takes two inputs, FlashR always first casts
+ * the type of one input to match the other. So we assume that all binary
+ * operators take inputs of the same type.
+ */
+fm::bulk_operate::const_ptr get_op(SEXP pfun, fm::prim_type type);
 /* Get a unary operator. */
 fm::bulk_uoperate::const_ptr get_uop(SEXP pfun, fm::prim_type type);
 

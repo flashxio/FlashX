@@ -33,13 +33,10 @@ namespace fmr
  */
 
 static basic_ops_impl<int, int, int> R_basic_ops_II;
-static basic_ops_impl<double, int, double> R_basic_ops_DI;
-static basic_ops_impl<int, double, double> R_basic_ops_ID;
 static basic_ops_impl<double, double, double> R_basic_ops_DD;
 
 static basic_uops_impl<int, int> R_basic_uops_I;
 static basic_uops_impl<double, double> R_basic_uops_D;
-static basic_uops_impl<bool, bool> R_basic_uops_B;
 
 class generic_bulk_operate
 {
@@ -47,17 +44,12 @@ class generic_bulk_operate
 	// a bulk_operate for a different type.
 	std::unordered_map<int, bulk_operate::const_ptr> ops;
 public:
-	static int get_key(prim_type type1, prim_type type2) {
-		// Two bytes should be enough to represent all types.
-		return (type1 & 0xFFFF) + (((int) type2) << 16);
-	}
-
 	generic_bulk_operate(const std::string &name) {
 		this->name = name;
 	}
 
-	bulk_operate::const_ptr get_op(prim_type type1, prim_type type2) const {
-		int key = get_key(type1, type2);
+	bulk_operate::const_ptr get_op(prim_type type) const {
+		int key = type;
 		auto it = ops.find(key);
 		if (it == ops.end())
 			return bulk_operate::const_ptr();
@@ -66,8 +58,7 @@ public:
 	}
 
 	void add_op(bulk_operate::const_ptr op) {
-		int key = get_key(op->get_left_type().get_type(),
-				op->get_right_type().get_type());
+		int key = op->get_left_type().get_type();
 		ops.insert(std::pair<int, bulk_operate::const_ptr>(key, op));
 	}
 
@@ -133,7 +124,7 @@ void register_udf(const std::vector<bulk_uoperate::const_ptr> &ops,
 }
 
 static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
-		prim_type type1, prim_type type2)
+		prim_type type)
 {
 	if (noperands != 2) {
 		fprintf(stderr, "This isn't a binary operator\n");
@@ -147,13 +138,9 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 	bulk_operate::const_ptr op;
 	if (bo_idx < basic_ops::op_idx::NUM_OPS) {
 		basic_ops *ops = NULL;
-		if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_DOUBLE)
+		if (type == prim_type::P_DOUBLE)
 			ops = &R_basic_ops_DD;
-		else if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_INTEGER)
-			ops = &R_basic_ops_DI;
-		else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_DOUBLE)
-			ops = &R_basic_ops_ID;
-		else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_INTEGER)
+		else if (type == prim_type::P_INTEGER)
 			ops = &R_basic_ops_II;
 		else {
 			fprintf(stderr, "wrong type\n");
@@ -167,7 +154,7 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 	}
 	else if ((size_t) (bo_idx - basic_ops::op_idx::NUM_OPS) < bulk_ops.size()) {
 		size_t off = bo_idx - basic_ops::op_idx::NUM_OPS;
-		op = bulk_ops[off].get_op(type1, type2);
+		op = bulk_ops[off].get_op(type);
 		if (op == NULL) {
 			fprintf(stderr,
 					"can't find the specified operation with the right type\n");
@@ -184,11 +171,11 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 /*
  * Get a binary operator.
  */
-bulk_operate::const_ptr get_op(SEXP pfun, prim_type type1, prim_type type2)
+bulk_operate::const_ptr get_op(SEXP pfun, prim_type type)
 {
 	Rcpp::S4 fun_obj(pfun);
 	Rcpp::IntegerVector info = fun_obj.slot("info");
-	return _get_op((basic_ops::op_idx) info[0], info[1], type1, type2);
+	return _get_op((basic_ops::op_idx) info[0], info[1], type);
 }
 
 /*
@@ -199,13 +186,12 @@ agg_operate::const_ptr get_agg_op(SEXP pfun, const scalar_type &mat_type)
 	Rcpp::S4 sym_op(pfun);
 	Rcpp::IntegerVector agg_info = sym_op.slot("agg");
 	bulk_operate::const_ptr agg_op = _get_op((basic_ops::op_idx) agg_info[0],
-			agg_info[1], mat_type.get_type(), mat_type.get_type());
+			agg_info[1], mat_type.get_type());
 	Rcpp::IntegerVector combine_info = sym_op.slot("combine");
 	bulk_operate::const_ptr combine_op;
 	if (combine_info[0] >= 0)
 		combine_op = _get_op((basic_ops::op_idx) combine_info[0],
-				combine_info[1], agg_op->get_output_type().get_type(),
-				agg_op->get_output_type().get_type());
+				combine_info[1], agg_op->get_output_type().get_type());
 	return agg_operate::create(agg_op, combine_op);
 }
 
@@ -230,8 +216,6 @@ bulk_uoperate::const_ptr get_uop(SEXP pfun, prim_type type)
 			ops = &R_basic_uops_D;
 		else if (type == prim_type::P_INTEGER)
 			ops = &R_basic_uops_I;
-		else if (type == prim_type::P_BOOL)
-			ops = &R_basic_uops_B;
 		else {
 			fprintf(stderr, "wrong type\n");
 			return NULL;
