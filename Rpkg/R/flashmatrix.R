@@ -1199,3 +1199,68 @@ setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 			  ret <- .Call("R_FM_ifelse2", !test, no, yes, PACKAGE="FlashR")
 			  new.fmV(ret)
 		  })
+
+# This returns NA of the right type.
+get.na <- function(type) {
+	if (type == "logical") {
+		NA
+	}
+	else if (type == "integer") {
+		as.integer(NA)
+	}
+	else {
+		stop("unsupported type for NA")
+	}
+}
+
+# is.na for float-point needs to be handled differently because C/C++
+# interprets NA as NaN.
+setMethod("is.na", signature(x = "fm"), function(x) {
+		  if (typeof(x) == "double") {
+			  ret <- .Call("R_FM_isna", x, PACKAGE="FlashR")
+			  new.fm(ret)
+		  }
+		  else
+			  x == get.na(typeof(x))
+		  })
+setMethod("is.na", signature(x = "fmV"), function(x) {
+		  if (typeof(x) == "double") {
+			  ret <- .Call("R_FM_isna", x, PACKAGE="FlashR")
+			  new.fmV(ret)
+		  }
+		  else
+			  x == get.na(typeof(x))
+		  })
+
+setMethod("is.nan", signature(x = "fm"), function(x) {
+		  if (typeof(x) == "double") {
+			  ret <- .Call("R_FM_isnan", x, PACKAGE="FlashR")
+			  new.fm(ret)
+		  }
+		  else
+			  # TODO construct this matrix shouldn't have data movement.
+			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+		  })
+setMethod("is.nan", signature(x = "fmV"), function(x) {
+		  if (typeof(x) == "double") {
+			  ret <- .Call("R_FM_isnan", x, PACKAGE="FlashR")
+			  new.fmV(ret)
+		  }
+		  else
+			  fm.rep.int(FALSE, length(x))
+		  })
+setMethod("is.infinite", signature(x = "fm"), function(x) {
+		  if (typeof(x) == "double")
+			  x == Inf
+		  else
+			  # TODO construct this matrix shouldn't have data movement.
+			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+		  })
+setMethod("is.infinite", signature(x = "fmV"), function(x) {
+		  if (typeof(x) == "double")
+			  x == Inf
+		  else
+			  fm.rep.int(FALSE, length(x))
+		  })
+setMethod("is.finite", signature(x = "fm"), function(x) !is.infinite(x))
+setMethod("is.finite", signature(x = "fmV"), function(x) !is.infinite(x))
