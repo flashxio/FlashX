@@ -44,4 +44,4 @@ add_library(FMatrix STATIC
 if(ENABLE_TRILINOS)
 	subdirs(eigensolver)
 endif()
-subdirs(test)
+subdirs(utils)

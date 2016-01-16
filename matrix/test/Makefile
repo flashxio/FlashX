@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../.
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm rand_mat_gen test-algs
+	test-sort test-eigen test-dgemm rand_mat_gen test-algs
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
@@ -46,15 +46,6 @@ test-block_mv: test-block_mv.o ../libFMatrix.a ../eigensolver/libeigen.a
 
 test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
 	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
-
-el2al: el2al.o ../libFMatrix.a
-	$(CXX) -o el2al el2al.o $(LDFLAGS)
-
-al22d: al22d.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o al22d al22d.o fg_utils.o $(LDFLAGS)
-
-al2crs: al2crs.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o al2crs al2crs.o fg_utils.o $(LDFLAGS)
 
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
