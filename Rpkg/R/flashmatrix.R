@@ -743,6 +743,8 @@ fm.mapply2.fm.m <- function(o1, o2, FUN)
 	stopifnot(nrow(o1) == nrow(o2))
 	stopifnot(ncol(o1) == ncol(o2))
 	o2 <- fm.conv.R2FM(o2)
+	if (is.null(o2))
+		return(NULL)
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	new.fm(ret)
 }
@@ -755,6 +757,8 @@ fm.mapply2.m.fm <- function(o1, o2, FUN)
 	stopifnot(nrow(o1) == nrow(o2))
 	stopifnot(ncol(o1) == ncol(o2))
 	o1 <- fm.conv.R2FM(o1)
+	if (is.null(o1))
+		return(NULL)
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	new.fm(ret)
 }
@@ -767,6 +771,8 @@ fm.mapply2.fm.ANY <- function(o1, o2, FUN)
 	stopifnot(is.vector(o2) || fm.is.vector(o2))
 	if (length(o2) > 1) {
 		o2 <- fm.conv.R2FM(o2)
+		if (is.null(o2))
+			return(NULL)
 		fm.mapply.col(o1, o2, FUN)
 	}
 	else {
@@ -800,6 +806,8 @@ fm.mapply2.fmV.ANY <- function(o1, o2, FUN)
 	if (length(o2) > 1) {
 		stopifnot(length(o2) == length(o1))
 		o2 <- fm.conv.R2FM(o2)
+		if (is.null(o2))
+			return(NULL)
 		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	}
 	else
@@ -818,6 +826,8 @@ fm.mapply2.ANY.fmV <- function(o1, o2, FUN)
 	else {
 		stopifnot(length(o1) == length(o2))
 		o1 <- fm.conv.R2FM(o1)
+		if (is.null(o1))
+			return(NULL)
 		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	}
 	new.fmV(ret)
