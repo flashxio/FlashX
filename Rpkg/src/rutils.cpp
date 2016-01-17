@@ -34,6 +34,11 @@ bool R_is_integer(SEXP v)
 	return isInteger(v);
 }
 
+bool R_is_logical(SEXP v)
+{
+	return isLogical(v);
+}
+
 void R_gc()
 {
 	SEXP call = PROTECT(lang1(install("gc")));

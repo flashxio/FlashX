@@ -55,9 +55,9 @@ static inline const scalar_type &get_common_type(const scalar_type &left,
 {
 	if (left == right)
 		return left;
-	else if (left == get_scalar_type<int>())
+	else if (left == get_scalar_type<int>() && right == get_scalar_type<double>())
 		return right;
-	else if (right == get_scalar_type<int>())
+	else if (right == get_scalar_type<int>() && left == get_scalar_type<double>())
 		return left;
 	else {
 		fprintf(stderr, "left type: %d, right type: %d\n", left.get_type(),
@@ -72,6 +72,9 @@ static inline prim_type get_prim_type(SEXP obj)
 		return prim_type::P_INTEGER;
 	else if (R_is_real(obj))
 		return prim_type::P_DOUBLE;
+	// boolean values in R are stored as integers.
+	else if (R_is_logical(obj))
+		return prim_type::P_INTEGER;
 	else
 		return prim_type::NUM_TYPES;
 }
@@ -85,6 +88,11 @@ static inline scalar_variable::ptr get_scalar(SEXP po)
 	else if (R_is_integer(po)) {
 		return scalar_variable::ptr(
 				new scalar_variable_impl<int>(INTEGER(po)[0]));
+	}
+	else if (R_is_logical(po)) {
+		// boolean values in R are stored as integers.
+		return scalar_variable::ptr(
+				new scalar_variable_impl<int>(LOGICAL(po)[0]));
 	}
 	else {
 		fprintf(stderr, "The R variable has unsupported type\n");
@@ -108,16 +116,24 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	if (num_nodes == 1)
 		num_nodes = -1;
 	vector::ptr vec;
-	if (R_is_real(pinitv))
+	if (R_is_real(pinitv)) {
 		vec = create_rep_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
-	else if (R_is_integer(pinitv))
+		return create_FMR_vector(vec->get_raw_store(), "");
+	}
+	else if (R_is_integer(pinitv)) {
 		vec = create_rep_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
+		return create_FMR_vector(vec->get_raw_store(), "");
+	}
+	else if (R_is_logical(pinitv)) {
+		vec = create_rep_vector<int>(len, LOGICAL(pinitv)[0], num_nodes, true);
+		Rcpp::List ret = create_FMR_vector(vec->get_raw_store(), "");
+		ret["ele_type"] = Rcpp::String("logical");
+		return ret;
+	}
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
-		return Rcpp::List();
+		return R_NilValue;
 	}
-
-	return create_FMR_vector(vec->get_raw_store(), "");
 }
 
 template<class T>
@@ -209,6 +225,7 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 			mat_file);
 	if (store == NULL)
 		return R_NilValue;
+	// TODO how do we determine the matrix element type?
 	return create_FMR_matrix(dense_matrix::create(store), "");
 }
 
@@ -497,7 +514,9 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 		fprintf(stderr, "can't convert a vector to a matrix\n");
 		return R_NilValue;
 	}
-	return create_FMR_matrix(mat, "");
+	Rcpp::List ret = create_FMR_matrix(mat, "");
+	ret["ele_type"] = vec_obj.slot("ele_type");
+	return ret;
 }
 
 template<class T, class RType>
@@ -563,10 +582,6 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 	}
 	else if (mat->is_type<int>()) {
 		copy_FM2R_mem<int, int>(mat, is_vec, INTEGER(pRmat));
-		ret[0] = true;
-	}
-	else if (mat->is_type<bool>()) {
-		copy_FM2R_mem<bool, int>(mat, is_vec, LOGICAL(pRmat));
 		ret[0] = true;
 	}
 	else {
@@ -653,6 +668,21 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 				vec.size() * fm_vec->get_entry_size());
 		return create_FMR_vector(fm_vec, "");
 	}
+	else if (R_is_logical(pobj)) {
+		Rcpp::LogicalVector vec(pobj);
+		// We need to store an R boolean vector as an integer vector because
+		// there are three potential values for an R boolean variable.
+		std::unique_ptr<int[]> tmp(new int[vec.size()]);
+		for (int i = 0; i < vec.size(); i++)
+			tmp[i] = vec[i];
+
+		detail::mem_vec_store::ptr fm_vec = detail::mem_vec_store::create(
+				vec.size(), num_nodes, get_scalar_type<int>());
+		fm_vec->copy_from((char *) tmp.get(),
+				vec.size() * fm_vec->get_entry_size());
+		// TODO we need to indicate this is a boolean vector.
+		return create_FMR_vector(fm_vec, "");
+	}
 	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
@@ -690,6 +720,21 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 				fm_mat->set<int>(i, j, mat(i, j));
 		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
 	}
+	else if (R_is_logical(pobj)) {
+		Rcpp::LogicalMatrix mat(pobj);
+		size_t nrow = mat.nrow();
+		size_t ncol = mat.ncol();
+		// We need to store an R boolean matrix as an integer matrix because
+		// there are three potential values for an R boolean variable.
+		detail::mem_matrix_store::ptr fm_mat
+			= detail::mem_matrix_store::create(nrow, ncol, layout,
+					get_scalar_type<int>(), num_nodes);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				fm_mat->set<int>(i, j, mat(i, j));
+		// TODO we need to indicate this is a boolean matrix.
+		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
+	}
 	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
@@ -700,15 +745,18 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 RcppExport SEXP R_FM_transpose(SEXP pmat)
 {
 	Rcpp::S4 matrix_obj(pmat);
+	Rcpp::List ret;
 	if (is_sparse(matrix_obj)) {
 		sparse_matrix::ptr m = get_matrix<sparse_matrix>(matrix_obj);
-		return create_FMR_matrix(m->transpose(), "");
+		ret = create_FMR_matrix(m->transpose(), "");
 	}
 	else {
 		dense_matrix::ptr m = get_matrix<dense_matrix>(matrix_obj);
 		dense_matrix::ptr tm = m->transpose();
-		return create_FMR_matrix(tm, "");
+		ret = create_FMR_matrix(tm, "");
 	}
+	ret["ele_type"] = matrix_obj.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_get_basic_op(SEXP pname)
@@ -1057,8 +1105,6 @@ RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (m->is_type<bool>())
-		m = m->cast_ele_type(get_scalar_type<int>());
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -1082,8 +1128,6 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (m->is_type<bool>())
-		m = m->cast_ele_type(get_scalar_type<int>());
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -1270,8 +1314,12 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		fprintf(stderr, "can't get a submatrix from the matrix\n");
 		return R_NilValue;
 	}
-	else
-		return create_FMR_matrix(sub_m, "");
+	else {
+		Rcpp::List ret = create_FMR_matrix(sub_m, "");
+		Rcpp::S4 rcpp_mat(pmat);
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
 }
 
 RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
@@ -1288,7 +1336,10 @@ RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
 		fprintf(stderr, "can't get rows from the matrix\n");
 		return R_NilValue;
 	}
-	return create_FMR_matrix(res, "");
+	Rcpp::List ret = create_FMR_matrix(res, "");
+	Rcpp::S4 rcpp_mat(pmat);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_as_vector(SEXP pmat)
@@ -1535,7 +1586,10 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	// I think it's OK to materialize on the original matrix.
 	mat->materialize_self();
-	return create_FMR_matrix(mat, "");
+	Rcpp::List ret = create_FMR_matrix(mat, "");
+	Rcpp::S4 rcpp_mat(pmat);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
@@ -1547,12 +1601,15 @@ RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
 		return R_NilValue;
 	}
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	dense_matrix::ptr ret;
+	dense_matrix::ptr ret_mat;
 	if (byrow)
-		ret = mat->conv2(matrix_layout_t::L_ROW);
+		ret_mat = mat->conv2(matrix_layout_t::L_ROW);
 	else
-		ret = mat->conv2(matrix_layout_t::L_COL);
-	return create_FMR_matrix(ret, "");
+		ret_mat = mat->conv2(matrix_layout_t::L_COL);
+	Rcpp::List ret = create_FMR_matrix(ret_mat, "");
+	Rcpp::S4 rcpp_mat(pmat);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_get_layout(SEXP pmat)
@@ -1601,7 +1658,12 @@ RcppExport SEXP R_FM_rbind(SEXP pmats)
 	// TODO does it matter what layout is here?
 	detail::combined_matrix_store::ptr combined
 		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_ROW);
-	return create_FMR_matrix(dense_matrix::create(combined), "");
+	if (combined == NULL)
+		return R_NilValue;
+	Rcpp::List ret = create_FMR_matrix(dense_matrix::create(combined), "");
+	Rcpp::S4 rcpp_mat(mats[0]);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_cbind(SEXP pmats)
@@ -1623,7 +1685,12 @@ RcppExport SEXP R_FM_cbind(SEXP pmats)
 	// TODO does it matter what layout is here?
 	detail::combined_matrix_store::ptr combined
 		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_COL);
-	return create_FMR_matrix(dense_matrix::create(combined), "");
+	if (combined == NULL)
+		return R_NilValue;
+	Rcpp::List ret = create_FMR_matrix(dense_matrix::create(combined), "");
+	Rcpp::S4 rcpp_mat(mats[0]);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 template<class T>
@@ -1646,7 +1713,7 @@ public:
 	 */
 	virtual void runAA(size_t num_eles, const void *left_arr,
 			const void *right_arr, void *output_arr) const {
-		const bool *test = reinterpret_cast<const bool *>(left_arr);
+		const int *test = reinterpret_cast<const int *>(left_arr);
 		const T *yes = reinterpret_cast<const T *>(right_arr);
 		T *output = reinterpret_cast<T *>(output_arr);
 		for (size_t i = 0; i < num_eles; i++) {
@@ -1683,7 +1750,7 @@ public:
 	}
 
 	virtual const scalar_type &get_left_type() const {
-		return get_scalar_type<bool>();
+		return get_scalar_type<int>();
 	}
 	virtual const scalar_type &get_right_type() const {
 		return get_scalar_type<T>();
@@ -1728,7 +1795,7 @@ RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
 				"ifelse2 only works with integer and float currently\n");
 		return R_NilValue;
 	}
-	if (test->get_type() != get_scalar_type<bool>()) {
+	if (test->get_type() != get_scalar_type<int>()) {
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
 	}

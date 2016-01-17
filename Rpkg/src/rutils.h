@@ -26,6 +26,7 @@
 
 bool R_is_real(SEXP v);
 bool R_is_integer(SEXP v);
+bool R_is_logical(SEXP v);
 
 template<class T>
 bool R_get_number(SEXP v, T &ret) {
@@ -35,6 +36,10 @@ bool R_get_number(SEXP v, T &ret) {
 	}
 	else if (R_is_integer(v)) {
 		ret = INTEGER(v)[0];
+		return true;
+	}
+	else if (R_is_logical(v)) {
+		ret = LOGICAL(v)[0];
 		return true;
 	}
 	else
