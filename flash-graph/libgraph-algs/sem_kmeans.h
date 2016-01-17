@@ -52,19 +52,9 @@ namespace {
 
     static const unsigned INVALID_CLUST_ID = -1;
     static unsigned NUM_COLS;
-    static unsigned NUM_ROWS;
     static unsigned K;
-    static unsigned g_num_changed = 0;
-    static struct timeval start, end;
     static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
-    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
-    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
-
-    static init_type_t g_init; // May have to use
-    static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kms_stage_t g_stage; // What phase of the algo we're in
-    static unsigned g_iter;
 
     class cluster
     {
@@ -88,11 +78,11 @@ namespace {
             }
 
             cluster(const unsigned len) {
-                mean.assign(len, 0);
+                mean.resize(len);
                 num_members = 0;
                 complete = false;
 #if PRUNE
-                prev_mean.assign(len, 0);
+                prev_mean.resize(len);
 #endif
             }
 
@@ -101,7 +91,7 @@ namespace {
                 num_members = 0;
                 complete = true;
 #if PRUNE
-                prev_mean.assign(mean.size(), 0);
+                prev_mean.resize(mean.size());
                 reset_s_val();
 #endif
             }
@@ -150,7 +140,7 @@ namespace {
             }
 
             void init(const unsigned len) {
-                mean.assign(len, 0);
+                mean.resize(len);
                 num_members = 0;
             }
 
@@ -413,7 +403,8 @@ namespace {
             BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&) must not be called!");
         }
         void run(vertex_program& prog, const page_vertex &vertex) {
-            BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&, const page_vertex&) must not be called!");
+            BOOST_ASSERT_MSG(0, "base_kmeans_vertex run(vertex_program&,"
+                "const page_vertex&) must not be called!");
         }
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
 
@@ -425,8 +416,7 @@ namespace {
                 get_data_seq_it<double>();
 
             // Build the setter vector that we assign to a cluster center
-            std::vector<double> setter;
-            setter.assign(NUM_COLS, 0);
+            std::vector<double> setter(centers[to_cluster_id]->size());
             while (count_it.has_next()) {
                 double e = count_it.next();
                 setter[nid++] = e;
