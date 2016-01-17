@@ -36,6 +36,16 @@ namespace {
     static dist_matrix::ptr g_cluster_dist;
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
 
+    static unsigned NUM_ROWS;
+    static unsigned g_num_changed = 0;
+    static struct timeval start, end;
+    static init_type_t g_init; // May have to use
+    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
+    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
+    static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
+    static kms_stage_t g_stage; // What phase of the algo we're in
+    static unsigned g_iter;
+
     class kmeans_vertex: public base_kmeans_vertex
     {
         std::vector<double> lwr_bnd;
@@ -168,13 +178,13 @@ namespace {
             recalculated = false;
             if (!g_prune_init) {
                 for (unsigned cl = 0; cl < K; cl++) {
-                    // TODO: Test if (g_clusters[cl]->get_prev_dist()) > 0
-                    lwr_bnd[cl] = std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
+                    if (g_clusters[cl]->get_prev_dist() > 0) {
+                        lwr_bnd[cl] = std::max((lwr_bnd[cl] - g_clusters[cl]->get_prev_dist()), 0.0);
+                    }
                 }
 
                 /* #6 */
                 set_dist(get_dist() + g_clusters[get_cluster_id()]->get_prev_dist());
-
                 if (get_dist() <= g_clusters[get_cluster_id()]->get_s_val()) {
 #if KM_TEST
                     ((kmeans_vertex_program&) prog).get_ps()->pp_lemma1(K);

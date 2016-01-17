@@ -24,6 +24,15 @@ using namespace fg;
 
 namespace {
     static std::vector<cluster::ptr> g_clusters; // cluster means/centers
+    static unsigned NUM_ROWS;
+    static unsigned g_num_changed = 0;
+    static struct timeval start, end;
+    static init_type_t g_init; // May have to use
+    static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
+    static unsigned g_kmspp_next_cluster; // Sample row selected as the next cluster
+    static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
+    static kms_stage_t g_stage; // What phase of the algo we're in
+    static unsigned g_iter;
 
     class kmeans_vertex: public base_kmeans_vertex
     {
