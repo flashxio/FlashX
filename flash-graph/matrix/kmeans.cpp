@@ -18,7 +18,8 @@
  */
 
 #include "kmeans.h"
-#define KM_TEST 0
+#define KM_TEST 1
+#define VERBOSE 0
 #define KM_ENABLE_DIST_TYPE 0
 
 #ifdef PROFILER
@@ -26,7 +27,7 @@
 #endif
 
 namespace {
-	static unsigned NEV;
+	static unsigned NUM_COLS;
 	static size_t K;
 	static unsigned NUM_ROWS;
 	short OMP_MAX_THREADS;
@@ -35,76 +36,28 @@ namespace {
 
 	static struct timeval start, end;
 
-	/**
-	 * \brief Print an arry of some length `len`.
-	 *	 \param len The length of the array.
-	 */
-	template <typename T>
-		static void print_arr(T* arr, unsigned len) {
-			printf("[ ");
-			for (unsigned i = 0; i < len; i++) {
-				std::cout << arr[i] << " ";
-			}
-			printf("]\n");
-		}
-
-	/*
-	 * \Internal
-	 * \brief Simple helper used to print a vector.
-	 * \param v The vector to print.
-	 */
-	template <typename T>
-		static void print_vector(typename std::vector<T>& v) {
-			std::cout << "[";
-
-			typename std::vector<T>::iterator itr = v.begin();
-			for (; itr != v.end(); itr++) {
-				std::cout << " "<< *itr;
-			}
-			std::cout <<  " ]\n";
-		}
-
-	/*\Internal
-	 * \brief print a col wise matrix of type double / double.
-	 * Used for testing only.
-	 * \param matrix The col wise matrix.
-	 * \param rows The number of rows in the mat
-	 * \param cols The number of cols in the mat
-	 */
-	template <typename T>
-		static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
-			for (unsigned row = 0; row < rows; row++) {
-				std::cout << "[";
-				for (unsigned col = 0; col < cols; col++) {
-					std::cout << " " << matrix[row*cols + col];
-				}
-				std::cout <<  " ]\n";
-			}
-		}
-
     // TODO: Doc
     static double const eucl_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double dist = 0;
-        for (unsigned col = 0; col < NEV; col++) {
-            double diff = matrix[(row*NEV) + col] - clusters[clust_idx*NEV + col];
+        for (unsigned col = 0; col < NUM_COLS; col++) {
+            double diff = matrix[(row*NUM_COLS) + col] - clusters[clust_idx*NUM_COLS + col];
             dist += diff * diff;
         }
-        return  dist;
+        return sqrt(dist); // TODO: rm sqrt
     }
-    
 
     /**
-      * TODO: Doc
+      * TODO: Doc : TODO: Make static
       */
-    static double const cos_dist(const unsigned row, const unsigned clust_idx,
+    double const cos_dist(const unsigned row, const unsigned clust_idx,
                                 const double* matrix, const double* clusters) {
         double numr, ldenom, rdenom;
         numr = ldenom = rdenom = 0;
 
-        for (unsigned col = 0; col < NEV; col++) {
-            double a = matrix[(row*NEV) + col];
-            double b = clusters[clust_idx*NEV + col];
+        for (unsigned col = 0; col < NUM_COLS; col++) {
+            double a = matrix[(row*NUM_COLS) + col];
+            double b = clusters[clust_idx*NUM_COLS + col];
 
             numr += a*b;
             ldenom += a*a;
@@ -153,7 +106,7 @@ namespace {
 		}
 
 		// NOTE: M-Step is called in compute func to update cluster counts & centers
-#if KM_TEST
+#if VERBOSE
 		printf("After rand paritions cluster_asgns: "); print_arr(cluster_assignments, NUM_ROWS);
 #endif
 		BOOST_LOG_TRIVIAL(info) << "Random init end\n";
@@ -172,7 +125,7 @@ namespace {
 
 		for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) { // 0...K
 			unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
-			memcpy(&clusters[clust_idx*NEV], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
+			memcpy(&clusters[clust_idx*NUM_COLS], &matrix[rand_idx*NUM_COLS], sizeof(clusters[0])*NUM_COLS);
 		}
 
 		BOOST_LOG_TRIVIAL(info) << "Forgy init end";
@@ -197,7 +150,7 @@ namespace {
 		// Choose c1 uniiformly at random
 		unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
 
-		memcpy(&clusters[0], &matrix[rand_idx*NEV], sizeof(clusters[0])*NEV);
+		memcpy(&clusters[0], &matrix[rand_idx*NUM_COLS], sizeof(clusters[0])*NUM_COLS);
 		dist_v[rand_idx] = 0.0;
 
 #if KM_TEST
@@ -233,7 +186,7 @@ namespace {
 #if KM_TEST
 					BOOST_LOG_TRIVIAL(info) << "Choosing " << i << " as center K = " << clust_idx;
 #endif
-					memcpy(&(clusters[clust_idx*NEV]), &(matrix[i*NEV]), sizeof(clusters[0])*NEV);
+					memcpy(&(clusters[clust_idx*NUM_COLS]), &(matrix[i*NUM_COLS]), sizeof(clusters[0])*NUM_COLS);
 					break;
 				}
 			}
@@ -241,9 +194,9 @@ namespace {
 		}
 		delete [] dist_v;
 
-#if KM_TEST
-		BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NEV);
-		BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++"; print_mat(clusters, K, NEV);
+#if VERBOSE
+		BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NUM_COLS);
+		BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++"; print_mat(clusters, K, NUM_COLS);
 #endif
 	}
 
@@ -262,14 +215,9 @@ namespace {
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts) {
 #endif
 
-
-#if KM_TEST
-		gettimeofday(&start, NULL);
-#endif
-
 		// Create per thread vectors
 		std::vector<std::vector<unsigned>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
-		std::vector<std::vector<double>> pt_cl; // K * nev * OMP_MAX_THREADS
+		std::vector<std::vector<double>> pt_cl; // K * NUM_COLS * OMP_MAX_THREADS
 		std::vector<size_t> pt_num_change; // Per thread changed cluster count. OMP_MAX_THREADS
 
 		pt_cl_as_cnt.resize(OMP_MAX_THREADS);
@@ -278,7 +226,7 @@ namespace {
 
 		for (int i = 0; i < OMP_MAX_THREADS; i++) {
 			pt_cl_as_cnt[i].resize(K); // C++ default is 0 value in all
-			pt_cl[i].resize(K*NEV);
+			pt_cl[i].resize(K*NUM_COLS);
 		}
 
 #pragma omp parallel for firstprivate(matrix, clusters) shared(pt_cl_as_cnt, cluster_assignments)\
@@ -302,18 +250,18 @@ namespace {
 #if KM_TEST
 			assert(omp_get_thread_num() <= OMP_MAX_THREADS);
 #endif
-			for (unsigned col = 0; col < NEV; col++) {
-				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] =
-					pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] + matrix[row*NEV + col];
+			for (unsigned col = 0; col < NUM_COLS; col++) {
+				pt_cl[omp_get_thread_num()][asgnd_clust*NUM_COLS + col] =
+					pt_cl[omp_get_thread_num()][asgnd_clust*NUM_COLS + col] + matrix[row*NUM_COLS + col];
 			}
 		}
 
-#if KM_TEST
+#if VERBOSE
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
 #endif
 		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
-		memset(clusters, 0, sizeof(clusters[0])*K*NEV);
+		memset(clusters, 0, sizeof(clusters[0])*K*NUM_COLS);
 
 		// Serial aggreate of OMP_MAX_THREADS vectors
 		for (int i = 0; i < OMP_MAX_THREADS; i++) {
@@ -328,20 +276,15 @@ namespace {
 			// Summation for cluster centers
 #pragma omp parallel for firstprivate(pt_cl) shared(clusters) schedule(static)
 			for (unsigned row = 0; row < K; row++) { /* ClusterID */
-				for (unsigned col = 0; col < NEV; col++) { /* Features */
-					clusters[row*NEV+col] = pt_cl[i][row*NEV + col] + clusters[row*NEV + col];
+				for (unsigned col = 0; col < NUM_COLS; col++) { /* Features */
+					clusters[row*NUM_COLS+col] = pt_cl[i][row*NUM_COLS + col] + clusters[row*NUM_COLS + col];
 				}
 			}
 		}
 
 #if KM_TEST
-		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << "E-step time taken = " << time_diff(start, end) << " sec";
-#endif
-
-#if KM_TEST
 		printf("Cluster assignment counts: "); print_arr(cluster_assignment_counts, K);
-		printf("Cluster assignments:\n"); print_arr(cluster_assignments, NUM_ROWS);
+		//printf("Cluster assignments:\n"); print_arr(cluster_assignments, NUM_ROWS);
 		BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << g_num_changed;
 #endif
 	}
@@ -362,7 +305,7 @@ namespace {
 
 		if (init) {
 			BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
-			memset(clusters, 0, sizeof(clusters[0])*K*NEV);
+			memset(clusters, 0, sizeof(clusters[0])*K*NUM_COLS);
 
 			BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
 			memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
@@ -372,9 +315,9 @@ namespace {
 				unsigned asgnd_clust = cluster_assignments[vid];
 				cluster_assignment_counts[asgnd_clust]++;
 
-				for (unsigned col = 0; col < NEV; col++) {
-					clusters[asgnd_clust*NEV + col] =
-						clusters[asgnd_clust*NEV + col] + matrix[vid*NEV + col];
+				for (unsigned col = 0; col < NUM_COLS; col++) {
+					clusters[asgnd_clust*NUM_COLS + col] =
+						clusters[asgnd_clust*NUM_COLS + col] + matrix[vid*NUM_COLS + col];
 				}
 			}
 		}
@@ -382,20 +325,20 @@ namespace {
 		// Take the mean of all added means
 #if KM_TEST
 		BOOST_LOG_TRIVIAL(info) << " Div by in place ...";
-		double* clusters = __builtin_assume_aligned(clusters);
+		//double* clusters = __builtin_assume_aligned(clusters);
 #endif
 		for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
 			if (cluster_assignment_counts[clust_idx] > 0) { // Avoid div by 0
-				// #pragma omp parallel for firstprivate(cluster_assignment_counts, NEV) shared(clusters)
-				for (unsigned col = 0; col < NEV; col++) {
-					clusters[clust_idx*NEV + col] =
-						clusters[clust_idx*NEV + col] / cluster_assignment_counts[clust_idx];
+				// #pragma omp parallel for firstprivate(cluster_assignment_counts, NUM_COLS) shared(clusters)
+				for (unsigned col = 0; col < NUM_COLS; col++) {
+					clusters[clust_idx*NUM_COLS + col] =
+						clusters[clust_idx*NUM_COLS + col] / cluster_assignment_counts[clust_idx];
 				}
 			}
 		}
 
-# if KM_TEST
-		printf("Cluster centers: \n"); print_mat(clusters, K, NEV);
+# if 0
+		printf("Cluster centers: \n"); print_mat(clusters, K, NUM_COLS);
 #endif
 	}
 }
@@ -404,14 +347,14 @@ namespace fg
 {
 	unsigned compute_kmeans(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-			const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS,
+			const unsigned num_rows, const unsigned num_cols, const size_t k, const unsigned MAX_ITERS,
 			const int max_threads, const std::string init, const double tolerance,
             const std::string dist_type)
 	{
 #ifdef PROFILER
 		ProfilerStart("/home/disa/FlashGraph/flash-graph/matrix/kmeans.perf");
 #endif
-		NEV = nev;
+		NUM_COLS = num_cols;
 		K = k;
 		NUM_ROWS = num_rows;
 		assert(max_threads > 0);
@@ -452,20 +395,19 @@ namespace fg
 #endif
 
         if (init == "random") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
             random_partition_init(cluster_assignments);
             // We must now update cluster centers before we begin
             M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments, true);
         } else if (init == "forgy") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
             forgy_init(matrix, clusters);
         } else if (init == "kmeanspp") {
-            BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 #if KM_ENABLE_DIST_TYPE
             kmeanspp_init(matrix, clusters, dist_func);
 #else
             kmeanspp_init(matrix, clusters);
 #endif
+        } else if (init == "none") {
+            ;
         } else {
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
@@ -473,8 +415,14 @@ namespace fg
             exit(-1);
         }
 
+        BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 		BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
-
+#if 0
+        std::string fn = "centers"+std::to_string(K)+"-"+std::to_string(NUM_COLS)+".bin";
+        FILE* f = fopen(fn.c_str(), "wb");
+        fwrite(clusters, sizeof(double)*K*NUM_COLS, 1, f);
+        fclose(f);
+#endif
 		bool converged = false;
 
 		std::string str_iters =  MAX_ITERS == std::numeric_limits<unsigned>::max() ?

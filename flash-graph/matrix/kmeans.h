@@ -37,6 +37,40 @@
 #include "log.h"
 #include "common.h"
 
+namespace {
+    /**
+     * \brief Print an arry of some length `len`.
+     *	 \param len The length of the array.
+     */
+    template <typename T>
+        static void print_arr(T* arr, unsigned len) {
+            printf("[ ");
+            for (unsigned i = 0; i < len; i++) {
+                std::cout << arr[i] << " ";
+            }
+            printf("]\n");
+        }
+
+    /*\Internal
+     * \brief print a col wise matrix of type double / double.
+     * Used for testing only.
+     * \param matrix The col wise matrix.
+     * \param rows The number of rows in the mat
+     * \param cols The number of cols in the mat
+     */
+    template <typename T>
+        static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
+            for (unsigned row = 0; row < rows; row++) {
+                std::cout << "[";
+                for (unsigned col = 0; col < cols; col++) {
+                    std::cout << " " << matrix[row*cols + col];
+                }
+                std::cout <<  " ]\n";
+            }
+        }
+}
+
+namespace fg {
 /**
  * \brief Compute kmeans on matrix of features
  * \param matrix The matrix who's row IDs are being clustered.
@@ -49,11 +83,9 @@
  * \param max_iters The maximum number of iterations of K-means to perform.
  * \param init The type of initilization ["random", "forgy", "kmeanspp"]
  **/
-namespace fg
-{
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-		const unsigned num_rows, const unsigned nev, const size_t k, 
+		const unsigned num_rows, const unsigned num_cols, const size_t k, 
 		const unsigned MAX_ITERS, const int max_threads, const std::string init="kmeanspp",
 		const double tolerance=-1, const std::string dist_type="eucl");
 }
