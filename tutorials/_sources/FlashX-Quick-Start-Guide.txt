@@ -132,13 +132,13 @@ Go to the top directory of FlashX.
 
 ``wget http://snap.stanford.edu/data/wiki-Vote.txt.gz``
 
-FlashX provides a tool ``el2al`` to convert an edge list file in text
+FlashX provides a tool ``el2fg`` to convert an edge list file in text
 format to the graph format supported by FlashGraph.
 
 ::
 
     gunzip wiki-Vote.txt.gz
-    build/matrix/test/el2al conf/run_test.txt wiki-Vote.txt wiki-Vote
+    build/matrix/utils/el2fg conf/run_test.txt wiki-Vote.txt wiki-Vote
 
 | This tool takes a configuration file, a graph file in text edge list
   and a user-specified graph name. It creates two files wiki-Vote.adj
@@ -164,7 +164,12 @@ in-memory graphs. This is the simplest setup for FlashGraph.
 | For example, the command below runs WCC (weakly connected components)
   on the wiki graph.
 
-``build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index wcc``
+::
+
+    build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index wcc
+    ...
+    There are 1183 empty vertices
+    There are 24 components (exclude empty vertices), and largest comp has 7066 vertices
 
 Run FlashGraph with SAFS.
 -------------------------
@@ -264,14 +269,26 @@ Users can use the following function to configure FlashR.
 Run FlashGraph in FlashR
 ------------------------
 
-Users can run graph algorithms provided by FlashGraph in FlashR. Here
-shows an example of running PageRank.
+Users can run graph algorithms provided by FlashGraph in FlashR.
+
+Users can load a graph in both text edge list format and the FlashGraph
+format. If users provide a the text edge list format, FlashR will
+construct the FlashGraph format directly. e.g., both of the following
+commands loads the wiki-Vote graph to FlashR (assume the text edge list
+and the FlashGraph image are both in the current directory).
+
+::
+
+    g <- fg.load.graph("./wiki-Vote.txt", directed=TRUE)
+    g <- fg.load.graph("./wiki-Vote.adj", "./wiki-Vote.index")
+
+Here shows an example of running PageRank.
 
 ::
 
     > library(FlashR)
     > fg.set.conf("flash-graph/conf/run_test.txt")
-    > g <- fg.load.graph("wiki.adj", "wiki.index")
+    > g <- fg.load.graph("./wiki-Vote.adj", "./wiki-Vote.index")
     > res <- fg.page.rank(g)
     > res <- sort(res, decreasing=FALSE, index.return=TRUE)
     > tail(res$x, n=10)
@@ -291,14 +308,15 @@ FlashR for relatively smaller graphs (millions of vertices).
 Construct a sparse matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Users can construct a sparse matrix image from a graph image in
-FlashGraph format.
+FlashX provides a tool called ``fg2fm`` to construct a sparse matrix
+image from a FlashGraph image. Currently, this is the only way of
+constructing a sparse matrix for FlashR.
 
 ::
 
-    build/matrix/test/al22d matrix/conf/run_test.txt ./wiki.adj ./wiki.index wiki
+    build/matrix/utils/fg2fm matrix/conf/run_test.txt ./wiki-Vote.adj ./wiki-Vote.index wiki
 
-The wiki graph is directed, so ``al22d`` outputs four files.
+The wiki graph is directed, so ``fg2fm`` outputs four files.
 
 ::
 
@@ -315,14 +333,14 @@ There are multiple ways of loading a sparse matrix in FlashR.
 
    ::
 
-       > g <- fg.load.graph("./wiki.adj", "./wiki.index")
-       > m <- fm.get.matrix(g)
+       > g <- fg.load.graph("./wiki-Vote.adj", "./wiki-Vote.index")
+       > m <- fm.get.sparse.matrix(g)
 
 -  Users can load a sparse matrix image directly.
 
    ::
 
-       > m <- fm.load.matrix("./wiki.mat", "./wiki.mat_idx", "./wiki_t.mat", "./wiki_t.mat_idx")
+       > m <- fm.load.sparse.matrix("./wiki.mat", "./wiki.mat_idx", "./wiki_t.mat", "./wiki_t.mat_idx")
 
 Run FlashEigen
 ~~~~~~~~~~~~~~
@@ -336,7 +354,7 @@ FlashEigen only supports computing eigenvalues on symmetric matrices.
 
     > library(FlashR)
     > fg.set.conf("matrix/conf/run_test.txt")
-    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > m <- fm.load.sparse.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
     > multiply <- function(x, extra) t(m) %*% (m %*% x)
     > res <- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
     > res$vals
@@ -352,7 +370,7 @@ To compute eigenvalues with ARPACK and FlashR,
 
     > library(FlashR)
     > fg.set.conf("matrix/conf/run_test.txt")
-    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > m <- fm.load.sparse.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
     > multiply <- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
     > res <- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
     > res$values

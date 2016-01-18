@@ -1,3 +1,6 @@
+FlashR programming tutorial
+===========================
+
 FlashR is an extension of the R programming framework. It executes R
 code in parallel automatically and stores and accesses arrays in the R
 code on disks automatically to scale R to large datasets that can't fit
@@ -28,17 +31,18 @@ forbidding modifying individual elements, FlashR advocates
 array-oriented programming to achieve superior efficiency.
 
 How to start
-============
+------------
 
-Users can follow the instructions here to install FlashR in Ubuntu. To
-load FlashR to R, run
+Users can follow the
+`instructions <https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide>`__
+to install FlashR in Ubuntu. To load FlashR to R, run
 
 ::
 
     > library(FlashR)
 
 Construct FlashR vectors and matrices
-=====================================
+-------------------------------------
 
 FlashR provides a set of functions to generate FlashR vectors and
 matrices. These functions have very similar interface as the R
@@ -66,7 +70,7 @@ filesystem.
    file.
 
 Interact with native R
-======================
+----------------------
 
 FlashR also provides functions to interact with the original R system.
 
@@ -81,13 +85,13 @@ FlashR vector or matrix.
 -  ``fm.is.vector``: test if an object is a FlashR vector.
 -  ``fm.is.matrix``: test if an object is a FlashR matrix.
 
-Programming interface
-=====================
+Generalized operators
+---------------------
 
 | FlashR has two sets of programming API. It provides users a set of
   generalized operators, with which users can implement varieties of
   data mining and machine learning algorithms. On top of them, FlashR
-  implements many commonly used "small" R functions with the generalized
+  implements many R functions in the base package with the generalized
   operators to mimic the original R programming environment.
 | Generalized operators
 
@@ -100,11 +104,11 @@ many UDOs in FlashR such as addition and subtraction (see
 supported by FlashR.
 
 **Inner product**: a generalized matrix multiplication. It replaces
-multiplication and addition in matrix multiplication with two
-user-defined functions, respectively. As such, we can define many
-operations with inner product. For example, we can use inner product to
-compute various pair-wise distance matrics of data points such as
-Euclidean distance and Hamming distance.
+multiplication and addition in matrix multiplication with two UDOs,
+respectively. As such, we can define many operations with inner product.
+For example, we can use inner product to compute various pair-wise
+distance matrics of data points such as Euclidean distance and Hamming
+distance.
 
 ::
 
@@ -123,8 +127,7 @@ multiple variants.
    takes an element in a vector or a matrix at a time and outputs an
    element.
 -  ``fm.mapply2``: a generalized element-wise binary operation whose UDO
-   takes an element from each vector or matrix and outputs a single
-   element.
+   takes an element from each vector or matrix and outputs an element.
 -  ``fm.mapply.row`` and ``fm.mapply.col`` are two variants of
    ``fm.mapply2``. They are similar to ``sweep()`` in R and the
    broadcasting mechanism in Numpy. They are equivalent to mapply2 on
@@ -155,7 +158,7 @@ Aggregation takes multiple elements and outputs a single element.
 
 -  ``fm.agg``: aggregates over the entire vector or matrix.
 -  ``fm.agg.mat``: aggregates over each individual row or column of a
-   matrix.
+   matrix and outputs a vector.
 
    ::
 
@@ -168,25 +171,24 @@ Aggregation takes multiple elements and outputs a single element.
 | Example 2: compute rowSums(m)
 | ``fm.agg.mat(x, 1, fm.bo.add)``
 
-Again, both ``sum()`` and ``rowSums()`` have been implemented in FlashR.
+Again, both ``sum()`` and ``rowSums()`` have been implemented with
+aggregation in FlashR.
 
 | Groupby is similar to groupby in SQL. It groups multiple elements by
-  their values and perform some computation on the elements.
+  their values and perform some computation on the elements. Currently,
+  the function passed to a groupby function has to aggregate values.
 | ``fm.sgroupby``: groups elements by their values in a vector and
-  invokes UDO on the elements associated with the same value
+  invokes UDO on the elements associated with the same value. It outputs
+  a vector.
 | ``fm.groupby``: takes a matrix and a vector of categorical values,
   groups rows/columns of the matrix based on the corresponding
   categorical value and runs UDO on the rows/columns with the same
-  categorical value.
+  categorical value. It outputs a matrix.
 
 ::
 
     fm.sgroupby(o, FUN)
     fm.groupby(fm, margin, factor, FUN)
-
-The function passed to a groupby function can be a UDO or an aggregation
-operator. The current implementation only supports aggregation over the
-elements in the same group.
 
 | In practice, groupby requires an aggregation operation over some of
   the original elements in a group and combine operation over the
@@ -201,16 +203,17 @@ elements in the same group.
   aggregation and combine operation.
 | fm.create.agg.op(agg, combine, name)
 
-"Small" R functions
-===================
+"Base" R functions
+------------------
 
-FlashR provides many "small" R functions to mimic the R programming
-environment. Although we have a goal of having these functions as
-similar as possible to the original R functions, we do not provide 100%
-compatibility with the original R version for some functions. Overall,
-we try to provide similarity under the condition of not sacrificing
-performance. Below shows a list of "small" R functions currently
-supported by FlashR. In the future, more functions will be provided.
+FlashR implements many R functions in the base package to mimic the R
+programming environment. Although we have a goal of having these
+functions as similar as possible to the original R functions, we do not
+provide 100% compatibility with the original R version for some
+functions. Overall, we try to provide similarity under the condition of
+not sacrificing performance. Below shows a list of R functions in the
+base package currently supported by FlashR. In the future, more
+functions will be provided.
 
 The following functions have exactly the same interface as the original
 R function.
@@ -242,7 +245,7 @@ original R functions.
 -  fm.as.integer, fm.as.numeric
 
 Some examples of using FlashR
-=============================
+-----------------------------
 
 | PageRank is the classical algorithm to rank Web pages originally used
   by Google search engine. PageRank is an iterative algorithm. In each
@@ -323,7 +326,7 @@ Step 3: update all cluster centers.
     centers <- diag(1/cnts$Freq) %*% centers
 
 Requirements for FlashR users
-=============================
+-----------------------------
 
 | There are two requirements for FlashR users to get the best
   performance out of FlashR:

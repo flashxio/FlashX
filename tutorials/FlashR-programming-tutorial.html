@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>How to start &mdash; FlashX-docs 0.3 documentation</title>
+    <title>FlashR programming tutorial &mdash; FlashX-docs 0.3 documentation</title>
     
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -24,6 +24,7 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="next" title="FlashX tools" href="FlashX-tools.html" />
     <link rel="prev" title="Install FlashX" href="FlashX-Quick-Start-Guide.html" />
    
   
@@ -37,7 +38,9 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <p>FlashR is an extension of the R programming framework. It executes R
+  <div class="section" id="flashr-programming-tutorial">
+<h1>FlashR programming tutorial<a class="headerlink" href="#flashr-programming-tutorial" title="Permalink to this headline">¶</a></h1>
+<p>FlashR is an extension of the R programming framework. It executes R
 code in parallel automatically and stores and accesses arrays in the R
 code on disks automatically to scale R to large datasets that can&#8217;t fit
 in memory. The core of FlashR is a small set of generalized operators to
@@ -65,15 +68,16 @@ efficiency issues and these operations are harmful to SSDs. By
 forbidding modifying individual elements, FlashR advocates
 array-oriented programming to achieve superior efficiency.</p>
 <div class="section" id="how-to-start">
-<h1>How to start<a class="headerlink" href="#how-to-start" title="Permalink to this headline">¶</a></h1>
-<p>Users can follow the instructions here to install FlashR in Ubuntu. To
-load FlashR to R, run</p>
+<h2>How to start<a class="headerlink" href="#how-to-start" title="Permalink to this headline">¶</a></h2>
+<p>Users can follow the
+<a class="reference external" href="https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide">instructions</a>
+to install FlashR in Ubuntu. To load FlashR to R, run</p>
 <div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 </pre></div>
 </div>
 </div>
 <div class="section" id="construct-flashr-vectors-and-matrices">
-<h1>Construct FlashR vectors and matrices<a class="headerlink" href="#construct-flashr-vectors-and-matrices" title="Permalink to this headline">¶</a></h1>
+<h2>Construct FlashR vectors and matrices<a class="headerlink" href="#construct-flashr-vectors-and-matrices" title="Permalink to this headline">¶</a></h2>
 <p>FlashR provides a set of functions to generate FlashR vectors and
 matrices. These functions have very similar interface as the R
 counterparts that generate vectors and matrices.</p>
@@ -101,7 +105,7 @@ file.</li>
 </ul>
 </div>
 <div class="section" id="interact-with-native-r">
-<h1>Interact with native R<a class="headerlink" href="#interact-with-native-r" title="Permalink to this headline">¶</a></h1>
+<h2>Interact with native R<a class="headerlink" href="#interact-with-native-r" title="Permalink to this headline">¶</a></h2>
 <p>FlashR also provides functions to interact with the original R system.</p>
 <ul class="simple">
 <li><code class="docutils literal"><span class="pre">fm.as.vector</span></code>: convert an R vector to a FlashR vector.</li>
@@ -116,13 +120,13 @@ FlashR vector or matrix.</p>
 <li><code class="docutils literal"><span class="pre">fm.is.matrix</span></code>: test if an object is a FlashR matrix.</li>
 </ul>
 </div>
-<div class="section" id="programming-interface">
-<h1>Programming interface<a class="headerlink" href="#programming-interface" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="generalized-operators">
+<h2>Generalized operators<a class="headerlink" href="#generalized-operators" title="Permalink to this headline">¶</a></h2>
 <div class="line-block">
 <div class="line">FlashR has two sets of programming API. It provides users a set of
 generalized operators, with which users can implement varieties of
 data mining and machine learning algorithms. On top of them, FlashR
-implements many commonly used &#8220;small&#8221; R functions with the generalized
+implements many R functions in the base package with the generalized
 operators to mimic the original R programming environment.</div>
 <div class="line">Generalized operators</div>
 </div>
@@ -134,11 +138,11 @@ many UDOs in FlashR such as addition and subtraction (see
 <code class="docutils literal"><span class="pre">?fm.basic.op</span></code> for details). Below lists all GenOps currently
 supported by FlashR.</p>
 <p><strong>Inner product</strong>: a generalized matrix multiplication. It replaces
-multiplication and addition in matrix multiplication with two
-user-defined functions, respectively. As such, we can define many
-operations with inner product. For example, we can use inner product to
-compute various pair-wise distance matrics of data points such as
-Euclidean distance and Hamming distance.</p>
+multiplication and addition in matrix multiplication with two UDOs,
+respectively. As such, we can define many operations with inner product.
+For example, we can use inner product to compute various pair-wise
+distance matrics of data points such as Euclidean distance and Hamming
+distance.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">inner</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">mat</span><span class="p">,</span> <span class="n">FUN1</span><span class="p">,</span> <span class="n">FUN2</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -157,8 +161,7 @@ takes an element in a vector or a matrix at a time and outputs an
 element.</p>
 </li>
 <li><p class="first"><code class="docutils literal"><span class="pre">fm.mapply2</span></code>: a generalized element-wise binary operation whose UDO
-takes an element from each vector or matrix and outputs a single
-element.</p>
+takes an element from each vector or matrix and outputs an element.</p>
 </li>
 <li><p class="first"><code class="docutils literal"><span class="pre">fm.mapply.row</span></code> and <code class="docutils literal"><span class="pre">fm.mapply.col</span></code> are two variants of
 <code class="docutils literal"><span class="pre">fm.mapply2</span></code>. They are similar to <code class="docutils literal"><span class="pre">sweep()</span></code> in R and the
@@ -192,7 +195,7 @@ matrix addition and matrix negation have been implemented in FlashR.</p>
 <li><p class="first"><code class="docutils literal"><span class="pre">fm.agg</span></code>: aggregates over the entire vector or matrix.</p>
 </li>
 <li><p class="first"><code class="docutils literal"><span class="pre">fm.agg.mat</span></code>: aggregates over each individual row or column of a
-matrix.</p>
+matrix and outputs a vector.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
 <span class="n">fm</span><span class="o">.</span><span class="n">agg</span><span class="o">.</span><span class="n">mat</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">margin</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
 </pre></div>
@@ -207,24 +210,24 @@ matrix.</p>
 <div class="line">Example 2: compute rowSums(m)</div>
 <div class="line"><code class="docutils literal"><span class="pre">fm.agg.mat(x,</span> <span class="pre">1,</span> <span class="pre">fm.bo.add)</span></code></div>
 </div>
-<p>Again, both <code class="docutils literal"><span class="pre">sum()</span></code> and <code class="docutils literal"><span class="pre">rowSums()</span></code> have been implemented in FlashR.</p>
+<p>Again, both <code class="docutils literal"><span class="pre">sum()</span></code> and <code class="docutils literal"><span class="pre">rowSums()</span></code> have been implemented with
+aggregation in FlashR.</p>
 <div class="line-block">
 <div class="line">Groupby is similar to groupby in SQL. It groups multiple elements by
-their values and perform some computation on the elements.</div>
+their values and perform some computation on the elements. Currently,
+the function passed to a groupby function has to aggregate values.</div>
 <div class="line"><code class="docutils literal"><span class="pre">fm.sgroupby</span></code>: groups elements by their values in a vector and
-invokes UDO on the elements associated with the same value</div>
+invokes UDO on the elements associated with the same value. It outputs
+a vector.</div>
 <div class="line"><code class="docutils literal"><span class="pre">fm.groupby</span></code>: takes a matrix and a vector of categorical values,
 groups rows/columns of the matrix based on the corresponding
 categorical value and runs UDO on the rows/columns with the same
-categorical value.</div>
+categorical value. It outputs a matrix.</div>
 </div>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">fm</span><span class="o">.</span><span class="n">sgroupby</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
 <span class="n">fm</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">fm</span><span class="p">,</span> <span class="n">margin</span><span class="p">,</span> <span class="n">factor</span><span class="p">,</span> <span class="n">FUN</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The function passed to a groupby function can be a UDO or an aggregation
-operator. The current implementation only supports aggregation over the
-elements in the same group.</p>
 <div class="line-block">
 <div class="line">In practice, groupby requires an aggregation operation over some of
 the original elements in a group and combine operation over the
@@ -240,15 +243,16 @@ aggregation and combine operation.</div>
 <div class="line">fm.create.agg.op(agg, combine, name)</div>
 </div>
 </div>
-<div class="section" id="small-r-functions">
-<h1>&#8220;Small&#8221; R functions<a class="headerlink" href="#small-r-functions" title="Permalink to this headline">¶</a></h1>
-<p>FlashR provides many &#8220;small&#8221; R functions to mimic the R programming
-environment. Although we have a goal of having these functions as
-similar as possible to the original R functions, we do not provide 100%
-compatibility with the original R version for some functions. Overall,
-we try to provide similarity under the condition of not sacrificing
-performance. Below shows a list of &#8220;small&#8221; R functions currently
-supported by FlashR. In the future, more functions will be provided.</p>
+<div class="section" id="base-r-functions">
+<h2>&#8220;Base&#8221; R functions<a class="headerlink" href="#base-r-functions" title="Permalink to this headline">¶</a></h2>
+<p>FlashR implements many R functions in the base package to mimic the R
+programming environment. Although we have a goal of having these
+functions as similar as possible to the original R functions, we do not
+provide 100% compatibility with the original R version for some
+functions. Overall, we try to provide similarity under the condition of
+not sacrificing performance. Below shows a list of R functions in the
+base package currently supported by FlashR. In the future, more
+functions will be provided.</p>
 <p>The following functions have exactly the same interface as the original
 R function.</p>
 <ul class="simple">
@@ -280,7 +284,7 @@ original R functions.</p>
 </ul>
 </div>
 <div class="section" id="some-examples-of-using-flashr">
-<h1>Some examples of using FlashR<a class="headerlink" href="#some-examples-of-using-flashr" title="Permalink to this headline">¶</a></h1>
+<h2>Some examples of using FlashR<a class="headerlink" href="#some-examples-of-using-flashr" title="Permalink to this headline">¶</a></h2>
 <div class="line-block">
 <div class="line">PageRank is the classical algorithm to rank Web pages originally used
 by Google search engine. PageRank is an iterative algorithm. In each
@@ -355,12 +359,13 @@ centers &lt;- diag(1/cnts$Freq) %*% centers
 </div>
 </div>
 <div class="section" id="requirements-for-flashr-users">
-<h1>Requirements for FlashR users<a class="headerlink" href="#requirements-for-flashr-users" title="Permalink to this headline">¶</a></h1>
+<h2>Requirements for FlashR users<a class="headerlink" href="#requirements-for-flashr-users" title="Permalink to this headline">¶</a></h2>
 <div class="line-block">
 <div class="line">There are two requirements for FlashR users to get the best
 performance out of FlashR:</div>
 <div class="line">Array-oriented programming</div>
 <div class="line">Understand space &amp; computation complexity</div>
+</div>
 </div>
 </div>
 
@@ -372,19 +377,23 @@ performance out of FlashR:</div>
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">How to start</a></li>
+<li><a class="reference internal" href="#">FlashR programming tutorial</a><ul>
+<li><a class="reference internal" href="#how-to-start">How to start</a></li>
 <li><a class="reference internal" href="#construct-flashr-vectors-and-matrices">Construct FlashR vectors and matrices</a></li>
 <li><a class="reference internal" href="#interact-with-native-r">Interact with native R</a></li>
-<li><a class="reference internal" href="#programming-interface">Programming interface</a></li>
-<li><a class="reference internal" href="#small-r-functions">&#8220;Small&#8221; R functions</a></li>
+<li><a class="reference internal" href="#generalized-operators">Generalized operators</a></li>
+<li><a class="reference internal" href="#base-r-functions">&#8220;Base&#8221; R functions</a></li>
 <li><a class="reference internal" href="#some-examples-of-using-flashr">Some examples of using FlashR</a></li>
 <li><a class="reference internal" href="#requirements-for-flashr-users">Requirements for FlashR users</a></li>
+</ul>
+</li>
 </ul>
 <div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
       <li>Previous: <a href="FlashX-Quick-Start-Guide.html" title="previous chapter">Install FlashX</a></li>
+      <li>Next: <a href="FlashX-tools.html" title="next chapter">FlashX tools</a></li>
   </ul></li>
 </ul>
 </div>

@@ -154,10 +154,10 @@ of graphs. We currently require your graph be in <strong>edge list text
 format</strong>.</p>
 <p>Go to the top directory of FlashX.</p>
 <p><code class="docutils literal"><span class="pre">wget</span> <span class="pre">http://snap.stanford.edu/data/wiki-Vote.txt.gz</span></code></p>
-<p>FlashX provides a tool <code class="docutils literal"><span class="pre">el2al</span></code> to convert an edge list file in text
+<p>FlashX provides a tool <code class="docutils literal"><span class="pre">el2fg</span></code> to convert an edge list file in text
 format to the graph format supported by FlashGraph.</p>
 <div class="highlight-python"><div class="highlight"><pre>gunzip wiki-Vote.txt.gz
-build/matrix/test/el2al conf/run_test.txt wiki-Vote.txt wiki-Vote
+build/matrix/utils/el2fg conf/run_test.txt wiki-Vote.txt wiki-Vote
 </pre></div>
 </div>
 <div class="line-block">
@@ -184,7 +184,12 @@ index file for the graph file from the local Linux filesystem.</div>
 <div class="line">For example, the command below runs WCC (weakly connected components)
 on the wiki graph.</div>
 </div>
-<p><code class="docutils literal"><span class="pre">build/flash-graph/test-algs/test_algs</span> <span class="pre">flash-graph/conf/run_test.txt</span> <span class="pre">wiki-Vote.adj</span> <span class="pre">wiki-Vote.index</span> <span class="pre">wcc</span></code></p>
+<div class="highlight-python"><div class="highlight"><pre>build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index wcc
+...
+There are 1183 empty vertices
+There are 24 components (exclude empty vertices), and largest comp has 7066 vertices
+</pre></div>
+</div>
 </div>
 <div class="section" id="run-flashgraph-with-safs">
 <h2>Run FlashGraph with SAFS.<a class="headerlink" href="#run-flashgraph-with-safs" title="Permalink to this headline">¶</a></h2>
@@ -273,11 +278,20 @@ FlashGraph.</li>
 </div>
 <div class="section" id="run-flashgraph-in-flashr">
 <h2>Run FlashGraph in FlashR<a class="headerlink" href="#run-flashgraph-in-flashr" title="Permalink to this headline">¶</a></h2>
-<p>Users can run graph algorithms provided by FlashGraph in FlashR. Here
-shows an example of running PageRank.</p>
+<p>Users can run graph algorithms provided by FlashGraph in FlashR.</p>
+<p>Users can load a graph in both text edge list format and the FlashGraph
+format. If users provide a the text edge list format, FlashR will
+construct the FlashGraph format directly. e.g., both of the following
+commands loads the wiki-Vote graph to FlashR (assume the text edge list
+and the FlashGraph image are both in the current directory).</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">&lt;-</span> <span class="n">fg</span><span class="o">.</span><span class="n">load</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="s">&quot;./wiki-Vote.txt&quot;</span><span class="p">,</span> <span class="n">directed</span><span class="o">=</span><span class="n">TRUE</span><span class="p">)</span>
+<span class="n">g</span> <span class="o">&lt;-</span> <span class="n">fg</span><span class="o">.</span><span class="n">load</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="s">&quot;./wiki-Vote.adj&quot;</span><span class="p">,</span> <span class="s">&quot;./wiki-Vote.index&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here shows an example of running PageRank.</p>
 <div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
-&gt; g &lt;- fg.load.graph(&quot;wiki.adj&quot;, &quot;wiki.index&quot;)
+&gt; g &lt;- fg.load.graph(&quot;./wiki-Vote.adj&quot;, &quot;./wiki-Vote.index&quot;)
 &gt; res &lt;- fg.page.rank(g)
 &gt; res &lt;- sort(res, decreasing=FALSE, index.return=TRUE)
 &gt; tail(res$x, n=10)
@@ -296,12 +310,13 @@ installed. Otherwise, users can compute eigenvalues with ARPACK and
 FlashR for relatively smaller graphs (millions of vertices).</p>
 <div class="section" id="construct-a-sparse-matrix">
 <h3>Construct a sparse matrix<a class="headerlink" href="#construct-a-sparse-matrix" title="Permalink to this headline">¶</a></h3>
-<p>Users can construct a sparse matrix image from a graph image in
-FlashGraph format.</p>
-<div class="highlight-python"><div class="highlight"><pre>build/matrix/test/al22d matrix/conf/run_test.txt ./wiki.adj ./wiki.index wiki
+<p>FlashX provides a tool called <code class="docutils literal"><span class="pre">fg2fm</span></code> to construct a sparse matrix
+image from a FlashGraph image. Currently, this is the only way of
+constructing a sparse matrix for FlashR.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/matrix/utils/fg2fm matrix/conf/run_test.txt ./wiki-Vote.adj ./wiki-Vote.index wiki
 </pre></div>
 </div>
-<p>The wiki graph is directed, so <code class="docutils literal"><span class="pre">al22d</span></code> outputs four files.</p>
+<p>The wiki graph is directed, so <code class="docutils literal"><span class="pre">fg2fm</span></code> outputs four files.</p>
 <div class="highlight-python"><div class="highlight"><pre>$ ls wiki*
 wiki.mat  wiki.mat_idx  wiki_t.mat  wiki_t.mat_idx
 </pre></div>
@@ -313,13 +328,13 @@ wiki.mat  wiki.mat_idx  wiki_t.mat  wiki_t.mat_idx
 <ul>
 <li><p class="first">Users can load a graph image in FlashGraph format and get a sparse
 matrix.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; g &lt;- fg.load.graph(&quot;./wiki.adj&quot;, &quot;./wiki.index&quot;)
-&gt; m &lt;- fm.get.matrix(g)
+<div class="highlight-python"><div class="highlight"><pre>&gt; g &lt;- fg.load.graph(&quot;./wiki-Vote.adj&quot;, &quot;./wiki-Vote.index&quot;)
+&gt; m &lt;- fm.get.sparse.matrix(g)
 </pre></div>
 </div>
 </li>
 <li><p class="first">Users can load a sparse matrix image directly.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.load.matrix(&quot;./wiki.mat&quot;, &quot;./wiki.mat_idx&quot;, &quot;./wiki_t.mat&quot;, &quot;./wiki_t.mat_idx&quot;)
+<div class="highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.load.sparse.matrix(&quot;./wiki.mat&quot;, &quot;./wiki.mat_idx&quot;, &quot;./wiki_t.mat&quot;, &quot;./wiki_t.mat_idx&quot;)
 </pre></div>
 </div>
 </li>
@@ -333,7 +348,7 @@ using <code class="docutils literal"><span class="pre">fm.eigen</span></code> to
 FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
 <div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
-&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; m &lt;- fm.load.sparse.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
 &gt; multiply &lt;- function(x, extra) t(m) %*% (m %*% x)
 &gt; res &lt;- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
 &gt; res$vals
@@ -347,7 +362,7 @@ FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
 <p>To compute eigenvalues with ARPACK and FlashR,</p>
 <div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
-&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; m &lt;- fm.load.sparse.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
 &gt; multiply &lt;- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
 &gt; res &lt;- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
 &gt; res$values
