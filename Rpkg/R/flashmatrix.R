@@ -17,9 +17,10 @@
 
 setClass("fm", representation(pointer = "externalptr", name = "character",
 							  nrow = "numeric", ncol = "numeric",
-							  type="character"))
+							  type="character", ele_type="character"))
 setClass("fmV", representation(pointer = "externalptr", name = "character",
-							   len = "numeric", type="character"))
+							   len = "numeric", type="character",
+							   ele_type="character"))
 setClass("fmFactorV", representation(num.levels = "integer"), contains = "fmV")
 # We use symbolic representation for UDFs.
 # We will select the right form and right element type for a UDF when
@@ -32,7 +33,7 @@ new.fm <- function(fm)
 {
 	if (!is.null(fm))
 		new("fm", pointer=fm$pointer, name=fm$name, nrow=fm$nrow, ncol=fm$ncol,
-			type=fm$type)
+			type=fm$type, ele_type=fm$ele_type)
 	else
 		NULL
 }
@@ -40,7 +41,8 @@ new.fm <- function(fm)
 new.fmV <- function(fm)
 {
 	if (!is.null(fm))
-		new("fmV", pointer=fm$pointer, name=fm$name, len=fm$len, type=fm$type)
+		new("fmV", pointer=fm$pointer, name=fm$name, len=fm$len, type=fm$type,
+			ele_type=fm$ele_type)
 	else
 		NULL
 }
@@ -49,7 +51,7 @@ new.fmFactorV <- function(fm)
 {
 	if (!is.null(fm))
 		new("fmFactorV", num.levels=fm$levels, pointer=fm$pointer,
-			name=fm$name, len=fm$len, type=fm$type)
+			name=fm$name, len=fm$len, type=fm$type, ele_type=fm$ele_type)
 	else
 		NULL
 }
@@ -371,7 +373,7 @@ fm.typeof <- function(fm)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
-	.Call("R_FM_typeof", fm, PACKAGE="FlashR")
+	fm@ele_type
 }
 
 #' Convert a FlashMatrix matrix to a FlashMatrix vector.

@@ -54,6 +54,14 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("sparse");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>())
+		ret["ele_type"] = Rcpp::String("logical");
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<sparse_matrix> *ref = new object_ref<sparse_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -80,6 +88,16 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("dense");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>()) {
+		m = m->cast_ele_type(get_scalar_type<int>());
+		ret["ele_type"] = Rcpp::String("logical");
+	}
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -110,6 +128,16 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("vector");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>()) {
+		m = m->cast_ele_type(get_scalar_type<int>());
+		ret["ele_type"] = Rcpp::String("logical");
+	}
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);

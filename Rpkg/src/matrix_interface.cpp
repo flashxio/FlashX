@@ -680,8 +680,10 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 				vec.size(), num_nodes, get_scalar_type<int>());
 		fm_vec->copy_from((char *) tmp.get(),
 				vec.size() * fm_vec->get_entry_size());
-		// TODO we need to indicate this is a boolean vector.
-		return create_FMR_vector(fm_vec, "");
+		Rcpp::List ret = create_FMR_vector(fm_vec, "");
+		// we need to indicate this is a boolean vector.
+		ret["ele_type"] = Rcpp::String("logical");
+		return ret;
 	}
 	// TODO handle more types.
 	else {
@@ -732,8 +734,10 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 		for (size_t i = 0; i < nrow; i++)
 			for (size_t j = 0; j < ncol; j++)
 				fm_mat->set<int>(i, j, mat(i, j));
-		// TODO we need to indicate this is a boolean matrix.
-		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		Rcpp::List ret = create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		// we need to indicate this is a boolean matrix.
+		ret["ele_type"] = Rcpp::String("logical");
+		return ret;
 	}
 	// TODO handle more types.
 	else {
@@ -1224,32 +1228,6 @@ RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
 	return ret;
 }
 
-RcppExport SEXP R_FM_typeof(SEXP pmat)
-{
-	Rcpp::StringVector ret(1);
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "Don't support sparse matrix\n");
-		return R_NilValue;
-	}
-	else {
-		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		switch(mat->get_type().get_type()) {
-			case prim_type::P_BOOL:
-				ret[0] = Rcpp::String("logical");
-				break;
-			case prim_type::P_INTEGER:
-				ret[0] = Rcpp::String("integer");
-				break;
-			case prim_type::P_DOUBLE:
-				ret[0] = Rcpp::String("double");
-				break;
-			default:
-				ret[0] = Rcpp::String("unknown");
-		}
-	}
-	return ret;
-}
-
 #if 0
 RcppExport SEXP R_FM_set_cols(SEXP pmat, SEXP pidxs, SEXP pvs)
 {
@@ -1349,11 +1327,18 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 		return R_NilValue;
 	}
 
+	Rcpp::S4 rcpp_mat(pmat);
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->get_num_cols() == 1)
-		return create_FMR_vector(mat, "");
-	else if (mat->get_num_rows() == 1)
-		return create_FMR_vector(mat->transpose(), "");
+	if (mat->get_num_cols() == 1) {
+		Rcpp::List ret = create_FMR_vector(mat, "");
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
+	else if (mat->get_num_rows() == 1) {
+		Rcpp::List ret = create_FMR_vector(mat->transpose(), "");
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
 	else
 		return R_NilValue;
 }
@@ -1412,6 +1397,8 @@ RcppExport SEXP R_FM_read_obj(SEXP pfile)
 		dense_matrix::ptr mat = dense_matrix::create(store);
 		if (num_nodes > 1)
 			mat = mat->conv_store(true, num_nodes);
+		// TODO we are going to lose type info.
+		// A boolean object will become integer object.
 		return create_FMR_matrix(mat, "");
 	}
 }
