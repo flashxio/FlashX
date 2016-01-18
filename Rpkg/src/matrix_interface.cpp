@@ -403,6 +403,10 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
 	if (is_vector(pmat)) {
 		vector::ptr vec = get_vector(pmat);
+		if (!is_supported_type(vec->get_type())) {
+			fprintf(stderr, "multiply doesn't support the type\n");
+			return R_NilValue;
+		}
 		if (!vec->is_in_mem()) {
 			fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
 			return R_NilValue;
@@ -411,6 +415,10 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 	}
 	else {
 		dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+		if (!is_supported_type(right_mat->get_type())) {
+			fprintf(stderr, "multiply doesn't support the type\n");
+			return R_NilValue;
+		}
 		if (!right_mat->is_in_mem()) {
 			fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
 			return R_NilValue;
@@ -425,6 +433,11 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 {
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(matrix->get_type())
+			|| !is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
 	if (matrix->is_type<int>() && right_mat->is_type<double>())
 		matrix = matrix->cast_ele_type(get_scalar_type<double>());
 	if (matrix->is_type<double>() && right_mat->is_type<int>())
@@ -1066,6 +1079,10 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 	// We only need to test on one vector.
 	bool is_vec = is_vector(obj);
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 
 	bulk_uoperate::const_ptr op = fmr::get_uop(pfun, m->get_type().get_type());
 	if (op == NULL)
@@ -1109,6 +1126,10 @@ RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -1132,6 +1153,10 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -1157,6 +1182,10 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 		return R_NilValue;
 	}
 	vector::ptr vec = get_vector(pvec);
+	if (!is_supported_type(vec->get_type())) {
+		fprintf(stderr, "The input vector has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
 	data_frame::ptr groupby_res = vec->groupby(op, true);
 	return create_FMR_data_frame(groupby_res, "");
@@ -1173,6 +1202,10 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 		return R_NilValue;
 	}
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(mat->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 
 	int margin = INTEGER(pmargin)[0];
 	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
