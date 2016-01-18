@@ -753,6 +753,55 @@ res <- ifelse(test, m1, 0)
 rres <- ifelse(fm.conv.FM2R(test), fm.conv.FM2R(m1), 0)
 stopifnot(sum(rres == res) == length(m1))
 
+# Test is.na
+v1 <- runif(1000)
+v1.int <- as.integer(v1 * 100)
+v1[v1 < 0.2] <- NA
+v1.int[v1.int < 20] <- NA
+cat("#NA in v1:", sum(is.na(v1)), "\n")
+cat("#NA in v1.int:", sum(is.na(v1.int)), "\n")
+stopifnot(sum(is.na(v1) == is.na(fm.conv.R2FM(v1))) == length(v1))
+stopifnot(sum(is.na(v1.int) == is.na(fm.conv.R2FM(v1.int))) == length(v1.int))
+
+m1 <- matrix(v1, 100, 10)
+m1.int <- matrix(v1.int, 100, 10)
+cat("#NA in m1:", sum(is.na(m1)), "\n")
+cat("#NA in m1.int:", sum(is.na(m1.int)), "\n")
+stopifnot(sum(is.na(m1) == is.na(fm.conv.R2FM(m1))) == length(m1))
+stopifnot(sum(is.na(m1.int) == is.na(fm.conv.R2FM(m1.int))) == length(m1.int))
+
+# Test is.nan
+v1 <- runif(1000)
+v1.int <- as.integer(v1 * 100)
+v1[v1 < 0.2] <- NaN
+cat("#NaN in v1:", sum(is.nan(v1)), "\n")
+stopifnot(sum(is.nan(v1) == is.nan(fm.conv.R2FM(v1))) == length(v1))
+stopifnot(sum(is.nan(v1.int) == is.nan(fm.conv.R2FM(v1.int))) == length(v1.int))
+
+m1 <- matrix(v1, 100, 10)
+m1.int <- matrix(v1.int, 100, 10)
+cat("#NaN in m1:", sum(is.nan(m1)), "\n")
+stopifnot(sum(is.nan(m1) == is.nan(fm.conv.R2FM(m1))) == length(m1))
+stopifnot(sum(is.nan(m1.int) == is.nan(fm.conv.R2FM(m1.int))) == length(m1.int))
+
+# Test is.finite and is.infinite
+v1 <- runif(1000)
+v1.int <- as.integer(v1 * 100)
+v1[v1 < 0.2] <- Inf
+cat("#Inf in v1:", sum(is.infinite(v1)), "\n")
+stopifnot(sum(is.infinite(v1) == is.infinite(fm.conv.R2FM(v1))) == length(v1))
+stopifnot(sum(is.infinite(v1.int) == is.infinite(fm.conv.R2FM(v1.int))) == length(v1.int))
+stopifnot(sum(is.finite(v1) == is.finite(fm.conv.R2FM(v1))) == length(v1))
+stopifnot(sum(is.finite(v1.int) == is.finite(fm.conv.R2FM(v1.int))) == length(v1.int))
+
+m1 <- matrix(v1, 100, 10)
+m1.int <- matrix(v1.int, 100, 10)
+cat("#Inf in m1:", sum(is.infinite(m1)), "\n")
+stopifnot(sum(is.infinite(m1) == is.infinite(fm.conv.R2FM(m1))) == length(m1))
+stopifnot(sum(is.infinite(m1.int) == is.infinite(fm.conv.R2FM(m1.int))) == length(m1.int))
+stopifnot(sum(is.finite(m1) == is.finite(fm.conv.R2FM(m1))) == length(m1))
+stopifnot(sum(is.finite(m1.int) == is.finite(fm.conv.R2FM(m1.int))) == length(m1.int))
+
 # Test on a sparse matrix
 print("load sparse matrix")
 ig <- read.graph("wiki-Vote1.txt", directed=TRUE)
