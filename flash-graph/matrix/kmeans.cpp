@@ -68,7 +68,7 @@ namespace {
 
     // TODO: Doc
 #if KM_ENABLE_DIST_TYPE
-    static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters, 
+    static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters,
             double (const *dist_func) (const unsigned, const unsigned, const double*, const double*)) {
 #else
     static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters) {
@@ -125,7 +125,8 @@ namespace {
 
 		for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) { // 0...K
 			unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
-			memcpy(&clusters[clust_idx*NUM_COLS], &matrix[rand_idx*NUM_COLS], sizeof(clusters[0])*NUM_COLS);
+            std::copy(&matrix[rand_idx*NUM_COLS], &matrix[(rand_idx*NUM_COLS)+NUM_COLS],
+                    &clusters[clust_idx*NUM_COLS]);
 		}
 
 		BOOST_LOG_TRIVIAL(info) << "Forgy init end";
@@ -136,7 +137,7 @@ namespace {
 	 *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
 	 */
 #if KM_ENABLE_DIST_TYPE
-	static void kmeanspp_init(const double* matrix, double* clusters, 
+	static void kmeanspp_init(const double* matrix, double* clusters,
             double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
 #else
 	static void kmeanspp_init(const double* matrix, double* clusters) {
@@ -150,7 +151,7 @@ namespace {
 		// Choose c1 uniiformly at random
 		unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
 
-		memcpy(&clusters[0], &matrix[rand_idx*NUM_COLS], sizeof(clusters[0])*NUM_COLS);
+        std::copy(&matrix[rand_idx*NUM_COLS], &matrix[(rand_idx*NUM_COLS)+NUM_COLS], &clusters[0]);
 		dist_v[rand_idx] = 0.0;
 
 #if KM_TEST
@@ -186,7 +187,8 @@ namespace {
 #if KM_TEST
 					BOOST_LOG_TRIVIAL(info) << "Choosing " << i << " as center K = " << clust_idx;
 #endif
-					memcpy(&(clusters[clust_idx*NUM_COLS]), &(matrix[i*NUM_COLS]), sizeof(clusters[0])*NUM_COLS);
+                    std::copy(&(matrix[i*NUM_COLS]), &(matrix[i*(NUM_COLS)+NUM_COLS]),
+                            &(clusters[clust_idx*NUM_COLS]));
 					break;
 				}
 			}
@@ -260,8 +262,8 @@ namespace {
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
 		BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
 #endif
-		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
-		memset(clusters, 0, sizeof(clusters[0])*K*NUM_COLS);
+        std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
+        std::fill(&clusters[0], (&clusters[0])+(K*NUM_COLS), 0);
 
 		// Serial aggreate of OMP_MAX_THREADS vectors
 		for (int i = 0; i < OMP_MAX_THREADS; i++) {
@@ -305,10 +307,10 @@ namespace {
 
 		if (init) {
 			BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
-			memset(clusters, 0, sizeof(clusters[0])*K*NUM_COLS);
+            std::fill(&clusters[0], (&clusters[0])+(K*NUM_COLS), 0);
 
 			BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
-			memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
+            std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
 
 			for (unsigned vid = 0; vid < NUM_ROWS; vid++) {
 
@@ -373,9 +375,8 @@ namespace fg
 
 		gettimeofday(&start , NULL);
 		/*** Begin VarInit of data structures ***/
-		memset(cluster_assignments, -1,
-				sizeof(cluster_assignments[0])*NUM_ROWS);
-		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
+        std::fill(&cluster_assignments[0], (&cluster_assignments[0])+NUM_ROWS, -1);
+        std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
 
 		/*** End VarInit ***/
 #if KM_ENABLE_DIST_TYPE
