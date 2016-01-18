@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {
 				break;
 			case 'C':
 				centersfn = std::string(optarg);
+                BOOST_ASSERT_MSG(is_file_exist(centersfn.c_str()), "Centers file name doesn't exit!");
 				num_opts++;
 				break;
 			default:
@@ -80,7 +81,7 @@ int main(int argc, char* argv[]) {
 
     if (is_file_exist(centersfn.c_str())) {
         bin_reader<double> br2(centersfn, k, ncol);
-        br2.readline(p_centers);
+        br2.read(p_centers);
         printf("Read centers!\n");
     } else
         printf("No centers to read ..\n");
