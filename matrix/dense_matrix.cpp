@@ -2013,6 +2013,12 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 
 dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 {
+	if (get_type() != op->get_input_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrix type doesn't match with the sapply input type";
+		return dense_matrix::ptr();
+	}
+
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	sapply_op::const_ptr mapply_op(new sapply_op(op, get_num_rows(),
