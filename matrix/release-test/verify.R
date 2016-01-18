@@ -48,7 +48,7 @@ stopifnot(sum(mat1 == mat) == dim(fm.mat)[2] * dim(fm.mat)[1])
 test.MV1 <- function(fm.mat, fm.vec, res)
 {
 	fm.res <- fm.multiply(fm.mat, fm.vec)
-	stopifnot(sum(res[, 1] == fm.conv.FM2R(fm.res)) == length(fm.res))
+	stopifnot(sum(res[, 1] == fm.res) == length(fm.res))
 	stopifnot(fm.is.vector(fm.res))
 	stopifnot(length(fm.res) == dim(fm.mat)[1])
 	stopifnot(typeof(fm.res) == typeof(res))
@@ -92,7 +92,7 @@ test.MV(mat, vec)
 test.MM1 <- function(fm.left, fm.right, res)
 {
 	fm.res <- fm.multiply(fm.left, fm.right)
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == dim(fm.res)[1] * dim(fm.res)[2])
+	stopifnot(sum(res == fm.res) == dim(fm.res)[1] * dim(fm.res)[2])
 	stopifnot(dim(fm.res)[1] == dim(fm.left)[1])
 	stopifnot(dim(fm.res)[2] == dim(fm.right)[2])
 	stopifnot(typeof(fm.res) == typeof(res))
@@ -178,61 +178,61 @@ test.basic.op1 <- function(fm.o1, fm.o2, ro1, ro2)
 	fm.res <- fm.o1 + fm.o2
 	res <- ro1 + ro2
 	cat("add: left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 - fm.o2
 	res <- ro1 - ro2
 	cat("sub left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 * fm.o2
 	res <- ro1 * ro2
 	cat("mul left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 / fm.o2
 	res <- ro1 / ro2
 	cat("div left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 == fm.o2
 	res <- ro1 == ro2
 	cat("eq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 != fm.o2
 	res <- ro1 != ro2
 	cat("neq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 > fm.o2
 	res <- ro1 > ro2
 	cat("gt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 >= fm.o2
 	res <- ro1 >= ro2
 	cat("ge left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 < fm.o2
 	res <- ro1 < ro2
 	cat("lt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 <= fm.o2
 	res <- ro1 <= ro2
 	cat("le left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 }
 
@@ -244,73 +244,73 @@ test.basic.op <- function(fm.o1, fm.o2)
 	fm.res <- fm.o1 + fm.o2
 	res <- ro1 + ro2
 	cat("add left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 - fm.o2
 	res <- ro1 - ro2
 	cat("sub left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 * fm.o2
 	res <- ro1 * ro2
 	cat("mul left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 / fm.o2
 	res <- ro1 / ro2
 	cat("div left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 == fm.o2
 	res <- ro1 == ro2
 	cat("eq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 != fm.o2
 	res <- ro1 != ro2
 	cat("neq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 > fm.o2
 	res <- ro1 > ro2
 	cat("gt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 >= fm.o2
 	res <- ro1 >= ro2
 	cat("ge left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 < fm.o2
 	res <- ro1 < ro2
 	cat("lt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- fm.o1 <= fm.o2
 	res <- ro1 <= ro2
 	cat("le left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- pmin(fm.o1, fm.o2)
 	res <- pmin(ro1, ro2)
 	cat("min left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 
 	fm.res <- pmax(fm.o1, fm.o2)
 	res <- pmax(ro1, ro2)
 	cat("max left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
-	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(sum(res == fm.res) == length(res))
 	stopifnot(typeof(fm.res) == typeof(res))
 }
 
@@ -445,13 +445,13 @@ rvec1 <- fm.conv.FM2R(fm.vec1)
 print("abs")
 fm.res <- abs(fm.vec1)
 res <- abs(rvec1)
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+stopifnot(sum(fm.res == res) == length(res))
 fm.res <- sqrt(fm.res + 1)
 res <- sqrt(res + 1)
-stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+stopifnot(sum(fm.res == res) == length(res))
 fm.vec2 <- fm.runif(2000, -1, 1)
 rvec2 <- fm.conv.FM2R(fm.vec2)
-stopifnot(sum(fm.conv.FM2R(!(fm.vec1 == fm.vec2)) == !(rvec1 == rvec2)) == length(rvec1))
+stopifnot(sum((!(fm.vec1 == fm.vec2)) == !(rvec1 == rvec2)) == length(rvec1))
 
 test.matrix <- function(fm.mat)
 {
@@ -752,9 +752,6 @@ stopifnot(sum(rres == res) == length(m1))
 res <- ifelse(test, m1, 0)
 rres <- ifelse(fm.conv.FM2R(test), fm.conv.FM2R(m1), 0)
 stopifnot(sum(rres == res) == length(m1))
-
-
-fm <- fm.matrix(fm.runif(1000), 100, 10)
 
 # Test on a sparse matrix
 print("load sparse matrix")
