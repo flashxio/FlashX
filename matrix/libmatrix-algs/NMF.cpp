@@ -295,6 +295,8 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		tWW = tW->multiply(*W);
 	}
 	nmf_state state(W, H, tWW);
+	W = NULL;
+	H = NULL;
 	for (size_t i = 0; i < max_niters; i++) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
