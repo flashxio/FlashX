@@ -291,11 +291,15 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		state = update_lee(mat, state.W, state.H, state.tWW, num_in_mem);
 		gettimeofday(&end, NULL);
 		double update_time = time_diff(start, end);
-		start = end;
-		double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW, num_in_mem);
-		gettimeofday(&end, NULL);
-		printf("iteration %ld: distance: %f, update time: %.3fs, Fnorm: %.3f\n",
-				i, dist, update_time, time_diff(start, end));
+		if (i % 5 == 0) {
+			start = end;
+			double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW, num_in_mem);
+			gettimeofday(&end, NULL);
+			printf("iteration %ld: distance: %f, update time: %.3fs, Fnorm: %.3f\n",
+					i, dist, update_time, time_diff(start, end));
+		}
+		else
+			printf("iteration %ld: update time: %.3fs\n", i, update_time);
 	}
 	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(state.W, state.H);
 }
