@@ -54,6 +54,8 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 {
 	size_t k = D->get_num_cols();
 	dense_matrix::ptr ret;
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	if (num_in_mem >= k * 2) {
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
@@ -95,6 +97,8 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		ret = dense_matrix::create(detail::combined_matrix_store::create(
 					res_mats, matrix_layout_t::L_COL));
 	}
+	gettimeofday(&end, NULL);
+	printf("SpMM takes %.3f seconds\n", time_diff(start, end));
 	printf("reserve mem for %ld vecs\n",
 			detail::get_reserved_bytes() / D->get_num_rows() / D->get_entry_size());
 	return ret;
