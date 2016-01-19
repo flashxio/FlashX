@@ -113,6 +113,7 @@ static mat_ele_t Fnorm(sparse_matrix::ptr A, size_t Annz, dense_matrix::ptr W,
 	// tAW <- t(A) %*% W
 	sparse_matrix::ptr tA = A->transpose();
 	dense_matrix::ptr tAW = multiply(tA, W, num_in_mem);
+	W->drop_cache();
 
 	// tHtWW <- t(H) %*% (t(W) %*% W)
 	dense_matrix::ptr tH = H->transpose();
@@ -160,6 +161,7 @@ static detail::matrix_store::ptr create_materialize_store(size_t num_rows,
 static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		dense_matrix::ptr H, dense_matrix::ptr tWW, size_t num_in_mem)
 {
+	H->drop_cache();
 	mat_ele_t eps = 10e-9;
 	// den <- (t(W) %*% W) %*% H
 	dense_matrix::ptr D;
@@ -194,6 +196,7 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 				create_materialize_store(H->get_num_cols(), H->get_num_rows(),
 					num_in_mem, matrix_layout_t::L_ROW));
 	}
+	W->drop_cache();
 
 	// den <- W %*% (H %*% t(H))
 	{
@@ -202,6 +205,7 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		// H %*% t(H)
 		dense_matrix::ptr tmp1 = H->multiply(*tH);
 		D = W->multiply(*tmp1);
+		H->materialize_self();
 	}
 
 	// W <- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
@@ -223,13 +227,13 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 				create_materialize_store(W->get_num_rows(), W->get_num_cols(),
 					num_in_mem, matrix_layout_t::L_ROW));
 	}
+	H->drop_cache();
 
 	dense_matrix::ptr tW = W->transpose();
 	tWW = tW->multiply(*W);
 	// TODO We have to materialize these matrices here.
 	// Otherwise, we'll get segmentation fault. Why?
 	W->materialize_self();
-	H->materialize_self();
 	return nmf_state(W, H, tWW);
 }
 
