@@ -369,6 +369,70 @@ detail::portion_mapply_op::const_ptr multiply_tall_op<T>::transpose() const
 }
 
 template<class T>
+void tall_gemm_col(const detail::local_matrix_store &Astore, const T *Amat,
+		const detail::mem_matrix_store &Bstore, const T *Bmat,
+		detail::local_matrix_store &out, T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void tall_gemm_col<double>(const detail::local_matrix_store &Astore, const double *Amat,
+		const detail::mem_matrix_store &Bstore, const double *Bmat,
+		detail::local_matrix_store &out, double *res_mat)
+{
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
+			0, res_mat, out.get_num_rows());
+}
+
+template<>
+void tall_gemm_col<float>(const detail::local_matrix_store &Astore, const float *Amat,
+		const detail::mem_matrix_store &Bstore, const float *Bmat,
+		detail::local_matrix_store &out, float *res_mat)
+{
+	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
+			0, res_mat, out.get_num_rows());
+}
+
+template<class T>
+void tall_gemm_row(const detail::local_matrix_store &Astore, const T *Amat,
+		const detail::mem_matrix_store &Bstore, const T *Bmat,
+		detail::local_matrix_store &out, T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void tall_gemm_row<double>(const detail::local_matrix_store &Astore, const double *Amat,
+		const detail::mem_matrix_store &Bstore, const double *Bmat,
+		detail::local_matrix_store &out, double *res_mat)
+{
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
+			0, res_mat, out.get_num_cols());
+}
+
+template<>
+void tall_gemm_row<float>(const detail::local_matrix_store &Astore, const float *Amat,
+		const detail::mem_matrix_store &Bstore, const float *Bmat,
+		detail::local_matrix_store &out, float *res_mat)
+{
+	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
+			0, res_mat, out.get_num_cols());
+}
+
+template<class T>
 void multiply_tall_op<T>::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
@@ -422,17 +486,9 @@ void multiply_tall_op<T>::run(
 	}
 
 	if (out.store_layout() == matrix_layout_t::L_COL)
-		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_rows(), Bstore->get_num_cols(),
-				Astore->get_num_cols(), 1, Amat,
-				Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
-				0, res_mat, out.get_num_rows());
+		tall_gemm_col<T>(*Astore, Amat, *Bstore, Bmat, out, res_mat);
 	else
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_rows(), Bstore->get_num_cols(),
-				Astore->get_num_cols(), 1, Amat,
-				Astore->get_num_cols(), Bmat, Bstore->get_num_cols(),
-				0, res_mat, out.get_num_cols());
+		tall_gemm_row<T>(*Astore, Amat, *Bstore, Bmat, out, res_mat);
 	if (res_buf)
 		out.copy_from(*res_buf);
 }
@@ -485,6 +541,70 @@ public:
 					+ "*") + mats[1]->get_name() + std::string(")");
 	}
 };
+
+template<class T>
+void wide_gemm_col(const detail::local_matrix_store &Astore, const T *Amat,
+		const detail::local_matrix_store &Bstore, const T *Bmat,
+		T *res_mat, size_t out_num_rows)
+{
+	assert(0);
+}
+
+template<>
+void wide_gemm_col<double>(const detail::local_matrix_store &Astore, const double *Amat,
+		const detail::local_matrix_store &Bstore, const double *Bmat,
+		double *res_mat, size_t out_num_rows)
+{
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_cols(), Bstore.get_num_cols(),
+			Astore.get_num_rows(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_rows(),
+			1, res_mat, out_num_rows);
+}
+
+template<>
+void wide_gemm_col<float>(const detail::local_matrix_store &Astore, const float *Amat,
+		const detail::local_matrix_store &Bstore, const float *Bmat,
+		float *res_mat, size_t out_num_rows)
+{
+	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_cols(), Bstore.get_num_cols(),
+			Astore.get_num_rows(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_rows(),
+			1, res_mat, out_num_rows);
+}
+
+template<class T>
+void wide_gemm_row(const detail::local_matrix_store &Astore, const T *Amat,
+		const detail::local_matrix_store &Bstore, const T *Bmat,
+		T *res_mat, size_t out_num_cols)
+{
+	assert(0);
+}
+
+template<>
+void wide_gemm_row<double>(const detail::local_matrix_store &Astore, const double *Amat,
+		const detail::local_matrix_store &Bstore, const double *Bmat,
+		double *res_mat, size_t out_num_cols)
+{
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_cols(), Bstore.get_num_cols(),
+			Astore.get_num_rows(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_cols(),
+			1, res_mat, out_num_cols);
+}
+
+template<>
+void wide_gemm_row<float>(const detail::local_matrix_store &Astore, const float *Amat,
+		const detail::local_matrix_store &Bstore, const float *Bmat,
+		float *res_mat, size_t out_num_cols)
+{
+	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_cols(), Bstore.get_num_cols(),
+			Astore.get_num_rows(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_cols(),
+			1, res_mat, out_num_cols);
+}
 
 template<class T>
 void multiply_wide_op<T>::run(
@@ -560,29 +680,20 @@ void multiply_wide_op<T>::run(
 	// is stored in contiguous memory and is organized in row major, we can
 	// easily interpret it as its transpose by switching its #rows and #cols.
 	if (Blayout == matrix_layout_t::L_COL)
-		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_cols(), Bstore->get_num_cols(),
-				Astore->get_num_rows(), 1, Amat,
-				Astore->get_num_cols(), Bmat, Bstore->get_num_rows(),
-				1, res_mat, out_num_rows);
+		wide_gemm_col<T>(*Astore, Amat, *Bstore, Bmat, res_mat, out_num_rows);
 	else
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-				Astore->get_num_cols(), Bstore->get_num_cols(),
-				Astore->get_num_rows(), 1, Amat,
-				Astore->get_num_rows(), Bmat, Bstore->get_num_cols(),
-				1, res_mat, out_num_cols);
+		wide_gemm_row<T>(*Astore, Amat, *Bstore, Bmat, res_mat, out_num_cols);
 }
 
-}
-
-static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
+template<class T>
+dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
 	if (out_layout == matrix_layout_t::L_NONE)
 		out_layout = m1.store_layout();
 
-	assert(m1.get_type() == get_scalar_type<double>());
-	assert(m2.get_type() == get_scalar_type<double>());
+	assert(m1.get_type() == get_scalar_type<T>());
+	assert(m2.get_type() == get_scalar_type<T>());
 	detail::matrix_store::const_ptr right = m2.get_raw_store();
 	if (out_layout != m2.store_layout()) {
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
@@ -600,7 +711,7 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = m1.get_raw_store();
-	multiply_tall_op<double>::const_ptr mapply_op(new multiply_tall_op<double>(
+	typename multiply_tall_op<T>::const_ptr mapply_op(new multiply_tall_op<T>(
 				detail::mem_matrix_store::cast(right),
 				detail::mem_thread_pool::get_global_num_threads(),
 				m1.get_num_rows(), m2.get_num_cols()));
@@ -608,7 +719,8 @@ static dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 				out_layout));
 }
 
-static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
+template<class T>
+dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
 	detail::matrix_stats.inc_multiplies(
@@ -627,8 +739,8 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 	if (out_layout == matrix_layout_t::L_NONE)
 		out_layout = required_layout;
 
-	assert(m1.get_type() == get_scalar_type<double>());
-	assert(m2.get_type() == get_scalar_type<double>());
+	assert(m1.get_type() == get_scalar_type<T>());
+	assert(m2.get_type() == get_scalar_type<T>());
 
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 	std::vector<detail::matrix_store::const_ptr> mats(2);
@@ -638,7 +750,7 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 	assert(mats[1]);
 	size_t out_num_rows = m1.get_num_rows();
 	size_t out_num_cols = m2.get_num_cols();
-	std::shared_ptr<multiply_wide_op<double> > op(new multiply_wide_op<double> (
+	std::shared_ptr<multiply_wide_op<T> > op(new multiply_wide_op<T> (
 				nthreads, out_num_rows, out_num_cols, required_layout));
 	__mapply_portion(mats, op, required_layout);
 	std::vector<detail::local_matrix_store::ptr> local_ms
@@ -657,7 +769,7 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 				new detail::local_buf_col_matrix_store(0, 0,
 					out_num_rows, out_num_cols, m1.get_type(), -1));
 	local_res->reset_data();
-	const bulk_operate &add = get_scalar_type<double>().get_basic_ops().get_add();
+	const bulk_operate &add = get_scalar_type<T>().get_basic_ops().get_add();
 	for (size_t j = 0; j < local_ms.size(); j++) {
 		// It's possible that the local matrix store doesn't exist
 		// because the input matrix is very small.
@@ -676,10 +788,14 @@ static dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 	return dense_matrix::create(res);
 }
 
+}
+
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout, bool use_blas) const
 {
-	if (get_type() == get_scalar_type<double>() && use_blas) {
+	if ((get_type() == get_scalar_type<double>()
+				|| get_type() == get_scalar_type<float>()) && use_blas) {
+		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
 		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
 		// We prefer to perform computation on the larger matrix.
@@ -698,10 +814,14 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			return t_res->transpose();
 		}
 
-		if (is_wide())
-			return blas_multiply_wide(*this, mat, out_layout);
+		if (is_wide() && get_type() == get_scalar_type<double>())
+			return blas_multiply_wide<double>(*this, mat, out_layout);
+		else if (is_wide())
+			return blas_multiply_wide<float>(*this, mat, out_layout);
+		else if (get_type() == get_scalar_type<double>())
+			return blas_multiply_tall<double>(*this, mat, out_layout);
 		else
-			return blas_multiply_tall(*this, mat, out_layout);
+			return blas_multiply_tall<float>(*this, mat, out_layout);
 	}
 	else if (get_type() == get_scalar_type<double>()) {
 		bulk_operate::const_ptr add = bulk_operate::conv2ptr(
