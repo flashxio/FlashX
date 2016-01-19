@@ -26,7 +26,7 @@ namespace fm
 namespace alg
 {
 
-typedef double mat_ele_t;
+typedef float mat_ele_t;
 
 static size_t get_nnz(sparse_matrix::ptr mat)
 {
