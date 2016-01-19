@@ -26,6 +26,8 @@ namespace fm
 namespace alg
 {
 
+typedef double mat_ele_t;
+
 static size_t get_nnz(sparse_matrix::ptr mat)
 {
 	int num_nodes = matrix_conf.get_num_nodes();
@@ -41,12 +43,12 @@ static size_t get_nnz(sparse_matrix::ptr mat)
 }
 
 // trace of W %*% H
-static double trace_MM(dense_matrix::ptr W, dense_matrix::ptr H)
+static mat_ele_t trace_MM(dense_matrix::ptr W, dense_matrix::ptr H)
 {
 	dense_matrix::ptr tH = H->transpose();
 	dense_matrix::ptr tmp = W->multiply_ele(*tH);
 	scalar_variable::ptr res = tmp->sum();
-	return scalar_variable::get_val<double>(*res);
+	return scalar_variable::get_val<mat_ele_t>(*res);
 }
 
 static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
@@ -60,7 +62,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), D->get_raw_store()->get_num_nodes());
-		S->multiply<double, double>(D->get_raw_store(), res);
+		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
 		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem > k) {
@@ -68,14 +70,14 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 				S->get_num_rows(), D->get_num_cols(),
 				D->get_raw_store()->get_num_nodes(), D->get_type(),
 				num_in_mem - k, matrix_layout_t::L_COL);
-		S->multiply<double, double>(D->get_raw_store(), res);
+		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
 		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem == k) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), -1, false);
-		S->multiply<double, double>(D->get_raw_store(), res);
+		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
 		D->drop_cache();
 		ret = dense_matrix::create(res);
 	}
@@ -90,7 +92,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 			detail::matrix_store::ptr out = detail::matrix_store::create(
 					S->get_num_rows(), sub_in->get_num_cols(),
 					matrix_layout_t::L_COL, D->get_type(), -1, false);
-			S->multiply<double, double>(sub_in->get_raw_store(), out);
+			S->multiply<mat_ele_t, mat_ele_t>(sub_in->get_raw_store(), out);
 			D->drop_cache();
 			res_mats.push_back(out);
 		}
@@ -105,7 +107,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 }
 
 // ||A - W %*% H||^2
-static double Fnorm(sparse_matrix::ptr A, size_t Annz, dense_matrix::ptr W,
+static mat_ele_t Fnorm(sparse_matrix::ptr A, size_t Annz, dense_matrix::ptr W,
 		dense_matrix::ptr H, dense_matrix::ptr tWW, size_t num_in_mem)
 {
 	// tAW <- t(A) %*% W
@@ -143,22 +145,22 @@ static detail::matrix_store::ptr create_materialize_store(size_t num_rows,
 	detail::matrix_store::ptr ret;
 	if (num_in_mem < num_cols)
 		ret = detail::cached_matrix_store::create(
-				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_rows, num_cols, num_nodes, get_scalar_type<mat_ele_t>(),
 				std::min(num_in_mem, num_cols), layout);
 	else if (num_in_mem < 2 * num_cols)
 		ret = detail::cached_matrix_store::create(
-				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_rows, num_cols, num_nodes, get_scalar_type<mat_ele_t>(),
 				std::min(num_in_mem, num_cols), layout, layout);
 	else
 		ret = detail::mem_matrix_store::create(num_rows, num_cols, layout,
-				get_scalar_type<double>(), num_nodes);
+				get_scalar_type<mat_ele_t>(), num_nodes);
 	return ret;
 }
 
 static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		dense_matrix::ptr H, dense_matrix::ptr tWW, size_t num_in_mem)
 {
-	double eps = 10e-9;
+	mat_ele_t eps = 10e-9;
 	// den <- (t(W) %*% W) %*% H
 	dense_matrix::ptr D;
 	{
@@ -238,14 +240,14 @@ dense_matrix::ptr create_rand_cached(size_t num_rows, size_t num_cols,
 	size_t short_dim = std::min(num_rows, num_cols);
 	if (num_cached == short_dim)
 		store = detail::cached_matrix_store::create(
-				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_rows, num_cols, num_nodes, get_scalar_type<mat_ele_t>(),
 				num_cached, cached_layout, cached_layout);
 	else
 		store = detail::cached_matrix_store::create(
-				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_rows, num_cols, num_nodes, get_scalar_type<mat_ele_t>(),
 				num_cached, cached_layout);
-	store->init_randu(scalar_variable_impl<double>(0),
-			scalar_variable_impl<double>(1));
+	store->init_randu(scalar_variable_impl<mat_ele_t>(0),
+			scalar_variable_impl<mat_ele_t>(1));
 	return dense_matrix::create(store);
 }
 
@@ -262,9 +264,9 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 	int num_nodes = matrix_conf.get_num_nodes();
 	dense_matrix::ptr W, H;
 	if (num_in_mem >= 2 * k) {
-		W = dense_matrix::create_randu<double>(0, 1, n, k,
+		W = dense_matrix::create_randu<mat_ele_t>(0, 1, n, k,
 				matrix_layout_t::L_ROW, num_nodes, true);
-		H = dense_matrix::create_randu<double>(0, 1, k, m,
+		H = dense_matrix::create_randu<mat_ele_t>(0, 1, k, m,
 				matrix_layout_t::L_COL, num_nodes, true);
 	}
 	else if (num_in_mem > k && num_in_mem < 2 * k) {
@@ -274,12 +276,12 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 	}
 	else if (num_in_mem == k) {
 		W = create_rand_cached(n, k, num_nodes, k, matrix_layout_t::L_ROW);
-		H = dense_matrix::create_randu<double>(0, 1, k, m,
+		H = dense_matrix::create_randu<mat_ele_t>(0, 1, k, m,
 				matrix_layout_t::L_COL, num_nodes, false);
 	}
 	else {
 		W = create_rand_cached(n, k, num_nodes, num_in_mem, matrix_layout_t::L_ROW);
-		H = dense_matrix::create_randu<double>(0, 1, k, m,
+		H = dense_matrix::create_randu<mat_ele_t>(0, 1, k, m,
 				matrix_layout_t::L_ROW, num_nodes, false);
 	}
 
@@ -297,7 +299,7 @@ std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
 		double update_time = time_diff(start, end);
 		if (i % 5 == 0) {
 			start = end;
-			double dist = Fnorm(mat, nnz, state.W, state.H, state.tWW, num_in_mem);
+			mat_ele_t dist = Fnorm(mat, nnz, state.W, state.H, state.tWW, num_in_mem);
 			gettimeofday(&end, NULL);
 			printf("iteration %ld: distance: %f, update time: %.3fs, Fnorm: %.3f\n",
 					i, dist, update_time, time_diff(start, end));
