@@ -230,9 +230,16 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 dense_matrix::ptr create_rand_cached(size_t num_rows, size_t num_cols,
 		int num_nodes, size_t num_cached, matrix_layout_t cached_layout)
 {
-	detail::matrix_store::ptr store = detail::cached_matrix_store::create(
-			num_rows, num_cols, num_nodes, get_scalar_type<double>(),
-			num_cached, cached_layout);
+	detail::matrix_store::ptr store;
+	size_t short_dim = std::min(num_rows, num_cols);
+	if (num_cached == short_dim)
+		store = detail::cached_matrix_store::create(
+				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_cached, cached_layout, cached_layout);
+	else
+		store = detail::cached_matrix_store::create(
+				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				num_cached, cached_layout);
 	store->init_randu(scalar_variable_impl<double>(0),
 			scalar_variable_impl<double>(1));
 	return dense_matrix::create(store);
