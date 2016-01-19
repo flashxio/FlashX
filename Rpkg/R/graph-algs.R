@@ -1,19 +1,22 @@
-PageRank <- function(A, d, max.niters) {
+PageRank <- function(A, d = 0.15, max.niters = 30, epsilon = 1e-2,
+					 verbose = FALSE) {
 	N <- dim(A)[1]
-	epsilon <- 1e-2/N
-	cat("There are", N, "vertices. eps =", epsilon)
+	epsilon <- epsilon / N
+	cat("There are", N, "vertices.", "\n")
 	one <- fm.rep.int(1, N)
 	out.deg <- A %*% one
 	one <- NULL
 	pr1 <- fm.rep.int(1/N, N)
-	converge <- 0
+	L1 <- N
 
 	niters <- 0
 	A <- t(A)
-	while (converge < N && niters < max.niters) {
-		pr2 <- (1-d)/N+d*(A %*% (pr1/out.deg))
+	while (L1 >= epsilon && niters < max.niters) {
+		pr2 <- d/N+(1-d)*(A %*% (pr1/out.deg))
 		diff <- abs(pr1-pr2)
-		converge <- sum(diff < epsilon)
+		L1 <- sum(diff)
+		if (verbose)
+			cat("iter", niters, ", L1:", L1 * N, "\n")
 		pr1 <- pr2
 		niters <- niters + 1
 	}
