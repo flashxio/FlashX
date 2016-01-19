@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Load a graph to FlashGraphR &mdash; FlashX-docs 0.3 documentation</title>
+    <title>FlashGraphR programming tutorial &mdash; FlashX-docs 0.3 documentation</title>
     
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -24,6 +24,8 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="next" title="FlashX tools" href="FlashX-tools.html" />
+    <link rel="prev" title="FlashR programming tutorial" href="FlashR-programming-tutorial.html" />
    
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
@@ -36,8 +38,10 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="load-a-graph-to-flashgraphr">
-<h1>Load a graph to FlashGraphR<a class="headerlink" href="#load-a-graph-to-flashgraphr" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="flashgraphr-programming-tutorial">
+<h1>FlashGraphR programming tutorial<a class="headerlink" href="#flashgraphr-programming-tutorial" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="load-a-graph-to-flashgraphr">
+<h2>Load a graph to FlashGraphR<a class="headerlink" href="#load-a-graph-to-flashgraphr" title="Permalink to this headline">¶</a></h2>
 <p>Before running any graph algorithms on a graph, users need to first load
 the graph to FlashGraphR. There are multiple ways of loading a graph to
 FlashGraphR.</p>
@@ -71,7 +75,7 @@ object to access a graph on SAFS.</li>
 </ul>
 </div>
 <div class="section" id="the-graph-algorithms">
-<h1>The graph algorithms<a class="headerlink" href="#the-graph-algorithms" title="Permalink to this headline">¶</a></h1>
+<h2>The graph algorithms<a class="headerlink" href="#the-graph-algorithms" title="Permalink to this headline">¶</a></h2>
 <p>Once a graph is loaded to FlashGraphR, users can perform graph
 algorithms on the graph. The graph applications supported by FlashGraph
 are listed below:</p>
@@ -96,7 +100,7 @@ and normalized Laplacian matrix.</li>
 </ul>
 </div>
 <div class="section" id="other-functions">
-<h1>Other functions<a class="headerlink" href="#other-functions" title="Permalink to this headline">¶</a></h1>
+<h2>Other functions<a class="headerlink" href="#other-functions" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><code class="docutils literal"><span class="pre">fg.list.graphs</span></code>: list all graphs loaded to FlashGraphR.</li>
 <li><code class="docutils literal"><span class="pre">fg.exist.graph</span></code>: test if a graph has been loaded to FlashGraphR.</li>
@@ -107,17 +111,17 @@ and normalized Laplacian matrix.</li>
 <li><code class="docutils literal"><span class="pre">fg.degree</span></code>: get the degrees of all vertices.</li>
 <li><code class="docutils literal"><span class="pre">fg.fetch.subgraph</span></code>: extract an induced subgraph.</li>
 </ul>
+</div>
 <div class="section" id="examples-of-using-flashgraphr">
 <h2>Examples of using FlashGraphR<a class="headerlink" href="#examples-of-using-flashgraphr" title="Permalink to this headline">¶</a></h2>
 <p>Users can use R to further process the results returned from FlashGraph.
 Here are some examples how users process the results of the strongly
 connected components.</p>
-<pre>
-# Get the strongly connected components.
+<div class="code r highlight-python"><div class="highlight"><pre># Get the strongly connected components.
 # It returns an array whose elements are the component Ids of the vertices.
-cc &lt;- fg.cluster(fg, "strong")
+cc &lt;- fg.cluster(fg, &quot;strong&quot;)
 # Get the size of each component
-counts &lt;- as.data.frame(table(cc[cc >= 0]))
+counts &lt;- as.data.frame(table(cc[cc &gt;= 0]))
 # Get the largest component ID
 lcc.id &lt;- as.integer(levels(counts$Var1)[which.max(counts$Freq)])
 # Get all vertices in the largest component
@@ -125,54 +129,35 @@ lcc.v &lt;- which(cc == lcc.id)
 # Get the induced subgraph with all vertices in the largest components
 # Right now, this function is implemented with all data in memory, so run this function with caution.
 sub.fg &lt;- fg.fetch.subgraph(fg, vertices=lcc.v - 1, compress=FALSE)
-</pre><p>Some of the graph algorithms in FlashGraphR are implemented in R by
+</pre></div>
+</div>
+<p>Some of the graph algorithms in FlashGraphR are implemented in R by
 using other graph algorithms in FlashGraphR. Below show two examples of
 how to use existing graph algorithms in FlashGraphR to implement other
 graph algorithms.</p>
-<div class="line-block">
-<div class="line">One example is to compute graph transitivity. The code below computes
+<p>One example is to compute graph transitivity. The code below computes
 both global and local graph transitivity for both directed and
-undirected graphs.</div>
-<div class="line"><br /></div>
-<div class="line">deg &lt;- fg.degree(graph)</div>
-<div class="line">if (type == &#8220;local&#8221;) {</div>
-<div class="line">if (graph$directed) {</div>
-<div class="line">(fg.local.scan(graph) - deg) / (deg * (deg - 1))</div>
-<div class="line">}</div>
-<div class="line">else {</div>
-<div class="line">2 * fg.undirected.triangles(graph) / (deg * (deg - 1))</div>
-<div class="line">}</div>
-<div class="line">}</div>
-<div class="line">else {</div>
-<div class="line">if (graph$directed) {</div>
-<div class="line">sum(fg.local.scan(graph) - deg) / sum(deg * (deg - 1))</div>
-<div class="line">}</div>
-<div class="line">else {</div>
-<div class="line">2 * sum(fg.undirected.triangles(graph)) / sum(deg * (deg - 1))</div>
-<div class="line">}</div>
-<div class="line">}</div>
-<div class="line"><br /></div>
-</div>
-<div class="line-block">
-<div class="line">Another example is to perform spectral clustering on the normalized
-Laplacian matrix of a graph.</div>
-<div class="line"><br /></div>
-<div class="line">d &lt;- fg.degree(fg)</div>
-<div class="line">d_.5 &lt;- 1/sqrt(d)</div>
-<div class="line"># multiply function on the normalized laplacian matrix.</div>
-<div class="line">multiply &lt;- function(x, extra)</div>
-<div class="line">{</div>
-<div class="line"># D^(-1/2) * L * D^(-1/2) * x</div>
-<div class="line">x - d_.5 * fg.multiply(fg, d_.5 * x)</div>
-<div class="line">}</div>
-</div>
-<div class="highlight-python"><div class="highlight"><pre>eigen &amp;lt;- arpack(multiply, sym=TRUE,
-                options=list(n=fg.vcount(fg), which=&quot;LM&quot;,
-                             nev=num.eigen, ncv=2 * num.eigen))
-kmeans(eigen$vectors, num.clusters, algorithm=&quot;MacQueen&quot;)
+undirected graphs.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>deg &lt;- fg.degree(graph)
+if (type == &quot;local&quot;) {
+    if (graph$directed) {
+        (fg.local.scan(graph) - deg) / (deg * (deg - 1))
+    }
+    else {
+        2 * fg.undirected.triangles(graph) / (deg * (deg - 1))
+    }
+}
+else {
+    if (graph$directed) {
+        sum(fg.local.scan(graph) - deg) / sum(deg * (deg - 1))
+    }
+    else {
+        2 * sum(fg.undirected.triangles(graph)) / sum(deg * (deg - 1))
+    }
+}
 </pre></div>
 </div>
-</pre></div>
+</div>
 </div>
 
 
@@ -183,9 +168,10 @@ kmeans(eigen$vectors, num.clusters, algorithm=&quot;MacQueen&quot;)
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Load a graph to FlashGraphR</a></li>
+<li><a class="reference internal" href="#">FlashGraphR programming tutorial</a><ul>
+<li><a class="reference internal" href="#load-a-graph-to-flashgraphr">Load a graph to FlashGraphR</a></li>
 <li><a class="reference internal" href="#the-graph-algorithms">The graph algorithms</a></li>
-<li><a class="reference internal" href="#other-functions">Other functions</a><ul>
+<li><a class="reference internal" href="#other-functions">Other functions</a></li>
 <li><a class="reference internal" href="#examples-of-using-flashgraphr">Examples of using FlashGraphR</a></li>
 </ul>
 </li>
@@ -194,6 +180,8 @@ kmeans(eigen$vectors, num.clusters, algorithm=&quot;MacQueen&quot;)
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="FlashR-programming-tutorial.html" title="previous chapter">FlashR programming tutorial</a></li>
+      <li>Next: <a href="FlashX-tools.html" title="next chapter">FlashX tools</a></li>
   </ul></li>
 </ul>
 </div>

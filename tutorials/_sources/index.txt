@@ -13,6 +13,7 @@ Contents:
 
    FlashX-Quick-Start-Guide
    FlashR-programming-tutorial
+   FlashGraphR-programming-tutorial
    FlashX-tools
 
 Indices and tables
