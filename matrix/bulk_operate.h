@@ -496,6 +496,14 @@ class basic_ops_impl: public basic_ops
 			return d1 / d2;
 		}
 	};
+	struct divide_float {
+		static std::string get_name() {
+			return "/";
+		}
+		float operator()(const float &e1, const float &e2) const {
+			return e1 / e2;
+		}
+	};
 
 	struct min {
 		static std::string get_name() {
@@ -580,6 +588,7 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
 		LeftType, RightType, ResType> mul_op;
 	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
+	bulk_operate_impl<divide_float, float, float, float> div_float_op;
 	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
 	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
@@ -596,7 +605,12 @@ public:
 		ops[ADD] = &add_op;
 		ops[SUB] = &sub_op;
 		ops[MUL] = &mul_op;
-		ops[DIV] = &div_op;
+		// We should treat float differently, because we want to output float.
+		if (get_type<LeftType>() == prim_type::P_FLOAT
+				&& get_type<RightType>() == prim_type::P_FLOAT)
+			ops[DIV] = &div_float_op;
+		else
+			ops[DIV] = &div_op;
 		ops[MIN] = &min_op;
 		ops[MAX] = &max_op;
 		ops[POW] = &pow_op;
