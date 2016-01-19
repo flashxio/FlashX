@@ -16,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "matrix_algs.h"
 #include "combined_matrix_store.h"
 #include "cached_matrix_store.h"
@@ -134,17 +133,22 @@ struct nmf_state
 };
 
 static detail::matrix_store::ptr create_materialize_store(size_t num_rows,
-		size_t num_cols, size_t num_in_mem)
+		size_t num_cols, size_t num_in_mem, matrix_layout_t layout)
 {
 	int num_nodes = matrix_conf.get_num_nodes();
-	if (num_in_mem >= num_cols)
-		return detail::matrix_store::create(num_rows, num_cols,
-				matrix_layout_t::L_ROW, get_scalar_type<double>(),
-				num_nodes, true);
+	detail::matrix_store::ptr ret;
+	if (num_in_mem < num_cols)
+		ret = detail::cached_matrix_store::create(
+				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				std::min(num_in_mem, num_cols), layout);
+	else if (num_in_mem < 2 * num_cols)
+		ret = detail::cached_matrix_store::create(
+				num_rows, num_cols, num_nodes, get_scalar_type<double>(),
+				std::min(num_in_mem, num_cols), layout, layout);
 	else
-		return detail::cached_matrix_store::create(num_rows, num_cols,
-				num_nodes, get_scalar_type<double>(), num_in_mem,
-				matrix_layout_t::L_ROW);
+		ret = detail::mem_matrix_store::create(num_rows, num_cols, layout,
+				get_scalar_type<double>(), num_nodes);
+	return ret;
 }
 
 static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
@@ -166,6 +170,7 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		sparse_matrix::ptr tmat = mat->transpose();
 		// tA %*% W
 		dense_matrix::ptr tmp1 = multiply(tmat, W, num_in_mem);
+
 		// t(tA %*% W)
 		tmp1 = tmp1->transpose();
 		// H * t(tA %*% W)
@@ -181,7 +186,7 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		// TODO this might be confusing.
 		H->set_materialize_level(materialize_level::MATER_FULL,
 				create_materialize_store(H->get_num_cols(), H->get_num_rows(),
-					num_in_mem));
+					num_in_mem, matrix_layout_t::L_ROW));
 	}
 
 	// den <- W %*% (H %*% t(H))
@@ -210,7 +215,7 @@ static nmf_state update_lee(sparse_matrix::ptr mat, dense_matrix::ptr W,
 		W = tmp1->div(*tmp2);
 		W->set_materialize_level(materialize_level::MATER_FULL,
 				create_materialize_store(W->get_num_rows(), W->get_num_cols(),
-					num_in_mem));
+					num_in_mem, matrix_layout_t::L_ROW));
 	}
 
 	dense_matrix::ptr tW = W->transpose();
