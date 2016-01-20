@@ -72,6 +72,9 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
+    BOOST_ASSERT_MSG(!(init=="none" && centersfn.empty()),
+            "Centers file name doesn't exit!");
+
     bin_reader<double> br(datafn, nrow, ncol);
     double* p_data = new double [nrow*ncol];
     br.read(p_data);
