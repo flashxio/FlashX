@@ -29,6 +29,32 @@
 using namespace fg;
 
 namespace {
+#if 0
+    static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
+        double dist = 0;
+        BOOST_VERIFY(l_clust->size() == r_clust->size());
+
+        for (unsigned col = 0; col < NUM_COLS; col++) {
+            double diff = (*l_clust)[col] - (*r_clust)[col];
+            dist += diff * diff;
+        }
+        return sqrt(dist);
+    }
+#else
+    template <typename T>
+        static double const eucl_dist(const T* lhs, const T* rhs) {
+            double dist = 0;
+            BOOST_VERIFY(lhs->size() == rhs->size());
+
+            for (unsigned col = 0; col < lhs->size(); col++) {
+                double diff = (*lhs)[col] - (*rhs)[col];
+                dist += diff * diff;
+            }
+
+            BOOST_VERIFY(dist >= 0);
+            return sqrt(dist); // TODO: rm sqrt
+        }
+#endif
 
     template <typename T>
         static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
@@ -77,16 +103,16 @@ namespace {
                     }
                 }
 
-                std::vector<double> readline() {
-                    std::vector<double> v;
+                std::vector<T> readline() {
+                    std::vector<T> v;
                     v.resize(ncol);
-                    size_t num_read = fread(&v[0], sizeof(v[0])*ncol, 1, f);
+                    size_t num_read = fread(&v[0], sizeof(T)*ncol, 1, f);
                     BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
                     return v;
                 }
 
                 void readline(T* v) {
-                    size_t num_read = fread(&v[0], sizeof(v[0])*ncol, 1, f);
+                    size_t num_read = fread(&v[0], sizeof(T)*ncol, 1, f);
                     BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
                 }
 
@@ -96,113 +122,15 @@ namespace {
                     BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
                 }
 
+                // Read all the data!
+                void read(T* v) {
+                    size_t num_read = fread(&v[0], sizeof(T)*ncol*nrow, 1, f);
+                    BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
+                }
+
                 ~bin_reader() {
                     fclose(f);
                 }
         };
-
-    // Class to hold stats on the effectiveness of pruning
-    class prune_stats
-    {
-        private:
-            // Counts per iteration
-            unsigned lemma1, _3a, _3b, _3c, _4;
-
-            // Total counts
-            unsigned long tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4, iter;
-            unsigned nrow;
-            unsigned nclust;
-
-            prune_stats(const unsigned nrows, const unsigned nclust) {
-                _3a = 0; _3b = 0; lemma1 = 0; _3c = 0; _4 = 0;
-                tot_lemma1 = 0; tot_3a = 0; tot_3b = 0;
-                tot_3c = 0; tot_4 = 0; iter = 0;
-
-                this->nrow = nrows;
-                this->nclust = nclust;
-            }
-
-        public:
-            typedef std::shared_ptr<prune_stats> ptr;
-
-            static ptr create(const unsigned nrows, const unsigned nclust) {
-                return ptr(new prune_stats(nrows, nclust));
-            }
-            void pp_lemma1(unsigned var=1) {
-                lemma1 += var;
-            }
-            void pp_3a() {
-                _3a++;
-            }
-            void pp_3b() {
-                _3b++;
-            }
-            void pp_3c() {
-                _3c++;
-            }
-            void pp_4() {
-                _4++;
-            }
-
-            const unsigned get_lemma1() const { return lemma1; }
-            const unsigned get_3a() const { return _3a; }
-            const unsigned get_3b() const { return _3b; }
-            const unsigned get_3c() const { return _3c; }
-            const unsigned get_4() const { return _4; }
-
-            prune_stats& operator+=(prune_stats& other) {
-                lemma1 += other.get_lemma1();
-                _3a += other.get_3a();
-                _3b += other.get_3b();
-                _3c += other.get_3c();
-                _4 += other.get_4();
-                return *this;
-            }
-
-            void finalize() {
-                iter++;
-                BOOST_VERIFY((lemma1 + _3a + _3b + _3c + _4) <=  nrow*nclust);
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats count:\n"
-                    "lemma1 = " << lemma1 << ", 3a = " << _3a
-                    << ", 3b = " << _3b << ", 3c = " << _3c << ", 4 = " << _4;
-
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats \%s:\n"
-                    "lemma1 = " << (lemma1 == 0 ? 0 : ((double)lemma1/(nrow*nclust))*100) <<
-                    "\%, 3a = " << (_3a == 0 ? 0 : ((double)_3a/(nrow*nclust))*100) <<
-                    "\%, 3b = " << (_3b == 0 ? 0 : ((double) _3b/(nrow*nclust))*100) <<
-                    "\%, 3c = " << (_3c == 0 ? 0 : ((double) _3c/(nrow*nclust))*100) <<
-                    "\%, 4 = " << (_4 == 0 ? 0 : ((double) _4/(nrow*nclust))*100) << "\%";
-
-                tot_lemma1 += lemma1;
-                tot_3a += _3a;
-                tot_3b += _3b;
-                tot_3c += _3c;
-                tot_4 += _4;
-
-                lemma1 = 0; _3a = 0; _3b = 0; _3c = 0; _4 = 0; // reset
-            }
-
-            std::vector<double> get_stats() {
-                double perc_lemma1 = (tot_lemma1 / ((double)(nrow*iter*nclust)))*100;
-                double perc_3a = (tot_3a / ((double)(nrow*iter*nclust)))*100;
-                double perc_3b = (tot_3b / ((double)(nrow*iter*nclust)))*100;
-                double perc_3c = (tot_3c / ((double)(nrow*iter*nclust)))*100;
-                double perc_4 = (tot_4 / ((double)(nrow*iter*nclust)))*100;
-                // Total percentage
-                double perc = ((tot_3b + tot_3a + tot_3c + tot_4 + tot_lemma1) /
-                        ((double)(nrow*iter*nclust)))*100;
-
-                printf("tot_lemma1 = %lu, tot_3a = %lu, tot_3b = %lu, tot_3c = %lu, tot_4 = %lu\n",
-                        tot_lemma1, tot_3a, tot_3b, tot_3c, tot_4);
-
-                BOOST_LOG_TRIVIAL(info) << "\n\nPrune stats total:\n"
-                    "Tot = " << perc << "\%, 3a = " << perc_3a <<
-                    "\%, 3b = " << perc_3b << "\%, 3c = " << perc_3c
-                    << "\%, 4 = " << perc_4 << "\%, lemma1 = " << perc_lemma1 << "\%";
-
-                std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc_3c, perc_4, perc};
-                return ret;
-            }
-    };
 }
 #endif
