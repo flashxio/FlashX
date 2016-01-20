@@ -34,12 +34,14 @@
 #include "FGlib.h"
 #include "save_result.h"
 
+#include "sem_kmeans_util.h"
+#include "prune_stats.h"
+#include "cluster.h"
+#include "dist_matrix.h"
+
 #define PAGE_ROW
-#define PRUNE 1
 #define KM_TEST 1
 #define VERBOSE 0
-
-#include "sem_kmeans_util.h"
 
 using namespace fg;
 
@@ -55,330 +57,6 @@ namespace {
     static unsigned K;
     static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
-
-    class cluster
-    {
-        private:
-            std::vector<double> mean; // Cluster mean
-            int num_members; // Cluster assignment count
-            bool complete; // Have we already divided by num_members
-#if PRUNE
-            double s_val;
-            std::vector<double> prev_mean; // For lwr_bnd
-            double prev_dist; // Distance to prev mean
-#endif
-
-            void div(const unsigned val) {
-                if (num_members > 0) {
-                    for (unsigned i = 0; i < mean.size(); i++) {
-                        mean[i] /= double(val);
-                    }
-                }
-                complete = true;
-            }
-
-            cluster(const unsigned len) {
-                mean.resize(len);
-                num_members = 0;
-                complete = false;
-#if PRUNE
-                prev_mean.resize(len);
-#endif
-            }
-
-            cluster(const std::vector<double> mean) {
-                set_mean(mean);
-                num_members = 0;
-                complete = true;
-#if PRUNE
-                prev_mean.resize(mean.size());
-                reset_s_val();
-#endif
-            }
-
-        public:
-#if PRUNE
-            void reset_s_val() {
-                s_val = std::numeric_limits<double>::max();
-            }
-
-            void set_s_val(double val) {
-                s_val = val;
-            }
-
-            double const get_s_val() { return s_val; }
-
-            const std::vector<double>& get_prev_mean() const {
-                return prev_mean;
-            }
-
-            void set_prev_mean() {
-                if (!is_complete()) {
-                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Doing nothing for "
-                        "unfinalized mean. Permissible once";
-                    return;
-                }
-                prev_mean = mean;
-            }
-
-            void set_prev_dist(double dist) {
-                this->prev_dist = dist;
-            }
-
-            double get_prev_dist() {
-                return this->prev_dist;
-            }
-#endif
-            typedef typename std::shared_ptr<cluster> ptr;
-
-            static ptr create(const unsigned len) {
-                return ptr(new cluster(len));
-            }
-
-            static ptr create(const std::vector<double>& mean) {
-                return ptr(new cluster(mean));
-            }
-
-            void init(const unsigned len) {
-                mean.resize(len);
-                num_members = 0;
-            }
-
-            void clear() {
-                std::fill(this->mean.begin(), this->mean.end(), 0);
-                this->num_members = 0;
-                complete = false;
-            }
-
-            const std::vector<double>& get_mean() const {
-                return mean;
-            }
-
-            void set_mean(const std::vector<double>& mean) {
-                this->mean = mean;
-            }
-
-            const int get_num_members() const {
-                return num_members;
-            }
-
-            const bool is_complete() const {
-                return complete;
-            }
-
-            const unsigned size() const {
-                return mean.size();
-            }
-
-            void num_members_peq(const int val) {
-                num_members += val;
-            }
-
-            void finalize() {
-                if (is_complete()) {
-                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling finalize() on a"
-                        " finalized object";
-                    return;
-                }
-                this->div(this->num_members);
-            }
-
-            void unfinalize() {
-                if (!is_complete()) {
-                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling unfinalize() on an"
-                        " UNfinalized object";
-                    return;
-                }
-                complete = false;
-
-                for (unsigned i = 0; i < size(); i++) {
-                    this->mean[i] *= (double)num_members;
-                }
-            }
-
-            template <typename T>
-                void add_member(T& count_it) {
-                    vertex_id_t nid = 0;
-                    while(count_it.has_next()) {
-                        double e = count_it.next();
-                        mean[nid++] += e;
-                    }
-                    num_members++;
-                }
-
-#if PRUNE
-            template <typename T>
-                void remove_member(T& count_it) {
-                    vertex_id_t nid = 0;
-                    while(count_it.has_next()) {
-                        double e = count_it.next();
-                        mean[nid++] -= e;
-                    }
-                    num_members--;
-                }
-#endif
-
-            cluster& operator=(const cluster& other) {
-                this->mean = other.get_mean();
-                this->num_members = other.get_num_members();
-                return *this;
-            }
-
-            double& operator[](const unsigned index) {
-                BOOST_VERIFY(index < mean.size());
-                return mean[index];
-            }
-
-            cluster& operator+=(cluster& rhs) {
-                BOOST_VERIFY(rhs.size() == size());
-                // TODO vectorize perhaps
-                for (unsigned i = 0; i < mean.size(); i++) {
-                    this->mean[i] += rhs[i];
-                }
-                this->num_members += rhs.get_num_members();
-                return *this;
-            }
-    };
-
-#if 0
-    static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
-        double dist = 0;
-        BOOST_VERIFY(l_clust->size() == r_clust->size());
-
-        for (unsigned col = 0; col < NUM_COLS; col++) {
-            double diff = (*l_clust)[col] - (*r_clust)[col];
-            dist += diff * diff;
-        }
-        return sqrt(dist);
-    }
-#else
-    template <typename T>
-        static double const eucl_dist(const T* lhs, const T* rhs) {
-            double dist = 0;
-            BOOST_VERIFY(lhs->size() == rhs->size());
-
-            for (unsigned col = 0; col < lhs->size(); col++) {
-                double diff = (*lhs)[col] - (*rhs)[col];
-                dist += diff * diff;
-            }
-
-            BOOST_VERIFY(dist >= 0);
-            return sqrt(dist); // TODO: rm sqrt
-        }
-#endif
-
-    // NOTE: Creates a matrix like this e.g for K = 5
-    /* - Don't store full matrix, don't store dist to myself -> space: (k*k-1)/2
-       0 ==> 1 2 3 4
-       1 ==> 2 3 4
-       2 ==> 3 4
-       3 ==> 4
-       (4 ==> not needed)
-       */
-    class dist_matrix
-    {
-        private:
-            std::vector<std::vector<double>> mat;
-            unsigned rows;
-
-            dist_matrix(const unsigned rows) {
-                BOOST_VERIFY(rows > 1);
-
-                this->rows = rows-1;
-                // Distance to everyone other than yourself
-                for (unsigned i = this->rows; i > 0; i--) {
-                    std::vector<double> dist_row;
-                    dist_row.assign(i, std::numeric_limits<double>::max());
-                    mat.push_back(dist_row);
-                }
-            }
-
-            void translate(unsigned& row, unsigned& col) {
-                // First make sure the smaller is the row
-                if (row > col) {
-                    std::swap(row, col);
-                }
-
-                BOOST_VERIFY(row < rows);
-                col = col - row - 1; // Translation
-                BOOST_VERIFY(col < (rows - row));
-            }
-
-        public:
-            typedef typename std::shared_ptr<dist_matrix> ptr;
-
-            static ptr create(const unsigned rows) {
-                return ptr(new dist_matrix(rows));
-            }
-
-            /* Do a translation from raw id's to indexes in the distance matrix */
-            double get(unsigned row, unsigned col) {
-                if (row == col) { return std::numeric_limits<double>::max(); }
-                translate(row, col);
-                return mat[row][col];
-            }
-
-            // Testing purposes only
-            double get_min_dist(const unsigned row) {
-                double best = std::numeric_limits<double>::max();
-                for (unsigned col = 0; col < rows+1; col++) {
-                    if (col != row) {
-                        double val = get(row, col);
-                        if (val < best) best = val;
-                    }
-                }
-                BOOST_VERIFY(best < std::numeric_limits<double>::max());
-                return best;
-            }
-
-            void set(unsigned row, unsigned col, double val) {
-                BOOST_VERIFY(row != col);
-                translate(row, col);
-                mat[row][col] = val;
-            }
-
-            const unsigned get_num_rows() { return rows; }
-
-            void print() {
-                for (unsigned row = 0; row < rows; row++) {
-                    std::cout << row << " ==> ";
-                    print_vector<double>(mat[row]);
-                }
-            }
-
-            void compute_dist(std::vector<cluster::ptr>& vcl, const unsigned num_clust) {
-                if (num_clust <= 1) return;
-
-                BOOST_VERIFY(get_num_rows() == vcl.size()-1); // -1 since the last item has no row
-
-                for (unsigned i = 0; i < num_clust; i++) {
-                    vcl[i]->reset_s_val();
-                }
-
-                //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
-                for (unsigned i = 0; i < num_clust; i++) {
-                    for (unsigned j = i+1; j < num_clust; j++) {
-                        double dist = eucl_dist<std::vector<double>>(&(vcl[i]->get_mean()),
-                                &(vcl[j]->get_mean())) / 2.0;
-                        set(i,j, dist);
-
-                        // Set s(x) for each cluster
-                        if (dist < vcl[i]->get_s_val()) {
-                            vcl[i]->set_s_val(dist);
-                        }
-
-                        if (dist < vcl[j]->get_s_val()) {
-                            vcl[j]->set_s_val(dist);
-                        }
-                    }
-                }
-#if KM_TEST
-                for (unsigned cl = 0; cl < num_clust; cl++)
-                    BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl));
-#endif
-            }
-
-    };
 
     class base_kmeans_vertex: public compute_vertex
     {
@@ -409,8 +87,9 @@ namespace {
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
 
         // Set a cluster to have the same mean as this sample
+        template <typename ClusterType>
         void set_as_mean(const page_vertex &vertex, vertex_id_t my_id,
-                unsigned to_cluster_id, std::vector<cluster::ptr>& centers) {
+                unsigned to_cluster_id, std::vector<typename ClusterType::ptr>& centers) {
             vertex_id_t nid = 0;
             data_seq_iter count_it = ((const page_row&)vertex).
                 get_data_seq_it<double>();
@@ -427,29 +106,30 @@ namespace {
     };
 
     /* Used in per thread cluster formation */
-    template <typename T>
+    template <typename T, typename ClusterType>
     class base_kmeans_vertex_program: public vertex_program_impl<T>
     {
         unsigned pt_changed;
-        std::vector<cluster::ptr> pt_clusters;
+        std::vector<typename ClusterType::ptr> pt_clusters;
 
         public:
-        typedef std::shared_ptr<base_kmeans_vertex_program<T> > ptr;
+        typedef std::shared_ptr<base_kmeans_vertex_program<T, ClusterType> > ptr;
 
         //TODO: Opt only add cluster when a vertex joins it
         base_kmeans_vertex_program() {
             this->pt_changed = 0;
 
             for (unsigned thd = 0; thd < K; thd++) {
-                pt_clusters.push_back(cluster::create(NUM_COLS));
+                pt_clusters.push_back(ClusterType::create(NUM_COLS));
             }
         }
 
         static ptr cast2(vertex_program::ptr prog) {
-            return std::static_pointer_cast<base_kmeans_vertex_program<T>, vertex_program>(prog);
+            return std::static_pointer_cast<base_kmeans_vertex_program<T, ClusterType>,
+                   vertex_program>(prog);
         }
 
-        std::vector<cluster::ptr>& get_pt_clusters() {
+        std::vector<typename ClusterType::ptr>& get_pt_clusters() {
             return pt_clusters;
         }
 
@@ -465,9 +145,11 @@ namespace {
     };
 
     // Begin Helpers //
-    void print_clusters(std::vector<cluster::ptr>& clusters) {
-        for (std::vector<cluster::ptr>::iterator it = clusters.begin();
-                it != clusters.end(); ++it) {
+    template <typename ClusterType>
+    void print_clusters(typename std::vector<typename ClusterType::ptr>& clusters) {
+        typedef typename std::vector<typename ClusterType::ptr>::iterator cluster_itr;
+
+        for (cluster_itr it = clusters.begin(); it != clusters.end(); ++it) {
             std::cout << "#memb = " << (*it)->get_num_members() << " ";
             print_vector<double>((*it)->get_mean());
         }
@@ -486,20 +168,23 @@ namespace {
     }
     // End helpers //
 
-    void set_clusters(std::vector<double>* centers, std::vector<cluster::ptr>& vcl,
+    template <typename ClusterType>
+    void set_clusters(std::vector<double>* centers,
+            std::vector<typename ClusterType::ptr>& vcl,
             unsigned nclust, unsigned ncol) {
         for (size_t cl = 0; cl < nclust; cl++) {
             std::vector<double> v(ncol);
             std::copy(&((*centers)[cl*ncol]),
                     &((*centers)[(cl*ncol)+ncol]), v.begin());
-            vcl.push_back(cluster::create(v));
+            vcl.push_back(ClusterType::create(v));
         }
     }
 
-    void init_clusters(std::vector<cluster::ptr>& vcl,
+    template <typename ClusterType>
+    void init_clusters(std::vector<typename ClusterType::ptr>& vcl,
             unsigned nclust, unsigned ncol) {
         for (size_t cl = 0; cl < nclust; cl++) {
-            vcl.push_back(cluster::create(ncol));
+            vcl.push_back(ClusterType::create(ncol));
         }
     }
 }
