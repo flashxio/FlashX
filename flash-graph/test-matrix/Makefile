@@ -21,10 +21,7 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/ -DUSE_EIGEN
 
-all: test_matrix test-kmeans
-
-test_matrix: test_matrix.o ../libgraph.a ../matrix/libmatrix.a
-	$(CXX) -o test_matrix test_matrix.o $(LDFLAGS)
+all: test-kmeans
 
 test-kmeans: test-kmeans.o ../libgraph.a
 	$(CXX) -o test-kmeans test-kmeans.o $(LDFLAGS)
@@ -33,6 +30,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f test_matrix
+	rm -f test-kmeans
 
 -include $(DEPS) 
