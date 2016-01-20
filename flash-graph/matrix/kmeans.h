@@ -33,9 +33,11 @@
 #include <limits> 
 #include <iostream>
 #include <algorithm>
+#include <boost/assert.hpp>
 
 #include "log.h"
 #include "common.h"
+#include "libgraph-algs/kmeans_types.h"
 
 namespace {
     /**

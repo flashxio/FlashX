@@ -20,7 +20,6 @@
 #include "kmeans.h"
 #define KM_TEST 1
 #define VERBOSE 0
-#define KM_ENABLE_DIST_TYPE 0
 
 #ifdef PROFILER
 #include <gperftools/profiler.h>
@@ -33,25 +32,25 @@ namespace {
 	short OMP_MAX_THREADS;
 	static unsigned g_num_changed = 0;
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
+    static dist_type_t g_dist_type;
 
 	static struct timeval start, end;
 
     // TODO: Doc
     static double const eucl_dist(const unsigned row, const unsigned clust_idx,
-                                const double* matrix, const double* clusters) {
+            const double* matrix, const double* clusters) {
         double dist = 0;
         for (unsigned col = 0; col < NUM_COLS; col++) {
-            double diff = matrix[(row*NUM_COLS) + col] - clusters[clust_idx*NUM_COLS + col];
+            double diff = matrix[(row*NUM_COLS) + col] -
+                clusters[clust_idx*NUM_COLS + col];
             dist += diff * diff;
         }
         return sqrt(dist); // TODO: rm sqrt
     }
 
-    /**
-      * TODO: Doc : TODO: Make static
-      */
+    // TODO: Doc
     double const cos_dist(const unsigned row, const unsigned clust_idx,
-                                const double* matrix, const double* clusters) {
+            const double* matrix, const double* clusters) {
         double numr, ldenom, rdenom;
         numr = ldenom = rdenom = 0;
 
@@ -66,22 +65,19 @@ namespace {
         return  1 - (numr / ((sqrt(ldenom)*sqrt(rdenom))));
     }
 
-    // TODO: Doc
-#if KM_ENABLE_DIST_TYPE
-    static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters,
-            double (const *dist_func) (const unsigned, const unsigned, const double*, const double*)) {
-#else
     static size_t get_best_cluster(const unsigned row, const double* matrix, const double* clusters) {
-#endif
-
         size_t asgnd_clust = INVALID_CLUSTER_ID;
         double best = std::numeric_limits<double>::max();
+        double dist = -1;
+
         for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-#if KM_ENABLE_DIST_TYPE
-            double dist = dist_func(row, clust_idx, matrix, clusters);
-#else
-            double dist = eucl_dist(row, clust_idx, matrix, clusters);
-#endif
+            if (g_dist_type == EUCL)
+                dist = eucl_dist(row, clust_idx, matrix, clusters);
+            else if (g_dist_type == COS)
+                dist = cos_dist(row, clust_idx, matrix, clusters);
+            else
+                BOOST_ASSERT_MSG(false, "Unknown distance metric!");
+
             if (dist < best) {
                 best = dist;
                 asgnd_clust = clust_idx;
@@ -105,7 +101,7 @@ namespace {
 			cluster_assignments[vid] = assigned_cluster;
 		}
 
-		// NOTE: M-Step is called in compute func to update cluster counts & centers
+		// NOTE: M-Step called in compute func to update cluster counts & centers
 #if VERBOSE
 		printf("After rand paritions cluster_asgns: "); print_arr(cluster_assignments, NUM_ROWS);
 #endif
@@ -125,7 +121,8 @@ namespace {
 
 		for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) { // 0...K
 			unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
-            std::copy(&matrix[rand_idx*NUM_COLS], &matrix[(rand_idx*NUM_COLS)+NUM_COLS],
+            std::copy(&matrix[rand_idx*NUM_COLS],
+                    &matrix[(rand_idx*NUM_COLS)+NUM_COLS],
                     &clusters[clust_idx*NUM_COLS]);
 		}
 
@@ -136,12 +133,7 @@ namespace {
 	 * \brief A parallel version of the kmeans++ initialization alg.
 	 *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
 	 */
-#if KM_ENABLE_DIST_TYPE
-	static void kmeanspp_init(const double* matrix, double* clusters,
-            double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
-#else
 	static void kmeanspp_init(const double* matrix, double* clusters) {
-#endif
 
 		// Init distance array
 		double* dist_v = new double [NUM_ROWS*sizeof(double)];
@@ -151,7 +143,8 @@ namespace {
 		// Choose c1 uniiformly at random
 		unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
 
-        std::copy(&matrix[rand_idx*NUM_COLS], &matrix[(rand_idx*NUM_COLS)+NUM_COLS], &clusters[0]);
+        std::copy(&matrix[rand_idx*NUM_COLS],
+                &matrix[(rand_idx*NUM_COLS)+NUM_COLS], &clusters[0]);
 		dist_v[rand_idx] = 0.0;
 
 #if KM_TEST
@@ -166,11 +159,14 @@ namespace {
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v)
 			for (size_t row = 0; row < NUM_ROWS; row++) {
 
-#if KM_ENABLE_DIST_TYPE
-				double dist = dist_func(row, clust_idx, matrix, clusters); // Per thread instance
-#else
-				double dist = eucl_dist(row, clust_idx, matrix, clusters); // Per thread instance
-#endif
+                double dist = -1;
+                if (g_dist_type == EUCL)
+                    // Per thread instance
+                    dist = eucl_dist(row, clust_idx, matrix, clusters);
+                else if (g_dist_type == COS)
+                    dist = cos_dist(row, clust_idx, matrix, clusters);
+                else
+                    BOOST_ASSERT_MSG(false, "Unknown distance metric!");
 
 				if (dist < dist_v[row]) { // Found a closer cluster than before
 					dist_v[row] = dist;
@@ -208,15 +204,8 @@ namespace {
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-#if KM_ENABLE_DIST_TYPE
-	static void E_step(const double* matrix, double* clusters,
-			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            const double (const *dist_func)(const unsigned, const unsigned, const double*, const double*)) {
-#else
 	static void E_step(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts) {
-#endif
-
 		// Create per thread vectors
 		std::vector<std::vector<unsigned>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
 		std::vector<std::vector<double>> pt_cl; // K * NUM_COLS * OMP_MAX_THREADS
@@ -234,11 +223,7 @@ namespace {
 #pragma omp parallel for firstprivate(matrix, clusters) shared(pt_cl_as_cnt, cluster_assignments)\
 		schedule(static)
 		for (unsigned row = 0; row < NUM_ROWS; row++) {
-#if KM_ENABLE_DIST_TYPE
-			size_t asgnd_clust = get_best_cluster(row, matrix, clusters, dist_func);
-#else
 			size_t asgnd_clust = get_best_cluster(row, matrix, clusters);
-#endif
 
             assert(asgnd_clust != INVALID_CLUSTER_ID); // TODO: RM
 
@@ -379,39 +364,33 @@ namespace fg
         std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
 
 		/*** End VarInit ***/
-#if KM_ENABLE_DIST_TYPE
-        const double (const *dist_func)(const unsigned, const unsigned, const double*, const double*);
+        BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
         if (dist_type == "eucl") {
-            BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
-            dist_func = &eucl_dist;
+            g_dist_type = EUCL;
         } else if (dist_type == "cos") {
-            BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
-            dist_func = &cos_dist;
+            g_dist_type = COS;
         } else {
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param dist_type must be one of: 'eucl', 'cos'.It is '"
                 << dist_type << "'";
             exit(-1);
         }
-#endif
 
         if (init == "random") {
             random_partition_init(cluster_assignments);
             // We must now update cluster centers before we begin
-            M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments, true);
+            M_step(matrix, clusters, cluster_assignment_counts,
+                    cluster_assignments, true);
         } else if (init == "forgy") {
             forgy_init(matrix, clusters);
         } else if (init == "kmeanspp") {
-#if KM_ENABLE_DIST_TYPE
-            kmeanspp_init(matrix, clusters, dist_func);
-#else
             kmeanspp_init(matrix, clusters);
-#endif
         } else if (init == "none") {
             ;
         } else {
             BOOST_LOG_TRIVIAL(fatal)
-                << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
+                << "[ERROR]: param init must be one of: "
+                "'random', 'forgy', 'kmeanspp'.It is '"
                 << init << "'";
             exit(-1);
         }
@@ -437,11 +416,7 @@ namespace fg
 
 			BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
 				" . Computing cluster assignments ...";
-#if KM_ENABLE_DIST_TYPE
-			E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts, dist_func);
-#else
 			E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
-#endif
 
 			if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
 				converged = true;
