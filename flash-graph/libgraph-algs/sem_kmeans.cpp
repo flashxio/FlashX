@@ -64,7 +64,7 @@ namespace {
                     unsigned* new_cluster_id, const unsigned cl);
     };
 
-    typedef base_kmeans_vertex_program<kmeans_vertex> kmeans_vertex_program;
+    typedef base_kmeans_vertex_program<kmeans_vertex, cluster> kmeans_vertex_program;
     class kmeans_vertex_program_creater: public vertex_program_creater
     {
         public:
@@ -134,7 +134,7 @@ namespace {
 #if KM_TEST
                     printf("Forgy init: v%u setting cluster: c%x\n", my_id, g_init_hash[my_id]);
 #endif
-                    set_as_mean(vertex, my_id, g_init_hash[my_id], g_clusters);
+                    set_as_mean<cluster>(vertex, my_id, g_init_hash[my_id], g_clusters);
                 }
                 break;
             case PLUSPLUS:
@@ -336,9 +336,9 @@ namespace fg
         gettimeofday(&start , NULL);
         /*** Begin VarInit of data structures ***/
         if (centers) {
-            set_clusters(centers, g_clusters, K, NUM_COLS);
+            set_clusters<cluster>(centers, g_clusters, K, NUM_COLS);
         } else {
-            init_clusters(g_clusters, K, NUM_COLS);
+            init_clusters<cluster>(g_clusters, K, NUM_COLS);
         }
 
         FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
@@ -390,7 +390,7 @@ namespace fg
                     mat->wait4complete();
 #if VERBOSE
                     BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
-                    print_clusters(g_clusters);
+                    print_clusters<cluster>(g_clusters);
 #endif
                     if (g_kmspp_cluster_idx+1 == K) { break; } // skip the distance comp since we picked clusters
                     g_kmspp_stage = DIST;
@@ -425,7 +425,7 @@ namespace fg
 
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
-                print_clusters(g_clusters);
+                print_clusters<cluster>(g_clusters);
 
                 BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
                 get_membership(mat)->print(NUM_ROWS);

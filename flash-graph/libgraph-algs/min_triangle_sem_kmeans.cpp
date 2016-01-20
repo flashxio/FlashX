@@ -35,7 +35,7 @@ namespace {
 
     static bool g_prune_init = false;
     static dist_matrix::ptr g_cluster_dist;
-    static std::vector<cluster::ptr> g_clusters; // cluster means/centers
+    static std::vector<prune_cluster::ptr> g_clusters; // cluster means/centers
 
     static unsigned NUM_ROWS;
     static unsigned g_num_changed = 0;
@@ -83,7 +83,8 @@ namespace {
         double dist_comp(const page_vertex &vertex, const unsigned cl);
     };
 
-    class kmeans_vertex_program: public base_kmeans_vertex_program<kmeans_vertex>
+    class kmeans_vertex_program:
+        public base_kmeans_vertex_program<kmeans_vertex, prune_cluster>
     {
         unsigned num_reqs;
 #if KM_TEST
@@ -193,18 +194,6 @@ namespace {
 #endif
                     return; // Nothing changes -- no I/O request!
                 }
-/*
-                unsigned cl = 0;
-                for (unsigned cl = 0; cl < K; cl++) {
-                    if (get_dist() > g_cluster_dist->get(get_cluster_id(), cl)) {
-                        break;
-                    }
-                }
-                if (cl == K-1) { // Nothing changes -- no I/O request!
-                    ((kmeans_vertex_program&) prog).get_ps()->peq_2(K);
-                    return;
-                }
-*/
                 ((kmeans_vertex_program&) prog).num_requests_pp();
             }
         }
@@ -235,7 +224,7 @@ namespace {
 #if KM_TEST
                     printf("Forgy init: v%u setting cluster: c%x\n", my_id, g_init_hash[my_id]);
 #endif
-                    set_as_mean(vertex, my_id, g_init_hash[my_id], g_clusters);
+                    set_as_mean<prune_cluster>(vertex, my_id, g_init_hash[my_id], g_clusters);
                 }
                 break;
             case PLUSPLUS:
@@ -381,7 +370,7 @@ namespace {
 
             for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
                 kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-                std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
+                std::vector<prune_cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
 
                 g_io_reqs += kms_prog->get_num_reqs();
@@ -411,7 +400,7 @@ namespace {
 #if KM_TEST
             int t_members = 0;
             unsigned cl = 0;
-            BOOST_FOREACH(cluster::ptr c , g_clusters) {
+            BOOST_FOREACH(prune_cluster::ptr c , g_clusters) {
                 t_members += c->get_num_members();
                 if (t_members > (int) NUM_ROWS) {
                     BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many memnbers cluster: "
@@ -462,7 +451,7 @@ namespace {
 
         // Return all the cluster means only
         static void get_means(std::vector<std::vector<double>>& means) {
-            for (std::vector<cluster::ptr>::iterator it = g_clusters.begin();
+            for (std::vector<prune_cluster::ptr>::iterator it = g_clusters.begin();
                     it != g_clusters.end(); ++it) {
                 means.push_back((*it)->get_mean());
             }
@@ -519,9 +508,9 @@ namespace {
             gettimeofday(&start , NULL);
             /*** Begin VarInit of data structures ***/
             if (centers) {
-                set_clusters(centers, g_clusters, K, NUM_COLS);
+                set_clusters<prune_cluster>(centers, g_clusters, K, NUM_COLS);
             } else {
-                init_clusters(g_clusters, K, NUM_COLS);
+                init_clusters<prune_cluster>(g_clusters, K, NUM_COLS);
             }
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
@@ -586,7 +575,7 @@ namespace {
                         g_cluster_dist->compute_dist(g_clusters, g_kmspp_cluster_idx+1);
 #if VERBOSE
                         BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
-                        print_clusters(g_clusters);
+                        print_clusters<prune_cluster>(g_clusters);
 #endif
                         // skip distance comp since we picked clusters
                         if (g_kmspp_cluster_idx+1 == K) { break; }
@@ -600,7 +589,9 @@ namespace {
                         g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                     }
                 }
-            }
+            } else
+                print_clusters<prune_cluster>(g_clusters);
+
 
             if (init == "forgy" || init == "kmeanspp" || centers) {
                 g_prune_init = true; // set
@@ -659,7 +650,7 @@ namespace {
 
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
-                print_clusters(g_clusters);
+                print_clusters<prune_cluster>(g_clusters);
 
                 BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
                 get_membership(mat)->print(NUM_ROWS);
