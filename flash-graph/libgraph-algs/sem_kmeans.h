@@ -38,6 +38,7 @@
 #include "prune_stats.h"
 #include "cluster.h"
 #include "dist_matrix.h"
+#include "kmeans_types.h"
 
 #define PAGE_ROW
 #define KM_TEST 1
@@ -47,10 +48,7 @@ using namespace fg;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;
-    enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
-    enum init_type_t { RANDOM, FORGY, PLUSPLUS }; // May have to use
     enum kmspp_stage_t { ADDMEAN, DIST }; // Either adding a mean / computing dist
-    enum kms_stage_t { INIT, ESTEP }; // What phase of the algo we're in
 
     static const unsigned INVALID_CLUST_ID = -1;
     static unsigned NUM_COLS;
