@@ -23,6 +23,12 @@ using namespace fg;
 
 int main(int argc, char* argv[]) {
 
+    if (argc < 4) {
+        fprintf(stderr, "[ERROR]: usage => ./test_fake_index num_vert num_cols output_fn");
+        exit(EXIT_FAILURE);
+    }
+
+    // TODO: Do something more test-y
     printf("Testing fake index ...\n");
     make_index(atol(argv[2]), atol(argv[3]), argv[1]);
     printf("Fake index tested correctly!\n");
