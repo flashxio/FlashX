@@ -520,34 +520,63 @@ matrix_store::const_ptr EM_matrix_store::transpose() const
  * This matrix store accesses a set of rows of a wide matrix or a set of columns
  * of a tall matrix.
  */
-class sub_EM_matrix_store: public EM_matrix_store
+class sub_EM_matrix_store: public matrix_store, public EM_object
 {
 	const size_t mat_id;
 	const size_t data_id;
+	EM_matrix_store::const_ptr orig;
 	std::vector<off_t> rc_idxs;
 
-	sub_EM_matrix_store(const std::vector<off_t> idxs,
-			const EM_matrix_store &store, size_t _data_id): EM_matrix_store(
-				store), mat_id(mat_counter++), data_id(_data_id) {
-		this->rc_idxs = idxs;
-		assert(idxs.size() > 0);
-		if (store_layout() == matrix_layout_t::L_COL)
-			matrix_store::resize(get_num_rows(), idxs.size());
+	/*
+	 * We can only get sub matrix from a col-major tall matrix and a row-major
+	 * wide matrix.
+	 */
+	static size_t cal_num_rows(const std::vector<off_t> idxs,
+			const EM_matrix_store &store) {
+		if (store.is_wide())
+			return idxs.size();
 		else
-			matrix_store::resize(idxs.size(), get_num_cols());
+			return store.get_num_rows();
+	}
+	static size_t cal_num_cols(const std::vector<off_t> idxs,
+			const EM_matrix_store &store) {
+		if (store.is_wide())
+			return store.get_num_cols();
+		else
+			return idxs.size();
+	}
+
+	sub_EM_matrix_store(const std::vector<off_t> idxs,
+			EM_matrix_store::const_ptr store, size_t _data_id): matrix_store(
+				cal_num_rows(idxs, *store), cal_num_cols(idxs, *store), false,
+				store->get_type()), mat_id(mat_counter++), data_id(_data_id) {
+		this->rc_idxs = idxs;
+		this->orig = store;
+		assert(idxs.size() > 0);
 	}
 public:
 	sub_EM_matrix_store(const std::vector<off_t> idxs,
-			const EM_matrix_store &store): EM_matrix_store(store), mat_id(
+			EM_matrix_store::const_ptr store): matrix_store(cal_num_rows(idxs, *store),
+				cal_num_cols(idxs, *store), false, store->get_type()), mat_id(
 				// The sub matrix has a different matrix ID and data ID from
 				// its parent matrix.
 				mat_counter++), data_id(mat_id) {
 		this->rc_idxs = idxs;
+		this->orig = store;
 		assert(idxs.size() > 0);
-		if (store_layout() == matrix_layout_t::L_COL)
-			matrix_store::resize(get_num_rows(), idxs.size());
-		else
-			matrix_store::resize(idxs.size(), get_num_cols());
+	}
+
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return orig->get_underlying_mats();
+	}
+	virtual matrix_layout_t store_layout() const {
+		return orig->store_layout();
+	}
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		return orig->get_portion_size();
+	}
+	virtual int get_portion_node_id(size_t id) const {
+		return -1;
 	}
 
 	virtual std::string get_name() const {
@@ -556,9 +585,26 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const {
-		matrix_store::const_ptr t_mat = EM_matrix_store::transpose();
+		EM_matrix_store::const_ptr t_mat
+			= std::static_pointer_cast<const EM_matrix_store>(orig->transpose());
 		return matrix_store::const_ptr(new sub_EM_matrix_store(rc_idxs,
-					dynamic_cast<const EM_matrix_store &>(*t_mat), data_id));
+					t_mat, data_id));
+	}
+
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const {
+		// TODO let's not support this first.
+		assert(0);
+		return local_matrix_store::ptr();
+	}
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) {
+		// This doesn't need to be used. Changing the data in the local portion
+		// doesn't affect the data in the disks.
+		assert(0);
+		return local_matrix_store::ptr();
 	}
 
 	virtual async_cres_t get_col_portion_async(
@@ -586,22 +632,32 @@ public:
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
+		if (is_wide()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't get cols from a wide EM sub matrix\n";
+			return matrix_store::const_ptr();
+		}
 		std::vector<off_t> orig_idxs(idxs.size());
 		for (size_t i = 0; i < idxs.size(); i++)
 			orig_idxs[i] = rc_idxs[idxs[i]];
-		return EM_matrix_store::get_cols(orig_idxs);
+		return orig->get_cols(orig_idxs);
 	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
+		if (!is_wide()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't get rows from a tall EM sub matrix\n";
+			return matrix_store::const_ptr();
+		}
 		std::vector<off_t> orig_idxs(idxs.size());
 		for (size_t i = 0; i < idxs.size(); i++)
 			orig_idxs[i] = rc_idxs[idxs[i]];
-		return EM_matrix_store::get_rows(orig_idxs);
+		return orig->get_rows(orig_idxs);
 	}
 
 	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
 		if (store_layout() == matrix_layout_t::L_COL)
-			return EM_matrix_store::get_col_vec(rc_idxs[idx]);
+			return orig->get_col_vec(rc_idxs[idx]);
 		else {
 			BOOST_LOG_TRIVIAL(error)
 				<< "Can't get a col from a sub EM row matrix";
@@ -615,7 +671,7 @@ public:
 			return vec_store::const_ptr();
 		}
 		else
-			return EM_matrix_store::get_row_vec(rc_idxs[idx]);
+			return orig->get_row_vec(rc_idxs[idx]);
 	}
 
 	virtual async_res_t get_portion_async(
@@ -630,6 +686,10 @@ public:
 			off_t start_row, off_t start_col) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "Don't support write_portion_async in a sub EM matrix";
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const {
+		return orig->create_ios();
 	}
 };
 
@@ -779,8 +839,8 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 		num_fetched_rows = num_rows;
 	}
 	else {
-		start_fetched_row = start_row - (start_row % CHUNK_SIZE);
-		num_fetched_rows = std::min(CHUNK_SIZE,
+		start_fetched_row = start_row - (start_row % EM_matrix_store::CHUNK_SIZE);
+		num_fetched_rows = std::min(EM_matrix_store::CHUNK_SIZE,
 				get_num_rows() - start_fetched_row);
 	}
 
@@ -834,7 +894,7 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 	for (size_t i = 0; i < ranges.size(); i++) {
 		size_t local_num_cols = ranges[i].second - ranges[i].first;
 		collected_cols += local_num_cols;
-		async_cres_t res = EM_matrix_store::get_portion_async(
+		async_cres_t res = orig->get_portion_async(
 				start_fetched_row, ranges[i].first, num_fetched_rows,
 				local_num_cols, collect_compute);
 		if (res.first)
@@ -846,7 +906,7 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 	// Here we tell the collected compute how many of its buffers are ready.
 	for (size_t i = 0; i < num_ready; i++)
 		collect_compute->run(NULL, 0);
-	if (is_cache_portion())
+	if (orig->is_cache_portion())
 		local_mem_buffer::cache_portion(data_id, ret);
 
 	bool ready = num_ready == bufs.size();
@@ -869,8 +929,8 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 	size_t start_fetched_col;
 	size_t num_fetched_cols;
 	if (is_wide()) {
-		start_fetched_col = start_col - (start_col % CHUNK_SIZE);
-		num_fetched_cols = std::min(CHUNK_SIZE,
+		start_fetched_col = start_col - (start_col % EM_matrix_store::CHUNK_SIZE);
+		num_fetched_cols = std::min(EM_matrix_store::CHUNK_SIZE,
 				get_num_cols() - start_fetched_col);
 	}
 	else {
@@ -925,7 +985,7 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 	for (size_t i = 0; i < ranges.size(); i++) {
 		size_t local_num_rows = ranges[i].second - ranges[i].first;
 		collected_rows += local_num_rows;
-		async_cres_t res = EM_matrix_store::get_portion_async(
+		async_cres_t res = orig->get_portion_async(
 				ranges[i].first, start_fetched_col, local_num_rows,
 				num_fetched_cols, collect_compute);
 		// We assume the requested portion doesn't have data, so the callback
@@ -935,7 +995,7 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 	}
 	assert(collected_rows == num_rows);
 	collect_compute->set_bufs(bufs);
-	if (is_cache_portion())
+	if (orig->is_cache_portion())
 		local_mem_buffer::cache_portion(data_id, ret);
 	if (num_fetched_cols == num_cols)
 		return async_cres_t(false, ret);
@@ -953,7 +1013,7 @@ matrix_store::const_ptr EM_matrix_store::get_cols(
 		return matrix_store::const_ptr();
 	}
 
-	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, *this));
+	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, shallow_copy()));
 }
 
 matrix_store::const_ptr EM_matrix_store::get_rows(
@@ -965,7 +1025,7 @@ matrix_store::const_ptr EM_matrix_store::get_rows(
 		return matrix_store::const_ptr();
 	}
 
-	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, *this));
+	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, shallow_copy()));
 }
 
 bool EM_matrix_store::set_persistent(const std::string &name) const

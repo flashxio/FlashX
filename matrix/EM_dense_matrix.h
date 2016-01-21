@@ -105,6 +105,12 @@ public:
 		return std::dynamic_pointer_cast<const EM_matrix_store>(store);
 	}
 
+	EM_matrix_store::const_ptr shallow_copy() const {
+		return EM_matrix_store::const_ptr(new EM_matrix_store(holder, ios,
+					get_num_rows(), get_num_cols(), orig_num_rows, orig_num_cols,
+					store_layout(), get_type(), data_id));
+	}
+
 	virtual void set_cache_portion(bool cache_portion) {
 		this->cache_portion = cache_portion;
 	}
