@@ -1950,10 +1950,10 @@ void test_groupby()
 
 void test_get_col(dense_matrix::ptr mat)
 {
-	assert(mat->get_num_cols() == 1);
 	vector::ptr vec = mat->get_col(0);
 	assert(vec->get_length() == mat->get_num_rows());
 	std::vector<int> std_vec = vec->conv2std<int>();
+	mat = mat->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr mem_store
 		= detail::mem_matrix_store::cast(mat->get_raw_store());
 	for (size_t i = 0; i < std_vec.size(); i++)
@@ -1967,11 +1967,13 @@ dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = random() % mat->get_num_rows();
 	dense_matrix::ptr res = mat->get_rows(idxs);
-	detail::mem_matrix_store::const_ptr orig_store
-		= detail::mem_matrix_store::cast(mat->get_raw_store());
-	detail::mem_matrix_store::const_ptr res_store
-		= detail::mem_matrix_store::cast(res->get_raw_store());
 	assert(res != NULL);
+	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
+	dense_matrix::ptr mem_res = res->conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr orig_store
+		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= detail::mem_matrix_store::cast(mem_res->get_raw_store());
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		for (size_t j = 0; j < res->get_num_cols(); j++)
 			assert(res_store->get<int>(i, j) == orig_store->get<int>(idxs[i], j));
@@ -1981,15 +1983,17 @@ dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
 {
 	std::vector<off_t> idxs;
-	idxs.resize(std::max(mat->get_num_cols() / 5, 1UL));
+	idxs.resize(std::max(mat->get_num_cols() / 5, 2UL));
 	for (size_t i = 0; i < idxs.size(); i++)
-		idxs[i] = random() % mat->get_num_cols();
+		idxs[i] = (random() + mat->get_num_cols() / 2) % mat->get_num_cols();
 	dense_matrix::ptr res = mat->get_cols(idxs);
-	detail::mem_matrix_store::const_ptr orig_store
-		= detail::mem_matrix_store::cast(mat->get_raw_store());
-	detail::mem_matrix_store::const_ptr res_store
-		= detail::mem_matrix_store::cast(res->get_raw_store());
 	assert(res != NULL);
+	dense_matrix::ptr mem_res = res->conv_store(true, -1);
+	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr orig_store
+		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= detail::mem_matrix_store::cast(mem_res->get_raw_store());
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		for (size_t j = 0; j < res->get_num_cols(); j++)
 			assert(res_store->get<int>(i, j) == orig_store->get<int>(i, idxs[j]));
@@ -2057,6 +2061,17 @@ void test_get_rowcols(int num_nodes)
 	mat = test_get_cols(mat);
 	test_get_rows(mat);
 	test_get_cols(mat);
+
+	printf("test on col-major tall dense matrix in disks\n");
+	bool orig_in_mem = in_mem;
+	in_mem = false;
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	mat = test_get_cols(mat);
+	assert(!mat->is_in_mem());
+	test_get_cols(mat);
+	test_get_col(mat);
+	in_mem = orig_in_mem;
 }
 
 void test_materialize(int num_nodes)
