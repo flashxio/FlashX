@@ -1051,7 +1051,7 @@ matrix_store::const_ptr EM_matrix_store::get_rows(
 {
 	if (store_layout() == matrix_layout_t::L_COL || !is_wide()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "can't support get cols from a col-major or tall matrix";
+			<< "can't support get rows from a col-major or tall matrix";
 		return matrix_store::const_ptr();
 	}
 
