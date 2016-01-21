@@ -474,7 +474,8 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 		assert(last_nrows <= CHUNK_SIZE);
 		off_t ele_start = (get_num_cols() * row_idx + last_nrows * idx);
 		off_t read_start = round_ele(ele_start, PAGE_SIZE, entry_size);
-		size_t num_read_eles = roundup_ele(last_nrows, PAGE_SIZE, entry_size);
+		size_t num_read_eles = roundup_ele(last_nrows + (ele_start - read_start),
+				PAGE_SIZE, entry_size);
 		assert(read_start <= ele_start
 				&& ele_start + last_nrows <= read_start + num_read_eles);
 		smp_vec_store::ptr tmp = smp_vec_store::create(num_read_eles, get_type());
