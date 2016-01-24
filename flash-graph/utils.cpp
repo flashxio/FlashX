@@ -18,9 +18,6 @@
  */
 
 #include <unistd.h>
-#ifdef USE_GZIP
-#include <zlib.h>
-#endif
 
 #include <memory>
 #include <algorithm>
