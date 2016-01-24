@@ -510,7 +510,7 @@ bool spm_dispatcher::issue_task()
 }
 
 void sparse_matrix::compute(detail::task_creator::ptr creator,
-		size_t num_block_rows, size_t min_num_brows) const
+		const detail::matrix_store &in) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
 	// allocation. We should delete them all before running SpMM.
@@ -518,8 +518,7 @@ void sparse_matrix::compute(detail::task_creator::ptr creator,
 	detail::mem_thread_pool::ptr threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_workers = threads->get_num_threads();
-	matrix_io_generator::ptr io_gen = create_io_gen(num_block_rows,
-			min_num_brows);
+	matrix_io_generator::ptr io_gen = create_io_gen(in);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
@@ -598,9 +597,13 @@ public:
 		return factory;
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
-			size_t min_num_brows) const {
-		row_block_mapper mapper(blocks, matrix_conf.get_rb_io_size());
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		assert(!in.is_wide());
+		size_t num_rows = in.get_portion_size().first;
+		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
+				num_rows / matrix_conf.get_row_block_size());
+		row_block_mapper mapper(blocks, num_brows);
 		return matrix_io_generator::create(blocks, get_num_rows(),
 				get_num_cols(), factory->get_file_id(), mapper);
 	}
@@ -700,9 +703,13 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
-			size_t min_num_brows) const {
-		row_block_mapper mapper(*out_blocks, matrix_conf.get_rb_io_size());
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		assert(!in.is_wide());
+		size_t num_rows = in.get_portion_size().first;
+		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
+				num_rows / matrix_conf.get_row_block_size());
+		row_block_mapper mapper(*out_blocks, num_brows);
 		return matrix_io_generator::create(*out_blocks, get_num_rows(),
 				get_num_cols(), factory->get_file_id(), mapper);
 	}
@@ -829,10 +836,19 @@ public:
 		return sparse_matrix::ptr(new block_sparse_matrix(*this));
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
-			size_t min_num_brows) const {
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		// For 2D-partitioned sparse matrix, we access blocks in super blocks.
+		// The super block size should be CPU-cache friendly as well as I/O
+		// friendly. That is, the super block size should be large enough to
+		// fill the rows from the dense matrices involed in the computation
+		// should fill the entire CPU cache. If the output matrix is written
+		// to disks, the super block should also be large enough so that
+		// each write to disks is large enough to have high I/O throughput.
+		size_t sblock_size = detail::cal_super_block_size(get_block_size(),
+				in.get_entry_size() * in.get_num_cols());
 		return matrix_io_generator::create(index, factory->get_file_id(),
-				num_block_rows, min_num_brows);
+				sblock_size, 1);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -911,9 +927,9 @@ public:
 		return sparse_matrix::ptr(ret);
 	}
 
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
-			size_t min_num_brows) const {
-		return mat->create_io_gen(num_block_rows, min_num_brows);
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		return mat->create_io_gen(in);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -985,22 +1001,13 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 		in_tmp = in_tmp->conv_store(true, matrix_conf.get_num_nodes());
 	}
 
-	// The super block size should be CPU-cache friendly as well as I/O
-	// friendly. That is, the super block size should be large enough to
-	// fill the rows from the dense matrices involed in the computation
-	// should fill the entire CPU cache. If the output matrix is written
-	// to disks, the super block should also be large enough so that
-	// each write to disks is large enough to have high I/O throughput.
-	size_t sblock_size = detail::cal_super_block_size(get_block_size(),
-			in->get_entry_size() * in->get_num_cols());
-	size_t min_num_brows = 1;
 	if (in_tmp) {
 		in_tmp->materialize_self();
 		in = in_tmp->get_raw_store();
 	}
 	bool ret = create->set_data(in, out);
 	if (ret)
-		compute(create, sblock_size, min_num_brows);
+		compute(create, *in);
 	return ret;
 }
 

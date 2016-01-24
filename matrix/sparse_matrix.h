@@ -734,18 +734,14 @@ public:
 	 * how data is accessed and what computation runs on the data fetched
 	 * from the external memory. matrix_io_generator defines data access
 	 * and compute_task defines the computation.
-	 * `num_block_rows' will affect the behavior of matrix_io_generator.
-	 * More explanation of `num_block_rows' is seen in the comments of
-	 * `init_io_gens'.
 	 */
-	void compute(detail::task_creator::ptr creator, size_t num_block_rows,
-			size_t min_num_brows) const;
+	void compute(detail::task_creator::ptr creator,
+			const detail::matrix_store &in) const;
 	/*
 	 * This method defines how data in the matrix is accessed.
-	 * `num_block_rows' defines how many block rows are accessed in an I/O.
 	 */
-	virtual matrix_io_generator::ptr create_io_gen(size_t num_block_rows,
-			size_t min_num_brows) const = 0;
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const = 0;
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
 	/*
