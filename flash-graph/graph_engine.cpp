@@ -920,14 +920,15 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 {
 	long count = init_count.fetch_add(1);
 	if (count == 0) {
-		graph_conf.init(configs);
-		graph_conf.print();
+		// We need to initialize SAFS first.
 		try {
 			init_io_system(configs);
 		} catch (safs::init_error &e) {
 			BOOST_LOG_TRIVIAL(warning)
 				<< "FlashGraph: fail to initialize SAFS";
 		}
+		graph_conf.init(configs);
+		graph_conf.print();
 	}
 }
 
