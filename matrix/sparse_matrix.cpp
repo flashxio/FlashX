@@ -1025,6 +1025,14 @@ void init_flash_matrix(config_map::ptr configs)
 {
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {
+		// We should initialize SAFS first.
+		try {
+			safs::init_io_system(configs);
+		} catch (std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning)
+				<< "FlashMatrix: fail to initialize SAFS";
+		}
+
 		if (configs)
 			matrix_conf.init(configs);
 		size_t num_nodes = matrix_conf.get_num_nodes();
@@ -1033,13 +1041,6 @@ void init_flash_matrix(config_map::ptr configs)
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);
 		detail::init_memchunk_reserve(num_nodes);
-
-		try {
-			safs::init_io_system(configs);
-		} catch (std::exception &e) {
-			BOOST_LOG_TRIVIAL(warning)
-				<< "FlashMatrix: fail to initialize SAFS";
-		}
 	}
 }
 
