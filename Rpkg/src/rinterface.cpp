@@ -252,19 +252,12 @@ static bool exist_graph(std::string &graph_name)
 
 	auto graph_files = get_graph_files(graph_name);
 	safs_file graph_file(get_sys_RAID_conf(), graph_files.first);
-	if (!graph_file.exist()) {
-		fprintf(stderr, "The graph file of %s doesn't exist\n",
-				graph_name.c_str());
+	if (!graph_file.exist())
 		return false;
-	}
 
 	safs_file graph_index_file(get_sys_RAID_conf(), graph_files.second);
-	if (!graph_index_file.exist()) {
-		fprintf(stderr, "The index file of %s doesn't exist\n",
-				graph_name.c_str());
+	if (!graph_index_file.exist())
 		return false;
-	}
-
 	return true;
 }
 
