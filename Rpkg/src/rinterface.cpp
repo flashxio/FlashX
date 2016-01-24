@@ -102,14 +102,12 @@ static graph_map_t graphs;
 
 bool standalone = true;
 
-static bool exist_cindex(const std::string &graph_name)
+static std::pair<std::string, std::string> get_graph_files(
+		const std::string &graph_name)
 {
-	if (standalone)
-		return false;
-
-	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
-	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
-	return cindex_file.exist();
+	std::string graph_file = graph_name + ".adj";
+	std::string index_file = graph_name + ".index";
+	return std::pair<std::string, std::string>(graph_file, index_file);
 }
 
 /*
@@ -129,15 +127,8 @@ FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 		return FG_graph::ptr();
 	}
 	else {
-		std::string graph_name = graph["name"];
-		std::string version = itoa(CURR_VERSION);
-		std::string graph_file = graph_name + "-v" + version;
-		std::string index_file;
-		if (exist_cindex(graph_name))
-			index_file = graph_name + "-cindex-v" + version;
-		else
-			index_file = graph_name + "-index-v" + version;
-		return FG_graph::create(graph_file, index_file, configs);
+		auto graph_files = get_graph_files(graph["name"]);
+		return FG_graph::create(graph_files.first, graph_files.second, configs);
 	}
 }
 
@@ -259,20 +250,16 @@ static bool exist_graph(std::string &graph_name)
 	if (standalone)
 		return false;
 
-	std::string version = itoa(CURR_VERSION);
-	std::string graph_file_name = graph_name + "-v" + version;
-	safs_file graph_file(get_sys_RAID_conf(), graph_file_name);
+	auto graph_files = get_graph_files(graph_name);
+	safs_file graph_file(get_sys_RAID_conf(), graph_files.first);
 	if (!graph_file.exist()) {
 		fprintf(stderr, "The graph file of %s doesn't exist\n",
 				graph_name.c_str());
 		return false;
 	}
 
-	std::string graph_index_name = graph_name + "-index-v" + version;
-	std::string graph_cindex_name = graph_name + "-cindex-v" + version;
-	safs_file graph_index_file(get_sys_RAID_conf(), graph_index_name);
-	safs_file graph_cindex_file(get_sys_RAID_conf(), graph_cindex_name);
-	if (!graph_index_file.exist() && !graph_cindex_file.exist()) {
+	safs_file graph_index_file(get_sys_RAID_conf(), graph_files.second);
+	if (!graph_index_file.exist()) {
 		fprintf(stderr, "The index file of %s doesn't exist\n",
 				graph_name.c_str());
 		return false;
@@ -355,12 +342,9 @@ RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 
 static std::string extract_graph_name(const std::string &file_name)
 {
-	std::string version = itoa(CURR_VERSION);
-	size_t pos = file_name.rfind("-cindex-v" + version);
+	size_t pos = file_name.rfind(".adj");
 	if (pos == std::string::npos)
-		pos = file_name.rfind("-index-v" + version);
-	if (pos == std::string::npos)
-		pos = file_name.rfind("-v" + version);
+		pos = file_name.rfind(".index");
 	if (pos == std::string::npos)
 		return "";
 	else
@@ -660,17 +644,9 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 	auto it = graphs.find(graph_name);
 	// If the graph exist, but it's not in the graph table. It's in SAFS.
 	if (it == graphs.end()) {
-		std::string version = itoa(CURR_VERSION);
-		std::string graph_file = graph_name + "-v" + version;
-		std::string index_file;
-
-		std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
-		safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
-		if (cindex_file.exist())
-			index_file = graph_name + "-cindex-v" + version;
-		else
-			index_file = graph_name + "-index-v" + version;
-		FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+		auto graph_files = get_graph_files(graph_name);
+		FG_graph::ptr fg = FG_graph::create(graph_files.first,
+				graph_files.second, configs);
 		graph_ref *ref = register_in_mem_graph(fg, graph_name);
 		if (ref)
 			return create_FGR_obj(ref);
