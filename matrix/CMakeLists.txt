@@ -5,6 +5,13 @@ include_directories("${PROJECT_SOURCE_DIR}")
 find_package(BLAS REQUIRED)
 message( STATUS BLAS found: ${BLAS_LIBRARIES} )
 
+find_package(ZLIB)
+if (ZLIB_FOUND)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_GZIP")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_GZIP")
+endif()
+
+
 add_library(FMatrix STATIC
 	dense_matrix.cpp
 	EM_vector.cpp

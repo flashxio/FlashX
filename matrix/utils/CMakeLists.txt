@@ -13,3 +13,8 @@ if (hwloc_FOUND)
 	target_link_libraries(el2fg hwloc)
 	target_link_libraries(fg2fm hwloc)
 endif()
+
+if (ZLIB_FOUND)
+	target_link_libraries(el2fg z)
+	target_link_libraries(fg2fm z)
+endif()
