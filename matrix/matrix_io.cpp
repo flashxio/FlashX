@@ -95,12 +95,10 @@ public:
 
 /*
  * The I/O generator that access a matrix on disks by rows.
- * An I/O generator are assigned a number of row blocks that it can accesses.
- * Each thread has an I/O generator and gets I/O requests from its own I/O
- * generator. When load balancing kicks in, a thread will try to steal I/O requests
- * from other threads' I/O generators.
+ * It dynamically assigns a row block to a thread each time and thus balances
+ * the load automatically.
  */
-class row_io_generator: public matrix_io_generator
+class dyn_row_iogen: public matrix_io_generator
 {
 	std::vector<large_row_io> ios;
 	// The current offset in the row_block vector.
@@ -110,7 +108,7 @@ class row_io_generator: public matrix_io_generator
 
 	pthread_spinlock_t lock;
 public:
-	row_io_generator(const std::vector<row_block> &_blocks, size_t tot_num_rows,
+	dyn_row_iogen(const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
 
 	/*
@@ -118,12 +116,8 @@ public:
 	 * to get I/O requests.
 	 */
 	virtual matrix_io get_next_io() {
-		// TODO it should return a smaller I/O to improve load balancing at
-		// the end of SpMM.
 		matrix_io ret;
 		pthread_spin_lock(&lock);
-		// It's possible that all IOs have been stolen.
-		// We have to check it.
 		if ((size_t) curr_io_off < ios.size()) {
 			assert(ios[curr_io_off].has_data());
 			ret = ios[curr_io_off++].get_io(tot_num_cols, file_id);
@@ -140,7 +134,7 @@ public:
 	}
 };
 
-row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
+dyn_row_iogen::dyn_row_iogen(const std::vector<row_block> &blocks,
 		size_t tot_num_rows, size_t tot_num_cols, int file_id,
 		const row_block_mapper &mapper)
 {
@@ -159,6 +153,71 @@ row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
 	curr_io_off = 0;
 	this->tot_num_cols = tot_num_cols;
 	this->file_id = file_id;
+}
+
+/*
+ * The I/O generator that access a matrix on disks by rows.
+ * This assigns a row block to a thread statically, so it can't balance the load.
+ * This is for testing purpose only.
+ */
+class static_row_iogen: public matrix_io_generator
+{
+	std::vector<large_row_io> ios;
+	int file_id;
+	size_t tot_num_cols;
+	size_t num_threads;
+	// The current offset in the row_block vector for each thread.
+	std::vector<size_t> curr_io_offs;
+public:
+	static_row_iogen(const std::vector<row_block> &_blocks, size_t tot_num_rows,
+			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
+
+	/*
+	 * This method is called by the worker thread that owns the I/O generator
+	 * to get I/O requests.
+	 */
+	virtual matrix_io get_next_io() {
+		matrix_io ret;
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+		size_t curr_io_off = curr_io_offs[thread_id];
+		if (curr_io_off < ios.size()) {
+			assert(ios[curr_io_off].has_data());
+			ret = ios[curr_io_off].get_io(tot_num_cols, file_id);
+			// This is the easiest way of assign row blocks to threads.
+			curr_io_offs[thread_id] += num_threads;
+			assert(ret.is_valid());
+		}
+		return ret;
+	}
+
+	virtual bool has_next_io() {
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+		return curr_io_offs[thread_id] < ios.size();
+	}
+};
+
+static_row_iogen::static_row_iogen(const std::vector<row_block> &blocks,
+		size_t tot_num_rows, size_t tot_num_cols, int file_id,
+		const row_block_mapper &mapper)
+{
+	// blocks[blocks.size() - 1] is an empty block. It only indicates
+	// the end of the matrix file.
+	// blocks[blocks.size() - 2] is the last row block. It's possible that
+	// it's smaller than the full-size row block.
+	for (size_t i = 0; i < mapper.get_num_ranges(); i++) {
+		size_t num_row_blocks = mapper.get_range(i).num;
+		off_t rb_off = mapper.get_range(i).idx;
+		size_t num_rows = std::min(
+				num_row_blocks * matrix_conf.get_row_block_size(),
+				tot_num_rows - rb_off * matrix_conf.get_row_block_size());
+		ios.emplace_back(blocks, rb_off, num_row_blocks, num_rows);
+	}
+	this->tot_num_cols = tot_num_cols;
+	this->file_id = file_id;
+	this->num_threads = detail::mem_thread_pool::get_global_num_threads();
+	curr_io_offs.resize(num_threads);
+	for (size_t i = 0; i < curr_io_offs.size(); i++)
+		curr_io_offs[i] = i;
 }
 
 /*
@@ -245,7 +304,7 @@ matrix_io_generator::ptr matrix_io_generator::create(
 		const std::vector<row_block> &_blocks, size_t tot_num_rows,
 		size_t tot_num_cols, int file_id, const row_block_mapper &mapper)
 {
-	return matrix_io_generator::ptr(new row_io_generator(_blocks,
+	return matrix_io_generator::ptr(new dyn_row_iogen(_blocks,
 				tot_num_rows, tot_num_cols, file_id, mapper));
 }
 
