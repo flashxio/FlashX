@@ -18,7 +18,7 @@
 include ../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../include -I../libcommon $(OMP_FLAG) -DUSE_GZIP
+CXXFLAGS += -I../include -I../libcommon $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
 all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix
