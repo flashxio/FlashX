@@ -65,10 +65,11 @@ namespace {
                 return ptr(new cluster(mean));
             }
 
+            /*
             void init(const unsigned len) {
                 mean.resize(len);
                 num_members = 0;
-            }
+            }*/
 
             void clear() {
                 std::fill(this->mean.begin(), this->mean.end(), 0);
@@ -210,19 +211,6 @@ namespace {
 
             static ptr create(const std::vector<double>& mean) {
                 return ptr(new prune_cluster(mean));
-            }
-
-            void unfinalize() {
-                if (!is_complete()) {
-                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Calling unfinalize() on an"
-                        " UNfinalized object";
-                    return;
-                }
-                complete = false;
-
-                for (unsigned i = 0; i < size(); i++) {
-                    this->mean[i] *= (double)num_members;
-                }
             }
 
             template <typename T>
