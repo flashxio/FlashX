@@ -41,7 +41,7 @@ namespace {
         return header;
     }
 
-    static vertex_index::ptr make_index(const size_t num_vert, 
+    vertex_index::ptr make_index(const size_t num_vert,
             const size_t num_cols, const std::string outfn="") {
         graph_header header = make_graph_header(num_vert, num_cols);
 
