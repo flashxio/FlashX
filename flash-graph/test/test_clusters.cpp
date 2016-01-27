@@ -21,7 +21,7 @@ void test_clusters() {
     printf("Print no init:\n");
     empty->print_means();
 
-    clusters::ptr cls = clusters::create(NCLUST, NCOL, kv); 
+    clusters::ptr cls = clusters::create(NCLUST, NCOL, kv);
     printf("Print after init:\n");
     cls->print_means();
 
@@ -43,7 +43,7 @@ void test_clusters() {
     BOOST_VERIFY(*cls == *empty);
     printf("Success ...\n");
 
-    for (unsigned cl = 0; cl < NCLUST; cl++) 
+    for (unsigned cl = 0; cl < NCLUST; cl++)
         for (unsigned i = 0; i < data.size(); i++)
             cls->add_member(&(data[i][0]), cl);
     printf("Before finalize all should be equal:\n");
@@ -64,7 +64,7 @@ void test_clusters() {
     printf("Success ...\n");
 
     printf("Removing members:\n");
-    for (unsigned cl = 0; cl < NCLUST; cl++) 
+    for (unsigned cl = 0; cl < NCLUST; cl++)
         for (unsigned i = 0; i < data.size(); i++)
             cls->remove_member(&(data[i][0]), cl);
 

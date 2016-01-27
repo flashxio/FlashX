@@ -249,16 +249,16 @@ namespace {
             const unsigned get_nclust() const {
                 return nclust;
             }
-            
+
             const std::vector<bool>& get_complete_v() const {
                 return complete_v;
             }
 
             // Begin Helpers //
-            const void print(const kmsvector& v) const {
+            const void print_means() const {
                 for (unsigned cl_idx = 0; cl_idx < get_nclust(); cl_idx++) {
                     std::cout << "#memb = " << get_num_members(cl_idx) << " ";
-                        print_arr<double>(&(v[cl_idx*ncol]), ncol);
+                        print_arr<double>(&(means[cl_idx*ncol]), ncol);
                 }
                 std::cout << "\n";
             }
@@ -295,10 +295,6 @@ namespace {
                 return ptr(new prune_clusters(nclust, ncol, mean));
             }
 
-            static ptr cast2(clusters::ptr cl) {
-                return std::static_pointer_cast<prune_clusters, clusters>(cl);
-            }
-
             void reset_s_val_v() {
                 std::fill(s_val_v.begin(), s_val_v.end(),
                         std::numeric_limits<double>::max());
@@ -314,10 +310,12 @@ namespace {
                 return prev_means;
             }
 
-            // TODO: Test vs double* &(prev_means[idx*ncol])
+            // TODO: Test vs
             // TODO: Return reference
+            //const double* get_prev_mean(const unsigned idx) {
             const kmsiterator get_prev_mean(const unsigned idx) {
-                return prev_means.begin()+(ncol*idx);
+                return prev_means.begin()+(idx*ncol);
+                //return &(prev_means[idx*ncol]);
             }
 
             void set_prev_mean(const unsigned idx) {
@@ -327,8 +325,7 @@ namespace {
                     return;
                 }
 
-                // TODO: Check me
-                std::copy(means.begin()+(idx*ncol), means.end()+((idx+1)*ncol),
+                std::copy(means.begin()+(idx*ncol), means.begin()+((idx+1)*ncol),
                         this->prev_means.begin()+(idx*ncol));
             }
 
@@ -338,6 +335,13 @@ namespace {
 
             double get_prev_dist(const unsigned idx) {
                 return prev_dist_v[idx];
+            }
+
+            const void print_prev_means_v() const {
+                for (unsigned cl_idx = 0; cl_idx < get_nclust(); cl_idx++) {
+                    print_arr<double>(&(prev_means[cl_idx*ncol]), ncol);
+                }
+                std::cout << "\n";
             }
     };
 }
