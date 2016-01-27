@@ -202,7 +202,8 @@ namespace {
         request_vertices(&id, 1);
     }
 
-    void kmeans_vertex::run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init) {
+    void kmeans_vertex::run_init(vertex_program& prog,
+            const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
             case RANDOM:
                 {
@@ -363,13 +364,15 @@ namespace {
             }
         }
 
-        static void update_clusters(graph_engine::ptr mat, std::vector<unsigned>& num_members_v) {
+        static void update_clusters(graph_engine::ptr mat,
+                std::vector<unsigned>& num_members_v) {
             clear_clusters();
             std::vector<vertex_program::ptr> kms_clust_progs;
             mat->get_vertex_programs(kms_clust_progs);
 
             for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
-                kmeans_vertex_program::ptr kms_prog = kmeans_vertex_program::cast2(kms_clust_progs[thd]);
+                kmeans_vertex_program::ptr kms_prog =
+                    kmeans_vertex_program::cast2(kms_clust_progs[thd]);
                 std::vector<prune_cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
 
@@ -386,9 +389,10 @@ namespace {
                         g_clusters[cl]->finalize();
                         num_members_v[cl] = g_clusters[cl]->get_num_members();
 
-                        double dist = eucl_dist<std::vector<double>>(&(g_clusters[cl]->get_mean()),
-                                &(g_clusters[cl]->get_prev_mean()));
-#if KM_TEST
+                        double dist = eucl_dist<std::vector<double>>
+                            (&(g_clusters[cl]->get_mean()),
+                             &(g_clusters[cl]->get_prev_mean()));
+#if VERBOSE
                         BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                             << cl << " is " << dist;
                         BOOST_VERIFY(g_clusters[cl]->get_num_members() <= (int)NUM_ROWS);
@@ -424,7 +428,8 @@ namespace {
 
             double cuml_sum = 0;
             BOOST_FOREACH(vertex_program::ptr vprog, kmspp_progs) {
-                kmeanspp_vertex_program::ptr kmspp_prog = kmeanspp_vertex_program::cast2(vprog);
+                kmeanspp_vertex_program::ptr kmspp_prog =
+                    kmeanspp_vertex_program::cast2(vprog);
                 cuml_sum += kmspp_prog->get_pt_cuml_sum();
             }
 
@@ -440,7 +445,8 @@ namespace {
                 cuml_sum -= g_kmspp_distance[row];
                 if (cuml_sum <= 0) {
 #if KM_TEST
-                    BOOST_LOG_TRIVIAL(info) << "Choosing v:" << row << " as center K = " << g_kmspp_cluster_idx;
+                    BOOST_LOG_TRIVIAL(info) << "Choosing v:" << row
+                        << " as center K = " << g_kmspp_cluster_idx;
 #endif
                     return row;
                 }
@@ -477,7 +483,7 @@ namespace {
             if ((NULL == centers) && init.compare("random") && init.compare("kmeanspp") &&
                     init.compare("forgy")) {
                 BOOST_LOG_TRIVIAL(fatal)
-                    << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
+                    << "[ERROR]: init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
                     << init << "'";
                 exit(EXIT_FAILURE);
             }
@@ -637,7 +643,8 @@ namespace {
                 g_cluster_dist->compute_dist(g_clusters, K);
 
                 for (unsigned cl = 0; cl < K; cl++)
-                    BOOST_LOG_TRIVIAL(info) << "cl:" << cl << " get_s_val: " << g_clusters[cl]->get_s_val();
+                    BOOST_LOG_TRIVIAL(info) << "cl:" << cl << " get_s_val: "
+                        << g_clusters[cl]->get_s_val();
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix ...";
                 g_cluster_dist->print();
@@ -659,7 +666,8 @@ namespace {
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
                 print_vector<unsigned>(num_members_v);
 
-                BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
+                BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
+                    << g_num_changed << " **\n";
 
                 if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
                     converged = true;
