@@ -21,7 +21,8 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header test_sem_kmeans
+TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header test_sem_kmeans\
+			 test_clusters
 
 all: $(TESTFILES)
 
@@ -39,6 +40,9 @@ make_page_row_header: make_page_row_header.o ../libgraph.a
 
 test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
 	$(CXX) -o test_sem_kmeans test_sem_kmeans.o $(LDFLAGS)
+
+test_clusters: test_clusters.o ../libgraph.a
+	$(CXX) -o test_clusters test_clusters.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
