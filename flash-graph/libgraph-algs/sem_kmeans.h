@@ -142,18 +142,6 @@ namespace {
         }
     };
 
-    // Begin Helpers //
-    template <typename ClusterType>
-    void print_clusters(typename std::vector<typename ClusterType::ptr>& clusters) {
-        typedef typename std::vector<typename ClusterType::ptr>::iterator cluster_itr;
-
-        for (cluster_itr it = clusters.begin(); it != clusters.end(); ++it) {
-            std::cout << "#memb = " << (*it)->get_num_members() << " ";
-            print_vector<double>((*it)->get_mean());
-        }
-        std::cout << "\n";
-    }
-
     void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
         std::vector<std::string> v;
         while (count_it.has_next()) {
@@ -165,26 +153,6 @@ namespace {
         printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
     }
     // End helpers //
-
-    template <typename ClusterType>
-    void set_clusters(std::vector<double>* centers,
-            std::vector<typename ClusterType::ptr>& vcl,
-            unsigned nclust, unsigned ncol) {
-        for (size_t cl = 0; cl < nclust; cl++) {
-            std::vector<double> v(ncol);
-            std::copy(&((*centers)[cl*ncol]),
-                    &((*centers)[(cl*ncol)+ncol]), v.begin());
-            vcl.push_back(ClusterType::create(v));
-        }
-    }
-
-    template <typename ClusterType>
-    void init_clusters(std::vector<typename ClusterType::ptr>& vcl,
-            unsigned nclust, unsigned ncol) {
-        for (size_t cl = 0; cl < nclust; cl++) {
-            vcl.push_back(ClusterType::create(ncol));
-        }
-    }
 }
 
 namespace fg
