@@ -90,15 +90,15 @@ namespace {
 	 * \brief This initializes clusters by randomly choosing sample
 	 *		membership in a cluster.
 	 * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
-	 *	\param cluster_assignments Which cluster each sample falls into.
+     * \param cluster_assignments Which cluster each sample falls into.
 	 */
 	static void random_partition_init(unsigned* cluster_assignments) {
 		BOOST_LOG_TRIVIAL(info) << "Random init start";
 
 		// #pragma omp parallel for firstprivate(cluster_assignments, K) shared(cluster_assignments)
-		for (unsigned vid = 0; vid < NUM_ROWS; vid++) {
+		for (unsigned row = 0; row < NUM_ROWS; row++) {
 			size_t assigned_cluster = random() % K; // 0...K
-			cluster_assignments[vid] = assigned_cluster;
+			cluster_assignments[row] = assigned_cluster;
 		}
 
 		// NOTE: M-Step called in compute func to update cluster counts & centers
@@ -134,14 +134,12 @@ namespace {
 	 *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
 	 */
 	static void kmeanspp_init(const double* matrix, double* clusters) {
-
 		// Init distance array
-		double* dist_v = new double [NUM_ROWS*sizeof(double)];
-		for (size_t i = 0; i < NUM_ROWS; i++)
-			dist_v[i] = std::numeric_limits<double>::max();
+        std::vector<double> dist_v = std::vector<double>(NUM_ROWS);
+        std::fill(dist_v.begin(), dist_v.end(), std::numeric_limits<double>::max());
 
 		// Choose c1 uniiformly at random
-		unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
+		unsigned rand_idx = random() % NUM_ROWS; // 0...(NUM_ROWS-1)
 
         std::copy(&matrix[rand_idx*NUM_COLS],
                 &matrix[(rand_idx*NUM_COLS)+NUM_COLS], &clusters[0]);
@@ -174,14 +172,15 @@ namespace {
 				cum_dist += dist_v[row];
 			}
 
-			cum_dist = (cum_dist * ((double)random())) / (RAND_MAX - 1.);
+			cum_dist = (cum_dist * ((double)random())) / (RAND_MAX - 1.0);
 			clust_idx++;
 
 			for (size_t i=0; i < NUM_ROWS; i++) {
 				cum_dist -= dist_v[i];
 				if (cum_dist <= 0) {
 #if KM_TEST
-					BOOST_LOG_TRIVIAL(info) << "Choosing " << i << " as center K = " << clust_idx;
+					BOOST_LOG_TRIVIAL(info) << "Choosing "
+                        << i << " as center K = " << clust_idx;
 #endif
                     std::copy(&(matrix[i*NUM_COLS]), &(matrix[i*(NUM_COLS)+NUM_COLS]),
                             &(clusters[clust_idx*NUM_COLS]));
@@ -190,7 +189,6 @@ namespace {
 			}
 			assert (cum_dist <= 0);
 		}
-		delete [] dist_v;
 
 #if VERBOSE
 		BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NUM_COLS);
@@ -207,13 +205,9 @@ namespace {
 	static void E_step(const double* matrix, double* clusters,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts) {
 		// Create per thread vectors
-		std::vector<std::vector<unsigned>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
-		std::vector<std::vector<double>> pt_cl; // K * NUM_COLS * OMP_MAX_THREADS
-		std::vector<size_t> pt_num_change; // Per thread changed cluster count. OMP_MAX_THREADS
-
-		pt_cl_as_cnt.resize(OMP_MAX_THREADS);
-		pt_cl.resize(OMP_MAX_THREADS);
-		pt_num_change.resize(OMP_MAX_THREADS);
+		std::vector<std::vector<unsigned>> pt_cl_as_cnt(OMP_MAX_THREADS); // K * OMP_MAX_THREADS
+		std::vector<std::vector<double>> pt_cl(OMP_MAX_THREADS); // K * NUM_COLS * OMP_MAX_THREADS
+		std::vector<size_t> pt_num_change(OMP_MAX_THREADS); // Per thread changed cluster count. OMP_MAX_THREADS
 
 		for (int i = 0; i < OMP_MAX_THREADS; i++) {
 			pt_cl_as_cnt[i].resize(K); // C++ default is 0 value in all
@@ -297,14 +291,15 @@ namespace {
 			BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
             std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
 
-			for (unsigned vid = 0; vid < NUM_ROWS; vid++) {
+            // FIXME: Could be loop over threads not rows if we replicate clusters
+			for (unsigned row = 0; row < NUM_ROWS; row++) {
 
-				unsigned asgnd_clust = cluster_assignments[vid];
+				unsigned asgnd_clust = cluster_assignments[row];
 				cluster_assignment_counts[asgnd_clust]++;
 
 				for (unsigned col = 0; col < NUM_COLS; col++) {
 					clusters[asgnd_clust*NUM_COLS + col] =
-						clusters[asgnd_clust*NUM_COLS + col] + matrix[vid*NUM_COLS + col];
+						clusters[asgnd_clust*NUM_COLS + col] + matrix[row*NUM_COLS + col];
 				}
 			}
 		}
@@ -355,7 +350,7 @@ namespace fg
 			BOOST_LOG_TRIVIAL(fatal)
 				<< "'k' must be between 2 and the number of rows in the matrix" <<
 				"k = " << K;
-			exit(-1);
+			exit(EXIT_FAILURE);
 		}
 
 		gettimeofday(&start , NULL);
@@ -373,7 +368,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param dist_type must be one of: 'eucl', 'cos'.It is '"
                 << dist_type << "'";
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
 
         if (init == "random") {
@@ -392,7 +387,7 @@ namespace fg
                 << "[ERROR]: param init must be one of: "
                 "'random', 'forgy', 'kmeanspp'.It is '"
                 << init << "'";
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
 
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
