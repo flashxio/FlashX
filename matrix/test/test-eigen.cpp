@@ -175,6 +175,7 @@ void print_usage()
 	fprintf(stderr, "-o file: output eigenvectors\n");
 	fprintf(stderr, "-T type: eigen, SVD, NA_eigen (normalized adjacency)\n");
 	fprintf(stderr, "-c num: The number of cached matrices\n");
+	fprintf(stderr, "-m: keep sparse matrix in memory\n");
 }
 
 int main (int argc, char *argv[])
@@ -188,8 +189,9 @@ int main (int argc, char *argv[])
 	std::string solver;
 	double tol = -1;
 	bool in_mem = true;
+	bool spm_in_mem = false;
 	size_t num_cached = 1;
-	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:m")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -222,6 +224,9 @@ int main (int argc, char *argv[])
 			case 'c':
 				num_cached = atoi(optarg);
 				num_opts++;
+				break;
+			case 'm':
+				spm_in_mem = true;
 				break;
 			default:
 				print_usage();
@@ -289,18 +294,32 @@ int main (int argc, char *argv[])
 	// Load matrix.
 	sparse_matrix::ptr mat;
 	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
-	if (type == "SVD" && mat_f.exist())
-		mat = sparse_matrix::create(
-				index, safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS),
-				t_index, safs::create_io_factory(t_matrix_file,
-					safs::REMOTE_ACCESS));
+	if (type == "SVD" && mat_f.exist()) {
+		if (spm_in_mem) {
+			mat = sparse_matrix::create(
+					index, SpM_2d_storage::safs_load(matrix_file, index),
+					t_index, SpM_2d_storage::safs_load(t_matrix_file, t_index));
+		}
+		else {
+			safs::file_io_factory::shared_ptr factory
+				= safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS);
+			safs::file_io_factory::shared_ptr t_factory
+				= safs::create_io_factory(t_matrix_file, safs::REMOTE_ACCESS);
+			mat = sparse_matrix::create(index, factory, t_index, t_factory);
+		}
+	}
 	else if (type == "SVD")
 		mat = sparse_matrix::create(
 				index, SpM_2d_storage::load(matrix_file, index),
 				t_index, SpM_2d_storage::load(t_matrix_file, t_index));
-	else if (mat_f.exist())
-		mat = sparse_matrix::create(index,
-				safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS));
+	else if (mat_f.exist()) {
+		if (spm_in_mem)
+			mat = sparse_matrix::create(index,
+					SpM_2d_storage::safs_load(matrix_file, index));
+		else
+			mat = sparse_matrix::create(index,
+					safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS));
+	}
 	else
 		mat = sparse_matrix::create(index,
 				SpM_2d_storage::load(matrix_file, index));
