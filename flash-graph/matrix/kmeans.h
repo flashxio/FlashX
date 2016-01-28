@@ -30,7 +30,7 @@
 #include <gperftools/profiler.h>
 #endif
 #include <vector>
-#include <limits> 
+#include <limits>
 #include <iostream>
 #include <algorithm>
 #include <boost/assert.hpp>
@@ -85,10 +85,19 @@ namespace fg {
  * \param max_iters The maximum number of iterations of K-means to perform.
  * \param init The type of initilization ["random", "forgy", "kmeanspp"]
  **/
-unsigned compute_kmeans(const double* matrix, double* clusters, 
+unsigned compute_kmeans(const double* matrix, double* clusters,
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-		const unsigned num_rows, const unsigned num_cols, const size_t k, 
-		const unsigned MAX_ITERS, const int max_threads, const std::string init="kmeanspp",
-		const double tolerance=-1, const std::string dist_type="eucl");
+		const unsigned num_rows, const unsigned num_cols, const size_t k,
+		const unsigned MAX_ITERS, const int max_threads,
+        const std::string init="kmeanspp", const double tolerance=-1,
+        const std::string dist_type="eucl");
+
+/** See `compute_kmeans` for argument list */
+unsigned compute_min_kmeans(const double* matrix, double* clusters_ptr,
+        unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
+        const unsigned num_rows, const unsigned num_cols, const size_t k,
+        const unsigned MAX_ITERS, const int max_threads,
+        const std::string init="kmeanspp", const double tolerance=-1,
+        const std::string dist_type="eucl");
 }
 #endif
