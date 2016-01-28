@@ -33,13 +33,14 @@ int main(int argc, char* argv[]) {
 	unsigned nthread = 1024;
 	int num_opts = 0;
 	double tolerance = -1;
+    bool use_min_tri = false;
 
     // Increase by 3 -- getopt ignores argv[0]
 	argv += 3;
 	argc -= 3;
     
 	signal(SIGINT, int_handler);
-	while ((opt = getopt(argc, argv, "l:i:t:T:d:C:")) != -1) {
+	while ((opt = getopt(argc, argv, "l:i:t:T:d:C:a")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'l':
@@ -65,6 +66,11 @@ int main(int argc, char* argv[]) {
 			case 'C':
 				centersfn = std::string(optarg);
                 BOOST_ASSERT_MSG(is_file_exist(centersfn.c_str()), "Centers file name doesn't exit!");
+                init = "none"; // Ignore whatever you pass in
+				num_opts++;
+				break;
+			case 'a':
+				use_min_tri = true;
 				num_opts++;
 				break;
 			default:
@@ -92,9 +98,15 @@ int main(int argc, char* argv[]) {
     unsigned* p_clust_asgns = new unsigned [nrow];
     unsigned* p_clust_asgn_cnt = new unsigned [k];
 
-    compute_kmeans(p_data, p_centers, p_clust_asgns,
-            p_clust_asgn_cnt, nrow, ncol, k, max_iters,
-            nthread, init, tolerance, dist_type);
+    if (use_min_tri) {
+        compute_min_kmeans(p_data, p_centers, p_clust_asgns,
+                p_clust_asgn_cnt, nrow, ncol, k, max_iters,
+                nthread, init, tolerance, dist_type);
+    } else {
+        compute_kmeans(p_data, p_centers, p_clust_asgns,
+                p_clust_asgn_cnt, nrow, ncol, k, max_iters,
+                nthread, init, tolerance, dist_type);
+    }
 
     delete [] p_clust_asgns;
     delete [] p_clust_asgn_cnt;
@@ -115,4 +127,5 @@ void print_usage() {
     fprintf(stderr, "-C File with initial clusters in same format as data\n");
     fprintf(stderr, "-l tolerance for convergence (1E-6)\n");
     fprintf(stderr, "-d Distance matric [eucl,cos]\n");
+    fprintf(stderr, "-m Use the minimal triangle inequality\n");
 }
