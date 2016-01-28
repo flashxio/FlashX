@@ -14,7 +14,8 @@ static const kmsvector three {13,14,15,16};
 static const kmsvector four {17,18,19,20};
 static const clusters::ptr empty = clusters::create(NCLUST, NCOL);
 static const std::vector<kmsvector> data {zero, one, two, three, four};
-static const kmsvector kv {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
+static const double arr [] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
+static const kmsvector kv(std::begin(arr), std::end(arr));
 
 void test_clusters() {
     printf("Testing clusters ...\n");
@@ -80,7 +81,11 @@ void test_clusters() {
 void test_prune_clusters() {
     printf("Testing prune_clusters ...\n");
     prune_clusters::ptr pcl = prune_clusters::create(NCLUST, NCOL);
-    pcl->set_mean(kv);
+    pcl->set_mean(arr);
+
+    printf("Testing set_mean == create(nclust, ncol, kv)");
+    BOOST_VERIFY(*pcl == *(prune_clusters::create(NCLUST, NCOL, kv)));
+    printf("Success ...\n");
 
     clusters::ptr cl = clusters::create(NCLUST, NCOL, kv);
     printf("Test *cl == *pcl after cast...\n");

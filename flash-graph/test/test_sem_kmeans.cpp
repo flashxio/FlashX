@@ -19,6 +19,7 @@
 
 #include "libgraph-algs/sem_kmeans.h"
 #include "libgraph-algs/sem_kmeans_util.h"
+#include "libgraph-algs/dist_matrix.h"
 
 #if PRUNE
 static std::vector<cluster::ptr> g_clusters;
