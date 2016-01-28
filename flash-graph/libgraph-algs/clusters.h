@@ -113,11 +113,23 @@ namespace {
                 return means;
             }
 
+            /** \param idx the cluster index.
+              */
             void set_mean(const kmsvector& mean, const int idx=-1) {
                 if (idx == -1) { // Set all means
                     means = mean;
                 } else {
                     std::copy(mean.begin(), mean.end(), this->means.begin()+(idx*ncol));
+                }
+            }
+
+            void set_mean(const double* mean, const int idx=-1) {
+                if (idx == -1) { // Set all means
+                    if (means.size() != (ncol*nclust))
+                        means.resize(ncol*nclust);
+                    std::copy(&(mean[0]), &(mean[ncol*nclust]), this->means.begin());
+                } else {
+                    std::copy(&(mean[0]), &(mean[ncol]), this->means.begin()+(idx*ncol));
                 }
             }
 
@@ -226,19 +238,24 @@ namespace {
                 return means[index];
             }
 
+            // Get an index (based on the entire chunck)
+            double get(const unsigned index) {
+                BOOST_VERIFY(index < size()); // TODO: rm -- called to often!
+                return means[index];
+            }
+
             clusters& operator+=(clusters& rhs) {
                 // TODO: rm -- called to often!
                 BOOST_VERIFY(rhs.size() == size() &&
                         (v_eq(get_complete_v(), rhs.get_complete_v())) &&
                         v_eq_const(get_complete_v(), false));
 
-                // TODO vectorize perhaps
+                // TODO vectorize perhaps OR omp parallel
                 for (unsigned i = 0; i < size(); i++)
                     this->means[i] += rhs[i];
 
                 for (unsigned idx = 0; idx < nclust; idx++)
                     num_members_peq(rhs.get_num_members(idx), idx);
-
                 return *this;
             }
 
@@ -271,16 +288,20 @@ namespace {
             kmsvector prev_means;
             kmsvector prev_dist_v; // Distance to prev mean
 
-            prune_clusters(const unsigned nclust, const unsigned ncol):
-                clusters(nclust, ncol) {
+            void init() {
                 prev_means.resize(ncol*nclust);
                 prev_dist_v.resize(nclust);
+                s_val_v.assign(nclust, std::numeric_limits<double>::max());
+            }
+
+            prune_clusters(const unsigned nclust, const unsigned ncol):
+                clusters(nclust, ncol) {
+                    init();
             }
 
             prune_clusters(const unsigned nclust, const unsigned ncol,
                     const kmsvector means): clusters(nclust, ncol, means) {
-                prev_means.resize(ncol*nclust);
-                s_val_v.assign(nclust, std::numeric_limits<double>::max());
+                init();
             }
 
         public:
