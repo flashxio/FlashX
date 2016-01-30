@@ -84,7 +84,7 @@ namespace {
     };
 
     class kmeans_vertex_program:
-        public base_kmeans_vertex_program<kmeans_vertex, prune_cluster>
+        public base_kmeans_vertex_program<kmeans_vertex, cluster>
     {
         unsigned num_reqs;
 #if KM_TEST
@@ -373,7 +373,7 @@ namespace {
             for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
                 kmeans_vertex_program::ptr kms_prog =
                     kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-                std::vector<prune_cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
+                std::vector<cluster::ptr> pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
 
                 g_io_reqs += kms_prog->get_num_reqs();
@@ -389,9 +389,9 @@ namespace {
                         g_clusters[cl]->finalize();
                         num_members_v[cl] = g_clusters[cl]->get_num_members();
 
-                        double dist = eucl_dist<std::vector<double>>
-                            (&(g_clusters[cl]->get_mean()),
-                             &(g_clusters[cl]->get_prev_mean()));
+                        double dist = eucl_dist
+                            (&((g_clusters[cl]->get_mean())[0]),
+                             &((g_clusters[cl]->get_prev_mean())[0]), NUM_COLS);
 #if VERBOSE
                         BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                             << cl << " is " << dist;
