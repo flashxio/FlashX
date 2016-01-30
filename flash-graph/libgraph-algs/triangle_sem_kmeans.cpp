@@ -399,8 +399,9 @@ namespace {
                         g_clusters[cl]->finalize();
                         num_members_v[cl] = g_clusters[cl]->get_num_members();
 
-                        double dist = eucl_dist<std::vector<double>>(&(g_clusters[cl]->get_mean()),
-                                &(g_clusters[cl]->get_prev_mean()));
+                        double dist = eucl_dist
+                            (&((g_clusters[cl]->get_mean())[0]),
+                             &((g_clusters[cl]->get_prev_mean())[0]), NUM_COLS);
 #if KM_TEST
                         BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                             << cl << " is " << dist;
