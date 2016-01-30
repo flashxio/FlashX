@@ -46,6 +46,7 @@ add_library(FMatrix STATIC
 	EM_object.cpp
 	local_mem_buffer.cpp
 	bulk_operate.cpp
+	matrix_config.cpp
 )
 
 if(ENABLE_TRILINOS)
