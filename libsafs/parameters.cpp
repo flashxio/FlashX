@@ -20,6 +20,8 @@
 #include<algorithm>
 #include <sstream>
 
+#include <boost/format.hpp>
+
 #include "log.h"
 #include "parameters.h"
 #include "common.h"
@@ -153,6 +155,12 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		num_nodes = str2size(it->second);
 	}
+#ifdef USE_HWLOC
+	else
+		num_nodes = cpus.get_num_nodes();
+#endif
+	BOOST_LOG_TRIVIAL(info) << boost::format("SAFS runs on %1% NUMA nodes")
+		% num_nodes;
 
 	it = configs.find("merge_reqs");
 	if (it != configs.end()) {
