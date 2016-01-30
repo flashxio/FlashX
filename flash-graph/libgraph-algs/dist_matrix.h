@@ -116,8 +116,8 @@ namespace
                 //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
                 for (unsigned i = 0; i < num_clust; i++) {
                     for (unsigned j = i+1; j < num_clust; j++) {
-                        double dist = eucl_dist<std::vector<double>>(&(vcl[i]->get_mean()),
-                                &(vcl[j]->get_mean())) / 2.0;
+                        double dist = eucl_dist(&((vcl[i]->get_mean())[0]) ,
+                                &((vcl[j]->get_mean())[0]), vcl[0]->size()) / 2.0;
                         set(i,j, dist);
 
                         // Set s(x) for each cluster
