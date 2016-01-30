@@ -91,6 +91,10 @@ namespace {
                 complete_v.assign(nclust, true);
             }
 
+            double& operator[](const unsigned index) {
+                return means[index];
+            }
+
         public:
             typedef typename std::shared_ptr<clusters> ptr;
 
@@ -193,8 +197,9 @@ namespace {
 
             template <typename T>
                 void add_member(const T* arr, const unsigned idx) {
+                    unsigned offset = idx * ncol;
                     for (unsigned i=0; i < ncol; i++) {
-                        means[(idx*ncol)+i] += arr[i];
+                        means[offset+i] += arr[i];
                     }
                     num_members_v[idx]++;
                 }
@@ -211,8 +216,9 @@ namespace {
 
             template <typename T>
                 void remove_member(const T* arr, const unsigned idx) {
+                    unsigned offset = idx * ncol;
                     for (unsigned i=0; i < ncol; i++) {
-                        means[(idx*ncol)+i] -= arr[i];
+                        means[offset+i] -= arr[i];
                     }
                     num_members_v[idx]--;
                 }
@@ -233,23 +239,12 @@ namespace {
                 );
             }
 
-            double& operator[](const unsigned index) {
-                BOOST_VERIFY(index < size()); // TODO: rm -- called to often!
-                return means[index];
-            }
-
             // Get an index (based on the entire chunck)
             double get(const unsigned index) {
-                BOOST_VERIFY(index < size()); // TODO: rm -- called to often!
                 return means[index];
             }
 
             clusters& operator+=(clusters& rhs) {
-                // TODO: rm -- called to often!
-                BOOST_VERIFY(rhs.size() == size() &&
-                        (v_eq(get_complete_v(), rhs.get_complete_v())) &&
-                        v_eq_const(get_complete_v(), false));
-
                 // TODO vectorize perhaps OR omp parallel
                 for (unsigned i = 0; i < size(); i++)
                     this->means[i] += rhs[i];
@@ -257,6 +252,15 @@ namespace {
                 for (unsigned idx = 0; idx < nclust; idx++)
                     num_members_peq(rhs.get_num_members(idx), idx);
                 return *this;
+            }
+
+            void peq(ptr rhs) {
+                BOOST_VERIFY(rhs->size() == size());
+                for (unsigned i = 0; i < size(); i++)
+                    this->means[i] += rhs->get(i);
+
+                for (unsigned idx = 0; idx < nclust; idx++)
+                    num_members_peq(rhs->get_num_members(idx), idx);
             }
 
             const unsigned get_ncol() const {
