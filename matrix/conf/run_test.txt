@@ -17,7 +17,7 @@ io_depth=4
 cache_size=512M
 
 # The number of NUMA nodes
-num_nodes=1
+# num_nodes=1
 
 # change FG_TOP to the path of the top directory of FlashGraph.
 root_conf=FG_TOP/matrix/conf/data_files.txt
@@ -32,4 +32,4 @@ num_io_threads=1
 # Parameters for FlashMatrix
 
 # The number of worker threads to process a matrix.
-threads=1
+# threads=1
