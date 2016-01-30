@@ -40,35 +40,6 @@ namespace {
 	static struct timeval start, end;
     static init_type_t g_init_type;
 
-    // TODO: Doc
-    static double const eucl_dist(const unsigned row, const unsigned clust_idx,
-            const double* matrix, prune_clusters::ptr clusters) {
-        double dist = 0;
-        for (unsigned col = 0; col < NUM_COLS; col++) {
-            double diff = matrix[(row*NUM_COLS) + col] -
-                clusters->get(clust_idx*NUM_COLS + col);
-            dist += diff * diff;
-        }
-        return sqrt(dist); // TODO: rm sqrt
-    }
-
-    // TODO: Doc
-    double const cos_dist(const unsigned row, const unsigned clust_idx,
-            const double* matrix, prune_clusters::ptr clusters) {
-        double numr, ldenom, rdenom;
-        numr = ldenom = rdenom = 0;
-
-        for (unsigned col = 0; col < NUM_COLS; col++) {
-            double a = matrix[(row*NUM_COLS) + col];
-            double b = clusters->get(clust_idx*NUM_COLS + col);
-
-            numr += a*b;
-            ldenom += a*a;
-            rdenom += b*b;
-        }
-        return  1 - (numr / ((sqrt(ldenom)*sqrt(rdenom))));
-    }
-
     static void compute_dist(prune_clusters::ptr cls, dist_matrix::ptr dm) {
         if (cls->get_nclust() <= 1) return;
 
@@ -77,7 +48,8 @@ namespace {
         //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
         for (unsigned i = 0; i < cls->get_nclust(); i++) {
             for (unsigned j = i+1; j < cls->get_nclust(); j++) {
-                double dist = eucl_dist(i, j, &(cls->get_means()[0]), cls) / 2.0;
+                double dist = eucl_dist(&(cls->get_means()[i*NUM_COLS]),
+                        &(cls->get_means()[j*NUM_COLS]), NUM_COLS) / 2.0;
                 dm->set(i,j, dist);
 
                 // Set s(x) for each cluster
@@ -97,28 +69,6 @@ namespace {
                 << cls->get_s_val(cl);
         }
 #endif
-    }
-
-    static size_t get_best_cluster(const unsigned row, const double* matrix,
-            prune_clusters::ptr clusters) {
-        size_t asgnd_clust = INVALID_CLUSTER_ID;
-        double best = std::numeric_limits<double>::max();
-        double dist = -1;
-
-        for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-            if (g_dist_type == EUCL)
-                dist = eucl_dist(row, clust_idx, matrix, clusters);
-            else if (g_dist_type == COS)
-                dist = cos_dist(row, clust_idx, matrix, clusters);
-            else
-                BOOST_ASSERT_MSG(false, "Unknown distance metric!");
-
-            if (dist < best) {
-                best = dist;
-                asgnd_clust = clust_idx;
-            }
-        }
-        return asgnd_clust;
     }
 
 	/**
@@ -192,9 +142,11 @@ namespace {
 
                 if (g_dist_type == EUCL)
                     // Per thread instance
-                    dist = eucl_dist(row, clust_idx, matrix, clusters);
+                    dist = eucl_dist(&matrix[row*NUM_COLS],
+                            &((clusters->get_means())[clust_idx*NUM_COLS]), NUM_COLS);
                 else if (g_dist_type == COS)
-                    dist = cos_dist(row, clust_idx, matrix, clusters);
+                    dist = cos_dist(&matrix[row*NUM_COLS],
+                            &((clusters->get_means())[clust_idx*NUM_COLS]), NUM_COLS);
                 else
                     BOOST_ASSERT_MSG(false, "Unknown distance metric!");
 
@@ -236,7 +188,7 @@ namespace {
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void E_step(const double* matrix, prune_clusters::ptr clusters,
+	static void E_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
             std::vector<bool>& recalculated, prune_stats::ptr ps=nullptr,
             const bool prune_init=false) {
@@ -248,23 +200,40 @@ namespace {
         for (int i = 0; i < OMP_MAX_THREADS; i++)
             pt_cl[i] = clusters::create(K, NUM_COLS);
 
-#pragma omp parallel for firstprivate(matrix, clusters) \
-        shared(cluster_assignments, recalculated) \
-		schedule(static)
+#pragma omp parallel for firstprivate(matrix, pt_cl)\
+        shared(cluster_assignments, recalculated) schedule(static)
 		for (unsigned row = 0; row < NUM_ROWS; row++) {
 
-            size_t asgnd_clust = get_best_cluster(row, matrix, clusters);
+            size_t asgnd_clust = INVALID_CLUSTER_ID;
+            double best, dist;
+            dist = best = std::numeric_limits<double>::max();
+
+            for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
+                if (g_dist_type == EUCL)
+                    dist = eucl_dist(&matrix[row*NUM_COLS],
+                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
+                else if (g_dist_type == COS)
+                    dist = cos_dist(&matrix[row*NUM_COLS],
+                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
+                else
+                    BOOST_ASSERT_MSG(false, "Unknown distance metric!");
+
+                if (dist < best) {
+                    best = dist;
+                    asgnd_clust = clust_idx;
+                }
+            }
+
             BOOST_VERIFY(asgnd_clust != INVALID_CLUSTER_ID);
 
             if (asgnd_clust != cluster_assignments[row]) {
                 pt_num_change[omp_get_thread_num()]++;
             }
             cluster_assignments[row] = asgnd_clust;
-
             pt_cl[omp_get_thread_num()]->add_member(&matrix[row*NUM_COLS], asgnd_clust);
             // Accumulate for local copies
 #if KM_TEST
-            assert(omp_get_thread_num() <= OMP_MAX_THREADS);
+            //assert(omp_get_thread_num() <= OMP_MAX_THREADS);
 #endif
 		}
 
@@ -274,9 +243,9 @@ namespace {
 #endif
         /*
 		if (prune_init)
-            */clusters->clear();
+            */cls->clear();
         /*else
-            clusters->unfinalize(); // Here
+            cls->unfinalize(); // Here
         */
 
 		// Serial aggreate of OMP_MAX_THREADS vectors
@@ -285,13 +254,13 @@ namespace {
 			// Updated the changed cluster count
 			g_num_changed += pt_num_change[thd];
 			// Summation for cluster centers
-            *clusters += *(pt_cl[thd]);
+            cls->peq(pt_cl[thd]);
 		}
 
         unsigned chk_nmemb = 0;
         for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-            clusters->finalize(clust_idx);
-            cluster_assignment_counts[clust_idx] = clusters->get_num_members(clust_idx);
+            cls->finalize(clust_idx);
+            cluster_assignment_counts[clust_idx] = cls->get_num_members(clust_idx);
             chk_nmemb += cluster_assignment_counts[clust_idx];
         }
         BOOST_VERIFY(chk_nmemb == NUM_ROWS);
@@ -311,7 +280,7 @@ namespace fg
             const double tolerance, const std::string dist_type)
 	{
 #ifdef PROFILER
-		ProfilerStart("/home/disa/FlashGraph/flash-graph/matrix/kmeans.perf");
+		ProfilerStart("/mnt/nfs/disa/FlashGraph/flash-graph/matrix/min-tri-kmeans.perf");
 #endif
 		NUM_COLS = num_cols;
 		K = k;
@@ -382,7 +351,6 @@ namespace fg
 #if KM_TEST
         prune_stats::ptr ps = prune_stats::create(NUM_ROWS, K);
 #endif
-        dist_matrix::ptr dm = dist_matrix::create(K);
 
         if (g_init_type == NONE || g_init_type == FORGY
                 || g_init_type == RANDOM) {
@@ -390,9 +358,12 @@ namespace fg
                     cluster_assignment_counts, recalculated, ps, true);
         }
 
+#if 1
+        dist_matrix::ptr dm = dist_matrix::create(K);
         compute_dist(clusters, dm);
         printf("Printing dist mat:\n"); dm->print();
         printf("Printing init clusters:\n"); clusters->print_means();
+#endif
 
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 		BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
@@ -421,7 +392,9 @@ namespace fg
 				break;
 			} else {
 				g_num_changed = 0;
+#if 1
                 compute_dist(clusters, dm);
+#endif
 			}
 			iter++;
 		}
