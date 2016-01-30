@@ -24,37 +24,76 @@
 
 #include <vector>
 #include <iostream>
+
 #include <boost/assert.hpp>
+
+#include "cluster.h"
 
 using namespace fg;
 
 namespace {
-#if 0
-    static double const eucl_dist(const cluster::ptr l_clust, const cluster::ptr r_clust) {
-        double dist = 0;
-        BOOST_VERIFY(l_clust->size() == r_clust->size());
-
-        for (unsigned col = 0; col < NUM_COLS; col++) {
-            double diff = (*l_clust)[col] - (*r_clust)[col];
-            dist += diff * diff;
-        }
-        return sqrt(dist);
-    }
-#else
     template <typename T>
-        static double const eucl_dist(const T* lhs, const T* rhs) {
+        static double const eucl_dist(const T* lhs, const T* rhs,
+                const unsigned size) {
             double dist = 0;
-            BOOST_VERIFY(lhs->size() == rhs->size());
+            //BOOST_VERIFY(lhs->size() == rhs->size());
 
-            for (unsigned col = 0; col < lhs->size(); col++) {
-                double diff = (*lhs)[col] - (*rhs)[col];
+            for (unsigned col = 0; col < size; col++) {
+                double diff = lhs[col] - rhs[col];
                 dist += diff * diff;
             }
 
             BOOST_VERIFY(dist >= 0);
             return sqrt(dist); // TODO: rm sqrt
         }
-#endif
+
+    template<typename T>
+        double const cos_dist(const T* lhs, const T* rhs,
+                const unsigned size) {
+            T numr, ldenom, rdenom;
+            numr = ldenom = rdenom = 0;
+
+            for (unsigned col = 0; col < size; col++) {
+                T a = lhs[col];
+                T b = rhs[col];
+
+                numr += a*b;
+                ldenom += a*a;
+                rdenom += b*b;
+            }
+            return  1 - (numr / ((sqrt(ldenom)*sqrt(rdenom))));
+        }
+
+    template <typename ClusterType>
+        void set_clusters(std::vector<double>* centers,
+                std::vector<typename ClusterType::ptr>& vcl,
+                unsigned nclust, unsigned ncol) {
+            for (size_t cl = 0; cl < nclust; cl++) {
+                std::vector<double> v(ncol);
+                std::copy(&((*centers)[cl*ncol]), &((*centers)[(cl*ncol)+ncol]), v.begin());
+                vcl.push_back(ClusterType::create(v));
+            }
+        }
+
+    /*
+    template <typename ClusterType>
+        void set_clusters(double* centers, std::vector<typename ClusterType::ptr>& vcl,
+                unsigned nclust, unsigned ncol) {
+            for (size_t cl = 0; cl < nclust; cl++) {
+                std::vector<double> v(ncol);
+                std::copy(&(centers[cl*ncol]), &(centers[(cl*ncol)+ncol]), v.begin());
+                vcl.push_back(ClusterType::create(v));
+            }
+        }
+        */
+
+    template <typename ClusterType>
+        void init_clusters(std::vector<typename ClusterType::ptr>& vcl,
+                unsigned nclust, unsigned ncol) {
+            for (size_t cl = 0; cl < nclust; cl++) {
+                vcl.push_back(ClusterType::create(ncol));
+            }
+        }
 
     template <typename T>
         static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
@@ -69,6 +108,18 @@ namespace {
             if (v.size() > print_len) std::cout << " ...";
             std::cout <<  " ]\n";
         }
+
+    // Begin Helpers //
+    template <typename ClusterType>
+    void print_clusters(typename std::vector<typename ClusterType::ptr>& clusters) {
+        typedef typename std::vector<typename ClusterType::ptr>::iterator cluster_itr;
+
+        for (cluster_itr it = clusters.begin(); it != clusters.end(); ++it) {
+            std::cout << "#memb = " << (*it)->get_num_members() << " ";
+            print_vector<double>((*it)->get_mean());
+        }
+        std::cout << "\n";
+    }
 
     // A very C-style binary data reader
     template <typename T>
