@@ -73,7 +73,7 @@ void test_clusters() {
     BOOST_VERIFY(*cls == *empty);
     printf("Success ...\n");
 
-    *cls += *empty;
+    cls->peq(empty);
     BOOST_VERIFY(*cls == *empty);
     printf("Success ...\n");
 }

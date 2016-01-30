@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 	argc -= 3;
     
 	signal(SIGINT, int_handler);
-	while ((opt = getopt(argc, argv, "l:i:t:T:d:C:a")) != -1) {
+	while ((opt = getopt(argc, argv, "l:i:t:T:d:C:m")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'l':
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
                 init = "none"; // Ignore whatever you pass in
 				num_opts++;
 				break;
-			case 'a':
+			case 'm':
 				use_min_tri = true;
 				num_opts++;
 				break;
