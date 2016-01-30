@@ -71,7 +71,8 @@ sys_parameters::sys_parameters()
 	max_num_pending_ios = 1000;
 	huge_page_enabled = false;
 	busy_wait = false;
-	num_io_threads = 1;
+	// The number of I/O threads will be determined based on the number of SSDs.
+	num_io_threads = 0;
 	bind_io_thread = false;
 }
 
