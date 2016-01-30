@@ -48,7 +48,7 @@ namespace {
                 complete = false;
             }
 
-            cluster(const std::vector<double> mean) {
+            cluster(const std::vector<double>& mean) {
                 set_mean(mean);
                 num_members = 0;
                 complete = true;
@@ -64,12 +64,6 @@ namespace {
             static ptr create(const std::vector<double>& mean) {
                 return ptr(new cluster(mean));
             }
-
-            /*
-            void init(const unsigned len) {
-                mean.resize(len);
-                num_members = 0;
-            }*/
 
             void clear() {
                 std::fill(this->mean.begin(), this->mean.end(), 0);
@@ -133,6 +127,16 @@ namespace {
                     num_members++;
                 }
 
+            template <typename T>
+                void remove_member(T& count_it) {
+                    unsigned nid = 0;
+                    while(count_it.has_next()) {
+                        double e = count_it.next();
+                        mean[nid++] -= e;
+                    }
+                    num_members--;
+                }
+
             cluster& operator=(const cluster& other) {
                 this->mean = other.get_mean();
                 this->num_members = other.get_num_members();
@@ -166,7 +170,7 @@ namespace {
                 prev_mean.resize(len);
             }
 
-            prune_cluster(const std::vector<double> mean): cluster(mean) {
+            prune_cluster(const std::vector<double>& mean): cluster(mean) {
                 prev_mean.resize(mean.size());
                 reset_s_val();
             }
@@ -212,16 +216,6 @@ namespace {
             static ptr create(const std::vector<double>& mean) {
                 return ptr(new prune_cluster(mean));
             }
-
-            template <typename T>
-                void remove_member(T& count_it) {
-                    unsigned nid = 0;
-                    while(count_it.has_next()) {
-                        double e = count_it.next();
-                        mean[nid++] -= e;
-                    }
-                    num_members--;
-                }
     };
 }
 #endif
