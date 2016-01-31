@@ -69,7 +69,7 @@ in 16 m2.4xlarge instances, which each has 8 CPU cores and 68GB RAM.
 Only PowerGraph is a little faster than FlashGraph in PageRank when
 FlashGraph runs in a small Amazon instance.
 
-|runtime|
+.. image:: http://icoming.github.io/FlashX/tutorials/FlashGraph-runtime.png
 
 Figure 1. The runtime of FlashGraph vs. distributed graph engines in
 PageRank and weakly connected components.
@@ -85,7 +85,7 @@ engines with this metric, FlashGraph in i2.xlarge is the most
 economical. These distributed graph engines are one order of magnitude
 more costly than FlashGraph in the cloud.
 
-|runtime dollors|
+.. image:: http://icoming.github.io/FlashX/tutorials/FlashGraph-runtime-dollors.png
 
 Figure 2. The runtime dollars of FlashGraph vs. distributed graph
 engines.
