@@ -1,31 +1,82 @@
-Comparison to PowerGraph
-========================
+FlashGraph performance
+======================
 
-Here are some performance results comparing FlashGraph and
-`PowerGraph <http://graphlab.org/projects/index.html>`__ on large graphs
-on a single machine. We choose PowerGraph for comparison because it is a
-highly adopted, distributed, in-memory graph framework that on-average
-performs well and is among the previous state of the art graph engines.
-We run five graph applications: breadth-first search (BFS), triangle
-counting (TC), weakly connected components (WCC), scan statistics (SS),
-and pagerank (PR). Each has a FlashGraph implementation and a
-corresponding PowerGraph implementation. We use these applications to
-compare the performance of FlashGraph to that of PowerGraph on the
-twitter graph (42M vertices and 1.5B edges) and the `subdomain
-graph <http://webdatacommons.org/hyperlinkgraph/>`__ (89M vertices and
-2B edges). Figure 8 shows the runtime of the applications in both graph
-engines and Figure 9 shows the memory consumption of FlashGraph and
-PowerGraph. Although FlashGraph runs in the semi-external memory mode,
-it can still significantly outperform PowerGraph in most graph
-applications and it uses a small fraction of the memory used by
-PowerGraph.
+| FlashGraph was designed for specialized hardware (a large parallel
+  machine with many SSDs).
+| However, most people may not possess such powerful hardware, so we
+  also evaluate its performance in the Amazon cloud. Table 1 shows the
+  hardware configurations where FlashGraph is evaluated. We demonstrate
+  that FlashGraph is able to outperform other well-known graph
+  processing frameworks in both specialized hardware and Amazon cloud.
 
-|runtime on twitter and subdomain|
+| \| \| i2.xlarge \| i2.8xlarge \| HW1 \| HW2 \|
+| \| ---------- \|:---------:\| ----------:\|-------:\|-------:\|
+| \| #CPU cores \| 4 \| 32 \| 32 \| 48 \|
+| \| RAM (GB) \| 30 \| 244 \| 512 \| 1024 \|
+| \| #SSDs \| 1 \| 8 \| 15 \| 24 \|
+| Table 1. The hardware configuration where FlashGraph is evaluated.
 
-|memory consumption|
+| \| \| i2.xlarge \| i2.8xlarge \| HW1 \| HW2 \|
+| \| -------- \|:---------:\| ----------:\|-------:\|-------:\|
+| \| BFS \| 36.86 \| 5.48 \| 3.56 \| 3.11 \|
+| \| PageRank \| 438.74 \| 67.34 \| 54.07 \| 33.58 \|
+| \| WCC \| 58.90 \| 7.91 \| 7.91 \| 5.03 \|
+| \| Triangle \| 4747.07 \| 830.08 \| 532.21 \| 442.65 \|
+| \| SCC \| 141.62 \| 22.39 \| N/A \| 12.06 \|
+| Table 2. The runtime (seconds) of FlashGraph on different hardware
+  with 1GB page cache.
+
+| We evaluate the performance of FlashGraph on the Twitter graph with 42
+  millions vertices and 1.5 billion edges (Table 2). The reason that we
+  choose the Twitter graph is that this graph is used by many graph
+  processing frameworks for performance evaluation. We run multiple
+  graph algorithms: breadth-first search, triangle counting, weakly
+  connected components and pagerank.
+| The twitter graph is relatively small and all of the hardware has
+  enough RAM to keep the entire graph in memory. We artificially limit
+  the page cache size in FlashGraph to 1GB and 4GB to push most of data
+  access to SSDs. As a result, FlashGraph only uses a small fraction of
+  the RAM in the machines. Keep in mind that FlashGraph runs much faster
+  if we do not limit its page cache size. To our surprise, the
+  i2.8xlarge instance has performance very close to our specialized
+  hardware.
+
+For comparison, we pull performance results of distributed graph engines
+from the `GraphX
+paper <https://amplab.cs.berkeley.edu/wp-content/uploads/2014/09/graphx.pdf>`__.
+The paper don't have performance results of all of the graph
+applications we evaluated. Therefore, we only compare their performance
+in PageRank and weakly connected components.
+`Giraph <http://giraph.apache.org/>`__,
+`GraphX <http://spark.apache.org/graphx/>`__ and
+`PowerGraph <https://github.com/dato-code/PowerGraph>`__ were evaluated
+in 16 m2.4xlarge instances, which each has 8 CPU cores and 68GB RAM.
+Only PowerGraph is a little faster than FlashGraph in PageRank when
+FlashGraph runs in a small Amazon instance.
+
+|runtime|
+
+Figure 1. The runtime of FlashGraph vs. distributed graph engines in
+PageRank and weakly connected components.
+
+Given such performance results, we can further demonstrate that
+FlashGraph is much more economical than distributed graph engines in the
+Amazon cloud. m2.4xlarge is the previous-generation instance type. A
+similar instance (m4.2xlarge) of the current generation has cut the
+price almost by half and we use the cost of m4.2xlarge for the
+calculation. Figure 2 shows the runtime dollars (=runtime \* instance
+cost) of the graph engines in the cloud. When comparing these graph
+engines with this metric, FlashGraph in i2.xlarge is the most
+economical. These distributed graph engines are one order of magnitude
+more costly than FlashGraph in the cloud.
+
+|runtime dollors|
+
+Figure 2. The runtime dollars of FlashGraph vs. distributed graph
+engines.
 
 FlashGraph on a billion-node graph
-==================================
+----------------------------------
 
 FlashGraph enables us to process very large graphs in a single machine.
 Here we demonstrate that FlashGraph can process a real-world `hyperlink
@@ -35,9 +86,6 @@ performance of the same graph applications as above. It also includes
 the performance of Betweenness centrality (BC) from a single vertex.
 
 |runtime on page graph|
-
-Comparison to other graph engines on large graphs
-=================================================
 
 | FlashGraph takes only eight minutes to traverse the page graph (3.5B
   vertices and 128B edges) with a cache size of 4GB and less than six
@@ -58,6 +106,6 @@ graph. Based on a recent talk by the main developer of
 with 20 workers can run five iterations of PageRank on a graph with 5
 billion edges in approx. 75 minutes.
 
-.. |runtime on twitter and subdomain| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/perf1.png
-.. |memory consumption| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/perf2.png
+.. |runtime| image:: http://flashx.io/images/FlashGraph.vs.others.png
+.. |runtime dollors| image:: http://flashx.io/images/FlashGraph.vs.others.dollor.png
 .. |runtime on page graph| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/pg-perf.png

@@ -12,6 +12,8 @@ Contents:
    :maxdepth: 2
 
    FlashX-Quick-Start-Guide
+   Run-FlashX-in-the-Amazon-cloud
+   FlashGraph-performance
    FlashR-programming-tutorial
    FlashGraphR-programming-tutorial
    FlashX-tools

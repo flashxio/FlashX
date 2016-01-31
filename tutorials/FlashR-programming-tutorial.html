@@ -24,8 +24,8 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
-    <link rel="next" title="FlashX tools" href="FlashX-tools.html" />
-    <link rel="prev" title="Install FlashX" href="FlashX-Quick-Start-Guide.html" />
+    <link rel="next" title="FlashGraphR programming tutorial" href="FlashGraphR-programming-tutorial.html" />
+    <link rel="prev" title="FlashGraph performance" href="FlashGraph-performance.html" />
    
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
@@ -256,22 +256,22 @@ functions will be provided.</p>
 <p>The following functions have exactly the same interface as the original
 R function.</p>
 <ul class="simple">
-<li>dim, nrow, ncol, length, typeof, t</li>
-<li>abs, sqrt, ceiling, floor, round, log, log2, log10, exp</li>
+<li><code class="docutils literal"><span class="pre">dim,</span> <span class="pre">nrow,</span> <span class="pre">ncol,</span> <span class="pre">length,</span> <span class="pre">typeof,</span> <span class="pre">t</span></code></li>
+<li><code class="docutils literal"><span class="pre">abs,</span> <span class="pre">sqrt,</span> <span class="pre">ceiling,</span> <span class="pre">floor,</span> <span class="pre">round,</span> <span class="pre">log,</span> <span class="pre">log2,</span> <span class="pre">log10,</span> <span class="pre">exp</span></code></li>
 </ul>
 <p>The following functions have exactly the same interface as the original
 R functions. When they are applied to a matrix and a vector, it requires
 the vector has the same length as the columns in the matrix.</p>
 <ul class="simple">
-<li>+, -, <em>, /, %</em>%</li>
-<li>==, !=, &gt;, &gt;=, &lt;, &lt;=, !</li>
+<li><code class="docutils literal"><span class="pre">+,</span> <span class="pre">-,</span> <span class="pre">*,</span> <span class="pre">/,</span> <span class="pre">%*%</span></code></li>
+<li><code class="docutils literal"><span class="pre">==,</span> <span class="pre">!=,</span> <span class="pre">&gt;,</span> <span class="pre">&gt;=,</span> <span class="pre">&lt;,</span> <span class="pre">&lt;=,</span> <span class="pre">!</span></code></li>
 </ul>
 <p>The following functions have exactly the same interface as the original
 R functions, but currently we don&#8217;t support some functionality such as
 removing missing values.</p>
 <ul class="simple">
-<li>sum, min, max, mean, sd, pmin, pmax</li>
-<li>rowSums, colSums, rowMeans, colMeans</li>
+<li><code class="docutils literal"><span class="pre">sum,</span> <span class="pre">min,</span> <span class="pre">max,</span> <span class="pre">mean,</span> <span class="pre">sd,</span> <span class="pre">pmin,</span> <span class="pre">pmax</span></code></li>
+<li><code class="docutils literal"><span class="pre">rowSums,</span> <span class="pre">colSums,</span> <span class="pre">rowMeans,</span> <span class="pre">colMeans</span></code></li>
 </ul>
 <p>Some of them have slightly different interface and semantics. These
 slightly different functions always start with &#8220;fm.&#8221; to indicate that
@@ -279,20 +279,20 @@ they are actually FlashR functions. In the future, we will provide
 implementations with exactly the same interface and semantics as the
 original R functions.</p>
 <ul class="simple">
-<li>fm.table</li>
-<li>fm.as.integer, fm.as.numeric</li>
+<li><code class="docutils literal"><span class="pre">fm.table</span></code></li>
+<li><code class="docutils literal"><span class="pre">fm.as.integer,</span> <span class="pre">fm.as.numeric</span></code></li>
 </ul>
 </div>
 <div class="section" id="some-examples-of-using-flashr">
 <h2>Some examples of using FlashR<a class="headerlink" href="#some-examples-of-using-flashr" title="Permalink to this headline">¶</a></h2>
-<div class="line-block">
-<div class="line">PageRank is the classical algorithm to rank Web pages originally used
-by Google search engine. PageRank is an iterative algorithm. In each
-iteration, the PageRank value of a vertex is updated as follow:</div>
-<div class="line">PR(p_i) = \frac{1-d}{N} + d \sum_{p_j \in M(p_i)} \frac{PR
-(p_j)}{L(p_j)}</div>
-<div class="line">As such, the PageRank algorithm is implemented as follows:</div>
-</div>
+<div class="section" id="pagerank">
+<h3>PageRank<a class="headerlink" href="#pagerank" title="Permalink to this headline">¶</a></h3>
+<p><a class="reference external" href="https://en.wikipedia.org/wiki/PageRank">PageRank</a> is the classical
+algorithm to rank Web pages originally used by Google search engine.
+PageRank is an iterative algorithm. In each iteration, the PageRank
+value of a vertex is updated as follow:</p>
+<p><img alt="PageRank" src="https://upload.wikimedia.org/math/8/0/1/80125f33d12ceb608fdb9daec09d9c10.png" /></p>
+<p>As such, the PageRank algorithm is implemented as follows:</p>
 <div class="code r highlight-python"><div class="highlight"><pre>pr1 &lt;- fm.rep.int(1/N, N)
 converge &lt;- 0
 while (converge &lt; N) {
@@ -303,10 +303,15 @@ while (converge &lt; N) {
 }
 </pre></div>
 </div>
+</div>
+<div class="section" id="non-negative-matrix-factorization">
+<h3>Non-negative Matrix Factorization<a class="headerlink" href="#non-negative-matrix-factorization" title="Permalink to this headline">¶</a></h3>
 <div class="line-block">
-<div class="line">Non-negative Matrix Factorization (NMF) factorizes a matrix to two
-non-negative matrices. The following code implements the algorithm
-described in the Lee&#8217;s paper.</div>
+<div class="line"><a class="reference external" href="https://en.wikipedia.org/wiki/Non-negative_matrix_factorization">Non-negative Matrix
+Factorization</a>
+(NMF) factorizes a matrix to two non-negative matrices. The following
+code implements the algorithm described in the Lee&#8217;s
+<a class="reference external" href="http://papers.nips.cc/paper/1861-algorithms-for-non-negative-matrix-factorization.pdf">paper</a>.</div>
 <div class="line">The update rules described in Lee&#8217;s paper are implemented as follow</div>
 </div>
 <div class="code r highlight-python"><div class="highlight"><pre>den &lt;- (t(W) %*% W) %*% H
@@ -315,16 +320,16 @@ den &lt;- W %*% (H %*% t(H))
 W &lt;- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
 </pre></div>
 </div>
-<p>One of the convergence condition is ||A - WH||2. It is
+<p>One of the convergence condition is ||A - WH||^2. It is
 computationally expensive to compute the Frobenius norm of (A-WH)
 directly. Suppose A is a n×m matrix, W is a n×k matrix and H is a k×m
 matrix. The computation complexity is O(n×k×m). Therefore, instead of
-computing the Frobenius norm, we compute trace((A-WH)T(A-WH)) =
-trace(ATA) -2*trace((ATW)H)+trace((HT(WTW))H). We need to order the
-matrix multiplication in a certain way to reduce computation complexity.
-The computation complexity of (ATW)H is O(l*k), where l is the number
-of non-zero entries in A. The computation complexity of (HT(WTW))H is
-O(k2×n+k2×m).</p>
+computing the Frobenius norm, we compute trace(t(A-WH)(A-WH)) =
+trace(t(A)A) -2×trace((t(A)W)H)+trace((t(H)(t(W)W))H). We need to order
+the matrix multiplication in a certain way to reduce computation
+complexity. The computation complexity of (t(A)W)H is O(l*k), where l
+is the number of non-zero entries in A. The computation complexity of
+(t(H)(t(W)W))H is O(k×k×n+k×k×m).</p>
 <div class="code r highlight-python"><div class="highlight"><pre># trace of W %*% H
 trace.MM &lt;- function(W, H) {
  X &lt;- W * t(H)
@@ -358,6 +363,7 @@ centers &lt;- diag(1/cnts$Freq) %*% centers
 </pre></div>
 </div>
 </div>
+</div>
 <div class="section" id="requirements-for-flashr-users">
 <h2>Requirements for FlashR users<a class="headerlink" href="#requirements-for-flashr-users" title="Permalink to this headline">¶</a></h2>
 <div class="line-block">
@@ -383,7 +389,11 @@ performance out of FlashR:</div>
 <li><a class="reference internal" href="#interact-with-native-r">Interact with native R</a></li>
 <li><a class="reference internal" href="#generalized-operators">Generalized operators</a></li>
 <li><a class="reference internal" href="#base-r-functions">&#8220;Base&#8221; R functions</a></li>
-<li><a class="reference internal" href="#some-examples-of-using-flashr">Some examples of using FlashR</a></li>
+<li><a class="reference internal" href="#some-examples-of-using-flashr">Some examples of using FlashR</a><ul>
+<li><a class="reference internal" href="#pagerank">PageRank</a></li>
+<li><a class="reference internal" href="#non-negative-matrix-factorization">Non-negative Matrix Factorization</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#requirements-for-flashr-users">Requirements for FlashR users</a></li>
 </ul>
 </li>
@@ -392,8 +402,8 @@ performance out of FlashR:</div>
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="FlashX-Quick-Start-Guide.html" title="previous chapter">Install FlashX</a></li>
-      <li>Next: <a href="FlashX-tools.html" title="next chapter">FlashX tools</a></li>
+      <li>Previous: <a href="FlashGraph-performance.html" title="previous chapter">FlashGraph performance</a></li>
+      <li>Next: <a href="FlashGraphR-programming-tutorial.html" title="next chapter">FlashGraphR programming tutorial</a></li>
   </ul></li>
 </ul>
 </div>

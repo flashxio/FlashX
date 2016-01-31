@@ -1,0 +1,232 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>FlashX tools &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="prev" title="FlashR programming tutorial" href="FlashR-programming-tutorial.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="flashx-tools">
+<h1>FlashX tools<a class="headerlink" href="#flashx-tools" title="Permalink to this headline">¶</a></h1>
+<p>FlashX provides three tools:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">utils/SAFS-util</span></code>: helps users to access files in SAFS.</li>
+<li><code class="docutils literal"><span class="pre">matrix/utils/el2fg</span></code>: constructs a FlashGraph graph from the text
+edge list.</li>
+<li><code class="docutils literal"><span class="pre">matrix/utils/fg2fm</span></code>: constructs a FlashMatrix sparse matrix from a
+FlashGraph graph.</li>
+</ul>
+<div class="section" id="interact-with-safs">
+<h2>Interact with SAFS<a class="headerlink" href="#interact-with-safs" title="Permalink to this headline">¶</a></h2>
+<p>utils/SAFS-util is a tool provided by SAFS that helps users to interact
+with SAFS. It provides a set of commands to access SAFS.</p>
+<div class="highlight-python"><div class="highlight"><pre>SAFS-util conf_file command ...
+The supported commands are
+    create file_name size: create a file with the specified size
+    delete file_name: delete a file
+    help: print the help info
+    list: list existing files in SAFS
+    load file_name [ext_file]: load data to the file
+    load_part file_name ext_file part_id: load part of the file to SAFS
+    verify file_name [ext_file]: verify data in the file
+    export file_name ext_file: export an SAFS file to Linux filesystem
+    info file_name: show the information of an SAFS file
+    rename file_name new_name: rename an SAFS file
+</pre></div>
+</div>
+<p>The most useful commands are:</p>
+<ul class="simple">
+<li>create: create an SAFS file with the specified size</li>
+<li>delete: delete an SAFS file</li>
+<li>list: list all files in SAFS</li>
+<li>load: load data to a SAFS file named <code class="docutils literal"><span class="pre">file_name</span></code>. Users can load
+data from a Linux file to the SAFS file by providing a second
+argument. If a Linux file isn&#8217;t provided, the SAFS file is filled
+with 0.</li>
+<li>export: export an SAFS file to Linux filesystem</li>
+<li>info file_name: show the metadata information of an SAFS file</li>
+<li>rename file_name new_name: rename an SAFS file</li>
+</ul>
+</div>
+<div class="section" id="construct-flashgraph-graphs">
+<h2>Construct FlashGraph graphs<a class="headerlink" href="#construct-flashgraph-graphs" title="Permalink to this headline">¶</a></h2>
+<div class="line-block">
+<div class="line">matrix/utils/el2fg takes a file of edge lists in the text format and
+converts them to the FlashGraph format, which is adjacency list in the
+binary format. The edge list file(s) can be gzip&#8217;d. The gzip&#8217;d file
+needs to have a filename extension <code class="docutils literal"><span class="pre">.gz</span></code> in order to be considered
+as a gzip&#8217;d file. el2fg takes a FlashX configuration file, a text edge
+list file and a graph name, and outputs two files: graph_name.adj,
+which contains the adjacency lists of the graph, and
+graph_name.index, which contains the locations of the adjacency lists
+in the graph file.</div>
+<div class="line">By default, el2fg keeps all intermediate data in memory.</div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre>matrix/utils/el2fg [options] conf_file edge_file graph_name
+-u: undirected graph
+-U: unqiue edges
+-e: use external memory
+-s size: sort buffer size
+-g size: groupby buffer size
+-t type: the edge attribute type
+</pre></div>
+</div>
+<p>The most important flags are shown as follows:</p>
+<ul class="simple">
+<li>-u: To construct an undirected graph, users have to explicitly enable
+this flag.</li>
+<li>-U: enable this flag to remove redundant edges in a graph.</li>
+<li>-e: enable this flag to use disks to construct a graph. It requires
+users to configure SAFS correctly.</li>
+<li>-t type: users can specify the edge attribute type. When this option
+is specified, the input edge list has to have three columns and the
+third column provides the edge attribute. Currently, four attribute
+types are supported. &#8220;I&#8221;: 32-bit integer attributes, &#8220;L&#8221;: 64-bit
+integer attributes, &#8220;F&#8221;: single-precision float-point, &#8220;D&#8221;:
+double-precision float-point.</li>
+</ul>
+<p>An example:</p>
+<div class="line-block">
+<div class="line">To convert a directed graph
+<a class="reference external" href="http://snap.stanford.edu/data/wiki-Vote.html">wiki-Vote</a> in the
+edge list format to the FlashGraph format, we can run the following
+command:</div>
+<div class="line"><code class="docutils literal"><span class="pre">matrix/utils/el2fg</span> <span class="pre">matrix/conf/run_test.txt</span> <span class="pre">wiki-Vote.txt</span> <span class="pre">wiki-Vote</span></code></div>
+<div class="line">This converts an edge list in <code class="docutils literal"><span class="pre">wiki-Vote.txt</span></code> to the FlashGraph
+format and generate two files: <code class="docutils literal"><span class="pre">wiki-Vote.adj</span></code> and
+<code class="docutils literal"><span class="pre">wiki-Vote.index</span></code>.</div>
+</div>
+<div class="line-block">
+<div class="line">To convert an undirected graph
+<a class="reference external" href="http://snap.stanford.edu/data/egonets-Facebook.html">facebook</a> in
+the edge list format to the FlashGraph format, we run:</div>
+<div class="line"><code class="docutils literal"><span class="pre">matrix/utils/el2fg</span> <span class="pre">matrix/conf/run_test.txt</span> <span class="pre">-u</span> <span class="pre">facebook_combined.txt</span> <span class="pre">facebook</span></code></div>
+</div>
+</div>
+<div class="section" id="construct-flashmatrix-sparse-matrices">
+<h2>Construct FlashMatrix sparse matrices<a class="headerlink" href="#construct-flashmatrix-sparse-matrices" title="Permalink to this headline">¶</a></h2>
+<p>matrix/utils/fg2fm converts a graph in the FlashGraph format to a sparse
+matrix in the FlashMatrix format. The FlashMatrix is necessary to
+support very efficient sparse matrix dense matrix multiplication (SpMM).
+SpMM is much more efficient with the FlashMatrix format than the
+FlashGraph format.</p>
+<div class="highlight-python"><div class="highlight"><pre>fg2fm [options] conf_file graph_file index_file matrix_name
+-h height: the height of a 2D-partitioned matrix block
+-w width: the width of a 2D-partitioned matrix block
+-v: verify the generated matrix image
+-g size: the groupby buffer size on vector vectors
+-t type: the type of non-zero entries
+</pre></div>
+</div>
+<p>Users don&#8217;t need to provide the options to <code class="docutils literal"><span class="pre">fg2fm</span></code> most of time. The
+only useful option for some users is <code class="docutils literal"><span class="pre">-t</span></code>, which tells <code class="docutils literal"><span class="pre">fg2fm</span></code> the
+type of the edge attribute in the FlashGraph format.</p>
+<div class="line-block">
+<div class="line"><code class="docutils literal"><span class="pre">fg2fm</span></code> detects whether the provided graph is directed. For an
+undirected graph, it outputs two files: <code class="docutils literal"><span class="pre">matrix_name.mat</span></code>, which
+contains the sparse matrix data, and <code class="docutils literal"><span class="pre">matrix_name.mat_idx</span></code>, which
+contains the locations of some rows of the sparse matrix in
+<code class="docutils literal"><span class="pre">matrix_name.mat</span></code>. For a directed graph, it outputs four files:</div>
+<div class="line"><code class="docutils literal"><span class="pre">matrix_name.mat</span></code>, <code class="docutils literal"><span class="pre">matrix_name.mat_idx</span></code>, <code class="docutils literal"><span class="pre">matrix_name_t.mat</span></code>
+and <code class="docutils literal"><span class="pre">matrix_name_t.mat_idx</span></code>. The first two files contain the sparse
+matrix and the last two files contain the transpose of the sparse
+matrix.</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">FlashX tools</a><ul>
+<li><a class="reference internal" href="#interact-with-safs">Interact with SAFS</a></li>
+<li><a class="reference internal" href="#construct-flashgraph-graphs">Construct FlashGraph graphs</a></li>
+<li><a class="reference internal" href="#construct-flashmatrix-sparse-matrices">Construct FlashMatrix sparse matrices</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="FlashR-programming-tutorial.html" title="previous chapter">FlashR programming tutorial</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/FlashX-tools.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/FlashX-tools.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

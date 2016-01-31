@@ -1,0 +1,219 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Spectral analysis on a median-size graph &mdash; FlashX-docs 0.3 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="spectral-analysis-on-a-median-size-graph">
+<h1>Spectral analysis on a median-size graph<a class="headerlink" href="#spectral-analysis-on-a-median-size-graph" title="Permalink to this headline">¶</a></h1>
+<p>Here shows the steps of performing spectral analysis on an undirected
+graph with 4,036,538 vertices and 34,681,189 edges. The graph is
+downloaded at
+<a class="reference external" href="http://snap.stanford.edu/data/com-LiveJournal.html">SNAP</a>.</p>
+<p>Load FlashR in R and configure it with a configuration file in the
+current directory.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+&gt; fg.set.conf(&quot;./run_test.txt&quot;)
+</pre></div>
+</div>
+<p>FlashR loads a graph in the text edge list format and constructs a
+FlashGraph graph automatically. FlashR is able to construct from a
+zipped file. The constructed graph is an undirected graph with 4,036,538
+vertices and 34,681,189 edges.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; fg &lt;- fg.load.graph(&quot;./com-lj.ungraph.txt.gz&quot;, directed=FALSE)
+&gt; fg
+FlashGraph ./com-lj.ungraph.txt.gz (U): 4036538 34681189
+</pre></div>
+</div>
+<p>We compute connected components of this graph. The result shows that all
+vertices with edges are connected with each other, but there are 38,576
+isolated vertices.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; cc &lt;- fg.clusters(fg, mode=&quot;weak&quot;)
+&gt; table(cc)
+cc
+     -1       0
+  38576 3997962
+</pre></div>
+</div>
+<p>We extract the largest connected component from the graph and construct
+a new graph with the largest connected component. The new graph has
+3,997,962 vertices and 34,681,189 edges.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; lccV &lt;- which(cc == 0)
+&gt; lcc &lt;- fg.fetch.subgraph(fg, vertices=lccV - 1, compress=TRUE)
+&gt; lcc
+FlashGraph ./com-lj.ungraph.txt.gz-sub (U): 3997962 34681189
+</pre></div>
+</div>
+<p>We compute eigenvalues of the largest connected component.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.get.matrix(lcc)
+&gt; multiply &lt;- function(x, extra) as.vector(m %*% fm.as.vector(x))
+&gt; res &lt;- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
+</pre></div>
+</div>
+</div>
+<div class="section" id="spectral-analysis-on-a-larger-graph">
+<h1>Spectral analysis on a larger graph<a class="headerlink" href="#spectral-analysis-on-a-larger-graph" title="Permalink to this headline">¶</a></h1>
+<p>To compute eigenvalues of a larger graph, users may need to store the
+graph on SAFS. Here shows the steps of computing eigenvalues of a larger
+graph, which has 65,608,366 vertices and 1,806,067,135 edges. The text
+edge list format of the graph can be downloaded at
+<a class="reference external" href="http://snap.stanford.edu/data/com-Friendster.html">SNAP</a>.</p>
+<p>To perform computation on graphs stored on SAFS, users need to construct
+a graph in FlashGraph format and load it to SAFS in advance. We assume
+users have followed the steps in shown in <a class="reference external" href="https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide">FlashX Quick Start
+Guide</a>
+to configure SAFS.</p>
+<p>Go to the top directory of FlashX and download the graph.</p>
+<div class="highlight-python"><div class="highlight"><pre>wget http://snap.stanford.edu/data/bigdata/communities/com-friendster.ungraph.txt.gz
+</pre></div>
+</div>
+<p>Use the tool <code class="docutils literal"><span class="pre">el2fg</span></code> to convert the edge list file in text format to
+the FlashGraph format. The command below creates two files
+<code class="docutils literal"><span class="pre">friendster.adj</span></code> and <code class="docutils literal"><span class="pre">friendster.index</span></code>.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/matrix/utils/el2fg run_test.txt com-friendster.ungraph.txt.gz friendster
+</pre></div>
+</div>
+<p>Load the graph file and its index to SAFS with <code class="docutils literal"><span class="pre">SAFS-util</span></code>. When
+loading a graph file and its index to SAFS, users need to make sure the
+graph file on SAFS has to have the extension name <code class="docutils literal"><span class="pre">.adj</span></code> and the index
+file has to have the extension name <code class="docutils literal"><span class="pre">.index</span></code>.</p>
+<div class="highlight-python"><div class="highlight"><pre>build/utils/SAFS-util run_test.txt load friendster.adj friendster.adj
+build/utils/SAFS-util run_test.txt load friendster.index friendster.index
+</pre></div>
+</div>
+<p>Initialize FlashR.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+&gt; fg.set.conf(&quot;run_test.txt&quot;)
+</pre></div>
+</div>
+<p>List all of the graphs stored on SAFS. This function lists the names of
+all the graphs on SAFS. To get a graph listed by this function, the
+graph must have two files named with <code class="docutils literal"><span class="pre">graph_name.adj</span></code> and
+<code class="docutils literal"><span class="pre">graph_name.index</span></code> on SAFS.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; fg.list.graphs()
+             name in.mem
+1      friendster  FALSE
+2      page-graph  FALSE
+3   rmat-100M-160  FALSE
+4 rmat-100M-160-u  FALSE
+5    rmat-100M-40  FALSE
+6  rmat-100M-40-u  FALSE
+7     twitter-lcc  FALSE
+8            wiki  FALSE
+</pre></div>
+</div>
+<p>Get a reference to the friendster graph and then reference it as a
+sparse matrix. Note: the functions don&#8217;t load a graph to memory, nor
+converting it to a sparse matrix physically. We support sparse matrix
+multiplication on a graph in the FlashGraph format.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; fg &lt;- fg.get.graph(&quot;friendster&quot;)
+&gt; m &lt;- fm.get.matrix(fg)
+</pre></div>
+</div>
+<p>Compute 10 eigenvalues of the graph with FlashEigen.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; multiply &lt;- function(x, extra) m %*% x
+&gt; res &lt;- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
+&gt; res$vals
+ [1] 693304.9 407554.7 312981.7 272623.5 257470.4 220616.7 204678.5 184447.2
+ [9] 178047.9 177168.6
+</pre></div>
+</div>
+<p>Run KMeans on the 10 eigenvectors. The
+<a class="reference external" href="https://github.com/icoming/FlashX/blob/release/Rpkg/R/KMeans.R">KMeans</a>
+is implemented with R.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; fm.KMeans(res$vecs, K=10)
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Spectral analysis on a median-size graph</a></li>
+<li><a class="reference internal" href="#spectral-analysis-on-a-larger-graph">Spectral analysis on a larger graph</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/Examples-of-using-FlashR.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Da Zheng.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/Examples-of-using-FlashR.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

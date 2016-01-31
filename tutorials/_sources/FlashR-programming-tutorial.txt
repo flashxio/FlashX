@@ -218,22 +218,22 @@ functions will be provided.
 The following functions have exactly the same interface as the original
 R function.
 
--  dim, nrow, ncol, length, typeof, t
--  abs, sqrt, ceiling, floor, round, log, log2, log10, exp
+-  ``dim, nrow, ncol, length, typeof, t``
+-  ``abs, sqrt, ceiling, floor, round, log, log2, log10, exp``
 
 The following functions have exactly the same interface as the original
 R functions. When they are applied to a matrix and a vector, it requires
 the vector has the same length as the columns in the matrix.
 
--  +, -, *, /, %*\ %
--  ==, !=, >, >=, <, <=, !
+-  ``+, -, *, /, %*%``
+-  ``==, !=, >, >=, <, <=, !``
 
 The following functions have exactly the same interface as the original
 R functions, but currently we don't support some functionality such as
 removing missing values.
 
--  sum, min, max, mean, sd, pmin, pmax
--  rowSums, colSums, rowMeans, colMeans
+-  ``sum, min, max, mean, sd, pmin, pmax``
+-  ``rowSums, colSums, rowMeans, colMeans``
 
 Some of them have slightly different interface and semantics. These
 slightly different functions always start with "fm." to indicate that
@@ -241,18 +241,23 @@ they are actually FlashR functions. In the future, we will provide
 implementations with exactly the same interface and semantics as the
 original R functions.
 
--  fm.table
--  fm.as.integer, fm.as.numeric
+-  ``fm.table``
+-  ``fm.as.integer, fm.as.numeric``
 
 Some examples of using FlashR
 -----------------------------
 
-| PageRank is the classical algorithm to rank Web pages originally used
-  by Google search engine. PageRank is an iterative algorithm. In each
-  iteration, the PageRank value of a vertex is updated as follow:
-| PR(p\_i) = \\frac{1-d}{N} + d \\sum\_{p\_j \\in M(p\_i)} \\frac{PR
-  (p\_j)}{L(p\_j)}
-| As such, the PageRank algorithm is implemented as follows:
+PageRank
+~~~~~~~~
+
+`PageRank <https://en.wikipedia.org/wiki/PageRank>`__ is the classical
+algorithm to rank Web pages originally used by Google search engine.
+PageRank is an iterative algorithm. In each iteration, the PageRank
+value of a vertex is updated as follow:
+
+|PageRank|
+
+As such, the PageRank algorithm is implemented as follows:
 
 .. code:: r
 
@@ -265,9 +270,14 @@ Some examples of using FlashR
      pr1 <- pr2
     }
 
-| Non-negative Matrix Factorization (NMF) factorizes a matrix to two
-  non-negative matrices. The following code implements the algorithm
-  described in the Lee's paper.
+Non-negative Matrix Factorization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+| `Non-negative Matrix
+  Factorization <https://en.wikipedia.org/wiki/Non-negative_matrix_factorization>`__
+  (NMF) factorizes a matrix to two non-negative matrices. The following
+  code implements the algorithm described in the Lee's
+  `paper <http://papers.nips.cc/paper/1861-algorithms-for-non-negative-matrix-factorization.pdf>`__.
 | The update rules described in Lee's paper are implemented as follow
 
 .. code:: r
@@ -277,16 +287,16 @@ Some examples of using FlashR
     den <- W %*% (H %*% t(H))
     W <- fm.pmax2(W * (A %*% t(H)), eps) / (den + eps)
 
-One of the convergence condition is \|\|A - WH\|\|2. It is
+One of the convergence condition is \|\|A - WH\|\|^2. It is
 computationally expensive to compute the Frobenius norm of (A-WH)
 directly. Suppose A is a n×m matrix, W is a n×k matrix and H is a k×m
 matrix. The computation complexity is O(n×k×m). Therefore, instead of
-computing the Frobenius norm, we compute trace((A-WH)T(A-WH)) =
-trace(ATA) -2*trace((ATW)H)+trace((HT(WTW))H). We need to order the
-matrix multiplication in a certain way to reduce computation complexity.
-The computation complexity of (ATW)H is O(l*\ k), where l is the number
-of non-zero entries in A. The computation complexity of (HT(WTW))H is
-O(k2×n+k2×m).
+computing the Frobenius norm, we compute trace(t(A-WH)(A-WH)) =
+trace(t(A)A) -2×trace((t(A)W)H)+trace((t(H)(t(W)W))H). We need to order
+the matrix multiplication in a certain way to reduce computation
+complexity. The computation complexity of (t(A)W)H is O(l\*k), where l
+is the number of non-zero entries in A. The computation complexity of
+(t(H)(t(W)W))H is O(k×k×n+k×k×m).
 
 .. code:: r
 
@@ -332,3 +342,5 @@ Requirements for FlashR users
   performance out of FlashR:
 | Array-oriented programming
 | Understand space & computation complexity
+
+.. |PageRank| image:: https://upload.wikimedia.org/math/8/0/1/80125f33d12ceb608fdb9daec09d9c10.png

@@ -212,8 +212,8 @@ SAFS.
 
 ::
 
-    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote wiki-Vote.adj
-    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote-index wiki-Vote.index
+    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote.adj wiki-Vote.adj
+    build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote.index wiki-Vote.index
 
 Step 3: Run graph algorithms
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -222,7 +222,7 @@ The command below demonstrates how to run PageRank on wiki-Vote.
 
 ::
 
-    build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote wiki-Vote-index pagerank2
+    build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index pagerank2
     ...
     The sum of pagerank of all vertices: 3146.831787
     v5254: 6.384571
@@ -262,7 +262,7 @@ machine are:
 
 Users can use the following function to configure FlashR.
 
-::
+.. code:: r
 
     > fg.set.conf("flash-graph/conf/run_test.txt")
 
@@ -277,14 +277,14 @@ construct the FlashGraph format directly. e.g., both of the following
 commands loads the wiki-Vote graph to FlashR (assume the text edge list
 and the FlashGraph image are both in the current directory).
 
-::
+.. code:: r
 
     g <- fg.load.graph("./wiki-Vote.txt", directed=TRUE)
     g <- fg.load.graph("./wiki-Vote.adj", "./wiki-Vote.index")
 
 Here shows an example of running PageRank.
 
-::
+.. code:: r
 
     > library(FlashR)
     > fg.set.conf("flash-graph/conf/run_test.txt")
@@ -331,16 +331,16 @@ There are multiple ways of loading a sparse matrix in FlashR.
 -  Users can load a graph image in FlashGraph format and get a sparse
    matrix.
 
-   ::
+   .. code:: r
 
        > g <- fg.load.graph("./wiki-Vote.adj", "./wiki-Vote.index")
-       > m <- fm.get.sparse.matrix(g)
+       > m <- fm.get.matrix(g)
 
 -  Users can load a sparse matrix image directly.
 
-   ::
+   .. code:: r
 
-       > m <- fm.load.sparse.matrix("./wiki.mat", "./wiki.mat_idx", "./wiki_t.mat", "./wiki_t.mat_idx")
+       > m <- fm.load.matrix("./wiki.mat", "./wiki.mat_idx", "./wiki_t.mat", "./wiki_t.mat_idx")
 
 Run FlashEigen
 ~~~~~~~~~~~~~~
@@ -350,11 +350,11 @@ very similar interface to ARPACK in iGraph. Below shows an example of
 using ``fm.eigen`` to compute SVD on the asymmetric matrix. Currently,
 FlashEigen only supports computing eigenvalues on symmetric matrices.
 
-::
+.. code:: r
 
     > library(FlashR)
     > fg.set.conf("matrix/conf/run_test.txt")
-    > m <- fm.load.sparse.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
     > multiply <- function(x, extra) t(m) %*% (m %*% x)
     > res <- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
     > res$vals
@@ -366,11 +366,11 @@ Run FlashR + ARPACK
 
 To compute eigenvalues with ARPACK and FlashR,
 
-::
+.. code:: r
 
     > library(FlashR)
     > fg.set.conf("matrix/conf/run_test.txt")
-    > m <- fm.load.sparse.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
+    > m <- fm.load.matrix("wiki.mat", "wiki.mat_idx", "wiki_t.mat", "wiki_t.mat_idx")
     > multiply <- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
     > res <- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
     > res$values

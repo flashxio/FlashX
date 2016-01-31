@@ -24,7 +24,7 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
-    <link rel="next" title="How to start" href="FlashR-programming-tutorial.html" />
+    <link rel="next" title="Run FlashX in the Amazon cloud" href="Run-FlashX-in-the-Amazon-cloud.html" />
     <link rel="prev" title="Welcome to FlashX-docs’s documentation!" href="index.html" />
    
   
@@ -225,15 +225,15 @@ directory of FlashGraph.</div>
 a tool called <code class="docutils literal"><span class="pre">SAFS-util</span></code> to load a file in the native filesystem to
 SAFS. The following commands load the graph files for <code class="docutils literal"><span class="pre">wiki-Vote</span></code> to
 SAFS.</p>
-<div class="highlight-python"><div class="highlight"><pre>build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote wiki-Vote.adj
-build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote-index wiki-Vote.index
+<div class="highlight-python"><div class="highlight"><pre>build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote.adj wiki-Vote.adj
+build/utils/SAFS-util flash-graph/conf/run_test.txt load wiki-Vote.index wiki-Vote.index
 </pre></div>
 </div>
 </div>
 <div class="section" id="step-3-run-graph-algorithms">
 <h3>Step 3: Run graph algorithms<a class="headerlink" href="#step-3-run-graph-algorithms" title="Permalink to this headline">¶</a></h3>
 <p>The command below demonstrates how to run PageRank on wiki-Vote.</p>
-<div class="highlight-python"><div class="highlight"><pre>build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote wiki-Vote-index pagerank2
+<div class="highlight-python"><div class="highlight"><pre>build/flash-graph/test-algs/test_algs flash-graph/conf/run_test.txt wiki-Vote.adj wiki-Vote.index pagerank2
 ...
 The sum of pagerank of all vertices: 3146.831787
 v5254: 6.384571
@@ -272,7 +272,7 @@ FlashGraph.</li>
 <li><code class="docutils literal"><span class="pre">num_io_threads</span></code>: the number of I/O threads per NUMA node.</li>
 </ul>
 <p>Users can use the following function to configure FlashR.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
 </pre></div>
 </div>
 </div>
@@ -284,12 +284,12 @@ format. If users provide a the text edge list format, FlashR will
 construct the FlashGraph format directly. e.g., both of the following
 commands loads the wiki-Vote graph to FlashR (assume the text edge list
 and the FlashGraph image are both in the current directory).</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">&lt;-</span> <span class="n">fg</span><span class="o">.</span><span class="n">load</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="s">&quot;./wiki-Vote.txt&quot;</span><span class="p">,</span> <span class="n">directed</span><span class="o">=</span><span class="n">TRUE</span><span class="p">)</span>
+<div class="code r highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">&lt;-</span> <span class="n">fg</span><span class="o">.</span><span class="n">load</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="s">&quot;./wiki-Vote.txt&quot;</span><span class="p">,</span> <span class="n">directed</span><span class="o">=</span><span class="n">TRUE</span><span class="p">)</span>
 <span class="n">g</span> <span class="o">&lt;-</span> <span class="n">fg</span><span class="o">.</span><span class="n">load</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="s">&quot;./wiki-Vote.adj&quot;</span><span class="p">,</span> <span class="s">&quot;./wiki-Vote.index&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Here shows an example of running PageRank.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;flash-graph/conf/run_test.txt&quot;)
 &gt; g &lt;- fg.load.graph(&quot;./wiki-Vote.adj&quot;, &quot;./wiki-Vote.index&quot;)
 &gt; res &lt;- fg.page.rank(g)
@@ -328,13 +328,13 @@ wiki.mat  wiki.mat_idx  wiki_t.mat  wiki_t.mat_idx
 <ul>
 <li><p class="first">Users can load a graph image in FlashGraph format and get a sparse
 matrix.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; g &lt;- fg.load.graph(&quot;./wiki-Vote.adj&quot;, &quot;./wiki-Vote.index&quot;)
-&gt; m &lt;- fm.get.sparse.matrix(g)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; g &lt;- fg.load.graph(&quot;./wiki-Vote.adj&quot;, &quot;./wiki-Vote.index&quot;)
+&gt; m &lt;- fm.get.matrix(g)
 </pre></div>
 </div>
 </li>
 <li><p class="first">Users can load a sparse matrix image directly.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.load.sparse.matrix(&quot;./wiki.mat&quot;, &quot;./wiki.mat_idx&quot;, &quot;./wiki_t.mat&quot;, &quot;./wiki_t.mat_idx&quot;)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.load.matrix(&quot;./wiki.mat&quot;, &quot;./wiki.mat_idx&quot;, &quot;./wiki_t.mat&quot;, &quot;./wiki_t.mat_idx&quot;)
 </pre></div>
 </div>
 </li>
@@ -346,9 +346,9 @@ matrix.</p>
 very similar interface to ARPACK in iGraph. Below shows an example of
 using <code class="docutils literal"><span class="pre">fm.eigen</span></code> to compute SVD on the asymmetric matrix. Currently,
 FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
-&gt; m &lt;- fm.load.sparse.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
 &gt; multiply &lt;- function(x, extra) t(m) %*% (m %*% x)
 &gt; res &lt;- fm.eigen(multiply, options=list(n=dim(m)[1], nev=10))
 &gt; res$vals
@@ -360,9 +360,9 @@ FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
 <div class="section" id="run-flashr-arpack">
 <h3>Run FlashR + ARPACK<a class="headerlink" href="#run-flashr-arpack" title="Permalink to this headline">¶</a></h3>
 <p>To compute eigenvalues with ARPACK and FlashR,</p>
-<div class="highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
 &gt; fg.set.conf(&quot;matrix/conf/run_test.txt&quot;)
-&gt; m &lt;- fm.load.sparse.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
+&gt; m &lt;- fm.load.matrix(&quot;wiki.mat&quot;, &quot;wiki.mat_idx&quot;, &quot;wiki_t.mat&quot;, &quot;wiki_t.mat_idx&quot;)
 &gt; multiply &lt;- function(x, extra) as.vector(t(m) %*% (m %*% fm.as.vector(x)))
 &gt; res &lt;- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
 &gt; res$values
@@ -421,7 +421,7 @@ FlashEigen only supports computing eigenvalues on symmetric matrices.</p>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
       <li>Previous: <a href="index.html" title="previous chapter">Welcome to FlashX-docs&#8217;s documentation!</a></li>
-      <li>Next: <a href="FlashR-programming-tutorial.html" title="next chapter">How to start</a></li>
+      <li>Next: <a href="Run-FlashX-in-the-Amazon-cloud.html" title="next chapter">Run FlashX in the Amazon cloud</a></li>
   </ul></li>
 </ul>
 </div>
