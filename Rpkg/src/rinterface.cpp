@@ -637,14 +637,19 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 	auto it = graphs.find(graph_name);
 	// If the graph exist, but it's not in the graph table. It's in SAFS.
 	if (it == graphs.end()) {
-		auto graph_files = get_graph_files(graph_name);
-		FG_graph::ptr fg = FG_graph::create(graph_files.first,
-				graph_files.second, configs);
-		graph_ref *ref = register_in_mem_graph(fg, graph_name);
-		if (ref)
-			return create_FGR_obj(ref);
-		else
-			return create_FGR_obj(fg, graph_name);
+		try {
+			auto graph_files = get_graph_files(graph_name);
+			FG_graph::ptr fg = FG_graph::create(graph_files.first,
+					graph_files.second, configs);
+			graph_ref *ref = register_in_mem_graph(fg, graph_name);
+			if (ref)
+				return create_FGR_obj(ref);
+			else
+				return create_FGR_obj(fg, graph_name);
+		} catch(wrong_format &e) {
+			fprintf(stderr, "%s\n", e.what());
+			return R_NilValue;
+		}
 	}
 	else
 		return create_FGR_obj(it->second);
