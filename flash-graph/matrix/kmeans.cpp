@@ -157,7 +157,7 @@ namespace {
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void E_step(const double* matrix, prune_clusters::ptr cls,
+	static void EM_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
             prune_stats::ptr ps=nullptr, const bool prune_init=false) {
 
@@ -240,7 +240,7 @@ namespace fg
             const double tolerance, const std::string dist_type)
 	{
 #ifdef PROFILER
-		ProfilerStart("/mnt/nfs/disa/FlashGraph/flash-graph/matrix/min-tri-kmeans.perf");
+		ProfilerStart("/mnt/nfs/disa/FlashGraph/flash-graph/matrix/kmeans.perf");
 #endif
 		NUM_COLS = num_cols;
 		K = k;
@@ -311,7 +311,7 @@ namespace fg
 
         if (g_init_type == NONE || g_init_type == FORGY
                 || g_init_type == RANDOM) {
-			E_step(matrix, clusters, cluster_assignments,
+			EM_step(matrix, clusters, cluster_assignments,
                     cluster_assignment_counts, ps, true);
         }
 
@@ -329,7 +329,7 @@ namespace fg
 			// Hold cluster assignment counter
 			BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
 				". Computing cluster assignments ...";
-			E_step(matrix, clusters, cluster_assignments,
+			EM_step(matrix, clusters, cluster_assignments,
                     cluster_assignment_counts, ps);
 #if KM_TEST
             printf("Cluster assignment counts: ");
