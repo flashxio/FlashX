@@ -389,13 +389,15 @@ fm.as.matrix <- function(obj)
 	else if (class(obj) == "fmV") {
 		# A FlashMatrix vector is actually stored in a dense matrix.
 		# We only need to construct the fm object in R.
-		new("fm", pointer=obj@pointer, name=obj@name, nrow=obj@length,
+		new("fm", pointer=obj@pointer, name=obj@name, nrow=obj@len,
 			ncol=1, type=obj@type)
 	}
-	else if (is.matrix(obj))
-		fm.conv.R2FM(obj)
-	else
-		NULL
+	else {
+		# Let's convert it to a FM object
+		ret <- fm.conv.R2FM(obj)
+		# Then try to convert it to a FM matrix.
+		fm.as.matrix(ret)
+	}
 }
 
 #' Convert a FlashMatrix vector to a FlashMatrix factor vector.
@@ -1087,7 +1089,7 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 		return(NULL)
 	}
 	ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
-		  as.list(options), PACKAGE="FlashR")
+				 as.list(options), PACKAGE="FlashR")
 	ret$vecs <- new.fm(ret$vecs)
 	ret
 }
