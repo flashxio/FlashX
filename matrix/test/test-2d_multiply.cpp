@@ -25,13 +25,15 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-class mat_init_operate: public type_set_operate<double>
+typedef double mat_ele_t;
+
+class mat_init_operate: public type_set_operate<mat_ele_t>
 {
 public:
 	mat_init_operate(size_t num_rows, size_t num_cols) {
 	}
 
-	virtual void set(double *arr, size_t num_eles, off_t row_idx,
+	virtual void set(mat_ele_t *arr, size_t num_eles, off_t row_idx,
 			            off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
 			// Reduce the value of the elements to avoid float-point
@@ -50,18 +52,18 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 		if (ext_mem)
 			in = detail::EM_matrix_store::create(mat->get_num_cols(),
 					indiv_mat_width, matrix_layout_t::L_ROW,
-					get_scalar_type<double>());
+					get_scalar_type<mat_ele_t>());
 		else
 			in = detail::mem_matrix_store::create(mat->get_num_cols(),
 					indiv_mat_width, matrix_layout_t::L_ROW,
-					get_scalar_type<double>(), num_nodes);
+					get_scalar_type<mat_ele_t>(), num_nodes);
 		if (!ext_mem && num_nodes < 0) {
 			detail::mem_matrix_store::ptr mem_in
 				= detail::mem_matrix_store::cast(in);
 			// This forces all memory is allocated in a single NUMA node.
 			for (size_t i = 0; i < in->get_num_rows(); i++)
 				for (size_t j = 0; j < in->get_num_cols(); j++)
-					mem_in->set<double>(i, j, (i % 100) * (j + 1));
+					mem_in->set<mat_ele_t>(i, j, (i % 100) * (j + 1));
 		}
 		else
 			in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
@@ -73,18 +75,20 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 		detail::matrix_store::ptr out;
 		// Initialize the output matrix and allocate pages for it.
 		if (ext_mem)
-			out = detail::EM_matrix_store::create(mat->get_num_rows(), indiv_mat_width,
-					matrix_layout_t::L_ROW, get_scalar_type<double>());
+			out = detail::EM_matrix_store::create(mat->get_num_rows(),
+					indiv_mat_width, matrix_layout_t::L_ROW,
+					get_scalar_type<mat_ele_t>());
 		else
-			out = detail::mem_matrix_store::create(mat->get_num_rows(), indiv_mat_width,
-					matrix_layout_t::L_ROW, get_scalar_type<double>(), num_nodes);
+			out = detail::mem_matrix_store::create(mat->get_num_rows(),
+					indiv_mat_width, matrix_layout_t::L_ROW,
+					get_scalar_type<mat_ele_t>(), num_nodes);
 		if (num_nodes < 0 && out->is_in_mem()) {
 			detail::mem_matrix_store::ptr mem_out
 				= detail::mem_matrix_store::cast(out);
 			// This forces all memory is allocated in a single NUMA node.
 			for (size_t i = 0; i < out->get_num_rows(); i++)
 				for (size_t j = 0; j < out->get_num_cols(); j++)
-					mem_out->set<double>(i, j, 0);
+					mem_out->set<mat_ele_t>(i, j, 0);
 		}
 		else if (out->is_in_mem())
 			out->reset_data();
@@ -101,7 +105,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 	for (size_t k = 0; k < repeats; k++) {
 		gettimeofday(&start, NULL);
 		for (size_t i = 0; i < ins.size(); i++)
-			mat->multiply<double, float>(ins[i], outs[i]);
+			mat->multiply<mat_ele_t, float>(ins[i], outs[i]);
 		gettimeofday(&end, NULL);
 		printf("it takes %.3f seconds\n", time_diff(start, end));
 	}
@@ -116,10 +120,10 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 			dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
 			dense_matrix::ptr sum = in_mat->col_sum();
 			vector::ptr sum_vec = sum->get_col(0);
-			std::vector<double> in_col_sum = sum_vec->conv2std<double>();
+			std::vector<mat_ele_t> in_col_sum = sum_vec->conv2std<mat_ele_t>();
 			sum = out_mat->col_sum();
 			sum_vec = sum->get_col(0);
-			std::vector<double> out_col_sum = sum_vec->conv2std<double>();
+			std::vector<mat_ele_t> out_col_sum = sum_vec->conv2std<mat_ele_t>();
 			for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
 				printf("%ld: sum of input: %lf, sum of product: %lf\n",
 						k, in_col_sum[k], out_col_sum[k]);
