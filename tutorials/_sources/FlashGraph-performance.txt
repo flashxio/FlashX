@@ -1,28 +1,43 @@
 FlashGraph performance
 ======================
 
+FlashGraph on a multi-million-node graph
+----------------------------------
+
 | FlashGraph was designed for specialized hardware (a large parallel
   machine with many SSDs).
-| However, most people may not possess such powerful hardware, so we
+  However, most people may not possess such powerful hardware, so we
   also evaluate its performance in the Amazon cloud. Table 1 shows the
   hardware configurations where FlashGraph is evaluated. We demonstrate
   that FlashGraph is able to outperform other well-known graph
   processing frameworks in both specialized hardware and Amazon cloud.
 
-| \| \| i2.xlarge \| i2.8xlarge \| HW1 \| HW2 \|
-| \| ---------- \|:---------:\| ----------:\|-------:\|-------:\|
-| \| #CPU cores \| 4 \| 32 \| 32 \| 48 \|
-| \| RAM (GB) \| 30 \| 244 \| 512 \| 1024 \|
-| \| #SSDs \| 1 \| 8 \| 15 \| 24 \|
++------------+------------+------------+-----+-----+
+|            | i2.xlarge  | i2.8xlarge | HW1 | HW2 |
++============+============+============+=====+=====+
+| #CPU cores | 4          | 32         | 32  | 48  |
++------------+------------+------------+-----+-----+
+| RAM (GB)   | 30         | 244        | 512 | 1024|
++------------+------------+------------+-----+-----+
+| #SSDs      | 1          | 8          | 15  | 24  |
++------------+------------+------------+-----+-----+
+
 | Table 1. The hardware configuration where FlashGraph is evaluated.
 
-| \| \| i2.xlarge \| i2.8xlarge \| HW1 \| HW2 \|
-| \| -------- \|:---------:\| ----------:\|-------:\|-------:\|
-| \| BFS \| 36.86 \| 5.48 \| 3.56 \| 3.11 \|
-| \| PageRank \| 438.74 \| 67.34 \| 54.07 \| 33.58 \|
-| \| WCC \| 58.90 \| 7.91 \| 7.91 \| 5.03 \|
-| \| Triangle \| 4747.07 \| 830.08 \| 532.21 \| 442.65 \|
-| \| SCC \| 141.62 \| 22.39 \| N/A \| 12.06 \|
++----------+-----------+------------+-------+-------+
+|          | i2.xlarge | i2.8xlarge | HW1   | HW2   |
++==========+===========+============+=======+=======+
+| BFS      | 36.86     | 5.48       | 3.56  | 3.11  |
++----------+-----------+------------+-------+-------+
+| PageRank | 438.74    | 67.34      | 54.07 | 33.58 |
++----------+-----------+------------+-------+-------+
+| WCC      | 58.90     | 7.91       | 7.91  | 5.03  |
++----------+-----------+------------+-------+-------+
+| Triangle | 4747.07   | 830.08     | 532.21| 442.65|
++----------+-----------+------------+-------+-------+
+| SCC      | 141.62    | 22.39      | N/A   | 12.06 |
++----------+-----------+------------+-------+-------+
+
 | Table 2. The runtime (seconds) of FlashGraph on different hardware
   with 1GB page cache.
 
@@ -85,26 +100,31 @@ and 129B edges) in a single machine. The table below shows the
 performance of the same graph applications as above. It also includes
 the performance of Betweenness centrality (BC) from a single vertex.
 
-| \| \| Runtime (sec) \| Memory (GB) \|
-| \| ----------- \|:-------------:\| -----------:\|
-| \| BFS \| 298 \| 22 \|
-| \| Betweenness \| 595 \| 81 \|
-| \| Triangle \| 7818 \| 55 \|
-| \| WCC \| 461 \| 47 \|
-| \| PageRank \| 2041 \| 46 \|
++-------------+---------------+-------------+
+|             | Runtime (sec) | Memory (GB) |
++=============+===============+=============+
+| BFS         | 298           | 22          |
++-------------+---------------+-------------+
+| Betweenness | 595           | 81          |
++-------------+---------------+-------------+
+| Triangle    | 7818          | 55          |
++-------------+---------------+-------------+
+| WCC         | 461           | 47          |
++-------------+---------------+-------------+
+| PageRank    | 2041          | 46          |
++-------------+---------------+-------------+
+
 | Table 3. The runtime of FlashGraph on the Page graph on HW1.
 
-| FlashGraph takes only six minutes to traverse the page graph (3.5B
-  vertices and 128B edges) with a cache size of 4GB.
-| `Pregel <http://dl.acm.org/citation.cfm?id=1807184>`__ used 300
-  multicore machines to
-| run the shortest path algorithm on their largest random graph (1B
-  vertices and 127B edges)
-| and took a little over ten minutes. More recently,
-| `Trinity <http://research.microsoft.com/en-us/projects/trinity/>`__
-| took over ten minutes to perform breadth-first search on a
-| graph of one billion vertices and 13 billion edges on 14 12-core
-| machines.
+FlashGraph takes only six minutes to traverse the page graph (3.5B
+vertices and 128B edges) with a cache size of 4GB.
+`Pregel <http://dl.acm.org/citation.cfm?id=1807184>`__ used 300
+multicore machines to run the shortest path algorithm on their largest
+random graph (1B vertices and 127B edges) and took a little over ten
+minutes. More recently,
+`Trinity <http://research.microsoft.com/en-us/projects/trinity/>`__ took
+over ten minutes to perform breadth-first search on a graph of one
+billion vertices and 13 billion edges on 14 12-core machines.
 
 FlashGraph takes 34 minutes to run 30 iterations of PageRank on the page
 graph. Based on a recent talk by the main developer of
