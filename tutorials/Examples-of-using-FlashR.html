@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Spectral analysis on a median-size graph &mdash; FlashX-docs 0.3 documentation</title>
+    <title>Examples of using FlashR &mdash; FlashX-docs 0.3 documentation</title>
     
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -24,6 +24,8 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="FlashX-docs 0.3 documentation" href="index.html" />
+    <link rel="next" title="FlashGraph performance" href="FlashGraph-performance.html" />
+    <link rel="prev" title="Run FlashX in the Amazon cloud" href="Run-FlashX-in-the-Amazon-cloud.html" />
    
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
@@ -36,21 +38,20 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="spectral-analysis-on-a-median-size-graph">
-<h1>Spectral analysis on a median-size graph<a class="headerlink" href="#spectral-analysis-on-a-median-size-graph" title="Permalink to this headline">¶</a></h1>
-<div class="line-block">
-<div class="line">Here shows the steps of performing spectral analysis on an undirected
+  <div class="section" id="examples-of-using-flashr">
+<h1>Examples of using FlashR<a class="headerlink" href="#examples-of-using-flashr" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="spectral-analysis-on-a-median-size-graph">
+<h2>Spectral analysis on a median-size graph<a class="headerlink" href="#spectral-analysis-on-a-median-size-graph" title="Permalink to this headline">¶</a></h2>
+<p>Here shows the steps of performing spectral analysis on an undirected
 graph with 4,036,538 vertices and 34,681,189 edges. The graph is
 downloaded at
 <a class="reference external" href="http://snap.stanford.edu/data/com-LiveJournal.html">SNAP</a>.
 Interested users can try this example at Amazon EC2 instance (see the
 instructions
 <a class="reference external" href="https://github.com/icoming/FlashX/wiki/Run-FlashX-in-the-Amazon-cloud">here</a>
-to set up a FlashX instance) or</div>
-<div class="line">on a local machine (see the instructions
-<a class="reference external" href="https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide">here</a></div>
-<div class="line">to install FlashX locally).</div>
-</div>
+to set up a FlashX instance) or on a local machine (see the instructions
+<a class="reference external" href="https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide">here</a>
+to install FlashX locally).</p>
 <p>Download the graph.</p>
 <div class="highlight-python"><div class="highlight"><pre>wget http://snap.stanford.edu/data/bigdata/communities/com-lj.ungraph.txt.gz
 </pre></div>
@@ -99,7 +100,7 @@ FlashGraph ./com-lj.ungraph.txt.gz-sub (U): 3997962 34681189
 </div>
 </div>
 <div class="section" id="spectral-analysis-on-a-larger-graph">
-<h1>Spectral analysis on a larger graph<a class="headerlink" href="#spectral-analysis-on-a-larger-graph" title="Permalink to this headline">¶</a></h1>
+<h2>Spectral analysis on a larger graph<a class="headerlink" href="#spectral-analysis-on-a-larger-graph" title="Permalink to this headline">¶</a></h2>
 <p>To compute eigenvalues of a larger graph, users may need to store the
 graph on SAFS. Here shows the steps of computing eigenvalues of a larger
 graph, which has 65,608,366 vertices and 1,806,067,135 edges. The text
@@ -170,6 +171,7 @@ multiplication on a graph in the FlashGraph format.</p>
 </pre></div>
 </div>
 </div>
+</div>
 
 
           </div>
@@ -179,13 +181,18 @@ multiplication on a graph in the FlashGraph format.</p>
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Spectral analysis on a median-size graph</a></li>
+<li><a class="reference internal" href="#">Examples of using FlashR</a><ul>
+<li><a class="reference internal" href="#spectral-analysis-on-a-median-size-graph">Spectral analysis on a median-size graph</a></li>
 <li><a class="reference internal" href="#spectral-analysis-on-a-larger-graph">Spectral analysis on a larger graph</a></li>
+</ul>
+</li>
 </ul>
 <div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="Run-FlashX-in-the-Amazon-cloud.html" title="previous chapter">Run FlashX in the Amazon cloud</a></li>
+      <li>Next: <a href="FlashGraph-performance.html" title="next chapter">FlashGraph performance</a></li>
   </ul></li>
 </ul>
 </div>

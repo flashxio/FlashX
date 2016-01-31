@@ -13,6 +13,7 @@ Contents:
 
    FlashX-Quick-Start-Guide
    Run-FlashX-in-the-Amazon-cloud
+   Examples-of-using-FlashR
    FlashGraph-performance
    FlashR-programming-tutorial
    FlashGraphR-programming-tutorial

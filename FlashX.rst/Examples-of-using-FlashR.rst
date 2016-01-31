@@ -4,17 +4,16 @@ Examples of using FlashR
 Spectral analysis on a median-size graph
 ----------------------------------------
 
-| Here shows the steps of performing spectral analysis on an undirected
-  graph with 4,036,538 vertices and 34,681,189 edges. The graph is
-  downloaded at
-  `SNAP <http://snap.stanford.edu/data/com-LiveJournal.html>`__.
-  Interested users can try this example at Amazon EC2 instance (see the
-  instructions
-  `here <https://github.com/icoming/FlashX/wiki/Run-FlashX-in-the-Amazon-cloud>`__
-  to set up a FlashX instance) or
-| on a local machine (see the instructions
-  `here <https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide>`__
-| to install FlashX locally).
+Here shows the steps of performing spectral analysis on an undirected
+graph with 4,036,538 vertices and 34,681,189 edges. The graph is
+downloaded at
+`SNAP <http://snap.stanford.edu/data/com-LiveJournal.html>`__.
+Interested users can try this example at Amazon EC2 instance (see the
+instructions
+`here <https://github.com/icoming/FlashX/wiki/Run-FlashX-in-the-Amazon-cloud>`__
+to set up a FlashX instance) or on a local machine (see the instructions
+`here <https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide>`__
+to install FlashX locally).
 
 Download the graph.
 
