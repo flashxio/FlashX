@@ -120,11 +120,19 @@ page graph</a> (3.4B vertices
 and 129B edges) in a single machine. The table below shows the
 performance of the same graph applications as above. It also includes
 the performance of Betweenness centrality (BC) from a single vertex.</p>
-<p><img alt="runtime on page graph" src="http://www.cs.jhu.edu/~zhengda/FlashGraph/pg-perf.png" /></p>
 <div class="line-block">
-<div class="line">FlashGraph takes only eight minutes to traverse the page graph (3.5B
-vertices and 128B edges) with a cache size of 4GB and less than six
-minutes with a cache size of 256 GB.</div>
+<div class="line">| | Runtime (sec) | Memory (GB) |</div>
+<div class="line">| &#8212;&#8212;&#8212;&#8211; |:&#8212;&#8212;&#8212;&#8212;-:| &#8212;&#8212;&#8212;&#8211;:|</div>
+<div class="line">| BFS | 298 | 22 |</div>
+<div class="line">| Betweenness | 595 | 81 |</div>
+<div class="line">| Triangle | 7818 | 55 |</div>
+<div class="line">| WCC | 461 | 47 |</div>
+<div class="line">| PageRank | 2041 | 46 |</div>
+<div class="line">Table 3. The runtime of FlashGraph on the Page graph on HW1.</div>
+</div>
+<div class="line-block">
+<div class="line">FlashGraph takes only six minutes to traverse the page graph (3.5B
+vertices and 128B edges) with a cache size of 4GB.</div>
 <div class="line"><a class="reference external" href="http://dl.acm.org/citation.cfm?id=1807184">Pregel</a> used 300
 multicore machines to</div>
 <div class="line">run the shortest path algorithm on their largest random graph (1B
@@ -135,7 +143,7 @@ vertices and 127B edges)</div>
 <div class="line">graph of one billion vertices and 13 billion edges on 14 12-core</div>
 <div class="line">machines.</div>
 </div>
-<p>FlashGraph takes 75 minutes to run 30 iterations of PageRank on the page
+<p>FlashGraph takes 34 minutes to run 30 iterations of PageRank on the page
 graph. Based on a recent talk by the main developer of
 <a class="reference external" href="http://www.youtube.com/watch?v=b5Qmz4zPj-M">Giraph</a>, Giraph running
 with 20 workers can run five iterations of PageRank on a graph with 5

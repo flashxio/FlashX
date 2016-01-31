@@ -1,18 +1,29 @@
 Spectral analysis on a median-size graph
 ========================================
 
-Here shows the steps of performing spectral analysis on an undirected
-graph with 4,036,538 vertices and 34,681,189 edges. The graph is
-downloaded at
-`SNAP <http://snap.stanford.edu/data/com-LiveJournal.html>`__.
+| Here shows the steps of performing spectral analysis on an undirected
+  graph with 4,036,538 vertices and 34,681,189 edges. The graph is
+  downloaded at
+  `SNAP <http://snap.stanford.edu/data/com-LiveJournal.html>`__.
+  Interested users can try this example at Amazon EC2 instance (see the
+  instructions
+  `here <https://github.com/icoming/FlashX/wiki/Run-FlashX-in-the-Amazon-cloud>`__
+  to set up a FlashX instance) or
+| on a local machine (see the instructions
+  `here <https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide>`__
+| to install FlashX locally).
 
-Load FlashR in R and configure it with a configuration file in the
-current directory.
+Download the graph.
+
+::
+
+    wget http://snap.stanford.edu/data/bigdata/communities/com-lj.ungraph.txt.gz
+
+Load FlashR in R.
 
 .. code:: r
 
     > library(FlashR)
-    > fg.set.conf("./run_test.txt")
 
 FlashR loads a graph in the text edge list format and constructs a
 FlashGraph graph automatically. FlashR is able to construct from a
@@ -55,6 +66,12 @@ We compute eigenvalues of the largest connected component.
     > m <- fm.get.matrix(lcc)
     > multiply <- function(x, extra) as.vector(m %*% fm.as.vector(x))
     > res <- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
+
+Run KMeans on the 10 eigenvectors.
+
+.. code:: r
+
+    > kmeans.res <- fg.kmeans(res$vectors, k=10)
 
 Spectral analysis on a larger graph
 ===================================
@@ -140,10 +157,8 @@ Compute 10 eigenvalues of the graph with FlashEigen.
      [1] 693304.9 407554.7 312981.7 272623.5 257470.4 220616.7 204678.5 184447.2
      [9] 178047.9 177168.6
 
-Run KMeans on the 10 eigenvectors. The
-`KMeans <https://github.com/icoming/FlashX/blob/release/Rpkg/R/KMeans.R>`__
-is implemented with R.
+Run KMeans on the 10 eigenvectors.
 
 .. code:: r
 
-    > fm.KMeans(res$vecs, K=10)
+    > kmeans.res <- fg.kmeans(as.matrix(res$vecs), k=10)

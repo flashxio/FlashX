@@ -38,14 +38,25 @@
             
   <div class="section" id="spectral-analysis-on-a-median-size-graph">
 <h1>Spectral analysis on a median-size graph<a class="headerlink" href="#spectral-analysis-on-a-median-size-graph" title="Permalink to this headline">¶</a></h1>
-<p>Here shows the steps of performing spectral analysis on an undirected
+<div class="line-block">
+<div class="line">Here shows the steps of performing spectral analysis on an undirected
 graph with 4,036,538 vertices and 34,681,189 edges. The graph is
 downloaded at
-<a class="reference external" href="http://snap.stanford.edu/data/com-LiveJournal.html">SNAP</a>.</p>
-<p>Load FlashR in R and configure it with a configuration file in the
-current directory.</p>
+<a class="reference external" href="http://snap.stanford.edu/data/com-LiveJournal.html">SNAP</a>.
+Interested users can try this example at Amazon EC2 instance (see the
+instructions
+<a class="reference external" href="https://github.com/icoming/FlashX/wiki/Run-FlashX-in-the-Amazon-cloud">here</a>
+to set up a FlashX instance) or</div>
+<div class="line">on a local machine (see the instructions
+<a class="reference external" href="https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide">here</a></div>
+<div class="line">to install FlashX locally).</div>
+</div>
+<p>Download the graph.</p>
+<div class="highlight-python"><div class="highlight"><pre>wget http://snap.stanford.edu/data/bigdata/communities/com-lj.ungraph.txt.gz
+</pre></div>
+</div>
+<p>Load FlashR in R.</p>
 <div class="code r highlight-python"><div class="highlight"><pre>&gt; library(FlashR)
-&gt; fg.set.conf(&quot;./run_test.txt&quot;)
 </pre></div>
 </div>
 <p>FlashR loads a graph in the text edge list format and constructs a
@@ -80,6 +91,10 @@ FlashGraph ./com-lj.ungraph.txt.gz-sub (U): 3997962 34681189
 <div class="code r highlight-python"><div class="highlight"><pre>&gt; m &lt;- fm.get.matrix(lcc)
 &gt; multiply &lt;- function(x, extra) as.vector(m %*% fm.as.vector(x))
 &gt; res &lt;- arpack(multiply, sym=TRUE, options=list(n=nrow(m), nev=10, ncv=20))
+</pre></div>
+</div>
+<p>Run KMeans on the 10 eigenvectors.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; kmeans.res &lt;- fg.kmeans(res$vectors, k=10)
 </pre></div>
 </div>
 </div>
@@ -150,10 +165,8 @@ multiplication on a graph in the FlashGraph format.</p>
  [9] 178047.9 177168.6
 </pre></div>
 </div>
-<p>Run KMeans on the 10 eigenvectors. The
-<a class="reference external" href="https://github.com/icoming/FlashX/blob/release/Rpkg/R/KMeans.R">KMeans</a>
-is implemented with R.</p>
-<div class="code r highlight-python"><div class="highlight"><pre>&gt; fm.KMeans(res$vecs, K=10)
+<p>Run KMeans on the 10 eigenvectors.</p>
+<div class="code r highlight-python"><div class="highlight"><pre>&gt; kmeans.res &lt;- fg.kmeans(as.matrix(res$vecs), k=10)
 </pre></div>
 </div>
 </div>

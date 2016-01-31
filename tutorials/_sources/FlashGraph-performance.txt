@@ -85,11 +85,17 @@ and 129B edges) in a single machine. The table below shows the
 performance of the same graph applications as above. It also includes
 the performance of Betweenness centrality (BC) from a single vertex.
 
-|runtime on page graph|
+| \| \| Runtime (sec) \| Memory (GB) \|
+| \| ----------- \|:-------------:\| -----------:\|
+| \| BFS \| 298 \| 22 \|
+| \| Betweenness \| 595 \| 81 \|
+| \| Triangle \| 7818 \| 55 \|
+| \| WCC \| 461 \| 47 \|
+| \| PageRank \| 2041 \| 46 \|
+| Table 3. The runtime of FlashGraph on the Page graph on HW1.
 
-| FlashGraph takes only eight minutes to traverse the page graph (3.5B
-  vertices and 128B edges) with a cache size of 4GB and less than six
-  minutes with a cache size of 256 GB.
+| FlashGraph takes only six minutes to traverse the page graph (3.5B
+  vertices and 128B edges) with a cache size of 4GB.
 | `Pregel <http://dl.acm.org/citation.cfm?id=1807184>`__ used 300
   multicore machines to
 | run the shortest path algorithm on their largest random graph (1B
@@ -100,7 +106,7 @@ the performance of Betweenness centrality (BC) from a single vertex.
 | graph of one billion vertices and 13 billion edges on 14 12-core
 | machines.
 
-FlashGraph takes 75 minutes to run 30 iterations of PageRank on the page
+FlashGraph takes 34 minutes to run 30 iterations of PageRank on the page
 graph. Based on a recent talk by the main developer of
 `Giraph <http://www.youtube.com/watch?v=b5Qmz4zPj-M>`__, Giraph running
 with 20 workers can run five iterations of PageRank on a graph with 5
@@ -108,4 +114,3 @@ billion edges in approx. 75 minutes.
 
 .. |runtime| image:: http://flashx.io/images/FlashGraph.vs.others.png
 .. |runtime dollors| image:: http://flashx.io/images/FlashGraph.vs.others.dollor.png
-.. |runtime on page graph| image:: http://www.cs.jhu.edu/~zhengda/FlashGraph/pg-perf.png
