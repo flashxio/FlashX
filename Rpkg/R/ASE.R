@@ -23,6 +23,7 @@
 #' @param nev The number of eigenvalues/vectors required.
 #' @param which The type of the embedding.
 #' @param c The constant used in the Aug variant of embedding.
+#' @param ncv The number of vectors in the vector subspace.
 #' @param tol Numeric scalar. Stopping criterion: the relative accuracy
 #' of the Ritz value is considered acceptable if its error is less than
 #' tol times its estimated value. If this is set to zero then machine
@@ -45,7 +46,7 @@
 #' @name fm.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
-								  c=1/nrow(fm), tol=1.0e-12)
+								  c=1/nrow(fm), ncv=2*nev, tol=1.0e-12)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
@@ -105,7 +106,7 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 
 	ret <- fm.eigen(multiply, sym=TRUE,
 					options=list(n=nrow(fm), which="LM",
-								 nev=nev, ncv=2 * num.eigen, tol=tol))
+								 nev=nev, block_size=1, num_blocks=ncv, tol=tol))
 	rescale <- function(x) {
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
