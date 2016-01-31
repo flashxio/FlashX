@@ -49,22 +49,96 @@ hardware configurations where FlashGraph is evaluated. We demonstrate
 that FlashGraph is able to outperform other well-known graph
 processing frameworks in both specialized hardware and Amazon cloud.</div>
 </div>
+<table border="1" class="docutils">
+<colgroup>
+<col width="26%" />
+<col width="26%" />
+<col width="26%" />
+<col width="11%" />
+<col width="11%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">&nbsp;</th>
+<th class="head">i2.xlarge</th>
+<th class="head">i2.8xlarge</th>
+<th class="head">HW1</th>
+<th class="head">HW2</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>#CPU cores</td>
+<td>4</td>
+<td>32</td>
+<td>32</td>
+<td>48</td>
+</tr>
+<tr class="row-odd"><td>RAM (GB)</td>
+<td>30</td>
+<td>244</td>
+<td>512</td>
+<td>1024</td>
+</tr>
+<tr class="row-even"><td>#SSDs</td>
+<td>1</td>
+<td>8</td>
+<td>15</td>
+<td>24</td>
+</tr>
+</tbody>
+</table>
 <div class="line-block">
-<div class="line">| | i2.xlarge | i2.8xlarge | HW1 | HW2 |</div>
-<div class="line">| &#8212;&#8212;&#8212;- |:&#8212;&#8212;&#8212;:| &#8212;&#8212;&#8212;-:|&#8212;&#8212;-:|&#8212;&#8212;-:|</div>
-<div class="line">| #CPU cores | 4 | 32 | 32 | 48 |</div>
-<div class="line">| RAM (GB) | 30 | 244 | 512 | 1024 |</div>
-<div class="line">| #SSDs | 1 | 8 | 15 | 24 |</div>
 <div class="line">Table 1. The hardware configuration where FlashGraph is evaluated.</div>
 </div>
+<table border="1" class="docutils">
+<colgroup>
+<col width="21%" />
+<col width="23%" />
+<col width="26%" />
+<col width="15%" />
+<col width="15%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">&nbsp;</th>
+<th class="head">i2.xlarge</th>
+<th class="head">i2.8xlarge</th>
+<th class="head">HW1</th>
+<th class="head">HW2</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>BFS</td>
+<td>36.86</td>
+<td>5.48</td>
+<td>3.56</td>
+<td>3.11</td>
+</tr>
+<tr class="row-odd"><td>PageRank</td>
+<td>438.74</td>
+<td>67.34</td>
+<td>54.07</td>
+<td>33.58</td>
+</tr>
+<tr class="row-even"><td>WCC</td>
+<td>58.90</td>
+<td>7.91</td>
+<td>7.91</td>
+<td>5.03</td>
+</tr>
+<tr class="row-odd"><td>Triangle</td>
+<td>4747.07</td>
+<td>830.08</td>
+<td>532.21</td>
+<td>442.65</td>
+</tr>
+<tr class="row-even"><td>SCC</td>
+<td>141.62</td>
+<td>22.39</td>
+<td>N/A</td>
+<td>12.06</td>
+</tr>
+</tbody>
+</table>
 <div class="line-block">
-<div class="line">| | i2.xlarge | i2.8xlarge | HW1 | HW2 |</div>
-<div class="line">| &#8212;&#8212;&#8211; |:&#8212;&#8212;&#8212;:| &#8212;&#8212;&#8212;-:|&#8212;&#8212;-:|&#8212;&#8212;-:|</div>
-<div class="line">| BFS | 36.86 | 5.48 | 3.56 | 3.11 |</div>
-<div class="line">| PageRank | 438.74 | 67.34 | 54.07 | 33.58 |</div>
-<div class="line">| WCC | 58.90 | 7.91 | 7.91 | 5.03 |</div>
-<div class="line">| Triangle | 4747.07 | 830.08 | 532.21 | 442.65 |</div>
-<div class="line">| SCC | 141.62 | 22.39 | N/A | 12.06 |</div>
 <div class="line">Table 2. The runtime (seconds) of FlashGraph on different hardware
 with 1GB page cache.</div>
 </div>
@@ -120,29 +194,53 @@ page graph</a> (3.4B vertices
 and 129B edges) in a single machine. The table below shows the
 performance of the same graph applications as above. It also includes
 the performance of Betweenness centrality (BC) from a single vertex.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="32%" />
+<col width="37%" />
+<col width="32%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">&nbsp;</th>
+<th class="head">Runtime (sec)</th>
+<th class="head">Memory (GB)</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>BFS</td>
+<td>298</td>
+<td>22</td>
+</tr>
+<tr class="row-odd"><td>Betweenness</td>
+<td>595</td>
+<td>81</td>
+</tr>
+<tr class="row-even"><td>Triangle</td>
+<td>7818</td>
+<td>55</td>
+</tr>
+<tr class="row-odd"><td>WCC</td>
+<td>461</td>
+<td>47</td>
+</tr>
+<tr class="row-even"><td>PageRank</td>
+<td>2041</td>
+<td>46</td>
+</tr>
+</tbody>
+</table>
 <div class="line-block">
-<div class="line">| | Runtime (sec) | Memory (GB) |</div>
-<div class="line">| &#8212;&#8212;&#8212;&#8211; |:&#8212;&#8212;&#8212;&#8212;-:| &#8212;&#8212;&#8212;&#8211;:|</div>
-<div class="line">| BFS | 298 | 22 |</div>
-<div class="line">| Betweenness | 595 | 81 |</div>
-<div class="line">| Triangle | 7818 | 55 |</div>
-<div class="line">| WCC | 461 | 47 |</div>
-<div class="line">| PageRank | 2041 | 46 |</div>
 <div class="line">Table 3. The runtime of FlashGraph on the Page graph on HW1.</div>
 </div>
-<div class="line-block">
-<div class="line">FlashGraph takes only six minutes to traverse the page graph (3.5B
-vertices and 128B edges) with a cache size of 4GB.</div>
-<div class="line"><a class="reference external" href="http://dl.acm.org/citation.cfm?id=1807184">Pregel</a> used 300
-multicore machines to</div>
-<div class="line">run the shortest path algorithm on their largest random graph (1B
-vertices and 127B edges)</div>
-<div class="line">and took a little over ten minutes. More recently,</div>
-<div class="line"><a class="reference external" href="http://research.microsoft.com/en-us/projects/trinity/">Trinity</a></div>
-<div class="line">took over ten minutes to perform breadth-first search on a</div>
-<div class="line">graph of one billion vertices and 13 billion edges on 14 12-core</div>
-<div class="line">machines.</div>
-</div>
+<p>FlashGraph takes only six minutes to traverse the page graph (3.5B
+vertices and 128B edges) with a cache size of 4GB.
+<a class="reference external" href="http://dl.acm.org/citation.cfm?id=1807184">Pregel</a> used 300
+multicore machines to run the shortest path algorithm on their largest
+random graph (1B vertices and 127B edges) and took a little over ten
+minutes. More recently,
+<a class="reference external" href="http://research.microsoft.com/en-us/projects/trinity/">Trinity</a> took
+over ten minutes to perform breadth-first search on a graph of one
+billion vertices and 13 billion edges on 14 12-core machines.</p>
 <p>FlashGraph takes 34 minutes to run 30 iterations of PageRank on the page
 graph. Based on a recent talk by the main developer of
 <a class="reference external" href="http://www.youtube.com/watch?v=b5Qmz4zPj-M">Giraph</a>, Giraph running
