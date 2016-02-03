@@ -121,7 +121,7 @@ namespace {
 
 				if (dist < dist_v[row]) { // Found a closer cluster than before
 					dist_v[row] = dist;
-                    cluster_assignments[row] = selected_idx;
+                    cluster_assignments[row] = clust_idx;
 				}
 				cum_dist += dist_v[row];
 			}
@@ -137,7 +137,6 @@ namespace {
                         << i << " as center K = " << clust_idx;
 #endif
                     clusters->set_mean(&(matrix[i*NUM_COLS]), clust_idx);
-                    selected_idx = i;
 					break;
 				}
 			}
@@ -145,7 +144,6 @@ namespace {
 		}
 
 #if VERBOSE
-		BOOST_LOG_TRIVIAL(info) << "\n\nOriginal matrix: "; print_mat(matrix, NUM_ROWS, NUM_COLS);
 		BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++"; clusters->print_means();
 #endif
 	}
