@@ -20,13 +20,14 @@
 // Read raw row-wise data in a file and print to stdout
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
 
 static int num_rows, num_cols;
 
 void print_arr(const double* arr) {
     printf("[ ");
     for (int i = 0; i < num_cols; i++) {
-        printf("%E ", arr[i]);
+        std::cout << arr[i] << " ";
     }
     printf("]\n");
 }
@@ -34,14 +35,20 @@ void print_arr(const double* arr) {
 int main(int argc, char* argv []) {
 
     if (argc < 4) {
-        printf("usage: ./read num_rows num_cols filename\n");
+        printf("usage: ./read num_rows num_cols filename [-h | --has_header]\n");
         exit(EXIT_FAILURE);
     }
 
     num_rows = atoi(argv[1]);
     num_cols = atoi(argv[2]);
+
     FILE *f = fopen(argv[3], "rb");
 
+    if (argc == 5) {
+        std::cout << "Original pos:" << ftell(f) << "\n";
+        fseek(f, 4096, SEEK_CUR);
+        std::cout << "Pos after skip:" << ftell(f) << "\n";
+    }
 
     double in [num_cols];
 

@@ -774,7 +774,7 @@ std::string supported_algs[] = {
 	"louvain",
     "sem_kmeans",
     "sem_tri_kmeans",
-    "min_sem_tri_kmeans"
+    "min_tri_sem_kmeans"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -838,7 +838,7 @@ void print_usage()
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "sem_kmeans | sem_tri_kmeans | min_sem_tri_kmeans\n");
+	fprintf(stderr, "sem_kmeans | sem_tri_kmeans | min_tri_sem_kmeans\n");
 	fprintf(stderr, "-k: the number of clusters to use\n");
 	fprintf(stderr, "-i: max number of iterations\n");
 	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
@@ -938,7 +938,7 @@ int main(int argc, char *argv[])
     else if (alg == "sem_tri_kmeans") {
 		run_sem_kmeans(graph, argc, argv, TRI);
 	}
-    else if (alg == "min_sem_tri_kmeans") {
+    else if (alg == "min_tri_sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv, MIN_TRI);
 	}
 	else {
