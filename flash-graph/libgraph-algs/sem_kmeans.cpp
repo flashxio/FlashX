@@ -298,7 +298,7 @@ namespace fg
             const unsigned max_iters, const double tolerance, const unsigned num_rows,
             const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
-        ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
+        ProfilerStart("libgraph-algs/sem_kmeans.perf");
 #endif
         K = k;
 
