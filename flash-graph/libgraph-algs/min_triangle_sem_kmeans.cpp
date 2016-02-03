@@ -202,6 +202,13 @@ namespace {
         request_vertices(&id, 1);
     }
 
+    std::string s (const double d) {
+        if (d == std::numeric_limits<double>::max())
+            return "max";
+        else
+            return std::to_string(d);
+    }
+
     void kmeans_vertex::run_init(vertex_program& prog,
             const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
@@ -244,8 +251,8 @@ namespace {
                         double _dist = get_distance(g_kmspp_cluster_idx, count_it);
                         if (_dist < g_kmspp_distance[my_id]) {
 #if VERBOSE
-                            printf("kms++ v%u updating dist from: %.3f to %.3f\n",
-                                    my_id, g_kmspp_distance[my_id], _dist);
+                            printf("kms++ v%u updating dist from: %s to %.3f\n",
+                                    my_id, (s(g_kmspp_distance[my_id])).c_str(), _dist);
 #endif
                             g_kmspp_distance[my_id] = _dist;
                             set_cluster_id(g_kmspp_cluster_idx);
@@ -475,7 +482,7 @@ namespace {
                 const std::string init, const unsigned max_iters, const double tolerance,
                 const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
-            ProfilerStart("/home/disa/FlashGraph/flash-graph/libgraph-algs/sem_kmeans.perf");
+            ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
 #endif
             K = k;
 
@@ -609,7 +616,8 @@ namespace {
                 g_cluster_dist->print();
 #endif
 
-                BOOST_LOG_TRIVIAL(info) << "Init: Running an engine for PRUNE since init is " << init;
+                BOOST_LOG_TRIVIAL(info) << "Init: Running an engine for PRUNE since init is "
+                    << init;
 
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
