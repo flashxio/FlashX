@@ -72,6 +72,12 @@ namespace {
 
             kmsvector means; // Cluster means
 
+            double& operator[](const unsigned index) {
+                return means[index];
+            }
+        public:
+            typedef typename std::shared_ptr<clusters> ptr;
+
             clusters(const unsigned nclust, const unsigned ncol) {
                 this->nclust = nclust;
                 this->ncol = ncol;
@@ -91,12 +97,6 @@ namespace {
                 complete_v.assign(nclust, true);
             }
 
-            double& operator[](const unsigned index) {
-                return means[index];
-            }
-
-        public:
-            typedef typename std::shared_ptr<clusters> ptr;
 
             static ptr create(const unsigned nclust, const unsigned ncol) {
                 return ptr(new clusters(nclust, ncol));
@@ -223,6 +223,13 @@ namespace {
                     num_members_v[idx]--;
                 }
 
+            template <typename T>
+                void swap_membership(const T* arr, const unsigned from_idx,
+                        const unsigned to_idx) {
+                    remove_member(arr, from_idx);
+                    add_member(arr, to_idx);
+                }
+
             clusters& operator=(const clusters& other) {
                 this->means = other.get_means();
                 this->num_members_v = other.get_num_members_v();
@@ -335,26 +342,11 @@ namespace {
                 return prev_means;
             }
 
-            // TODO: Test vs
-            // TODO: Return reference
-            //const double* get_prev_mean(const unsigned idx) {
-            const kmsiterator get_prev_mean(const unsigned idx) {
-                return prev_means.begin()+(idx*ncol);
-                //return &(prev_means[idx*ncol]);
+            void set_prev_means() {
+                this->prev_means = means;
             }
 
-            void set_prev_mean(const unsigned idx) {
-                if (!is_complete(idx)) {
-                    BOOST_LOG_TRIVIAL(warning) << "WARNING: Doing nothing for "
-                        "unfinalized mean. Permissible once";
-                    return;
-                }
-
-                std::copy(means.begin()+(idx*ncol), means.begin()+((idx+1)*ncol),
-                        this->prev_means.begin()+(idx*ncol));
-            }
-
-            void set_prev_dist_v(const double dist, const unsigned idx) {
+            void set_prev_dist(const double dist, const unsigned idx) {
                 prev_dist_v[idx] = dist;
             }
 
