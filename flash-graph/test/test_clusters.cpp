@@ -96,16 +96,17 @@ void test_prune_clusters() {
     for (unsigned i = 0; i < NCLUST; i++) {
         pcl->add_member(&(data[i][0]), i);
         pcl->finalize(i);
-        pcl->set_prev_mean(i);
     }
 
+    pcl->set_prev_means();
     printf("Printing prev_mean:\n");
     pcl->print_prev_means_v();
 
     printf("Testing prev_mean ..\n");
 
     for (unsigned i = 0; i < NCLUST; i++) {
-        kmsiterator it = pcl->get_prev_mean(i);
+        kmsvector v = pcl->get_prev_means();
+        kmsiterator it = v.begin() + (i*NCOL);
         for (unsigned col = 0; col < NCOL; col++) {
             BOOST_VERIFY(*(it++) == data[i][col]);
         }
