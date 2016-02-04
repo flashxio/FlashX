@@ -155,7 +155,7 @@ namespace {
         // Choose next center c_i with weighted prob
         while ((clust_idx + 1) < K) {
             double cum_dist = 0;
-#pragma omp parallel for reduction(+:cum_dist) shared (dist_v)
+#pragma omp parallel for reduction(+:cum_dist) shared (dist_v, cluster_assignments)
             for (size_t row = 0; row < NUM_ROWS; row++) {
                 double dist = get_dist(&matrix[row*NUM_COLS],
                         &((clusters->get_means())[clust_idx*NUM_COLS]),
@@ -211,16 +211,17 @@ namespace {
             pt_cl[i] = clusters::create(K, NUM_COLS);
 
 #pragma omp parallel for firstprivate(matrix, pt_cl)\
-        shared(cluster_assignments, recalculated_v) schedule(static)
+        shared(cluster_assignments, recalculated_v, dist_v)\
+        schedule(static)
         for (unsigned row = 0; row < NUM_ROWS; row++) {
-
             size_t old_clust = cluster_assignments[row];
+            unsigned offset = row*NUM_COLS;
 
             if (prune_init) { // TODO: Prune using acutal lemma1
                 double dist = std::numeric_limits<double>::max();
 
                 for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-                    dist = get_dist(&matrix[row*NUM_COLS],
+                    dist = get_dist(&matrix[offset],
                             &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                     if (dist < dist_v[row]) {
@@ -230,7 +231,6 @@ namespace {
                 }
             } else {
                 recalculated_v[row] = false;
-
                 dist_v[row] += cls->get_prev_dist(cluster_assignments[row]);
 
                 if (dist_v[row] <= cls->get_s_val(cluster_assignments[row])) {
@@ -249,7 +249,7 @@ namespace {
                         }
 
                         if (!recalculated_v[row]) {
-                            dist_v[row] = get_dist(&matrix[row*NUM_COLS],
+                            dist_v[row] = get_dist(&matrix[offset],
                                     &(cls->get_means()[cluster_assignments[row]*NUM_COLS]),
                                     NUM_COLS);
                             recalculated_v[row] = true;
@@ -262,7 +262,7 @@ namespace {
                         }
 
                         // Track 5
-                        double jdist = get_dist(&matrix[row*NUM_COLS],
+                        double jdist = get_dist(&matrix[offset],
                                 &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                         if (jdist < dist_v[row]) {
@@ -279,12 +279,12 @@ namespace {
 
             if (prune_init) {
                 pt_num_change[omp_get_thread_num()]++;
-                pt_cl[omp_get_thread_num()]->add_member(&matrix[row*NUM_COLS],
+                pt_cl[omp_get_thread_num()]->add_member(&matrix[offset],
                         cluster_assignments[row]);
             } else if (old_clust != cluster_assignments[row]) {
                 pt_num_change[omp_get_thread_num()]++;
 
-                pt_cl[omp_get_thread_num()]->swap_membership(&matrix[row*NUM_COLS],
+                pt_cl[omp_get_thread_num()]->swap_membership(&matrix[offset],
                         old_clust, cluster_assignments[row]);
             }
         }
@@ -295,9 +295,9 @@ namespace {
         BOOST_LOG_TRIVIAL(info) << "Clearing/unfinalizing cluster centers ...";
 #endif
 
-        if (prune_init)
+        if (prune_init) {
             cls->clear();
-        else {
+        } else {
             for (unsigned idx = 0; idx < K; idx++)
                 cls->unfinalize(idx);
         }
