@@ -296,11 +296,16 @@ namespace {
         unsigned old_cluster_id = get_cluster_id();
 
         if (g_prune_init) {
-            for (unsigned cl = 0; cl < K; cl++) { // TODO: Prune this at least
-                double udist = dist_comp(vertex, cl);
-                if (udist < get_dist()) {
-                    set_dist(udist);
-                    set_cluster_id(cl);
+            for (unsigned cl = 0; cl < K; cl++) {
+                if ((get_cluster_id() != INVALID_CLUST_ID) &&
+                        get_dist() <= g_cluster_dist->get(get_cluster_id(), cl)) {
+                    // Skip dist comp
+                } else {
+                    double udist = dist_comp(vertex, cl);
+                    if (udist < get_dist()) {
+                        set_dist(udist);
+                        set_cluster_id(cl);
+                    }
                 }
             }
         } else {
@@ -327,7 +332,7 @@ namespace {
                 }
 
                 // Track 5
-                double jdist = dist_comp(vertex, cl); // TODO: If I've already done this ...
+                double jdist = dist_comp(vertex, cl);
                 if (jdist < get_dist()) {
                     set_dist(jdist);
                     set_cluster_id(cl);
@@ -656,6 +661,8 @@ namespace {
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix ...";
                 g_cluster_dist->print();
+                BOOST_LOG_TRIVIAL(info) << "Printing Clusters:";
+                print_clusters<prune_cluster>(g_clusters);
 #endif
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
