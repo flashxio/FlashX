@@ -252,7 +252,6 @@ namespace {
                         if (get_cluster_id() != INVALID_CLUST_ID &&
                                 g_kmspp_distance[my_id] <=
                                 g_cluster_dist->get(g_kmspp_cluster_idx, get_cluster_id())) {
-                            printf(".");
                         } else {
                             double _dist = get_distance(g_kmspp_cluster_idx, count_it);
 
