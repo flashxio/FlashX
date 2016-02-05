@@ -26,7 +26,6 @@
 #endif
 
 #include "libgraph-algs/dist_matrix.h"
-#include "libgraph-algs/prune_stats.h"
 #include "libgraph-algs/clusters.h"
 
 namespace {
@@ -99,7 +98,7 @@ namespace {
 
         // #pragma omp parallel for firstprivate(cluster_assignments, K) shared(cluster_assignments)
         for (unsigned row = 0; row < NUM_ROWS; row++) {
-            size_t asgnd_clust = random() % K; // 0...K
+            unsigned asgnd_clust = random() % K; // 0...K
             clusters->add_member(&matrix[row*NUM_COLS], asgnd_clust);
             cluster_assignments[row] = asgnd_clust;
         }
@@ -135,7 +134,7 @@ namespace {
      *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
      */
     static void kmeanspp_init(const double* matrix, prune_clusters::ptr clusters,
-            unsigned* cluster_assignments) {
+            unsigned* cluster_assignments, dist_matrix::ptr dm) {
 
         // Choose c1 uniiformly at random
         unsigned selected_idx = random() % NUM_ROWS; // 0...(NUM_ROWS-1)
@@ -156,22 +155,32 @@ namespace {
         while ((clust_idx + 1) < K) {
             double cum_dist = 0;
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v, cluster_assignments)
-            for (size_t row = 0; row < NUM_ROWS; row++) {
-                double dist = get_dist(&matrix[row*NUM_COLS],
-                        &((clusters->get_means())[clust_idx*NUM_COLS]),
-                        NUM_COLS);
+            for (unsigned row = 0; row < NUM_ROWS; row++) {
+                // Prune in kms++
+                if ((cluster_assignments[row] != INVALID_CLUSTER_ID) &&
+                        dist_v[row] <= dm->get(cluster_assignments[row],
+                            clust_idx)) {
 
-                if (dist < dist_v[row]) { // Found a closer cluster than before
-                    dist_v[row] = dist;
-                    cluster_assignments[row] = clust_idx;
+                    // Do no computation
+                } else {
+                    double dist = get_dist(&matrix[row*NUM_COLS],
+                            &((clusters->get_means())[clust_idx*NUM_COLS]),
+                            NUM_COLS);
+
+                    if (dist < dist_v[row]) { // Found a closer cluster than before
+                        dist_v[row] = dist;
+                        cluster_assignments[row] = clust_idx;
+                    }
                 }
                 cum_dist += dist_v[row];
             }
 
+            compute_dist(clusters, dm);
+
             cum_dist = (cum_dist * ((double)random())) / (RAND_MAX - 1.0);
             clust_idx++;
 
-            for (size_t i=0; i < NUM_ROWS; i++) {
+            for (unsigned i = 0; i < NUM_ROWS; i++) {
                 cum_dist -= dist_v[i];
                 if (cum_dist <= 0) {
 #if KM_TEST
@@ -200,12 +209,11 @@ namespace {
     static void EM_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
             std::vector<bool>& recalculated_v, std::vector<double>& dist_v,
-            dist_matrix::ptr dm, prune_stats::ptr ps=nullptr,
-            const bool prune_init=false) {
+            dist_matrix::ptr dm, const bool prune_init=false) {
 
         std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
         // Per thread changed cluster count. OMP_MAX_THREADS
-        std::vector<size_t> pt_num_change(OMP_MAX_THREADS);
+        std::vector<unsigned> pt_num_change(OMP_MAX_THREADS);
 
         for (int i = 0; i < OMP_MAX_THREADS; i++)
             pt_cl[i] = clusters::create(K, NUM_COLS);
@@ -214,19 +222,26 @@ namespace {
         shared(cluster_assignments, recalculated_v, dist_v)\
         schedule(static)
         for (unsigned row = 0; row < NUM_ROWS; row++) {
-            size_t old_clust = cluster_assignments[row];
+            unsigned old_clust = cluster_assignments[row];
             unsigned offset = row*NUM_COLS;
 
-            if (prune_init) { // TODO: Prune using acutal lemma1
+            if (prune_init) {
                 double dist = std::numeric_limits<double>::max();
 
                 for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-                    dist = get_dist(&matrix[offset],
-                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
-                    if (dist < dist_v[row]) {
-                        dist_v[row] = dist;
-                        cluster_assignments[row] = clust_idx;
+                    if ((cluster_assignments[row] != INVALID_CLUSTER_ID) &&
+                            dist_v[row] <= dm->get(cluster_assignments[row],
+                                clust_idx)) {
+                        // Do no computation
+                    } else {
+                        dist = get_dist(&matrix[offset],
+                                &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
+
+                        if (dist < dist_v[row]) {
+                            dist_v[row] = dist;
+                            cluster_assignments[row] = clust_idx;
+                        }
                     }
                 }
             } else {
@@ -234,17 +249,13 @@ namespace {
                 dist_v[row] += cls->get_prev_dist(cluster_assignments[row]);
 
                 if (dist_v[row] <= cls->get_s_val(cluster_assignments[row])) {
-#if KM_TEST
-                    //TODO: ps_v[omp_get_thread_num()]->pp_lemma1(K);
-#endif
+                    // Skip all rows
                 } else {
                     for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
 
                         if (dist_v[row] <= dm->get(cluster_assignments[row],
                                     clust_idx)) {
-#if KM_TEST
-                            //TODO: ps_v[omp_get_thread_num()]->pp_3a();
-#endif
+                            // Skip this cluster
                             continue;
                         }
 
@@ -257,7 +268,7 @@ namespace {
 
                         if (dist_v[row] <= dm->get(cluster_assignments[row],
                                     clust_idx)) {
-                            // TODO: ps_v[omp_get_thread_num()]->pp_3c();
+                            // Skip this cluster
                             continue;
                         }
 
@@ -371,6 +382,7 @@ namespace fg
         recalculated_v.assign(NUM_ROWS, false);
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
+        dist_matrix::ptr dm = dist_matrix::create(K);
 
         /*** End VarInit ***/
         BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
@@ -392,8 +404,7 @@ namespace fg
             forgy_init(matrix, clusters);
             g_init_type = FORGY;
         } else if (init == "kmeanspp") {
-            // TODO: Prune in here
-            kmeanspp_init(matrix, clusters, cluster_assignments);
+            kmeanspp_init(matrix, clusters, cluster_assignments, dm);
             g_init_type = PLUSPLUS;
         } else if (init == "none") {
             g_init_type = NONE;
@@ -405,18 +416,12 @@ namespace fg
             exit(-1);
         }
 
-#if KM_TEST
-        prune_stats::ptr ps = prune_stats::create(NUM_ROWS, K);
-#endif
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
-
-        dist_matrix::ptr dm = dist_matrix::create(K);
-        compute_dist(clusters, dm);
 
         BOOST_LOG_TRIVIAL(info) << "Running INIT engine:";
         EM_step(matrix, clusters, cluster_assignments,
                 cluster_assignment_counts, recalculated_v,
-                dist_v, dm, ps, true);
+                dist_v, dm, true);
 
         g_num_changed = 0;
         BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
@@ -442,8 +447,8 @@ namespace fg
             clusters->print_means();
 #endif
 
-            EM_step(matrix, clusters, cluster_assignments, cluster_assignment_counts,
-                    recalculated_v, dist_v, dm, ps);
+            EM_step(matrix, clusters, cluster_assignments,
+                    cluster_assignment_counts, recalculated_v, dist_v, dm);
 #if KM_TEST
             printf("Cluster assignment counts: ");
             print_arr(cluster_assignment_counts, K);
