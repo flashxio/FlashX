@@ -248,15 +248,23 @@ namespace {
                         g_clusters[g_kmspp_cluster_idx]->add_member(count_it);
                     } else if (g_kmspp_stage == DIST) {
                         vertex_id_t my_id = prog.get_vertex_id(*this);
-                        double _dist = get_distance(g_kmspp_cluster_idx, count_it);
-                        if (_dist < g_kmspp_distance[my_id]) {
+
+                        if (get_cluster_id() != INVALID_CLUST_ID &&
+                                g_kmspp_distance[my_id] <=
+                                g_cluster_dist->get(g_kmspp_cluster_idx, get_cluster_id())) {
+                            printf(".");
+                        } else {
+                            double _dist = get_distance(g_kmspp_cluster_idx, count_it);
+
+                            if (_dist < g_kmspp_distance[my_id]) {
 #if VERBOSE
-                            printf("kms++ v%u updating dist from: %s to %.3f\n",
-                                    my_id, (s(g_kmspp_distance[my_id])).c_str(), _dist);
+                                printf("kms++ v%u updating dist from: %s to %.3f\n",
+                                        my_id, (s(g_kmspp_distance[my_id])).c_str(), _dist);
 #endif
-                            g_kmspp_distance[my_id] = _dist;
-                            set_cluster_id(g_kmspp_cluster_idx);
-                            set_dist(_dist);
+                                g_kmspp_distance[my_id] = _dist;
+                                set_cluster_id(g_kmspp_cluster_idx);
+                                set_dist(_dist);
+                            }
                         }
                         ((kmeanspp_vertex_program&)prog).
                             pt_cuml_sum_peq(g_kmspp_distance[my_id]);
