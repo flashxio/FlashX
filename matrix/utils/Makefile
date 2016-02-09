@@ -32,3 +32,11 @@ fg2fm: fg2fm.o fg_utils.o ../libFMatrix.a
 
 fg2crs: fg2crs.o fg_utils.o ../libFMatrix.a
 	$(CXX) -o fg2crs fg2crs.o fg_utils.o $(LDFLAGS)
+
+clean:
+	rm -f el2fg
+	rm -f fg2crs
+	rm -f fg2fm
+	rm -f *.o
+	rm -f *.d
+	rm *~

@@ -103,5 +103,6 @@ clean:
 	rm -f test-mem_matrix_store
 	rm -f test-special_matrix_store
 	rm -f test-rounderror
+	rm -f test-EM_vector_vector
 
 -include $(DEPS) 

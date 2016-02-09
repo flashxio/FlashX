@@ -136,5 +136,12 @@ clean:
 	rm -f test-mkl_multiply
 	rm -f test-eigen
 	rm -f BlockDavidsonTpetra
+	rm -f rand_mat_gen
+	rm -f test-algs
+	rm -f test-anasazi_eigen
+	rm -f test-block_mv
+	rm -f test-dgemm
+	rm -f test-tpetra_MV_multiply
+	rm -f test-mkl_dgemm
 
 -include $(DEPS) 
