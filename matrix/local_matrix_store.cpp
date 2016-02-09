@@ -603,39 +603,110 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 
 }
 
-void aggregate(const local_matrix_store &store, const bulk_operate &op,
-		int margin, local_vec_store &res)
+static const size_t LONG_DIM_LEN = 1024;
+
+// This case is to aggregate all elements to a single value.
+static void agg_both(const local_matrix_store &store, const agg_operate &op,
+		local_vec_store &res)
 {
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	if (margin == matrix_margin::BOTH) {
-		assert(res.get_length() == 1);
-		// If the store has data stored contiguously.
-		if (store.get_raw_arr())
-			op.runAgg(ncol * nrow, store.get_raw_arr(), NULL, res.get_raw_arr());
-		// For row-major matrix.
-		else if (store.store_layout() == matrix_layout_t::L_ROW) {
-			const local_row_matrix_store &row_store
-				= static_cast<const local_row_matrix_store &>(store);
-			// We need to initialize the result first.
-			op.runAgg(ncol, row_store.get_row(0), NULL, res.get_raw_arr());
-			for (size_t i = 1; i < nrow; i++)
-				op.runAgg(ncol, row_store.get_row(i), res.get_raw_arr(),
-						res.get_raw_arr());
+	assert(res.get_length() == 1);
+	// If the store has data stored contiguously.
+	if (store.get_raw_arr())
+		op.runAgg(ncol * nrow, store.get_raw_arr(), NULL, res.get_raw_arr());
+	// For row-major matrix and the agg op allows to combine partial agg res.
+	else if (store.store_layout() == matrix_layout_t::L_ROW && op.has_combine()) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		local_buf_vec_store part_res(0, store.get_num_rows(),
+				op.get_output_type(), -1);
+		for (size_t i = 0; i < nrow; i++)
+			op.runAgg(ncol, row_store.get_row(i), NULL, part_res.get(i));
+		op.runCombine(part_res.get_length(), part_res.get_raw_arr(), NULL,
+				res.get_raw_arr());
+	}
+	// For col-major matrix and the agg op allows to combine partial agg res.
+	else if (op.has_combine()) {
+		assert(store.store_layout() == matrix_layout_t::L_COL);
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		local_buf_vec_store part_res(0, store.get_num_cols(),
+				op.get_output_type(), -1);
+		for (size_t i = 0; i < ncol; i++)
+			op.runAgg(nrow, col_store.get_col(i), NULL, part_res.get(i));
+		op.runCombine(part_res.get_length(), part_res.get_raw_arr(), NULL,
+				res.get_raw_arr());
+	}
+	// For row-major matrix and the agg op doesn't allow to combine partial
+	// agg res.
+	else if (store.store_layout() == matrix_layout_t::L_ROW) {
+		local_buf_row_matrix_store buf(0, 0, store.get_num_rows(),
+				store.get_num_cols(), store.get_type(), -1);
+		buf.copy_from(store);
+		op.runAgg(ncol * nrow, buf.get_raw_arr(), NULL, res.get_raw_arr());
+	}
+	// For col-major matrix and the agg op doesn't allow to combine partial
+	// agg res.
+	else {
+		local_buf_col_matrix_store buf(0, 0, store.get_num_rows(),
+				store.get_num_cols(), store.get_type(), -1);
+		buf.copy_from(store);
+		op.runAgg(ncol * nrow, buf.get_raw_arr(), NULL, res.get_raw_arr());
+	}
+}
+
+static void agg_rows(const local_matrix_store &store, const agg_operate &op,
+		local_vec_store &res)
+{
+	size_t ncol = store.get_num_cols();
+	size_t nrow = store.get_num_rows();
+	assert(ncol > 1);
+	// Aggregate on rows, but the matrix is stored in col-major.
+	// Instead of running aggregation on each row directly, we compute partial
+	// aggregation on columns. This only works if the aggregation operation
+	// allows partial aggregation and the agg and combine operations are
+	// the same.
+	if (store.store_layout() == matrix_layout_t::L_COL && op.is_same()) {
+		assert(res.get_length() == store.get_num_rows());
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		if (nrow <= LONG_DIM_LEN) {
+			char *res_arr = res.get_raw_arr();
+			op.get_agg().runAA(res.get_length(), col_store.get_col(0),
+					col_store.get_col(1), res_arr);
+			for (size_t i = 2; i < ncol; i++)
+				op.get_agg().runAA(res.get_length(), res_arr,
+						col_store.get_col(i), res_arr);
 		}
+		// In this case, we need to break the matrix into smaller partitions
+		// so that the agg result is always in L1/L2 cache.
 		else {
-			assert(store.store_layout() == matrix_layout_t::L_COL);
-			const local_col_matrix_store &col_store
-				= static_cast<const local_col_matrix_store &>(store);
-			// We need to initialize the result first.
-			op.runAgg(nrow, col_store.get_col(0), NULL, res.get_raw_arr());
-			for (size_t i = 1; i < ncol; i++)
-				op.runAgg(nrow, col_store.get_col(i), res.get_raw_arr(),
-						res.get_raw_arr());
+			char *res_arr = res.get_raw_arr();
+			size_t res_entry_size = res.get_type().get_size();
+			size_t orig_num_rows = col_store.get_num_rows();
+			local_matrix_store::exposed_area orig = col_store.get_exposed_area();
+			local_col_matrix_store &mutable_store
+				= const_cast<local_col_matrix_store &>(col_store);
+			for (size_t row_idx = 0; row_idx < orig_num_rows;
+					row_idx += LONG_DIM_LEN) {
+				size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
+				mutable_store.resize(row_idx, 0, llen, col_store.get_num_cols());
+
+				char *lres_arr = res_arr + row_idx * res_entry_size;
+				op.get_agg().runAA(llen, col_store.get_col(0),
+						col_store.get_col(1), lres_arr);
+				for (size_t i = 2; i < col_store.get_num_cols(); i++)
+					op.get_agg().runAA(llen, lres_arr, col_store.get_col(i),
+							lres_arr);
+			}
+			mutable_store.restore_size(orig);
 		}
 	}
-	else if (margin == matrix_margin::MAR_ROW) {
+	// This is the default solution to compute aggregation.
+	else {
 		local_matrix_store::const_ptr buf_mat;
+		assert(res.get_length() == store.get_num_rows());
 		const local_row_matrix_store *row_store;
 		if (store.store_layout() == matrix_layout_t::L_COL) {
 			buf_mat = store.conv2(matrix_layout_t::L_ROW);
@@ -645,24 +716,79 @@ void aggregate(const local_matrix_store &store, const bulk_operate &op,
 		}
 		else
 			row_store = static_cast<const local_row_matrix_store *>(&store);
-		assert(res.get_length() == store.get_num_rows());
+		// Aggregate on rows, and the matrix is stored in row-major.
 		for (size_t i = 0; i < nrow; i++)
 			op.runAgg(ncol, row_store->get_row(i), NULL, res.get(i));
 	}
-	else if (margin == matrix_margin::MAR_COL) {
+}
+
+// This is implemented very similarly to above.
+static void agg_cols(const local_matrix_store &store, const agg_operate &op,
+		local_vec_store &res)
+{
+	size_t ncol = store.get_num_cols();
+	size_t nrow = store.get_num_rows();
+	assert(nrow > 1);
+	if (store.store_layout() == matrix_layout_t::L_ROW && op.is_same()) {
+		assert(res.get_length() == store.get_num_cols());
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		if (ncol <= LONG_DIM_LEN) {
+			char *res_arr = res.get_raw_arr();
+			op.get_agg().runAA(res.get_length(), row_store.get_row(0),
+					row_store.get_row(1), res_arr);
+			for (size_t i = 2; i < nrow; i++)
+				op.get_agg().runAA(res.get_length(), res_arr,
+						row_store.get_row(i), res_arr);
+		}
+		else {
+			char *res_arr = res.get_raw_arr();
+			size_t res_entry_size = res.get_type().get_size();
+			size_t orig_num_cols = row_store.get_num_cols();
+			local_matrix_store::exposed_area orig = row_store.get_exposed_area();
+			local_row_matrix_store &mutable_store
+				= const_cast<local_row_matrix_store &>(row_store);
+			for (size_t col_idx = 0; col_idx < orig_num_cols;
+					col_idx += LONG_DIM_LEN) {
+				size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
+				mutable_store.resize(0, col_idx, row_store.get_num_rows(), llen);
+
+				char *lres_arr = res_arr + col_idx * res_entry_size;
+				op.get_agg().runAA(llen, row_store.get_row(0),
+						row_store.get_row(1), lres_arr);
+				for (size_t i = 2; i < row_store.get_num_rows(); i++)
+					op.get_agg().runAA(llen, lres_arr, row_store.get_row(i),
+							lres_arr);
+			}
+			mutable_store.restore_size(orig);
+		}
+	}
+	else {
 		local_matrix_store::const_ptr buf_mat;
+		assert(res.get_length() == store.get_num_cols());
 		const local_col_matrix_store *col_store;
 		if (store.store_layout() == matrix_layout_t::L_ROW) {
 			buf_mat = store.conv2(matrix_layout_t::L_COL);
+			assert(buf_mat);
 			col_store = static_cast<const local_col_matrix_store *>(
 					buf_mat.get());
 		}
 		else
 			col_store = static_cast<const local_col_matrix_store *>(&store);
-		assert(res.get_length() == store.get_num_cols());
 		for (size_t i = 0; i < ncol; i++)
 			op.runAgg(nrow, col_store->get_col(i), NULL, res.get(i));
 	}
+}
+
+void aggregate(const local_matrix_store &store, const agg_operate &op,
+		int margin, local_vec_store &res)
+{
+	if (margin == matrix_margin::BOTH)
+		agg_both(store, op, res);
+	else if (margin == matrix_margin::MAR_ROW)
+		agg_rows(store, op, res);
+	else if (margin == matrix_margin::MAR_COL)
+		agg_cols(store, op, res);
 	else {
 		// This shouldn't happen.
 		BOOST_LOG_TRIVIAL(error) << boost::format(

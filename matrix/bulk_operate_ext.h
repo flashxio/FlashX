@@ -46,8 +46,20 @@ public:
 	static const_ptr create(bulk_operate::const_ptr agg,
 			bulk_operate::const_ptr combine);
 
+	bool is_same() const {
+		return agg == combine;
+	}
+
 	bool has_combine() const {
 		return combine != NULL;
+	}
+
+	bulk_operate::const_ptr get_agg_ptr() const {
+		return agg;
+	}
+
+	bulk_operate::const_ptr get_combine_ptr() const {
+		return combine;
 	}
 
 	const bulk_operate &get_agg() const {

@@ -236,12 +236,37 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 	else
 		store->set_data(set_row_operate(store->get_num_cols()));
 
-	const bulk_operate &op = store->get_type().get_basic_ops().get_add();
-	int sum = 0;
-	local_ref_vec_store res((char *) &sum, 0, 1, get_scalar_type<int>(), -1);
-	aggregate(*store, op, matrix_margin::BOTH, res);
-	int num_eles = store->get_num_rows() * store->get_num_cols();
-	assert(sum == (num_eles - 1) * num_eles / 2);
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			store->get_type().get_basic_ops().get_add());
+	for (size_t i = 0; i < 2; i++) {
+		agg_operate::const_ptr op;
+		if (i == 0)
+			op = agg_operate::create(add, add);
+		else
+			op = agg_operate::create(add, bulk_operate::const_ptr());
+
+		int sum = 0;
+		local_ref_vec_store res((char *) &sum, 0, 1, get_scalar_type<int>(), -1);
+		aggregate(*store, *op, matrix_margin::BOTH, res);
+		int num_eles = store->get_num_rows() * store->get_num_cols();
+		assert(sum == (num_eles - 1) * num_eles / 2);
+
+		local_buf_vec_store res1(0, store->get_num_rows(), op->get_output_type(), -1);
+		aggregate(*store, *op, matrix_margin::MAR_ROW, res1);
+		for (size_t i = 0; i < res1.get_length(); i++) {
+			int base = i * store->get_num_cols();
+			assert(res1.get<int>(i) == base * store->get_num_cols()
+					+ (store->get_num_cols() - 1) * store->get_num_cols() / 2);
+		}
+
+		local_buf_vec_store res2(0, store->get_num_cols(), op->get_output_type(), -1);
+		aggregate(*store, *op, matrix_margin::MAR_COL, res2);
+		for (size_t i = 0; i < res2.get_length(); i++) {
+			size_t n = store->get_num_rows();
+			size_t m = store->get_num_cols();
+			assert(res2.get<int>(i) == i * n + (n - 1) * m * n / 2);
+		}
+	}
 }
 
 void test_aggregate(size_t long_dim)
@@ -250,8 +275,12 @@ void test_aggregate(size_t long_dim)
 	// Test on local buffer matrix.
 	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
 	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(

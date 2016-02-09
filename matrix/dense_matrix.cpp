@@ -2512,7 +2512,7 @@ public:
 			local_ref_vec_store res(
 					static_cast<detail::local_row_matrix_store &>(out).get_row(0),
 					0, out.get_num_cols(), out.get_type(), -1);
-			aggregate(*ins[0], op->get_agg(), margin, res);
+			aggregate(*ins[0], *op, margin, res);
 		}
 		else {
 			assert(out.store_layout() == matrix_layout_t::L_COL);
@@ -2520,7 +2520,7 @@ public:
 			local_ref_vec_store res(
 					static_cast<detail::local_col_matrix_store &>(out).get_col(0),
 					0, out.get_num_rows(), out.get_type(), -1);
-			aggregate(*ins[0], op->get_agg(), margin, res);
+			aggregate(*ins[0], *op, margin, res);
 		}
 	}
 
@@ -2599,7 +2599,7 @@ void matrix_long_agg_op::run(
 			= local_vec_store::ptr(new local_buf_vec_store(0,
 						partial_res->get_num_cols(), partial_res->get_type(),
 						ins[0]->get_node_id()));
-	detail::aggregate(*ins[0], op->get_agg(), margin, *local_bufs[thread_id]);
+	detail::aggregate(*ins[0], *op, margin, *local_bufs[thread_id]);
 
 	// If this is the first time, we should copy the local results to
 	// the corresponding row.
@@ -2699,8 +2699,12 @@ detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 			partial_res->get_type(), -1);
 	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_num_rows(),
 			res->get_type(), -1);
-	detail::aggregate(*local_res, op->get_combine(),
-			matrix_margin::MAR_COL, local_vec);
+	// I need to create new aggregation with the combine operation
+	// to run aggregation on the columns of the matrix.
+	agg_operate::const_ptr combine_agg = agg_operate::create(op->get_combine_ptr(),
+			bulk_operate::const_ptr());
+	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
+			local_vec);
 	return res;
 }
 

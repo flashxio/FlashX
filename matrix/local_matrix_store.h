@@ -35,6 +35,7 @@ namespace fm
 
 class bulk_operate;
 class bulk_uoperate;
+class agg_operate;
 class arr_apply_operate;
 
 namespace detail
@@ -1127,7 +1128,7 @@ public:
 /*
  * These are the general operations on the local matrix store.
  */
-void aggregate(const local_matrix_store &store, const bulk_operate &op,
+void aggregate(const local_matrix_store &store, const agg_operate &op,
 		int margin, local_vec_store &res);
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res);
