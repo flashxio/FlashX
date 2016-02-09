@@ -5,7 +5,7 @@
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
- * This file is part of FlashMatrix.
+ * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@
 #include "log.h"
 #include "common.h"
 #include "libgraph-algs/kmeans_types.h"
+#include "libgraph-algs/sem_kmeans_util.h"
+#include "libgraph-algs/clusters.h"
 
 namespace {
     /**
@@ -70,6 +72,24 @@ namespace {
                 std::cout <<  " ]\n";
             }
         }
+
+    static dist_type_t g_dist_type;
+
+    /** /brief Choose the correct distance function and return it
+     * /param arg0 A pointer to data
+     * /param arg1 Another pointer to data
+     * /param len The number of elements used in the comparison
+     * /return the distance based on the chosen distance metric
+     */
+    double get_dist(const double* arg0, const double* arg1, const unsigned len) {
+        if (g_dist_type == EUCL)
+            return eucl_dist(arg0, arg1, len);
+        else if (g_dist_type == COS)
+            return cos_dist(arg0, arg1, len);
+        else
+            BOOST_ASSERT_MSG(false, "Unknown distance metric!");
+        exit(EXIT_FAILURE);
+    }
 }
 
 namespace fg {
