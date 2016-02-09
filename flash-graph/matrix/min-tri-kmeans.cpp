@@ -2,7 +2,7 @@
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
- * This file is part of FlashMatrix.
+ * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@
 #endif
 
 #include "libgraph-algs/dist_matrix.h"
-#include "libgraph-algs/clusters.h"
 
 namespace {
     static unsigned NUM_COLS;
@@ -35,56 +34,8 @@ namespace {
     short OMP_MAX_THREADS;
     static unsigned g_num_changed = 0;
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
-    static dist_type_t g_dist_type;
     static struct timeval start, end;
     static init_type_t g_init_type;
-
-    static void compute_dist(prune_clusters::ptr cls, dist_matrix::ptr dm) {
-        if (cls->get_nclust() <= 1) return;
-
-        BOOST_VERIFY(dm->get_num_rows() == cls->get_nclust()-1);
-        cls->reset_s_val_v();
-        //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
-        for (unsigned i = 0; i < cls->get_nclust(); i++) {
-            for (unsigned j = i+1; j < cls->get_nclust(); j++) {
-                double dist = eucl_dist(&(cls->get_means()[i*NUM_COLS]),
-                        &(cls->get_means()[j*NUM_COLS]), NUM_COLS) / 2.0;
-                dm->set(i,j, dist);
-
-                // Set s(x) for each cluster
-                if (dist < cls->get_s_val(i)) {
-                    cls->set_s_val(dist, i);
-                }
-
-                if (dist < cls->get_s_val(j)) {
-                    cls->set_s_val(dist, j);
-                }
-            }
-        }
-#if KM_TEST
-        for (unsigned cl = 0; cl < cls->get_nclust(); cl++) {
-            BOOST_VERIFY(cls->get_s_val(cl) == dm->get_min_dist(cl));
-            BOOST_LOG_TRIVIAL(info) << "cl:" << cl << " get_s_val: "
-                << cls->get_s_val(cl);
-        }
-#endif
-    }
-
-    /** /brief Choose the correct distance function and return it
-     * /param arg0 A pointer to data
-     * /param arg1 Another pointer to data
-     * /param len The number of elements used in the comparison
-     * /return the distance based on the chosen distance metric
-     */
-    static double get_dist(const double* arg0, const double* arg1, const unsigned len) {
-        if (g_dist_type == EUCL)
-            return eucl_dist(arg0, arg1, len);
-        else if (g_dist_type == COS)
-            return cos_dist(arg0, arg1, len);
-        else
-            BOOST_ASSERT_MSG(false, "Unknown distance metric!");
-        exit(EXIT_FAILURE);
-    }
 
     /**
      * \brief This initializes clusters by randomly choosing sample
@@ -175,7 +126,7 @@ namespace {
                 cum_dist += dist_v[row];
             }
 
-            compute_dist(clusters, dm);
+            compute_dist(clusters, dm, NUM_COLS);
 
             cum_dist = (cum_dist * ((double)random())) / (RAND_MAX - 1.0);
             clust_idx++;
@@ -348,7 +299,7 @@ namespace fg
             const double tolerance, const std::string dist_type)
     {
 #ifdef PROFILER
-        ProfilerStart("/mnt/nfs/disa/FlashGraph/flash-graph/matrix/min-tri-kmeans.perf");
+        ProfilerStart("matrix/min-tri-kmeans.perf");
 #endif
         NUM_COLS = num_cols;
         K = k;
@@ -408,6 +359,7 @@ namespace fg
             g_init_type = PLUSPLUS;
         } else if (init == "none") {
             g_init_type = NONE;
+            compute_dist(clusters, dm, NUM_COLS);
         } else {
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param init must be one of: "
@@ -439,7 +391,7 @@ namespace fg
                 ". Computing cluster assignments ...";
 
             BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
-            compute_dist(clusters, dm);
+            compute_dist(clusters, dm, NUM_COLS);
 #if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix ...";
             dm->print();
