@@ -2,7 +2,7 @@
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
- * This file is part of FlashMatrix.
+ * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,6 @@
 #include <gperftools/profiler.h>
 #endif
 
-#include "libgraph-algs/sem_kmeans_util.h"
-#include "libgraph-algs/prune_stats.h"
-#include "libgraph-algs/clusters.h"
-
 namespace {
 	static unsigned NUM_COLS;
 	static size_t K;
@@ -36,7 +32,6 @@ namespace {
 	short OMP_MAX_THREADS;
 	static unsigned g_num_changed = 0;
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
-    static dist_type_t g_dist_type;
 	static struct timeval start, end;
     static init_type_t g_init_type;
 
@@ -47,7 +42,7 @@ namespace {
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
 	static void random_partition_init(unsigned* cluster_assignments,
-            const double* matrix, prune_clusters::ptr clusters) {
+            const double* matrix, clusters::ptr clusters) {
 		BOOST_LOG_TRIVIAL(info) << "Random init start";
 
 		// #pragma omp parallel for firstprivate(cluster_assignments, K) shared(cluster_assignments)
@@ -64,14 +59,13 @@ namespace {
 		BOOST_LOG_TRIVIAL(info) << "Random init end\n";
 	}
 
-
 	/**
 	 * \brief Forgy init takes `K` random samples from the matrix
 	 *		and uses them as cluster centers.
 	 * \param matrix the flattened matrix who's rows are being clustered.
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 */
-	static void forgy_init(const double* matrix, prune_clusters::ptr clusters) {
+	static void forgy_init(const double* matrix, clusters::ptr clusters) {
 
 		BOOST_LOG_TRIVIAL(info) << "Forgy init start";
 
@@ -87,7 +81,7 @@ namespace {
 	 * \brief A parallel version of the kmeans++ initialization alg.
 	 *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
 	 */
-	static void kmeanspp_init(const double* matrix, prune_clusters::ptr clusters,
+	static void kmeanspp_init(const double* matrix, clusters::ptr clusters,
             unsigned* cluster_assignments, std::vector<double>& dist_v) {
 
 		// Choose c1 uniiformly at random
@@ -97,7 +91,8 @@ namespace {
 		dist_v[selected_idx] = 0.0;
 
 #if KM_TEST
-		BOOST_LOG_TRIVIAL(info) << "\nChoosing " << selected_idx << " as center K = 0";
+		BOOST_LOG_TRIVIAL(info) << "\nChoosing "
+            << selected_idx << " as center K = 0";
 #endif
 
 		unsigned clust_idx = 0; // The number of clusters assigned
@@ -107,17 +102,8 @@ namespace {
 			double cum_dist = 0;
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v)
 			for (size_t row = 0; row < NUM_ROWS; row++) {
-                double dist = std::numeric_limits<double>::max();
-
-                if (g_dist_type == EUCL)
-                    // Per thread instance
-                    dist = eucl_dist(&matrix[row*NUM_COLS],
+                double dist = get_dist(&matrix[row*NUM_COLS],
                             &((clusters->get_means())[clust_idx*NUM_COLS]), NUM_COLS);
-                else if (g_dist_type == COS)
-                    dist = cos_dist(&matrix[row*NUM_COLS],
-                            &((clusters->get_means())[clust_idx*NUM_COLS]), NUM_COLS);
-                else
-                    BOOST_ASSERT_MSG(false, "Unknown distance metric!");
 
 				if (dist < dist_v[row]) { // Found a closer cluster than before
 					dist_v[row] = dist;
@@ -155,9 +141,9 @@ namespace {
 	 * \param clusters The cluster centers (means) flattened matrix.
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
-	static void EM_step(const double* matrix, prune_clusters::ptr cls,
+	static void EM_step(const double* matrix, clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            prune_stats::ptr ps=nullptr, const bool prune_init=false) {
+            const bool prune_init=false) {
 
 		std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
         // Per thread changed cluster count. OMP_MAX_THREADS
@@ -175,14 +161,8 @@ namespace {
             dist = best = std::numeric_limits<double>::max();
 
             for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-                if (g_dist_type == EUCL)
-                    dist = eucl_dist(&matrix[row*NUM_COLS],
-                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
-                else if (g_dist_type == COS)
-                    dist = cos_dist(&matrix[row*NUM_COLS],
-                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
-                else
-                    BOOST_ASSERT_MSG(false, "Unknown distance metric!");
+                dist = get_dist(&matrix[row*NUM_COLS],
+                        &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                 if (dist < best) {
                     best = dist;
@@ -238,7 +218,7 @@ namespace fg
             const double tolerance, const std::string dist_type)
 	{
 #ifdef PROFILER
-		ProfilerStart("/mnt/nfs/disa/FlashGraph/flash-graph/matrix/kmeans.perf");
+		ProfilerStart("matrix/kmeans.perf");
 #endif
 		NUM_COLS = num_cols;
 		K = k;
@@ -262,7 +242,7 @@ namespace fg
         std::fill(&cluster_assignments[0], (&cluster_assignments[0])+NUM_ROWS, -1);
         std::fill(&cluster_assignment_counts[0], (&cluster_assignment_counts[0])+K, 0);
 
-        prune_clusters::ptr clusters = prune_clusters::create(K, NUM_COLS);
+        clusters::ptr clusters = clusters::create(K, NUM_COLS);
 
         if (init == "none")
             clusters->set_mean(clusters_ptr);
@@ -303,14 +283,10 @@ namespace fg
             exit(-1);
         }
 
-#if KM_TEST
-        prune_stats::ptr ps = prune_stats::create(NUM_ROWS, K);
-#endif
-
         if (g_init_type == NONE || g_init_type == FORGY
                 || g_init_type == RANDOM) {
 			EM_step(matrix, clusters, cluster_assignments,
-                    cluster_assignment_counts, ps, true);
+                    cluster_assignment_counts, true);
         }
 
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
@@ -328,7 +304,7 @@ namespace fg
 			BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter <<
 				". Computing cluster assignments ...";
 			EM_step(matrix, clusters, cluster_assignments,
-                    cluster_assignment_counts, ps);
+                    cluster_assignment_counts);
 #if KM_TEST
             printf("Cluster assignment counts: ");
             print_arr(cluster_assignment_counts, K);
