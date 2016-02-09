@@ -315,11 +315,15 @@ class in_mem_byte_array: public page_byte_array
 	off_t off;
 	size_t size;
 	const char *pages;
+	// We might need to allocate memory to keep data in `pages'.
+	// We use this to hold the allocated memory.
+	std::shared_ptr<char> data_holder;
 
 	void assign(in_mem_byte_array &arr) {
 		this->off = arr.off;
 		this->size = arr.size;
 		this->pages = arr.pages;
+		this->data_holder = arr.data_holder;
 	}
 
 	in_mem_byte_array(in_mem_byte_array &arr) {
@@ -338,10 +342,12 @@ public:
 	}
 
 	in_mem_byte_array(const io_request &req, const char *pages,
+			std::shared_ptr<char> holder,
 			byte_array_allocator &alloc): page_byte_array(alloc) {
 		this->off = req.get_offset();
 		this->size = req.get_size();
 		this->pages = pages;
+		this->data_holder = holder;
 	}
 
 	virtual off_t get_offset() const {
@@ -425,6 +431,7 @@ void in_mem_io::process_req(const io_request &req)
 	NUMA_buffer::data_info info = data->get_data(off, size);
 	assert(info.first);
 	char *first_page = info.first;
+	std::shared_ptr<char> holder;
 	// If the data in the buffer isn't stored in contiguous memory,
 	// we need to copy them to a piece of contiguous memory.
 	// This should happen very rarely if the range size in the NUMA mapper
@@ -432,16 +439,13 @@ void in_mem_io::process_req(const io_request &req)
 	if (info.second < size) {
 		first_page = (char *) malloc(size);
 		data->copy_to(first_page, size, off);
+		holder = std::shared_ptr<char>(first_page, cfree());
 	}
 
-	in_mem_byte_array byte_arr(req, first_page, *array_allocator);
+	in_mem_byte_array byte_arr(req, first_page, holder, *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
 	comp_io_sched->post_comp_process(compute);
-
-	// If we allocate memory to store the data, we need to delete it now.
-	if (info.second < size)
-		free(first_page);
 }
 
 void in_mem_io::process_computes()

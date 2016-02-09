@@ -260,16 +260,23 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			}
 		}
 		// Iterate over the NUMA nodes with disks.
+		size_t tot_num_threads = 0;
 		for (auto it = indices.begin(); it != indices.end(); it++) {
+			size_t num_io_threads = params.get_num_io_threads();
+			// If the number of I/O threads isn't specified, we give an I/O
+			// thread for each SSD.
+			if (num_io_threads == 0)
+				num_io_threads = it->second.size();
 			// Create disk accessing threads.
-			if (it->second.size() % params.get_num_io_threads() != 0) {
-				fprintf(stderr, "There are %ld disks on Node %d, but %d I/O threads\n",
-						it->second.size(), it->first, params.get_num_io_threads());
+			if (it->second.size() % num_io_threads != 0) {
+				fprintf(stderr, "There are %ld disks on Node %d, but %ld I/O threads\n",
+						it->second.size(), it->first, num_io_threads);
 				fprintf(stderr,
 						"The number of disks should be divisible by #I/O threads\n");
 				exit(-1);
 			}
-			std::vector<disk_io_thread::ptr> ts(params.get_num_io_threads());
+			std::vector<disk_io_thread::ptr> ts(num_io_threads);
+			tot_num_threads += num_io_threads;
 			for (size_t i = 0; i < ts.size(); i++) {
 				std::vector<int> disks(it->second.size() / ts.size());
 				for (size_t j = 0; j < disks.size(); j++)
@@ -297,6 +304,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 				}
 			}
 		}
+		BOOST_LOG_TRIVIAL(info) << boost::format(
+				"SAFS runs on %1% SSDs with %2% I/O threads") % num_files
+			% tot_num_threads;
 		global_data.read_thread_set.insert(global_data.read_threads.begin(),
 				global_data.read_threads.end());
 #if 0

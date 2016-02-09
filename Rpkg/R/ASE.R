@@ -14,13 +14,16 @@
 #' For the Laplacian matrix and the normalized Laplacian matrix, this function
 #' only accepts a symmetric sparse matrix.
 #'
+#' For the adjacency matrix (A) and augmented matrix (Aug), it computes
+#' the largest eigenvalues and the corresponding eigenvectors.
+#' For the Laplacian matrix and the normalized Laplacian matrix, it computes
+#' the eigenvectors for the smallest eigenvalues.
+#'
 #' @param fm The FlashMatrixR object
-#' @param num.eigen The number of eigenvalues/vectors required.
+#' @param nev The number of eigenvalues/vectors required.
 #' @param which The type of the embedding.
-#' @param which.eigen Specify which eigenvalues/vectors to compute,
-#'                    character constant with exactly two characters.
 #' @param c The constant used in the Aug variant of embedding.
-#' @param tau The value used in the regularized Laplacian embedding.
+#' @param ncv The number of vectors in the vector subspace.
 #' @param tol Numeric scalar. Stopping criterion: the relative accuracy
 #' of the Ritz value is considered acceptable if its error is less than
 #' tol times its estimated value. If this is set to zero then machine
@@ -42,8 +45,8 @@
 #'   the performed calculation, including an ARPACK exit code.
 #' @name fm.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.ASE <- function(fm, num.eigen, which=c("A, Aug, L, nL"),
-				   which.eigen=c("LM, LA, SM, SA"), c=1, tol=1.0e-12)
+fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
+								  c=1/nrow(fm), ncv=2*nev, tol=1.0e-12)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
@@ -82,46 +85,19 @@ fm.ASE <- function(fm, num.eigen, which=c("A, Aug, L, nL"),
 	}
 	else if (which == "L") {
 		d <- get.degree(fm)
-		if (which.eigen == "LM" || which.eigen == "LA")
-			multiply <- function(x, extra) multiply.left.diag(d, x) - fm %*% x
-		# When computing the smallest eigenvalues, we compute the largest ones
-		# and them convert them to the smallest eigenvalues.
-		# It's easier to compute the largest eigenvalues.
-		else if (which.eigen == "SM") {
-			multiply <- function(x, extra) fm %*% x
-			which.eigen <- "LM"
-			comp.oppo <- TRUE
-		}
-		else {
-			multiply <- function(x, extra) fm %*% x
-			which.eigen <- "LA"
-			comp.oppo <- TRUE
-		}
+		# We compute the largest eigenvalues and then convert them to
+		# the smallest eigenvalues. It's easier to compute the largest eigenvalues.
+		multiply <- function(x, extra) fm %*% x
+		comp.oppo <- TRUE
 	}
 	else if (which == "nL") {
 		d <- 1/sqrt(get.degree(fm))
-		# D^(-1/2) * L * D^(-1/2) * x
-		if (which.eigen == "LM" || which.eigen == "LA")
-			multiply <- function(x, extra) {
-				x - multiply.left.diag(d, fm %*% multiply.left.diag(d, x))
-			}
-		# When computing the smallest eigenvalues, we compute the largest ones
-		# and them convert them to the smallest eigenvalues.
-		# It's easier to compute the largest eigenvalues.
-		else if (which.eigen == "SM") {
-			multiply <- function(x, extra) {
-				multiply.left.diag(d, fm %*% multiply.left.diag(d, x))
-			}
-			which.eigen <- "LM"
-			comp.oppo <- TRUE
+		# We compute the largest eigenvalues and then convert them to
+		# the smallest eigenvalues. It's easier to compute the largest eigenvalues.
+		multiply <- function(x, extra) {
+			multiply.left.diag(d, fm %*% multiply.left.diag(d, x))
 		}
-		else {
-			multiply <- function(x, extra) {
-				multiply.left.diag(d, fm %*% multiply.left.diag(d, x))
-			}
-			which.eigen <- "LA"
-			comp.oppo <- TRUE
-		}
+		comp.oppo <- TRUE
 	}
 	else {
 		print("wrong option")
@@ -129,8 +105,8 @@ fm.ASE <- function(fm, num.eigen, which=c("A, Aug, L, nL"),
 	}
 
 	ret <- fm.eigen(multiply, sym=TRUE,
-					options=list(n=nrow(fm), which=which.eigen,
-								 nev=num.eigen, ncv=2 * num.eigen, tol=tol))
+					options=list(n=nrow(fm), which="LM",
+								 nev=nev, block_size=1, num_blocks=ncv, tol=tol))
 	rescale <- function(x) {
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
@@ -142,9 +118,12 @@ fm.ASE <- function(fm, num.eigen, which=c("A, Aug, L, nL"),
 		ret[["right"]] <- rescale(multiply.right(ret$vecs))
 		ret$vecs <- NULL
 	}
-	else {
-		if (comp.oppo && which == "nL")
+	else if (comp.oppo) {
+		if (which == "nL")
 			ret$vals <- 1 - ret$vals
+		# We can't compute the eigenvalues of the Laplacian matrix.
+		else
+			ret$vals[1:length(ret$vals)] <- 0
 	}
 	ret
 }

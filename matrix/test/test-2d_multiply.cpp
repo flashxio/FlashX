@@ -136,19 +136,17 @@ sparse_matrix::ptr load_2d_matrix(const std::string &matrix_file,
 		const std::string &index_file, bool in_mem)
 {
 	SpM_2d_index::ptr index;
-	safs::safs_file idx_f(safs::get_sys_RAID_conf(), index_file);
-	if (idx_f.exist())
+	if (safs::exist_safs_file(index_file))
 		index = SpM_2d_index::safs_load(index_file);
 	else
 		index = SpM_2d_index::load(index_file);
 	printf("load the matrix index\n");
 
 	sparse_matrix::ptr mat;
-	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
-	if (mat_f.exist() && in_mem)
+	if (safs::exist_safs_file(matrix_file) && in_mem)
 		mat = sparse_matrix::create(index,
 				SpM_2d_storage::safs_load(matrix_file, index));
-	else if (mat_f.exist())
+	else if (safs::exist_safs_file(matrix_file))
 		mat = sparse_matrix::create(index, safs::create_io_factory(
 					matrix_file, safs::REMOTE_ACCESS));
 	else

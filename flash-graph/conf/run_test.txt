@@ -10,7 +10,7 @@ io_depth=64
 cache_size=512M
 
 # The number of NUMA nodes
-num_nodes=1
+# num_nodes=1
 
 # change FG_TOP to the path of the top directory of FlashGraph.
 root_conf=FG_TOP/flash-graph/conf/data_files.txt
@@ -19,13 +19,13 @@ root_conf=FG_TOP/flash-graph/conf/data_files.txt
 # huge_page=
 
 # The number of I/O threads per NUMA node.
-num_io_threads=1
+# num_io_threads=1
 
 
 # Parameters for FlashGraph
 
 # The number of worker threads to process a graph.
-threads=1
+# threads=1
 
 # The max number of vertices being processed in parallel in a worker thread
 # max_processing_vertices=1000

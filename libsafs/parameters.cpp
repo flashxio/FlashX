@@ -20,6 +20,8 @@
 #include<algorithm>
 #include <sstream>
 
+#include <boost/format.hpp>
+
 #include "log.h"
 #include "parameters.h"
 #include "common.h"
@@ -69,7 +71,8 @@ sys_parameters::sys_parameters()
 	max_num_pending_ios = 1000;
 	huge_page_enabled = false;
 	busy_wait = false;
-	num_io_threads = 1;
+	// The number of I/O threads will be determined based on the number of SSDs.
+	num_io_threads = 0;
 	bind_io_thread = false;
 }
 
@@ -153,6 +156,12 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		num_nodes = str2size(it->second);
 	}
+#ifdef USE_HWLOC
+	else
+		num_nodes = cpus.get_num_nodes();
+#endif
+	BOOST_LOG_TRIVIAL(info) << boost::format("SAFS runs on %1% NUMA nodes")
+		% num_nodes;
 
 	it = configs.find("merge_reqs");
 	if (it != configs.end()) {

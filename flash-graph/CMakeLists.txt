@@ -20,6 +20,7 @@ add_library(graph STATIC
 	vertex_program.cpp
 	utils.cpp
 	vertex_index_constructor.cpp
+	graph_config.cpp
 )
 
 subdirs(libgraph-algs

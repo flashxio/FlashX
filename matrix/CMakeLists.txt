@@ -50,6 +50,7 @@ add_library(FMatrix STATIC
 	col_vec.cpp
 	combined_matrix_store.cpp
 	cached_matrix_store.cpp
+	matrix_config.cpp
 )
 
 if(ENABLE_TRILINOS)
