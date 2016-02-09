@@ -21,16 +21,16 @@
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/dist_matrix.h"
 
-static std::vector<prune_cluster::ptr> g_clusters;
+static prune_clusters::ptr g_clusters;
 constexpr unsigned NCOL = 5;
 
 // Any item with an iterator can be tested for equivalence
 template <typename T>
-bool all_equal(const T& arg0, const T& arg1) {
-    return std::equal(arg0.begin(), arg0.end(), arg1.begin());
+bool all_equal(const T* arg0, const T* arg1, const unsigned numel) {
+    return std::equal(arg0, arg0+numel, arg1);
 }
 
-std::vector<std::vector<double>> test_init_g_clusters(const size_t k=4) {
+std::vector<double> test_init_g_clusters(const size_t k=4) {
     BOOST_LOG_TRIVIAL(info) << "Running init g_clusters";
     BOOST_VERIFY(k == 4);
 
@@ -39,95 +39,21 @@ std::vector<std::vector<double>> test_init_g_clusters(const size_t k=4) {
     const std::vector<double> v3 {6E-12, -23423.7, .82342342432, 93., 10};
     const std::vector<double> v4 {-.2342, -23.342, -.000003232, -3.234232, 1};
 
-    std::vector<std::vector<double>> means = {v1, v2, v3, v4};
+    const std::vector<double> v {1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        6E-12, -23423.7, .82342342432, 93., 10, -.2342, -23.342, -.000003232, -3.234232, 1};
+    g_clusters = prune_clusters::create(k, NCOL, v); // ctor & init
+
+    printf("Set clusters: \n");
+    g_clusters->print_means();
 
     for (size_t cl = 0; cl < k; cl++) {
-        g_clusters.push_back(prune_cluster::create(means[cl])); // ctor & init
-
         printf("c:%lu =>\n", cl);
-        print_vector(g_clusters[cl]->get_mean());
-        print_vector(means[cl]);
+        print_arr(&(v[cl*NCOL]), NCOL);
 
-        BOOST_VERIFY(all_equal(means[cl], g_clusters[cl]->get_mean()));
+        BOOST_VERIFY(all_equal<double>(&v[0], &(g_clusters->get_means()[0]), NCOL*k));
     }
     printf("Exiting test_init_g_clusters!\n");
-    return means;
-}
-
-void test_cluster() {
-    size_t k = 4;
-    std::vector<std::vector<double>> means = test_init_g_clusters(k);
-    /* test prev_mean */
-
-    // NOTE: Rotate means clockwise: 0 => 1; 1 => 2; 2 => 3; 3 => 0
-    // dist(3,0), (1, 0), (1,2), (2,3)
-    const std::vector<double> pdists =
-        {ceil(sqrt(721.074)), ceil(sqrt(125)),
-            ceil(sqrt(549004845.993)), ceil(sqrt(547586097.288))};
-
-    std::vector<double> tmp;
-    std::vector<double> prev = g_clusters.back()->get_mean();
-    for (size_t cl = 0; cl < k; cl++) {
-        tmp = g_clusters[cl]->get_mean();
-        g_clusters[cl]->set_prev_mean();
-        g_clusters[cl]->set_mean(prev);
-
-        // Compute dist to prev
-        g_clusters[cl]->set_prev_dist(eucl_dist(&((g_clusters[cl]->get_mean())[0]),
-                    &((g_clusters[cl]->get_prev_mean())[0]), NCOL) );
-
-        /* test prev_dist */
-        BOOST_VERIFY(ceil(g_clusters[cl]->get_prev_dist()) == pdists[cl]);
-        prev = tmp;
-    }
-
-    /* Test operator [] */
-    for (unsigned i = 0; i < g_clusters[0]->size(); i++) {
-        BOOST_VERIFY((*(g_clusters[1]))[i]  == means[0][i]);
-    }
-
-    /* Test add member */
-    class data_seq_it {
-        private:
-            std::vector<double> data;
-            unsigned pos;
-        public:
-            data_seq_it(std::vector<double>& data) {
-                pos = 0;
-                this->data = data;
-            }
-            bool has_next() { return pos < data.size(); }
-            double next() { return data[pos++]; }
-    };
-
-    // Add 0 to 1
-    data_seq_it dsi0(means[0]);
-    data_seq_it dsi1(means[1]);
-
-    g_clusters[2]->add_member(dsi0);
-    g_clusters[1]->add_member(dsi1);
-
-    BOOST_VERIFY(all_equal(g_clusters[2]->get_mean(),
-                g_clusters[1]->get_mean()));
-    
-    std::cout << "\nMembers in 2 = " <<
-        g_clusters[2]->get_num_members() << std::endl;
-    std::cout << "Members in 1 = " <<
-        g_clusters[1]->get_num_members() << std::endl;
-
-    BOOST_VERIFY(g_clusters[2]->get_num_members() == 1);
-    BOOST_VERIFY(g_clusters[1]->get_num_members() == 1);
-
-    // Test remove member
-    dsi0 = data_seq_it(means[0]);
-    dsi1 = data_seq_it(means[1]);
-    g_clusters[1]->remove_member(dsi1);
-    g_clusters[1]->remove_member(dsi0);
-    std::vector<double> zeros {0,0,0,0,0};
-
-    BOOST_VERIFY(all_equal(g_clusters[1]->get_mean(), zeros));
-    BOOST_VERIFY(g_clusters[1]->get_num_members() == -1);
-    printf("Exiting test_cluster ==> ");
+    return v;
 }
 
 void test_eucl() {
@@ -170,15 +96,15 @@ void test_dist_matrix() {
     dist_matrix::ptr test_mat = dist_matrix::create(k);
 
     /* Test compute_dist */
-    test_mat->compute_dist(g_clusters, k);
+    compute_dist(g_clusters, test_mat, NCOL);
 
-    printf("Clusters:\n"); print_clusters<prune_cluster>(g_clusters);
+    printf("Clusters:\n"); g_clusters->print_means();
     printf("Cluster distance :\n"); test_mat->print();
 
     /* Test s_val */
     printf("Printing s_vals:\n");
     for (unsigned i = 0; i < k; i++) {
-        BOOST_VERIFY(g_clusters[i]->get_s_val() ==
+        BOOST_VERIFY(g_clusters->get_s_val(i) ==
                 test_mat->get_min_dist(i));
     }
     printf("\n");
@@ -191,16 +117,12 @@ int main(int argc, char* argv[]) {
             test_eucl(); std::cout << "Test eucl Success ...\n";
         } else if (std::string(argv[1]) == "-d") {
             test_dist_matrix(); std::cout << "Test distance matrix Success ...\n";
-        } else if (std::string(argv[1]) == "-c") {
-            test_cluster(); std::cout << "Test cluster Success ...\n";
         } else {
             fprintf(stderr, "Unknown test option '%s'", argv[1]);
         }
     } else { /* Do all tests */
         test_eucl(); std::cout << "Test eucl Success ...\n";
         test_dist_matrix(); std::cout << "Test distance matrix Success ...\n";
-        test_cluster(); std::cout << "Test cluster Success ...\n";
     }
     return EXIT_SUCCESS;
-
 }
