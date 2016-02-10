@@ -31,6 +31,27 @@ public:
 	}
 };
 
+class mat_init2: public type_set_operate<size_t>
+{
+public:
+	virtual void set(size_t *arr, size_t num_eles, off_t row_idx,
+			            off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = i;
+	}
+};
+
+class mat_init3: public type_set_operate<double>
+{
+	size_t num_vertices;
+public:
+	virtual void set(double *arr, size_t num_eles, off_t row_idx,
+			            off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = 1.0 / (i + 1);
+	}
+};
+
 void test_mapply()
 {
 	struct timeval start, end;
@@ -92,8 +113,74 @@ void test_agg()
 {
 }
 
+void test_agg_dmultiply(matrix_layout_t layout)
+{
+	size_t num_tot = 16L * 1024 * 1024 * 1024;
+	for (size_t i = 1; i < 8; i++) {
+		size_t width = 1 << i;
+		size_t height = num_tot / width;
+		dense_matrix::ptr mat = dense_matrix::create(height, width, layout,
+				get_scalar_type<double>(), mat_init3(),
+				matrix_conf.get_num_nodes());
+		agg_operate::const_ptr mul_agg = agg_operate::create(
+				bulk_operate::conv2ptr(mat->get_type().get_basic_ops().get_multiply()));
+		printf("start to compute\n");
+		for (size_t i = 0; i < 5; i++) {
+			struct timeval start, end;
+			gettimeofday(&start, NULL);
+			dense_matrix::ptr res = mat->aggregate(matrix_margin::MAR_ROW,
+					mul_agg);
+			res->materialize_self();
+			assert(res->get_num_rows() == height);
+			assert(res->get_num_cols() == 1);
+			gettimeofday(&end, NULL);
+			printf("agg on %ld x %ld matrix takes %f seconds\n",
+					mat->get_num_rows(), mat->get_num_cols(),
+					time_diff(start, end));
+		}
+	}
+}
+
+void test_agg_ladd(matrix_layout_t layout)
+{
+	size_t num_tot = 16L * 1024 * 1024 * 1024;
+	for (size_t i = 1; i < 8; i++) {
+		size_t width = 1 << i;
+		size_t height = num_tot / width;
+		dense_matrix::ptr mat = dense_matrix::create(height, width, layout,
+				get_scalar_type<size_t>(), mat_init2(),
+				matrix_conf.get_num_nodes());
+		agg_operate::const_ptr add_agg = agg_operate::create(
+				bulk_operate::conv2ptr(mat->get_type().get_basic_ops().get_add()));
+		printf("start to compute\n");
+		for (size_t i = 0; i < 5; i++) {
+			struct timeval start, end;
+			gettimeofday(&start, NULL);
+			dense_matrix::ptr res = mat->aggregate(matrix_margin::MAR_ROW,
+					add_agg);
+			res->materialize_self();
+			assert(res->get_num_rows() == height);
+			assert(res->get_num_cols() == 1);
+			gettimeofday(&end, NULL);
+			printf("agg on %ld x %ld matrix takes %f seconds\n",
+					mat->get_num_rows(), mat->get_num_cols(),
+					time_diff(start, end));
+		}
+	}
+}
+
 void test_agg_mat()
 {
+	printf("test agg matrix\n");
+	printf("test int add on column-major matrix\n");
+	test_agg_ladd(matrix_layout_t::L_COL);
+	printf("test int add on row-major matrix\n");
+	test_agg_ladd(matrix_layout_t::L_ROW);
+
+	printf("test float multiply on column-major matrix\n");
+	test_agg_dmultiply(matrix_layout_t::L_COL);
+	printf("test float multiply on row-major matrix\n");
+	test_agg_dmultiply(matrix_layout_t::L_ROW);
 }
 
 void test_groupby()
