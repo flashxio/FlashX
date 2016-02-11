@@ -1064,7 +1064,6 @@ void test_conv2(int num_nodes)
 			mat->get_num_cols());
 	assert(!mat->is_virtual());
 	mat1 = mat->conv2(matrix_layout_t::L_ROW);
-	assert(!mat1->is_virtual());
 	assert(mat->get_num_rows() == mat1->get_num_rows());
 	assert(mat->get_num_cols() == mat1->get_num_cols());
 	assert(mat1->store_layout() == matrix_layout_t::L_ROW);
@@ -1075,7 +1074,6 @@ void test_conv2(int num_nodes)
 	printf("conv2 layout of virtual matrix of %ld, %ld\n", mat->get_num_rows(),
 			mat->get_num_cols());
 	mat1 = mat->conv2(matrix_layout_t::L_ROW);
-	assert(mat1->is_virtual());
 	assert(mat1->is_in_mem() == mat->is_in_mem());
 	assert(mat->get_num_rows() == mat1->get_num_rows());
 	assert(mat->get_num_cols() == mat1->get_num_cols());
