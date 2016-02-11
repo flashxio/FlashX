@@ -2196,15 +2196,6 @@ dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
 		return t_res->transpose();
 	}
 
-	if (out_layout == matrix_layout_t::L_NONE) {
-		if (this->store_layout() == matrix_layout_t::L_ROW)
-			out_layout = matrix_layout_t::L_ROW;
-		else if (this->is_wide())
-			out_layout = matrix_layout_t::L_ROW;
-		else
-			out_layout = matrix_layout_t::L_COL;
-	}
-
 	detail::matrix_store::ptr res;
 	if (is_wide())
 		res = inner_prod_wide(m, left_op, right_op, out_layout);
@@ -2322,6 +2313,16 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 	assert(right->get_num_nodes() == -1);
 	assert(!right->is_virtual());
 
+	if (out_layout == matrix_layout_t::L_NONE) {
+		// If the left matrix is col-major, the output matrix should also
+		// be col-major.
+		if (this->store_layout() == matrix_layout_t::L_COL)
+			out_layout = matrix_layout_t::L_COL;
+		else
+			// We don't care about the layout of the output matrix in this case.
+			out_layout = matrix_layout_t::L_ROW;
+	}
+
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	inner_prod_tall_op::const_ptr mapply_op(new inner_prod_tall_op(right,
@@ -2408,9 +2409,25 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 
 	std::vector<detail::matrix_store::const_ptr> mats(2);
-	mats[0] = get_data().transpose();
+	// If the right matrix is stored in col major order,
+	// the left matrix should be stored in row major order.
+	if (store_layout() == matrix_layout_t::L_COL
+			&& m.store_layout() == matrix_layout_t::L_COL) {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		mats[0] = tmp->get_data().transpose();
+	}
+	else
+		mats[0] = get_data().transpose();
 	assert(mats[0]);
-	mats[1] = m.get_raw_store();
+	// If the left matrix is stored in row major order,
+	// the right matrix should be stored in col major order.
+	if (store_layout() == matrix_layout_t::L_ROW
+			&& m.store_layout() == matrix_layout_t::L_ROW) {
+		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
+		mats[1] = tmp->get_raw_store();
+	}
+	else
+		mats[1] = m.get_raw_store();
 	assert(mats[1]);
 	std::shared_ptr<inner_prod_wide_op> op(new inner_prod_wide_op(
 				*left_op, *right_op, res, nthreads));
@@ -2418,6 +2435,15 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 	std::vector<detail::local_matrix_store::ptr> local_ms
 		= op->get_partial_results();
 	assert(local_ms.size() == nthreads);
+
+	if (out_layout == matrix_layout_t::L_NONE) {
+		// mats[0] is the transpose
+		if (mats[0]->store_layout() == matrix_layout_t::L_ROW)
+			out_layout = matrix_layout_t::L_COL;
+		else
+			// Actually, we don't care what the layout is for this case.
+			out_layout = matrix_layout_t::L_ROW;
+	}
 
 	// Aggregate the results from omp threads.
 	res->reset_data();

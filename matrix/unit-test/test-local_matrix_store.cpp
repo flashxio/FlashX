@@ -497,7 +497,7 @@ void test_inner_prod(size_t long_dim)
 					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
-	test_inner_prod1(m1, m2, matrix_layout_t::L_ROW);
+	test_inner_prod1(m1, m2, m1->store_layout());
 }
 
 void verify_transpose(const local_matrix_store &m1, const local_matrix_store &m2)
