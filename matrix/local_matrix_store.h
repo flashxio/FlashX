@@ -1022,6 +1022,10 @@ public:
 				global_start_col, nrow, ncol, type, node_id) {
 	}
 
+	virtual bool is_virtual() const {
+		return true;
+	}
+
 	virtual bool read_only() const {
 		return true;
 	}
@@ -1076,6 +1080,10 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_row_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id) {
+	}
+
+	virtual bool is_virtual() const {
+		return true;
 	}
 
 	virtual bool read_only() const {
