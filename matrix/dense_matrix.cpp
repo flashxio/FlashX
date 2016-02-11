@@ -2625,8 +2625,18 @@ detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 	// It runs in serial. I hope it's not a bottleneck.
 	detail::local_matrix_store::const_ptr local_res;
 	size_t num_valid_rows = agg_op->get_num_valid_rows();
+	// If there is only one row that is valid, we have the final agg results.
+	if (num_valid_rows == 1) {
+		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+				partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
+				partial_res->get_type(), -1);
+		memcpy(res->get_raw_arr(), partial_res->get_row(0),
+				partial_res->get_num_cols() * partial_res->get_entry_size());
+		return res;
+	}
+	// If not, we need to combine the partial aggregation results.
 	// If all rows are valid.
-	if (num_valid_rows == partial_res->get_num_rows())
+	else if (num_valid_rows == partial_res->get_num_rows())
 		local_res = partial_res->get_portion(
 				0, 0, partial_res->get_num_rows(), partial_res->get_num_cols());
 	else {
