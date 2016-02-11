@@ -32,6 +32,8 @@ namespace fm
 namespace detail
 {
 
+static const size_t LONG_DIM_LEN = 1024;
+
 local_matrix_store::ptr local_matrix_store::conv2(matrix_layout_t layout) const
 {
 	local_matrix_store::ptr ret;
@@ -603,8 +605,6 @@ void inner_prod_col_tall(const local_col_matrix_store &m1,
 
 }
 
-static const size_t LONG_DIM_LEN = 1024;
-
 // This case is to aggregate all elements to a single value.
 static void agg_both(const local_matrix_store &store, const agg_operate &op,
 		local_vec_store &res)
@@ -827,7 +827,7 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 	}
 }
 
-void sapply(const local_matrix_store &store, const bulk_uoperate &op,
+static void _sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
@@ -851,6 +851,54 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		for (size_t i = 0; i < ncol; i++)
 			op.runA(nrow, col_store.get_col(i), col_res.get_col(i));
 	}
+}
+
+void sapply(const local_matrix_store &store, const bulk_uoperate &op,
+		local_matrix_store &res)
+{
+	// resize the wide matrix.
+	if (store.is_virtual() && store.is_wide()
+			&& store.get_num_cols() > LONG_DIM_LEN) {
+		size_t orig_num_cols = store.get_num_cols();
+		local_matrix_store::exposed_area orig_in = store.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(
+				store);
+		for (size_t col_idx = 0; col_idx < orig_num_cols;
+				col_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
+			mutable_store.resize(orig_in.local_start_row,
+					orig_in.local_start_col + col_idx, store.get_num_rows(), llen);
+			res.resize(orig_res.local_start_row,
+					orig_res.local_start_col + col_idx, res.get_num_rows(), llen);
+			_sapply(store, op, res);
+		}
+		mutable_store.restore_size(orig_in);
+		res.restore_size(orig_res);
+	}
+	// resize the tall matrix
+	else if (store.is_virtual() && store.get_num_rows() > LONG_DIM_LEN) {
+		size_t orig_num_rows = store.get_num_rows();
+		local_matrix_store::exposed_area orig_in = store.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(
+				store);
+		for (size_t row_idx = 0; row_idx < orig_num_rows;
+				row_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
+			mutable_store.resize(orig_in.local_start_row + row_idx,
+					orig_in.local_start_col, llen, store.get_num_cols());
+			res.resize(orig_res.local_start_row + row_idx,
+					orig_res.local_start_col, llen, res.get_num_cols());
+			_sapply(store, op, res);
+		}
+		mutable_store.restore_size(orig_in);
+		res.restore_size(orig_res);
+	}
+	else
+		// If the local matrix isn't virtual, we don't need to resize it
+		// to increase CPU cache hits.
+		_sapply(store, op, res);
 }
 
 void apply(int margin, const arr_apply_operate &op,
