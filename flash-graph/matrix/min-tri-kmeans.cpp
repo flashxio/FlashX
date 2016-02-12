@@ -80,12 +80,19 @@ namespace {
         BOOST_LOG_TRIVIAL(info) << "Forgy init end";
     }
 
+    std::string s (const double d) {
+        if (d == std::numeric_limits<double>::max())
+            return "max";
+        else
+            return std::to_string(d);
+    }
+
     /**
      * \brief A parallel version of the kmeans++ initialization alg.
      *  See: http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf for algorithm
      */
     static void kmeanspp_init(const double* matrix, prune_clusters::ptr clusters,
-            unsigned* cluster_assignments, dist_matrix::ptr dm) {
+            unsigned* cluster_assignments) {
 
         // Choose c1 uniiformly at random
         unsigned selected_idx = random() % NUM_ROWS; // 0...(NUM_ROWS-1)
@@ -108,25 +115,16 @@ namespace {
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v, cluster_assignments)
             for (unsigned row = 0; row < NUM_ROWS; row++) {
                 // Prune in kms++
-                if ((cluster_assignments[row] != INVALID_CLUSTER_ID) &&
-                        dist_v[row] <= dm->get(cluster_assignments[row],
-                            clust_idx)) {
+                double dist = get_dist(&matrix[row*NUM_COLS],
+                        &((clusters->get_means())[clust_idx*NUM_COLS]),
+                        NUM_COLS);
 
-                    // Do no computation
-                } else {
-                    double dist = get_dist(&matrix[row*NUM_COLS],
-                            &((clusters->get_means())[clust_idx*NUM_COLS]),
-                            NUM_COLS);
-
-                    if (dist < dist_v[row]) { // Found a closer cluster than before
-                        dist_v[row] = dist;
-                        cluster_assignments[row] = clust_idx;
-                    }
+                if (dist < dist_v[row]) { // Found a closer cluster than before
+                    dist_v[row] = dist;
+                    cluster_assignments[row] = clust_idx;
                 }
                 cum_dist += dist_v[row];
             }
-
-            compute_dist(clusters, dm, NUM_COLS);
 
             cum_dist = (cum_dist * ((double)random())) / (RAND_MAX - 1.0);
             clust_idx++;
@@ -180,21 +178,15 @@ namespace {
                 double dist = std::numeric_limits<double>::max();
 
                 for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
+                    dist = get_dist(&matrix[offset],
+                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
-                    if ((cluster_assignments[row] != INVALID_CLUSTER_ID) &&
-                            dist_v[row] <= dm->get(cluster_assignments[row],
-                                clust_idx)) {
-                        // Do no computation
-                    } else {
-                        dist = get_dist(&matrix[offset],
-                                &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
-
-                        if (dist < dist_v[row]) {
-                            dist_v[row] = dist;
-                            cluster_assignments[row] = clust_idx;
-                        }
+                    if (dist < dist_v[row]) {
+                        dist_v[row] = dist;
+                        cluster_assignments[row] = clust_idx;
                     }
                 }
+
             } else {
                 recalculated_v[row] = false;
                 dist_v[row] += cls->get_prev_dist(cluster_assignments[row]);
@@ -278,6 +270,10 @@ namespace {
             cls->finalize(clust_idx);
             cls->set_prev_dist(eucl_dist(&(cls->get_means()[clust_idx*NUM_COLS]),
                         &(cls->get_prev_means()[clust_idx*NUM_COLS]), NUM_COLS), clust_idx);
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "Dist to prev mean for c:" << clust_idx
+                << " is " << cls->get_prev_dist(clust_idx);
+#endif
 
             cluster_assignment_counts[clust_idx] = cls->get_num_members(clust_idx);
             chk_nmemb += cluster_assignment_counts[clust_idx];
@@ -355,7 +351,7 @@ namespace fg
             forgy_init(matrix, clusters);
             g_init_type = FORGY;
         } else if (init == "kmeanspp") {
-            kmeanspp_init(matrix, clusters, cluster_assignments, dm);
+            kmeanspp_init(matrix, clusters, cluster_assignments);
             g_init_type = PLUSPLUS;
         } else if (init == "none") {
             g_init_type = NONE;
@@ -367,6 +363,12 @@ namespace fg
                 << init << "'";
             exit(-1);
         }
+
+#if VERBOSE
+        compute_dist(clusters, dm, NUM_COLS); // NOTE: Not necessary
+        BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix after init ...";
+        dm->print();
+#endif
 
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 
