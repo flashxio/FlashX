@@ -36,7 +36,6 @@
 
 #include "sem_kmeans_util.h"
 #include "prune_stats.h"
-#include "cluster.h"
 #include "dist_matrix.h"
 #include "kmeans_types.h"
 
@@ -83,24 +82,6 @@ namespace {
                 "const page_vertex&) must not be called!");
         }
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
-
-        // Set a cluster to have the same mean as this sample
-        template <typename ClusterType>
-        void set_as_mean(const page_vertex &vertex, vertex_id_t my_id,
-                unsigned to_cluster_id, std::vector<typename ClusterType::ptr>& centers) {
-            vertex_id_t nid = 0;
-            data_seq_iter count_it = ((const page_row&)vertex).
-                get_data_seq_it<double>();
-
-            // Build the setter vector that we assign to a cluster center
-            std::vector<double> setter(centers[to_cluster_id]->size());
-            while (count_it.has_next()) {
-                double e = count_it.next();
-                setter[nid++] = e;
-            }
-
-            centers[to_cluster_id]->set_mean(setter);
-        }
     };
 
     /* Used in per thread cluster formation */
@@ -108,7 +89,7 @@ namespace {
     class base_kmeans_vertex_program: public vertex_program_impl<T>
     {
         unsigned pt_changed;
-        std::vector<typename ClusterType::ptr> pt_clusters;
+        typename ClusterType::ptr pt_clusters;
 
         public:
         typedef std::shared_ptr<base_kmeans_vertex_program<T, ClusterType> > ptr;
@@ -117,9 +98,7 @@ namespace {
         base_kmeans_vertex_program() {
             this->pt_changed = 0;
 
-            for (unsigned thd = 0; thd < K; thd++) {
-                pt_clusters.push_back(ClusterType::create(NUM_COLS));
-            }
+            pt_clusters = ClusterType::create(K, NUM_COLS);
         }
 
         static ptr cast2(vertex_program::ptr prog) {
@@ -127,12 +106,12 @@ namespace {
                    vertex_program>(prog);
         }
 
-        std::vector<typename ClusterType::ptr>& get_pt_clusters() {
+        typename ClusterType::ptr get_pt_clusters() {
             return pt_clusters;
         }
 
         void add_member(const unsigned id, data_seq_iter& count_it) {
-            pt_clusters[id]->add_member(count_it);
+            pt_clusters->add_member(count_it, id);
         }
 
         const unsigned get_pt_changed() { return pt_changed; }
@@ -142,6 +121,7 @@ namespace {
         }
     };
 
+    // Begin helpers
     void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
         std::vector<std::string> v;
         while (count_it.has_next()) {
@@ -151,6 +131,13 @@ namespace {
             v.push_back(std::string(buffer));
         }
         printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
+    }
+
+    std::string s (const double d) {
+        if (d == std::numeric_limits<double>::max())
+            return "max";
+        else
+            return std::to_string(d);
     }
     // End helpers //
 }

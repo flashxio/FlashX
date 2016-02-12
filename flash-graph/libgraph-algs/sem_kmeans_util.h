@@ -27,9 +27,9 @@
 
 #include <boost/assert.hpp>
 
-#include "cluster.h"
+#include "clusters.h"
 
-using namespace fg;
+//using namespace fg;
 
 namespace {
     template <typename T>
@@ -64,37 +64,6 @@ namespace {
             return  1 - (numr / ((sqrt(ldenom)*sqrt(rdenom))));
         }
 
-    template <typename ClusterType>
-        void set_clusters(std::vector<double>* centers,
-                std::vector<typename ClusterType::ptr>& vcl,
-                unsigned nclust, unsigned ncol) {
-            for (size_t cl = 0; cl < nclust; cl++) {
-                std::vector<double> v(ncol);
-                std::copy(&((*centers)[cl*ncol]), &((*centers)[(cl*ncol)+ncol]), v.begin());
-                vcl.push_back(ClusterType::create(v));
-            }
-        }
-
-    /*
-    template <typename ClusterType>
-        void set_clusters(double* centers, std::vector<typename ClusterType::ptr>& vcl,
-                unsigned nclust, unsigned ncol) {
-            for (size_t cl = 0; cl < nclust; cl++) {
-                std::vector<double> v(ncol);
-                std::copy(&(centers[cl*ncol]), &(centers[(cl*ncol)+ncol]), v.begin());
-                vcl.push_back(ClusterType::create(v));
-            }
-        }
-        */
-
-    template <typename ClusterType>
-        void init_clusters(std::vector<typename ClusterType::ptr>& vcl,
-                unsigned nclust, unsigned ncol) {
-            for (size_t cl = 0; cl < nclust; cl++) {
-                vcl.push_back(ClusterType::create(ncol));
-            }
-        }
-
     template <typename T>
         static void print_vector(typename std::vector<T> v, unsigned max_print=100) {
             unsigned print_len = v.size() > max_print ? max_print : v.size();
@@ -108,18 +77,6 @@ namespace {
             if (v.size() > print_len) std::cout << " ...";
             std::cout <<  " ]\n";
         }
-
-    // Begin Helpers //
-    template <typename ClusterType>
-    void print_clusters(typename std::vector<typename ClusterType::ptr>& clusters) {
-        typedef typename std::vector<typename ClusterType::ptr>::iterator cluster_itr;
-
-        for (cluster_itr it = clusters.begin(); it != clusters.end(); ++it) {
-            std::cout << "#memb = " << (*it)->get_num_members() << " ";
-            print_vector<double>((*it)->get_mean());
-        }
-        std::cout << "\n";
-    }
 
     // A very C-style binary data reader
     template <typename T>
