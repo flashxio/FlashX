@@ -20,8 +20,8 @@
 #ifndef __DIST_MATRIX_H__
 #define __DIST_MATRIX_H__
 
-#include "cluster.h"
 #include "sem_kmeans_util.h"
+#include "clusters.h"
 
 namespace
 {
@@ -103,38 +103,38 @@ namespace
                     print_vector<double>(mat[row]);
                 }
             }
-
-            void compute_dist(std::vector<prune_cluster::ptr>& vcl, const unsigned num_clust) {
-                if (num_clust <= 1) return;
-
-                BOOST_VERIFY(get_num_rows() == vcl.size()-1); // -1 since the last item has no row
-
-                for (unsigned i = 0; i < num_clust; i++) {
-                    vcl[i]->reset_s_val();
-                }
-
-                //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
-                for (unsigned i = 0; i < num_clust; i++) {
-                    for (unsigned j = i+1; j < num_clust; j++) {
-                        double dist = eucl_dist(&((vcl[i]->get_mean())[0]) ,
-                                &((vcl[j]->get_mean())[0]), vcl[0]->size()) / 2.0;
-                        set(i,j, dist);
-
-                        // Set s(x) for each cluster
-                        if (dist < vcl[i]->get_s_val()) {
-                            vcl[i]->set_s_val(dist);
-                        }
-
-                        if (dist < vcl[j]->get_s_val()) {
-                            vcl[j]->set_s_val(dist);
-                        }
-                    }
-                }
-#if KM_TEST
-                for (unsigned cl = 0; cl < num_clust; cl++)
-                    BOOST_VERIFY(vcl[cl]->get_s_val() == get_min_dist(cl));
-#endif
-            }
     };
+
+    void compute_dist(prune_clusters::ptr cls, dist_matrix::ptr dm,
+            const unsigned ncol) {
+        if (cls->get_nclust() <= 1) return;
+
+        BOOST_VERIFY(dm->get_num_rows() == cls->get_nclust()-1);
+        cls->reset_s_val_v();
+        //#pragma omp parallel for collapse(2) // FIXME: Opt Coalese perhaps
+        for (unsigned i = 0; i < cls->get_nclust(); i++) {
+            for (unsigned j = i+1; j < cls->get_nclust(); j++) {
+                double dist = eucl_dist(&(cls->get_means()[i*ncol]),
+                        &(cls->get_means()[j*ncol]), ncol) / 2.0;
+                dm->set(i,j, dist);
+
+                // Set s(x) for each cluster
+                if (dist < cls->get_s_val(i)) {
+                    cls->set_s_val(dist, i);
+                }
+
+                if (dist < cls->get_s_val(j)) {
+                    cls->set_s_val(dist, j);
+                }
+            }
+        }
+#if VERBOSE
+        for (unsigned cl = 0; cl < cls->get_nclust(); cl++) {
+            BOOST_VERIFY(cls->get_s_val(cl) == dm->get_min_dist(cl));
+            BOOST_LOG_TRIVIAL(info) << "cl:" << cl << " get_s_val: "
+                << cls->get_s_val(cl);
+        }
+#endif
+    }
 }
 #endif
