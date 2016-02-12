@@ -935,7 +935,7 @@ int main(int argc, char *argv[])
     else if (alg == "sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv, REG);
 	}
-    else if (alg == "sem_tri_kmeans") {
+    else if (alg == "tri_sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv, TRI);
 	}
     else if (alg == "min_tri_sem_kmeans") {
