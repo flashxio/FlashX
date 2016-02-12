@@ -966,6 +966,108 @@ void mapply_task::run()
 		op.run(local_stores, local_out_stores);
 }
 
+class mem_task_queue
+{
+public:
+	typedef std::shared_ptr<mem_task_queue> ptr;
+
+	static const size_t INVALID_TASK = std::numeric_limits<size_t>::max();
+
+	virtual size_t get_portion_idx() = 0;
+	virtual int get_node_id() const = 0;
+};
+
+/*
+ * This dispatches the computation tasks for all threads in a machine,
+ * so it is shared by all threads.
+ */
+class smp_task_queue: public mem_task_queue
+{
+	std::atomic<size_t> curr_portion;
+	size_t num_portions;
+public:
+	smp_task_queue(size_t num_portions) {
+		this->num_portions = num_portions;
+		this->curr_portion = 0;
+	}
+
+	virtual size_t get_portion_idx() {
+		size_t portion_idx = curr_portion.fetch_add(1);
+		if (portion_idx >= num_portions)
+			return INVALID_TASK;
+		else
+			return portion_idx;
+	}
+
+	virtual int get_node_id() const {
+		return -1;
+	}
+};
+
+/*
+ * This dispatches the computation tasks for the portions in a specific
+ * NUMA node. All threads in a NUMA node share the same task queue.
+ */
+class numa_task_queue: public mem_task_queue
+{
+	matrix_store::const_ptr numa_mat;
+	size_t num_portions;
+	std::atomic<size_t> curr_portion;
+	int curr_node_id;
+public:
+	numa_task_queue(matrix_store::const_ptr mat, int node_id) {
+		this->numa_mat = mat;
+		this->num_portions = mat->get_num_portions();
+		this->curr_portion = 0;
+		this->curr_node_id = node_id;
+	}
+
+	virtual size_t get_portion_idx() {
+		while (true) {
+			// TODO this doesn't scale to a large number of NUMA nodes.
+			size_t portion_idx = curr_portion.fetch_add(1);
+			// If we have run out of portions, we need to indicate that
+			// we have processed all tasks.
+			if (portion_idx >= num_portions)
+				return INVALID_TASK;
+			// We only return the portion in the current node.
+			int node_id = numa_mat->get_portion_node_id(portion_idx);
+			if (node_id == curr_node_id)
+				return portion_idx;
+		}
+	}
+
+	virtual int get_node_id() const {
+		return curr_node_id;
+	}
+};
+
+class mem_worker_task: public thread_task
+{
+	std::vector<matrix_store::const_ptr> mats;
+	std::vector<matrix_store::ptr> out_mats;
+	const portion_mapply_op &op;
+	mem_task_queue::ptr task_queue;
+public:
+	mem_worker_task(const std::vector<matrix_store::const_ptr> mats,
+			const portion_mapply_op &_op,
+			const std::vector<matrix_store::ptr> out_mats,
+			mem_task_queue::ptr task_queue): op(_op) {
+		this->mats = mats;
+		this->out_mats = out_mats;
+		this->task_queue = task_queue;
+	}
+
+	void run() {
+		size_t portion_idx;
+		while ((portion_idx = task_queue->get_portion_idx())
+				!= mem_task_queue::INVALID_TASK) {
+			mapply_task task(mats, portion_idx, op, out_mats);
+			task.run();
+		}
+	}
+};
+
 /*
  * This local write buffer helps to write data to part of a portion and
  * keep track of which parts are valid. It can flush data to EM matrix
@@ -1632,6 +1734,7 @@ bool __mapply_portion(
 		portion_mapply_op::const_ptr op,
 		const std::vector<matrix_store::ptr> &out_mats, bool par_access)
 {
+	std::vector<matrix_store::const_ptr> numa_mats;
 	bool out_in_mem;
 	int out_num_nodes;
 	if (out_mats.empty()) {
@@ -1641,6 +1744,8 @@ bool __mapply_portion(
 	else {
 		out_in_mem = out_mats.front()->is_in_mem();
 		out_num_nodes = out_mats.front()->get_num_nodes();
+		if (out_num_nodes > 0)
+			numa_mats.push_back(out_mats.front());
 		detail::matrix_stats.inc_write_bytes(
 				out_mats[0]->get_num_rows() * out_mats[0]->get_num_cols()
 				* out_mats[0]->get_entry_size(), out_in_mem);
@@ -1651,8 +1756,16 @@ bool __mapply_portion(
 		detail::matrix_stats.inc_write_bytes(
 				out_mats[i]->get_num_rows() * out_mats[i]->get_num_cols()
 				* out_mats[i]->get_entry_size(), out_in_mem);
+		if (out_mats[i]->get_num_nodes() > 0)
+			numa_mats.push_back(out_mats[i]);
 	}
 	assert(mats.size() >= 1);
+
+	// Collect all NUMA matrices in the input matrices.
+	for (size_t i = 0; i < mats.size(); i++) {
+		if (mats[i]->get_num_nodes() > 0)
+			numa_mats.push_back(mats[i]);
+	}
 
 	bool all_in_mem = mats[0]->is_in_mem();
 	size_t num_chunks = mats.front()->get_num_portions();
@@ -1685,6 +1798,14 @@ bool __mapply_portion(
 	}
 	all_in_mem = all_in_mem && out_in_mem;
 
+	// We need to test if all NUMA matrices distribute data to NUMA nodes
+	// with the same mapping. It's kind of difficult to test it.
+	// Right now the system has only one mapper. As long as a NUMA matrix
+	// is distributed to the same number of NUMA nodes, they should be
+	// distributed with the same mapping.
+	for (size_t i = 1; i < numa_mats.size(); i++)
+		assert(numa_mats[i]->get_num_nodes() == numa_mats[0]->get_num_nodes());
+
 	// If all matrices are in memory and all matrices have only one portion,
 	// we should perform computation in the local thread.
 	if (all_in_mem && num_chunks == 1) {
@@ -1704,31 +1825,38 @@ bool __mapply_portion(
 		detail::mem_thread_pool::enable_thread_pool();
 	}
 	else if (all_in_mem) {
-		detail::mem_thread_pool::ptr mem_threads
+		detail::mem_thread_pool::ptr threads
 			= detail::mem_thread_pool::get_global_mem_threads();
-		for (size_t i = 0; i < num_chunks; i++) {
-			int node_id = -1;
-			for (size_t j = 0; j < mats.size(); j++) {
-				if (node_id < 0)
-					node_id = mats[j]->get_portion_node_id(i);
-				else if (mats[j]->get_portion_node_id(i) >= 0)
-					assert(node_id == mats[j]->get_portion_node_id(i));
-			}
-			for (size_t j = 0; j < out_mats.size(); j++) {
-				if (node_id < 0)
-					node_id = out_mats[j]->get_portion_node_id(i);
-				else if (out_mats[j]->get_portion_node_id(i) >= 0)
-					assert(node_id == out_mats[j]->get_portion_node_id(i));
-			}
-
-			// If the local matrix portion is not assigned to any node, 
-			// assign the tasks in round robin fashion.
-			if (node_id < 0)
-				node_id = i % mem_threads->get_num_nodes();
-			mem_threads->process_task(node_id, new mapply_task(mats, i, *op,
-						out_mats));
+		std::vector<mem_task_queue::ptr> task_queues;
+		// If there aren't NUMA matrices, there will be only one queue.
+		if (numa_mats.empty()) {
+			task_queues.resize(1);
+			task_queues[0] = mem_task_queue::ptr(
+					new smp_task_queue(mats[0]->get_num_portions()));
 		}
-		mem_threads->wait4complete();
+		// Otherwise, each NUMA node has a task queue.
+		else {
+			int num_nodes = numa_mats.front()->get_num_nodes();
+			assert(num_nodes > 0);
+			task_queues.resize(num_nodes);
+			for (int i = 0; i < num_nodes; i++)
+				task_queues[i] = mem_task_queue::ptr(
+						new numa_task_queue(numa_mats.front(), i));
+		}
+		for (size_t i = 0; i < threads->get_num_threads(); i++) {
+			int node_id = i % threads->get_num_nodes();
+			mem_task_queue::ptr queue;
+			if (task_queues.size() == 1)
+				queue = task_queues[0];
+			else {
+				assert((size_t) node_id < task_queues.size());
+				queue = task_queues[node_id];
+				assert(queue->get_node_id() == node_id);
+			}
+			threads->process_task(node_id, new mem_worker_task(mats, *op,
+						out_mats, queue));
+		}
+		threads->wait4complete();
 	}
 	else {
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
