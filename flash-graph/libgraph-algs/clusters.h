@@ -123,7 +123,8 @@ namespace {
                 if (idx == -1) { // Set all means
                     means = mean;
                 } else {
-                    std::copy(mean.begin(), mean.end(), this->means.begin()+(idx*ncol));
+                    std::copy(mean.begin(), mean.end(),
+                            this->means.begin()+(idx*ncol));
                 }
             }
 
@@ -136,6 +137,16 @@ namespace {
                     std::copy(&(mean[0]), &(mean[ncol]), this->means.begin()+(idx*ncol));
                 }
             }
+
+            template<typename T>
+                void set_mean(T& it, const int idx) {
+                    unsigned offset = idx*ncol;
+                    unsigned nid = 0;
+                    while(it.has_next()) {
+                        double e = it.next();
+                        means[offset+nid] = e;
+                    }
+                }
 
             const int get_num_members(const unsigned idx) const {
                 return num_members_v[idx];
@@ -228,6 +239,21 @@ namespace {
                         const unsigned to_idx) {
                     remove_member(arr, from_idx);
                     add_member(arr, to_idx);
+                }
+
+            template <typename T>
+                void swap_membership(T& count_it,
+                        const unsigned from_id, const unsigned to_id) {
+                    unsigned nid = 0;
+                    unsigned from_offset = from_id * ncol;
+                    unsigned to_offset = to_id * ncol;
+                    while(count_it.has_next()) {
+                        double e = count_it.next();
+                        means[from_offset+nid] -= e;
+                        means[to_offset+nid++] += e;
+                    }
+                    num_members_v[from_id]--;
+                    num_members_v[to_id]++;
                 }
 
             clusters& operator=(const clusters& other) {
