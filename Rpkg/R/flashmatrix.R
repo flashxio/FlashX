@@ -1041,7 +1041,10 @@ fm.materialize <- function(fm)
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
 	ret <- .Call("R_FM_materialize", fm, PACKAGE="FlashR")
-	new.fm(ret)
+	if (class(fm) == "fm")
+		new.fm(ret)
+	else
+		new.fmV(ret)
 }
 
 #' Write a FlashMatrix object (vector/matrix) to a file

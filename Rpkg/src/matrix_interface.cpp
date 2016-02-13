@@ -1606,7 +1606,12 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	// I think it's OK to materialize on the original matrix.
 	mat->materialize_self();
-	Rcpp::List ret = create_FMR_matrix(mat, "");
+
+	Rcpp::List ret;
+	if (is_vector(pmat))
+		ret = create_FMR_vector(mat, "");
+	else
+		ret = create_FMR_matrix(mat, "");
 	Rcpp::S4 rcpp_mat(pmat);
 	ret["ele_type"] = rcpp_mat.slot("ele_type");
 	return ret;
