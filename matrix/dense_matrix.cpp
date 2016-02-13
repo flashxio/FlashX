@@ -3305,14 +3305,7 @@ void groupby_row_mapply_op::run(
 {
 	assert(ins.size() == 2);
 	detail::local_matrix_store::const_ptr labels = ins[0];
-	detail::local_row_matrix_store::const_ptr in;
-	if (ins[1]->store_layout() == matrix_layout_t::L_COL)
-		in = std::dynamic_pointer_cast<const detail::local_row_matrix_store>(
-				ins[1]->conv2(matrix_layout_t::L_ROW));
-	else
-		in = std::dynamic_pointer_cast<const detail::local_row_matrix_store>(
-				ins[1]);
-	size_t num_local_rows = in->get_num_rows();
+	detail::local_matrix_store::const_ptr in = ins[1];
 
 	groupby_row_mapply_op *mutable_this = const_cast<groupby_row_mapply_op *>(
 			this);
@@ -3330,24 +3323,12 @@ void groupby_row_mapply_op::run(
 	if (!part_status[thread_id])
 		return;
 
-	for (size_t i = 0; i < num_local_rows; i++) {
-		factor_value_t label_id = labels->get<factor_value_t>(i, 0);
-		if ((size_t) label_id >= part_agg[thread_id].size()) {
-			mutable_this->part_status[thread_id] = false;
-			break;
-		}
-		// If we never get partially aggregated result for a label, we should
-		// copy the data to the corresponding row.
-		if (!part_agg[thread_id][label_id])
-			memcpy(part_results[thread_id]->get_row(label_id), in->get_row(i),
-					in->get_num_cols() * in->get_entry_size());
-		else
-			op->get_agg().runAA(in->get_num_cols(), in->get_row(i),
-					part_results[thread_id]->get_row(label_id),
-					part_results[thread_id]->get_row(label_id));
-		auto bit = mutable_this->part_agg[thread_id][label_id];
-		bit = true;
-	}
+	assert(in->store_layout() == matrix_layout_t::L_ROW);
+	bool ret = detail::groupby_row(*labels,
+			static_cast<const detail::local_row_matrix_store &>(*in),
+			*op, *part_results[thread_id], mutable_this->part_agg[thread_id]);
+	if (!ret)
+		mutable_this->part_status[thread_id] = false;
 }
 
 }
@@ -3377,7 +3358,12 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 
 	std::vector<detail::matrix_store::const_ptr> mats(2);
 	mats[0] = labels->get_raw_store();
-	mats[1] = store;
+	if (store_layout() == matrix_layout_t::L_ROW)
+		mats[1] = store;
+	else {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		mats[1] = tmp->get_raw_store();
+	}
 	groupby_row_mapply_op *_groupby_op = new groupby_row_mapply_op(
 			labels->get_factor().get_num_levels(), op);
 	detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
