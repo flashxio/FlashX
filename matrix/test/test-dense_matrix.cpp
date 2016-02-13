@@ -59,6 +59,21 @@ void test_mapply()
 
 void test_conv_layout()
 {
+	struct timeval start, end;
+	typedef size_t ele_type;
+	size_t height = 1024 * 1024 * 1024;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->conv2(matrix_layout_t::L_COL);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("conv layout takes %.3f seconds\n", time_diff(start, end));
+	}
 }
 
 class single_operate2
@@ -216,6 +231,18 @@ void test_inner_prod(matrix_layout_t layout)
 		res->materialize_self();
 		gettimeofday(&end, NULL);
 		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	if (mat->store_layout() == matrix_layout_t::L_ROW) {
+		mat = mat->conv2(matrix_layout_t::L_COL);
+		printf("conv layout\n");
+		for (size_t i = 0; i < 5; i++) {
+			gettimeofday(&start, NULL);
+			dense_matrix::ptr res = mat->multiply(*small_mat);
+			res->materialize_self();
+			gettimeofday(&end, NULL);
+			printf("it takes %.3f seconds\n", time_diff(start, end));
+		}
 	}
 }
 
