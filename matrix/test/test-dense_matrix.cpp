@@ -61,8 +61,220 @@ void test_conv_layout()
 {
 }
 
+class single_operate2
+{
+public:
+	typedef std::shared_ptr<const single_operate2> const_ptr;
+
+	virtual void run(const void *in1, const void *in2, void *out) const = 0;
+};
+
+template<class T>
+class multiply2_op: public single_operate2
+{
+public:
+	void run(const void *in1, const void *in2, void *out) const {
+		const T *t_in1 = (const T *) in1;
+		const T *t_in2 = (const T *) in2;
+		T *t_out = (T *) out;
+		*t_out = *t_in1 * *t_in2;
+	}
+};
+
+template<class T>
+class add2_op: public single_operate2
+{
+public:
+	void run(const void *in1, const void *in2, void *out) const {
+		const T *t_in1 = (const T *) in1;
+		const T *t_in2 = (const T *) in2;
+		T *t_out = (T *) out;
+		*t_out = *t_in1 + *t_in2;
+	}
+};
+
+static const size_t LONG_DIM_LEN = 1024;
+
+class portion_multiply_op: public detail::portion_mapply_op
+{
+	single_operate2::const_ptr left_op;
+	single_operate2::const_ptr right_op;
+	detail::mem_col_matrix_store::const_ptr right;
+public:
+	portion_multiply_op(single_operate2::const_ptr left_op,
+			single_operate2::const_ptr right_op,
+			detail::mem_col_matrix_store::const_ptr right,
+			size_t out_num_rows): detail::portion_mapply_op(
+				out_num_rows, right->get_num_cols(), right->get_type()) {
+		this->left_op = left_op;
+		this->right_op = right_op;
+		this->right = right;
+	}
+
+	void run(const detail::local_row_matrix_store &in,
+			detail::local_matrix_store &out) const {
+		std::vector<char> tmp(in.get_entry_size());
+		for (size_t i = 0; i < in.get_num_rows(); i++) {
+			const char *left_row = in.get_row(i);
+			for (size_t j = 0; j < right->get_num_cols(); j++) {
+				const char *right_col = right->get_col(j);
+				char *res = out.get(i, j);
+				left_op->run(left_row, right_col, res);
+				// Work on the row from the left matrix and the column from
+				// the right matrix
+				for (size_t k = 1; k < right->get_num_rows(); k++) {
+					left_op->run(left_row + k * in.get_entry_size(),
+							right_col + k * in.get_entry_size(), tmp.data());
+					right_op->run(tmp.data(), res, res);
+				}
+			}
+		}
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+			// If the local matrix isn't virtual, we don't need to resize it
+			// to increase CPU cache hits.
+			run(static_cast<const detail::local_row_matrix_store &>(*ins[0]),
+					out);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+template<class T>
+class portion_multiply_op2: public detail::portion_mapply_op
+{
+	detail::mem_col_matrix_store::const_ptr right;
+public:
+	portion_multiply_op2(detail::mem_col_matrix_store::const_ptr right,
+			size_t out_num_rows): detail::portion_mapply_op(
+				out_num_rows, right->get_num_cols(), right->get_type()) {
+		this->right = right;
+	}
+
+	void run(const detail::local_row_matrix_store &in,
+			detail::local_matrix_store &out) const {
+		const T *left_arr = (const T *) in.get_raw_arr();
+		assert(left_arr);
+		const T *right_arr = (const T *) right->get_raw_arr();
+		assert(right_arr);
+		T *res_arr = (T *) out.get_raw_arr();
+		assert(res_arr);
+		for (size_t i = 0; i < in.get_num_rows(); i++) {
+			const T *left_row = left_arr + i * in.get_num_cols();
+			for (size_t j = 0; j < right->get_num_cols(); j++) {
+				const T *right_col = right_arr + j * right->get_num_rows();
+				T tmp = 0;
+				for (size_t k = 0; k < right->get_num_rows(); k++)
+					tmp += left_row[k] * right_col[k];
+				res_arr[i * out.get_num_cols() + j] = tmp;
+			}
+		}
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+			// If the local matrix isn't virtual, we don't need to resize it
+			// to increase CPU cache hits.
+			run(static_cast<const detail::local_row_matrix_store &>(*ins[0]),
+					out);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+void test_inner_prod(matrix_layout_t layout)
+{
+	struct timeval start, end;
+	typedef size_t ele_type;
+	size_t height = 1024 * 1024 * 1024;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			layout, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	dense_matrix::ptr small_mat = dense_matrix::create(width, width,
+			matrix_layout_t::L_COL, get_scalar_type<ele_type>(), mat_init<ele_type>(), -1);
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->multiply(*small_mat);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
+void test_inner_prod_manual()
+{
+	struct timeval start, end;
+	typedef size_t ele_type;
+	size_t height = 1024 * 1024 * 1024;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	dense_matrix::ptr small_mat = dense_matrix::create(width, width,
+			matrix_layout_t::L_COL, get_scalar_type<ele_type>(), mat_init<ele_type>(), -1);
+	dense_matrix::ptr ret;
+	printf("inner prod with single calls\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = mat->get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(new portion_multiply_op(
+					single_operate2::const_ptr(new multiply2_op<ele_type>()),
+					single_operate2::const_ptr(new add2_op<ele_type>()),
+					std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+						small_mat->get_raw_store()),
+					mat->get_num_rows()));
+		detail::matrix_store::ptr res_store = __mapply_portion(ins, portion_op,
+				mat->store_layout());
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+		ret = dense_matrix::create(res_store);
+	}
+
+	printf("inner prod manually\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = mat->get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(
+				new portion_multiply_op2<ele_type>(
+					std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+						small_mat->get_raw_store()),
+					mat->get_num_rows()));
+		detail::matrix_store::ptr res_store = __mapply_portion(ins, portion_op,
+				mat->store_layout());
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+		ret = dense_matrix::create(res_store);
+	}
+}
+
 void test_inner_prod()
 {
+	test_inner_prod_manual();
+	printf("inner prod row\n");
+	test_inner_prod(matrix_layout_t::L_ROW);
+	printf("inner prod col\n");
+	test_inner_prod(matrix_layout_t::L_COL);
 }
 
 void test_agg()
@@ -186,8 +398,6 @@ public:
 		*t_out = *t_in + val;
 	}
 };
-
-static const size_t LONG_DIM_LEN = 1024;
 
 class portion_add_op: public detail::portion_mapply_op
 {
