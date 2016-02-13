@@ -2441,18 +2441,28 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 	assert(right->get_num_nodes() == -1);
 	assert(!right->is_virtual());
 
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	// If the matrix is already stored in col-major order or this is
+	// a relatively wide matrix, we don't need to convert its data layout.
+	if (store_layout() == matrix_layout_t::L_COL || get_num_cols() > 16)
+		ins[0] = this->get_raw_store();
+	else {
+		// If this is a very tall and skinny matrix, col-major works better
+		// even though we need to pay the overhead of converting the layout.
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
+		ins[0] = tmp->get_raw_store();
+	}
+
 	if (out_layout == matrix_layout_t::L_NONE) {
 		// If the left matrix is col-major, the output matrix should also
 		// be col-major.
-		if (this->store_layout() == matrix_layout_t::L_COL)
+		if (ins[0]->store_layout() == matrix_layout_t::L_COL)
 			out_layout = matrix_layout_t::L_COL;
 		else
 			// We don't care about the layout of the output matrix in this case.
 			out_layout = matrix_layout_t::L_ROW;
 	}
 
-	std::vector<detail::matrix_store::const_ptr> ins(1);
-	ins[0] = this->get_raw_store();
 	inner_prod_tall_op::const_ptr mapply_op(new inner_prod_tall_op(right,
 				left_op, right_op, get_num_rows(), m.get_num_cols()));
 	return __mapply_portion_virtual(ins, mapply_op, out_layout);
