@@ -800,8 +800,90 @@ void test_get_raw(size_t long_dim)
 	assert(*(int *) store->get_raw_arr() == 100);
 }
 
+void test_conv_layout(size_t long_dim)
+{
+	// Tall matrices
+	local_row_matrix_store::ptr row_store(new local_buf_row_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<int>(), -1));
+	row_store->set_data(set_row_operate(row_store->get_num_cols()));
+	local_col_matrix_store::ptr col_store(new local_buf_col_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<int>(), -1));
+	col_store->copy_from(*row_store);
+	local_matrix_store::ptr store = col_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	row_store->reset_data();
+	row_store->copy_from(*col_store);
+	store = row_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	std::vector<char *> rows(row_store->get_num_rows());
+	for (size_t i = 0; i < rows.size(); i++)
+		rows[i] = row_store->get_row(i);
+	row_store = local_row_matrix_store::ptr(new local_ref_row_matrix_store(rows,
+				0, 0, row_store->get_num_rows(), row_store->get_num_cols(),
+				row_store->get_type(), -1));
+	col_store->reset_data();
+	col_store->copy_from(*row_store);
+	store = col_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	row_store->reset_data();
+	row_store->copy_from(*col_store);
+	store = row_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	// Wide matrices
+	row_store = local_row_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				10, long_dim, get_scalar_type<int>(), -1));
+	row_store->set_data(set_row_operate(row_store->get_num_cols()));
+	col_store = local_col_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				10, long_dim, get_scalar_type<int>(), -1));
+	col_store->copy_from(*row_store);
+	store = col_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	row_store->reset_data();
+	row_store->copy_from(*col_store);
+	store = row_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	std::vector<char *> cols(col_store->get_num_cols());
+	for (size_t i = 0; i < cols.size(); i++)
+		cols[i] = col_store->get_col(i);
+	col_store = local_col_matrix_store::ptr(new local_ref_col_matrix_store(cols,
+				0, 0, col_store->get_num_rows(), col_store->get_num_cols(),
+				col_store->get_type(), -1));
+	row_store->reset_data();
+	row_store->copy_from(*col_store);
+	store = row_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+
+	col_store->reset_data();
+	col_store->copy_from(*row_store);
+	store = col_store;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
+}
+
 int main()
 {
+	test_conv_layout(1000);
 	test_get_raw(1000);
 	test_reset(1000);
 	test_reset(10000);

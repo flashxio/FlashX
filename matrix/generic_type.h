@@ -128,6 +128,7 @@ class basic_uops;
 class basic_ops;
 class agg_ops;
 class scatter_gather;
+class conv_layout;
 class scalar_variable;
 class rand_gen;
 class set_operate;
@@ -152,6 +153,7 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual const conv_layout &get_conv() const = 0;
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
@@ -205,6 +207,7 @@ public:
 	}
 
 	virtual const scatter_gather &get_sg() const;
+	virtual const conv_layout &get_conv() const;
 	virtual const stl_algs &get_stl_algs() const {
 		static stl_algs_impl<T> algs;
 		return algs;

@@ -234,6 +234,13 @@ const scatter_gather &scalar_type_impl<T>::get_sg() const
 }
 
 template<class T>
+const conv_layout &scalar_type_impl<T>::get_conv() const
+{
+	static type_conv_layout<T> sg;
+	return sg;
+}
+
+template<class T>
 const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
 {
 	assert(val.get_type() == get_scalar_type<T>());

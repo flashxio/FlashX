@@ -257,7 +257,7 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 	// We should handle wide matrix and tall matrix differently
 	// to minimize virtual function calls.
 	// The idea is to reduce cache misses.
-	else if (is_wide()) {
+	else if (is_wide() && store.get_raw_arr() == NULL) {
 		const local_col_matrix_store &col_store
 			= static_cast<const local_col_matrix_store &>(store);
 		std::vector<char *> dest_col(get_num_rows());
@@ -273,7 +273,14 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 				dest_col[j] += entry_size;
 		}
 	}
-	else {
+	else if (is_wide()) {
+		std::vector<char *> dst_rows(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++)
+			dst_rows[i] = get_row(i);
+		get_type().get_conv().conv(store.get_raw_arr(),
+				get_num_rows() * get_num_cols(), dst_rows);
+	}
+	else if (get_raw_arr() == NULL) {
 		const local_col_matrix_store &col_store
 			= static_cast<const local_col_matrix_store &>(store);
 		std::vector<const char *> src_row(get_num_cols());
@@ -288,6 +295,14 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 			for (size_t j = 0; j < src_row.size(); j++)
 				src_row[j] += entry_size;
 		}
+	}
+	else {
+		std::vector<const char *> src_cols(get_num_cols());
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		for (size_t i = 0; i < get_num_cols(); i++)
+			src_cols[i] = col_store.get_col(i);
+		get_type().get_conv().conv(src_cols, get_num_rows(), get_raw_arr());
 	}
 	return true;
 }
@@ -355,7 +370,7 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 	}
 	// We should handle wide matrix and tall matrix differently
 	// to minimize virtual function calls.
-	else if (is_wide()) {
+	else if (is_wide() && get_raw_arr() == NULL) {
 		const local_row_matrix_store &row_store
 			= static_cast<const local_row_matrix_store &>(store);
 		std::vector<const char *> src_col(get_num_rows());
@@ -371,7 +386,15 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 				src_col[j] += entry_size;
 		}
 	}
-	else {
+	else if (is_wide()) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		std::vector<const char *> src_rows(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++)
+			src_rows[i] = row_store.get_row(i);
+		get_type().get_conv().conv(src_rows, get_num_cols(), get_raw_arr());
+	}
+	else if (store.get_raw_arr() == NULL) {
 		const local_row_matrix_store &row_store
 			= static_cast<const local_row_matrix_store &>(store);
 		std::vector<char *> dst_row(get_num_cols());
@@ -387,6 +410,13 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 			for (size_t j = 0; j < dst_row.size(); j++)
 				dst_row[j] += entry_size;
 		}
+	}
+	else {
+		std::vector<char *> dst_cols(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++)
+			dst_cols[i] = get_col(i);
+		get_type().get_conv().conv(store.get_raw_arr(),
+				get_num_rows() * get_num_cols(), dst_cols);
 	}
 	return true;
 }

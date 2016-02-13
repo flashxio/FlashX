@@ -833,6 +833,54 @@ public:
 	}
 };
 
+class conv_layout
+{
+public:
+	/*
+	 * Move data in a matrix stored in `arrs' to a single piece of memory
+	 * pointed by `contig_arr'.
+	 * The number of elements in each array of the vector is `arr_len'.
+	 */
+	virtual void conv(const std::vector<const char *> &arrs, size_t arr_len,
+			char *contig_arr) const = 0;
+	/*
+	 * Move data in a single piece of memory to a matrix stored in `arrs'.
+	 * The number of elements in the contiguous memory is `arr_len'.
+	 */
+	virtual void conv(const char *contig_arr, size_t arr_len,
+			const std::vector<char *> &arrs) const = 0;
+};
+
+template<class T>
+class type_conv_layout: public conv_layout
+{
+public:
+	virtual void conv(const std::vector<const char *> &arrs, size_t arr_len,
+			char *contig_arr) const {
+		std::vector<const T *> t_arrs(arrs.size());
+		for (size_t i = 0; i < arrs.size(); i++)
+			t_arrs[i] = reinterpret_cast<const T *>(arrs[i]);
+		T *t_res = reinterpret_cast<T *>(contig_arr);
+		size_t res_idx = 0;
+		for (size_t i = 0; i < arr_len; i++)
+			for (size_t j = 0; j < t_arrs.size(); j++)
+				t_res[res_idx++] = t_arrs[j][i];
+
+	}
+	virtual void conv(const char *contig_arr, size_t arr_len,
+			const std::vector<char *> &arrs) const {
+		const T *t_arr = reinterpret_cast<const T *>(contig_arr);
+		std::vector<T *> t_res(arrs.size());
+		for (size_t i = 0; i < t_res.size(); i++)
+			t_res[i] = reinterpret_cast<T *>(arrs[i]);
+		size_t each_len = arr_len / arrs.size();
+		size_t src_idx = 0;
+		for (size_t i = 0; i < each_len; i++)
+			for (size_t j = 0; j < t_res.size(); j++)
+				t_res[j][i] = t_arr[src_idx++];
+	}
+};
+
 }
 
 #endif
