@@ -751,16 +751,16 @@ fm.set.na <- function(in1, in2, res)
 	else if (fm.typeof(res) == "logical")
 		# is.na always return TRUE or FALSE, we don't need to test and set NA
 		# on the result. If we do, we'll get infinite recursive calls.
-		ifelse(fm.mapply2(!is.na(in1), !is.na(in2), fm.bo.and,
-						  FALSE), res, NA)
+		ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
+						  FALSE), NA, res)
 	else if (fm.typeof(res) == "integer")
-		ifelse(fm.mapply2(!is.na(in1), !is.na(in2), fm.bo.and,
-						  FALSE), res, as.integer(NA))
+		ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
+						  FALSE), as.integer(NA), res)
 	else if (fm.typeof(res) == "double") {
-		res <- ifelse(fm.mapply2(!is.na(in1), !is.na(in2), fm.bo.and,
-						  FALSE), res, as.double(NA))
-		ifelse(fm.mapply2(!is.nan(in1), !is.nan(in2), fm.bo.and,
-						  FALSE), res, NaN)
+		res <- ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
+						  FALSE), as.double(NA), res)
+		ifelse(fm.mapply2(is.nan(in1), is.nan(in2), fm.bo.or,
+						  FALSE), NaN, res)
 	}
 	else
 		# In this case, we don't do anything with the result.
@@ -1281,7 +1281,7 @@ setMethod("ifelse", signature(test = "fm", yes = "fm", no = "ANY"),
 
 setMethod("ifelse", signature(test = "fm", yes = "ANY", no = "fm"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_yes", !test, no, yes, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
 			  new.fm(ret)
 		  })
 
@@ -1293,7 +1293,7 @@ setMethod("ifelse", signature(test = "fmV", yes = "fmV", no = "ANY"),
 
 setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_yes", !test, no, yes, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
 			  new.fmV(ret)
 		  })
 
@@ -1372,8 +1372,8 @@ fm.test.na.finite <- function(input, res)
 		return(NULL)
 	else {
 		# The result must be float points.
-		ifelse(fm.mapply2(!is.na(input), !is.nan(input), fm.bo.and,
-						  FALSE), res, FALSE)
+		ifelse(fm.mapply2(is.na(input), is.nan(input), fm.bo.or,
+						  FALSE), FALSE, res)
 	}
 }
 setMethod("is.finite", signature(x = "fm"), function(x) {
