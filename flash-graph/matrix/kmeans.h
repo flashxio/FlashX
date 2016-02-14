@@ -107,7 +107,7 @@ namespace fg {
  **/
 unsigned compute_kmeans(const double* matrix, double* clusters,
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-		const unsigned num_rows, const unsigned num_cols, const size_t k,
+		const size_t num_rows, const size_t num_cols, const unsigned k,
 		const unsigned MAX_ITERS, const int max_threads,
         const std::string init="kmeanspp", const double tolerance=-1,
         const std::string dist_type="eucl");
@@ -115,7 +115,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 /** See `compute_kmeans` for argument list */
 unsigned compute_min_kmeans(const double* matrix, double* clusters_ptr,
         unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-        const unsigned num_rows, const unsigned num_cols, const size_t k,
+		const size_t num_rows, const size_t num_cols, const unsigned k,
         const unsigned MAX_ITERS, const int max_threads,
         const std::string init="kmeanspp", const double tolerance=-1,
         const std::string dist_type="eucl");

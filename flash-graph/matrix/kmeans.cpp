@@ -213,7 +213,7 @@ namespace fg
 {
 	unsigned compute_kmeans(const double* matrix, double* clusters_ptr,
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-			const unsigned num_rows, const unsigned num_cols, const size_t k,
+			const size_t num_rows, const size_t num_cols, const unsigned k,
             const unsigned MAX_ITERS, const int max_threads, const std::string init,
             const double tolerance, const std::string dist_type)
 	{
