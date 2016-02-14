@@ -1351,18 +1351,41 @@ setMethod("is.nan", signature(x = "fmV"), function(x) {
 		  else
 			  fm.rep.int(FALSE, length(x))
 		  })
+
 setMethod("is.infinite", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double")
-			  x == Inf
+			  fm.mapply2(x, Inf, fm.bo.eq, FALSE)
 		  else
 			  # TODO construct this matrix shouldn't have data movement.
 			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
 		  })
 setMethod("is.infinite", signature(x = "fmV"), function(x) {
 		  if (typeof(x) == "double")
-			  x == Inf
+			  fm.mapply2(x, Inf, fm.bo.eq, FALSE)
 		  else
 			  fm.rep.int(FALSE, length(x))
 		  })
-setMethod("is.finite", signature(x = "fm"), function(x) !is.infinite(x))
-setMethod("is.finite", signature(x = "fmV"), function(x) !is.infinite(x))
+
+fm.test.na.finite <- function(input, res)
+{
+	if (is.null(res))
+		return(NULL)
+	else {
+		# The result must be float points.
+		ifelse(fm.mapply2(!is.na(input), !is.nan(input), fm.bo.and,
+						  FALSE), res, FALSE)
+	}
+}
+setMethod("is.finite", signature(x = "fm"), function(x) {
+		  if (typeof(x) == "double")
+			  fm.test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
+		  else
+			  # TODO construct this matrix shouldn't have data movement.
+			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+		  })
+setMethod("is.finite", signature(x = "fmV"), function(x) {
+		  if (typeof(x) == "double")
+			  fm.test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
+		  else
+			  fm.rep.int(FALSE, length(x))
+		  })
