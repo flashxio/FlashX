@@ -160,6 +160,10 @@ fm.load.sparse.matrix <- function(mat, index, t.mat=NULL, t.index=NULL, in.mem=T
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.rep.int <- function(x, times)
 {
+	if (times <= 0) {
+		print("we can't generate a vector of 0 elements")
+		return(NULL)
+	}
 	stopifnot(is.vector(x) && is.atomic(x))
 	vec <- .Call("R_FM_create_vector", as.numeric(times), x, PACKAGE="FlashR")
 	new.fmV(vec)
@@ -175,6 +179,10 @@ fm.rep.int <- function(x, times)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.seq.int <- function(from, to, by)
 {
+	if ((to - from) / by <= 0) {
+		print("we can't generate a vector of 0 elements")
+		return(NULL)
+	}
 	vec <- .Call("R_FM_create_seq", from, to, by, PACKAGE="FlashR")
 	new.fmV(vec)
 }
@@ -188,6 +196,10 @@ fm.seq.int <- function(from, to, by)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.runif <- function(n, min=0, max=1)
 {
+	if (n <= 0) {
+		print("we can't generate a vector of 0 elements")
+		return(NULL)
+	}
 	vec <- .Call("R_FM_create_rand", n, min, max, PACKAGE="FlashR")
 	new.fmV(vec)
 }
