@@ -32,7 +32,7 @@ namespace {
 #if KM_TEST
     static prune_stats::ptr g_prune_stats;
 #endif
-    static unsigned g_io_reqs = 0;
+    static size_t g_io_reqs = 0;
 
     static bool g_prune_init = false;
     static dist_matrix::ptr g_cluster_dist;
@@ -242,10 +242,6 @@ namespace {
                             double _dist = dist_comp(vertex, g_kmspp_cluster_idx);
 
                             if (_dist < g_kmspp_distance[my_id]) {
-#if 0
-                                printf("kms++ v%u updating dist from: %s to %.3f\n",
-                                        my_id, (s(g_kmspp_distance[my_id])).c_str(), _dist);
-#endif
                                 g_kmspp_distance[my_id] = _dist;
                                 set_cluster_id(g_kmspp_cluster_idx);
                                 set_dist(_dist);
@@ -529,6 +525,7 @@ namespace {
                     mat->start_all(vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                     mat->wait4complete();
+                    g_io_reqs += NUM_ROWS;
 
                     update_clusters(mat, num_members_v);
                 }
@@ -545,6 +542,7 @@ namespace {
                     }
                     mat->start(&init_ids.front(), K);
                     mat->wait4complete();
+                    g_io_reqs++;
                 } else if (init == "kmeanspp") {
                     BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
                     g_init = PLUSPLUS;
@@ -564,8 +562,6 @@ namespace {
                         // TODO: Start 1 vertex which will activate all
                         g_kmspp_stage = ADDMEAN;
 
-                        g_io_reqs++;
-
                         mat->start(&g_kmspp_next_cluster, 1);
                         mat->wait4complete();
 
@@ -579,7 +575,7 @@ namespace {
                         if (g_kmspp_cluster_idx+1 == K) { break; }
                         g_kmspp_stage = DIST;
 
-                        g_io_reqs += NUM_ROWS;
+                        g_io_reqs += NUM_ROWS + 1;
 
                         mat->start_all(vertex_initializer::ptr(),
                                 vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
@@ -687,7 +683,7 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
-            printf("Total # of IO requests: %u\nTotal bytes requested: %lu\n\n",
+            printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
 
             if (converged) {

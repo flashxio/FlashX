@@ -29,7 +29,7 @@ using namespace fg;
 
 namespace {
 
-    static unsigned g_io_reqs = 0;
+    static size_t g_io_reqs = 0;
 
     static clusters::ptr g_clusters; // cluster means/centers
 
@@ -75,7 +75,6 @@ namespace {
     class kmeans_vertex_program:
         public base_kmeans_vertex_program<kmeans_vertex, clusters>
     {
-        unsigned num_reqs;
 #if KM_TEST
         prune_stats::ptr pt_ps;
 #endif
@@ -84,7 +83,6 @@ namespace {
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
 
         kmeans_vertex_program() {
-            this->num_reqs = 0;
 #if KM_TEST
             pt_ps = prune_stats::create(NUM_ROWS, K);
 #endif
@@ -102,11 +100,6 @@ namespace {
                 const unsigned to_id) {
             get_pt_clusters()->swap_membership(count_it, from_id, to_id);
         }
-
-        void num_requests_pp() {
-            num_reqs++;
-        }
-        const unsigned get_num_reqs() const { return num_reqs; }
     };
 
     class kmeans_vertex_program_creater: public vertex_program_creater
@@ -271,8 +264,6 @@ namespace {
                 clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
 
-                g_io_reqs += kms_prog->get_num_reqs();
-
                 BOOST_VERIFY(g_num_changed <= NUM_ROWS);
                 /* Merge the per-thread clusters */
                 // TODO: Pool
@@ -411,6 +402,7 @@ namespace {
                     mat->start_all(vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                     mat->wait4complete();
+                    g_io_reqs += NUM_ROWS;
 
                     update_clusters(mat, num_members_v);
                 }
@@ -427,6 +419,8 @@ namespace {
                     }
                     mat->start(&init_ids.front(), K);
                     mat->wait4complete();
+                    g_io_reqs += 1;
+
                 } else if (init == "kmeanspp") {
                     BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
                     g_init = PLUSPLUS;
@@ -446,8 +440,6 @@ namespace {
                         // TODO: Start 1 vertex which will activate all
                         g_kmspp_stage = ADDMEAN;
 
-                        g_io_reqs++;
-
                         mat->start(&g_kmspp_next_cluster, 1);
                         mat->wait4complete();
 #if VERBOSE
@@ -458,11 +450,11 @@ namespace {
                         if (g_kmspp_cluster_idx+1 == K) { break; }
                         g_kmspp_stage = DIST;
 
-                        g_io_reqs += NUM_ROWS;
-
                         mat->start_all(vertex_initializer::ptr(),
                                 vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
                         mat->wait4complete();
+                        g_io_reqs += (NUM_ROWS + 1);
+
                         g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                     }
                 }
@@ -487,6 +479,8 @@ namespace {
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
+                g_io_reqs += NUM_ROWS;
+
                 BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating cluster means ...";
                 update_clusters(mat, num_members_v);
 
@@ -513,7 +507,7 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
-            printf("Total # of IO requests: %u\nTotal bytes requested: %lu\n\n",
+            printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
 
             if (converged) {
