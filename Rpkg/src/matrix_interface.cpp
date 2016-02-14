@@ -1730,33 +1730,7 @@ RcppExport SEXP R_FM_cbind(SEXP pmats)
 template<class T>
 class ifelse2_op: public bulk_operate
 {
-	T no;
-
-	ifelse2_op(T no) {
-		this->no = no;
-	}
 public:
-	static const_ptr create(scalar_variable::ptr no) {
-		T val = scalar_variable::get_val<T>(*no);
-		return const_ptr(new ifelse2_op<T>(val));
-	}
-
-	/*
-	 * This performs element-wise operation on two input arrays, and stores
-	 * the result on the output array.
-	 */
-	virtual void runAA(size_t num_eles, const void *left_arr,
-			const void *right_arr, void *output_arr) const {
-		const int *test = reinterpret_cast<const int *>(left_arr);
-		const T *yes = reinterpret_cast<const T *>(right_arr);
-		T *output = reinterpret_cast<T *>(output_arr);
-		for (size_t i = 0; i < num_eles; i++) {
-			if (test[i])
-				output[i] = yes[i];
-			else
-				output[i] = no;
-		}
-	}
 	/*
 	 * This performs operations on the left input array and the right element,
 	 * and stores the result on the output array.
@@ -1798,10 +1772,95 @@ public:
 	}
 };
 
+template<class T>
+class ifelse_no_op: public ifelse2_op<T>
+{
+	T no;
+
+	ifelse_no_op(T no) {
+		this->no = no;
+	}
+public:
+	static bulk_operate::const_ptr create(scalar_variable::ptr no) {
+		T val = scalar_variable::get_val<T>(*no);
+		return bulk_operate::const_ptr(new ifelse_no_op<T>(val));
+	}
+
+	/*
+	 * This performs element-wise operation on two input arrays, and stores
+	 * the result on the output array.
+	 */
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const int *test = reinterpret_cast<const int *>(left_arr);
+		const T *yes = reinterpret_cast<const T *>(right_arr);
+		T *output = reinterpret_cast<T *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++) {
+			if (test[i])
+				output[i] = yes[i];
+			else
+				output[i] = no;
+		}
+	}
+};
+
+template<class T>
+class ifelse_yes_op: public ifelse2_op<T>
+{
+	T yes;
+
+	ifelse_yes_op(T yes) {
+		this->yes = yes;
+	}
+public:
+	static bulk_operate::const_ptr create(scalar_variable::ptr yes) {
+		T val = scalar_variable::get_val<T>(*yes);
+		return bulk_operate::const_ptr(new ifelse_yes_op<T>(val));
+	}
+
+	/*
+	 * This performs element-wise operation on two input arrays, and stores
+	 * the result on the output array.
+	 */
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const int *test = reinterpret_cast<const int *>(left_arr);
+		const T *no = reinterpret_cast<const T *>(right_arr);
+		T *output = reinterpret_cast<T *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++) {
+			if (test[i])
+				output[i] = yes;
+			else
+				output[i] = no[i];
+		}
+	}
+};
+
+static scalar_variable::ptr conv_R2scalar(SEXP pobj)
+{
+	if (R_is_logical(pobj)) {
+		int val = LOGICAL(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	}
+	else if (R_is_integer(pobj)) {
+		int val = INTEGER(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	}
+	else if (R_is_real(pobj)) {
+		double val = REAL(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<double>(val));
+	}
+	else {
+		fprintf(stderr,
+				"ifelse2 only works with boolean, integer or float currently\n");
+		return NULL;
+	}
+}
+
 /*
  * This version of ifelse only requires test and yes to be FlashMatrix matrices.
  */
-RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
+RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 {
 	if (is_sparse(ptest) || is_sparse(pyes)) {
 		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
@@ -1815,26 +1874,11 @@ RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
 		return R_NilValue;
 	}
 
-	scalar_variable::ptr no;
+	scalar_variable::ptr no = conv_R2scalar(pno);
 	bool is_bool = false;
-	if (R_is_logical(pno)) {
-		int val = LOGICAL(pno)[0];
-		no = scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	if (R_is_logical(pno))
 		is_bool = true;
-	}
-	else if (R_is_integer(pno)) {
-		int val = INTEGER(pno)[0];
-		no = scalar_variable::ptr(new scalar_variable_impl<int>(val));
-	}
-	else if (R_is_real(pno)) {
-		double val = REAL(pno)[0];
-		no = scalar_variable::ptr(new scalar_variable_impl<double>(val));
-	}
-	else {
-		fprintf(stderr,
-				"ifelse2 only works with integer and float currently\n");
-		return R_NilValue;
-	}
+
 	if (test->get_type() != get_scalar_type<int>()) {
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
@@ -1850,15 +1894,74 @@ RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
 	// We need to cast type so that the type of yes and no matches.
 	bulk_operate::const_ptr op;
 	if (yes->get_type() == get_scalar_type<int>())
-		op = ifelse2_op<int>::create(no);
+		op = ifelse_no_op<int>::create(no);
 	else if (yes->get_type() == get_scalar_type<double>())
-		op = ifelse2_op<double>::create(no);
+		op = ifelse_no_op<double>::create(no);
 	else {
 		fprintf(stderr, "unsupported type in ifelse2\n");
 		return R_NilValue;
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*yes, op);
+	Rcpp::List ret_obj;
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(ptest))
+		ret_obj = create_FMR_vector(ret, "");
+	else
+		ret_obj = create_FMR_matrix(ret, "");
+
+	if (is_bool)
+		ret_obj["ele_type"] = Rcpp::String("logical");
+	return ret_obj;
+}
+
+/*
+ * This version of ifelse only requires test and no to be FlashMatrix matrices.
+ */
+RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
+{
+	if (is_sparse(ptest) || is_sparse(pno)) {
+		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr test = get_matrix<dense_matrix>(ptest);
+	dense_matrix::ptr no = get_matrix<dense_matrix>(pno);
+	if (test->get_num_rows() != no->get_num_rows()
+			|| test->get_num_cols() != no->get_num_cols()) {
+		fprintf(stderr, "the size of test and no has to be the same\n");
+		return R_NilValue;
+	}
+
+	scalar_variable::ptr yes = conv_R2scalar(pyes);
+	bool is_bool = false;
+	if (R_is_logical(pyes))
+		is_bool = true;
+
+	if (test->get_type() != get_scalar_type<int>()) {
+		fprintf(stderr, "test must be boolean\n");
+		return R_NilValue;
+	}
+
+	// TODO we should cast type if they are different.
+	if (yes->get_type() != no->get_type()) {
+		fprintf(stderr,
+				"ifelse2 doesn't support yes and no of different types\n");
+		return R_NilValue;
+	}
+
+	// We need to cast type so that the type of yes and no matches.
+	bulk_operate::const_ptr op;
+	if (no->get_type() == get_scalar_type<int>())
+		op = ifelse_yes_op<int>::create(yes);
+	else if (no->get_type() == get_scalar_type<double>())
+		op = ifelse_yes_op<double>::create(yes);
+	else {
+		fprintf(stderr, "unsupported type in ifelse2\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr ret = test->mapply2(*no, op);
 	Rcpp::List ret_obj;
 	if (ret == NULL)
 		return R_NilValue;
