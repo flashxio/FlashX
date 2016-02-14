@@ -1816,7 +1816,13 @@ RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
 	}
 
 	scalar_variable::ptr no;
-	if (R_is_integer(pno)) {
+	bool is_bool = false;
+	if (R_is_logical(pno)) {
+		int val = LOGICAL(pno)[0];
+		no = scalar_variable::ptr(new scalar_variable_impl<int>(val));
+		is_bool = true;
+	}
+	else if (R_is_integer(pno)) {
 		int val = INTEGER(pno)[0];
 		no = scalar_variable::ptr(new scalar_variable_impl<int>(val));
 	}
@@ -1853,12 +1859,17 @@ RcppExport SEXP R_FM_ifelse2(SEXP ptest, SEXP pyes, SEXP pno)
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*yes, op);
+	Rcpp::List ret_obj;
 	if (ret == NULL)
 		return R_NilValue;
 	else if (is_vector(ptest))
-		return create_FMR_vector(ret, "");
+		ret_obj = create_FMR_vector(ret, "");
 	else
-		return create_FMR_matrix(ret, "");
+		ret_obj = create_FMR_matrix(ret, "");
+
+	if (is_bool)
+		ret_obj["ele_type"] = Rcpp::String("logical");
+	return ret_obj;
 }
 
 class double_isna_op: public bulk_uoperate
