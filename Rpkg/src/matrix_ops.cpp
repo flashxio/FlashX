@@ -304,6 +304,10 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::LE;
 	else if (name == "<=")
 		return basic_ops::op_idx::LE;
+	else if (name == "|")
+		return basic_ops::op_idx::OR;
+	else if (name == "&")
+		return basic_ops::op_idx::AND;
 	else
 		return _get_op_id(name);
 }
