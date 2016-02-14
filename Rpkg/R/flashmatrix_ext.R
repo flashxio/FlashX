@@ -358,7 +358,7 @@ fm.mapply.list <- function(data, FUN, na.rm)
 	if (n > 1) {
 		for (arg in data[2:n]) {
 			if (class(res) == class(arg))
-				res <- fm.mapply2(res, arg, FUN)
+				res <- fm.mapply2(res, arg, FUN, TRUE)
 			else if (class(res) == "fm" && class(arg) == "fmV")
 				res <- fm.mapply.col(res, arg, FUN)
 			# We assume that FUN is commutative.
@@ -443,8 +443,8 @@ setMethod("log10", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log10))
 setMethod("log10", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log10))
 setMethod("log2", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log2))
 setMethod("log2", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log2))
-setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
-setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
 			  fm.sapply(x, fm.buo.log)

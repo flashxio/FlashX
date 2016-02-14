@@ -950,7 +950,7 @@ fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
 #' @return a FlashMatrix vector/matrix.
 #' @name fm.mapply2
 #' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.mapply2", function(o1, o2, FUN, set.na=TRUE) NULL)
+setGeneric("fm.mapply2", function(o1, o2, FUN, set.na) standardGeneric("fm.mapply2"))
 setMethod("fm.mapply2",
 		  signature(o1 = "fm", o2 = "fm", FUN = "ANY", set.na="logical"),
 		  fm.mapply2.fm)
