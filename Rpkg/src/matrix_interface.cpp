@@ -535,15 +535,8 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 template<class T, class RType>
 void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
 {
-	dense_matrix::ptr mem_mat;
-	if (!mat.is_in_mem())
-		mem_mat = mat.conv_store(true, -1);
-	else {
-		mem_mat = mat.clone();
-		mem_mat->materialize_self();
-	}
 	const detail::mem_matrix_store &mem_store
-		= dynamic_cast<const detail::mem_matrix_store &>(mem_mat->get_data());
+		= dynamic_cast<const detail::mem_matrix_store &>(mat.get_data());
 	// TODO this is going to be slow. But I don't care about performance
 	// for now.
 	size_t nrow = mat.get_num_rows();
@@ -557,14 +550,30 @@ template<class T, class RType>
 void copy_FM2R_mem(dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
-		vector::ptr mem_vec = mem_mat->get_col(0);
-		if (sizeof(T) == sizeof(RType))
-			mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
+		const char *raw_arr;
+		size_t len;
+		if (mem_mat->is_wide()) {
+			mem_mat = mem_mat->conv2(matrix_layout_t::L_ROW);
+			mem_mat->materialize_self();
+			detail::mem_row_matrix_store::const_ptr row_store
+				= detail::mem_row_matrix_store::cast(mem_mat->get_raw_store());
+			raw_arr = row_store->get_row(0);
+			len = mem_mat->get_num_cols();
+		}
 		else {
-			std::unique_ptr<T[]> tmp(new T[mem_vec->get_length()]);
-			mem_vec->get_data().copy_to((char *) tmp.get(), mem_vec->get_length());
-			for (size_t i = 0; i < mem_vec->get_length(); i++)
-				ret[i] = tmp[i];
+			mem_mat = mem_mat->conv2(matrix_layout_t::L_COL);
+			mem_mat->materialize_self();
+			detail::mem_col_matrix_store::const_ptr col_store
+				= detail::mem_col_matrix_store::cast(mem_mat->get_raw_store());
+			raw_arr = col_store->get_col(0);
+			len = mem_mat->get_num_rows();
+		}
+		if (sizeof(T) == sizeof(RType))
+			memcpy(ret, raw_arr, len * mem_mat->get_entry_size());
+		else {
+			const T *t_arr = reinterpret_cast<const T *>(raw_arr);
+			for (size_t i = 0; i < len; i++)
+				ret[i] = t_arr[i];
 		}
 	}
 	else
@@ -582,11 +591,11 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
 	assert(mat);
-	if (!mat->is_in_mem()) {
-		fprintf(stderr, "We only support in-memory matrix right now\n");
-		ret[0] = false;
-		return ret;
-	}
+	// If the matrix is stored on disks or in NUMA memory.
+	if (!mat->is_in_mem() || mat->get_data().get_num_nodes() > 0)
+		mat = mat->conv_store(true, -1);
+	else
+		mat->materialize_self();
 
 	bool is_vec = is_vector(pobj);
 	if (mat->is_type<double>()) {
