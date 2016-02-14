@@ -569,7 +569,7 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2)
 #' \item{`fm.bo.min'}{the predifined basic binary operator for computing minimum.}
 #' \item{`fm.bo.max'}{the predifined basic binary operator for computing maximum.}
 #' \item{`fm.bo.pow'}{the predifined basic binary operator for computing exponential.}
-#' \item{`fm.bo.eq', `fm.bo.gt', `fm.bo.ge', `fm.bo.lt' and `fm.bo.le'}
+#' \item{`fm.bo.eq', `fm.bo.neq', `fm.bo.gt', `fm.bo.ge', `fm.bo.lt' and `fm.bo.le'}
 #' {the predefined basic logical operators to compare two elements: ==, >, >=, <, <=.}
 #' \item{`fm.buo.neg'}{the predefined basic unary operator for negate.}
 #' \item{`fm.buo.sqrt'}{the predefined basic unary operator for square root.}
@@ -628,6 +628,8 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.bo.pow))
 	fm.bo.eq <<- fm.get.basic.op("eq")
 	stopifnot(!is.null(fm.bo.eq))
+	fm.bo.neq <<- fm.get.basic.op("neq")
+	stopifnot(!is.null(fm.bo.neq))
 	fm.bo.gt <<- fm.get.basic.op("gt")
 	stopifnot(!is.null(fm.bo.gt))
 	fm.bo.ge <<- fm.get.basic.op("ge")

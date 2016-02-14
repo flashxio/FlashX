@@ -288,6 +288,10 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::EQ;
 	else if (name == "==")
 		return basic_ops::op_idx::EQ;
+	else if (name == "neq")
+		return basic_ops::op_idx::NEQ;
+	else if (name == "!=")
+		return basic_ops::op_idx::NEQ;
 	else if (name == "gt")
 		return basic_ops::op_idx::GT;
 	else if (name == ">")
