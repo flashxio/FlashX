@@ -22,8 +22,8 @@ int main(int argc, char* argv[]) {
 
 	int opt;
     std::string datafn = std::string(argv[1]);
-    unsigned nrow = atol(argv[2]);
-    unsigned ncol = atol(argv[3]);
+    size_t nrow = atol(argv[2]);
+    size_t ncol = atol(argv[3]);
     unsigned k = atol(argv[4]);
 
     std::string dist_type = "eucl";

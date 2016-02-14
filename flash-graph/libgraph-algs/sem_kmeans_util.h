@@ -83,18 +83,18 @@ namespace {
         class bin_reader {
             private:
                 FILE* f;
-                unsigned nrow, ncol;
+                size_t nrow, ncol;
 
                 void cat(const T* arr) {
                     std::cout << "[ ";
-                    for (unsigned i = 0; i < ncol; i++) {
+                    for (size_t i = 0; i < ncol; i++) {
                         std::cout << arr[i] << " ";
                     }
                     std::cout << "]\n";
                 }
 
             public:
-                bin_reader(std::string fn, unsigned nrow, unsigned ncol) {
+                bin_reader(std::string fn, size_t nrow, size_t ncol) {
                     f = fopen(fn.c_str(), "rb");
                     BOOST_VERIFY(NULL != f);
                     this->nrow = nrow;
@@ -104,7 +104,7 @@ namespace {
                 // Read data and cat in a viewer friendly fashion
                 void read_cat() {
                     T arr [ncol];
-                    for (unsigned i = 0; i < nrow; i++) {
+                    for (size_t i = 0; i < nrow; i++) {
                         size_t num_read = fread(&arr[0], sizeof(T)*ncol, 1, f);
                         BOOST_ASSERT_MSG(num_read == 1, "Error reading file!\n");
                         cat(arr);
