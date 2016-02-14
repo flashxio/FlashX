@@ -411,6 +411,7 @@ public:
 		MAX,
 		POW,
 		EQ,
+		NEQ,
 		GT,
 		GE,
 		LT,
@@ -549,6 +550,15 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct neq {
+		static std::string get_name() {
+			return "!=";
+		}
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 != e2;
+		}
+	};
+
 	struct gt {
 		static std::string get_name() {
 			return ">";
@@ -613,6 +623,7 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
 	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
 	bulk_operate_impl<eq, LeftType, RightType, bool> eq_op;
+	bulk_operate_impl<neq, LeftType, RightType, bool> neq_op;
 	bulk_operate_impl<gt, LeftType, RightType, bool> gt_op;
 	bulk_operate_impl<ge, LeftType, RightType, bool> ge_op;
 	bulk_operate_impl<lt, LeftType, RightType, bool> lt_op;
@@ -637,6 +648,7 @@ public:
 		ops[MAX] = &max_op;
 		ops[POW] = &pow_op;
 		ops[EQ] = &eq_op;
+		ops[NEQ] = &neq_op;
 		ops[GT] = &gt_op;
 		ops[GE] = &ge_op;
 		ops[LT] = &lt_op;
