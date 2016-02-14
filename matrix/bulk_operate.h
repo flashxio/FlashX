@@ -415,6 +415,8 @@ public:
 		GE,
 		LT,
 		LE,
+		OR,
+		AND,
 		NUM_OPS,
 	};
 
@@ -583,6 +585,24 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct logic_or {
+		static std::string get_name() {
+			return "||";
+		}
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 || e2;
+		}
+	};
+
+	struct logic_and {
+		static std::string get_name() {
+			return "&&";
+		}
+		bool operator()(const LeftType &e1, const RightType &e2) const {
+			return e1 && e2;
+		}
+	};
+
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
 	bulk_operate_impl<multiply<LeftType, RightType, ResType>,
@@ -597,6 +617,8 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<ge, LeftType, RightType, bool> ge_op;
 	bulk_operate_impl<lt, LeftType, RightType, bool> lt_op;
 	bulk_operate_impl<le, LeftType, RightType, bool> le_op;
+	bulk_operate_impl<logic_or, LeftType, RightType, bool> or_op;
+	bulk_operate_impl<logic_and, LeftType, RightType, bool> and_op;
 
 	std::vector<bulk_operate *> ops;
 public:
@@ -619,6 +641,8 @@ public:
 		ops[GE] = &ge_op;
 		ops[LT] = &lt_op;
 		ops[LE] = &le_op;
+		ops[OR] = &or_op;
+		ops[AND] = &and_op;
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {
