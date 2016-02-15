@@ -31,6 +31,7 @@ namespace {
 
 #if KM_TEST
     static prune_stats::ptr g_prune_stats;
+    static std::vector<double> g_gb_req_iter; // #bytes req per iter
 #endif
     static size_t g_io_reqs = 0;
 
@@ -362,6 +363,9 @@ namespace {
             std::vector<vertex_program::ptr> kms_clust_progs;
             mat->get_vertex_programs(kms_clust_progs);
 
+#if KM_TEST
+            size_t io_req = 0;
+#endif
             for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
                 kmeans_vertex_program::ptr kms_prog =
                     kmeans_vertex_program::cast2(kms_clust_progs[thd]);
@@ -372,6 +376,7 @@ namespace {
 
 #if KM_TEST
                 (*g_prune_stats) += (*kms_prog->get_ps());
+                io_req += kms_prog->get_num_reqs();
 #endif
                 BOOST_VERIFY(g_num_changed <= NUM_ROWS);
                 /* Merge the per-thread clusters */
@@ -396,11 +401,15 @@ namespace {
             for (unsigned cl = 0; cl < K; cl++) {
                 t_members += g_clusters->get_num_members(cl);
                 if (t_members > (int) NUM_ROWS) {
-                    BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many memnbers cluster: "
+                    BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many members cluster: "
                         << cl << "/" << K << " at members = " << t_members;
                     BOOST_VERIFY(false);
                 }
             }
+
+            if (io_req == 0) io_req = NUM_ROWS; // First iteration
+            g_gb_req_iter.push_back((io_req*sizeof(double)*NUM_COLS)/
+                    (double)(1024*1024*1024));
 #endif
         }
 
@@ -604,6 +613,7 @@ namespace {
                 BOOST_LOG_TRIVIAL(info) << "Init: M-step Updating cluster means ...";
 
                 update_clusters(mat, num_members_v);
+                g_io_reqs += NUM_ROWS;
 #if KM_TEST
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: clusters:";
                 g_clusters->print_means();
@@ -674,6 +684,8 @@ namespace {
 
 #if KM_TEST
             g_prune_stats->get_stats();
+            BOOST_LOG_TRIVIAL(info) << "Bytes retreived per iteration: ";
+                print_vector<double>(g_gb_req_iter);
 #endif
             gettimeofday(&end, NULL);
             BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<

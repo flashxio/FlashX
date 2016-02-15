@@ -630,6 +630,7 @@ namespace {
                 BOOST_LOG_TRIVIAL(info) << "Init: M-step Updating cluster means ...";
 
                 update_clusters(mat, num_members_v);
+                g_io_reqs += NUM_ROWS;
 #if KM_TEST
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: clusters:";
                 g_clusters->print_means();
