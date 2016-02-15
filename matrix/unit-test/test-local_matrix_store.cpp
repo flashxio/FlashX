@@ -946,6 +946,7 @@ void test_conv_layout(size_t long_dim)
 	std::vector<char *> rows(row_store->get_num_rows());
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
+	local_row_matrix_store::ptr row_buf = row_store;
 	row_store = local_row_matrix_store::ptr(new local_ref_row_matrix_store(rows,
 				0, 0, row_store->get_num_rows(), row_store->get_num_cols(),
 				row_store->get_type(), -1));
@@ -985,6 +986,7 @@ void test_conv_layout(size_t long_dim)
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
+	local_col_matrix_store::ptr col_buf = col_store;
 	col_store = local_col_matrix_store::ptr(new local_ref_col_matrix_store(cols,
 				0, 0, col_store->get_num_rows(), col_store->get_num_cols(),
 				col_store->get_type(), -1));
