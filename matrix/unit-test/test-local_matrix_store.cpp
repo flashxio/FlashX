@@ -5,6 +5,96 @@
 using namespace fm;
 using namespace fm::detail;
 
+class ltest_col_matrix_store: public lvirtual_col_matrix_store
+{
+	local_col_matrix_store::ptr buf;
+public:
+	ltest_col_matrix_store(local_col_matrix_store::ptr buf): lvirtual_col_matrix_store(
+			buf->get_global_start_row(), buf->get_global_start_col(),
+			buf->get_num_rows(), buf->get_num_cols(), buf->get_type(),
+			buf->get_node_id()) {
+		this->buf = buf;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		buf->resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		buf->reset_size();
+	}
+
+	using lvirtual_col_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		return buf->get_raw_arr();
+	}
+
+	using lvirtual_col_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		return matrix_store::const_ptr();
+	}
+
+	using lvirtual_col_matrix_store::get_col;
+	virtual const char *get_col(size_t col) const {
+		return buf->get_col(col);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		return buf->get_portion(local_start_row, local_start_col,
+				num_rows, num_cols);
+	}
+};
+
+class ltest_row_matrix_store: public lvirtual_row_matrix_store
+{
+	local_row_matrix_store::ptr buf;
+public:
+	ltest_row_matrix_store(local_row_matrix_store::ptr buf): lvirtual_row_matrix_store(
+			buf->get_global_start_row(), buf->get_global_start_col(),
+			buf->get_num_rows(), buf->get_num_cols(), buf->get_type(),
+			buf->get_node_id()) {
+		this->buf = buf;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		buf->resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		buf->reset_size();
+	}
+
+	using lvirtual_row_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		return buf->get_raw_arr();
+	}
+
+	using lvirtual_row_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		return matrix_store::const_ptr();
+	}
+
+	using lvirtual_row_matrix_store::get_row;
+	virtual const char *get_row(size_t row) const {
+		return buf->get_row(row);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		return buf->get_portion(local_start_row, local_start_col,
+				num_rows, num_cols);
+	}
+};
+
 void test_reset1(std::shared_ptr<local_matrix_store> store)
 {
 	assert(!store->read_only());
@@ -324,6 +414,18 @@ void test_mapply21(std::shared_ptr<local_matrix_store> store)
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) * 2 == res->get<int>(i, j));
+
+	if (store->store_layout() == matrix_layout_t::L_COL)
+		store = local_matrix_store::ptr(new ltest_col_matrix_store(
+					local_col_matrix_store::cast(store)));
+	else
+		store = local_matrix_store::ptr(new ltest_row_matrix_store(
+					local_row_matrix_store::cast(store)));
+
+	mapply2(*store, *store, op, *res);
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) * 2 == res->get<int>(i, j));
 }
 
 void test_mapply2(size_t long_dim)
@@ -382,6 +484,18 @@ void test_sapply1(std::shared_ptr<local_matrix_store> store)
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) == -res->get<int>(i, j));
+
+	if (store->store_layout() == matrix_layout_t::L_COL)
+		store = local_matrix_store::ptr(new ltest_col_matrix_store(
+					local_col_matrix_store::cast(store)));
+	else
+		store = local_matrix_store::ptr(new ltest_row_matrix_store(
+					local_row_matrix_store::cast(store)));
+
+	sapply(*store, op, *res);
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == -res->get<int>(i, j));
 }
 
 void test_sapply(size_t long_dim)
@@ -392,6 +506,10 @@ void test_sapply(size_t long_dim)
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_sapply1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_sapply1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
+	test_sapply1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
