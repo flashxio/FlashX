@@ -752,7 +752,7 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 	}
 }
 
-void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
+static void _mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res)
 {
 	assert(m1.store_layout() == m2.store_layout()
@@ -780,6 +780,62 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			op.runAA(nrow, col_m1.get_col(i), col_m2.get_col(i),
 					col_res.get_col(i));
 	}
+}
+
+void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
+			const bulk_operate &op, local_matrix_store &res)
+{
+	bool is_virt = m1.is_virtual() || m2.is_virtual();
+	// resize the wide matrix.
+	if (is_virt && m1.is_wide() && m1.get_num_cols() > LONG_DIM_LEN) {
+		size_t orig_num_cols = m1.get_num_cols();
+		local_matrix_store::exposed_area orig_m1 = m1.get_exposed_area();
+		local_matrix_store::exposed_area orig_m2 = m2.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_m1 = const_cast<local_matrix_store &>(m1);
+		local_matrix_store &mutable_m2 = const_cast<local_matrix_store &>(m2);
+		for (size_t col_idx = 0; col_idx < orig_num_cols;
+				col_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
+			mutable_m1.resize(orig_m1.local_start_row,
+					orig_m1.local_start_col + col_idx, m1.get_num_rows(), llen);
+			mutable_m2.resize(orig_m2.local_start_row,
+					orig_m2.local_start_col + col_idx, m2.get_num_rows(), llen);
+			res.resize(orig_res.local_start_row,
+					orig_res.local_start_col + col_idx, res.get_num_rows(), llen);
+			_mapply2(m1, m2, op, res);
+		}
+		mutable_m1.restore_size(orig_m1);
+		mutable_m2.restore_size(orig_m2);
+		res.restore_size(orig_res);
+	}
+	// resize the tall matrix
+	else if (is_virt && m1.get_num_rows() > LONG_DIM_LEN) {
+		size_t orig_num_rows = m1.get_num_rows();
+		local_matrix_store::exposed_area orig_m1 = m1.get_exposed_area();
+		local_matrix_store::exposed_area orig_m2 = m2.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_m1 = const_cast<local_matrix_store &>(m1);
+		local_matrix_store &mutable_m2 = const_cast<local_matrix_store &>(m2);
+		for (size_t row_idx = 0; row_idx < orig_num_rows;
+				row_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
+			mutable_m1.resize(orig_m1.local_start_row + row_idx,
+					orig_m1.local_start_col, llen, m1.get_num_cols());
+			mutable_m2.resize(orig_m2.local_start_row + row_idx,
+					orig_m2.local_start_col, llen, m2.get_num_cols());
+			res.resize(orig_res.local_start_row + row_idx,
+					orig_res.local_start_col, llen, res.get_num_cols());
+			_mapply2(m1, m2, op, res);
+		}
+		mutable_m1.restore_size(orig_m1);
+		mutable_m2.restore_size(orig_m2);
+		res.restore_size(orig_res);
+	}
+	else
+		// If the local matrix isn't virtual, we don't need to resize it
+		// to increase CPU cache hits.
+		_mapply2(m1, m2, op, res);
 }
 
 static void _sapply(const local_matrix_store &store, const bulk_uoperate &op,

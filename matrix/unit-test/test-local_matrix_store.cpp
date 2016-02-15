@@ -334,6 +334,10 @@ void test_mapply2(size_t long_dim)
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_mapply21(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_mapply21(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
+	test_mapply21(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
