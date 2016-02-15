@@ -985,6 +985,52 @@ setMethod("fm.mapply2",
 		  signature(o1 = "ANY", o2 = "fmV", FUN = "ANY", set.na="logical"),
 		  fm.mapply2.ANY.fmV)
 
+fm.set.na1 <- function(input, res)
+{
+	# This is a special function that helps to test and set NA on
+	# the computation results, so it shouldn't call any functions that
+	# try to test and set NA on the result.
+	if (is.null(res))
+		return(NULL)
+	else if (!fm.test.na)
+		return(res)
+	else if (fm.typeof(res) == "logical")
+		# is.na always return TRUE or FALSE, we don't need to test and set NA
+		# on the result. If we do, we'll get infinite recursive calls.
+		ifelse(is.na(input), NA, res)
+	else if (fm.typeof(res) == "integer")
+		ifelse(is.na(input), as.integer(NA), res)
+	else if (fm.typeof(res) == "double") {
+		res <- ifelse(is.na(input), as.double(NA), res)
+		ifelse(is.nan(input), NaN, res)
+	}
+	else
+		# In this case, we don't do anything with the result.
+		res
+}
+
+fm.sapply.fm <- function(o, FUN, set.na=TRUE)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.uop(FUN)
+	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
+	ret <- new.fm(ret)
+	if (set.na)
+		ret <- fm.set.na1(o, ret)
+	ret
+}
+
+fm.sapply.fmV <- function(o, FUN, set.na=TRUE)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.uop(FUN)
+	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
+	ret <- new.fmV(ret)
+	if (set.na)
+		ret <- fm.set.na1(o, ret)
+	ret
+}
+
 #' Apply a Function to a FlashMatrix vector/matrix.
 #'
 #' `sapply' applies `FUN' to every element of a vector/matrix.
@@ -996,21 +1042,11 @@ setMethod("fm.mapply2",
 #' @return a FlashMatrix vector/matrix.
 #' @name fm.sapply
 #' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.sapply", function(o, FUN) 0)
-setMethod("fm.sapply", signature(o = "fm", FUN = "ANY"),
-		  function(o, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.uop(FUN)
-			  ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
-			  new.fm(ret)
-		  })
-setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY"),
-		  function(o, FUN) {
-			  if (class(FUN) == "character")
-				  FUN <- fm.get.basic.uop(FUN)
-			  ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
-			  new.fmV(ret)
-		  })
+setGeneric("fm.sapply", function(o, FUN, set.na)  standardGeneric("fm.sapply"))
+setMethod("fm.sapply", signature(o = "fm", FUN = "ANY", set.na="logical"),
+		  fm.sapply.fm)
+setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY", set.na="logical"),
+		  fm.sapply.fmV)
 
 #' Groupby on a FlashMatrix vector.
 #'

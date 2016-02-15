@@ -273,9 +273,9 @@ setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.and))
 
 setMethod("-", signature(e1 = "fm", e2 = "missing"), function(e1)
-		  fm.sapply(e1, fm.buo.neg))
+		  fm.sapply.fm(e1, fm.buo.neg))
 setMethod("-", signature(e1 = "fmV", e2 = "missing"), function(e1)
-		  fm.sapply(e1, fm.buo.neg))
+		  fm.sapply.fmV(e1, fm.buo.neg))
 
 pmax2 <- function(e1, e2) pmax(e1, e2)
 pmin2 <- function(e1, e2) pmin(e1, e2)
@@ -326,12 +326,12 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 `!.fm` <- function(o)
 {
-	fm.sapply(o, fm.buo.not)
+	fm.sapply.fm(o, fm.buo.not)
 }
 
 `!.fmV` <- function(o)
 {
-	fm.sapply(o, fm.buo.not)
+	fm.sapply.fmV(o, fm.buo.not)
 }
 
 setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
@@ -429,33 +429,33 @@ for (cl in fm.cls) {
 }
 
 # Miscellaneous Mathematical Functions
-setMethod("abs", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.abs))
-setMethod("abs", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.abs))
-setMethod("sqrt", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.sqrt))
-setMethod("sqrt", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.sqrt))
-setMethod("ceiling", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.ceil))
-setMethod("ceiling", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.ceil))
-setMethod("floor", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.floor))
-setMethod("floor", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.floor))
-setMethod("round", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.round))
-setMethod("round", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.round))
-setMethod("log10", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log10))
-setMethod("log10", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log10))
-setMethod("log2", signature(x = "fm"), function(x) fm.sapply(x, fm.buo.log2))
-setMethod("log2", signature(x = "fmV"), function(x) fm.sapply(x, fm.buo.log2))
+setMethod("abs", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.abs))
+setMethod("abs", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.abs))
+setMethod("sqrt", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.sqrt))
+setMethod("sqrt", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.sqrt))
+setMethod("ceiling", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.ceil))
+setMethod("ceiling", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.ceil))
+setMethod("floor", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.floor))
+setMethod("floor", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.floor))
+setMethod("round", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.round))
+setMethod("round", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.round))
+setMethod("log10", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.log10))
+setMethod("log10", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.log10))
+setMethod("log2", signature(x = "fm"), function(x) fm.sapply.fm(x, fm.buo.log2))
+setMethod("log2", signature(x = "fmV"), function(x) fm.sapply.fmV(x, fm.buo.log2))
 setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
 setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
-			  fm.sapply(x, fm.buo.log)
+			  fm.sapply.fm(x, fm.buo.log)
 		  else
-			  fm.sapply(x, fm.buo.log) / log(base)
+			  fm.sapply.fm(x, fm.buo.log) / log(base)
 })
 setMethod("log", "fmV", function(x, base=exp(1)) {
 		  if (base == exp(1))
-			  fm.sapply(x, fm.buo.log)
+			  fm.sapply.fmV(x, fm.buo.log)
 		  else
-			  fm.sapply(x, fm.buo.log) / log(base)
+			  fm.sapply.fmV(x, fm.buo.log) / log(base)
 })
 
 # TODO I need to handle na.rm and dims here as well.
@@ -492,5 +492,5 @@ fm.table <- function(x)
 	fm.sgroupby(x, count)
 }
 
-fm.as.integer <- function(x) fm.sapply(x, fm.buo.as.int)
-fm.as.numeric <- function(x) fm.sapply(x, fm.buo.as.numeric)
+fm.as.integer <- function(x) fm.sapply(x, fm.buo.as.int, TRUE)
+fm.as.numeric <- function(x) fm.sapply(x, fm.buo.as.numeric, TRUE)
