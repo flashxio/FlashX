@@ -213,6 +213,151 @@ public:
 	}
 };
 
+template<class Type, int LEN>
+class add_bulk_op: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr1,
+			const void *right_arr1, void *output_arr1) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *right_arr = (const Type *) right_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = left_arr[i] + right_arr[i];
+	}
+
+	virtual void runAE(size_t num_eles, const void *left_arr1,
+			const void *right, void *output_arr1) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		Type entry = *(const Type *) right;
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = left_arr[i] + entry;
+	}
+
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr1, void *output_arr1) const {
+		assert(LEN == num_eles);
+		Type entry = *(const Type *) left;
+		const Type *right_arr = (const Type *) right_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = entry + right_arr[i];
+	}
+
+	virtual void runAgg(size_t num_eles, const void *left_arr1,
+			const void *orig, void *output) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		if (num_eles == 0)
+			return;
+
+		size_t i;
+		Type res;
+		if (orig) {
+			i = 0;
+			res = *(const Type *) orig;
+		}
+		else {
+			i = 1;
+			res = left_arr[0];
+		}
+		for (; i < num_eles; i++)
+			res = left_arr[i] + res;
+		*(Type *) output = res;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual std::string get_name() const {
+		return "+";
+	}
+};
+
+template<class Type, int LEN>
+class multiply_bulk_op: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr1,
+			const void *right_arr1, void *output_arr1) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *right_arr = (const Type *) right_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		for (size_t i = 0; i < LEN; i++)
+			output_arr[i] = left_arr[i] * right_arr[i];
+	}
+
+	virtual void runAE(size_t num_eles, const void *left_arr1,
+			const void *right, void *output_arr1) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		Type entry = *(const Type *) right;
+		for (size_t i = 0; i < LEN; i++)
+			output_arr[i] = left_arr[i] * entry;
+	}
+
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr1, void *output_arr1) const {
+		assert(LEN == num_eles);
+		Type entry = *(const Type *) left;
+		const Type *right_arr = (const Type *) right_arr1;
+		Type *output_arr = (Type *) output_arr1;
+		for (size_t i = 0; i < LEN; i++)
+			output_arr[i] = entry * right_arr[i];
+	}
+
+	virtual void runAgg(size_t num_eles, const void *left_arr1,
+			const void *orig, void *output) const {
+		assert(LEN == num_eles);
+		const Type *left_arr = (const Type *) left_arr1;
+		if (LEN == 0)
+			return;
+
+		size_t i;
+		Type res;
+		if (orig) {
+			i = 0;
+			res = *(const Type *) orig;
+		}
+		else {
+			i = 1;
+			res = left_arr[0];
+		}
+		for (; i < LEN; i++)
+			res = left_arr[i] * res;
+		*(Type *) output = res;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<Type>();
+	}
+	virtual std::string get_name() const {
+		return "*";
+	}
+};
+
+namespace fm
+{
+extern bool inner_prod_conv;
+};
+
 void test_inner_prod(matrix_layout_t layout)
 {
 	struct timeval start, end;
@@ -234,15 +379,34 @@ void test_inner_prod(matrix_layout_t layout)
 	}
 
 	if (mat->store_layout() == matrix_layout_t::L_ROW) {
-		mat = mat->conv2(matrix_layout_t::L_COL);
-		printf("conv layout\n");
+		printf("with hard-coded length\n");
+		dense_matrix::ptr res1;
 		for (size_t i = 0; i < 5; i++) {
+			res1 = NULL;
 			gettimeofday(&start, NULL);
-			dense_matrix::ptr res = mat->multiply(*small_mat);
-			res->materialize_self();
+			res1 = mat->inner_prod(*small_mat,
+					bulk_operate::const_ptr(new multiply_bulk_op<size_t, 8>()),
+					bulk_operate::const_ptr(new add_bulk_op<size_t, 8>()));
+			res1->materialize_self();
 			gettimeofday(&end, NULL);
 			printf("it takes %.3f seconds\n", time_diff(start, end));
 		}
+
+		mat = mat->conv2(matrix_layout_t::L_COL);
+		printf("conv layout\n");
+		dense_matrix::ptr res2;
+		for (size_t i = 0; i < 5; i++) {
+			res2 = NULL;
+			gettimeofday(&start, NULL);
+			res2 = mat->multiply(*small_mat);
+			res2->materialize_self();
+			gettimeofday(&end, NULL);
+			printf("it takes %.3f seconds\n", time_diff(start, end));
+		}
+
+		dense_matrix::ptr tmp = res1->minus(*res2);
+		scalar_variable::ptr var = tmp->sum();
+		assert(scalar_variable::get_val<ele_type>(*var) == 0);
 	}
 }
 
@@ -297,6 +461,7 @@ void test_inner_prod_manual()
 
 void test_inner_prod()
 {
+	inner_prod_conv = false;
 	test_inner_prod_manual();
 	printf("inner prod row\n");
 	test_inner_prod(matrix_layout_t::L_ROW);

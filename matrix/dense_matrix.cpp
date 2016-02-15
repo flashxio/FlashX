@@ -2419,6 +2419,10 @@ void inner_prod_tall_op::run(
 
 }
 
+// A flag to indicate whether we need to convert the matrix layout.
+// This flag is only used for testing.
+bool inner_prod_conv = true;
+
 detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 		const dense_matrix &m, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op, matrix_layout_t out_layout) const
@@ -2444,7 +2448,8 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	// If the matrix is already stored in col-major order or this is
 	// a relatively wide matrix, we don't need to convert its data layout.
-	if (store_layout() == matrix_layout_t::L_COL || get_num_cols() > 16)
+	if (store_layout() == matrix_layout_t::L_COL || get_num_cols() > 16
+			|| !inner_prod_conv)
 		ins[0] = this->get_raw_store();
 	else {
 		// If this is a very tall and skinny matrix, col-major works better
