@@ -21,6 +21,7 @@
 #define __PRUNE_STATS_H__
 
 #include <vector>
+#include <map>
 
 namespace {
     // Class to hold stats on the effectiveness of pruning
@@ -115,6 +116,121 @@ namespace {
                 std::vector<double> ret {perc_lemma1, perc_3a, perc_3b, perc_3c, perc_4, perc};
                 return ret;
             }
+    };
+
+    class active_counter {
+        private:
+        std::vector<bool> prev_active; // Was a vertex active last iter
+        // Active in this iter & active in last
+        std::vector<std::vector<bool>> active;
+        size_t nrow;
+
+        active_counter(const size_t nrow) {
+            this->nrow = nrow;
+            prev_active.assign(nrow, false);
+            init_iter();
+        }
+
+        // Was active in the prev iteration
+        const bool was_active(const size_t row) const {
+            return prev_active[row];
+        }
+
+        void consolidate_samples(std::map<std::vector<bool>, size_t>& data_hash,
+                const size_t rows) {
+            for (size_t row = 0; row < rows; row++) {
+                std::vector<bool> sample(active.size());
+                for (unsigned iter = 0; iter < active.size(); iter++) {
+                    sample[iter] = active[iter][row];
+                }
+
+                if (data_hash.find(sample) != data_hash.end())
+                    data_hash[sample]++;
+                else
+                    data_hash[sample] = 1;
+            }
+        }
+
+        public:
+        typedef std::shared_ptr<active_counter> ptr;
+        static ptr create(const size_t nrow) {
+            return ptr(new active_counter(nrow));
+        }
+
+        void init_iter() {
+            std::vector<bool> v;
+            v.assign(nrow, false);
+            active.push_back(v); // iteration i all are initially false
+        }
+
+        void is_active(const size_t row, const bool val) {
+            if (active.size() == 1 && was_active(row))
+                BOOST_ASSERT_MSG(false, "In first iter the row cannot be active previously");
+
+            if (val && was_active(row)) {
+                // 1. Grow the rows active vec, to add a true
+                active.back()[row] = true;
+            } else {
+                active.back()[row] = false;
+            }
+
+            prev_active[row] = val; // Seen in next iteration
+        }
+
+        void write_raw(std::string fn, size_t print_row_cnt) {
+
+            if (print_row_cnt > nrow)
+                print_row_cnt = nrow;
+
+            std::string out = "";
+            for (size_t row = 0; row < print_row_cnt; row++) {
+                for (unsigned iter = 0; iter < active.size(); iter++) {
+                    if (iter == 0)
+                        out += std::to_string(row) + ", ";
+
+                    if (iter + 1 == active.size())
+                        out += std::to_string(active[iter][row]) + "\n";
+                    else
+                        out += std::to_string(active[iter][row]) + ", ";
+                }
+            }
+
+            FILE* f = fopen(fn.c_str(), "wb");
+            fwrite((char*)out.c_str(), out.size(), 1, f);
+            fclose(f);
+
+            //printf("Printing the activation:\n%s\n", out.c_str());
+        }
+
+        void write_consolidated(std::string fn, size_t print_row_cnt) {
+            if (print_row_cnt > nrow)
+                print_row_cnt = nrow;
+
+            std::string out = "";
+            std::map<std::vector<bool>, size_t> dhash;
+            consolidate_samples(dhash, print_row_cnt);
+
+            // Iterate and print
+            for (std::map<std::vector<bool>, size_t>::iterator it = dhash.begin();
+                    it != dhash.end(); ++it) {
+
+                out += std::to_string(it->second) + ", ";
+                std::vector<bool> v = it->first;
+                for (std::vector<bool>::iterator vit = v.begin();
+                        vit != v.end(); ++vit) {
+                    if (vit + 1 == v.end())
+                        out += std::to_string(*vit) + "\n";
+                    else
+                        out += std::to_string(*vit) + ", ";
+                }
+            }
+
+            FILE* f = fopen(fn.c_str(), "wb");
+            fwrite((char*)out.c_str(), out.size(), 1, f);
+            fclose(f);
+
+            //printf("Consolidated activation:\n%s\n", out.c_str());
+        }
     };
 }
 #endif
