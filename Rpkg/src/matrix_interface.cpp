@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <Rcpp.h>
+#include <fmr_isna.h>
 
 #include "log.h"
 #include "safs_file.h"
@@ -2006,16 +2007,23 @@ public:
 	}
 };
 
+// This is true only for NA.
 class double_isna_only_op: public bulk_uoperate
 {
 public:
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const {
-		const double *in = reinterpret_cast<const double *>(in_arr);
 		bool *out = reinterpret_cast<bool *>(out_arr);
-		// This is true only for NA.
+#ifdef RCPP_HAS_LONG_LONG_TYPES
+		const rcpp_ulong_long_type *in
+			= reinterpret_cast<const rcpp_ulong_long_type *>(in_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = FM_IsNA(in + i);
+#else
+		const double *in = reinterpret_cast<const double *>(in_arr);
 		for (size_t i = 0; i < num_eles; i++)
 			out[i] = R_IsNA(in[i]);
+#endif
 	}
 
 	virtual const scalar_type &get_input_type() const {
