@@ -53,9 +53,7 @@ public:
 			void *out_arr) const = 0;
 	virtual const scalar_type &get_input_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
-	virtual std::string get_name() const {
-		return std::string("uop");
-	}
+	virtual std::string get_name() const = 0;
 
 	size_t input_entry_size() const {
 		return get_input_type().get_size();
@@ -144,9 +142,7 @@ public:
 	virtual const scalar_type &get_left_type() const = 0;
 	virtual const scalar_type &get_right_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
-	virtual std::string get_name() const {
-		return std::string("op");
-	}
+	virtual std::string get_name() const = 0;
 
 	size_t left_entry_size() const {
 		return get_left_type().get_size();

@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "comm_exception.h"
 #include "bulk_operate.h"
 
@@ -139,6 +141,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<size_t>();
 	}
+	virtual std::string get_name() const {
+		return "find_next";
+	}
 };
 
 /*
@@ -189,6 +194,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<size_t>();
 	}
+	virtual std::string get_name() const {
+		return "find_prev";
+	}
 };
 
 template<class T>
@@ -225,6 +233,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<size_t>();
+	}
+	virtual std::string get_name() const {
+		return "count";
 	}
 };
 
@@ -282,6 +293,10 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<T2>();
+	}
+	virtual std::string get_name() const {
+		return boost::str(boost::format("cast_%1%2%2%") % get_type_str<T1>()
+				% get_type_str<T2>());
 	}
 };
 

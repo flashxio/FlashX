@@ -175,6 +175,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<long double>();
 	}
+	virtual std::string get_name() const {
+		return "dsqrt";
+	}
 };
 
 class sum_agg: public bulk_operate
@@ -225,6 +228,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<long double>();
 	}
+	virtual std::string get_name() const {
+		return "ldsum";
+	}
 };
 
 class double_multiply_operate: public bulk_operate
@@ -267,6 +273,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<long double>();
+	}
+	virtual std::string get_name() const {
+		return "dmultiply";
 	}
 };
 
@@ -865,6 +874,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return op->get_output_type();
+	}
+	virtual std::string get_name() const {
+		return "apply_scalar";
 	}
 };
 

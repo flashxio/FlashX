@@ -1016,6 +1016,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<double>();
 	}
+	virtual std::string get_name() const {
+		return "dmultiply";
+	}
 };
 
 double_multiply_operate dm_op;

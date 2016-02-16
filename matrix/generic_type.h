@@ -124,6 +124,78 @@ inline prim_type get_type<unsigned long>()
 	return prim_type::P_ULONG;
 }
 
+template<class T>
+std::string get_type_str()
+{
+	return "unknown";
+}
+
+template<>
+inline std::string get_type_str<char>()
+{
+	return "char";
+}
+
+template<>
+inline std::string get_type_str<short>()
+{
+	return "short";
+}
+
+template<>
+inline std::string get_type_str<int>()
+{
+	return "int";
+}
+
+template<>
+inline std::string get_type_str<long>()
+{
+	return "long";
+}
+
+template<>
+inline std::string get_type_str<float>()
+{
+	return "float";
+}
+
+template<>
+inline std::string get_type_str<double>()
+{
+	return "double";
+}
+
+template<>
+inline std::string get_type_str<long double>()
+{
+	return "ldouble";
+}
+
+template<>
+inline std::string get_type_str<bool>()
+{
+	return "bool";
+}
+
+template<>
+inline std::string get_type_str<unsigned short>()
+{
+	return "ushort";
+}
+
+template<>
+inline std::string get_type_str<unsigned int>()
+{
+	return "uint";
+}
+
+template<>
+inline std::string get_type_str<unsigned long>()
+{
+	return "ulong";
+}
+
 class basic_uops;
 class basic_ops;
 class agg_ops;
