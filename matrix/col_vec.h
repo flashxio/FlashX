@@ -37,6 +37,7 @@ protected:
 	}
 public:
 	typedef std::shared_ptr<col_vec> ptr;
+	typedef std::shared_ptr<const col_vec> const_ptr;
 
 	template<class T>
 	static ptr create_randn(size_t len) {
