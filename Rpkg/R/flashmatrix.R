@@ -1425,3 +1425,9 @@ setMethod("is.finite", signature(x = "fmV"), function(x) {
 		  else
 			  fm.rep.int(FALSE, length(x))
 		  })
+
+fm.print.mat.info <- function(fm)
+{
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	ret <- .Call("R_FM_print_mat_info", fm, PACKAGE="FlashR")
+}

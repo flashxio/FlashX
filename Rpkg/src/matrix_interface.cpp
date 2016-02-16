@@ -894,6 +894,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return op->get_output_type();
 	}
+	virtual std::string get_name() const {
+		return "mapply_AE";
+	}
 };
 
 RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
@@ -974,6 +977,9 @@ public:
 
 	virtual const scalar_type &get_output_type() const {
 		return op->get_output_type();
+	}
+	virtual std::string get_name() const {
+		return "mapply_EA";
 	}
 };
 
@@ -1995,6 +2001,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<bool>();
 	}
+	virtual std::string get_name() const {
+		return "isna";
+	}
 };
 
 RcppExport SEXP R_FM_isna(SEXP px)
@@ -2036,6 +2045,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<bool>();
 	}
+	virtual std::string get_name() const {
+		return "isnan";
+	}
 };
 
 RcppExport SEXP R_FM_isnan(SEXP px)
@@ -2073,5 +2085,22 @@ RcppExport SEXP R_FM_print_conf()
 RcppExport SEXP R_SAFS_print_conf()
 {
 	safs::params.print();
+	return R_NilValue;
+}
+
+RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
+{
+	if (is_sparse(pmat)) {
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		printf("sparse matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
+				mat->get_num_cols());
+	}
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		printf("dense matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
+				mat->get_num_cols());
+		std::string name = mat->get_data().get_name();
+		printf("matrix store: %s\n", name.c_str());
+	}
 	return R_NilValue;
 }

@@ -377,6 +377,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
 	}
+	virtual std::string get_name() const {
+		return "count";
+	}
 };
 
 template<class T>
@@ -421,6 +424,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
+	}
+	virtual std::string get_name() const {
+		return "which_max";
 	}
 };
 
@@ -467,6 +473,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
 	}
+	virtual std::string get_name() const {
+		return "which_min";
+	}
 };
 
 template<class T>
@@ -511,6 +520,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<T>();
+	}
+	virtual std::string get_name() const {
+		return "euclidean";
 	}
 };
 
