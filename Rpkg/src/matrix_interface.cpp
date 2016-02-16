@@ -1734,7 +1734,7 @@ RcppExport SEXP R_FM_cbind(SEXP pmats)
 	return ret;
 }
 
-template<class T>
+template<class BoolType, class T>
 class ifelse2_op: public bulk_operate
 {
 public:
@@ -1765,7 +1765,7 @@ public:
 	}
 
 	virtual const scalar_type &get_left_type() const {
-		return get_scalar_type<int>();
+		return get_scalar_type<BoolType>();
 	}
 	virtual const scalar_type &get_right_type() const {
 		return get_scalar_type<T>();
@@ -1779,8 +1779,8 @@ public:
 	}
 };
 
-template<class T>
-class ifelse_no_op: public ifelse2_op<T>
+template<class BoolType, class T>
+class ifelse_no_op: public ifelse2_op<BoolType, T>
 {
 	T no;
 
@@ -1790,7 +1790,7 @@ class ifelse_no_op: public ifelse2_op<T>
 public:
 	static bulk_operate::const_ptr create(scalar_variable::ptr no) {
 		T val = scalar_variable::get_val<T>(*no);
-		return bulk_operate::const_ptr(new ifelse_no_op<T>(val));
+		return bulk_operate::const_ptr(new ifelse_no_op<BoolType, T>(val));
 	}
 
 	/*
@@ -1799,7 +1799,7 @@ public:
 	 */
 	virtual void runAA(size_t num_eles, const void *left_arr,
 			const void *right_arr, void *output_arr) const {
-		const int *test = reinterpret_cast<const int *>(left_arr);
+		const BoolType *test = reinterpret_cast<const BoolType *>(left_arr);
 		const T *yes = reinterpret_cast<const T *>(right_arr);
 		T *output = reinterpret_cast<T *>(output_arr);
 		for (size_t i = 0; i < num_eles; i++) {
@@ -1811,8 +1811,8 @@ public:
 	}
 };
 
-template<class T>
-class ifelse_yes_op: public ifelse2_op<T>
+template<class BoolType, class T>
+class ifelse_yes_op: public ifelse2_op<BoolType, T>
 {
 	T yes;
 
@@ -1822,7 +1822,7 @@ class ifelse_yes_op: public ifelse2_op<T>
 public:
 	static bulk_operate::const_ptr create(scalar_variable::ptr yes) {
 		T val = scalar_variable::get_val<T>(*yes);
-		return bulk_operate::const_ptr(new ifelse_yes_op<T>(val));
+		return bulk_operate::const_ptr(new ifelse_yes_op<BoolType, T>(val));
 	}
 
 	/*
@@ -1831,7 +1831,7 @@ public:
 	 */
 	virtual void runAA(size_t num_eles, const void *left_arr,
 			const void *right_arr, void *output_arr) const {
-		const int *test = reinterpret_cast<const int *>(left_arr);
+		const BoolType *test = reinterpret_cast<const BoolType *>(left_arr);
 		const T *no = reinterpret_cast<const T *>(right_arr);
 		T *output = reinterpret_cast<T *>(output_arr);
 		for (size_t i = 0; i < num_eles; i++) {
@@ -1890,6 +1890,15 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
 	}
+	detail::mapply_matrix_store::const_ptr test_store
+		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+				test->get_raw_store());
+	if (test_store) {
+		detail::matrix_store::const_ptr first
+			= test_store->get_input_mats().front();
+		if (first->get_type() == get_scalar_type<bool>())
+			test = dense_matrix::create(first);
+	}
 
 	// TODO we should cast type if they are different.
 	if (yes->get_type() != no->get_type()) {
@@ -1900,13 +1909,25 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 
 	// We need to cast type so that the type of yes and no matches.
 	bulk_operate::const_ptr op;
-	if (yes->get_type() == get_scalar_type<int>())
-		op = ifelse_no_op<int>::create(no);
-	else if (yes->get_type() == get_scalar_type<double>())
-		op = ifelse_no_op<double>::create(no);
+	if (test->get_type() == get_scalar_type<bool>()) {
+		if (yes->get_type() == get_scalar_type<int>())
+			op = ifelse_no_op<bool, int>::create(no);
+		else if (yes->get_type() == get_scalar_type<double>())
+			op = ifelse_no_op<bool, double>::create(no);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
 	else {
-		fprintf(stderr, "unsupported type in ifelse2\n");
-		return R_NilValue;
+		if (yes->get_type() == get_scalar_type<int>())
+			op = ifelse_no_op<int, int>::create(no);
+		else if (yes->get_type() == get_scalar_type<double>())
+			op = ifelse_no_op<int, double>::create(no);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*yes, op);
@@ -1949,6 +1970,15 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
 	}
+	detail::mapply_matrix_store::const_ptr test_store
+		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
+				test->get_raw_store());
+	if (test_store) {
+		detail::matrix_store::const_ptr first
+			= test_store->get_input_mats().front();
+		if (first->get_type() == get_scalar_type<bool>())
+			test = dense_matrix::create(first);
+	}
 
 	// TODO we should cast type if they are different.
 	if (yes->get_type() != no->get_type()) {
@@ -1959,13 +1989,25 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 
 	// We need to cast type so that the type of yes and no matches.
 	bulk_operate::const_ptr op;
-	if (no->get_type() == get_scalar_type<int>())
-		op = ifelse_yes_op<int>::create(yes);
-	else if (no->get_type() == get_scalar_type<double>())
-		op = ifelse_yes_op<double>::create(yes);
+	if (test->get_type() == get_scalar_type<bool>()) {
+		if (no->get_type() == get_scalar_type<int>())
+			op = ifelse_yes_op<bool, int>::create(yes);
+		else if (no->get_type() == get_scalar_type<double>())
+			op = ifelse_yes_op<bool, double>::create(yes);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
 	else {
-		fprintf(stderr, "unsupported type in ifelse2\n");
-		return R_NilValue;
+		if (no->get_type() == get_scalar_type<int>())
+			op = ifelse_yes_op<int, int>::create(yes);
+		else if (no->get_type() == get_scalar_type<double>())
+			op = ifelse_yes_op<int, double>::create(yes);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*no, op);
