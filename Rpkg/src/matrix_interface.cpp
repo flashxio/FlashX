@@ -2006,7 +2006,31 @@ public:
 	}
 };
 
-RcppExport SEXP R_FM_isna(SEXP px)
+class double_isna_only_op: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		const double *in = reinterpret_cast<const double *>(in_arr);
+		bool *out = reinterpret_cast<bool *>(out_arr);
+		// This is true only for NA.
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = R_IsNA(in[i]);
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<bool>();
+	}
+	virtual std::string get_name() const {
+		return "isna_only";
+	}
+};
+
+RcppExport SEXP R_FM_isna(SEXP px, SEXP ponly)
 {
 	if (is_sparse(px)) {
 		fprintf(stderr, "isna doesn't support sparse matrices\n");
@@ -2017,8 +2041,13 @@ RcppExport SEXP R_FM_isna(SEXP px)
 		fprintf(stderr, "isna only works on float-point matrices\n");
 		return R_NilValue;
 	}
-	dense_matrix::ptr ret
-		= x->sapply(bulk_uoperate::const_ptr(new double_isna_op()));
+
+	bool na_only = LOGICAL(ponly)[0];
+	dense_matrix::ptr ret;
+	if (na_only)
+		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_only_op()));
+	else
+		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_op()));
 	if (ret == NULL)
 		return R_NilValue;
 	else if (is_vector(px))

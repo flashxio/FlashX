@@ -756,12 +756,9 @@ fm.set.na <- function(in1, in2, res)
 	else if (fm.typeof(res) == "integer")
 		ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
 						  FALSE), as.integer(NA), res)
-	else if (fm.typeof(res) == "double") {
-		res <- ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
-						  FALSE), as.double(NA), res)
-		ifelse(fm.mapply2(is.nan(in1), is.nan(in2), fm.bo.or,
-						  FALSE), NaN, res)
-	}
+	else if (fm.typeof(res) == "double")
+		ifelse(fm.mapply2(fm.is.na.only(in1), fm.is.na.only(in2),
+						  fm.bo.or, FALSE), as.double(NA), res)
 	else
 		# In this case, we don't do anything with the result.
 		res
@@ -1001,8 +998,7 @@ fm.set.na1 <- function(input, res)
 	else if (fm.typeof(res) == "integer")
 		ifelse(is.na(input), as.integer(NA), res)
 	else if (fm.typeof(res) == "double") {
-		res <- ifelse(is.na(input), as.double(NA), res)
-		ifelse(is.nan(input), NaN, res)
+		ifelse(fm.is.na.only(input), as.double(NA), res)
 	}
 	else
 		# In this case, we don't do anything with the result.
@@ -1346,6 +1342,16 @@ get.na <- function(type) {
 	}
 }
 
+fm.is.na.only <- function(fm)
+{
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	ret <- .Call("R_FM_isna", fm, TRUE, PACKAGE="FlashR")
+	if (class(fm) == "fm")
+		new.fm(ret)
+	else
+		new.fmV(ret)
+}
+
 # These functions shouldn't call any functions that try to test and
 # set NA on the result.
 
@@ -1353,7 +1359,7 @@ get.na <- function(type) {
 # interprets NA as NaN.
 setMethod("is.na", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double") {
-			  ret <- .Call("R_FM_isna", x, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_isna", x, FALSE, PACKAGE="FlashR")
 			  new.fm(ret)
 		  }
 		  else
@@ -1362,7 +1368,7 @@ setMethod("is.na", signature(x = "fm"), function(x) {
 		  })
 setMethod("is.na", signature(x = "fmV"), function(x) {
 		  if (typeof(x) == "double") {
-			  ret <- .Call("R_FM_isna", x, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_isna", x, FALSE, PACKAGE="FlashR")
 			  new.fmV(ret)
 		  }
 		  else
