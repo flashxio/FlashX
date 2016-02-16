@@ -74,6 +74,10 @@ public:
 			portion_mapply_op::const_ptr op,
 			matrix_layout_t layout, size_t data_id = mat_counter++);
 
+	const std::vector<matrix_store::const_ptr> get_input_mats() const {
+		return in_mats;
+	}
+
 	bool is_materialized() const;
 
 	virtual void set_cache_portion(bool cache_portion);
