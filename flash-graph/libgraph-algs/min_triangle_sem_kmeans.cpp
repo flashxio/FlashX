@@ -24,6 +24,8 @@
 
 #include "sem_kmeans.h"
 #include "clusters.h"
+#include "row_cache.h"
+#include "matrix/kmeans.h"
 
 using namespace fg;
 
@@ -32,6 +34,7 @@ namespace {
 #if KM_TEST
     static prune_stats::ptr g_prune_stats;
     static std::vector<double> g_gb_req_iter; // #bytes req per iter
+    static active_counter::ptr ac;
 #endif
     static size_t g_io_reqs = 0;
 
@@ -48,6 +51,12 @@ namespace {
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
     static kms_stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
+
+    // TODO: cache
+    static lazy_cache<double>::ptr g_row_cache = nullptr;
+    static unsigned g_io_iter = 0; // How many iterations of full I/O have I done?
+    static size_t g_row_cache_size = 0;
+    // End cache
 
     class kmeans_vertex: public base_kmeans_vertex
     {
@@ -184,13 +193,26 @@ namespace {
                 if (get_dist() <= g_clusters->get_s_val(get_cluster_id())) {
 #if KM_TEST
                     ((kmeans_vertex_program&) prog).get_ps()->pp_lemma1(K);
+                    ac->is_active(prog.get_vertex_id(*this), false);
 #endif
                     return; // Nothing changes -- no I/O request!
                 }
                 ((kmeans_vertex_program&) prog).num_requests_pp();
             }
+#if KM_TEST
+            ac->is_active(prog.get_vertex_id(*this), true);
+#endif
         }
+
         vertex_id_t id = prog.get_vertex_id(*this);
+        if (g_row_cache) {
+            double* row = g_row_cache->get(id);
+            if (row) { // row maybe NULL
+                // TODO: use the cached copy and return
+                //return;
+            }
+        }
+
         request_vertices(&id, 1);
     }
 
@@ -357,6 +379,15 @@ namespace {
             }
         }
 
+        static void manage_cache(const unsigned cache_update_iter=10) {
+            // clear the cache
+            if (g_io_iter++ % 10) {
+                BOOST_LOG_TRIVIAL(info) << "Clearing the cache";
+                g_row_cache = lazy_cache<double>::create(g_row_cache_size, NUM_COLS);
+            }
+
+        }
+
         static void update_clusters(graph_engine::ptr mat,
                 std::vector<unsigned>& num_members_v) {
             clear_clusters();
@@ -508,10 +539,19 @@ namespace {
                 NUM_COLS;
 #if KM_TEST
             g_prune_stats = prune_stats::create(NUM_ROWS, K);
+            ac = active_counter::create(NUM_ROWS);
 #endif
             gettimeofday(&start , NULL);
 
             /*** Begin VarInit of data structures ***/
+            // TODO: Start caching
+            g_dist_type = EUCL; // TODO: Add to params
+            g_row_cache_size = NUM_ROWS/10; // TODO: Add to params
+
+            // TODO: Add params for cache size
+            g_row_cache = lazy_cache<double>::create(g_row_cache_size, NUM_COLS);
+            // End caching
+
             g_clusters = prune_clusters::create(K, NUM_COLS);
             if (centers)
                 g_clusters->set_mean(*centers);
@@ -534,6 +574,10 @@ namespace {
                     mat->start_all(vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                     mat->wait4complete();
+
+                    if (g_row_cache)
+                        manage_cache();
+
                     g_io_reqs += NUM_ROWS;
 
                     update_clusters(mat, num_members_v);
@@ -589,6 +633,10 @@ namespace {
                         mat->start_all(vertex_initializer::ptr(),
                                 vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
                         mat->wait4complete();
+
+                        if (g_row_cache)
+                            manage_cache();
+
                         g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                     }
                 }
@@ -610,6 +658,10 @@ namespace {
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
+
+                if (g_row_cache)
+                    manage_cache();
+
                 BOOST_LOG_TRIVIAL(info) << "Init: M-step Updating cluster means ...";
 
                 update_clusters(mat, num_members_v);
@@ -624,6 +676,7 @@ namespace {
 
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
                 print_vector<unsigned>(num_members_v);
+                ac->init_iter();
 #endif
                 g_prune_init = false; // reset
                 g_num_changed = 0; // reset
@@ -653,6 +706,10 @@ namespace {
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
                 mat->wait4complete();
+
+                if (g_row_cache)
+                    manage_cache();
+
                 BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating cluster means ...";
                 update_clusters(mat, num_members_v);
 
@@ -679,17 +736,20 @@ namespace {
 
 #if KM_TEST
                 g_prune_stats->finalize();
+                ac->init_iter();
 #endif
             }
 
-#if KM_TEST
-            g_prune_stats->get_stats();
-            BOOST_LOG_TRIVIAL(info) << "Bytes retreived per iteration: ";
-                print_vector<double>(g_gb_req_iter);
-#endif
             gettimeofday(&end, NULL);
             BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
                 time_diff(start, end) << " sec\n";
+#if KM_TEST
+            g_prune_stats->get_stats();
+            BOOST_LOG_TRIVIAL(info) << "GBytes retreived per iteration: ";
+                print_vector<double>(g_gb_req_iter);
+            //ac->write_raw("activation_by_iter.csv", 300);
+            ac->write_consolidated("consol_activation_by_iter.csv", NUM_ROWS);
+#endif
 
 #ifdef PROFILER
             ProfilerStop();
