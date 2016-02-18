@@ -76,6 +76,24 @@ void test_conv_layout()
 	}
 }
 
+void test_copy()
+{
+	struct timeval start, end;
+	typedef size_t ele_type;
+	size_t height = 1024 * 1024 * 1024;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->deep_copy();
+		gettimeofday(&end, NULL);
+		printf("copy takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
 class single_operate2
 {
 public:
@@ -731,6 +749,8 @@ int main(int argc, char *argv[])
 
 	if (test_name == "conv_layout")
 		test_conv_layout();
+	else if (test_name == "copy")
+		test_copy();
 	else if (test_name == "inner_prod")
 		test_inner_prod();
 	else if (test_name == "agg")
