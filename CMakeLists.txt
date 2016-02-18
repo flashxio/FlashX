@@ -2,6 +2,8 @@ cmake_minimum_required (VERSION 2.6)
 
 project (FlashGraph)
 
+include(CheckCCompilerFlag)
+
 # The version number.
 set (FlashGraph_VERSION_MAJOR 0)
 set (FlashGraph_VERSION_MINOR 3)
@@ -41,6 +43,12 @@ find_package(hwloc)
 if (hwloc_FOUND)
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_HWLOC")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HWLOC")
+endif()
+
+check_c_compiler_flag("-mavx" HAVE_FLAG_M_AVX)
+if(HAVE_FLAG_M_AVX)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mavx")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
 endif()
 
 #set(CMAKE_BUILD_TYPE Release)

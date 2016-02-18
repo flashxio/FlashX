@@ -37,7 +37,7 @@ endif
 
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt -fopenmp
-CXXFLAGS += -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK -fopenmp
+CXXFLAGS += -mavx -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK -fopenmp
 ifdef PROF
 	LDFLAGS +=-lprofiler
 	CXXFLAGS += -DPROFILER
