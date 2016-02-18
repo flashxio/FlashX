@@ -3143,7 +3143,10 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
 		assert(ins.size() == 1);
-		out.copy_from(*ins[0]);
+		bool ret = out.large_copy_from(*ins[0]);
+		// Large memory copy may fail, fall back to the default one.
+		if (!ret)
+			out.copy_from(*ins[0]);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {

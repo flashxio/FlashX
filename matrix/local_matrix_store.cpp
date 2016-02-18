@@ -19,6 +19,8 @@
 
 #include <boost/format.hpp>
 
+#include <immintrin.h>
+
 #include <cblas.h>
 
 #include "local_matrix_store.h"
@@ -34,6 +36,31 @@ namespace detail
 {
 
 static const size_t LONG_DIM_LEN = 1024;
+
+#ifdef __AVX__
+static void memcpy256(char *dest, const char *src, size_t num256)
+{
+	__m256i *dst_arr = reinterpret_cast<__m256i *>(dest);
+	const __m256i *src_arr = reinterpret_cast<const __m256i *>(src);
+	for (size_t i = 0; i < num256; i++)
+		_mm256_stream_si256(dst_arr + i, *(src_arr + i));
+}
+#endif
+
+bool local_matrix_store::large_copy_from(const local_matrix_store &store)
+{
+#ifdef __AVX__
+	char *dst_arr = get_raw_arr();
+	const char *src_arr = get_raw_arr();
+	size_t num_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+	if (dst_arr && src_arr && num_bytes % sizeof(__m256i) == 0) {
+		memcpy256(dst_arr, src_arr, num_bytes / sizeof(__m256i));
+		return true;
+	}
+	else
+#endif
+		return false;
+}
 
 local_matrix_store::ptr local_matrix_store::conv2(matrix_layout_t layout) const
 {

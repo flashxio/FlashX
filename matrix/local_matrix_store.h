@@ -201,6 +201,8 @@ public:
 				area.num_rows, area.num_cols);
 	}
 
+	bool large_copy_from(const local_matrix_store &store);
+
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols);
 	virtual void reset_size() {
