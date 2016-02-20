@@ -1462,8 +1462,10 @@ void matrix_tall_multiply(const local_matrix_store &Astore,
 {
 	assert(Astore.get_type() == Bstore.get_type());
 	assert(Astore.get_type() == out.get_type());
-	if ((Astore.get_raw_arr() == NULL || out.get_raw_arr() == NULL)
-			&& Astore.get_num_rows() > LONG_DIM_LEN) {
+	// As long as Astore is taller than we expect, we partition it to compute
+	// matrix multiplication. This may cause a little extra overhead if Astore
+	// is row-major and isn't a virtual matrix.
+	if (Astore.get_num_rows() > LONG_DIM_LEN) {
 		size_t orig_num_rows = Astore.get_num_rows();
 		local_matrix_store::exposed_area orig_A = Astore.get_exposed_area();
 		local_matrix_store::exposed_area orig_out = out.get_exposed_area();
