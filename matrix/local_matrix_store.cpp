@@ -1334,6 +1334,169 @@ local_matrix_store::ptr local_col_matrix_store::get_portion(
 	return ret;
 }
 
+///////////////////////// BLAS matrix multiplication //////////////////////////
+
+template<class T>
+void tall_gemm_col(const local_matrix_store &Astore, const T *Amat,
+		const local_matrix_store &Bstore, const T *Bmat,
+		local_matrix_store &out, T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void tall_gemm_col<double>(const local_matrix_store &Astore, const double *Amat,
+		const local_matrix_store &Bstore, const double *Bmat,
+		local_matrix_store &out, double *res_mat)
+{
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
+			0, res_mat, out.get_num_rows());
+}
+
+template<>
+void tall_gemm_col<float>(const local_matrix_store &Astore, const float *Amat,
+		const local_matrix_store &Bstore, const float *Bmat,
+		local_matrix_store &out, float *res_mat)
+{
+	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
+			0, res_mat, out.get_num_rows());
+}
+
+template<class T>
+void tall_gemm_row(const local_matrix_store &Astore, const T *Amat,
+		const local_matrix_store &Bstore, const T *Bmat,
+		local_matrix_store &out, T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void tall_gemm_row<double>(const local_matrix_store &Astore, const double *Amat,
+		const local_matrix_store &Bstore, const double *Bmat,
+		local_matrix_store &out, double *res_mat)
+{
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
+			0, res_mat, out.get_num_cols());
+}
+
+template<>
+void tall_gemm_row<float>(const local_matrix_store &Astore, const float *Amat,
+		const local_matrix_store &Bstore, const float *Bmat,
+		local_matrix_store &out, float *res_mat)
+{
+	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Astore.get_num_rows(), Bstore.get_num_cols(),
+			Astore.get_num_cols(), 1, Amat,
+			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
+			0, res_mat, out.get_num_cols());
+}
+
+static local_matrix_store::ptr alloc_mat_buf(size_t num_rows, size_t num_cols,
+		const scalar_type &type, matrix_layout_t layout)
+{
+	if (layout == matrix_layout_t::L_COL)
+		return local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+					num_rows, num_cols, type, -1));
+	else
+		return local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+					num_rows, num_cols, type, -1));
+}
+
+template<class T>
+void _matrix_tall_multiply(const local_matrix_store &Astore,
+		const local_matrix_store &Bstore, local_matrix_store &out,
+		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs)
+{
+	const T *Amat = (const T *) Astore.get_raw_arr();
+	// If the A matrix isn't stored in contiguous memory,
+	// and the matrix buffer doesn't exist or has a wrong size.
+	if (Amat == NULL || Astore.store_layout() != out.store_layout()) {
+		if (bufs.first == NULL
+				|| bufs.first->get_num_rows() != Astore.get_num_rows())
+			// Let's make sure all matrices have the same data layout as
+			// the result matrix.
+			bufs.first = alloc_mat_buf(Astore.get_num_rows(),
+					Astore.get_num_cols(), Astore.get_type(), out.store_layout());
+		bufs.first->copy_from(Astore);
+		Amat = reinterpret_cast<const T *>(bufs.first->get_raw_arr());
+	}
+
+	T *res_mat = (T *) out.get_raw_arr();
+	// If the out matrix isn't stored in contiguous memory,
+	// and the matrix buffer doesn't exist or has a wrong size.
+	if (res_mat == NULL && (bufs.second == NULL
+				|| bufs.second->get_num_rows() != out.get_num_rows()))
+		bufs.second = alloc_mat_buf(out.get_num_rows(), out.get_num_cols(),
+				out.get_type(), out.store_layout());
+	// If the out matrix isn't stored in contiguous memory,
+	if (res_mat == NULL)
+		res_mat = reinterpret_cast<T *>(bufs.second->get_raw_arr());
+
+	const T *Bmat = reinterpret_cast<const T *>(Bstore.get_raw_arr());
+	assert(Bstore.store_layout() == out.store_layout());
+	assert(Amat);
+	assert(Bmat);
+	assert(res_mat);
+
+	if (out.store_layout() == matrix_layout_t::L_COL)
+		tall_gemm_col<T>(Astore, Amat, Bstore, Bmat, out, res_mat);
+	else
+		tall_gemm_row<T>(Astore, Amat, Bstore, Bmat, out, res_mat);
+
+	if (out.get_raw_arr() == NULL)
+		out.copy_from(*bufs.second);
+}
+
+void matrix_tall_multiply(const local_matrix_store &Astore,
+		const local_matrix_store &Bstore, local_matrix_store &out,
+		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs)
+{
+	assert(Astore.get_type() == Bstore.get_type());
+	assert(Astore.get_type() == out.get_type());
+	if ((Astore.get_raw_arr() == NULL || out.get_raw_arr() == NULL)
+			&& Astore.get_num_rows() > LONG_DIM_LEN) {
+		size_t orig_num_rows = Astore.get_num_rows();
+		local_matrix_store::exposed_area orig_A = Astore.get_exposed_area();
+		local_matrix_store::exposed_area orig_out = out.get_exposed_area();
+		local_matrix_store &mutableA = const_cast<local_matrix_store &>(Astore);
+		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
+			mutableA.resize(orig_A.local_start_row + row_idx,
+					orig_A.local_start_col, llen, Astore.get_num_cols());
+			out.resize(orig_out.local_start_row + row_idx,
+					orig_out.local_start_col, llen, out.get_num_cols());
+
+			if (Astore.get_type() == get_scalar_type<double>())
+				_matrix_tall_multiply<double>(Astore, Bstore, out, bufs);
+			else
+				_matrix_tall_multiply<float>(Astore, Bstore, out, bufs);
+		}
+		mutableA.restore_size(orig_A);
+		out.restore_size(orig_out);
+	}
+	else {
+		if (Astore.get_type() == get_scalar_type<double>())
+			_matrix_tall_multiply<double>(Astore, Bstore, out, bufs);
+		else
+			_matrix_tall_multiply<float>(Astore, Bstore, out, bufs);
+	}
+}
+
+void matrix_wide_multiply(const local_matrix_store &left,
+		const local_matrix_store &right, local_matrix_store &out,
+		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs)
+{
+}
+
 }
 
 }

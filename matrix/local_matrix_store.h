@@ -1160,6 +1160,24 @@ bool groupby_row(const detail::local_matrix_store &labels,
 		const detail::local_row_matrix_store &mat, const agg_operate &op,
 		detail::local_row_matrix_store &results, std::vector<bool> &agg_flags);
 
+/*
+ * BLAS matrix multiplication: a tall matrix * a small matrix.
+ * It may create two buffer matrices to store data from the input and
+ * output tall matrices if data in the input and output matrices isn't
+ * stored in contiguous memory.
+ */
+void matrix_tall_multiply(const local_matrix_store &left,
+		const local_matrix_store &right, local_matrix_store &out,
+		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs);
+/*
+ * BLAS matrix multiplication: a wide matrix * a tall matrix.
+ * It may create two buffer matrices to store data from the input matrices
+ * if data in the input matrices isn't stored in contiguous memory.
+ */
+void matrix_wide_multiply(const local_matrix_store &left,
+		const local_matrix_store &right, local_matrix_store &out,
+		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs);
+
 }
 
 }

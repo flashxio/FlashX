@@ -1,3 +1,5 @@
+#include <cblas.h>
+
 #include "bulk_operate.h"
 #include "local_matrix_store.h"
 #include "dense_matrix.h"
@@ -145,7 +147,8 @@ void test_reset(size_t long_dim)
 					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
-class set_col_operate: public type_set_operate<int>
+template<class T>
+class set_col_operate: public type_set_operate<T>
 {
 	size_t num_cols;
 public:
@@ -153,14 +156,15 @@ public:
 		this->num_cols = num_cols;
 	}
 
-	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+	void set(T *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = (row_idx + i) * num_cols + col_idx;
 		}
 	}
 };
 
-class set_row_operate: public type_set_operate<int>
+template<class T>
+class set_row_operate: public type_set_operate<T>
 {
 	size_t num_cols;
 public:
@@ -168,7 +172,7 @@ public:
 		this->num_cols = num_cols;
 	}
 
-	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+	void set(T *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = row_idx * num_cols + col_idx + i;
 		}
@@ -243,9 +247,9 @@ void test_set1(std::shared_ptr<local_matrix_store> store)
 	assert(store->is_whole());
 	assert(!store->read_only());
 	if (store->store_layout() == matrix_layout_t::L_COL)
-		store->set_data(set_col_operate(store->get_num_cols()));
+		store->set_data(set_col_operate<int>(store->get_num_cols()));
 	else
-		store->set_data(set_row_operate(store->get_num_cols()));
+		store->set_data(set_row_operate<int>(store->get_num_cols()));
 	verify_set(store);
 }
 
@@ -322,9 +326,9 @@ void test_set(size_t long_dim)
 void test_agg1(std::shared_ptr<local_matrix_store> store)
 {
 	if (store->store_layout() == matrix_layout_t::L_COL)
-		store->set_data(set_col_operate(store->get_num_cols()));
+		store->set_data(set_col_operate<int>(store->get_num_cols()));
 	else
-		store->set_data(set_row_operate(store->get_num_cols()));
+		store->set_data(set_row_operate<int>(store->get_num_cols()));
 
 	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
 			store->get_type().get_basic_ops().get_add());
@@ -397,13 +401,13 @@ void test_mapply21(std::shared_ptr<local_matrix_store> store)
 {
 	std::shared_ptr<local_matrix_store> res;
 	if (store->store_layout() == matrix_layout_t::L_COL) {
-		store->set_data(set_col_operate(store->get_num_cols()));
+		store->set_data(set_col_operate<int>(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
 				get_scalar_type<int>(), -1));
 	}
 	else {
-		store->set_data(set_row_operate(store->get_num_cols()));
+		store->set_data(set_row_operate<int>(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
 				get_scalar_type<int>(), -1));
@@ -466,13 +470,13 @@ void test_sapply1(std::shared_ptr<local_matrix_store> store)
 {
 	std::shared_ptr<local_matrix_store> res;
 	if (store->store_layout() == matrix_layout_t::L_COL) {
-		store->set_data(set_col_operate(store->get_num_cols()));
+		store->set_data(set_col_operate<int>(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
 				get_scalar_type<int>(), -1));
 	}
 	else {
-		store->set_data(set_row_operate(store->get_num_cols()));
+		store->set_data(set_row_operate<int>(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
 				get_scalar_type<int>(), -1));
@@ -779,7 +783,7 @@ void test_copy_from(size_t long_dim, bool is_tall)
 		m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
 					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	}
-	m1->set_data(set_col_operate(m1->get_num_cols()));
+	m1->set_data(set_col_operate<int>(m1->get_num_cols()));
 	test_copy_from1(*m1, *m2);
 
 	// For the sub col-major matrix.
@@ -809,7 +813,7 @@ void test_copy_from(size_t long_dim, bool is_tall)
 		m2 = local_matrix_store::ptr(new local_buf_row_matrix_store(
 					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	}
-	m1->set_data(set_row_operate(m1->get_num_cols()));
+	m1->set_data(set_row_operate<int>(m1->get_num_cols()));
 	test_copy_from1(*m1, *m2);
 
 	// For the sub row-major matrix.
@@ -838,7 +842,7 @@ void test_get_raw(size_t long_dim)
 	// Test local buffer matrix store.
 	local_matrix_store::ptr store(new local_buf_col_matrix_store(0, 0,
 				long_dim, 10, get_scalar_type<int>(), -1));
-	store->set_data(set_col_operate(store->get_num_cols()));
+	store->set_data(set_col_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
 	assert(store->get_raw_arr() == NULL);
@@ -848,7 +852,7 @@ void test_get_raw(size_t long_dim)
 
 	store = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
 				long_dim, 1, get_scalar_type<int>(), -1));
-	store->set_data(set_col_operate(store->get_num_cols()));
+	store->set_data(set_col_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
 	assert(store->get_raw_arr());
@@ -856,7 +860,7 @@ void test_get_raw(size_t long_dim)
 
 	store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
 				10, long_dim, get_scalar_type<int>(), -1));
-	store->set_data(set_row_operate(store->get_num_cols()));
+	store->set_data(set_row_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
 	assert(store->get_raw_arr() == NULL);
@@ -866,7 +870,7 @@ void test_get_raw(size_t long_dim)
 
 	store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
 				1, long_dim, get_scalar_type<int>(), -1));
-	store->set_data(set_row_operate(store->get_num_cols()));
+	store->set_data(set_row_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
 	assert(store->get_raw_arr());
@@ -878,7 +882,7 @@ void test_get_raw(size_t long_dim)
 	store = local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
 				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
 				buf->get_type(), buf->get_node_id()));
-	store->set_data(set_col_operate(store->get_num_cols()));
+	store->set_data(set_col_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
 	assert(store->get_raw_arr() == NULL);
@@ -891,7 +895,7 @@ void test_get_raw(size_t long_dim)
 	store = local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
 				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
 				buf->get_type(), buf->get_node_id()));
-	store->set_data(set_col_operate(store->get_num_cols()));
+	store->set_data(set_col_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(100, 0, store->get_num_rows() - 100, store->get_num_cols());
 	assert(store->get_raw_arr());
@@ -902,7 +906,7 @@ void test_get_raw(size_t long_dim)
 	store = local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
 				buf->get_type(), buf->get_node_id()));
-	store->set_data(set_row_operate(store->get_num_cols()));
+	store->set_data(set_row_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
 	assert(store->get_raw_arr() == NULL);
@@ -915,7 +919,7 @@ void test_get_raw(size_t long_dim)
 	store = local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 				buf->get_raw_arr(), 0, 0, buf->get_num_rows(), buf->get_num_cols(),
 				buf->get_type(), buf->get_node_id()));
-	store->set_data(set_row_operate(store->get_num_cols()));
+	store->set_data(set_row_operate<int>(store->get_num_cols()));
 	assert(store->get_raw_arr());
 	store->resize(0, 100, store->get_num_rows(), store->get_num_cols() - 100);
 	assert(store->get_raw_arr());
@@ -927,7 +931,7 @@ void test_conv_layout(size_t long_dim)
 	// Tall matrices
 	local_row_matrix_store::ptr row_store(new local_buf_row_matrix_store(0, 0,
 				long_dim, 10, get_scalar_type<int>(), -1));
-	row_store->set_data(set_row_operate(row_store->get_num_cols()));
+	row_store->set_data(set_row_operate<int>(row_store->get_num_cols()));
 	local_col_matrix_store::ptr col_store(new local_buf_col_matrix_store(0, 0,
 				long_dim, 10, get_scalar_type<int>(), -1));
 	col_store->copy_from(*row_store);
@@ -967,7 +971,7 @@ void test_conv_layout(size_t long_dim)
 	// Wide matrices
 	row_store = local_row_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
 				10, long_dim, get_scalar_type<int>(), -1));
-	row_store->set_data(set_row_operate(row_store->get_num_cols()));
+	row_store->set_data(set_row_operate<int>(row_store->get_num_cols()));
 	col_store = local_col_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
 				10, long_dim, get_scalar_type<int>(), -1));
 	col_store->copy_from(*row_store);
@@ -1005,8 +1009,146 @@ void test_conv_layout(size_t long_dim)
 			assert(store->get<int>(i, j) == i * store->get_num_cols() + j);
 }
 
+void blas_col_multiply(const local_col_matrix_store &m1,
+		const local_col_matrix_store &m2, local_col_matrix_store &res)
+{
+	assert(m1.get_type() == m2.get_type());
+	local_col_matrix_store::ptr m1_buf;
+	local_col_matrix_store::ptr m2_buf;
+	local_col_matrix_store::ptr res_buf;
+	const char *m1_raw = m1.get_raw_arr();
+	if (m1_raw == NULL) {
+		m1_buf = local_col_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				m1.get_num_rows(), m1.get_num_cols(), m1.get_type(), -1));
+		m1_buf->copy_from(m1);
+		m1_raw = m1_buf->get_raw_arr();
+	}
+	const char *m2_raw = m2.get_raw_arr();
+	assert(m2_raw);
+	char *res_raw = res.get_raw_arr();
+	if (res_raw == NULL) {
+		res_buf = local_col_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+					res.get_num_rows(), res.get_num_cols(), res.get_type(), -1));
+		res_raw = res_buf->get_raw_arr();
+	}
+	if (m1.get_type() == get_scalar_type<double>()) {
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+				m1.get_num_rows(), m2.get_num_cols(),
+				m1.get_num_cols(), 1, (const double *) m1_raw,
+				m1.get_num_rows(), (const double *) m2_raw,
+				m2.get_num_rows(), 0, (double *) res_raw,
+				res.get_num_rows());
+	}
+	else {
+		assert(m1.get_type() == get_scalar_type<float>());
+		cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+				m1.get_num_rows(), m2.get_num_cols(),
+				m1.get_num_cols(), 1, (const float *) m1_raw,
+				m1.get_num_rows(), (const float *) m2_raw,
+				m2.get_num_rows(), 0, (float *) res_raw,
+				res.get_num_rows());
+	}
+	if (res_raw != res.get_raw_arr())
+		res.copy_from(*res_buf);
+}
+
+template<class T>
+void equal_mat(const local_matrix_store &m1, const local_matrix_store &m2)
+{
+	assert(m1.get_num_rows() == m2.get_num_rows());
+	assert(m1.get_num_cols() == m2.get_num_cols());
+	for (size_t i = 0; i < m1.get_num_rows(); i++)
+		for (size_t j = 0; j < m1.get_num_cols(); j++)
+			assert(m1.get<T>(i, j) == m2.get<T>(i, j));
+}
+
+void blas_row_multiply(const local_row_matrix_store &m1,
+		const local_row_matrix_store &m2, local_row_matrix_store &res)
+{
+	local_matrix_store::ptr col_m1 = m1.conv2(matrix_layout_t::L_COL);
+	equal_mat<double>(*col_m1, m1);
+	local_matrix_store::ptr col_m2 = m2.conv2(matrix_layout_t::L_COL);
+	equal_mat<double>(*col_m2, m2);
+	local_col_matrix_store::ptr col_res(new local_buf_col_matrix_store(0, 0,
+				res.get_num_rows(), res.get_num_cols(), res.get_type(), -1));
+	blas_col_multiply(dynamic_cast<const local_col_matrix_store &>(*col_m1),
+			dynamic_cast<const local_col_matrix_store &>(*col_m2), *col_res);
+	res.copy_from(*col_res);
+}
+
+void blas_multiply(const local_matrix_store &m1, const local_matrix_store &m2,
+		local_matrix_store &res)
+{
+	if (m1.store_layout() == matrix_layout_t::L_ROW)
+		blas_row_multiply(dynamic_cast<const local_row_matrix_store &>(m1),
+				dynamic_cast<const local_row_matrix_store &>(m2),
+				dynamic_cast<local_row_matrix_store &>(res));
+	else
+		blas_col_multiply(dynamic_cast<const local_col_matrix_store &>(m1),
+				dynamic_cast<const local_col_matrix_store &>(m2),
+				dynamic_cast<local_col_matrix_store &>(res));
+}
+
+void test_tall_multiply(size_t long_dim)
+{
+	local_matrix_store::ptr left_store, right_store, out1, out2;
+	long_dim = 10;
+
+	// test row matrix.
+	printf("multiply tall row matrix (%ld)\n", long_dim);
+	left_store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<double>(), -1));
+	left_store->set_data(set_row_operate<double>(left_store->get_num_cols()));
+	left_store->resize(0, 0, left_store->get_num_rows() - 1,
+			left_store->get_num_cols());
+	right_store = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				10, 12, get_scalar_type<double>(), -1));
+	right_store->set_data(set_row_operate<double>(right_store->get_num_cols()));
+	out1 = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				long_dim, 12, get_scalar_type<double>(), -1));
+	out1->resize(0, 0, out1->get_num_rows() - 1, out1->get_num_cols());
+	out2 = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
+				long_dim - 1, 12, get_scalar_type<double>(), -1));
+
+	std::pair<local_matrix_store::ptr, local_matrix_store::ptr> bufs;
+	matrix_tall_multiply(*left_store, *right_store, *out1, bufs);
+	blas_multiply(*left_store, *right_store, *out2);
+	equal_mat<double>(*out1, *out2);
+
+	printf("multiply tall col matrix (%ld)\n", long_dim);
+	left_store = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				long_dim, 10, get_scalar_type<double>(), -1));
+	left_store->resize(0, 0, left_store->get_num_rows() - 1,
+			left_store->get_num_cols());
+	left_store->set_data(set_col_operate<double>(left_store->get_num_cols()));
+	right_store = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				10, 12, get_scalar_type<double>(), -1));
+	right_store->set_data(set_col_operate<double>(right_store->get_num_cols()));
+	out1 = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				long_dim, 12, get_scalar_type<double>(), -1));
+	out1->resize(0, 0, out1->get_num_rows() - 1, out1->get_num_cols());
+	out2 = local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+				long_dim - 1, 12, get_scalar_type<double>(), -1));
+
+	matrix_tall_multiply(*left_store, *right_store, *out1, bufs);
+	blas_multiply(*left_store, *right_store, *out2);
+	equal_mat<double>(*out1, *out2);
+}
+
+void test_wide_multiply(size_t long_dim)
+{
+}
+
+void test_multiply(size_t long_dim)
+{
+	test_tall_multiply(long_dim);
+	test_wide_multiply(long_dim);
+}
+
 int main()
 {
+	test_multiply(1000);
+	test_multiply(10000);
 	test_conv_layout(1000);
 	test_get_raw(1000);
 	test_reset(1000);

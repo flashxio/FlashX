@@ -309,18 +309,21 @@ double dense_matrix::norm2() const
 namespace
 {
 
-template<class T>
 class multiply_tall_op: public detail::portion_mapply_op
 {
-	detail::mem_matrix_store::const_ptr Bstore;
+	detail::mem_matrix_store::const_ptr Bmem;
+	detail::local_matrix_store::const_ptr Bstore;
 	std::vector<detail::local_matrix_store::ptr> Abufs;
 	std::vector<detail::local_matrix_store::ptr> res_bufs;
 public:
-	multiply_tall_op(detail::mem_matrix_store::const_ptr Bstore,
+	multiply_tall_op(detail::mem_matrix_store::const_ptr Bmem,
 			size_t num_threads, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(
-				out_num_rows, out_num_cols, get_scalar_type<T>()) {
-		this->Bstore = Bstore;
+				out_num_rows, out_num_cols, Bmem->get_type()) {
+		this->Bmem = Bmem;
+		this->Bstore = Bmem->get_portion(0);
+		assert(this->Bstore->get_num_rows() == Bmem->get_num_rows());
+		assert(this->Bstore->get_num_cols() == Bmem->get_num_cols());
 		Abufs.resize(num_threads);
 		res_bufs.resize(num_threads);
 	}
@@ -338,12 +341,11 @@ public:
 	}
 };
 
-template<class T>
 class t_multiply_tall_op: public detail::portion_mapply_op
 {
-	multiply_tall_op<T> op;
+	multiply_tall_op op;
 public:
-	t_multiply_tall_op(const multiply_tall_op<T> &_op): detail::portion_mapply_op(
+	t_multiply_tall_op(const multiply_tall_op &_op): detail::portion_mapply_op(
 			_op.get_out_num_cols(), _op.get_out_num_rows(),
 			_op.get_output_type()), op(_op) {
 	}
@@ -363,7 +365,7 @@ public:
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		return fm::detail::portion_mapply_op::const_ptr(
-				new multiply_tall_op<T>(op));
+				new multiply_tall_op(op));
 	}
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
@@ -371,78 +373,12 @@ public:
 	}
 };
 
-template<class T>
-detail::portion_mapply_op::const_ptr multiply_tall_op<T>::transpose() const
+detail::portion_mapply_op::const_ptr multiply_tall_op::transpose() const
 {
-	return detail::portion_mapply_op::const_ptr(new t_multiply_tall_op<T>(*this));
+	return detail::portion_mapply_op::const_ptr(new t_multiply_tall_op(*this));
 }
 
-template<class T>
-void tall_gemm_col(const detail::local_matrix_store &Astore, const T *Amat,
-		const detail::mem_matrix_store &Bstore, const T *Bmat,
-		detail::local_matrix_store &out, T *res_mat)
-{
-	assert(0);
-}
-
-template<>
-void tall_gemm_col<double>(const detail::local_matrix_store &Astore, const double *Amat,
-		const detail::mem_matrix_store &Bstore, const double *Bmat,
-		detail::local_matrix_store &out, double *res_mat)
-{
-	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_rows(), Bstore.get_num_cols(),
-			Astore.get_num_cols(), 1, Amat,
-			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
-			0, res_mat, out.get_num_rows());
-}
-
-template<>
-void tall_gemm_col<float>(const detail::local_matrix_store &Astore, const float *Amat,
-		const detail::mem_matrix_store &Bstore, const float *Bmat,
-		detail::local_matrix_store &out, float *res_mat)
-{
-	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_rows(), Bstore.get_num_cols(),
-			Astore.get_num_cols(), 1, Amat,
-			Astore.get_num_rows(), Bmat, Bstore.get_num_rows(),
-			0, res_mat, out.get_num_rows());
-}
-
-template<class T>
-void tall_gemm_row(const detail::local_matrix_store &Astore, const T *Amat,
-		const detail::mem_matrix_store &Bstore, const T *Bmat,
-		detail::local_matrix_store &out, T *res_mat)
-{
-	assert(0);
-}
-
-template<>
-void tall_gemm_row<double>(const detail::local_matrix_store &Astore, const double *Amat,
-		const detail::mem_matrix_store &Bstore, const double *Bmat,
-		detail::local_matrix_store &out, double *res_mat)
-{
-	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_rows(), Bstore.get_num_cols(),
-			Astore.get_num_cols(), 1, Amat,
-			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
-			0, res_mat, out.get_num_cols());
-}
-
-template<>
-void tall_gemm_row<float>(const detail::local_matrix_store &Astore, const float *Amat,
-		const detail::mem_matrix_store &Bstore, const float *Bmat,
-		detail::local_matrix_store &out, float *res_mat)
-{
-	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_rows(), Bstore.get_num_cols(),
-			Astore.get_num_cols(), 1, Amat,
-			Astore.get_num_cols(), Bmat, Bstore.get_num_cols(),
-			0, res_mat, out.get_num_cols());
-}
-
-template<class T>
-void multiply_tall_op<T>::run(
+void multiply_tall_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
@@ -450,56 +386,17 @@ void multiply_tall_op<T>::run(
 	detail::matrix_stats.inc_multiplies(
 			Astore->get_num_rows() * Astore->get_num_cols() * Bstore->get_num_cols());
 
-	const T *Amat = (const T *) Astore->get_raw_arr();
-	// Let's make sure all matrices have the same data layout as the result matrix.
-	if (Amat == NULL || Astore->store_layout() != out.store_layout()) {
-		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-		if (Abufs[thread_id] == NULL
-				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
-				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
-			if (out.store_layout() == matrix_layout_t::L_COL)
-				const_cast<multiply_tall_op<T> *>(this)->Abufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_col_matrix_store(0, 0,
-								Astore->get_num_rows(), Astore->get_num_cols(),
-								Astore->get_type(), -1));
-			else
-				const_cast<multiply_tall_op<T> *>(this)->Abufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_row_matrix_store(0, 0,
-								Astore->get_num_rows(), Astore->get_num_cols(),
-								Astore->get_type(), -1));
-		}
-		Abufs[thread_id]->copy_from(*Astore);
-		Amat = (const T *) Abufs[thread_id]->get_raw_arr();
-	}
-	const T *Bmat = (const T *) Bstore->get_raw_arr();
-	assert(Bstore->store_layout() == out.store_layout());
-	assert(Amat);
-	assert(Bmat);
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	// TODO Maybe I should store the pairs in the vector directly.
+	std::pair<detail::local_matrix_store::ptr, detail::local_matrix_store::ptr> bufs(
+			Abufs[thread_id], res_bufs[thread_id]);
+	detail::matrix_tall_multiply(*Astore, *Bstore, out, bufs);
 
-	T *res_mat = (T *) out.get_raw_arr();
-	detail::local_matrix_store::ptr res_buf;
-	if (res_mat == NULL) {
-		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-		if (res_bufs[thread_id] == NULL
-				|| out.get_num_rows() != res_bufs[thread_id]->get_num_rows()
-				|| out.get_num_cols() != res_bufs[thread_id]->get_num_cols())
-			const_cast<multiply_tall_op<T> *>(this)->res_bufs[thread_id]
-				= detail::local_matrix_store::ptr(
-					new fm::detail::local_buf_col_matrix_store(0, 0,
-						out.get_num_rows(), out.get_num_cols(),
-						out.get_type(), -1));
-		res_buf = res_bufs[thread_id];
-		res_mat = (T *) res_buf->get_raw_arr();
-	}
-
-	if (out.store_layout() == matrix_layout_t::L_COL)
-		tall_gemm_col<T>(*Astore, Amat, *Bstore, Bmat, out, res_mat);
-	else
-		tall_gemm_row<T>(*Astore, Amat, *Bstore, Bmat, out, res_mat);
-	if (res_buf)
-		out.copy_from(*res_buf);
+	multiply_tall_op *mutable_this = const_cast<multiply_tall_op *>(this);
+	if (bufs.first != Abufs[thread_id])
+		mutable_this->Abufs[thread_id] = bufs.first;
+	if (bufs.second != res_bufs[thread_id])
+		mutable_this->res_bufs[thread_id] = bufs.second;
 }
 
 template<class T>
@@ -720,7 +617,7 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = m1.get_raw_store();
-	typename multiply_tall_op<T>::const_ptr mapply_op(new multiply_tall_op<T>(
+	multiply_tall_op::const_ptr mapply_op(new multiply_tall_op(
 				detail::mem_matrix_store::cast(right),
 				detail::mem_thread_pool::get_global_num_threads(),
 				m1.get_num_rows(), m2.get_num_cols()));
