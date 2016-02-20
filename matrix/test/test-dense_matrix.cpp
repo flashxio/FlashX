@@ -523,6 +523,41 @@ void test_inner_prod()
 	test_inner_prod(matrix_layout_t::L_COL);
 }
 
+void test_multiply()
+{
+	struct timeval start, end;
+	typedef double ele_type;
+	size_t height = 1024 * 1024 * 1024;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	dense_matrix::ptr small_mat = dense_matrix::create(width, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	printf("matrix multiply (%ld x %ld) * (%ld x %ld)\n", mat->get_num_rows(),
+			mat->get_num_cols(), small_mat->get_num_rows(),
+			small_mat->get_num_cols());
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->multiply(*small_mat);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("multiply tall takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	dense_matrix::ptr mat1 = dense_matrix::create(width, height,
+			matrix_layout_t::L_COL, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat1->multiply(*mat);
+		gettimeofday(&end, NULL);
+		printf("multiply wide takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
 void test_agg()
 {
 }
@@ -793,6 +828,8 @@ int main(int argc, char *argv[])
 		test_reset_data();
 	else if (test_name == "inner_prod")
 		test_inner_prod();
+	else if (test_name == "multiply")
+		test_multiply();
 	else if (test_name == "agg")
 		test_agg();
 	else if (test_name == "agg_mat")
