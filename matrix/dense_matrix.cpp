@@ -3040,9 +3040,14 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
 		assert(ins.size() == 1);
+#if 0
+		// Using bypass-cache memory copy for the right matrix in tall matrix
+		// multiplication significantly decreases the performance of tall
+		// matrix multiplication.
 		bool ret = out.large_copy_from(*ins[0]);
 		// Large memory copy may fail, fall back to the default one.
 		if (!ret)
+#endif
 			out.copy_from(*ins[0]);
 	}
 
