@@ -337,6 +337,11 @@ public:
 	dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
+	/*
+	 * Compute aggregation on the matrix.
+	 * It can aggregate on rows, on columns or on all elements.
+	 * By default, we compute aggregation lazily.
+	 */
 	dense_matrix::ptr aggregate(matrix_margin margin, agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(agg_operate::const_ptr op) const;
 	std::shared_ptr<scalar_variable> aggregate(bulk_operate::const_ptr op) const;

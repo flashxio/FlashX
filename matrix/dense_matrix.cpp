@@ -35,6 +35,7 @@
 #include "local_mem_buffer.h"
 #include "factor.h"
 #include "cached_matrix_store.h"
+#include "agg_matrix_store.h"
 
 namespace fm
 {
@@ -2567,87 +2568,9 @@ public:
 	}
 };
 
-/*
- * This aggregates on the longer dimension.
- * It outputs a very short vector, so the result is materialized immediately.
- */
-class matrix_long_agg_op: public detail::portion_mapply_op
-{
-	matrix_margin margin;
-	agg_operate::const_ptr op;
-	// Each row stores the local aggregation results on a thread.
-	detail::mem_row_matrix_store::ptr partial_res;
-	std::vector<local_vec_store::ptr> local_bufs;
-	// This indicates the number of times that data has been aggregated to
-	// the partial results.
-	std::vector<size_t> num_aggs;
-public:
-	matrix_long_agg_op(detail::mem_row_matrix_store::ptr partial_res,
-			matrix_margin margin,
-			agg_operate::const_ptr &op): detail::portion_mapply_op(
-				0, 0, partial_res->get_type()) {
-		this->partial_res = partial_res;
-		this->margin = margin;
-		this->op = op;
-		local_bufs.resize(partial_res->get_num_rows());
-		num_aggs.resize(partial_res->get_num_rows());
-	}
-
-	bool valid_row(size_t off) const {
-		return num_aggs[off] > 0;
-	}
-
-	size_t get_num_valid_rows() const {
-		size_t ret = 0;
-		for (size_t i = 0; i < num_aggs.size(); i++)
-			if (num_aggs[i] > 0)
-				ret++;
-		return ret;
-	}
-
-	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
-
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		assert(0);
-		return detail::portion_mapply_op::const_ptr();
-	}
-
-	virtual std::string to_string(
-			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		return std::string();
-	}
-};
-
-void matrix_long_agg_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
-{
-	assert(ins.size() == 1);
-	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-	if (local_bufs[thread_id] == NULL)
-		const_cast<matrix_long_agg_op *>(this)->local_bufs[thread_id]
-			= local_vec_store::ptr(new local_buf_vec_store(0,
-						partial_res->get_num_cols(), partial_res->get_type(),
-						ins[0]->get_node_id()));
-	detail::aggregate(*ins[0], *op, margin, *local_bufs[thread_id]);
-
-	// If this is the first time, we should copy the local results to
-	// the corresponding row.
-	if (num_aggs[thread_id] == 0)
-		memcpy(partial_res->get_row(thread_id),
-				local_bufs[thread_id]->get_raw_arr(),
-				partial_res->get_num_cols() * partial_res->get_entry_size());
-	else
-		op->get_combine().runAA(partial_res->get_num_cols(),
-				partial_res->get_row(thread_id),
-				local_bufs[thread_id]->get_raw_arr(),
-				partial_res->get_row(thread_id));
-	const_cast<matrix_long_agg_op *>(this)->num_aggs[thread_id]++;
 }
 
-}
-
-detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
+static detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 		matrix_margin margin, agg_operate::const_ptr op)
 {
 	/*
@@ -2675,77 +2598,8 @@ detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store,
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
 	 */
-	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
-	detail::mem_row_matrix_store::ptr partial_res;
-	if (margin == matrix_margin::BOTH)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				1, op->get_output_type());
-	// For the next two cases, I assume the partial result is small enough
-	// to be kept in memory.
-	else if (margin == matrix_margin::MAR_ROW)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				store->get_num_rows(), op->get_output_type());
-	else if (margin == matrix_margin::MAR_COL)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				store->get_num_cols(), op->get_output_type());
-	else
-		// This shouldn't happen.
-		assert(0);
-	partial_res->reset_data();
-
-	std::shared_ptr<matrix_long_agg_op> agg_op(new matrix_long_agg_op(
-				partial_res, margin, op));
-	std::vector<detail::matrix_store::const_ptr> ins(1);
-	ins[0] = store;
-	__mapply_portion(ins, agg_op, matrix_layout_t::L_ROW);
-
-	// The last step is to aggregate the partial results from all portions.
-	// It runs in serial. I hope it's not a bottleneck.
-	detail::local_matrix_store::const_ptr local_res;
-	size_t num_valid_rows = agg_op->get_num_valid_rows();
-	// If there is only one row that is valid, we have the final agg results.
-	if (num_valid_rows == 1) {
-		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-				partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
-				partial_res->get_type(), -1);
-		memcpy(res->get_raw_arr(), partial_res->get_row(0),
-				partial_res->get_num_cols() * partial_res->get_entry_size());
-		return res;
-	}
-	// If not, we need to combine the partial aggregation results.
-	// If all rows are valid.
-	else if (num_valid_rows == partial_res->get_num_rows())
-		local_res = partial_res->get_portion(
-				0, 0, partial_res->get_num_rows(), partial_res->get_num_cols());
-	else {
-		// Otherwise, we have to pick all the valid rows out.
-		detail::local_row_matrix_store::ptr tmp(
-				new detail::local_buf_row_matrix_store(0, 0, num_valid_rows,
-					partial_res->get_num_cols(), partial_res->get_type(), -1));
-		size_t entry_size = partial_res->get_entry_size();
-		size_t copy_row = 0;
-		for (size_t i = 0; i < partial_res->get_num_rows(); i++)
-			if (agg_op->valid_row(i)) {
-				memcpy(tmp->get_row(copy_row), partial_res->get_row(i),
-						partial_res->get_num_cols() * entry_size);
-				copy_row++;
-			}
-		assert(copy_row == num_valid_rows);
-		local_res = tmp;
-	}
-
-	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-			partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
-			partial_res->get_type(), -1);
-	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_num_rows(),
-			res->get_type(), -1);
-	// I need to create new aggregation with the combine operation
-	// to run aggregation on the columns of the matrix.
-	agg_operate::const_ptr combine_agg = agg_operate::create(op->get_combine_ptr(),
-			bulk_operate::const_ptr());
-	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
-			local_vec);
-	return res;
+	return detail::matrix_store::ptr(new detail::agg_matrix_store(store,
+				margin, op));
 }
 
 dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
@@ -2771,8 +2625,14 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 			<< "The matrix element type is different from the operator";
 		return scalar_variable::ptr();
 	}
-	detail::matrix_store::ptr _res = fm::aggregate(store,
+	detail::matrix_store::const_ptr _res = fm::aggregate(store,
 			matrix_margin::BOTH, op);
+	assert(_res != NULL);
+	// It's evaluated lazily
+	detail::virtual_matrix_store::const_ptr virt_res
+		= std::dynamic_pointer_cast<const detail::virtual_matrix_store>(_res);
+	assert(virt_res);
+	_res = virt_res->materialize(true, -1);
 	assert(_res != NULL);
 	assert(_res->get_num_rows() == 1 && _res->get_num_cols() == 1);
 	assert(_res->is_in_mem());
