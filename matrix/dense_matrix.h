@@ -551,6 +551,8 @@ inline dense_matrix t(const dense_matrix &m)
 	return *ret;
 }
 
+void materialize(std::vector<dense_matrix::ptr> &mats);
+
 }
 
 #endif

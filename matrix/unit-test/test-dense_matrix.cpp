@@ -2171,6 +2171,72 @@ void test_materialize(int num_nodes)
 	in_mem = orig_in_mem;
 }
 
+template<class T>
+void print_mat(detail::matrix_store::const_ptr mat)
+{
+	detail::mem_matrix_store::const_ptr mem_mat
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(mat);
+	assert(mem_mat);
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < mat->get_num_cols(); j++)
+			std::cout << mem_mat->get<T>(i, j) << " ";
+		std::cout << std::endl;
+	}
+}
+
+void test_materialize_all(int num_nodes)
+{
+	printf("materialize two tall matrices\n");
+	dense_matrix::ptr m1 = create_matrix(long_dim, 8, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	dense_matrix::ptr tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+
+	dense_matrix::ptr m2 = create_matrix(long_dim, 8, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	dense_matrix::ptr tmp2 = m2->add(*m2);
+	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
+
+	std::vector<dense_matrix::ptr> mats(2);
+	mats[0] = tmp1;
+	mats[1] = tmp2;
+	materialize(mats);
+	assert(!tmp1->is_virtual());
+	assert(!tmp2->is_virtual());
+
+	scalar_variable::ptr res = tmp1->sum();
+	size_t num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+	res = tmp2->sum();
+	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+
+	printf("materialize two aggregations\n");
+	tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+	tmp2 = m2->add(*m2);
+	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
+	bulk_operate::const_ptr add
+		= bulk_operate::conv2ptr(tmp1->get_type().get_basic_ops().get_add());
+	agg_operate::const_ptr sum = agg_operate::create(add);
+	dense_matrix::ptr agg1 = tmp1->aggregate(matrix_margin::BOTH, sum);
+	dense_matrix::ptr agg2 = tmp2->aggregate(matrix_margin::BOTH, sum);
+	assert(agg1->is_virtual());
+	assert(agg2->is_virtual());
+
+	mats[0] = agg1;
+	mats[1] = agg2;
+	materialize(mats);
+	assert(!agg1->is_virtual());
+	assert(!agg2->is_virtual());
+	const detail::mem_matrix_store &mem_agg1
+		= dynamic_cast<const detail::mem_matrix_store &>(agg1->get_data());
+	const detail::mem_matrix_store &mem_agg2
+		= dynamic_cast<const detail::mem_matrix_store &>(agg2->get_data());
+	num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+	assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
+	assert(*(const size_t *) mem_agg2.get_raw_arr() == ((num_eles - 1) * num_eles));
+}
+
 void test_bmv_multiply_tall()
 {
 	bool in_mem = false;
@@ -2345,6 +2411,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_materialize_all(num_nodes);
 	test_materialize(num_nodes);
 	test_get_rowcols(num_nodes);
 	test_groupby();

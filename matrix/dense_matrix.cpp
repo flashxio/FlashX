@@ -3177,4 +3177,56 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 	return groupby_row(labels, agg);
 }
 
+namespace
+{
+
+class materialize_mapply_op: public detail::portion_mapply_op
+{
+public:
+	// The type doesn't really matter.
+	materialize_mapply_op(const scalar_type &type): detail::portion_mapply_op(
+			0, 0, type) {
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		throw unsupported_exception(
+				"Don't support transpose of groupby_row_mapply_op");
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
+		// We don't need to do anything here.
+		// What we really need is to call get_portion for every portion in
+		// an input matrix. The virtual matrices will store the materialized
+		// parts.
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		throw unsupported_exception(
+				"Don't support to_string of groupby_row_mapply_op");
+	}
+};
+
+}
+
+void materialize(std::vector<dense_matrix::ptr> &mats)
+{
+	std::vector<detail::matrix_store::const_ptr> virt_stores;
+	for (size_t i = 0; i < mats.size(); i++) {
+		// If this isn't a virtual matrix, skip it.
+		if (!mats[i]->is_virtual())
+			continue;
+		// We need to the virtual matrices stores the partial materialized results.
+		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
+		virt_stores.push_back(mats[i]->get_raw_store());
+	}
+	detail::portion_mapply_op::const_ptr materialize_op(
+			new materialize_mapply_op(virt_stores[0]->get_type()));
+	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW);
+	// Now all virtual matrices contain the materialized results.
+	for (size_t i = 0; i < mats.size(); i++)
+		mats[i]->materialize_self();
+}
+
 }
