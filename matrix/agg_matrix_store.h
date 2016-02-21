@@ -41,7 +41,6 @@ class agg_matrix_store: public virtual_matrix_store
 {
 	std::shared_ptr<portion_mapply_op> portion_op;
 	matrix_store::const_ptr data;
-	detail::mem_row_matrix_store::const_ptr partial_res;
 
 	matrix_store::ptr get_agg_res() const;
 public:

@@ -32,6 +32,99 @@ namespace detail
 {
 
 /*
+ * This contains the partial result of aggregation.
+ */
+class partial_matrix
+{
+	size_t vec_len;
+	// The number of effective elements in a vector.
+	size_t num_effect;
+	// Each vector contains the local aggregation result in a thread.
+	std::vector<smp_vec_store::ptr> res;
+	const scalar_type &type;
+public:
+	typedef std::shared_ptr<partial_matrix> ptr;
+	typedef std::shared_ptr<const partial_matrix> const_ptr;
+
+	partial_matrix(size_t num_rows, size_t num_cols,
+			const scalar_type &_type): type(_type) {
+		res.resize(num_rows);
+		num_effect = num_cols;
+		// We want each vector has at least 32 elements to avoid false sharing
+		// in a CPU cache line.
+		vec_len = std::max(num_cols, 32UL);
+	}
+
+	bool has_agg(size_t idx) const {
+		return res[idx] != NULL;
+	}
+
+	bool has_materialized() const {
+		bool materialized = false;
+		for (size_t i = 0; i < res.size(); i++)
+			if (res[i])
+				materialized = true;
+		return materialized;
+	}
+
+	char *get_row(size_t idx) {
+		if (res[idx] == NULL) {
+			res[idx] = smp_vec_store::create(vec_len, type);
+			res[idx]->reset_data();
+		}
+		return res[idx]->get_raw_arr();
+	}
+
+	const char *get_row(size_t idx) const {
+		assert(res[idx]);
+		return res[idx]->get_raw_arr();
+	}
+
+	const scalar_type &get_type() const {
+		return type;
+	}
+
+	const size_t get_entry_size() const {
+		return get_type().get_size();
+	}
+
+	size_t get_num_rows() const {
+		return res.size();
+	}
+
+	size_t get_num_valid_rows() const {
+		size_t num_valid_rows = 0;
+		for (size_t i = 0; i < res.size(); i++)
+			if (res[i])
+				num_valid_rows++;
+		return num_valid_rows;
+	}
+
+	size_t get_num_cols() const {
+		return num_effect;
+	}
+
+	local_matrix_store::const_ptr get_local_matrix() const;
+};
+
+local_matrix_store::const_ptr partial_matrix::get_local_matrix() const
+{
+	size_t num_valid_rows = get_num_valid_rows();
+	size_t entry_size = get_entry_size();
+	local_row_matrix_store::ptr tmp(new local_buf_row_matrix_store(0, 0,
+				num_valid_rows, num_effect, type, -1));
+	size_t copy_row = 0;
+	for (size_t i = 0; i < res.size(); i++)
+		if (res[i]) {
+			memcpy(tmp->get_row(copy_row), res[i]->get_raw_arr(),
+					num_effect * entry_size);
+			copy_row++;
+		}
+
+	return tmp;
+}
+
+/*
  * This aggregates on the longer dimension.
  * It outputs a very short vector, so the result is materialized immediately.
  */
@@ -40,43 +133,24 @@ class matrix_long_agg_op: public portion_mapply_op
 	matrix_margin margin;
 	agg_operate::const_ptr op;
 	// Each row stores the local aggregation results on a thread.
-	mem_row_matrix_store::ptr partial_res;
+	partial_matrix::ptr partial_res;
 	std::vector<local_vec_store::ptr> local_bufs;
-	// This indicates the number of elements that have been aggregated to
-	// the partial results.
-	std::vector<size_t> num_aggs;
 public:
-	matrix_long_agg_op(mem_row_matrix_store::ptr partial_res,
+	matrix_long_agg_op(partial_matrix::ptr partial_res,
 			matrix_margin margin, agg_operate::const_ptr &op): portion_mapply_op(
 				0, 0, partial_res->get_type()) {
 		this->partial_res = partial_res;
 		this->margin = margin;
 		this->op = op;
 		local_bufs.resize(partial_res->get_num_rows());
-		num_aggs.resize(partial_res->get_num_rows());
 	}
 
-	size_t get_num_aggs() const {
-		size_t sum = 0;
-		for (size_t i = 0; i < num_aggs.size(); i++)
-			sum += num_aggs[i];
-		return sum;
+	partial_matrix::const_ptr get_partial_res() const {
+		return partial_res;
 	}
 
 	const agg_operate &get_agg_op() const {
 		return *op;
-	}
-
-	bool valid_row(size_t off) const {
-		return num_aggs[off] > 0;
-	}
-
-	size_t get_num_valid_rows() const {
-		size_t ret = 0;
-		for (size_t i = 0; i < num_aggs.size(); i++)
-			if (num_aggs[i] > 0)
-				ret++;
-		return ret;
 	}
 
 	virtual void run(const std::vector<local_matrix_store::const_ptr> &ins) const;
@@ -106,7 +180,7 @@ void matrix_long_agg_op::run(
 
 	// If this is the first time, we should copy the local results to
 	// the corresponding row.
-	if (num_aggs[thread_id] == 0)
+	if (!partial_res->has_agg(thread_id))
 		memcpy(partial_res->get_row(thread_id),
 				local_bufs[thread_id]->get_raw_arr(),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
@@ -115,8 +189,6 @@ void matrix_long_agg_op::run(
 				partial_res->get_row(thread_id),
 				local_bufs[thread_id]->get_raw_arr(),
 				partial_res->get_row(thread_id));
-	const_cast<matrix_long_agg_op *>(this)->num_aggs[thread_id]
-		+= ins[0]->get_num_rows() * ins[0]->get_num_cols();
 }
 
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
@@ -127,36 +199,35 @@ agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 	this->data = data;
 
 	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
-	detail::mem_row_matrix_store::ptr partial_res;
+	partial_matrix::ptr partial_res;
 	if (margin == matrix_margin::BOTH)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				1, op->get_output_type());
+		partial_res = partial_matrix::ptr(new partial_matrix(num_threads,
+				1, op->get_output_type()));
 	// For the next two cases, I assume the partial result is small enough
 	// to be kept in memory.
 	else if (margin == matrix_margin::MAR_ROW)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				data->get_num_rows(), op->get_output_type());
+		partial_res = partial_matrix::ptr(new partial_matrix(num_threads,
+				data->get_num_rows(), op->get_output_type()));
 	else if (margin == matrix_margin::MAR_COL)
-		partial_res = detail::mem_row_matrix_store::create(num_threads,
-				data->get_num_cols(), op->get_output_type());
+		partial_res = partial_matrix::ptr(new partial_matrix(num_threads,
+				data->get_num_cols(), op->get_output_type()));
 	else
 		// This shouldn't happen.
 		assert(0);
-	partial_res->reset_data();
-
 	portion_op = std::shared_ptr<matrix_long_agg_op>(new matrix_long_agg_op(
 				partial_res, margin, op));
-	this->partial_res = partial_res;
 }
 
 matrix_store::ptr agg_matrix_store::get_agg_res() const
 {
 	std::shared_ptr<matrix_long_agg_op> agg_op
 		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
+
+	partial_matrix::const_ptr partial_res = agg_op->get_partial_res();
 	// The last step is to aggregate the partial results from all portions.
 	// It runs in serial. I hope it's not a bottleneck.
 	detail::local_matrix_store::const_ptr local_res;
-	size_t num_valid_rows = agg_op->get_num_valid_rows();
+	size_t num_valid_rows = partial_res->get_num_valid_rows();
 	// If there is only one row that is valid, we have the final agg results.
 	if (num_valid_rows == 1) {
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
@@ -166,27 +237,8 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 				partial_res->get_num_cols() * partial_res->get_entry_size());
 		return res;
 	}
-	// If not, we need to combine the partial aggregation results.
-	// If all rows are valid.
-	else if (num_valid_rows == partial_res->get_num_rows())
-		local_res = partial_res->get_portion(
-				0, 0, partial_res->get_num_rows(), partial_res->get_num_cols());
-	else {
-		// Otherwise, we have to pick all the valid rows out.
-		detail::local_row_matrix_store::ptr tmp(
-				new detail::local_buf_row_matrix_store(0, 0, num_valid_rows,
-					partial_res->get_num_cols(), partial_res->get_type(), -1));
-		size_t entry_size = partial_res->get_entry_size();
-		size_t copy_row = 0;
-		for (size_t i = 0; i < partial_res->get_num_rows(); i++)
-			if (agg_op->valid_row(i)) {
-				memcpy(tmp->get_row(copy_row), partial_res->get_row(i),
-						partial_res->get_num_cols() * entry_size);
-				copy_row++;
-			}
-		assert(copy_row == num_valid_rows);
-		local_res = tmp;
-	}
+	else
+		local_res = partial_res->get_local_matrix();
 
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
@@ -234,7 +286,7 @@ bool agg_matrix_store::has_materialized() const
 {
 	std::shared_ptr<matrix_long_agg_op> agg_op
 		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
-	return agg_op->get_num_aggs() == get_num_rows() * get_num_cols();
+	return agg_op->get_partial_res()->has_materialized();
 }
 
 void agg_matrix_store::materialize_self() const
