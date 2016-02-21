@@ -3182,10 +3182,12 @@ namespace
 
 class materialize_mapply_op: public detail::portion_mapply_op
 {
+	bool is_wide;
 public:
 	// The type doesn't really matter.
-	materialize_mapply_op(const scalar_type &type): detail::portion_mapply_op(
-			0, 0, type) {
+	materialize_mapply_op(const scalar_type &type,
+			bool is_wide): detail::portion_mapply_op(0, 0, type) {
+		this->is_wide = is_wide;
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -3195,10 +3197,10 @@ public:
 
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
-		// We don't need to do anything here.
-		// What we really need is to call get_portion for every portion in
-		// an input matrix. The virtual matrices will store the materialized
-		// parts.
+		if (is_wide)
+			detail::materialize_wide(ins);
+		else
+			detail::materialize_tall(ins);
 	}
 
 	virtual std::string to_string(
@@ -3212,6 +3214,9 @@ public:
 
 void materialize(std::vector<dense_matrix::ptr> &mats)
 {
+	// TODO we need to deal with the case that some matrices are tall and
+	// some are wide.
+
 	std::vector<detail::matrix_store::const_ptr> virt_stores;
 	for (size_t i = 0; i < mats.size(); i++) {
 		// If this isn't a virtual matrix, skip it.
@@ -3222,7 +3227,8 @@ void materialize(std::vector<dense_matrix::ptr> &mats)
 		virt_stores.push_back(mats[i]->get_raw_store());
 	}
 	detail::portion_mapply_op::const_ptr materialize_op(
-			new materialize_mapply_op(virt_stores[0]->get_type()));
+			new materialize_mapply_op(virt_stores[0]->get_type(),
+				virt_stores.front()->is_wide()));
 	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW);
 	// Now all virtual matrices contain the materialized results.
 	for (size_t i = 0; i < mats.size(); i++)

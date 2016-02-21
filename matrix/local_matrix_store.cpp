@@ -1499,6 +1499,69 @@ void matrix_wide_multiply(const local_matrix_store &left,
 {
 }
 
+void materialize_tall(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins)
+{
+	size_t orig_num_rows = ins[0]->get_num_rows();
+	// We need all tall matrices have the same number of rows.
+	for (size_t i = 1; i < ins.size(); i++)
+		assert(ins[i]->get_num_rows() == orig_num_rows);
+
+	if (orig_num_rows > LONG_DIM_LEN) {
+		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
+		for (size_t i = 0; i < ins.size(); i++)
+			orig_areas[i] = ins[i]->get_exposed_area();
+		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
+			for (size_t i = 0; i < ins.size(); i++) {
+				const_cast<local_matrix_store &>(*ins[i]).resize(
+						orig_areas[i].local_start_row + row_idx,
+						orig_areas[i].local_start_col, llen,
+						ins[i]->get_num_cols());
+				ins[i]->materialize_self();
+			}
+		}
+		for (size_t i = 0; i < ins.size(); i++)
+			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
+	}
+	else {
+		for (size_t i = 0; i < ins.size(); i++)
+			ins[i]->materialize_self();
+	}
+}
+
+void materialize_wide(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins)
+{
+	size_t orig_num_cols = ins[0]->get_num_cols();
+	// We need all wide matrices have the same number of cols.
+	for (size_t i = 1; i < ins.size(); i++)
+		assert(ins[i]->get_num_cols() == orig_num_cols);
+
+	if (orig_num_cols > LONG_DIM_LEN) {
+		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
+		for (size_t i = 0; i < ins.size(); i++)
+			orig_areas[i] = ins[i]->get_exposed_area();
+		for (size_t col_idx = 0; col_idx < orig_num_cols;
+				col_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
+			for (size_t i = 0; i < ins.size(); i++) {
+				const_cast<local_matrix_store &>(*ins[i]).resize(
+						orig_areas[i].local_start_row,
+						orig_areas[i].local_start_col + col_idx,
+						ins[i]->get_num_rows(), llen);
+				ins[i]->materialize_self();
+			}
+		}
+		for (size_t i = 0; i < ins.size(); i++)
+			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
+	}
+	else {
+		for (size_t i = 0; i < ins.size(); i++)
+			ins[i]->materialize_self();
+	}
+}
+
 }
 
 }

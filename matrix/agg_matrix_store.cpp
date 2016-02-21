@@ -251,70 +251,166 @@ matrix_store::const_ptr agg_matrix_store::materialize(bool in_mem,
 	return get_agg_res();
 }
 
+
+namespace
+{
+
+/*
+ * The role of these two matrices is to materialize the underlying local matrix
+ * piece by piece so that we can keep data in the CPU cache when computing
+ * aggregation.
+ */
+
+class lmaterialize_col_matrix_store: public lvirtual_col_matrix_store
+{
+	std::vector<local_matrix_store::const_ptr> parts;
+	local_matrix_store &mutable_part;
+	portion_mapply_op::const_ptr portion_op;
+public:
+	lmaterialize_col_matrix_store(local_matrix_store::const_ptr part,
+			portion_mapply_op::const_ptr portion_op): lvirtual_col_matrix_store(
+				part->get_global_start_row(), part->get_global_start_col(),
+				part->get_num_rows(), part->get_num_cols(), part->get_type(),
+				part->get_node_id()), parts(1, part),
+			mutable_part(const_cast<local_matrix_store &>(*part)) {
+		this->portion_op = portion_op;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
+				local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		mutable_part.reset_size();
+		local_matrix_store::reset_size();
+	}
+
+	using lvirtual_col_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		assert(0);
+		return NULL;
+	}
+
+	using lvirtual_col_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+
+	using lvirtual_col_matrix_store::get_col;
+	virtual const char *get_col(size_t col) const {
+		assert(0);
+		return NULL;
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+
+	virtual void materialize_self() const {
+		portion_op->run(parts);
+	}
+};
+
+class lmaterialize_row_matrix_store: public lvirtual_row_matrix_store
+{
+	std::vector<local_matrix_store::const_ptr> parts;
+	local_matrix_store &mutable_part;
+	portion_mapply_op::const_ptr portion_op;
+public:
+	lmaterialize_row_matrix_store(local_matrix_store::const_ptr part,
+			portion_mapply_op::const_ptr portion_op): lvirtual_row_matrix_store(
+				part->get_global_start_row(), part->get_global_start_col(),
+				part->get_num_rows(), part->get_num_cols(), part->get_type(),
+				part->get_node_id()), parts(1, part),
+			mutable_part(const_cast<local_matrix_store &>(*part)) {
+		this->portion_op = portion_op;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
+				local_num_cols);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		mutable_part.reset_size();
+		local_matrix_store::reset_size();
+	}
+
+	using lvirtual_row_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		assert(0);
+		return NULL;
+	}
+
+	using lvirtual_row_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+
+	using lvirtual_row_matrix_store::get_row;
+	virtual const char *get_row(size_t row) const {
+		assert(0);
+		return NULL;
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		assert(0);
+		return local_matrix_store::const_ptr();
+	}
+
+	virtual void materialize_self() const {
+		portion_op->run(parts);
+	}
+};
+
+}
+
+static local_matrix_store::const_ptr create_lmaterialize_matrix(
+		local_matrix_store::const_ptr part,
+		portion_mapply_op::const_ptr portion_op)
+{
+	if (part->store_layout() == matrix_layout_t::L_ROW)
+		return local_matrix_store::const_ptr(new lmaterialize_row_matrix_store(
+					part, portion_op));
+	else
+		return local_matrix_store::const_ptr(new lmaterialize_col_matrix_store(
+					part, portion_op));
+}
+
 local_matrix_store::const_ptr agg_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols) const
 {
 	local_matrix_store::const_ptr part = data->get_portion(start_row,
 			start_col, num_rows, num_cols);
-	std::vector<local_matrix_store::const_ptr> ins(1, part);
-	portion_op->run(ins);
-	return part;
+	return create_lmaterialize_matrix(part, portion_op);
 }
 
 local_matrix_store::const_ptr agg_matrix_store::get_portion(size_t id) const
 {
 	local_matrix_store::const_ptr part = data->get_portion(id);
-	std::vector<local_matrix_store::const_ptr> ins(1, part);
-	portion_op->run(ins);
-	return part;
+	return create_lmaterialize_matrix(part, portion_op);
 }
-
-class agg_portion_compute: public portion_compute
-{
-	std::vector<local_matrix_store::const_ptr> portions;
-	std::shared_ptr<portion_mapply_op> op;
-	portion_compute::ptr orig_compute;
-public:
-	agg_portion_compute(std::shared_ptr<portion_mapply_op> op,
-			portion_compute::ptr orig_compute) {
-		this->orig_compute = orig_compute;
-		this->op = op;
-		portions.resize(1);
-	}
-
-	void set_buf(local_matrix_store::const_ptr portion) {
-		portions[0] = portion;
-	}
-
-	virtual void run(char *buf, size_t size) {
-		assert(!portions.empty());
-		op->run(portions);
-		// We should also invoke the original compute.
-		orig_compute->run(buf, size);
-		// This is to make sure the portion compute is only invoked once.
-		portions.clear();
-	}
-};
 
 async_cres_t agg_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, std::shared_ptr<portion_compute> compute) const
 {
-	agg_portion_compute *_agg_compute = new agg_portion_compute(portion_op,
-			compute);
-	portion_compute::ptr agg_compute(_agg_compute);
 	async_cres_t ret = data->get_portion_async(start_row, start_col,
-			num_rows, num_cols, agg_compute);
-	// If the data in the portion available, we should run on the data directly.
-	if (ret.first) {
-		std::vector<local_matrix_store::const_ptr> ins(1, ret.second);
-		portion_op->run(ins);
-	}
-	// Otherwise, agg_compute will run on the portion when its data becomes
-	// available.
-	else
-		_agg_compute->set_buf(ret.second);
+			num_rows, num_cols, compute);
+	ret.second = create_lmaterialize_matrix(ret.second, portion_op);
 	return ret;
 }
 

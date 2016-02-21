@@ -203,6 +203,11 @@ public:
 
 	bool large_copy_from(const local_matrix_store &store);
 
+	// This method is useful for virtual local matrix.
+	// By default, it doesn't do anything.
+	virtual void materialize_self() const {
+	}
+
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols);
 	virtual void reset_size() {
@@ -1177,6 +1182,9 @@ void matrix_tall_multiply(const local_matrix_store &left,
 void matrix_wide_multiply(const local_matrix_store &left,
 		const local_matrix_store &right, local_matrix_store &out,
 		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs);
+
+void materialize_tall(const std::vector<detail::local_matrix_store::const_ptr> &ins);
+void materialize_wide(const std::vector<detail::local_matrix_store::const_ptr> &ins);
 
 }
 
