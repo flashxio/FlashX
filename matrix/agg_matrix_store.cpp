@@ -57,7 +57,10 @@ public:
 	}
 
 	size_t get_num_aggs() const {
-		return std::accumulate(num_aggs.begin(), num_aggs.end(), 0);
+		size_t sum = 0;
+		for (size_t i = 0; i < num_aggs.size(); i++)
+			sum += num_aggs[i];
+		return sum;
 	}
 
 	const agg_operate &get_agg_op() const {
