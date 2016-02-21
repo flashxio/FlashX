@@ -119,7 +119,7 @@ simple_raw_array::simple_raw_array(size_t num_bytes,
 
 void simple_raw_array::reset_data()
 {
-	assert(0);
+	memset(data.get(), 0, get_num_bytes());
 }
 
 simple_raw_array simple_raw_array::deep_copy() const
