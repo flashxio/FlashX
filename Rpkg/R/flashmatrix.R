@@ -1158,15 +1158,36 @@ fm.set.materialize.level <- function(fm, level)
 	.Call("R_FM_set_materialize_level", fm, as.integer(level), PACKAGE="FlashR")
 }
 
-fm.materialize <- function(fm)
+fm.materialize <- function(...)
 {
-	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
-	ret <- .Call("R_FM_materialize", fm, PACKAGE="FlashR")
-	if (class(fm) == "fm")
-		new.fm(ret)
-	else
-		new.fmV(ret)
+	args <- list(...)
+	if (length(args) == 0)
+		stop("no arguments")
+	else if (length(args) == 1) {
+		obj <- args[[1]]
+		stopifnot(!is.null(obj))
+		stopifnot(class(obj) == "fm" || class(obj) == "fmV")
+		ret <- .Call("R_FM_materialize", obj, PACKAGE="FlashR")
+		if (class(obj) == "fm")
+			new.fm(ret)
+		else
+			new.fmV(ret)
+	}
+	else {
+		for (obj in args) {
+			stopifnot(!is.null(obj))
+			stopifnot(class(obj) == "fm" || class(obj) == "fmV")
+		}
+		rets <- .Call("R_FM_materialize_list", args, PACKAGE="FlashR")
+		stopifnot(length(rets) == length(args))
+		for (i in 1:length(args)) {
+			if (class(args[[i]]) == "fm")
+				rets[[i]] <- new.fm(rets[[i]])
+			else
+				rets[[i]] <- new.fmV(rets[[i]])
+		}
+		rets
+	}
 }
 
 #' Write a FlashMatrix object (vector/matrix) to a file

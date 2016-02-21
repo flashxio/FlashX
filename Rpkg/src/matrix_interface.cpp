@@ -1613,24 +1613,75 @@ RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel)
 	return res;
 }
 
+static SEXP materialize_sparse(const SEXP &pmat)
+{
+	// don't do anything for a sparse matrix.
+	sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+	Rcpp::S4 rcpp_mat(pmat);
+	Rcpp::String name = rcpp_mat.slot("name");
+	Rcpp::List ret = create_FMR_matrix(mat, name);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
+}
+
 RcppExport SEXP R_FM_materialize(SEXP pmat)
 {
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
-		return R_NilValue;
-	}
+	if (is_sparse(pmat))
+		return materialize_sparse(pmat);
+
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	// I think it's OK to materialize on the original matrix.
 	mat->materialize_self();
 
 	Rcpp::List ret;
-	if (is_vector(pmat))
-		ret = create_FMR_vector(mat, "");
-	else
-		ret = create_FMR_matrix(mat, "");
 	Rcpp::S4 rcpp_mat(pmat);
+	Rcpp::String name = rcpp_mat.slot("name");
+	if (is_vector(pmat))
+		ret = create_FMR_vector(mat, name);
+	else
+		ret = create_FMR_matrix(mat, name);
 	ret["ele_type"] = rcpp_mat.slot("ele_type");
 	return ret;
+}
+
+RcppExport SEXP R_FM_materialize_list(SEXP plist)
+{
+	Rcpp::List ret_list;
+	Rcpp::List in_list(plist);
+	std::vector<int> dense_mat_idxs;
+	std::vector<dense_matrix::ptr> dense_mats;
+	for (int i = 0; i < in_list.size(); i++) {
+		SEXP pmat = in_list[i];
+		if (is_sparse(pmat))
+			ret_list.push_back(materialize_sparse(pmat));
+		else {
+			// We collect the dense matrices for materialization.
+			dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+			dense_mats.push_back(mat);
+			dense_mat_idxs.push_back(i);
+			// We should have NULL to hold a place in the return list.
+			ret_list.push_back(R_NilValue);
+		}
+	}
+	materialize(dense_mats);
+
+	// We need to add the materialized matrix to the return list.
+	for (size_t i = 0; i < dense_mats.size(); i++) {
+		int orig_idx = dense_mat_idxs[i];
+		dense_matrix::ptr mat = dense_mats[i];
+		SEXP pmat = in_list[orig_idx];
+
+		Rcpp::S4 rcpp_mat(pmat);
+		Rcpp::String name = rcpp_mat.slot("name");
+		Rcpp::List ret;
+		if (is_vector(pmat))
+			ret = create_FMR_vector(mat, name);
+		else
+			ret = create_FMR_matrix(mat, name);
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		ret_list[orig_idx] = ret;
+	}
+	return ret_list;
 }
 
 RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
