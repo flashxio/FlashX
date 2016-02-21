@@ -560,6 +560,37 @@ void test_multiply()
 
 void test_agg()
 {
+	struct timeval start, end;
+	typedef size_t ele_type;
+	size_t height = 1024L * 1024 * 1024 * 4;
+	size_t width = 8;
+
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	bulk_operate::const_ptr min
+		= bulk_operate::conv2ptr(*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::MIN));
+	bulk_operate::const_ptr max
+		= bulk_operate::conv2ptr(*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::MAX));
+	agg_operate::const_ptr min_agg = agg_operate::create(min);
+	agg_operate::const_ptr max_agg = agg_operate::create(max);
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		mat->aggregate(min);
+		gettimeofday(&end, NULL);
+		printf("min takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		std::vector<dense_matrix::ptr> res(2);
+		res[0] = mat->aggregate(matrix_margin::BOTH, min_agg);
+		res[1] = mat->aggregate(matrix_margin::BOTH, max_agg);
+		materialize(res);
+		gettimeofday(&end, NULL);
+		printf("range takes %.3f seconds\n", time_diff(start, end));
+	}
 }
 
 void test_agg_dmultiply(matrix_layout_t layout)
