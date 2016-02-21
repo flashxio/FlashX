@@ -3226,6 +3226,9 @@ void materialize(std::vector<dense_matrix::ptr> &mats)
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 		virt_stores.push_back(mats[i]->get_raw_store());
 	}
+	if (virt_stores.empty())
+		return;
+
 	detail::portion_mapply_op::const_ptr materialize_op(
 			new materialize_mapply_op(virt_stores[0]->get_type(),
 				virt_stores.front()->is_wide()));
