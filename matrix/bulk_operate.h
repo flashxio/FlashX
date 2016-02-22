@@ -509,10 +509,7 @@ class basic_ops_impl: public basic_ops
 			return "min";
 		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			if (e1 < e2)
-				return e1;
-			else
-				return e2;
+			return std::min(e1, e2);
 		}
 	};
 
@@ -521,10 +518,7 @@ class basic_ops_impl: public basic_ops
 			return "max";
 		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			if (e1 > e2)
-				return e1;
-			else
-				return e2;
+			return std::max(e1, e2);
 		}
 	};
 
