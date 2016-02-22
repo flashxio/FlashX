@@ -1160,6 +1160,31 @@ RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 	}
 }
 
+RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr res = m->aggregate(matrix_margin::BOTH, op);
+	if (res->is_type<bool>()) {
+		fprintf(stderr, "can't lazily eval a bool matrix right now\n");
+		return R_NilValue;
+	}
+	return create_FMR_matrix(res, "");
+}
+
 RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 {
 	Rcpp::S4 obj1(pobj);
@@ -1189,6 +1214,44 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 	}
 	else
 		return create_FMR_vector(res, "");
+}
+
+RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg_mat doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+
+	if ((margin == matrix_margin::MAR_ROW && m->is_wide())
+				|| (margin == matrix_margin::MAR_COL && !m->is_wide())) {
+		dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+		if (res->is_type<bool>()) {
+			fprintf(stderr, "can't lazily eval a bool matrix right now\n");
+			return R_NilValue;
+		}
+		return create_FMR_matrix(res, "");
+	}
+	else {
+		dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+		return create_FMR_matrix(res, "");
+	}
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)

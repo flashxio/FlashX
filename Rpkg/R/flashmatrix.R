@@ -697,10 +697,25 @@ fm.create.agg.op <- function(agg, combine, name)
 #' This function accepts a basic operator and perform aggregation on
 #' the FlashMatrix object with the basic operator.
 #'
+#' `fm.agg' aggregates over the entire object.
+#'
+#' `fm.agg.lazy' aggregates over the entire object, but it performs aggregation
+#' lazily.
+#'
+#' `fm.agg.mat' aggregates on the rows or columns of a matrix. It performs
+#' aggregation on the shorter dimension lazily, but on the longer dimension
+#' immediately.
+#'
+#' `fm.agg.mat.lazy' aggregates on the rows or columns of a matrix and performs
+#' aggregation lazily regardless the dimension.
+#'
 #' @param fm a FlashMatrix object
 #' @param op the reference or the name of a predefined basic operator or
 #' the reference to an aggregation operator returned by `fm.create.agg.op'.
-#' @return a scalar
+#' @param margin the subscript which the function will be applied over.
+#' @return `fm.agg' returns a scalar, `fm.agg.mat' returns a FlashMatrix vector,
+#' `fm.agg.lazy' and `fm.agg.mat.lazy' return a FlashMatrix matrix.
+#' @name fm.basic.op
 fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -713,16 +728,24 @@ fm.agg <- function(fm, op)
 	.Call("R_FM_agg", fm, op, PACKAGE="FlashR")
 }
 
-#' Aggregation on a FlashMatrix matrix.
-#'
-#' This function accepts a basic operator and perform aggregation on
-#' the rows/columns of a FlashMatrix matrix with the basic operator.
-#'
-#' @param fm a FlashMatrix matrix
-#' @param margin the subscript which the function will be applied over.
-#' @param op the reference or the name of a predefined basic operator or
-#' the reference to an aggregation operator returned by `fm.create.agg.op'
-#' @return a FlashMatrix vector.
+#' @name fm.basic.op
+fm.agg.lazy <- function(fm, op)
+{
+	stopifnot(!is.null(fm) && !is.null(op))
+	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
+	if (class(op) == "character")
+		op <- fm.get.basic.op(op)
+	if (class(op) == "fm.bo")
+		op <- fm.create.agg.op(op, op, op@name)
+	stopifnot(class(op) == "fm.agg.op")
+	ret <- .Call("R_FM_agg_lazy", fm, op, PACKAGE="FlashR")
+	if (class(fm) == "fmV")
+		new.fmV(ret)
+	else
+		new.fm(ret)
+}
+
+#' @name fm.basic.op
 fm.agg.mat <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -732,9 +755,24 @@ fm.agg.mat <- function(fm, margin, op)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
-	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op,
+	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op, as.logical(lazy),
 				 PACKAGE="FlashR")
 	new.fmV(ret)
+}
+
+#' @name fm.basic.op
+fm.agg.mat.lazy <- function(fm, margin, op)
+{
+	stopifnot(!is.null(fm) && !is.null(op))
+	stopifnot(class(fm) == "fm")
+	if (class(op) == "character")
+		op <- fm.get.basic.op(op)
+	if (class(op) == "fm.bo")
+		op <- fm.create.agg.op(op, op, op@name)
+	stopifnot(class(op) == "fm.agg.op")
+	ret <- .Call("R_FM_agg_mat_lazy", fm, as.integer(margin), op,
+				 PACKAGE="FlashR")
+	new.fm(ret)
 }
 
 fm.test.na <- TRUE
