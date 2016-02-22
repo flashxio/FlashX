@@ -372,6 +372,14 @@ fm.mapply.list <- function(data, FUN, na.rm)
 	res
 }
 
+fm.range1 <- function(x)
+{
+	tmp1 <- fm.agg.lazy(x, fm.bo.min)
+	tmp2 <- fm.agg.lazy(x, fm.bo.max)
+	res <- fm.materialize(tmp1, tmp2)
+	c(fm.conv.FM2R(res[[1]])[1, 1], fm.conv.FM2R(res[[2]])[1, 1])
+}
+
 # Aggregation on a FlashMatrixR vector/matrix.
 for (cl in fm.cls) {
 	# TODO we need to handle na.rm for all of the functions here properly.
@@ -402,6 +410,19 @@ for (cl in fm.cls) {
 			  if (nargs >= 4) {
 				  for (arg in args[3:(nargs - 1)])
 					  res <- max(res, fm.agg(arg, fm.bo.max))
+			  }
+			  res
+		  })
+	setMethod("range", cl, function(x, ..., na.rm) {
+			  args <- as.list(match.call())
+			  nargs <- length(args)
+			  res <- fm.range1(x)
+			  if (nargs >= 4) {
+				  for (arg in args[3:(nargs - 1)]) {
+					  tmp <- fm.range1(arg)
+					  res[1] <- min(res[1], tmp[1])
+					  res[2] <- max(res[2], tmp[2])
+				  }
 			  }
 			  res
 		  })
