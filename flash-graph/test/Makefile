@@ -22,7 +22,7 @@ LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
 TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header test_sem_kmeans\
-			 test_clusters
+			 test_clusters test_row_cache test_lazy_cache test_partition_cache
 
 all: $(TESTFILES)
 
@@ -43,6 +43,15 @@ test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
 
 test_clusters: test_clusters.o ../libgraph.a
 	$(CXX) -o test_clusters test_clusters.o $(LDFLAGS)
+
+test_row_cache: test_row_cache.o ../libgraph.a
+	$(CXX) -o test_row_cache test_row_cache.o $(LDFLAGS)
+
+test_lazy_cache: test_lazy_cache.o ../libgraph.a
+	$(CXX) -o test_lazy_cache test_lazy_cache.o $(LDFLAGS)
+
+test_partition_cache: test_partition_cache.o ../libgraph.a
+	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
