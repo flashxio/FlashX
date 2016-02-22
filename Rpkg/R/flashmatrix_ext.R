@@ -440,8 +440,14 @@ for (cl in fm.cls) {
 		  })
 	setMethod("sd", cl, function(x, na.rm) {
 			  n <- length(x)
-			  avg <- mean(x)
-			  sqrt((sum(x * x) - n * avg * avg) / (n - 1))
+			  x2 <- x * x
+			  sum.x <- fm.agg.lazy(x, fm.bo.add)
+			  sum.x2 <- fm.agg.lazy(x2, fm.bo.add)
+			  sums <- fm.materialize(sum.x, sum.x2)
+			  sum.x <- fm.conv.FM2R(sums[[1]])[1, 1]
+			  sum.x2 <- fm.conv.FM2R(sums[[2]])[1, 1]
+			  avg <- sum.x / n
+			  sqrt((sum.x2 - n * avg * avg) / (n - 1))
 		  })
 	# TODO I need to implemented trimmed mean
 	setMethod("mean", cl, function(x, trim, na.rm) {
