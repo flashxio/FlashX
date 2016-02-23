@@ -102,7 +102,7 @@ namespace {
 			double cum_dist = 0;
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v)
 			for (size_t row = 0; row < NUM_ROWS; row++) {
-                double dist = get_dist(&matrix[row*NUM_COLS],
+                double dist = dist_comp_raw(&matrix[row*NUM_COLS],
                             &((clusters->get_means())[clust_idx*NUM_COLS]), NUM_COLS);
 
 				if (dist < dist_v[row]) { // Found a closer cluster than before
@@ -161,7 +161,7 @@ namespace {
             dist = best = std::numeric_limits<double>::max();
 
             for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-                dist = get_dist(&matrix[row*NUM_COLS],
+                dist = dist_comp_raw(&matrix[row*NUM_COLS],
                         &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                 if (dist < best) {

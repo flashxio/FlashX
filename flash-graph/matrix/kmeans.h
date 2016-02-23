@@ -81,7 +81,8 @@ namespace {
      * /param len The number of elements used in the comparison
      * /return the distance based on the chosen distance metric
      */
-    double get_dist(const double* arg0, const double* arg1, const unsigned len) {
+    double dist_comp_raw(const double* arg0, const double* arg1,
+            const unsigned len) {
         if (g_dist_type == EUCL)
             return eucl_dist(arg0, arg1, len);
         else if (g_dist_type == COS)

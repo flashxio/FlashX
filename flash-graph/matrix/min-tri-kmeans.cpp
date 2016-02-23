@@ -114,8 +114,9 @@ namespace {
             double cum_dist = 0;
 #pragma omp parallel for reduction(+:cum_dist) shared (dist_v, cluster_assignments)
             for (unsigned row = 0; row < NUM_ROWS; row++) {
-                // Prune in kms++
-                double dist = get_dist(&matrix[row*NUM_COLS],
+                // Prune in kms++ possible using
+                // if (div_v[row] > dm->get(cluster_assignments[row], clust_idx) {
+                double dist = dist_comp_raw(&matrix[row*NUM_COLS],
                         &((clusters->get_means())[clust_idx*NUM_COLS]),
                         NUM_COLS);
 
@@ -123,6 +124,7 @@ namespace {
                     dist_v[row] = dist;
                     cluster_assignments[row] = clust_idx;
                 }
+                //}
                 cum_dist += dist_v[row];
             }
 
@@ -178,7 +180,7 @@ namespace {
                 double dist = std::numeric_limits<double>::max();
 
                 for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
-                    dist = get_dist(&matrix[offset],
+                    dist = dist_comp_raw(&matrix[offset],
                             &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                     if (dist < dist_v[row]) {
@@ -203,7 +205,7 @@ namespace {
                         }
 
                         if (!recalculated_v[row]) {
-                            dist_v[row] = get_dist(&matrix[offset],
+                            dist_v[row] = dist_comp_raw(&matrix[offset],
                                     &(cls->get_means()[cluster_assignments[row]*NUM_COLS]),
                                     NUM_COLS);
                             recalculated_v[row] = true;
@@ -216,7 +218,7 @@ namespace {
                         }
 
                         // Track 5
-                        double jdist = get_dist(&matrix[offset],
+                        double jdist = dist_comp_raw(&matrix[offset],
                                 &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
 
                         if (jdist < dist_v[row]) {
