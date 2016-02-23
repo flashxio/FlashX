@@ -1300,13 +1300,13 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 	if (margin == matrix_margin::MAR_ROW
 			&& factor->get_length() != mat->get_num_cols()) {
 		fprintf(stderr,
-				"the factor vector needs to have the length as #columns");
+				"the factor vector needs to have the length as #columns\n");
 		return R_NilValue;
 	}
 	else if (margin == matrix_margin::MAR_COL
 			&& factor->get_length() != mat->get_num_rows()) {
 		fprintf(stderr,
-				"the factor vector needs to have the length as #rows");
+				"the factor vector needs to have the length as #rows\n");
 		return R_NilValue;
 	}
 
