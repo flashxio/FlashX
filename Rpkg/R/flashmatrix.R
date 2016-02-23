@@ -1321,8 +1321,8 @@ fm.read.obj <- function(file)
 #' }
 #'
 #' @return A named list with the following members:
-#'         values: Numeric vector, the desired eigenvalues.
-#'         vectors: Numeric matrix, the desired eigenvectors as columns.
+#'         vals: Numeric vector, the desired eigenvalues.
+#'         vecs: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
@@ -1332,10 +1332,44 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 		print("fm.eigen only supports symmetric matrices")
 		return(NULL)
 	}
-	ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
-				 as.list(options), PACKAGE="FlashR")
-	ret$vecs <- new.fm(ret$vecs)
-	ret
+	if (is.loaded("R_FM_eigen")) {
+		ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
+					 as.list(options), PACKAGE="FlashR")
+		ret$vecs <- new.fm(ret$vecs)
+		ret
+	}
+	else {
+		arpack.opts <- arpack_defaults
+		if (!is.null(options)) {
+			if (!is.null(options[["n"]]))
+				arpack.opts$n <- options$n
+			if (!is.null(options[["nev"]]))
+				arpack.opts$nev <- options$nev
+			if (!is.null(options[["tol"]]))
+				arpack.opts$tol <- options$tol
+			if (!is.null(options[["block_size"]])
+				&& !is.null(options[["num_blocks"]]))
+				arpack.opts$ncv <- options$block_size * options$num_blocks
+			# If we compute a small number of eigenvalues, we need a larger
+			# subspace.
+			else if (arpack.opts$nev <= 2)
+				arpack.opts$ncv <- arpack.opts$nev * 2 + 3
+			else
+				arpack.opts$ncv <- arpack.opts$nev * 2
+			if (!is.null(options[["which"]]))
+				arpack.opts$which <- options$which
+		}
+		arpack.fun <- function(x, extra) {
+			# TODO this might be slow
+			fm.x <- fm.as.vector(x)
+			ret <- func(fm.x, extra)
+			# TODO this might be slow
+			as.vector(ret)
+		}
+		arpack.ret <- arpack(arpack.fun, extra, sym, arpack.opts, env)
+		list(vals=arpack.ret$values, vecs=fm.as.matrix(arpack.ret$vectors),
+			 options=arpack.ret$options)
+	}
 }
 
 #' Combine FlashR matrices by rows or columns.
