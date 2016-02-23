@@ -114,6 +114,10 @@ namespace {
             pt_clusters->add_member(count_it, id);
         }
 
+        void add_member(const unsigned id, const double* row) {
+            pt_clusters->add_member(row, id);
+        }
+
         const unsigned get_pt_changed() { return pt_changed; }
 
         void pt_changed_pp() {
@@ -199,7 +203,7 @@ namespace fg
      * \param num_cols The # of columns in the dataset
      * \param centers To skip any initialization use this to pass initialized centers 
      */
-    sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+    sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const unsigned k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
             const unsigned num_cols=0, std::vector<double>* centers=NULL);
 
@@ -208,7 +212,7 @@ namespace fg
      * see: `compute_sem_kmeans` for description of parameter list 
      * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
      */
-    sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
+    sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k, const std::string init,
             const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
             const unsigned num_cols=0, std::vector<double>* centers=NULL);
 
@@ -217,8 +221,8 @@ namespace fg
      * see: `compute_sem_kmeans` for description of parameter list
      * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
      */
-    sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const size_t k, const std::string init,
-            const unsigned max_iters, const double tolerance, const unsigned num_rows,
-            const unsigned num_cols, std::vector<double>* centers=NULL);
+    sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+            const std::string init, const unsigned max_iters, const double tolerance,
+            const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers=NULL);
 }
 #endif
