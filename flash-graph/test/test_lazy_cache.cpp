@@ -56,10 +56,8 @@ int main(int argc, char* argv[]) {
 
     lazy_cache<double>::ptr cache;
 
-    bool printed = false;
     for (unsigned i = 0; i <= 30; i++) {
         if (i % 5 == 0) {
-            printed = false;
             printf("building new cache\n");
             cache = lazy_cache<double>::create(cache_size, ncol);
         }
@@ -70,14 +68,6 @@ int main(int argc, char* argv[]) {
                 cache->add(&data[row*ncol], row, ncol);
             } else {
                 printf(".");
-            }
-
-            if (cache->is_full()) {
-                if (!printed) {
-                    printf("Printing full cache @r:%u\n", row);
-                    cache->print();
-                    printed = true;
-                }
             }
         }
     }
