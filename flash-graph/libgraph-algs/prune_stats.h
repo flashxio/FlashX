@@ -144,8 +144,9 @@ namespace {
                     sample[iter] = active[iter][row];
                 }
 
-                if (data_hash.find(sample) != data_hash.end())
-                    data_hash[sample]++;
+                std::map<std::vector<bool>, size_t>::iterator it = data_hash.find(sample);
+                if (it != data_hash.end())
+                    it->second++;
                 else
                     data_hash[sample] = 1;
             }
