@@ -775,7 +775,13 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	new.fm(ret)
 }
 
-fm.test.na <- TRUE
+fm.env <- new.env()
+fm.env$fm.test.na <- TRUE
+
+fm.set.test.na <- function(val)
+{
+	fm.env$fm.test.na <- val
+}
 
 fm.set.na <- function(in1, in2, res)
 {
@@ -784,7 +790,7 @@ fm.set.na <- function(in1, in2, res)
 	# try to test and set NA on the result.
 	if (is.null(res))
 		return(NULL)
-	else if (!fm.test.na)
+	else if (!fm.env$fm.test.na)
 		return(res)
 	else if (fm.typeof(res) == "logical")
 		# is.na always return TRUE or FALSE, we don't need to test and set NA
@@ -1027,7 +1033,7 @@ fm.set.na1 <- function(input, res)
 	# try to test and set NA on the result.
 	if (is.null(res))
 		return(NULL)
-	else if (!fm.test.na)
+	else if (!fm.env$fm.test.na)
 		return(res)
 	else if (fm.typeof(res) == "logical")
 		# is.na always return TRUE or FALSE, we don't need to test and set NA

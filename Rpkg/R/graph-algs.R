@@ -1,5 +1,8 @@
 PageRank <- function(A, d = 0.15, max.niters = 30, epsilon = 1e-2,
-					 verbose = FALSE) {
+					 verbose = FALSE)
+{
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
 	N <- dim(A)[1]
 	epsilon <- epsilon / N
 	cat("There are", N, "vertices.", "\n")
@@ -20,5 +23,6 @@ PageRank <- function(A, d = 0.15, max.niters = 30, epsilon = 1e-2,
 		pr1 <- pr2
 		niters <- niters + 1
 	}
+	fm.set.test.na(orig.test.na)
 	pr2
 }
