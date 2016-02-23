@@ -69,7 +69,7 @@ namespace {
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex &vertex);
-        double dist_comp(const page_vertex &vertex, const unsigned cl);
+        double dist_comp(const page_vertex &vertex, const double* mean);
     };
 
     class kmeans_vertex_program:
@@ -144,6 +144,23 @@ namespace {
             }
     };
 
+    double kmeans_vertex::dist_comp(const page_vertex &vertex, const double* mean) {
+        data_seq_iter count_it =
+            ((const page_row&)vertex).get_data_seq_it<double>();
+
+        double dist = 0;
+        double diff;
+        vertex_id_t nid = 0;
+
+        while(count_it.has_next()) {
+            double e = count_it.next();
+            diff = e - mean[nid++];
+            dist += diff*diff;
+        }
+        BOOST_VERIFY(nid == NUM_COLS);
+        return sqrt(dist); // TODO: sqrt
+    }
+
     void kmeans_vertex::run_init(vertex_program& prog,
             const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
@@ -185,7 +202,8 @@ namespace {
                         g_clusters->add_member(count_it, g_kmspp_cluster_idx);
                     } else if (g_kmspp_stage == DIST) {
                         vertex_id_t my_id = prog.get_vertex_id(*this);
-                        double _dist = dist_comp(vertex, g_kmspp_cluster_idx);
+                        double _dist = dist_comp(vertex,
+                                &(g_clusters->get_means()[g_kmspp_cluster_idx*NUM_COLS]));
 
                         if (_dist < g_kmspp_distance[my_id]) {
                             g_kmspp_distance[my_id] = _dist;
@@ -203,31 +221,13 @@ namespace {
         }
     }
 
-    double kmeans_vertex::dist_comp(const page_vertex &vertex, const unsigned cl) {
-        data_seq_iter count_it =
-            ((const page_row&)vertex).get_data_seq_it<double>();
-
-        double dist = 0;
-        double diff;
-        vertex_id_t nid = 0;
-
-        const double* mean = &(g_clusters->get_means()[cl*NUM_COLS]);
-        while(count_it.has_next()) {
-            double e = count_it.next();
-            diff = e - mean[nid++];
-            dist += diff*diff;
-        }
-        BOOST_VERIFY(nid == NUM_COLS);
-        return sqrt(dist); // TODO: sqrt
-    }
-
     void kmeans_vertex::run_distance(vertex_program& prog, const page_vertex &vertex) {
         kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
         unsigned old_cluster_id = get_cluster_id();
 
         double best = std::numeric_limits<double>::max();
         for (unsigned cl = 0; cl < K; cl++) {
-            double udist = dist_comp(vertex, cl);
+            double udist = dist_comp(vertex, &(g_clusters->get_means()[cl*NUM_COLS]));
             if (udist < best) {
                 best = udist;
                 set_cluster_id(cl);
@@ -344,7 +344,7 @@ namespace {
 
     namespace fg
     {
-        sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const size_t k,
+        sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const unsigned k,
                 const std::string init, const unsigned max_iters, const double tolerance,
                 const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
