@@ -1133,9 +1133,18 @@ fm.groupby <- function(fm, margin, factor, FUN)
 		FUN <- fm.create.agg.op(FUN, FUN, FUN@name)
 	stopifnot(class(FUN) == "fm.agg.op")
 	stopifnot(class(factor) == "fmFactorV")
+	orig.margin <- margin
+	if (margin == 1) {
+		margin <- 2
+		fm <- t(fm)
+	}
 	res <- .Call("R_FM_groupby", fm, as.integer(margin), factor, FUN,
 				 PACKAGE="FlashR")
-	new.fm(res)
+	res <- new.fm(res)
+	if (orig.margin == 1)
+		t(res)
+	else
+		res
 }
 
 #' Transpose a FlashMatrix matrix.
