@@ -1112,6 +1112,10 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY", set.na="logical"),
 fm.sgroupby <- function(obj, FUN)
 {
 	stopifnot(class(obj) == "fmV" || class(obj) == "fmFactorV")
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	if (class(FUN) == "fm.bo")
+		FUN <- fm.create.agg.op(FUN, FUN, FUN@name)
 	stopifnot(class(FUN) == "fm.agg.op")
 	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashR")
 	if (is.null(res))
@@ -1123,6 +1127,10 @@ fm.sgroupby <- function(obj, FUN)
 fm.groupby <- function(fm, margin, factor, FUN)
 {
 	stopifnot(class(fm) == "fm")
+	if (class(FUN) == "character")
+		FUN <- fm.get.basic.op(FUN)
+	if (class(FUN) == "fm.bo")
+		FUN <- fm.create.agg.op(FUN, FUN, FUN@name)
 	stopifnot(class(FUN) == "fm.agg.op")
 	stopifnot(class(factor) == "fmFactorV")
 	res <- .Call("R_FM_groupby", fm, as.integer(margin), factor, FUN,
