@@ -54,6 +54,7 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	}
 	if (comp.right) {
 		right <- res$vecs
+		left <- NULL
 		if (nu > 0) {
 			left <- x %*% right
 			if (ncol(left) > nu)
@@ -62,6 +63,7 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	}
 	else {
 		left <- res$vecs
+		right <- NULL
 		if (nv > 0) {
 			right <- t(x) %*% left
 			if (ncol(right) > nv)
