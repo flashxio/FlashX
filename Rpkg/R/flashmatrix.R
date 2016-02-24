@@ -22,6 +22,11 @@ setClass("fmV", representation(pointer = "externalptr", name = "character",
 							   len = "numeric", type="character",
 							   ele_type="character"))
 setClass("fmFactorV", representation(num.levels = "integer"), contains = "fmV")
+# This represents a lazily evaluated agg matrix, wide inner product matrix and
+# groupby matrix.
+setClass("fmSink", representation(pointer = "externalptr", name = "character",
+								  nrow = "numeric", ncol = "numeric",
+								  type="character", ele_type="character"))
 # We use symbolic representation for UDFs.
 # We will select the right form and right element type for a UDF when
 # the UDF is used.
@@ -54,6 +59,13 @@ new.fmFactorV <- function(fm)
 			name=fm$name, len=fm$len, type=fm$type, ele_type=fm$ele_type)
 	else
 		NULL
+}
+
+new.fmSink <- function(fm)
+{
+	if (!is.null(fm))
+		new("fmSink", pointer=fm$pointer, name=fm$name, nrow=fm$nrow, ncol=fm$ncol,
+			type=fm$type, ele_type=fm$ele_type)
 }
 
 #' Reconfigure FlashMatrix
@@ -714,9 +726,9 @@ fm.create.agg.op <- function(agg, combine, name)
 #' the reference to an aggregation operator returned by `fm.create.agg.op'.
 #' @param margin the subscript which the function will be applied over.
 #' @return `fm.agg' returns a scalar, `fm.agg.mat' returns a FlashMatrix vector,
-#' `fm.agg.lazy' and `fm.agg.mat.lazy' return a FlashMatrix matrix.
+#' `fm.agg.lazy' and `fm.agg.mat.lazy' return a FlashMatrix sink matrix.
 #' @name fm.basic.op
-fm.agg <- function(fm, op)
+fm.agg <- function(fm, op, test.na)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
@@ -739,14 +751,11 @@ fm.agg.lazy <- function(fm, op)
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
 	ret <- .Call("R_FM_agg_lazy", fm, op, PACKAGE="FlashR")
-	if (class(fm) == "fmV")
-		new.fmV(ret)
-	else
-		new.fm(ret)
+	new.fmSink(ret)
 }
 
 #' @name fm.basic.op
-fm.agg.mat <- function(fm, margin, op)
+fm.agg.mat <- function(fm, margin, op, test.na)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fm")
@@ -772,7 +781,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	stopifnot(class(op) == "fm.agg.op")
 	ret <- .Call("R_FM_agg_mat_lazy", fm, as.integer(margin), op,
 				 PACKAGE="FlashR")
-	new.fm(ret)
+	new.fmSink(ret)
 }
 
 fm.env <- new.env()
@@ -1227,7 +1236,8 @@ fm.materialize <- function(...)
 	else if (length(args) == 1) {
 		obj <- args[[1]]
 		stopifnot(!is.null(obj))
-		stopifnot(class(obj) == "fm" || class(obj) == "fmV")
+		stopifnot(class(obj) == "fm" || class(obj) == "fmV"
+				  || class(obj) == "fmSink")
 		ret <- .Call("R_FM_materialize", obj, PACKAGE="FlashR")
 		if (class(obj) == "fm")
 			new.fm(ret)
@@ -1237,7 +1247,8 @@ fm.materialize <- function(...)
 	else {
 		for (obj in args) {
 			stopifnot(!is.null(obj))
-			stopifnot(class(obj) == "fm" || class(obj) == "fmV")
+			stopifnot(class(obj) == "fm" || class(obj) == "fmV"
+					  || class(obj) == "fmSink")
 		}
 		rets <- .Call("R_FM_materialize_list", args, PACKAGE="FlashR")
 		stopifnot(length(rets) == length(args))

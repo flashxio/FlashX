@@ -1178,11 +1178,7 @@ RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
 		return R_NilValue;
 
 	dense_matrix::ptr res = m->aggregate(matrix_margin::BOTH, op);
-	if (res->is_type<bool>()) {
-		fprintf(stderr, "can't lazily eval a bool matrix right now\n");
-		return R_NilValue;
-	}
-	return create_FMR_matrix(res, "");
+	return create_FMR_sinkV(res, 1, "");
 }
 
 RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
@@ -1239,19 +1235,13 @@ RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
 		return R_NilValue;
 	}
 
-	if ((margin == matrix_margin::MAR_ROW && m->is_wide())
-				|| (margin == matrix_margin::MAR_COL && !m->is_wide())) {
-		dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
-		if (res->is_type<bool>()) {
-			fprintf(stderr, "can't lazily eval a bool matrix right now\n");
-			return R_NilValue;
-		}
-		return create_FMR_matrix(res, "");
-	}
-	else {
-		dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
-		return create_FMR_matrix(res, "");
-	}
+	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+	size_t len;
+	if (margin == matrix_margin::MAR_ROW)
+		len = m->get_num_rows();
+	else
+		len = m->get_num_cols();
+	return create_FMR_sinkV(res, len, "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
@@ -1699,7 +1689,13 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	Rcpp::List ret;
 	Rcpp::S4 rcpp_mat(pmat);
 	Rcpp::String name = rcpp_mat.slot("name");
-	if (is_vector(pmat))
+	if (is_sink(rcpp_mat)) {
+		if (rcpp_mat.slot("type") == "vector")
+			ret = create_FMR_vector(mat, name);
+		else
+			ret = create_FMR_matrix(mat, name);
+	}
+	else if (is_vector(pmat))
 		ret = create_FMR_vector(mat, name);
 	else
 		ret = create_FMR_matrix(mat, name);
@@ -1737,7 +1733,13 @@ RcppExport SEXP R_FM_materialize_list(SEXP plist)
 		Rcpp::S4 rcpp_mat(pmat);
 		Rcpp::String name = rcpp_mat.slot("name");
 		Rcpp::List ret;
-		if (is_vector(pmat))
+		if (is_sink(rcpp_mat)) {
+			if (rcpp_mat.slot("type") == "vector")
+				ret = create_FMR_vector(mat, name);
+			else
+				ret = create_FMR_matrix(mat, name);
+		}
+		else if (is_vector(pmat))
 			ret = create_FMR_vector(mat, name);
 		else
 			ret = create_FMR_matrix(mat, name);

@@ -65,6 +65,11 @@ static inline bool is_factor_vector(const Rcpp::S4 &vec)
 	return vec.is("fmFactorV");
 }
 
+static inline bool is_sink(const Rcpp::S4 &mat)
+{
+	return mat.is("fmSink");
+}
+
 void R_gc();
 SEXP R_create_s4fm(SEXP fm);
 

@@ -208,3 +208,34 @@ SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)
 	}
 	return ret;
 }
+
+SEXP create_FMR_sinkV(dense_matrix::ptr m, size_t len, const std::string &name)
+{
+	Rcpp::List ret;
+	ret["name"] = Rcpp::String(name);
+	ret["type"] = Rcpp::String("vector");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>()) {
+		ret["ele_type"] = Rcpp::String("logical");
+	}
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
+
+	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
+	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
+	R_RegisterCFinalizerEx(pointer, fm_clean_DM, TRUE);
+	ret["pointer"] = pointer;
+
+	Rcpp::NumericVector nrow(1);
+	nrow[0] = len;
+	ret["nrow"] = nrow;
+
+	Rcpp::NumericVector ncol(1);
+	ncol[0] = 1;
+	ret["ncol"] = ncol;
+
+	return ret;
+}
