@@ -764,8 +764,7 @@ fm.agg.mat <- function(fm, margin, op, test.na)
 	if (class(op) == "fm.bo")
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
-	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op, as.logical(lazy),
-				 PACKAGE="FlashR")
+	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op, PACKAGE="FlashR")
 	new.fmV(ret)
 }
 
