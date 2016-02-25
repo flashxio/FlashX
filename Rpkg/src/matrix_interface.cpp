@@ -1481,6 +1481,11 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (!mat->is_in_mem())
+		mat = mat->conv_store(true, -1);
+	else
+		mat->materialize_self();
+
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
 	Rcpp::LogicalVector ret(1);
 	ret[0] = dynamic_cast<const detail::mem_matrix_store &>(
