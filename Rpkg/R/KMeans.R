@@ -1,5 +1,8 @@
 fm.KMeans <- function(data, K, debug=FALSE)
 {
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
+
 	data <- fm.conv.layout(data, TRUE)
 	data <- fm.materialize(data)
 	n <- dim(data)[1]
@@ -38,6 +41,7 @@ fm.KMeans <- function(data, K, debug=FALSE)
 			iter.start <- Sys.time()
 		centers <- new.centers
 		old.parts <- parts
+		gc()
 		m <- fm.inner.prod(data, t(centers), fm.bo.euclidean, fm.bo.add)
 		parts <- fm.as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
@@ -54,4 +58,6 @@ fm.KMeans <- function(data, K, debug=FALSE)
 	}
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and", end.time - start.time, "seconds\n")
+	fm.set.test.na(orig.test.na)
+	parts
 }
