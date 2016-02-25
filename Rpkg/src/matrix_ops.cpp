@@ -34,6 +34,7 @@ namespace fmr
 
 static basic_ops_impl<int, int, int> R_basic_ops_II;
 static basic_ops_impl<double, double, double> R_basic_ops_DD;
+static basic_ops_impl<bool, bool, bool> R_basic_ops_BB;
 
 static basic_uops_impl<int, int> R_basic_uops_I;
 static basic_uops_impl<double, double> R_basic_uops_D;
@@ -142,6 +143,8 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 			ops = &R_basic_ops_DD;
 		else if (type == prim_type::P_INTEGER)
 			ops = &R_basic_ops_II;
+		else if (type == prim_type::P_BOOL)
+			ops = &R_basic_ops_BB;
 		else {
 			fprintf(stderr, "wrong type\n");
 			return bulk_operate::const_ptr();
