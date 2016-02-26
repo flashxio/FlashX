@@ -2300,6 +2300,13 @@ RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 		printf("dense matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
 				mat->get_num_cols());
+		if (!mat->is_in_mem())
+			printf("dense matrix is stored on disks\n");
+		else if (mat->get_data().get_num_nodes() > 0)
+			printf("dense matrix is stored on %d NUMA nodes\n",
+					mat->get_data().get_num_nodes());
+		else
+			printf("dense matrix is stored on SMP\n");
 		std::string name = mat->get_data().get_name();
 		printf("matrix store: %s\n", name.c_str());
 	}
