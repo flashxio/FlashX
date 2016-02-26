@@ -1122,7 +1122,6 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 		fprintf(stderr, "can't aggregate on the matrix\n");
 		return R_NilValue;
 	}
-	assert(res->get_type() == get_scalar_type<T>());
 	if (res != NULL) {
 		ret[0] = *(const T *) res->get_raw();
 		return ret;
@@ -1150,10 +1149,12 @@ RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 	if (op == NULL)
 		return R_NilValue;
 
-	if (m->is_type<double>())
+	if (op->get_output_type() == get_scalar_type<double>())
 		return matrix_agg<double, Rcpp::NumericVector>(*m, op);
-	else if (m->is_type<int>())
+	else if (op->get_output_type() == get_scalar_type<int>())
 		return matrix_agg<int, Rcpp::IntegerVector>(*m, op);
+	else if (op->get_output_type() == get_scalar_type<bool>())
+		return matrix_agg<bool, Rcpp::LogicalVector>(*m, op);
 	else {
 		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
 		return R_NilValue;
