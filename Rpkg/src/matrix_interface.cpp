@@ -1696,7 +1696,8 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	Rcpp::S4 rcpp_mat(pmat);
 	Rcpp::String name = rcpp_mat.slot("name");
 	if (is_sink(rcpp_mat)) {
-		if (rcpp_mat.slot("type") == "vector")
+		std::string sink_type = rcpp_mat.slot("type");
+		if (sink_type == "vector")
 			ret = create_FMR_vector(mat, name);
 		else
 			ret = create_FMR_matrix(mat, name);
@@ -1740,7 +1741,8 @@ RcppExport SEXP R_FM_materialize_list(SEXP plist)
 		Rcpp::String name = rcpp_mat.slot("name");
 		Rcpp::List ret;
 		if (is_sink(rcpp_mat)) {
-			if (rcpp_mat.slot("type") == "vector")
+			std::string sink_type = rcpp_mat.slot("type");
+			if (sink_type == "vector")
 				ret = create_FMR_vector(mat, name);
 			else
 				ret = create_FMR_matrix(mat, name);

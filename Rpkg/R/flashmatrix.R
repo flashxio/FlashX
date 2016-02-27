@@ -1229,6 +1229,10 @@ fm.set.materialize.level <- function(fm, level)
 
 fm.materialize <- function(...)
 {
+	is.vec <- function(x) {
+		class(x) == "fmV" || (class(x) == "fmSink" && x@type == "vector")
+	}
+
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
@@ -1238,10 +1242,10 @@ fm.materialize <- function(...)
 		stopifnot(class(obj) == "fm" || class(obj) == "fmV"
 				  || class(obj) == "fmSink")
 		ret <- .Call("R_FM_materialize", obj, PACKAGE="FlashR")
-		if (class(obj) == "fm")
-			new.fm(ret)
-		else
+		if (is.vec(obj))
 			new.fmV(ret)
+		else
+			new.fm(ret)
 	}
 	else {
 		for (obj in args) {
@@ -1252,10 +1256,10 @@ fm.materialize <- function(...)
 		rets <- .Call("R_FM_materialize_list", args, PACKAGE="FlashR")
 		stopifnot(length(rets) == length(args))
 		for (i in 1:length(args)) {
-			if (class(args[[i]]) == "fm")
-				rets[[i]] <- new.fm(rets[[i]])
-			else
+			if (is.vec(args[[i]]))
 				rets[[i]] <- new.fmV(rets[[i]])
+			else
+				rets[[i]] <- new.fm(rets[[i]])
 		}
 		rets
 	}
