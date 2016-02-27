@@ -459,6 +459,60 @@ struct multiply<double, double, double>
 	}
 };
 
+template<class LeftType, class RightType, class ResType>
+struct min
+{
+	static std::string get_name() {
+		return "min";
+	}
+	ResType operator()(const LeftType &e1, const RightType &e2) const {
+		return std::min(e1, e2);
+	}
+};
+
+template<>
+struct min<double, double, double>
+{
+	static std::string get_name() {
+		return "min";
+	}
+	double operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1))
+			return e1;
+		else if (std::isnan(e2))
+			return e2;
+		else
+			return std::min(e1, e2);
+	}
+};
+
+template<class LeftType, class RightType, class ResType>
+struct max
+{
+	static std::string get_name() {
+		return "max";
+	}
+	ResType operator()(const LeftType &e1, const RightType &e2) const {
+		return std::max(e1, e2);
+	}
+};
+
+template<>
+struct max<double, double, double>
+{
+	static std::string get_name() {
+		return "max";
+	}
+	double operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1))
+			return e1;
+		else if (std::isnan(e2))
+			return e2;
+		else
+			return std::max(e1, e2);
+	}
+};
+
 /*
  * This template implements all basic binary operators for different types.
  */
@@ -501,24 +555,6 @@ class basic_ops_impl: public basic_ops
 		}
 		float operator()(const float &e1, const float &e2) const {
 			return e1 / e2;
-		}
-	};
-
-	struct min {
-		static std::string get_name() {
-			return "min";
-		}
-		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return std::min(e1, e2);
-		}
-	};
-
-	struct max {
-		static std::string get_name() {
-			return "max";
-		}
-		ResType operator()(const LeftType &e1, const RightType &e2) const {
-			return std::max(e1, e2);
 		}
 	};
 
@@ -609,8 +645,10 @@ class basic_ops_impl: public basic_ops
 		LeftType, RightType, ResType> mul_op;
 	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
 	bulk_operate_impl<divide_float, float, float, float> div_float_op;
-	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
-	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
+	bulk_operate_impl<min<LeftType, RightType, ResType>,
+		LeftType, RightType, ResType> min_op;
+	bulk_operate_impl<max<LeftType, RightType, ResType>,
+		LeftType, RightType, ResType> max_op;
 	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
 	bulk_operate_impl<eq, LeftType, RightType, bool> eq_op;
 	bulk_operate_impl<neq, LeftType, RightType, bool> neq_op;
