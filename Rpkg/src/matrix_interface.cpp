@@ -2314,3 +2314,30 @@ RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
 	}
 	return R_NilValue;
 }
+
+RcppExport SEXP R_FM_conv_store(SEXP pmat, SEXP pin_mem, SEXP pnum_nodes,
+		SEXP pname)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "we can't convert the store of a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	bool in_mem = LOGICAL(pin_mem)[0];
+	int num_nodes = INTEGER(pnum_nodes)[0];
+	std::string name = CHAR(STRING_ELT(pname, 0));
+	mat = mat->conv_store(in_mem, num_nodes);
+	mat->materialize_self();
+	if (!name.empty() && !in_mem) {
+		detail::EM_matrix_store::const_ptr store
+			= detail::EM_matrix_store::cast(mat->get_raw_store());
+		bool ret = store->set_persistent(name);
+		if (!ret)
+			return R_NilValue;
+	}
+	if (is_vector(pmat))
+		return create_FMR_vector(mat, name);
+	else
+		return create_FMR_matrix(mat, name);
+}
