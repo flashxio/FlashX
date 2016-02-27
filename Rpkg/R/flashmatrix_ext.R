@@ -525,6 +525,70 @@ for (cl in fm.cls) {
 			  }
 			  res
 		  })
+	setMethod("all", cl, function(x, ..., na.rm) {
+			  others <- list(...)
+			  test.na <- TRUE
+			  if (na.rm) {
+				  # If the inputs aren't logical, we should cast them
+				  # to logical values.
+				  if (typeof(x) != "logical")
+					  x <- x != 0
+				  if (length(others) > 0) {
+					  for (i in 1:length(others)) {
+						  if (typeof(others[[i]]) != "logical")
+							  others[[i]] <- others[[i]] != 0
+					  }
+				  }
+				  x <- replace.na(x, TRUE)
+				  others <- replace.na.list(others, TRUE)
+				  test.na <- FALSE
+			  }
+			  res <- fm.agg.na(x, fm.bo.and, test.na)
+			  if (is.na(res))
+				  return(res)
+			  if (length(others) >= 1) {
+				  for (arg in others) {
+					  res <- res & fm.agg.na(arg, fm.bo.and, test.na)
+					  if (is.na(res))
+						  return(res)
+					  if (!res)
+						  return(FALSE)
+				  }
+			  }
+			  res
+		  })
+	setMethod("any", cl, function(x, ..., na.rm) {
+			  others <- list(...)
+			  test.na <- TRUE
+			  if (na.rm) {
+				  # If the inputs aren't logical, we should cast them
+				  # to logical values.
+				  if (typeof(x) != "logical")
+					  x <- x != 0
+				  if (length(others) > 0) {
+					  for (i in 1:length(others)) {
+						  if (typeof(others[[i]]) != "logical")
+							  others[[i]] <- others[[i]] != 0
+					  }
+				  }
+				  x <- replace.na(x, FALSE)
+				  others <- replace.na.list(others, FALSE)
+				  test.na <- FALSE
+			  }
+			  res <- fm.agg.na(x, fm.bo.or, test.na)
+			  if (is.na(res))
+				  return(res)
+			  if (length(others) >= 1) {
+				  for (arg in others) {
+					  res <- res | fm.agg.na(arg, fm.bo.or, test.na)
+					  if (is.na(res))
+						  return(res)
+					  if (res)
+						  return(TRUE)
+				  }
+			  }
+			  res
+		  })
 	setMethod("range", cl, function(x, ..., na.rm) {
 			  others <- list(...)
 			  res <- fm.range1(x, na.rm)
