@@ -351,20 +351,20 @@ fm.cls <- list("fm", "fmV")
 setGeneric("pmax", signature="...")
 setGeneric("pmin", signature="...")
 
-fm.mapply.list <- function(data, FUN, na.rm)
+fm.mapply.list <- function(data, FUN, test.na)
 {
 	n <- length(data)
 	res <- data[[1]]
 	if (n > 1) {
 		for (arg in data[2:n]) {
 			if (class(res) == class(arg))
-				res <- fm.mapply2(res, arg, FUN, TRUE)
+				res <- fm.mapply2(res, arg, FUN, test.na)
 			else if (class(res) == "fm" && class(arg) == "fmV")
-				res <- fm.mapply.col(res, arg, FUN)
+				res <- fm.mapply.col(res, arg, FUN, test.na)
 			# We assume that FUN is commutative.
 			# This function is used for pmin/pmax, so it's fine.
 			else if (class(res) == "fmV" && class(arg) == "fm")
-				res <- fm.mapply.col(arg, res, FUN)
+				res <- fm.mapply.col(arg, res, FUN, test.na)
 			else
 				stop("unknown arguments")
 		}
@@ -372,54 +372,169 @@ fm.mapply.list <- function(data, FUN, na.rm)
 	res
 }
 
-fm.range1 <- function(x)
+get.zero <- function(type)
 {
-	tmp1 <- fm.agg.lazy(x, fm.bo.min)
-	tmp2 <- fm.agg.lazy(x, fm.bo.max)
-	res <- fm.materialize(tmp1, tmp2)
-	c(fm.conv.FM2R(res[[1]])[1, 1], fm.conv.FM2R(res[[2]])[1, 1])
+	if (type == "double")
+		0
+	else if (type == "integer")
+		as.integer(0)
+	else if (type == "logical")
+		FALSE
+	else
+		stop("only integer and numeric value have 0")
+}
+
+get.max.val <- function(type)
+{
+	if (type == "double")
+		.Machine$double.xmax
+	else if (type == "integer")
+		.Machine$integer.max
+	else
+		TRUE
+}
+
+get.min.val <- function(type)
+{
+	if (type == "double")
+		-.Machine$double.xmax
+	else if (type == "integer")
+		-.Machine$integer.max
+	else
+		FALSE
+}
+
+get.na <- function(type)
+{
+	if (type == "double")
+		as.double(NA)
+	else if (type == "integer")
+		as.integer(NA)
+	else
+		NA
+}
+
+fm.range1 <- function(x, na.rm)
+{
+	test.na <- TRUE
+	if (na.rm) {
+		x.min <- ifelse(is.na(x), get.min.val(typeof(x)), x)
+		x.max <- ifelse(is.na(x), get.max.val(typeof(x)), x)
+		test.na <- FALSE
+		tmp1 <- fm.agg.lazy(x.max, fm.bo.min)
+		tmp2 <- fm.agg.lazy(x.min, fm.bo.max)
+	}
+	else {
+		tmp1 <- fm.agg.lazy(x, fm.bo.min)
+		tmp2 <- fm.agg.lazy(x, fm.bo.max)
+	}
+	if (test.na) {
+		x.is.na <- fm.agg.lazy(fm.is.na.only(x), fm.bo.or)
+		res <- fm.materialize(tmp1, tmp2, x.is.na)
+		if (fmV2scalar(res[[3]])) {
+			na <- get.na(typeof(x))
+			c(na, na)
+		}
+		else
+			c(fmV2scalar(res[[1]]), fmV2scalar(res[[2]]))
+	}
+	else {
+		res <- fm.materialize(tmp1, tmp2)
+		c(fmV2scalar(res[[1]]), fmV2scalar(res[[2]]))
+	}
+}
+
+# We replace both NA and NaN
+replace.na <- function(obj, val)
+{
+	ifelse(is.na(obj), val, obj)
+}
+replace.na.list <- function(objs, val)
+{
+	if (length(objs) == 0)
+		return(objs)
+
+	for (i in 1:length(objs))
+		objs[[i]] <- ifelse(is.na(objs[[i]]), val, objs[[i]])
+	objs
+}
+
+fm.agg.na <- function(fm, op, test.na)
+{
+	if (test.na && fm.env$fm.test.na) {
+		any.na <- fm.agg.lazy(fm.is.na.only(fm), fm.bo.or)
+		agg.res <- fm.agg.lazy(fm, op)
+		res <- fm.materialize(any.na, agg.res)
+		if (fmV2scalar(res[[1]]))
+			get.na(typeof(agg.res))
+		else
+			fmV2scalar(res[[2]])
+	}
+	else
+		fm.agg(fm, op)
 }
 
 # Aggregation on a FlashMatrixR vector/matrix.
 for (cl in fm.cls) {
 	# TODO we need to handle na.rm for all of the functions here properly.
 	setMethod("sum", cl, function(x, ..., na.rm) {
-			  args <- as.list(match.call())
-			  nargs <- length(args)
-			  res <- fm.agg(x, fm.bo.add)
-			  if (nargs >= 4) {
-				  for (arg in args[3:(nargs - 1)])
-					  res <- res + fm.agg(arg, fm.bo.add)
+			  others <- list(...)
+			  test.na <- TRUE
+			  if (na.rm) {
+				  zero <- get.zero(typeof(x))
+				  x <- replace.na(x, zero)
+				  others <- replace.na.list(others, zero)
+				  test.na <- FALSE
+			  }
+			  res <- fm.agg.na(x, fm.bo.add, test.na)
+			  if (length(others) >= 1) {
+				  for (arg in others)
+					  res <- res + fm.agg.na(arg, fm.bo.add, test.na)
 			  }
 			  res
 		  })
 	setMethod("min", cl, function(x, ..., na.rm) {
-			  args <- as.list(match.call())
-			  nargs <- length(args)
-			  res <- fm.agg(x, fm.bo.min)
-			  if (nargs >= 4) {
-				  for (arg in args[3:(nargs - 1)])
-					  res <- min(res, fm.agg(arg, fm.bo.min))
+			  others <- list(...)
+			  test.na <- TRUE
+			  if (na.rm) {
+				  max.val <- get.max.val(typeof(x))
+				  x <- replace.na(x, max.val)
+				  others <- replace.na.list(others, max.val)
+				  test.na <- FALSE
+			  }
+			  res <- fm.agg.na(x, fm.bo.min, test.na)
+			  if (length(others) >= 1) {
+				  for (arg in others)
+					  res <- min(res, fm.agg.na(arg, fm.bo.min, test.na))
 			  }
 			  res
 		  })
 	setMethod("max", cl, function(x, ..., na.rm) {
-			  args <- as.list(match.call())
-			  nargs <- length(args)
-			  res <- fm.agg(x, fm.bo.max)
-			  if (nargs >= 4) {
-				  for (arg in args[3:(nargs - 1)])
-					  res <- max(res, fm.agg(arg, fm.bo.max))
+			  others <- list(...)
+			  test.na <- TRUE
+			  if (na.rm) {
+				  min.val <- get.min.val(typeof(x))
+				  x <- replace.na(x, min.val)
+				  others <- replace.na.list(others, min.val)
+				  test.na <- FALSE
+			  }
+			  res <- fm.agg.na(x, fm.bo.max, test.na)
+			  if (length(others) >= 1) {
+				  for (arg in others)
+					  res <- max(res, fm.agg.na(arg, fm.bo.max, test.na))
 			  }
 			  res
 		  })
 	setMethod("range", cl, function(x, ..., na.rm) {
-			  args <- as.list(match.call())
-			  nargs <- length(args)
-			  res <- fm.range1(x)
-			  if (nargs >= 4) {
-				  for (arg in args[3:(nargs - 1)]) {
-					  tmp <- fm.range1(arg)
+			  others <- list(...)
+			  res <- fm.range1(x, na.rm)
+			  if (length(others) >= 1) {
+				  for (arg in others) {
+					  tmp <- fm.range1(arg, na.rm)
+					  # If there is NA in the data, there is no point of
+					  # continuing.
+					  if (is.na(tmp))
+						  return(tmp)
 					  res[1] <- min(res[1], tmp[1])
 					  res[2] <- max(res[2], tmp[2])
 				  }
@@ -430,28 +545,70 @@ for (cl in fm.cls) {
 			  args <- list(...)
 			  if (length(args) == 0)
 				  stop("no arguments")
-			  fm.mapply.list(args, fm.bo.min, na.rm)
+			  if (na.rm) {
+				  args <- replace.na.list(args, get.max.val(typeof(args[[1]])))
+				  fm.mapply.list(args, fm.bo.min, FALSE)
+			  }
+			  else
+				  fm.mapply.list(args, fm.bo.min, TRUE)
 		  })
 	setMethod("pmax", cl, function(..., na.rm = FALSE) {
 			  args <- list(...)
 			  if (length(args) == 0)
 				  stop("no arguments")
-			  fm.mapply.list(args, fm.bo.max, na.rm)
+			  if (na.rm) {
+				  args <- replace.na.list(args, get.min.val(typeof(args[[1]])))
+				  fm.mapply.list(args, fm.bo.min, FALSE)
+			  }
+			  else
+				  fm.mapply.list(args, fm.bo.max, TRUE)
 		  })
 	setMethod("sd", cl, function(x, na.rm) {
 			  n <- length(x)
 			  x2 <- x * x
+			  test.na <- TRUE
+			  num.na <- 0
+			  if (na.rm) {
+				  zero <- get.zero(typeof(x))
+				  in.is.na <- is.na(x)
+				  x <- ifelse(in.is.na, zero, x)
+				  x2 <- ifelse(in.is.na, zero, x2)
+				  test.na <- FALSE
+			  }
 			  sum.x <- fm.agg.lazy(x, fm.bo.add)
 			  sum.x2 <- fm.agg.lazy(x2, fm.bo.add)
-			  sums <- fm.materialize(sum.x, sum.x2)
-			  sum.x <- fm.conv.FM2R(sums[[1]])[1, 1]
-			  sum.x2 <- fm.conv.FM2R(sums[[2]])[1, 1]
+
+			  if (test.na) {
+				  x.is.na <- fm.agg.lazy(fm.is.na.only(x), fm.bo.or)
+				  res <- fm.materialize(sum.x, sum.x2, x.is.na)
+				  if (fmV2scalar(res[[3]]))
+					  return(get.na(typeof(x)))
+				  sums <- res[1:2]
+			  }
+			  else {
+				  # If we remove NA, we should calculate the number of
+				  # NAs in the vector.
+				  sum.na <- fm.agg.lazy(in.is.na, fm.bo.add)
+				  res <- fm.materialize(sum.x, sum.x2, sum.na)
+				  n <- n - fmV2scalar(res[[3]])
+				  sums <- res[1:2]
+			  }
+			  sum.x <- fmV2scalar(sums[[1]])
+			  sum.x2 <- fmV2scalar(sums[[2]])
 			  avg <- sum.x / n
 			  sqrt((sum.x2 - n * avg * avg) / (n - 1))
 		  })
 	# TODO I need to implemented trimmed mean
-	setMethod("mean", cl, function(x, trim, na.rm) {
-			  sum(x)/length(x)
+	setMethod("mean", cl, function(x, ...) {
+			  args <- list(...)
+			  na.rm <- FALSE
+			  if (!is.null(args[["na.rm"]]))
+				  na.rm <- args[["na.rm"]]
+			  n <- length(x)
+			  # TODO I need to lazily calculate it.
+			  if (na.rm)
+				  n <- n - sum(is.na(x))
+			  sum(x, na.rm=na.rm) / n
 		  })
 }
 
@@ -521,3 +678,8 @@ fm.table <- function(x)
 
 fm.as.integer <- function(x) fm.sapply(x, fm.buo.as.int, TRUE)
 fm.as.numeric <- function(x) fm.sapply(x, fm.buo.as.numeric, TRUE)
+
+fmV2scalar <- function(x)
+{
+	fm.conv.FM2R(x)[1]
+}

@@ -728,7 +728,7 @@ fm.create.agg.op <- function(agg, combine, name)
 #' @return `fm.agg' returns a scalar, `fm.agg.mat' returns a FlashMatrix vector,
 #' `fm.agg.lazy' and `fm.agg.mat.lazy' return a FlashMatrix sink matrix.
 #' @name fm.basic.op
-fm.agg <- function(fm, op, test.na)
+fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
@@ -755,7 +755,7 @@ fm.agg.lazy <- function(fm, op)
 }
 
 #' @name fm.basic.op
-fm.agg.mat <- function(fm, margin, op, test.na)
+fm.agg.mat <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fm")
@@ -1471,11 +1471,15 @@ get.na <- function(type) {
 fm.is.na.only <- function(fm)
 {
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
-	ret <- .Call("R_FM_isna", fm, TRUE, PACKAGE="FlashR")
-	if (class(fm) == "fm")
-		new.fm(ret)
+	if (typeof(fm) == "double") {
+		ret <- .Call("R_FM_isna", fm, TRUE, PACKAGE="FlashR")
+		if (class(fm) == "fm")
+			new.fm(ret)
+		else
+			new.fmV(ret)
+	}
 	else
-		new.fmV(ret)
+		is.na(fm)
 }
 
 # These functions shouldn't call any functions that try to test and
