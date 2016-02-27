@@ -194,7 +194,7 @@ void matrix_long_agg_op::run(
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 		matrix_margin margin, agg_operate::const_ptr op): virtual_matrix_store(
 			data->get_num_rows(), data->get_num_cols(), data->is_in_mem(),
-			data->get_type())
+			op->get_output_type())
 {
 	this->data = data;
 
@@ -323,9 +323,10 @@ class lmaterialize_col_matrix_store: public lvirtual_col_matrix_store
 	portion_mapply_op::const_ptr portion_op;
 public:
 	lmaterialize_col_matrix_store(local_matrix_store::const_ptr part,
+			const scalar_type &type,
 			portion_mapply_op::const_ptr portion_op): lvirtual_col_matrix_store(
 				part->get_global_start_row(), part->get_global_start_col(),
-				part->get_num_rows(), part->get_num_cols(), part->get_type(),
+				part->get_num_rows(), part->get_num_cols(), type,
 				part->get_node_id()), parts(1, part),
 			mutable_part(const_cast<local_matrix_store &>(*part)) {
 		this->portion_op = portion_op;
@@ -380,9 +381,10 @@ class lmaterialize_row_matrix_store: public lvirtual_row_matrix_store
 	portion_mapply_op::const_ptr portion_op;
 public:
 	lmaterialize_row_matrix_store(local_matrix_store::const_ptr part,
+			const scalar_type &type,
 			portion_mapply_op::const_ptr portion_op): lvirtual_row_matrix_store(
 				part->get_global_start_row(), part->get_global_start_col(),
-				part->get_num_rows(), part->get_num_cols(), part->get_type(),
+				part->get_num_rows(), part->get_num_cols(), type,
 				part->get_node_id()), parts(1, part),
 			mutable_part(const_cast<local_matrix_store &>(*part)) {
 		this->portion_op = portion_op;
@@ -433,15 +435,15 @@ public:
 }
 
 static local_matrix_store::const_ptr create_lmaterialize_matrix(
-		local_matrix_store::const_ptr part,
+		local_matrix_store::const_ptr part, const scalar_type &type,
 		portion_mapply_op::const_ptr portion_op)
 {
 	if (part->store_layout() == matrix_layout_t::L_ROW)
 		return local_matrix_store::const_ptr(new lmaterialize_row_matrix_store(
-					part, portion_op));
+					part, type, portion_op));
 	else
 		return local_matrix_store::const_ptr(new lmaterialize_col_matrix_store(
-					part, portion_op));
+					part, type, portion_op));
 }
 
 local_matrix_store::const_ptr agg_matrix_store::get_portion(
@@ -450,13 +452,13 @@ local_matrix_store::const_ptr agg_matrix_store::get_portion(
 {
 	local_matrix_store::const_ptr part = data->get_portion(start_row,
 			start_col, num_rows, num_cols);
-	return create_lmaterialize_matrix(part, portion_op);
+	return create_lmaterialize_matrix(part, get_type(), portion_op);
 }
 
 local_matrix_store::const_ptr agg_matrix_store::get_portion(size_t id) const
 {
 	local_matrix_store::const_ptr part = data->get_portion(id);
-	return create_lmaterialize_matrix(part, portion_op);
+	return create_lmaterialize_matrix(part, get_type(), portion_op);
 }
 
 async_cres_t agg_matrix_store::get_portion_async(
@@ -465,7 +467,7 @@ async_cres_t agg_matrix_store::get_portion_async(
 {
 	async_cres_t ret = data->get_portion_async(start_row, start_col,
 			num_rows, num_cols, compute);
-	ret.second = create_lmaterialize_matrix(ret.second, portion_op);
+	ret.second = create_lmaterialize_matrix(ret.second, get_type(), portion_op);
 	return ret;
 }
 
