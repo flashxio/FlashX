@@ -815,6 +815,41 @@ cat("#NA in m1.int:", sum(is.na(m1.int)), "\n")
 stopifnot(sum(is.na(m1) == is.na(fm.conv.R2FM(m1))) == length(m1))
 stopifnot(sum(is.na(m1.int) == is.na(fm.conv.R2FM(m1.int))) == length(m1.int))
 
+approx.equal <- function(x1, x2)
+{
+	abs(x1 - x2) < 1e-16
+}
+
+test.with.na <- function(data, fun)
+{
+	fm.data <- fm.conv.R2FM(data)
+	stopifnot(is.na(fun(fm.data)))
+	stopifnot(!is.na(fun(fm.data, na.rm=TRUE))
+			  && approx.equal(fun(fm.data, na.rm=TRUE), fun(data, na.rm=TRUE)))
+	data <- as.double(data)
+	fm.data <- fm.conv.R2FM(data)
+	stopifnot(is.na(fun(fm.data)))
+	stopifnot(!is.na(fun(fm.data, na.rm=TRUE))
+			  && approx.equal(fun(fm.data, na.rm=TRUE), fun(data, na.rm=TRUE)))
+}
+
+v1 <- 1:100
+v1[1] <- NA
+test.with.na(v1, sum)
+test.with.na(v1, min)
+test.with.na(v1, max)
+test.with.na(v1, sd)
+test.with.na(v1, mean)
+v1 <- runif(100) < 0.5
+v1[1] <- NA
+test.with.na(v1, all)
+test.with.na(v1, any)
+test.with.na(v1, sum)
+test.with.na(v1, min)
+test.with.na(v1, max)
+test.with.na(v1, sd)
+test.with.na(v1, mean)
+
 # Test is.nan
 v1 <- runif(1000)
 v1.int <- as.integer(v1 * 100)
@@ -828,6 +863,14 @@ m1.int <- matrix(v1.int, 100, 10)
 cat("#NaN in m1:", sum(is.nan(m1)), "\n")
 stopifnot(sum(is.nan(m1) == is.nan(fm.conv.R2FM(m1))) == length(m1))
 stopifnot(sum(is.nan(m1.int) == is.nan(fm.conv.R2FM(m1.int))) == length(m1.int))
+
+v1 <- 1:100
+v1[1] <- NaN
+test.with.na(v1, sum)
+test.with.na(v1, min)
+test.with.na(v1, max)
+test.with.na(v1, sd)
+test.with.na(v1, mean)
 
 # Test is.finite and is.infinite
 v1 <- runif(1000)
