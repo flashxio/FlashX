@@ -100,7 +100,7 @@ std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 		// This returns the relative start location of the next value.
 		find_next->runAgg(sorted_vec.get_length() - start,
 				sorted_vec.get_raw_arr() + sorted_vec.get_entry_size() * start,
-				NULL, &par_starts[i]);
+				&par_starts[i]);
 		// This is the absolute start location of this partition.
 		par_starts[i] += start;
 	}
@@ -246,10 +246,10 @@ void agg_vec_portion_op::run(
 	size_t key_idx = 0;
 	while (llength > 0) {
 		size_t num_same = 0;
-		find_next->runAgg(llength, arr, NULL, &num_same);
+		find_next->runAgg(llength, arr, &num_same);
 		assert(num_same <= llength);
 		memcpy(lkeys->get(key_idx), arr, lvec->get_entry_size());
-		agg_op->runAgg(num_same, arr, NULL, laggs->get(key_idx));
+		agg_op->runAgg(num_same, arr, laggs->get(key_idx));
 
 		key_idx++;
 		arr += num_same * lvec->get_entry_size();
@@ -341,7 +341,7 @@ public:
 	}
 
 	void run() {
-		op.runAgg(sub_vec->get_length(), sub_vec->get_raw_arr(), NULL, agg_res);
+		op.runAgg(sub_vec->get_length(), sub_vec->get_raw_arr(), agg_res);
 	}
 };
 
@@ -372,7 +372,7 @@ scalar_variable::ptr vector::aggregate(const bulk_operate &op) const
 	}
 	mem_threads->wait4complete();
 	char final_res[res->get_size()];
-	op.runAgg(num_portions, raw_res.get(), NULL, final_res);
+	op.runAgg(num_portions, raw_res.get(), final_res);
 	res->set_raw(final_res, res->get_size());
 	return res;
 }

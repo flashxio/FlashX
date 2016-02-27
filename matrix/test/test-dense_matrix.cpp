@@ -302,23 +302,11 @@ public:
 	}
 
 	virtual void runAgg(size_t num_eles, const void *left_arr1,
-			const void *orig, void *output) const {
+			void *output) const {
 		assert(LEN == num_eles);
 		const Type *left_arr = (const Type *) left_arr1;
-		if (num_eles == 0)
-			return;
-
-		size_t i;
-		Type res;
-		if (orig) {
-			i = 0;
-			res = *(const Type *) orig;
-		}
-		else {
-			i = 1;
-			res = left_arr[0];
-		}
-		for (; i < num_eles; i++)
+		Type res = left_arr[0];
+		for (size_t i = 1; i < num_eles; i++)
 			res = left_arr[i] + res;
 		*(Type *) output = res;
 	}
@@ -372,23 +360,11 @@ public:
 	}
 
 	virtual void runAgg(size_t num_eles, const void *left_arr1,
-			const void *orig, void *output) const {
+			void *output) const {
 		assert(LEN == num_eles);
 		const Type *left_arr = (const Type *) left_arr1;
-		if (LEN == 0)
-			return;
-
-		size_t i;
-		Type res;
-		if (orig) {
-			i = 0;
-			res = *(const Type *) orig;
-		}
-		else {
-			i = 1;
-			res = left_arr[0];
-		}
-		for (; i < LEN; i++)
+		Type res = left_arr[0];
+		for (size_t i = 1; i < LEN; i++)
 			res = left_arr[i] * res;
 		*(Type *) output = res;
 	}

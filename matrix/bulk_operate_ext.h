@@ -72,9 +72,8 @@ public:
 		return *combine;
 	}
 
-	void runAgg(size_t num_eles, const void *left_arr, const void *orig,
-			void *output) const {
-		agg->runAgg(num_eles, left_arr, orig, output);
+	void runAgg(size_t num_eles, const void *left_arr, void *output) const {
+		agg->runAgg(num_eles, left_arr, output);
 	}
 
 	/*
@@ -82,10 +81,9 @@ public:
 	 * The input and output types of this method are both the output type of
 	 * the aggregation.
 	 */
-	void runCombine(size_t num_eles, const void *in, const void *orig,
-			void *out) const {
+	void runCombine(size_t num_eles, const void *in, void *out) const {
 		assert(combine);
-		combine->runAgg(num_eles, in, orig, out);
+		combine->runAgg(num_eles, in, out);
 	}
 
 	const scalar_type &get_input_type() const {
@@ -123,7 +121,7 @@ public:
 	 * If all elements are the same, it returns the number of elements
 	 * in the array.
 	 */
-	virtual void runAgg(size_t num_eles, const void *left_arr, const void *orig,
+	virtual void runAgg(size_t num_eles, const void *left_arr,
 			void *output) const {
 		const T *curr = (const T *) left_arr;
 		T val = *curr;
@@ -173,7 +171,7 @@ public:
 	 * If all elements are the same, it returns the number of elements
 	 * in the array.
 	 */
-	virtual void runAgg(size_t num_eles, const void *arr_end, const void *orig,
+	virtual void runAgg(size_t num_eles, const void *arr_end,
 			void *output) const {
 		const T *curr = ((const T *) arr_end) - 1;
 		T val = *curr;
@@ -216,13 +214,9 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		size_t *t_out = (size_t *) output;
-		if (orig == NULL)
-			t_out[0] = num_eles;
-		else
-			t_out[0] = (*(const size_t *) orig) + num_eles;
+		t_out[0] = num_eles;
 	}
 
 	virtual const scalar_type &get_left_type() const {

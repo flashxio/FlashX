@@ -185,21 +185,11 @@ class sum_agg: public bulk_operate
 {
 public:
 	virtual void runAgg(size_t num_eles, const void *left_arr1,
-			const void *orig, void *output) const {
+			void *output) const {
 		const long double *t_input = (const long double *) left_arr1;
 		long double *t_output = (long double *) output;
-		if (num_eles == 0)
-			return;
-		size_t i;
-		if (orig) {
-			i = 0;
-			t_output[0] = *(const long double *) orig;
-		}
-		else {
-			i = 1;
-			t_output[0] = t_input[0];
-		}
-		for (; i < num_eles; i++)
+		t_output[0] = t_input[0];
+		for (size_t i = 1; i < num_eles; i++)
 			t_output[0] += t_input[i];
 	}
 
@@ -262,7 +252,7 @@ public:
 			c[i] = x[i] * a;
 	}
 	virtual void runAgg(size_t num_eles, const void *left_arr,
-			const void *orig, void *output) const {
+			void *output) const {
 		assert(0);
 	}
 

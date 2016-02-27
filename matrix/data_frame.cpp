@@ -298,7 +298,7 @@ void local_groupby_task::run()
 		size_t curr_length = col_len - loc;
 		const char *curr_ptr = start + entry_size * loc;
 		size_t rel_end;
-		find_next->runAgg(curr_length, curr_ptr, NULL, &rel_end);
+		find_next->runAgg(curr_length, curr_ptr, &rel_end);
 		// This expose a portion of the data frame.
 		expose_portion(sub_df, loc, rel_end);
 		// The first argument is the key and the second one is the value
@@ -445,7 +445,7 @@ bool EM_df_groupby_dispatcher::issue_task()
 		size_t off;
 		size_t entry_size = vec->get_type().get_size();
 		find_prev->runAgg(read_len, vec->get_raw_arr() + read_len * entry_size,
-				NULL, &off);
+				&off);
 		assert(off < read_len);
 		real_len = read_len - off;
 		// The local buffer may already be a sub vector.

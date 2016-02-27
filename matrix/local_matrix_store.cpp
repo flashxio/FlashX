@@ -470,7 +470,7 @@ static void inner_prod_row(const local_row_matrix_store &m1,
 	for (size_t i = 0; i < nrow; i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			left_op.runAA(ncol, m1.get_row(i), m2.get_col(j), tmp_buf.data());
-			right_op.runAgg(ncol, tmp_buf.data(), NULL, res.get(i, j));
+			right_op.runAgg(ncol, tmp_buf.data(), res.get(i, j));
 		}
 	}
 }
@@ -596,7 +596,7 @@ static void agg_both(const local_matrix_store &store, const agg_operate &op,
 	assert(res.get_length() == 1);
 	// If the store has data stored contiguously.
 	if (store.get_raw_arr())
-		op.runAgg(ncol * nrow, store.get_raw_arr(), NULL, res.get_raw_arr());
+		op.runAgg(ncol * nrow, store.get_raw_arr(), res.get_raw_arr());
 	// For row-major matrix and the agg op allows to combine partial agg res.
 	else if (store.store_layout() == matrix_layout_t::L_ROW && op.has_combine()) {
 		const local_row_matrix_store &row_store
@@ -604,8 +604,8 @@ static void agg_both(const local_matrix_store &store, const agg_operate &op,
 		local_buf_vec_store part_res(0, store.get_num_rows(),
 				op.get_output_type(), -1);
 		for (size_t i = 0; i < nrow; i++)
-			op.runAgg(ncol, row_store.get_row(i), NULL, part_res.get(i));
-		op.runCombine(part_res.get_length(), part_res.get_raw_arr(), NULL,
+			op.runAgg(ncol, row_store.get_row(i), part_res.get(i));
+		op.runCombine(part_res.get_length(), part_res.get_raw_arr(),
 				res.get_raw_arr());
 	}
 	// For col-major matrix and the agg op allows to combine partial agg res.
@@ -616,8 +616,8 @@ static void agg_both(const local_matrix_store &store, const agg_operate &op,
 		local_buf_vec_store part_res(0, store.get_num_cols(),
 				op.get_output_type(), -1);
 		for (size_t i = 0; i < ncol; i++)
-			op.runAgg(nrow, col_store.get_col(i), NULL, part_res.get(i));
-		op.runCombine(part_res.get_length(), part_res.get_raw_arr(), NULL,
+			op.runAgg(nrow, col_store.get_col(i), part_res.get(i));
+		op.runCombine(part_res.get_length(), part_res.get_raw_arr(),
 				res.get_raw_arr());
 	}
 	// For row-major matrix and the agg op doesn't allow to combine partial
@@ -626,7 +626,7 @@ static void agg_both(const local_matrix_store &store, const agg_operate &op,
 		local_buf_row_matrix_store buf(0, 0, store.get_num_rows(),
 				store.get_num_cols(), store.get_type(), -1);
 		buf.copy_from(store);
-		op.runAgg(ncol * nrow, buf.get_raw_arr(), NULL, res.get_raw_arr());
+		op.runAgg(ncol * nrow, buf.get_raw_arr(), res.get_raw_arr());
 	}
 	// For col-major matrix and the agg op doesn't allow to combine partial
 	// agg res.
@@ -634,7 +634,7 @@ static void agg_both(const local_matrix_store &store, const agg_operate &op,
 		local_buf_col_matrix_store buf(0, 0, store.get_num_rows(),
 				store.get_num_cols(), store.get_type(), -1);
 		buf.copy_from(store);
-		op.runAgg(ncol * nrow, buf.get_raw_arr(), NULL, res.get_raw_arr());
+		op.runAgg(ncol * nrow, buf.get_raw_arr(), res.get_raw_arr());
 	}
 }
 
@@ -700,7 +700,7 @@ static void agg_rows(const local_matrix_store &store, const agg_operate &op,
 			row_store = static_cast<const local_row_matrix_store *>(&store);
 		// Aggregate on rows, and the matrix is stored in row-major.
 		for (size_t i = 0; i < nrow; i++)
-			op.runAgg(ncol, row_store->get_row(i), NULL, res.get(i));
+			op.runAgg(ncol, row_store->get_row(i), res.get(i));
 	}
 }
 
@@ -758,7 +758,7 @@ static void agg_cols(const local_matrix_store &store, const agg_operate &op,
 		else
 			col_store = static_cast<const local_col_matrix_store *>(&store);
 		for (size_t i = 0; i < ncol; i++)
-			op.runAgg(nrow, col_store->get_col(i), NULL, res.get(i));
+			op.runAgg(nrow, col_store->get_col(i), res.get(i));
 	}
 }
 
@@ -1030,7 +1030,7 @@ public:
 		cblas_dscal(num_eles, a, c, 1);
 	}
 	virtual void runAgg(size_t num_eles, const void *left_arr,
-			const void *orig, void *output) const {
+			void *output) const {
 		assert(0);
 	}
 

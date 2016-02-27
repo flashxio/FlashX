@@ -24,6 +24,7 @@
 
 #include "data_frame.h"
 #include "mem_vec_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -73,6 +74,7 @@ public:
 
 	void insert(size_t num, const void *pkeys, const void *pvals,
 			const agg_operate &op) {
+		assert(op.get_input_type().get_size() == ValSize);
 		const KeyType *keys = (const KeyType *) pkeys;
 		const ValType *vals = (const ValType *) pvals;
 		assert(op.has_combine());
@@ -80,12 +82,17 @@ public:
 			auto ret = table.insert(std::pair<KeyType, ValType>(keys[i],
 						vals[i]));
 			// TODO this is going to be slow.
-			if (!ret.second)
-				op.runCombine(1, &vals[i], &ret.first->second, &ret.first->second);
+			if (!ret.second) {
+				ValType tmp_vals[2];
+				tmp_vals[0] = ret.first->second;
+				tmp_vals[1] = vals[i];
+				op.runCombine(2, tmp_vals, &ret.first->second);
+			}
 		}
 	}
 
 	virtual void merge(const generic_hashtable &gtable, const agg_operate &op) {
+		assert(op.get_input_type().get_size() == ValSize);
 		const generic_hashtable_impl<KeyType, ValSize> &gtable1
 			= dynamic_cast<const generic_hashtable_impl<KeyType, ValSize> &>(
 					gtable);
@@ -93,9 +100,12 @@ public:
 		for (auto it = gtable1.table.begin(); it != gtable1.table.end(); it++) {
 			auto ret = table.insert(std::pair<KeyType, ValType>(it->first,
 						it->second));
-			if (!ret.second)
-				op.runCombine(1, &it->second, &ret.first->second,
-						&ret.first->second);
+			if (!ret.second) {
+				ValType tmp_vals[2];
+				tmp_vals[0] = ret.first->second;
+				tmp_vals[1] = it->second;
+				op.runCombine(2, tmp_vals, &ret.first->second);
+			}
 		}
 	}
 
