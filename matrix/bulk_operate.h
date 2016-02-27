@@ -26,6 +26,8 @@
 #include <vector>
 #include <cmath>
 
+#include "common.h"
+
 #include "generic_type.h"
 
 namespace fm
@@ -163,15 +165,70 @@ public:
 template<class OpType, class LeftType, class RightType, class ResType>
 class bulk_operate_impl: public bulk_operate
 {
+	static const size_t BULK_LEN = 1024;
 	OpType op;
+
+	void runAA_short(size_t num_eles, const LeftType *left_arr,
+			const RightType *right_arr, ResType *output_arr) const {
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = op(left_arr[i], right_arr[i]);
+	}
+	void runAA_fixed(const LeftType *left_arr,
+			const RightType *right_arr, ResType *output_arr) const {
+		for (size_t i = 0; i < BULK_LEN; i++)
+			output_arr[i] = op(left_arr[i], right_arr[i]);
+	}
+
+	void runAE_short(size_t num_eles, const LeftType *left_arr,
+			const RightType &entry, ResType *output_arr) const {
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = op(left_arr[i], entry);
+	}
+	void runAE_fixed(const LeftType *left_arr, const RightType &entry,
+			ResType *output_arr) const {
+		for (size_t i = 0; i < BULK_LEN; i++)
+			output_arr[i] = op(left_arr[i], entry);
+	}
+
+	void runEA_short(size_t num_eles, const LeftType &entry,
+			const RightType *right_arr, ResType *output_arr) const {
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = op(entry, right_arr[i]);
+	}
+	void runEA_fixed(const LeftType &entry, const RightType *right_arr,
+			ResType *output_arr) const {
+		for (size_t i = 0; i < BULK_LEN; i++)
+			output_arr[i] = op(entry, right_arr[i]);
+	}
+
+	ResType runAgg_short(size_t num_eles, const LeftType *left_arr,
+			const ResType &orig) const {
+		ResType res = orig;
+		for (size_t i = 0; i < num_eles; i++)
+			res = op(left_arr[i], res);
+		return res;
+	}
+	ResType runAgg_fixed(const LeftType *left_arr, const ResType &orig) const {
+		ResType res = orig;
+		for (size_t i = 0; i < BULK_LEN; i++)
+			res = op(left_arr[i], res);
+		return res;
+	}
 public:
 	virtual void runAA(size_t num_eles, const void *left_arr1,
 			const void *right_arr1, void *output_arr1) const {
 		const LeftType *left_arr = (const LeftType *) left_arr1;
 		const RightType *right_arr = (const RightType *) right_arr1;
 		ResType *output_arr = (ResType *) output_arr1;
-		for (size_t i = 0; i < num_eles; i++)
-			output_arr[i] = op(left_arr[i], right_arr[i]);
+		if (num_eles < BULK_LEN)
+			runAA_short(num_eles, left_arr, right_arr, output_arr);
+		else {
+			size_t num_eles_align = ROUND(num_eles, BULK_LEN);
+			for (size_t i = 0; i < num_eles_align; i += BULK_LEN)
+				runAA_fixed(left_arr + i, right_arr + i, output_arr + i);
+			runAA_short(num_eles - num_eles_align, left_arr + num_eles_align,
+					right_arr + num_eles_align, output_arr + num_eles_align);
+		}
 	}
 
 	virtual void runAE(size_t num_eles, const void *left_arr1,
@@ -179,8 +236,15 @@ public:
 		const LeftType *left_arr = (const LeftType *) left_arr1;
 		ResType *output_arr = (ResType *) output_arr1;
 		RightType entry = *(const RightType *) right;
-		for (size_t i = 0; i < num_eles; i++)
-			output_arr[i] = op(left_arr[i], entry);
+		if (num_eles < BULK_LEN)
+			runAE_short(num_eles, left_arr, entry, output_arr);
+		else {
+			size_t num_eles_align = ROUND(num_eles, BULK_LEN);
+			for (size_t i = 0; i < num_eles_align; i += BULK_LEN)
+				runAE_fixed(left_arr + i, entry, output_arr + i);
+			runAE_short(num_eles - num_eles_align, left_arr + num_eles_align,
+					entry, output_arr + num_eles_align);
+		}
 	}
 
 	virtual void runEA(size_t num_eles, const void *left,
@@ -188,17 +252,30 @@ public:
 		LeftType entry = *(const LeftType *) left;
 		const RightType *right_arr = (const RightType *) right_arr1;
 		ResType *output_arr = (ResType *) output_arr1;
-		for (size_t i = 0; i < num_eles; i++)
-			output_arr[i] = op(entry, right_arr[i]);
+		if (num_eles < BULK_LEN)
+			runEA_short(num_eles, entry, right_arr, output_arr);
+		else {
+			size_t num_eles_align = ROUND(num_eles, BULK_LEN);
+			for (size_t i = 0; i < num_eles_align; i += BULK_LEN)
+				runEA_fixed(entry, right_arr + i, output_arr + i);
+			runEA_short(num_eles - num_eles_align, entry,
+					right_arr + num_eles_align, output_arr + num_eles_align);
+		}
 	}
 
 	virtual void runAgg(size_t num_eles, const void *left_arr1,
 			void *output) const {
 		const LeftType *left_arr = (const LeftType *) left_arr1;
-		ResType res = left_arr[0];
-		for (size_t i = 1; i < num_eles; i++)
-			res = op(left_arr[i], res);
-		*(ResType *) output = res;
+		ResType res = OpType::get_agg_init();
+		if (num_eles < BULK_LEN)
+			*(ResType *) output = runAgg_short(num_eles, left_arr, res);
+		else {
+			size_t num_eles_align = ROUND(num_eles, BULK_LEN);
+			for (size_t i = 0; i < num_eles_align; i += BULK_LEN)
+				res = runAgg_fixed(left_arr + i, res);
+			*(ResType *) output = runAgg_short(num_eles - num_eles_align,
+					left_arr + num_eles_align, res);
+		}
 	}
 
 	virtual const scalar_type &get_left_type() const;
@@ -426,6 +503,9 @@ struct multiply
 	static std::string get_name() {
 		return "*";
 	}
+	static ResType1 get_agg_init() {
+		return 1;
+	}
 	ResType1 operator()(const LeftType1 &e1, const RightType1 &e2) const {
 		return e1 * e2;
 	}
@@ -436,6 +516,9 @@ struct multiply<double, double, double>
 {
 	static std::string get_name() {
 		return "*";
+	}
+	static double get_agg_init() {
+		return 1;
 	}
 	double operator()(const double &e1, const double &e2) const {
 		long double first = e1;
@@ -450,6 +533,9 @@ struct min
 	static std::string get_name() {
 		return "min";
 	}
+	static ResType get_agg_init() {
+		return std::numeric_limits<ResType>::max();
+	}
 	ResType operator()(const LeftType &e1, const RightType &e2) const {
 		return std::min(e1, e2);
 	}
@@ -460,6 +546,9 @@ struct min<double, double, double>
 {
 	static std::string get_name() {
 		return "min";
+	}
+	static double get_agg_init() {
+		return std::numeric_limits<double>::max();
 	}
 	double operator()(const double &e1, const double &e2) const {
 		if (std::isnan(e1))
@@ -477,6 +566,9 @@ struct max
 	static std::string get_name() {
 		return "max";
 	}
+	static ResType get_agg_init() {
+		return std::numeric_limits<ResType>::min();
+	}
 	ResType operator()(const LeftType &e1, const RightType &e2) const {
 		return std::max(e1, e2);
 	}
@@ -488,7 +580,31 @@ struct max<double, double, double>
 	static std::string get_name() {
 		return "max";
 	}
+	static double get_agg_init() {
+		// We need to define the minimum float-point differently.
+		return -std::numeric_limits<double>::max();
+	}
 	double operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1))
+			return e1;
+		else if (std::isnan(e2))
+			return e2;
+		else
+			return std::max(e1, e2);
+	}
+};
+
+template<>
+struct max<float, float, float>
+{
+	static std::string get_name() {
+		return "max";
+	}
+	static float get_agg_init() {
+		// We need to define the minimum float-point differently.
+		return -std::numeric_limits<float>::max();
+	}
+	float operator()(const float &e1, const float &e2) const {
 		if (std::isnan(e1))
 			return e1;
 		else if (std::isnan(e2))
@@ -508,6 +624,9 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "+";
 		}
+		static ResType get_agg_init() {
+			return 0;
+		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 + e2;
 		}
@@ -516,6 +635,11 @@ class basic_ops_impl: public basic_ops
 	struct sub {
 		static std::string get_name() {
 			return "-";
+		}
+		static ResType get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return 0;
 		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 - e2;
@@ -528,6 +652,11 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "/";
 		}
+		static ResType get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return 0;
+		}
 		double operator()(const LeftType &e1, const RightType &e2) const {
 			double d1 = e1;
 			double d2 = e2;
@@ -538,6 +667,11 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "/";
 		}
+		static float get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return 0;
+		}
 		float operator()(const float &e1, const float &e2) const {
 			return e1 / e2;
 		}
@@ -546,6 +680,11 @@ class basic_ops_impl: public basic_ops
 	struct pow {
 		static std::string get_name() {
 			return "pow";
+		}
+		static ResType get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return 0;
 		}
 		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return (ResType) std::pow(e1, e2);
@@ -556,6 +695,11 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "==";
 		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 == e2;
 		}
@@ -564,6 +708,11 @@ class basic_ops_impl: public basic_ops
 	struct neq {
 		static std::string get_name() {
 			return "!=";
+		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
 		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 != e2;
@@ -574,6 +723,11 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return ">";
 		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 > e2;
 		}
@@ -582,6 +736,11 @@ class basic_ops_impl: public basic_ops
 	struct ge {
 		static std::string get_name() {
 			return ">=";
+		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
 		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 >= e2;
@@ -592,6 +751,11 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "<";
 		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 < e2;
 		}
@@ -600,6 +764,11 @@ class basic_ops_impl: public basic_ops
 	struct le {
 		static std::string get_name() {
 			return "<=";
+		}
+		static bool get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return false;
 		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 <= e2;
@@ -610,6 +779,9 @@ class basic_ops_impl: public basic_ops
 		static std::string get_name() {
 			return "||";
 		}
+		static bool get_agg_init() {
+			return false;
+		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 || e2;
 		}
@@ -618,6 +790,9 @@ class basic_ops_impl: public basic_ops
 	struct logic_and {
 		static std::string get_name() {
 			return "&&";
+		}
+		static bool get_agg_init() {
+			return true;
 		}
 		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 && e2;
