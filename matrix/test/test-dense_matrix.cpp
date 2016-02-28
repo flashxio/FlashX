@@ -25,36 +25,68 @@ public:
 void test_mapply()
 {
 	struct timeval start, end;
-	int num_nodes = matrix_conf.get_num_nodes();
-	printf("mapply on %d nodes\n", num_nodes);
-	gettimeofday(&start, NULL);
-	detail::matrix_store::ptr tmp = detail::matrix_store::create(
-			length, 1, matrix_layout_t::L_ROW,
-			get_scalar_type<float>(), num_nodes, true);
-	detail::matrix_store::ptr tmp1 = detail::matrix_store::create(
-			length, 1, matrix_layout_t::L_ROW,
-			get_scalar_type<float>(), num_nodes, true);
-	tmp->set_data(mat_init<int>());
-	printf("init vec1 of %ld eles\n", tmp->get_num_rows());
-	tmp1->set_data(mat_init<float>());
-	printf("init vec2 of %ld eles\n", tmp1->get_num_rows());
-	gettimeofday(&end, NULL);
-	printf("init takes %.3f seconds\n", time_diff(start, end));
+	typedef size_t ele_type;
+	size_t height = 1024L * 1024 * 1024;
+	size_t width = 8;
 
-	start = end;
-	dense_matrix::ptr pr = dense_matrix::create(tmp);
-	dense_matrix::ptr pr1 = dense_matrix::create(tmp1);
-	pr = pr->multiply_scalar<float>(0.85);
-	pr = pr->add_scalar<float>(0.15 / length);
-	dense_matrix::ptr diff = pr1->minus(*pr);
-	diff = diff->abs();
-	gettimeofday(&end, NULL);
-	printf("virtual computation takes %.3f seconds\n", time_diff(start, end));
-	dense_matrix::ptr comp = diff->lt_scalar<float>(0.00001);
-	scalar_variable::ptr convg = comp->sum();
-	assert(convg->get_type() == get_scalar_type<size_t>());
-	gettimeofday(&end, NULL);
-	printf("test takes %.3f seconds\n", time_diff(start, end));
+	dense_matrix::ptr mat1 = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	dense_matrix::ptr mat2 = dense_matrix::create(height, width,
+			matrix_layout_t::L_ROW, get_scalar_type<ele_type>(),
+			mat_init<ele_type>(), matrix_conf.get_num_nodes());
+	bulk_operate::const_ptr min
+		= bulk_operate::conv2ptr(*mat1->get_type().get_basic_ops().get_op(basic_ops::op_idx::MIN));
+	bulk_operate::const_ptr max
+		= bulk_operate::conv2ptr(*mat1->get_type().get_basic_ops().get_op(basic_ops::op_idx::MAX));
+	bulk_operate::const_ptr add
+		= bulk_operate::conv2ptr(*mat1->get_type().get_basic_ops().get_op(basic_ops::op_idx::ADD));
+	bulk_operate::const_ptr sub
+		= bulk_operate::conv2ptr(*mat1->get_type().get_basic_ops().get_op(basic_ops::op_idx::SUB));
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res1 = mat1->mapply2(*mat2, min);
+		res1->materialize_self();
+		dense_matrix::ptr res2 = mat1->mapply2(*mat2, max);
+		res2->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("separate min+max takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res1 = mat1->mapply2(*mat2, min);
+		dense_matrix::ptr res2 = mat1->mapply2(*mat2, max);
+		std::vector<dense_matrix::ptr> ress(2);
+		ress[0] = res1;
+		ress[1] = res2;
+		materialize(ress);
+		gettimeofday(&end, NULL);
+		printf("min+max takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res1 = mat1->mapply2(*mat2, add);
+		res1->materialize_self();
+		dense_matrix::ptr res2 = mat1->mapply2(*mat2, sub);
+		res2->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("separate add+sub takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res1 = mat1->mapply2(*mat2, add);
+		dense_matrix::ptr res2 = mat1->mapply2(*mat2, sub);
+		std::vector<dense_matrix::ptr> ress(2);
+		ress[0] = res1;
+		ress[1] = res2;
+		materialize(ress);
+		gettimeofday(&end, NULL);
+		printf("add+sub takes %.3f seconds\n", time_diff(start, end));
+	}
 }
 
 void test_conv_layout()
