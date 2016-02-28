@@ -250,6 +250,32 @@ void io_worker_task::run()
 	}
 }
 
+global_counter::global_counter()
+{
+	counts.resize(mem_thread_pool::get_global_num_threads());
+	reset();
+}
+
+void global_counter::inc(size_t val)
+{
+	int id = mem_thread_pool::get_curr_thread_id();
+	counts[id].count += val;
+}
+
+void global_counter::reset()
+{
+	for (size_t i = 0; i < counts.size(); i++)
+		counts[i].count = 0;
+}
+
+size_t global_counter::get() const
+{
+	size_t tot = 0;
+	for (size_t i = 0; i < counts.size(); i++)
+		tot += counts[i].count;
+	return tot;
+}
+
 }
 
 }

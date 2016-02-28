@@ -150,6 +150,26 @@ public:
 	virtual void run();
 };
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 32
+#endif
+
+class global_counter
+{
+	union count_t {
+		size_t count;
+		// The cache line size to avoid false sharing.
+		char data[CACHE_LINE_SIZE];
+	};
+	std::vector<count_t> counts;
+public:
+	global_counter();
+
+	void inc(size_t val);
+	void reset();
+	size_t get() const;
+};
+
 }
 
 }
