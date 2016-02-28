@@ -38,9 +38,8 @@ class materialized_mapply_tall_store
 	std::pair<size_t, size_t> portion_size;
 	// The buffer matrix that keep the full materialization result.
 	matrix_store::ptr res_buf;
-	std::vector<int> portion_avails;
-	// The number of rows/columns that have data available.
-	std::atomic<size_t> num_res_avails;
+	// The number of elements that been written.
+	global_counter num_res_avails;
 public:
 	typedef std::shared_ptr<materialized_mapply_tall_store> ptr;
 
@@ -77,11 +76,20 @@ public:
 	}
 
 	bool is_materialized() const {
-		return num_res_avails == portion_avails.size();
+		size_t num_eles = res_buf->get_num_rows() * res_buf->get_num_cols();
+		size_t count = num_res_avails.get();
+		assert(num_eles >= count);
+		return count == num_eles;
 	}
 
 	void write_portion_async(local_matrix_store::const_ptr portion,
 			size_t start_row, size_t start_col);
+
+	local_matrix_store::ptr get_portion(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols) {
+		num_res_avails.inc(num_rows * num_cols);
+		return res_buf->get_portion(start_row, start_col, num_rows, num_cols);
+	}
 
 	void print_state() const {
 		if (is_materialized())
@@ -89,7 +97,7 @@ public:
 		else
 			BOOST_LOG_TRIVIAL(info) << boost::format(
 					"there are %1% portions materialized")
-				% num_res_avails.load();
+				% num_res_avails.get();
 	}
 };
 
@@ -109,8 +117,6 @@ materialized_mapply_tall_store::materialized_mapply_tall_store(
 	res_buf = matrix_store::create(num_rows, num_cols, layout, type,
 			num_nodes, in_mem);
 	portion_size = res_buf->get_portion_size();
-	portion_avails.resize(div_ceil(num_rows, portion_size.first));
-	num_res_avails = 0;
 	tall_res = res_buf;
 	wide_res = res_buf->transpose();
 }
@@ -122,9 +128,6 @@ materialized_mapply_tall_store::materialized_mapply_tall_store(
 	assert(!buf->is_wide());
 	res_buf = buf;
 	portion_size = res_buf->get_portion_size();
-	portion_avails.resize(div_ceil(res_buf->get_num_rows(),
-				portion_size.first));
-	num_res_avails = 0;
 	tall_res = res_buf;
 	wide_res = res_buf->transpose();
 }
@@ -141,37 +144,30 @@ void materialized_mapply_tall_store::set_materialized(matrix_store::const_ptr re
 	}
 	portion_size = tall_res->get_portion_size();
 	res_buf = NULL;
-	portion_avails.clear();
-	num_res_avails = 0;
+	num_res_avails.reset();
 }
 
 void materialized_mapply_tall_store::write_portion_async(
 		local_matrix_store::const_ptr portion, size_t start_row,
 		size_t start_col)
 {
-	// It's only true if the portion isn't the last one.
-	if (portion->get_global_start_row()
-			+ portion_size.first <= res_buf->get_num_rows())
-		assert(portion->get_num_rows() == portion_size.first);
 	assert(portion->get_num_cols() == portion_size.second);
-	// If the portion has been materialized, we don't need to do anything.
-	if (portion_avails[start_row / portion_size.first] == 0) {
-		res_buf->write_portion_async(portion, start_row, start_col);
-		num_res_avails++;
-		portion_avails[start_row / portion_size.first] = 1;
-	}
+	res_buf->write_portion_async(portion, start_row, start_col);
+	num_res_avails.inc(portion->get_num_rows() * portion->get_num_cols());
 }
 
 namespace
 {
 
-size_t SUB_CHUNK_SIZE = 4 * 1024;
+size_t SUB_CHUNK_SIZE = 1024;
 
 class mapply_store
 {
 	materialize_level mater_level;
 	std::vector<local_matrix_store::const_ptr> ins;
 	const portion_mapply_op &op;
+	// This is the global matrix store that keeps the materialized result.
+	materialized_mapply_tall_store *global_res;
 	// This stores the materialized result for the whole portion.
 	// If it exists, we always get data from it.
 	local_matrix_store::ptr whole_res;
@@ -204,11 +200,13 @@ class mapply_store
 	}
 public:
 	mapply_store(const std::vector<local_matrix_store::const_ptr> &ins,
-			const portion_mapply_op &_op, local_matrix_store *lstore,
-			materialize_level mater_level): op(_op) {
+			const portion_mapply_op &_op, materialized_mapply_tall_store *global_res,
+			local_matrix_store *lstore, materialize_level mater_level): op(_op) {
+		this->global_res = global_res;
 		this->mater_level = mater_level;
 		this->lstore = lstore;
 		this->ins = ins;
+		assert(ins.size() > 0);
 
 		is_wide = lstore->is_wide();
 		orig_global_start_row = lstore->get_global_start_row();
@@ -239,7 +237,6 @@ public:
 				&& is_right_part(*res_bufs[0])) {
 			ret = res_bufs[0]->get_raw_arr();
 		}
-		assert(ret);
 		return ret;
 	}
 
@@ -325,7 +322,27 @@ void mapply_store::materialize_whole()
 	if (whole_res)
 		return;
 
-	if (lstore->store_layout() == matrix_layout_t::L_COL) {
+	// If we need full materialization, we need to keep the materialized result.
+	// We only do it if the materialized result is stored in memory.
+	// As such, we get the portion from the materialized matrix store directly.
+	if (mater_level == materialize_level::MATER_FULL && global_res
+			&& global_res->is_in_mem()) {
+		// TODO we need to check is_wide more explicitly.
+		// is_wide in the local store doesn't necessarily mean is_wide in
+		// the global matrix store.
+		if (is_wide) {
+			local_matrix_store::ptr tmp = global_res->get_portion(
+					lstore->get_global_start_col(), lstore->get_global_start_row(),
+					lstore->get_num_cols(), lstore->get_num_rows());
+			whole_res = std::static_pointer_cast<local_matrix_store>(
+					tmp->transpose());
+		}
+		else
+			whole_res = global_res->get_portion(lstore->get_global_start_row(),
+					lstore->get_global_start_col(), lstore->get_num_rows(),
+					lstore->get_num_cols());
+	}
+	else if (lstore->store_layout() == matrix_layout_t::L_COL) {
 		local_buf_col_matrix_store *tmp = new local_buf_col_matrix_store(
 				lstore->get_global_start_row(),
 				lstore->get_global_start_col(), lstore->get_num_rows(),
@@ -441,7 +458,27 @@ void mapply_store::materialize() const
 
 	// Materialize the part.
 	local_matrix_store::ptr part;
-	if (lstore->store_layout() == matrix_layout_t::L_COL)
+	// If we need full materialization, we need to keep the materialized result.
+	// We only do it if the materialized result is stored in memory.
+	// As such, we get the portion from the materialized matrix store directly.
+	if (mater_level == materialize_level::MATER_FULL && global_res
+			&& global_res->is_in_mem()) {
+		// TODO we need to check is_wide more explicitly.
+		// is_wide in the local store doesn't necessarily mean is_wide in
+		// the global matrix store.
+		if (is_wide) {
+			local_matrix_store::ptr tmp = global_res->get_portion(
+					lstore->get_global_start_col(), lstore->get_global_start_row(),
+					lstore->get_num_cols(), lstore->get_num_rows());
+			part = std::static_pointer_cast<local_matrix_store>(
+					tmp->transpose());
+		}
+		else
+			part = global_res->get_portion(lstore->get_global_start_row(),
+					lstore->get_global_start_col(), lstore->get_num_rows(),
+					lstore->get_num_cols());
+	}
+	else if (lstore->store_layout() == matrix_layout_t::L_COL)
 		part = local_matrix_store::ptr(
 				new local_buf_col_matrix_store(lstore->get_global_start_row(),
 					lstore->get_global_start_col(), lstore->get_num_rows(),
@@ -555,12 +592,13 @@ public:
 	lmapply_col_matrix_store(materialize_level mater_level,
 			const std::vector<local_matrix_store::const_ptr> &ins,
 			const portion_mapply_op &op,
+			materialized_mapply_tall_store *res,
 			collect_portion_compute::ptr collect_compute,
 			off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_col_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id),
-			store(ins, op, this, mater_level) {
+			store(ins, op, res, this, mater_level) {
 		this->collect_compute = collect_compute;
 	}
 
@@ -582,22 +620,19 @@ public:
 
 	using lvirtual_col_matrix_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return store.get_raw_arr();
 	}
 
 	using lvirtual_col_matrix_store::transpose;
 	virtual matrix_store::const_ptr transpose() const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return store.get_materialized_res().transpose();
 	}
 
 	using lvirtual_col_matrix_store::get_col;
 	virtual const char *get_col(size_t col) const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return static_cast<const local_col_matrix_store &>(
 				store.get_materialized_res()).get_col(col);
 	}
@@ -610,6 +645,10 @@ public:
 		return store.get_whole_res().get_portion(local_start_row,
 				local_start_col, num_rows, num_cols);
 	}
+	virtual void materialize_self() const {
+		if (!store.is_materialized())
+			store.materialize();
+	}
 };
 
 class lmapply_row_matrix_store: public lvirtual_row_matrix_store
@@ -620,12 +659,13 @@ public:
 	lmapply_row_matrix_store(materialize_level mater_level,
 			const std::vector<local_matrix_store::const_ptr> &ins,
 			const portion_mapply_op &op,
+			materialized_mapply_tall_store *res,
 			collect_portion_compute::ptr collect_compute,
 			off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_row_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id),
-			store(ins, op, this, mater_level) {
+			store(ins, op, res, this, mater_level) {
 		this->collect_compute = collect_compute;
 	}
 
@@ -647,22 +687,19 @@ public:
 
 	using lvirtual_row_matrix_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return store.get_raw_arr();
 	}
 
 	using lvirtual_row_matrix_store::transpose;
 	virtual matrix_store::const_ptr transpose() const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return store.get_materialized_res().transpose();
 	}
 
 	using lvirtual_row_matrix_store::get_row;
 	virtual const char *get_row(size_t row) const {
-		if (!store.is_materialized())
-			store.materialize();
+		materialize_self();
 		return static_cast<const local_row_matrix_store &>(
 				store.get_materialized_res()).get_row(row);
 	}
@@ -674,6 +711,10 @@ public:
 		store.materialize();
 		return store.get_whole_res().get_portion(local_start_row,
 				local_start_col, num_rows, num_cols);
+	}
+	virtual void materialize_self() const {
+		if (!store.is_materialized())
+			store.materialize();
 	}
 };
 
@@ -866,29 +907,16 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 
 	if (store_layout() == matrix_layout_t::L_ROW)
 		ret = local_matrix_store::const_ptr(new lmapply_row_matrix_store(
-					get_materialize_level(), parts, *op, NULL, start_row,
-					start_col, num_rows, num_cols, get_type(),
+					get_materialize_level(), parts, *op, res.get(), NULL,
+					start_row, start_col, num_rows, num_cols, get_type(),
 					parts.front()->get_node_id()));
 	else
 		ret = local_matrix_store::const_ptr(new lmapply_col_matrix_store(
-					get_materialize_level(), parts, *op, NULL, start_row,
-					start_col, num_rows, num_cols, get_type(),
+					get_materialize_level(), parts, *op, res.get(), NULL,
+					start_row, start_col, num_rows, num_cols, get_type(),
 					parts.front()->get_node_id()));
 	if (cache_portion)
 		local_mem_buffer::cache_portion(data_id, ret);
-
-	// If we need full materialization, we need to keep the materialized result.
-	if (get_materialize_level() == materialize_level::MATER_FULL) {
-		assert(res);
-		if (is_wide()) {
-			local_matrix_store::const_ptr lstore
-				= std::static_pointer_cast<const local_matrix_store>(
-						ret->transpose());
-			res->write_portion_async(lstore, start_col, start_row);
-		}
-		else
-			res->write_portion_async(ret, start_row, start_col);
-	}
 	return ret;
 }
 
@@ -1026,14 +1054,14 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	local_matrix_store::ptr ret;
 	if (store_layout() == matrix_layout_t::L_ROW)
 		ret = local_matrix_store::ptr(new lmapply_row_matrix_store(
-					get_materialize_level(), parts, *op, collect_compute,
-					start_row, start_col, num_rows, num_cols, get_type(),
-					parts.front()->get_node_id()));
+					get_materialize_level(), parts, *op, res.get(),
+					collect_compute, start_row, start_col, num_rows,
+					num_cols, get_type(), parts.front()->get_node_id()));
 	else
 		ret = local_matrix_store::ptr(new lmapply_col_matrix_store(
-					get_materialize_level(), parts, *op, collect_compute,
-					start_row, start_col, num_rows, num_cols, get_type(),
-					parts.front()->get_node_id()));
+					get_materialize_level(), parts, *op, res.get(),
+					collect_compute, start_row, start_col, num_rows,
+					num_cols, get_type(), parts.front()->get_node_id()));
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
 	if (cache_portion)
