@@ -250,27 +250,6 @@ const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val
 	return op;
 }
 
-template<class T>
-const basic_uops &scalar_type_impl<T>::get_basic_uops() const
-{
-	static basic_uops_impl<T, T> uops;
-	return uops;
-}
-
-template<class T>
-const basic_ops &scalar_type_impl<T>::get_basic_ops() const
-{
-	static basic_ops_impl<T, T, T> ops;
-	return ops;
-}
-
-template<class T>
-const agg_ops &scalar_type_impl<T>::get_agg_ops() const
-{
-	static agg_ops_impl<T, T> aops;
-	return aops;
-}
-
 namespace
 {
 
