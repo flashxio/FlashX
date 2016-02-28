@@ -46,26 +46,18 @@ void mem_matrix_store::write_portion_async(local_matrix_store::const_ptr portion
 			off_t start_row, off_t start_col)
 {
 	if (is_wide()) {
-		size_t portion_size = get_portion_size().second;
-		assert(start_col % portion_size == 0);
 		assert(start_row == 0);
 		assert(portion->get_num_rows() == get_num_rows());
-		assert(portion->get_num_cols() <= portion_size);
-		size_t num_cols = std::min(portion_size, get_num_cols() - start_col);
 		local_matrix_store::ptr lstore = get_portion(start_row,
-				start_col, portion->get_num_rows(), num_cols);
+				start_col, portion->get_num_rows(), portion->get_num_cols());
 		assert(lstore);
 		lstore->copy_from(*portion);
 	}
 	else {
-		size_t portion_size = get_portion_size().first;
-		assert(start_row % portion_size == 0);
 		assert(start_col == 0);
 		assert(portion->get_num_cols() == get_num_cols());
-		assert(portion->get_num_rows() <= portion_size);
-		size_t num_rows = std::min(portion_size, get_num_rows() - start_row);
 		local_matrix_store::ptr lstore = get_portion(start_row, start_col,
-				num_rows, portion->get_num_cols());
+				portion->get_num_rows(), portion->get_num_cols());
 		assert(lstore);
 		lstore->copy_from(*portion);
 	}
