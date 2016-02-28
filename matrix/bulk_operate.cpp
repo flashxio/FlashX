@@ -136,9 +136,27 @@ class bulk_operate_impl: public bulk_operate
 		return res;
 	}
 	ResType runAgg_fixed(const LeftType *left_arr, const ResType &orig) const {
+		// GCC cannot optimize reduction well for many operations.
+		// Because some optimizations may change the result of the reduction.
+		// For example, float-point operations aren't strictly commutative or
+		// associative; even though min/max is commutative and associative
+		// semantically, GCC cannot discover this property by default.
+		// Arranging the operation as below helps GCC apply more optimizations
+		// and vectorize operations.
+		// NOTE: such arranging will change the result of float-point operations
+		// slightly. We may not care because parallelization changes the result
+		// anyway.
+		const size_t tmp_len = 8;
+		ResType tmp[tmp_len];
+		for (size_t i = 0; i < tmp_len; i++)
+			tmp[i] = OpType::get_agg_init();
+		for (size_t i = 0; i < BULK_LEN; i += tmp_len) {
+			for (size_t j = 0; j < tmp_len; j++)
+				tmp[j] = op(left_arr[i + j], tmp[j]);
+		}
 		ResType res = orig;
-		for (size_t i = 0; i < BULK_LEN; i++)
-			res = op(left_arr[i], res);
+		for (size_t i = 0; i < tmp_len; i++)
+			res = op(tmp[i], res);
 		return res;
 	}
 public:
