@@ -39,4 +39,4 @@ clean:
 	rm -f fg2fm
 	rm -f *.o
 	rm -f *.d
-	rm *~
+	rm -f *~
