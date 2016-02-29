@@ -599,6 +599,30 @@ void test_agg()
 		gettimeofday(&end, NULL);
 		printf("range takes %.3f seconds\n", time_diff(start, end));
 	}
+
+	bulk_operate::const_ptr add
+		= bulk_operate::conv2ptr(*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::ADD));
+	bulk_operate::const_ptr sub
+		= bulk_operate::conv2ptr(*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::SUB));
+	agg_operate::const_ptr add_agg = agg_operate::create(add);
+	agg_operate::const_ptr sub_agg = agg_operate::create(sub);
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		mat->aggregate(add);
+		gettimeofday(&end, NULL);
+		printf("sum takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		std::vector<dense_matrix::ptr> res(2);
+		res[0] = mat->aggregate(matrix_margin::BOTH, add_agg);
+		res[1] = mat->aggregate(matrix_margin::BOTH, sub_agg);
+		materialize(res);
+		gettimeofday(&end, NULL);
+		printf("add+sub takes %.3f seconds\n", time_diff(start, end));
+	}
 }
 
 void test_agg_dmultiply(matrix_layout_t layout)
