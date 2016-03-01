@@ -1205,6 +1205,11 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 		return R_NilValue;
 	}
 	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+	// If we aggregate on the long dimension.
+	if ((m->is_wide() && margin == matrix_margin::MAR_ROW)
+			|| (!m->is_wide() && margin == matrix_margin::MAR_COL))
+		res->materialize_self();
+
 	if (res == NULL) {
 		fprintf(stderr, "can't aggregate on the matrix\n");
 		return R_NilValue;
