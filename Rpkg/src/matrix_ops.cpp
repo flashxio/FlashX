@@ -362,13 +362,9 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
-		if (orig == NULL)
-			t_out[0] = num_eles;
-		else
-			t_out[0] = (*(const int *) orig) + num_eles;
+		t_out[0] = num_eles;
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -402,8 +398,7 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
 		const T *t_in = (const T *) in;
 		if (num_eles == 0)
@@ -450,8 +445,7 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
 		const T *t_in = (const T *) in;
 		if (num_eles == 0)
@@ -510,8 +504,7 @@ public:
 			out[i] = (v - arr2[i]) * (v - arr2[i]);
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		throw unsupported_exception();
 	}
 

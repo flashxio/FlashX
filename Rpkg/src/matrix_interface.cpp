@@ -1888,8 +1888,7 @@ public:
 	 * This performs aggregation on the input array, combines the agg result
 	 * with the original agg result and stores the result on output.
 	 */
-	virtual void runAgg(size_t num_eles, const void *left_arr, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *left_arr, void *output) const {
 		throw unsupported_exception("ifelse2_op doesn't support runAgg");
 	}
 
