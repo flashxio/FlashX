@@ -26,19 +26,6 @@ using namespace fm;
 namespace fmr
 {
 
-/*
- * R has only two data types in matrix multiplication: integer and numeric.
- * So we only need to predefine a small number of basic operations with
- * different types.
- */
-
-static basic_ops_impl<int, int, int> R_basic_ops_II;
-static basic_ops_impl<double, double, double> R_basic_ops_DD;
-static basic_ops_impl<bool, bool, bool> R_basic_ops_BB;
-
-static basic_uops_impl<int, int> R_basic_uops_I;
-static basic_uops_impl<double, double> R_basic_uops_D;
-
 class generic_bulk_operate
 {
 	std::string name;
@@ -138,13 +125,13 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 
 	bulk_operate::const_ptr op;
 	if (bo_idx < basic_ops::op_idx::NUM_OPS) {
-		basic_ops *ops = NULL;
+		const basic_ops *ops = NULL;
 		if (type == prim_type::P_DOUBLE)
-			ops = &R_basic_ops_DD;
+			ops = &get_scalar_type<double>().get_basic_ops();
 		else if (type == prim_type::P_INTEGER)
-			ops = &R_basic_ops_II;
+			ops = &get_scalar_type<int>().get_basic_ops();
 		else if (type == prim_type::P_BOOL)
-			ops = &R_basic_ops_BB;
+			ops = &get_scalar_type<bool>().get_basic_ops();
 		else {
 			fprintf(stderr, "wrong type\n");
 			return bulk_operate::const_ptr();
@@ -214,11 +201,11 @@ bulk_uoperate::const_ptr get_uop(SEXP pfun, prim_type type)
 
 	bulk_uoperate::const_ptr op;
 	if (bo_idx < basic_uops::op_idx::NUM_OPS) {
-		basic_uops *ops = NULL;
+		const basic_uops *ops = NULL;
 		if (type == prim_type::P_DOUBLE)
-			ops = &R_basic_uops_D;
+			ops = &get_scalar_type<double>().get_basic_uops();
 		else if (type == prim_type::P_INTEGER)
-			ops = &R_basic_uops_I;
+			ops = &get_scalar_type<int>().get_basic_uops();
 		else {
 			fprintf(stderr, "wrong type\n");
 			return NULL;
