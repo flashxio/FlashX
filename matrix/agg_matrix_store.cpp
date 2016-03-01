@@ -162,7 +162,17 @@ public:
 
 	virtual std::string to_string(
 			const std::vector<matrix_store::const_ptr> &mats) const {
-		return std::string();
+		assert(mats.size() > 0);
+		std::string name;
+		if (margin == matrix_margin::MAR_ROW)
+			name = "agg_row";
+		else
+			name = "agg_col";
+		name += op->get_agg().get_name() + "(" + mats[0]->get_name();
+		for (size_t i = 1; i < mats.size(); i++)
+			name += ", " + mats[i]->get_name();
+		name += ")";
+		return name;
 	}
 };
 
