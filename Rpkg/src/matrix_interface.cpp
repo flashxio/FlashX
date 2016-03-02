@@ -1408,26 +1408,6 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 	}
 }
 
-RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
-{
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "We don't support get rows from a sparse matrix yet\n");
-		return R_NilValue;
-	}
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	Rcpp::IntegerVector tmp(pidxs);
-	std::vector<off_t> idxs(tmp.begin(), tmp.end());
-	dense_matrix::ptr res = mat->get_rows(idxs);
-	if (res == NULL) {
-		fprintf(stderr, "can't get rows from the matrix\n");
-		return R_NilValue;
-	}
-	Rcpp::List ret = create_FMR_matrix(res, "");
-	Rcpp::S4 rcpp_mat(pmat);
-	ret["ele_type"] = rcpp_mat.slot("ele_type");
-	return ret;
-}
-
 RcppExport SEXP R_FM_as_vector(SEXP pmat)
 {
 	if (is_sparse(pmat)) {
