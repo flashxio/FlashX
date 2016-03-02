@@ -2176,6 +2176,12 @@ vector::ptr dense_matrix::get_row(off_t idx) const
 
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
+	for (size_t i = 0; i < idxs.size(); i++)
+		if (idxs[i] < 0 || idxs[i] >= get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
+			return dense_matrix::ptr();
+		}
+
 	detail::matrix_store::const_ptr ret = get_data().get_cols(idxs);
 	if (ret)
 		return dense_matrix::ptr(new dense_matrix(ret));
@@ -2185,6 +2191,12 @@ dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 
 dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
+	for (size_t i = 0; i < idxs.size(); i++)
+		if (idxs[i] < 0 || idxs[i] >= get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
+			return dense_matrix::ptr();
+		}
+
 	detail::matrix_store::const_ptr ret = get_data().get_rows(idxs);
 	if (ret)
 		return dense_matrix::ptr(new dense_matrix(ret));
