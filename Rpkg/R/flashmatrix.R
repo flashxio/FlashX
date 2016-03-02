@@ -1196,7 +1196,8 @@ fm.set.cols <- function(fm, idxs, m2)
 #'
 #' @param fm A FlashMatrix matrix
 #' @param idxs an array of column indices in fm.
-#' @return a submatrix
+#' @return a FlashMatrix vector if getting one row or column;
+#' a FlashMatrix matrix if getting more than one row or column.
 #' @name fm.get.eles
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.get.cols <- function(fm, idxs)
@@ -1205,8 +1206,11 @@ fm.get.cols <- function(fm, idxs)
 	stopifnot(class(fm) == "fm")
 	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.integer(idxs),
 				 PACKAGE="FlashR")
-	if (!is.null(ret))
+	if (!is.null(ret) && length(idxs) > 1)
 		new.fm(ret)
+	else if (!is.null(ret))
+		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$nrow, type=ret$type,
+			ele_type=ret$ele_type)
 	else
 		NULL
 }
@@ -1218,8 +1222,11 @@ fm.get.rows <- function(fm, idxs)
 	stopifnot(class(fm) == "fm")
 	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.integer(idxs),
 				 PACKAGE="FlashR")
-	if (!is.null(ret))
+	if (!is.null(ret) && length(idxs) > 1)
 		new.fm(ret)
+	else if (!is.null(ret))
+		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$ncol, type=ret$type,
+			ele_type=ret$ele_type)
 	else
 		NULL
 }
