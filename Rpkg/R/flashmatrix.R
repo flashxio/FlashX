@@ -791,6 +791,8 @@ fm.set.test.na <- function(val)
 	fm.env$fm.test.na <- val
 }
 
+# If one of the inputs has an NA in an element, the corresponding location
+# in `res' is set to NA.
 fm.set.na <- function(in1, in2, res)
 {
 	# This is a special function that helps to test and set NA on
@@ -811,6 +813,31 @@ fm.set.na <- function(in1, in2, res)
 	else if (fm.typeof(res) == "double")
 		ifelse(fm.mapply2(fm.is.na.only(in1), fm.is.na.only(in2),
 						  fm.bo.or, FALSE), as.double(NA), res)
+	else
+		# In this case, we don't do anything with the result.
+		res
+}
+
+# If the input has an NA in an element, the corresponding location in `res'
+# is set to NA.
+fm.set.na1 <- function(input, res)
+{
+	# This is a special function that helps to test and set NA on
+	# the computation results, so it shouldn't call any functions that
+	# try to test and set NA on the result.
+	if (is.null(res))
+		return(NULL)
+	else if (!fm.env$fm.test.na)
+		return(res)
+	else if (fm.typeof(res) == "logical")
+		# is.na always return TRUE or FALSE, we don't need to test and set NA
+		# on the result. If we do, we'll get infinite recursive calls.
+		ifelse(is.na(input), NA, res)
+	else if (fm.typeof(res) == "integer")
+		ifelse(is.na(input), as.integer(NA), res)
+	else if (fm.typeof(res) == "double") {
+		ifelse(fm.is.na.only(input), as.double(NA), res)
+	}
 	else
 		# In this case, we don't do anything with the result.
 		res
@@ -892,7 +919,7 @@ fm.mapply2.fm.ANY <- function(o1, o2, FUN, set.na=TRUE)
 		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
 		ret <- new.fm(ret)
 		if (set.na)
-			ret <- fm.set.na(o1, o2, ret)
+			ret <- fm.set.na1(o1, ret)
 		ret
 	}
 }
@@ -911,7 +938,7 @@ fm.mapply2.ANY.fm <- function(o1, o2, FUN, set.na=TRUE)
 		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
 		ret <- new.fm(ret)
 		if (set.na)
-			ret <- fm.set.na(o1, o2, ret)
+			ret <- fm.set.na1(o2, ret)
 		ret
 	}
 }
@@ -933,7 +960,7 @@ fm.mapply2.fmV.ANY <- function(o1, o2, FUN, set.na=TRUE)
 		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- new.fmV(ret)
 	if (set.na)
-		ret <- fm.set.na(o1, o2, ret)
+		ret <- fm.set.na1(o1, ret)
 	ret
 }
 
@@ -954,7 +981,7 @@ fm.mapply2.ANY.fmV <- function(o1, o2, FUN, set.na=TRUE)
 	}
 	ret <- new.fmV(ret)
 	if (set.na)
-		ret <- fm.set.na(o1, o2, ret)
+		ret <- fm.set.na1(o2, ret)
 	ret
 }
 
@@ -968,7 +995,7 @@ fm.mapply.row <- function(o1, o2, FUN, set.na=TRUE)
 				 PACKAGE="FlashR")
 	ret <- new.fm(ret)
 	if (set.na)
-		ret <- fm.set.na(o1, o2, ret)
+		ret <- fm.set.na1(o1, ret)
 	ret
 }
 
@@ -982,7 +1009,7 @@ fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
 				 PACKAGE="FlashR")
 	ret <- new.fm(ret)
 	if (set.na)
-		ret <- fm.set.na(o1, o2, ret)
+		ret <- fm.set.na1(o1, ret)
 	ret
 }
 
@@ -1033,29 +1060,6 @@ setMethod("fm.mapply2",
 setMethod("fm.mapply2",
 		  signature(o1 = "ANY", o2 = "fmV", FUN = "ANY", set.na="logical"),
 		  fm.mapply2.ANY.fmV)
-
-fm.set.na1 <- function(input, res)
-{
-	# This is a special function that helps to test and set NA on
-	# the computation results, so it shouldn't call any functions that
-	# try to test and set NA on the result.
-	if (is.null(res))
-		return(NULL)
-	else if (!fm.env$fm.test.na)
-		return(res)
-	else if (fm.typeof(res) == "logical")
-		# is.na always return TRUE or FALSE, we don't need to test and set NA
-		# on the result. If we do, we'll get infinite recursive calls.
-		ifelse(is.na(input), NA, res)
-	else if (fm.typeof(res) == "integer")
-		ifelse(is.na(input), as.integer(NA), res)
-	else if (fm.typeof(res) == "double") {
-		ifelse(fm.is.na.only(input), as.double(NA), res)
-	}
-	else
-		# In this case, we don't do anything with the result.
-		res
-}
 
 fm.sapply.fm <- function(o, FUN, set.na=TRUE)
 {
