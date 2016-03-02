@@ -754,3 +754,14 @@ setMethod("[", signature(x="fm", j="missing", drop="missing"),
 		  function(x, i, j, drop) fm.get.rows(x, i))
 setMethod("[", signature(x="fm", i="missing", drop="missing"),
 		  function(x, i, j, drop) fm.get.cols(x, j))
+
+setMethod("crossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  t(x) %*% y
+		  })
+setMethod("tcrossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  x %*% t(y)
+		  })
