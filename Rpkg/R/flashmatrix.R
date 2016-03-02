@@ -1406,10 +1406,12 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 #' respectively.
 #'
 #' @param ... A list of FlashR matrices.
+#' @param objs A list of FlashR matrices.
 #'
-#' The function of these two functions is similar to the R counterparts:
-#' `rbind' and `cbind'. ' Currently, `fm.rbind' only supports combining
-#' a list of wide matrices. `fm.cbind' can only combine a list of tall matrices.
+#' These functions are similar to the R counterparts: `rbind' and `cbind'.
+#' Currently, `fm.rbind' and `fm.rbind.list' only supports combining
+#' a list of wide matrices. `fm.cbind' and `fm.cbind.list' can only combine
+#' a list of tall matrices.
 #'
 #' @return A FlashR matrix.
 #' @name fm.bind
@@ -1417,17 +1419,23 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 fm.rbind <- function(...)
 {
 	args <- list(...)
-	nargs <- length(args)
-	if (nargs < 2) {
-		return(args[1])
+	fm.rbind.list(args)
+}
+
+#' @name fm.bind
+fm.rbind.list <- function(objs)
+{
+	nobjs <- length(objs)
+	if (nobjs < 2) {
+		return(objs[[1]])
 	}
-	for (fm in args) {
-		if (class(fm) != "fm") {
+	for (fm in objs) {
+		if (class(fm) != "fm" && class(fm) != "fmV") {
 			print("fm.rbind only works on FlashMatrix matrix")
 			return(NULL)
 		}
 	}
-	ret <- .Call("R_FM_rbind", args, PACKAGE="FlashR")
+	ret <- .Call("R_FM_rbind", objs, PACKAGE="FlashR")
 	new.fm(ret)
 }
 
@@ -1435,17 +1443,23 @@ fm.rbind <- function(...)
 fm.cbind <- function(...)
 {
 	args <- list(...)
-	nargs <- length(args)
-	if (nargs < 2) {
-		return(args[1])
+	fm.cbind.list(args)
+}
+
+#' @name fm.bind
+fm.cbind.list <- function(objs)
+{
+	nobjs <- length(objs)
+	if (nobjs < 2) {
+		return(objs[1])
 	}
-	for (fm in args) {
-		if (class(fm) != "fm") {
+	for (fm in objs) {
+		if (class(fm) != "fm" && class(fm) != "fmV") {
 			print("fm.cbind only works on FlashMatrix matrix")
 			return(NULL)
 		}
 	}
-	ret <- .Call("R_FM_cbind", args, PACKAGE="FlashR")
+	ret <- .Call("R_FM_cbind", objs, PACKAGE="FlashR")
 	new.fm(ret)
 }
 
