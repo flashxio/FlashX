@@ -755,6 +755,16 @@ setMethod("[", signature(x="fm", j="missing", drop="missing"),
 setMethod("[", signature(x="fm", i="missing", drop="missing"),
 		  function(x, i, j, drop) fm.get.cols(x, j))
 
+setMethod("sweep", "fm",
+		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {
+			  if (MARGIN == 2)
+				  fm.mapply.row(x, STATS, FUN)
+			  else if (MARGIN == 1)
+				  fm.mapply.col(x, STATS, FUN)
+			  else
+				  stop("a wrong margin")
+		  })
+
 setMethod("crossprod", "fm", function(x, y=NULL) {
 		  if (is.null(y))
 			  y <- x

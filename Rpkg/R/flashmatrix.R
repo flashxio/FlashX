@@ -987,6 +987,8 @@ fm.mapply2.ANY.fmV <- function(o1, o2, FUN, set.na=TRUE)
 
 fm.mapply.row <- function(o1, o2, FUN, set.na=TRUE)
 {
+	if (class(o2) != "fmV")
+		o2 <- fm.conv.R2FM(o2)
 	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
@@ -1001,6 +1003,8 @@ fm.mapply.row <- function(o1, o2, FUN, set.na=TRUE)
 
 fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
 {
+	if (class(o2) != "fmV")
+		o2 <- fm.conv.R2FM(o2)
 	stopifnot(class(o1) == "fm" && class(o2) == "fmV")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
