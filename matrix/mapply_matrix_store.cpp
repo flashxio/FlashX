@@ -51,6 +51,16 @@ public:
 		set_materialized(res);
 	}
 
+	size_t get_num_rows() const {
+		assert(tall_res);
+		return tall_res->get_num_rows();
+	}
+
+	size_t get_num_cols() const {
+		assert(tall_res);
+		return tall_res->get_num_cols();
+	}
+
 	const matrix_store &get_materialize_ref(bool is_wide) {
 		if (is_wide)
 			return *wide_res;
@@ -76,7 +86,7 @@ public:
 	}
 
 	bool is_materialized() const {
-		size_t num_eles = res_buf->get_num_rows() * res_buf->get_num_cols();
+		size_t num_eles = get_num_rows() * get_num_cols();
 		size_t count = num_res_avails.get();
 		assert(num_eles >= count);
 		return count == num_eles;
