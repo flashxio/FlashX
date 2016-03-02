@@ -336,6 +336,8 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
 setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
+setMethod("%*%", signature(x = "fm", y = "ANY"),
+		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
 
 setMethod("dim", signature(x = "fm"), function(x) c(x@nrow, x@ncol))
 setMethod("nrow", signature(x = "fm"), function(x) x@nrow)
