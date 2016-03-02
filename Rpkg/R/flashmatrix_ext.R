@@ -324,6 +324,11 @@ setMethod("pmin2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 		  fm.mapply2.ANY.fmV(e1, e2, fm.bo.min))
 
+setMethod("^", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fm.ANY(e1, e2, fm.bo.pow))
+setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  fm.mapply2.fmV.ANY(e1, e2, fm.bo.pow))
+
 `!.fm` <- function(o)
 {
 	fm.sapply.fm(o, fm.buo.not)
