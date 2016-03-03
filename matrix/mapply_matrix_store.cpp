@@ -805,8 +805,8 @@ void mapply_matrix_store::materialize_self() const
 	if (is_materialized())
 		return;
 
-	matrix_store::ptr materialized = __mapply_portion(in_mats, op, layout,
-			is_in_mem(), get_num_nodes(), par_access);
+	matrix_store::const_ptr materialized = __mapply_portion(in_mats, op,
+			layout, is_in_mem(), get_num_nodes(), par_access);
 	if (res)
 		res->set_materialized(materialized);
 	else {
