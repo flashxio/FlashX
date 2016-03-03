@@ -75,18 +75,8 @@ namespace {
     class kmeans_vertex_program:
         public base_kmeans_vertex_program<kmeans_vertex, clusters>
     {
-#if KM_TEST
-        prune_stats::ptr pt_ps;
-#endif
-
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
-
-        kmeans_vertex_program() {
-#if KM_TEST
-            pt_ps = prune_stats::create(NUM_ROWS, K);
-#endif
-        }
 
         static ptr cast2(vertex_program::ptr prog) {
             return std::static_pointer_cast<kmeans_vertex_program, vertex_program>(prog);
@@ -275,11 +265,11 @@ namespace {
                 num_members_v[cl] = g_clusters->get_num_members(cl);
             }
 #if KM_TEST
-            int t_members = 0;
+            long t_members = 0;
             for (unsigned cl = 0; cl < K; cl++) {
                 t_members += g_clusters->get_num_members(cl);
-                if (t_members > (int) NUM_ROWS) {
-                    BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many memnbers cluster: "
+                if (t_members > (long) NUM_ROWS) {
+                    BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many members cluster: "
                         << cl << "/" << K << " at members = " << t_members;
                     BOOST_VERIFY(false);
                 }

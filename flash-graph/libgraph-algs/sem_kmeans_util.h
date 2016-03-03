@@ -33,16 +33,19 @@
 
 namespace {
     template <typename T>
+        bool eq_all(const T* v1, const T* v2, const unsigned len) {
+            return (std::equal(&v1[0], &(v1[len-1]), &v2[0]));
+        }
+
+    template <typename T>
         static double const eucl_dist(const T* lhs, const T* rhs,
                 const unsigned size) {
             double dist = 0;
-            //BOOST_VERIFY(lhs->size() == rhs->size());
 
             for (unsigned col = 0; col < size; col++) {
                 double diff = lhs[col] - rhs[col];
                 dist += diff * diff;
             }
-
             BOOST_VERIFY(dist >= 0);
             return sqrt(dist); // TODO: rm sqrt
         }
