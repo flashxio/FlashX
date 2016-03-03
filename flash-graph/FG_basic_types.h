@@ -34,7 +34,6 @@ typedef unsigned int vsize_t;
 typedef unsigned int vertex_id_t; /** Used to represent vertex IDs in graph */
 const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
 const vertex_id_t INVALID_VERTEX_ID = -1;
-const size_t MAX_VERTEX_SIZE = INT_MAX;
 
 }
 
