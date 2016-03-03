@@ -56,8 +56,9 @@ namespace {
     static partition_cache<double>::ptr g_row_cache = nullptr;
     static unsigned g_io_iter = 0; // How many iterations of full I/O have I done?
     static unsigned g_row_cache_size = 0;
-    //static size_t g_cache_hits = 0; // TODO: Count cache hits
     static unsigned g_nthread;
+    static std::vector<std::vector<double>> g_data;
+    static unsigned g_cache_update_iter = 5; // TODO: select param
     // End cache
 
     class kmeans_vertex: public base_kmeans_vertex
@@ -187,14 +188,13 @@ namespace {
 
     void kmeans_vertex::run(vertex_program &prog) {
         if (g_kmspp_stage == DIST) {
-            if (get_cluster_id() != INVALID_CLUST_ID) {
-                if (get_dist() <= g_cluster_dist->get(get_cluster_id(),
-                            g_kmspp_cluster_idx)) {
+            if (get_cluster_id() != INVALID_CLUST_ID &&
+                    get_dist() <= g_cluster_dist->get(get_cluster_id(),
+                        g_kmspp_cluster_idx)) {
                     // No dist comp, but add my mean
                     ((kmeanspp_vertex_program&)prog).
                         pt_cuml_sum_peq(get_dist());
                     return;
-                }
             }
         } else if (g_stage != INIT) {
             recalculated = false;
@@ -218,7 +218,8 @@ namespace {
 
         vertex_id_t id = prog.get_vertex_id(*this);
         if (g_row_cache) {
-            double* row = g_row_cache->get(id);
+            const unsigned thd = prog.get_partition_id();
+            double* row = g_row_cache->get(id, thd);
             if (row) { // row == NULL is a cache miss
                 switch (g_stage) {
                     case INIT:
@@ -327,6 +328,17 @@ namespace {
         }
     }
 
+    void add_row(const page_vertex& vertex, const vertex_id_t id) {
+        data_seq_iter it = ((const page_row&)vertex).
+            get_data_seq_it<double>();
+        std::vector<double> v;
+        while (it.has_next()) {
+            double el = it.next();
+            v.push_back(el);
+        }
+        g_data[id] = v;
+    }
+
     void kmeans_vertex::run_init(vertex_program& prog,
             const page_vertex &vertex, init_type_t init) {
         switch (g_init) {
@@ -369,6 +381,9 @@ namespace {
                     } else if (g_kmspp_stage == DIST) {
                         vertex_id_t my_id = prog.get_vertex_id(*this);
                         unsigned thd = -1;
+
+                        //if (g_kmspp_cluster_idx == 0)
+                            //add_row(vertex, my_id);
 
                         if (g_row_cache)
                             thd = prog.get_partition_id();
@@ -528,98 +543,126 @@ namespace {
         }
     }
 
-        static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
-            FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
-            mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
-            return vec;
+    template<class T, class VertexType>
+        class bic_query: public fg::vertex_query {
+        typename fg::FG_vector<T>::ptr vec;
+        public:
+        bic_query(typename fg::FG_vector<T>::ptr vec) {
+            this->vec = vec;
         }
 
-        static void clear_clusters() {
-            if (g_prune_init) {
-                g_clusters->clear();
-            } else {
-                g_clusters->set_prev_means();
-                for (unsigned cl = 0; cl < K; cl++) {
-                    g_clusters->unfinalize(cl);
-#if VERBOSE
-                    std::cout << "Unfinalized g_clusters[thd] ==> ";
-                    print_vector<double>(g_clusters[cl]->get_mean());
-#endif
-                }
-            }
+        virtual void run(fg::graph_engine &graph, fg::compute_vertex &v1) {
+            VertexType &v = (VertexType &) v1;
+            vec->set(graph.get_graph_index().get_vertex_id(v), v.get_dist());
         }
 
-        // TODO: Try static cache
-        // TODO: Try logarithmically increasing
-        static void manage_cache(const unsigned cache_update_iter=10) {
-            // clear the cache
-            if (g_row_cache) {
-                if (g_io_iter++ % cache_update_iter == 0) {
-                    BOOST_LOG_TRIVIAL(info) << "Clearing the cache ...";
-                    g_row_cache = partition_cache<double>::create(g_nthread,
-                            NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
-                } else if (g_row_cache->index_empty()){
-                    BOOST_LOG_TRIVIAL(info) << "Building cache index ...";
-                    g_row_cache->build_index();
-                }
-            }
+        virtual void merge(fg::graph_engine &graph, fg::vertex_query::ptr q) {
         }
 
-        static void update_clusters(graph_engine::ptr mat,
-                std::vector<unsigned>& num_members_v) {
-            clear_clusters();
-            std::vector<vertex_program::ptr> kms_clust_progs;
-            mat->get_vertex_programs(kms_clust_progs);
+        virtual ptr clone() {
+            return fg::vertex_query::ptr(new bic_query(vec));
+        }
+    };
 
-#if KM_TEST
-            size_t io_req = 0;
-#endif
-            for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
-                kmeans_vertex_program::ptr kms_prog =
-                    kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-                clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
-                g_num_changed += kms_prog->get_pt_changed();
+    double get_bic(graph_engine::ptr mat) {
+        FG_vector<double>::ptr vec = FG_vector<double>::create(mat);
+        mat->query_on_all(vertex_query::ptr(new bic_query<double, kmeans_vertex>(vec)));
+        return 2*vec->sum() + log(NUM_ROWS)*K*NUM_COLS;
+    }
 
-                g_io_reqs += kms_prog->get_num_reqs();
+    static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
+        FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
+        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
+        return vec;
+    }
 
-#if KM_TEST
-                (*g_prune_stats) += (*kms_prog->get_ps());
-                io_req += kms_prog->get_num_reqs();
-#endif
-                BOOST_VERIFY(g_num_changed <= NUM_ROWS);
-                /* Merge the per-thread clusters */
-                // TODO: Pool
-                g_clusters->peq(pt_clusters);
-            }
-
+    static void clear_clusters() {
+        if (g_prune_init) {
+            g_clusters->clear();
+        } else {
+            g_clusters->set_prev_means();
             for (unsigned cl = 0; cl < K; cl++) {
-                g_clusters->finalize(cl);
-                num_members_v[cl] = g_clusters->get_num_members(cl);
-
-                g_clusters->set_prev_dist(eucl_dist(&(g_clusters->get_means()[cl*NUM_COLS]),
-                            &(g_clusters->get_prev_means()[cl*NUM_COLS]), NUM_COLS), cl);
+                g_clusters->unfinalize(cl);
 #if VERBOSE
-                BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
-                    << cl << " is " << g_clusters->get_prev_dist(cl);
-                BOOST_VERIFY(g_clusters->get_num_members(cl) <= (int)NUM_ROWS);
+                std::cout << "Unfinalized g_clusters[thd] ==> ";
+                print_vector<double>(g_clusters[cl]->get_mean());
 #endif
             }
-#if KM_TEST
-            int t_members = 0;
-            for (unsigned cl = 0; cl < K; cl++) {
-                t_members += g_clusters->get_num_members(cl);
-                if (t_members > (int) NUM_ROWS) {
-                    BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many members cluster: "
-                        << cl << "/" << K << " at members = " << t_members;
-                    BOOST_VERIFY(false);
-                }
-            }
+        }
+    }
 
-            if (io_req == 0) io_req = NUM_ROWS; // First iteration
-            g_gb_req_iter.push_back((io_req*sizeof(double)*NUM_COLS)/
-                    (double)(1024*1024*1024));
+    // TODO: Try static cache
+    // TODO: Try logarithmically increasing
+    static void manage_cache() {
+        // clear the cache
+        if (g_row_cache) {
+            if (g_io_iter++ % g_cache_update_iter == 0) {
+                BOOST_LOG_TRIVIAL(info) << "Clearing the cache ...";
+                g_row_cache = partition_cache<double>::create(g_nthread,
+                        NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
+                g_cache_update_iter += g_cache_update_iter; // log cache
+            } else if (g_row_cache->index_empty()){
+                BOOST_LOG_TRIVIAL(info) << "Building cache index ...";
+                g_row_cache->build_index();
+            }
+        }
+    }
+
+    static void update_clusters(graph_engine::ptr mat,
+            std::vector<unsigned>& num_members_v) {
+        clear_clusters();
+        std::vector<vertex_program::ptr> kms_clust_progs;
+        mat->get_vertex_programs(kms_clust_progs);
+
+#if KM_TEST
+        size_t io_req = 0;
+#endif
+        for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
+            kmeans_vertex_program::ptr kms_prog =
+                kmeans_vertex_program::cast2(kms_clust_progs[thd]);
+            clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
+            g_num_changed += kms_prog->get_pt_changed();
+
+            g_io_reqs += kms_prog->get_num_reqs();
+
+#if KM_TEST
+            (*g_prune_stats) += (*kms_prog->get_ps());
+            io_req += kms_prog->get_num_reqs();
+#endif
+            BOOST_VERIFY(g_num_changed <= NUM_ROWS);
+            /* Merge the per-thread clusters */
+            // TODO: Pool
+            g_clusters->peq(pt_clusters);
+        }
+
+        for (unsigned cl = 0; cl < K; cl++) {
+            g_clusters->finalize(cl);
+            num_members_v[cl] = g_clusters->get_num_members(cl);
+
+            g_clusters->set_prev_dist(eucl_dist(&(g_clusters->get_means()[cl*NUM_COLS]),
+                        &(g_clusters->get_prev_means()[cl*NUM_COLS]), NUM_COLS), cl);
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
+                << cl << " is " << g_clusters->get_prev_dist(cl);
+            BOOST_VERIFY(g_clusters->get_num_members(cl) <= (int)NUM_ROWS);
 #endif
         }
+#if KM_TEST
+        int t_members = 0;
+        for (unsigned cl = 0; cl < K; cl++) {
+            t_members += g_clusters->get_num_members(cl);
+            if (t_members > (int) NUM_ROWS) {
+                BOOST_LOG_TRIVIAL(error) << "[FATAL]: Too many members cluster: "
+                    << cl << "/" << K << " at members = " << t_members;
+                BOOST_VERIFY(false);
+            }
+        }
+
+        if (io_req == 0) io_req = NUM_ROWS; // First iteration
+        g_gb_req_iter.push_back((io_req*sizeof(double)*NUM_COLS)/
+                (double)(1024*1024*1024));
+#endif
+    }
 
         /* During kmeans++ we select a new cluster each iteration
            This step get the next sample selected as a cluster center
@@ -728,11 +771,13 @@ namespace {
             /*** Begin VarInit of data structures ***/
             // TODO: Start caching
             g_dist_type = EUCL; // TODO: Add to params
-            g_row_cache_size = NUM_ROWS/50; // TODO: Add to params
+            g_row_cache_size = NUM_ROWS/30; // TODO: Add to params
 
             // TODO: Add params for cache size
             g_row_cache = partition_cache<double>::create(g_nthread,
                     NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
+            /*printf("Malloc-ing the whole fucking dataset!\n");
+            g_data.resize(NUM_ROWS);*/
             // End caching
 
             g_clusters = prune_clusters::create(K, NUM_COLS);
@@ -943,8 +988,10 @@ namespace {
             ProfilerStop();
 #endif
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
-            printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n\n",
+            printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
+            printf("# of Row Cache hits = %lu\n\n",
+                    g_row_cache->get_cache_hits());
 
             if (converged) {
                 BOOST_LOG_TRIVIAL(info) <<
