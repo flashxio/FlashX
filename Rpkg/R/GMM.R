@@ -13,7 +13,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		if (fm.is.matrix(covar))
 			covar <- fm.conv.FM2R(covar)
 		covar.inv <- solve(covar)
-		X1 <- fm.mapply.row(X, mu, "-")
+		X1 <- sweep(X, 2, mu, "-")
 		X2 <- X1 %*% covar.inv
 		X3 <- -0.5 * fm.agg.mat(X2 * X1, 1, "+")
 		k <- dim(covar)[1]
@@ -26,7 +26,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 	# TODO alternatively, we can use KMeans to initialize it.
 	rand.k <- as.integer(runif(k, 1, m))
 	mus <- t(X[rand.k,])
-	init.covar <- fm.cov(X)
+	init.covar <- cov(X)
 	covars <- list()
 	for (i in 1:k)
 		covars[[i]] <- init.covar
@@ -41,13 +41,13 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 			P.list[[i]] <- multivar.normal(X, mus[,i], covars[[i]])
 		}
 		P <- fm.cbind.list(P.list)
-		P <- fm.mapply.col(fm.mapply.row(P, phi, "*"), P %*% phi, "/")
+		P <- sweep(P, 2, phi, "*") / (P %*% phi)
 
 		# M-step
 		phi <- colSums(P)/m
-		mus <- fm.mapply.row(t(X) %*% P, phi * m, "/")
+		mus <- sweep(t(X) %*% P, 2, phi * m, "/")
 		for (j in 1:k)
-			covars[[j]] <- fm.cov.wt(X, P[,j])$cov
+			covars[[j]] <- cov.wt(X, P[,j])$cov
 
 		if (length(old.state) > 0) {
 			new.like <- log.like(X, phi, mus, covars)
