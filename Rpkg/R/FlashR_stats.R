@@ -110,3 +110,15 @@ fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TR
 
 setMethod("cov", "fm",  fm.cov)
 setMethod("cov.wt", "fm", fm.cov.wt)
+
+fm.dmvnorm <- function(X, mu, covar, log=FALSE)
+{
+	if (fm.is.matrix(covar))
+		covar <- fm.conv.FM2R(covar)
+	covar.inv <- solve(covar)
+	X1 <- sweep(X, 2, mu, "-")
+	X2 <- X1 %*% covar.inv
+	X3 <- -0.5 * fm.agg.mat(X2 * X1, 1, "+")
+	k <- dim(covar)[1]
+	1/sqrt(((2 * pi) ^ k) * det(covar)) * exp(X3)
+}

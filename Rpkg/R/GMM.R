@@ -9,17 +9,6 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		sum(log(rowSums(P)))
 	}
 
-	multivar.normal <- function(X, mu, covar) {
-		if (fm.is.matrix(covar))
-			covar <- fm.conv.FM2R(covar)
-		covar.inv <- solve(covar)
-		X1 <- sweep(X, 2, mu, "-")
-		X2 <- X1 %*% covar.inv
-		X3 <- -0.5 * fm.agg.mat(X2 * X1, 1, "+")
-		k <- dim(covar)[1]
-		1/sqrt(((2 * pi) ^ k) * det(covar)) * exp(X3)
-	}
-
 	m <- dim(X)[1]
 
 	# Random init
