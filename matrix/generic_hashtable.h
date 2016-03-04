@@ -74,7 +74,6 @@ public:
 
 	void insert(size_t num, const void *pkeys, const void *pvals,
 			const agg_operate &op) {
-		assert(op.get_input_type().get_size() == ValSize);
 		const KeyType *keys = (const KeyType *) pkeys;
 		const ValType *vals = (const ValType *) pvals;
 		assert(op.has_combine());
@@ -92,7 +91,6 @@ public:
 	}
 
 	virtual void merge(const generic_hashtable &gtable, const agg_operate &op) {
-		assert(op.get_input_type().get_size() == ValSize);
 		const generic_hashtable_impl<KeyType, ValSize> &gtable1
 			= dynamic_cast<const generic_hashtable_impl<KeyType, ValSize> &>(
 					gtable);
