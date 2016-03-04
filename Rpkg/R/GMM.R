@@ -59,4 +59,5 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		}
 		old.state <- list(phi=phi, mus=mus, covars=covars)
 	}
+	P
 }
