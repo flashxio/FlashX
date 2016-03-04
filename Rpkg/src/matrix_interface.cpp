@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <Rcpp.h>
+#include <Rmath.h>
 #include <fmr_isna.h>
 
 #include "log.h"
@@ -137,36 +138,57 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	}
 }
 
-template<class T>
-class rand_set_operate: public type_set_vec_operate<T>
+template<class FUN>
+class rand_set_operate: public type_set_vec_operate<double>
 {
-	const T min;
-	const T max;
-
-	T gen_rand() const {
-		// We need to rescale and shift the random number accordingly.
-		return unif_rand() * (max - min) + min;
-	}
+	FUN fun;
 public:
-	rand_set_operate(T _min, T _max): min(_min), max(_max) {
+	rand_set_operate(const FUN &_fun): fun(_fun) {
 	}
 
-	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
+	virtual void set(double *arr, size_t num_eles, off_t start_idx) const {
 		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = gen_rand();
+			arr[i] = fun();
 		}
 	}
 };
 
-RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
+class runif_gen
 {
+	double min;
+	double max;
+public:
+	runif_gen(double min, double max) {
+		this->min = min;
+		this->max = max;
+	}
+
+	double operator()() const {
+		return R::runif(min, max);
+	}
+};
+
+class rnorm_gen
+{
+	double mu;
+	double sigma;
+public:
+	rnorm_gen(double mu, double sigma) {
+		this->mu = mu;
+		this->sigma = sigma;
+	}
+
+	double operator()() const {
+		return R::rnorm(mu, sigma);
+	}
+};
+
+RcppExport SEXP R_FM_create_rand(SEXP ptype, SEXP pn, SEXP pparams)
+{
+	std::string type = CHAR(STRING_ELT(ptype, 0));
 	size_t n;
-	double min, max;
-	bool ret1, ret2, ret3;
-	ret1 = R_get_number<size_t>(pn, n);
-	ret2 = R_get_number<double>(pmin, min);
-	ret3 = R_get_number<double>(pmax, max);
-	if (!ret1 || !ret2 || !ret3) {
+	bool ret1 = R_get_number<size_t>(pn, n);
+	if (!ret1) {
 		fprintf(stderr, "the arguments aren't of the supported type\n");
 		return R_NilValue;
 	}
@@ -177,10 +199,42 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	vector::ptr v = vector::create(n, get_scalar_type<double>(), num_nodes,
-			true, rand_set_operate<double>(min, max));
+
+	vector::ptr v;
+	if (type == "uniform") {
+		Rcpp::List params(pparams);
+		double min, max;
+		bool ret2 = R_get_number<double>(params["min"], min);
+		bool ret3 = R_get_number<double>(params["max"], max);
+		if (!ret2 || !ret3)
+			fprintf(stderr, "min/max aren't of the supported type\n");
+		else {
+			runif_gen gen(min, max);
+			v = vector::create(n, get_scalar_type<double>(), num_nodes,
+					true, rand_set_operate<runif_gen>(gen));
+		}
+	}
+	else if (type == "norm") {
+		Rcpp::List params(pparams);
+		double mu, sigma;
+		bool ret2 = R_get_number<double>(params["mu"], mu);
+		bool ret3 = R_get_number<double>(params["sigma"], sigma);
+		if (!ret2 || !ret3)
+			fprintf(stderr, "mu/sigma aren't of the supported type\n");
+		else {
+			rnorm_gen gen(mu, sigma);
+			v = vector::create(n, get_scalar_type<double>(), num_nodes,
+					true, rand_set_operate<rnorm_gen>(gen));
+		}
+	}
+	else
+		fprintf(stderr, "unsupported type\n");
 	PutRNGstate();
-	return create_FMR_vector(v->get_raw_store(), "");
+
+	if (v)
+		return create_FMR_vector(v->get_raw_store(), "");
+	else
+		return R_NilValue;
 }
 
 RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)

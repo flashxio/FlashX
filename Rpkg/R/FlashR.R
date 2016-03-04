@@ -212,7 +212,26 @@ fm.runif <- function(n, min=0, max=1)
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", n, min, max, PACKAGE="FlashR")
+	vec <- .Call("R_FM_create_rand", "uniform", n,
+				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
+	new.fmV(vec)
+}
+
+#' Create a FlashMatrix vector with random numbers from normal distribution.
+#'
+#' @param n the number of random numbers to be generated.
+#' @param mean the mean of the distribution.
+#' @param sd the standard deviation of the distribution.
+#' @name fm.rnorm
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.rnorm <- function(n, mean=0, sd=1)
+{
+	if (n <= 0) {
+		print("we can't generate a vector of 0 elements")
+		return(NULL)
+	}
+	vec <- .Call("R_FM_create_rand", "norm", n,
+				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
 	new.fmV(vec)
 }
 
