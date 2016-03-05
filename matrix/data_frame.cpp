@@ -446,7 +446,15 @@ bool EM_df_groupby_dispatcher::issue_task()
 		size_t entry_size = vec->get_type().get_size();
 		find_prev->runAgg(read_len, vec->get_raw_arr() + read_len * entry_size,
 				NULL, &off);
-		assert(off < read_len);
+		// All keys are the same in this portion of the vector. Then we don't
+		// know if we have got all values for the key.
+		// If we know we can ignore the key, we can ignore the entire portion.
+		if (off == read_len && op.ignore_key(vec->get_raw_arr()))
+			off = 0;
+		// Otherwise, we have to make sure we have seen all values for the keys
+		// we are going to run UDFs.
+		else
+			assert(off < read_len);
 		real_len = read_len - off;
 		// The local buffer may already be a sub vector.
 		const_cast<local_vec_store &>(*vec).expose_sub_vec(vec->get_local_start(),

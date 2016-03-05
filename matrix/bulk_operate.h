@@ -783,6 +783,9 @@ template<class T>
 class gr_apply_operate
 {
 public:
+	virtual bool ignore_key(const void *key) const {
+		return false;
+	}
 	virtual void run(const void *key, const T &val,
 			local_vec_store &vec) const = 0;
 
