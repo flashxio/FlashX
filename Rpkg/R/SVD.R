@@ -17,33 +17,23 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
 	tx <- t(x)
-	# If we need to compute more right singular vectors,
-	# we compute right singular vectors first.
-	if (nv > nu)
+	comp.right <- FALSE
+	if (nrow(x) > ncol(x))
 		comp.right <- TRUE
-	# If we need to compute more left singular vectors,
-	# we compute left singular vectors first.
-	else if (nv < nu)
-		comp.right <- FALSE
-	# If we compute the same number of left and right singular vectors,
-	# we choose to compute on the form that reduces the length of vectors.
-	else if (nrow(x) > ncol(x) && nv > 0)
-		comp.right <- TRUE
-	else
-		comp.right <- FALSE
 
+	nev <- max(nu, nv)
 	if (comp.right) {
 		n <- ncol(x)
-		nev <- nv
-		multiply <- function(mat, extra) tx %*% (x %*% mat)
+		txx <- fm.conv.FM2R(tx %*% x)
+		multiply <- function(vec, extra) txx %*% vec
 	}
 	else {
 		n <- nrow(x)
-		nev <- nu
-		multiply <- function(mat, extra) x %*% (tx %*% mat)
+		xtx <- fm.conv.FM2R(x %*% tx)
+		multiply <- function(vec, extra) xtx %*% vec
 	}
-	res <- fm.eigen(multiply, sym=TRUE,
-					options=list(n=n, nev=nev, tol=tol, which="LM"))
+	res <- arpack(multiply, sym=TRUE,
+				  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
 
 	# After we compute the other singular vectors, we need to rescale
 	# these singular vectors because they aren't orthonormal.
@@ -53,22 +43,32 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 		x <- fm.materialize(x)
 	}
 	if (comp.right) {
-		right <- res$vecs
+		right <- NULL
+		if (nv > 0) {
+			if (nv < nev)
+				right <- fm.conv.R2FM(res$vectors[,1:nv])
+			else
+				right <- fm.conv.R2FM(res$vectors)
+		}
 		left <- NULL
 		if (nu > 0) {
-			left <- x %*% right
-			if (ncol(left) > nu)
-				left <- rescale(fm.get.cols(left, 1:nu))
+			left <- x %*% res$vectors[,1:nu]
+			left <- rescale(left)
 		}
 	}
 	else {
-		left <- res$vecs
+		left <- NULL
+		if (nu > 0) {
+			if (nu < nev)
+				left <- fm.conv.R2FM(res$vectors[,1:nu])
+			else
+				left <- fm.conv.R2FM(res$vectors)
+		}
 		right <- NULL
 		if (nv > 0) {
-			right <- t(x) %*% left
-			if (ncol(right) > nv)
-				right <- rescale(fm.get.cols(right, 1:nv))
+			right <- t(x) %*% res$vectors[,1:nv]
+			right <- rescale(right)
 		}
 	}
-	list(d=sqrt(res$vals), u=left, v=right)
+	list(d=sqrt(res$values), u=left, v=right)
 }
