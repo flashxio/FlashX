@@ -196,6 +196,11 @@ public:
 		return max;
 	}
 
+	virtual bool ignore_key(const void *key) const {
+		fg::vertex_id_t vid = *(const fg::vertex_id_t *) key;
+		return vid == fg::INVALID_VERTEX_ID;
+	}
+
 	void run(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
 
