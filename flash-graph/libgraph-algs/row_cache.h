@@ -350,6 +350,8 @@ namespace {
             }
 
             void build_index() {
+                struct timeval start, end;
+                gettimeofday(&start , NULL);
                 //print_data_mat();
 
                 BOOST_LOG_TRIVIAL(info) << "Building hash index";
@@ -364,6 +366,8 @@ namespace {
                 }
                 //printf("Printing the cache:\n"); print();
                 //verify();
+                BOOST_LOG_TRIVIAL(info) << "\nBuilding cache index took " <<
+                    time_diff(start, end) << " sec\n";
             }
 
             T* get(const unsigned id){
@@ -420,7 +424,7 @@ namespace {
             std::atomic<unsigned> numel;
             unsigned max_numel, numel_sync, elem_len;
             unsigned pt_elem, nthread;
-            static constexpr unsigned MAX_SYNC_ELEM = 100;
+            static constexpr unsigned MAX_SYNC_ELEM = 200;
 
             typedef typename std::unordered_map<unsigned, T*>::iterator cache_map_iter;
 
@@ -455,7 +459,6 @@ namespace {
                     numel_sync > MAX_SYNC_ELEM ? MAX_SYNC_ELEM:
                     numel_sync;
                 BOOST_ASSERT_MSG(numel_sync >= 0, "[ERROR]: param numel_sync <= 0");
-                //pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 
                 BOOST_LOG_TRIVIAL(info) << "\nParams ==> nthread: " << nthread <<
                     ", elem_len: " << this->elem_len << ", max_numel:"
@@ -501,12 +504,13 @@ namespace {
                 if (is_full(thd)) /* Ok because || is short-circuiting */
                     return false;
 
-                std::vector<unsigned>::iterator begin = ids.begin()+(thd*pt_elem);
+                unsigned tmp = thd*pt_elem;
+                std::vector<unsigned>::iterator begin = ids.begin()+tmp;
                 std::vector<unsigned>::iterator end = begin + tot_elem_added[thd];
                 if (std::find(begin, end, id) != end)
                     return false;
 
-                ids[(thd*pt_elem)+tot_elem_added[thd]++] = id;
+                ids[tmp+tot_elem_added[thd]++] = id;
                 elem_added[thd]++;
                 return true;
             }
@@ -516,9 +520,7 @@ namespace {
                 data[end_index[thd]++] = elem;
                 if (is_end) {
                     if (elem_added[thd] == numel_sync) {
-                        //pthread_spin_lock(&lock); // lock it
                         numel = numel + elem_added[thd];
-                        //pthread_spin_unlock(&lock); // unlock it
                         elem_added[thd] = 0; // reset
                     }
                 }
@@ -559,7 +561,7 @@ namespace {
             }
 
             const size_t get_cache_hits() {
-                return std::accumulate(g_cache_hits.begin(), g_cache_hits.end(),0);
+                return std::accumulate(g_cache_hits.begin(), g_cache_hits.end(), 0);
             }
 
             void print() {
