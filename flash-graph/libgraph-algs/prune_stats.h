@@ -118,6 +118,40 @@ namespace {
             }
     };
 
+    class activation_counter {
+        private:
+        std::vector<unsigned> agg_active_count; // summation of per thread
+        std::vector<unsigned> active_count;
+
+        activation_counter(const unsigned nthread) {
+            active_count.resize(nthread);
+        }
+
+        public:
+        typedef std::shared_ptr<activation_counter> ptr;
+        static ptr create(const unsigned nthread) {
+            return ptr(new activation_counter(nthread));
+        }
+
+        void active(const unsigned thd) {
+            active_count[thd]++;
+        }
+
+        void complete() {
+            unsigned tot = 0;
+            for (std::vector<unsigned>::iterator it = active_count.begin();
+                    it != active_count.end(); ++it)
+                tot += *it;
+
+            active_count.assign(active_count.size(), 0); // reset
+            agg_active_count.push_back(tot);
+        }
+
+        std::vector<unsigned>& get_active_count_per_iter() {
+            return agg_active_count;
+        }
+    };
+
     class active_counter {
         private:
         std::vector<bool> prev_active; // Was a vertex active last iter
@@ -158,6 +192,7 @@ namespace {
             return ptr(new active_counter(nrow));
         }
 
+        // Called at the end of every kmeans iteration
         void init_iter() {
             std::vector<bool> v;
             v.assign(nrow, false);
