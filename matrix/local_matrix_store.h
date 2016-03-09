@@ -216,6 +216,10 @@ public:
 		matrix_store::resize(num_rows, num_cols);
 	}
 	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
+	virtual size_t get_all_rows(std::vector<const char *> &rows) const;
+	virtual size_t get_all_cols(std::vector<const char *> &cols) const;
+	virtual size_t get_all_rows(std::vector<char *> &rows);
+	virtual size_t get_all_cols(std::vector<char *> &cols);
 
 	virtual bool read_only() const = 0;
 	virtual const char *get_raw_arr() const = 0;

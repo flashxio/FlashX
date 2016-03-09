@@ -99,6 +99,90 @@ void local_matrix_store::resize_transpose(local_matrix_store &store) const
 	}
 }
 
+size_t local_matrix_store::get_all_rows(std::vector<const char *> &rows) const
+{
+	if (store_layout() == matrix_layout_t::L_COL)
+		return 0;
+	else if (get_raw_arr()) {
+		rows.resize(get_num_rows());
+		const char *arr = get_raw_arr();
+		size_t row_len = get_num_cols() * get_entry_size();
+		for (size_t i = 0; i < get_num_rows(); i++)
+			rows[i] = arr + row_len * i;
+	}
+	else {
+		const local_row_matrix_store *row_store
+			= static_cast<const local_row_matrix_store *>(this);
+		rows.resize(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++)
+			rows[i] = row_store->get_row(i);
+	}
+	return rows.size();
+}
+
+size_t local_matrix_store::get_all_cols(std::vector<const char *> &cols) const
+{
+	if (store_layout() == matrix_layout_t::L_ROW)
+		return 0;
+	else if (get_raw_arr()) {
+		cols.resize(get_num_cols());
+		const char *arr = get_raw_arr();
+		size_t col_len = get_num_rows() * get_entry_size();
+		for (size_t i = 0; i < get_num_cols(); i++)
+			cols[i] = arr + col_len * i;
+	}
+	else {
+		const local_col_matrix_store *col_store
+			= static_cast<const local_col_matrix_store *>(this);
+		cols.resize(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++)
+			cols[i] = col_store->get_col(i);
+	}
+	return cols.size();
+}
+
+size_t local_matrix_store::get_all_rows(std::vector<char *> &rows)
+{
+	if (store_layout() == matrix_layout_t::L_COL)
+		return 0;
+	else if (get_raw_arr()) {
+		rows.resize(get_num_rows());
+		char *arr = get_raw_arr();
+		size_t row_len = get_num_cols() * get_entry_size();
+		for (size_t i = 0; i < get_num_rows(); i++)
+			rows[i] = arr + row_len * i;
+	}
+	else {
+		local_row_matrix_store *row_store
+			= static_cast<local_row_matrix_store *>(this);
+		rows.resize(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++)
+			rows[i] = row_store->get_row(i);
+	}
+	return rows.size();
+}
+
+size_t local_matrix_store::get_all_cols(std::vector<char *> &cols)
+{
+	if (store_layout() == matrix_layout_t::L_ROW)
+		return 0;
+	else if (get_raw_arr()) {
+		cols.resize(get_num_cols());
+		char *arr = get_raw_arr();
+		size_t col_len = get_num_rows() * get_entry_size();
+		for (size_t i = 0; i < get_num_cols(); i++)
+			cols[i] = arr + col_len * i;
+	}
+	else {
+		local_col_matrix_store *col_store
+			= static_cast<local_col_matrix_store *>(this);
+		cols.resize(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++)
+			cols[i] = col_store->get_col(i);
+	}
+	return cols.size();
+}
+
 matrix_store::const_ptr local_buf_col_matrix_store::transpose() const
 {
 	return create_transpose<local_buf_row_matrix_store,
@@ -449,17 +533,18 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 }
 
 /*
- * The two functions below work for matrices with specific data layout.
- * It works for different matrix shapes, but it may have better performance
- * for matrices with certain shapes. We require the method in dense_matrix
- * to determine the right data layout for a matrix with a specific data layout.
+ * We optimize inner product on matrices with different shapes and different
+ * data layout differently. Specifically, we optimize inner product for
+ * row-major tall matrix, row-major wide matrix, col-major tall matrix and
+ * col-major wide matrix. We prefer row-major wide matrix and col-major
+ * tall matrix because they are easier to be optimized.
  */
 
 /*
- * In this case, the left matrix is row-major. The right matrix is stored
- * column-wise.
+ * In this case, the left matrix is row-major tall matrix. The right matrix
+ * is stored column-wise.
  */
-static void inner_prod_row(const local_row_matrix_store &m1,
+static void inner_prod_tall_row(const local_row_matrix_store &m1,
 		const local_col_matrix_store &m2, const bulk_operate &left_op,
 		const bulk_operate &right_op, local_matrix_store &res,
 		std::vector<char> &tmp_buf)
@@ -467,40 +552,125 @@ static void inner_prod_row(const local_row_matrix_store &m1,
 	size_t ncol = m1.get_num_cols();
 	size_t nrow = m1.get_num_rows();
 	tmp_buf.resize(ncol * left_op.output_entry_size());
-	for (size_t i = 0; i < nrow; i++) {
-		for (size_t j = 0; j < m2.get_num_cols(); j++) {
-			left_op.runAA(ncol, m1.get_row(i), m2.get_col(j), tmp_buf.data());
-			right_op.runAgg(ncol, tmp_buf.data(), res.get(i, j));
+
+	// Get all rows in m1.
+	std::vector<const char *> m1_rows;
+	size_t m1_num_rows = m1.get_all_rows(m1_rows);
+	assert(m1_num_rows > 0);
+
+	// Get all cols in m2.
+	std::vector<const char *> m2_cols;
+	size_t m2_num_cols = m2.get_all_cols(m2_cols);
+	assert(m2_num_cols > 0);
+
+	if (res.store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> res_rows;
+		size_t res_num_rows = res.get_all_rows(res_rows);
+		assert(res_num_rows > 0);
+
+		for (size_t i = 0; i < nrow; i++) {
+			for (size_t j = 0; j < m2.get_num_cols(); j++) {
+				left_op.runAA(ncol, m1_rows[i], m2_cols[j], tmp_buf.data());
+				right_op.runAgg(ncol, tmp_buf.data(),
+						res_rows[i] + j * res.get_entry_size());
+			}
+		}
+	}
+	else {
+		std::vector<char *> res_cols;
+		size_t res_num_cols = res.get_all_rows(res_cols);
+		assert(res_num_cols > 0);
+
+		for (size_t i = 0; i < nrow; i++) {
+			for (size_t j = 0; j < m2.get_num_cols(); j++) {
+				left_op.runAA(ncol, m1_rows[i], m2_cols[j], tmp_buf.data());
+				right_op.runAgg(ncol, tmp_buf.data(),
+						res_cols[j] + i * res.get_entry_size());
+			}
 		}
 	}
 }
 
 /*
- * In this case, the left matrix is in column major and we don't assume
- * the layout of the right matrix.
+ * In this case, the left matrix is row-major wide matrix. The right matrix
+ * is stored column-wise.
+ */
+static void inner_prod_wide_row(const local_row_matrix_store &m1,
+		const local_col_matrix_store &m2, const bulk_operate &left_op,
+		const bulk_operate &right_op, local_matrix_store &res,
+		std::vector<char> &tmp_buf)
+{
+	size_t ncol = m1.get_num_cols();
+	size_t nrow = m1.get_num_rows();
+	tmp_buf.resize(ncol * left_op.output_entry_size());
+
+	for (size_t i = 0; i < nrow; i++) {
+		const char *m1_row = m1.get_row(i);
+		for (size_t j = 0; j < m2.get_num_cols(); j++) {
+			left_op.runAA(ncol, m1_row, m2.get_col(j), tmp_buf.data());
+			right_op.runAgg(ncol, tmp_buf.data(), res.get(i, j));
+		}
+	}
+}
+
+static void inner_prod_col_part(const local_col_matrix_store &m1,
+		size_t m1_start_col, size_t m1_num_cols, const local_matrix_store &m2,
+		size_t m2_start_col, size_t m2_num_cols, const bulk_operate &left_op,
+		const bulk_operate &right_op, local_col_matrix_store &res,
+		std::vector<char> &tmp_buf)
+{
+	size_t nrow = m1.get_num_rows();
+	tmp_buf.resize(nrow * left_op.output_entry_size());
+	size_t m1_end_col = m1_start_col + m1_num_cols;
+	size_t m2_end_col = m2_start_col + m2_num_cols;
+
+	// For the first col from the left matrix and the first row from
+	// the right matrix.
+	if (m1_start_col == 0) {
+		const char *m1_col = m1.get_col(0);
+		for (size_t j = m2_start_col; j < m2_start_col + m2_num_cols; j++)
+			left_op.runAE(nrow, m1_col, m2.get(0, j), res.get_col(j));
+		m1_start_col = 1;
+	}
+
+	// For the rest of the matrix.
+	for (size_t i = m1_start_col; i < m1_end_col; i++) {
+		const char *m1_col = m1.get_col(i);
+		for (size_t j = m2_start_col; j < m2_end_col; j++) {
+			left_op.runAE(nrow, m1_col, m2.get(i, j), tmp_buf.data());
+			char *store_col = res.get_col(j);
+			right_op.runAA(nrow, tmp_buf.data(), store_col, store_col);
+		}
+	}
+}
+
+/*
+ * In this case, the left matrix is tall and in column major and we don't
+ * assume the layout of the right matrix.
  */
 static void inner_prod_col(const local_col_matrix_store &m1,
 		const local_matrix_store &m2, const bulk_operate &left_op,
 		const bulk_operate &right_op, local_col_matrix_store &res,
 		std::vector<char> &tmp_buf)
 {
-	size_t ncol = m1.get_num_cols();
-	size_t nrow = m1.get_num_rows();
-	tmp_buf.resize(nrow * left_op.output_entry_size());
-
-	// For the first col from the left matrix and the first row from
-	// the right matrix.
-	const char *m1_col = m1.get_col(0);
-	for (size_t j = 0; j < m2.get_num_cols(); j++)
-		left_op.runAE(nrow, m1_col, m2.get(0, j), res.get_col(j));
-
-	// For the rest of the matrix.
-	for (size_t i = 1; i < ncol; i++) {
-		const char *m1_col = m1.get_col(i);
-		for (size_t j = 0; j < m2.get_num_cols(); j++) {
-			left_op.runAE(nrow, m1_col, m2.get(i, j), tmp_buf.data());
-			char *store_col = res.get_col(j);
-			right_op.runAA(nrow, tmp_buf.data(), store_col, store_col);
+	const size_t L1_SIZE = 1024 * 32;
+	size_t num_cols_part = L1_SIZE / m1.get_num_rows() / m1.get_entry_size() / 2;
+	if (num_cols_part <= 1)
+		inner_prod_col_part(m1, 0, m1.get_num_cols(), m2, 0, m2.get_num_cols(),
+				left_op, right_op, res, tmp_buf);
+	else {
+		// We further partition the matrix vertically to keep the columns
+		// in the L1 CPU cache as much as possible. However, it doesn't seem
+		// to have performance improvement.
+		// TODO We need more performance profiling to improve its performance.
+		for (size_t i = 0; i < m1.get_num_cols(); i += num_cols_part) {
+			size_t m1_num_cols = std::min(num_cols_part, m1.get_num_cols() - i);
+			for (size_t j = 0; j < m2.get_num_cols(); j += num_cols_part) {
+				size_t m2_num_cols = std::min(num_cols_part,
+						m2.get_num_cols() - j);
+				inner_prod_col_part(m1, i, m1_num_cols, m2, j, m2_num_cols,
+						left_op, right_op, res, tmp_buf);
+			}
 		}
 	}
 }
@@ -512,15 +682,23 @@ static void _inner_prod(const local_matrix_store &m1,
 {
 	if (m1.store_layout() == matrix_layout_t::L_ROW) {
 		assert(m2.store_layout() == matrix_layout_t::L_COL);
-		inner_prod_row(static_cast<const local_row_matrix_store &>(m1),
-				static_cast<const local_col_matrix_store &>(m2), left_op,
-				right_op, res, tmp_buf);
+		const local_row_matrix_store &row_m1
+			= static_cast<const local_row_matrix_store &>(m1);
+		const local_col_matrix_store &col_m2
+			= static_cast<const local_col_matrix_store &>(m2);
+		if (m1.is_wide())
+			inner_prod_wide_row(row_m1, col_m2, left_op, right_op, res, tmp_buf);
+		else
+			inner_prod_tall_row(row_m1, col_m2, left_op, right_op, res, tmp_buf);
 	}
 	else {
 		assert(res.store_layout() == matrix_layout_t::L_COL);
-		inner_prod_col(static_cast<const local_col_matrix_store &>(m1),
-				m2, left_op, right_op,
-				static_cast<local_col_matrix_store &>(res), tmp_buf);
+		assert(!m1.is_wide());
+		const local_col_matrix_store &col_m1
+			= static_cast<const local_col_matrix_store &>(m1);
+		local_col_matrix_store &col_res
+			= static_cast<local_col_matrix_store &>(res);
+		inner_prod_col(col_m1, m2, left_op, right_op, col_res, tmp_buf);
 	}
 }
 
