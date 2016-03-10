@@ -72,6 +72,10 @@ public:
 	matrix_store::const_ptr get_mat(size_t off) const {
 		return mats[off];
 	}
+
+	const matrix_store &get_mat_ref(size_t off) const {
+		return *mats[off];
+	}
 };
 }
 

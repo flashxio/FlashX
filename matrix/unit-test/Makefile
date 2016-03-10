@@ -27,7 +27,7 @@ all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
 	test-special_matrix_store test-EM_vector_vector test-rounderror \
-	test-hashtable test-bulk_operate
+	test-hashtable test-bulk_operate test-block_matrix
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -88,6 +88,9 @@ test-hashtable: test-hashtable.o ../libFMatrix.a
 
 test-bulk_operate: test-bulk_operate.o ../libFMatrix.a
 	$(CXX) -o test-bulk_operate test-bulk_operate.o $(LDFLAGS)
+
+test-block_matrix: test-block_matrix.o ../libFMatrix.a
+	$(CXX) -o test-block_matrix test-block_matrix.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

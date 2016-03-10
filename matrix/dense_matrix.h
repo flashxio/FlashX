@@ -169,13 +169,6 @@ private:
 			matrix_layout_t layout, int num_nodes, bool in_mem,
 			safs::safs_file_group::ptr group);
 
-	detail::matrix_store::ptr inner_prod_tall(const dense_matrix &m,
-			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
-			matrix_layout_t out_layout) const;
-	detail::matrix_store::ptr inner_prod_wide(const dense_matrix &m,
-			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
-			matrix_layout_t out_layout) const;
-
 	detail::matrix_store::const_ptr _conv_store(bool in_mem, int num_nodes) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
@@ -186,6 +179,13 @@ protected:
 	bool verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	bool verify_apply(matrix_margin margin, const arr_apply_operate &op) const;
+
+	virtual dense_matrix::ptr inner_prod_tall(const dense_matrix &m,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t out_layout) const;
+	virtual dense_matrix::ptr inner_prod_wide(const dense_matrix &m,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t out_layout) const;
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
@@ -227,6 +227,8 @@ public:
 	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL);
+	virtual ~dense_matrix() {
+	}
 
 	const detail::matrix_store &get_data() const {
 		return *store;
@@ -252,10 +254,6 @@ public:
 		return store->get_type();
 	}
 
-	matrix_layout_t store_layout() const {
-		return store->store_layout();
-	}
-
 	bool is_in_mem() const {
 		return store->is_in_mem();
 	}
@@ -264,79 +262,89 @@ public:
 		return store->is_wide();
 	}
 
-	bool is_virtual() const {
-		return store->is_virtual();
-	}
-
-	void materialize_self() const;
-	void set_materialize_level(materialize_level level,
-			detail::matrix_store::ptr materialize_buf = NULL);
-
 	template<class T>
 	bool is_type() const {
 		return get_type() == get_scalar_type<T>();
 	}
 
+	virtual matrix_layout_t store_layout() const {
+		return store->store_layout();
+	}
+
+	virtual bool is_virtual() const {
+		return store->is_virtual();
+	}
+
+	virtual void materialize_self() const;
+	virtual void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf = NULL);
+
 	/*
 	 * We can't change the matrix data that it points to, but we can change
 	 * the pointer in the class so that it can point to another matrix data.
 	 */
-	void assign(const dense_matrix &mat) {
+	virtual void assign(const dense_matrix &mat) {
 		store = mat.store;
 	}
 
-	std::shared_ptr<vector> get_col(off_t idx) const;
-	std::shared_ptr<vector> get_row(off_t idx) const;
-	dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
-	dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual std::shared_ptr<vector> get_col(off_t idx) const;
+	virtual std::shared_ptr<vector> get_row(off_t idx) const;
+	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
+	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 	/*
 	 * Clone the matrix.
 	 * The class can't modify the matrix data that it points to, but it
 	 * can modify the pointer. If someone changes in the pointer in the cloned
 	 * matrix, it doesn't affect the current matrix.
 	 */
-	dense_matrix::ptr clone() const {
+	virtual dense_matrix::ptr clone() const {
 		return ptr(new dense_matrix(get_raw_store()));
 	}
-	dense_matrix::ptr deep_copy() const;
+	virtual dense_matrix::ptr deep_copy() const;
 
-	dense_matrix::ptr transpose() const;
+	virtual dense_matrix::ptr transpose() const;
 	/*
 	 * This converts the data layout of the dense matrix.
 	 * It actually generates a virtual matrix that represents the matrix
 	 * with required data layout.
 	 */
-	dense_matrix::ptr conv2(matrix_layout_t layout) const;
+	virtual dense_matrix::ptr conv2(matrix_layout_t layout) const;
 	/*
 	 * This method converts the storage media of the matrix.
 	 * It can convert an in-memory matrix to an EM matrix, or vice versa.
 	 * The output matrix is always materialized.
 	 */
-	dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
-	bool move_store(bool in_mem, int num_nodes) const;
+	virtual dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
+	virtual bool move_store(bool in_mem, int num_nodes) const;
 
 	/*
 	 * If the matrix store keeps data in cache, this method will remove
 	 * the cache and return true. Otherwise, it returns false.
 	 */
-	bool drop_cache();
+	virtual bool drop_cache();
 
 	/*
 	 * This returns the number of cached rows/columns in a matrix.
 	 */
-	size_t get_num_cached() const;
+	virtual size_t get_num_cached() const;
 
-	dense_matrix::ptr inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
+	virtual dense_matrix::ptr multiply(const dense_matrix &mat,
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE,
+			bool use_blas = true) const;
 	/*
 	 * Compute aggregation on the matrix.
 	 * It can aggregate on rows, on columns or on all elements.
 	 * By default, we compute aggregation lazily.
 	 */
-	dense_matrix::ptr aggregate(matrix_margin margin, agg_operate::const_ptr op) const;
-	std::shared_ptr<scalar_variable> aggregate(agg_operate::const_ptr op) const;
-	std::shared_ptr<scalar_variable> aggregate(bulk_operate::const_ptr op) const;
+	virtual dense_matrix::ptr aggregate(matrix_margin margin,
+			agg_operate::const_ptr op) const;
+	virtual std::shared_ptr<scalar_variable> aggregate(
+			agg_operate::const_ptr op) const;
+	virtual std::shared_ptr<scalar_variable> aggregate(
+			bulk_operate::const_ptr op) const;
 
 	/*
 	 * This operator groups rows based on the labels in the factor vector
@@ -345,20 +353,23 @@ public:
 	 * Each row of the output dense matrix is the aggregation of all rows in
 	 * the input dense matrix that have the same factor.
 	 */
-	dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
+	virtual dense_matrix::ptr groupby_row(
+			std::shared_ptr<const factor_col_vector> labels,
 			agg_operate::const_ptr) const;
-	dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
+	virtual dense_matrix::ptr groupby_row(
+			std::shared_ptr<const factor_col_vector> labels,
 			bulk_operate::const_ptr) const;
 
-	dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,
+	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,
 			bulk_operate::const_ptr op) const;
-	dense_matrix::ptr mapply_rows(std::shared_ptr<const vector> vals,
+	virtual dense_matrix::ptr mapply_rows(std::shared_ptr<const vector> vals,
 			bulk_operate::const_ptr op) const;
-	dense_matrix::ptr mapply2(const dense_matrix &m,
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
-	dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
-	dense_matrix::ptr apply(matrix_margin margin,
+	virtual dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
+	virtual dense_matrix::ptr apply(matrix_margin margin,
 			arr_apply_operate::const_ptr op) const;
+
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;
 
@@ -378,9 +389,6 @@ public:
 		// each column.
 		return mapply_cols(vals, multiply);
 	}
-	dense_matrix::ptr multiply(const dense_matrix &mat,
-			matrix_layout_t out_layout = matrix_layout_t::L_NONE,
-			bool use_blas = true) const;
 
 	dense_matrix::ptr add(const dense_matrix &mat) const {
 		const bulk_operate &op = get_type().get_basic_ops().get_add();

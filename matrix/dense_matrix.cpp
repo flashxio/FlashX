@@ -2238,13 +2238,10 @@ dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
 		return t_res->transpose();
 	}
 
-	detail::matrix_store::ptr res;
 	if (is_wide())
-		res = inner_prod_wide(m, left_op, right_op, out_layout);
+		return inner_prod_wide(m, left_op, right_op, out_layout);
 	else
-		res = inner_prod_tall(m, left_op, right_op, out_layout);
-
-	return dense_matrix::ptr(new dense_matrix(res));
+		return inner_prod_tall(m, left_op, right_op, out_layout);
 }
 
 namespace
@@ -2337,7 +2334,7 @@ void inner_prod_tall_op::run(
 // This flag is only used for testing.
 bool inner_prod_conv = true;
 
-detail::matrix_store::ptr dense_matrix::inner_prod_tall(
+dense_matrix::ptr dense_matrix::inner_prod_tall(
 		const dense_matrix &m, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op, matrix_layout_t out_layout) const
 {
@@ -2384,7 +2381,9 @@ detail::matrix_store::ptr dense_matrix::inner_prod_tall(
 
 	inner_prod_tall_op::const_ptr mapply_op(new inner_prod_tall_op(right,
 				left_op, right_op, get_num_rows(), m.get_num_cols()));
-	return __mapply_portion_virtual(ins, mapply_op, out_layout);
+	detail::matrix_store::ptr res = __mapply_portion_virtual(ins, mapply_op, out_layout);
+	assert(res);
+	return dense_matrix::create(res);
 }
 
 namespace
@@ -2454,7 +2453,7 @@ void inner_prod_wide_op::run(
 
 }
 
-detail::matrix_store::ptr dense_matrix::inner_prod_wide(
+dense_matrix::ptr dense_matrix::inner_prod_wide(
 		const dense_matrix &m, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op, matrix_layout_t out_layout) const
 {
@@ -2513,7 +2512,7 @@ detail::matrix_store::ptr dense_matrix::inner_prod_wide(
 		if (local_ms[j])
 			detail::mapply2(*local_res, *local_ms[j], *right_op, *local_res);
 	}
-	return res;
+	return dense_matrix::create(res);
 }
 
 ////////////////////////////// Aggregation /////////////////////////////
@@ -2624,13 +2623,11 @@ scalar_variable::ptr dense_matrix::aggregate(bulk_operate::const_ptr op) const
 
 scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 {
-	if (this->get_type() != op->get_input_type()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The matrix element type is different from the operator";
+	dense_matrix::ptr agg_mat = aggregate(matrix_margin::BOTH, op);
+	if (agg_mat == NULL)
 		return scalar_variable::ptr();
-	}
-	detail::matrix_store::const_ptr _res = fm::aggregate(store,
-			matrix_margin::BOTH, op);
+
+	detail::matrix_store::const_ptr _res = agg_mat->get_raw_store();
 	assert(_res != NULL);
 	// It's evaluated lazily
 	detail::virtual_matrix_store::const_ptr virt_res
