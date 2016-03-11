@@ -250,8 +250,7 @@ dense_matrix::ptr create_rand_cached(size_t num_rows, size_t num_cols,
 		store = detail::cached_matrix_store::create(
 				num_rows, num_cols, num_nodes, get_scalar_type<mat_ele_t>(),
 				num_cached, cached_layout);
-	store->init_randu(scalar_variable_impl<mat_ele_t>(0),
-			scalar_variable_impl<mat_ele_t>(1));
+	store->init_randu<mat_ele_t>(0, 1);
 	return dense_matrix::create(store);
 }
 

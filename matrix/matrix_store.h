@@ -71,6 +71,18 @@ public:
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &_type);
 
+	template<class T>
+	void init_randu(T min, T max) {
+		std::shared_ptr<const set_operate> op = create_urand_init<T>(min, max);
+		set_data(*op);
+	}
+
+	template<class T>
+	void init_randn(T mean, T var) {
+		std::shared_ptr<const set_operate> op = create_nrand_init<T>(mean, var);
+		set_data(*op);
+	}
+
 	virtual ~matrix_store() {
 	}
 
@@ -123,8 +135,6 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
-	void init_randu(const scalar_variable &min, const scalar_variable &max);
-	void init_randn(const scalar_variable &mean, const scalar_variable &var);
 
 	virtual matrix_store::const_ptr transpose() const = 0;
 

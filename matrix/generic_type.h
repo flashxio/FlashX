@@ -404,6 +404,28 @@ public:
 
 bool require_cast(const scalar_type &t1, const scalar_type &t2);
 
+class set_operate;
+
+template<class T>
+std::shared_ptr<const set_operate> create_urand_init(T _min, T _max)
+{
+	extern std::shared_ptr<const set_operate> create_urand_init(
+			scalar_variable::const_ptr min, scalar_variable::const_ptr max);
+	scalar_variable::const_ptr min(new scalar_variable_impl<T>(_min));
+	scalar_variable::const_ptr max(new scalar_variable_impl<T>(_max));
+	return create_urand_init(min, max);
+}
+
+template<class T>
+std::shared_ptr<const set_operate> create_nrand_init(T _mean, T _var)
+{
+	extern std::shared_ptr<const set_operate> create_nrand_init(
+			scalar_variable::const_ptr mean, scalar_variable::const_ptr var);
+	scalar_variable::const_ptr mean(new scalar_variable_impl<T>(_mean));
+	scalar_variable::const_ptr var(new scalar_variable_impl<T>(_var));
+	return create_nrand_init(mean, var);
+}
+
 }
 
 #endif

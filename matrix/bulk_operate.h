@@ -207,6 +207,8 @@ public:
 class set_operate
 {
 public:
+	typedef std::shared_ptr<const set_operate> const_ptr;
+
 	virtual void set(void *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const = 0;
 	virtual const scalar_type &get_type() const = 0;

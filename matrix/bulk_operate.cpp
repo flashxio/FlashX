@@ -21,6 +21,7 @@
 #include "bulk_operate.h"
 #include "bulk_operate_ext.h"
 #include "generic_type.h"
+#include "rand_gen.h"
 
 namespace fm
 {
@@ -775,6 +776,104 @@ const agg_ops &scalar_type_impl<T>::get_agg_ops() const
 {
 	static agg_ops_impl<T, T> aops;
 	return aops;
+}
+
+namespace
+{
+
+/*
+ * This class set elements in a container randomly.
+ * set_operate can't change its own state and has to be thread-safe when
+ * running on multiple threads. However, random generators aren't
+ * thread-safe, so we have to create a random generator for each thread.
+ */
+class rand_init: public set_operate
+{
+public:
+	enum rand_dist_type {
+		NORM,
+		UNIF,
+		MAX_NUM,
+	};
+private:
+	class rand_gen_wrapper {
+		rand_gen::ptr gen;
+	public:
+		rand_gen_wrapper(rand_gen::ptr gen) {
+			this->gen = gen;
+		}
+
+		rand_gen &get_gen() {
+			return *gen;
+		}
+	};
+
+	pthread_key_t gen_key;
+	const scalar_type &type;
+	scalar_variable::const_ptr var1;
+	scalar_variable::const_ptr var2;
+	rand_dist_type rand_dist;
+
+	rand_gen &get_rand_gen() const {
+		void *addr = pthread_getspecific(gen_key);
+		if (addr == NULL) {
+			if (rand_dist == rand_dist_type::NORM)
+				addr = new rand_gen_wrapper(type.create_randn_gen(*var1, *var2));
+			else if (rand_dist == rand_dist_type::UNIF)
+				addr = new rand_gen_wrapper(type.create_randu_gen(*var1, *var2));
+			else
+				assert(0);
+			int ret = pthread_setspecific(gen_key, addr);
+			assert(ret == 0);
+		}
+		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) addr;
+		return wrapper->get_gen();
+	}
+
+	static void destroy_rand_gen(void *gen) {
+		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) gen;
+		delete wrapper;
+		printf("destroy rand gen\n");
+	}
+public:
+	rand_init(scalar_variable::const_ptr var1, scalar_variable::const_ptr var2,
+			rand_dist_type rand_dist): type(var1->get_type()) {
+		this->var1 = var1;
+		this->var2 = var2;
+		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
+		this->rand_dist = rand_dist;
+		assert(ret == 0);
+	}
+
+	~rand_init() {
+		pthread_key_delete(gen_key);
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		get_rand_gen().gen(arr, num_eles);
+	}
+	virtual const scalar_type &get_type() const {
+		return get_rand_gen().get_type();
+	}
+};
+
+}
+
+set_operate::const_ptr create_urand_init(scalar_variable::const_ptr min,
+		scalar_variable::const_ptr max)
+{
+	assert(min->get_type() == max->get_type());
+	return set_operate::const_ptr(new rand_init(min, max,
+				rand_init::rand_dist_type::UNIF));
+}
+
+set_operate::const_ptr create_nrand_init(
+		scalar_variable::const_ptr mean, scalar_variable::const_ptr var)
+{
+	assert(mean->get_type() == var->get_type());
+	return set_operate::const_ptr(new rand_init(mean, var,
+				rand_init::rand_dist_type::NORM));
 }
 
 }
