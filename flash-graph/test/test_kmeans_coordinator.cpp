@@ -20,7 +20,7 @@
 #include "matrix/kmeans_coordinator.h"
 
 int main (int argc, char* argv []) {
-    
+
     if (argc < 6) {
         fprintf(stderr, "usage: ./test_kmeans_coordinator nthreads "
                 "nrow ncol k datafile\n");
@@ -37,7 +37,7 @@ int main (int argc, char* argv []) {
     printf("nrow: %u\n", nrow);
     printf("ncol: %u\n", ncol);
 
-    unsigned nnodes = numa_num_task_nodes(); 
+    unsigned nnodes = numa_num_task_nodes();
     std::cout << "We have " << nnodes << " NUMA nodes\n";
 
     kmeans_coordinator::ptr kc = kmeans_coordinator::create(
