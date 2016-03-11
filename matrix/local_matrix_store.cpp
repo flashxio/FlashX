@@ -693,7 +693,6 @@ static void _inner_prod(const local_matrix_store &m1,
 	}
 	else {
 		assert(res.store_layout() == matrix_layout_t::L_COL);
-		assert(!m1.is_wide());
 		const local_col_matrix_store &col_m1
 			= static_cast<const local_col_matrix_store &>(m1);
 		local_col_matrix_store &col_res
