@@ -24,69 +24,69 @@
 
 namespace {
     void kmeans_thread::run() {
-        std::cout << "Hello from thread: " <<
-            get_thd_id() << "\n";
+        switch(state) {
+            case TEST:
+                test();
+                break;
+            case ALLOC_DATA:
+                numa_alloc_mem();
+                assert(0);
+                break;
+            case KMSPP_INIT:
+                assert(0);
+                break;
+            case EM: /*EM steps of kmeans*/
+                assert(0);
+                break;
+            default:
+                fprintf(stderr, "Unknown thread state\n");
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    void kmeans_thread::test() {
+        std::cout << "Hello from thread: " << get_thd_id() << "\n";
         set_val(get_thd_id());
+    }
+
+    static void bind2node_id(int node_id) {
+        struct bitmask *bmp = numa_allocate_nodemask();
+        numa_bitmask_setbit(bmp, node_id);
+        numa_bind(bmp);
+        numa_free_nodemask(bmp);
     }
 
     void* callback(void* arg) {
         kmeans_thread* t = static_cast<kmeans_thread*>(arg);
+        bind2node_id(t->node_id);
         t->run();
         pthread_exit(NULL);
     }
 
-    void kmeans_thread::start() {
-        //BOOST_VERIFY(hw_thd == 0);
+    void kmeans_thread::start(const thread_state_t state) {
+        this->state = state;
+
         int rc = pthread_create(&hw_thd, NULL, callback, this);
-        printf("Thread completed run method\n");
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
                 exit(rc);
         }
     }
 
-#if 0
-    // Move data equally to all nodes
-    std::vector<double*> numa_data_move(double* data, const unsigned nnodes,
-            const unsigned nrow, const unsigned ncol) {
-        nrow_tuple rt = get_rows_per_node(nrow, ncol, nnodes);
+    // Move data ~equally to all nodes
+    void kmeans_thread::numa_alloc_mem() {
+        BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
+            size_t blob_size = get_data_size();
+            local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
+            fseek(f, start_offset*sizeof(double), SEEK_CUR); // start position
+            BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
+            close_file_handle();
 
-        std::vector<double*> ret_addrs;
-        for (unsigned node_id = 0; node_id < nnodes; node_id++) {
-            size_t start_offset = node_id*rt.first*ncol;
-            if (node_id + 1 < nnodes) {
-                size_t blob_size = sizeof(double)*rt.first*ncol;
-                ret_addrs.push_back(
-                        (double*)numa_alloc_onnode(blob_size, node_id));
-                std::move(&(data[start_offset]),
-                        &(data[start_offset+(ncol*rt.first)]), ret_addrs.back());
-            } else {
-                size_t blob_size = sizeof(double)*rt.second*ncol;
-                ret_addrs.push_back(
-                        (double*)numa_alloc_onnode(blob_size, node_id));
-                std::move(&(data[start_offset]),
-                        &(data[start_offset+(ncol*rt.second)]), ret_addrs.back());
-            }
-        }
-        return ret_addrs;
+            //std::copy(&(full_data[start_offset]),
+            //        &(full_data[start_offset+(ncol*nprocrows)]), local_data);
     }
 
-    // <First -> rows_per_node, Last -> rows_last_node>
-    void numa_destroy_mem(std::vector<double*>& data_addrs, const unsigned nnodes,
-            const unsigned nrow, const unsigned ncol) {
-        nrow_tuple rt = compute_rows_per_node(nrow, ncol, nnodes);
-        for (unsigned node_id = 0; node_id < nnodes; node_id++) {
-            size_t blob_size;
-            if (node_id + 1 < nnodes) {
-                blob_size = sizeof(double)*rt.first*ncol;
-            } else {
-                blob_size = sizeof(double)*rt.second*ncol;
-            }
-            BOOST_VERIFY(blob_size > 0);
-            //printf("numa_free: %lu bytes\n", blob_size);
-            numa_free(data_addrs[node_id], blob_size);
-        }
+    void kmeans_thread::print_local_data() {
+        print_mat(local_data, nprocrows, ncol);
     }
-
-#endif
 }
