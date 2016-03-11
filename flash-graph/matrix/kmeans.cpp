@@ -18,7 +18,7 @@
  */
 
 #include "kmeans.h"
-#define KM_TEST 1
+#define KM_TEST 0
 #define VERBOSE 0
 
 #ifdef PROFILER
@@ -142,8 +142,7 @@ namespace {
 	 *	\param cluster_assignments Which cluster each sample falls into.
 	 */
 	static void EM_step(const double* matrix, clusters::ptr cls,
-            unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            const bool prune_init=false) {
+            unsigned* cluster_assignments, unsigned* cluster_assignment_counts) {
 
 		std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
         // Per thread changed cluster count. OMP_MAX_THREADS
@@ -237,6 +236,9 @@ namespace fg
 			exit(-1);
 		}
 
+        /*BOOST_LOG_TRIVIAL(info) << "Projecting onto a sphere:";
+        spherical_projection(matrix, NUM_ROWS, NUM_COLS);*/
+
 		gettimeofday(&start , NULL);
 		/*** Begin VarInit of data structures ***/
         std::fill(&cluster_assignments[0], (&cluster_assignments[0])+NUM_ROWS, -1);
@@ -247,7 +249,6 @@ namespace fg
         if (init == "none")
             clusters->set_mean(clusters_ptr);
 
-        // For pruning
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
 
@@ -286,12 +287,27 @@ namespace fg
         if (g_init_type == NONE || g_init_type == FORGY
                 || g_init_type == RANDOM) {
 			EM_step(matrix, clusters, cluster_assignments,
-                    cluster_assignment_counts, true);
+                    cluster_assignment_counts);
         }
+
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "\n\nInitialization time taken = " <<
+			time_diff(start, end) << " sec\n";
+		gettimeofday(&start , NULL);
 
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 		BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
-
+#if 0
+        FILE* f;
+        BOOST_VERIFY(f =
+                fopen("/mnt/nfs/disa/data/big/friendster-8-10centers", "wb"));
+        fwrite(&((clusters->get_means())[0]),
+                sizeof(double)*NUM_COLS*K, 1, f);
+        fclose(f);
+        printf("\n\nCenters should be:\n");
+        clusters->print_means();
+        exit(1);
+#endif
 		bool converged = false;
 		std::string str_iters = MAX_ITERS == std::numeric_limits<unsigned>::max() ?
 			"until convergence ...":
@@ -337,6 +353,15 @@ namespace fg
 				<< iter << " iterations";
 		}
 		BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
+
+#if VERBOSE
+        printf("Computed bic: %f\n", get_bic(dist_v, NUM_ROWS, NUM_COLS, K));
+        unsigned max_index = (std::max_element(cluster_assignment_counts,
+                    cluster_assignment_counts+K) - cluster_assignment_counts);
+
+        store_cluster(max_index, matrix, cluster_assignment_counts[max_index],
+                cluster_assignments, NUM_ROWS, NUM_COLS, "/mnt/nfs/disa/data/big/");
+#endif
 
 		return iter;
 	}
