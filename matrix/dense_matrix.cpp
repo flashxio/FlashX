@@ -36,6 +36,7 @@
 #include "factor.h"
 #include "cached_matrix_store.h"
 #include "agg_matrix_store.h"
+#include "IPW_matrix_store.h"
 
 namespace fm
 {
@@ -2386,132 +2387,35 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 	return dense_matrix::create(res);
 }
 
-namespace
-{
-
-class inner_prod_wide_op: public detail::portion_mapply_op
-{
-	const bulk_operate &left_op;
-	const bulk_operate &right_op;
-	detail::matrix_store::const_ptr res;
-	std::vector<detail::local_matrix_store::ptr> local_ms;
-public:
-	inner_prod_wide_op(const bulk_operate &_left_op, const bulk_operate &_right_op,
-			detail::matrix_store::const_ptr res,
-			size_t num_threads): detail::portion_mapply_op( 0, 0,
-				res->get_type()), left_op(_left_op), right_op(_right_op) {
-		local_ms.resize(num_threads);
-		this->res = res;
-	}
-
-	const std::vector<detail::local_matrix_store::ptr> &get_partial_results() const {
-		return local_ms;
-	}
-
-	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
-
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		// We don't need to implement this because we materialize
-		// the output matrix immediately.
-		assert(0);
-		return detail::portion_mapply_op::const_ptr();
-	}
-	virtual std::string to_string(
-			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		assert(mats.size() == 1);
-		return std::string("inner_prod(") + mats[0]->get_name()
-			+ "," + mats[1]->get_name() + ")";
-	}
-};
-
-void inner_prod_wide_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
-{
-	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-	detail::local_matrix_store::ptr local_m = local_ms[thread_id];
-	if (local_m == NULL) {
-		if (res->store_layout() == matrix_layout_t::L_COL)
-			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_col_matrix_store(0, 0,
-						res->get_num_rows(), res->get_num_cols(),
-						right_op.get_output_type(), -1));
-		else
-			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_row_matrix_store(0, 0,
-						res->get_num_rows(), res->get_num_cols(),
-						right_op.get_output_type(), -1));
-		local_m->reset_data();
-		assert((size_t) thread_id < local_ms.size());
-		const_cast<inner_prod_wide_op *>(this)->local_ms[thread_id] = local_m;
-	}
-	detail::local_matrix_store::const_ptr store
-		= std::static_pointer_cast<const detail::local_matrix_store>(
-				ins[0]->transpose());
-	detail::inner_prod(*store, *ins[1], left_op, right_op, *local_m);
-}
-
-}
-
 dense_matrix::ptr dense_matrix::inner_prod_wide(
 		const dense_matrix &m, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op, matrix_layout_t out_layout) const
 {
-	// This matrix is small. We can always keep it in memory.
-	detail::matrix_store::ptr res = detail::matrix_store::create(
-			get_num_rows(), m.get_num_cols(), out_layout,
-			right_op->get_output_type(), -1, true);
-
-	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
-
-	std::vector<detail::matrix_store::const_ptr> mats(2);
 	// If the right matrix is stored in col major order,
 	// the left matrix should be stored in row major order.
+	detail::matrix_store::const_ptr left_mat;
 	if (store_layout() == matrix_layout_t::L_COL
 			&& m.store_layout() == matrix_layout_t::L_COL) {
 		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
-		mats[0] = tmp->get_data().transpose();
+		left_mat = tmp->get_raw_store();
 	}
 	else
-		mats[0] = get_data().transpose();
-	assert(mats[0]);
+		left_mat = get_raw_store();
+	assert(left_mat);
 	// If the left matrix is stored in row major order,
 	// the right matrix should be stored in col major order.
+	detail::matrix_store::const_ptr right_mat;
 	if (store_layout() == matrix_layout_t::L_ROW
 			&& m.store_layout() == matrix_layout_t::L_ROW) {
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
-		mats[1] = tmp->get_raw_store();
+		right_mat = tmp->get_raw_store();
 	}
 	else
-		mats[1] = m.get_raw_store();
-	assert(mats[1]);
-	std::shared_ptr<inner_prod_wide_op> op(new inner_prod_wide_op(
-				*left_op, *right_op, res, nthreads));
-	__mapply_portion(mats, op, out_layout);
-	std::vector<detail::local_matrix_store::ptr> local_ms
-		= op->get_partial_results();
-	assert(local_ms.size() == nthreads);
+		right_mat = m.get_raw_store();
+	assert(right_mat);
 
-	if (out_layout == matrix_layout_t::L_NONE) {
-		// mats[0] is the transpose
-		if (mats[0]->store_layout() == matrix_layout_t::L_ROW)
-			out_layout = matrix_layout_t::L_COL;
-		else
-			// Actually, we don't care what the layout is for this case.
-			out_layout = matrix_layout_t::L_ROW;
-	}
-
-	// Aggregate the results from omp threads.
-	res->reset_data();
-	detail::local_matrix_store::ptr local_res = res->get_portion(0);
-	assert(local_res->get_num_rows() == res->get_num_rows()
-			&& local_res->get_num_cols() == res->get_num_cols());
-	for (size_t j = 0; j < local_ms.size(); j++) {
-		// It's possible that the local matrix store doesn't exist
-		// because the input matrix is very small.
-		if (local_ms[j])
-			detail::mapply2(*local_res, *local_ms[j], *right_op, *local_res);
-	}
+	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
+				left_mat, right_mat, left_op, right_op, out_layout));
 	return dense_matrix::create(res);
 }
 
