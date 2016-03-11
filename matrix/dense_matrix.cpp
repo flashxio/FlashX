@@ -1956,9 +1956,10 @@ dense_matrix::ptr dense_matrix::mapply_cols(vector::const_ptr vals,
 			<< "The vector's length needs to equal to #rows";
 		return dense_matrix::ptr();
 	}
-	if (get_type() != vals->get_type()) {
+	if (get_type() != op->get_left_type()
+			|| vals->get_type() != op->get_right_type()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "The vector needs to have the same type as the matrix";
+			<< "mapply_rows: the input type is different from what the bulk operator expects";
 		return dense_matrix::ptr();
 	}
 
@@ -1984,9 +1985,10 @@ dense_matrix::ptr dense_matrix::mapply_rows(vector::const_ptr vals,
 			<< "The vector's length needs to equal to #columns";
 		return dense_matrix::ptr();
 	}
-	if (get_type() != vals->get_type()) {
+	if (get_type() != op->get_left_type()
+			|| vals->get_type() != op->get_right_type()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "The vector needs to have the same type as the matrix";
+			<< "mapply_rows: the input type is different from what the bulk operator expects";
 		return dense_matrix::ptr();
 	}
 
