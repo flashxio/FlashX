@@ -21,8 +21,9 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header test_sem_kmeans\
-			 test_clusters test_row_cache test_lazy_cache test_partition_cache
+TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
+			test_sem_kmeans test_clusters test_row_cache test_lazy_cache\
+		   	test_partition_cache test_kmeans_thread test_kmeans_coordinator
 
 all: $(TESTFILES)
 
@@ -32,26 +33,32 @@ test_load_balancer: test_load_balancer.o ../libgraph.a
 test_comm: test_comm.o ../libgraph.a
 	$(CXX) -o test_comm test_comm.o $(LDFLAGS)
 
-test_fake_index: test_fake_index.o ../libgraph.a
+test_fake_index: test_fake_index.o
 	$(CXX) -o test_fake_index test_fake_index.o $(LDFLAGS)
 
-make_page_row_header: make_page_row_header.o ../libgraph.a
+make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
-test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
+test_sem_kmeans: test_sem_kmeans.o
 	$(CXX) -o test_sem_kmeans test_sem_kmeans.o $(LDFLAGS)
 
-test_clusters: test_clusters.o ../libgraph.a
+test_clusters: test_clusters.o
 	$(CXX) -o test_clusters test_clusters.o $(LDFLAGS)
 
-test_row_cache: test_row_cache.o ../libgraph.a
+test_row_cache: test_row_cache.o
 	$(CXX) -o test_row_cache test_row_cache.o $(LDFLAGS)
 
-test_lazy_cache: test_lazy_cache.o ../libgraph.a
+test_lazy_cache: test_lazy_cache.o
 	$(CXX) -o test_lazy_cache test_lazy_cache.o $(LDFLAGS)
 
-test_partition_cache: test_partition_cache.o ../libgraph.a
+test_partition_cache: test_partition_cache.o
 	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
+
+test_kmeans_thread: test_kmeans_thread.o ../matrix/kmeans_thread.o
+	$(CXX) -o test_kmeans_thread test_kmeans_thread.o $(LDFLAGS)
+
+test_kmeans_coordinator: test_kmeans_coordinator.o ../matrix/kmeans_coordinator.o
+	$(CXX) -o test_kmeans_coordinator test_kmeans_coordinator.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
@@ -59,4 +66,4 @@ clean:
 	rm -f *~
 	rm -f $(TESTFILES)
 
--include $(DEPS) 
+-include $(DEPS)
