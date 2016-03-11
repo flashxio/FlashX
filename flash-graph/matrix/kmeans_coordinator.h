@@ -31,7 +31,7 @@ namespace {
     class kmeans_coordinator {
         private:
             unsigned nthreads, nnodes, nrow, ncol;
-            std::vector<kmeans_thread::ptr> threads; 
+            std::vector<kmeans_thread::ptr> threads;
             std::string fn; // File on disk
             unsigned* cluster_assignments;
             unsigned* cluster_assignment_counts;
