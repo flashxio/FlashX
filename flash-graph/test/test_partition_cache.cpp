@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
 
         for (unsigned row = 0; row < nrow; row++) {
             // Do a get or populate
-            if (!cache->get(row)) {
+            if (!cache->get(row, row % nthread)) {
                 if (cache->add_id(row % nthread, row)) { // Fake threading
                     for (unsigned col = 0; col < ncol; col++) {
                         // Fake threading
@@ -87,6 +87,8 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 printf("Cache hit for row:%u\n", row); // Cache hit
+                BOOST_VERIFY(eq_all<double>(&data[row*ncol],
+                            cache->get(row, row % nthread), ncol));
             }
         }
 
