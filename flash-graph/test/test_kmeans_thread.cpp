@@ -26,9 +26,11 @@ void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes) {
     std::vector<kmeans_thread::ptr> thds;
 
     // Always: Build state alone
-    for (unsigned i = 0; i < NTHREADS; i++)
+    for (unsigned i = 0; i < NTHREADS; i++) {
+        clusters::ptr cl = clusters::create(2,2);
         thds.push_back(kmeans_thread::create
-                (i%nnodes, i, 69, 200, 2, nullptr, NULL, "/dev/null"));
+                (i%nnodes, i, 69, 200, 2, cl, NULL, "/dev/null"));
+    }
 
     // Always: Start threads alone
     for (unsigned i = 0; i < NTHREADS; i++)
@@ -56,9 +58,12 @@ void test_numa_populate_data() {
     std::vector<kmeans_thread::ptr> thds;
 
     // Always: Build state alone
-    for (unsigned i = 0; i < NTHREADS; i++)
+    for (unsigned i = 0; i < NTHREADS; i++) {
+        clusters::ptr cl = clusters::create(2,2);
         thds.push_back(kmeans_thread::create
-                (i%nnodes, i, i*nprocrows*ncol, nprocrows, ncol, nullptr, NULL, fn));
+                (i%nnodes, i, i*nprocrows*ncol, nprocrows, ncol,
+                 cl, NULL, fn));
+    }
 
     bin_reader<double> br(fn, nrow, ncol);
     double* data = new double [nrow*ncol];
@@ -89,7 +94,12 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+#if KM_TEST
     test_thread_creation(atoi(argv[1]), atoi(argv[2]));
+#else
+    printf("[FATAL]: Set KM_TEST 1 in kmeans.h\n");
+    exit(EXIT_FAILURE);
+#endif
     test_numa_populate_data();
 
     return (EXIT_SUCCESS);
