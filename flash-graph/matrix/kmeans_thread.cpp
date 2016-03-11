@@ -30,7 +30,6 @@ namespace {
                 break;
             case ALLOC_DATA:
                 numa_alloc_mem();
-                assert(0);
                 break;
             case KMSPP_INIT:
                 assert(0);
@@ -38,6 +37,9 @@ namespace {
             case EM: /*EM steps of kmeans*/
                 assert(0);
                 break;
+            case PAUSED:
+                fprintf(stderr, "[FATAL]: Thread state is PAUSED but running!\n");
+                exit(EXIT_FAILURE);
             default:
                 fprintf(stderr, "Unknown thread state\n");
                 exit(EXIT_FAILURE);
@@ -45,7 +47,7 @@ namespace {
     }
 
     void kmeans_thread::test() {
-        std::cout << "Hello from thread: " << get_thd_id() << "\n";
+        printf("Hello from thread: %u\n", get_thd_id());
         set_val(get_thd_id());
     }
 
@@ -65,25 +67,21 @@ namespace {
 
     void kmeans_thread::start(const thread_state_t state) {
         this->state = state;
-
         int rc = pthread_create(&hw_thd, NULL, callback, this);
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
-                exit(rc);
+            exit(rc);
         }
     }
 
     // Move data ~equally to all nodes
     void kmeans_thread::numa_alloc_mem() {
         BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
-            size_t blob_size = get_data_size();
-            local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
-            fseek(f, start_offset*sizeof(double), SEEK_CUR); // start position
-            BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
-            close_file_handle();
-
-            //std::copy(&(full_data[start_offset]),
-            //        &(full_data[start_offset+(ncol*nprocrows)]), local_data);
+        size_t blob_size = get_data_size();
+        local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
+        fseek(f, start_offset*sizeof(double), SEEK_CUR); // start position
+        BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
+        close_file_handle();
     }
 
     void kmeans_thread::print_local_data() {

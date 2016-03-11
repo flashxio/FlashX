@@ -36,7 +36,8 @@ namespace {
         TEST, /*just for testing*/
         ALLOC_DATA, /*moving data for reduces rma*/
         KMSPP_INIT,
-        EM /*EM steps of kmeans*/
+        EM, /*EM steps of kmeans*/
+        PAUSED /*When the thread is waiting to be run or killed*/
     };
 
     class kmeans_thread {
@@ -72,12 +73,18 @@ namespace {
                 this->cluster_assignments = cluster_assignments;
                 BOOST_VERIFY(this->f = fopen(fn.c_str(), "rb"));
 
+                local_clusters = clusters::create(g_clusters->get_nclust(), ncol);
+                local_num_changed.assign(g_clusters->get_nclust(), 0);
+
+#if KM_TEST
                 printf("Starting thread. Metadata: thd_id: %u, node_id: %u"
                         ", start_offset: %lu, nprocrows: %u, ncol: %u\n", this->thd_id,
                         this->node_id, this->start_offset, this->nprocrows, this->ncol);
+#endif
             }
-            // Testing
+#if KM_TEST
             unsigned val;
+#endif
         public:
             typedef std::shared_ptr<kmeans_thread> ptr;
 
@@ -91,27 +98,24 @@ namespace {
 
             void join() {
                 void* join_status;
-                printf("Thread %u calling join()\n", thd_id);
-
                 int rc = pthread_join(hw_thd, &join_status);
                 if (rc) {
                     fprintf(stderr, "[FATAL]: Return code from pthread_join() "
                             "is %d\n", rc);
                     exit(rc);
                 }
-                printf("Sucessful join on thread: %u with status %lu\n", thd_id,
-                        (long)join_status);
+                this->state = PAUSED;
             }
 
             const unsigned get_thd_id() const {
                 return thd_id;
             }
 
-            // Testing
+#if KM_TEST
             void set_val(const unsigned val) { this->val = val; }
             const unsigned get_val() const { return val; }
             void test();
-            // END Testing
+#endif
 
             void start(const thread_state_t state);
             // Allocate and move data using this thread
@@ -134,6 +138,10 @@ namespace {
                     exit(rc);
                 }
                 f = NULL;
+            }
+
+            const double* get_local_data() {
+                return local_data;
             }
 
             ~kmeans_thread() {
