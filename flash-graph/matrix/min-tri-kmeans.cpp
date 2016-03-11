@@ -18,9 +18,6 @@
  */
 
 #include "kmeans.h"
-#define KM_TEST 1
-#define VERBOSE 0
-
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
@@ -36,49 +33,6 @@ namespace {
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
     static struct timeval start, end;
     static init_type_t g_init_type;
-
-    /**
-     * \brief This initializes clusters by randomly choosing sample
-     *		membership in a cluster.
-     * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
-     *	\param cluster_assignments Which cluster each sample falls into.
-     */
-    static void random_partition_init(unsigned* cluster_assignments,
-            const double* matrix, prune_clusters::ptr clusters) {
-        BOOST_LOG_TRIVIAL(info) << "Random init start";
-
-        // #pragma omp parallel for firstprivate(cluster_assignments, K) shared(cluster_assignments)
-        for (unsigned row = 0; row < NUM_ROWS; row++) {
-            unsigned asgnd_clust = random() % K; // 0...K
-            clusters->add_member(&matrix[row*NUM_COLS], asgnd_clust);
-            cluster_assignments[row] = asgnd_clust;
-        }
-
-        // NOTE: M-Step called in compute func to update cluster counts & centers
-#if VERBOSE
-        printf("After rand paritions cluster_asgns: "); print_arr(cluster_assignments, NUM_ROWS);
-#endif
-        BOOST_LOG_TRIVIAL(info) << "Random init end\n";
-    }
-
-
-    /**
-     * \brief Forgy init takes `K` random samples from the matrix
-     *		and uses them as cluster centers.
-     * \param matrix the flattened matrix who's rows are being clustered.
-     * \param clusters The cluster centers (means) flattened matrix.
-     */
-    static void forgy_init(const double* matrix, prune_clusters::ptr clusters) {
-
-        BOOST_LOG_TRIVIAL(info) << "Forgy init start";
-
-        for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) { // 0...K
-            unsigned rand_idx = random() % (NUM_ROWS - 1); // 0...(n-1)
-            clusters->set_mean(&matrix[rand_idx*NUM_COLS], clust_idx);
-        }
-
-        BOOST_LOG_TRIVIAL(info) << "Forgy init end";
-    }
 
     std::string s (const double d) {
         if (d == std::numeric_limits<double>::max())
@@ -286,6 +240,22 @@ namespace {
         BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << g_num_changed;
 #endif
     }
+
+    void get_sampling(std::vector<std::vector<double>>& samples, const unsigned* cluster_assignments,
+             const double* data, const unsigned* cluster_assignment_counts) {
+        constexpr unsigned MAX_PLOT_POINTS = 1000;
+        const unsigned samples_per_cluster =
+            NUM_ROWS > MAX_PLOT_POINTS ? MAX_PLOT_POINTS : NUM_ROWS/K;
+
+        if (samples_per_cluster < MAX_PLOT_POINTS) { // Just plot everything
+            // TODO
+        }
+
+        for (unsigned k=0; k < K; k++) {
+            //unsigned rand_idx = random() % (cluster_assignment_counts[k]-1);
+            //TODO: Add sample to the sampling result
+        }
+    }
 }
 
 namespace fg
@@ -347,10 +317,13 @@ namespace fg
         }
 
         if (init == "random") {
-            random_partition_init(cluster_assignments, matrix, clusters);
+            random_partition_init(cluster_assignments, matrix,
+                    clusters, NUM_ROWS, NUM_COLS, K);
             g_init_type = RANDOM;
+            for (unsigned cl = 0; cl < K; cl++)
+                clusters->finalize(cl);
         } else if (init == "forgy") {
-            forgy_init(matrix, clusters);
+            forgy_init(matrix, clusters, NUM_ROWS, NUM_COLS, K);
             g_init_type = FORGY;
         } else if (init == "kmeanspp") {
             kmeanspp_init(matrix, clusters, cluster_assignments);

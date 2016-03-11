@@ -41,6 +41,9 @@
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/clusters.h"
 
+#define KM_TEST 1
+#define VERBOSE 0
+
 namespace {
     /**
      * \brief Print an arry of some length `len`.
@@ -141,6 +144,52 @@ namespace {
         }
         BOOST_VERIFY(count == numel);
         fclose(f);
+    }
+
+    /**
+     * \brief This initializes clusters by randomly choosing sample
+     *		membership in a cluster.
+     * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+     *	\param cluster_assignments Which cluster each sample falls into.
+     */
+    void random_partition_init(unsigned* cluster_assignments,
+            const double* matrix, clusters::ptr clusters, const unsigned num_rows,
+            const unsigned num_cols, const unsigned k) {
+        BOOST_LOG_TRIVIAL(info) << "Random init start";
+
+        //#pragma omp parallel for firstprivate(cluster_assignments, K)
+        //shared(cluster_assignments)
+        for (unsigned row = 0; row < num_rows; row++) {
+            size_t asgnd_clust = random() % k; // 0...K
+            clusters->add_member(&matrix[row*num_cols], asgnd_clust);
+            cluster_assignments[row] = asgnd_clust;
+        }
+
+        // NOTE: M-Step called in compute func to update cluster counts & centers
+#if VERBOSE
+        printf("After rand paritions cluster_asgns: ");
+        print_arr(cluster_assignments, NUM_ROWS);
+#endif
+        BOOST_LOG_TRIVIAL(info) << "Random init end\n";
+    }
+
+    /**
+     * \brief Forgy init takes `K` random samples from the matrix
+     *		and uses them as cluster centers.
+     * \param matrix the flattened matrix who's rows are being clustered.
+     * \param clusters The cluster centers (means) flattened matrix.
+     */
+    void forgy_init(const double* matrix, clusters::ptr clusters,
+            const unsigned num_rows, const unsigned num_cols, const unsigned k) {
+
+        BOOST_LOG_TRIVIAL(info) << "Forgy init start";
+
+        for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) { // 0...K
+            unsigned rand_idx = random() % (num_rows - 1); // 0...(n-1)
+            clusters->set_mean(&matrix[rand_idx*num_cols], clust_idx);
+        }
+
+        BOOST_LOG_TRIVIAL(info) << "Forgy init end";
     }
 }
 
