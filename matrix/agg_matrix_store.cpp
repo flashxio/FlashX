@@ -24,7 +24,6 @@
 #include "local_vec_store.h"
 #include "local_matrix_store.h"
 #include "mem_worker_thread.h"
-#include "EM_object.h"
 
 namespace fm
 {

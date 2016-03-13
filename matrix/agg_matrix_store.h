@@ -24,6 +24,7 @@
 
 #include "virtual_matrix_store.h"
 #include "dense_matrix.h"
+#include "EM_object.h"
 
 namespace fm
 {
@@ -37,7 +38,7 @@ class portion_mapply_op;
  * This matrix store is to enable lazy evaluation on the aggregation on
  * the long dimension of a dense matrix or the entire dense matrix. 
  */
-class agg_matrix_store: public virtual_matrix_store
+class agg_matrix_store: public virtual_matrix_store, public EM_object
 {
 	std::shared_ptr<portion_mapply_op> portion_op;
 	matrix_store::const_ptr data;

@@ -22,7 +22,6 @@
 #include "IPW_matrix_store.h"
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
-#include "EM_object.h"
 
 namespace fm
 {

@@ -1530,6 +1530,7 @@ bool __mapply_portion(
 				if (!mats[j]->is_in_mem()) {
 					const EM_object *obj
 						= dynamic_cast<const EM_object *>(mats[j].get());
+					assert(obj);
 					task->register_EM_obj(const_cast<EM_object *>(obj));
 				}
 			}

@@ -21,6 +21,7 @@
 
 #include "virtual_matrix_store.h"
 #include "bulk_operate.h"
+#include "EM_object.h"
 
 #ifndef __FM_IPW_MATRIX_STORE_H__
 #define __FM_IPW_MATRIX_STORE_H__
@@ -36,7 +37,7 @@ class portion_mapply_op;
  * This matrix store is to enable lazy evaluation on the inner product
  * on a wide matrix.
  */
-class IPW_matrix_store: public virtual_matrix_store
+class IPW_matrix_store: public virtual_matrix_store, public EM_object
 {
 	matrix_store::const_ptr left_mat;
 	matrix_store::const_ptr right_mat;
