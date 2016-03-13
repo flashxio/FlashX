@@ -483,18 +483,20 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 			right_mats.push_back(block_m->store->get_mat(i));
 	}
 
-	if (out_layout == matrix_layout_t::L_NONE) {
-		// If the left matrix is in col-major, we prefer the output matrix
-		// is also in col-major. It helps computation in local matrices.
-		if (store->get_mat_ref(0).store_layout() == matrix_layout_t::L_COL)
-			out_layout = matrix_layout_t::L_COL;
-		else
-			out_layout = matrix_layout_t::L_ROW;
+	detail::matrix_store::ptr res;
+	// If the left operator isn't defined, we assume it uses BLAS for matrix
+	// multiplication.
+	bool use_blas = left_op == NULL;
+	if (use_blas) {
+		assert(get_type() == m.get_type());
+		assert(get_type() == get_scalar_type<double>()
+				|| get_type() == get_scalar_type<float>());
+		res = detail::matrix_store::create(get_num_rows(), m.get_num_cols(),
+				out_layout, get_type(), -1, true);
 	}
-
-	detail::matrix_store::ptr res = detail::matrix_store::create(
-			get_num_rows(), m.get_num_cols(), out_layout,
-			right_op->get_output_type(), -1, true);
+	else
+		res = detail::matrix_store::create(get_num_rows(), m.get_num_cols(),
+				out_layout, right_op->get_output_type(), -1, true);
 	// Each time we take one matrix in the right group and perform inner product
 	// with all matrices in the left group.
 	size_t right_block_size = right_mats[0]->get_num_cols();
@@ -503,8 +505,11 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 		std::vector<dense_matrix::ptr> tmp_mats(store->get_num_mats());
 		for (size_t j = 0; j < store->get_num_mats(); j++) {
 			dense_matrix::ptr left = dense_matrix::create(store->get_mat(j));
-			tmp_mats[j] = left->inner_prod(*right, left_op, right_op,
-					out_layout);
+			if (use_blas)
+				tmp_mats[j] = left->multiply(*right, out_layout);
+			else
+				tmp_mats[j] = left->inner_prod(*right, left_op, right_op,
+						out_layout);
 			const_cast<detail::matrix_store &>(left->get_data()).set_cache_portion(false);
 		}
 		materialize(tmp_mats, false);
@@ -531,13 +536,13 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 dense_matrix::ptr block_matrix::multiply_tall(const dense_matrix &m,
 		matrix_layout_t out_layout) const
 {
-	return inner_prod_tall(m, NULL, NULL, out_layout);
+	return block_matrix::inner_prod_tall(m, NULL, NULL, out_layout);
 }
 
 dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 		matrix_layout_t out_layout) const
 {
-	return dense_matrix::ptr();
+	return block_matrix::inner_prod_wide(m, NULL, NULL, out_layout);
 }
 
 dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,

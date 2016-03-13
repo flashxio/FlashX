@@ -47,7 +47,10 @@ void check_mat_approx(dense_matrix::ptr m1, dense_matrix::ptr m2)
 		m1 = dense_matrix::create(block_m->get_raw_store());
 		m1->materialize_self();
 	}
-	scalar_variable::const_ptr res = m1->minus(*m2)->abs()->max();
+	dense_matrix::ptr diff = m1->minus(*m2)->abs();
+	dense_matrix::ptr max = m1->abs()->pmax(*m2->abs());
+	scalar_variable::const_ptr res = diff->div(*max)->max();
+	std::cout << "max diff: " << scalar_variable::get_val<T>(*res) << std::endl;
 	assert(scalar_variable::get_val<T>(*res) < 10e-14);
 }
 
@@ -249,8 +252,8 @@ void print_mat(detail::matrix_store::const_ptr mat)
 	assert(mem_mat);
 	for (size_t i = 0; i < mem_mat->get_num_rows(); i++) {
 		for (size_t j = 0; j < mem_mat->get_num_cols(); j++)
-			printf("%ld, ", mem_mat->get<size_t>(i, j));
-		printf("\n");
+			std::cout << mem_mat->get<T>(i, j) << ", ";
+		std::cout << std::endl;
 	}
 }
 
@@ -310,6 +313,19 @@ void test_multiply()
 
 	assert(is_block_matrix(res1));
 	assert(!is_block_matrix(res2));
+	check_mat_approx<double>(res1, res2);
+
+	printf("test multiply on wide matrix\n");
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
+	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op);
+	res1 = mat1->multiply(*mat2);
+
+	mat3 = dense_matrix::create(mat1->get_raw_store());
+	mat3->materialize_self();
+	dense_matrix::ptr mat4 = dense_matrix::create(mat2->get_raw_store());
+	mat4->materialize_self();
+	res2 = mat3->multiply(*mat4);
+	res2->materialize_self();
 	check_mat_approx<double>(res1, res2);
 }
 
