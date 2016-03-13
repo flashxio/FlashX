@@ -736,9 +736,13 @@ void inner_prod(const local_matrix_store &left, const local_matrix_store &right,
 					llen);
 			mutable_right.resize(orig_right.local_start_row + col_idx,
 					orig_right.local_start_col, llen, right.get_num_cols());
-			// We accumulate the product on the result matrix directly.
-			_inner_prod(left, right, left_op, right_op, *tmp_res, tmp_buf);
-			mapply2(res, *tmp_res, right_op, res);
+			if (col_idx > 0) {
+				// We accumulate the product on the result matrix directly.
+				_inner_prod(left, right, left_op, right_op, *tmp_res, tmp_buf);
+				mapply2(res, *tmp_res, right_op, res);
+			}
+			else
+				_inner_prod(left, right, left_op, right_op, res, tmp_buf);
 		}
 		mutable_left.restore_size(orig_left);
 		mutable_right.restore_size(orig_right);

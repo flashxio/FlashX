@@ -45,6 +45,7 @@ class inner_prod_wide_op: public portion_mapply_op
 	bulk_operate::const_ptr right_op;
 	matrix_info out_mat_info;
 	std::vector<detail::local_matrix_store::ptr> local_ms;
+	std::vector<detail::local_matrix_store::ptr> local_tmps;
 public:
 	inner_prod_wide_op(bulk_operate::const_ptr left_op,
 			bulk_operate::const_ptr right_op, const matrix_info &out_mat_info,
@@ -53,6 +54,7 @@ public:
 		this->left_op = left_op;
 		this->right_op = right_op;
 		local_ms.resize(num_threads);
+		local_tmps.resize(num_threads);
 		this->out_mat_info = out_mat_info;
 		this->require_trans = false;
 	}
@@ -95,31 +97,56 @@ void inner_prod_wide_op::run(
 {
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	detail::local_matrix_store::ptr local_m = local_ms[thread_id];
+	detail::local_matrix_store::ptr local_tmp = local_tmps[thread_id];
+	bool is_first = false;
 	if (local_m == NULL) {
-		if (out_mat_info.layout == matrix_layout_t::L_COL)
+		is_first = true;
+		if (out_mat_info.layout == matrix_layout_t::L_COL) {
 			local_m = detail::local_matrix_store::ptr(
 					new detail::local_buf_col_matrix_store(0, 0,
 						out_mat_info.num_rows, out_mat_info.num_cols,
 						right_op->get_output_type(), -1));
-		else
+			local_tmp = detail::local_matrix_store::ptr(
+					new detail::local_buf_col_matrix_store(0, 0,
+						out_mat_info.num_rows, out_mat_info.num_cols,
+						right_op->get_output_type(), -1));
+		}
+		else {
 			local_m = detail::local_matrix_store::ptr(
 					new detail::local_buf_row_matrix_store(0, 0,
 						out_mat_info.num_rows, out_mat_info.num_cols,
 						right_op->get_output_type(), -1));
+			local_tmp = detail::local_matrix_store::ptr(
+					new detail::local_buf_row_matrix_store(0, 0,
+						out_mat_info.num_rows, out_mat_info.num_cols,
+						right_op->get_output_type(), -1));
+		}
 		local_m->reset_data();
+		local_tmp->reset_data();
 		assert((size_t) thread_id < local_ms.size());
 		const_cast<inner_prod_wide_op *>(this)->local_ms[thread_id] = local_m;
+		const_cast<inner_prod_wide_op *>(this)->local_tmps[thread_id] = local_tmp;
 	}
 	if (!require_trans) {
 		assert(ins[0]->get_num_cols() == ins[1]->get_num_rows());
-		detail::inner_prod(*ins[0], *ins[1], *left_op, *right_op, *local_m);
+		if (is_first)
+			detail::inner_prod(*ins[0], *ins[1], *left_op, *right_op, *local_m);
+		else {
+			detail::inner_prod(*ins[0], *ins[1], *left_op, *right_op, *local_tmp);
+			mapply2(*local_m, *local_tmp, *right_op, *local_m);
+		}
 	}
 	else {
 		assert(ins[0]->get_num_rows() == ins[1]->get_num_rows());
 		detail::local_matrix_store::const_ptr store
 			= std::static_pointer_cast<const detail::local_matrix_store>(
 					ins[0]->transpose());
-		detail::inner_prod(*store, *ins[1], *left_op, *right_op, *local_m);
+		if (is_first)
+			detail::inner_prod(*store, *ins[1], *left_op, *right_op, *local_m);
+		else {
+			detail::inner_prod(*store, *ins[1], *left_op, *right_op, *local_tmp);
+			mapply2(*local_m, *local_tmp, *right_op, *local_m);
+		}
 	}
 }
 
