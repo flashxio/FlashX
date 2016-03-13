@@ -494,6 +494,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -505,6 +507,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -516,6 +520,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -527,6 +533,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -538,6 +546,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -549,6 +559,8 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	assert(res->is_virtual());
+	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
