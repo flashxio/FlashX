@@ -33,8 +33,22 @@ void check_mat_equal(dense_matrix::ptr m1, dense_matrix::ptr m2)
 		m1 = dense_matrix::create(block_m->get_raw_store());
 		m1->materialize_self();
 	}
-	scalar_variable::const_ptr res = m1->minus(*m2)->sum();
+	scalar_variable::const_ptr res = m1->minus(*m2)->abs()->max();
 	assert(scalar_variable::get_val<T>(*res) == 0);
+}
+
+template<class T>
+void check_mat_approx(dense_matrix::ptr m1, dense_matrix::ptr m2)
+{
+	assert(m1->get_num_rows() == m2->get_num_rows());
+	assert(m1->get_num_cols() == m2->get_num_cols());
+	block_matrix::ptr block_m = std::dynamic_pointer_cast<block_matrix>(m1);
+	if (block_m) {
+		m1 = dense_matrix::create(block_m->get_raw_store());
+		m1->materialize_self();
+	}
+	scalar_variable::const_ptr res = m1->minus(*m2)->abs()->max();
+	assert(scalar_variable::get_val<T>(*res) < 10e-14);
 }
 
 template<class T>
@@ -279,6 +293,26 @@ void test_inner_prod()
 	check_mat_equal<size_t>(res1, res2);
 }
 
+void test_multiply()
+{
+	set_operate::const_ptr init_op = create_urand_init<double>(0, 1);
+
+	printf("test multiply on tall matrix\n");
+	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
+			init_op->get_type(), *init_op);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 1,
+			10, 11, matrix_layout_t::L_ROW);
+	dense_matrix::ptr res1 = mat1->multiply(*mat2);
+
+	dense_matrix::ptr mat3 = dense_matrix::create(mat1->get_raw_store());
+	mat3->materialize_self();
+	dense_matrix::ptr res2 = mat3->multiply(*mat2);
+
+	assert(is_block_matrix(res1));
+	assert(!is_block_matrix(res2));
+	check_mat_approx<double>(res1, res2);
+}
+
 int main()
 {
 	init_flash_matrix(NULL);
@@ -289,5 +323,6 @@ int main()
 	test_mapply_cols();
 	test_sapply();
 	test_inner_prod();
+	test_multiply();
 	destroy_flash_matrix();
 }

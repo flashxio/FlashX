@@ -288,22 +288,17 @@ dense_matrix::ptr block_matrix::transpose() const
 	return block_matrix::create(detail::combined_matrix_store::cast(tmp));
 }
 
-static detail::mem_col_matrix_store::const_ptr get_sub_mat(
-		detail::mem_col_matrix_store::const_ptr mat, size_t start_row,
+static detail::mem_matrix_store::const_ptr get_sub_mat(
+		detail::mem_matrix_store::const_ptr mat, size_t start_row,
 		size_t start_col, size_t num_rows, size_t num_cols)
 {
 	detail::local_matrix_store::const_ptr portion = mat->get_portion(
 			start_row, start_col, num_rows, num_cols);
 	assert(portion);
-	detail::local_col_matrix_store::const_ptr col_portion
-		= detail::local_col_matrix_store::cast(portion);
-	assert(col_portion);
 
-	detail::mem_col_matrix_store::ptr ret = detail::mem_col_matrix_store::create(
-			num_rows, num_cols, col_portion->get_type());
-	for (size_t i = 0; i < num_cols; i++)
-		memcpy(ret->get_col(i), col_portion->get_col(i),
-				num_rows * ret->get_entry_size());
+	detail::mem_matrix_store::ptr ret = detail::mem_matrix_store::create(
+			num_rows, num_cols, mat->store_layout(), portion->get_type(), -1);
+	ret->write_portion_async(portion, 0, 0);
 	return ret;
 }
 
@@ -406,16 +401,20 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const
 {
-	// Get the right matrix in memory and in col major.
-	detail::mem_col_matrix_store::const_ptr mem_m2;
-	dense_matrix::ptr m2;
-	if (m.store_layout() == matrix_layout_t::L_ROW) {
-		m2 = m.conv2(matrix_layout_t::L_COL);
-		m2 = m2->conv_store(true, -1);
+	// Get the right matrix in memory.
+	dense_matrix::ptr m2 = m.conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr mem_m2
+		= detail::mem_matrix_store::cast(m2->get_raw_store());
+
+	// Here is to reuse the code for matrix multiplication with BLAS.
+	bool use_blas = left_op == NULL;
+	if (use_blas) {
+		assert(get_type() == get_scalar_type<double>()
+				|| get_type() == get_scalar_type<float>());
+		assert(m.get_type() == get_scalar_type<double>()
+				|| m.get_type() == get_scalar_type<float>());
+		right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 	}
-	else
-		m2 = m.conv_store(true, -1);
-	mem_m2 = detail::mem_col_matrix_store::cast(m2->get_raw_store());
 
 	// This contains the blocks for the final output.
 	std::vector<detail::matrix_store::const_ptr> res_blocks(
@@ -434,14 +433,17 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 					m2->get_num_rows() - m2_row);
 			size_t part_num_cols = std::min(get_block_size(),
 					m2->get_num_cols() - m2_col);
-			detail::mem_col_matrix_store::const_ptr part = get_sub_mat(mem_m2,
+			detail::mem_matrix_store::const_ptr part = get_sub_mat(mem_m2,
 					m2_row, m2_col, part_num_rows, part_num_cols);
 			dense_matrix::ptr right = dense_matrix::create(part);
 
 			// Compute the temporary matrix.
 			// TODO maybe we can perform multiply with multiple block matrices
 			// together in the cost of more memory consumption.
-			tmp_mats[i] = left->inner_prod(*right, left_op, right_op, out_layout);
+			if (use_blas)
+				tmp_mats[i] = left->multiply(*right, out_layout);
+			else
+				tmp_mats[i] = left->inner_prod(*right, left_op, right_op, out_layout);
 			// We really don't need to cache the portion in this intermediate
 			// matrix and the EM matrix beneath it in the hierarchy.
 			const_cast<detail::matrix_store &>(tmp_mats[i]->get_data()).set_cache_portion(false);
@@ -526,10 +528,49 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 	return dense_matrix::create(res);
 }
 
-dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
+dense_matrix::ptr block_matrix::multiply_tall(const dense_matrix &m,
+		matrix_layout_t out_layout) const
+{
+	return inner_prod_tall(m, NULL, NULL, out_layout);
+}
+
+dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 		matrix_layout_t out_layout) const
 {
 	return dense_matrix::ptr();
+}
+
+dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
+		matrix_layout_t out_layout) const
+{
+	if ((get_type() == get_scalar_type<double>()
+				|| get_type() == get_scalar_type<float>())) {
+		assert(get_type() == mat.get_type());
+		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
+		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
+		// We prefer to perform computation on the larger matrix.
+		// If the matrix in the right operand is larger, we transpose
+		// the entire computation.
+		if (long_dim2 > long_dim1) {
+			dense_matrix::ptr t_mat1 = this->transpose();
+			dense_matrix::ptr t_mat2 = mat.transpose();
+			matrix_layout_t t_layout = out_layout;
+			if (t_layout == matrix_layout_t::L_ROW)
+				t_layout = matrix_layout_t::L_COL;
+			else if (t_layout == matrix_layout_t::L_COL)
+				t_layout = matrix_layout_t::L_ROW;
+			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
+			return t_res->transpose();
+		}
+
+		if (is_wide())
+			return multiply_wide(mat, out_layout);
+		else
+			return multiply_tall(mat, out_layout);
+	}
+	else
+		// This relies on inner product to compute matrix multiplication.
+		return dense_matrix::multiply(mat, out_layout);
 }
 
 dense_matrix::ptr block_matrix::mapply_cols(vector::const_ptr vals,

@@ -55,6 +55,10 @@ protected:
 	virtual dense_matrix::ptr inner_prod_wide(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const;
+	dense_matrix::ptr multiply_tall(const dense_matrix &m,
+			matrix_layout_t out_layout) const;
+	dense_matrix::ptr multiply_wide(const dense_matrix &m,
+			matrix_layout_t out_layout) const;
 public:
 	typedef std::shared_ptr<block_matrix> ptr;
 
