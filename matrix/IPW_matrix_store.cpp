@@ -167,6 +167,7 @@ class multiply_wide_op: public combine_op
 	std::vector<detail::local_matrix_store::ptr> Abufs;
 	std::vector<detail::local_matrix_store::ptr> Bbufs;
 	std::vector<detail::local_matrix_store::ptr> res_bufs;
+	bool require_trans;
 	size_t out_num_rows;
 	size_t out_num_cols;
 	matrix_layout_t Alayout;
@@ -180,16 +181,22 @@ public:
 		res_bufs.resize(num_threads);
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
-		// We need to transpose the A matrix, so we want the data in the A matrix
-		// to be organized in the opposite layout to the required.
-		if (required_layout == matrix_layout_t::L_COL)
-			Alayout = matrix_layout_t::L_ROW;
-		else
-			Alayout = matrix_layout_t::L_COL;
+		Alayout = required_layout;
 		Blayout = required_layout;
+		require_trans = false;
 	}
 
 	void set_require_trans(bool val) {
+		if (require_trans == val)
+			return;
+
+		this->require_trans = val;
+		// We need to transpose the A matrix, so we want the data in the A matrix
+		// to be organized in the opposite layout to the required.
+		if (Alayout == matrix_layout_t::L_COL)
+			Alayout = matrix_layout_t::L_ROW;
+		else
+			Alayout = matrix_layout_t::L_COL;
 	}
 
 	virtual bool has_materialized() const {
@@ -222,67 +229,59 @@ public:
 };
 
 template<class T>
-void wide_gemm_col(const detail::local_matrix_store &Astore, const T *Amat,
-		const detail::local_matrix_store &Bstore, const T *Bmat,
+void wide_gemm_col(const std::pair<size_t, size_t> &Asize, const T *Amat,
+		const std::pair<size_t, size_t> &, const T *Bmat,
 		T *res_mat, size_t out_num_rows)
 {
 	assert(0);
 }
 
 template<>
-void wide_gemm_col<double>(const detail::local_matrix_store &Astore, const double *Amat,
-		const detail::local_matrix_store &Bstore, const double *Bmat,
-		double *res_mat, size_t out_num_rows)
+void wide_gemm_col<double>(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, const std::pair<size_t, size_t> &Bsize,
+		const double *Bmat, double *res_mat, size_t out_num_rows)
 {
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_cols(), Bstore.get_num_cols(),
-			Astore.get_num_rows(), 1, Amat,
-			Astore.get_num_cols(), Bmat, Bstore.get_num_rows(),
-			1, res_mat, out_num_rows);
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.first,
+			Bmat, Bsize.first, 1, res_mat, out_num_rows);
 }
 
 template<>
-void wide_gemm_col<float>(const detail::local_matrix_store &Astore, const float *Amat,
-		const detail::local_matrix_store &Bstore, const float *Bmat,
-		float *res_mat, size_t out_num_rows)
+void wide_gemm_col<float>(const std::pair<size_t, size_t> &Asize,
+		const float *Amat, const std::pair<size_t, size_t> &Bsize,
+		const float *Bmat, float *res_mat, size_t out_num_rows)
 {
 	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_cols(), Bstore.get_num_cols(),
-			Astore.get_num_rows(), 1, Amat,
-			Astore.get_num_cols(), Bmat, Bstore.get_num_rows(),
-			1, res_mat, out_num_rows);
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.first,
+			Bmat, Bsize.first, 1, res_mat, out_num_rows);
 }
 
 template<class T>
-void wide_gemm_row(const detail::local_matrix_store &Astore, const T *Amat,
-		const detail::local_matrix_store &Bstore, const T *Bmat,
+void wide_gemm_row(const std::pair<size_t, size_t> &Asize, const T *Amat,
+		const std::pair<size_t, size_t> &Bsize, const T *Bmat,
 		T *res_mat, size_t out_num_cols)
 {
 	assert(0);
 }
 
 template<>
-void wide_gemm_row<double>(const detail::local_matrix_store &Astore, const double *Amat,
-		const detail::local_matrix_store &Bstore, const double *Bmat,
-		double *res_mat, size_t out_num_cols)
+void wide_gemm_row<double>(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, const std::pair<size_t, size_t> &Bsize,
+		const double *Bmat, double *res_mat, size_t out_num_cols)
 {
 	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_cols(), Bstore.get_num_cols(),
-			Astore.get_num_rows(), 1, Amat,
-			Astore.get_num_rows(), Bmat, Bstore.get_num_cols(),
-			1, res_mat, out_num_cols);
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.second,
+			Bmat, Bsize.second, 1, res_mat, out_num_cols);
 }
 
 template<>
-void wide_gemm_row<float>(const detail::local_matrix_store &Astore, const float *Amat,
-		const detail::local_matrix_store &Bstore, const float *Bmat,
-		float *res_mat, size_t out_num_cols)
+void wide_gemm_row<float>(const std::pair<size_t, size_t> &Asize,
+		const float *Amat, const std::pair<size_t, size_t> &Bsize,
+		const float *Bmat, float *res_mat, size_t out_num_cols)
 {
 	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-			Astore.get_num_cols(), Bstore.get_num_cols(),
-			Astore.get_num_rows(), 1, Amat,
-			Astore.get_num_rows(), Bmat, Bstore.get_num_cols(),
-			1, res_mat, out_num_cols);
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.second,
+			Bmat, Bsize.second, 1, res_mat, out_num_cols);
 }
 
 void multiply_wide_op::run(
@@ -354,18 +353,28 @@ void multiply_wide_op::run(
 	}
 	assert(res_bufs[thread_id]->store_layout() == Blayout);
 	void *res_mat = res_bufs[thread_id]->get_raw_arr();
-	// The A matrix is the transpose of the matrix we need. Since the A matrix
-	// is stored in contiguous memory and is organized in row major, we can
-	// easily interpret it as its transpose by switching its #rows and #cols.
+	std::pair<size_t, size_t> Asize, Bsize;
+	if (require_trans) {
+		assert(Alayout != Blayout);
+		Asize.first = Astore->get_num_cols();
+		Asize.second = Astore->get_num_rows();
+	}
+	else {
+		assert(Alayout == Blayout);
+		Asize.first = Astore->get_num_rows();
+		Asize.second = Astore->get_num_cols();
+	}
+	Bsize.first = Bstore->get_num_rows();
+	Bsize.second = Bstore->get_num_cols();
 	if (get_output_type() == get_scalar_type<double>()) {
 		const double *t_Amat = reinterpret_cast<const double *>(Amat);
 		const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
 		double *t_res_mat = reinterpret_cast<double *>(res_mat);
 		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<double>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+			wide_gemm_col<double>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
 					out_num_rows);
 		else
-			wide_gemm_row<double>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+			wide_gemm_row<double>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
 					out_num_cols);
 	}
 	else {
@@ -373,10 +382,10 @@ void multiply_wide_op::run(
 		const float *t_Bmat = reinterpret_cast<const float *>(Bmat);
 		float *t_res_mat = reinterpret_cast<float *>(res_mat);
 		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<float>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+			wide_gemm_col<float>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
 					out_num_rows);
 		else
-			wide_gemm_row<float>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+			wide_gemm_row<float>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
 					out_num_cols);
 	}
 }
