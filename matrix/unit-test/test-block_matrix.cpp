@@ -227,12 +227,26 @@ void test_sapply()
 	check_mat_equal<double>(mat1, mat2);
 }
 
+template<class T>
+void print_mat(detail::matrix_store::const_ptr mat)
+{
+	detail::mem_matrix_store::const_ptr mem_mat
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(mat);
+	assert(mem_mat);
+	for (size_t i = 0; i < mem_mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < mem_mat->get_num_cols(); j++)
+			printf("%ld, ", mem_mat->get<size_t>(i, j));
+		printf("\n");
+	}
+}
+
 void test_inner_prod()
 {
 	set_operate::const_ptr init_op = create_urand_init<size_t>(0, 10000);
 	const bulk_operate &mul_op = init_op->get_type().get_basic_ops().get_multiply();
 	const bulk_operate &add_op = init_op->get_type().get_basic_ops().get_add();
 
+	printf("test inner product on tall matrix\n");
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
 			init_op->get_type(), *init_op);
 	dense_matrix::ptr mat2 = dense_matrix::create_randu<size_t>(0, 10000,
@@ -247,6 +261,21 @@ void test_inner_prod()
 
 	assert(is_block_matrix(res1));
 	assert(!is_block_matrix(res2));
+	check_mat_equal<size_t>(res1, res2);
+
+	printf("test inner product on wide matrix\n");
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
+	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op);
+	res1 = mat1->inner_prod(*mat2,
+			bulk_operate::conv2ptr(mul_op), bulk_operate::conv2ptr(add_op));
+
+	mat3 = dense_matrix::create(mat1->get_raw_store());
+	mat3->materialize_self();
+	dense_matrix::ptr mat4 = dense_matrix::create(mat2->get_raw_store());
+	mat4->materialize_self();
+	res2 = mat3->inner_prod(*mat4,
+			bulk_operate::conv2ptr(mul_op), bulk_operate::conv2ptr(add_op));
+	res2->materialize_self();
 	check_mat_equal<size_t>(res1, res2);
 }
 

@@ -472,7 +472,58 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const
 {
-	return dense_matrix::ptr();
+	std::vector<detail::matrix_store::const_ptr> right_mats;
+	const block_matrix *block_m = dynamic_cast<const block_matrix *>(&m);
+	if (block_m == NULL)
+		right_mats.push_back(m.get_raw_store());
+	else {
+		for (size_t i = 0; i < block_m->store->get_num_mats(); i++)
+			right_mats.push_back(block_m->store->get_mat(i));
+	}
+
+	if (out_layout == matrix_layout_t::L_NONE) {
+		// If the left matrix is in col-major, we prefer the output matrix
+		// is also in col-major. It helps computation in local matrices.
+		if (store->get_mat_ref(0).store_layout() == matrix_layout_t::L_COL)
+			out_layout = matrix_layout_t::L_COL;
+		else
+			out_layout = matrix_layout_t::L_ROW;
+	}
+
+	detail::matrix_store::ptr res = detail::matrix_store::create(
+			get_num_rows(), m.get_num_cols(), out_layout,
+			right_op->get_output_type(), -1, true);
+	// Each time we take one matrix in the right group and perform inner product
+	// with all matrices in the left group.
+	size_t right_block_size = right_mats[0]->get_num_cols();
+	for (size_t i = 0; i < right_mats.size(); i++) {
+		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
+		std::vector<dense_matrix::ptr> tmp_mats(store->get_num_mats());
+		for (size_t j = 0; j < store->get_num_mats(); j++) {
+			dense_matrix::ptr left = dense_matrix::create(store->get_mat(j));
+			tmp_mats[j] = left->inner_prod(*right, left_op, right_op,
+					out_layout);
+			const_cast<detail::matrix_store &>(left->get_data()).set_cache_portion(false);
+		}
+		materialize(tmp_mats, false);
+
+		// We now copy the inner product result to the final matrix.
+		size_t col_idx = i * right_block_size;
+		for (size_t j = 0; j < tmp_mats.size(); j++) {
+			size_t row_idx = j * block_size;
+			size_t num_rows = std::min(block_size, get_num_rows() - row_idx);
+			size_t num_cols = std::min(right_block_size,
+					m.get_num_cols() - col_idx);
+			assert(num_rows == tmp_mats[j]->get_num_rows());
+			assert(num_cols == tmp_mats[j]->get_num_cols());
+			detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
+					col_idx, num_rows, num_cols);
+			detail::local_matrix_store::const_ptr src_part
+				= tmp_mats[j]->get_data().get_portion(0);
+			res_part->copy_from(*src_part);
+		}
+	}
+	return dense_matrix::create(res);
 }
 
 dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,

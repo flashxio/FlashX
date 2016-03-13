@@ -3117,7 +3117,7 @@ public:
 
 }
 
-void materialize(std::vector<dense_matrix::ptr> &mats)
+void materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 {
 	// TODO we need to deal with the case that some matrices are tall and
 	// some are wide.
@@ -3137,7 +3137,8 @@ void materialize(std::vector<dense_matrix::ptr> &mats)
 	detail::portion_mapply_op::const_ptr materialize_op(
 			new materialize_mapply_op(virt_stores[0]->get_type(),
 				virt_stores.front()->is_wide()));
-	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW);
+	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW,
+			par_access);
 	// Now all virtual matrices contain the materialized results.
 	for (size_t i = 0; i < mats.size(); i++)
 		mats[i]->materialize_self();
