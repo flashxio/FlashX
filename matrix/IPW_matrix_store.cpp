@@ -162,7 +162,6 @@ void inner_prod_wide_op::run(
 	}
 }
 
-template<class T>
 class multiply_wide_op: public combine_op
 {
 	std::vector<detail::local_matrix_store::ptr> Abufs;
@@ -174,8 +173,8 @@ class multiply_wide_op: public combine_op
 	matrix_layout_t Blayout;
 public:
 	multiply_wide_op(size_t num_threads, size_t out_num_rows, size_t out_num_cols,
-			matrix_layout_t required_layout): combine_op(0, 0,
-				get_scalar_type<T>()) {
+			matrix_layout_t required_layout, const scalar_type &type): combine_op(
+				0, 0, type) {
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
 		res_bufs.resize(num_threads);
@@ -286,83 +285,100 @@ void wide_gemm_row<float>(const detail::local_matrix_store &Astore, const float 
 			1, res_mat, out_num_cols);
 }
 
-template<class T>
-void multiply_wide_op<T>::run(
+void multiply_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	detail::local_matrix_store::const_ptr Astore = ins[0];
-	const T *Amat = (const T *) Astore->get_raw_arr();
+	const void *Amat = Astore->get_raw_arr();
 	if (Amat == NULL || Astore->store_layout() != Alayout) {
 		if (Abufs[thread_id] == NULL
 				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
 				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
 			if (Alayout == matrix_layout_t::L_ROW)
-				const_cast<multiply_wide_op<T> *>(this)->Abufs[thread_id]
+				const_cast<multiply_wide_op *>(this)->Abufs[thread_id]
 					= detail::local_matrix_store::ptr(
 							new fm::detail::local_buf_row_matrix_store(0, 0,
 								Astore->get_num_rows(), Astore->get_num_cols(),
 								Astore->get_type(), -1));
 			else
-				const_cast<multiply_wide_op<T> *>(this)->Abufs[thread_id]
+				const_cast<multiply_wide_op *>(this)->Abufs[thread_id]
 					= detail::local_matrix_store::ptr(
 							new fm::detail::local_buf_col_matrix_store(0, 0,
 								Astore->get_num_rows(), Astore->get_num_cols(),
 								Astore->get_type(), -1));
 		}
 		Abufs[thread_id]->copy_from(*Astore);
-		Amat = (const T *) Abufs[thread_id]->get_raw_arr();
+		Amat = Abufs[thread_id]->get_raw_arr();
 	}
 	assert(Amat);
 
 	detail::local_matrix_store::const_ptr Bstore = ins[1];
-	const T *Bmat = (const T *) Bstore->get_raw_arr();
+	const void *Bmat = Bstore->get_raw_arr();
 	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
 		if (Bbufs[thread_id] == NULL
 				|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
 				|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
 			if (Blayout == matrix_layout_t::L_COL)
-				const_cast<multiply_wide_op<T> *>(this)->Bbufs[thread_id]
+				const_cast<multiply_wide_op *>(this)->Bbufs[thread_id]
 					= detail::local_matrix_store::ptr(
 							new fm::detail::local_buf_col_matrix_store(0, 0,
 								Bstore->get_num_rows(), Bstore->get_num_cols(),
 								Bstore->get_type(), -1));
 			else
-				const_cast<multiply_wide_op<T> *>(this)->Bbufs[thread_id]
+				const_cast<multiply_wide_op *>(this)->Bbufs[thread_id]
 					= detail::local_matrix_store::ptr(
 							new fm::detail::local_buf_row_matrix_store(0, 0,
 								Bstore->get_num_rows(), Bstore->get_num_cols(),
 								Bstore->get_type(), -1));
 		}
 		Bbufs[thread_id]->copy_from(*Bstore);
-		Bmat = (const T *) Bbufs[thread_id]->get_raw_arr();
+		Bmat = Bbufs[thread_id]->get_raw_arr();
 	}
 	assert(Bmat);
 
 	if (res_bufs[thread_id] == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
-			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+			const_cast<multiply_wide_op *>(this)->res_bufs[thread_id]
 				= detail::local_matrix_store::ptr(
 						new fm::detail::local_buf_col_matrix_store(0, 0,
-							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+							out_num_rows, out_num_cols, get_output_type(), -1));
 		else
-			const_cast<multiply_wide_op<T> *>(this)->res_bufs[thread_id]
+			const_cast<multiply_wide_op *>(this)->res_bufs[thread_id]
 				= detail::local_matrix_store::ptr(
 						new fm::detail::local_buf_row_matrix_store(0, 0,
-							out_num_rows, out_num_cols, get_scalar_type<T>(), -1));
+							out_num_rows, out_num_cols, get_output_type(), -1));
 		res_bufs[thread_id]->reset_data();
 	}
 	assert(res_bufs[thread_id]->store_layout() == Blayout);
-	T *res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
+	void *res_mat = res_bufs[thread_id]->get_raw_arr();
 	// The A matrix is the transpose of the matrix we need. Since the A matrix
 	// is stored in contiguous memory and is organized in row major, we can
 	// easily interpret it as its transpose by switching its #rows and #cols.
-	if (Blayout == matrix_layout_t::L_COL)
-		wide_gemm_col<T>(*Astore, Amat, *Bstore, Bmat, res_mat, out_num_rows);
-	else
-		wide_gemm_row<T>(*Astore, Amat, *Bstore, Bmat, res_mat, out_num_cols);
+	if (get_output_type() == get_scalar_type<double>()) {
+		const double *t_Amat = reinterpret_cast<const double *>(Amat);
+		const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
+		double *t_res_mat = reinterpret_cast<double *>(res_mat);
+		if (Blayout == matrix_layout_t::L_COL)
+			wide_gemm_col<double>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+					out_num_rows);
+		else
+			wide_gemm_row<double>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+					out_num_cols);
+	}
+	else {
+		const float *t_Amat = reinterpret_cast<const float *>(Amat);
+		const float *t_Bmat = reinterpret_cast<const float *>(Bmat);
+		float *t_res_mat = reinterpret_cast<float *>(res_mat);
+		if (Blayout == matrix_layout_t::L_COL)
+			wide_gemm_col<float>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+					out_num_rows);
+		else
+			wide_gemm_row<float>(*Astore, t_Amat, *Bstore, t_Bmat, t_res_mat,
+					out_num_cols);
+	}
 }
 
 }
@@ -403,14 +419,9 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			this->layout = layout;
 
 		assert(left->get_type() == right->get_type());
-		if (left->get_type() == get_scalar_type<double>())
-			portion_op = std::shared_ptr<portion_mapply_op>(
-					new multiply_wide_op<double>(nthreads, left->get_num_rows(),
-						right->get_num_cols(), required_layout));
-		else
-			portion_op = std::shared_ptr<portion_mapply_op>(
-					new multiply_wide_op<float>(nthreads, left->get_num_rows(),
-						right->get_num_cols(), required_layout));
+		portion_op = std::shared_ptr<portion_mapply_op>(
+				new multiply_wide_op(nthreads, left->get_num_rows(),
+					right->get_num_cols(), required_layout, left->get_type()));
 	}
 	else {
 		this->left_op = left_op;

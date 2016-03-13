@@ -345,15 +345,13 @@ void multiply_tall_op::run(
 		mutable_this->res_bufs[thread_id] = bufs.second;
 }
 
-template<class T>
 dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
 	if (out_layout == matrix_layout_t::L_NONE)
 		out_layout = m1.store_layout();
 
-	assert(m1.get_type() == get_scalar_type<T>());
-	assert(m2.get_type() == get_scalar_type<T>());
+	assert(m1.get_type() == m2.get_type());
 	detail::matrix_store::const_ptr right = m2.get_raw_store();
 	if (out_layout != m2.store_layout()) {
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
@@ -379,15 +377,13 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 				out_layout));
 }
 
-template<class T>
 dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
 	detail::matrix_stats.inc_multiplies(
 			m1.get_num_rows() * m1.get_num_cols() * m2.get_num_cols());
 
-	assert(m1.get_type() == get_scalar_type<T>());
-	assert(m2.get_type() == get_scalar_type<T>());
+	assert(m1.get_type() == m2.get_type());
 
 	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
 				m1.get_raw_store(), m2.get_raw_store(), NULL, NULL, out_layout));
@@ -419,14 +415,10 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			return t_res->transpose();
 		}
 
-		if (is_wide() && get_type() == get_scalar_type<double>())
-			return blas_multiply_wide<double>(*this, mat, out_layout);
-		else if (is_wide())
-			return blas_multiply_wide<float>(*this, mat, out_layout);
-		else if (get_type() == get_scalar_type<double>())
-			return blas_multiply_tall<double>(*this, mat, out_layout);
+		if (is_wide())
+			return blas_multiply_wide(*this, mat, out_layout);
 		else
-			return blas_multiply_tall<float>(*this, mat, out_layout);
+			return blas_multiply_tall(*this, mat, out_layout);
 	}
 	else {
 		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
