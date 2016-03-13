@@ -2204,7 +2204,7 @@ void print_mat(detail::matrix_store::const_ptr mat)
 	}
 }
 
-void test_materialize_all(int num_nodes)
+void _test_materialize_all(int num_nodes)
 {
 	printf("materialize two tall matrices\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 8, matrix_layout_t::L_COL,
@@ -2255,6 +2255,16 @@ void test_materialize_all(int num_nodes)
 	num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
 	assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
 	assert(*(const size_t *) mem_agg2.get_raw_arr() == ((num_eles - 1) * num_eles));
+}
+
+void test_materialize_all(int num_nodes)
+{
+	// Test the in-mem case.
+	_test_materialize_all(num_nodes);
+	// Test the EM case.
+	in_mem = false;
+	_test_materialize_all(num_nodes);
+	in_mem = true;
 }
 
 void test_bmv_multiply_tall()
