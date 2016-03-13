@@ -96,7 +96,7 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 	assert(data.size() == mapper.get_num_nodes());
 	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
 	for (size_t node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
-		assert(data[node_id].get_node_id() == (size_t) node_id);
+		assert((size_t) data[node_id].get_node_id() == node_id);
 		assert(data[node_id].get_num_bytes()
 				>= local_lens[node_id] * ncol * get_entry_size());
 		assert(data[node_id].get_contig_block_size() % block_bytes == 0);
