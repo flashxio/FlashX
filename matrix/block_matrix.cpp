@@ -527,7 +527,7 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 }
 
 dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
-		matrix_layout_t out_layout, bool use_blas) const
+		matrix_layout_t out_layout) const
 {
 	return dense_matrix::ptr();
 }

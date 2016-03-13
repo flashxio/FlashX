@@ -428,7 +428,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == m1->is_in_mem());
@@ -440,7 +440,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_COL);
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == m1->is_in_mem());
@@ -452,7 +452,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -462,7 +462,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -472,7 +472,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_ROW);
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -482,7 +482,7 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -493,7 +493,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
@@ -506,7 +506,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_COL, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_COL);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
@@ -519,7 +519,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
@@ -532,7 +532,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
@@ -545,7 +545,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_ROW, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_ROW);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_ROW);
@@ -558,7 +558,7 @@ void test_multiply(int num_nodes)
 	m1 = m1->transpose();
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	res = m1->multiply(*m2, matrix_layout_t::L_NONE, true);
+	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	assert(res->is_virtual());
 	res->materialize_self();
 	assert(res->store_layout() == matrix_layout_t::L_COL);
@@ -1177,38 +1177,38 @@ void test_mapply_chain(int num_nodes, const scalar_type &type)
 	printf("test a chain of mapply virtual matrices\n");
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
 	dense_matrix::ptr vmat1 = orig_mat1->multiply(*smat1,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	dense_matrix::ptr vmat3 = orig_mat1->multiply(*smat5,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	dense_matrix::ptr vmat4 = vmat3->multiply(*smat2,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	dense_matrix::ptr vmat5 = orig_mat2->multiply(*smat3,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	dense_matrix::ptr vmat6 = vmat4->multiply(*smat4,
-			matrix_layout_t::L_NONE, true)->add(*vmat5);
+			matrix_layout_t::L_NONE)->add(*vmat5);
 	dense_matrix::ptr res = vmat6->transpose()->multiply(*vmat1,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	detail::matrix_stats.print_diff(orig_stats);
 
 	printf("materialize every matrix operations individually\n");
 	detail::matrix_stats_t orig_stats1 = detail::matrix_stats;
 	dense_matrix::ptr mat1 = orig_mat1->multiply(*smat1,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	mat1->materialize_self();
 	dense_matrix::ptr mat3 = orig_mat1->multiply(*smat5,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	mat3->materialize_self();
 	dense_matrix::ptr mat4 = vmat3->multiply(*smat2,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	mat4->materialize_self();
 	dense_matrix::ptr mat5 = orig_mat2->multiply(*smat3,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	mat5->materialize_self();
 	dense_matrix::ptr mat6 = vmat4->multiply(*smat4,
-			matrix_layout_t::L_NONE, true)->add(*vmat5);
+			matrix_layout_t::L_NONE)->add(*vmat5);
 	mat6->materialize_self();
 	dense_matrix::ptr res1 = mat6->transpose()->multiply(*mat1,
-			matrix_layout_t::L_NONE, true);
+			matrix_layout_t::L_NONE);
 	detail::matrix_stats.print_diff(orig_stats1);
 
 	if (type == get_scalar_type<int>())

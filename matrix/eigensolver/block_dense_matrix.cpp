@@ -1460,7 +1460,7 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 						this->get_num_cols()));
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
-				matrix_layout_t::L_NONE, true);
+				matrix_layout_t::L_NONE);
 		ret->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 		return ret;

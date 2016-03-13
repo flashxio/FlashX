@@ -102,7 +102,7 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	virtual dense_matrix::ptr multiply(const dense_matrix &mat,
-			matrix_layout_t out_layout, bool use_blas) const;
+			matrix_layout_t out_layout) const;
 
 
 	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,

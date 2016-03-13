@@ -225,52 +225,6 @@ public:
 	}
 };
 
-class double_multiply_operate: public bulk_operate
-{
-public:
-	virtual void runAA(size_t num_eles, const void *left_arr,
-			const void *right_arr, void *output_arr) const {
-		const double *a = static_cast<const double *>(left_arr);
-		const double *b = static_cast<const double *>(right_arr);
-		long double *c = static_cast<long double *>(output_arr);
-		for (size_t i = 0; i < num_eles; i++)
-			c[i] = ((long double) a[i]) * ((long double) b[i]);
-	}
-	virtual void runAE(size_t num_eles, const void *left_arr,
-			const void *right, void *output_arr) const {
-		long double a = *static_cast<const double *>(right);
-		const double *x = static_cast<const double *>(left_arr);
-		long double *c = static_cast<long double *>(output_arr);
-		for (size_t i = 0; i < num_eles; i++)
-			c[i] = x[i] * a;
-	}
-	virtual void runEA(size_t num_eles, const void *left,
-			const void *right_arr, void *output_arr) const {
-		long double a = *static_cast<const double *>(left);
-		const double *x = static_cast<const double *>(right_arr);
-		long double *c = static_cast<long double *>(output_arr);
-		for (size_t i = 0; i < num_eles; i++)
-			c[i] = x[i] * a;
-	}
-	virtual void runAgg(size_t num_eles, const void *left_arr,
-			void *output) const {
-		assert(0);
-	}
-
-	virtual const scalar_type &get_left_type() const {
-		return get_scalar_type<double>();
-	}
-	virtual const scalar_type &get_right_type() const {
-		return get_scalar_type<double>();
-	}
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<long double>();
-	}
-	virtual std::string get_name() const {
-		return "dmultiply";
-	}
-};
-
 }
 
 double dense_matrix::norm2() const
@@ -443,10 +397,10 @@ dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 }
 
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
-		matrix_layout_t out_layout, bool use_blas) const
+		matrix_layout_t out_layout) const
 {
 	if ((get_type() == get_scalar_type<double>()
-				|| get_type() == get_scalar_type<float>()) && use_blas) {
+				|| get_type() == get_scalar_type<float>())) {
 		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
 		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
@@ -461,8 +415,7 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 				t_layout = matrix_layout_t::L_COL;
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
-			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout,
-					use_blas);
+			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
 			return t_res->transpose();
 		}
 
@@ -474,19 +427,6 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			return blas_multiply_tall<double>(*this, mat, out_layout);
 		else
 			return blas_multiply_tall<float>(*this, mat, out_layout);
-	}
-	else if (get_type() == get_scalar_type<double>()) {
-		bulk_operate::const_ptr add = bulk_operate::conv2ptr(
-				get_scalar_type<long double>().get_basic_ops().get_add());
-		bulk_operate::const_ptr multiply(new double_multiply_operate());
-		dense_matrix::ptr res;
-		if (is_wide())
-			res = inner_prod(mat, multiply, add, out_layout);
-		else
-			res = inner_prod(mat, multiply, add, out_layout);
-		assert(res->get_type() == get_scalar_type<long double>());
-		dense_matrix::ptr ret = res->cast_ele_type(get_scalar_type<double>());
-		return ret;
 	}
 	else {
 		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(

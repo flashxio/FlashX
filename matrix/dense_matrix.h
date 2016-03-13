@@ -332,8 +332,7 @@ public:
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 	virtual dense_matrix::ptr multiply(const dense_matrix &mat,
-			matrix_layout_t out_layout = matrix_layout_t::L_NONE,
-			bool use_blas = true) const;
+			matrix_layout_t out_layout = matrix_layout_t::L_NONE) const;
 	/*
 	 * Compute aggregation on the matrix.
 	 * It can aggregate on rows, on columns or on all elements.
