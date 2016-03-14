@@ -318,10 +318,19 @@ bool vector::equals(const vector &vec) const
 		return false;
 	else {
 		assert(is_in_mem());
-		return memcmp(
-				dynamic_cast<const detail::mem_vec_store &>(get_data()).get_raw_arr(),
-				dynamic_cast<const detail::mem_vec_store &>(vec.get_data()).get_raw_arr(),
-				get_length() * get_entry_size()) == 0;
+		const detail::mem_vec_store &v1
+			= dynamic_cast<const detail::mem_vec_store &>(get_data());
+		const detail::mem_vec_store &v2
+			= dynamic_cast<const detail::mem_vec_store &>(vec.get_data());
+		size_t portion_size = std::min(v1.get_portion_size(),
+				v2.get_portion_size());
+		for (size_t idx = 0; idx < v1.get_length(); idx += portion_size) {
+			size_t llen = std::min(v1.get_length() - idx, portion_size);
+			if (memcmp(v1.get_sub_arr(idx, llen), v2.get_sub_arr(idx, llen),
+						llen * get_entry_size()) != 0)
+				return false;
+		}
+		return true;
 	}
 }
 
