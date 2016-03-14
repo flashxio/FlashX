@@ -70,30 +70,6 @@ void portion_mapply_op::run(
 	assert(0);
 }
 
-matrix_stats_t matrix_stats;
-
-void matrix_stats_t::print_diff(const matrix_stats_t &orig) const
-{
-#ifdef MATRIX_DEBUG
-	if (this->mem_read_bytes != orig.mem_read_bytes)
-		BOOST_LOG_TRIVIAL(info) << "in-mem read "
-			<< (this->mem_read_bytes - orig.mem_read_bytes) << " bytes";
-	if (this->mem_write_bytes != orig.mem_write_bytes)
-		BOOST_LOG_TRIVIAL(info) << "in-mem write "
-			<< (this->mem_write_bytes - orig.mem_write_bytes) << " bytes";
-	if (this->EM_read_bytes != orig.EM_read_bytes)
-		BOOST_LOG_TRIVIAL(info) << "ext-mem read "
-			<< (this->EM_read_bytes - orig.EM_read_bytes) << " bytes";
-	if (this->EM_write_bytes != orig.EM_write_bytes)
-		BOOST_LOG_TRIVIAL(info) << "ext-mem write "
-			<< (this->EM_write_bytes - orig.EM_write_bytes) << " bytes";
-	if (this->double_multiplies != orig.double_multiplies)
-		BOOST_LOG_TRIVIAL(info) << "multiply "
-			<< (this->double_multiplies - orig.double_multiplies)
-			<< " double float points";
-#endif
-}
-
 }
 
 bool dense_matrix::verify_inner_prod(const dense_matrix &m,

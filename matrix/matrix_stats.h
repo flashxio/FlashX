@@ -20,6 +20,10 @@
  * limitations under the License.
  */
 
+#include <stdlib.h>
+
+#include <atomic>
+
 namespace fm
 {
 
@@ -54,74 +58,12 @@ public:
 		double_multiplies = stats.double_multiplies.load();
 	}
 
-	size_t inc_read_bytes(size_t bytes, bool in_mem) {
-#ifdef MATRIX_DEBUG
-		if (in_mem) {
-			mem_read_bytes += bytes;
-			return mem_read_bytes;
-		}
-		else {
-			EM_read_bytes += bytes;
-			return EM_read_bytes;
-		}
-#else
-		return 0;
-#endif
-	}
-
-	size_t get_read_bytes(bool in_mem) const {
-#ifdef MATRIX_DEBUG
-		if (in_mem)
-			return mem_read_bytes;
-		else
-			return EM_read_bytes;
-#else
-		return 0;
-#endif
-	}
-
-	size_t inc_write_bytes(size_t bytes, bool in_mem) {
-#ifdef MATRIX_DEBUG
-		if (in_mem) {
-			mem_write_bytes += bytes;
-			return mem_write_bytes;
-		}
-		else {
-			EM_write_bytes += bytes;
-			return EM_write_bytes;
-		}
-#else
-		return 0;
-#endif
-	}
-
-	size_t get_write_bytes(bool in_mem) const {
-#ifdef MATRIX_DEBUG
-		if (in_mem)
-			return mem_write_bytes;
-		else
-			return EM_write_bytes;
-#else
-		return 0;
-#endif
-	}
-
-	size_t inc_multiplies(size_t multiplies) {
-#ifdef MATRIX_DEBUG
-		this->double_multiplies += multiplies;
-		return double_multiplies;
-#else
-		return 0;
-#endif
-	}
-
-	size_t get_multiplies() const {
-#ifdef MATRIX_DEBUG
-		return double_multiplies;
-#else
-		return 0;
-#endif
-	}
+	size_t inc_read_bytes(size_t bytes, bool in_mem);
+	size_t get_read_bytes(bool in_mem) const;
+	size_t inc_write_bytes(size_t bytes, bool in_mem);
+	size_t get_write_bytes(bool in_mem) const;
+	size_t inc_multiplies(size_t multiplies);
+	size_t get_multiplies() const;
 
 	void print_diff(const matrix_stats_t &orig) const;
 };
