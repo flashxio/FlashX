@@ -45,6 +45,7 @@
 #define VERBOSE 0
 
 namespace {
+    static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
     /**
      * \brief Print an arry of some length `len`.
      *	 \param len The length of the array.
@@ -160,7 +161,8 @@ namespace {
         //#pragma omp parallel for firstprivate(cluster_assignments, K)
         //shared(cluster_assignments)
         for (unsigned row = 0; row < num_rows; row++) {
-            size_t asgnd_clust = random() % k; // 0...K
+            unsigned asgnd_clust = random() % k; // 0...K
+
             clusters->add_member(&matrix[row*num_cols], asgnd_clust);
             cluster_assignments[row] = asgnd_clust;
         }
@@ -168,7 +170,7 @@ namespace {
         // NOTE: M-Step called in compute func to update cluster counts & centers
 #if VERBOSE
         printf("After rand paritions cluster_asgns: ");
-        print_arr(cluster_assignments, NUM_ROWS);
+        print_arr(cluster_assignments, num_rows);
 #endif
         BOOST_LOG_TRIVIAL(info) << "Random init end\n";
     }
