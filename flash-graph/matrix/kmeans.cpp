@@ -28,7 +28,6 @@ namespace {
 	static unsigned NUM_ROWS;
 	short OMP_MAX_THREADS;
 	static unsigned g_num_changed = 0;
-    static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
 	static struct timeval start, end;
     static init_type_t g_init_type;
 
@@ -169,8 +168,7 @@ namespace fg
 			unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 			const unsigned num_rows, const unsigned num_cols, const unsigned k,
             const unsigned MAX_ITERS, const int max_threads, const std::string init,
-            const double tolerance, const std::string dist_type)
-	{
+            const double tolerance, const std::string dist_type) {
 #ifdef PROFILER
 		ProfilerStart("matrix/kmeans.perf");
 #endif
@@ -240,12 +238,6 @@ namespace fg
                 "'random', 'forgy', 'kmeanspp'.It is '"
                 << init << "'";
             exit(-1);
-        }
-
-        if (g_init_type == NONE || g_init_type == FORGY
-                || g_init_type == RANDOM) {
-			EM_step(matrix, clusters, cluster_assignments,
-                    cluster_assignment_counts);
         }
 
         g_num_changed = 0;
