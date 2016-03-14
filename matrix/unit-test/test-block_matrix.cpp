@@ -23,9 +23,13 @@
 
 using namespace fm;
 
+bool in_mem;
+
 template<class T>
 void check_mat_equal(dense_matrix::ptr m1, dense_matrix::ptr m2)
 {
+	m1 = m1->conv_store(true, -1);
+	m2 = m2->conv_store(true, -1);
 	assert(m1->get_num_rows() == m2->get_num_rows());
 	assert(m1->get_num_cols() == m2->get_num_cols());
 	block_matrix::ptr block_m = std::dynamic_pointer_cast<block_matrix>(m1);
@@ -40,6 +44,8 @@ void check_mat_equal(dense_matrix::ptr m1, dense_matrix::ptr m2)
 template<class T>
 void check_mat_approx(dense_matrix::ptr m1, dense_matrix::ptr m2)
 {
+	m1 = m1->conv_store(true, -1);
+	m2 = m2->conv_store(true, -1);
 	assert(m1->get_num_rows() == m2->get_num_rows());
 	assert(m1->get_num_cols() == m2->get_num_cols());
 	block_matrix::ptr block_m = std::dynamic_pointer_cast<block_matrix>(m1);
@@ -71,9 +77,11 @@ void test_mapply2()
 {
 	printf("test mapply2\n");
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			get_scalar_type<int>(), const_set_operate<int>(1));
+			get_scalar_type<int>(), const_set_operate<int>(1),
+			matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = block_matrix::create(10000, 10, 3,
-			get_scalar_type<int>(), const_set_operate<int>(1));
+			get_scalar_type<int>(), const_set_operate<int>(1),
+			matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr res = mat1->add(*mat2);
 	assert(is_block_matrix(res));
 	res->materialize_self();
@@ -91,7 +99,7 @@ void test_get_rc()
 
 	// check getting columns.
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -111,7 +119,8 @@ void test_get_rc()
 	check_mat_equal<double>(sub_m1, sub_m2);
 
 	// check getting rows.
-	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
 	mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -133,7 +142,7 @@ void test_transpose()
 	set_operate::const_ptr init_op = create_urand_init<double>(0, 1);
 
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -165,7 +174,7 @@ void test_mapply_rows()
 
 	// Tall matrix
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -178,7 +187,8 @@ void test_mapply_rows()
 	check_mat_equal<double>(mat1, mat2);
 
 	// Wide matrix
-	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
 	mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -199,7 +209,7 @@ void test_mapply_cols()
 
 	// Tall matrix
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -212,7 +222,8 @@ void test_mapply_cols()
 	check_mat_equal<double>(mat1, mat2);
 
 	// Wide matrix
-	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
 	mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -233,7 +244,7 @@ void test_sapply()
 		= *init_op->get_type().get_basic_uops().get_op(basic_uops::op_idx::NEG);
 
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create(mat1->get_raw_store());
 	mat2->materialize_self();
 
@@ -265,7 +276,7 @@ void test_inner_prod()
 
 	printf("test inner product on tall matrix\n");
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create_randu<size_t>(0, 10000,
 			10, 11, matrix_layout_t::L_ROW);
 	dense_matrix::ptr res1 = mat1->inner_prod(*mat2,
@@ -281,8 +292,10 @@ void test_inner_prod()
 	check_mat_equal<size_t>(res1, res2);
 
 	printf("test inner product on wide matrix\n");
-	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
-	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op);
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
+	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
 	res1 = mat1->inner_prod(*mat2,
 			bulk_operate::conv2ptr(mul_op), bulk_operate::conv2ptr(add_op));
 
@@ -302,7 +315,7 @@ void test_multiply()
 
 	printf("test multiply on tall matrix\n");
 	dense_matrix::ptr mat1 = block_matrix::create(10000, 10, 3,
-			init_op->get_type(), *init_op);
+			init_op->get_type(), *init_op, matrix_conf.get_num_nodes(), in_mem);
 	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(0, 1,
 			10, 11, matrix_layout_t::L_ROW);
 	dense_matrix::ptr res1 = mat1->multiply(*mat2);
@@ -316,8 +329,10 @@ void test_multiply()
 	check_mat_approx<double>(res1, res2);
 
 	printf("test multiply on wide matrix\n");
-	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op);
-	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op);
+	mat1 = block_matrix::create(10, 10000, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
+	mat2 = block_matrix::create(10000, 5, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
 	res1 = mat1->multiply(*mat2);
 
 	mat3 = dense_matrix::create(mat1->get_raw_store());
@@ -329,9 +344,19 @@ void test_multiply()
 	check_mat_approx<double>(res1, res2);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-	init_flash_matrix(NULL);
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
+	}
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
+	in_mem = false;
+	test_multiply();
 	test_mapply2();
 	test_get_rc();
 	test_transpose();
@@ -339,6 +364,16 @@ int main()
 	test_mapply_cols();
 	test_sapply();
 	test_inner_prod();
+
+	in_mem = true;
 	test_multiply();
+	test_mapply2();
+	test_get_rc();
+	test_transpose();
+	test_mapply_rows();
+	test_mapply_cols();
+	test_sapply();
+	test_inner_prod();
+
 	destroy_flash_matrix();
 }
