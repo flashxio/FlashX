@@ -697,4 +697,35 @@ dense_matrix::ptr block_matrix::apply(matrix_margin margin,
 	return dense_matrix::ptr();
 }
 
+dense_matrix::ptr block_matrix::conv_store(bool in_mem, int num_nodes) const
+{
+	std::vector<detail::matrix_store::const_ptr> new_stores(store->get_num_mats());
+	// TODO it's better to convert them all together.
+	for (size_t i = 0; i < store->get_num_mats(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+		mat = mat->conv_store(in_mem, num_nodes);
+		if (mat == NULL)
+			return dense_matrix::ptr();
+		new_stores[i] = mat->get_raw_store();
+	}
+	return block_matrix::create(detail::combined_matrix_store::create(
+				new_stores, store->store_layout()));
+}
+
+bool block_matrix::move_store(bool in_mem, int num_nodes) const
+{
+	std::vector<detail::matrix_store::const_ptr> new_stores(store->get_num_mats());
+	// TODO it's better to convert them all together.
+	for (size_t i = 0; i < store->get_num_mats(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+		mat = mat->conv_store(in_mem, num_nodes);
+		if (mat == NULL)
+			return false;
+		new_stores[i] = mat->get_raw_store();
+	}
+	const_cast<block_matrix *>(this)->store
+		= detail::combined_matrix_store::create(new_stores, store->store_layout());
+	return true;
+}
+
 }

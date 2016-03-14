@@ -60,8 +60,6 @@ protected:
 	dense_matrix::ptr multiply_wide(const dense_matrix &m,
 			matrix_layout_t out_layout) const;
 public:
-	typedef std::shared_ptr<block_matrix> ptr;
-
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,
 			int num_nodes = -1, bool in_mem = true,
@@ -95,8 +93,6 @@ public:
 
 	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(matrix_layout_t layout) const;
-	virtual dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
-	virtual bool move_store(bool in_mem, int num_nodes) const;
 	virtual bool drop_cache();
 	virtual size_t get_num_cached() const;
 #endif
@@ -118,6 +114,9 @@ public:
 	virtual dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
 	virtual dense_matrix::ptr apply(matrix_margin margin,
 			arr_apply_operate::const_ptr op) const;
+
+	virtual dense_matrix::ptr conv_store(bool in_mem, int num_nodes) const;
+	virtual bool move_store(bool in_mem, int num_nodes) const;
 };
 
 }
