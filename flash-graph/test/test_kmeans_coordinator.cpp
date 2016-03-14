@@ -27,20 +27,17 @@ int main (int argc, char* argv []) {
         exit(911);
     }
 
-    unsigned nthreads = atoi(argv[1]);
     unsigned nrow = atoi(argv[2]);
     unsigned ncol = atoi(argv[3]);
     unsigned k = atoi(argv[4]);
     std::string fn = argv[5];
-
-    printf("nthreads: %u\n", nthreads);
-    printf("nrow: %u\n", nrow);
-    printf("ncol: %u\n", ncol);
-
+    constexpr unsigned max_iters = 50;
     unsigned nnodes = numa_num_task_nodes();
-    std::cout << "We have " << nnodes << " NUMA nodes\n";
+    unsigned nthreads = atoi(argv[1]);
+    std::string init = "random";
 
-    kmeans_coordinator::ptr kc = kmeans_coordinator::create(
-            nthreads, nnodes, nrow, ncol, k, fn);
+    kmeans_coordinator::ptr kc = kmeans_coordinator::create(fn,
+            nrow, ncol, k, max_iters, nnodes, nthreads, init);
+    kc->run_kmeans();
     return(EXIT_SUCCESS);
 }

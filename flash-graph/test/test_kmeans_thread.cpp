@@ -29,13 +29,14 @@ void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes) {
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
         thds.push_back(kmeans_thread::create
-                (i%nnodes, i, 69, 200, 2, cl, NULL, "/dev/null"));
+                (i%nnodes, i, 69, 200, 1, 2, cl, NULL, "/dev/null"));
     }
 
     // Always: Start threads alone
     for (unsigned i = 0; i < NTHREADS; i++)
         thds[i]->start(TEST);
 
+    // Always: join threads alone
     unsigned sum = 0;
     unsigned verification = 0;
     for (unsigned i = 0; i < thds.size(); i++) {
@@ -61,7 +62,7 @@ void test_numa_populate_data() {
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
         thds.push_back(kmeans_thread::create
-                (i%nnodes, i, i*nprocrows*ncol, nprocrows, ncol,
+                (i%nnodes, i, i*nprocrows*ncol, nprocrows, nprocrows, ncol,
                  cl, NULL, fn));
     }
 
