@@ -561,6 +561,7 @@ void test_multiply()
 	for (size_t i = 0; i < 5; i++) {
 		gettimeofday(&start, NULL);
 		dense_matrix::ptr res = mat1->multiply(*mat);
+		res->materialize_self();
 		gettimeofday(&end, NULL);
 		printf("multiply wide takes %.3f seconds\n", time_diff(start, end));
 	}
