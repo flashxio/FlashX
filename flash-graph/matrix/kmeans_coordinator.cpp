@@ -20,15 +20,5 @@
 #include "kmeans_coordinator.h"
 
 namespace {
-    void kmeans_coordinator::numa_alloc_data() {
-        //TODO: Pass file handle to threads to read & numa alloc
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->start(ALLOC_DATA);
-        join_threads();
-    }
 
-    void kmeans_coordinator::join_threads() {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->join();
-    }
 }
