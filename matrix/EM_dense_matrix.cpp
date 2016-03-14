@@ -306,6 +306,15 @@ async_cres_t EM_matrix_store::get_portion_async(
 					num_rows, num_cols);
 		else
 			ret = ret1;
+		// We need its transpose.
+		if (ret1->get_num_rows() == fetch_num_cols
+				&& ret1->get_num_cols() == fetch_num_rows)
+			ret = std::static_pointer_cast<const local_matrix_store>(
+					ret->transpose());
+		assert((size_t) ret->get_global_start_row() == start_row);
+		assert((size_t) ret->get_global_start_col() == start_col);
+		assert(ret->get_num_rows() == num_rows);
+		assert(ret->get_num_cols() == num_cols);
 		return async_cres_t(valid_data, ret);
 	}
 
@@ -442,6 +451,7 @@ vec_store::const_ptr EM_matrix_store::get_col_vec(off_t idx) const
 	safs::io_interface &io = ios->get_curr_io();
 	if (get_num_cols() == 1) {
 		size_t len = roundup_ele(get_num_rows(), PAGE_SIZE, entry_size);
+		// TODO I shouldn't read the column into a SMP vector.
 		smp_vec_store::ptr vec = smp_vec_store::create(len, get_type());
 		vec->expose_sub_vec(0, get_num_rows());
 
