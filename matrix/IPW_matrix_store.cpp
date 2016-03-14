@@ -212,6 +212,9 @@ public:
 		return res_bufs;
 	}
 
+	void run_part(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
@@ -288,6 +291,37 @@ void multiply_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
+	size_t LONG_DIM_LEN = 1024;
+	size_t long_dim = ins[1]->get_num_rows();
+	if (long_dim <= LONG_DIM_LEN) {
+		run_part(ins);
+		return;
+	}
+
+	local_matrix_store::exposed_area orig_A = ins[0]->get_exposed_area();
+	local_matrix_store::exposed_area orig_B = ins[1]->get_exposed_area();
+	local_matrix_store &mutableA = const_cast<local_matrix_store &>(*ins[0]);
+	local_matrix_store &mutableB = const_cast<local_matrix_store &>(*ins[1]);
+	for (size_t row_idx = 0; row_idx < long_dim; row_idx += LONG_DIM_LEN) {
+		size_t llen = std::min(long_dim - row_idx, LONG_DIM_LEN);
+		if (require_trans)
+			mutableA.resize(orig_A.local_start_row + row_idx,
+					orig_A.local_start_col, llen, mutableA.get_num_cols());
+		else
+			mutableA.resize(orig_A.local_start_row,
+					orig_A.local_start_col + row_idx, mutableA.get_num_rows(),
+					llen);
+		mutableB.resize(orig_B.local_start_row + row_idx,
+				orig_B.local_start_col, llen, mutableB.get_num_cols());
+		run_part(ins);
+	}
+	mutableA.restore_size(orig_A);
+	mutableB.restore_size(orig_B);
+}
+
+void multiply_wide_op::run_part(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	detail::local_matrix_store::const_ptr Astore = ins[0];
