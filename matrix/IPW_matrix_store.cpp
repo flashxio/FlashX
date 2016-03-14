@@ -400,6 +400,7 @@ void multiply_wide_op::run_part(
 	}
 	Bsize.first = Bstore->get_num_rows();
 	Bsize.second = Bstore->get_num_cols();
+	assert(out_num_rows == Asize.first && out_num_cols == Bsize.second);
 	if (get_output_type() == get_scalar_type<double>()) {
 		const double *t_Amat = reinterpret_cast<const double *>(Amat);
 		const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
@@ -766,6 +767,7 @@ local_matrix_store::const_ptr IPW_matrix_store::get_portion(
 			start_col, num_rows, num_cols);
 	local_matrix_store::const_ptr right_part = right_mat->get_portion(
 			start_col, 0, num_cols, right_mat->get_num_cols());
+	assert(left_part->get_num_cols() == right_part->get_num_rows());
 	return create_lmaterialize_matrix(left_part, right_part, get_type(),
 			portion_op);
 }
@@ -774,6 +776,7 @@ local_matrix_store::const_ptr IPW_matrix_store::get_portion(size_t id) const
 {
 	local_matrix_store::const_ptr left_part = left_mat->get_portion(id);
 	local_matrix_store::const_ptr right_part = right_mat->get_portion(id);
+	assert(left_part->get_num_cols() == right_part->get_num_rows());
 	return create_lmaterialize_matrix(left_part, right_part, get_type(),
 			portion_op);
 }
@@ -825,6 +828,7 @@ async_cres_t IPW_matrix_store::get_portion_async(
 			num_rows, num_cols, new_compute);
 	async_cres_t right_ret = right_mat->get_portion_async(start_col, 0,
 			num_cols, right_mat->get_num_cols(), new_compute);
+	assert(left_ret.second->get_num_cols() == right_ret.second->get_num_rows());
 	if (left_ret.first && right_ret.first)
 		return async_cres_t(true, create_lmaterialize_matrix(left_ret.second,
 					right_ret.second, get_type(), portion_op));
