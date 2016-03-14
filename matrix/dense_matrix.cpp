@@ -1119,9 +1119,7 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 	else {
 		// This forces the portion of a mapply matrix to materialize and
 		// release the data in the underlying portion.
-		// TODO it's better to have a better way to materialize the mapply
-		// matrix portion.
-		portion->get_raw_arr();
+		portion->materialize_self();
 		ready_portions.push_back(portion);
 	}
 }
