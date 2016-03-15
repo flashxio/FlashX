@@ -833,7 +833,7 @@ async_cres_t IPW_matrix_store::get_portion_async(
 		return async_cres_t(true, create_lmaterialize_matrix(left_ret.second,
 					right_ret.second, get_type(), portion_op));
 	else {
-		new_compute->set_EM_count(left_ret.first + right_ret.first);
+		new_compute->set_EM_count(!left_ret.first + !right_ret.first);
 		return async_cres_t(false, create_lmaterialize_matrix(left_ret.second,
 					right_ret.second, get_type(), portion_op));
 	}
