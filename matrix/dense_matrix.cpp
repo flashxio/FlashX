@@ -2749,11 +2749,13 @@ namespace
 class materialize_mapply_op: public detail::portion_mapply_op
 {
 	bool is_wide;
+	bool _agg;
 public:
 	// The type doesn't really matter.
 	materialize_mapply_op(const scalar_type &type,
-			bool is_wide): detail::portion_mapply_op(0, 0, type) {
+			bool is_wide, bool _agg): detail::portion_mapply_op(0, 0, type) {
 		this->is_wide = is_wide;
+		this->_agg = _agg;
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -2767,6 +2769,10 @@ public:
 			detail::materialize_wide(ins);
 		else
 			detail::materialize_tall(ins);
+	}
+
+	virtual bool is_agg() const {
+		return _agg;
 	}
 
 	virtual std::string to_string(
@@ -2797,7 +2803,7 @@ void materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 
 	detail::portion_mapply_op::const_ptr materialize_op(
 			new materialize_mapply_op(virt_stores[0]->get_type(),
-				virt_stores.front()->is_wide()));
+				virt_stores.front()->is_wide(), !par_access));
 	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW,
 			par_access);
 	// Now all virtual matrices contain the materialized results.
