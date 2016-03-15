@@ -37,7 +37,7 @@ namespace fm
 namespace detail
 {
 
-const size_t EM_matrix_store::CHUNK_SIZE = 256 * 1024;
+const size_t EM_matrix_store::CHUNK_SIZE = 32 * 1024;
 
 static std::unordered_map<std::string, EM_object::file_holder::ptr> file_holders;
 
