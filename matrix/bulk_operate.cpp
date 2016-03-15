@@ -93,7 +93,7 @@ public:
 template<class OpType, class LeftType, class RightType, class ResType>
 class bulk_operate_impl: public bulk_operate
 {
-	static const size_t BULK_LEN = 1024;
+	static const size_t BULK_LEN = 128;
 	OpType op;
 
 	void runAA_short(size_t num_eles, const LeftType *left_arr,
