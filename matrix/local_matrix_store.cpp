@@ -35,7 +35,7 @@ namespace fm
 namespace detail
 {
 
-static const size_t LONG_DIM_LEN = 1024;
+static const size_t L1_SIZE = 1024 * 32;
 
 #ifdef __AVX__
 static void memcpy256(char *dest, const char *src, size_t num256)
@@ -653,7 +653,6 @@ static void inner_prod_col(const local_col_matrix_store &m1,
 		const bulk_operate &right_op, local_col_matrix_store &res,
 		std::vector<char> &tmp_buf)
 {
-	const size_t L1_SIZE = 1024 * 32;
 	size_t num_cols_part = L1_SIZE / m1.get_num_rows() / m1.get_entry_size() / 2;
 	if (num_cols_part <= 1)
 		inner_prod_col_part(m1, 0, m1.get_num_cols(), m2, 0, m2.get_num_cols(),
@@ -705,6 +704,14 @@ void inner_prod(const local_matrix_store &left, const local_matrix_store &right,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		local_matrix_store &res)
 {
+	size_t LONG_DIM_LEN;
+	if (left.is_wide())
+		LONG_DIM_LEN = get_long_dim_len(left, right);
+	else
+		// In this case, the left matrix is a tall matrix and the right matrix
+		// is a small matrix.
+		LONG_DIM_LEN = get_long_dim_len(left);
+
 	std::vector<char> tmp_buf;
 	// If the matrix is small.
 	if ((left.is_wide() && left.get_num_cols() <= LONG_DIM_LEN)
@@ -825,6 +832,7 @@ static void agg_rows(const local_matrix_store &store, const agg_operate &op,
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
 	assert(ncol > 1);
+	const size_t LONG_DIM_LEN = get_long_dim_len(store);
 	// Aggregate on rows, but the matrix is stored in col-major.
 	// Instead of running aggregation on each row directly, we compute partial
 	// aggregation on columns. This only works if the aggregation operation
@@ -892,6 +900,7 @@ static void agg_cols(const local_matrix_store &store, const agg_operate &op,
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
 	assert(nrow > 1);
+	const size_t LONG_DIM_LEN = get_long_dim_len(store);
 	if (store.store_layout() == matrix_layout_t::L_ROW && op.is_same()) {
 		assert(res.get_length() == store.get_num_cols());
 		const local_row_matrix_store &row_store
@@ -995,6 +1004,7 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 {
 	bool is_virt = m1.is_virtual() || m2.is_virtual();
 	// resize the wide matrix.
+	const size_t LONG_DIM_LEN = get_long_dim_len(m1);
 	if (is_virt && m1.is_wide() && m1.get_num_cols() > LONG_DIM_LEN) {
 		size_t orig_num_cols = m1.get_num_cols();
 		local_matrix_store::exposed_area orig_m1 = m1.get_exposed_area();
@@ -1075,6 +1085,7 @@ static void _sapply(const local_matrix_store &store, const bulk_uoperate &op,
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_matrix_store &res)
 {
+	const size_t LONG_DIM_LEN = get_long_dim_len(store);
 	// resize the wide matrix.
 	if (store.is_virtual() && store.is_wide()
 			&& store.get_num_cols() > LONG_DIM_LEN) {
@@ -1325,6 +1336,7 @@ bool groupby_row(const detail::local_matrix_store &labels,
 		const detail::local_row_matrix_store &mat, const agg_operate &op,
 		detail::local_row_matrix_store &results, std::vector<bool> &agg_flags)
 {
+	const size_t LONG_DIM_LEN = get_long_dim_len(mat);
 	assert(!mat.is_wide());
 	// resize the tall matrix
 	if (mat.is_virtual() && mat.get_num_rows() > LONG_DIM_LEN) {
@@ -1641,6 +1653,7 @@ void matrix_tall_multiply(const local_matrix_store &Astore,
 		const local_matrix_store &Bstore, local_matrix_store &out,
 		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs)
 {
+	const size_t LONG_DIM_LEN = get_long_dim_len(Astore);
 	assert(Astore.get_type() == Bstore.get_type());
 	assert(Astore.get_type() == out.get_type());
 	// As long as Astore is taller than we expect, we partition it to compute
@@ -1688,6 +1701,17 @@ void materialize_tall(
 	for (size_t i = 1; i < ins.size(); i++)
 		assert(ins[i]->get_num_rows() == orig_num_rows);
 
+	// Get the length in the long dimension.
+	size_t max_num_cols = ins[0]->get_num_cols();
+	size_t max_idx = 0;
+	for (size_t i = 1; i < ins.size(); i++) {
+		if (max_num_cols < ins[i]->get_num_cols()) {
+			max_idx = i;
+			max_num_cols = ins[i]->get_num_cols();
+		}
+	}
+	size_t LONG_DIM_LEN = get_long_dim_len(*ins[max_idx]);
+
 	if (orig_num_rows > LONG_DIM_LEN) {
 		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
 		for (size_t i = 0; i < ins.size(); i++)
@@ -1719,6 +1743,17 @@ void materialize_wide(
 	for (size_t i = 1; i < ins.size(); i++)
 		assert(ins[i]->get_num_cols() == orig_num_cols);
 
+	// Get the length in the long dimension.
+	size_t max_num_rows = ins[0]->get_num_rows();
+	size_t max_idx = 0;
+	for (size_t i = 1; i < ins.size(); i++) {
+		if (max_num_rows < ins[i]->get_num_rows()) {
+			max_idx = i;
+			max_num_rows = ins[i]->get_num_rows();
+		}
+	}
+	size_t LONG_DIM_LEN = get_long_dim_len(*ins[max_idx]);
+
 	if (orig_num_cols > LONG_DIM_LEN) {
 		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
 		for (size_t i = 0; i < ins.size(); i++)
@@ -1741,6 +1776,33 @@ void materialize_wide(
 		for (size_t i = 0; i < ins.size(); i++)
 			ins[i]->materialize_self();
 	}
+}
+
+size_t get_long_dim_len(const local_matrix_store &mat)
+{
+	size_t short_dim = std::min(mat.get_num_rows(), mat.get_num_cols());
+	size_t entry_size = mat.get_entry_size();
+	size_t max_long_dim = L1_SIZE / short_dim / entry_size;
+	// We use this minimal size for in the long dimension because normally,
+	// the maximal size for the short dimension is 32.
+	size_t long_dim = 128;
+	// The maximal size for the long dimension is 1024.
+	while (long_dim < max_long_dim && long_dim < 1024)
+		long_dim *= 2;
+	return long_dim;
+}
+
+size_t get_long_dim_len(const local_matrix_store &mat1,
+		const local_matrix_store &mat2)
+{
+	size_t short_dim1 = std::min(mat1.get_num_rows(), mat1.get_num_cols());
+	size_t short_dim2 = std::min(mat2.get_num_rows(), mat2.get_num_cols());
+	// We use the matrix with the larger length in the short dimension
+	// to determine the length in the long dimension.
+	if (short_dim1 < short_dim2)
+		return get_long_dim_len(mat2);
+	else
+		return get_long_dim_len(mat1);
 }
 
 }

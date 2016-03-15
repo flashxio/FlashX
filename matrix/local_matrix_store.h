@@ -1190,6 +1190,19 @@ void matrix_wide_multiply(const local_matrix_store &left,
 void materialize_tall(const std::vector<detail::local_matrix_store::const_ptr> &ins);
 void materialize_wide(const std::vector<detail::local_matrix_store::const_ptr> &ins);
 
+/*
+ * This returns the length in the long dimension for a partition of the matrix
+ * that can fit in CPU cache.
+ */
+size_t get_long_dim_len(const local_matrix_store &mat);
+/*
+ * Some computation takes two matrices as input. We use the matrix with
+ * the larger length in the short dimension to determine the length of
+ * the long dimension.
+ */
+size_t get_long_dim_len(const local_matrix_store &mat1,
+		const local_matrix_store &mat2);
+
 }
 
 }

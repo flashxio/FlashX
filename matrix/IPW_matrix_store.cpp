@@ -291,7 +291,7 @@ void multiply_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
-	size_t LONG_DIM_LEN = 1024;
+	size_t LONG_DIM_LEN = get_long_dim_len(*ins[0], *ins[1]);
 	size_t long_dim = ins[1]->get_num_rows();
 	if (long_dim <= LONG_DIM_LEN) {
 		run_part(ins);
