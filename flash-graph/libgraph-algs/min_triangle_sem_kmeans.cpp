@@ -550,10 +550,10 @@ namespace {
     }
 
     template<class T, class VertexType>
-        class bic_query: public fg::vertex_query {
+        class dist_query: public fg::vertex_query {
             typename fg::FG_vector<T>::ptr vec;
             public:
-            bic_query(typename fg::FG_vector<T>::ptr vec) {
+            dist_query(typename fg::FG_vector<T>::ptr vec) {
                 this->vec = vec;
             }
 
@@ -566,13 +566,19 @@ namespace {
             }
 
             virtual ptr clone() {
-                return fg::vertex_query::ptr(new bic_query(vec));
+                return fg::vertex_query::ptr(new dist_query(vec));
             }
         };
 
+    FG_vector<double>::ptr get_dist_v(graph_engine::ptr mat) {
+        FG_vector<double>::ptr vec = FG_vector<double>::create(mat);
+        mat->query_on_all(vertex_query::ptr(new dist_query<double, kmeans_vertex>(vec)));
+        return vec;
+    }
+
     double get_bic(graph_engine::ptr mat) {
         FG_vector<double>::ptr vec = FG_vector<double>::create(mat);
-        mat->query_on_all(vertex_query::ptr(new bic_query<double, kmeans_vertex>(vec)));
+        mat->query_on_all(vertex_query::ptr(new dist_query<double, kmeans_vertex>(vec)));
         return 2*vec->sum() + log(NUM_ROWS)*K*NUM_COLS;
     }
 
@@ -947,6 +953,12 @@ namespace fg
             update_clusters(mat, num_members_v);
             g_io_reqs += NUM_ROWS;
 #if KM_TEST
+            BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
+            print_vector<unsigned>(num_members_v);
+            acntr->complete();
+#endif
+
+#if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "After Init engine: clusters:";
             g_clusters->print_means();
 
@@ -954,11 +966,6 @@ namespace fg
             compute_dist(g_clusters, g_cluster_dist, NUM_COLS);
             g_cluster_dist->print();
 
-            BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
-            print_vector<unsigned>(num_members_v);
-            acntr->complete();
-#endif
-#if VERBOSE
             ac->init_iter();
 #endif
             g_prune_init = false; // reset
