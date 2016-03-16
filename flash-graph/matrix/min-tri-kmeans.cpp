@@ -17,11 +17,12 @@
  * limitations under the License.
  */
 
-#include "kmeans.h"
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
 
+#include "kmeans.h"
+#include "thd_safe_bool_vector.h"
 #include "libgraph-algs/dist_matrix.h"
 
 namespace {
@@ -30,7 +31,6 @@ namespace {
     static unsigned NUM_ROWS;
     short OMP_MAX_THREADS;
     static unsigned g_num_changed = 0;
-    static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
     static struct timeval start, end;
     static init_type_t g_init_type;
 
@@ -113,7 +113,7 @@ namespace {
      */
     static void EM_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            std::vector<bool>& recalculated_v, std::vector<double>& dist_v,
+            std::vector<short>& recalculated_v, std::vector<double>& dist_v,
             dist_matrix::ptr dm, const bool prune_init=false) {
 
         std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
@@ -144,7 +144,7 @@ namespace {
                 }
 
             } else {
-                recalculated_v[row] = false;
+                recalculated_v[row] = 0;
                 dist_v[row] += cls->get_prev_dist(cluster_assignments[row]);
 
                 if (dist_v[row] <= cls->get_s_val(cluster_assignments[row])) {
@@ -162,7 +162,7 @@ namespace {
                             dist_v[row] = dist_comp_raw(&matrix[offset],
                                     &(cls->get_means()[cluster_assignments[row]*NUM_COLS]),
                                     NUM_COLS);
-                            recalculated_v[row] = true;
+                            recalculated_v[row] = 1;
                         }
 
                         if (dist_v[row] <= dm->get(cluster_assignments[row],
@@ -186,21 +186,17 @@ namespace {
             BOOST_VERIFY(cluster_assignments[row] >= 0 &&
                     cluster_assignments[row] < K);
 
-
             if (prune_init) {
                 pt_num_change[omp_get_thread_num()]++;
                 pt_cl[omp_get_thread_num()]->add_member(&matrix[offset],
                         cluster_assignments[row]);
             } else if (old_clust != cluster_assignments[row]) {
                 pt_num_change[omp_get_thread_num()]++;
-
                 pt_cl[omp_get_thread_num()]->swap_membership(&matrix[offset],
                         old_clust, cluster_assignments[row]);
             }
         }
 
-        if (!prune_init)
-            cls->set_prev_means();
 #if VERBOSE
         BOOST_LOG_TRIVIAL(info) << "Clearing/unfinalizing cluster centers ...";
 #endif
@@ -208,6 +204,7 @@ namespace {
         if (prune_init) {
             cls->clear();
         } else {
+            cls->set_prev_means();
             for (unsigned idx = 0; idx < K; idx++)
                 cls->unfinalize(idx);
         }
@@ -297,8 +294,8 @@ namespace fg
             clusters->set_mean(clusters_ptr);
 
         // For pruning
-        std::vector<bool> recalculated_v;
-        recalculated_v.assign(NUM_ROWS, false);
+        std::vector<short> recalculated_v;
+        recalculated_v.assign(NUM_ROWS, 0);
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
         dist_matrix::ptr dm = dist_matrix::create(K);
@@ -351,6 +348,10 @@ namespace fg
         EM_step(matrix, clusters, cluster_assignments,
                 cluster_assignment_counts, recalculated_v,
                 dist_v, dm, true);
+#if KM_TEST
+            printf("Cluster assignment counts: ");
+            print_arr(cluster_assignment_counts, K);
+#endif
 
         g_num_changed = 0;
         BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
@@ -370,16 +371,18 @@ namespace fg
             BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
             compute_dist(clusters, dm, NUM_COLS);
 #if VERBOSE
-            BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix ...";
+            BOOST_LOG_TRIVIAL(info) << "Before: Cluster distance matrix ...";
             dm->print();
-            BOOST_LOG_TRIVIAL(info) << "Printing clusters:";
-            clusters->print_means();
 #endif
 
             EM_step(matrix, clusters, cluster_assignments,
                     cluster_assignment_counts, recalculated_v, dist_v, dm);
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "Before: Printing clusters:";
+            clusters->print_means();
+#endif
 #if KM_TEST
-            printf("Cluster assignment counts: ");
+            BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
             print_arr(cluster_assignment_counts, K);
 #endif
 
@@ -409,6 +412,8 @@ namespace fg
             BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
                 << iter << " iterations";
         }
+        BOOST_LOG_TRIVIAL(info) << "Final cluster counts ...";
+        print_arr(cluster_assignment_counts, K);
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
         return iter;
