@@ -20,6 +20,7 @@
 #include "block_matrix.h"
 #include "vector.h"
 #include "local_matrix_store.h"
+#include "one_val_matrix_store.h"
 
 namespace fm
 {
@@ -46,6 +47,49 @@ dense_matrix::ptr block_matrix::create(
 			}
 	}
 	return dense_matrix::ptr(new block_matrix(store));
+}
+
+dense_matrix::ptr block_matrix::create(scalar_variable::ptr val, size_t num_rows,
+		size_t num_cols, size_t block_size, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
+{
+	// For tall matrices
+	if (num_rows > num_cols) {
+		// If there is only one block.
+		if (num_cols < block_size)
+			return dense_matrix::create_const(val, num_rows, num_cols,
+					matrix_layout_t::L_COL, num_nodes, in_mem, group);
+
+		std::vector<detail::matrix_store::const_ptr> stores(div_ceil<size_t>(
+					num_cols, block_size));
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t local_num_cols = std::min(num_cols - i * block_size,
+					block_size);
+			stores[i] = detail::matrix_store::ptr(new detail::one_val_matrix_store(
+						val, num_rows, local_num_cols, matrix_layout_t::L_COL,
+						num_nodes));
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, matrix_layout_t::L_COL));
+	}
+	else {
+		// If there is only one block.
+		if (num_rows < block_size)
+			return dense_matrix::create_const(val, num_rows, num_cols,
+					matrix_layout_t::L_ROW, num_nodes, in_mem, group);
+
+		std::vector<detail::matrix_store::const_ptr> stores(div_ceil<size_t>(
+					num_rows, block_size));
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t local_num_rows = std::min(num_rows - i * block_size,
+					block_size);
+			stores[i] = detail::matrix_store::ptr(new detail::one_val_matrix_store(
+						val, local_num_rows, num_cols, matrix_layout_t::L_ROW,
+						num_nodes));
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, matrix_layout_t::L_ROW));
+	}
 }
 
 dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,

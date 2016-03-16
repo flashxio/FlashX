@@ -64,6 +64,9 @@ public:
 			size_t block_size, const scalar_type &type, const set_operate &op,
 			int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL);
+	static dense_matrix::ptr create(scalar_variable::ptr val, size_t num_rows,
+			size_t num_cols, size_t block_size, int num_nodes = -1,
+			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
 
 	size_t get_block_size() const {
 		return block_size;

@@ -165,10 +165,6 @@ public:
 private:
 	detail::matrix_store::const_ptr store;
 
-	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes, bool in_mem,
-			safs::safs_file_group::ptr group);
-
 	detail::matrix_store::const_ptr _conv_store(bool in_mem, int num_nodes) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
@@ -189,10 +185,17 @@ protected:
 public:
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes = -1, bool in_mem = true,
-			safs::safs_file_group::ptr group = NULL);
+			safs::safs_file_group::ptr group = NULL) {
+		return create_const(type.create_scalar(), nrow, ncol, layout,
+				num_nodes, in_mem, group);
+	}
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, const set_operate &op, int num_nodes = -1,
 			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
+	static ptr create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes, bool in_mem,
+			safs::safs_file_group::ptr group);
+
 	static ptr create(detail::matrix_store::const_ptr store) {
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
@@ -219,7 +222,7 @@ public:
 			matrix_layout_t layout, int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL) {
 		scalar_variable::ptr val(new scalar_variable_impl<T>(_val));
-		return _create_const(val, nrow, ncol, layout, num_nodes, in_mem, group);
+		return create_const(val, nrow, ncol, layout, num_nodes, in_mem, group);
 	}
 
 	dense_matrix() {

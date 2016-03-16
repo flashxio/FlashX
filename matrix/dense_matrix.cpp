@@ -37,6 +37,7 @@
 #include "cached_matrix_store.h"
 #include "agg_matrix_store.h"
 #include "IPW_matrix_store.h"
+#include "block_matrix.h"
 
 namespace fm
 {
@@ -442,15 +443,6 @@ dense_matrix::ptr dense_matrix::apply_scalar(
 		return dense_matrix::ptr();
 	}
 	return sapply(bulk_uoperate::const_ptr(new apply_scalar_op(var, op)));
-}
-
-dense_matrix::ptr dense_matrix::_create_const(scalar_variable::ptr val,
-		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
-		bool in_mem, safs::safs_file_group::ptr group)
-{
-	detail::matrix_store::ptr store(new detail::one_val_matrix_store(
-				val, nrow, ncol, layout, num_nodes));
-	return dense_matrix::ptr(new dense_matrix(store));
 }
 
 void dense_matrix::materialize_self() const
@@ -1800,24 +1792,41 @@ dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 				type.create_scalar(), nrow, ncol, layout, num_nodes));
 }
 
-dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
-		matrix_layout_t layout, const scalar_type &type, int num_nodes,
+dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
+		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 		bool in_mem, safs::safs_file_group::ptr group)
 {
-	// If nothing is specified, it creates a zero matrix.
-	detail::matrix_store::ptr store(new detail::one_val_matrix_store(
-				type.create_scalar(), nrow, ncol, layout, num_nodes));
-	return dense_matrix::ptr(new dense_matrix(store));
+	size_t long_dim = std::max(nrow, ncol);
+	size_t short_dim = std::min(nrow, ncol);
+	// We don't want to create a small block matrix.
+	if (long_dim < detail::EM_matrix_store::CHUNK_SIZE
+			|| short_dim <= matrix_conf.get_block_size()) {
+		detail::matrix_store::ptr store(new detail::one_val_matrix_store(
+					val, nrow, ncol, layout, num_nodes));
+		return dense_matrix::ptr(new dense_matrix(store));
+	}
+	else
+		return block_matrix::create(val, nrow, ncol,
+				matrix_conf.get_block_size(), num_nodes, in_mem, group);
 }
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, const set_operate &op,
 		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
 {
-	detail::matrix_store::ptr store = detail::matrix_store::create(
-			nrow, ncol, layout, type, num_nodes, in_mem, group);
-	store->set_data(op);
-	return dense_matrix::ptr(new dense_matrix(store));
+	size_t long_dim = std::max(nrow, ncol);
+	size_t short_dim = std::min(nrow, ncol);
+	// We don't want to create a small block matrix.
+	if (long_dim < detail::EM_matrix_store::CHUNK_SIZE
+			|| short_dim <= matrix_conf.get_block_size()) {
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, layout, type, num_nodes, in_mem, group);
+		store->set_data(op);
+		return dense_matrix::ptr(new dense_matrix(store));
+	}
+	else
+		return block_matrix::create(nrow, ncol, matrix_conf.get_block_size(),
+				type, op, num_nodes, in_mem, group);
 }
 
 vector::ptr dense_matrix::get_col(off_t idx) const
