@@ -52,6 +52,9 @@ add_library(FMatrix STATIC
 	cached_matrix_store.cpp
 	matrix_config.cpp
 	agg_matrix_store.cpp
+	matrix_stats.cpp
+	block_matrix.cpp
+	IPW_matrix_store.cpp
 )
 
 if(ENABLE_TRILINOS)
