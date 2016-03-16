@@ -1801,7 +1801,9 @@ void test_EM_matrix(int num_nodes)
 	test_mapply_chain(-1, get_scalar_type<double>());
 	test_mapply_chain(-1, get_scalar_type<int>());
 	test_multiply<double>(-1);
+#if 0
 	test_multiply<float>(-1);
+#endif
 	test_cast();
 	test_write2file();
 	test_apply();
@@ -1843,7 +1845,9 @@ void test_mem_matrix(int num_nodes)
 	test_mapply_chain(-1, get_scalar_type<int>());
 	test_mapply_chain(num_nodes, get_scalar_type<int>());
 	test_multiply<double>(-1);
+#if 0
 	test_multiply<float>(-1);
+#endif
 	test_cast();
 	test_write2file();
 	test_apply();
