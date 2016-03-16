@@ -230,9 +230,29 @@ fm.rnorm <- function(n, mean=0, sd=1)
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", "norm", n,
+	vec <- .Call("R_FM_create_rand", "norm", as.integer(n),
 				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
 	new.fmV(vec)
+}
+
+fm.runif.matrix <- function(nrow, ncol, min=0, max=1)
+{
+	if (nrow <= 0 || ncol <= 0)
+		stop("we can't generate a matrix with 0 rows or cols")
+
+	mat <- .Call("R_FM_create_randmat", "uniform", as.integer(nrow), as.integer(ncol),
+				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
+	new.fm(mat)
+}
+
+fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1)
+{
+	if (nrow <= 0 || ncol <= 0)
+		stop("we can't generate a matrix with 0 rows or cols")
+
+	mat <- .Call("R_FM_create_randmat", "norm", as.integer(nrow), as.integer(ncol),
+				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
+	new.fm(mat)
 }
 
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
