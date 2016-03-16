@@ -24,6 +24,7 @@
 #include "kmeans.h"
 #include "thd_safe_bool_vector.h"
 #include "libgraph-algs/dist_matrix.h"
+#include "thd_safe_bool_vector.h"
 
 namespace {
     static unsigned NUM_COLS;
@@ -113,7 +114,7 @@ namespace {
      */
     static void EM_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            std::vector<short>& recalculated_v, std::vector<double>& dist_v,
+            thd_safe_bool_vector::ptr recalculated_v, std::vector<double>& dist_v,
             dist_matrix::ptr dm, const bool prune_init=false) {
 
         std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
@@ -144,7 +145,7 @@ namespace {
                 }
 
             } else {
-                recalculated_v[row] = 0;
+                recalculated_v->set(row, false);
                 dist_v[row] += cls->get_prev_dist(cluster_assignments[row]);
 
                 if (dist_v[row] <= cls->get_s_val(cluster_assignments[row])) {
@@ -158,11 +159,11 @@ namespace {
                             continue;
                         }
 
-                        if (!recalculated_v[row]) {
+                        if (!recalculated_v->get(row)) {
                             dist_v[row] = dist_comp_raw(&matrix[offset],
                                     &(cls->get_means()[cluster_assignments[row]*NUM_COLS]),
                                     NUM_COLS);
-                            recalculated_v[row] = 1;
+                            recalculated_v->set(row, true);
                         }
 
                         if (dist_v[row] <= dm->get(cluster_assignments[row],
@@ -294,8 +295,9 @@ namespace fg
             clusters->set_mean(clusters_ptr);
 
         // For pruning
-        std::vector<short> recalculated_v;
-        recalculated_v.assign(NUM_ROWS, 0);
+        thd_safe_bool_vector::ptr recalculated_v =
+          thd_safe_bool_vector::create(NUM_ROWS, false);
+
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
         dist_matrix::ptr dm = dist_matrix::create(K);
