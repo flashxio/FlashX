@@ -67,10 +67,10 @@ namespace {
             std::vector<_bool> data;
 
             thd_safe_bool_vector(const size_t len) {
-                data.resize(len); 
+                data.resize(len);
             }
 
-            thd_safe_bool_vector(const size_t len, const bool init) : 
+            thd_safe_bool_vector(const size_t len, const bool init) :
                 thd_safe_bool_vector(len) {
                     if (init) {
                         for (unsigned i = 0; i < data.size(); i++)
