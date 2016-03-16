@@ -242,7 +242,15 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
 				partial_res->get_type(), -1);
-		memcpy(res->get_raw_arr(), partial_res->get_row(0),
+		off_t valid_row = -1;
+		for (size_t i = 0; i < partial_res->get_num_rows(); i++) {
+			if (partial_res->has_agg(i)) {
+				valid_row = i;
+				break;
+			}
+		}
+		assert(valid_row >= 0);
+		memcpy(res->get_raw_arr(), partial_res->get_row(valid_row),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
 		return res;
 	}
