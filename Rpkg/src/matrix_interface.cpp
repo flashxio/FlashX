@@ -566,8 +566,7 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 		matrix = matrix->cast_ele_type(get_scalar_type<double>());
 	if (matrix->is_type<double>() && right_mat->is_type<int>())
 		right_mat = right_mat->cast_ele_type(get_scalar_type<double>());
-	dense_matrix::ptr res = matrix->multiply(*right_mat,
-			matrix->store_layout(), true);
+	dense_matrix::ptr res = matrix->multiply(*right_mat, matrix->store_layout());
 	if (res == NULL)
 		return R_NilValue;
 
