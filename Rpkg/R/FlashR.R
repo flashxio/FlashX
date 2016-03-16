@@ -1350,7 +1350,7 @@ fm.read.obj <- function(file)
 fm.conv.store <- function(fm, in.mem, num.nodes, name="")
 {
 	ret <- .Call("R_FM_conv_store", fm, as.logical(in.mem),
-				 as.integer(num_nodes), name, PACKAGE="FlashR")
+				 as.integer(num.nodes), name, PACKAGE="FlashR")
 	if (class(ret) == "fmV")
 		new.fmV(ret)
 	else
