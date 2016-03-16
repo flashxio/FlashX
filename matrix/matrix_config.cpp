@@ -49,6 +49,7 @@ void matrix_config::print_help()
 	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
 	printf("\tstream_io_size: the I/O size used for streaming\n");
 	printf("\tkeep_mem_buf: indicate whether to keep memory buffer for I/O in dense matrix operation\n");
+	printf("\tblock_size: the block size in a dense matrix\n");
 }
 
 void matrix_config::print()
@@ -70,6 +71,7 @@ void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size: " << write_io_buf_size;
 	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size: " << stream_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf: " << keep_mem_buf;
+	BOOST_LOG_TRIVIAL(info) << "\tblock_size: " << block_size;
 }
 
 void matrix_config::init(config_map::ptr map)
@@ -150,5 +152,11 @@ void matrix_config::init(config_map::ptr map)
 	}
 	if (map->has_option("keep_mem_buf"))
 		map->read_option_bool("keep_mem_buf", keep_mem_buf);
+
+	if (map->has_option("block_size")) {
+		long tmp = 0;
+		map->read_option_long("block_size", tmp);
+		block_size = tmp;
+	}
 }
 }

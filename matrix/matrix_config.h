@@ -72,6 +72,8 @@ class matrix_config
 	// operations. Allocating the memory buffer for every dense matrix operation
 	// is expensive.
 	bool keep_mem_buf;
+	// The block size for a dense matrix.
+	size_t block_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -93,6 +95,7 @@ public:
 		write_io_buf_size = 128 * 1024 * 1024;
 		stream_io_size = 128 * 1024 * 1024;
 		keep_mem_buf = false;
+		block_size = 32;
 	}
 
 	/**
@@ -235,6 +238,10 @@ public:
 
 	bool is_keep_mem_buf() const {
 		return keep_mem_buf;
+	}
+
+	size_t get_block_size() const {
+		return block_size;
 	}
 };
 
