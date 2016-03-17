@@ -423,6 +423,47 @@ void test_multiply(int num_nodes)
 {
 	dense_matrix::ptr m1, m2, correct, res;
 
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 3;
+	idxs[2] = 5;
+
+	printf("Test self cross product on wide row matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
+			get_scalar_type<T>());
+	m1->materialize_self();
+	m2 = m1->transpose();
+	res = m1->multiply(*m2);
+	assert(res->is_virtual());
+	res->materialize_self();
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test self cross product on wide row submatrix\n");
+	m1 = m1->get_rows(idxs);
+	m2 = m1->transpose();
+	if (m1->is_in_mem())
+		m1 = m1->deep_copy();
+	if (m2->is_in_mem())
+		m2 = m2->deep_copy();
+	res = m1->multiply(*m2);
+	assert(res->is_virtual());
+	std::vector<dense_matrix::ptr> tmp_vec(1);
+	tmp_vec[0] = res;
+	materialize(tmp_vec);
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test self cross product on wide col matrix\n");
+	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	m2 = m1->transpose();
+	res = m1->multiply(*m2);
+	assert(res->is_virtual());
+	res->materialize_self();
+	correct = blas_multiply(*m1, *m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
 	printf("Test multiplication on tall row matrix X small row matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());

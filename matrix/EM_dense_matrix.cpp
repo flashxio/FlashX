@@ -858,31 +858,54 @@ async_cres_t sub_EM_matrix_store::get_col_portion_async(
 	// Fetch the portion from the cache.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
 			data_id);
-	// If it's in the same portion.
-	if (ret1 && (((size_t) ret1->get_global_start_row() == start_fetched_row
-					&& (size_t) ret1->get_global_start_col() == start_col
-					&& ret1->get_num_rows() == num_fetched_rows
-					&& ret1->get_num_cols() == num_cols)
-				// If it's in the corresponding portion in the transposed matrix.
-				|| ((size_t) ret1->get_global_start_row() == start_col
-					&& (size_t) ret1->get_global_start_col() == start_fetched_row
-					&& ret1->get_num_rows() == num_cols
-					&& ret1->get_num_cols() == num_fetched_rows))) {
+
+	bool match = false;
+	bool match_trans = false;
+	if (ret1) {
+		// If it's in the same portion.
+		match = (size_t) ret1->get_global_start_row() == start_fetched_row
+			&& (size_t) ret1->get_global_start_col() == start_col
+			&& ret1->get_num_rows() == num_fetched_rows
+			&& ret1->get_num_cols() == num_cols;
+		// If it's in the corresponding portion in the transposed matrix.
+		match_trans = (size_t) ret1->get_global_start_row() == start_col
+			&& (size_t) ret1->get_global_start_col() == start_fetched_row
+			&& ret1->get_num_rows() == num_cols
+			&& ret1->get_num_cols() == num_fetched_rows;
+	}
+
+	if (match || match_trans) {
 		assert(ret1->get_local_start_row() == 0);
 		assert(ret1->get_local_start_col() == 0);
+		collect_rc_compute::ptr collect_compute;
 		// In the asynchronous version, data in the portion isn't ready when
 		// the method is called. We should add the user's portion computation
 		// to the queue. When the data is ready, all user's portion computations
 		// will be invoked.
-		local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
-		local_collected_buf_col_matrix_store *store
-			= dynamic_cast<local_collected_buf_col_matrix_store *>(tmp);
-		collect_rc_compute::ptr collect_compute = store->get_compute();
+		if (match) {
+			local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+			local_collected_buf_col_matrix_store *store
+				= dynamic_cast<local_collected_buf_col_matrix_store *>(tmp);
+			assert(store);
+			compute = store->get_compute();
+		}
+		else {
+			local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+			local_collected_buf_row_matrix_store *store
+				= dynamic_cast<local_collected_buf_row_matrix_store *>(tmp);
+			assert(store);
+			compute = store->get_compute();
+		}
 		// If collect_rc_compute doesn't exist, it mean the data has been read
 		// from disks.
 		bool valid_data = collect_compute == NULL;
 		if (!valid_data)
 			collect_compute->add_orig_compute(compute);
+
+		// We need its transpose.
+		if (match_trans)
+			ret1 = std::static_pointer_cast<const local_matrix_store>(
+					ret1->transpose());
 
 		local_matrix_store::const_ptr ret;
 		if (start_fetched_row < start_row || num_rows < num_fetched_rows)
@@ -952,29 +975,50 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 	// Fetch the portion from the cache.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
 			data_id);
-	// If it's in the same portion.
-	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
-					&& (size_t) ret1->get_global_start_col() == start_fetched_col
-					&& ret1->get_num_rows() == num_rows
-					&& ret1->get_num_cols() == num_fetched_cols)
-				// If it's in the corresponding portion in the transposed matrix.
-				|| ((size_t) ret1->get_global_start_row() == start_fetched_col
-					&& (size_t) ret1->get_global_start_col() == start_row
-					&& ret1->get_num_rows() == num_fetched_cols
-					&& ret1->get_num_cols() == num_rows))) {
+	bool match = false;
+	bool match_trans = false;
+	if (ret1) {
+		// If it's in the same portion.
+		match = (size_t) ret1->get_global_start_row() == start_row
+			&& (size_t) ret1->get_global_start_col() == start_fetched_col
+			&& ret1->get_num_rows() == num_rows
+			&& ret1->get_num_cols() == num_fetched_cols;
+		// If it's in the corresponding portion in the transposed matrix.
+		match_trans = (size_t) ret1->get_global_start_row() == start_fetched_col
+			&& (size_t) ret1->get_global_start_col() == start_row
+			&& ret1->get_num_rows() == num_fetched_cols
+			&& ret1->get_num_cols() == num_rows;
+	}
+	if (match || match_trans) {
 		assert(ret1->get_local_start_row() == 0);
 		assert(ret1->get_local_start_col() == 0);
 		// In the asynchronous version, data in the portion isn't ready when
 		// the method is called. We should add the user's portion computation
 		// to the queue. When the data is ready, all user's portion computations
 		// will be invoked.
-		local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
-		local_collected_buf_row_matrix_store *store
-			= dynamic_cast<local_collected_buf_row_matrix_store *>(tmp);
-		collect_rc_compute::ptr collect_compute = store->get_compute();
+		collect_rc_compute::ptr collect_compute;
+		if (match) {
+			local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+			local_collected_buf_row_matrix_store *store
+				= dynamic_cast<local_collected_buf_row_matrix_store *>(tmp);
+			assert(store);
+			collect_compute = store->get_compute();
+		}
+		else {
+			local_matrix_store *tmp = const_cast<local_matrix_store *>(ret1.get());
+			local_collected_buf_col_matrix_store *store
+				= dynamic_cast<local_collected_buf_col_matrix_store *>(tmp);
+			assert(store);
+			collect_compute = store->get_compute();
+		}
 		bool valid_data = collect_compute == NULL;
 		if (!valid_data)
 			collect_compute->add_orig_compute(compute);
+
+		// We need its transpose.
+		if (match_trans)
+			ret1 = std::static_pointer_cast<const local_matrix_store>(
+					ret1->transpose());
 
 		local_matrix_store::const_ptr ret;
 		if (start_fetched_col < start_col || num_cols < num_fetched_cols)
