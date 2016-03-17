@@ -22,6 +22,9 @@
 #include <gperftools/profiler.h>
 #endif
 
+#define KM_TEST 1
+#define VERBOSE 0
+
 namespace {
 	static unsigned NUM_COLS;
 	static size_t K;
@@ -246,6 +249,11 @@ namespace fg
 			time_diff(start, end) << " sec\n";
 		gettimeofday(&start , NULL);
 
+#if KM_TEST
+        printf("Cluster assignment counts: ");
+        print_arr(cluster_assignment_counts, K);
+#endif
+
         BOOST_LOG_TRIVIAL(info) << "Init is '" << init << "'";
 		BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";
 #if 0
@@ -276,7 +284,10 @@ namespace fg
             printf("Cluster assignment counts: ");
             print_arr(cluster_assignment_counts, K);
 #endif
-
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "Printing clusters:";
+            clusters->print_means();
+#endif
 			if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS))
                     <= tolerance) {
 				converged = true;
@@ -303,6 +314,8 @@ namespace fg
 			BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
 				<< iter << " iterations";
 		}
+        printf("Final cluster counts: ");
+        print_arr(cluster_assignment_counts, K);
 		BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
 #if VERBOSE

@@ -41,9 +41,6 @@
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/clusters.h"
 
-#define KM_TEST 1
-#define VERBOSE 0
-
 namespace {
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
     /**

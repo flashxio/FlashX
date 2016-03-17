@@ -26,6 +26,9 @@
 #include "libgraph-algs/dist_matrix.h"
 #include "thd_safe_bool_vector.h"
 
+#define KM_TEST 1
+#define VERBOSE 0
+
 namespace {
     static unsigned NUM_COLS;
     static size_t K;
