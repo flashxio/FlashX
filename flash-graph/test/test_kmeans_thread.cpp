@@ -37,15 +37,10 @@ void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes) {
         thds[i]->start(TEST);
 
     // Always: join threads alone
-    unsigned sum = 0;
-    unsigned verification = 0;
     for (unsigned i = 0; i < thds.size(); i++) {
         thds[i]->join();
-        sum += thds[i]->get_val(); // OK to do together
-        verification += i;
     }
-    BOOST_VERIFY(sum == verification);
-    std::cout << "SUCCESS: The sum is: " << sum << "\n";
+    std::cout << "SUCCESS: for creation & join\n";
 }
 
 void test_numa_populate_data() {
