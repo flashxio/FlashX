@@ -577,14 +577,17 @@ void collect_portion_compute::run(char *buf, size_t size)
 
 		// If we want full materialization, we should write the result back.
 		if (global_res) {
-			if (is_wide) {
+			// The global result may be in memory while the input matrices
+			// are in external memory. In this case, the materialized data
+			// is stored in memory automatically.
+			if (!global_res->is_in_mem() && is_wide) {
 				local_matrix_store::const_ptr tres
 					= std::static_pointer_cast<const local_matrix_store>(
 						res->transpose());
 				global_res->write_portion_async(tres,
 						tres->get_global_start_row(), tres->get_global_start_col());
 			}
-			else
+			else if (!global_res->is_in_mem())
 				global_res->write_portion_async(res,
 						res->get_global_start_row(), res->get_global_start_col());
 		}
