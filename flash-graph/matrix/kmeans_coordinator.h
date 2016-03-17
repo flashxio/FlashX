@@ -24,9 +24,13 @@
 #include <memory>
 
 #include "kmeans_thread.h"
+#include "libgraph-algs/sem_kmeans_util.h"
 
 namespace {
     typedef std::vector<kmeans_thread::ptr>::iterator thread_iter;
+#if 0
+    std::vector<double> g_data; // TEST
+#endif
 
     class kmeans_coordinator {
         private:
@@ -43,18 +47,26 @@ namespace {
             unsigned max_iters;
             unsigned num_changed; // total # of samples that changed clstr in an iter
 
-            // Test
+            // Metadata
+            std::vector<unsigned> thd_max_row_idx; // max index stored within each threads partition
 
             kmeans_coordinator(const std::string fn, const unsigned nrow,
                     const unsigned ncol, const unsigned k, const unsigned max_iters,
-                    const unsigned nnodes, const unsigned nthreads, const init_type_t it,
+                    const unsigned nnodes, const unsigned nthreads,
+                    const double* centers, const init_type_t it,
                     const double tolerance, const dist_type_t dt) {
+#if 0
+                // TEST //
+                bin_reader<double> b(fn, nrow, ncol);
+                g_data.resize(nrow*ncol);
+                b.read(&g_data);
+#endif
 
                 this->fn = fn;
                 this->nrow = nrow;
                 this->ncol = ncol;
                 this->k = k;
-                BOOST_ASSERT_MSG(k >=1, "[FATAL]: 'k' must be >= 1");
+                BOOST_ASSERT_MSG(k >= 1, "[FATAL]: 'k' must be >= 1");
                 this->max_iters = max_iters;
                 this->nnodes = nnodes;
                 this->nthreads = nthreads;
@@ -75,12 +87,26 @@ namespace {
                 std::fill(&cluster_assignment_counts[0],
                         (&cluster_assignment_counts[0])+k, 0);
 
-                 cltrs = clusters::create(k, ncol);
+                cltrs = clusters::create(k, ncol);
+                if (centers) {
+                    printf("\nhere!\n");
+                    cltrs->set_mean(centers);
+                    if (_init_t != NONE) {
+                        BOOST_LOG_TRIVIAL(warning) << "[WARNING]: Init method " <<
+                            "ignored because centers provided!";
+                    } else {
+                        BOOST_LOG_TRIVIAL(info) << "Init-ed centers to";
+                        cltrs->print_means();
+                    }
+                } else {
+                    printf("\nNot here!\n");
+                }
 
                 // NUMA node affinity binding policy is round-robin
                 unsigned thds_row = nrow / nthreads;
                 for (unsigned thd_id = 0; thd_id < nthreads; thd_id++) {
                     std::pair<size_t, unsigned> tup = get_offset_len_tup(thd_id);
+                    thd_max_row_idx.push_back((thd_id*thds_row) + tup.second);
                     threads.push_back(kmeans_thread::create((thd_id % nnodes),
                                 thd_id, tup.first, tup.second, thds_row,
                                 ncol, cltrs, cluster_assignments, fn));
@@ -93,8 +119,8 @@ namespace {
             static ptr create(const std::string fn, const unsigned nrow,
                     const unsigned ncol, const unsigned k, const unsigned max_iters,
                     const unsigned nnodes, const unsigned nthreads,
-                    const std::string init="kmeanspp", const double tolerance=-1,
-                    const std::string dist_type="eucl") {
+                    const double* centers=NULL, const std::string init="kmeanspp",
+                    const double tolerance=-1, const std::string dist_type="eucl") {
 
                 init_type_t _init_t;
                 if (init == "random")
@@ -121,14 +147,14 @@ namespace {
                        " 'eucl', 'cos'.It is '" << dist_type << "'";
                     exit(-1);
                 }
-
+#if KM_TEST
                 printf("kmeans coordinator => NUMA nodes: %u, nthreads: %u, "
                         "nrow: %u, ncol: %u, init: '%s', dist_t: '%s', fn: '%s'"
                         "\n\n", nnodes, nthreads, nrow, ncol, init.c_str(),
                         dist_type.c_str(), fn.c_str());
-
+#endif
                 return ptr(new kmeans_coordinator(fn, nrow, ncol, k, max_iters,
-                            nnodes, nthreads, _init_t, tolerance, _dist_t));
+                            nnodes, nthreads, centers, _init_t, tolerance, _dist_t));
             }
 
             std::pair<size_t, unsigned> get_offset_len_tup(const unsigned thd_id) {
@@ -158,7 +184,6 @@ namespace {
                 std::vector<kmeans_thread::ptr>::iterator it = threads.begin();
                 for (; it != threads.end(); ++it)
                     (*it)->destroy_numa_mem();
-
                 delete [] cluster_assignments;
                 delete [] cluster_assignment_counts;
             }
@@ -181,8 +206,8 @@ namespace {
     // <Thread, within-thread-row-id>
     const double* kmeans_coordinator::get_thd_data(const unsigned row_id) const {
         // TODO: Cheapen
-
-        unsigned parent_thd = std::min(((row_id+1)*nthreads)/nrow, nthreads-1);
+        unsigned parent_thd = std::upper_bound(thd_max_row_idx.begin(),
+                thd_max_row_idx.end(), row_id) - thd_max_row_idx.begin();
         unsigned rows_per_thread = nrow/nthreads; // All but the last thread
 
 #if 0
@@ -195,19 +220,30 @@ namespace {
     }
 
     void kmeans_coordinator::random_partition_init() {
-        BOOST_LOG_TRIVIAL(info) << "Random init start";
         for (unsigned row = 0; row < nrow; row++) {
             unsigned asgnd_clust = random() % k; // 0...k
-            cltrs->add_member(get_thd_data(row), asgnd_clust);
+
+            const double* dp = get_thd_data(row);
+#if 0
+            if (!(eq_all(dp, &g_data[row*ncol], ncol))) {
+                printf("Correct data: ");
+                print_arr<double>(&g_data[row*ncol], ncol);
+                printf("Retrived data: ");
+                print_arr<double>(dp, ncol);
+                assert(0);
+            }
+#endif
+            cltrs->add_member(dp, asgnd_clust);
             cluster_assignments[row] = asgnd_clust;
         }
 
         for (unsigned cl = 0; cl < k; cl++)
             cltrs->finalize(cl);
 
+#if VERBOSE
         printf("After rand paritions cluster_asgns: ");
         print_arr<unsigned>(cluster_assignments, nrow);
-        BOOST_LOG_TRIVIAL(info) << "Random init end";
+#endif
     }
 
     void kmeans_coordinator::forgy_init() {
@@ -231,7 +267,6 @@ namespace {
                 assert(0);
                 break;
             case NONE:
-                assert(0);
                 break;
             default:
                 fprintf(stderr, "[FATAL]: Unknow initialization type\n");
@@ -249,8 +284,10 @@ namespace {
             num_changed += (*it)->get_num_changed();
             // Summation for cluster centers
 
+#if VERBOSE
             printf("Thread %ld clusters:\n", (it-threads.begin()));
             ((*it)->get_local_clusters())->print_means();
+#endif
 
             cltrs->peq((*it)->get_local_clusters());
         }
@@ -272,7 +309,6 @@ namespace {
         BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << num_changed;
 #endif
     }
-
 
     void kmeans_coordinator::run_min_tri_kmeans() {
         assert(0); // TODO: min-tri-kmeans logic here
