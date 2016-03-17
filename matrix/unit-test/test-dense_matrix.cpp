@@ -428,18 +428,20 @@ void test_multiply(int num_nodes)
 	idxs[1] = 3;
 	idxs[2] = 5;
 
+	std::vector<dense_matrix::ptr> tmp_vec(1);
 	printf("Test self cross product on wide row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
-	m1->materialize_self();
 	m2 = m1->transpose();
 	res = m1->multiply(*m2);
 	assert(res->is_virtual());
-	res->materialize_self();
+	tmp_vec[0] = res;
+	materialize(tmp_vec);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
 	printf("Test self cross product on wide row submatrix\n");
+	m1->materialize_self();
 	m1 = m1->get_rows(idxs);
 	m2 = m1->transpose();
 	if (m1->is_in_mem())
@@ -448,7 +450,6 @@ void test_multiply(int num_nodes)
 		m2 = m2->deep_copy();
 	res = m1->multiply(*m2);
 	assert(res->is_virtual());
-	std::vector<dense_matrix::ptr> tmp_vec(1);
 	tmp_vec[0] = res;
 	materialize(tmp_vec);
 	correct = blas_multiply(*m1, *m2);

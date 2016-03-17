@@ -728,6 +728,112 @@ public:
 	}
 };
 
+/*
+ * This is the transpose of lmapply_col_matrix_store.
+ */
+class t_lmapply_col_matrix_store: public lvirtual_row_matrix_store
+{
+	lmapply_col_matrix_store::const_ptr store;
+public:
+	t_lmapply_col_matrix_store(
+			lmapply_col_matrix_store::const_ptr store): lvirtual_row_matrix_store(
+				store->get_global_start_col(), store->get_global_start_row(),
+				store->get_num_cols(), store->get_num_rows(),
+				store->get_type(), store->get_node_id()) {
+		this->store = store;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		const_cast<local_col_matrix_store &>(*store).resize(local_start_col,
+				local_start_row, local_num_cols, local_num_rows);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		const_cast<local_col_matrix_store &>(*store).reset_size();
+		local_matrix_store::reset_size();
+	}
+
+	using lvirtual_row_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		return store->get_raw_arr();
+	}
+
+	using lvirtual_row_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		return store;
+	}
+
+	using lvirtual_row_matrix_store::get_row;
+	virtual const char *get_row(size_t row) const {
+		return store->get_col(row);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		return store->get_portion(local_start_col, local_start_row, num_cols,
+				num_rows);
+	}
+	virtual void materialize_self() const {
+		store->materialize_self();
+	}
+};
+
+/*
+ * This is the transpose of lmapply_row_matrix_store.
+ */
+class t_lmapply_row_matrix_store: public lvirtual_col_matrix_store
+{
+	lmapply_row_matrix_store::const_ptr store;
+public:
+	t_lmapply_row_matrix_store(
+			lmapply_row_matrix_store::const_ptr store): lvirtual_col_matrix_store(
+				store->get_global_start_col(), store->get_global_start_row(),
+				store->get_num_cols(), store->get_num_rows(),
+				store->get_type(), store->get_node_id()) {
+		this->store = store;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		const_cast<local_row_matrix_store &>(*store).resize(local_start_col,
+				local_start_row, local_num_cols, local_num_rows);
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		const_cast<local_row_matrix_store &>(*store).reset_size();
+		local_matrix_store::reset_size();
+	}
+
+	using lvirtual_col_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		return store->get_raw_arr();
+	}
+
+	using lvirtual_col_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const {
+		return store;
+	}
+
+	using lvirtual_col_matrix_store::get_col;
+	virtual const char *get_col(size_t col) const {
+		return store->get_row(col);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const {
+		return store->get_portion(local_start_col, local_start_row, num_cols,
+				num_rows);
+	}
+	virtual void materialize_self() const {
+		store->materialize_self();
+	}
+};
+
 }
 
 static inline bool is_all_in_mem(
@@ -868,6 +974,23 @@ matrix_store::const_ptr mapply_matrix_store::get_rows(
 	return res->get_materialize_ref(is_wide()).get_rows(idxs);
 }
 
+static local_matrix_store::const_ptr transpose_lmapply(
+		local_matrix_store::const_ptr store)
+{
+	if (store->store_layout() == matrix_layout_t::L_COL) {
+		lmapply_col_matrix_store::const_ptr store1
+			= std::static_pointer_cast<const lmapply_col_matrix_store>(store);
+		return local_matrix_store::const_ptr(
+				new t_lmapply_col_matrix_store(store1));
+	}
+	else {
+		lmapply_row_matrix_store::const_ptr store1
+			= std::static_pointer_cast<const lmapply_row_matrix_store>(store);
+		return local_matrix_store::const_ptr(
+				new t_lmapply_row_matrix_store(store1));
+	}
+}
+
 local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const
@@ -888,7 +1011,11 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 					&& ret->get_num_cols() == num_rows))) {
 		assert(ret->get_local_start_row() == 0);
 		assert(ret->get_local_start_col() == 0);
-		return ret;
+		// We need to transpose the matrix.
+		if (ret->get_num_rows() == num_cols && ret->get_num_cols() == num_rows)
+			return transpose_lmapply(ret);
+		else
+			return ret;
 	}
 
 	// If the virtual matrix store has been materialized, we should return
@@ -1015,6 +1142,9 @@ async_cres_t mapply_matrix_store::get_portion_async(
 			assert(store);
 			collect_compute = store->get_compute();
 		}
+		// We need to transpose the matrix.
+		if (ret1->get_num_rows() == num_cols && ret1->get_num_cols() == num_rows)
+			ret1 = transpose_lmapply(ret1);
 		// If the collect compute doesn't exist, it mean the data in the local
 		// matrix store may already by ready.
 		if (collect_compute) {
