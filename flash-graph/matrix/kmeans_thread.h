@@ -31,6 +31,9 @@
 #include "libgraph-algs/clusters.h"
 #include "kmeans.h"
 
+#define KM_TEST 1
+#define VERBOSE 0
+
 namespace {
     enum thread_state_t {
         TEST, /*just for testing*/
@@ -80,13 +83,12 @@ namespace {
 
 #if KM_TEST
                 printf("Initializing thread. Metadata: thd_id: %u, node_id: %u"
-                        ", start_offset: %lu, nprocrows: %u, ncol: %u\n", this->thd_id,
-                        this->node_id, this->start_offset, this->nprocrows, this->ncol);
+                        ", start_offset: %lu, nprocrows: %u, ncol: %u\n",
+                        this->thd_id, this->node_id, this->start_offset,
+                        this->nprocrows, this->ncol);
 #endif
             }
-#if KM_TEST
-            unsigned val;
-#endif
+
         public:
             typedef std::shared_ptr<kmeans_thread> ptr;
 
@@ -115,11 +117,7 @@ namespace {
                 return thd_id;
             }
 
-#if KM_TEST
-            void set_val(const unsigned val) { this->val = val; }
-            const unsigned get_val() const { return val; }
             void test();
-#endif
 
             void start(const thread_state_t state);
             // Allocate and move data using this thread
@@ -144,7 +142,9 @@ namespace {
                     fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
                     exit(rc);
                 }
+#if VERBOSE
                 printf("Thread %u closing the file handle.\n",thd_id);
+#endif
                 f = NULL;
             }
 
@@ -163,7 +163,9 @@ namespace {
             ~kmeans_thread() {
                 if (f)
                     close_file_handle();
+#if VERBOSE
                 printf("Thread %u being destroyed\n", thd_id);
+#endif
             }
     };
 
@@ -185,14 +187,13 @@ namespace {
                 fprintf(stderr, "[FATAL]: Thread state is PAUSED but running!\n");
                 exit(EXIT_FAILURE);
             default:
-                fprintf(stderr, "Unknown thread state\n");
+                fprintf(stderr, "[FATAL]: Unknown thread state\n");
                 exit(EXIT_FAILURE);
         }
     }
 
     void kmeans_thread::test() {
         printf("Hello from thread: %u\n", get_thd_id());
-        set_val(get_thd_id());
     }
 
     static void bind2node_id(int node_id) {
