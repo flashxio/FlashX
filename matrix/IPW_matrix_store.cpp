@@ -47,7 +47,7 @@ public:
 				num_rows, num_cols, type) {
 	}
 	virtual bool has_materialized() const = 0;
-	virtual const std::vector<detail::local_matrix_store::ptr> &get_partial_results() const = 0;
+	virtual detail::mem_matrix_store::ptr get_combined_result() const = 0;
 	virtual void set_require_trans(bool val) = 0;
 };
 
@@ -83,9 +83,7 @@ public:
 		return materialized;
 	}
 
-	const std::vector<detail::local_matrix_store::ptr> &get_partial_results() const {
-		return local_ms;
-	}
+	virtual detail::mem_matrix_store::ptr get_combined_result() const;
 
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
@@ -103,6 +101,35 @@ public:
 			+ "," + mats[1]->get_name() + ")";
 	}
 };
+
+detail::mem_matrix_store::ptr inner_prod_wide_op::get_combined_result() const
+{
+	// The first non-empty local matrix.
+	detail::local_matrix_store::ptr lmat;
+	for (size_t i = 0; i < local_ms.size(); i++)
+		if (local_ms[i]) {
+			lmat = local_ms[i];
+			break;
+		}
+	assert(lmat);
+
+	// Aggregate the results from omp threads.
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			lmat->get_num_rows(), lmat->get_num_cols(), lmat->store_layout(),
+			right_op->get_output_type(), -1);
+	detail::local_matrix_store::ptr local_res = res->get_portion(0);
+	assert(local_res->get_num_rows() == res->get_num_rows()
+			&& local_res->get_num_cols() == res->get_num_cols());
+	res->write_portion_async(lmat, 0, 0);
+
+	for (size_t j = 0; j < local_ms.size(); j++) {
+		// It's possible that the local matrix store doesn't exist
+		// because the input matrix is very small.
+		if (local_ms[j] && local_ms[j] != lmat)
+			detail::mapply2(*local_res, *local_ms[j], *right_op, *local_res);
+	}
+	return res;
+}
 
 void inner_prod_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
@@ -162,11 +189,140 @@ void inner_prod_wide_op::run(
 	}
 }
 
+/*
+ * This class accumulates the matrix multiplication results on matrix partitions.
+ * For float-point matrices, we require certain precision. When we accumulate
+ * the multiply results, we lose precision if we use the original float-point type.
+ * As such, we should use a high-precision float-point for accumulation.
+ */
+class matmul_accumulator
+{
+public:
+	typedef std::shared_ptr<matmul_accumulator> ptr;
+
+	static ptr create(size_t num_rows, size_t num_cols, matrix_layout_t layout,
+			const scalar_type &type);
+
+	/*
+	 * We accumulate the result from each partition.
+	 */
+	virtual void add_matrix(const detail::local_matrix_store &mat) = 0;
+
+	/*
+	 * We need to combine the results from multiple accumulators to generate
+	 * the final result.
+	 */
+	virtual detail::mem_matrix_store::ptr combine(
+			const std::vector<matmul_accumulator::ptr> &accus) const = 0;
+
+	virtual detail::local_matrix_store::ptr get_accu() const = 0;
+};
+
+template<class ExposeType, class IntType>
+class matmul_accumulator_impl: public matmul_accumulator
+{
+	detail::local_matrix_store::ptr accu_buf;
+public:
+	matmul_accumulator_impl(size_t num_rows, size_t num_cols,
+			matrix_layout_t layout);
+	virtual void add_matrix(const detail::local_matrix_store &mat);
+	virtual detail::mem_matrix_store::ptr combine(
+			const std::vector<matmul_accumulator::ptr> &accus) const;
+	virtual detail::local_matrix_store::ptr get_accu() const {
+		return accu_buf;
+	}
+};
+
+template<class ExposeType, class IntType>
+matmul_accumulator_impl<ExposeType, IntType>::matmul_accumulator_impl(
+		size_t num_rows, size_t num_cols, matrix_layout_t layout)
+{
+	if (layout == matrix_layout_t::L_ROW)
+		accu_buf = detail::local_matrix_store::ptr(
+				new detail::local_buf_row_matrix_store(0, 0,
+					num_rows, num_cols, get_scalar_type<IntType>(), -1));
+	else
+		accu_buf = detail::local_matrix_store::ptr(
+				new detail::local_buf_col_matrix_store(0, 0,
+					num_rows, num_cols, get_scalar_type<IntType>(), -1));
+	accu_buf->reset_data();
+}
+
+template<class ExposeType, class IntType>
+void matmul_accumulator_impl<ExposeType, IntType>::add_matrix(
+		const detail::local_matrix_store &mat)
+{
+	assert(accu_buf->store_layout() == mat.store_layout());
+	const ExposeType *input_arr = reinterpret_cast<const ExposeType *>(
+			mat.get_raw_arr());
+	IntType *accu_arr = reinterpret_cast<IntType *>(accu_buf->get_raw_arr());
+	assert(input_arr && accu_arr);
+	size_t num_eles = mat.get_num_rows() * mat.get_num_cols();
+	for (size_t i = 0; i < num_eles; i++)
+		accu_arr[i] += input_arr[i];
+}
+
+template<class ExposeType, class IntType>
+detail::mem_matrix_store::ptr matmul_accumulator_impl<ExposeType, IntType>::combine(
+			const std::vector<matmul_accumulator::ptr> &accus) const
+{
+	detail::local_matrix_store::ptr accu_buf = accus[0]->get_accu();
+	matrix_layout_t layout = accu_buf->store_layout();
+	size_t num_rows = accu_buf->get_num_rows();
+	size_t num_cols = accu_buf->get_num_cols();
+	detail::mem_matrix_store::ptr accu_mat = detail::mem_matrix_store::create(
+				num_rows, num_cols, layout, get_scalar_type<IntType>(), -1);
+	detail::mem_matrix_store::ptr expo_mat = detail::mem_matrix_store::create(
+				num_rows, num_cols, layout, get_scalar_type<ExposeType>(), -1);
+	expo_mat->reset_data();
+	accu_mat->reset_data();
+
+	// If there is only one accumulator, we convert the accumulated result
+	// to the exposed type and return.
+	size_t num_eles = num_rows * num_cols;
+	if (accus.size() == 1) {
+		ExposeType *expo_arr = reinterpret_cast<ExposeType *>(
+				expo_mat->get_raw_arr());
+		const IntType *accu_arr = reinterpret_cast<const IntType *>(
+				accu_buf->get_raw_arr());
+		for (size_t i = 0; i < num_eles; i++)
+			expo_arr[i] = accu_arr[i];
+		return expo_mat;
+	}
+
+	// Otherwise, we need to add the results from multiple accumulators.
+	IntType *final_accu = reinterpret_cast<IntType *>(accu_mat->get_raw_arr());
+	for (size_t i = 0; i < accus.size(); i++) {
+		const IntType *accu_arr = reinterpret_cast<IntType *>(
+				accus[i]->get_accu()->get_raw_arr());
+		for (size_t j = 0; j < num_eles; j++)
+			final_accu[j] += accu_arr[j];
+	}
+
+	// And convert the final results to the exposed type.
+	ExposeType *expo_arr = reinterpret_cast<ExposeType *>(expo_mat->get_raw_arr());
+	for (size_t i = 0; i < num_eles; i++)
+		expo_arr[i] = final_accu[i];
+	return expo_mat;
+}
+
+matmul_accumulator::ptr matmul_accumulator::create(size_t num_rows,
+		size_t num_cols, matrix_layout_t layout, const scalar_type &type)
+{
+	if (type == get_scalar_type<double>())
+		return ptr(new matmul_accumulator_impl<double, long double>(
+					num_rows, num_cols, layout));
+	else
+		return ptr(new matmul_accumulator_impl<float, double>(
+					num_rows, num_cols, layout));
+}
+
 class multiply_wide_op: public combine_op
 {
 	std::vector<detail::local_matrix_store::ptr> Abufs;
 	std::vector<detail::local_matrix_store::ptr> Bbufs;
-	std::vector<detail::local_matrix_store::ptr> res_bufs;
+	std::vector<detail::local_matrix_store::ptr> tmp_bufs;
+	std::vector<matmul_accumulator::ptr> res_bufs;
 	bool require_trans;
 	size_t out_num_rows;
 	size_t out_num_cols;
@@ -179,6 +335,7 @@ public:
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
 		res_bufs.resize(num_threads);
+		tmp_bufs.resize(num_threads);
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
 		Alayout = required_layout;
@@ -207,10 +364,7 @@ public:
 		return materialized;
 	}
 
-	virtual const std::vector<detail::local_matrix_store::ptr> &get_partial_results(
-			) const {
-		return res_bufs;
-	}
+	virtual detail::mem_matrix_store::ptr get_combined_result() const;
 
 	void run_part(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
@@ -231,6 +385,16 @@ public:
 	}
 };
 
+detail::mem_matrix_store::ptr multiply_wide_op::get_combined_result() const
+{
+	std::vector<matmul_accumulator::ptr> non_empty;
+	for (size_t i = 0; i < res_bufs.size(); i++)
+		if (res_bufs[i])
+			non_empty.push_back(res_bufs[i]);
+	assert(non_empty.size() > 0);
+	return non_empty[0]->combine(non_empty);
+}
+
 template<class T>
 void wide_gemm_col(const std::pair<size_t, size_t> &Asize, const T *Amat,
 		const std::pair<size_t, size_t> &, const T *Bmat,
@@ -246,7 +410,7 @@ void wide_gemm_col<double>(const std::pair<size_t, size_t> &Asize,
 {
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.first,
-			Bmat, Bsize.first, 1, res_mat, out_num_rows);
+			Bmat, Bsize.first, 0, res_mat, out_num_rows);
 }
 
 template<>
@@ -256,7 +420,7 @@ void wide_gemm_col<float>(const std::pair<size_t, size_t> &Asize,
 {
 	cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.first,
-			Bmat, Bsize.first, 1, res_mat, out_num_rows);
+			Bmat, Bsize.first, 0, res_mat, out_num_rows);
 }
 
 template<class T>
@@ -274,7 +438,7 @@ void wide_gemm_row<double>(const std::pair<size_t, size_t> &Asize,
 {
 	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
 			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.second,
-			Bmat, Bsize.second, 1, res_mat, out_num_cols);
+			Bmat, Bsize.second, 0, res_mat, out_num_cols);
 }
 
 template<>
@@ -284,7 +448,7 @@ void wide_gemm_row<float>(const std::pair<size_t, size_t> &Asize,
 {
 	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
 			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.second,
-			Bmat, Bsize.second, 1, res_mat, out_num_cols);
+			Bmat, Bsize.second, 0, res_mat, out_num_cols);
 }
 
 void multiply_wide_op::run(
@@ -324,6 +488,7 @@ void multiply_wide_op::run_part(
 {
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
+	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const void *Amat = Astore->get_raw_arr();
 	if (Amat == NULL || Astore->store_layout() != Alayout) {
@@ -331,17 +496,15 @@ void multiply_wide_op::run_part(
 				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
 				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
 			if (Alayout == matrix_layout_t::L_ROW)
-				const_cast<multiply_wide_op *>(this)->Abufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_row_matrix_store(0, 0,
-								Astore->get_num_rows(), Astore->get_num_cols(),
-								Astore->get_type(), -1));
+				mutable_this->Abufs[thread_id] = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_row_matrix_store(0, 0,
+							Astore->get_num_rows(), Astore->get_num_cols(),
+							Astore->get_type(), -1));
 			else
-				const_cast<multiply_wide_op *>(this)->Abufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_col_matrix_store(0, 0,
-								Astore->get_num_rows(), Astore->get_num_cols(),
-								Astore->get_type(), -1));
+				mutable_this->Abufs[thread_id] = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_col_matrix_store(0, 0,
+							Astore->get_num_rows(), Astore->get_num_cols(),
+							Astore->get_type(), -1));
 		}
 		Abufs[thread_id]->copy_from(*Astore);
 		Amat = Abufs[thread_id]->get_raw_arr();
@@ -355,17 +518,15 @@ void multiply_wide_op::run_part(
 				|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
 				|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
 			if (Blayout == matrix_layout_t::L_COL)
-				const_cast<multiply_wide_op *>(this)->Bbufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_col_matrix_store(0, 0,
-								Bstore->get_num_rows(), Bstore->get_num_cols(),
-								Bstore->get_type(), -1));
+				mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_col_matrix_store(0, 0,
+							Bstore->get_num_rows(), Bstore->get_num_cols(),
+							Bstore->get_type(), -1));
 			else
-				const_cast<multiply_wide_op *>(this)->Bbufs[thread_id]
-					= detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_row_matrix_store(0, 0,
-								Bstore->get_num_rows(), Bstore->get_num_cols(),
-								Bstore->get_type(), -1));
+				mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_row_matrix_store(0, 0,
+							Bstore->get_num_rows(), Bstore->get_num_cols(),
+							Bstore->get_type(), -1));
 		}
 		Bbufs[thread_id]->copy_from(*Bstore);
 		Bmat = Bbufs[thread_id]->get_raw_arr();
@@ -374,19 +535,19 @@ void multiply_wide_op::run_part(
 
 	if (res_bufs[thread_id] == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
-			const_cast<multiply_wide_op *>(this)->res_bufs[thread_id]
-				= detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_col_matrix_store(0, 0,
-							out_num_rows, out_num_cols, get_output_type(), -1));
+			mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						out_num_rows, out_num_cols, get_output_type(), -1));
 		else
-			const_cast<multiply_wide_op *>(this)->res_bufs[thread_id]
-				= detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_row_matrix_store(0, 0,
-							out_num_rows, out_num_cols, get_output_type(), -1));
-		res_bufs[thread_id]->reset_data();
+			mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_row_matrix_store(0, 0,
+						out_num_rows, out_num_cols, get_output_type(), -1));
+		tmp_bufs[thread_id]->reset_data();
+		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
+				out_num_rows, out_num_cols, Blayout, get_output_type());
 	}
-	assert(res_bufs[thread_id]->store_layout() == Blayout);
-	void *res_mat = res_bufs[thread_id]->get_raw_arr();
+	assert(tmp_bufs[thread_id]->store_layout() == Blayout);
+	void *tmp_mat = tmp_bufs[thread_id]->get_raw_arr();
 	std::pair<size_t, size_t> Asize, Bsize;
 	if (require_trans) {
 		assert(Alayout != Blayout);
@@ -404,25 +565,26 @@ void multiply_wide_op::run_part(
 	if (get_output_type() == get_scalar_type<double>()) {
 		const double *t_Amat = reinterpret_cast<const double *>(Amat);
 		const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
-		double *t_res_mat = reinterpret_cast<double *>(res_mat);
+		double *t_tmp_mat = reinterpret_cast<double *>(tmp_mat);
 		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<double>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
+			wide_gemm_col<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
 					out_num_rows);
 		else
-			wide_gemm_row<double>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
+			wide_gemm_row<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
 					out_num_cols);
 	}
 	else {
 		const float *t_Amat = reinterpret_cast<const float *>(Amat);
 		const float *t_Bmat = reinterpret_cast<const float *>(Bmat);
-		float *t_res_mat = reinterpret_cast<float *>(res_mat);
+		float *t_tmp_mat = reinterpret_cast<float *>(tmp_mat);
 		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<float>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
+			wide_gemm_col<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
 					out_num_rows);
 		else
-			wide_gemm_row<float>(Asize, t_Amat, Bsize, t_Bmat, t_res_mat,
+			wide_gemm_row<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
 					out_num_cols);
 	}
+	res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
 }
 
 }
@@ -491,33 +653,10 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 
 matrix_store::ptr IPW_matrix_store::get_combine_res() const
 {
-	std::vector<detail::local_matrix_store::ptr> local_ms
-		= std::static_pointer_cast<const inner_prod_wide_op>(
-				portion_op)->get_partial_results();
-	matrix_layout_t local_layout = matrix_layout_t::L_NONE;
-	for (size_t i = 0; i < local_ms.size(); i++) {
-		if (local_ms[i]) {
-			local_layout = local_ms[i]->store_layout();
-			break;
-		}
-	}
-	assert(local_layout != matrix_layout_t::L_NONE);
-
 	// Aggregate the results from omp threads.
-	detail::matrix_store::ptr res = detail::matrix_store::create(
-			left_mat->get_num_rows(), right_mat->get_num_cols(), local_layout,
-			right_op->get_output_type(), -1, true);
-	res->reset_data();
-	detail::local_matrix_store::ptr local_res = res->get_portion(0);
-	assert(local_res->get_num_rows() == res->get_num_rows()
-			&& local_res->get_num_cols() == res->get_num_cols());
-	for (size_t j = 0; j < local_ms.size(); j++) {
-		// It's possible that the local matrix store doesn't exist
-		// because the input matrix is very small.
-		if (local_ms[j])
-			detail::mapply2(*local_res, *local_ms[j], *right_op, *local_res);
-	}
-	if (this->layout == local_layout)
+	detail::matrix_store::ptr res = std::static_pointer_cast<const combine_op>(
+				portion_op)->get_combined_result();
+	if (this->layout == res->store_layout())
 		return res;
 	else {
 		// Otherwise, we need to convert the matrix layout.
