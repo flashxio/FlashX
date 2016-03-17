@@ -23,7 +23,7 @@ int main (int argc, char* argv []) {
 
     if (argc < 6) {
         fprintf(stderr, "usage: ./test_kmeans_coordinator nthreads "
-                "nrow ncol k datafile\n");
+                "nrow ncol k datafile [initfile]\n");
         exit(911);
     }
 
@@ -34,10 +34,22 @@ int main (int argc, char* argv []) {
     constexpr unsigned max_iters = 50;
     unsigned nnodes = numa_num_task_nodes();
     unsigned nthreads = atoi(argv[1]);
+
     std::string init = "random";
 
+    double* p_centers = NULL;
+    if (argc > 6) {
+        p_centers = new double [k*ncol];
+        bin_reader<double> br2(argv[6], k, ncol);
+        br2.read(p_centers);
+        printf("Read centers!\n");
+        init = "none";
+    }
+
     kmeans_coordinator::ptr kc = kmeans_coordinator::create(fn,
-            nrow, ncol, k, max_iters, nnodes, nthreads, init);
+            nrow, ncol, k, max_iters, nnodes, nthreads, p_centers, init);
     kc->run_kmeans();
+    delete [] p_centers;
+
     return(EXIT_SUCCESS);
 }
