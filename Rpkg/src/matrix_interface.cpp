@@ -133,137 +133,6 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	}
 }
 
-template<class FUN>
-class rand_set_operate: public type_set_vec_operate<double>
-{
-	FUN fun;
-public:
-	rand_set_operate(const FUN &_fun): fun(_fun) {
-	}
-
-	virtual void set(double *arr, size_t num_eles, off_t start_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = fun();
-		}
-	}
-};
-
-template<class FUN>
-class rand_operate: public type_set_operate<double>
-{
-	FUN fun;
-public:
-	rand_operate(const FUN &_fun): fun(_fun) {
-	}
-
-	virtual void set(double *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = fun();
-	}
-};
-
-class runif_gen
-{
-	double min;
-	double max;
-public:
-	runif_gen(double min, double max) {
-		this->min = min;
-		this->max = max;
-	}
-
-	double operator()() const {
-		return R::runif(min, max);
-	}
-};
-
-class rnorm_gen
-{
-	double mu;
-	double sigma;
-public:
-	rnorm_gen(double mu, double sigma) {
-		this->mu = mu;
-		this->sigma = sigma;
-	}
-
-	double operator()() const {
-		return R::rnorm(mu, sigma);
-	}
-};
-
-RcppExport SEXP R_FM_create_rand(SEXP ptype, SEXP pn, SEXP pin_mem, SEXP pname,
-		SEXP pparams)
-{
-	std::string type = CHAR(STRING_ELT(ptype, 0));
-	std::string name = CHAR(STRING_ELT(pname, 0));
-	size_t n;
-	bool ret1 = R_get_number<size_t>(pn, n);
-	if (!ret1) {
-		fprintf(stderr, "the arguments aren't of the supported type\n");
-		return R_NilValue;
-	}
-	bool in_mem = LOGICAL(pin_mem)[0];
-	if (!in_mem && !safs::is_safs_init()) {
-		fprintf(stderr, "can't create ext-mem vector when SAFS is disabled\n");
-		return R_NilValue;
-	}
-
-	// TODO let's just use in-memory dense matrix first.
-	GetRNGstate();
-	int num_nodes = matrix_conf.get_num_nodes();
-	// When there is only one NUMA node, it's better to use SMP vector.
-	if (num_nodes == 1)
-		num_nodes = -1;
-
-	vector::ptr v;
-	if (type == "uniform") {
-		Rcpp::List params(pparams);
-		double min, max;
-		bool ret2 = R_get_number<double>(params["min"], min);
-		bool ret3 = R_get_number<double>(params["max"], max);
-		if (!ret2 || !ret3)
-			fprintf(stderr, "min/max aren't of the supported type\n");
-		else {
-			runif_gen gen(min, max);
-			v = vector::create(n, get_scalar_type<double>(), num_nodes,
-					true, rand_set_operate<runif_gen>(gen));
-		}
-	}
-	else if (type == "norm") {
-		Rcpp::List params(pparams);
-		double mu, sigma;
-		bool ret2 = R_get_number<double>(params["mu"], mu);
-		bool ret3 = R_get_number<double>(params["sigma"], sigma);
-		if (!ret2 || !ret3)
-			fprintf(stderr, "mu/sigma aren't of the supported type\n");
-		else {
-			rnorm_gen gen(mu, sigma);
-			v = vector::create(n, get_scalar_type<double>(), num_nodes,
-					in_mem, rand_set_operate<rnorm_gen>(gen));
-		}
-	}
-	else
-		fprintf(stderr, "unsupported type\n");
-	PutRNGstate();
-
-	if (v) {
-		detail::EM_vec_store::const_ptr em_vec
-			= std::dynamic_pointer_cast<const detail::EM_vec_store>(
-					v->get_raw_store());
-		if (em_vec && !name.empty()) {
-			bool ret = const_cast<detail::EM_vec_store &>(
-					*em_vec).set_persistent(name);
-			if (!ret)
-				fprintf(stderr, "Can't set vector %s persistent\n", name.c_str());
-		}
-		return create_FMR_vector(v->get_raw_store(), "");
-	}
-	else
-		return R_NilValue;
-}
-
 RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 		SEXP pin_mem, SEXP pname, SEXP pparams)
 {
@@ -283,8 +152,6 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 		return R_NilValue;
 	}
 
-	// TODO let's just use in-memory dense matrix first.
-	GetRNGstate();
 	int num_nodes = matrix_conf.get_num_nodes();
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
@@ -300,12 +167,9 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 		bool ret3 = R_get_number<double>(params["max"], max);
 		if (!ret2 || !ret3)
 			fprintf(stderr, "min/max aren't of the supported type\n");
-		else {
-			runif_gen gen(min, max);
-			mat = dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<double>(), rand_operate<runif_gen>(gen),
-					num_nodes, in_mem);
-		}
+		else
+			mat = dense_matrix::create_randu<double>(min, max, nrow, ncol,
+					layout, num_nodes, in_mem);
 	}
 	else if (type == "norm") {
 		Rcpp::List params(pparams);
@@ -314,16 +178,12 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 		bool ret3 = R_get_number<double>(params["sigma"], sigma);
 		if (!ret2 || !ret3)
 			fprintf(stderr, "mu/sigma aren't of the supported type\n");
-		else {
-			rnorm_gen gen(mu, sigma);
-			mat = dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<double>(), rand_operate<rnorm_gen>(gen),
-					num_nodes, in_mem);
-		}
+		else
+			mat = dense_matrix::create_randn<double>(mu, sigma, nrow, ncol,
+					layout, num_nodes, in_mem);
 	}
 	else
 		fprintf(stderr, "unsupported type\n");
-	PutRNGstate();
 
 	if (mat) {
 		detail::EM_matrix_store::const_ptr em_mat

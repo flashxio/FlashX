@@ -215,10 +215,14 @@ fm.runif <- function(n, min=0, max=1, in.mem=TRUE, name="")
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", "uniform", n, as.logical(in.mem),
-				 as.character(name), list(min=as.double(min),
-										  max=as.double(max)), PACKAGE="FlashR")
-	new.fmV(vec)
+	vec <- .Call("R_FM_create_randmat", "uniform", as.integer(n), 1,
+				 as.logical(in.mem), as.character(name),
+				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
+	if (!is.null(vec))
+		new("fmV", pointer=vec$pointer, name=vec$name, len=vec$nrow, type=vec$type,
+			ele_type=vec$ele_type)
+	else
+		NULL
 }
 
 #' Create a FlashMatrix vector with random numbers from normal distribution.
@@ -235,10 +239,14 @@ fm.rnorm <- function(n, mean=0, sd=1, in.mem=TRUE, name="")
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", "norm", as.integer(n), as.logical(in.mem),
-				 as.character(name), list(mu=as.double(mean),
-										  sigma=as.double(sd)), PACKAGE="FlashR")
-	new.fmV(vec)
+	vec <- .Call("R_FM_create_randmat", "norm", as.integer(n), 1,
+				 as.logical(in.mem), as.character(name),
+				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
+	if (!is.null(vec))
+		new("fmV", pointer=vec$pointer, name=vec$name, len=vec$nrow, type=vec$type,
+			ele_type=vec$ele_type)
+	else
+		NULL
 }
 
 fm.runif.matrix <- function(nrow, ncol, min=0, max=1, in.mem=TRUE, name="")
