@@ -169,8 +169,6 @@ void materialized_mapply_tall_store::write_portion_async(
 namespace
 {
 
-size_t SUB_CHUNK_SIZE = 1024;
-
 class mapply_store
 {
 	materialize_level mater_level;
@@ -183,9 +181,12 @@ class mapply_store
 	local_matrix_store::ptr whole_res;
 	// This stores the materialized results for individual sub chunks.
 	std::vector<local_matrix_store::ptr> res_bufs;
-	size_t num_materialized_parts;
 	local_matrix_store *lstore;
 
+	// The partition size.
+	size_t part_size;
+	// The number of elements that have been materialized.
+	size_t num_materialized_eles;
 	// The information of the original portion.
 	bool is_wide;
 	size_t orig_global_start_row;
@@ -203,9 +204,9 @@ class mapply_store
 	off_t get_part_idx() const {
 		off_t part_idx;
 		if (is_wide)
-			part_idx = lstore->get_local_start_col() / SUB_CHUNK_SIZE;
+			part_idx = lstore->get_local_start_col() / part_size;
 		else
-			part_idx = lstore->get_local_start_row() / SUB_CHUNK_SIZE;
+			part_idx = lstore->get_local_start_row() / part_size;
 		return part_idx;
 	}
 public:
@@ -223,14 +224,11 @@ public:
 		orig_global_start_col = lstore->get_global_start_col();
 		orig_num_rows = lstore->get_num_rows();
 		orig_num_cols = lstore->get_num_cols();
-
-		size_t num_parts;
 		if (is_wide)
-			num_parts = ceil(((double) orig_num_cols) / SUB_CHUNK_SIZE);
+			part_size = lstore->get_num_cols();
 		else
-			num_parts = ceil(((double) orig_num_rows) / SUB_CHUNK_SIZE);
-		res_bufs.resize(num_parts);
-		num_materialized_parts = 0;
+			part_size = lstore->get_num_rows();
+		num_materialized_eles = 0;
 	}
 
 	const char *get_raw_arr() const {
@@ -304,21 +302,43 @@ void mapply_store::reset_size()
 void mapply_store::resize(off_t local_start_row, off_t local_start_col,
 		size_t local_num_rows, size_t local_num_cols)
 {
+	// When someone accesses the matrix, he might want to access it with
+	// smaller partitions. If we haven't partitioned the matrix yet, we should
+	// use this function to deterime the partition size. The first time that
+	// someone wants to resize it, we assume the new size is the partition size.
+	// The part size should 2^n.
+
+	size_t num_parts = 0;
 	if (is_wide) {
 		assert(local_start_row == 0 && local_num_rows == lstore->get_num_rows());
 		for (size_t i = 0; i < ins.size(); i++)
 			const_cast<local_matrix_store *>(ins[i].get())->resize(0,
 					local_start_col, ins[i]->get_num_rows(), local_num_cols);
+		if (part_size == orig_num_cols && local_num_cols < orig_num_cols) {
+			assert(local_start_col == 0);
+			part_size = local_num_cols;
+			num_parts = div_ceil<size_t>(orig_num_cols, part_size);
+		}
 	}
 	else {
 		assert(local_start_col == 0 && local_num_cols == lstore->get_num_cols());
 		for (size_t i = 0; i < ins.size(); i++)
 			const_cast<local_matrix_store *>(ins[i].get())->resize(
 					local_start_row, 0, local_num_rows, ins[i]->get_num_cols());
+		if (part_size == orig_num_rows && local_num_rows < orig_num_rows) {
+			assert(local_start_row == 0);
+			part_size = local_num_rows;
+			num_parts = div_ceil<size_t>(orig_num_rows, part_size);
+		}
 	}
 	if (whole_res)
 		whole_res->resize(local_start_row, local_start_col, local_num_rows,
 				local_num_cols);
+	// We haven't partitioned the matrix yet. We now use the new partition size.
+	if (num_parts > 0 && res_bufs.empty()) {
+		assert(num_parts > 1);
+		res_bufs.resize(num_parts);
+	}
 }
 
 /*
@@ -369,19 +389,19 @@ void mapply_store::materialize_whole()
 
 	// If all parts in the local matrix store have been materialized,
 	// we can merge them.
-	if (num_materialized_parts == res_bufs.size() && res_bufs[0]) {
+	if (num_materialized_eles == orig_num_rows * orig_num_cols && res_bufs[0]) {
 		for (size_t i = 0; i < res_bufs.size(); i++)
 			assert(res_bufs[i]);
 
 		// Copy all the parts
 		if (is_wide) {
 			for (size_t local_start_col = 0; local_start_col < orig_num_cols;
-					local_start_col += SUB_CHUNK_SIZE) {
-				size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
+					local_start_col += part_size) {
+				size_t local_num_cols = std::min(part_size,
 						orig_num_cols - local_start_col);
 				whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
 						local_num_cols);
-				off_t part_idx = local_start_col / SUB_CHUNK_SIZE;
+				off_t part_idx = local_start_col / part_size;
 				assert(res_bufs[part_idx]);
 				whole_res->copy_from(*res_bufs[part_idx]);
 			}
@@ -389,12 +409,12 @@ void mapply_store::materialize_whole()
 		else {
 			// If this is a tall matrix.
 			for (size_t local_start_row = 0; local_start_row < orig_num_rows;
-					local_start_row += SUB_CHUNK_SIZE) {
-				size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
+					local_start_row += part_size) {
+				size_t local_num_rows = std::min(part_size,
 						orig_num_rows - local_start_row);
 				whole_res->resize(local_start_row, 0, local_num_rows,
 						whole_res->get_num_cols());
-				off_t part_idx = local_start_row / SUB_CHUNK_SIZE;
+				off_t part_idx = local_start_row / part_size;
 				assert(res_bufs[part_idx]);
 				whole_res->copy_from(*res_bufs[part_idx]);
 			}
@@ -402,6 +422,8 @@ void mapply_store::materialize_whole()
 		whole_res->reset_size();
 	}
 	else {
+		// We can determine the subchunk size as we do for local_matrix_store.
+		const size_t SUB_CHUNK_SIZE = 1024;
 		std::vector<local_matrix_store *> mutable_ins(ins.size());
 		for (size_t i = 0; i < ins.size(); i++)
 			mutable_ins[i] = const_cast<local_matrix_store *>(ins[i].get());
@@ -438,7 +460,8 @@ void mapply_store::materialize_whole()
 		for (size_t i = 0; i < mutable_ins.size(); i++)
 			mutable_ins[i]->reset_size();
 		whole_res->reset_size();
-		num_materialized_parts = res_bufs.size();
+		num_materialized_eles
+			= whole_res->get_num_rows() * whole_res->get_num_cols();
 	}
 
 	// We can clean up all the parts now if there is any. We'll always access
@@ -503,11 +526,12 @@ void mapply_store::materialize() const
 	if (mater_level == materialize_level::MATER_CPU)
 		mutable_this->res_bufs[0] = part;
 	else {
-		mutable_this->num_materialized_parts++;
+		mutable_this->num_materialized_eles
+			+= part->get_num_rows() * part->get_num_cols();
 		mutable_this->res_bufs[part_idx] = part;
 	}
 
-	if (num_materialized_parts == res_bufs.size())
+	if (num_materialized_eles == orig_num_rows * orig_num_cols)
 		// We don't need the input matrix portions any more.
 		mutable_this->ins.clear();
 }
