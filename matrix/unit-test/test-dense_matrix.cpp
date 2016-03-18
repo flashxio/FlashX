@@ -400,24 +400,6 @@ void test_multiply_col(int num_nodes)
 	verify_result(*res1, *correct, equal_func<int>());
 }
 
-void test_agg_col(int num_nodes)
-{
-	printf("Test aggregation on tall matrix stored column wise\n");
-	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
-			matrix_layout_t::L_COL, num_nodes, get_scalar_type<size_t>());
-	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
-			m1->get_type().get_basic_ops().get_add());
-	scalar_variable::ptr res = m1->aggregate(op);
-	assert(res->get_type() == m1->get_type());
-	assert(res->get_type() == get_scalar_type<size_t>());
-	size_t sum = *(size_t *) res->get_raw();
-	size_t num_eles = m1->get_num_rows() * m1->get_num_cols();
-	if (matrix_val == matrix_val_t::DEFAULT)
-		assert(sum == 0);
-	else
-		assert(sum == (num_eles - 1) * num_eles / 2);
-}
-
 template<class T>
 void test_multiply(int num_nodes)
 {
@@ -679,17 +661,51 @@ void test_multiply_matrix(int num_nodes)
 	verify_result(*res, *correct, equal_func<int>());
 }
 
-void test_agg_row(int num_nodes)
+void test_agg(int num_nodes, matrix_layout_t layout)
 {
-	printf("Test aggregation on tall matrix stored row wise\n");
+	printf("Test aggregation on tall %s-major matrix\n",
+			layout == matrix_layout_t::L_COL ? "column" : "row");
+	long_dim = 2000;
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
-			matrix_layout_t::L_ROW, num_nodes, get_scalar_type<size_t>());
+			layout, num_nodes, get_scalar_type<size_t>());
 	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
 			m1->get_type().get_basic_ops().get_add());
 	scalar_variable::ptr res = m1->aggregate(op);
 	assert(res->get_type() == m1->get_type());
+	assert(res->get_type() == get_scalar_type<size_t>());
 	size_t sum = *(size_t *) res->get_raw();
 	size_t num_eles = m1->get_num_rows() * m1->get_num_cols();
+	if (matrix_val == matrix_val_t::DEFAULT)
+		assert(sum == 0);
+	else
+		assert(sum == (num_eles - 1) * num_eles / 2);
+
+	dense_matrix::ptr sum_col = m1->aggregate(matrix_margin::MAR_ROW,
+			agg_operate::create(op));
+	if (sum_col->is_in_mem())
+		sum_col->set_materialize_level(materialize_level::MATER_FULL);
+	else {
+		detail::matrix_store::ptr buf = detail::mem_matrix_store::create(
+				sum_col->get_num_rows(), sum_col->get_num_cols(),
+				sum_col->store_layout(), sum_col->get_type(), num_nodes);
+		sum_col->set_materialize_level(materialize_level::MATER_FULL, buf);
+	}
+	res = sum_col->aggregate(op);
+	sum_col->materialize_self();
+	assert(sum_col->get_num_rows() == m1->get_num_rows());
+	assert(sum_col->get_num_cols() == 1);
+	detail::mem_matrix_store::const_ptr tmp
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum_col->get_raw_store());
+	assert(tmp);
+	for (size_t i = 0; i < sum_col->get_num_rows(); i++) {
+		size_t val = 0;
+		size_t ncol = m1->get_num_cols();
+		if (matrix_val == matrix_val_t::SEQ)
+			val = i * ncol * ncol + (ncol - 1) * ncol / 2;
+		assert(tmp->get<size_t>(i, 0) == val);
+	}
+	sum = *(size_t *) res->get_raw();
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == 0);
 	else
@@ -1837,6 +1853,8 @@ void test_EM_matrix(int num_nodes)
 	in_mem = false;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_agg(-1, matrix_layout_t::L_COL);
+	test_agg(-1, matrix_layout_t::L_ROW);
 	test_setdata(-1);
 	test_EM_persistent();
 	test_sub_matrix();
@@ -1855,9 +1873,7 @@ void test_EM_matrix(int num_nodes)
 	test_multiply_scalar(-1);
 	test_ele_wise(-1);
 	test_multiply_col(-1);
-	test_agg_col(-1);
 	test_multiply_matrix(-1);
-	test_agg_row(-1);
 	test_agg_sub_col(-1);
 	test_agg_sub_row(-1);
 	test_sum_row_col(-1);
@@ -1874,6 +1890,10 @@ void test_mem_matrix(int num_nodes)
 	in_mem = true;
 
 	matrix_val = matrix_val_t::SEQ;
+	test_agg(-1, matrix_layout_t::L_COL);
+	test_agg(num_nodes, matrix_layout_t::L_COL);
+	test_agg(-1, matrix_layout_t::L_ROW);
+	test_agg(num_nodes, matrix_layout_t::L_ROW);
 	test_setdata(-1);
 	test_setdata(num_nodes);
 	test_copy(-1, true);
@@ -1906,12 +1926,8 @@ void test_mem_matrix(int num_nodes)
 	test_ele_wise(num_nodes);
 	test_multiply_col(-1);
 	test_multiply_col(num_nodes);
-	test_agg_col(-1);
-	test_agg_col(num_nodes);
 	test_multiply_matrix(-1);
 	test_multiply_matrix(num_nodes);
-	test_agg_row(-1);
-	test_agg_row(num_nodes);
 	test_agg_sub_col(-1);
 	test_agg_sub_row(-1);
 #if 0
