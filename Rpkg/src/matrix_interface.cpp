@@ -1792,7 +1792,7 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 }
 #endif
 
-RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel)
+RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel, SEXP pin_mem)
 {
 	Rcpp::LogicalVector res(1);
 	if (is_sparse(pmat)) {
@@ -1808,8 +1808,20 @@ RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel)
 		res[0] = false;
 		return res;
 	}
+
+	bool in_mem = LOGICAL(pin_mem)[0];
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	mat->set_materialize_level((materialize_level) level);
+	if (in_mem == mat->is_in_mem())
+		mat->set_materialize_level((materialize_level) level);
+	else {
+		// The store buffer has to be a tall matrix.
+		size_t nrow = std::max(mat->get_num_rows(), mat->get_num_cols());
+		size_t ncol = std::min(mat->get_num_rows(), mat->get_num_cols());
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, mat->store_layout(), mat->get_type(),
+				matrix_conf.get_num_nodes(), in_mem);
+		mat->set_materialize_level((materialize_level) level, store);
+	}
 	res[0] = true;
 	return res;
 }
