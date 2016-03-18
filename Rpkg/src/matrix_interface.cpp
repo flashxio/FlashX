@@ -24,6 +24,7 @@
 
 #include "log.h"
 #include "safs_file.h"
+#include "io_interface.h"
 
 #include "FGlib.h"
 #include "data_frame.h"
@@ -36,6 +37,7 @@
 #endif
 #include "factor.h"
 #include "EM_dense_matrix.h"
+#include "EM_vector.h"
 #include "combined_matrix_store.h"
 
 #include "rutils.h"
@@ -191,13 +193,20 @@ public:
 	}
 };
 
-RcppExport SEXP R_FM_create_rand(SEXP ptype, SEXP pn, SEXP pparams)
+RcppExport SEXP R_FM_create_rand(SEXP ptype, SEXP pn, SEXP pin_mem, SEXP pname,
+		SEXP pparams)
 {
 	std::string type = CHAR(STRING_ELT(ptype, 0));
+	std::string name = CHAR(STRING_ELT(pname, 0));
 	size_t n;
 	bool ret1 = R_get_number<size_t>(pn, n);
 	if (!ret1) {
 		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr, "can't create ext-mem vector when SAFS is disabled\n");
 		return R_NilValue;
 	}
 
@@ -232,29 +241,45 @@ RcppExport SEXP R_FM_create_rand(SEXP ptype, SEXP pn, SEXP pparams)
 		else {
 			rnorm_gen gen(mu, sigma);
 			v = vector::create(n, get_scalar_type<double>(), num_nodes,
-					true, rand_set_operate<rnorm_gen>(gen));
+					in_mem, rand_set_operate<rnorm_gen>(gen));
 		}
 	}
 	else
 		fprintf(stderr, "unsupported type\n");
 	PutRNGstate();
 
-	if (v)
+	if (v) {
+		detail::EM_vec_store::const_ptr em_vec
+			= std::dynamic_pointer_cast<const detail::EM_vec_store>(
+					v->get_raw_store());
+		if (em_vec && !name.empty()) {
+			bool ret = const_cast<detail::EM_vec_store &>(
+					*em_vec).set_persistent(name);
+			if (!ret)
+				fprintf(stderr, "Can't set vector %s persistent\n", name.c_str());
+		}
 		return create_FMR_vector(v->get_raw_store(), "");
+	}
 	else
 		return R_NilValue;
 }
 
 RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
-		SEXP pparams)
+		SEXP pin_mem, SEXP pname, SEXP pparams)
 {
 	std::string type = CHAR(STRING_ELT(ptype, 0));
+	std::string name = CHAR(STRING_ELT(pname, 0));
 	size_t nrow;
 	size_t ncol;
 	bool ret1 = R_get_number<size_t>(pnrow, nrow);
 	bool ret2 = R_get_number<size_t>(pncol, ncol);
 	if (!ret1 || !ret2) {
 		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr, "can't create ext-mem matrix when SAFS is disabled\n");
 		return R_NilValue;
 	}
 
@@ -279,7 +304,7 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 			runif_gen gen(min, max);
 			mat = dense_matrix::create(nrow, ncol, layout,
 					get_scalar_type<double>(), rand_operate<runif_gen>(gen),
-					num_nodes, true);
+					num_nodes, in_mem);
 		}
 	}
 	else if (type == "norm") {
@@ -293,15 +318,25 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 			rnorm_gen gen(mu, sigma);
 			mat = dense_matrix::create(nrow, ncol, layout,
 					get_scalar_type<double>(), rand_operate<rnorm_gen>(gen),
-					num_nodes, true);
+					num_nodes, in_mem);
 		}
 	}
 	else
 		fprintf(stderr, "unsupported type\n");
 	PutRNGstate();
 
-	if (mat)
+	if (mat) {
+		detail::EM_matrix_store::const_ptr em_mat
+			= std::dynamic_pointer_cast<const detail::EM_matrix_store>(
+					mat->get_raw_store());
+		if (em_mat && !name.empty()) {
+			bool ret = const_cast<detail::EM_matrix_store &>(
+					*em_mat).set_persistent(name);
+			if (!ret)
+				fprintf(stderr, "Can't set matrix %s persistent\n", name.c_str());
+		}
 		return create_FMR_matrix(mat, "");
+	}
 	else
 		return R_NilValue;
 }

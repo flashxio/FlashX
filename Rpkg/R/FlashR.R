@@ -204,16 +204,20 @@ fm.seq.int <- function(from, to, by)
 #' @param n the number of random numbers to be generated.
 #' @param min lower limits of the distribution.
 #' @param max upper limits of the distribution.
+#' @param in.mem whether the vector is stored in memory.
+#' @param name the name of the vector on SAFS if the vector is stored on SAFS
+#' persistently.
 #' @name fm.runif
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.runif <- function(n, min=0, max=1)
+fm.runif <- function(n, min=0, max=1, in.mem=TRUE, name="")
 {
 	if (n <= 0) {
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", "uniform", n,
-				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
+	vec <- .Call("R_FM_create_rand", "uniform", n, as.logical(in.mem),
+				 as.character(name), list(min=as.double(min),
+										  max=as.double(max)), PACKAGE="FlashR")
 	new.fmV(vec)
 }
 
@@ -222,35 +226,39 @@ fm.runif <- function(n, min=0, max=1)
 #' @param n the number of random numbers to be generated.
 #' @param mean the mean of the distribution.
 #' @param sd the standard deviation of the distribution.
+#' @param in.mem whether the vector is stored in memory.
 #' @name fm.rnorm
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.rnorm <- function(n, mean=0, sd=1)
+fm.rnorm <- function(n, mean=0, sd=1, in.mem=TRUE, name="")
 {
 	if (n <= 0) {
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_rand", "norm", as.integer(n),
-				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
+	vec <- .Call("R_FM_create_rand", "norm", as.integer(n), as.logical(in.mem),
+				 as.character(name), list(mu=as.double(mean),
+										  sigma=as.double(sd)), PACKAGE="FlashR")
 	new.fmV(vec)
 }
 
-fm.runif.matrix <- function(nrow, ncol, min=0, max=1)
+fm.runif.matrix <- function(nrow, ncol, min=0, max=1, in.mem=TRUE, name="")
 {
 	if (nrow <= 0 || ncol <= 0)
 		stop("we can't generate a matrix with 0 rows or cols")
 
-	mat <- .Call("R_FM_create_randmat", "uniform", as.integer(nrow), as.integer(ncol),
+	mat <- .Call("R_FM_create_randmat", "uniform", as.integer(nrow),
+				 as.integer(ncol), as.logical(in.mem), as.character(name),
 				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
 	new.fm(mat)
 }
 
-fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1)
+fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1, in.mem=TRUE, name="")
 {
 	if (nrow <= 0 || ncol <= 0)
 		stop("we can't generate a matrix with 0 rows or cols")
 
-	mat <- .Call("R_FM_create_randmat", "norm", as.integer(nrow), as.integer(ncol),
+	mat <- .Call("R_FM_create_randmat", "norm", as.integer(nrow),
+				 as.integer(ncol), as.logical(in.mem), as.character(name),
 				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
 	new.fm(mat)
 }
