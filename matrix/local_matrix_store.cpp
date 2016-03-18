@@ -862,7 +862,8 @@ static void agg_rows(const local_matrix_store &store, const agg_operate &op,
 			for (size_t row_idx = 0; row_idx < orig_num_rows;
 					row_idx += LONG_DIM_LEN) {
 				size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
-				mutable_store.resize(row_idx, 0, llen, col_store.get_num_cols());
+				mutable_store.resize(orig.local_start_row + row_idx,
+						orig.local_start_col, llen, col_store.get_num_cols());
 
 				char *lres_arr = res_arr + row_idx * res_entry_size;
 				op.get_agg().runAA(llen, col_store.get_col(0),
@@ -923,7 +924,9 @@ static void agg_cols(const local_matrix_store &store, const agg_operate &op,
 			for (size_t col_idx = 0; col_idx < orig_num_cols;
 					col_idx += LONG_DIM_LEN) {
 				size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
-				mutable_store.resize(0, col_idx, row_store.get_num_rows(), llen);
+				mutable_store.resize(orig.local_start_row,
+						orig.local_start_col + col_idx,
+						row_store.get_num_rows(), llen);
 
 				char *lres_arr = res_arr + col_idx * res_entry_size;
 				op.get_agg().runAA(llen, row_store.get_row(0),
