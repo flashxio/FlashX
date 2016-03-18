@@ -929,19 +929,11 @@ void mapply_matrix_store::materialize_self() const
 matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	if (is_materialized()) {
-		matrix_store::const_ptr res = this->res->get_materialize_res(is_wide());
-		if (res->is_in_mem() == in_mem && res->get_num_nodes() == num_nodes)
-			return res;
-		else {
-			BOOST_LOG_TRIVIAL(info) << boost::format(
-					"move materialized matrix from %d, %d to %d, %d")
-				% res->is_in_mem() % res->get_num_nodes() % in_mem % num_nodes;
-			dense_matrix::ptr mat = dense_matrix::create(res);
-			mat = mat->conv_store(in_mem, num_nodes);
-			return mat->get_raw_store();
-		}
-	}
+	if (is_materialized())
+		// The input arguments only provide some guidance for where
+		// the materialized data should be stored. If the matrix has been
+		// materialized, we don't need to move the data.
+		return this->res->get_materialize_res(is_wide());
 	else
 		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes,
 				par_access);

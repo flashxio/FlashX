@@ -85,7 +85,10 @@ public:
 
 	/*
 	 * When we materialize the matrix, we can specify where the materialized
-	 * matrix is stored.
+	 * matrix is stored. However, the input arguments only provide guidance
+	 * for the place where the materialized data should be stored. If
+	 * the data of the matrix has been materialized, we don't need to move
+	 * the data to the specified store.
 	 */
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 			int num_nodes) const = 0;
