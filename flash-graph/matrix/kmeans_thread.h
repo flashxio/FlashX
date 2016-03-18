@@ -43,6 +43,11 @@ namespace {
         PAUSED /*When the thread is waiting to be run or killed*/
     };
 
+    union metaunion {
+        unsigned num_changed; // Used during kmeans
+        unsigned clust_idx; // Used during kms++
+    };
+
     class kmeans_thread {
         private:
             pthread_t hw_thd;
@@ -55,12 +60,17 @@ namespace {
             double* local_data; // Pointer to where the data begins that the thread works on
             clusters::ptr g_clusters; // Pointer to global cluster data
             clusters::ptr local_clusters;
-            unsigned num_changed;
+
+            metaunion meta;
+            //unsigned num_changed;
+
             FILE* f; // Data file on disk
 
             unsigned* cluster_assignments;
 
             thread_state_t state;
+            double* dist_v;
+            double cuml_dist;
 
             friend void* callback(void* arg);
             void run();
@@ -79,9 +89,9 @@ namespace {
                 BOOST_VERIFY(this->f = fopen(fn.c_str(), "rb"));
 
                 local_clusters = clusters::create(g_clusters->get_nclust(), ncol);
-                this->num_changed = 0;
+                meta.num_changed = 0; // Same as meta.clust_idx = 0;
 
-#if KM_TEST
+#if VERBOSE
                 printf("Initializing thread. Metadata: thd_id: %u, node_id: %u"
                         ", start_offset: %lu, nprocrows: %u, ncol: %u\n",
                         this->thd_id, this->node_id, this->start_offset,
@@ -100,6 +110,10 @@ namespace {
                 return ptr(new kmeans_thread(node_id, thd_id, start_offset,
                             nprocrows, thds_row, ncol, g_clusters,
                             cluster_assignments, fn));
+            }
+
+            void set_dist_v_ptr(double* v) {
+                dist_v = v;
             }
 
             void join() {
@@ -123,6 +137,7 @@ namespace {
             // Allocate and move data using this thread
             void numa_alloc_mem();
             void EM_step();
+            void kmspp_dist();
 
             const void print_local_data() const;
             const unsigned get_global_data_id(const unsigned row_id) const;
@@ -153,11 +168,19 @@ namespace {
             }
 
             const unsigned get_num_changed() const {
-                return num_changed;
+                return meta.num_changed;
             }
 
             const clusters::ptr get_local_clusters() const {
                 return local_clusters;
+            }
+
+            void set_clust_idx(const unsigned idx) {
+                meta.clust_idx = idx;
+            }
+
+            const double get_culm_dist() const {
+                return cuml_dist;
             }
 
             ~kmeans_thread() {
@@ -178,7 +201,7 @@ namespace {
                 numa_alloc_mem();
                 break;
             case KMSPP_INIT:
-                assert(0);
+                kmspp_dist();
                 break;
             case EM: /*E step of kmeans*/
                 EM_step();
@@ -230,13 +253,15 @@ namespace {
     }
 
     /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/
+    /** Sometimes we need to get a global row_id given a local one
+      */
     const unsigned kmeans_thread::
         get_global_data_id(const unsigned row_id) const {
         return (thd_id*thds_row)+row_id;
     }
 
     void kmeans_thread::EM_step() {
-        num_changed = 0; // Always reset at the beginning of an EM-step
+        meta.num_changed = 0; // Always reset at the beginning of an EM-step
         local_clusters->clear();
 
         for (unsigned row = 0; row < nprocrows; row++) {
@@ -259,10 +284,30 @@ namespace {
             unsigned true_row_id = get_global_data_id(row);
 
             if (asgnd_clust != cluster_assignments[true_row_id])
-                num_changed++;
+                meta.num_changed++;
 
             cluster_assignments[true_row_id] = asgnd_clust;
             local_clusters->add_member(&local_data[row*ncol], asgnd_clust);
+        }
+    }
+
+    /** Method for a distance computation vs a single cluster.
+      * Used in kmeans++ init
+      */
+    void kmeans_thread::kmspp_dist() {
+        cuml_dist = 0;
+        unsigned clust_idx = meta.clust_idx;
+        for (unsigned row = 0; row < nprocrows; row++) {
+            unsigned true_row_id = get_global_data_id(row);
+
+            double dist = dist_comp_raw(&local_data[row*ncol],
+                    &((g_clusters->get_means())[clust_idx*ncol]), ncol);
+
+            if (dist < dist_v[true_row_id]) { // Found a closer cluster than before
+                dist_v[true_row_id] = dist;
+                cluster_assignments[true_row_id] = clust_idx;
+            }
+            cuml_dist += dist_v[true_row_id];
         }
     }
 
