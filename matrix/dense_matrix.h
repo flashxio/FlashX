@@ -225,6 +225,9 @@ public:
 		return create_const(val, nrow, ncol, layout, num_nodes, in_mem, group);
 	}
 
+	static ptr rbind(const std::vector<dense_matrix::ptr> &mats);
+	static ptr cbind(const std::vector<dense_matrix::ptr> &mats);
+
 	dense_matrix() {
 	}
 	dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,

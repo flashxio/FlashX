@@ -2820,4 +2820,145 @@ void materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 		mats[i]->materialize_self();
 }
 
+
+class combined_set_operate: public set_operate
+{
+	// Previous state for the local thread.
+	struct prev_state {
+		off_t store_idx;
+		size_t out_row_idx;
+		prev_state() {
+			store_idx = -1;
+			out_row_idx = 0;
+		}
+	};
+	std::vector<size_t> accu_nrows;
+	std::vector<detail::mem_matrix_store::const_ptr> stores;
+	// This is per-thread state.
+	std::vector<prev_state> prev_states;
+public:
+	combined_set_operate(
+			const std::vector<detail::mem_matrix_store::const_ptr> &stores) {
+		this->stores = stores;
+		accu_nrows.resize(stores.size() + 1);
+		accu_nrows[0] = 0;
+		for (size_t i = 0; i < stores.size(); i++)
+			accu_nrows[i + 1] = accu_nrows[i] + stores[i]->get_num_rows();
+		prev_states.resize(detail::mem_thread_pool::get_global_num_threads());
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const;
+
+	virtual const scalar_type &get_type() const {
+		return stores[0]->get_type();
+	}
+};
+
+void combined_set_operate::set(void *arr, size_t num_eles, off_t row_idx,
+		off_t col_idx) const
+{
+	combined_set_operate *mutable_this = const_cast<combined_set_operate *>(this);
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	// If we don't have previous matrix store.
+	if (prev_states[thread_id].store_idx < 0
+			// If we have jumped.
+			|| prev_states[thread_id].out_row_idx + 1 != (size_t) row_idx) {
+		// We have to find the right matrix store for this row.
+		size_t i;
+		for (i = 0; i < stores.size(); i++) {
+			if (accu_nrows[i] <= (size_t) row_idx
+					&& (size_t) row_idx < accu_nrows[i + 1]) {
+				mutable_this->prev_states[thread_id].store_idx = i;
+				break;
+			}
+		}
+		// We have to be able to find a store.
+		assert(i < stores.size());
+	}
+	off_t store_idx = prev_states[thread_id].store_idx;
+	assert(store_idx >= 0);
+	size_t local_row_idx = row_idx - accu_nrows[store_idx];
+	const void *src_row = stores[store_idx]->get_row(local_row_idx);
+	assert(num_eles == stores[store_idx]->get_num_cols());
+	memcpy(arr, src_row, num_eles * stores[store_idx]->get_entry_size());
+	mutable_this->prev_states[thread_id].out_row_idx = row_idx;
+	if (local_row_idx == stores[store_idx]->get_num_rows() - 1)
+		mutable_this->prev_states[thread_id].store_idx = -1;
+}
+
+dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats)
+{
+	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
+	size_t ncol = mats[0]->get_num_cols();
+	size_t nrow = 0;
+	bool in_mem = mats[0]->is_in_mem();
+	const scalar_type &type = mats[0]->get_type();
+	for (size_t i = 0; i < mats.size(); i++) {
+		dense_matrix::ptr mat = mats[i];
+		if (mat->get_num_cols() != ncol) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't rbind two matrices with diff number of columns.";
+			return dense_matrix::ptr();
+		}
+		if (mat->get_type() != type) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't bind two matrices with diff element types";
+			return dense_matrix::ptr();
+		}
+		stores[i] = mat->get_raw_store();
+		// We create a matrix in memory only if all matrices are in memory.
+		in_mem = in_mem && mats[i]->is_in_mem();
+		nrow += mats[i]->get_num_rows();
+	}
+	detail::matrix_store::ptr combined;
+	if (ncol > nrow)
+		combined = detail::combined_matrix_store::create(stores,
+				matrix_layout_t::L_ROW);
+	else if (in_mem) {
+		std::vector<detail::mem_matrix_store::const_ptr> mem_stores(mats.size());
+		for (size_t i = 0; i < stores.size(); i++) {
+			dense_matrix::ptr mat = mats[i]->conv2(matrix_layout_t::L_ROW);
+			mat->materialize_self();
+			mem_stores[i] = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+						mat->get_raw_store());
+		}
+		combined = detail::matrix_store::create(nrow, ncol,
+				matrix_layout_t::L_ROW, type, matrix_conf.get_num_nodes(),
+				in_mem);
+		combined->set_data(combined_set_operate(mem_stores));
+	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << "we don't support rbind on EM tall matrices";
+		return dense_matrix::ptr();
+	}
+	return dense_matrix::create(combined);
+}
+
+dense_matrix::ptr dense_matrix::cbind(const std::vector<dense_matrix::ptr> &mats)
+{
+	size_t nrow = mats[0]->get_num_rows();
+	const scalar_type &type = mats[0]->get_type();
+	for (size_t i = 0; i < mats.size(); i++) {
+		dense_matrix::ptr mat = mats[i];
+		if (mat->get_num_rows() != nrow) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't rbind two matrices with diff number of rows.";
+			return dense_matrix::ptr();
+		}
+		if (mat->get_type() != type) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't bind two matrices with diff element types";
+			return dense_matrix::ptr();
+		}
+	}
+	std::vector<dense_matrix::ptr> tmats(mats.size());
+	for (size_t i = 0; i < mats.size(); i++)
+		tmats[i] = mats[i]->transpose();
+	dense_matrix::ptr combined = rbind(tmats);
+	if (combined)
+		combined = combined->transpose();
+	return combined;
+}
+
 }

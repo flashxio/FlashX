@@ -2487,6 +2487,55 @@ void test_block_mv()
 	test_bmv_multiply_tall();
 }
 
+void test_bind(int num_nodes)
+{
+	printf("test matrix rbind\n");
+	std::vector<dense_matrix::ptr> mats(10);
+	std::vector<scalar_variable::ptr> sums(mats.size());
+	int tot_sum = 0;
+	std::vector<const void *> rows;
+	for (size_t i = 0; i < mats.size(); i++) {
+		mats[i] = dense_matrix::create(random() % 1000000, 10,
+				matrix_layout_t::L_ROW, get_scalar_type<int>(),
+				set_row_operate(10), num_nodes);
+		sums[i] = mats[i]->sum();
+		tot_sum += scalar_variable::get_val<int>(*sums[i]);
+		detail::mem_matrix_store::const_ptr store
+			= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+					mats[i]->get_raw_store());
+		assert(store);
+		for (size_t j = 0; j < store->get_num_rows(); j++)
+			rows.push_back(store->get_row(j));
+	}
+	dense_matrix::ptr combined = dense_matrix::rbind(mats);
+	assert(combined->store_layout() == matrix_layout_t::L_ROW);
+	detail::mem_matrix_store::const_ptr combined_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				combined->get_raw_store());
+	assert(combined_store);
+	scalar_variable::ptr sum = combined->sum();
+	assert(tot_sum == scalar_variable::get_val<int>(*sum));
+	assert(rows.size() == combined->get_num_rows());
+	for (size_t i = 0; i < rows.size(); i++)
+		assert(memcmp(rows[i], combined_store->get_row(i),
+					combined->get_num_cols() * combined->get_entry_size()) == 0);
+
+	printf("test matrix cbined\n");
+	for (size_t i = 0; i < mats.size(); i++)
+		mats[i] = mats[i]->transpose();
+	combined = dense_matrix::cbind(mats);
+	assert(combined->store_layout() == matrix_layout_t::L_COL);
+	combined_store = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+			combined->get_raw_store());
+	assert(combined_store);
+	sum = combined->sum();
+	assert(tot_sum == scalar_variable::get_val<int>(*sum));
+	assert(rows.size() == combined->get_num_cols());
+	for (size_t i = 0; i < rows.size(); i++)
+		assert(memcmp(rows[i], combined_store->get_col(i),
+					combined->get_num_rows() * combined->get_entry_size()) == 0);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -2499,6 +2548,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_bind(num_nodes);
 	test_materialize_all(num_nodes);
 	test_materialize(num_nodes);
 	test_get_rowcols(num_nodes);
