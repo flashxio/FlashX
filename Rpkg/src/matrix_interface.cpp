@@ -2301,8 +2301,9 @@ RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		printf("dense matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
-				mat->get_num_cols());
+		printf("dense matrix with %ld rows and %ld cols in %s-major order\n",
+				mat->get_num_rows(), mat->get_num_cols(),
+				mat->store_layout() == matrix_layout_t::L_COL ? "col" : "row");
 		if (!mat->is_in_mem())
 			printf("dense matrix is stored on disks\n");
 		else if (mat->get_data().get_num_nodes() > 0)
