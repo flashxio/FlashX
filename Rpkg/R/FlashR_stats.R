@@ -128,3 +128,30 @@ fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 	else
 		ret <- exp(logret)
 }
+
+fm.summary <- function(x)
+{
+	lazy.res <- list()
+	if (is.matrix(x)) {
+		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.mat.lazy(x, 2, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.mat.lazy(x, 2, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.mat.lazy(abs(x), 2, fm.bo.add)
+		lazy.res[[5]] <- fm.agg.mat.lazy(x * x, 2, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.mat.lazy(x != 0, 2, fm.bo.add)
+	}
+	else {
+		lazy.res[[1]] <- fm.agg.lazy(x, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.lazy(x, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.lazy(x, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.lazy(abs(x), fm.bo.add)
+		lazy.res[[5]] <- fm.agg.lazy(x * x, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
+	}
+	res <- fm.materialize.list(lazy.res)
+	res <- lapply(res, function(o) fm.conv.FM2R(o))
+	mean <- res[[3]]/nrow(x)
+	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
+	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
+		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
+}
