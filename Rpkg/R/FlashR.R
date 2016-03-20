@@ -1298,13 +1298,12 @@ fm.set.materialize.level <- function(fm, level, in.mem)
 		  as.logical(in.mem), PACKAGE="FlashR")
 }
 
-fm.materialize <- function(...)
+fm.materialize.list <- function(args)
 {
 	is.vec <- function(x) {
 		class(x) == "fmV" || (class(x) == "fmSink" && x@type == "vector")
 	}
 
-	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
 	else if (length(args) == 1) {
@@ -1334,6 +1333,12 @@ fm.materialize <- function(...)
 		}
 		rets
 	}
+}
+
+fm.materialize <- function(...)
+{
+	args <- list(...)
+	fm.materialize.list(args)
 }
 
 #' Write a FlashMatrix object (vector/matrix) to a file
