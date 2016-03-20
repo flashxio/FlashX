@@ -31,6 +31,8 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		}
 		P <- fm.cbind.list(P.list)
 		P <- sweep(P, 2, phi, "*") / (P %*% phi)
+		P <- fm.materialize(P)
+		gc()
 
 		# M-step
 		phi <- colSums(P)/m
