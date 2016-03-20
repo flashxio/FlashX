@@ -23,7 +23,10 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 
 	old.state <- list()
 	for (iter in 1:maxiters) {
+		if (verbose)
+			cat("iter", iter, "\n")
 		# E-step
+		start.t <- Sys.time()
 		P.list <- list()
 		for (i in 1:k) {
 			curr.covar <- covars[[i]]
@@ -33,8 +36,12 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		P <- sweep(P, 2, phi, "*") / (P %*% phi)
 		P <- fm.materialize(P)
 		gc()
+		end.t <- Sys.time()
+		if (verbose)
+			cat("E-step takes", end.t - start.t, "\n")
 
 		# M-step
+		start.t <- Sys.time()
 		phi <- colSums(P)/m
 		mus <- sweep(t(X) %*% P, 2, phi * m, "/")
 		for (j in 1:k)
@@ -48,6 +55,9 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 			if (new.like - old.like < 0.01)
 				break
 		}
+		end.t <- Sys.time()
+		if (verbose)
+			cat("M-step takes", end.t - start.t, "\n")
 		old.state <- list(phi=phi, mus=mus, covars=covars)
 	}
 	P
