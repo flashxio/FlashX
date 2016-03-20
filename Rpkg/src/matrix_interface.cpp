@@ -2325,8 +2325,14 @@ RcppExport SEXP R_FM_conv_store(SEXP pmat, SEXP pin_mem, SEXP pnum_nodes,
 		return R_NilValue;
 	}
 
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"can't convert it to ext-mem matrix when SAFS is disabled\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	int num_nodes = INTEGER(pnum_nodes)[0];
 	std::string name = CHAR(STRING_ELT(pname, 0));
 	mat = mat->conv_store(in_mem, num_nodes);
