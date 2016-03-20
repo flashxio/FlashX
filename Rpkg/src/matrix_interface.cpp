@@ -1820,54 +1820,42 @@ RcppExport SEXP R_FM_is_sym(SEXP pmat)
 
 RcppExport SEXP R_FM_rbind(SEXP pmats)
 {
-	Rcpp::List mats(pmats);
-	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
-	for (int i = 0; i < mats.size(); i++) {
-		if (is_sparse(mats[i])) {
+	Rcpp::List rcpp_mats(pmats);
+	std::vector<dense_matrix::ptr> mats(rcpp_mats.size());
+	for (int i = 0; i < rcpp_mats.size(); i++) {
+		if (is_sparse(rcpp_mats[i])) {
 			fprintf(stderr, "can't bind sparse matrix\n");
 			return R_NilValue;
 		}
-		dense_matrix::ptr mat = get_matrix<dense_matrix>(mats[i]);
-		if (!mat->is_wide()) {
-			fprintf(stderr, "can't rbind two tall matrix\n");
-			return R_NilValue;
-		}
-		stores[i] = mat->get_raw_store();
+		mats[i] = get_matrix<dense_matrix>(rcpp_mats[i]);
 	}
-	// TODO does it matter what layout is here?
-	detail::combined_matrix_store::ptr combined
-		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_ROW);
+	dense_matrix::ptr combined = dense_matrix::rbind(mats);
 	if (combined == NULL)
 		return R_NilValue;
-	Rcpp::List ret = create_FMR_matrix(dense_matrix::create(combined), "");
-	Rcpp::S4 rcpp_mat(mats[0]);
+
+	Rcpp::List ret = create_FMR_matrix(combined, "");
+	Rcpp::S4 rcpp_mat(rcpp_mats[0]);
 	ret["ele_type"] = rcpp_mat.slot("ele_type");
 	return ret;
 }
 
 RcppExport SEXP R_FM_cbind(SEXP pmats)
 {
-	Rcpp::List mats(pmats);
-	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
-	for (int i = 0; i < mats.size(); i++) {
-		if (is_sparse(mats[i])) {
+	Rcpp::List rcpp_mats(pmats);
+	std::vector<dense_matrix::ptr> mats(rcpp_mats.size());
+	for (int i = 0; i < rcpp_mats.size(); i++) {
+		if (is_sparse(rcpp_mats[i])) {
 			fprintf(stderr, "can't bind sparse matrix\n");
 			return R_NilValue;
 		}
-		dense_matrix::ptr mat = get_matrix<dense_matrix>(mats[i]);
-		if (mat->is_wide()) {
-			fprintf(stderr, "can't cbind two wide matrix\n");
-			return R_NilValue;
-		}
-		stores[i] = mat->get_raw_store();
+		mats[i] = get_matrix<dense_matrix>(rcpp_mats[i]);
 	}
-	// TODO does it matter what layout is here?
-	detail::combined_matrix_store::ptr combined
-		= detail::combined_matrix_store::create(stores, matrix_layout_t::L_COL);
+	dense_matrix::ptr combined = dense_matrix::cbind(mats);
 	if (combined == NULL)
 		return R_NilValue;
-	Rcpp::List ret = create_FMR_matrix(dense_matrix::create(combined), "");
-	Rcpp::S4 rcpp_mat(mats[0]);
+
+	Rcpp::List ret = create_FMR_matrix(combined, "");
+	Rcpp::S4 rcpp_mat(rcpp_mats[0]);
 	ret["ele_type"] = rcpp_mat.slot("ele_type");
 	return ret;
 }
