@@ -4,7 +4,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		P.list <- list()
 		phi <- fm.conv.FM2R(phi)
 		for (i in 1:length(covars))
-			P.list[[i]] <- phi[i] * multivar.normal(X, mus[,i], covars[[i]])
+			P.list[[i]] <- phi[i] * fm.dmvnorm(X, mus[,i], covars[[i]])
 		P <- fm.cbind.list(P.list)
 		sum(log(rowSums(P)))
 	}
@@ -27,7 +27,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		P.list <- list()
 		for (i in 1:k) {
 			curr.covar <- covars[[i]]
-			P.list[[i]] <- multivar.normal(X, mus[,i], covars[[i]])
+			P.list[[i]] <- fm.dmvnorm(X, mus[,i], covars[[i]])
 		}
 		P <- fm.cbind.list(P.list)
 		P <- sweep(P, 2, phi, "*") / (P %*% phi)
