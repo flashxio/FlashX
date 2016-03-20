@@ -118,7 +118,13 @@ fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 	covar.inv <- solve(covar)
 	X1 <- sweep(X, 2, mu, "-")
 	X2 <- X1 %*% covar.inv
-	X3 <- -0.5 * fm.agg.mat(X2 * X1, 1, "+")
+	X3 <- fm.agg.mat(X2 * X1, 1, "+")
 	k <- dim(covar)[1]
-	1/sqrt(((2 * pi) ^ k) * det(covar)) * exp(X3)
+	dec <- tryCatch(chol(covar), error = function(e) e)
+	logdet <- -sum(log(diag(dec)))
+	logret <- logdet - 0.5 * k * log(2 * pi) - 0.5 * X3
+	if (log)
+		ret <- logret
+	else
+		ret <- exp(logret)
 }
