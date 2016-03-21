@@ -208,7 +208,7 @@ combined_matrix_store::combined_matrix_store(
 std::string combined_matrix_store::get_name() const
 {
 	std::string name = std::string("combine(") + mats[0]->get_name();
-	for (size_t i = 1; mats.size(); i++)
+	for (size_t i = 1; i < mats.size(); i++)
 		name += std::string(", ") + mats[i]->get_name();
 	name += ")";
 	return name;
