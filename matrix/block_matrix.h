@@ -45,9 +45,6 @@ class block_matrix: public dense_matrix
 			this->block_size = store->get_mat_ref(0).get_num_cols();
 		this->store = store;
 	}
-
-	static dense_matrix::ptr create(
-			detail::combined_matrix_store::const_ptr store);
 protected:
 	virtual dense_matrix::ptr inner_prod_tall(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
@@ -60,6 +57,10 @@ protected:
 	dense_matrix::ptr multiply_wide(const dense_matrix &m,
 			matrix_layout_t out_layout) const;
 public:
+	typedef std::shared_ptr<block_matrix> ptr;
+
+	static dense_matrix::ptr create(
+			detail::combined_matrix_store::const_ptr store);
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,
 			int num_nodes = -1, bool in_mem = true,
@@ -67,6 +68,10 @@ public:
 	static dense_matrix::ptr create(scalar_variable::ptr val, size_t num_rows,
 			size_t num_cols, size_t block_size, int num_nodes = -1,
 			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
+
+	size_t get_num_blocks() const {
+		return store->get_num_mats();
+	}
 
 	size_t get_block_size() const {
 		return block_size;

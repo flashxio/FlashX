@@ -11,6 +11,7 @@
 #include "matrix_stats.h"
 #include "mapply_matrix_store.h"
 #include "factor.h"
+#include "block_matrix.h"
 
 #include "eigensolver/block_dense_matrix.h"
 #include "eigensolver/collected_col_matrix_store.h"
@@ -2490,7 +2491,7 @@ void test_block_mv()
 void test_bind(int num_nodes)
 {
 	printf("test matrix rbind\n");
-	std::vector<dense_matrix::ptr> mats(10);
+	std::vector<dense_matrix::ptr> mats(3);
 	std::vector<scalar_variable::ptr> sums(mats.size());
 	int tot_sum = 0;
 	std::vector<const void *> rows;
@@ -2534,6 +2535,30 @@ void test_bind(int num_nodes)
 	for (size_t i = 0; i < rows.size(); i++)
 		assert(memcmp(rows[i], combined_store->get_col(i),
 					combined->get_num_rows() * combined->get_entry_size()) == 0);
+
+	printf("test block matrix rbind\n");
+	set_operate::const_ptr rand_init = create_urand_init<int>(0, 1000);
+	tot_sum = 0;
+	for (size_t i = 0; i < mats.size(); i++) {
+		mats[i] = block_matrix::create(random() % 1000000 + 100, 9, 4,
+				get_scalar_type<int>(), *rand_init, num_nodes);
+		sums[i] = mats[i]->sum();
+		tot_sum += scalar_variable::get_val<int>(*sums[i]);
+	}
+	combined = dense_matrix::rbind(mats);
+	sum = combined->sum();
+	assert(tot_sum == scalar_variable::get_val<int>(*sum));
+
+	printf("test block matrix cbind\n");
+	tot_sum = 0;
+	for (size_t i = 0; i < mats.size(); i++) {
+		mats[i] = mats[i]->transpose();
+		sums[i] = mats[i]->sum();
+		tot_sum += scalar_variable::get_val<int>(*sums[i]);
+	}
+	combined = dense_matrix::cbind(mats);
+	sum = combined->sum();
+	assert(tot_sum == scalar_variable::get_val<int>(*sum));
 }
 
 int main(int argc, char *argv[])

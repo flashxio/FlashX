@@ -2887,8 +2887,52 @@ void combined_set_operate::set(void *arr, size_t num_eles, off_t row_idx,
 		mutable_this->prev_states[thread_id].store_idx = -1;
 }
 
+/*
+ * If all block matrices have the same block size, we can rbind individual
+ * matrices from each block matrix first and create a new block matrix.
+ * All individual matrices are tall matrices.
+ */
+static dense_matrix::ptr rbind_block(const std::vector<block_matrix::ptr> &mats)
+{
+	block_matrix::ptr mat = mats.front();
+	std::vector<detail::combined_matrix_store::const_ptr> combined_stores(
+			mats.size());
+	for (size_t i = 0; i < combined_stores.size(); i++)
+		combined_stores[i]
+			= std::static_pointer_cast<const detail::combined_matrix_store>(
+					mats[i]->get_raw_store());
+	std::vector<detail::matrix_store::const_ptr> indiv_stores(mat->get_num_blocks());
+	for (size_t i = 0; i < mat->get_num_blocks(); i++) {
+		// First, get all individual matrices at location i.
+		std::vector<detail::mem_matrix_store::const_ptr> mem_stores(mats.size());
+		size_t nrow = 0;
+		for (size_t j = 0; j < mem_stores.size(); j++) {
+			dense_matrix::ptr mat = dense_matrix::create(combined_stores[j]->get_mat(i));
+			// TODO it's better to copy data for column major layout.
+			mat = mat->conv2(matrix_layout_t::L_ROW);
+			mat->materialize_self();
+			mem_stores[j] = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+						mat->get_raw_store());
+			assert(mem_stores[j]);
+			nrow += mem_stores[j]->get_num_rows();
+		}
+		detail::matrix_store::ptr indiv_store = detail::matrix_store::create(
+				nrow, mem_stores[0]->get_num_cols(), matrix_layout_t::L_ROW,
+				mem_stores[0]->get_type(), matrix_conf.get_num_nodes(),
+				mem_stores[0]->is_in_mem());
+		// Copy the data over.
+		indiv_store->set_data(combined_set_operate(mem_stores));
+		indiv_stores[i] = indiv_store;
+	}
+	detail::combined_matrix_store::ptr combined
+		= detail::combined_matrix_store::create(indiv_stores,
+				mats[0]->store_layout());
+	return block_matrix::create(combined);
+}
+
 dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats)
 {
+	std::vector<block_matrix::ptr> block_mats;
 	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
 	size_t ncol = mats[0]->get_num_cols();
 	size_t nrow = 0;
@@ -2906,16 +2950,51 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 				<< "can't bind two matrices with diff element types";
 			return dense_matrix::ptr();
 		}
+		block_matrix::ptr block_mat = std::dynamic_pointer_cast<block_matrix>(mat);
+		if (block_mat)
+			block_mats.push_back(block_mat);
 		stores[i] = mat->get_raw_store();
 		// We create a matrix in memory only if all matrices are in memory.
 		in_mem = in_mem && mats[i]->is_in_mem();
 		nrow += mats[i]->get_num_rows();
 	}
+
 	detail::matrix_store::ptr combined;
-	if (ncol > nrow)
-		combined = detail::combined_matrix_store::create(stores,
+	if (ncol > nrow) {
+		// We have to make sure all input matrices are wide matrices.
+		assert(mats[0]->get_num_cols() > mats[0]->get_num_rows());
+		std::vector<detail::matrix_store::const_ptr> indiv_stores;
+		for (size_t i = 0; i < stores.size(); i++) {
+			// If this is a combined matrix store, we get all its individual
+			// matrices.
+			detail::combined_matrix_store::const_ptr combined
+				= std::dynamic_pointer_cast<const detail::combined_matrix_store>(
+						stores[i]);
+			if (combined) {
+				for (size_t j = 0; j < combined->get_num_mats(); j++)
+					indiv_stores.push_back(combined->get_mat(j));
+			}
+			else
+				indiv_stores.push_back(stores[i]);
+		}
+		combined = detail::combined_matrix_store::create(indiv_stores,
 				matrix_layout_t::L_ROW);
+	}
 	else if (in_mem) {
+		// We have to make sure all input matrices are tall matrices.
+		assert(mats[0]->get_num_cols() < mats[0]->get_num_rows());
+		// If all block matrices have the same block_size.
+		bool same_block_size = true;
+		for (size_t i = 1; i < block_mats.size(); i++) {
+			if (block_mats[i]->get_block_size() != block_mats[0]->get_block_size()) {
+				same_block_size = false;
+				break;
+			}
+		}
+		// If all matrices are block matrices with the same block size.
+		if (block_mats.size() == mats.size() && same_block_size)
+			return rbind_block(block_mats);
+
 		std::vector<detail::mem_matrix_store::const_ptr> mem_stores(mats.size());
 		for (size_t i = 0; i < stores.size(); i++) {
 			dense_matrix::ptr mat = mats[i]->conv2(matrix_layout_t::L_ROW);
