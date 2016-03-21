@@ -96,6 +96,7 @@ dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
 		size_t block_size, const scalar_type &type, const set_operate &op,
 		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
 {
+	detail::combined_matrix_store::ptr combined;
 	// For tall matrices
 	if (num_rows > num_cols) {
 		// If there is only one block.
@@ -115,8 +116,8 @@ dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
 		}
 		std::vector<detail::matrix_store::const_ptr> const_stores(
 				stores.begin(), stores.end());
-		return block_matrix::create(detail::combined_matrix_store::create(
-					const_stores, matrix_layout_t::L_COL));
+		combined = detail::combined_matrix_store::create(const_stores,
+				matrix_layout_t::L_COL);
 	}
 	else {
 		// If there is only one block.
@@ -136,9 +137,13 @@ dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
 		}
 		std::vector<detail::matrix_store::const_ptr> const_stores(
 				stores.begin(), stores.end());
-		return block_matrix::create(detail::combined_matrix_store::create(
-					const_stores, matrix_layout_t::L_ROW));
+		combined = detail::combined_matrix_store::create(const_stores,
+				matrix_layout_t::L_ROW);
 	}
+	if (combined)
+		return block_matrix::create(combined);
+	else
+		return dense_matrix::ptr();
 }
 
 matrix_layout_t block_matrix::store_layout() const
