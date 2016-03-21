@@ -174,7 +174,10 @@ void block_matrix::materialize_self() const
 	block_matrix *mutable_this = const_cast<block_matrix *>(this);
 	mutable_this->store = detail::combined_matrix_store::create(res_stores,
 			res_stores[0]->store_layout());
-	mutable_this->dense_matrix::assign(*this);
+
+	// This is only way to change the store pointer in dense_matrix.
+	dense_matrix::ptr tmp = dense_matrix::create(this->store);
+	mutable_this->dense_matrix::assign(*tmp);
 }
 
 void block_matrix::set_materialize_level(materialize_level level,
