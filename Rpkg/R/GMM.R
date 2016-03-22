@@ -1,13 +1,37 @@
+comp.prob <- function(X, mus, covars, phi)
+{
+	k <- length(covars)
+
+	log.likely.list <- list()
+	for (i in 1:k)
+		log.likely.list[[i]] <- fm.dmvnorm(X, mus[,i], covars[[i]], TRUE)
+	log.likely <- fm.cbind.list(log.likely.list)
+
+	P.list <- list()
+	for (i in 1:k)
+		P.list[[i]] <- phi[i] / (exp(log.likely - log.likely.list[[i]]) %*% phi)
+	P <- fm.cbind.list(P.list)
+	fm.materialize(P)
+}
+
+log.like <- function(X, phi, mus, covars)
+{
+	log.likely.list <- list()
+	for (i in 1:length(covars))
+		log.likely.list[[i]] <- fm.dmvnorm(X, mus[,i], covars[[i]], TRUE)
+	log.likely <- fm.cbind.list(log.likely.list)
+	max.log.likely <- fm.agg.mat(log.likely, 1, fm.bo.max)
+	rel.log.likely.list <- list()
+	for (i in 1:length(covars))
+		rel.log.likely.list[[i]] <- log.likely.list[[i]] - max.log.likely
+	rel.likely <- exp(fm.cbind.list(rel.log.likely.list))
+	sum(log(rel.likely %*% phi)) + sum(max.log.likely)
+}
+
 GMM <- function(X, k, maxiters, verbose=FALSE)
 {
-	log.like <- function(X, phi, mus, covars) {
-		P.list <- list()
-		phi <- fm.conv.FM2R(phi)
-		for (i in 1:length(covars))
-			P.list[[i]] <- phi[i] * fm.dmvnorm(X, mus[,i], covars[[i]])
-		P <- fm.cbind.list(P.list)
-		sum(log(rowSums(P)))
-	}
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
 
 	m <- dim(X)[1]
 
@@ -18,23 +42,16 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 	init.covar <- cov(X)
 	covars <- list()
 	for (i in 1:k)
-		covars[[i]] <- init.covar
-	phi <- fm.rep.int(1/m, k)
+		covars[[i]] <- fm.conv.FM2R(init.covar)
+	phi <- rep.int(1/m, k)
 
-	old.state <- list()
 	for (iter in 1:maxiters) {
 		if (verbose)
 			cat("iter", iter, "\n")
 		# E-step
 		start.t <- Sys.time()
-		P.list <- list()
-		for (i in 1:k) {
-			curr.covar <- covars[[i]]
-			P.list[[i]] <- fm.dmvnorm(X, mus[,i], covars[[i]])
-		}
-		P <- fm.cbind.list(P.list)
-		P <- sweep(P, 2, phi, "*") / (P %*% phi)
-		P <- fm.materialize(P)
+		P <- comp.prob(X, mus, covars, phi)
+
 		gc()
 		end.t <- Sys.time()
 		if (verbose)
@@ -42,23 +59,29 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 
 		# M-step
 		start.t <- Sys.time()
-		phi <- colSums(P)/m
+		phi <- fm.conv.FM2R(colSums(P)/m)
+		if (verbose)
+			print(phi)
 		mus <- sweep(t(X) %*% P, 2, phi * m, "/")
 		for (j in 1:k)
-			covars[[j]] <- cov.wt(X, P[,j])$cov
+			covars[[j]] <- fm.conv.FM2R(cov.wt(X, P[,j])$cov)
 
-		if (length(old.state) > 0) {
-			new.like <- log.like(X, phi, mus, covars)
-			old.like <- log.like(X, old.state$phi, old.state$mus, old.state$covars)
-			if (verbose)
-				cat("log likelihood:", new.like, "\n")
+		new.like <- log.like(X, phi, mus, covars)
+		if (iter > 1) {
+			if (verbose) {
+				cat("new log likelihood:", new.like, ", old log likelihood:",
+					old.like, "\n")
+			}
 			if (new.like - old.like < 0.01)
 				break
 		}
+		old.like <- new.like
 		end.t <- Sys.time()
 		if (verbose)
 			cat("M-step takes", end.t - start.t, "\n")
-		old.state <- list(phi=phi, mus=mus, covars=covars)
 	}
-	P
+	mus <- fm.conv.FM2R(mus)
+	clust.ids <- fm.materialize(fm.agg.mat(P, 1, fm.bo.which.max))
+	fm.set.test.na(orig.test.na)
+	list(P=P, clust.ids=clust.ids, niters=iter, phi=phi, mus=mus, covars=covars)
 }
