@@ -737,7 +737,9 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 	bool byrow = LOGICAL(pbyrow)[0];
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
-	int num_nodes = matrix_conf.get_num_nodes();
+	// I think we can assume the matrix converted from an R matrix is small.
+	// So it's enough to store it as a SMP matrix.
+	int num_nodes = -1;
 	if (R_is_real(pobj)) {
 		Rcpp::NumericMatrix mat(pobj);
 		size_t nrow = mat.nrow();
