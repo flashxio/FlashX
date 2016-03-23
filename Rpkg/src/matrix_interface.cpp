@@ -39,6 +39,7 @@
 #include "EM_dense_matrix.h"
 #include "EM_vector.h"
 #include "combined_matrix_store.h"
+#include "block_matrix.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -2306,6 +2307,10 @@ RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
 		printf("dense matrix with %ld rows and %ld cols in %s-major order\n",
 				mat->get_num_rows(), mat->get_num_cols(),
 				mat->store_layout() == matrix_layout_t::L_COL ? "col" : "row");
+		block_matrix::ptr block_mat = std::dynamic_pointer_cast<block_matrix>(mat);
+		if (block_mat)
+			printf("the matrix has %ld blocks of size %ld\n",
+					block_mat->get_num_blocks(), block_mat->get_block_size());
 		if (!mat->is_in_mem())
 			printf("dense matrix is stored on disks\n");
 		else if (mat->get_data().get_num_nodes() > 0)
