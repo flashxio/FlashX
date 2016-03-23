@@ -105,6 +105,8 @@ fm.cor <- function(x, y=NULL, use="everything",
 fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
 					       method = c("unbiased", "ML"))
 {
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
 	if (is.data.frame(x))
 		x <- as.matrix(x)
 	else if (!is.matrix(x))
@@ -140,6 +142,7 @@ fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TR
 		R[] <- Is * cov * rep(Is, each = nrow(cov))
 		y$cor <- R
 	}
+	fm.set.test.na(orig.test.na)
 	y
 }
 
@@ -148,6 +151,8 @@ setMethod("cov.wt", "fm", fm.cov.wt)
 
 fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 {
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
 	if (fm.is.matrix(covar))
 		covar <- fm.conv.FM2R(covar)
 	covar.inv <- solve(covar)
@@ -162,10 +167,14 @@ fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 		ret <- logret
 	else
 		ret <- exp(logret)
+	fm.set.test.na(orig.test.na)
+	ret
 }
 
 fm.summary <- function(x)
 {
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
 	lazy.res <- list()
 	if (is.matrix(x)) {
 		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
@@ -187,6 +196,7 @@ fm.summary <- function(x)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
+	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
