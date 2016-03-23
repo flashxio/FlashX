@@ -56,15 +56,50 @@ for (cl in fm.cls) {
 fm.cov <- function(x, y=NULL, use="everything",
 				   method=c("pearson", "kendall", "spearman"))
 {
-	x.mu <- colSums(x) / nrow(x)
-	x0 <- fm.mapply.row(x, x.mu, fm.bo.sub)
-	if (is.null(y))
-		(t(x0) %*% x0) / (nrow(x) - 1)
-	else {
-		y.mu <- colSums(y) / nrow(y)
-		y0 <- fm.mapply.row(y, y.mu, fm.bo.sub)
-		(t(x0) %*% y0) / (nrow(x) - 1)
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
+	if (!is.null(y))
+		stopifnot(nrow(x) == nrow(y))
+	n <- nrow(x)
+	x.mu <- colSums(x) / n
+	if (is.null(y)) {
+		x.mu <- fm.conv.FM2R(x.mu)
+		ret <- (t(x) %*% x - n * x.mu %*% t(x.mu)) / (n - 1)
 	}
+	else {
+		y.mu <- colSums(y) / n
+		x.mu <- fm.as.matrix(x.mu)
+		y.mu <- fm.as.matrix(y.mu)
+		ret <- (t(x) %*% y - n * x.mu %*% t(y.mu)) / (n - 1)
+	}
+	fm.set.test.na(orig.test.na)
+	ret
+}
+
+fm.cor <- function(x, y=NULL, use="everything",
+				   method=c("pearson", "kendall", "spearman"))
+{
+	orig.test.na <- fm.env$fm.test.na
+	fm.set.test.na(FALSE)
+	if (!is.null(y))
+		stopifnot(nrow(x) == nrow(y))
+	n <- nrow(x)
+	x.mu <- colSums(x) / n
+	x.sd <- sqrt((colSums(x * x) - n * x.mu * x.mu) / (n - 1))
+	x.mu <- fm.as.matrix(x.mu)
+	x.sd <- fm.as.matrix(x.sd)
+	if (is.null(y)) {
+		ret <- (t(x) %*% x - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
+	}
+	else {
+		y.mu <- colSums(y) / n
+		y.sd <- sqrt((colSums(y * y) - n * y.mu * y.mu) / (n - 1))
+		y.mu <- fm.as.matrix(y.mu)
+		y.sd <- fm.as.matrix(y.sd)
+		ret <- (t(x) %*% y - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
+	}
+	fm.set.test.na(orig.test.na)
+	ret
 }
 
 fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
