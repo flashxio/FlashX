@@ -2080,7 +2080,35 @@ dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
 void test_get_rowcols(int num_nodes)
 {
 	dense_matrix::ptr mat;
-	std::vector<off_t> idxs;
+
+	bool orig_in_mem = in_mem;
+	in_mem = false;
+
+	printf("test on col-major tall dense matrix in disks\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	mat = test_get_rows(mat);
+	assert(mat->is_in_mem());
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	mat = test_get_cols(mat);
+	assert(!mat->is_in_mem());
+	test_get_cols(mat);
+	test_get_col(mat);
+
+	printf("test on row-major tall dense matrix in disks\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, -1,
+			get_scalar_type<int>());
+	mat = test_get_rows(mat);
+	assert(mat->is_in_mem());
+
+	printf("test on row-major wide dense matrix in disks\n");
+	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW, -1,
+			get_scalar_type<int>());
+	mat = test_get_cols(mat);
+	assert(mat->is_in_mem());
+
+	in_mem = orig_in_mem;
 
 	printf("get a column from a row-major tall matrix in SMP\n");
 	mat = create_matrix(long_dim, 1, matrix_layout_t::L_ROW, -1,
@@ -2138,17 +2166,6 @@ void test_get_rowcols(int num_nodes)
 	mat = test_get_cols(mat);
 	test_get_rows(mat);
 	test_get_cols(mat);
-
-	printf("test on col-major tall dense matrix in disks\n");
-	bool orig_in_mem = in_mem;
-	in_mem = false;
-	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
-			get_scalar_type<int>());
-	mat = test_get_cols(mat);
-	assert(!mat->is_in_mem());
-	test_get_cols(mat);
-	test_get_col(mat);
-	in_mem = orig_in_mem;
 }
 
 void test_materialize(int num_nodes)

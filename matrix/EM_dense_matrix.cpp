@@ -1062,22 +1062,84 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 matrix_store::const_ptr EM_matrix_store::get_cols(
 			const std::vector<off_t> &idxs) const
 {
-	if (store_layout() == matrix_layout_t::L_ROW || is_wide()) {
+	if (store_layout() == matrix_layout_t::L_ROW && !is_wide()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "can't support get cols from a row-major or wide matrix";
+			<< "can't support get cols from a tall row-major matrix";
 		return matrix_store::const_ptr();
+	}
+
+	if (is_wide()) {
+		matrix_store::const_ptr tthis = transpose();
+		matrix_store::const_ptr ret = tthis->get_rows(idxs);
+		return ret->transpose();
 	}
 
 	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, shallow_copy()));
 }
 
+struct comp_row_idx
+{
+	bool operator()(const std::pair<off_t, off_t> &a,
+			const std::pair<off_t, off_t> &b) const {
+		return a.first < b.first;
+	}
+};
+
 matrix_store::const_ptr EM_matrix_store::get_rows(
 			const std::vector<off_t> &idxs) const
 {
-	if (store_layout() == matrix_layout_t::L_COL || !is_wide()) {
+	if (store_layout() == matrix_layout_t::L_COL && is_wide()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "can't support get rows from a col-major or tall matrix";
+			<< "can't support get rows from a wide col-major matrix";
 		return matrix_store::const_ptr();
+	}
+
+	// If this is a tall matrix, we read portions that contains the specified
+	// rows. This operation is slow, should be used to read a very small number
+	// of rows.
+	if (!is_wide()) {
+		std::pair<size_t, size_t> chunk_size = get_portion_size();
+		mem_matrix_store::ptr ret = mem_matrix_store::create(idxs.size(),
+				get_num_cols(), matrix_layout_t::L_ROW, get_type(), -1);
+		local_row_matrix_store::const_ptr prev;
+		// We sort the row idxs, so we only need to keep one portion in memory.
+		// But we need to know the offset in the original row idx array before
+		// sorted.
+		std::vector<std::pair<off_t, off_t> > sorted_idxs(idxs.size());
+		for (size_t i = 0; i < idxs.size(); i++) {
+			sorted_idxs[i].first = idxs[i];
+			sorted_idxs[i].second = i;
+		}
+		std::sort(sorted_idxs.begin(), sorted_idxs.end(), comp_row_idx());
+
+		for (size_t i = 0; i < sorted_idxs.size(); i++) {
+			off_t portion_id = sorted_idxs[i].first / chunk_size.first;
+			local_row_matrix_store::const_ptr row_portion;
+			// If we don't have a portion previously or the previous portion
+			// doesn't match with the required portion, we read the portion
+			// from the matrix.
+			if (prev == NULL
+					|| (size_t) prev->get_global_start_row()
+					!= portion_id * chunk_size.first) {
+				size_t lnum_rows = std::min(chunk_size.first,
+						get_num_rows() - portion_id * chunk_size.first);
+				local_matrix_store::const_ptr portion = get_portion(
+						portion_id * chunk_size.first, 0, lnum_rows,
+						get_num_cols());
+				if (portion->store_layout() != matrix_layout_t::L_ROW)
+					portion = portion->conv2(matrix_layout_t::L_ROW);
+				row_portion = std::static_pointer_cast<const local_row_matrix_store>(
+							portion);
+				prev = row_portion;
+			}
+			else
+				row_portion = prev;
+			off_t lrow_idx = sorted_idxs[i].first - row_portion->get_global_start_row();
+			assert(lrow_idx >= 0 && (size_t) lrow_idx < row_portion->get_num_rows());
+			memcpy(ret->get_row(sorted_idxs[i].second), row_portion->get_row(lrow_idx),
+					row_portion->get_num_cols() * row_portion->get_entry_size());
+		}
+		return ret;
 	}
 
 	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, shallow_copy()));
