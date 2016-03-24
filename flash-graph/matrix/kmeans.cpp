@@ -41,7 +41,7 @@ namespace {
 	static void kmeanspp_init(const double* matrix, clusters::ptr clusters,
             unsigned* cluster_assignments, std::vector<double>& dist_v) {
 
-		// Choose c1 uniiformly at random
+		// Choose c1 uniformly at random
 		unsigned selected_idx = random() % NUM_ROWS; // 0...(NUM_ROWS-1)
 
         clusters->set_mean(&matrix[selected_idx*NUM_COLS], 0);
