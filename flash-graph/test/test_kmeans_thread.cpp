@@ -36,6 +36,11 @@ void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes) {
     for (unsigned i = 0; i < NTHREADS; i++)
         thds[i]->start(TEST);
 
+    for (unsigned i = 0; i < NTHREADS; i++) {
+        std::cout << "Thread " << i << " state: " <<
+            thds[i]->get_state() << std::endl;
+    }
+
     // Always: join threads alone
     for (unsigned i = 0; i < thds.size(); i++) {
         thds[i]->join();
