@@ -29,8 +29,6 @@
 
 #include "clusters.h"
 
-//using namespace fg;
-
 namespace {
     template <typename T>
         bool eq_all(const T* v1, const T* v2, const unsigned len) {
@@ -38,20 +36,20 @@ namespace {
         }
 
     template <typename T>
-        static double const eucl_dist(const T* lhs, const T* rhs,
+        static const double eucl_dist(const T* lhs, const T* rhs,
                 const unsigned size) {
             double dist = 0;
+            double diff;
 
             for (unsigned col = 0; col < size; col++) {
-                double diff = lhs[col] - rhs[col];
+                diff = lhs[col] - rhs[col];
                 dist += diff * diff;
             }
-            BOOST_VERIFY(dist >= 0);
-            return sqrt(dist); // TODO: rm sqrt
+            return sqrt(dist);
         }
 
     template<typename T>
-        double const cos_dist(const T* lhs, const T* rhs,
+        const double cos_dist(const T* lhs, const T* rhs,
                 const unsigned size) {
             T numr, ldenom, rdenom;
             numr = ldenom = rdenom = 0;
@@ -97,7 +95,7 @@ namespace {
                 }
 
             public:
-                bin_reader(std::string fn, size_t nrow, size_t ncol) {
+                bin_reader(const std::string fn, const size_t nrow, const size_t ncol) {
                     f = fopen(fn.c_str(), "rb");
                     BOOST_VERIFY(NULL != f);
                     this->nrow = nrow;
