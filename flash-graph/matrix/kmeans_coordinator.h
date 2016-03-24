@@ -33,12 +33,13 @@
 namespace {
     typedef std::vector<kmeans_thread::ptr>::iterator thread_iter;
 #if 0
-    std::vector<double> g_data; // TEST
+    double* g_data; // TEST
 #endif
 
     class kmeans_coordinator {
         private:
-            unsigned nthreads, nnodes, nrow, ncol;
+            unsigned nthreads, nnodes;
+            size_t nrow, ncol;
             std::vector<kmeans_thread::ptr> threads;
             std::string fn; // File on disk
             unsigned* cluster_assignments;
@@ -54,16 +55,19 @@ namespace {
             // Metadata
             std::vector<unsigned> thd_max_row_idx; // max index stored within each threads partition
 
-            kmeans_coordinator(const std::string fn, const unsigned nrow,
-                    const unsigned ncol, const unsigned k, const unsigned max_iters,
+            kmeans_coordinator(const std::string fn, const size_t nrow,
+                    const size_t ncol, const unsigned k, const unsigned max_iters,
                     const unsigned nnodes, const unsigned nthreads,
                     const double* centers, const init_type_t it,
                     const double tolerance, const dist_type_t dt) {
 #if 0
                 // TEST //
+                std:: cout << "Reading " << nrow <<
+                    "rows, " << ncol << "cols\n";
                 bin_reader<double> b(fn, nrow, ncol);
-                g_data.resize(nrow*ncol);
-                b.read(&g_data);
+                //g_data.resize(nrow*ncol);
+                g_data = new double[nrow*ncol];
+                b.read(g_data);
 #endif
 
                 this->fn = fn;
@@ -115,8 +119,8 @@ namespace {
         public:
             typedef std::shared_ptr<kmeans_coordinator> ptr;
 
-            static ptr create(const std::string fn, const unsigned nrow,
-                    const unsigned ncol, const unsigned k, const unsigned max_iters,
+            static ptr create(const std::string fn, const size_t nrow,
+                    const size_t ncol, const unsigned k, const unsigned max_iters,
                     const unsigned nnodes, const unsigned nthreads,
                     const double* centers=NULL, const std::string init="kmeanspp",
                     const double tolerance=-1, const std::string dist_type="eucl") {
@@ -148,7 +152,7 @@ namespace {
                 }
 #if KM_TEST
                 printf("kmeans coordinator => NUMA nodes: %u, nthreads: %u, "
-                        "nrow: %u, ncol: %u, init: '%s', dist_t: '%s', fn: '%s'"
+                        "nrow: %lu, ncol: %lu, init: '%s', dist_t: '%s', fn: '%s'"
                         "\n\n", nnodes, nthreads, nrow, ncol, init.c_str(),
                         dist_type.c_str(), fn.c_str());
 #endif
@@ -189,6 +193,10 @@ namespace {
                     (*it)->destroy_numa_mem();
                 delete [] cluster_assignments;
                 delete [] cluster_assignment_counts;
+
+#if 0
+                delete [] g_data;
+#endif
             }
     };
 
@@ -223,13 +231,14 @@ namespace {
     }
 
     void kmeans_coordinator::random_partition_init() {
+        printf("In random init testing data ...\n");
         for (unsigned row = 0; row < nrow; row++) {
             unsigned asgnd_clust = random() % k; // 0...k
 
             const double* dp = get_thd_data(row);
 #if 0
             if (!(eq_all(dp, &g_data[row*ncol], ncol))) {
-                printf("Correct data: ");
+                printf("Row: %u, Correct data: ", row);
                 print_arr<double>(&g_data[row*ncol], ncol);
                 printf("Retrived data: ");
                 print_arr<double>(dp, ncol);
@@ -392,12 +401,15 @@ namespace {
             time_diff(start, end) << " sec\n";
     }
 
+    /**
+     * Main driver for kmeans
+     */
     void kmeans_coordinator::run_kmeans() {
-        numa_alloc_data(); // Move data
-        struct timeval start, end;
 #ifdef PROFILER
 		ProfilerStart("matrix/kmeans_coordinator.perf");
 #endif
+        numa_alloc_data(); // Move data
+        struct timeval start, end;
         gettimeofday(&start , NULL);
         run_init(); // Initialize clusters
 
