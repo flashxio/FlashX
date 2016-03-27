@@ -696,8 +696,10 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
     unsigned num_col = 0;
     std::vector<double>* centers = NULL;
     std::string init_centers_fn = "";
+    double cache_size_gb = 0;
+    unsigned rc_update_start_interval = 5;
 
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:")) != -1) {
+	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:r:I:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -715,11 +717,19 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
                 num_opts++;
                 break;
             case 'c':
-                num_col = atof(optarg);
+                num_col = atol(optarg);
                 num_opts++;
                 break;
             case 'C':
                 init_centers_fn = optarg;
+                num_opts++;
+                break;
+            case 'r':
+                cache_size_gb = atof(optarg);
+                num_opts++;
+                break;
+            case 'I':
+                rc_update_start_interval = atoi(optarg);
                 num_opts++;
                 break;
 			default:
@@ -738,13 +748,17 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
 
     switch(type) {
         case REG:
-            compute_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
+            compute_sem_kmeans(graph, k, init, max_iters,
+                    tolerance, 0, num_col, centers);
             break;
         case TRI:
-            compute_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
+            compute_triangle_sem_kmeans(graph, k, init,
+                    max_iters, tolerance, 0, num_col, centers);
             break;
         case MIN_TRI:
-            compute_min_triangle_sem_kmeans(graph, k, init, max_iters, tolerance, 0, num_col, centers);
+            compute_min_triangle_sem_kmeans(graph, k, init,
+                    max_iters, tolerance, 0, num_col, centers,
+                    cache_size_gb, rc_update_start_interval);
             break;
         default:
             print_usage();
@@ -845,6 +859,8 @@ void print_usage()
 	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
 	fprintf(stderr, "-c: number of columns in your on disk matrix\n");
 	fprintf(stderr, "-C: path to a binary containing initial centers\n");
+	fprintf(stderr, "-r: size of the row cache in gb\n");
+	fprintf(stderr, "-I: row cache update interval\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
