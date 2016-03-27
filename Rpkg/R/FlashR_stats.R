@@ -61,19 +61,31 @@ fm.cov <- function(x, y=NULL, use="everything",
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
-	x.mu <- colSums(x) / n
 	if (is.null(y)) {
+		# we need to transpose x and compute rowSum instead of computing
+		# colSum on the original matrix. The reason is that fm.materialize
+		# only works on a set of matrices the same the long dimension and
+		# dimension size. TODO I need to change that.
+		x.sum <- fm.rowSums(t(x), TRUE)
+		x.prod <- fm.multiply(t(x), x, TRUE)
+		ret <- fm.materialize(x.sum, x.prod)
+		x.mu <- ret[[1]] / n
 		x.mu <- fm.conv.FM2R(x.mu)
-		ret <- (t(x) %*% x - n * x.mu %*% t(x.mu)) / (n - 1)
+		ret <- (ret[[2]] - n * x.mu %*% t(x.mu)) / (n - 1)
 	}
 	else {
-		y.mu <- colSums(y) / n
+		x.sum <- fm.rowSums(t(x), TRUE)
+		y.sum <- fm.rowSums(t(y), TRUE)
+		xy.prod <- fm.multiply(t(x), y, TRUE)
+		ret <- fm.materialize(x.sum, y.sum, xy.prod)
+		x.mu <- ret[[1]] / n
+		y.mu <- ret[[2]] / n
 		x.mu <- fm.as.matrix(x.mu)
 		y.mu <- fm.as.matrix(y.mu)
-		ret <- (t(x) %*% y - n * x.mu %*% t(y.mu)) / (n - 1)
+		ret <- (ret[[3]] - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
 	fm.set.test.na(orig.test.na)
-	ret
+	fm.materialize(ret)
 }
 
 fm.cor <- function(x, y=NULL, use="everything",
@@ -84,22 +96,36 @@ fm.cor <- function(x, y=NULL, use="everything",
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
-	x.mu <- colSums(x) / n
-	x.sd <- sqrt((colSums(x * x) - n * x.mu * x.mu) / (n - 1))
-	x.mu <- fm.as.matrix(x.mu)
-	x.sd <- fm.as.matrix(x.sd)
 	if (is.null(y)) {
-		ret <- (t(x) %*% x - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
+		x.sum <- fm.rowSums(t(x), TRUE)
+		x2.sum <- fm.rowSums(t(x * x), TRUE)
+		x.prod <- fm.multiply(t(x), x, TRUE)
+		ret <- fm.materialize(x.sum, x2.sum, x.prod)
+		x.mu <- ret[[1]] / n
+		x.sd <- sqrt((ret[[2]] - n * x.mu * x.mu) / (n - 1))
+		x.mu <- fm.as.matrix(x.mu)
+		x.sd <- fm.as.matrix(x.sd)
+		ret <- (ret[[3]] - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
 	}
 	else {
-		y.mu <- colSums(y) / n
-		y.sd <- sqrt((colSums(y * y) - n * y.mu * y.mu) / (n - 1))
+		x.sum <- fm.rowSums(t(x), TRUE)
+		y.sum <- fm.rowSums(t(y), TRUE)
+		x2.sum <- fm.rowSums(t(x * x), TRUE)
+		y2.sum <- fm.rowSums(t(y * y), TRUE)
+		xy.prod <- fm.multiply(t(x), y, TRUE)
+		ret <- fm.materialize(x.sum, y.sum, x2.sum, y2.sum, xy.prod)
+		x.mu <- ret[[1]] / n
+		x.sd <- sqrt((ret[[3]] - n * x.mu * x.mu) / (n - 1))
+		x.mu <- fm.as.matrix(x.mu)
+		x.sd <- fm.as.matrix(x.sd)
+		y.mu <- ret[[2]] / n
+		y.sd <- sqrt((ret[[4]] - n * y.mu * y.mu) / (n - 1))
 		y.mu <- fm.as.matrix(y.mu)
 		y.sd <- fm.as.matrix(y.sd)
-		ret <- (t(x) %*% y - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
+		ret <- (ret[[5]] - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
 	fm.set.test.na(orig.test.na)
-	ret
+	fm.materialize(ret)
 }
 
 fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
@@ -111,28 +137,53 @@ fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TR
 		x <- as.matrix(x)
 	else if (!is.matrix(x))
 		stop("'x' must be a matrix or a data frame")
-	if (!all(is.finite(x)))
-		stop("'x' must contain finite values only")
 	n <- nrow(x)
 	if (with.wt <- !missing(wt)) {
 		if (length(wt) != n)
 			stop("length of 'wt' must equal the number of rows in 'x'")
-		if (any(wt < 0) || (s <- sum(wt)) == 0)
+		any.neg <- fm.any(wt < 0, TRUE)
+		s <- fm.sum(wt, TRUE)
+		ret <- fm.materialize(any.neg, s)
+		any.neg <- fm.conv.FM2R(ret[[1]])
+		s <- fm.conv.FM2R(ret[[2]])
+		if (any.neg || s == 0)
 			stop("weights must be non-negative and not all zero")
 		wt <- wt/s
 	}
+
+	all.finite <- fm.all(is.finite(t(x)), TRUE)
 	if (is.logical(center)) {
 		center <- if (center)
-			colSums(wt * x)
+#			fm.colSums(wt * x, TRUE)
+			fm.rowSums(t(wt * x), TRUE)
 		else 0
 	}
 	else {
 		if (length(center) != ncol(x))
 			stop("length of 'center' must equal the number of columns in 'x'")
 	}
-	x <- sqrt(wt) * sweep(x, 2, center, check.margin = FALSE)
-	cov <- switch(match.arg(method),
-				  unbiased = crossprod(x)/(1 - sum(wt^2)), ML = crossprod(x))
+	wx <- wt * x
+#	wx.cs <- fm.colSums(wx, TRUE)
+	wx.cs <- fm.rowSums(t(wx), TRUE)
+	x.cp <- fm.crossprod(wx, x, lazy=TRUE)
+	if (fm.is.sink(center)) {
+		ret <- fm.materialize(center, all.finite, wx.cs, x.cp)
+		center <- fm.conv.FM2R(ret[[1]])
+		all.finite <- fm.conv.FM2R(ret[[2]])
+		wx.cs <- fm.conv.FM2R(ret[[3]])
+		x.cp <- ret[[4]]
+	}
+	else {
+		ret <- fm.materialize(all.finite, wx.cs, x.cp)
+		all.finite <- fm.conv.FM2R(ret[[1]])
+		wx.cs <- fm.conv.FM2R(ret[[2]])
+		x.cp <- ret[[3]]
+	}
+	if (!all.finite)
+		stop("'x' must contain finite values only")
+
+	x.cp <- x.cp - wx.cs %*% t(center) - center %*% t(wx.cs) + center %*% t(center)
+	cov <- switch(match.arg(method), unbiased = x.cp/(1 - sum(wt^2)), ML = x.cp)
 	y <- list(cov = cov, center = center, n.obs = n)
 	if (with.wt)
 		y$wt <- wt

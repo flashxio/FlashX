@@ -448,6 +448,12 @@ fm.is.matrix <- function(fm)
 	class(fm) == "fm"
 }
 
+fm.is.sink <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	class(fm) == "fmSink"
+}
+
 fm.typeof <- function(fm)
 {
 	stopifnot(!is.null(fm))
