@@ -40,6 +40,7 @@
 #include "EM_vector.h"
 #include "combined_matrix_store.h"
 #include "block_matrix.h"
+#include "col_vec.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -1065,24 +1066,22 @@ RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
 		return R_NilValue;
 	}
 	dense_matrix::ptr m = get_matrix<dense_matrix>(po1);
-	dense_matrix::ptr m2 = get_matrix<dense_matrix>(po2);
+	dense_matrix::ptr v = get_matrix<dense_matrix>(po2);
 	if (!is_supported_type(m->get_type())
-			|| !is_supported_type(m2->get_type())) {
+			|| !is_supported_type(v->get_type())) {
 		fprintf(stderr, "The input matrices have unsupported type\n");
 		return R_NilValue;
 	}
-	const scalar_type &common_type = get_common_type(m2->get_type(),
+	if (v->get_num_cols() > 1) {
+		fprintf(stderr, "The second argument should be a vector\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(v->get_type(),
 			m->get_type());
 	if (common_type != m->get_type())
 		m = m->cast_ele_type(common_type);
-	if (common_type != m2->get_type())
-		m2 = m2->cast_ele_type(common_type);
-
-	vector::ptr v = m2->get_col(0);
-	if (v == NULL) {
-		fprintf(stderr, "can't get the vector\n");
-		return R_NilValue;
-	}
+	if (common_type != v->get_type())
+		v = v->cast_ele_type(common_type);
 
 	int margin = INTEGER(pmargin)[0];
 	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type());
@@ -1090,9 +1089,9 @@ RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
 		return R_NilValue;
 	dense_matrix::ptr res;
 	if (margin == matrix_margin::MAR_ROW)
-		res = m->mapply_rows(v, op);
+		res = m->mapply_rows(col_vec::create(v), op);
 	else if (margin == matrix_margin::MAR_COL)
-		res = m->mapply_cols(v, op);
+		res = m->mapply_cols(col_vec::create(v), op);
 	else {
 		fprintf(stderr, "a wrong margin\n");
 		return R_NilValue;
