@@ -1745,7 +1745,9 @@ RcppExport SEXP R_FM_materialize_list(SEXP plist)
 			ret_list.push_back(R_NilValue);
 		}
 	}
-	materialize(dense_mats);
+	bool ret = materialize(dense_mats);
+	if (!ret)
+		return R_NilValue;
 
 	// We need to add the materialized matrix to the return list.
 	for (size_t i = 0; i < dense_mats.size(); i++) {

@@ -1343,6 +1343,8 @@ fm.materialize.list <- function(args)
 					  || class(obj) == "fmSink")
 		}
 		rets <- .Call("R_FM_materialize_list", args, PACKAGE="FlashR")
+		if (is.null(rets))
+			return(NULL)
 		stopifnot(length(rets) == length(args))
 		for (i in 1:length(args)) {
 			if (is.vec(args[[i]]))
