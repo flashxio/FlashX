@@ -1861,6 +1861,8 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 
 vector::ptr dense_matrix::get_col(off_t idx) const
 {
+	BOOST_LOG_TRIVIAL(warning)
+		<< boost::format("get col %1% from the dense matrix.") % idx;
 	detail::vec_store::const_ptr vec = get_data().get_col_vec(idx);
 	if (vec)
 		return vector::create(vec);
@@ -1870,6 +1872,8 @@ vector::ptr dense_matrix::get_col(off_t idx) const
 
 vector::ptr dense_matrix::get_row(off_t idx) const
 {
+	BOOST_LOG_TRIVIAL(warning)
+		<< boost::format("get row %1% from the dense matrix.") % idx;
 	detail::vec_store::const_ptr vec = get_data().get_row_vec(idx);
 	if (vec)
 		return vector::create(vec);
