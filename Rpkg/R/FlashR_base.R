@@ -480,6 +480,30 @@ fm.agg.na <- function(fm, op, test.na)
 		fm.agg(fm, op)
 }
 
+fm.any <- function(x, lazy=FALSE)
+{
+	if (lazy)
+		fm.agg.lazy(x, fm.bo.or)
+	else
+		fm.agg(x, fm.bo.or)
+}
+
+fm.all <- function(x, lazy=FALSE)
+{
+	if (lazy)
+		fm.agg.lazy(x, fm.bo.and)
+	else
+		fm.agg(x, fm.bo.and)
+}
+
+fm.sum <- function(x, lazy=FALSE)
+{
+	if (lazy)
+		fm.agg.lazy(x, fm.bo.add)
+	else
+		fm.agg(x, fm.bo.add)
+}
+
 # Aggregation on a FlashMatrixR vector/matrix.
 for (cl in fm.cls) {
 	# TODO we need to handle na.rm for all of the functions here properly.
@@ -677,6 +701,22 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 			  fm.sapply.fmV(x, fm.buo.log) / log(base)
 })
 
+fm.rowSums <- function(x, lazy)
+{
+	if (lazy)
+		fm.agg.mat.lazy(x, 1, fm.bo.add)
+	else
+		fm.agg.mat(x, 1, fm.bo.add)
+}
+
+fm.colSums <- function(x, lazy)
+{
+	if (lazy)
+		fm.agg.mat.lazy(x, 2, fm.bo.add)
+	else
+		fm.agg.mat(x, 2, fm.bo.add)
+}
+
 # TODO I need to handle na.rm and dims here as well.
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY", dims = "ANY"),
 		  function(x, na.rm, dims) {
@@ -734,15 +774,21 @@ setMethod("sweep", "fm",
 				  stop("a wrong margin")
 		  })
 
-setMethod("crossprod", "fm", function(x, y=NULL) {
-		  if (is.null(y))
-			  y <- x
-		  t(x) %*% y
-		  })
-setMethod("tcrossprod", "fm", function(x, y=NULL) {
-		  if (is.null(y))
-			  y <- x
-		  x %*% t(y)
-		  })
+fm.crossprod <- function(x, y=NULL, lazy=FALSE)
+{
+	if (is.null(y))
+		y <- x
+	fm.multiply(t(x), y, lazy)
+}
+
+fm.tcrossprod <- function(x, y=NULL, lazy=FALSE)
+{
+	if (is.null(y))
+		y <- x
+	fm.multiply(x, t(y), lazy)
+}
+
+setMethod("crossprod", "fm", function(x, y=NULL) fm.crossprod(x, y))
+setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 
 setMethod("is.matrix", "fm", function(x) TRUE)
