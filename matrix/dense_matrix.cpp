@@ -2823,22 +2823,38 @@ public:
 
 }
 
-void materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
+bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 {
+	if (mats.empty())
+		return true;
 	// TODO we need to deal with the case that some matrices are tall and
 	// some are wide.
 
 	std::vector<detail::matrix_store::const_ptr> virt_stores;
+	bool is_wide = mats[0]->is_wide();
+	size_t long_dim = std::max(mats[0]->get_num_rows(), mats[0]->get_num_cols());
 	for (size_t i = 0; i < mats.size(); i++) {
 		// If this isn't a virtual matrix, skip it.
 		if (!mats[i]->is_virtual())
 			continue;
+		if (mats[i]->is_wide() != is_wide) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't materialize virtual matrices with diff long dim";
+			return false;
+		}
+		size_t long_dim1 = std::max(mats[i]->get_num_rows(),
+				mats[i]->get_num_cols());
+		if (long_dim != long_dim1) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't materialize virtual matrices with diff long dim sizes.";
+			return false;
+		}
 		// We need to the virtual matrices stores the partial materialized results.
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 		virt_stores.push_back(mats[i]->get_raw_store());
 	}
 	if (virt_stores.empty())
-		return;
+		return true;
 
 	detail::portion_mapply_op::const_ptr materialize_op(
 			new materialize_mapply_op(virt_stores[0]->get_type(),
@@ -2848,6 +2864,7 @@ void materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 	// Now all virtual matrices contain the materialized results.
 	for (size_t i = 0; i < mats.size(); i++)
 		mats[i]->materialize_self();
+	return true;
 }
 
 
