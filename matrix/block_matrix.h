@@ -113,9 +113,9 @@ public:
 			matrix_layout_t out_layout) const;
 
 
-	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const vector> vals,
+	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const col_vec> vals,
 			bulk_operate::const_ptr op) const;
-	virtual dense_matrix::ptr mapply_rows(std::shared_ptr<const vector> vals,
+	virtual dense_matrix::ptr mapply_rows(std::shared_ptr<const col_vec> vals,
 			bulk_operate::const_ptr op) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;

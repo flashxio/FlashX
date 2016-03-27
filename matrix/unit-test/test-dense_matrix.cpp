@@ -666,7 +666,6 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 {
 	printf("Test aggregation on tall %s-major matrix\n",
 			layout == matrix_layout_t::L_COL ? "column" : "row");
-	long_dim = 2000;
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			layout, num_nodes, get_scalar_type<size_t>());
 	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
@@ -845,7 +844,7 @@ void test_flatten()
 void test_scale_cols1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_seq_vector<int>(0, orig->get_num_cols() - 1, 1);
-	dense_matrix::ptr res = orig->scale_cols(vals);
+	dense_matrix::ptr res = orig->scale_cols(col_vec::create(vals));
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == orig->is_in_mem());
 	res->materialize_self();
@@ -889,7 +888,7 @@ void test_scale_cols(int num_nodes)
 void test_scale_rows1(dense_matrix::ptr orig)
 {
 	vector::ptr vals = create_seq_vector<int>(0, orig->get_num_rows() - 1, 1);
-	dense_matrix::ptr res = orig->scale_rows(vals);
+	dense_matrix::ptr res = orig->scale_rows(col_vec::create(vals));
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == orig->is_in_mem());
 	res->materialize_self();

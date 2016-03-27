@@ -20,6 +20,7 @@
 #include "sparse_matrix.h"
 #include "block_matrix.h"
 #include "combined_matrix_store.h"
+#include "col_vec.h"
 
 using namespace fm;
 
@@ -180,8 +181,8 @@ void test_mapply_rows()
 
 	vector::ptr vec = vector::create(mat1->get_num_cols(),
 			get_scalar_type<double>(), -1, true, vec_init<double>());
-	mat1 = mat1->mapply_rows(vec, bulk_operate::conv2ptr(op));
-	mat2 = mat2->mapply_rows(vec, bulk_operate::conv2ptr(op));
+	mat1 = mat1->mapply_rows(col_vec::create(vec), bulk_operate::conv2ptr(op));
+	mat2 = mat2->mapply_rows(col_vec::create(vec), bulk_operate::conv2ptr(op));
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
 	check_mat_equal<double>(mat1, mat2);
@@ -194,8 +195,8 @@ void test_mapply_rows()
 
 	vec = vector::create(mat1->get_num_cols(), get_scalar_type<double>(),
 			-1, true, vec_init<double>());
-	mat1 = mat1->mapply_rows(vec, bulk_operate::conv2ptr(op));
-	mat2 = mat2->mapply_rows(vec, bulk_operate::conv2ptr(op));
+	mat1 = mat1->mapply_rows(col_vec::create(vec), bulk_operate::conv2ptr(op));
+	mat2 = mat2->mapply_rows(col_vec::create(vec), bulk_operate::conv2ptr(op));
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
 	check_mat_equal<double>(mat1, mat2);
@@ -215,8 +216,8 @@ void test_mapply_cols()
 
 	vector::ptr vec = vector::create(mat1->get_num_rows(),
 			get_scalar_type<double>(), -1, true, vec_init<double>());
-	mat1 = mat1->mapply_cols(vec, bulk_operate::conv2ptr(op));
-	mat2 = mat2->mapply_cols(vec, bulk_operate::conv2ptr(op));
+	mat1 = mat1->mapply_cols(col_vec::create(vec), bulk_operate::conv2ptr(op));
+	mat2 = mat2->mapply_cols(col_vec::create(vec), bulk_operate::conv2ptr(op));
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
 	check_mat_equal<double>(mat1, mat2);
@@ -229,8 +230,8 @@ void test_mapply_cols()
 
 	vec = vector::create(mat1->get_num_rows(), get_scalar_type<double>(),
 			-1, true, vec_init<double>());
-	mat1 = mat1->mapply_cols(vec, bulk_operate::conv2ptr(op));
-	mat2 = mat2->mapply_cols(vec, bulk_operate::conv2ptr(op));
+	mat1 = mat1->mapply_cols(col_vec::create(vec), bulk_operate::conv2ptr(op));
+	mat2 = mat2->mapply_cols(col_vec::create(vec), bulk_operate::conv2ptr(op));
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
 	check_mat_equal<double>(mat1, mat2);

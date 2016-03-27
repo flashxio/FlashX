@@ -38,6 +38,7 @@
 #include "agg_matrix_store.h"
 #include "IPW_matrix_store.h"
 #include "block_matrix.h"
+#include "col_vec.h"
 
 namespace fm
 {
@@ -1479,14 +1480,16 @@ namespace
 
 class mapply_col_op: public detail::portion_mapply_op
 {
-	detail::mem_vec_store::const_ptr vals;
+	detail::mem_matrix_store::const_ptr vals;
 	bulk_operate::const_ptr op;
 public:
-	mapply_col_op(detail::mem_vec_store::const_ptr vals, bulk_operate::const_ptr op,
+	mapply_col_op(detail::mem_matrix_store::const_ptr vals, bulk_operate::const_ptr op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->vals = vals;
 		this->op = op;
+		if (vals)
+			assert(vals->get_num_cols() == 1);
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1495,22 +1498,28 @@ public:
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		assert(mats.size() == 1);
-		return std::string("mapply_col(") + mats[0]->get_name() + ", vec"
-			+ std::string(")");
+		assert(mats.size() >= 1);
+		std::string ret = std::string("mapply_col(") + mats[0]->get_name();
+		if (mats.size() == 1)
+			ret += ", vec";
+		else
+			ret += mats[1]->get_name();
+		return ret + std::string(")");
 	}
 };
 
 class mapply_row_op: public detail::portion_mapply_op
 {
-	detail::mem_vec_store::const_ptr vals;
+	detail::mem_matrix_store::const_ptr vals;
 	bulk_operate::const_ptr op;
 public:
-	mapply_row_op(detail::mem_vec_store::const_ptr vals, bulk_operate::const_ptr op,
+	mapply_row_op(detail::mem_matrix_store::const_ptr vals, bulk_operate::const_ptr op,
 			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->vals = vals;
 		this->op = op;
+		if (vals)
+			assert(vals->get_num_cols() == 1);
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1519,9 +1528,13 @@ public:
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		assert(mats.size() == 1);
-		return std::string("mapply_row(") + mats[0]->get_name() + ", vec"
-			+ std::string(")");
+		assert(mats.size() >= 1);
+		std::string ret = std::string("mapply_row(") + mats[0]->get_name();
+		if (mats.size() == 1)
+			ret += ", vec";
+		else
+			ret += mats[1]->get_name();
+		return ret + std::string(")");
 	}
 };
 
@@ -1534,29 +1547,37 @@ detail::portion_mapply_op::const_ptr mapply_col_op::transpose() const
 void mapply_row_op::run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
-	assert(ins.size() == 1);
+	assert(ins.size() >= 1);
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * ins[0]->get_num_cols());
 
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	// This is a tall matrix. We divide the matrix horizontally.
-	if (ins[0]->get_num_cols() == get_out_num_cols()) {
-		// If we use get_raw_arr, it may not work with NUMA vector.
-		const char *arr = vals->get_sub_arr(0, vals->get_length());
-		assert(arr);
-		local_cref_vec_store lvals(arr, 0, vals->get_length(),
+	if (ins.size() == 1) {
+		assert(vals);
+		assert(ins[0]->get_global_start_col() == 0
+				&& vals->get_num_rows() == ins[0]->get_num_cols());
+		// vals is a column vector.
+		const char *col = vals->get_col(0);
+		assert(col);
+		local_cref_vec_store lvals(col, 0, vals->get_num_rows(),
 				vals->get_type(), -1);
 		detail::mapply_rows(*ins[0], lvals, *op, out);
 	}
 	// We divide the matrix vertically.
 	else {
-		off_t global_start = ins[0]->get_global_start_col();
-		size_t len = ins[0]->get_num_cols();
-		local_vec_store::const_ptr portion = vals->get_portion(global_start,
-				len);
-		assert(portion);
-		detail::mapply_rows(*ins[0], *portion, *op, out);
+		assert(ins.size() == 2);
+		assert(ins[1]->get_num_rows() == 1);
+		assert(ins[1]->store_layout() == matrix_layout_t::L_ROW);
+		detail::local_row_matrix_store::const_ptr row_in1
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[1]);
+		const char *arr = row_in1->get_row(0);
+		assert(arr);
+		local_cref_vec_store lvals(arr, ins[1]->get_global_start_col(),
+				ins[1]->get_num_cols(), ins[1]->get_type(), -1);
+		detail::mapply_rows(*ins[0], lvals, *op, out);
 	}
 }
 
@@ -1564,29 +1585,37 @@ void mapply_col_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins,
 		detail::local_matrix_store &out) const
 {
-	assert(ins.size() == 1);
+	assert(ins.size() >= 1);
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * ins[0]->get_num_cols());
 
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	// This is a wide matrix. We divide the matrix vertically.
-	if (ins[0]->get_num_rows() == get_out_num_rows()) {
+	if (ins.size() == 1) {
+		assert(vals);
+		assert(ins[0]->get_global_start_row() == 0
+				&& vals->get_num_rows() == ins[0]->get_num_rows());
 		// If we use get_raw_arr, it may not work with NUMA vector.
-		const char *arr = vals->get_sub_arr(0, vals->get_length());
-		assert(arr);
-		local_cref_vec_store lvals(arr, 0, vals->get_length(),
+		const char *col = vals->get_col(0);
+		assert(col);
+		local_cref_vec_store lvals(col, 0, vals->get_num_rows(),
 				vals->get_type(), -1);
 		detail::mapply_cols(*ins[0], lvals, *op, out);
 	}
 	// We divide the tall matrix horizontally.
 	else {
-		off_t global_start = ins[0]->get_global_start_row();
-		size_t len = ins[0]->get_num_rows();
-		local_vec_store::const_ptr portion = vals->get_portion(global_start,
-				len);
-		assert(portion);
-		detail::mapply_cols(*ins[0], *portion, *op, out);
+		assert(ins.size() == 2);
+		assert(ins[1]->get_num_cols() == 1);
+		assert(ins[1]->store_layout() == matrix_layout_t::L_COL);
+		detail::local_col_matrix_store::const_ptr col_in1
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[1]);
+		const char *arr = col_in1->get_col(0);
+		assert(arr);
+		local_cref_vec_store lvals(arr, ins[1]->get_global_start_row(),
+				ins[1]->get_num_rows(), ins[1]->get_type(), -1);
+		detail::mapply_cols(*ins[0], lvals, *op, out);
 	}
 }
 
@@ -1598,13 +1627,9 @@ detail::portion_mapply_op::const_ptr mapply_row_op::transpose() const
 
 }
 
-dense_matrix::ptr dense_matrix::mapply_cols(vector::const_ptr vals,
+dense_matrix::ptr dense_matrix::mapply_cols(col_vec::const_ptr vals,
 		bulk_operate::const_ptr op) const
 {
-	if (!vals->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error) << "Can't scale columns with an EM vector";
-		return dense_matrix::ptr();
-	}
 	if (get_num_rows() != vals->get_length()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The vector's length needs to equal to #rows";
@@ -1619,21 +1644,28 @@ dense_matrix::ptr dense_matrix::mapply_cols(vector::const_ptr vals,
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
-	mapply_col_op::const_ptr mapply_op(new mapply_col_op(
-				detail::mem_vec_store::cast(vals->get_raw_store()),
-				op, get_num_rows(), get_num_cols()));
+	mapply_col_op::const_ptr mapply_op;
+	// If this is a tall matrix, the input vector may also be stored on
+	// disks. We should give it as the input of mapply_portion.
+	if (!is_wide()) {
+		ins.push_back(vals->get_raw_store());
+		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
+					NULL, op, get_num_rows(), get_num_cols()));
+	}
+	else {
+		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
+		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
+					detail::mem_matrix_store::cast(mem_mat->get_raw_store()),
+					op, get_num_rows(), get_num_cols()));
+	}
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 			mapply_op, this->store_layout());
 	return dense_matrix::create(ret);
 }
 
-dense_matrix::ptr dense_matrix::mapply_rows(vector::const_ptr vals,
+dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 		bulk_operate::const_ptr op) const
 {
-	if (!vals->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error) << "Can't scale rows with an EM vector";
-		return dense_matrix::ptr();
-	}
 	if (get_num_cols() != vals->get_length()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The vector's length needs to equal to #columns";
@@ -1646,14 +1678,12 @@ dense_matrix::ptr dense_matrix::mapply_rows(vector::const_ptr vals,
 		return dense_matrix::ptr();
 	}
 
-	std::vector<detail::matrix_store::const_ptr> ins(1);
-	ins[0] = this->get_raw_store();
-	mapply_row_op::const_ptr mapply_op(new mapply_row_op(
-				detail::mem_vec_store::cast(vals->get_raw_store()),
-				op, get_num_rows(), get_num_cols()));
-	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
-			mapply_op, this->store_layout());
-	return dense_matrix::create(ret);
+	dense_matrix::ptr t = transpose();
+	dense_matrix::ptr ret = t->mapply_cols(vals, op);
+	if (ret)
+		return ret->transpose();
+	else
+		return dense_matrix::ptr();
 }
 
 //////////////////////////// Cast the element types ///////////////////////////

@@ -23,6 +23,7 @@
 #include "dense_matrix.h"
 #include "generic_type.h"
 #include "vector.h"
+#include "col_vec.h"
 #include "sparse_matrix.h"
 
 #include "eigensolver.h"
@@ -187,7 +188,8 @@ public:
 			for (size_t k = 0; k < block_size; k++)
 				sub_vec->set<Type>(k, vec[i * block_size + k]);
 			fm::vector::ptr sub_vec1 = fm::vector::create(sub_vec);
-			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec1));
+			ret_vecs->set_block(i,
+					get_block(i)->scale_cols(col_vec::create(sub_vec1)));
 		}
 		return ret_vecs;
 	}

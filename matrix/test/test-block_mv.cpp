@@ -412,9 +412,9 @@ void test_gemm_simul(size_t block_size, size_t num_blocks)
 		dense_matrix::ptr small_mat = dense_matrix::create_randu<double>(
 				0, 1, block_size, block_size, matrix_layout_t::L_COL);
 
-		mat = mat->scale_cols(vec);
+		mat = mat->scale_cols(col_vec::create(vec));
 		mat = mat->multiply(*small_mat, matrix_layout_t::L_NONE);
-		mat = mat->scale_cols(vec);
+		mat = mat->scale_cols(col_vec::create(vec));
 		mv1->set_block(0, mat);
 	}
 

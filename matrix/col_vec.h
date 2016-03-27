@@ -25,6 +25,8 @@
 namespace fm
 {
 
+class vector;
+
 /*
  * This represents a vector with a one-col matrix.
  * As such, a vector can contain data that doesn't physically exist.
@@ -38,6 +40,8 @@ protected:
 public:
 	typedef std::shared_ptr<col_vec> ptr;
 	typedef std::shared_ptr<const col_vec> const_ptr;
+
+	static ptr create(std::shared_ptr<const vector> vec);
 
 	template<class T>
 	static ptr create_randn(size_t len) {
@@ -53,6 +57,7 @@ public:
 	}
 
 	static ptr create(dense_matrix::ptr mat);
+	static ptr create(detail::matrix_store::ptr store);
 
 	col_vec(): dense_matrix(NULL) {
 	}

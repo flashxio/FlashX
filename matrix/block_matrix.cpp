@@ -21,6 +21,7 @@
 #include "vector.h"
 #include "local_matrix_store.h"
 #include "one_val_matrix_store.h"
+#include "col_vec.h"
 
 namespace fm
 {
@@ -714,14 +715,14 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 		return dense_matrix::multiply(mat, out_layout);
 }
 
-dense_matrix::ptr block_matrix::mapply_cols(vector::const_ptr vals,
+dense_matrix::ptr block_matrix::mapply_cols(col_vec::const_ptr vals,
 		bulk_operate::const_ptr op) const
 {
 	dense_matrix::ptr tmat = transpose();
 	return tmat->mapply_rows(vals, op)->transpose();
 }
 
-dense_matrix::ptr block_matrix::mapply_rows(vector::const_ptr vals,
+dense_matrix::ptr block_matrix::mapply_rows(col_vec::const_ptr vals,
 		bulk_operate::const_ptr op) const
 {
 	if (!vals->is_in_mem()) {
@@ -749,16 +750,20 @@ dense_matrix::ptr block_matrix::mapply_rows(vector::const_ptr vals,
 	}
 	else {
 		size_t val_start = 0;
-		detail::mem_vec_store::const_ptr mem_vals
-			= detail::mem_vec_store::cast(vals->get_raw_store());
+		vals->move_store(true, -1);
+		detail::mem_matrix_store::const_ptr mem_vals
+			= detail::mem_matrix_store::cast(vals->get_raw_store());
 		for (size_t i = 0; i < res_stores.size(); i++) {
 			// Get part of the vector.
 			size_t llen = store->get_mat_ref(i).get_num_cols();
-			detail::smp_vec_store::ptr vals_store
-				= detail::smp_vec_store::create(llen, vals->get_type());
-			memcpy(vals_store->get_raw_arr(), mem_vals->get_sub_arr(val_start,
-						val_start + llen), llen * vals->get_entry_size());
-			vector::ptr vals_part = vector::create(vals_store);
+			detail::mem_col_matrix_store::ptr vals_store
+				= detail::mem_col_matrix_store::create(llen, 1, vals->get_type());
+			// mem_vals is stored in a contiguous memory, so we can get
+			// the starting address of the memory we want by getting the address
+			// of the element.
+			memcpy(vals_store->get_col(0), mem_vals->get(val_start, 0),
+					llen * vals->get_entry_size());
+			col_vec::ptr vals_part = col_vec::create(vals_store);
 
 			// Perform computation.
 			dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
