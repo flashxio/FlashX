@@ -1,3 +1,37 @@
+gmm.covs <- function (x, wts)
+{
+	k <- ncol(wts)
+	n <- nrow(x)
+	if (nrow(wts) != n)
+		stop("length of 'wt' must equal the number of rows in 'x'")
+
+	s <- fm.colSums(wts, TRUE)
+	s2 <- fm.colSums(wts * wts, TRUE)
+	ret <- fm.materialize(s, s2)
+	s <- fm.conv.FM2R(ret[[1]])
+	s2 <- fm.conv.FM2R(ret[[2]])
+
+	centers <- list()
+	xs.cp <- list()
+	for (i in 1:k) {
+		wx <- wts[,i] * x / s[i]
+		# fm.colSums(wt * x, TRUE)
+		centers[[i]] <- fm.rowSums(t(wx), TRUE)
+		xs.cp[[i]] <- fm.crossprod(wx, x, lazy=TRUE)
+	}
+	centers <- fm.materialize.list(centers)
+	xs.cp <- fm.materialize.list(xs.cp)
+
+	for (i in 1:k) {
+		center <- fm.conv.FM2R(centers[[i]])
+		x.cp <- fm.conv.FM2R(xs.cp[[i]])
+		x.cp <- x.cp - center %*% t(center)
+		# x.cp/(1 - sum(wt^2))
+		xs.cp[[i]] <- x.cp/(1 - s2[i]/s[i]/s[i])
+	}
+	xs.cp
+}
+
 comp.prob <- function(X, mus, covars, phi)
 {
 	k <- length(covars)
@@ -29,6 +63,9 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 	fm.set.test.na(FALSE)
 
 	m <- dim(X)[1]
+
+	if (!all(is.finite(X)))
+		stop("'x' must contain finite values only")
 
 	# Random init
 	# TODO alternatively, we can use KMeans to initialize it.
@@ -69,8 +106,8 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		if (verbose)
 			print(phi)
 		mus <- sweep(t(X) %*% P, 2, phi * m, "/")
-		for (j in 1:k)
-			covars[[j]] <- fm.conv.FM2R(cov.wt(X, P[,j])$cov)
+
+		covars <- gmm.covs(X, P)
 		end.t <- Sys.time()
 		if (verbose)
 			cat("M-step takes", as.integer(end.t) - as.integer(start.t),
