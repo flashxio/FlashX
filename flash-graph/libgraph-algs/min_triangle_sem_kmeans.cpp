@@ -55,14 +55,12 @@ namespace {
     static kms_stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
 
-    // TODO: cache
     static partition_cache<double>::ptr g_row_cache = nullptr;
     static unsigned g_io_iter = 0; // How many iterations of full I/O have I done?
     static unsigned g_row_cache_size = 0;
     static unsigned g_nthread;
     static std::vector<std::vector<double>> g_data;
     static unsigned g_cache_update_iter = 5; // TODO: select param
-    // End cache
 
     class kmeans_vertex: public base_kmeans_vertex
     {
@@ -771,7 +769,8 @@ namespace fg
 {
     sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
-            const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers) {
+            const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers,
+            const double cache_size_gb, const unsigned rc_update_start_interval) {
 #ifdef PROFILER
         ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
 #endif
@@ -818,13 +817,22 @@ namespace fg
         gettimeofday(&start , NULL);
 
         /*** Begin VarInit of data structures ***/
-        // TODO: Start caching
         g_dist_type = EUCL; // TODO: Add to params
-        g_row_cache_size = NUM_ROWS/30; // TODO: Add to params
 
-        // TODO: Add params for cache size
-        g_row_cache = partition_cache<double>::create(g_nthread,
-                NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
+        if (cache_size_gb > 0) {
+            g_row_cache_size = (cache_size_gb*(1024*1024*1024))/
+                ((double)sizeof(double)*NUM_COLS);
+            BOOST_LOG_TRIVIAL(info) << "Cache size: " << cache_size_gb
+                << "GB, #Rows: " << g_row_cache_size;
+
+            g_cache_update_iter = rc_update_start_interval;
+
+            g_row_cache = partition_cache<double>::create(g_nthread,
+                    NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
+        } else {
+            BOOST_LOG_TRIVIAL(info) << "\n[INFO]: Row Cache inactive ...";
+        }
+
         /*printf("Malloc-ing the whole dataset!\n");
           g_data.resize(NUM_ROWS);*/
         // End caching
@@ -1044,18 +1052,18 @@ namespace fg
 #if KM_TEST
         g_prune_stats->get_stats();
         BOOST_LOG_TRIVIAL(info) << "\nGBytes requested per iteration: ";
-        print_vector<double>(g_gb_req_iter);
+        print_vector<double>(g_gb_req_iter, 200);
 
         std::vector<double> v = per_iter_from_agg_io(g_gb_obt_iter);
         BOOST_LOG_TRIVIAL(info) << "\nGBytes obtained per iteration: ";
-        print_vector<double>(v);
+        print_vector<double>(v, 200);
 
         std::vector<size_t> cv = per_iter_from_agg_cache(g_cache_hits_iter);
         BOOST_LOG_TRIVIAL(info) << "\nRow-Cache hits per iteration: ";
-        print_vector<size_t>(cv);
+        print_vector<size_t>(cv, 200);
 
         BOOST_LOG_TRIVIAL(info) << "\nActive count per iteration: ";
-        print_vector<unsigned>(acntr->get_active_count_per_iter());
+        print_vector<unsigned>(acntr->get_active_count_per_iter(), 200);
 #endif
 #if VERBOSE
         ac->write_consolidated("consol_activation_by_iter.csv", NUM_ROWS);
