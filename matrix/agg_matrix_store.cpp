@@ -21,7 +21,6 @@
 
 #include "agg_matrix_store.h"
 #include "dense_matrix.h"
-#include "local_vec_store.h"
 #include "local_matrix_store.h"
 #include "mem_worker_thread.h"
 
@@ -133,7 +132,7 @@ class matrix_long_agg_op: public portion_mapply_op
 	agg_operate::const_ptr op;
 	// Each row stores the local aggregation results on a thread.
 	partial_matrix::ptr partial_res;
-	std::vector<local_vec_store::ptr> local_bufs;
+	std::vector<local_matrix_store::ptr> local_bufs;
 public:
 	matrix_long_agg_op(partial_matrix::ptr partial_res,
 			matrix_margin margin, agg_operate::const_ptr &op): portion_mapply_op(
@@ -182,8 +181,8 @@ void matrix_long_agg_op::run(
 	int thread_id = mem_thread_pool::get_curr_thread_id();
 	if (local_bufs[thread_id] == NULL)
 		const_cast<matrix_long_agg_op *>(this)->local_bufs[thread_id]
-			= local_vec_store::ptr(new local_buf_vec_store(0,
-						partial_res->get_num_cols(), partial_res->get_type(),
+			= local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
+						partial_res->get_num_cols(), 1, partial_res->get_type(),
 						ins[0]->get_node_id()));
 	aggregate(*ins[0], *op, margin, *local_bufs[thread_id]);
 
@@ -260,14 +259,15 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			partial_res->get_num_cols(), 1, matrix_layout_t::L_COL,
 			partial_res->get_type(), -1);
-	local_ref_vec_store local_vec(res->get_raw_arr(), 0, res->get_num_rows(),
-			res->get_type(), -1);
+	local_matrix_store::ptr portion = res->get_portion(0);
+	assert(res->get_num_rows() == portion->get_num_rows());
+	assert(res->get_num_cols() == portion->get_num_cols());
 	// I need to create new aggregation with the combine operation
 	// to run aggregation on the columns of the matrix.
 	agg_operate::const_ptr combine_agg = agg_operate::create(
 			agg_op->get_agg_op().get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
-			local_vec);
+			*portion);
 	return res;
 }
 

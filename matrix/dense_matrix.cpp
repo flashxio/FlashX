@@ -2151,18 +2151,16 @@ public:
 		// The output matrix is actually a vector.
 		if (out.get_num_rows() == 1) {
 			assert(out.store_layout() == matrix_layout_t::L_ROW);
-			local_ref_vec_store res(
-					static_cast<detail::local_row_matrix_store &>(out).get_row(0),
-					0, out.get_num_cols(), out.get_type(), -1);
-			aggregate(*ins[0], *op, margin, res);
+			char *arr = out.get_raw_arr();
+			assert(arr);
+			detail::local_ref_contig_col_matrix_store ref_out(arr, 0, 0,
+					out.get_num_cols(), 1, out.get_type(), out.get_node_id());
+			aggregate(*ins[0], *op, margin, ref_out);
 		}
 		else {
 			assert(out.store_layout() == matrix_layout_t::L_COL);
 			assert(out.get_num_cols() == 1);
-			local_ref_vec_store res(
-					static_cast<detail::local_col_matrix_store &>(out).get_col(0),
-					0, out.get_num_rows(), out.get_type(), -1);
-			aggregate(*ins[0], *op, margin, res);
+			aggregate(*ins[0], *op, margin, out);
 		}
 	}
 

@@ -340,25 +340,28 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 			op = agg_operate::create(add, bulk_operate::const_ptr());
 
 		int sum = 0;
-		local_ref_vec_store res((char *) &sum, 0, 1, get_scalar_type<int>(), -1);
+		local_ref_contig_col_matrix_store res((char *) &sum, 0, 0, 1, 1,
+				get_scalar_type<int>(), -1);
 		aggregate(*store, *op, matrix_margin::BOTH, res);
 		int num_eles = store->get_num_rows() * store->get_num_cols();
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
-		local_buf_vec_store res1(0, store->get_num_rows(), op->get_output_type(), -1);
+		local_buf_col_matrix_store res1(0, 0, store->get_num_rows(), 1,
+				op->get_output_type(), -1);
 		aggregate(*store, *op, matrix_margin::MAR_ROW, res1);
-		for (size_t i = 0; i < res1.get_length(); i++) {
+		for (size_t i = 0; i < res1.get_num_rows(); i++) {
 			int base = i * store->get_num_cols();
-			assert(res1.get<int>(i) == base * store->get_num_cols()
+			assert(*(int *) res1.get(i, 0) == base * store->get_num_cols()
 					+ (store->get_num_cols() - 1) * store->get_num_cols() / 2);
 		}
 
-		local_buf_vec_store res2(0, store->get_num_cols(), op->get_output_type(), -1);
+		local_buf_col_matrix_store res2(0, 0, store->get_num_cols(), 1,
+				op->get_output_type(), -1);
 		aggregate(*store, *op, matrix_margin::MAR_COL, res2);
-		for (size_t i = 0; i < res2.get_length(); i++) {
+		for (size_t i = 0; i < res2.get_num_rows(); i++) {
 			size_t n = store->get_num_rows();
 			size_t m = store->get_num_cols();
-			assert(res2.get<int>(i) == i * n + (n - 1) * m * n / 2);
+			assert(*(int *) res2.get(i, 0) == i * n + (n - 1) * m * n / 2);
 		}
 	}
 }

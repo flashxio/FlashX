@@ -1148,7 +1148,7 @@ public:
  * These are the general operations on the local matrix store.
  */
 void aggregate(const local_matrix_store &store, const agg_operate &op,
-		int margin, local_vec_store &res);
+		int margin, local_matrix_store &res);
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res);
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
