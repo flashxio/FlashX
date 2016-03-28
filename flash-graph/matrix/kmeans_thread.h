@@ -40,7 +40,7 @@ namespace {
         ALLOC_DATA, /*moving data for reduces rma*/
         KMSPP_INIT,
         EM, /*EM steps of kmeans*/
-        PAUSED /*When the thread is waiting to be run or killed*/
+        IDLE /*When the thread is waiting to be run or killed*/
     };
 
     union metaunion {
@@ -124,7 +124,11 @@ namespace {
                             "is %d\n", rc);
                     exit(rc);
                 }
-                this->state = PAUSED;
+                this->state = IDLE;
+            }
+
+            const thread_state_t get_state() {
+                return this->state;
             }
 
             const unsigned get_thd_id() const {
@@ -206,8 +210,8 @@ namespace {
             case EM: /*E step of kmeans*/
                 EM_step();
                 break;
-            case PAUSED:
-                fprintf(stderr, "[FATAL]: Thread state is PAUSED but running!\n");
+            case IDLE:
+                fprintf(stderr, "[FATAL]: Thread state is IDLE but running!\n");
                 exit(EXIT_FAILURE);
             default:
                 fprintf(stderr, "[FATAL]: Unknown thread state\n");
