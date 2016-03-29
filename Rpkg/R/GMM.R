@@ -43,18 +43,16 @@ comp.prob <- function(X, mus, covars, phi)
 	# I need to materialize a matrix here first to speed up. Why?
 	log.likely <- fm.materialize(log.likely)
 
-	P.list <- list()
-	for (i in 1:k)
-		P.list[[i]] <- phi[i] / (exp(log.likely - log.likely[,i]) %*% phi)
-	P <- fm.cbind.list(P.list)
-	P <- fm.materialize(P)
-
 	max.log.likely <- fm.agg.mat(log.likely, 1, fm.bo.max)
-	rel.log.likely <- log.likely - max.log.likely
-	rel.likely <- exp(rel.log.likely)
-	log.like <- sum(log(rel.likely %*% phi)) + sum(max.log.likely)
+	rel.likely <- exp(log.likely - max.log.likely) %*% phi
+	sum1 <- fm.sum(log(rel.likely), TRUE)
+	sum2 <- fm.sum(max.log.likely, TRUE)
 
-	list(P=P, log.like=log.like)
+	P <- sweep(exp(log.likely - max.log.likely), 2, phi, "*") / rel.likely
+	ret <- fm.materialize(P, sum1, sum2)
+	log.like <- fm.conv.FM2R(ret[[2]]) + fm.conv.FM2R(ret[[3]])
+
+	list(P=ret[[1]], log.like=log.like)
 }
 
 GMM <- function(X, k, maxiters, verbose=FALSE)
