@@ -884,6 +884,45 @@ void test_VUDF()
 	}
 }
 
+void test_crossprod()
+{
+	size_t long_dim = 100000000;
+	size_t short_dim = 32;
+	struct timeval start, end;
+	set_operate::const_ptr init_op = create_nrand_init<double>(1, 1);
+	dense_matrix::ptr mat1, mat2;
+
+	printf("crossprod in-mem col\n");
+	mat1 = dense_matrix::create(long_dim, short_dim, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), *init_op, matrix_conf.get_num_nodes(),
+			true);
+
+	mat2 = mat1->transpose();
+	printf("t(mat) * mat\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat2->multiply(*mat1);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	printf("crossprod in-mem row\n");
+	mat1 = dense_matrix::create(long_dim, short_dim, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), *init_op, matrix_conf.get_num_nodes(),
+			true);
+
+	mat2 = mat1->transpose();
+	printf("t(mat) * mat\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat2->multiply(*mat1);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
@@ -927,6 +966,8 @@ int main(int argc, char *argv[])
 		test_mapply();
 	else if (test_name == "VUDF")
 		test_VUDF();
+	else if (test_name == "crossprod")
+		test_crossprod();
 	else {
 		fprintf(stderr, "unknow test\n");
 		return -1;
