@@ -3,8 +3,6 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 	orig.test.na <- fm.env$fm.test.na
 	fm.set.test.na(FALSE)
 
-	data <- fm.conv.layout(data, TRUE)
-	data <- fm.materialize(data)
 	n <- dim(data)[1]
 	m <- dim(data)[2]
 	agg.sum <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
