@@ -387,7 +387,7 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 		std::vector<char *> dst_rows(get_num_rows());
 		for (size_t i = 0; i < get_num_rows(); i++)
 			dst_rows[i] = get_row(i);
-		get_type().get_conv().conv(store.get_raw_arr(),
+		get_type().get_conv().conv2(store.get_raw_arr(),
 				get_num_rows() * get_num_cols(), dst_rows);
 	}
 	else if (get_raw_arr() == NULL) {
@@ -412,7 +412,16 @@ bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 			= static_cast<const local_col_matrix_store &>(store);
 		for (size_t i = 0; i < get_num_cols(); i++)
 			src_cols[i] = col_store.get_col(i);
-		get_type().get_conv().conv(src_cols, get_num_rows(), get_raw_arr());
+		const size_t LONG_DIM_LEN = get_long_dim_len(*this);
+		char *dst_arr = get_raw_arr();
+		for (size_t row_idx = 0; row_idx < get_num_rows();
+				row_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(LONG_DIM_LEN, get_num_rows() - row_idx);
+			get_type().get_conv().conv1(src_cols, llen, dst_arr);
+			for (size_t i = 0; i < get_num_cols(); i++)
+				src_cols[i] += llen * get_entry_size();
+			dst_arr += llen * src_cols.size() * get_entry_size();
+		}
 	}
 	return true;
 }
@@ -502,7 +511,16 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 		std::vector<const char *> src_rows(get_num_rows());
 		for (size_t i = 0; i < get_num_rows(); i++)
 			src_rows[i] = row_store.get_row(i);
-		get_type().get_conv().conv(src_rows, get_num_cols(), get_raw_arr());
+		const size_t LONG_DIM_LEN = get_long_dim_len(*this);
+		char *dst_arr = get_raw_arr();
+		for (size_t col_idx = 0; col_idx < get_num_cols();
+				col_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(LONG_DIM_LEN, get_num_cols() - col_idx);
+			get_type().get_conv().conv1(src_rows, llen, dst_arr);
+			for (size_t i = 0; i < get_num_rows(); i++)
+				src_rows[i] += llen * get_entry_size();
+			dst_arr += src_rows.size() * llen * get_entry_size();
+		}
 	}
 	else if (store.get_raw_arr() == NULL) {
 		const local_row_matrix_store &row_store
@@ -525,7 +543,7 @@ bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 		std::vector<char *> dst_cols(get_num_cols());
 		for (size_t i = 0; i < get_num_cols(); i++)
 			dst_cols[i] = get_col(i);
-		get_type().get_conv().conv(store.get_raw_arr(),
+		get_type().get_conv().conv2(store.get_raw_arr(),
 				get_num_rows() * get_num_cols(), dst_cols);
 	}
 	return true;
