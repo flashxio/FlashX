@@ -62,6 +62,9 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 
 	m <- dim(X)[1]
 
+	X <- fm.conv.layout(X, FALSE)
+	X <- fm.materialize(X)
+
 	if (!all(is.finite(X)))
 		stop("'x' must contain finite values only")
 
