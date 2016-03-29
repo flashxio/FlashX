@@ -194,6 +194,5 @@ namespace {
         BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
         close_file_handle();
     }
-
 }
 #endif

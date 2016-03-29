@@ -19,78 +19,26 @@
 
 #ifndef __KMEANS_THREAD_H__
 #define __KMEANS_THREAD_H__
-
-#include <pthread.h>
-#include <numa.h>
-
-#include <memory>
-#include <utility>
-#include <boost/format.hpp>
-
-#include "log.h"
-#include "libgraph-algs/clusters.h"
-#include "kmeans.h"
-
-#define KM_TEST 1
-#define VERBOSE 0
+#include "base_kmeans_thread.h"
 
 namespace {
-    enum thread_state_t {
-        TEST, /*just for testing*/
-        ALLOC_DATA, /*moving data for reduces rma*/
-        KMSPP_INIT,
-        EM, /*EM steps of kmeans*/
-        IDLE /*When the thread is waiting to be run or killed*/
-    };
-
-    union metaunion {
-        unsigned num_changed; // Used during kmeans
-        unsigned clust_idx; // Used during kms++
-    };
-
-    class kmeans_thread {
+    class kmeans_thread : public base_kmeans_thread {
         private:
-            pthread_t hw_thd;
-            unsigned node_id; // Which NUMA node are you on?
-            unsigned thd_id;
-            size_t start_offset; // With respect to the original data
             unsigned nprocrows; // How many rows to process
-            unsigned thds_row; // How many rows to process
-            unsigned ncol; // How many columns in the data
-            double* local_data; // Pointer to where the data begins that the thread works on
+            unsigned thds_row; // The general split of row to threads
             clusters::ptr g_clusters; // Pointer to global cluster data
-            clusters::ptr local_clusters;
 
-            metaunion meta;
-            //unsigned num_changed;
-
-            FILE* f; // Data file on disk
-
-            unsigned* cluster_assignments;
-
-            thread_state_t state;
-            double* dist_v;
-            double cuml_dist;
-
-            friend void* callback(void* arg);
-            void run();
             kmeans_thread(const int node_id, const unsigned thd_id, const size_t start_offset,
                     const unsigned nprocrows, const unsigned thds_row, const unsigned ncol,
                     clusters::ptr g_clusters, unsigned* cluster_assignments,
-                    const std::string fn) {
-                this->node_id = node_id;
-                this->thd_id = thd_id;
-                this->start_offset = start_offset;
+                    const std::string fn) : base_kmeans_thread(node_id, thd_id, ncol,
+                        g_clusters->get_nclust(), cluster_assignments, start_offset, fn) {
+
                 this->nprocrows = nprocrows;
                 this->thds_row = thds_row; // Threads per row other than possibly the last one
-                this->ncol = ncol;
                 this->g_clusters = g_clusters;
-                this->cluster_assignments = cluster_assignments;
-                BOOST_VERIFY(this->f = fopen(fn.c_str(), "rb"));
 
-                local_clusters = clusters::create(g_clusters->get_nclust(), ncol);
-                meta.num_changed = 0; // Same as meta.clust_idx = 0;
-
+                set_data_size(sizeof(double)*nprocrows*ncol);
 #if VERBOSE
                 printf("Initializing thread. Metadata: thd_id: %u, node_id: %u"
                         ", start_offset: %lu, nprocrows: %u, ncol: %u\n",
@@ -112,87 +60,17 @@ namespace {
                             cluster_assignments, fn));
             }
 
-            void set_dist_v_ptr(double* v) {
-                dist_v = v;
-            }
-
-            void join() {
-                void* join_status;
-                int rc = pthread_join(hw_thd, &join_status);
-                if (rc) {
-                    fprintf(stderr, "[FATAL]: Return code from pthread_join() "
-                            "is %d\n", rc);
-                    exit(rc);
-                }
-                this->state = IDLE;
-            }
-
-            const thread_state_t get_state() {
-                return this->state;
-            }
-
-            const unsigned get_thd_id() const {
-                return thd_id;
-            }
-
-            void test();
-
             void start(const thread_state_t state);
             // Allocate and move data using this thread
-            void numa_alloc_mem();
             void EM_step();
             void kmspp_dist();
+            const unsigned get_global_data_id(const unsigned row_id) const;
+            void run();
 
             const void print_local_data() const;
-            const unsigned get_global_data_id(const unsigned row_id) const;
 
             void destroy_numa_mem() {
                 numa_free(local_data, get_data_size());
-            }
-
-            size_t get_data_size() {
-                return sizeof(double)*nprocrows*ncol;
-            }
-
-            // Once the algorithm ends we should deallocate the memory we moved
-            void close_file_handle() {
-                int rc = fclose(f);
-                if (rc) {
-                    fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
-                    exit(rc);
-                }
-#if VERBOSE
-                printf("Thread %u closing the file handle.\n",thd_id);
-#endif
-                f = NULL;
-            }
-
-            const double* get_local_data() const {
-                return local_data;
-            }
-
-            const unsigned get_num_changed() const {
-                return meta.num_changed;
-            }
-
-            const clusters::ptr get_local_clusters() const {
-                return local_clusters;
-            }
-
-            void set_clust_idx(const unsigned idx) {
-                meta.clust_idx = idx;
-            }
-
-            const double get_culm_dist() const {
-                return cuml_dist;
-            }
-
-            ~kmeans_thread() {
-                if (f)
-                    close_file_handle();
-#if VERBOSE
-                printf("Thread %u being destroyed\n", thd_id);
-#endif
             }
     };
 
@@ -219,17 +97,6 @@ namespace {
         }
     }
 
-    void kmeans_thread::test() {
-        printf("Hello from thread: %u\n", get_thd_id());
-    }
-
-    static void bind2node_id(int node_id) {
-        struct bitmask *bmp = numa_allocate_nodemask();
-        numa_bitmask_setbit(bmp, node_id);
-        numa_bind(bmp);
-        numa_free_nodemask(bmp);
-    }
-
     void* callback(void* arg) {
         kmeans_thread* t = static_cast<kmeans_thread*>(arg);
         bind2node_id(t->node_id);
@@ -244,16 +111,6 @@ namespace {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
             exit(rc);
         }
-    }
-
-    // Move data ~equally to all nodes
-    void kmeans_thread::numa_alloc_mem() {
-        BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
-        size_t blob_size = get_data_size();
-        local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
-        fseek(f, start_offset*sizeof(double), SEEK_CUR); // start position
-        BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
-        close_file_handle();
     }
 
     /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/
