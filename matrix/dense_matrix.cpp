@@ -2064,7 +2064,7 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	// If the matrix is already stored in col-major order or this is
 	// a relatively wide matrix, we don't need to convert its data layout.
-	if (store_layout() == matrix_layout_t::L_COL || get_num_cols() > 16
+	if (store_layout() == matrix_layout_t::L_COL || get_num_cols() > 32
 			|| !inner_prod_conv)
 		ins[0] = this->get_raw_store();
 	else {
