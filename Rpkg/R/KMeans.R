@@ -1,4 +1,4 @@
-fm.KMeans <- function(data, K, debug=FALSE)
+fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 {
 	orig.test.na <- fm.env$fm.test.na
 	fm.set.test.na(FALSE)
@@ -36,7 +36,7 @@ fm.KMeans <- function(data, K, debug=FALSE)
 	iter <- 0
 	start.time <- Sys.time()
 	num.moves <- length(parts)
-	while (num.moves > 0) {
+	while (num.moves > 0 && iter < max.iters) {
 		if (debug)
 			iter.start <- Sys.time()
 		centers <- new.centers
