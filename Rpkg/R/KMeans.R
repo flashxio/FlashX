@@ -45,7 +45,7 @@ fm.KMeans <- function(data, K, debug=FALSE)
 		m <- fm.inner.prod(data, t(centers), fm.bo.euclidean, fm.bo.add)
 		parts <- fm.as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
-		fm.set.materialize.level(parts, 2)
+		fm.set.materialize.level(parts, 2, TRUE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, K))
 		num.moves <- sum(old.parts != parts)
