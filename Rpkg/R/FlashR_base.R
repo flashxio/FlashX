@@ -701,7 +701,7 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 			  fm.sapply.fmV(x, fm.buo.log) / log(base)
 })
 
-fm.rowSums <- function(x, lazy)
+fm.rowSums <- function(x, lazy=FALSE)
 {
 	if (lazy)
 		fm.agg.mat.lazy(x, 1, fm.bo.add)
@@ -709,7 +709,7 @@ fm.rowSums <- function(x, lazy)
 		fm.agg.mat(x, 1, fm.bo.add)
 }
 
-fm.colSums <- function(x, lazy)
+fm.colSums <- function(x, lazy=FALSE)
 {
 	if (lazy)
 		fm.agg.mat.lazy(x, 2, fm.bo.add)
