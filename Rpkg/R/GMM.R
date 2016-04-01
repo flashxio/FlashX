@@ -71,7 +71,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 	# Random init
 	# TODO alternatively, we can use KMeans to initialize it.
 	rand.k <- as.integer(runif(k, 1, m))
-	mus <- t(X[rand.k,])
+	mus <- fm.conv.FM2R(t(X[rand.k,]))
 	init.covar <- cov(X)
 	covars <- list()
 	for (i in 1:k)
@@ -106,7 +106,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		phi <- fm.conv.FM2R(colSums(P)/m)
 		if (verbose)
 			print(phi)
-		mus <- sweep(t(X) %*% P, 2, phi * m, "/")
+		mus <- sweep(fm.conv.FM2R(t(X) %*% P), 2, phi * m, "/")
 
 		covars <- gmm.covs(X, P)
 		end.t <- Sys.time()
@@ -114,7 +114,6 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 			cat("M-step takes", as.integer(end.t) - as.integer(start.t),
 				"seconds\n")
 	}
-	mus <- fm.conv.FM2R(mus)
 	clust.ids <- fm.materialize(fm.agg.mat(P, 1, fm.bo.which.max))
 	fm.set.test.na(orig.test.na)
 	list(P=P, clust.ids=clust.ids, niters=iter, phi=phi, mus=mus, covars=covars)
