@@ -45,6 +45,8 @@ class agg_matrix_store: public virtual_matrix_store, public EM_object
 
 	matrix_store::ptr get_agg_res() const;
 public:
+	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
+
 	agg_matrix_store(matrix_store::const_ptr data, matrix_margin margin,
 			agg_operate::const_ptr op);
 

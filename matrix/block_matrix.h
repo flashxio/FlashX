@@ -94,8 +94,6 @@ public:
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 
 #if 0
-	virtual dense_matrix::ptr aggregate(matrix_margin margin,
-			agg_operate::const_ptr op) const;
 	virtual dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
 			agg_operate::const_ptr) const;
 
@@ -112,6 +110,8 @@ public:
 	virtual dense_matrix::ptr multiply(const dense_matrix &mat,
 			matrix_layout_t out_layout) const;
 
+	virtual dense_matrix::ptr aggregate(matrix_margin margin,
+			agg_operate::const_ptr op) const;
 
 	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const col_vec> vals,
 			bulk_operate::const_ptr op) const;

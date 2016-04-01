@@ -38,6 +38,8 @@ void check_mat_equal(dense_matrix::ptr m1, dense_matrix::ptr m2)
 		m1 = dense_matrix::create(block_m->get_raw_store());
 		m1->materialize_self();
 	}
+	scalar_variable::const_ptr sum1 = m1->sum();
+	scalar_variable::const_ptr sum2 = m2->sum();
 	scalar_variable::const_ptr res = m1->minus(*m2)->abs()->max();
 	assert(scalar_variable::get_val<T>(*res) == 0);
 }
@@ -345,6 +347,45 @@ void test_multiply()
 	check_mat_approx<double>(res1, res2);
 }
 
+void test_agg()
+{
+	set_operate::const_ptr init_op = create_urand_init<size_t>(0, 100000);
+	const bulk_operate &add_op = init_op->get_type().get_basic_ops().get_add();
+	agg_operate::const_ptr sum
+		= agg_operate::create(bulk_operate::conv2ptr(add_op));
+	dense_matrix::ptr mat1, mat2, res1, res2;
+
+	mat1 = block_matrix::create(10000, 10, 3, init_op->get_type(), *init_op,
+			matrix_conf.get_num_nodes(), in_mem);
+	mat2 = dense_matrix::create(mat1->get_raw_store());
+	mat2->materialize_self();
+
+	printf("test agg on rows of tall matrix\n");
+	res1 = mat1->aggregate(matrix_margin::MAR_ROW, sum);
+	res2 = mat2->aggregate(matrix_margin::MAR_ROW, sum);
+	check_mat_equal<size_t>(res1, res2);
+
+	printf("test agg on cols of tall matrix\n");
+	res1 = mat1->aggregate(matrix_margin::MAR_COL, sum);
+	res2 = mat2->aggregate(matrix_margin::MAR_COL, sum);
+	check_mat_equal<size_t>(res1, res2);
+
+	printf("test agg on tall matrix\n");
+	res1 = mat1->aggregate(matrix_margin::BOTH, sum);
+	res2 = mat2->aggregate(matrix_margin::BOTH, sum);
+	check_mat_equal<size_t>(res1, res2);
+
+	printf("test two aggs on tall matrix\n");
+	std::vector<dense_matrix::ptr> ress(2);
+	ress[0] = mat1->aggregate(matrix_margin::MAR_COL, sum);
+	ress[1] = mat1->aggregate(matrix_margin::BOTH, sum);
+	materialize(ress);
+	check_mat_equal<size_t>(ress[0],
+			mat2->aggregate(matrix_margin::MAR_COL, sum));
+	check_mat_equal<size_t>(ress[1],
+			mat2->aggregate(matrix_margin::BOTH, sum));
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -357,6 +398,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	in_mem = false;
+	test_agg();
 	test_multiply();
 	test_mapply2();
 	test_get_rc();
@@ -367,6 +409,7 @@ int main(int argc, char *argv[])
 	test_inner_prod();
 
 	in_mem = true;
+	test_agg();
 	test_multiply();
 	test_mapply2();
 	test_get_rc();

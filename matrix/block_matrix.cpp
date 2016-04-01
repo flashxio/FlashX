@@ -22,6 +22,8 @@
 #include "local_matrix_store.h"
 #include "one_val_matrix_store.h"
 #include "col_vec.h"
+#include "sink_matrix.h"
+#include "agg_matrix_store.h"
 
 namespace fm
 {
@@ -867,6 +869,207 @@ bool block_matrix::move_store(bool in_mem, int num_nodes) const
 	const_cast<block_matrix *>(this)->store
 		= detail::combined_matrix_store::create(new_stores, store->store_layout());
 	return true;
+}
+
+namespace
+{
+
+/*
+ * This is for aggregating on the long dimensions.
+ * When we get the aggregation result from each matrix, we concatenate
+ * the results.
+ */
+class long_agg_block_sink_store: public detail::block_sink_store
+{
+	detail::matrix_store::const_ptr final_res;
+public:
+	typedef std::vector<detail::matrix_store::const_ptr> mat_vec_t;
+	long_agg_block_sink_store(const mat_vec_t &stores): detail::block_sink_store(
+				stores) {
+	}
+
+	virtual void materialize_self() const;
+
+	virtual matrix_store::const_ptr materialize(bool in_mem,
+			int num_nodes) const;
+};
+
+void long_agg_block_sink_store::materialize_self() const
+{
+	if (final_res == NULL)
+		const_cast<long_agg_block_sink_store *>(this)->final_res
+			= materialize(true, -1);
+}
+
+detail::matrix_store::const_ptr long_agg_block_sink_store::materialize(
+		bool in_mem, int num_nodes) const
+{
+	if (final_res)
+		return final_res;
+
+	// Get the materialized parts.
+	std::vector<matrix_store::const_ptr> parts;
+	detail::agg_matrix_store::const_ptr agg_mat
+		= std::dynamic_pointer_cast<const detail::agg_matrix_store>(get_block(0));
+	assert(agg_mat);
+	bool materialized = agg_mat->has_materialized();
+	if (materialized) {
+		parts.resize(get_num_blocks());
+		parts[0] = agg_mat->materialize(true, -1);
+		for (size_t i = 1; i < get_num_blocks(); i++) {
+			agg_mat = std::dynamic_pointer_cast<const detail::agg_matrix_store>(
+					get_block(i));
+			assert(agg_mat);
+			// If one is materialized, all others should also have been
+			// materialized.
+			assert(agg_mat->has_materialized());
+			parts[i] = agg_mat->materialize(true, -1);
+		}
+	}
+	else
+		parts = get_materialized_blocks();
+
+	size_t num_rows = 0;
+	for (size_t i = 0; i < get_num_blocks(); i++) {
+		assert(parts[i]->get_num_cols() == 1);
+		num_rows += parts[i]->get_num_rows();
+	}
+	detail::mem_col_matrix_store::ptr ret
+		= detail::mem_col_matrix_store::create(num_rows, 1, parts[0]->get_type());
+	size_t row_idx = 0;
+	for (size_t i = 0; i < parts.size(); i++) {
+		assert(parts[i]->is_in_mem());
+		detail::mem_matrix_store::const_ptr part
+			= std::static_pointer_cast<const detail::mem_matrix_store>(parts[i]);
+		memcpy(ret->get_raw_arr() + row_idx * ret->get_entry_size(),
+				part->get_raw_arr(),
+				part->get_num_rows() * part->get_entry_size());
+		row_idx += part->get_num_rows();
+	}
+	return ret;
+}
+
+/*
+ * This is for aggregating on all elements and outputting a single value.
+ * When we get the aggregation result from each matrix, we combine the results
+ * into a single value.
+ */
+class agg_block_sink_store: public detail::block_sink_store
+{
+	agg_operate::const_ptr op;
+	detail::matrix_store::const_ptr final_res;
+public:
+	typedef std::vector<detail::matrix_store::const_ptr> mat_vec_t;
+	agg_block_sink_store(const mat_vec_t &stores,
+			agg_operate::const_ptr op): detail::block_sink_store(stores) {
+		this->op = op;
+	}
+
+	virtual void materialize_self() const;
+
+	virtual matrix_store::const_ptr materialize(bool in_mem,
+			int num_nodes) const;
+};
+
+void agg_block_sink_store::materialize_self() const
+{
+	if (final_res == NULL)
+		const_cast<agg_block_sink_store *>(this)->final_res = materialize(
+				true, -1);
+}
+
+detail::matrix_store::const_ptr agg_block_sink_store::materialize(
+		bool in_mem, int num_nodes) const
+{
+	if (final_res)
+		return final_res;
+
+	// Get the materialized parts.
+	std::vector<matrix_store::const_ptr> blocks;
+	detail::agg_matrix_store::const_ptr agg_mat
+		= std::dynamic_pointer_cast<const detail::agg_matrix_store>(get_block(0));
+	assert(agg_mat);
+	bool materialized = agg_mat->has_materialized();
+	if (materialized) {
+		blocks.resize(get_num_blocks());
+		blocks[0] = agg_mat->materialize(true, -1);
+		for (size_t i = 1; i < get_num_blocks(); i++) {
+			agg_mat = std::dynamic_pointer_cast<const detail::agg_matrix_store>(
+					get_block(i));
+			assert(agg_mat);
+			// If one is materialized, all others should also have been
+			// materialized.
+			assert(agg_mat->has_materialized());
+			blocks[i] = agg_mat->materialize(true, -1);
+		}
+	}
+	else
+		blocks = get_materialized_blocks();
+
+	detail::mem_col_matrix_store::ptr parts
+		= detail::mem_col_matrix_store::create(get_num_blocks(), 1, get_type());
+	for (size_t i = 0; i < get_num_blocks(); i++) {
+		assert(blocks[i]->get_num_cols() == 1 && blocks[i]->get_num_rows() == 1);
+		assert(blocks[i]->is_in_mem());
+		detail::mem_matrix_store::const_ptr mem_part
+			= std::static_pointer_cast<const detail::mem_matrix_store>(blocks[i]);
+		memcpy(parts->get(i, 0), mem_part->get(0, 0), mem_part->get_entry_size());
+	}
+	detail::mem_col_matrix_store::ptr ret
+		= detail::mem_col_matrix_store::create(1, 1, parts->get_type());
+	assert(op->has_combine());
+	op->get_combine().runAgg(parts->get_num_rows(), parts->get_raw_arr(),
+			ret->get_raw_arr());
+	return ret;
+}
+
+}
+
+dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
+			agg_operate::const_ptr op) const
+{
+	bool is_wide = store->get_mat_ref(0).is_wide();
+	// TODO we might want to optimize the first case specially because
+	// the current implementation still cause a lot of CPU cache misses.
+	if ((margin == matrix_margin::MAR_ROW && !is_wide)
+			|| (margin == matrix_margin::MAR_COL && is_wide)) {
+		// If the agg operation doesn't have combine, we have to concatenate
+		// rows first before running agg on it.
+		if (!op->has_combine())
+			return dense_matrix::aggregate(margin, op);
+
+		std::vector<dense_matrix::ptr> vecs(store->get_num_mats());
+		for (size_t i = 0; i < store->get_num_mats(); i++) {
+			dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+			// If the matrix has only one row or one column, we don't need
+			// to run agg on it.
+			if ((mat->is_wide() && mat->get_num_rows() == 1)
+					|| (!mat->is_wide() && mat->get_num_cols() == 1)) {
+				// TODO What if agg and combine are different?
+				assert(op->is_same());
+				vecs[i] = mat;
+			}
+			else
+				vecs[i] = mat->aggregate(margin, op);
+		}
+		// aggregate always returns a column matrix.
+		dense_matrix::ptr combined = dense_matrix::cbind(vecs);
+		return combined->aggregate(matrix_margin::MAR_ROW, op);
+	}
+	else {
+		std::vector<detail::matrix_store::const_ptr> sinks(store->get_num_mats());
+		for (size_t i = 0; i < store->get_num_mats(); i++) {
+			dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+			dense_matrix::ptr res = mat->aggregate(margin, op);
+			sinks[i] = res->get_raw_store();
+		}
+		detail::matrix_store::ptr ret;
+		if (margin == matrix_margin::BOTH)
+			ret = detail::matrix_store::ptr(new agg_block_sink_store(sinks, op));
+		else
+			ret = detail::matrix_store::ptr(new long_agg_block_sink_store(sinks));
+		return dense_matrix::create(ret);
+	}
 }
 
 }

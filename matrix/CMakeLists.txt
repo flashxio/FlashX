@@ -55,6 +55,7 @@ add_library(FMatrix STATIC
 	matrix_stats.cpp
 	block_matrix.cpp
 	IPW_matrix_store.cpp
+	sink_matrix.cpp
 )
 
 if(ENABLE_TRILINOS)

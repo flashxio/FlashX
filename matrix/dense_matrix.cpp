@@ -39,6 +39,7 @@
 #include "IPW_matrix_store.h"
 #include "block_matrix.h"
 #include "col_vec.h"
+#include "sink_matrix.h"
 
 namespace fm
 {
@@ -2825,6 +2826,18 @@ public:
 
 }
 
+static void process_block_sinks(
+		const std::vector<detail::block_sink_store::const_ptr> &sinks)
+{
+	std::vector<detail::matrix_store::const_ptr> block_groups
+		= reorg_block_sinks(sinks);
+	detail::portion_mapply_op::const_ptr materialize_op(
+			new materialize_mapply_op(block_groups[0]->get_type(),
+				block_groups.front()->is_wide(), true));
+	__mapply_portion(block_groups, materialize_op, matrix_layout_t::L_ROW,
+			false);
+}
+
 bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 {
 	if (mats.empty())
@@ -2832,6 +2845,7 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 	// TODO we need to deal with the case that some matrices are tall and
 	// some are wide.
 
+	std::vector<detail::block_sink_store::const_ptr> block_sinks;
 	std::vector<detail::matrix_store::const_ptr> virt_stores;
 	bool is_wide = mats[0]->is_wide();
 	size_t long_dim = std::max(mats[0]->get_num_rows(), mats[0]->get_num_cols());
@@ -2839,6 +2853,17 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 		// If this isn't a virtual matrix, skip it.
 		if (!mats[i]->is_virtual())
 			continue;
+
+		// We collect the block sink matrix stores and will materialize
+		// them differently.
+		detail::block_sink_store::const_ptr sink
+			= std::dynamic_pointer_cast<const detail::block_sink_store>(
+					mats[i]->get_raw_store());
+		if (sink) {
+			block_sinks.push_back(sink);
+			continue;
+		}
+
 		if (mats[i]->is_wide() != is_wide) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "Can't materialize virtual matrices with diff long dim";
@@ -2855,14 +2880,27 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 		virt_stores.push_back(mats[i]->get_raw_store());
 	}
-	if (virt_stores.empty())
+	if (virt_stores.empty() && block_sinks.empty())
 		return true;
 
-	detail::portion_mapply_op::const_ptr materialize_op(
-			new materialize_mapply_op(virt_stores[0]->get_type(),
-				virt_stores.front()->is_wide(), !par_access));
-	__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW,
-			par_access);
+	// If we have normal virtual matrices, including sink matrices.
+	if (!virt_stores.empty()) {
+		detail::portion_mapply_op::const_ptr materialize_op(
+				new materialize_mapply_op(virt_stores[0]->get_type(),
+					virt_stores.front()->is_wide(), !par_access));
+		__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW,
+				par_access);
+	}
+
+	if (!block_sinks.empty()) {
+		// We group the sink matrices based on their underlying matrices and
+		// process the sink matrices with the same underlying matrices together.
+		auto groups = group_block_sinks(block_sinks);
+		for (size_t i = 0; i < groups.size(); i++) {
+			process_block_sinks(groups[i]);
+		}
+	}
+
 	// Now all virtual matrices contain the materialized results.
 	for (size_t i = 0; i < mats.size(); i++)
 		mats[i]->materialize_self();
