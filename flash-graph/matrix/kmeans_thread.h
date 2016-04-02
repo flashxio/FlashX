@@ -20,6 +20,7 @@
 #ifndef __KMEANS_THREAD_H__
 #define __KMEANS_THREAD_H__
 #include "base_kmeans_thread.h"
+#include <atomic>
 
 namespace {
     class kmeans_thread : public base_kmeans_thread {
@@ -28,7 +29,10 @@ namespace {
             unsigned thds_row; // The general split of row to threads
             clusters::ptr g_clusters; // Pointer to global cluster data
 
-            kmeans_thread(const int node_id, const unsigned thd_id, const size_t start_offset,
+            pthread_cond_t* parent_cond;
+            std::atomic<unsigned>* parent_pending_threads;
+
+            kmeans_thread(const int node_id, const unsigned thd_id,const size_t start_offset,
                     const unsigned nprocrows, const unsigned thds_row, const unsigned ncol,
                     clusters::ptr g_clusters, unsigned* cluster_assignments,
                     const std::string fn) : base_kmeans_thread(node_id, thd_id, ncol,
@@ -66,12 +70,22 @@ namespace {
             void kmspp_dist();
             const unsigned get_global_data_id(const unsigned row_id) const;
             void run();
+            void wait();
 
             const void print_local_data() const;
 
             void destroy_numa_mem() {
                 numa_free(local_data, get_data_size());
             }
+
+            void set_parent_cond(pthread_cond_t* cond) {
+                parent_cond = cond;
+            }
+
+            void set_parent_pending_threads(std::atomic<unsigned>* ppt) {
+                parent_pending_threads = ppt;
+            }
+
     };
 
     void kmeans_thread::run() {
@@ -88,29 +102,77 @@ namespace {
             case EM: /*E step of kmeans*/
                 EM_step();
                 break;
-            case IDLE:
-                fprintf(stderr, "[FATAL]: Thread state is IDLE but running!\n");
+            case EXIT:
+                fprintf(stderr, "[FATAL]: Thread state is EXIT but running!\n");
                 exit(EXIT_FAILURE);
             default:
                 fprintf(stderr, "[FATAL]: Unknown thread state\n");
                 exit(EXIT_FAILURE);
         }
+
+        int rc;
+
+        rc = pthread_mutex_lock(&mutex);
+        if (rc) perror("pthread_mutex_lock");
+
+        (*parent_pending_threads) = (*parent_pending_threads) - 1; // TODO: Atomic needed ??
+        //printf("**Thread %d dropped pending_threads to %u\n",
+         //       thd_id, (unsigned)(*parent_pending_threads));
+
+        set_thread_state(WAIT);
+        pthread_mutex_unlock(&mutex);
+
+        rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+        if (rc) perror("pthread_cond_signal");
+
+        //printf("\nThread %d signalled parent ...\n", thd_id);
+    }
+
+    void kmeans_thread::wait() {
+        int rc;
+        rc = pthread_mutex_lock(&mutex);
+        if (rc) perror("pthread_mutex_lock");
+
+        while (state == WAIT) {
+            //printf("Thread %d begin cond_wait\n", thd_id);
+            rc = pthread_cond_wait(&cond, &mutex);
+            if (rc) perror("pthread_cond_wait");
+        }
+
+        rc = pthread_mutex_unlock(&mutex);
+        if (rc) perror("pthread_mutex_unlock");
     }
 
     void* callback(void* arg) {
         kmeans_thread* t = static_cast<kmeans_thread*>(arg);
         bind2node_id(t->node_id);
-        t->run();
+
+        while (t->is_running()) { // So we can receive task after task
+            if (t->state == WAIT)
+                t->wait();
+
+            if (t->state == EXIT) {// No more work to do
+                //printf("Thread %d exiting ...\n", t->thd_id);
+                break;
+            }
+
+            printf("Thread %d awake and doing a run()\n", t->thd_id);
+            t->run(); // else
+        }
+
+        // We've stopped running so exit
         pthread_exit(NULL);
     }
 
-    void kmeans_thread::start(const thread_state_t state) {
-        this->state = state;
+    void kmeans_thread::start(const thread_state_t state=WAIT) {
+        this->state = state; // TODO: update state outside the start method
         int rc = pthread_create(&hw_thd, NULL, callback, this);
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
             exit(rc);
         }
+
+        //printf("Thd %u alive ...\n", thd_id);
     }
 
     /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/
