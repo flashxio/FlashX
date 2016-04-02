@@ -33,6 +33,7 @@
 
 #define KM_TEST 1
 #define VERBOSE 0
+#define INVALID_THD_ID -1
 
 namespace {
     enum thread_state_t {
@@ -40,7 +41,8 @@ namespace {
         ALLOC_DATA, /*moving data for reduces rma*/
         KMSPP_INIT,
         EM, /*EM steps of kmeans*/
-        IDLE /*When the thread is waiting to be run or killed*/
+        WAIT, /*When the thread is waiting for a new task*/
+        EXIT /* Say goodnight */
     };
 
     union metaunion {
@@ -53,12 +55,18 @@ namespace {
         private:
             pthread_t hw_thd;
             unsigned node_id; // Which NUMA node are you on?
-            unsigned thd_id;
+            int thd_id;
             size_t start_offset; // With respect to the original data
             unsigned ncol; // How many columns in the data
             double* local_data; // Pointer to where the data begins that the thread works on
             size_t data_size; // true size of local_data at any point
             clusters::ptr local_clusters;
+
+            bool _is_running;
+
+            pthread_mutex_t mutex;
+            pthread_cond_t cond;
+            pthread_mutexattr_t mutex_attr;
 
             metaunion meta;
             //unsigned num_changed;
@@ -76,6 +84,12 @@ namespace {
             base_kmeans_thread(const int node_id, const unsigned thd_id, const unsigned ncol,
                     const unsigned nclust, unsigned* cluster_assignments, size_t start_offset,
                     const std::string fn) {
+
+
+                pthread_mutexattr_init(&mutex_attr);
+                pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_ERRORCHECK);
+                pthread_mutex_init(&mutex, &mutex_attr);
+                pthread_cond_init(&cond, NULL);
                 this->node_id = node_id;
                 this->thd_id = thd_id;
                 this->ncol = ncol;
@@ -85,6 +99,8 @@ namespace {
 
                 local_clusters = clusters::create(nclust, ncol);
                 meta.num_changed = 0; // Same as meta.clust_idx = 0;
+                set_running(true);
+                set_thread_state(WAIT);
             }
 
         public:
@@ -98,25 +114,22 @@ namespace {
             virtual void destroy_numa_mem() = 0;
 
             void numa_alloc_mem();
-            void test();
+
+            void test() {
+                printf("Hello from thread: %u\n", get_thd_id());
+            }
+
 
             void set_dist_v_ptr(double* v) {
                 dist_v = v;
             }
 
-            void join() {
-                void* join_status;
-                int rc = pthread_join(hw_thd, &join_status);
-                if (rc) {
-                    fprintf(stderr, "[FATAL]: Return code from pthread_join() "
-                            "is %d\n", rc);
-                    exit(rc);
-                }
-                this->state = IDLE;
-            }
-
             const thread_state_t get_state() {
                 return this->state;
+            }
+
+            void set_thread_state(thread_state_t state) {
+                this->state = state;
             }
 
             const unsigned get_thd_id() const {
@@ -151,31 +164,66 @@ namespace {
                 return this->data_size;
             }
 
-            //FIXME: bunch of getters and setters
-            // Once the algorithm ends we should deallocate the memory we moved
-            void close_file_handle() {
-                int rc = fclose(f);
-                if (rc) {
-                    fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
-                    exit(rc);
-                }
-#if VERBOSE
-                printf("Thread %u closing the file handle.\n",thd_id);
-#endif
-                f = NULL;
+            const bool is_running() const {
+                return _is_running;
             }
 
-            ~base_kmeans_thread() {
-                if (f)
-                    close_file_handle();
-#if VERBOSE
-                printf("Thread %u being destroyed\n", thd_id);
-#endif
+            void set_running(const bool val) {
+                this->_is_running = val;
             }
+
+            pthread_mutex_t& get_lock() {
+                return mutex;
+            }
+
+            pthread_cond_t& get_cond() {
+                return cond;
+            }
+
+            void join();
+            void close_file_handle();
+            ~base_kmeans_thread();
     };
 
-    void base_kmeans_thread::test() {
-        printf("Hello from thread: %u\n", get_thd_id());
+    void base_kmeans_thread::join() {
+        void* join_status;
+        int rc = pthread_join(hw_thd, &join_status);
+        if (rc) {
+            fprintf(stderr, "[FATAL]: Return code from pthread_join() "
+                    "is %d\n", rc);
+            exit(rc);
+        }
+        thd_id = INVALID_THD_ID;
+    }
+
+    //FIXME: bunch of getters and setters
+    // Once the algorithm ends we should deallocate the memory we moved
+    void base_kmeans_thread::close_file_handle() {
+        int rc = fclose(f);
+        if (rc) {
+            fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
+            exit(rc);
+        }
+#if VERBOSE
+        printf("Thread %u closing the file handle.\n",thd_id);
+#endif
+        f = NULL;
+    }
+
+    base_kmeans_thread::~base_kmeans_thread() {
+        // TODO: Check me
+        pthread_cond_destroy(&cond);
+        pthread_mutex_destroy(&mutex);
+        pthread_mutexattr_destroy(&mutex_attr);
+        // End TODO: Check me
+
+        if (f)
+            close_file_handle();
+#if VERBOSE
+        printf("Thread %u being destroyed\n", thd_id);
+#endif
+        if (thd_id != INVALID_THD_ID)
+            join();
     }
 
     static void bind2node_id(int node_id) {
