@@ -142,7 +142,8 @@ public:
 
 	void register_EM_obj(EM_object *obj) {
 		pthread_spin_lock(&lock);
-		assert(EM_objs.find(obj) == EM_objs.end());
+		assert(obj);
+		// If the object was registered before, we can just ignore it.
 		EM_objs.insert(obj);
 		pthread_spin_unlock(&lock);
 	}
