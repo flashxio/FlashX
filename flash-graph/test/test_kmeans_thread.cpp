@@ -32,11 +32,11 @@ static pthread_mutexattr_t mutex_attr;
 
 static void wait4complete() {
     //printf("\nParent entering wait4complete ..\n");
-    //pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mutex);
     while (pending_threads != 0) {
-        //pthread_cond_wait(&cond, &mutex);
+        pthread_cond_wait(&cond, &mutex);
     }
-    //pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mutex);
     //printf("Exiting wait4complete!!\n\n");
 }
 
