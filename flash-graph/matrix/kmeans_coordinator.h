@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <memory>
 
+#include "base_kmeans_coordinator.h"
 #include "kmeans_thread.h"
 #include "libgraph-algs/sem_kmeans_util.h"
 
@@ -31,35 +32,25 @@
 #endif
 
 namespace {
-    typedef std::vector<kmeans_thread::ptr>::iterator thread_iter;
 #if 0
     double* g_data; // TEST
 #endif
+    typedef std::vector<kmeans_thread::ptr>::iterator thread_iter;
 
-    class kmeans_coordinator {
+    class kmeans_coordinator : public base_kmeans_coordinator {
         private:
-            unsigned nthreads, nnodes;
-            size_t nrow, ncol;
             std::vector<kmeans_thread::ptr> threads;
-            std::string fn; // File on disk
-            unsigned* cluster_assignments;
-            unsigned* cluster_assignment_counts;
-            unsigned k;
-            clusters::ptr cltrs;
-            init_type_t _init_t;
-            dist_type_t _dist_t;
-            double tolerance;
-            unsigned max_iters;
-            unsigned num_changed; // total # of samples that changed clstr in an iter
-
             // Metadata
-            std::vector<unsigned> thd_max_row_idx; // max index stored within each threads partition
+            // max index stored within each threads partition
+            std::vector<unsigned> thd_max_row_idx;
 
             kmeans_coordinator(const std::string fn, const size_t nrow,
                     const size_t ncol, const unsigned k, const unsigned max_iters,
                     const unsigned nnodes, const unsigned nthreads,
                     const double* centers, const init_type_t it,
-                    const double tolerance, const dist_type_t dt) {
+                    const double tolerance, const dist_type_t dt) :
+                base_kmeans_coordinator(fn, nrow, ncol, k, max_iters,
+                        nnodes, nthreads, centers, it, tolerance, dt) {
 #if 0
                 // TEST //
                 std:: cout << "Reading " << nrow <<
@@ -69,31 +60,6 @@ namespace {
                 g_data = new double[nrow*ncol];
                 b.read(g_data);
 #endif
-
-                this->fn = fn;
-                this->nrow = nrow;
-                this->ncol = ncol;
-                this->k = k;
-                BOOST_ASSERT_MSG(k >= 1, "[FATAL]: 'k' must be >= 1");
-                this->max_iters = max_iters;
-                this->nnodes = nnodes;
-                this->nthreads = nthreads;
-                if (nthreads >  (unsigned)get_num_omp_threads()) {
-                    BOOST_LOG_TRIVIAL(warning) << "[WARNING]: Exceeded system"
-                        " #virtual cores of: " << get_num_omp_threads();
-                }
-                this->_init_t = it;
-                this->tolerance = tolerance;
-                this->_dist_t = dt;
-                num_changed = 0;
-
-                BOOST_VERIFY(cluster_assignments = new unsigned [nrow]);
-                BOOST_VERIFY(cluster_assignment_counts = new unsigned [k]);
-
-                std::fill(&cluster_assignments[0],
-                        (&cluster_assignments[0])+nrow, -1);
-                std::fill(&cluster_assignment_counts[0],
-                        (&cluster_assignment_counts[0])+k, 0);
 
                 cltrs = clusters::create(k, ncol);
                 if (centers) {
@@ -105,6 +71,7 @@ namespace {
                         BOOST_LOG_TRIVIAL(info) << "Init-ed centers ...";
                     }
                 }
+
                 // NUMA node affinity binding policy is round-robin
                 unsigned thds_row = nrow / nthreads;
                 for (unsigned thd_id = 0; thd_id < nthreads; thd_id++) {
@@ -113,6 +80,9 @@ namespace {
                     threads.push_back(kmeans_thread::create((thd_id % nnodes),
                                 thd_id, tup.first, tup.second, thds_row,
                                 ncol, cltrs, cluster_assignments, fn));
+                    threads[thd_id]->set_parent_cond(&cond);
+                    threads[thd_id]->set_parent_pending_threads(&pending_threads);
+                    threads[thd_id]->start(WAIT); // Thread puts itself to sleep
                 }
             }
 
@@ -170,48 +140,43 @@ namespace {
             }
 
             // Pass file handle to threads to read & numa alloc
-            void numa_alloc_data();
-            void join_threads();
             void create_thread_map();
-            void run_init();
             void run_kmeans();
-            void run_min_tri_kmeans();
-            void random_partition_init();
-            void forgy_init();
             void update_clusters();
             void kmeanspp_init();
-            void start_threads(const thread_state_t state);
+            void wake4run(thread_state_t state);
+            void destroy_threads();
             void set_thread_clust_idx(const unsigned clust_idx);
             double reduction_on_cuml_sum();
             void set_thd_dist_v_ptr(double* v);
+            void run_init();
+            void random_partition_init();
+            void forgy_init();
 
             const double* get_thd_data(const unsigned row_id) const;
 
             ~kmeans_coordinator() {
-                std::vector<kmeans_thread::ptr>::iterator it = threads.begin();
+                thread_iter it = threads.begin();
                 for (; it != threads.end(); ++it)
                     (*it)->destroy_numa_mem();
+
                 delete [] cluster_assignments;
                 delete [] cluster_assignment_counts;
 
+                pthread_cond_destroy(&cond);
+                pthread_mutex_destroy(&mutex);
+                pthread_mutexattr_destroy(&mutex_attr);
 #if 0
                 delete [] g_data;
 #endif
+                destroy_threads();
             }
     };
 
     typedef std::pair<unsigned, unsigned> thd_row_tup;
 
-    // Pass file handle to threads to read & numa alloc
-    void kmeans_coordinator::numa_alloc_data() {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->start(ALLOC_DATA);
-        join_threads();
-    }
-
-    void kmeans_coordinator::join_threads() {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->join();
+    void kmeans_coordinator::destroy_threads() {
+        wake4run(EXIT);
     }
 
     // <Thread, within-thread-row-id>
@@ -230,21 +195,125 @@ namespace {
                 [(row_id-(parent_thd*rows_per_thread))*ncol]);
     }
 
+    void kmeans_coordinator::update_clusters() {
+        num_changed = 0; // Always reset here since there's no pruning
+        cltrs->clear();
+
+        // Serial aggreate of OMP_MAX_THREADS vectors
+        for (thread_iter it = threads.begin(); it != threads.end(); ++it) {
+            // Updated the changed cluster count
+            num_changed += (*it)->get_num_changed();
+            // Summation for cluster centers
+
+#if VERBOSE
+            printf("Thread %ld clusters:\n", (it-threads.begin()));
+            ((*it)->get_local_clusters())->print_means();
+#endif
+
+            cltrs->peq((*it)->get_local_clusters());
+        }
+
+        unsigned chk_nmemb = 0;
+        for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) {
+            cltrs->finalize(clust_idx);
+            cluster_assignment_counts[clust_idx] =
+                cltrs->get_num_members(clust_idx);
+            chk_nmemb += cluster_assignment_counts[clust_idx];
+        }
+        if (chk_nmemb != nrow)
+            printf("chk_nmemb = %u\n", chk_nmemb);
+
+        BOOST_VERIFY(chk_nmemb == nrow);
+        BOOST_VERIFY(num_changed <= nrow);
+
+#if KM_TEST
+        BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << num_changed;
+#endif
+    }
+
+    double kmeans_coordinator::reduction_on_cuml_sum() {
+        double tot = 0;
+        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
+            tot += (*it)->get_culm_dist();
+        return tot;
+    }
+
+    void kmeans_coordinator::wake4run(const thread_state_t state) {
+        pending_threads = nthreads;
+        for (unsigned thd_id = 0; thd_id < threads.size(); thd_id++)
+            threads[thd_id]->wake(state);
+    }
+
+    void kmeans_coordinator::set_thread_clust_idx(const unsigned clust_idx) {
+        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
+            (*it)->set_clust_idx(clust_idx);
+    }
+
+    void kmeans_coordinator::set_thd_dist_v_ptr(double* v) {
+        for (unsigned thd_id = 0; thd_id < threads.size(); thd_id++) {
+            pthread_mutex_lock(&threads[thd_id]->get_lock());
+            threads[thd_id]->set_dist_v_ptr(v);
+            pthread_mutex_unlock(&threads[thd_id]->get_lock());
+        }
+    }
+
+    void kmeans_coordinator::kmeanspp_init() {
+        struct timeval start, end;
+        gettimeofday(&start , NULL);
+
+        std::vector<double> dist_v;
+        dist_v.assign(nrow, std::numeric_limits<double>::max());
+        set_thd_dist_v_ptr(&dist_v[0]);
+
+		// Choose c1 uniformly at random
+		unsigned selected_idx = random() % nrow; // 0...(nrow-1)
+
+        cltrs->set_mean(get_thd_data(selected_idx), 0);
+		dist_v[selected_idx] = 0.0;
+#if KM_TEST
+		BOOST_LOG_TRIVIAL(info) << "\nChoosing "
+            << selected_idx << " as center K = 0";
+#endif
+		unsigned clust_idx = 0; // The number of clusters assigned
+
+		// Choose next center c_i with weighted prob
+		while ((clust_idx + 1) < k) {
+            set_thread_clust_idx(clust_idx); // Set the current cluster index
+            wake4run(KMSPP_INIT); // Run || distance comp to clust_idx
+            wait4complete();
+			double cuml_dist = reduction_on_cuml_sum(); // Sum the per thread cumulative dists
+
+			cuml_dist = (cuml_dist * ((double)random())) / (RAND_MAX - 1.0);
+			clust_idx++;
+
+			for (size_t row = 0; row < nrow; row++) {
+				cuml_dist -= dist_v[row];
+				if (cuml_dist <= 0) {
+#if KM_TEST
+					BOOST_LOG_TRIVIAL(info) << "Choosing "
+                        << row << " as center k = " << clust_idx;
+#endif
+                    cltrs->set_mean(get_thd_data(row), clust_idx);
+					break;
+				}
+			}
+			BOOST_VERIFY(cuml_dist <= 0);
+		}
+
+#if VERBOSE
+		BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++";
+        clusters->print_means();
+#endif
+        gettimeofday(&end, NULL);
+        BOOST_LOG_TRIVIAL(info) << "\n\nInitialization time: " <<
+            time_diff(start, end) << " sec\n";
+    }
+
     void kmeans_coordinator::random_partition_init() {
-        printf("In random init testing data ...\n");
         for (unsigned row = 0; row < nrow; row++) {
             unsigned asgnd_clust = random() % k; // 0...k
-
             const double* dp = get_thd_data(row);
-#if 0
-            if (!(eq_all(dp, &g_data[row*ncol], ncol))) {
-                printf("Row: %u, Correct data: ", row);
-                print_arr<double>(&g_data[row*ncol], ncol);
-                printf("Retrived data: ");
-                print_arr<double>(dp, ncol);
-                assert(0);
-            }
-#endif
+
             cltrs->add_member(dp, asgnd_clust);
             cluster_assignments[row] = asgnd_clust;
         }
@@ -286,121 +355,6 @@ namespace {
         }
     }
 
-    void kmeans_coordinator::update_clusters() {
-        num_changed = 0; // Always reset here since there's no pruning
-        cltrs->clear();
-
-        // Serial aggreate of OMP_MAX_THREADS vectors
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it) {
-            // Updated the changed cluster count
-            num_changed += (*it)->get_num_changed();
-            // Summation for cluster centers
-
-#if VERBOSE
-            printf("Thread %ld clusters:\n", (it-threads.begin()));
-            ((*it)->get_local_clusters())->print_means();
-#endif
-
-            cltrs->peq((*it)->get_local_clusters());
-        }
-
-        unsigned chk_nmemb = 0;
-        for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) {
-            cltrs->finalize(clust_idx);
-            cluster_assignment_counts[clust_idx] =
-                cltrs->get_num_members(clust_idx);
-            chk_nmemb += cluster_assignment_counts[clust_idx];
-        }
-        if (chk_nmemb != nrow)
-            printf("chk_nmemb = %u\n", chk_nmemb);
-
-        BOOST_VERIFY(chk_nmemb == nrow);
-        BOOST_VERIFY(num_changed <= nrow);
-
-#if KM_TEST
-        BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << num_changed;
-#endif
-    }
-
-    void kmeans_coordinator::run_min_tri_kmeans() {
-        assert(0); // TODO: min-tri-kmeans logic here
-    }
-
-    double kmeans_coordinator::reduction_on_cuml_sum() {
-        double tot = 0;
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            tot += (*it)->get_culm_dist();
-        return tot;
-    }
-
-    void kmeans_coordinator::set_thread_clust_idx(const unsigned clust_idx) {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->set_clust_idx(clust_idx);
-    }
-
-    void kmeans_coordinator::set_thd_dist_v_ptr(double* v) {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it)
-            (*it)->set_dist_v_ptr(v);
-    }
-
-    void kmeans_coordinator::start_threads(const thread_state_t state) {
-        for (thread_iter it = threads.begin(); it != threads.end(); ++it) {
-            (*it)->start(state);
-        }
-    }
-
-    void kmeans_coordinator::kmeanspp_init() {
-        struct timeval start, end;
-        gettimeofday(&start , NULL);
-
-        std::vector<double> dist_v;
-        dist_v.assign(nrow, std::numeric_limits<double>::max());
-        set_thd_dist_v_ptr(&dist_v[0]);
-
-		// Choose c1 uniformly at random
-		unsigned selected_idx = random() % nrow; // 0...(nrow-1)
-
-        cltrs->set_mean(get_thd_data(selected_idx), 0);
-		dist_v[selected_idx] = 0.0;
-#if KM_TEST
-		BOOST_LOG_TRIVIAL(info) << "\nChoosing "
-            << selected_idx << " as center K = 0";
-#endif
-		unsigned clust_idx = 0; // The number of clusters assigned
-
-		// Choose next center c_i with weighted prob
-		while ((clust_idx + 1) < k) {
-            set_thread_clust_idx(clust_idx); // Set the current cluster index
-            start_threads(KMSPP_INIT); // Run || distance comp to clust_idx
-            join_threads();
-			double cuml_dist = reduction_on_cuml_sum(); // Sum the per thread cumulative dists
-
-			cuml_dist = (cuml_dist * ((double)random())) / (RAND_MAX - 1.0);
-			clust_idx++;
-
-			for (size_t row = 0; row < nrow; row++) {
-				cuml_dist -= dist_v[row];
-				if (cuml_dist <= 0) {
-#if KM_TEST
-					BOOST_LOG_TRIVIAL(info) << "Choosing "
-                        << row << " as center k = " << clust_idx;
-#endif
-                    cltrs->set_mean(get_thd_data(row), clust_idx);
-					break;
-				}
-			}
-			BOOST_VERIFY(cuml_dist <= 0);
-		}
-
-#if VERBOSE
-		BOOST_LOG_TRIVIAL(info) << "\nCluster centers after kmeans++";
-        clusters->print_means();
-#endif
-        gettimeofday(&end, NULL);
-        BOOST_LOG_TRIVIAL(info) << "\n\nInitialization time: " <<
-            time_diff(start, end) << " sec\n";
-    }
-
     /**
      * Main driver for kmeans
      */
@@ -408,7 +362,9 @@ namespace {
 #ifdef PROFILER
 		ProfilerStart("matrix/kmeans_coordinator.perf");
 #endif
-        numa_alloc_data(); // Move data
+        wake4run(ALLOC_DATA);
+        wait4complete();
+
         struct timeval start, end;
         gettimeofday(&start , NULL);
         run_init(); // Initialize clusters
@@ -418,8 +374,9 @@ namespace {
         bool converged = false;
         while (iter <= max_iters) {
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration: " << iter;
-            start_threads(EM);
-            join_threads();
+            wake4run(EM);
+            wait4complete();
+
             update_clusters();
 
             printf("Cluster assignment counts: ");
