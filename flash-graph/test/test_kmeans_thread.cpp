@@ -31,90 +31,66 @@ static pthread_cond_t cond;
 static pthread_mutexattr_t mutex_attr;
 
 static void wait4complete() {
-    printf("Parent entering wait4complete ..\n");
-    pthread_mutex_lock(&mutex);
-    while (pending_threads != 0) { // TODO: Check Data race on this ...
-        pthread_cond_wait(&cond, &mutex);
+    //printf("\nParent entering wait4complete ..\n");
+    //pthread_mutex_lock(&mutex);
+    while (pending_threads != 0) {
+        //pthread_cond_wait(&cond, &mutex);
     }
-    pthread_mutex_unlock(&mutex);
-    printf("Exiting wait4complete!!\n");
+    //pthread_mutex_unlock(&mutex);
+    //printf("Exiting wait4complete!!\n\n");
 }
 
-static void exit_threads(std::vector<kmeans_thread::ptr> thds) {
-    printf("Trying to join threads that are waiting ...\n");
-    for (unsigned i = 0; i < thds.size(); i++) {
-        pthread_mutex_lock(&thds[i]->get_lock());
-        thds[i]->set_thread_state(EXIT);
-        pthread_mutex_unlock(&thds[i]->get_lock());
-
-        pthread_cond_signal(&thds[i]->get_cond());
+static void wake4run(std::vector<kmeans_thread::ptr>& threads,
+        const unsigned nthreads, const thread_state_t state) {
+    pending_threads = nthreads;
+    for (unsigned thd_id = 0; thd_id < threads.size(); thd_id++) {
+        threads[thd_id]->wake(state);
     }
 }
 
 static void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes) {
-    std::vector<kmeans_thread::ptr> thds;
+    std::vector<kmeans_thread::ptr> threads;
 
     // Always: Build state alone
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
-        thds.push_back(kmeans_thread::create
+        threads.push_back(kmeans_thread::create
                 (i%nnodes, i, 69, 200, 1, 2, cl, NULL, "/dev/null"));
-        thds[i]->set_parent_cond(&cond);
-        thds[i]->set_parent_pending_threads(&pending_threads);
-        thds[i]->start(WAIT); // Thread puts itself to sleep
+        threads[i]->set_parent_cond(&cond);
+        threads[i]->set_parent_pending_threads(&pending_threads);
+        threads[i]->start(WAIT); // Thread puts itself to sleep
     }
 
-    // Wake thread & restart computation on a waiting thread
-    // BLOCK
-    pending_threads = NTHREADS;
-    for (unsigned i = 0; i < NTHREADS; i++) {
-        pthread_mutex_lock(&thds[i]->get_lock());
-        thds[i]->set_thread_state(TEST);
-        pthread_mutex_unlock(&thds[i]->get_lock());
-
-        pthread_cond_signal(&thds[i]->get_cond());
+    for (unsigned i = 0; i < 2048; i++) {
+        wake4run(threads, NTHREADS, TEST);
+        wait4complete();
     }
-    wait4complete();
-    // End BLOCK
 
-    // Wake thread & restart computation on a waiting thread
-    // BLOCK
-    pending_threads = NTHREADS;
-    for (unsigned i = 0; i < NTHREADS; i++) {
-        pthread_mutex_lock(&thds[i]->get_lock());
-        thds[i]->set_thread_state(TEST);
-        pthread_mutex_unlock(&thds[i]->get_lock());
-
-        pthread_cond_signal(&thds[i]->get_cond());
-    }
-    wait4complete();
-    // End BLOCK
-
-    exit_threads(thds); // Could be skipped because of join in destructor
+    wake4run(threads, NTHREADS, EXIT);
     std::cout << "SUCCESS: for creation & join\n";
 }
 
 void test_numa_populate_data() {
     constexpr unsigned NTHREADS = 10;
     printf("\n\nRunning test_numa_populate_data with"
-            "constexpr NTHREADS = %u...\n", NTHREADS);
+            " constexpr NTHREADS = %u...\n", NTHREADS);
     constexpr unsigned nnodes = 4;
     constexpr unsigned nrow = 50;
     const unsigned nprocrows = nrow/NTHREADS;
     constexpr unsigned ncol = 5;
     const std::string fn = "/mnt/nfs/disa/data/tiny/matrix_r50_c5_rrw.bin";
 
-    std::vector<kmeans_thread::ptr> thds;
+    std::vector<kmeans_thread::ptr> threads;
 
     // Always: Build state alone
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
-        thds.push_back(kmeans_thread::create
+        threads.push_back(kmeans_thread::create
                 (i%nnodes, i, i*nprocrows*ncol, nprocrows, nprocrows, ncol,
                  cl, NULL, fn));
-        thds[i]->set_parent_cond(&cond);
-        thds[i]->set_parent_pending_threads(&pending_threads);
-        thds[i]->start(WAIT); // Thread puts itself to sleep
+        threads[i]->set_parent_cond(&cond);
+        threads[i]->set_parent_pending_threads(&pending_threads);
+        threads[i]->start(WAIT); // Thread puts itself to sleep
     }
 
     bin_reader<double> br(fn, nrow, ncol);
@@ -122,28 +98,18 @@ void test_numa_populate_data() {
     printf("Bin read data\n");
     br.read(data);
 
-    // Wake thread & restart computation on a waiting thread
-    // BLOCK
-    pending_threads = NTHREADS;
-    for (unsigned i = 0; i < NTHREADS; i++) {
-        pthread_mutex_lock(&thds[i]->get_lock());
-        thds[i]->set_thread_state(ALLOC_DATA);
-        pthread_mutex_unlock(&thds[i]->get_lock());
-
-        pthread_cond_signal(&thds[i]->get_cond());
-    }
-    // End BLOCK
+    wake4run(threads, NTHREADS, ALLOC_DATA);
     wait4complete();
 
-    std::vector<kmeans_thread::ptr>::iterator it = thds.begin();
+    std::vector<kmeans_thread::ptr>::iterator it = threads.begin();
     // Print it back
-    for (it = thds.begin(); it != thds.end(); ++it) {
+    for (it = threads.begin(); it != threads.end(); ++it) {
         double *dp = &data[(*it)->get_thd_id()*ncol*nprocrows];
         BOOST_VERIFY(eq_all(dp, (*it)->get_local_data(), nprocrows*ncol));
         printf("Thread %u PASSED numa_mem_alloc()\n", (*it)->get_thd_id());
     }
 
-    exit_threads(thds); // Could be skipped because of join in destructor
+    wake4run(threads, NTHREADS, EXIT);
     delete [] data;
     printf("SUCCESS test_numa_populate_data ..\n");
 }
@@ -168,11 +134,9 @@ int main(int argc, char* argv[]) {
 #endif
     test_numa_populate_data();
 
-    // TODO: Check me
     pthread_cond_destroy(&cond);
     pthread_mutex_destroy(&mutex);
     pthread_mutexattr_destroy(&mutex_attr);
-    // End TODO: Check me
 
     return (EXIT_SUCCESS);
 }
