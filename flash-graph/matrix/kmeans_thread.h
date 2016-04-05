@@ -71,6 +71,7 @@ namespace {
             const unsigned get_global_data_id(const unsigned row_id) const;
             void run();
             void wait();
+            void wake(thread_state_t state);
 
             const void print_local_data() const;
 
@@ -115,15 +116,12 @@ namespace {
         rc = pthread_mutex_lock(&mutex);
         if (rc) perror("pthread_mutex_lock");
 
-        (*parent_pending_threads) = (*parent_pending_threads) - 1; // TODO: Atomic needed ??
-        //printf("**Thread %d dropped pending_threads to %u\n",
-         //       thd_id, (unsigned)(*parent_pending_threads));
-
+        (*parent_pending_threads)--;
         set_thread_state(WAIT);
+        //rc = pthread_cond_signal(parent_cond); // Wake up parent thread
         pthread_mutex_unlock(&mutex);
 
-        rc = pthread_cond_signal(parent_cond); // Wake up parent thread
-        if (rc) perror("pthread_cond_signal");
+        //if (rc) perror("pthread_cond_signal");
 
         //printf("\nThread %d signalled parent ...\n", thd_id);
     }
@@ -143,11 +141,22 @@ namespace {
         if (rc) perror("pthread_mutex_unlock");
     }
 
+    void kmeans_thread::wake(thread_state_t state) {
+        int rc;
+        rc = pthread_mutex_lock(&mutex);
+        if (rc) perror("pthread_mutex_lock");
+        set_thread_state(state);
+        rc = pthread_mutex_unlock(&mutex);
+        if (rc) perror("pthread_mutex_unlock");
+
+        rc = pthread_cond_signal(&cond);
+    }
+
     void* callback(void* arg) {
         kmeans_thread* t = static_cast<kmeans_thread*>(arg);
         bind2node_id(t->node_id);
 
-        while (t->is_running()) { // So we can receive task after task
+        while (true) { // So we can receive task after task
             if (t->state == WAIT)
                 t->wait();
 
@@ -156,7 +165,7 @@ namespace {
                 break;
             }
 
-            printf("Thread %d awake and doing a run()\n", t->thd_id);
+            //printf("Thread %d awake and doing a run()\n", t->thd_id);
             t->run(); // else
         }
 
@@ -165,14 +174,13 @@ namespace {
     }
 
     void kmeans_thread::start(const thread_state_t state=WAIT) {
+        //printf("Thread %d started ...\n", thd_id);
         this->state = state; // TODO: update state outside the start method
         int rc = pthread_create(&hw_thd, NULL, callback, this);
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
             exit(rc);
         }
-
-        //printf("Thd %u alive ...\n", thd_id);
     }
 
     /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/

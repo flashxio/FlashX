@@ -62,8 +62,6 @@ namespace {
             size_t data_size; // true size of local_data at any point
             clusters::ptr local_clusters;
 
-            bool _is_running;
-
             pthread_mutex_t mutex;
             pthread_cond_t cond;
             pthread_mutexattr_t mutex_attr;
@@ -99,11 +97,16 @@ namespace {
 
                 local_clusters = clusters::create(nclust, ncol);
                 meta.num_changed = 0; // Same as meta.clust_idx = 0;
-                set_running(true);
                 set_thread_state(WAIT);
             }
 
+        protected:
+            void set_thread_state(thread_state_t state) {
+                this->state = state;
+            }
+
         public:
+            typedef std::shared_ptr<base_kmeans_thread> ptr;
 
             virtual void start(const thread_state_t state) = 0;
             // Allocate and move data using this thread
@@ -116,7 +119,7 @@ namespace {
             void numa_alloc_mem();
 
             void test() {
-                printf("Hello from thread: %u\n", get_thd_id());
+                //printf("%u ", get_thd_id());
             }
 
 
@@ -124,12 +127,8 @@ namespace {
                 dist_v = v;
             }
 
-            const thread_state_t get_state() {
+            const thread_state_t get_state() const {
                 return this->state;
-            }
-
-            void set_thread_state(thread_state_t state) {
-                this->state = state;
             }
 
             const unsigned get_thd_id() const {
@@ -162,14 +161,6 @@ namespace {
 
             const size_t get_data_size() const {
                 return this->data_size;
-            }
-
-            const bool is_running() const {
-                return _is_running;
-            }
-
-            void set_running(const bool val) {
-                this->_is_running = val;
             }
 
             pthread_mutex_t& get_lock() {
