@@ -118,11 +118,11 @@ namespace {
 
     void base_kmeans_coordinator::wait4complete() {
         //printf("Coordinator entering wait4complete ..\n");
-        //pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&mutex);
         while (pending_threads != 0) {
-            //pthread_cond_wait(&cond, &mutex);
+            pthread_cond_wait(&cond, &mutex);
         }
-        //pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&mutex);
         //printf("Coordinator exiting wait4complete!!\n");
     }
 

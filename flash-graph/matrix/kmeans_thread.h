@@ -118,12 +118,12 @@ namespace {
 
         (*parent_pending_threads)--;
         set_thread_state(WAIT);
-        //rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+
+        if (*parent_pending_threads == 0) {
+            rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+            if (rc) perror("pthread_cond_signal");
+        }
         pthread_mutex_unlock(&mutex);
-
-        //if (rc) perror("pthread_cond_signal");
-
-        //printf("\nThread %d signalled parent ...\n", thd_id);
     }
 
     void kmeans_thread::wait() {
