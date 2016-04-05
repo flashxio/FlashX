@@ -155,8 +155,7 @@ namespace {
             const unsigned num_cols, const unsigned k) {
         BOOST_LOG_TRIVIAL(info) << "Random init start";
 
-        //#pragma omp parallel for firstprivate(cluster_assignments, K)
-        //shared(cluster_assignments)
+//#pragma omp parallel for shared(cluster_assignments)
         for (unsigned row = 0; row < num_rows; row++) {
             unsigned asgnd_clust = random() % k; // 0...K
 
