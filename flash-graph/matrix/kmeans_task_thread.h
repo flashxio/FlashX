@@ -25,7 +25,8 @@
 #include <atomic>
 
 using namespace km;
-namespace base {
+
+namespace prune {
     class kmeans_task_thread : public base_kmeans_thread {
         private:
             prune_clusters::ptr g_clusters; // Pointer to global cluster data
@@ -43,7 +44,7 @@ namespace base {
 
                 this->g_clusters = g_clusters;
 
-                tasks = task_queue(local_data, start_rid, nlocal_rows);  
+                tasks = task_queue(local_data, start_rid, nlocal_rows);
 
                 set_data_size(sizeof(double)*nlocal_rows*ncol);
 #if VERBOSE

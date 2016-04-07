@@ -25,17 +25,18 @@
 
 #include <memory>
 #include <utility>
+#include <atomic>
 #include <boost/format.hpp>
 
 #include "log.h"
 #include "libgraph-algs/clusters.h"
 #include "kmeans.h"
 
-#define KM_TEST 1
+//#define KM_TEST 1
 #define VERBOSE 0
 #define INVALID_THD_ID -1
 
-namespace {
+namespace km {
     enum thread_state_t {
         TEST, /*just for testing*/
         ALLOC_DATA, /*moving data for reduces rma*/
@@ -51,12 +52,11 @@ namespace {
     };
 
     class base_kmeans_thread {
-        friend class kmeans_thread; // FIXME: RM
-        private:
+        protected:
             pthread_t hw_thd;
             unsigned node_id; // Which NUMA node are you on?
             int thd_id;
-            size_t start_offset; // With respect to the original data
+            unsigned start_rid; // With respect to the original data
             unsigned ncol; // How many columns in the data
             double* local_data; // Pointer to where the data begins that the thread works on
             size_t data_size; // true size of local_data at any point
@@ -66,11 +66,13 @@ namespace {
             pthread_cond_t cond;
             pthread_mutexattr_t mutex_attr;
 
+            pthread_cond_t* parent_cond;
+            std::atomic<unsigned>* parent_pending_threads;
+
             metaunion meta;
             //unsigned num_changed;
 
             FILE* f; // Data file on disk
-
             unsigned* cluster_assignments;
 
             thread_state_t state;
@@ -80,7 +82,7 @@ namespace {
             friend void* callback(void* arg);
 
             base_kmeans_thread(const int node_id, const unsigned thd_id, const unsigned ncol,
-                    const unsigned nclust, unsigned* cluster_assignments, size_t start_offset,
+                    const unsigned nclust, unsigned* cluster_assignments, const unsigned start_rid,
                     const std::string fn) {
 
 
@@ -92,7 +94,7 @@ namespace {
                 this->thd_id = thd_id;
                 this->ncol = ncol;
                 this->cluster_assignments = cluster_assignments;
-                this->start_offset = start_offset;
+                this->start_rid = start_rid;
                 BOOST_VERIFY(this->f = fopen(fn.c_str(), "rb"));
 
                 local_clusters = clusters::create(nclust, ncol);
@@ -171,6 +173,19 @@ namespace {
                 return cond;
             }
 
+            unsigned get_node_id() {
+                return node_id;
+            }
+
+            void set_parent_cond(pthread_cond_t* cond) {
+                parent_cond = cond;
+            }
+
+            void set_parent_pending_threads(std::atomic<unsigned>* ppt) {
+                parent_pending_threads = ppt;
+            }
+
+
             void join();
             void close_file_handle();
             ~base_kmeans_thread();
@@ -187,7 +202,6 @@ namespace {
         thd_id = INVALID_THD_ID;
     }
 
-    //FIXME: bunch of getters and setters
     // Once the algorithm ends we should deallocate the memory we moved
     void base_kmeans_thread::close_file_handle() {
         int rc = fclose(f);
@@ -202,11 +216,9 @@ namespace {
     }
 
     base_kmeans_thread::~base_kmeans_thread() {
-        // TODO: Check me
         pthread_cond_destroy(&cond);
         pthread_mutex_destroy(&mutex);
         pthread_mutexattr_destroy(&mutex_attr);
-        // End TODO: Check me
 
         if (f)
             close_file_handle();
@@ -229,7 +241,7 @@ namespace {
         BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
         size_t blob_size = get_data_size();
         local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
-        fseek(f, start_offset*sizeof(double), SEEK_CUR); // start position
+        fseek(f, start_rid*ncol*sizeof(double), SEEK_CUR); // start position
         BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
         close_file_handle();
     }

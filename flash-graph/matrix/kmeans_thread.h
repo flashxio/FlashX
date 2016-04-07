@@ -20,33 +20,27 @@
 #ifndef __KMEANS_THREAD_H__
 #define __KMEANS_THREAD_H__
 #include "base_kmeans_thread.h"
-#include <atomic>
 
 namespace {
     class kmeans_thread : public base_kmeans_thread {
         private:
-            unsigned nprocrows; // How many rows to process
-            unsigned thds_row; // The general split of row to threads
             clusters::ptr g_clusters; // Pointer to global cluster data
+            unsigned nprocrows; // How many rows to process
 
-            pthread_cond_t* parent_cond;
-            std::atomic<unsigned>* parent_pending_threads;
-
-            kmeans_thread(const int node_id, const unsigned thd_id,const size_t start_offset,
-                    const unsigned nprocrows, const unsigned thds_row, const unsigned ncol,
+            kmeans_thread(const int node_id, const unsigned thd_id, const unsigned start_rid,
+                    const unsigned nprocrows, const unsigned ncol,
                     clusters::ptr g_clusters, unsigned* cluster_assignments,
                     const std::string fn) : base_kmeans_thread(node_id, thd_id, ncol,
-                        g_clusters->get_nclust(), cluster_assignments, start_offset, fn) {
+                        g_clusters->get_nclust(), cluster_assignments, start_rid, fn) {
 
                 this->nprocrows = nprocrows;
-                this->thds_row = thds_row; // Threads per row other than possibly the last one
                 this->g_clusters = g_clusters;
 
                 set_data_size(sizeof(double)*nprocrows*ncol);
 #if VERBOSE
                 printf("Initializing thread. Metadata: thd_id: %u, node_id: %u"
-                        ", start_offset: %lu, nprocrows: %u, ncol: %u\n",
-                        this->thd_id, this->node_id, this->start_offset,
+                        ", start_rid: %lu, nprocrows: %u, ncol: %u\n",
+                        this->thd_id, this->node_id, this->start_rid,
                         this->nprocrows, this->ncol);
 #endif
             }
@@ -55,12 +49,11 @@ namespace {
             typedef std::shared_ptr<kmeans_thread> ptr;
 
             static ptr create(const int node_id, const unsigned thd_id,
-                    const size_t start_offset, const unsigned nprocrows,
-                    const unsigned thds_row, const unsigned ncol,
-                    clusters::ptr g_clusters, unsigned* cluster_assignments,
-                    const std::string fn) {
-                return ptr(new kmeans_thread(node_id, thd_id, start_offset,
-                            nprocrows, thds_row, ncol, g_clusters,
+                    const unsigned start_rid, const unsigned nprocrows,
+                    const unsigned ncol, clusters::ptr g_clusters,
+                    unsigned* cluster_assignments, const std::string fn) {
+                return ptr(new kmeans_thread(node_id, thd_id, start_rid,
+                            nprocrows, ncol, g_clusters,
                             cluster_assignments, fn));
             }
 
@@ -78,15 +71,6 @@ namespace {
             void destroy_numa_mem() {
                 numa_free(local_data, get_data_size());
             }
-
-            void set_parent_cond(pthread_cond_t* cond) {
-                parent_cond = cond;
-            }
-
-            void set_parent_pending_threads(std::atomic<unsigned>* ppt) {
-                parent_pending_threads = ppt;
-            }
-
     };
 
     void kmeans_thread::run() {
@@ -154,13 +138,13 @@ namespace {
 
     void* callback(void* arg) {
         kmeans_thread* t = static_cast<kmeans_thread*>(arg);
-        bind2node_id(t->node_id);
+        bind2node_id(t->get_node_id());
 
         while (true) { // So we can receive task after task
-            if (t->state == WAIT)
+            if (t->get_state() == WAIT)
                 t->wait();
 
-            if (t->state == EXIT) {// No more work to do
+            if (t->get_state() == EXIT) {// No more work to do
                 //printf("Thread %d exiting ...\n", t->thd_id);
                 break;
             }
@@ -174,8 +158,7 @@ namespace {
     }
 
     void kmeans_thread::start(const thread_state_t state=WAIT) {
-        //printf("Thread %d started ...\n", thd_id);
-        this->state = state; // TODO: update state outside the start method
+        this->state = state;
         int rc = pthread_create(&hw_thd, NULL, callback, this);
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
@@ -183,12 +166,9 @@ namespace {
         }
     }
 
-    /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/
-    /** Sometimes we need to get a global row_id given a local one
-      */
     const unsigned kmeans_thread::
         get_global_data_id(const unsigned row_id) const {
-        return (thd_id*thds_row)+row_id;
+        return start_rid+row_id;
     }
 
     void kmeans_thread::EM_step() {
@@ -196,7 +176,7 @@ namespace {
         local_clusters->clear();
 
         for (unsigned row = 0; row < nprocrows; row++) {
-            size_t asgnd_clust = INVALID_CLUSTER_ID;
+            unsigned asgnd_clust = INVALID_CLUSTER_ID;
             double best, dist;
             dist = best = std::numeric_limits<double>::max();
 
