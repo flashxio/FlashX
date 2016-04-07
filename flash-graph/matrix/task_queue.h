@@ -18,82 +18,125 @@
  */
 
 #ifndef __KMEANS_TASK_QUEUE_H__
-#define __KMEANS_TASK_QUEUE_H__ 
+#define __KMEANS_TASK_QUEUE_H__
 
 #include <memory>
+#include <boost/assert.hpp>
 
-#define TASK_SIZE 4096 // TODO: Vary me
-/**
-  * These are given to threads to run
-  */
-class kmeans_task {
-    private:
-        double* task_data;
-        unsigned n_task_rows;
-    public:
-        kmeans_task(double* task_data, const unsigned n_task_rows) {
-            this->task_data = task_data;
-            this->n_task_rows = n_task_rows;
-        }
-        double* get_task_data() { return task_data; }
-        unsigned get_n_task_rows () { return n_task_rows; }
-};
+//#define MIN_TASK_ROWS 2048 // TODO: Change
+#define MIN_TASK_ROWS 2 // TODO: Change
+namespace km {
+    template <typename T>
+        class data_container {
+            private:
+                T* data;
+                unsigned start_rid; // row id of the first elem
+                unsigned nrow;
+            public:
+                data_container() { }
 
-class task_queue_interface {
-    private:
-        bool _has_task;
+                data_container(T* data, const unsigned start_rid) {
+                    set_data_ptr(data);
+                    set_start_rid(start_rid);
+                }
 
-    public:
-        virtual kmeans_task* get_task() = 0;
-        virtual bool has_task() = 0;
-};
+                data_container(T* data, const unsigned start_rid,
+                        const unsigned nrow) {
+                    set_data_ptr(data);
+                    set_start_rid(start_rid);
+                    set_nrow(nrow);
+                }
 
-// FIXME: Let's assume no NUMA memory allocation first
-// NOTE: This should be locked when accessed
-class simple_task_queue : public task_queue_interface {
-    private:
-        unsigned curr_pos; // Where we are in the queue
-        double *data; // pointer to the start of the 
-        unsigned NROW_PER_TASK;
-        unsigned ncol;
-        unsigned data_size;
+                void set_data_ptr(T* data) {
+                    this->data = data;
+                }
 
-    public:
-        typedef std::shared_ptr<simple_task_queue> ptr;
+                void set_start_rid(const unsigned start_rid) {
+                    this->start_rid = start_rid;
+                }
+                void set_nrow(const unsigned nrow) {
+                    this->nrow = nrow;
+                }
 
-        simple_task_queue(double* data, const unsigned data_size,
-                const unsigned ncol) {
-            this->data = data;
-            this->ncol = ncol;
-            this->data_size = data_size;
-            NROW_PER_TASK = TASK_SIZE/ncol; // NOTE: integer div
-        }
+                T* get_data_ptr() const {
+                    return data;
+                }
 
-        /**
-         * \param data_size The number of rows in the dataset
-         **/
-        static ptr create(double* data, const unsigned data_size,
-                const unsigned ncol) {
-            return ptr(new simple_task_queue(data, data_size, ncol));
-        }
+                const unsigned get_start_rid() const {
+                    return start_rid;
+                }
 
-        // TODO: Check if we really need to alloc this ...
-        kmeans_task* get_task() {
-            unsigned task_size; 
-            if ((curr_pos + NROW_PER_TASK) >= data_size) {
-                task_size = data_size - curr_pos; // TODO: Check me
-                curr_pos = data_size - 1;
-            } else {
-                task_size = NROW_PER_TASK;
-                curr_pos += NROW_PER_TASK;
+                const unsigned get_nrow() const {
+                    return nrow;
+                }
+        };
+
+    typedef data_container<double> task; // Task sent to a thread to process
+
+    template<typename T>
+        class task_queue_interface {
+            private:
+                bool _has_task;
+
+            public:
+                virtual task get_task() = 0;
+                virtual bool has_task() = 0;
+        };
+
+
+    // Repr of mem alloc'd generally by a thread
+    //  bound to numa node
+    class task_queue: public data_container<double>, task_queue_interface<double> {
+        private:
+            bool _has_task;
+            unsigned curr_rid; // Last index processed in the Q
+            unsigned ncol;
+        public:
+            task_queue() {}
+
+            task_queue(double* data, const unsigned start_rid, const unsigned nrow,
+                    const unsigned ncol): data_container(data, start_rid, nrow) {
+                _has_task = true;
+                curr_rid = start_rid;
+                this->ncol = ncol;
             }
 
-            kmeans_task* t = new kmeans_task(&data[curr_pos*ncol], task_size); 
-            return t;
-        }
+            // NOTE: This must be called with a lock taken
+            task get_task () {
+                if (!has_task())
+                    return task(NULL, -1, 0);
+                BOOST_VERIFY(curr_rid != get_nrow());
 
-        bool has_task() {
-            return curr_pos < data_size - 1;
-        }
-};
+                // TODO: Make better for when there are only
+                //  a few left rows if we give away a task
+                //TODO: May need malloc-ing
+                task t(&(get_data_ptr()[curr_rid*ncol]),
+                        get_start_rid()+curr_rid);
+                if ((curr_rid + MIN_TASK_ROWS) < get_nrow()) {
+                    t.set_nrow(MIN_TASK_ROWS);
+                    curr_rid += MIN_TASK_ROWS;
+                    return t;
+                } else {
+                    t.set_nrow(get_nrow()-curr_rid);
+                    curr_rid = get_nrow();
+                    _has_task = false;
+                }
+                return t;
+            }
+
+            bool has_task() {
+                return _has_task;
+            }
+
+            const unsigned get_curr_rid() const {
+                return curr_rid;
+            }
+
+            void reset() {
+                curr_rid = get_start_rid();
+                if (get_nrow() > 0)
+                    _has_task = true;
+            }
+    };
+}
 #endif
