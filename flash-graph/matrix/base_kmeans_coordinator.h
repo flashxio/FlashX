@@ -31,18 +31,17 @@
 #include <gperftools/profiler.h>
 #endif
 
-namespace {
-    class base_kmeans_coordinator {
-        private:
-            friend class kmeans_coordinator; // TODO: Encapsulate properly
+using namespace km;
 
+namespace base {
+    class base_kmeans_coordinator {
+        protected:
             unsigned nthreads, nnodes;
             size_t nrow, ncol;
             std::string fn; // File on disk
             unsigned* cluster_assignments;
             unsigned* cluster_assignment_counts;
             unsigned k;
-            clusters::ptr cltrs;
             init_type_t _init_t;
             dist_type_t _dist_t;
             double tolerance;

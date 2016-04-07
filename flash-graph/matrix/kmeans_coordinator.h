@@ -16,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __KMEANS_COORDINATOR__
-#define __KMEANS_COORDINATOR__
+#ifndef __KMEANS_COORDINATOR_H__
+#define __KMEANS_COORDINATOR_H__
 
 #include <vector>
 #include <unordered_map>
@@ -31,18 +31,20 @@
 #include <gperftools/profiler.h>
 #endif
 
+using namespace km;
 namespace {
 #if 0
     double* g_data; // TEST
 #endif
     typedef std::vector<kmeans_thread::ptr>::iterator thread_iter;
 
-    class kmeans_coordinator : public base_kmeans_coordinator {
+    class kmeans_coordinator : public base::base_kmeans_coordinator {
         private:
             std::vector<kmeans_thread::ptr> threads;
             // Metadata
             // max index stored within each threads partition
             std::vector<unsigned> thd_max_row_idx;
+            clusters::ptr cltrs;
 
             kmeans_coordinator(const std::string fn, const size_t nrow,
                     const size_t ncol, const unsigned k, const unsigned max_iters,
@@ -64,7 +66,7 @@ namespace {
                 cltrs = clusters::create(k, ncol);
                 if (centers) {
                     cltrs->set_mean(centers);
-                    if (_init_t != NONE) {
+                    if (_init_t != init_type_t::NONE) {
                         BOOST_LOG_TRIVIAL(warning) << "[WARNING]: Init method " <<
                             "ignored because centers provided!";
                     } else {
@@ -75,10 +77,10 @@ namespace {
                 // NUMA node affinity binding policy is round-robin
                 unsigned thds_row = nrow / nthreads;
                 for (unsigned thd_id = 0; thd_id < nthreads; thd_id++) {
-                    std::pair<size_t, unsigned> tup = get_offset_len_tup(thd_id);
+                    std::pair<unsigned, unsigned> tup = get_rid_len_tup(thd_id);
                     thd_max_row_idx.push_back((thd_id*thds_row) + tup.second);
                     threads.push_back(kmeans_thread::create((thd_id % nnodes),
-                                thd_id, tup.first, tup.second, thds_row,
+                                thd_id, tup.first, tup.second,
                                 ncol, cltrs, cluster_assignments, fn));
                     threads[thd_id]->set_parent_cond(&cond);
                     threads[thd_id]->set_parent_pending_threads(&pending_threads);
@@ -97,13 +99,13 @@ namespace {
 
                 init_type_t _init_t;
                 if (init == "random")
-                    _init_t = RANDOM;
+                    _init_t = init_type_t::RANDOM;
                 else if (init == "forgy")
-                    _init_t = FORGY;
+                    _init_t = init_type_t::FORGY;
                 else if (init == "kmeanspp")
-                    _init_t = PLUSPLUS;
+                    _init_t = init_type_t::PLUSPLUS;
                 else if (init == "none")
-                    _init_t = NONE;
+                    _init_t = init_type_t::NONE;
                 else {
                     BOOST_LOG_TRIVIAL(fatal) << "[ERROR]: param init must be one of:"
                        " [random | forgy | kmeanspp]. It is '" << init << "'";
@@ -130,13 +132,13 @@ namespace {
                             nnodes, nthreads, centers, _init_t, tolerance, _dist_t));
             }
 
-            std::pair<size_t, unsigned> get_offset_len_tup(const unsigned thd_id) {
+            std::pair<unsigned, unsigned> get_rid_len_tup(const unsigned thd_id) {
                 unsigned rows_per_thread = nrow / nthreads;
-                size_t start_offset = (thd_id*rows_per_thread*ncol);
+                unsigned start_rid = (thd_id*rows_per_thread);
 
                 if (thd_id == nthreads - 1)
                     rows_per_thread += nrow % nthreads;
-                return std::pair<size_t, unsigned>(start_offset, rows_per_thread);
+                return std::pair<unsigned, unsigned>(start_rid, rows_per_thread);
             }
 
             // Pass file handle to threads to read & numa alloc
@@ -338,16 +340,16 @@ namespace {
 
     void kmeans_coordinator::run_init() {
         switch(_init_t) {
-            case RANDOM:
+            case init_type_t::RANDOM:
                 random_partition_init();
                 break;
-            case FORGY:
+            case init_type_t::FORGY:
                 forgy_init();
                 break;
-            case PLUSPLUS:
+            case init_type_t::PLUSPLUS:
                 kmeanspp_init();
                 break;
-            case NONE:
+            case init_type_t::NONE:
                 break;
             default:
                 fprintf(stderr, "[FATAL]: Unknow initialization type\n");
