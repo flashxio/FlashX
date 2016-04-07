@@ -44,6 +44,7 @@
 #define VERBOSE 0
 
 using namespace fg;
+using namespace km;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;

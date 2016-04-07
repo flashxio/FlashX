@@ -24,6 +24,8 @@
 
 #include "libgraph-algs/clusters.h"
 
+using namespace km;
+
 constexpr unsigned NCOL = 4;
 constexpr unsigned NCLUST = 5;
 static const kmsvector zero {1,2,3,4};

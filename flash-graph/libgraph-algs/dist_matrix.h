@@ -23,6 +23,7 @@
 #include "sem_kmeans_util.h"
 #include "clusters.h"
 
+using namespace km;
 namespace
 {
     // NOTE: Creates a matrix like this e.g for K = 5

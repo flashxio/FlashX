@@ -27,7 +27,7 @@
 
 #include "log.h"
 
-namespace {
+namespace km {
 
     typedef std::vector<double> kmsvector;
     typedef std::vector<double>::iterator kmsiterator;

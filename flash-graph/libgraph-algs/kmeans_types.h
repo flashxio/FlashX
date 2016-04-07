@@ -19,7 +19,7 @@
 
 #ifndef __KMEANS_TYPES_H__
 #define __KMEANS_TYPES_H__
-namespace {
+namespace km {
     enum kms_stage_t { INIT, ESTEP }; // What phase of the algo we're in
     enum dist_type_t { EUCL, COS }; // Euclidean, Cosine distance
     enum init_type_t { RANDOM, FORGY, PLUSPLUS, NONE }; // May have to use
