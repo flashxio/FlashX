@@ -55,7 +55,7 @@ static void test_thread_creation(const unsigned NTHREADS, const unsigned nnodes)
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
         threads.push_back(kmeans_thread::create
-                (i%nnodes, i, 69, 200, 1, 2, cl, NULL, "/dev/null"));
+                (i%nnodes, i, 69, 200, 1, cl, NULL, "/dev/null"));
         threads[i]->set_parent_cond(&cond);
         threads[i]->set_parent_pending_threads(&pending_threads);
         threads[i]->start(WAIT); // Thread puts itself to sleep
@@ -86,7 +86,7 @@ void test_numa_populate_data() {
     for (unsigned i = 0; i < NTHREADS; i++) {
         clusters::ptr cl = clusters::create(2,2);
         threads.push_back(kmeans_thread::create
-                (i%nnodes, i, i*nprocrows*ncol, nprocrows, nprocrows, ncol,
+                (i%nnodes, i, i*nprocrows, nprocrows, ncol,
                  cl, NULL, fn));
         threads[i]->set_parent_cond(&cond);
         threads[i]->set_parent_pending_threads(&pending_threads);
@@ -126,12 +126,7 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-#if KM_TEST
     test_thread_creation(atoi(argv[1]), atoi(argv[2]));
-#else
-    printf("[FATAL]: Set KM_TEST 1 in kmeans.h\n");
-    exit(EXIT_FAILURE);
-#endif
     test_numa_populate_data();
 
     pthread_cond_destroy(&cond);
