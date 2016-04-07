@@ -24,7 +24,8 @@ CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
 			test_sem_kmeans test_clusters test_row_cache test_lazy_cache\
 			test_partition_cache test_kmeans_thread test_kmeans_coordinator\
-			test_thd_safe_bool_vector
+			test_thd_safe_bool_vector test_kmeans_task_thread\
+			test_task_queue
 
 all: $(TESTFILES)
 
@@ -63,6 +64,12 @@ test_kmeans_coordinator: test_kmeans_coordinator.o ../matrix/kmeans_coordinator.
 
 test_thd_safe_bool_vector: test_thd_safe_bool_vector.o
 	$(CXX) -o test_thd_safe_bool_vector test_thd_safe_bool_vector.o $(LDFLAGS)
+
+test_kmeans_task_thread: test_kmeans_task_thread.o
+	$(CXX) -o test_kmeans_task_thread test_kmeans_task_thread.o $(LDFLAGS)
+
+test_task_queue: test_task_queue.o
+	$(CXX) -o test_task_queue test_task_queue.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

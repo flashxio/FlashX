@@ -19,10 +19,10 @@
 
 #include <stdlib.h>
 #include <pthread.h>
-#include "matrix/kmeans_thread.h"
-#include "matrix/kmeans_thread.cpp"
-#include "libgraph-algs/sem_kmeans_util.h"
 #include <atomic>
+
+#include "matrix/kmeans_thread.h"
+#include "libgraph-algs/sem_kmeans_util.h"
 
 static std::atomic<unsigned> pending_threads;
 //static unsigned pending_threads;
