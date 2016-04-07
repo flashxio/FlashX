@@ -41,6 +41,7 @@
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/clusters.h"
 
+using namespace km;
 namespace {
     static const unsigned INVALID_CLUSTER_ID = std::numeric_limits<unsigned>::max();
     /**
