@@ -64,14 +64,26 @@ namespace {
             const unsigned get_global_data_id(const unsigned row_id) const;
             void run();
             void wait();
+            void sleep();
             void wake(thread_state_t state);
 
             const void print_local_data() const;
-
-            void destroy_numa_mem() {
-                numa_free(local_data, get_data_size());
-            }
     };
+
+    void kmeans_thread::sleep() {
+        int rc;
+        rc = pthread_mutex_lock(&mutex);
+        if (rc) perror("pthread_mutex_lock");
+
+        (*parent_pending_threads)--;
+        set_thread_state(WAIT);
+
+        if (*parent_pending_threads == 0) {
+            rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+            if (rc) perror("pthread_cond_signal");
+        }
+        pthread_mutex_unlock(&mutex);
+    }
 
     void kmeans_thread::run() {
         switch(state) {
@@ -94,20 +106,7 @@ namespace {
                 fprintf(stderr, "[FATAL]: Unknown thread state\n");
                 exit(EXIT_FAILURE);
         }
-
-        int rc;
-
-        rc = pthread_mutex_lock(&mutex);
-        if (rc) perror("pthread_mutex_lock");
-
-        (*parent_pending_threads)--;
-        set_thread_state(WAIT);
-
-        if (*parent_pending_threads == 0) {
-            rc = pthread_cond_signal(parent_cond); // Wake up parent thread
-            if (rc) perror("pthread_cond_signal");
-        }
-        pthread_mutex_unlock(&mutex);
+        sleep();
     }
 
     void kmeans_thread::wait() {
