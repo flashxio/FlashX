@@ -21,6 +21,8 @@
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/dist_matrix.h"
 
+using namespace prune;
+
 static prune_clusters::ptr g_clusters;
 constexpr unsigned NCOL = 5;
 
@@ -93,19 +95,19 @@ void test_eucl() {
 void test_dist_matrix() {
     constexpr unsigned k = 4;
     test_init_g_clusters();
-    dist_matrix::ptr test_mat = dist_matrix::create(k);
+    dist_matrix::ptr dm = dist_matrix::create(k);
 
     /* Test compute_dist */
-    compute_dist(g_clusters, test_mat, NCOL);
+    dm->compute_dist(g_clusters, NCOL);
 
     printf("Clusters:\n"); g_clusters->print_means();
-    printf("Cluster distance :\n"); test_mat->print();
+    printf("Cluster distance :\n"); dm->print();
 
     /* Test s_val */
     printf("Printing s_vals:\n");
     for (unsigned i = 0; i < k; i++) {
         BOOST_VERIFY(g_clusters->get_s_val(i) ==
-                test_mat->get_min_dist(i));
+                dm->get_min_dist(i));
     }
     printf("\n");
     printf("Exiting test_dist_matrix ==> ");

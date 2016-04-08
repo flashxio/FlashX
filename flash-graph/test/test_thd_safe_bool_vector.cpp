@@ -24,6 +24,8 @@
 #include "matrix/thd_safe_bool_vector.h"
 #include "libgraph-algs/sem_kmeans_util.h"
 
+using namespace prune;
+
 void build_state(std::vector<short> &verifier,
         thd_safe_bool_vector::ptr data, const unsigned len) {
     for (unsigned i = 0; i < len; i++) {
