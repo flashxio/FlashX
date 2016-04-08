@@ -253,9 +253,9 @@ namespace {
 
     void kmeans_coordinator::set_thd_dist_v_ptr(double* v) {
         for (unsigned thd_id = 0; thd_id < threads.size(); thd_id++) {
-            pthread_mutex_lock(&threads[thd_id]->get_lock());
+            pthread_mutex_lock(&mutex);
             threads[thd_id]->set_dist_v_ptr(v);
-            pthread_mutex_unlock(&threads[thd_id]->get_lock());
+            pthread_mutex_unlock(&mutex);
         }
     }
 
