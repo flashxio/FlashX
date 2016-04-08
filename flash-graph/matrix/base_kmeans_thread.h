@@ -116,14 +116,13 @@ namespace km {
             virtual void kmspp_dist() = 0;
             virtual const unsigned get_global_data_id(const unsigned row_id) const = 0;
             virtual void run() = 0;
-            virtual void destroy_numa_mem() = 0;
+            virtual void sleep() = 0;
 
             void numa_alloc_mem();
 
             void test() {
                 //printf("%u ", get_thd_id());
             }
-
 
             void set_dist_v_ptr(double* v) {
                 dist_v = v;
@@ -185,6 +184,9 @@ namespace km {
                 parent_pending_threads = ppt;
             }
 
+            void destroy_numa_mem() {
+                numa_free(local_data, get_data_size());
+            }
 
             void join();
             void close_file_handle();
