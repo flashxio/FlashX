@@ -42,7 +42,7 @@ namespace {
     static size_t g_io_reqs = 0;
 
     static bool g_prune_init = false;
-    static dist_matrix::ptr g_cluster_dist;
+    static prune::dist_matrix::ptr g_cluster_dist;
     static prune_clusters::ptr g_clusters; // cluster means/centers
 
     static unsigned NUM_ROWS;
@@ -814,7 +814,6 @@ namespace fg
 #if VERBOSE
         ac = active_counter::create(NUM_ROWS);
 #endif
-        gettimeofday(&start , NULL);
 
         /*** Begin VarInit of data structures ***/
         g_dist_type = EUCL; // TODO: Add to params
@@ -846,7 +845,7 @@ namespace fg
 
         BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
         // Distance to everyone other than yourself
-        g_cluster_dist = dist_matrix::create(K);
+        g_cluster_dist = prune::dist_matrix::create(K);
         /*** End VarInit ***/
 
         if (!centers) {
@@ -903,7 +902,7 @@ namespace fg
                     mat->wait4complete();
 
                     // Compute distance matrix
-                    compute_dist(g_clusters, g_cluster_dist, NUM_COLS);
+                     g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 #if VERBOSE
                     BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
                     g_clusters->print_means();
@@ -931,12 +930,13 @@ namespace fg
         g_gb_obt_iter.push_back(mat->get_tot_bytes());
         g_cache_hits_iter.push_back(g_row_cache->get_cache_hits());
 #endif
+        gettimeofday(&start , NULL);
 
         if (init == "forgy" || init == "kmeanspp" || centers) {
             g_prune_init = true; // set
             g_stage = ESTEP;
             BOOST_LOG_TRIVIAL(info) << "Init: Computing cluster distance matrix ...";
-            compute_dist(g_clusters, g_cluster_dist, NUM_COLS);
+            g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 #if KM_TEST
             BOOST_LOG_TRIVIAL(info) << "Printing inited cluster distance matrix ...";
             g_cluster_dist->print();
@@ -971,7 +971,7 @@ namespace fg
             g_clusters->print_means();
 
             BOOST_LOG_TRIVIAL(info) << "After Init engine: cluster distance matrix ...";
-            compute_dist(g_clusters, g_cluster_dist, NUM_COLS);
+            g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
             g_cluster_dist->print();
 
             ac->init_iter();
@@ -995,7 +995,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
                 " . Computing cluster assignments ...";
             BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
-            compute_dist(g_clusters, g_cluster_dist, NUM_COLS);
+            g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 
 #if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "Before: Cluster distance matrix ...";
