@@ -46,7 +46,7 @@ namespace prune {
             // max index stored within each threads partition
             std::vector<unsigned> thd_max_row_idx;
             prune_clusters::ptr cltrs;
-            thd_safe_bool_vector::ptr recalculated_v;
+            prune::thd_safe_bool_vector::ptr recalculated_v;
             double* dist_v; // global
             prune::dist_matrix::ptr dm;
 
@@ -70,7 +70,7 @@ namespace prune {
                 }
 
                 // For pruning
-                recalculated_v = thd_safe_bool_vector::create(nrow, false);
+                recalculated_v = prune::thd_safe_bool_vector::create(nrow, false);
                 dist_v = new double[nrow];
                 std::fill(&dist_v[0], &dist_v[nrow], std::numeric_limits<double>::max());
                 dm = prune::dist_matrix::create(k);
@@ -406,7 +406,7 @@ namespace prune {
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration: " << iter;
 
             BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
-            compute_dist(cltrs, dm, ncol);
+            dm->compute_dist(cltrs, ncol);
 
             wake4run(EM);
             wait4complete();

@@ -24,9 +24,8 @@
 #include "kmeans.h"
 #include "thd_safe_bool_vector.h"
 #include "libgraph-algs/dist_matrix.h"
-#include "thd_safe_bool_vector.h"
 
-#define KM_TEST 1
+#define KM_TEST 0
 #define VERBOSE 0
 
 namespace {
@@ -52,7 +51,7 @@ namespace {
     static void kmeanspp_init(const double* matrix, prune_clusters::ptr clusters,
             unsigned* cluster_assignments) {
 
-        // Choose c1 uniiformly at random
+        // Choose c1 uniformly at random
         unsigned selected_idx = random() % NUM_ROWS; // 0...(NUM_ROWS-1)
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
@@ -117,8 +116,8 @@ namespace {
      */
     static void EM_step(const double* matrix, prune_clusters::ptr cls,
             unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
-            thd_safe_bool_vector::ptr recalculated_v, std::vector<double>& dist_v,
-            dist_matrix::ptr dm, const bool prune_init=false) {
+            prune::thd_safe_bool_vector::ptr recalculated_v, std::vector<double>& dist_v,
+            prune::dist_matrix::ptr dm, const bool prune_init=false) {
 
         std::vector<clusters::ptr> pt_cl(OMP_MAX_THREADS);
         // Per thread changed cluster count. OMP_MAX_THREADS
@@ -128,8 +127,7 @@ namespace {
             pt_cl[i] = clusters::create(K, NUM_COLS);
 
 #pragma omp parallel for firstprivate(matrix, pt_cl)\
-        shared(cluster_assignments, recalculated_v, dist_v)\
-        schedule(static)
+        shared(cluster_assignments, recalculated_v, dist_v)
         for (unsigned row = 0; row < NUM_ROWS; row++) {
             unsigned old_clust = cluster_assignments[row];
             unsigned offset = row*NUM_COLS;
@@ -298,12 +296,12 @@ namespace fg
             clusters->set_mean(clusters_ptr);
 
         // For pruning
-        thd_safe_bool_vector::ptr recalculated_v =
-          thd_safe_bool_vector::create(NUM_ROWS, false);
+        prune::thd_safe_bool_vector::ptr recalculated_v =
+            prune::thd_safe_bool_vector::create(NUM_ROWS, false);
 
         std::vector<double> dist_v;
         dist_v.assign(NUM_ROWS, std::numeric_limits<double>::max());
-        dist_matrix::ptr dm = dist_matrix::create(K);
+        prune::dist_matrix::ptr dm = prune::dist_matrix::create(K);
 
         /*** End VarInit ***/
         BOOST_LOG_TRIVIAL(info) << "Dist_type is " << dist_type;
@@ -332,7 +330,7 @@ namespace fg
             g_init_type = PLUSPLUS;
         } else if (init == "none") {
             g_init_type = NONE;
-            compute_dist(clusters, dm, NUM_COLS);
+            dm->compute_dist(clusters, NUM_COLS);
         } else {
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param init must be one of: "
@@ -342,7 +340,7 @@ namespace fg
         }
 
 #if VERBOSE
-        compute_dist(clusters, dm, NUM_COLS); // NOTE: Not necessary
+        dm->compute_dist(clusters, NUM_COLS);
         BOOST_LOG_TRIVIAL(info) << "Cluster distance matrix after init ...";
         dm->print();
 #endif
@@ -374,7 +372,7 @@ namespace fg
                 ". Computing cluster assignments ...";
 
             BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
-            compute_dist(clusters, dm, NUM_COLS);
+            dm->compute_dist(clusters, NUM_COLS);
 #if VERBOSE
             BOOST_LOG_TRIVIAL(info) << "Before: Cluster distance matrix ...";
             dm->print();

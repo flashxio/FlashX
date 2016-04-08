@@ -29,7 +29,7 @@
 #include "log.h"
 #include "../libgraph-algs/sem_kmeans_util.h"
 
-namespace {
+namespace prune {
     constexpr unsigned LEN = 2;
 
     class _bool{
@@ -41,8 +41,10 @@ namespace {
                 _[0] = c;
             }
 
+#if 0
             friend std::ostream& operator<<(std::ostream& os,
                     const _bool& b);
+#endif
 
             operator bool() const {
                 if (strcmp(_, "1"))
@@ -51,11 +53,13 @@ namespace {
             }
     };
 
+#if 0
     std::ostream& operator<<(std::ostream& os,
             const _bool& b) {
         os << b._;
         return os;
     }
+#endif
 
     /**
       * \brief This class uses a char[2] vector to represent a
