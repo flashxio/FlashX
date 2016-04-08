@@ -100,9 +100,7 @@ namespace base {
             virtual void random_partition_init() = 0;
             virtual void forgy_init() = 0;
 
-            //virtual void numa_alloc_data() = 0;
             virtual void run_kmeans() = 0;
-            virtual void update_clusters() = 0;
             virtual void kmeanspp_init() = 0;
             virtual void wake4run(thread_state_t state) = 0;
             virtual const double* get_thd_data(const unsigned row_id) const = 0;
