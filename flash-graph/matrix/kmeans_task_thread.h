@@ -33,18 +33,21 @@ namespace prune {
             unsigned start_rid; // The row id of the first item in this partition
 
             std::vector<kmeans_task_thread::ptr>* workers; // all other worker threads
-            task_queue tasks; // TODO: Init me
-            task curr_task; // TODO: Populate me
+            task_queue tasks;
+            task curr_task;
 
-            kmeans_task_thread(const int node_id, const unsigned thd_id,const unsigned start_rid,
-                    const unsigned nlocal_rows, const unsigned ncol,
-                    prune_clusters::ptr g_clusters, unsigned* cluster_assignments,
+            kmeans_task_thread(const int node_id, const unsigned thd_id,
+                    const unsigned start_rid, const unsigned nlocal_rows,
+                    const unsigned ncol, prune_clusters::ptr g_clusters,
+                    unsigned* cluster_assignments,
                     const std::string fn) : base_kmeans_thread(node_id, thd_id, ncol,
                         g_clusters->get_nclust(), cluster_assignments, start_rid, fn) {
 
                 this->g_clusters = g_clusters;
-
-                tasks = task_queue(local_data, start_rid, nlocal_rows);
+                // Init task queue
+                tasks.set_start_rid(start_rid);
+                tasks.set_nrow(nlocal_rows);
+                tasks.set_ncol(ncol);
 
                 set_data_size(sizeof(double)*nlocal_rows*ncol);
 #if VERBOSE
@@ -75,12 +78,11 @@ namespace prune {
             void run();
             void wait();
             void wake(thread_state_t state);
+            void request_task();
+            void lock_sleep();
+            void sleep();
 
             const void print_local_data() const;
-
-            void destroy_numa_mem() {
-                numa_free(local_data, get_data_size());
-            }
 
             void set_parent_cond(pthread_cond_t* cond) {
                 parent_cond = cond;
@@ -92,28 +94,7 @@ namespace prune {
 
     };
 
-    void kmeans_task_thread::run() {
-        switch(state) {
-            case TEST:
-                test();
-                break;
-            case ALLOC_DATA:
-                numa_alloc_mem();
-                break;
-            case KMSPP_INIT:
-                kmspp_dist();
-                break;
-            case EM: /*E step of kmeans*/
-                EM_step();
-                break;
-            case EXIT:
-                fprintf(stderr, "[FATAL]: Thread state is EXIT but running!\n");
-                exit(EXIT_FAILURE);
-            default:
-                fprintf(stderr, "[FATAL]: Unknown thread state\n");
-                exit(EXIT_FAILURE);
-        }
-
+    void kmeans_task_thread::request_task() {
         int rc;
         rc = pthread_mutex_lock(&mutex);
         if (rc) perror("pthread_mutex_lock");
@@ -122,18 +103,81 @@ namespace prune {
             // Grab another task
             //delete curr_task;
             curr_task = tasks.get_task();
-            BOOST_ASSERT_MSG(curr_task.get_nrow(), "FIXME: Empty task"); // FIXME someone got the last task
+            BOOST_VERIFY(curr_task.get_nrow() <= tasks.get_nrow());
+
+            // FIXME: someone got the last task
+            //printf("request_task: Thd: %u, Task ==> ", get_thd_id()); curr_task.print();
+            BOOST_ASSERT_MSG(curr_task.get_nrow(), "FIXME: Empty task");
         } else {
             // TODO: Here is where we should steal tasks first
-            (*parent_pending_threads)--;
-            set_thread_state(WAIT);
-
-            if (*parent_pending_threads == 0) {
-                rc = pthread_cond_signal(parent_cond); // Wake up parent thread
-                if (rc) perror("pthread_cond_signal");
-            }
+            sleep();
         }
         pthread_mutex_unlock(&mutex);
+    }
+
+    void kmeans_task_thread::lock_sleep() {
+        int rc;
+        rc = pthread_mutex_lock(&mutex);
+        if (rc) perror("pthread_mutex_lock");
+
+        (*parent_pending_threads)--;
+        set_thread_state(WAIT);
+
+        if (*parent_pending_threads == 0) {
+            rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+            if (rc) perror("pthread_cond_signal");
+        }
+        rc = pthread_mutex_unlock(&mutex);
+        if (rc) perror("pthread_mutex_unlock");
+    }
+
+    // Assumes caller has lock already ... or else ...
+    void kmeans_task_thread::sleep() {
+        (*parent_pending_threads)--;
+        set_thread_state(WAIT);
+
+        if (*parent_pending_threads == 0) {
+            int rc = pthread_cond_signal(parent_cond); // Wake up parent thread
+            if (rc) perror("pthread_cond_signal");
+        }
+    }
+
+    void kmeans_task_thread::run() {
+        switch(state) {
+            case TEST:
+                test();
+                lock_sleep();
+                break;
+            case ALLOC_DATA:
+                numa_alloc_mem();
+                tasks.set_data_ptr(local_data); // We now have real data
+#if 0
+                if (thd_id == 1) {
+                    printf("Local data:\n");
+                    print_local_data();
+
+                    printf("Task queue contents: ==>\n");
+                    print_mat<double>(tasks.get_data_ptr(), tasks.get_nrow(), tasks.get_ncol());
+                }
+#endif
+                lock_sleep();
+                break;
+            case KMSPP_INIT:
+                kmspp_dist();
+                return; // TODO: RM
+                request_task();
+                break;
+            case EM: /* Super-E-step */
+                EM_step();
+                request_task();
+                break;
+            case EXIT:
+                fprintf(stderr, "[FATAL]: Thread state is EXIT but running!\n");
+                exit(EXIT_FAILURE);
+            default:
+                fprintf(stderr, "[FATAL]: Unknown thread state\n");
+                exit(EXIT_FAILURE);
+        }
     }
 
     void kmeans_task_thread::wait() {
@@ -156,6 +200,20 @@ namespace prune {
         rc = pthread_mutex_lock(&mutex);
         if (rc) perror("pthread_mutex_lock");
         set_thread_state(state);
+
+        if (state == thread_state_t::EM ||
+                state == thread_state_t::KMSPP_INIT) {
+            // Threads only sleep if they AND all other threads have no tasks
+            tasks.reset(); // NOTE: Only place this is reset
+            curr_task = tasks.get_task();
+            BOOST_VERIFY(curr_task.get_nrow() <= tasks.get_nrow());
+
+            meta.num_changed = 0; // Always reset at the beginning of an EM-step
+            local_clusters->clear(); // FIXME: May need update when pruning
+
+            //printf("wake: Thd: %u, Task ==> ", get_thd_id()); curr_task.print();
+        }
+
         rc = pthread_mutex_unlock(&mutex);
         if (rc) perror("pthread_mutex_unlock");
 
@@ -185,7 +243,7 @@ namespace prune {
 
     void kmeans_task_thread::start(const thread_state_t state=WAIT) {
         //printf("Thread %d started ...\n", thd_id);
-        this->state = state; // TODO: update state outside the start method
+        this->state = state;
         int rc = pthread_create(&hw_thd, NULL, callback, this);
         if (rc) {
             fprintf(stderr, "[FATAL]: Thread creation failed with code: %d\n", rc);
@@ -198,18 +256,13 @@ namespace prune {
       */
     const unsigned kmeans_task_thread::
         get_global_data_id(const unsigned row_id) const {
-            BOOST_ASSERT_MSG(false, "Unimplemented!\n");
+            BOOST_ASSERT_MSG(false, "Unimplemented!\n"); // FIXME
             return 0;
         }
 
     void kmeans_task_thread::EM_step() {
-        BOOST_ASSERT_MSG(false, "Unimplemented!\n");
-#if 1
-        meta.num_changed = 0; // Always reset at the beginning of an EM-step
-        local_clusters->clear();
-
         for (unsigned row = 0; row < curr_task.get_nrow(); row++) {
-            size_t asgnd_clust = INVALID_CLUSTER_ID;
+            unsigned asgnd_clust = INVALID_CLUSTER_ID;
             double best, dist;
             dist = best = std::numeric_limits<double>::max();
 
@@ -231,9 +284,8 @@ namespace prune {
                 meta.num_changed++;
 
             cluster_assignments[true_row_id] = asgnd_clust;
-            local_clusters->add_member(&curr_task.get_data_ptr()[row*ncol], asgnd_clust);
+            local_clusters->add_member(&(curr_task.get_data_ptr()[row*ncol]), asgnd_clust);
         }
-#endif
     }
 
     /** Method for a distance computation vs a single cluster.
