@@ -22,9 +22,8 @@ LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
 TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
-			test_sem_kmeans test_clusters test_row_cache test_lazy_cache\
-			test_partition_cache test_kmeans_thread test_kmeans_coordinator\
-			test_thd_safe_bool_vector test_kmeans_task_thread\
+			test_sem_kmeans test_clusters test_lazy_cache test_partition_cache\
+			test_kmeans_thread test_thd_safe_bool_vector test_kmeans_task_thread\
 			test_task_queue
 
 all: $(TESTFILES)
@@ -46,9 +45,6 @@ test_sem_kmeans: test_sem_kmeans.o
 
 test_clusters: test_clusters.o
 	$(CXX) -o test_clusters test_clusters.o $(LDFLAGS)
-
-test_row_cache: test_row_cache.o
-	$(CXX) -o test_row_cache test_row_cache.o $(LDFLAGS)
 
 test_lazy_cache: test_lazy_cache.o
 	$(CXX) -o test_lazy_cache test_lazy_cache.o $(LDFLAGS)

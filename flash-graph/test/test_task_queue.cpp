@@ -45,12 +45,14 @@ void test_queue_get() {
     printf("Task queue ==> nrow: %u, ncol: %u\n",
             q.get_nrow(), nrow);
 
-    printf("Printing task queue data ...\n");
-    for (unsigned i = 0; i < 2; i++) {
+    printf("run:");
+    for (unsigned i = 0; i < 4; i++) {
+        printf(" %u", i);
         // Test reset
         q.reset();
+        km::task t;
         while(q.has_task()) {
-            km::task t = q.get_task();
+            t = q.get_task();
 #if 0
             print_mat<double>(t.get_data_ptr(), t.get_nrow(), ncol);
 #endif
@@ -60,7 +62,7 @@ void test_queue_get() {
         }
     }
 
-    printf("Task queue test SUCCESSful! ...\n");
+    printf("\n\nTask queue test SUCCESSful! ...\n");
     delete [] data;
 }
 
