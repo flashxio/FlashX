@@ -22,6 +22,8 @@
 
 #include "base_kmeans_thread.h"
 #include "task_queue.h"
+#include "libgraph-algs/dist_matrix.h"
+#include "thd_safe_bool_vector.h"
 #include <atomic>
 
 using namespace km;
@@ -36,6 +38,10 @@ namespace prune {
             task_queue tasks;
             task curr_task;
 
+            bool prune_init;
+            prune::dist_matrix::ptr dm; // global
+            thd_safe_bool_vector::ptr recalculated_v; // global
+
             kmeans_task_thread(const int node_id, const unsigned thd_id,
                     const unsigned start_rid, const unsigned nlocal_rows,
                     const unsigned ncol, prune_clusters::ptr g_clusters,
@@ -48,6 +54,7 @@ namespace prune {
                 tasks.set_start_rid(start_rid);
                 tasks.set_nrow(nlocal_rows);
                 tasks.set_ncol(ncol);
+                prune_init = true;
 
                 set_data_size(sizeof(double)*nlocal_rows*ncol);
 #if VERBOSE
@@ -83,6 +90,7 @@ namespace prune {
             void sleep();
 
             const void print_local_data() const;
+            double* get_dist_v_ptr() { return &dist_v[0]; }
 
             void set_parent_cond(pthread_cond_t* cond) {
                 parent_cond = cond;
@@ -92,6 +100,21 @@ namespace prune {
                 parent_pending_threads = ppt;
             }
 
+            void set_prune_init(const bool prune_init) {
+                this->prune_init = prune_init;
+            }
+
+            const bool is_prune_init() {
+                return prune_init;
+            }
+
+            void set_recalc_v_ptr(thd_safe_bool_vector::ptr recalculated_v) {
+                this->recalculated_v = recalculated_v;
+            }
+
+            void set_dist_mat_ptr(prune::dist_matrix::ptr dm) {
+                this->dm = dm;
+            }
     };
 
     void kmeans_task_thread::request_task() {
@@ -151,20 +174,10 @@ namespace prune {
             case ALLOC_DATA:
                 numa_alloc_mem();
                 tasks.set_data_ptr(local_data); // We now have real data
-#if 0
-                if (thd_id == 1) {
-                    printf("Local data:\n");
-                    print_local_data();
-
-                    printf("Task queue contents: ==>\n");
-                    print_mat<double>(tasks.get_data_ptr(), tasks.get_nrow(), tasks.get_ncol());
-                }
-#endif
                 lock_sleep();
                 break;
             case KMSPP_INIT:
                 kmspp_dist();
-                return; // TODO: RM
                 request_task();
                 break;
             case EM: /* Super-E-step */
@@ -209,7 +222,7 @@ namespace prune {
             BOOST_VERIFY(curr_task.get_nrow() <= tasks.get_nrow());
 
             meta.num_changed = 0; // Always reset at the beginning of an EM-step
-            local_clusters->clear(); // FIXME: May need update when pruning
+            local_clusters->clear();
 
             //printf("wake: Thd: %u, Task ==> ", get_thd_id()); curr_task.print();
         }
@@ -251,42 +264,92 @@ namespace prune {
         }
     }
 
-    /*TODO: Check if it's cheaper to do per thread `cluster_assignments`*/
-    /** Sometimes we need to get a global row_id given a local one
-      */
     const unsigned kmeans_task_thread::
         get_global_data_id(const unsigned row_id) const {
-            BOOST_ASSERT_MSG(false, "Unimplemented!\n"); // FIXME
-            return 0;
+            return row_id + curr_task.get_start_rid();
         }
 
     void kmeans_task_thread::EM_step() {
         for (unsigned row = 0; row < curr_task.get_nrow(); row++) {
-            unsigned asgnd_clust = INVALID_CLUSTER_ID;
-            double best, dist;
-            dist = best = std::numeric_limits<double>::max();
+            unsigned true_row_id = get_global_data_id(row);
+            unsigned old_clust = cluster_assignments[true_row_id];
 
-            for (unsigned clust_idx = 0;
-                    clust_idx < g_clusters->get_nclust(); clust_idx++) {
-                dist = dist_comp_raw(&curr_task.get_data_ptr()[row*ncol],
-                        &(g_clusters->get_means()[clust_idx*ncol]), ncol);
+            if (prune_init) {
+                double dist = std::numeric_limits<double>::max();
 
-                if (dist < best) {
-                    best = dist;
-                    asgnd_clust = clust_idx;
+                for (unsigned clust_idx = 0;
+                        clust_idx < g_clusters->get_nclust(); clust_idx++) {
+                    dist = dist_comp_raw(&curr_task.get_data_ptr()[row*ncol],
+                            &(g_clusters->get_means()[clust_idx*ncol]), ncol);
+
+                    if (dist < dist_v[true_row_id]) {
+                        dist_v[true_row_id] = dist;
+                        cluster_assignments[true_row_id] = clust_idx;
+                    }
+                }
+
+            } else {
+                recalculated_v->set(true_row_id, false);
+                dist_v[true_row_id] +=
+                    g_clusters->get_prev_dist(cluster_assignments[true_row_id]);
+
+                if (dist_v[true_row_id] <=
+                        g_clusters->get_s_val(cluster_assignments[true_row_id])) {
+                    // Skip all rows
+                } else {
+                    for (unsigned clust_idx = 0;
+                            clust_idx < g_clusters->get_nclust(); clust_idx++) {
+
+                        if (dist_v[true_row_id] <= dm->get(cluster_assignments
+                                    [true_row_id], clust_idx)) {
+                            // Skip this cluster
+                            continue;
+                        }
+
+                        if (!recalculated_v->get(true_row_id)) {
+                            dist_v[true_row_id] = dist_comp_raw(
+                                    &curr_task.get_data_ptr()[row*ncol],
+                                    &(g_clusters->get_means()[cluster_assignments
+                                        [true_row_id]*ncol]), ncol);
+                            recalculated_v->set(true_row_id, true);
+                        }
+
+                        if (dist_v[true_row_id] <=
+                            dm->get(cluster_assignments[true_row_id], clust_idx)) {
+                            // Skip this cluster
+                            continue;
+                        }
+
+                        // Track 5
+                        double jdist = dist_comp_raw(
+                                &curr_task.get_data_ptr()[row*ncol],
+                                &(g_clusters->get_means()[clust_idx*ncol]), ncol);
+
+                        if (jdist < dist_v[true_row_id]) {
+                            dist_v[true_row_id] = jdist;
+                            cluster_assignments[true_row_id] = clust_idx;
+                        }
+                    } // endfor
                 }
             }
 
-            BOOST_VERIFY(asgnd_clust != INVALID_CLUSTER_ID);
-            unsigned true_row_id = row + curr_task.get_start_rid();
+            BOOST_VERIFY(cluster_assignments[true_row_id] >= 0 &&
+                    cluster_assignments[true_row_id] < g_clusters->get_nclust());
 
-            if (asgnd_clust != cluster_assignments[true_row_id])
+            if (prune_init) {
                 meta.num_changed++;
-
-            cluster_assignments[true_row_id] = asgnd_clust;
-            local_clusters->add_member(&(curr_task.get_data_ptr()[row*ncol]), asgnd_clust);
+            local_clusters->add_member(&(curr_task.get_data_ptr()[row*ncol]),
+                    cluster_assignments[true_row_id]);
+            } else if (old_clust != cluster_assignments[true_row_id]) {
+                meta.num_changed++;
+                local_clusters->swap_membership(
+                        &(curr_task.get_data_ptr()[row*ncol]),
+                        old_clust, cluster_assignments[true_row_id]);
+            }
         }
     }
+
+
 
     /** Method for a distance computation vs a single cluster.
       * Used in kmeans++ init
