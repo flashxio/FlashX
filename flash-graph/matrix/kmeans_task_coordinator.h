@@ -26,6 +26,8 @@
 #include "base_kmeans_coordinator.h"
 #include "kmeans_task_thread.h"
 #include "libgraph-algs/sem_kmeans_util.h"
+#include "libgraph-algs/dist_matrix.h"
+#include "thd_safe_bool_vector.h"
 
 #ifdef PROFILER
 #include <gperftools/profiler.h>
@@ -44,6 +46,9 @@ namespace prune {
             // max index stored within each threads partition
             std::vector<unsigned> thd_max_row_idx;
             prune_clusters::ptr cltrs;
+            thd_safe_bool_vector::ptr recalculated_v;
+            double* dist_v; // global
+            prune::dist_matrix::ptr dm;
 
             kmeans_task_coordinator(const std::string fn, const size_t nrow,
                     const size_t ncol, const unsigned k, const unsigned max_iters,
@@ -63,6 +68,12 @@ namespace prune {
                         BOOST_LOG_TRIVIAL(info) << "Init-ed centers ...";
                     }
                 }
+
+                // For pruning
+                recalculated_v = thd_safe_bool_vector::create(nrow, false);
+                dist_v = new double[nrow];
+                std::fill(&dist_v[0], &dist_v[nrow], std::numeric_limits<double>::max());
+                dm = prune::dist_matrix::create(k);
 
                 // NUMA node affinity binding policy is round-robin
                 unsigned thds_row = nrow / nthreads;
@@ -134,7 +145,7 @@ namespace prune {
             // Pass file handle to threads to read & numa alloc
             void create_thread_map();
             void run_kmeans();
-            void update_clusters();
+            void update_clusters(const bool prune_init);
             void kmeanspp_init();
             void wake4run(thread_state_t state);
             void destroy_threads();
@@ -144,6 +155,7 @@ namespace prune {
             void run_init();
             void random_partition_init();
             void forgy_init();
+            void set_global_ptrs();
 
             const double* get_thd_data(const unsigned row_id) const;
 
@@ -154,6 +166,7 @@ namespace prune {
 
                 delete [] cluster_assignments;
                 delete [] cluster_assignment_counts;
+                delete [] dist_v;
 
                 pthread_cond_destroy(&cond);
                 pthread_mutex_destroy(&mutex);
@@ -163,9 +176,24 @@ namespace prune {
 #endif
                 destroy_threads();
             }
+
+            void set_prune_init(const bool prune_init) {
+                for (thread_iter it = threads.begin(); it != threads.end(); ++it)
+                    (*it)->set_prune_init(prune_init);
+            }
     };
 
     typedef std::pair<unsigned, unsigned> thd_row_tup;
+
+    void kmeans_task_coordinator::set_global_ptrs() {
+        for (thread_iter it = threads.begin(); it != threads.end(); ++it) {
+            pthread_mutex_lock(&mutex);
+            (*it)->set_dist_v_ptr(dist_v);
+            (*it)->set_recalc_v_ptr(recalculated_v);
+            (*it)->set_dist_mat_ptr(dm);
+            pthread_mutex_unlock(&mutex);
+        }
+    }
 
     void kmeans_task_coordinator::destroy_threads() {
         wake4run(EXIT);
@@ -173,7 +201,6 @@ namespace prune {
 
     // <Thread, within-thread-row-id>
     const double* kmeans_task_coordinator::get_thd_data(const unsigned row_id) const {
-        // TODO: Cheapen
         unsigned parent_thd = std::upper_bound(thd_max_row_idx.begin(),
                 thd_max_row_idx.end(), row_id) - thd_max_row_idx.begin();
         unsigned rows_per_thread = nrow/nthreads; // All but the last thread
@@ -187,36 +214,36 @@ namespace prune {
                 [(row_id-(parent_thd*rows_per_thread))*ncol]);
     }
 
-    void kmeans_task_coordinator::update_clusters() {
-        num_changed = 0; // Always reset here since there's no pruning
-        cltrs->clear();
+    void kmeans_task_coordinator::update_clusters(const bool prune_init) {
+        if (prune_init) {
+            printf("Clearing because of init ..\n");
+            cltrs->clear();
+        } else {
+            cltrs->set_prev_means();
+            for (unsigned idx = 0; idx < k; idx++)
+                cltrs->unfinalize(idx);
+        }
 
-        // Serial aggreate of OMP_MAX_THREADS vectors
         for (thread_iter it = threads.begin(); it != threads.end(); ++it) {
             // Updated the changed cluster count
             num_changed += (*it)->get_num_changed();
-            // Summation for cluster centers
-
-#if VERBOSE
-            printf("Thread %ld clusters:\n", (it-threads.begin()));
-            ((*it)->get_local_clusters())->print_means();
-#endif
-
             cltrs->peq((*it)->get_local_clusters());
         }
 
         unsigned chk_nmemb = 0;
         for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) {
             cltrs->finalize(clust_idx);
-            cluster_assignment_counts[clust_idx] =
-                cltrs->get_num_members(clust_idx);
+            cltrs->set_prev_dist(eucl_dist(&(cltrs->get_means()[clust_idx*ncol]),
+                    &(cltrs->get_prev_means()[clust_idx*ncol]), ncol), clust_idx);
+#if VERBOSE
+            BOOST_LOG_TRIVIAL(info) << "Dist to prev mean for c:" << clust_idx
+                << " is " << cltrs->get_prev_dist(clust_idx);
+#endif
+
+            cluster_assignment_counts[clust_idx] = cltrs->get_num_members(clust_idx);
             chk_nmemb += cluster_assignment_counts[clust_idx];
         }
-        if (chk_nmemb != nrow)
-            printf("chk_nmemb = %u\n", chk_nmemb);
-
         BOOST_VERIFY(chk_nmemb == nrow);
-        BOOST_VERIFY(num_changed <= nrow);
 
 #if KM_TEST
         BOOST_LOG_TRIVIAL(info) << "Global number of changes: " << num_changed;
@@ -252,10 +279,7 @@ namespace prune {
     void kmeans_task_coordinator::kmeanspp_init() {
         struct timeval start, end;
         gettimeofday(&start , NULL);
-
-        std::vector<double> dist_v;
-        dist_v.assign(nrow, std::numeric_limits<double>::max());
-        set_thd_dist_v_ptr(&dist_v[0]);
+        set_thd_dist_v_ptr(dist_v);
 
 		// Choose c1 uniformly at random
 		unsigned selected_idx = random() % nrow; // 0...(nrow-1)
@@ -354,6 +378,7 @@ namespace prune {
 #ifdef PROFILER
 		ProfilerStart("matrix/kmeans_task_coordinator.perf");
 #endif
+        set_global_ptrs();
         wake4run(ALLOC_DATA);
         wait4complete();
 
@@ -361,15 +386,31 @@ namespace prune {
         gettimeofday(&start , NULL);
         run_init(); // Initialize clusters
 
+#if 0
+        printf("printing clusters:\n");
+        cltrs->print_means();
+#endif
+
+        // Init Engine
+        printf("Running init engine:\n");
+        wake4run(EM);
+        wait4complete();
+        update_clusters(true);
+        set_prune_init(false);
+
+        num_changed = 0;
         // Run kmeans loop
         size_t iter = 1;
         bool converged = false;
         while (iter <= max_iters) {
             BOOST_LOG_TRIVIAL(info) << "E-step Iteration: " << iter;
+
+            BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
+            compute_dist(cltrs, dm, ncol);
+
             wake4run(EM);
             wait4complete();
-
-            update_clusters();
+            update_clusters(false);
 
             printf("Cluster assignment counts: ");
             print_arr(cluster_assignment_counts, k);
@@ -378,6 +419,8 @@ namespace prune {
                     ((num_changed/(double)nrow)) <= tolerance) {
                 converged = true;
                 break;
+            } else {
+                num_changed = 0;
             }
             iter++;
         }
