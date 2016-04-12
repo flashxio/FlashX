@@ -52,14 +52,16 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 		iter <- iter + 1
 		if (debug) {
 			iter.end <- Sys.time()
-			cat("iteration", iter, "takes", iter.end - iter.start,
+			cat("iteration", iter, "takes",
+				as.numeric(iter.end) - as.numeric(iter.start),
 				"seconds and moves", num.moves, "data points\n")
 		}
 		old.parts <- NULL
 		gc()
 	}
 	end.time <- Sys.time()
-	cat("KMeans takes", iter , "iterations and", end.time - start.time, "seconds\n")
+	cat("KMeans takes", iter , "iterations and",
+		as.numeric(end.time) - as.numeric(start.time), "seconds\n")
 	fm.set.test.na(orig.test.na)
 	parts
 }
