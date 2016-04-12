@@ -71,7 +71,7 @@ fm.cov <- function(x, y=NULL, use="everything",
 		ret <- fm.materialize(x.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.mu <- fm.conv.FM2R(x.mu)
-		ret <- (ret[[2]] - n * x.mu %*% t(x.mu)) / (n - 1)
+		ret <- (fm.conv.FM2R(ret[[2]]) - n * x.mu %*% t(x.mu)) / (n - 1)
 	}
 	else {
 		x.sum <- fm.rowSums(t(x), TRUE)
@@ -80,12 +80,12 @@ fm.cov <- function(x, y=NULL, use="everything",
 		ret <- fm.materialize(x.sum, y.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		y.mu <- ret[[2]] / n
-		x.mu <- fm.as.matrix(x.mu)
-		y.mu <- fm.as.matrix(y.mu)
-		ret <- (ret[[3]] - n * x.mu %*% t(y.mu)) / (n - 1)
+		x.mu <- fm.conv.FM2R(x.mu)
+		y.mu <- fm.conv.FM2R(y.mu)
+		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
 	fm.set.test.na(orig.test.na)
-	fm.materialize(ret)
+	ret
 }
 
 fm.cor <- function(x, y=NULL, use="everything",
@@ -103,9 +103,9 @@ fm.cor <- function(x, y=NULL, use="everything",
 		ret <- fm.materialize(x.sum, x2.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[2]] - n * x.mu * x.mu) / (n - 1))
-		x.mu <- fm.as.matrix(x.mu)
-		x.sd <- fm.as.matrix(x.sd)
-		ret <- (ret[[3]] - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
+		x.mu <- fm.conv.FM2R(x.mu)
+		x.sd <- fm.conv.FM2R(x.sd)
+		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
 	}
 	else {
 		x.sum <- fm.rowSums(t(x), TRUE)
@@ -116,16 +116,16 @@ fm.cor <- function(x, y=NULL, use="everything",
 		ret <- fm.materialize(x.sum, y.sum, x2.sum, y2.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[3]] - n * x.mu * x.mu) / (n - 1))
-		x.mu <- fm.as.matrix(x.mu)
-		x.sd <- fm.as.matrix(x.sd)
+		x.mu <- fm.conv.FM2R(x.mu)
+		x.sd <- fm.conv.FM2R(x.sd)
 		y.mu <- ret[[2]] / n
 		y.sd <- sqrt((ret[[4]] - n * y.mu * y.mu) / (n - 1))
-		y.mu <- fm.as.matrix(y.mu)
-		y.sd <- fm.as.matrix(y.sd)
-		ret <- (ret[[5]] - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
+		y.mu <- fm.conv.FM2R(y.mu)
+		y.sd <- fm.conv.FM2R(y.sd)
+		ret <- (fm.conv.FM2R(ret[[5]]) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
 	fm.set.test.na(orig.test.na)
-	fm.materialize(ret)
+	ret
 }
 
 fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
