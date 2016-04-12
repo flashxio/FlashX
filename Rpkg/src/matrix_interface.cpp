@@ -1403,7 +1403,7 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		return R_NilValue;
 	}
 
-	Rcpp::IntegerVector r_idxs(pidxs);
+	Rcpp::NumericVector r_idxs(pidxs);
 	std::vector<off_t> c_idxs(r_idxs.size());
 	for (size_t i = 0; i < c_idxs.size(); i++)
 		// R is 1-based indexing, and C/C++ is 0-based.

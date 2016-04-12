@@ -1282,7 +1282,7 @@ fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.integer(idxs),
+	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.numeric(idxs),
 				 PACKAGE="FlashR")
 	if (!is.null(ret) && length(idxs) > 1)
 		new.fm(ret)
@@ -1298,7 +1298,7 @@ fm.get.rows <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.integer(idxs),
+	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.numeric(idxs),
 				 PACKAGE="FlashR")
 	if (!is.null(ret) && length(idxs) > 1)
 		new.fm(ret)
