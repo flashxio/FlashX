@@ -47,9 +47,10 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	# After we compute the other singular vectors, we need to rescale
 	# these singular vectors because they aren't orthonormal.
 	rescale <- function(x) {
+		fm.set.materialize.level(x, 2)
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
-		x <- fm.materialize(x)
+#		x <- fm.materialize(x)
 	}
 	if (comp.right) {
 		right <- NULL
