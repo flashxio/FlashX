@@ -26,14 +26,15 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 		fm.as.matrix(centers)
 	}
 
-	parts <- fm.as.integer(floor(fm.runif(n, min=0, max=K)))
-	new.centers <- cal.centers(data, fm.as.factor(parts, K))
-	centers <- fm.matrix(fm.rep.int(0, K * m), K, m)
-	old.parts <- fm.rep.int(0, n)
+#	parts <- fm.as.integer(floor(fm.runif(n, min=0, max=K)))
+#	new.centers <- cal.centers(data, fm.as.factor(parts, K))
+	rand.k <- runif(K, 1, nrow(data))
+	new.centers <- data[rand.k,]
+	parts <- NULL
 
 	iter <- 0
 	start.time <- Sys.time()
-	num.moves <- length(parts)
+	num.moves <- nrow(data)
 	while (num.moves > 0 && iter < max.iters) {
 		if (debug)
 			iter.start <- Sys.time()
@@ -46,13 +47,16 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 		fm.set.materialize.level(parts, 2, TRUE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, K))
-		num.moves <- sum(old.parts != parts)
+		if (!is.null(old.parts))
+			num.moves <- sum(old.parts != parts)
 		iter <- iter + 1
 		if (debug) {
 			iter.end <- Sys.time()
 			cat("iteration", iter, "takes", iter.end - iter.start,
 				"seconds and moves", num.moves, "data points\n")
 		}
+		old.parts <- NULL
+		gc()
 	}
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and", end.time - start.time, "seconds\n")
