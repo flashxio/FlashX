@@ -75,7 +75,7 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 	init.covar <- cov(X)
 	covars <- list()
 	for (i in 1:k)
-		covars[[i]] <- fm.conv.FM2R(init.covar)
+		covars[[i]] <- init.covar
 	phi <- rep.int(1/m, k)
 
 	for (iter in 1:maxiters) {
