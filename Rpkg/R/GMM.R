@@ -82,6 +82,9 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 		if (verbose)
 			cat("iter", iter, "\n")
 		# E-step
+		P <- NULL
+		ret <- NULL
+		gc()
 		start.t <- Sys.time()
 		ret <- comp.prob(X, mus, covars, phi)
 		P <- ret$P
@@ -95,7 +98,6 @@ GMM <- function(X, k, maxiters, verbose=FALSE)
 				break
 		}
 		old.like <- new.like
-		gc()
 		end.t <- Sys.time()
 		if (verbose)
 			cat("E-step takes", as.integer(end.t) - as.integer(start.t),
