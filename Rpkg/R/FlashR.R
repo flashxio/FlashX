@@ -461,6 +461,13 @@ fm.typeof <- function(fm)
 	fm@ele_type
 }
 
+fm.in.mem <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	.Call("R_FM_is_inmem", fm, PACKAGE="FlashR")
+}
+
 #' Convert a FlashMatrix matrix to a FlashMatrix vector.
 #'
 #' The matrix must have only one row or one column. Otherwise, the function
@@ -1309,7 +1316,7 @@ fm.get.rows <- function(fm, idxs)
 		NULL
 }
 
-fm.set.materialize.level <- function(fm, level, in.mem)
+fm.set.materialize.level <- function(fm, level, in.mem=fm.in.mem(fm))
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")

@@ -1355,6 +1355,21 @@ RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
 	return ret;
 }
 
+RcppExport SEXP R_FM_is_inmem(SEXP pmat)
+{
+	Rcpp::LogicalVector ret(1);
+	if (is_sparse(pmat)) {
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		// TODO let's assume it's always on SSDs first.
+		ret[0] = false;
+	}
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		ret[0] = mat->is_in_mem();
+	}
+	return ret;
+}
+
 #if 0
 RcppExport SEXP R_FM_set_cols(SEXP pmat, SEXP pidxs, SEXP pvs)
 {
