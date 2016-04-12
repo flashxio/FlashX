@@ -24,16 +24,25 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	nev <- max(nu, nv)
 	if (comp.right) {
 		n <- ncol(x)
-		txx <- fm.conv.FM2R(tx %*% x)
-		multiply <- function(vec, extra) txx %*% vec
+		x.prod <- fm.conv.FM2R(tx %*% x)
+		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	else {
 		n <- nrow(x)
-		xtx <- fm.conv.FM2R(x %*% tx)
-		multiply <- function(vec, extra) xtx %*% vec
+		x.prod <- fm.conv.FM2R(x %*% tx)
+		multiply <- function(vec, extra) x.prod %*% vec
 	}
-	res <- arpack(multiply, sym=TRUE,
-				  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
+	# If it's a very small matrix, we can compute its eigenvalues directly.
+	# Or if we need to compute many eigenvalues, we probably should also
+	# compute its eigenvalues directly.
+	if (nrow(x.prod) < 100 || nev >= nrow(x.prod) / 2) {
+		res <- eigen(x.prod, TRUE, FALSE)
+		res$values <- res$values[nev]
+		nev <- nrow(x.prod)
+	}
+	else
+		res <- arpack(multiply, sym=TRUE,
+					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
 
 	# After we compute the other singular vectors, we need to rescale
 	# these singular vectors because they aren't orthonormal.
