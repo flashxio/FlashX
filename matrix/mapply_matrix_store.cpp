@@ -1043,8 +1043,9 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 					&& ret->get_num_cols() == num_rows))) {
 		assert(ret->get_local_start_row() == 0);
 		assert(ret->get_local_start_col() == 0);
-		// We need to transpose the matrix.
-		if (ret->get_num_rows() == num_cols && ret->get_num_cols() == num_rows)
+		// If the cached portion has different data layout from the matrix,
+		// the cached portion is transposed. We need to transpose the matrix.
+		if (ret->store_layout() != store_layout())
 			return transpose_lmapply(ret);
 		else
 			return ret;
@@ -1174,8 +1175,9 @@ async_cres_t mapply_matrix_store::get_portion_async(
 			assert(store);
 			collect_compute = store->get_compute();
 		}
-		// We need to transpose the matrix.
-		if (ret1->get_num_rows() == num_cols && ret1->get_num_cols() == num_rows)
+		// If the cached portion has different data layout from the matrix,
+		// the cached portion is transposed. We need to transpose the matrix.
+		if (ret1->store_layout() != store_layout())
 			ret1 = transpose_lmapply(ret1);
 		// If the collect compute doesn't exist, it mean the data in the local
 		// matrix store may already by ready.
