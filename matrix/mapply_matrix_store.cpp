@@ -600,18 +600,31 @@ void collect_portion_compute::run(char *buf, size_t size)
 		orig_computes.clear();
 
 		// If we want full materialization, we should write the result back.
-		if (global_res) {
+		// We don't need to do it explicitly for in-memory matrix because
+		// we store the materialized portions to in-memory matrix directly.
+		if (global_res && !global_res->is_in_mem()) {
+			// If the portion is too large, we should split it and materialize
+			// parts separately to improve CPU cache hits.
+			if (res->get_num_rows() == EM_matrix_store::CHUNK_SIZE
+					|| res->get_num_cols() == EM_matrix_store::CHUNK_SIZE) {
+				std::vector<detail::local_matrix_store::const_ptr> lstores(1);
+				lstores[0] = res;
+				if (res->is_wide())
+					materialize_wide(lstores);
+				else
+					materialize_tall(lstores);
+			}
 			// The global result may be in memory while the input matrices
 			// are in external memory. In this case, the materialized data
 			// is stored in memory automatically.
-			if (!global_res->is_in_mem() && is_wide) {
+			if (is_wide) {
 				local_matrix_store::const_ptr tres
 					= std::static_pointer_cast<const local_matrix_store>(
 						res->transpose());
 				global_res->write_portion_async(tres,
 						tres->get_global_start_row(), tres->get_global_start_col());
 			}
-			else if (!global_res->is_in_mem())
+			else
 				global_res->write_portion_async(res,
 						res->get_global_start_row(), res->get_global_start_col());
 		}
