@@ -299,6 +299,11 @@ async_cres_t EM_matrix_store::get_portion_async(
 		if (!valid_data)
 			cb.add(req, compute);
 
+		// We need its transpose.
+		if (ret1->store_layout() != store_layout())
+			ret1 = std::static_pointer_cast<const local_matrix_store>(
+					ret1->transpose());
+
 		local_matrix_store::const_ptr ret;
 		if (local_start_row > 0 || local_start_col > 0
 				|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
@@ -306,11 +311,6 @@ async_cres_t EM_matrix_store::get_portion_async(
 					num_rows, num_cols);
 		else
 			ret = ret1;
-		// We need its transpose.
-		if (ret1->get_num_rows() == fetch_num_cols
-				&& ret1->get_num_cols() == fetch_num_rows)
-			ret = std::static_pointer_cast<const local_matrix_store>(
-					ret->transpose());
 		assert((size_t) ret->get_global_start_row() == start_row);
 		assert((size_t) ret->get_global_start_col() == start_col);
 		assert(ret->get_num_rows() == num_rows);
