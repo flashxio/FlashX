@@ -21,15 +21,39 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
+//#include <cmath>
 
 #include <vector>
 #include <iostream>
 
 #include <boost/assert.hpp>
 
-#include "clusters.h"
-
 namespace {
+    template <typename T>
+        static void print_arr(const T* arr, const unsigned len) {
+            printf("[ ");
+            for (unsigned i = 0; i < len; i++) {
+                std::cout << arr[i] << " ";
+            }
+            printf("]\n");
+        }
+
+    // Vector equal function
+    template <typename T>
+        static bool v_eq(const T& lhs, const T& rhs) {
+            return std::equal(lhs.begin(), lhs.end(), rhs.begin());
+        }
+
+
+    template <typename T>
+        static const bool v_eq_const(const std::vector<T>& v, const T var) {
+            for (unsigned i=0; i < v.size(); i++) {
+                if (v[i] != var) return false;
+            }
+            return true;
+        }
+
     template <typename T>
         bool eq_all(const T* v1, const T* v2, const unsigned len) {
             return (std::equal(&v1[0], &(v1[len-1]), &v2[0]));
