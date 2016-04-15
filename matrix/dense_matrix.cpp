@@ -1679,12 +1679,27 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 		return dense_matrix::ptr();
 	}
 
-	dense_matrix::ptr t = transpose();
-	dense_matrix::ptr ret = t->mapply_cols(vals, op);
-	if (ret)
-		return ret->transpose();
-	else
-		return dense_matrix::ptr();
+	// We should handle mapply_row and mapply_col separately, so we don't
+	// mess up the case of square matrices.
+	std::vector<detail::matrix_store::const_ptr> ins(1);
+	ins[0] = this->get_raw_store();
+	mapply_row_op::const_ptr mapply_op;
+	// If this is a wide matrix, the input vector may also be stored on
+	// disks. We should give it as the input of mapply_portion.
+	if (is_wide()) {
+		ins.push_back(vals->get_raw_store());
+		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
+					NULL, op, get_num_rows(), get_num_cols()));
+	}
+	else {
+		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
+		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
+					detail::mem_matrix_store::cast(mem_mat->get_raw_store()),
+					op, get_num_rows(), get_num_cols()));
+	}
+	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+			mapply_op, this->store_layout());
+	return dense_matrix::create(ret);
 }
 
 //////////////////////////// Cast the element types ///////////////////////////
