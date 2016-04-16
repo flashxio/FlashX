@@ -2643,7 +2643,51 @@ dense_matrix::ptr dense_matrix::deep_copy() const
 namespace
 {
 
-class groupby_row_mapply_op: public detail::portion_mapply_op
+class groupby_long_row_mapply_op: public detail::portion_mapply_op
+{
+	factor_col_vector::const_ptr labels;
+	detail::local_matrix_store::const_ptr llabels;
+	agg_operate::const_ptr op;
+public:
+	groupby_long_row_mapply_op(agg_operate::const_ptr op,
+			factor_col_vector::const_ptr labels,
+			size_t num_cols): detail::portion_mapply_op(
+				labels->get_factor().get_num_levels(), num_cols,
+				op->get_output_type()) {
+		this->op = op;
+		this->labels = labels;
+		this->llabels = labels->get_raw_store()->get_portion(0);
+		assert(this->llabels->get_num_rows() == labels->get_length());
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		throw unsupported_exception(
+				"Don't support transpose of groupby_short_row_mapply_op");
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+		assert(out.store_layout() == matrix_layout_t::L_ROW);
+		std::vector<bool> agg_flags(out.get_num_rows());
+		const detail::local_row_matrix_store &row_in
+			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		bool ret = detail::groupby_row(*llabels, row_in, *op, row_out, agg_flags);
+		assert(ret);
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("groupby_row(") + mats[0]->get_name() + ")";
+	}
+};
+
+class groupby_short_row_mapply_op: public detail::portion_mapply_op
 {
 	// This contains a bool vector for each thread.
 	// The bool vector indicates whether a label gets partially aggregated data.
@@ -2655,8 +2699,8 @@ class groupby_row_mapply_op: public detail::portion_mapply_op
 	size_t num_levels;
 	agg_operate::const_ptr op;
 public:
-	groupby_row_mapply_op(size_t num_levels,
-			agg_operate::const_ptr op): detail::portion_mapply_op(0, 0,
+	groupby_short_row_mapply_op(agg_operate::const_ptr op,
+			size_t num_levels): detail::portion_mapply_op(0, 0,
 				op->get_output_type()) {
 		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 		part_results.resize(num_threads);
@@ -2668,7 +2712,7 @@ public:
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		throw unsupported_exception(
-				"Don't support transpose of groupby_row_mapply_op");
+				"Don't support transpose of groupby_short_row_mapply_op");
 	}
 
 	virtual void run(
@@ -2677,13 +2721,13 @@ public:
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		throw unsupported_exception(
-				"Don't support to_string of groupby_row_mapply_op");
+				"Don't support to_string of groupby_short_row_mapply_op");
 	}
 
 	detail::matrix_store::ptr get_agg() const;
 };
 
-detail::matrix_store::ptr groupby_row_mapply_op::get_agg() const
+detail::matrix_store::ptr groupby_short_row_mapply_op::get_agg() const
 {
 	for (size_t i = 0; i < part_status.size(); i++) {
 		if (!part_status[i]) {
@@ -2715,15 +2759,15 @@ detail::matrix_store::ptr groupby_row_mapply_op::get_agg() const
 	return res;
 }
 
-void groupby_row_mapply_op::run(
+void groupby_short_row_mapply_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
 	detail::local_matrix_store::const_ptr labels = ins[0];
 	detail::local_matrix_store::const_ptr in = ins[1];
 
-	groupby_row_mapply_op *mutable_this = const_cast<groupby_row_mapply_op *>(
-			this);
+	groupby_short_row_mapply_op *mutable_this
+		= const_cast<groupby_short_row_mapply_op *>(this);
 	// Prepare for the output result.
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	if (part_results[thread_id] == NULL) {
@@ -2751,11 +2795,6 @@ void groupby_row_mapply_op::run(
 dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		agg_operate::const_ptr op) const
 {
-	if (is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "groupby_row can't run on a wide dense matrix";
-		return dense_matrix::ptr();
-	}
 	if (labels->get_length() != get_num_rows()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "groupby_row: there should be the same #labels as #rows";
@@ -2771,24 +2810,46 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		return dense_matrix::ptr();
 	}
 
-	std::vector<detail::matrix_store::const_ptr> mats(2);
-	mats[0] = labels->get_raw_store();
-	if (store_layout() == matrix_layout_t::L_ROW)
-		mats[1] = store;
-	else {
-		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
-		mats[1] = tmp->get_raw_store();
+	if (this->is_wide()) {
+		std::vector<detail::matrix_store::const_ptr> mats(1);
+		if (store_layout() == matrix_layout_t::L_ROW)
+			mats[0] = store;
+		else {
+			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+			mats[0] = tmp->get_raw_store();
+		}
+		// I need to materialize the vector because this vector is shared by
+		// all threads.
+		labels->materialize_self();
+		detail::portion_mapply_op::const_ptr groupby_op(
+				new groupby_long_row_mapply_op(op, labels, get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(mats,
+				groupby_op, matrix_layout_t::L_ROW);
+		if (ret == NULL)
+			return dense_matrix::ptr();
+		else
+			return dense_matrix::create(ret);
 	}
-	groupby_row_mapply_op *_groupby_op = new groupby_row_mapply_op(
-			labels->get_factor().get_num_levels(), op);
-	detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
-	__mapply_portion(mats, groupby_op, matrix_layout_t::L_ROW);
+	else {
+		std::vector<detail::matrix_store::const_ptr> mats(2);
+		mats[0] = labels->get_raw_store();
+		if (store_layout() == matrix_layout_t::L_ROW)
+			mats[1] = store;
+		else {
+			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+			mats[1] = tmp->get_raw_store();
+		}
+		groupby_short_row_mapply_op *_groupby_op = new groupby_short_row_mapply_op(
+				op, labels->get_factor().get_num_levels());
+		detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
+		__mapply_portion(mats, groupby_op, matrix_layout_t::L_ROW);
 
-	detail::matrix_store::ptr agg = _groupby_op->get_agg();
-	if (agg == NULL)
-		return dense_matrix::ptr();
-	else
-		return dense_matrix::create(agg);
+		detail::matrix_store::ptr agg = _groupby_op->get_agg();
+		if (agg == NULL)
+			return dense_matrix::ptr();
+		else
+			return dense_matrix::create(agg);
+	}
 }
 
 dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,

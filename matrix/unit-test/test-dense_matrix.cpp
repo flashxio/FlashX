@@ -1984,17 +1984,17 @@ public:
 	}
 };
 
-void test_groupby()
+void _test_groupby(dense_matrix::ptr mat)
 {
-	dense_matrix::ptr mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
-			-1, get_scalar_type<int>());
+	printf("group by rows on matrix: %ld, %ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
 	factor f(10);
 	factor_col_vector::ptr rand_factors = factor_col_vector::create(f,
 			mat->get_num_rows(), -1, true, rand_set(f));
 	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
 			mat->get_type().get_basic_ops().get_add());
 	dense_matrix::ptr group_sum = mat->groupby_row(rand_factors, add);
-	printf("groupby finishes\n");
+	group_sum->materialize_self();
 
 	detail::mem_matrix_store::const_ptr mem_mat
 		= detail::mem_matrix_store::cast(mat->get_raw_store());
@@ -2022,6 +2022,14 @@ void test_groupby()
 			assert(agg_res[i][j] == mem_res->get<int>(i, j));
 		}
 	}
+}
+
+void test_groupby()
+{
+	_test_groupby(create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
+				-1, get_scalar_type<int>()));
+	_test_groupby(create_matrix(10, long_dim, matrix_layout_t::L_ROW,
+				-1, get_scalar_type<int>()));
 }
 
 void test_get_col(dense_matrix::ptr mat)

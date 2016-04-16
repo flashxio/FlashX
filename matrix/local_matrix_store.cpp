@@ -1397,9 +1397,40 @@ bool groupby_row(const detail::local_matrix_store &labels,
 		detail::local_row_matrix_store &results, std::vector<bool> &agg_flags)
 {
 	const size_t LONG_DIM_LEN = get_long_dim_len(mat);
-	assert(!mat.is_wide());
+	// If this is a very wide matrix, we need to resize it.
+	if (mat.is_wide() && mat.get_num_cols() > LONG_DIM_LEN) {
+		size_t orig_num_cols = mat.get_num_cols();
+		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = results.get_exposed_area();
+		local_row_matrix_store &mutable_mat
+			= const_cast<local_row_matrix_store &>(mat);
+		for (size_t col_idx = 0; col_idx < orig_num_cols;
+				col_idx += LONG_DIM_LEN) {
+			size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
+			mutable_mat.resize(orig_in.local_start_row,
+					orig_in.local_start_col + col_idx, mat.get_num_rows(), llen);
+			results.resize(orig_res.local_start_row,
+					orig_res.local_start_col + col_idx,
+					results.get_num_rows(), llen);
+			// We need to reset the flags when we compute on smaller parts.
+			size_t orig_num = agg_flags.size();
+			agg_flags.clear();
+			agg_flags.resize(orig_num, false);
+			bool ret = _groupby_row(labels, mat, op, results, agg_flags);
+			if (!ret) {
+				mutable_mat.restore_size(orig_in);
+				results.restore_size(orig_res);
+				return false;
+			}
+		}
+		mutable_mat.restore_size(orig_in);
+		results.restore_size(orig_res);
+		return true;
+	}
+	else if (mat.is_wide())
+		return _groupby_row(labels, mat, op, results, agg_flags);
 	// resize the tall matrix
-	if (mat.is_virtual() && mat.get_num_rows() > LONG_DIM_LEN) {
+	else if (mat.is_virtual() && mat.get_num_rows() > LONG_DIM_LEN) {
 		size_t orig_num_rows = mat.get_num_rows();
 		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
 		local_matrix_store::exposed_area orig_labels = labels.get_exposed_area();

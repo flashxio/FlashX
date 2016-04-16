@@ -1163,7 +1163,7 @@ void mapply_cols(const local_matrix_store &m1, const local_vec_store &vals,
 void mapply_rows(const local_matrix_store &m1, const local_vec_store &vals,
 		const bulk_operate &op, local_matrix_store &m2);
 /*
- * This groupby on a tall row-major matrix.
+ * This groupby on a row-major matrix.
  */
 bool groupby_row(const detail::local_matrix_store &labels,
 		const detail::local_row_matrix_store &mat, const agg_operate &op,
