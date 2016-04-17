@@ -25,7 +25,6 @@
 #include "kmeans.h"
 
 #define MIN_TASK_ROWS 8192 // TODO: Change
-//#define MIN_TASK_ROWS 2 // TODO: Change
 namespace km {
     template <typename T>
         class data_container {
@@ -78,7 +77,14 @@ namespace km {
                 }
         };
 
-    typedef data_container<double> task; // Task sent to a thread to process
+    // Task sent to a thread to process
+    class task : public data_container<double> {
+        public:
+            task():data_container() { }
+            task(double* data, const unsigned start_rid):data_container(data, start_rid) { }
+            task(double* data, const unsigned start_rid,
+                    const unsigned nrow):data_container(data, start_rid, nrow){ }
+    };
 
     template<typename T>
         class task_queue_interface {
@@ -86,8 +92,9 @@ namespace km {
                 bool _has_task;
 
             public:
-                virtual task get_task() = 0;
+                virtual task* get_task() = 0;
                 virtual const bool has_task() const = 0;
+                virtual ~task_queue_interface() {};
         };
 
 
@@ -110,26 +117,26 @@ namespace km {
             }
 
             // NOTE: This must be called with a lock taken
-            task get_task () {
+            task* get_task () {
                 if (!has_task()) {
                     printf("[ERROR]: In get_task() with no task left!!\n");
-                    return task(NULL, -1, 0);
+                    return new task(NULL, -1, 0);
                 }
                 BOOST_VERIFY(curr_rid < get_nrow());
 
                 // TODO: Make better for when there are only
                 //  a few left rows if we give away a task
-                task t(&(get_data_ptr()[curr_rid*ncol]), get_start_rid()+curr_rid);
+                task* t = new task(&(get_data_ptr()[curr_rid*ncol]), get_start_rid()+curr_rid);
                 if ((curr_rid + MIN_TASK_ROWS) < (get_nrow()-1)) {
-                    t.set_nrow(MIN_TASK_ROWS);
+                    t->set_nrow(MIN_TASK_ROWS);
                     curr_rid += MIN_TASK_ROWS;
                     return t;
                 } else {
-                    t.set_nrow(get_nrow()-curr_rid);
+                    t->set_nrow(get_nrow()-curr_rid);
                     curr_rid = get_nrow()-1;
                     _has_task = false;
                 }
-                BOOST_VERIFY(t.get_nrow() > 0);
+                BOOST_VERIFY(t->get_nrow() > 0);
                 return t;
             }
 
