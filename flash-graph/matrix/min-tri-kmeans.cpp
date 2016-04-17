@@ -24,9 +24,12 @@
 #include "kmeans.h"
 #include "thd_safe_bool_vector.h"
 #include "libgraph-algs/dist_matrix.h"
+#include "libgraph-algs/clusters.h"
 
 #define KM_TEST 0
 #define VERBOSE 0
+
+using namespace km;
 
 namespace {
     static unsigned NUM_COLS;
@@ -36,6 +39,53 @@ namespace {
     static unsigned g_num_changed = 0;
     static struct timeval start, end;
     static init_type_t g_init_type;
+    static dist_type_t g_dist_type;
+
+    /**
+     * \brief This initializes clusters by randomly choosing sample
+     *		membership in a cluster.
+     * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+     *	\param cluster_assignments Which cluster each sample falls into.
+     */
+    void random_partition_init(unsigned* cluster_assignments,
+            const double* matrix, std::shared_ptr<clusters> clusters, const unsigned num_rows,
+            const unsigned num_cols, const unsigned k) {
+        BOOST_LOG_TRIVIAL(info) << "Random init start";
+
+//#pragma omp parallel for shared(cluster_assignments)
+        for (unsigned row = 0; row < num_rows; row++) {
+            unsigned asgnd_clust = random() % k; // 0...K
+
+            clusters->add_member(&matrix[row*num_cols], asgnd_clust);
+            cluster_assignments[row] = asgnd_clust;
+        }
+
+        // NOTE: M-Step called in compute func to update cluster counts & centers
+#if VERBOSE
+        printf("After rand paritions cluster_asgns: ");
+        print_arr(cluster_assignments, num_rows);
+#endif
+        BOOST_LOG_TRIVIAL(info) << "Random init end\n";
+    }
+
+    /**
+     * \brief Forgy init takes `K` random samples from the matrix
+     *		and uses them as cluster centers.
+     * \param matrix the flattened matrix who's rows are being clustered.
+     * \param clusters The cluster centers (means) flattened matrix.
+     */
+    void forgy_init(const double* matrix, std::shared_ptr<clusters> clusters,
+            const unsigned num_rows, const unsigned num_cols, const unsigned k) {
+
+        BOOST_LOG_TRIVIAL(info) << "Forgy init start";
+
+        for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) { // 0...K
+            unsigned rand_idx = random() % (num_rows - 1); // 0...(n-1)
+            clusters->set_mean(&matrix[rand_idx*num_cols], clust_idx);
+        }
+
+        BOOST_LOG_TRIVIAL(info) << "Forgy init end";
+    }
 
     std::string s (const double d) {
         if (d == std::numeric_limits<double>::max())
@@ -75,7 +125,7 @@ namespace {
                 // if (div_v[row] > dm->get(cluster_assignments[row], clust_idx) {
                 double dist = dist_comp_raw(&matrix[row*NUM_COLS],
                         &((clusters->get_means())[clust_idx*NUM_COLS]),
-                        NUM_COLS);
+                        NUM_COLS, g_dist_type);
 
                 if (dist < dist_v[row]) { // Found a closer cluster than before
                     dist_v[row] = dist;
@@ -137,7 +187,8 @@ namespace {
 
                 for (unsigned clust_idx = 0; clust_idx < K; clust_idx++) {
                     dist = dist_comp_raw(&matrix[offset],
-                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
+                            &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS,
+                            g_dist_type);
 
                     if (dist < dist_v[row]) {
                         dist_v[row] = dist;
@@ -163,7 +214,7 @@ namespace {
                         if (!recalculated_v->get(row)) {
                             dist_v[row] = dist_comp_raw(&matrix[offset],
                                     &(cls->get_means()[cluster_assignments[row]*NUM_COLS]),
-                                    NUM_COLS);
+                                    NUM_COLS, g_dist_type);
                             recalculated_v->set(row, true);
                         }
 
@@ -175,7 +226,7 @@ namespace {
 
                         // Track 5
                         double jdist = dist_comp_raw(&matrix[offset],
-                                &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS);
+                                &(cls->get_means()[clust_idx*NUM_COLS]), NUM_COLS, g_dist_type);
 
                         if (jdist < dist_v[row]) {
                             dist_v[row] = jdist;
