@@ -28,8 +28,29 @@
 #include <iostream>
 
 #include <boost/assert.hpp>
+#include "log.h"
+#include "kmeans_types.h"
 
 namespace {
+
+    /*\Internal
+     * \brief print a col wise matrix of type double / double.
+     * Used for testing only.
+     * \param matrix The col wise matrix.
+     * \param rows The number of rows in the mat
+     * \param cols The number of cols in the mat
+     */
+    template <typename T>
+        static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
+            for (unsigned row = 0; row < rows; row++) {
+                std::cout << "[";
+                for (unsigned col = 0; col < cols; col++) {
+                    std::cout << " " << matrix[row*cols + col];
+                }
+                std::cout <<  " ]\n";
+            }
+        }
+
     template <typename T>
         static void print_arr(const T* arr, const unsigned len) {
             printf("[ ");
@@ -38,6 +59,58 @@ namespace {
             }
             printf("]\n");
         }
+
+    double get_bic(const std::vector<double>& dist_v, const unsigned nrow,
+            const unsigned ncol, const unsigned k) {
+            double bic = 0;
+#pragma omp parallel for reduction(+:bic) shared (dist_v)
+        for (unsigned i = 0; i < dist_v.size(); i++) {
+            bic += (dist_v[i] );
+        }
+        printf("Distance sum: %f\n", bic);
+
+        return 2*bic + log(nrow)*ncol*k;
+    }
+
+    void spherical_projection(double* data, const unsigned nrow, const unsigned ncol) {
+#pragma omp parallel for shared (data)
+        for (unsigned row = 0; row < nrow; row++) {
+            double norm2 = 0;
+            for (unsigned col = 0; col < ncol; col++)
+                norm2 += (data[row]*data[row]);
+            sqrt(norm2);
+            for (unsigned col = 0; col < ncol; col++)
+                data[col] = data[col]/norm2;
+        }
+    }
+
+    // For experiments
+    void store_cluster(const unsigned id, const double* data,
+            const unsigned numel, const unsigned* cluster_assignments,
+            const unsigned nrow, const unsigned ncol, const std::string dir) {
+        BOOST_LOG_TRIVIAL(info) <<
+            "Storing cluster " << id;
+
+        FILE* f;
+        std::string fn = dir+"cluster_"+std::to_string(id)+
+            "_r"+std::to_string(numel)+"_c"+std::to_string(ncol)+".bin";
+        BOOST_VERIFY(f = fopen(fn.c_str(), "wb"));
+        BOOST_LOG_TRIVIAL(info) << "[Warning]: Writing cluster file '" <<
+            fn << "'";
+        unsigned count = 0;
+
+        for(unsigned i = 0; i < nrow; i++) {
+            if (count == numel) { break; }
+            if (cluster_assignments[i] == id) {
+                BOOST_VERIFY(fwrite(&data[i*ncol],
+                            (ncol*sizeof(double)), 1, f));
+                count++;
+            }
+        }
+        BOOST_VERIFY(count == numel);
+        fclose(f);
+    }
+
 
     // Vector equal function
     template <typename T>
