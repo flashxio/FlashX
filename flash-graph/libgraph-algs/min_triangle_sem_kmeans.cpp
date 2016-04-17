@@ -53,6 +53,7 @@ namespace {
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
     static kms_stage_t g_stage; // What phase of the algo we're in
+    static dist_type_t g_dist_type;
     static unsigned g_iter;
 
     static partition_cache<double>::ptr g_row_cache = nullptr;
@@ -312,7 +313,7 @@ namespace {
                                 g_cluster_dist->get(g_kmspp_cluster_idx, get_cluster_id())) {
                         } else {
                             double _dist = dist_comp_raw(row, &(g_clusters->get_means()
-                                        [g_kmspp_cluster_idx*NUM_COLS]), NUM_COLS);
+                                        [g_kmspp_cluster_idx*NUM_COLS]), NUM_COLS, g_dist_type);
 
                             if (_dist < g_kmspp_distance[my_id]) {
                                 g_kmspp_distance[my_id] = _dist;
@@ -425,7 +426,7 @@ namespace {
         if (g_prune_init) {
             for (unsigned cl = 0; cl < K; cl++) {
                 double udist = dist_comp_raw(row, &(g_clusters->get_means()[cl*NUM_COLS]),
-                        NUM_COLS);
+                        NUM_COLS, g_dist_type);
                 if (udist < get_dist()) {
                     set_dist(udist);
                     set_cluster_id(cl);
@@ -443,7 +444,7 @@ namespace {
                 // If not recalculated to my current cluster .. do so to tighten bounds
                 if (!recalculated) {
                     double udist = dist_comp_raw(row, &(g_clusters->get_means()
-                                [get_cluster_id()*NUM_COLS]), NUM_COLS);
+                                [get_cluster_id()*NUM_COLS]), NUM_COLS, g_dist_type);
                     set_dist(udist);
                     recalculated = true;
                 }
@@ -457,7 +458,7 @@ namespace {
 
                 // Track 5
                 double jdist = dist_comp_raw(row, &(g_clusters->get_means()[cl*NUM_COLS]),
-                        NUM_COLS);
+                        NUM_COLS, g_dist_type);
                 if (jdist < get_dist()) {
                     set_dist(jdist);
                     set_cluster_id(cl);

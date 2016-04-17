@@ -31,8 +31,7 @@ namespace km {
     typedef std::vector<double> kmsvector;
     typedef std::vector<double>::iterator kmsiterator;
 
-    class clusters
-    {
+    class clusters {
         friend class prune_clusters;
         private:
             // Together are nXd matrix
@@ -133,8 +132,7 @@ namespace km {
                         const unsigned from_id, const unsigned to_id);
     };
 
-    class prune_clusters : public clusters
-    {
+    class prune_clusters : public clusters {
         private:
             kmsvector s_val_v;
             kmsvector prev_means;
