@@ -26,26 +26,20 @@
 #include <memory>
 #include <utility>
 #include <atomic>
-#include <boost/format.hpp>
+#include <boost/assert.hpp>
 
 #include "log.h"
-#include "libgraph-algs/clusters.h"
-#include "kmeans.h"
+#include "common.h"
+#include "thread_state.h"
 
-//#define KM_TEST 1
 #define VERBOSE 0
 #define INVALID_THD_ID -1
 
 namespace km {
-    enum thread_state_t {
-        TEST, /*just for testing*/
-        ALLOC_DATA, /*moving data for reduces rma*/
-        KMSPP_INIT,
-        EM, /*EM steps of kmeans*/
-        WAIT, /*When the thread is waiting for a new task*/
-        EXIT /* Say goodnight */
-    };
+    class clusters;
+}
 
+namespace km {
     union metaunion {
         unsigned num_changed; // Used during kmeans
         unsigned clust_idx; // Used during kms++
@@ -60,7 +54,7 @@ namespace km {
             unsigned ncol; // How many columns in the data
             double* local_data; // Pointer to where the data begins that the thread works on
             size_t data_size; // true size of local_data at any point
-            clusters::ptr local_clusters;
+            std::shared_ptr<km::clusters> local_clusters;
 
             pthread_mutex_t mutex;
             pthread_cond_t cond;
@@ -97,7 +91,6 @@ namespace km {
                 this->start_rid = start_rid;
                 BOOST_VERIFY(this->f = fopen(fn.c_str(), "rb"));
 
-                local_clusters = clusters::create(nclust, ncol);
                 meta.num_changed = 0; // Same as meta.clust_idx = 0;
                 set_thread_state(WAIT);
             }
@@ -144,7 +137,7 @@ namespace km {
                 return meta.num_changed;
             }
 
-            const clusters::ptr get_local_clusters() const {
+            const std::shared_ptr<km::clusters> get_local_clusters() const {
                 return local_clusters;
             }
 
@@ -231,7 +224,7 @@ namespace km {
             join();
     }
 
-    static void bind2node_id(int node_id) {
+    void bind2node_id(int node_id) {
         struct bitmask *bmp = numa_allocate_nodemask();
         numa_bitmask_setbit(bmp, node_id);
         numa_bind(bmp);
