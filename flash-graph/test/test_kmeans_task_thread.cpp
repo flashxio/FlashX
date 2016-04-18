@@ -19,9 +19,12 @@
 
 #include <stdlib.h>
 #include <pthread.h>
+#include "libgraph-algs/clusters.h"
 #include "matrix/kmeans_task_thread.h"
 #include "libgraph-algs/sem_kmeans_util.h"
 #include <atomic>
+
+using namespace km;
 
 static std::atomic<unsigned> pending_threads;
 //static unsigned pending_threads;

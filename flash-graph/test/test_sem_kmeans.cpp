@@ -20,6 +20,7 @@
 #include "libgraph-algs/sem_kmeans.h"
 #include "libgraph-algs/sem_kmeans_util.h"
 #include "libgraph-algs/dist_matrix.h"
+#include "libgraph-algs/clusters.h"
 
 using namespace prune;
 
