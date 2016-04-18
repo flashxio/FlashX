@@ -50,15 +50,14 @@ void test_queue_get() {
         printf(" %u", i);
         // Test reset
         q.reset();
-        km::task t;
         while(q.has_task()) {
-            t = q.get_task();
+            km::task* t = q.get_task();
 #if 0
-            print_mat<double>(t.get_data_ptr(), t.get_nrow(), ncol);
+            print_mat<double>(t->get_data_ptr(), t->get_nrow(), ncol);
 #endif
-            BOOST_VERIFY(t.get_start_rid() == (q.get_curr_rid()-MIN_TASK_ROWS));
-            BOOST_VERIFY(eq_all(t.get_data_ptr(), &(data[t.get_start_rid()*ncol]),
+            BOOST_VERIFY(eq_all(t->get_data_ptr(), &(data[t->get_start_rid()*ncol]),
                         MIN_TASK_ROWS*ncol));
+            delete t;
         }
     }
 
