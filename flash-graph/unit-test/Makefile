@@ -17,8 +17,7 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lz $(LDFLAGS)
 CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)

@@ -17,9 +17,8 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) $(LDFLAGS) -lz
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(LDFLAGS) -lz
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I.
 
 all: rmat-gen graph-stat print_graph
 
