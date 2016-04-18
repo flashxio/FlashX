@@ -111,8 +111,6 @@ namespace km {
             virtual void run() = 0;
             virtual void sleep() = 0;
 
-            void numa_alloc_mem();
-
             void test() {
                 //printf("%u ", get_thd_id());
             }
@@ -181,64 +179,60 @@ namespace km {
                 numa_free(local_data, get_data_size());
             }
 
-            void join();
-            void close_file_handle();
-            ~base_kmeans_thread();
+            void join() {
+                void* join_status;
+                int rc = pthread_join(hw_thd, &join_status);
+                if (rc) {
+                    fprintf(stderr, "[FATAL]: Return code from pthread_join() "
+                            "is %d\n", rc);
+                    exit(rc);
+                }
+                thd_id = INVALID_THD_ID;
+            }
+
+            // Once the algorithm ends we should deallocate the memory we moved
+            void close_file_handle() {
+                int rc = fclose(f);
+                if (rc) {
+                    fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
+                    exit(rc);
+                }
+#if VERBOSE
+                printf("Thread %u closing the file handle.\n",thd_id);
+#endif
+                f = NULL;
+            }
+
+            // Move data ~equally to all nodes
+            void numa_alloc_mem() {
+                BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
+                size_t blob_size = get_data_size();
+                local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
+                fseek(f, start_rid*ncol*sizeof(double), SEEK_CUR); // start position
+                BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
+                close_file_handle();
+            }
+
+            ~base_kmeans_thread() {
+                pthread_cond_destroy(&cond);
+                pthread_mutex_destroy(&mutex);
+                pthread_mutexattr_destroy(&mutex_attr);
+
+                if (f)
+                    close_file_handle();
+#if VERBOSE
+                printf("Thread %u being destroyed\n", thd_id);
+#endif
+                if (thd_id != INVALID_THD_ID)
+                    join();
+            }
+
+            void bind2node_id() {
+                struct bitmask *bmp = numa_allocate_nodemask();
+                numa_bitmask_setbit(bmp, node_id);
+                numa_bind(bmp);
+                numa_free_nodemask(bmp);
+            }
     };
-
-    void base_kmeans_thread::join() {
-        void* join_status;
-        int rc = pthread_join(hw_thd, &join_status);
-        if (rc) {
-            fprintf(stderr, "[FATAL]: Return code from pthread_join() "
-                    "is %d\n", rc);
-            exit(rc);
-        }
-        thd_id = INVALID_THD_ID;
-    }
-
-    // Once the algorithm ends we should deallocate the memory we moved
-    void base_kmeans_thread::close_file_handle() {
-        int rc = fclose(f);
-        if (rc) {
-            fprintf(stderr, "[FATAL]: fclose() failed with code: %d\n", rc);
-            exit(rc);
-        }
-#if VERBOSE
-        printf("Thread %u closing the file handle.\n",thd_id);
-#endif
-        f = NULL;
-    }
-
-    base_kmeans_thread::~base_kmeans_thread() {
-        pthread_cond_destroy(&cond);
-        pthread_mutex_destroy(&mutex);
-        pthread_mutexattr_destroy(&mutex_attr);
-
-        if (f)
-            close_file_handle();
-#if VERBOSE
-        printf("Thread %u being destroyed\n", thd_id);
-#endif
-        if (thd_id != INVALID_THD_ID)
-            join();
-    }
-
-    void bind2node_id(int node_id) {
-        struct bitmask *bmp = numa_allocate_nodemask();
-        numa_bitmask_setbit(bmp, node_id);
-        numa_bind(bmp);
-        numa_free_nodemask(bmp);
-    }
-
-    // Move data ~equally to all nodes
-    void base_kmeans_thread::numa_alloc_mem() {
-        BOOST_ASSERT_MSG(f, "File handle invalid, can only alloc once!");
-        size_t blob_size = get_data_size();
-        local_data = static_cast<double*>(numa_alloc_onnode(blob_size, node_id));
-        fseek(f, start_rid*ncol*sizeof(double), SEEK_CUR); // start position
-        BOOST_VERIFY(1 == fread(local_data, blob_size, 1, f));
-        close_file_handle();
-    }
 }
 #endif

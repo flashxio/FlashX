@@ -41,10 +41,11 @@ make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
 test_sem_kmeans: test_sem_kmeans.o
-	$(CXX) -o test_sem_kmeans test_sem_kmeans.o $(LDFLAGS)
+	$(CXX) -o test_sem_kmeans test_sem_kmeans.o ../libgraph-algs/clusters.o\
+		../libgraph-algs/dist_matrix.o $(LDFLAGS)
 
 test_clusters: test_clusters.o
-	$(CXX) -o test_clusters test_clusters.o $(LDFLAGS)
+	$(CXX) -o test_clusters test_clusters.o ../libgraph-algs/clusters.o $(LDFLAGS)
 
 test_lazy_cache: test_lazy_cache.o
 	$(CXX) -o test_lazy_cache test_lazy_cache.o $(LDFLAGS)
@@ -52,17 +53,17 @@ test_lazy_cache: test_lazy_cache.o
 test_partition_cache: test_partition_cache.o
 	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
 
-test_kmeans_thread: test_kmeans_thread.o ../matrix/kmeans_thread.o
-	$(CXX) -o test_kmeans_thread test_kmeans_thread.o $(LDFLAGS)
-
-test_kmeans_coordinator: test_kmeans_coordinator.o ../matrix/kmeans_coordinator.o
-	$(CXX) -o test_kmeans_coordinator test_kmeans_coordinator.o $(LDFLAGS)
+test_kmeans_thread: test_kmeans_thread.o
+	$(CXX) -o test_kmeans_thread test_kmeans_thread.o\
+		../matrix/kmeans_thread.o ../libgraph-algs/clusters.o $(LDFLAGS)
 
 test_thd_safe_bool_vector: test_thd_safe_bool_vector.o
 	$(CXX) -o test_thd_safe_bool_vector test_thd_safe_bool_vector.o $(LDFLAGS)
 
 test_kmeans_task_thread: test_kmeans_task_thread.o
-	$(CXX) -o test_kmeans_task_thread test_kmeans_task_thread.o $(LDFLAGS)
+	$(CXX) -o test_kmeans_task_thread test_kmeans_task_thread.o \
+		../libgraph-algs/clusters.o ../matrix/kmeans_task_thread.o \
+		../libgraph-algs/dist_matrix.o $(LDFLAGS)
 
 test_task_queue: test_task_queue.o
 	$(CXX) -o test_task_queue test_task_queue.o $(LDFLAGS)
