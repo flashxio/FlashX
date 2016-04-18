@@ -1701,3 +1701,15 @@ fm.print.mat.info <- function(fm)
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV" || class(fm) == "fmSink")
 	ret <- .Call("R_FM_print_mat_info", fm, PACKAGE="FlashR")
 }
+
+fm.start.profiler <- function(file)
+{
+	if (is.loaded("R_start_profiler"))
+		.Call("R_start_profiler", file, PACKAGE="FlashR")
+}
+
+fm.stop.profiler <- function()
+{
+	if (is.loaded("R_stop_profiler"))
+		.Call("R_stop_profiler", PACKAGE="FlashR")
+}

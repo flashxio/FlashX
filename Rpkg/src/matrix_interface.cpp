@@ -16,6 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifdef USE_PROFILER
+#include <gperftools/profiler.h>
+#endif
 #include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <Rcpp.h>
@@ -2370,3 +2373,18 @@ RcppExport SEXP R_FM_conv_store(SEXP pmat, SEXP pin_mem, SEXP pname)
 	else
 		return create_FMR_matrix(mat, name);
 }
+
+#ifdef USE_PROFILER
+RcppExport SEXP R_start_profiler(SEXP pfile)
+{
+	std::string file = CHAR(STRING_ELT(pfile, 0));
+	ProfilerStart(file.c_str());
+	return R_NilValue;
+}
+
+RcppExport SEXP R_stop_profiler()
+{
+	ProfilerStop();
+	return R_NilValue;
+}
+#endif
