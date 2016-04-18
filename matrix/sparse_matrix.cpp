@@ -91,11 +91,6 @@ const char *row_portions::get_rows(size_t start_row, size_t end_row) const
 }
 
 /*
- * The minimum write I/O size (in bytes).
- */
-static const size_t MIN_WRITE_SIZE = 4 * 1024 * 1024;
-
-/*
  * This processes the blocks in the their original order.
  * It can process an arbitrary number of blocks.
  */
