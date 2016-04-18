@@ -17,9 +17,7 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -DUSE_GZIP -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS += $(OMP_FLAG)
+CXXFLAGS += -DUSE_GZIP -I../../include -I../../libcommon -I../../flash-graph -I..
 
 all: libmatrix-algs
 

@@ -17,9 +17,8 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver
+LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: el2fg fg2fm fg2crs
