@@ -243,6 +243,7 @@ public:
 	virtual local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const;
 	virtual local_matrix_store::const_ptr get_portion(size_t id) const;
+	using virtual_matrix_store::get_portion_async;
 	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const;

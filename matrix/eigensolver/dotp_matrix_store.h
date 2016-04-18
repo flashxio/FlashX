@@ -82,6 +82,7 @@ public:
 					sub_dot_prods, orig_idxs));
 	}
 
+	using virtual_matrix_store::get_portion;
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		assert(!orig_store->is_wide());
@@ -112,6 +113,7 @@ public:
 		return orig_store->get_cols(idxs)->transpose();
 	}
 
+	using virtual_matrix_store::get_portion_async;
 	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
@@ -190,12 +192,14 @@ public:
 		return orig_store->transpose();
 	}
 
+	using virtual_matrix_store::get_portion_async;
 	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		return orig_store->get_portion_async(start_row, start_col, num_rows,
 				num_cols, compute);
 	}
+	using virtual_matrix_store::get_portion;
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		return orig_store->get_portion(start_row, start_col, num_rows, num_cols);

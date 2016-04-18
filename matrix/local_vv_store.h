@@ -157,6 +157,7 @@ public:
 	virtual bool is_sorted() const {
 		return false;
 	}
+	using local_vec_store::conv2mat;
 	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
 			size_t nrow, size_t ncol, bool byrow) const {
 		assert(0);
