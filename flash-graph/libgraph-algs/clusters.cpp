@@ -28,6 +28,7 @@
 
 using namespace km;
 
+namespace km {
 void clusters::clear() {
     std::fill(means.begin(), means.end(), 0);
     std::fill(num_members_v.begin(), num_members_v.end(), 0);
@@ -52,16 +53,6 @@ void clusters::set_mean(const double* mean, const int idx) {
         std::copy(&(mean[0]), &(mean[ncol*nclust]), this->means.begin());
     } else {
         std::copy(&(mean[0]), &(mean[ncol]), this->means.begin()+(idx*ncol));
-    }
-}
-
-template<typename T>
-void clusters::set_mean(T& it, const int idx) {
-    unsigned offset = idx*ncol;
-    unsigned nid = 0;
-    while(it.has_next()) {
-        double e = it.next();
-        means[offset+nid] = e;
     }
 }
 
@@ -91,66 +82,6 @@ void clusters::unfinalize(const unsigned idx) {
     for (unsigned col = 0; col < ncol; col++) {
         this->means[(ncol*idx) + col] *= (double)num_members_v[idx];
     }
-}
-
-template <typename T>
-void clusters::add_member(T& count_it, const unsigned idx) {
-    unsigned nid = 0;
-    while(count_it.has_next()) {
-        double e = count_it.next();
-        means[(idx*ncol)+(nid++)] += e;
-    }
-    num_members_v[idx]++;
-}
-
-template <typename T>
-void clusters::add_member(const T* arr, const unsigned idx) {
-    unsigned offset = idx * ncol;
-    for (unsigned i=0; i < ncol; i++) {
-        means[offset+i] += arr[i];
-    }
-    num_members_v[idx]++;
-}
-
-template <typename T>
-void clusters::remove_member(T& count_it, const unsigned idx) {
-    unsigned nid = 0;
-    while(count_it.has_next()) {
-        double e = count_it.next();
-        means[(idx*ncol)+nid++] -= e;
-    }
-    num_members_v[idx]--;
-}
-
-template <typename T>
-void clusters::remove_member(const T* arr, const unsigned idx) {
-    unsigned offset = idx * ncol;
-    for (unsigned i=0; i < ncol; i++) {
-        means[offset+i] -= arr[i];
-    }
-    num_members_v[idx]--;
-}
-
-template <typename T>
-void clusters::swap_membership(const T* arr,
-        const unsigned from_idx, const unsigned to_idx) {
-    remove_member(arr, from_idx);
-    add_member(arr, to_idx);
-}
-
-template <typename T>
-void clusters::swap_membership(T& count_it,
-        const unsigned from_id, const unsigned to_id) {
-    unsigned nid = 0;
-    unsigned from_offset = from_id * ncol;
-    unsigned to_offset = to_id * ncol;
-    while(count_it.has_next()) {
-        double e = count_it.next();
-        means[from_offset+nid] -= e;
-        means[to_offset+nid++] += e;
-    }
-    num_members_v[from_id]--;
-    num_members_v[to_id]++;
 }
 
 clusters& clusters::operator=(const clusters& other) {
@@ -227,4 +158,5 @@ const void prune_clusters::print_prev_means_v() const {
         print_arr<double>(&(prev_means[cl_idx*ncol]), ncol);
     }
     std::cout << "\n";
+}
 }

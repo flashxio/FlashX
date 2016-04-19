@@ -102,6 +102,76 @@ namespace km {
                 return complete_v;
             }
 
+            template <typename T>
+                void add_member(const T* arr, const unsigned idx) {
+                    unsigned offset = idx * ncol;
+                    for (unsigned i=0; i < ncol; i++) {
+                        means[offset+i] += arr[i];
+                    }
+                    num_members_v[idx]++;
+                }
+
+            template <typename T>
+                void add_member(T& count_it, const unsigned idx) {
+                    unsigned nid = 0;
+                    while(count_it.has_next()) {
+                        double e = count_it.next();
+                        means[(idx*ncol)+(nid++)] += e;
+                    }
+                    num_members_v[idx]++;
+                }
+
+            template <typename T>
+                void remove_member(T& count_it, const unsigned idx) {
+                    unsigned nid = 0;
+                    while(count_it.has_next()) {
+                        double e = count_it.next();
+                        means[(idx*ncol)+nid++] -= e;
+                    }
+                    num_members_v[idx]--;
+                }
+
+            template <typename T>
+                void remove_member(const T* arr, const unsigned idx) {
+                    unsigned offset = idx * ncol;
+                    for (unsigned i=0; i < ncol; i++) {
+                        means[offset+i] -= arr[i];
+                    }
+                    num_members_v[idx]--;
+                }
+
+            template <typename T>
+                void swap_membership(const T* arr,
+                        const unsigned from_idx, const unsigned to_idx) {
+                    remove_member(arr, from_idx);
+                    add_member(arr, to_idx);
+                }
+
+            template <typename T>
+                void swap_membership(T& count_it,
+                        const unsigned from_id, const unsigned to_id) {
+                    unsigned nid = 0;
+                    unsigned from_offset = from_id * ncol;
+                    unsigned to_offset = to_id * ncol;
+                    while(count_it.has_next()) {
+                        double e = count_it.next();
+                        means[from_offset+nid] -= e;
+                        means[to_offset+nid++] += e;
+                    }
+                    num_members_v[from_id]--;
+                    num_members_v[to_id]++;
+                }
+
+            template<typename T>
+                void set_mean(T& it, const int idx) {
+                    unsigned offset = idx*ncol;
+                    unsigned nid = 0;
+                    while(it.has_next()) {
+                        double e = it.next();
+                        means[offset+nid] = e;
+                    }
+                }
+
             clusters& operator+=(clusters& rhs);
             clusters& operator=(const clusters& other);
             bool operator==(const clusters& other);
@@ -112,24 +182,8 @@ namespace km {
               */
             void set_mean(const kmsvector& mean, const int idx=-1);
             void set_mean(const double* mean, const int idx=-1);
-            template<typename T>
-                void set_mean(T& it, const int idx);
             void finalize(const unsigned idx);
             void unfinalize(const unsigned idx);
-            template <typename T>
-                void add_member(T& count_it, const unsigned idx);
-            template <typename T>
-                void add_member(const T* arr, const unsigned idx);
-            template <typename T>
-                void remove_member(T& count_it, const unsigned idx);
-            template <typename T>
-                void remove_member(const T* arr, const unsigned idx);
-            template <typename T>
-                void swap_membership(const T* arr, const unsigned from_idx,
-                        const unsigned to_idx);
-            template <typename T>
-                void swap_membership(T& count_it,
-                        const unsigned from_id, const unsigned to_id);
     };
 
     class prune_clusters : public clusters {
