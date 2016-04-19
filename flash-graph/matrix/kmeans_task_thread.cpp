@@ -26,6 +26,7 @@
 using namespace km;
 using namespace prune;
 
+namespace prune {
 kmeans_task_thread::kmeans_task_thread(const int node_id, const unsigned thd_id,
         const unsigned start_rid, const unsigned nlocal_rows,
         const unsigned ncol, std::shared_ptr<prune_clusters> g_clusters,
@@ -330,4 +331,5 @@ const void kmeans_task_thread::print_local_data() const {
 
 kmeans_task_thread::~kmeans_task_thread() {
     delete tasks;
+}
 }

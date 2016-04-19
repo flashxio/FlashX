@@ -23,7 +23,7 @@
 #include "libgraph-algs/clusters.h"
 
 using namespace km;
-namespace {
+namespace km {
 #if 0
     double* g_data; // TEST
 #endif

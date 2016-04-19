@@ -38,7 +38,7 @@ namespace km {
 
 class kmeans_thread;
 
-namespace {
+namespace km {
     typedef std::vector<std::shared_ptr<kmeans_thread> >::iterator thread_iter;
 
     class kmeans_coordinator : public km::base_kmeans_coordinator {
