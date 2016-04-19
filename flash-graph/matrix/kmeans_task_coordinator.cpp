@@ -278,7 +278,7 @@ void kmeans_task_coordinator::random_partition_init() {
 void kmeans_task_coordinator::forgy_init() {
     BOOST_LOG_TRIVIAL(info) << "Forgy init start";
     for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) { // 0...k
-        unsigned rand_idx = random() % (nrow - 1); // 0...(nrow-1)
+        unsigned rand_idx = random() % nrow; // 0...(nrow-1)
         cltrs->set_mean(get_thd_data(rand_idx), clust_idx);
     }
     BOOST_LOG_TRIVIAL(info) << "Forgy init end";

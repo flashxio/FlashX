@@ -80,7 +80,7 @@ namespace {
         BOOST_LOG_TRIVIAL(info) << "Forgy init start";
 
         for (unsigned clust_idx = 0; clust_idx < k; clust_idx++) { // 0...K
-            unsigned rand_idx = random() % (num_rows - 1); // 0...(n-1)
+            unsigned rand_idx = random() % num_rows; // 0...(n-1)
             clusters->set_mean(&matrix[rand_idx*num_cols], clust_idx);
         }
 
