@@ -219,7 +219,11 @@ public:
 		this->ins = ins;
 		assert(ins.size() > 0);
 
-		is_wide = lstore->is_wide();
+		// This might be a better way of determining if the matrix is wide.
+		// In some cases, the input matrices are wide, but the output matrix
+		// is tall. An example is combining multiple matrices into a single
+		// matrix.
+		is_wide = ins.front()->is_wide();
 		orig_global_start_row = lstore->get_global_start_row();
 		orig_global_start_col = lstore->get_global_start_col();
 		orig_num_rows = lstore->get_num_rows();
