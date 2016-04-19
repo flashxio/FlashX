@@ -24,7 +24,11 @@ CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/includ
 all: test-kmeans
 
 test-kmeans: test-kmeans.o ../libgraph.a
-	$(CXX) -o test-kmeans test-kmeans.o $(LDFLAGS)
+	$(CXX) -o test-kmeans test-kmeans.o ../matrix/kmeans.o ../matrix/min-tri-kmeans.o\
+		 ../matrix/kmeans_task_coordinator.o ../matrix/kmeans_coordinator.o \
+		 ../matrix/base_kmeans_coordinator.o ../matrix/kmeans_task_thread.o \
+		../matrix/kmeans_thread.o ../libgraph-algs/clusters.o \
+		../libgraph-algs/dist_matrix.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

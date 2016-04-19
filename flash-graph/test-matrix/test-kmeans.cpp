@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
                     init, tolerance, dist_type);
             kc->run_kmeans();
         } else {
-            kmeans_coordinator::ptr kc = kmeans_coordinator::create(datafn,
+            km::kmeans_coordinator::ptr kc = km::kmeans_coordinator::create(datafn,
                     nrow, ncol, k, max_iters, nnodes, nthread, p_centers,
                     init, tolerance, dist_type);
             kc->run_kmeans();
