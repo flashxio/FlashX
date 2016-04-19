@@ -23,17 +23,10 @@
 
 #include "../mem_matrix_store.h"
 #include "convert_util.h"
+#include "libgraph-algs/sem_kmeans_util.h"
 
 using namespace fm;
 using namespace fm::detail;
-
-#if 0
-size_t g_nrow = 5; // FIXME
-size_t g_ncol = 7; // FIXME
-
-size_t g_nrow = 8; // FIXME
-size_t g_ncol = 65608366; // FIXME
-#endif
 
 size_t g_nrow, g_ncol;
 
@@ -55,21 +48,6 @@ static dense_matrix::ptr get_mat(std::string filename) {
 	return dmat;
 }
 
-// COMMON for reading contiguous double data
-static double* bin_read(std::string fname) {
-	std::ifstream _if;
-	_if.open(fname, std::ios::binary | std::ios::in);
-	double* outmat = new double[g_nrow*g_ncol];
-
-
-	BOOST_LOG_TRIVIAL(info) << "Binary read";
-	_if.read((char*)&outmat[0], sizeof(double)*g_nrow*g_ncol);
-
-	_if.close();
-	BOOST_LOG_TRIVIAL(info) << "Read completed!";
-	return outmat;
-}
-
 // SPARK
 static void to_spark(dense_matrix::ptr dmat, std::ofstream& of) {
 	for (size_t row=0; row < dmat->get_num_rows(); row++) {
@@ -87,34 +65,42 @@ static void to_spark(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_spark(double* outmat, std::ofstream& of, const conv_layout lay) {
-	BOOST_LOG_TRIVIAL(info) << "Writing matrix";
+static void to_spark(const std::string fn, std::ofstream& of, const conv_layout lay) {
+    unsigned long size = g_nrow*g_ncol;
+    BOOST_LOG_TRIVIAL(info) << "Malloc-ing matrix with size: " << size;
 
-	if (lay == RAWCOL) {
-		// Write it
-		for (size_t row=0; row < g_ncol; row++) {
-			for (size_t col=0; col < g_nrow; col++) {
-				if (col < g_nrow-1) {
-					of << outmat[row*g_nrow+col] << " ";
-				} else {
-					of << outmat[row*g_nrow+col];
-				}
-			}
-			of << "\n";
-		}
-	} else if (lay == RAWROW) {
-		for (size_t row = 0; row < g_nrow; row++) {
-			for (size_t col = 0; col < g_ncol; col++) {
-				if (col < g_ncol-1) {
-					of << outmat[row*g_ncol+col] << " ";
-				} else {
-					of << outmat[row*g_ncol+col];
-				}
-			}
-			of << "\n";
-		}
-	} else { assert(0); }
-	delete [] outmat;
+    double* outmat = new double [size];
+    BOOST_LOG_TRIVIAL(info) << "Reading " << fn << ", with r:" << g_nrow
+        << ", c: " << g_ncol;
+    bin_reader<double> b(fn, g_nrow, g_ncol);
+    b.read(outmat);
+
+    BOOST_LOG_TRIVIAL(info) << "Writing matrix ...";
+    if (lay == RAWCOL) {
+        // Write it
+        for (size_t row=0; row < g_ncol; row++) {
+            for (size_t col=0; col < g_nrow; col++) {
+                if (col < g_nrow-1) {
+                    of << outmat[row*g_nrow+col] << " ";
+                } else {
+                    of << outmat[row*g_nrow+col];
+                }
+            }
+            of << "\n";
+        }
+    } else if (lay == RAWROW) {
+        for (size_t row = 0; row < g_nrow; row++) {
+            for (size_t col = 0; col < g_ncol; col++) {
+                if (col < g_ncol-1) {
+                    of << outmat[row*g_ncol+col] << " ";
+                } else {
+                    of << outmat[row*g_ncol+col];
+                }
+            }
+            of << "\n";
+        }
+    } else { assert(0); }
+    delete [] outmat;
 }
 
 // KMEANS_PAR
@@ -135,9 +121,18 @@ static void to_kmeans_par(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_kmeans_par(double* outmat, std::ofstream& of, const conv_layout lay) {
-	BOOST_LOG_TRIVIAL(info) << "Writing matrix";
-	// Write it
+static void to_kmeans_par(const std::string fn, std::ofstream& of, const conv_layout lay) {
+    unsigned long size = g_nrow*g_ncol;
+    BOOST_LOG_TRIVIAL(info) << "Malloc-ing matrix with size: " << size;
+
+    double* outmat = new double [size];
+    BOOST_LOG_TRIVIAL(info) << "Reading " << fn << ", with r:" << g_nrow
+        << ", c: " << g_ncol;
+    bin_reader<double> b(fn, g_nrow, g_ncol);
+    b.read(outmat);
+
+    BOOST_LOG_TRIVIAL(info) << "Writing matrix ...";
+
 	if (lay == RAWCOL) {
 		for (size_t row = 0; row < g_ncol; row++) {
 			of << row+1 << " ";
@@ -185,15 +180,28 @@ static void to_fg(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_fg(double* mat, std::ofstream& of, const conv_layout lay) {
+
+
+static void to_fg(const std::string fn, std::ofstream& of, const conv_layout lay) {
+    unsigned long size = g_nrow*g_ncol;
+    BOOST_LOG_TRIVIAL(info) << "Malloc-ing matrix with size: " << size;
+
+    double* outmat = new double [size];
+    BOOST_LOG_TRIVIAL(info) << "Reading " << fn << ", with r:" << g_nrow
+        << ", c: " << g_ncol;
+    bin_reader<double> b(fn, g_nrow, g_ncol);
+    b.read(outmat);
+
+    BOOST_LOG_TRIVIAL(info) << "Writing matrix ...";
+
 	const size_t NUM_ROWS = g_nrow;
 	const size_t NUM_COLS = g_ncol;
 	BOOST_LOG_TRIVIAL(info) << "nrow = " << NUM_ROWS << ", ncol = " << NUM_COLS;
 
 	of.write((char*)&NUM_ROWS, sizeof(size_t)); // size_t rows
 	of.write((char*)&NUM_COLS, sizeof(size_t)); // size_t cols
-	of.write((char*)&mat[0], sizeof(double)*g_ncol*g_nrow);
-	delete [] mat;
+	of.write((char*)&outmat[0], sizeof(double)*size);
+	delete [] outmat;
 }
 
 static void to_h2o(dense_matrix::ptr dmat, std::ofstream& of) {
@@ -209,7 +217,18 @@ static void to_h2o(dense_matrix::ptr dmat, std::ofstream& of) {
 	}
 }
 
-static void to_h2o(double* outmat, std::ofstream& of, const conv_layout lay) {
+static void to_h2o(const std::string fn, std::ofstream& of,
+        const conv_layout lay) {
+
+    unsigned long size = g_nrow*g_ncol;
+    BOOST_LOG_TRIVIAL(info) << "Malloc-ing matrix with size: " << size;
+
+    double* outmat = new double [size];
+    BOOST_LOG_TRIVIAL(info) << "Reading " << fn << ", with r:" << g_nrow
+        << ", c: " << g_ncol;
+    bin_reader<double> b(fn, g_nrow, g_ncol);
+    b.read(outmat);
+
 	BOOST_LOG_TRIVIAL(info) << "Writing matrix ...";
 	if (lay == RAWCOL) {
 		// Write it
@@ -239,7 +258,7 @@ int main(int argc, char* argv[]) {
 		exit(-1);
 	}
 
-	std::string infile = (argv[1]);
+	std::string infile = argv[1];
 	std::string to_format = argv[2];
 	std::string out_filename = argv[3];
 	std::string argv4 = std::string(argv[4]);
@@ -267,7 +286,7 @@ int main(int argc, char* argv[]) {
 			if (lay == ROW || lay == COL) {
 				to_h2o(get_mat(infile), out_file);
 			} else {
-				to_h2o(bin_read(infile), out_file, lay);
+				to_h2o(infile, out_file, lay);
 			}
 			out_file.close();
 		} else { 
@@ -282,7 +301,7 @@ int main(int argc, char* argv[]) {
 				printf("Shouldnt be here!\n"); exit(-1);
 				to_spark(get_mat(infile), out_file);
 			} else {
-				to_spark(bin_read(infile), out_file, lay);
+				to_spark(infile, out_file, lay);
 			}
 			out_file.close();
 		} else {
@@ -297,7 +316,7 @@ int main(int argc, char* argv[]) {
 			if (lay == ROW || lay == COL) {
 				to_kmeans_par(get_mat(infile), out_file);
 			} else {
-				to_kmeans_par(bin_read(infile), out_file, lay);
+				to_kmeans_par(infile, out_file, lay);
 			}
 			out_file.close();
 		} else {
@@ -311,7 +330,7 @@ int main(int argc, char* argv[]) {
 			if (lay == ROW || lay == COL) {
 				to_fg(get_mat(infile), out_file);
 			} else {
-				to_fg(bin_read(infile), out_file, lay);
+				to_fg(infile, out_file, lay);
 			}
 			BOOST_LOG_TRIVIAL(info) << "Conversion to fg complete";
 			out_file.close();
