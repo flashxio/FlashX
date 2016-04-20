@@ -18,7 +18,7 @@
 include ../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
+CXXFLAGS += -DUSE_GZIP -I../libsafs -I../flash-graph $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
 all: libmatrix eigensolver test unit-test libmatrix-algs utils
@@ -52,5 +52,6 @@ clean:
 	$(MAKE) -C unit-test clean
 	$(MAKE) -C eigensolver clean
 	$(MAKE) -C utils clean
+	$(MAKE) -C libmatrix-algs clean
 
 -include $(DEPS) 

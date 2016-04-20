@@ -3,7 +3,7 @@ include ../../Makefile.common
 all: libeigen
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I.. -I../../include -I../../libcommon -I../../flash-graph $(OMP_FLAG)
+CXXFLAGS += -I.. -I../../libsafs -I../../flash-graph $(OMP_FLAG)
 
 libeigen: $(OBJS)
 	rm -f libeigen.a

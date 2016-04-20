@@ -20,7 +20,6 @@ include Makefile.common
 all: build_lib utils
 
 build_lib:
-	$(MAKE) -C libcommon
 	$(MAKE) -C libsafs
 	$(MAKE) -C flash-graph
 	$(MAKE) -C matrix
@@ -35,7 +34,6 @@ clean:
 	rm -f include/*~
 	find -name core -delete
 	make --ignore-errors -C libsafs clean
-	make --ignore-errors -C libcommon clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C flash-graph clean
 	make --ignore-errors -C matrix clean

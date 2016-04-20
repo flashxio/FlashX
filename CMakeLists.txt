@@ -47,6 +47,6 @@ endif()
 
 # add the binary tree to the search path for include files
 # so that we will find TutorialConfig.h
-include_directories("${PROJECT_BINARY_DIR}" include libcommon flash-graph)
+include_directories("${PROJECT_BINARY_DIR}"  libsafs flash-graph)
 
-subdirs(libcommon libsafs utils flash-graph matrix)
+subdirs(libsafs utils flash-graph matrix)

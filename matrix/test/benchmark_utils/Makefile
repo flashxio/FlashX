@@ -18,8 +18,8 @@
 include ../../../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS := -g -std=c++0x -I../../../include -I../../../libcommon -I../../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L../../eigensolver -leigen -L../../ -lFMatrix -L../../../flash-graph -lgraph -L../../../libsafs -lsafs -L../../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS := -g -std=c++0x -I../../../libsafs -I../../../flash-graph -I.. $(OMP_FLAG)
+LDFLAGS := $(OMP_FLAG) -L../../eigensolver -leigen -L../../ -lFMatrix -L../../../flash-graph -lgraph -L../../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lnuma -lz -laio -lcblas
 
 all: convert_matrix create_matrix

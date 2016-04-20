@@ -18,8 +18,8 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) -lz $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I. $(OMP_FLAG)
 
 all: test_load_balancer test_comm
 
