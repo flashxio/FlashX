@@ -17,8 +17,6 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I../include -I../libcommon
-
 all: libsafs unit_test test
 
 libsafs: $(OBJS)

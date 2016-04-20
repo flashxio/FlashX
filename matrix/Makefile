@@ -17,7 +17,7 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph
+CXXFLAGS += -DUSE_GZIP -I../libsafs -I../flash-graph
 
 all: libmatrix eigensolver test unit-test libmatrix-algs utils
 
@@ -51,5 +51,6 @@ clean:
 	$(MAKE) -C eigensolver clean
 	$(MAKE) -C libmatrix-algs clean
 	$(MAKE) -C utils clean
+	$(MAKE) -C libmatrix-algs clean
 
 -include $(DEPS) 

@@ -17,8 +17,8 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I.
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I.
 
 all: libgraph-algs
 

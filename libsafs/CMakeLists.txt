@@ -28,4 +28,11 @@ add_library(safs STATIC
 	direct_comp_access.cpp
 	comp_io_scheduler.cpp
 	in_mem_io.cpp
+	NUMA_mapper.cpp
+	common.cpp
+	config_map.cpp
+	log.cpp
+	mem_tracker.cpp
+	slab_allocator.cpp
+	thread.cpp
 )

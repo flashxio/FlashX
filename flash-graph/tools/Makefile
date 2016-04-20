@@ -17,8 +17,8 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(LDFLAGS) -lz
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I.
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(LDFLAGS) -lz
+CXXFLAGS += -I../../libsafs -I.. -I.
 
 all: rmat-gen graph-stat print_graph
 

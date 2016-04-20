@@ -17,8 +17,8 @@
 
 include ../../Makefile.common
 
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver
-LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver
+LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: el2fg fg2fm fg2crs
@@ -33,9 +33,7 @@ fg2crs: fg2crs.o fg_utils.o ../libFMatrix.a
 	$(CXX) -o fg2crs fg2crs.o fg_utils.o $(LDFLAGS)
 
 clean:
-	rm -f el2fg
-	rm -f fg2crs
-	rm -f fg2fm
-	rm -f *.o
 	rm -f *.d
+	rm -f *.o
 	rm -f *~
+	rm -f el2fg fg2fm fg2crs

@@ -17,8 +17,8 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lz $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. -I/usr/include/eigen3/ -DUSE_EIGEN
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I. -I/usr/include/eigen3/ -DUSE_EIGEN
 
 all: test_matrix
 

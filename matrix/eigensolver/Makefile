@@ -2,7 +2,7 @@ include ../../Makefile.common
 
 all: libeigen
 
-CXXFLAGS += -I.. -I../../include -I../../libcommon -I../../flash-graph
+CXXFLAGS += -I.. -I../../libsafs -I../../flash-graph
 
 libeigen: $(OBJS)
 	rm -f libeigen.a

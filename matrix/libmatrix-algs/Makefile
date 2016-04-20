@@ -17,7 +17,7 @@
 
 include ../../Makefile.common
 
-CXXFLAGS += -DUSE_GZIP -I../../include -I../../libcommon -I../../flash-graph -I..
+CXXFLAGS += -DUSE_GZIP -I../../libsafs -I../../flash-graph -I..
 
 all: libmatrix-algs
 
