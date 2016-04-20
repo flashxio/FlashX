@@ -120,7 +120,7 @@ public:
 	 * We care about the shape of a large matrix. We deal with a tall matrix
 	 * different from a wide matrix.
 	 */
-	bool is_wide() const {
+	virtual bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
 

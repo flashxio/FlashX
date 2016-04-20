@@ -179,6 +179,20 @@ public:
 		return global_start_col + get_local_start_col();
 	}
 
+	/*
+	 * This determines the shape of the global matrix.
+	 */
+	virtual bool is_wide() const {
+		// A local matrix can be resized. We can use the original size to
+		// determine the shape of the global matrix. We can also use
+		// the location of the local matrix in the global matrix to determine
+		// the shape.
+		if (global_start_row == 0 && global_start_col == 0)
+			return num_cols > num_rows;
+		else
+			return global_start_col != 0;
+	}
+
 	virtual std::string get_name() const {
 		return (boost::format("local_mat(%1%,%2%)") % get_num_rows()
 			% get_num_cols()).str();
