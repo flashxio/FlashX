@@ -17,16 +17,13 @@
 
 include Makefile.common
 
-all: build_lib tools utils
+all: build_lib utils
 
 build_lib:
 	$(MAKE) -C libcommon
 	$(MAKE) -C libsafs
 	$(MAKE) -C flash-graph
 	$(MAKE) -C matrix
-
-tools: build_lib
-	$(MAKE) -C tools
 
 utils: build_lib
 	$(MAKE) -C utils
@@ -39,7 +36,6 @@ clean:
 	find -name core -delete
 	make --ignore-errors -C libsafs clean
 	make --ignore-errors -C libcommon clean
-	make --ignore-errors -C tools clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C flash-graph clean
 	make --ignore-errors -C matrix clean
