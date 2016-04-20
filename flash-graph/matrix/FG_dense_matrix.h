@@ -23,10 +23,6 @@
 #include <vector>
 #include <memory>
 
-#ifdef USE_EIGEN
-#include <eigen3/Eigen/Dense>
-#endif
-
 #include "FG_vector.h"
 #include "graph.h"
 
@@ -112,51 +108,6 @@ public:
 		return rows[0]->get_size();
 	}
 };
-
-#ifdef USE_EIGEN
-template<class T>
-class Eigen_matrix_store
-{
-	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> mat;
-public:
-	typename Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> matrix_type;
-
-	Eigen_matrix_store(size_t nrow, size_t ncol) {
-		mat.resize(nrow, ncol);
-		assert((size_t) mat.rows() == nrow);
-		assert((size_t) mat.cols() == ncol);
-	}
-
-	Eigen_matrix_store(
-			const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat) {
-		this->mat = mat;
-	}
-
-	void set(size_t row, size_t col, const T &v) {
-		mat(row, col) = v;
-	}
-
-	const T &get(size_t row, size_t col) const {
-		return mat(row, col);
-	}
-
-	size_t get_num_rows() const {
-		return mat.rows();
-	}
-
-	size_t get_num_cols() const {
-		return mat.cols();
-	}
-
-	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() const {
-		return mat;
-	}
-
-	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() {
-		return mat;
-	}
-};
-#endif
 
 template<class T, class MatrixStore>
 class FG_dense_matrix
@@ -387,81 +338,6 @@ public:
 	template<class T1>
 	friend class FG_row_wise_matrix;
 };
-
-#ifdef USE_EIGEN
-template<class T>
-class FG_eigen_matrix: public FG_dense_matrix<T, Eigen_matrix_store<T> >
-{
-	FG_eigen_matrix(size_t nrow,
-			size_t ncol): FG_dense_matrix<T, Eigen_matrix_store<T> >(nrow, ncol) {
-	}
-public:
-	typedef std::shared_ptr<FG_eigen_matrix<T> > ptr;
-
-	FG_eigen_matrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
-			size_t nrow, size_t ncol): FG_dense_matrix<T, Eigen_matrix_store<T> >(
-				nrow, ncol) {
-		this->matrix_store = Eigen_matrix_store<T>(mat);
-		assert(nrow <= this->matrix_store.get_num_rows());
-		assert(ncol <= this->matrix_store.get_num_cols());
-		this->nrow = nrow;
-		this->ncol = ncol;
-	}
-
-	static ptr create(size_t nrow, size_t ncol) {
-		return ptr(new FG_eigen_matrix<T>(nrow, ncol));
-	}
-
-	void set_col(size_t idx, const FG_vector<T> &vec) {
-		assert(vec.get_size() == this->get_num_rows());
-		for (size_t i = 0; i < vec.get_size(); i++)
-			this->matrix_store.set(i, idx, vec.get(i));
-	}
-
-	void set_row(size_t idx, const FG_vector<T> &vec) {
-		assert(vec.get_size() == this->get_num_cols());
-		for (size_t i = 0; i < vec.get_size(); i++)
-			this->matrix_store.set(idx, i, vec.get(i));
-	}
-
-	typename FG_eigen_matrix<T>::ptr householderQ() const {
-		size_t nrows = this->matrix_store.get_num_rows();
-		size_t ncols = this->matrix_store.get_num_cols();
-		typename FG_eigen_matrix<T>::ptr ret = FG_eigen_matrix<T>::ptr(
-				new FG_eigen_matrix(nrows, ncols));
-		ret->matrix_store.get_matrix()
-			= this->matrix_store.get_matrix().householderQr().householderQ(
-					) * Eigen::MatrixXd::Identity(nrows, ncols);
-		ret->nrow = ret->matrix_store.get_num_rows();
-		ret->ncol = ret->matrix_store.get_num_cols();
-		return ret;
-	}
-
-	typename FG_vector<T>::ptr get_col(size_t col) const {
-		assert(col < this->ncol);
-		typename FG_vector<T>::ptr vec
-			= FG_vector<T>::create(this->get_num_rows());
-		for (size_t i = 0; i < this->get_num_rows(); i++)
-			vec->set(i, this->get(i, col));
-		return vec;
-	}
-
-	typename FG_vector<T>::ptr get_row(size_t row) const {
-		assert(row < this->nrow);
-		typename FG_vector<T>::ptr vec
-			= FG_vector<T>::create(this->get_num_cols());
-		for (size_t i = 0; i < this->get_num_cols(); i++)
-			vec->set(i, this->get(row, i));
-		return vec;
-	}
-
-	FG_eigen_matrix<T>::ptr transpose() const {
-		return FG_eigen_matrix<T>::ptr(new FG_eigen_matrix<T>(
-					this->matrix_store.get_matrix().transpose(),
-					this->get_num_cols(), this->get_num_rows()));
-	}
-};
-#endif
 
 }
 
