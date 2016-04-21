@@ -1687,7 +1687,7 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 	// If this is a wide matrix, the input vector may also be stored on
 	// disks. We should give it as the input of mapply_portion.
 	if (is_wide()) {
-		ins.push_back(vals->get_raw_store());
+		ins.push_back(vals->get_raw_store()->transpose());
 		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
 					NULL, op, get_num_rows(), get_num_cols()));
 	}
