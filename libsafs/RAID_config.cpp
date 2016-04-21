@@ -166,6 +166,27 @@ static int retrieve_data_files(std::string file_file,
 		std::string path_name = name;
 		path_name.erase(std::remove_if(path_name.begin(), path_name.end(),
 					isspace), path_name.end());
+		if (path_name[0] != '/') {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"Absolute paths to SSDs are required. `%1%' isn't an absolute path")
+				% path_name;
+			data_files.clear();
+			break;
+		}
+		native_dir dir(path_name);
+		if (!dir.exist()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("`%1%' doesn't exist") % path_name;
+			data_files.clear();
+			break;
+		}
+		if (!dir.is_dir()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("`%1%' isn't a directory") % path_name;
+			data_files.clear();
+			break;
+		}
+
 		data_files.emplace_back(path_name, disk_id, node_id);
 		free(line);
 		line = NULL;
