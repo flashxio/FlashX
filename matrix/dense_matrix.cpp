@@ -2662,7 +2662,7 @@ public:
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		throw unsupported_exception(
-				"Don't support transpose of groupby_short_row_mapply_op");
+				"Don't support transpose of groupby_long_row_mapply_op");
 	}
 
 	virtual void run(
