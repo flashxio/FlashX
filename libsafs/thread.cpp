@@ -265,12 +265,6 @@ void thread::thread_class_init()
 	pthread_once(&once_control, init_thread_class);
 }
 
-thread *thread::get_curr_thread()
-{
-	thread *curr = (thread *) pthread_getspecific(thread_key);
-	return curr;
-}
-
 pthread_key_t thread::thread_key;
 
 class thread_representer: public thread
@@ -282,6 +276,22 @@ public:
 				"representer-thread-node") + itoa(node_id), node_id) {
 	}
 };
+
+thread *thread::get_curr_thread()
+{
+	thread *curr = (thread *) pthread_getspecific(thread_key);
+	if (curr)
+		return curr;
+	// If the thread isn't associated with a thread object, we'll create
+	// a thread representer just to make the other SAFS code work.
+	else {
+		curr = new thread_representer(-1);
+		pthread_setspecific(thread::thread_key, curr);
+		curr->_is_sleeping = false;
+		curr->tid = gettid();
+		return curr;
+	}
+}
 
 thread *thread::represent_thread(int node_id)
 {
