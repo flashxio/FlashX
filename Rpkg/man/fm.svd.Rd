@@ -19,11 +19,9 @@ value. If this is set to zero then machine precision is used.}
 }
 \value{
 Returns a list with three entries
-\itemize{
   \item{d}{ max(nu, nv) approximate singular values}
   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
   \item{v}{ nv approximate right singular vectors}
-}
 }
 \description{
 Compute the singular-value decomposition of a large sparse matrix.

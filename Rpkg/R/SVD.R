@@ -1,3 +1,20 @@
+# Copyright 2016 Open Connectome Project (http://openconnecto.me)
+# Written by Da Zheng (zhengda1936@gmail.com)
+#
+# This file is part of FlashR.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 #' Compute the singular-value decomposition of a large sparse matrix.
 #'
 #' @param x a FlashMatrixR object
@@ -7,11 +24,9 @@
 #' is considered acceptable if its error is less than 'tol' times its estimated
 #' value. If this is set to zero then machine precision is used.
 #' @return Returns a list with three entries
-#' \itemize{
 #'   \item{d}{ max(nu, nv) approximate singular values}
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
-#' }
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.svd <- function(x, nu, nv, tol=1e-8)
 {

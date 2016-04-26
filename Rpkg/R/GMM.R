@@ -1,3 +1,20 @@
+# Copyright 2016 Open Connectome Project (http://openconnecto.me)
+# Written by Da Zheng (zhengda1936@gmail.com)
+#
+# This file is part of FlashR.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 gmm.covs <- function (x, wts)
 {
 	k <- ncol(wts)
@@ -55,7 +72,29 @@ comp.prob <- function(X, mus, covars, phi)
 	list(P=ret[[1]], log.like=log.like)
 }
 
-GMM <- function(X, k, maxiters, verbose=FALSE)
+#' Gaussian Mixture Model
+#'
+#' This clusters data points with an assumption that data is sampled from
+#' mixtures of Gaussian distribution. It fits Gaussian mixture model with
+#' EM algorithm.
+#'
+#' @param X a n x p data matrix, where each row is a data point.
+#' @param k the number of clusters
+#' @param maxiters the maximal number of iterations.
+#' @param verbose indicate whether to print extra information.
+#' @return This function returns a list of components:
+#'   \item{P}{A n x k matrix, where each row stores the probability that
+#'         a corresponding data point belongs to each cluster.}
+#'   \item{clust.ids}{A vector of n elements, where each element indicates
+#'         the cluster where a corresponding data point most likely belongs to.}
+#'   \item{niters}{a scalar that indicates the number of iterations}
+#'   \item{phi}{A vector of k elements, indicating the weight of Gaussian
+#'         distributions.}
+#'   \item{mus}{A k x p matrix, where each row is the mean of a Gaussian
+#'         distribution.}
+#'   \item{covars}{A list of k covariance matrices.}
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.GMM <- function(X, k, maxiters, verbose=FALSE)
 {
 	orig.test.na <- fm.env$fm.test.na
 	fm.set.test.na(FALSE)

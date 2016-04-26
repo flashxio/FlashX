@@ -1,3 +1,29 @@
+# Copyright 2016 Open Connectome Project (http://openconnecto.me)
+# Written by Da Zheng (zhengda1936@gmail.com)
+#
+# This file is part of FlashR.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#' KMeans clustering
+#'
+#' Perform k-means clustering on a data matrix.
+#'
+#' @param data the input data matrix where each row is a data point.
+#' @param K the number of clusters
+#' @param max.iters the maximal number of iterations.
+#' @return a vector that contains cluster Ids for each data point.
+#' @author Da Zheng <dzheng5@@jhu.edu>
 fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 {
 	orig.test.na <- fm.env$fm.test.na

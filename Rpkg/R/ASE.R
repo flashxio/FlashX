@@ -1,3 +1,20 @@
+# Copyright 2016 Open Connectome Project (http://openconnecto.me)
+# Written by Da Zheng (zhengda1936@gmail.com)
+#
+# This file is part of FlashR.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 #' Spectral embedding
 #'
 #' This computes spectral embedding of a given graph.
@@ -29,20 +46,11 @@
 #' tol times its estimated value. If this is set to zero then machine
 #' precision is used.
 #' @return A named list with the following members:
-#'
-#' values
-#'
-#'    Numeric vector, the desired eigenvalues.
-#'
-#' vectors
-#'
-#'    Numeric matrix, the desired eigenvectors as columns. If complex=TRUE
-#'   (the default for non-symmetric problems), then the matrix is complex.
-#'
-#' options
-#'
-#'   A named list with the supplied options and some information about
-#'   the performed calculation, including an ARPACK exit code.
+#' \item{values}{Numeric vector, the desired eigenvalues.}
+#' \item{vectors}{Numeric matrix, the desired eigenvectors as columns. If complex=TRUE
+#'   (the default for non-symmetric problems), then the matrix is complex.}
+#' \item{options}{A named list with the supplied options and some information
+#'   about the performed calculation, including an ARPACK exit code.}
 #' @name fm.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
