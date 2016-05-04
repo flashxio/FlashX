@@ -67,8 +67,10 @@ EM_object::file_holder::~file_holder()
 {
 	if (!persistent) {
 		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-		assert(f.exist());
-		f.delete_file();
+		if (f.exist())
+			f.delete_file();
+		else
+			BOOST_LOG_TRIVIAL(error) << file_name << " doesn't exist any more";
 	}
 }
 
