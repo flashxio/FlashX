@@ -37,7 +37,16 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 		comp.right <- TRUE
 
 	nev <- max(nu, nv)
-	if (comp.right) {
+	x.prod <- NULL
+	if (fm.is.sparse(x) && comp.right) {
+		n <- ncol(x)
+		multiply <- function(vec, extra) t(x) %*% (x %*% vec)
+	}
+	else if (fm.is.sparse(x)) {
+		n <- nrow(x)
+		multiply <- function(vec, extra) x %*% (t(x) %*% vec)
+	}
+	else if (comp.right) {
 		n <- ncol(x)
 		x.prod <- fm.conv.FM2R(tx %*% x)
 		multiply <- function(vec, extra) x.prod %*% vec
@@ -50,13 +59,16 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	# If it's a very small matrix, we can compute its eigenvalues directly.
 	# Or if we need to compute many eigenvalues, we probably should also
 	# compute its eigenvalues directly.
-	if (nrow(x.prod) < 100 || nev >= nrow(x.prod) / 2) {
+	if (!is.null(x.prod) && (n < 100 || nev >= n / 2)) {
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[nev]
 		nev <- nrow(x.prod)
 	}
-	else
+	else if (n < 1000000)
 		res <- arpack(multiply, sym=TRUE,
+					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
+	else
+		res <- fm.eigen(multiply, sym=TRUE,
 					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
 
 	# After we compute the other singular vectors, we need to rescale
@@ -70,10 +82,14 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	if (comp.right) {
 		right <- NULL
 		if (nv > 0) {
-			if (nv < nev)
+			if (nv < nev && !fm.is.matrix(res$vectors))
 				right <- fm.conv.R2FM(res$vectors[,1:nv])
-			else
+			else if (!fm.is.matrix(res$vectors))
 				right <- fm.conv.R2FM(res$vectors)
+			else if (nv < nev)
+				right <- res$vectors[,1:nv]
+			else
+				right <- res$vectors
 		}
 		left <- NULL
 		if (nu > 0) {
@@ -84,10 +100,14 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	else {
 		left <- NULL
 		if (nu > 0) {
-			if (nu < nev)
+			if (nu < nev && !fm.is.matrix(res$vectors))
 				left <- fm.conv.R2FM(res$vectors[,1:nu])
-			else
+			else if (!fm.is.matrix(res$vectors))
 				left <- fm.conv.R2FM(res$vectors)
+			else if (nu < nev)
+				left <- res$vectors[,1:nu]
+			else
+				left <- res$vectors
 		}
 		right <- NULL
 		if (nv > 0) {
