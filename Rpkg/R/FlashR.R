@@ -1451,8 +1451,8 @@ fm.conv.store <- function(fm, in.mem, name="")
 #' }
 #'
 #' @return A named list with the following members:
-#'         vals: Numeric vector, the desired eigenvalues.
-#'         vecs: Numeric matrix, the desired eigenvectors as columns.
+#'         values: Numeric vector, the desired eigenvalues.
+#'         vectors: Numeric matrix, the desired eigenvectors as columns.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
@@ -1465,7 +1465,7 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 	if (is.loaded("R_FM_eigen")) {
 		ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
 					 as.list(options), PACKAGE="FlashR")
-		ret$vecs <- new.fm(ret$vecs)
+		ret$vectors <- new.fm(ret$vectors)
 		ret
 	}
 	else {
@@ -1497,7 +1497,7 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 			as.vector(ret)
 		}
 		arpack.ret <- arpack(arpack.fun, extra, sym, arpack.opts, env)
-		list(vals=arpack.ret$values, vecs=fm.as.matrix(arpack.ret$vectors),
+		list(values=arpack.ret$values, vectors=fm.as.matrix(arpack.ret$vectors),
 			 options=arpack.ret$options)
 	}
 }

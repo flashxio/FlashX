@@ -1665,8 +1665,8 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 
 	Rcpp::List ret;
 	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
-	ret["vals"] = vals;
-	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
+	ret["values"] = vals;
+	ret["vectors"] = create_FMR_matrix(res.vecs, "evecs");
 	ret["options"] = options;
 	return ret;
 }

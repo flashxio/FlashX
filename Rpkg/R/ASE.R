@@ -121,17 +121,17 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 		x <- fm.materialize(x)
 	}
 	if (directed) {
-		ret$vals <- sqrt(ret$vals)
-		ret[["left"]] <- ret$vecs
-		ret[["right"]] <- rescale(multiply.right(ret$vecs))
-		ret$vecs <- NULL
+		ret$values <- sqrt(ret$values)
+		ret[["left"]] <- ret$vectors
+		ret[["right"]] <- rescale(multiply.right(ret$vectors))
+		ret$vectors <- NULL
 	}
 	else if (comp.oppo) {
 		if (which == "nL")
-			ret$vals <- 1 - ret$vals
+			ret$values <- 1 - ret$values
 		# We can't compute the eigenvalues of the Laplacian matrix.
 		else
-			ret$vals[1:length(ret$vals)] <- 0
+			ret$values[1:length(ret$values)] <- 0
 	}
 	ret
 }
