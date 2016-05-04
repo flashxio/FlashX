@@ -276,6 +276,31 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 		stop("a wrong mode")
 }
 
+#' Get the largest connected component in a graph
+#'
+#' Get the largest (weakly or strongly) connected component in a graph.
+#'
+#' For an undirected graph, this function returns the largest connected component
+#' and ignores the argument `mode'.
+#'
+#' @param graph The FlashGraph object
+#' @param mode Character string, either "weak" or "strong". For directed
+#'             graphs "weak" implies weakly, "strong" strongly c
+#'             components to search. It is ignored for undirected graphs.
+#' @return a FlashGraph object that contains the largest connected component in
+#'         the graph.
+#' @name fg.cc
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fg.get.lcc <- function(graph, mode=c("weak", "strong"))
+{
+	cc <- fg.clusters(graph, mode)
+	res <- table(cc)
+	df <- as.data.frame(res)
+	lcc.id <- df$cc[which.max(df$Freq)]
+	lccV <- which(cc == lcc.id)
+	fg.fetch.subgraph(graph, vertices=lccV - 1, compress=TRUE)
+}
+
 #fg.transitivity <- function(graph)
 #{
 #	stopifnot(!is.null(graph))
