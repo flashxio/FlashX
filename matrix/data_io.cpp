@@ -24,6 +24,7 @@
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "log.h"
 #include "native_file.h"
@@ -36,6 +37,7 @@
 #include "matrix_config.h"
 #include "data_frame.h"
 #include "mem_worker_thread.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -726,6 +728,146 @@ data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		return data_frame::ptr();
 	}
 	return read_lines(files, *parser, in_mem);
+}
+
+/*
+ * This parses one row of a dense matrix at a time.
+ */
+template<class T>
+class row_parser: public line_parser
+{
+	const std::string delim;
+	const size_t num_cols;
+public:
+	row_parser(const std::string &_delim,
+			size_t _num_cols): delim(_delim), num_cols(_num_cols) {
+	}
+
+	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
+	size_t get_num_cols() const {
+		return num_cols;
+	}
+
+	std::string get_col_name(off_t idx) const {
+		return boost::str(boost::format("c%1%") % idx);
+	}
+
+	const scalar_type &get_col_type(off_t idx) const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+size_t row_parser<T>::parse(const std::vector<std::string> &lines,
+		data_frame &df) const
+{
+	std::vector<detail::smp_vec_store::ptr> cols(num_cols);
+	for (size_t i = 0; i < cols.size(); i++)
+		cols[i] = detail::smp_vec_store::create(lines.size(), get_scalar_type<T>());
+	size_t num_rows = 0;
+	for (size_t i = 0; i < lines.size(); i++) {
+		const char *line = lines[i].c_str();
+		// Skip space
+		for (; isspace(*line); line++);
+		if (*line == '#')
+			continue;
+
+		// Split a string
+		std::vector<std::string> strs;
+		boost::split(strs, line, boost::is_any_of(delim));
+		if (strs.size() < num_cols) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("a row has only %1% entries") % strs.size();
+			continue;
+		}
+
+		// Parse each element.
+		std::vector<T> row(num_cols);
+		try {
+			for (size_t j = 0; j < num_cols; j++)
+				row[j] = boost::lexical_cast<T>(strs[j]);
+		}
+		catch (boost::bad_lexical_cast const&e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+		}
+
+		// If everything goes right, we store the results in the vectors.
+		for (size_t j = 0; j < num_cols; j++)
+			cols[j]->set<T>(num_rows, row[j]);
+		num_rows++;
+	}
+	for (size_t j = 0; j < num_cols; j++) {
+		cols[j]->resize(num_rows);
+		df.get_vec(j)->append(*cols[j]);
+	}
+	return num_rows;
+}
+
+dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		size_t num_cols)
+{
+	// We need to discover the number of columns ourselves.
+	if (num_cols == std::numeric_limits<size_t>::max()) {
+		FILE *f = fopen(files.front().c_str(), "r");
+		if (f == NULL) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("cannot open %1%: %2%")
+				% files.front() % strerror(errno);
+			return dense_matrix::ptr();
+		}
+
+		// Read at max 1M
+		safs::native_file in_file(files.front());
+		long buf_size = 1024 * 1024;
+		// If the input file is small, we read the entire file.
+		bool read_all = false;
+		if (buf_size > in_file.get_size()) {
+			buf_size = in_file.get_size();
+			read_all = true;
+		}
+		std::unique_ptr<char[]> buf(new char[buf_size]);
+		int ret = fread(buf.get(), buf_size, 1, f);
+		if (ret != 1) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("cannot read %1%: %2%")
+				% files.front() % strerror(errno);
+			fclose(f);
+			return dense_matrix::ptr();
+		}
+
+		// Find the first line.
+		char *res = strchr(buf.get(), '\n');
+		// If the buffer doesn't have '\n' and we didn't read the entire file
+		if (res == NULL && !read_all) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "read 1M data, can't find the end of the line";
+			fclose(f);
+			return dense_matrix::ptr();
+		}
+		*res = 0;
+
+		// Split a string
+		std::string line = buf.get();
+		std::vector<std::string> strs;
+		boost::split(strs, line, boost::is_any_of(delim));
+		num_cols = strs.size();
+		fclose(f);
+	}
+
+	std::shared_ptr<line_parser> parser;
+	if (ele_type == "I")
+		parser = std::shared_ptr<line_parser>(new row_parser<int>(delim, num_cols));
+	else if (ele_type == "L")
+		parser = std::shared_ptr<line_parser>(new row_parser<long>(delim, num_cols));
+	else if (ele_type == "F")
+		parser = std::shared_ptr<line_parser>(new row_parser<float>(delim, num_cols));
+	else if (ele_type == "D")
+		parser = std::shared_ptr<line_parser>(new row_parser<double>(delim, num_cols));
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
+		return dense_matrix::ptr();
+	}
+	data_frame::ptr df = read_lines(files, *parser, in_mem);
+	return dense_matrix::create(df);
 }
 
 }

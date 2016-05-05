@@ -29,12 +29,14 @@
 
 #include <memory>
 #include <vector>
+#include <limits>
 
 namespace fm
 {
 
 class data_frame;
 class scalar_type;
+class dense_matrix;
 
 class line_parser
 {
@@ -50,6 +52,10 @@ std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
 std::shared_ptr<data_frame> read_edge_list(const std::vector<std::string> &files,
 		bool in_mem, const std::string &attr_type);
+
+std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		size_t num_cols = std::numeric_limits<size_t>::max());
 
 }
 

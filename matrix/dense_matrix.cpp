@@ -40,6 +40,7 @@
 #include "block_matrix.h"
 #include "col_vec.h"
 #include "sink_matrix.h"
+#include "data_frame.h"
 
 namespace fm
 {
@@ -1873,6 +1874,17 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 	else
 		return block_matrix::create(nrow, ncol, matrix_conf.get_block_size(),
 				type, op, num_nodes, in_mem, group);
+}
+
+dense_matrix::ptr dense_matrix::create(data_frame::const_ptr df)
+{
+	std::vector<detail::matrix_store::const_ptr> mats(df->get_num_vecs());
+	for (size_t i = 0; i < mats.size(); i++) {
+		detail::vec_store::const_ptr v = df->get_vec(i);
+		mats[i] = v->conv2mat(v->get_length(), 1, false);
+	}
+	return dense_matrix::create(detail::combined_matrix_store::create(mats,
+				matrix_layout_t::L_COL));
 }
 
 vector::ptr dense_matrix::get_col(off_t idx) const

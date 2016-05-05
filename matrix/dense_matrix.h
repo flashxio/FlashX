@@ -45,6 +45,7 @@ class arr_apply_operate;
 class vector;
 class factor_col_vector;
 class col_vec;
+class data_frame;
 
 enum matrix_margin
 {
@@ -200,6 +201,8 @@ public:
 	static ptr create(detail::matrix_store::const_ptr store) {
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
+
+	static ptr create(std::shared_ptr<const data_frame> df);
 
 	template<class T>
 	static ptr create_randu(T min, T max, size_t nrow, size_t ncol,
