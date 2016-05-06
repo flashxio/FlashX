@@ -119,8 +119,10 @@ fm.get.params <- function(name)
 #' `fm.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
 #' a matrix represented by a FlashGraph object.
 #'
-#' `fm.get.dense.matrix' gets a FlashMatrix dense matrix from the underlying
-#" filesystem.
+#' `fm.get.dense.matrix' gets a FlashMatrix dense matrix from SAFS.
+#'
+#' `fm.load.dense.matrix' loads a dense matrix in the text format from
+#' the Linux filesystem.
 #'
 #' `fm.load.sparse.matrix' loads a FlashMatrix sparse matrix from files.
 #' The matrix in the file is in the FlashMatrix format.
@@ -128,6 +130,9 @@ fm.get.params <- function(name)
 #' @param fg A FlashGraph object.
 #' @param mat.file The file that stores the sparse matrix.
 #' @param index.file The file that stores the index of the sparse matrix.
+#' @param in.mem Determine the loaded matrix is stored in memory or on SAFS.
+#' @param ele.type The element type in a matrix.
+#' @param delim The delimiter of separating elements in the text format.
 #' @return a FlashMatrix matrix.
 #' @name fm.get.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -149,6 +154,16 @@ fm.get.dense.matrix <- function(name)
 	stopifnot(!is.null(name))
 	stopifnot(class(name) == "character")
 	m <- .Call("R_FM_get_dense_matrix", name, PACKAGE="FlashR")
+	new.fm(m)
+}
+
+#' @rdname fm.get.matrix
+fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",")
+{
+	stopifnot(!is.null(name))
+	stopifnot(class(name) == "character")
+	m <- .Call("R_FM_load_dense_matrix", name, in.mem, ele.type, delim,
+			   PACKAGE="FlashR")
 	new.fm(m)
 }
 

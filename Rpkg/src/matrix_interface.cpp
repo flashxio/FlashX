@@ -48,6 +48,7 @@
 #include "rutils.h"
 #include "fmr_utils.h"
 #include "matrix_ops.h"
+#include "data_io.h"
 
 using namespace fm;
 
@@ -251,6 +252,21 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 		return R_NilValue;
 	// TODO how do we determine the matrix element type?
 	return create_FMR_matrix(dense_matrix::create(store), "");
+}
+
+RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
+		SEXP pele_type, SEXP pdelim)
+{
+	std::vector<std::string> mat_files(1);
+	mat_files[0] = CHAR(STRING_ELT(pname, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+
+	dense_matrix::ptr mat = read_matrix(mat_files, in_mem, ele_type, delim);
+	if (mat == NULL)
+		return R_NilValue;
+	return create_FMR_matrix(mat, "");
 }
 
 RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
