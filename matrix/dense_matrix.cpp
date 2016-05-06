@@ -2835,7 +2835,8 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		labels->materialize_self();
 		detail::portion_mapply_op::const_ptr groupby_op(
 				new groupby_long_row_mapply_op(op, labels, get_num_cols()));
-		detail::matrix_store::ptr ret = __mapply_portion_virtual(mats,
+		// TODO I need to make this step virtual.
+		detail::matrix_store::ptr ret = __mapply_portion(mats,
 				groupby_op, matrix_layout_t::L_ROW);
 		if (ret == NULL)
 			return dense_matrix::ptr();
