@@ -1565,7 +1565,17 @@ fm.rbind.list <- function(objs)
 		}
 	}
 	ret <- .Call("R_FM_rbind", objs, PACKAGE="FlashR")
-	new.fm(ret)
+	# If it doesn't work, we fall to the default solution and use R
+	# to bind matrices.
+	if (is.null(ret)) {
+		print("Warning! use rbind in R to bind FM matrices")
+		for (i in 1:length(objs))
+			objs[[i]] <- fm.conv.FM2R(objs[[i]])
+		ret <- do.call(rbind, objs)
+		fm.conv.R2FM(ret)
+	}
+	else
+		new.fm(ret)
 }
 
 #' @name fm.bind
@@ -1589,7 +1599,17 @@ fm.cbind.list <- function(objs)
 		}
 	}
 	ret <- .Call("R_FM_cbind", objs, PACKAGE="FlashR")
-	new.fm(ret)
+	# If it doesn't work, we fall to the default solution and use R
+	# to bind matrices.
+	if (is.null(ret)) {
+		print("Warning! use cbind in R to bind FM matrices")
+		for (i in 1:length(objs))
+			objs[[i]] <- fm.conv.FM2R(objs[[i]])
+		ret <- do.call(cbind, objs)
+		fm.conv.R2FM(ret)
+	}
+	else
+		new.fm(ret)
 }
 
 setMethod("ifelse", signature(test = "fm", yes = "fm", no = "ANY"),
