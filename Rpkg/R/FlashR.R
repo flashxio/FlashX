@@ -162,8 +162,8 @@ fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",")
 {
 	stopifnot(!is.null(name))
 	stopifnot(class(name) == "character")
-	m <- .Call("R_FM_load_dense_matrix", name, in.mem, ele.type, delim,
-			   PACKAGE="FlashR")
+	m <- .Call("R_FM_load_dense_matrix", name, as.logical(in.mem),
+			   as.character(ele.type), as.character(delim), PACKAGE="FlashR")
 	new.fm(m)
 }
 
