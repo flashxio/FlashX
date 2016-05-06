@@ -3136,8 +3136,12 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 
 	detail::matrix_store::ptr combined;
 	if (ncol > nrow) {
-		// We have to make sure all input matrices are wide matrices.
-		assert(mats[0]->get_num_cols() > mats[0]->get_num_rows());
+		// If the input matrices are tall and the combined matrix is wide,
+		// We need to handle it differently. TODO right now, we don't handle
+		// this case.
+		if (mats[0]->get_num_cols() <= mats[0]->get_num_rows())
+			return dense_matrix::ptr();
+
 		std::vector<detail::matrix_store::const_ptr> indiv_stores;
 		for (size_t i = 0; i < stores.size(); i++) {
 			// If this is a combined matrix store, we get all its individual
@@ -3156,8 +3160,12 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 				matrix_layout_t::L_ROW);
 	}
 	else if (in_mem) {
-		// We have to make sure all input matrices are tall matrices.
-		assert(mats[0]->get_num_cols() < mats[0]->get_num_rows());
+		// If the input matrices are wide and the combined matrix is tall,
+		// We need to handle it differently. TODO right now, we don't handle
+		// this case.
+		if (mats[0]->get_num_cols() >= mats[0]->get_num_rows())
+			return dense_matrix::ptr();
+
 		// If all block matrices have the same block_size.
 		bool same_block_size = true;
 		for (size_t i = 1; i < block_mats.size(); i++) {
