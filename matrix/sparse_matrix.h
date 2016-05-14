@@ -775,7 +775,10 @@ public:
 	}
 	template<class T>
 	bool is_type() const {
-		if (entry_type == NULL)
+		// If entry_type doesn't exist, it's a bool sparse matrix.
+		if (entry_type == NULL && get_scalar_type<bool>() == get_scalar_type<T>())
+			return true;
+		else if (entry_type == NULL)
 			return false;
 		else
 			return *entry_type == get_scalar_type<T>();
