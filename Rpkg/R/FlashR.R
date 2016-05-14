@@ -359,7 +359,7 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 fm.conv.FM2R <- function(obj)
 {
 	stopifnot(!is.null(obj))
-	if (class(obj) == "fm") {
+	if (class(obj) == "fm" && !fm.is.sparse(obj)) {
 		nrow <- dim(obj)[1]
 		ncol <- dim(obj)[2]
 		if (fm.typeof(obj) == "integer")
@@ -368,6 +368,10 @@ fm.conv.FM2R <- function(obj)
 			ret <- matrix(vector(mode="double", nrow * ncol), nrow, ncol)
 		else if (fm.typeof(obj) == "logical")
 			ret <- matrix(vector(mode="logical", nrow * ncol), nrow, ncol)
+		else {
+			print("can't find the type of a dense matrix")
+			return(NULL)
+		}
 		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
 		ret
 	}
@@ -379,8 +383,16 @@ fm.conv.FM2R <- function(obj)
 			ret <- vector(mode="double", len)
 		else if (fm.typeof(obj) == "logical")
 			ret <- vector(mode="logical", len)
+		else {
+			print("can't find the type of a vector")
+			return(NULL)
+		}
 		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
 		ret
+	}
+	else if (class(obj) == "fm" && fm.is.sparse(obj)) {
+		print("doesn't support convert a sparse matrix to R object")
+		NULL
 	}
 	else {
 		print("It has to be a FlashMatrix object")
