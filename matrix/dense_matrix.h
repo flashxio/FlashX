@@ -60,6 +60,7 @@ namespace detail
 {
 
 class local_matrix_store;
+class sparse_project_matrix_store;
 
 class portion_mapply_op
 {

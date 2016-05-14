@@ -41,6 +41,7 @@
 #include "col_vec.h"
 #include "sink_matrix.h"
 #include "data_frame.h"
+#include "project_matrix_store.h"
 
 namespace fm
 {
@@ -375,7 +376,21 @@ dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
-	if ((get_type() == get_scalar_type<double>()
+	// We should treat a sparse matrix differently to improve performance of
+	// matrix multiplication.
+	if (mat.get_data().is_sparse()) {
+		detail::sparse_project_matrix_store::const_ptr store
+			= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
+					mat.get_raw_store());
+
+		if (out_layout == matrix_layout_t::L_NONE)
+			out_layout = matrix_layout_t::L_COL;
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
+		return dense_matrix::create(detail::matrix_store::ptr(
+					new detail::IPW_matrix_store(tmp->get_raw_store(), store,
+						NULL, NULL, out_layout)));
+	}
+	else if ((get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>())) {
 		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
@@ -507,12 +522,14 @@ void mapply_task::run()
 	int node_id = thread::get_curr_thread()->get_node_id();
 	for (size_t j = 0; j < mats.size(); j++) {
 		local_stores[j] = mats[j]->get_portion(portion_idx);
-		if (local_stores[j]->get_node_id() >= 0 && !one_portion)
+		if (local_stores[j] && local_stores[j]->get_node_id() >= 0
+				&& !one_portion)
 			assert(node_id == local_stores[j]->get_node_id());
 	}
 	for (size_t j = 0; j < out_mats.size(); j++) {
 		local_out_stores[j] = out_mats[j]->get_portion(portion_idx);
-		if (local_out_stores[j]->get_node_id() >= 0 && !one_portion)
+		if (local_stores[j] && local_out_stores[j]->get_node_id() >= 0
+				&& !one_portion)
 			assert(node_id == local_out_stores[j]->get_node_id());
 	}
 

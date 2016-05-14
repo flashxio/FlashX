@@ -42,6 +42,9 @@ class mem_matrix_store: public matrix_store
 	const size_t mat_id;
 protected:
 	bool write_header(FILE *f) const;
+	size_t get_mat_id() const {
+		return mat_id;
+	}
 public:
 	typedef std::shared_ptr<mem_matrix_store> ptr;
 	typedef std::shared_ptr<const mem_matrix_store> const_ptr;

@@ -22,6 +22,7 @@
 #include "IPW_matrix_store.h"
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
+#include "project_matrix_store.h"
 
 namespace fm
 {
@@ -324,14 +325,15 @@ class multiply_wide_op: public combine_op
 	std::vector<detail::local_matrix_store::ptr> tmp_bufs;
 	std::vector<matmul_accumulator::ptr> res_bufs;
 	bool require_trans;
+	bool is_sparse;
 	size_t out_num_rows;
 	size_t out_num_cols;
 	matrix_layout_t Alayout;
 	matrix_layout_t Blayout;
 public:
 	multiply_wide_op(size_t num_threads, size_t out_num_rows, size_t out_num_cols,
-			matrix_layout_t required_layout, const scalar_type &type): combine_op(
-				0, 0, type) {
+			matrix_layout_t required_layout, const scalar_type &type,
+			bool is_sparse): combine_op(0, 0, type) {
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
 		res_bufs.resize(num_threads);
@@ -341,6 +343,7 @@ public:
 		Alayout = required_layout;
 		Blayout = required_layout;
 		require_trans = false;
+		this->is_sparse = is_sparse;
 	}
 
 	void set_require_trans(bool val) {
@@ -366,7 +369,9 @@ public:
 
 	virtual detail::mem_matrix_store::ptr get_combined_result() const;
 
-	void run_part(
+	void run_part_dense(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+	void run_sparse(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual void run(
@@ -451,14 +456,117 @@ void wide_gemm_row<float>(const std::pair<size_t, size_t> &Asize,
 			Bmat, Bsize.second, 0, res_mat, out_num_cols);
 }
 
+/*
+ * dst_col += B * A[col_idx]
+ */
+template<class T>
+void multiply_sparse_entry(const detail::local_col_matrix_store &Astore,
+		off_t col_idx, T B, T *dst_col)
+{
+	assert(0);
+}
+template<>
+void multiply_sparse_entry(const detail::local_col_matrix_store &Astore,
+		off_t col_idx, double B, double *dst_col)
+{
+	const double *Acol
+		= reinterpret_cast<const double *>(Astore.get_col(col_idx));
+	cblas_daxpy(Astore.get_num_rows(), B, Acol, 1, dst_col, 1);
+}
+template<>
+void multiply_sparse_entry(const detail::local_col_matrix_store &Astore,
+		off_t col_idx, float B, float *dst_col)
+{
+	const float *Acol
+		= reinterpret_cast<const float *>(Astore.get_col(col_idx));
+	cblas_saxpy(Astore.get_num_rows(), B, Acol, 1, dst_col, 1);
+}
+
+/*
+ * This multiplies a dense matrix with a sparse matrix.
+ */
+template<class T>
+void multiply_sparse(const detail::local_col_matrix_store &Astore,
+		const detail::local_sparse_matrix_store &Bstore,
+		detail::local_col_matrix_store &Cstore)
+{
+	assert(get_scalar_type<T>() == Bstore.get_type());
+	std::vector<off_t> col_idxs;
+	for (size_t i = 0; i < Bstore.get_num_rows(); i++) {
+		col_idxs.clear();
+		const char *_Brow = Bstore.get_row_nnz(i, col_idxs);
+		// If the row doesn't have nnz.
+		if (_Brow == NULL)
+			continue;
+
+		const T *Brow = reinterpret_cast<const T *>(_Brow);
+		for (size_t j = 0; j < col_idxs.size(); j++) {
+			T *dst_col = reinterpret_cast<T *>(Cstore.get_col(col_idxs[j]));
+			multiply_sparse_entry(Astore, i, Brow[j], dst_col);
+		}
+	}
+}
+
+void multiply_wide_op::run_sparse(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
+	detail::local_matrix_store::const_ptr left;
+	if (require_trans)
+		left = std::static_pointer_cast<const detail::local_matrix_store>(
+				ins[0]->transpose());
+	else
+		left = ins[0];
+	assert(left->store_layout() == matrix_layout_t::L_COL);
+	const detail::local_col_matrix_store &Astore
+		= static_cast<const detail::local_col_matrix_store &>(*left);
+	const detail::local_sparse_matrix_store &Bstore
+		= static_cast<const detail::local_sparse_matrix_store &>(*ins[1]);
+
+	if (res_bufs[thread_id] == NULL) {
+		mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(
+				new local_buf_col_matrix_store(0, 0,
+					out_num_rows, out_num_cols, get_output_type(), -1));
+		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
+				out_num_rows, out_num_cols, Blayout, get_output_type());
+	}
+	assert(tmp_bufs[thread_id]->store_layout() == Blayout);
+	tmp_bufs[thread_id]->reset_data();
+
+	local_col_matrix_store &tmp_col_buf = static_cast<local_col_matrix_store &>(
+			*tmp_bufs[thread_id]);
+	if (get_output_type() == get_scalar_type<double>())
+		multiply_sparse<double>(Astore, Bstore, tmp_col_buf);
+	else {
+		assert(get_output_type() == get_scalar_type<float>());
+		multiply_sparse<float>(Astore, Bstore, tmp_col_buf);
+	}
+	res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
+}
+
 void multiply_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	assert(ins.size() == 2);
+	// If one of the matrix is a sparse matrix, some of its portions might
+	// be empty.
+	if (ins[0] == NULL || ins[1] == NULL)
+		return;
+
 	size_t LONG_DIM_LEN = get_long_dim_len(*ins[0], *ins[1]);
+
 	size_t long_dim = ins[1]->get_num_rows();
 	if (long_dim <= LONG_DIM_LEN) {
-		run_part(ins);
+		run_part_dense(ins);
+		return;
+	}
+
+	// We need to reset the temporary matrix that stores the product every time,
+	// which can be expense relative to the computation of the matrix
+	// multiplication.
+	if (is_sparse) {
+		run_sparse(ins);
 		return;
 	}
 
@@ -477,13 +585,13 @@ void multiply_wide_op::run(
 					llen);
 		mutableB.resize(orig_B.local_start_row + row_idx,
 				orig_B.local_start_col, llen, mutableB.get_num_cols());
-		run_part(ins);
+		run_part_dense(ins);
 	}
 	mutableA.restore_size(orig_A);
 	mutableB.restore_size(orig_B);
 }
 
-void multiply_wide_op::run_part(
+void multiply_wide_op::run_part_dense(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
@@ -602,6 +710,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 	bool use_blas = left_op == NULL;
 	if (use_blas) {
+		assert(!left->is_sparse());
 		this->left_op = NULL;
 		assert(left->get_type() == get_scalar_type<double>()
 				|| left->get_type() == get_scalar_type<float>());
@@ -610,8 +719,10 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		this->right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 
 		matrix_layout_t required_layout;
+		if (right->is_sparse())
+			required_layout = matrix_layout_t::L_COL;
 		// If both input matrices have the same data layout, it's easy.
-		if (left->store_layout() == right->store_layout())
+		else if (left->store_layout() == right->store_layout())
 			required_layout = left->store_layout();
 		// If they are different, we convert the smaller matrix.
 		else if (left->get_num_rows() * left->get_num_cols()
@@ -619,6 +730,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			required_layout = left->store_layout();
 		else
 			required_layout = right->store_layout();
+
 		if (layout == matrix_layout_t::L_NONE)
 			this->layout = required_layout;
 		else
@@ -627,9 +739,12 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		assert(left->get_type() == right->get_type());
 		portion_op = std::shared_ptr<portion_mapply_op>(
 				new multiply_wide_op(nthreads, left->get_num_rows(),
-					right->get_num_cols(), required_layout, left->get_type()));
+					right->get_num_cols(), required_layout, left->get_type(),
+					right->is_sparse()));
 	}
 	else {
+		assert(!left->is_sparse());
+		assert(!right->is_sparse());
 		this->left_op = left_op;
 		this->right_op = right_op;
 

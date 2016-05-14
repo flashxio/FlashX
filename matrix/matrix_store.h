@@ -111,6 +111,12 @@ public:
 		return in_mem;
 	}
 
+	// A matrix can represent a sparse matrix.
+	// By default, we assume all matrices are dense.
+	virtual bool is_sparse() const {
+		return false;
+	}
+
 	virtual int get_num_nodes() const {
 		return -1;
 	}
