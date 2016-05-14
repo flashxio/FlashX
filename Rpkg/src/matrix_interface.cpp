@@ -1679,6 +1679,14 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	which_str[0] = Rcpp::String(opts.which);
 	options["which"] = which_str;
 
+	Rcpp::IntegerVector iter_vec(1);
+	iter_vec[0] = res.status.num_iters;
+	options["iter"] = iter_vec;
+
+	Rcpp::IntegerVector numop_vec(1);
+	numop_vec[0] = res.status.num_ops;
+	options["numop"] = numop_vec;
+
 	Rcpp::List ret;
 	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
 	ret["values"] = vals;
