@@ -50,6 +50,10 @@ struct eigen_res
 {
 	std::vector<double> vals;
 	fm::dense_matrix::ptr vecs;
+	struct eigen_status {
+		size_t num_iters;
+		size_t num_ops;
+	} status;
 };
 
 struct eigen_options

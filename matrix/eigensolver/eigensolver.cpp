@@ -33,6 +33,7 @@ namespace fm
 namespace eigen
 {
 extern size_t num_cached_mats;
+size_t num_ops;
 }
 }
 
@@ -63,6 +64,7 @@ public:
 		BOOST_LOG_TRIVIAL(info) << "SpMM takes " << time_diff(start, end)
 			<< " seconds";
 		y.sync_fm2ep();
+		num_ops += x.get_data()->get_num_cols();
 	}
 
 };
@@ -111,11 +113,12 @@ bool eigen_options::init(int nev, std::string solver)
 	return true;
 }
 
-eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &_opts)
+eigen_res compute_eigen(spm_function *func, bool sym, struct eigen_options &_opts)
 {
 	using Teuchos::RCP;
 	using Teuchos::rcp;
+
+	num_ops = 0;
 
 	// Anasazi solvers have the following template parameters:
 	//
@@ -181,6 +184,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 			Anasazi::TimingDetails + Anasazi::FinalSummary);
 
 	Anasazi::ReturnType returnCode;
+	size_t num_iters = 0;
 	if (solver == "Davidson") {
 		anasaziPL.set ("Num Blocks", numBlocks);
 		anasaziPL.set ("Maximum Restarts", maxRestarts);
@@ -196,6 +200,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// you reuse intermediate state, like allocated basis vectors.
 		try {
 			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
 		} catch (std::runtime_error e) {
 			BOOST_LOG_TRIVIAL(error) << e.what();
 			return eigen_res();
@@ -216,6 +221,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// you reuse intermediate state, like allocated basis vectors.
 		try {
 			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
 		} catch (std::runtime_error e) {
 			BOOST_LOG_TRIVIAL(error) << e.what();
 			return eigen_res();
@@ -237,6 +243,7 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// you reuse intermediate state, like allocated basis vectors.
 		try {
 			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
 		} catch (std::runtime_error e) {
 			BOOST_LOG_TRIVIAL(error) << e.what();
 			return eigen_res();
@@ -297,6 +304,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		BOOST_LOG_TRIVIAL(error) << std::setw(16) << evals[i].realpart
 			<< std::setw(18) << normR[i] / evals[i].realpart;
 	}
+	res.status.num_iters = num_iters;
+	res.status.num_ops = num_ops;
 	BOOST_LOG_TRIVIAL(error) << "---------------------------------------------";
 	BOOST_LOG_TRIVIAL(error) << "#col writes: " << num_col_writes;
 	BOOST_LOG_TRIVIAL(error) << "#col reads: " << num_col_reads_concept << " in concept";
