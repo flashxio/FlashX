@@ -18,6 +18,7 @@
  */
 
 #include "project_matrix_store.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -223,6 +224,96 @@ void sparse_project_matrix_store::write_portion_async(
 		local_matrix_store::const_ptr portion, off_t start_row, off_t start_col)
 {
 	throw unsupported_exception("don't support write_portion_async");
+}
+
+namespace
+{
+
+class conv_dense_op: public portion_mapply_op
+{
+public:
+	conv_dense_op(size_t num_rows, size_t num_cols,
+			const scalar_type &type): portion_mapply_op(num_rows,
+				num_cols, type) {
+	}
+
+	virtual void run(const std::vector<local_matrix_store::const_ptr> &ins,
+			local_matrix_store &out) const;
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("conv_dense(") + mats[0]->get_name() + ")";
+	}
+};
+
+void conv_dense_op::run(const std::vector<local_matrix_store::const_ptr> &ins,
+		local_matrix_store &out) const {
+	assert(ins.size() == 1);
+	out.reset_data();
+	// A sparse matrix might have no nnz at all.
+	if (ins[0] == NULL)
+		return;
+
+	if (ins[0]->store_layout() == matrix_layout_t::L_COL) {
+		assert(out.store_layout() == matrix_layout_t::L_COL);
+		local_col_matrix_store &col_out
+			= static_cast<local_col_matrix_store &>(out);
+		local_sparse_matrix_store::const_ptr in
+			= std::static_pointer_cast<const local_sparse_matrix_store>(ins[0]);
+		assert(in->get_global_start_col() == col_out.get_global_start_col());
+		assert(in->get_global_start_row() == col_out.get_global_start_row());
+		std::vector<off_t> idxs;
+		std::vector<char *> dst_ptrs;
+		for (size_t i = 0; i < in->get_num_cols(); i++) {
+			const char *in_col = in->get_col_nnz(i, idxs);
+			char *out_col = col_out.get_col(i);
+			dst_ptrs.resize(idxs.size());
+			for (size_t j = 0; j < idxs.size(); j++)
+				dst_ptrs[j] = out_col + idxs[j] * in->get_entry_size();
+			in->get_type().get_sg().scatter(in_col, dst_ptrs);
+		}
+	}
+	else {
+		assert(out.store_layout() == matrix_layout_t::L_ROW);
+		local_row_matrix_store &row_out
+			= static_cast<local_row_matrix_store &>(out);
+		local_sparse_matrix_store::const_ptr in
+			= std::static_pointer_cast<const local_sparse_matrix_store>(ins[0]);
+		assert(in->get_global_start_col() == row_out.get_global_start_col());
+		assert(in->get_global_start_row() == row_out.get_global_start_row());
+		std::vector<off_t> idxs;
+		std::vector<char *> dst_ptrs;
+		for (size_t i = 0; i < in->get_num_rows(); i++) {
+			const char *in_row = in->get_row_nnz(i, idxs);
+			char *out_row = row_out.get_row(i);
+			dst_ptrs.resize(idxs.size());
+			for (size_t j = 0; j < idxs.size(); j++)
+				dst_ptrs[j] = out_row + idxs[j] * in->get_entry_size();
+			in->get_type().get_sg().scatter(in_row, dst_ptrs);
+		}
+	}
+}
+
+struct empty_deleter {
+	void operator()(const matrix_store *addr) {
+	}
+};
+
+}
+
+matrix_store::const_ptr sparse_project_matrix_store::conv_dense() const
+{
+	std::vector<matrix_store::const_ptr> ins(1);
+	ins[0] = std::shared_ptr<const matrix_store>(this, empty_deleter());
+	conv_dense_op::const_ptr mapply_op(new conv_dense_op(get_num_rows(),
+				get_num_cols(), get_type()));
+	// TODO we should virtualize it.
+	return __mapply_portion(ins, mapply_op, store_layout());
 }
 
 bool local_sparse_matrix_store::resize(off_t local_start_row,

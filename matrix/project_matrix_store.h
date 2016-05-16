@@ -176,6 +176,8 @@ public:
 	size_t get_nnz() const {
 		return nnz_idxs.size();
 	}
+
+	matrix_store::const_ptr conv_dense() const;
 };
 
 class local_sparse_matrix_store: public local_matrix_store
