@@ -115,5 +115,5 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 			right <- rescale(right)
 		}
 	}
-	list(d=sqrt(res$values), u=left, v=right)
+	list(d=sqrt(res$values), u=left, v=right, options=res$options)
 }
