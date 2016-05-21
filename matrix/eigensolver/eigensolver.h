@@ -77,7 +77,7 @@ struct eigen_options
  * `func' will be destroyed by this function.
  */
 eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &opts);
+		struct eigen_options &opts, bool verbose=false);
 
 }
 

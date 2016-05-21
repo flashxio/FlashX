@@ -113,7 +113,8 @@ bool eigen_options::init(int nev, std::string solver)
 	return true;
 }
 
-eigen_res compute_eigen(spm_function *func, bool sym, struct eigen_options &_opts)
+eigen_res compute_eigen(spm_function *func, bool sym,
+		struct eigen_options &_opts, bool verbose)
 {
 	using Teuchos::RCP;
 	using Teuchos::rcp;
@@ -180,8 +181,11 @@ eigen_res compute_eigen(spm_function *func, bool sym, struct eigen_options &_opt
 	anasaziPL.set ("Which", which.c_str());
 	anasaziPL.set ("Block Size", blockSize);
 	anasaziPL.set ("Convergence Tolerance", tol);
-	anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
-			Anasazi::TimingDetails + Anasazi::FinalSummary);
+	if (verbose)
+		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
+				Anasazi::TimingDetails + Anasazi::FinalSummary);
+	else
+		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings);
 
 	Anasazi::ReturnType returnCode;
 	size_t num_iters = 0;
@@ -287,39 +291,39 @@ eigen_res compute_eigen(spm_function *func, bool sym, struct eigen_options &_opt
 	}
 
 	// Print the results on MPI process 0.
-	cout << "Solver manager returned "
-		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.")
-		<< endl << endl
-		<< "------------------------------------------------------" << endl
+	BOOST_LOG_TRIVIAL(info) << "Solver manager returned "
+		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.");
+	BOOST_LOG_TRIVIAL(info)
+		<< "------------------------------------------------------";
+	BOOST_LOG_TRIVIAL(info)
 		<< std::setw(16) << "Eigenvalue"
 		<< std::setw(18) << "Direct Residual"
-		<< endl
-		<< "------------------------------------------------------" << endl;
+		<< "------------------------------------------------------";
 
 	struct eigen_res res;
 	res.vecs = evecs->get_data()->conv2matrix();
 	res.vals.resize(sol.numVecs);
 	for (int i=0; i<sol.numVecs; ++i) {
 		res.vals[i] = evals[i].realpart;
-		BOOST_LOG_TRIVIAL(error) << std::setw(16) << evals[i].realpart
+		BOOST_LOG_TRIVIAL(info) << std::setw(16) << evals[i].realpart
 			<< std::setw(18) << normR[i] / evals[i].realpart;
 	}
 	res.status.num_iters = num_iters;
 	res.status.num_ops = num_ops;
-	BOOST_LOG_TRIVIAL(error) << "---------------------------------------------";
-	BOOST_LOG_TRIVIAL(error) << "#col writes: " << num_col_writes;
-	BOOST_LOG_TRIVIAL(error) << "#col reads: " << num_col_reads_concept << " in concept";
-	BOOST_LOG_TRIVIAL(error) << "#col writes: " << num_col_writes_concept << " in concept";
-	BOOST_LOG_TRIVIAL(error) << "#multiply: " << num_multiply_concept << " in concept";
-	BOOST_LOG_TRIVIAL(error) << "#mem read bytes: "
+	BOOST_LOG_TRIVIAL(info) << "---------------------------------------------";
+	BOOST_LOG_TRIVIAL(info) << "#col writes: " << num_col_writes;
+	BOOST_LOG_TRIVIAL(info) << "#col reads: " << num_col_reads_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#col writes: " << num_col_writes_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#multiply: " << num_multiply_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#mem read bytes: "
 		<< detail::matrix_stats.get_read_bytes(true);
-	BOOST_LOG_TRIVIAL(error) << "#mem write bytes: "
+	BOOST_LOG_TRIVIAL(info) << "#mem write bytes: "
 		<< detail::matrix_stats.get_write_bytes(true);
-	BOOST_LOG_TRIVIAL(error) << "#EM read bytes: "
+	BOOST_LOG_TRIVIAL(info) << "#EM read bytes: "
 		<< detail::matrix_stats.get_read_bytes(false);
-	BOOST_LOG_TRIVIAL(error) << "#EM write bytes: "
+	BOOST_LOG_TRIVIAL(info) << "#EM write bytes: "
 		<< detail::matrix_stats.get_write_bytes(false);
-	BOOST_LOG_TRIVIAL(error) << "#double float-point multiplies: "
+	BOOST_LOG_TRIVIAL(info) << "#double float-point multiplies: "
 		<< detail::matrix_stats.get_multiplies();
 	cached_mats.clear();
 
