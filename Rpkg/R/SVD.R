@@ -63,17 +63,24 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[nev]
 		nev <- nrow(x.prod)
+		res$vectors <- fm.as.matrix(res$vectors)
 	}
-	else if (n < 1000000)
+	else if (n < 1000000) {
 		res <- arpack(multiply, sym=TRUE,
 					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
+		res$vectors <- fm.as.matrix(res$vectors)
+	}
 	else
 		res <- fm.eigen(multiply, sym=TRUE,
 					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
+	if (fm.is.vector(res$vectors))
+		res$vectors <- fm.as.matrix(res$vectors)
 
 	# After we compute the other singular vectors, we need to rescale
 	# these singular vectors because they aren't orthonormal.
 	rescale <- function(x) {
+		if (fm.is.vector(x))
+			x <- fm.as.matrix(x)
 		fm.set.materialize.level(x, 2)
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
@@ -82,11 +89,7 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	if (comp.right) {
 		right <- NULL
 		if (nv > 0) {
-			if (nv < nev && !fm.is.matrix(res$vectors))
-				right <- fm.conv.R2FM(res$vectors[,1:nv])
-			else if (!fm.is.matrix(res$vectors))
-				right <- fm.conv.R2FM(res$vectors)
-			else if (nv < nev)
+			if (nv < nev)
 				right <- res$vectors[,1:nv]
 			else
 				right <- res$vectors
@@ -100,11 +103,7 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	else {
 		left <- NULL
 		if (nu > 0) {
-			if (nu < nev && !fm.is.matrix(res$vectors))
-				left <- fm.conv.R2FM(res$vectors[,1:nu])
-			else if (!fm.is.matrix(res$vectors))
-				left <- fm.conv.R2FM(res$vectors)
-			else if (nu < nev)
+			if (nu < nev)
 				left <- res$vectors[,1:nu]
 			else
 				left <- res$vectors
