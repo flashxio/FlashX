@@ -24,6 +24,8 @@
 #include "col_vec.h"
 #include "sink_matrix.h"
 #include "agg_matrix_store.h"
+#include "project_matrix_store.h"
+#include "IPW_matrix_store.h"
 
 namespace fm
 {
@@ -684,10 +686,60 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 	return dense_matrix::create(res);
 }
 
+/*
+ * Multiply a wide block matrix with a sparse matrix.
+ * Here we assume the sparse matrix is small and can be stored in memory.
+ */
+dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
+		matrix_layout_t out_layout) const
+{
+	detail::sparse_project_matrix_store::const_ptr right
+		= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
+				m.get_raw_store());
+	assert(right);
+
+	if (out_layout == matrix_layout_t::L_NONE)
+		out_layout = matrix_layout_t::L_COL;
+
+	assert(get_type() == m.get_type());
+	assert(get_type() == get_scalar_type<double>()
+			|| get_type() == get_scalar_type<float>());
+	detail::matrix_store::ptr res = detail::matrix_store::create(get_num_rows(),
+			m.get_num_cols(), out_layout, get_type(), -1, true);
+
+	off_t row_idx = 0;
+	for (size_t i = 0; i < this->store->get_num_mats(); i++) {
+		// We have to make sure the matrix is column major.
+		detail::matrix_store::const_ptr left = this->store->get_mat(i);
+		if (left->store_layout() == matrix_layout_t::L_ROW) {
+			dense_matrix::ptr tmp = dense_matrix::create(left);
+			tmp = tmp->conv2(matrix_layout_t::L_COL);
+			left = tmp->get_raw_store();
+		}
+		dense_matrix::ptr tmp = dense_matrix::create(detail::matrix_store::ptr(
+					new detail::IPW_matrix_store(left, right, NULL, NULL,
+						out_layout)));
+		tmp->materialize_self();
+
+		detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
+				0, left->get_num_rows(), res->get_num_cols());
+		printf("block: %ld,%ld\n", row_idx, row_idx + left->get_num_rows());
+		detail::local_matrix_store::const_ptr src_part
+			= tmp->get_data().get_portion(0);
+		res_part->copy_from(*src_part);
+		row_idx += left->get_num_rows();
+	}
+	return dense_matrix::create(res);
+}
+
 dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
-	if ((get_type() == get_scalar_type<double>()
+	if (mat.get_data().is_sparse()) {
+		assert(is_wide());
+		return multiply_sparse_wide(mat, out_layout);
+	}
+	else if ((get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>())) {
 		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());

@@ -56,6 +56,8 @@ protected:
 			matrix_layout_t out_layout) const;
 	dense_matrix::ptr multiply_wide(const dense_matrix &m,
 			matrix_layout_t out_layout) const;
+	dense_matrix::ptr multiply_sparse_wide(const dense_matrix &m,
+			matrix_layout_t out_layout) const;
 public:
 	typedef std::shared_ptr<block_matrix> ptr;
 
