@@ -1870,7 +1870,7 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
 	else
-		return block_matrix::create(val, nrow, ncol,
+		return block_matrix::create_layout(val, nrow, ncol, layout,
 				matrix_conf.get_block_size(), num_nodes, in_mem, group);
 }
 
@@ -1889,8 +1889,9 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
 	else
-		return block_matrix::create(nrow, ncol, matrix_conf.get_block_size(),
-				type, op, num_nodes, in_mem, group);
+		return block_matrix::create_layout(nrow, ncol, layout,
+				matrix_conf.get_block_size(), type, op, num_nodes,
+				in_mem, group);
 }
 
 dense_matrix::ptr dense_matrix::create(data_frame::const_ptr df)

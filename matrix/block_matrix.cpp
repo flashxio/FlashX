@@ -54,8 +54,9 @@ dense_matrix::ptr block_matrix::create(
 	return dense_matrix::ptr(new block_matrix(store));
 }
 
-dense_matrix::ptr block_matrix::create(scalar_variable::ptr val, size_t num_rows,
-		size_t num_cols, size_t block_size, int num_nodes, bool in_mem,
+dense_matrix::ptr block_matrix::create_layout(scalar_variable::ptr val,
+		size_t num_rows, size_t num_cols, matrix_layout_t layout,
+		size_t block_size, int num_nodes, bool in_mem,
 		safs::safs_file_group::ptr group)
 {
 	// For tall matrices
@@ -63,7 +64,7 @@ dense_matrix::ptr block_matrix::create(scalar_variable::ptr val, size_t num_rows
 		// If there is only one block.
 		if (num_cols < block_size)
 			return dense_matrix::create_const(val, num_rows, num_cols,
-					matrix_layout_t::L_COL, num_nodes, in_mem, group);
+					layout, num_nodes, in_mem, group);
 
 		std::vector<detail::matrix_store::const_ptr> stores(div_ceil<size_t>(
 					num_cols, block_size));
@@ -71,17 +72,16 @@ dense_matrix::ptr block_matrix::create(scalar_variable::ptr val, size_t num_rows
 			size_t local_num_cols = std::min(num_cols - i * block_size,
 					block_size);
 			stores[i] = detail::matrix_store::ptr(new detail::one_val_matrix_store(
-						val, num_rows, local_num_cols, matrix_layout_t::L_COL,
-						num_nodes));
+						val, num_rows, local_num_cols, layout, num_nodes));
 		}
 		return block_matrix::create(detail::combined_matrix_store::create(
-					stores, matrix_layout_t::L_COL));
+					stores, layout));
 	}
 	else {
 		// If there is only one block.
 		if (num_rows < block_size)
 			return dense_matrix::create_const(val, num_rows, num_cols,
-					matrix_layout_t::L_ROW, num_nodes, in_mem, group);
+					layout, num_nodes, in_mem, group);
 
 		std::vector<detail::matrix_store::const_ptr> stores(div_ceil<size_t>(
 					num_rows, block_size));
@@ -89,25 +89,25 @@ dense_matrix::ptr block_matrix::create(scalar_variable::ptr val, size_t num_rows
 			size_t local_num_rows = std::min(num_rows - i * block_size,
 					block_size);
 			stores[i] = detail::matrix_store::ptr(new detail::one_val_matrix_store(
-						val, local_num_rows, num_cols, matrix_layout_t::L_ROW,
-						num_nodes));
+						val, local_num_rows, num_cols, layout, num_nodes));
 		}
 		return block_matrix::create(detail::combined_matrix_store::create(
-					stores, matrix_layout_t::L_ROW));
+					stores, layout));
 	}
 }
 
-dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
-		size_t block_size, const scalar_type &type, const set_operate &op,
-		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
+dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
+		matrix_layout_t layout, size_t block_size, const scalar_type &type,
+		const set_operate &op, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
 {
 	detail::combined_matrix_store::ptr combined;
 	// For tall matrices
 	if (num_rows > num_cols) {
 		// If there is only one block.
 		if (num_cols < block_size)
-			return dense_matrix::create(num_rows, num_cols,
-					matrix_layout_t::L_COL, type, op, num_nodes, in_mem, group);
+			return dense_matrix::create(num_rows, num_cols, layout, type, op,
+					num_nodes, in_mem, group);
 
 		std::vector<detail::matrix_store::ptr> stores(div_ceil<size_t>(
 					num_cols, block_size));
@@ -115,20 +115,19 @@ dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
 			size_t local_num_cols = std::min(num_cols - i * block_size,
 					block_size);
 			stores[i] = detail::matrix_store::create(num_rows, local_num_cols,
-					matrix_layout_t::L_COL, type, num_nodes, in_mem, group);
+					layout, type, num_nodes, in_mem, group);
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}
 		std::vector<detail::matrix_store::const_ptr> const_stores(
 				stores.begin(), stores.end());
-		combined = detail::combined_matrix_store::create(const_stores,
-				matrix_layout_t::L_COL);
+		combined = detail::combined_matrix_store::create(const_stores, layout);
 	}
 	else {
 		// If there is only one block.
 		if (num_rows < block_size)
-			return dense_matrix::create(num_rows, num_cols,
-					matrix_layout_t::L_ROW, type, op, num_nodes, in_mem, group);
+			return dense_matrix::create(num_rows, num_cols, layout, type,
+					op, num_nodes, in_mem, group);
 
 		std::vector<detail::matrix_store::ptr> stores(div_ceil<size_t>(
 					num_rows, block_size));
@@ -136,14 +135,13 @@ dense_matrix::ptr block_matrix::create(size_t num_rows, size_t num_cols,
 			size_t local_num_rows = std::min(num_rows - i * block_size,
 					block_size);
 			stores[i] = detail::matrix_store::create(local_num_rows, num_cols,
-					matrix_layout_t::L_ROW, type, num_nodes, in_mem, group);
+					layout, type, num_nodes, in_mem, group);
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}
 		std::vector<detail::matrix_store::const_ptr> const_stores(
 				stores.begin(), stores.end());
-		combined = detail::combined_matrix_store::create(const_stores,
-				matrix_layout_t::L_ROW);
+		combined = detail::combined_matrix_store::create(const_stores, layout);
 	}
 	if (combined)
 		return block_matrix::create(combined);

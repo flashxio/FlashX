@@ -63,13 +63,28 @@ public:
 
 	static dense_matrix::ptr create(
 			detail::combined_matrix_store::const_ptr store);
+	static dense_matrix::ptr create_layout(size_t num_rows, size_t num_cols,
+			matrix_layout_t layout, size_t block_size, const scalar_type &type,
+			const set_operate &op, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL);
+	static dense_matrix::ptr create_layout(scalar_variable::ptr val,
+			size_t num_rows, size_t num_cols, matrix_layout_t layout,
+			size_t block_size, int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL);
+
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,
 			int num_nodes = -1, bool in_mem = true,
-			safs::safs_file_group::ptr group = NULL);
+			safs::safs_file_group::ptr group = NULL) {
+		return create(num_rows, num_cols, block_size, type, op, num_nodes,
+				in_mem, group);
+	}
 	static dense_matrix::ptr create(scalar_variable::ptr val, size_t num_rows,
 			size_t num_cols, size_t block_size, int num_nodes = -1,
-			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
+			bool in_mem = true, safs::safs_file_group::ptr group = NULL) {
+		return create(val, num_rows, num_cols, block_size, num_nodes,
+				in_mem, group);
+	}
 
 	size_t get_num_blocks() const {
 		return store->get_num_mats();
