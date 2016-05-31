@@ -84,7 +84,7 @@ bool local_matrix_store::resize(off_t local_start_row,
 	this->local_start_row = local_start_row;
 	this->local_start_col = local_start_col;
 	matrix_store::resize(local_num_rows, local_num_cols);
-	return false;
+	return true;
 }
 
 void local_matrix_store::resize_transpose(local_matrix_store &store) const
