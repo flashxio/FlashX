@@ -193,8 +193,14 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 	}
 
 	// There isn't nnz in the portion.
-	if (start_it == nnz_idxs.end() || start_it == end_it)
-		return local_matrix_store::const_ptr();
+	if (start_it == nnz_idxs.end() || start_it == end_it) {
+		std::vector<sparse_project_matrix_store::nnz_idx> empty_idxs;
+		local_matrix_store::ptr empty_vals(new local_buf_col_matrix_store(
+					0, 0, 0, 0, vals->get_type(), -1));
+		return local_matrix_store::const_ptr(new local_sparse_matrix_store(
+					start_row, start_col, num_rows, num_cols, empty_idxs,
+					empty_vals, store_layout()));
+	}
 
 	// We search for [start, end].
 	// If the last element has value `end', we need to move the end iterator
