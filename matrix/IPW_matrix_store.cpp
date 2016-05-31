@@ -322,6 +322,10 @@ class multiply_wide_op: public combine_op
 {
 	std::vector<detail::local_matrix_store::ptr> Abufs;
 	std::vector<detail::local_matrix_store::ptr> Bbufs;
+	// The number of times we have accumulated the computation results
+	// on a portion in the tmp_buf. This is only useful for sparse matrix
+	// multiplication.
+	std::vector<size_t> num_tmp_accs;
 	std::vector<detail::local_matrix_store::ptr> tmp_bufs;
 	std::vector<matmul_accumulator::ptr> res_bufs;
 	bool require_trans;
@@ -344,6 +348,7 @@ public:
 		Blayout = required_layout;
 		require_trans = false;
 		this->is_sparse = is_sparse;
+		this->num_tmp_accs.resize(num_threads);
 	}
 
 	void set_require_trans(bool val) {
@@ -392,10 +397,18 @@ public:
 
 detail::mem_matrix_store::ptr multiply_wide_op::get_combined_result() const
 {
+	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
 	std::vector<matmul_accumulator::ptr> non_empty;
-	for (size_t i = 0; i < res_bufs.size(); i++)
-		if (res_bufs[i])
+	for (size_t i = 0; i < res_bufs.size(); i++) {
+		if (res_bufs[i]) {
+			if (num_tmp_accs[i] > 0) {
+				res_bufs[i]->add_matrix(*tmp_bufs[i]);
+				tmp_bufs[i]->reset_data();
+				mutable_this->num_tmp_accs[i] = 0;
+			}
 			non_empty.push_back(res_bufs[i]);
+		}
+	}
 	assert(non_empty.size() > 0);
 	return non_empty[0]->combine(non_empty);
 }
@@ -566,9 +579,9 @@ void multiply_wide_op::run_sparse(
 					out_num_rows, out_num_cols, get_output_type(), -1));
 		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
 				out_num_rows, out_num_cols, Blayout, get_output_type());
+		tmp_bufs[thread_id]->reset_data();
 	}
 	assert(tmp_bufs[thread_id]->store_layout() == Blayout);
-	tmp_bufs[thread_id]->reset_data();
 
 	local_col_matrix_store &tmp_col_buf = static_cast<local_col_matrix_store &>(
 			*tmp_bufs[thread_id]);
@@ -598,7 +611,18 @@ void multiply_wide_op::run_sparse(
 			= static_cast<const detail::local_col_matrix_store &>(*left);
 		multiply_sparse<float>(Astore, Bstore, tmp_col_buf);
 	}
-	res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
+
+	// We should accumulate results in res_bufs, which offers high precision
+	// for accumulation. This is a tradeoff between precision and computation
+	// overhead.
+	size_t thres = mem_matrix_store::CHUNK_SIZE / std::max(
+			ins[0]->get_num_rows(), ins[0]->get_num_cols());
+	mutable_this->num_tmp_accs[thread_id]++;
+	if (num_tmp_accs[thread_id] > thres) {
+		res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
+		tmp_bufs[thread_id]->reset_data();
+		mutable_this->num_tmp_accs[thread_id] = 0;
+	}
 }
 
 void multiply_wide_op::run(
