@@ -316,12 +316,6 @@ matrix_store::const_ptr sparse_project_matrix_store::conv_dense() const
 	return __mapply_portion(ins, mapply_op, store_layout());
 }
 
-bool local_sparse_matrix_store::resize(off_t local_start_row,
-		off_t local_start_col, size_t local_num_rows, size_t local_num_cols)
-{
-	throw unsupported_exception("don't support resizing a local sparse matrix");
-}
-
 local_matrix_store::ptr local_sparse_matrix_store::conv2(
 		matrix_layout_t layout) const
 {
@@ -380,16 +374,24 @@ const char *local_sparse_matrix_store::get_col_nnz(off_t col_idx,
 	}
 
 	sparse_project_matrix_store::nnz_idx start;
-	start.row_idx = 0;
-	start.col_idx = col_idx;
+	start.row_idx = get_local_start_row();
+	start.col_idx = col_idx + get_local_start_col();
 	auto it = std::lower_bound(local_idxs.begin(), local_idxs.end(), start,
-			col_comp());
+			col_first_comp());
 	if (it == local_idxs.end()) {
 		row_idxs.clear();
 		return NULL;
 	}
 	// There doesn't exist the col.
-	if (it->col_idx != col_idx) {
+	if (it->col_idx != start.col_idx) {
+		row_idxs.clear();
+		return NULL;
+	}
+
+	// Find the right location in a col.
+	if (it->row_idx < get_local_start_row())
+		it++;
+	if (it->row_idx >= get_local_start_row() + get_num_rows()) {
 		row_idxs.clear();
 		return NULL;
 	}
@@ -397,7 +399,8 @@ const char *local_sparse_matrix_store::get_col_nnz(off_t col_idx,
 	off_t val_off = it - local_idxs.begin();
 
 	row_idxs.clear();
-	for (; it != local_idxs.end() && it->col_idx == col_idx; it++) {
+	for (; it != local_idxs.end() && it->col_idx == start.col_idx
+			&& it->row_idx < get_local_start_row() + get_num_rows(); it++) {
 		row_idxs.push_back(it->row_idx);
 	}
 	return vals->get(val_off, 0);
@@ -412,23 +415,33 @@ const char *local_sparse_matrix_store::get_row_nnz(off_t row_idx,
 	}
 
 	sparse_project_matrix_store::nnz_idx start;
-	start.row_idx = row_idx;
-	start.col_idx = 0;
+	start.row_idx = row_idx + get_local_start_row();
+	start.col_idx = get_local_start_col();
 	auto it = std::lower_bound(local_idxs.begin(), local_idxs.end(), start,
-			row_comp());
+			row_first_comp());
 	if (it == local_idxs.end()) {
 		col_idxs.clear();
 		return NULL;
 	}
 	// There doesn't exist the row.
-	if (it->row_idx != row_idx) {
+	if (it->row_idx != start.row_idx) {
 		col_idxs.clear();
 		return NULL;
 	}
+
+	// Find the right location in a row.
+	if (it->col_idx < get_local_start_col())
+		it++;
+	if (it->col_idx >= get_local_start_col() + get_num_cols()) {
+		col_idxs.clear();
+		return NULL;
+	}
+
 	off_t val_off = it - local_idxs.begin();
 
 	col_idxs.clear();
-	for (; it != local_idxs.end() && it->row_idx == row_idx; it++) {
+	for (; it != local_idxs.end() && it->row_idx == start.row_idx
+			&& it->col_idx < get_local_start_col() + get_num_cols(); it++) {
 		col_idxs.push_back(it->col_idx);
 	}
 	return vals->get(val_off, 0);

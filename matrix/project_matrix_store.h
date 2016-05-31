@@ -182,16 +182,26 @@ public:
 
 class local_sparse_matrix_store: public local_matrix_store
 {
-	struct col_comp {
+	struct col_first_comp {
 		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
 				const sparse_project_matrix_store::nnz_idx &e2) const {
-			return e1.col_idx < e2.col_idx;
+			if (e1.col_idx < e2.col_idx)
+				return true;
+			else if (e1.col_idx > e2.col_idx)
+				return false;
+			else
+				return e1.row_idx < e2.row_idx;
 		}
 	};
-	struct row_comp {
+	struct row_first_comp {
 		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
 				const sparse_project_matrix_store::nnz_idx &e2) const {
-			return e1.row_idx < e2.row_idx;
+			if (e1.row_idx < e2.row_idx)
+				return true;
+			else if (e1.row_idx > e2.row_idx)
+				return false;
+			else
+				return e1.col_idx < e2.col_idx;
 		}
 	};
 
@@ -250,8 +260,6 @@ public:
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
 
-	virtual bool resize(off_t local_start_row, off_t local_start_col,
-			size_t local_num_rows, size_t local_num_cols);
 	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
 	virtual size_t get_all_rows(std::vector<const char *> &rows) const;
 	virtual size_t get_all_cols(std::vector<const char *> &cols) const;
