@@ -614,7 +614,10 @@ void multiply_wide_op::run(
 
 	size_t long_dim = ins[1]->get_num_rows();
 	if (long_dim <= LONG_DIM_LEN) {
-		run_part_dense(ins);
+		if (is_sparse)
+			run_sparse(ins);
+		else
+			run_part_dense(ins);
 		return;
 	}
 
