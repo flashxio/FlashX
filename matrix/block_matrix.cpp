@@ -702,10 +702,10 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 	assert(get_type() == m.get_type());
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
-	detail::matrix_store::ptr res = detail::matrix_store::create(get_num_rows(),
-			m.get_num_cols(), out_layout, get_type(), -1, true);
 
 	off_t row_idx = 0;
+	std::vector<dense_matrix::ptr> res_mats;
+	std::vector<dense_matrix::ptr> tmps;
 	for (size_t i = 0; i < this->store->get_num_mats(); i++) {
 		// We have to make sure the matrix is column major.
 		detail::matrix_store::const_ptr left = this->store->get_mat(i);
@@ -714,18 +714,35 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 			tmp = tmp->conv2(matrix_layout_t::L_COL);
 			left = tmp->get_raw_store();
 		}
-		dense_matrix::ptr tmp = dense_matrix::create(detail::matrix_store::ptr(
-					new detail::IPW_matrix_store(left, right, NULL, NULL,
-						out_layout)));
-		tmp->materialize_self();
+		tmps.push_back(dense_matrix::create(detail::matrix_store::ptr(
+						new detail::IPW_matrix_store(left, right, NULL, NULL,
+							out_layout))));
+		// TODO It might be better if we can perform computation on more
+		// matrices together. However, computation on more matrices requires
+		// more memory allocation.
+		if (tmps.size() >= 8) {
+			materialize(tmps, false);
+			res_mats.insert(res_mats.end(), tmps.begin(), tmps.end());
+			tmps.clear();
+		}
+	}
+	if (tmps.size() > 0) {
+		materialize(tmps, false);
+		res_mats.insert(res_mats.end(), tmps.begin(), tmps.end());
+		tmps.clear();
+	}
 
+	detail::matrix_store::ptr res = detail::matrix_store::create(get_num_rows(),
+			m.get_num_cols(), out_layout, get_type(), -1, true);
+	for (size_t i = 0; i < res_mats.size(); i++) {
+		dense_matrix::ptr tmp = res_mats[i];
+		assert(!tmp->is_virtual());
 		detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
-				0, left->get_num_rows(), res->get_num_cols());
-		printf("block: %ld,%ld\n", row_idx, row_idx + left->get_num_rows());
+				0, tmp->get_num_rows(), tmp->get_num_cols());
 		detail::local_matrix_store::const_ptr src_part
 			= tmp->get_data().get_portion(0);
 		res_part->copy_from(*src_part);
-		row_idx += left->get_num_rows();
+		row_idx += tmp->get_num_rows();
 	}
 	return dense_matrix::create(res);
 }
