@@ -19,7 +19,7 @@
 # labels contains I labels, one for each training instance
 # k specifies #columns of the output matrix
 # The output is a D x k matrix.
-LOL <- function(m, labels, k) {
+LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 	counts <- fm.table(labels)
 	num.labels <- length(counts$val)
 	num.features <- dim(m)[1]
@@ -27,6 +27,18 @@ LOL <- function(m, labels, k) {
 	gr.sum <- fm.groupby(m, 1, fm.as.factor(labels, 2), fm.bo.add)
 	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div, FALSE)
 	diff <- fm.get.cols(gr.mean, 1) - fm.get.cols(gr.mean, 2)
-	svd <- fm.svd(m, nv=0, nu=nv)
-	fm.cbind(diff, svd$u)
+	if (nv == 0)
+		return(diff)
+	if (type == "svd") {
+		svd <- fm.svd(m, nv=0, nu=nv)
+		fm.cbind(diff, svd$u)
+	}
+	else if (type == "rand_dense")
+		fm.cbind(diff, fm.rnorm.matrix(length(diff), nv))
+	else if (type == "rand_sparse")
+		fm.cbind(diff, fm.rsparse.proj(length(diff), nv, 1/sqrt(length(diff))))
+	else {
+		print("wrong type")
+		NULL
+	}
 }
