@@ -1539,6 +1539,22 @@ fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
 	}
 }
 
+#' Compute the residual of the eigenvalues.
+#'
+#' @param mul The multiply function that perform the matrix-vector multiplication.
+#' @param values The eigenvalues
+#' @param vectors The eigenvectors
+#' @return The corresponding residuals for the eigenvalues.
+#'
+#' @name fm.eigen
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.cal.residul <- function(mul, values, vectors)
+{
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	l2 <- sqrt(colSums(tmp * tmp))
+	fm.conv.FM2R(l2) / values
+}
+
 #' Combine FlashR matrices by rows or columns.
 #'
 #' Take a list of FlashR matrices and combine them by Columns or rows
