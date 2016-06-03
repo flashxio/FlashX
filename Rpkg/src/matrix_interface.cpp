@@ -44,6 +44,7 @@
 #include "combined_matrix_store.h"
 #include "block_matrix.h"
 #include "col_vec.h"
+#include "project_matrix_store.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -2412,3 +2413,22 @@ RcppExport SEXP R_stop_profiler()
 	return R_NilValue;
 }
 #endif
+
+RcppExport SEXP R_FM_rand_sparse_proj(SEXP pnrow, SEXP pncol, SEXP pdensity)
+{
+	size_t nrow;
+	size_t ncol;
+	double density;
+	bool ret1 = R_get_number<size_t>(pnrow, nrow);
+	bool ret2 = R_get_number<size_t>(pncol, ncol);
+	bool ret3 = R_get_number<double>(pdensity, density);
+	if (!ret1 || !ret2 || !ret3) {
+		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+
+	detail::sparse_project_matrix_store::ptr store
+		= detail::sparse_project_matrix_store::create_sparse_rand(nrow, ncol,
+				matrix_layout_t::L_COL, get_scalar_type<double>(), density);
+	return create_FMR_matrix(dense_matrix::create(store), "");
+}

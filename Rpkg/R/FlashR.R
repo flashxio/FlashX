@@ -286,6 +286,16 @@ fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1, in.mem=TRUE, name="")
 	new.fm(mat)
 }
 
+fm.rsparse.proj <- function(nrow, ncol, density, name="")
+{
+	if (nrow <= 0 || ncol <= 0)
+		stop("we can't generate a matrix with 0 rows or cols")
+
+	mat <- .Call("R_FM_rand_sparse_proj", as.numeric(nrow),
+				 as.numeric(ncol), as.numeric(density), PACKAGE="FlashR")
+	new.fm(mat)
+}
+
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
 setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
 
