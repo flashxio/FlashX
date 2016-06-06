@@ -376,7 +376,7 @@ public:
 
 	void run_part_dense(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
-	void run_sparse(
+	void run_part_sparse(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual void run(
@@ -496,34 +496,19 @@ void multiply_sparse(const detail::local_col_matrix_store &Astore,
 		const detail::local_sparse_matrix_store &Bstore,
 		detail::local_col_matrix_store &Cstore)
 {
-	size_t LONG_DIM_LEN = get_long_dim_len(Astore);
 	assert(get_scalar_type<T>() == Bstore.get_type());
-	std::vector<off_t> col_idxs;
-	size_t orig_num_cols = Astore.get_num_cols();
-	local_matrix_store::exposed_area orig_left = Astore.get_exposed_area();
-	local_col_matrix_store &mutableA = const_cast<local_col_matrix_store &>(
-			Astore);
-	for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += LONG_DIM_LEN) {
-		size_t llen = std::min(orig_num_cols - col_idx, LONG_DIM_LEN);
-		mutableA.resize(orig_left.local_start_row,
-				orig_left.local_start_col + col_idx, Astore.get_num_rows(), llen);
-		for (size_t i = 0; i < Astore.get_num_cols(); i++) {
-			col_idxs.clear();
-			off_t Brow_idx = col_idx + i;
-			const char *_Brow = Bstore.get_row_nnz(Brow_idx, col_idxs);
-			// If the row doesn't have nnz.
-			if (_Brow == NULL)
-				continue;
-
-			const T *Brow = reinterpret_cast<const T *>(_Brow);
-			for (size_t j = 0; j < col_idxs.size(); j++) {
-				T *dst_col = reinterpret_cast<T *>(Cstore.get_col(col_idxs[j]));
-				const T *Acol = reinterpret_cast<const T *>(Astore.get_col(i));
-				cblas_axpy<T>(Astore.get_num_rows(), Brow[j], Acol, dst_col);
-			}
-		}
+	std::vector<sparse_project_matrix_store::nnz_idx> Bidxs;
+	const char * _Brows = Bstore.get_rows_nnz(0, Bstore.get_num_rows(), Bidxs);
+	// If the sparse submatrix doesn't have non-zero values.
+	if (_Brows == NULL)
+		return;
+	const T *Brows = reinterpret_cast<const T *>(_Brows);
+	for (auto it = Bidxs.begin(); it != Bidxs.end(); it++) {
+		T B = Brows[it - Bidxs.begin()];
+		const T *Acol = reinterpret_cast<const T *>(Astore.get_col(it->row_idx));
+		T *dst_col = reinterpret_cast<T *>(Cstore.get_col(it->col_idx));
+		cblas_axpy<T>(Astore.get_num_rows(), B, Acol, dst_col);
 	}
-	mutableA.restore_size(orig_left);
 }
 
 /*
@@ -534,37 +519,22 @@ void multiply_sparse_trans(const detail::local_row_matrix_store &Astore,
 		const detail::local_sparse_matrix_store &Bstore,
 		detail::local_col_matrix_store &Cstore)
 {
-	size_t LONG_DIM_LEN = get_long_dim_len(Astore);
 	assert(get_scalar_type<T>() == Bstore.get_type());
-	std::vector<off_t> col_idxs;
-	size_t orig_num_rows = Astore.get_num_rows();
-	local_matrix_store::exposed_area orig_left = Astore.get_exposed_area();
-	local_row_matrix_store &mutableA = const_cast<local_row_matrix_store &>(
-			Astore);
-	for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += LONG_DIM_LEN) {
-		size_t llen = std::min(orig_num_rows - row_idx, LONG_DIM_LEN);
-		mutableA.resize(orig_left.local_start_row + row_idx,
-				orig_left.local_start_col, llen, Astore.get_num_cols());
-		for (size_t i = 0; i < Astore.get_num_rows(); i++) {
-			col_idxs.clear();
-			off_t Brow_idx = row_idx + i;
-			const char *_Brow = Bstore.get_row_nnz(Brow_idx, col_idxs);
-			// If the row doesn't have nnz.
-			if (_Brow == NULL)
-				continue;
-
-			const T *Brow = reinterpret_cast<const T *>(_Brow);
-			for (size_t j = 0; j < col_idxs.size(); j++) {
-				T *dst_col = reinterpret_cast<T *>(Cstore.get_col(col_idxs[j]));
-				const T *Arow = reinterpret_cast<const T *>(Astore.get_row(i));
-				cblas_axpy<T>(Astore.get_num_cols(), Brow[j], Arow, dst_col);
-			}
-		}
+	std::vector<sparse_project_matrix_store::nnz_idx> Bidxs;
+	const char * _Brows = Bstore.get_rows_nnz(0, Bstore.get_num_rows(), Bidxs);
+	// If the sparse submatrix doesn't have non-zero values.
+	if (_Brows == NULL)
+		return;
+	const T *Brows = reinterpret_cast<const T *>(_Brows);
+	for (auto it = Bidxs.begin(); it != Bidxs.end(); it++) {
+		T B = Brows[it - Bidxs.begin()];
+		const T *Arow = reinterpret_cast<const T *>(Astore.get_row(it->row_idx));
+		T *dst_col = reinterpret_cast<T *>(Cstore.get_col(it->col_idx));
+		cblas_axpy<T>(Astore.get_num_cols(), B, Arow, dst_col);
 	}
-	mutableA.restore_size(orig_left);
 }
 
-void multiply_wide_op::run_sparse(
+void multiply_wide_op::run_part_sparse(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
@@ -639,17 +609,9 @@ void multiply_wide_op::run(
 	size_t long_dim = ins[1]->get_num_rows();
 	if (long_dim <= LONG_DIM_LEN) {
 		if (is_sparse)
-			run_sparse(ins);
+			run_part_sparse(ins);
 		else
 			run_part_dense(ins);
-		return;
-	}
-
-	// We need to reset the temporary matrix that stores the product every time,
-	// which can be expense relative to the computation of the matrix
-	// multiplication.
-	if (is_sparse) {
-		run_sparse(ins);
 		return;
 	}
 
@@ -668,7 +630,10 @@ void multiply_wide_op::run(
 					llen);
 		mutableB.resize(orig_B.local_start_row + row_idx,
 				orig_B.local_start_col, llen, mutableB.get_num_cols());
-		run_part_dense(ins);
+		if (is_sparse)
+			run_part_sparse(ins);
+		else
+			run_part_dense(ins);
 	}
 	mutableA.restore_size(orig_A);
 	mutableB.restore_size(orig_B);

@@ -35,6 +35,17 @@ public:
 	struct nnz_idx {
 		off_t row_idx;
 		off_t col_idx;
+
+		nnz_idx() {
+			row_idx = 0;
+			col_idx = 0;
+		}
+
+		nnz_idx(off_t row_idx, off_t col_idx) {
+			this->row_idx = row_idx;
+			this->col_idx = col_idx;
+		}
+
 		bool operator==(const nnz_idx &e) const {
 			return row_idx == e.row_idx && col_idx == e.col_idx;
 		}
@@ -266,7 +277,13 @@ public:
 	virtual const char *get(size_t row, size_t col) const;
 	virtual matrix_store::const_ptr transpose() const;
 	const char *get_col_nnz(off_t col_idx, std::vector<off_t> &row_idxs) const;
-	const char *get_row_nnz(off_t col_idx, std::vector<off_t> &row_idxs) const;
+	const char *get_row_nnz(off_t row_idx, std::vector<off_t> &col_idxs) const;
+	// This returns rows in the specified range.
+	// The rows must be stored contiguously. Otherwise, it'll return NULL.
+	// The local store can be resized. The indexes of non-zero entries are
+	// relative in the resized store.
+	const char *get_rows_nnz(off_t start_row, off_t end_row,
+			std::vector<sparse_project_matrix_store::nnz_idx> &idxs) const;
 	size_t get_nnz() const {
 		return local_idxs.size();
 	}

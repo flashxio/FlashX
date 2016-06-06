@@ -453,6 +453,75 @@ const char *local_sparse_matrix_store::get_row_nnz(off_t row_idx,
 	return vals->get(val_off, 0);
 }
 
+// Test if the current location is inside the specified range.
+static inline bool inside_range(const sparse_project_matrix_store::nnz_idx &start,
+		const sparse_project_matrix_store::nnz_idx &end,
+		const sparse_project_matrix_store::nnz_idx &curr)
+{
+	return curr.row_idx >= start.row_idx && curr.row_idx <= end.row_idx
+		&& curr.col_idx >= start.col_idx && curr.col_idx < end.col_idx;
+}
+
+const char *local_sparse_matrix_store::get_rows_nnz(off_t start_row,
+		off_t end_row,
+		std::vector<sparse_project_matrix_store::nnz_idx> &idxs) const
+{
+	if (store_layout() == matrix_layout_t::L_COL) {
+		idxs.clear();
+		return NULL;
+	}
+	// If start col isn't 0, rows aren't stored contiguously.
+	if (get_local_start_col() > 0) {
+		idxs.clear();
+		return NULL;
+	}
+
+	sparse_project_matrix_store::nnz_idx start, end;
+	start.row_idx = start_row + get_local_start_row();
+	start.col_idx = get_local_start_col();
+	end.row_idx = end_row - 1 + get_local_start_row();
+	end.col_idx = get_local_start_col() + get_num_cols();
+	auto start_it = std::lower_bound(local_idxs.begin(), local_idxs.end(),
+			start, row_first_comp());
+	// All non-empty rows are smaller than the starting row.
+	if (start_it == local_idxs.end()) {
+		idxs.clear();
+		return NULL;
+	}
+	// The first row is out of the range.
+	if (start_it->row_idx > end.row_idx) {
+		idxs.clear();
+		return NULL;
+	}
+
+	auto end_it = std::lower_bound(local_idxs.begin(), local_idxs.end(),
+			end, row_first_comp());
+	if (end_it != local_idxs.end()) {
+		// If the last entry is inside the range.
+		if (inside_range(start, end, *end_it))
+			end_it++;
+	}
+
+	idxs.clear();
+	for (auto it = start_it; it != end_it; it++) {
+		// Rows have been resized. They can't be stored contiguously.
+		if (it->col_idx >= get_num_cols()) {
+			idxs.clear();
+			return NULL;
+		}
+		// The stored indexes are also relative.
+		// The local store might have been resized.
+		// The returned indexes should be relative to the current resized
+		// local store.
+		idxs.push_back(sparse_project_matrix_store::nnz_idx(
+					it->row_idx - get_local_start_row(),
+					it->col_idx - get_local_start_col()));
+		assert(inside_range(start, end, *it));
+	}
+
+	return vals->get(start_it - local_idxs.begin(), 0);
+}
+
 }
 
 }
