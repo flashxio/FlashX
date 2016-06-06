@@ -247,10 +247,25 @@ public:
 			size_t num_threads, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(
 				out_num_rows, out_num_cols, Bmem->get_type()) {
-		this->Bmem = Bmem;
-		this->Bstore = Bmem->get_portion(0);
+		// We need B matrix stores data in contiguous memory.
+		if (Bmem->get_raw_arr()) {
+			this->Bmem = Bmem;
+			this->Bstore = Bmem->get_portion(0);
+		}
+		else {
+			detail::mem_matrix_store::ptr copy = detail::mem_matrix_store::create(
+					Bmem->get_num_rows(), Bmem->get_num_cols(),
+					Bmem->store_layout(), Bmem->get_type(), -1);
+			detail::local_matrix_store::ptr copy_portion = copy->get_portion(0);
+			detail::local_matrix_store::const_ptr Bstore = Bmem->get_portion(0);
+			copy_portion->copy_from(*Bstore);
+			this->Bmem = copy;
+			this->Bstore = copy_portion;
+		}
+		assert(Bstore->get_raw_arr());
 		assert(this->Bstore->get_num_rows() == Bmem->get_num_rows());
 		assert(this->Bstore->get_num_cols() == Bmem->get_num_cols());
+
 		Abufs.resize(num_threads);
 		res_bufs.resize(num_threads);
 	}

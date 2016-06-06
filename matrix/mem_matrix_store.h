@@ -344,6 +344,14 @@ public:
 		return mem_col_matrix_store::get_col(orig_col_idxs->at(col));
 	}
 
+	// Its data is likely not in contiguous memory.
+	virtual const char *get_raw_arr() const {
+		return NULL;
+	}
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -401,6 +409,14 @@ public:
 
 	virtual const char *get_row(size_t row) const {
 		return mem_row_matrix_store::get_row(orig_row_idxs->at(row));
+	}
+
+	// Its data is likely not in contiguous memory.
+	virtual const char *get_raw_arr() const {
+		return NULL;
+	}
+	virtual char *get_raw_arr() {
+		return NULL;
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
