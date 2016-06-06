@@ -76,14 +76,18 @@ public:
 			size_t block_size, const scalar_type &type, const set_operate &op,
 			int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL) {
-		return create(num_rows, num_cols, block_size, type, op, num_nodes,
-				in_mem, group);
+		matrix_layout_t layout = num_rows
+			> num_cols ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+		return create_layout(num_rows, num_cols, layout, block_size, type,
+				op, num_nodes, in_mem, group);
 	}
 	static dense_matrix::ptr create(scalar_variable::ptr val, size_t num_rows,
 			size_t num_cols, size_t block_size, int num_nodes = -1,
 			bool in_mem = true, safs::safs_file_group::ptr group = NULL) {
-		return create(val, num_rows, num_cols, block_size, num_nodes,
-				in_mem, group);
+		matrix_layout_t layout = num_rows
+			> num_cols ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+		return create_layout(val, num_rows, num_cols, layout, block_size,
+				num_nodes, in_mem, group);
 	}
 
 	size_t get_num_blocks() const {
