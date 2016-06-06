@@ -3124,13 +3124,25 @@ static dense_matrix::ptr rbind_block(const std::vector<block_matrix::ptr> &mats)
 	return block_matrix::create(combined);
 }
 
+static inline bool is_small(const dense_matrix &mat)
+{
+	return mat.get_num_rows() <= detail::mem_matrix_store::CHUNK_SIZE
+		&& mat.get_num_cols() <= detail::mem_matrix_store::CHUNK_SIZE;
+}
+
 dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats)
 {
+	if (mats.empty())
+		return dense_matrix::ptr();
+	if (mats.size() == 1)
+		return mats[0];
+
 	std::vector<block_matrix::ptr> block_mats;
 	std::vector<detail::matrix_store::const_ptr> stores(mats.size());
 	size_t ncol = mats[0]->get_num_cols();
 	size_t nrow = 0;
 	bool in_mem = mats[0]->is_in_mem();
+	bool small = true;
 	const scalar_type &type = mats[0]->get_type();
 	for (size_t i = 0; i < mats.size(); i++) {
 		dense_matrix::ptr mat = mats[i];
@@ -3150,11 +3162,29 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 		stores[i] = mat->get_raw_store();
 		// We create a matrix in memory only if all matrices are in memory.
 		in_mem = in_mem && mats[i]->is_in_mem();
+		small = small && is_small(*mat);
 		nrow += mats[i]->get_num_rows();
 	}
 
 	detail::matrix_store::ptr combined;
-	if (ncol > nrow) {
+	// If all matrices are small, we can bind them physically.
+	if (small) {
+		detail::matrix_store::ptr res = detail::matrix_store::create(nrow,
+				ncol, mats[0]->store_layout(), type, -1, true);
+		off_t row_idx = 0;
+		for (size_t i = 0; i < mats.size(); i++) {
+			dense_matrix::ptr tmp = mats[i];
+			tmp->materialize_self();
+			detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
+					0, tmp->get_num_rows(), tmp->get_num_cols());
+			detail::local_matrix_store::const_ptr src_part
+				= tmp->get_data().get_portion(0);
+			res_part->copy_from(*src_part);
+			row_idx += tmp->get_num_rows();
+		}
+		return dense_matrix::create(res);
+	}
+	else if (ncol > nrow) {
 		// If the input matrices are tall and the combined matrix is wide,
 		// We need to handle it differently. TODO right now, we don't handle
 		// this case.
@@ -3218,6 +3248,11 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 
 dense_matrix::ptr dense_matrix::cbind(const std::vector<dense_matrix::ptr> &mats)
 {
+	if (mats.empty())
+		return dense_matrix::ptr();
+	if (mats.size() == 1)
+		return mats[0];
+
 	size_t nrow = mats[0]->get_num_rows();
 	const scalar_type &type = mats[0]->get_type();
 	for (size_t i = 0; i < mats.size(); i++) {
