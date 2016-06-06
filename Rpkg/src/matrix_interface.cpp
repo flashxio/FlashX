@@ -2427,8 +2427,10 @@ RcppExport SEXP R_FM_rand_sparse_proj(SEXP pnrow, SEXP pncol, SEXP pdensity)
 		return R_NilValue;
 	}
 
-	detail::sparse_project_matrix_store::ptr store
-		= detail::sparse_project_matrix_store::create_sparse_rand(nrow, ncol,
-				matrix_layout_t::L_COL, get_scalar_type<double>(), density);
+	detail::sparse_project_matrix_store::ptr store;
+	matrix_layout_t layout
+		= nrow > ncol ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	store = detail::sparse_project_matrix_store::create_sparse_rand(nrow,
+			ncol, layout, get_scalar_type<double>(), density);
 	return create_FMR_matrix(dense_matrix::create(store), "");
 }
