@@ -595,14 +595,17 @@ dense_matrix::ptr block_matrix::multiply_tall(const dense_matrix &m,
 }
 
 static void get_wider_matrices(detail::combined_matrix_store::const_ptr in,
-		std::vector<detail::matrix_store::const_ptr> &mats)
+		std::vector<detail::matrix_store::const_ptr> &mats, size_t block_size)
 {
 	size_t short_dim = std::min(in->get_mat_ref(0).get_num_rows(),
 			in->get_mat_ref(0).get_num_cols());
-	size_t num_blocks = 256 / short_dim;
+	block_size = std::min(block_size, 512UL);
+	size_t num_blocks = block_size / short_dim;
+	if (num_blocks == 0)
+		num_blocks = 1;
 	if (num_blocks <= 1) {
 		for (size_t i = 0; i < in->get_num_mats(); i++)
-			mats[i] = in->get_mat(i);
+			mats.push_back(in->get_mat(i));
 	}
 	else {
 		for (size_t i = 0; i < in->get_num_mats(); i += num_blocks) {
@@ -619,21 +622,17 @@ static void get_wider_matrices(detail::combined_matrix_store::const_ptr in,
 dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 		matrix_layout_t out_layout) const
 {
-	if (is_in_mem()) {
-		dense_matrix::ptr ret = dense_matrix::multiply(m, out_layout);
-		ret->materialize_self();
-		return ret;
-	}
-
 	std::vector<detail::matrix_store::const_ptr> right_mats;
 	const block_matrix *block_m = dynamic_cast<const block_matrix *>(&m);
 	if (block_m == NULL)
 		right_mats.push_back(m.get_raw_store());
 	else
-		get_wider_matrices(block_m->store, right_mats);
+		get_wider_matrices(block_m->store, right_mats,
+				std::min(get_num_rows(), m.get_num_cols()));
 
 	std::vector<detail::matrix_store::const_ptr> left_mats;
-	get_wider_matrices(store, left_mats);
+	get_wider_matrices(store, left_mats,
+			std::min(get_num_rows(), m.get_num_cols()));
 
 	detail::matrix_store::ptr res;
 	assert(get_type() == m.get_type());
