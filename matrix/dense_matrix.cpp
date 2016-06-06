@@ -373,22 +373,46 @@ dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 
 }
 
+dense_matrix::ptr dense_matrix::multiply_sparse_combined(
+		const dense_matrix &mat, matrix_layout_t out_layout) const
+{
+	detail::combined_matrix_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::combined_matrix_store>(
+				mat.get_raw_store());
+	assert(store);
+
+	std::vector<dense_matrix::ptr> res_mats(store->get_num_mats());
+	for (size_t i = 0; i < store->get_num_mats(); i++) {
+		dense_matrix::ptr right = dense_matrix::create(store->get_mat(i));
+		res_mats[i] = multiply(*right, out_layout);
+	}
+	materialize(res_mats, false);
+	return dense_matrix::cbind(res_mats);
+}
+
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
 	// We should treat a sparse matrix differently to improve performance of
 	// matrix multiplication.
 	if (mat.get_data().is_sparse()) {
+		// We don't know how to multiply two sparse matrices.
+		assert(!get_data().is_sparse());
 		detail::sparse_project_matrix_store::const_ptr store
 			= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
 					mat.get_raw_store());
 
-		if (out_layout == matrix_layout_t::L_NONE)
-			out_layout = matrix_layout_t::L_COL;
-		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
-		return dense_matrix::create(detail::matrix_store::ptr(
-					new detail::IPW_matrix_store(tmp->get_raw_store(), store,
-						NULL, NULL, out_layout)));
+		if (store) {
+			if (out_layout == matrix_layout_t::L_NONE)
+				out_layout = matrix_layout_t::L_COL;
+			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
+			// TODO we assume the left matrix is a wide matrix.
+			return dense_matrix::create(detail::matrix_store::ptr(
+						new detail::IPW_matrix_store(tmp->get_raw_store(),
+							store, NULL, NULL, out_layout)));
+		}
+		else
+			return multiply_sparse_combined(mat, out_layout);
 	}
 	else if ((get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>())) {

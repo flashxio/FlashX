@@ -76,6 +76,8 @@ public:
 	const matrix_store &get_mat_ref(size_t off) const {
 		return *mats[off];
 	}
+
+	virtual bool is_sparse() const;
 };
 }
 

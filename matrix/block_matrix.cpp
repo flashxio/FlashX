@@ -703,7 +703,6 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
 
-	off_t row_idx = 0;
 	std::vector<dense_matrix::ptr> res_mats;
 	std::vector<dense_matrix::ptr> tmps;
 	for (size_t i = 0; i < this->store->get_num_mats(); i++) {
@@ -732,19 +731,7 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 		tmps.clear();
 	}
 
-	detail::matrix_store::ptr res = detail::matrix_store::create(get_num_rows(),
-			m.get_num_cols(), out_layout, get_type(), -1, true);
-	for (size_t i = 0; i < res_mats.size(); i++) {
-		dense_matrix::ptr tmp = res_mats[i];
-		assert(!tmp->is_virtual());
-		detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
-				0, tmp->get_num_rows(), tmp->get_num_cols());
-		detail::local_matrix_store::const_ptr src_part
-			= tmp->get_data().get_portion(0);
-		res_part->copy_from(*src_part);
-		row_idx += tmp->get_num_rows();
-	}
-	return dense_matrix::create(res);
+	return dense_matrix::rbind(res_mats);
 }
 
 dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
@@ -752,7 +739,21 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 {
 	if (mat.get_data().is_sparse()) {
 		assert(is_wide());
-		return multiply_sparse_wide(mat, out_layout);
+
+		// TODO we need to deal with tall matrix.
+		detail::combined_matrix_store::const_ptr combined
+			= std::dynamic_pointer_cast<const detail::combined_matrix_store>(
+					mat.get_raw_store());
+		if (combined == NULL)
+			return multiply_sparse_wide(mat, out_layout);
+
+		std::vector<dense_matrix::ptr> res_mats(combined->get_num_mats());
+		for (size_t i = 0; i < combined->get_num_mats(); i++) {
+			dense_matrix::ptr right = dense_matrix::create(combined->get_mat(i));
+			res_mats[i] = multiply(*right, out_layout);
+		}
+		materialize(res_mats, false);
+		return dense_matrix::cbind(res_mats);
 	}
 	else if ((get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>())) {

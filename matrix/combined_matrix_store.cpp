@@ -273,6 +273,14 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 		return mat->get_rows(local_idxs);
 }
 
+bool combined_matrix_store::is_sparse() const
+{
+	for (size_t i = 0; i < mats.size(); i++)
+		if (mats[i]->is_sparse())
+			return true;
+	return false;
+}
+
 }
 
 }

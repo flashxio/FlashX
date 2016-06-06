@@ -169,6 +169,8 @@ private:
 	detail::matrix_store::const_ptr store;
 
 	detail::matrix_store::const_ptr _conv_store(bool in_mem, int num_nodes) const;
+	dense_matrix::ptr multiply_sparse_combined(const dense_matrix &mat,
+			matrix_layout_t out_layout) const;
 protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;

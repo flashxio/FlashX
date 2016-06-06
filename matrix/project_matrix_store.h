@@ -264,6 +264,10 @@ public:
 		return -1;
 	}
 
+	virtual bool is_sparse() const {
+		return true;
+	}
+
 	virtual matrix_layout_t store_layout() const {
 		return layout;
 	}
