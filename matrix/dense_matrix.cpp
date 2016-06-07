@@ -344,6 +344,12 @@ void multiply_tall_op::run(
 dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		const dense_matrix &m2, matrix_layout_t out_layout)
 {
+	if (m2.get_num_cols() > detail::mem_matrix_store::CHUNK_SIZE) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't multiply a tall matrix with a wide matrix";
+		return dense_matrix::ptr();
+	}
+
 	if (out_layout == matrix_layout_t::L_NONE)
 		out_layout = m1.store_layout();
 
