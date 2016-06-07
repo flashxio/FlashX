@@ -88,9 +88,8 @@ public:
 	}
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
-		// TODO what do we do if the two input matrices aren't both
-		// in memory or both on SSDS.
-		assert(left_mat->is_in_mem() == right_mat->is_in_mem());
+		assert(left_mat->get_portion_size().second
+				== right_mat->get_portion_size().first);
 		return left_mat->get_portion_size();
 	}
 
