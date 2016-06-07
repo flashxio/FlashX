@@ -1283,16 +1283,27 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 
 std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 {
+	// If the matrix has been materialized and it's stored on disks,
+	if (is_materialized() && !res->is_in_mem()) {
+		const EM_object *obj
+			= dynamic_cast<const EM_object *>(res->get_buf().get());
+		assert(obj);
+		return obj->create_ios();
+	}
+
+	// Otherwise, we get IO instances from all EM matrices in the virtual matrix.
 	std::vector<safs::io_interface::ptr> ret;
 	for (size_t i = 0; i < in_mats.size(); i++) {
 		if (!in_mats[i]->is_in_mem()) {
-			const EM_object *obj = dynamic_cast<const EM_object *>(in_mats[i].get());
+			const EM_object *obj
+				= dynamic_cast<const EM_object *>(in_mats[i].get());
 			std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 			ret.insert(ret.end(), tmp.begin(), tmp.end());
 		}
 	}
 	if (res && !res->is_materialized() && !res->is_in_mem()) {
-		const EM_object *obj = dynamic_cast<const EM_object *>(res->get_buf().get());
+		const EM_object *obj
+			= dynamic_cast<const EM_object *>(res->get_buf().get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
