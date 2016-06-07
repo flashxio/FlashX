@@ -737,11 +737,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (cols.size() == 1)
+			return get_col(0);
+		else
+			return NULL;
 	}
 
 	virtual char *get_raw_arr() {
-		return NULL;
+		if (cols.size() == 1)
+			return get_col(0);
+		else
+			return NULL;
 	}
 
 	virtual const char *get_col(size_t col) const {
@@ -797,11 +803,17 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (rows.size() == 1)
+			return get_row(0);
+		else
+			return NULL;
 	}
 
 	virtual char *get_raw_arr() {
-		return NULL;
+		if (rows.size() == 1)
+			return get_row(0);
+		else
+			return NULL;
 	}
 
 	virtual const char *get_row(size_t row) const {
@@ -968,7 +980,10 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (cols.size() == 1)
+			return get_col(0);
+		else
+			return NULL;
 	}
 	virtual char *get_raw_arr() {
 		assert(0);
@@ -1023,7 +1038,10 @@ public:
 	}
 
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (rows.size() == 1)
+			return get_row(0);
+		else
+			return NULL;
 	}
 	virtual char *get_raw_arr() {
 		assert(0);
