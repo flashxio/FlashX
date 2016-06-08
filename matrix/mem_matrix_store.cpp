@@ -34,7 +34,7 @@ namespace fm
 namespace detail
 {
 
-const size_t mem_matrix_store::CHUNK_SIZE = 32 * 1024;
+const size_t mem_matrix_store::CHUNK_SIZE = 16 * 1024;
 
 mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 		const scalar_type &type): matrix_store(nrow, ncol, true,
