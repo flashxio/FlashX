@@ -44,23 +44,36 @@ row_portions::row_portions()
 	tot_num_rows = 0;
 }
 
-row_portions::ptr row_portions::create(matrix_store::const_ptr mat)
+row_portions::ptr row_portions::create(matrix_store::const_ptr mat,
+		size_t block_size)
 {
 	if (mat->is_wide()) {
 		BOOST_LOG_TRIVIAL(error) << "the matrix needs to be tall-and-skinny";
 		return row_portions::ptr();
 	}
 
+	// The portion size of the input dense matrix and the block size
+	// of the sparse matrix may not match. If the block size is too small,
+	// we can use the portion size directly.
+	size_t portion_size = mat->get_portion_size().first;
+	if (block_size < portion_size) {
+		assert(portion_size % block_size == 0);
+		block_size = portion_size;
+	}
 	row_portions::ptr ret(new row_portions());
-	ret->portion_size_log = log2(mat->get_portion_size().first);
+	ret->portion_size_log = log2(block_size);
 	ret->portion_mask = (1UL << ret->portion_size_log) - 1;
 	ret->num_cols = mat->get_num_cols();
 	ret->entry_size = mat->get_entry_size();
 	ret->tot_num_rows = mat->get_num_rows();
-	ret->portions.resize(mat->get_num_portions());
-	ret->raw_portions.resize(mat->get_num_portions());
+	size_t num_portions = div_ceil<size_t>(mat->get_num_rows(), block_size);
+	ret->portions.resize(num_portions);
+	ret->raw_portions.resize(num_portions);
+	size_t row_idx = 0;
 	for (size_t i = 0; i < ret->portions.size(); i++) {
-		ret->portions[i] = mat->get_portion(i);
+		size_t num_rows = std::min(block_size, mat->get_num_rows() - row_idx);
+		ret->portions[i] = mat->get_portion(row_idx, 0, num_rows,
+				mat->get_num_cols());
 		if (ret->portions[i] == NULL) {
 			BOOST_LOG_TRIVIAL(error) << "Can't get row portions";
 			return row_portions::ptr();
@@ -1009,7 +1022,7 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 		in_tmp->materialize_self();
 		in = in_tmp->get_raw_store();
 	}
-	bool ret = create->set_data(in, out);
+	bool ret = create->set_data(in, out, get_block_size());
 	if (ret)
 		compute(create, *in);
 	return ret;

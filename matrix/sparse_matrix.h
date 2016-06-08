@@ -53,7 +53,7 @@ public:
 
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
 	virtual bool set_data(detail::matrix_store::const_ptr in,
-			detail::matrix_store::ptr out) = 0;
+			detail::matrix_store::ptr out, const block_2d_size &block_size) = 0;
 	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
 	virtual bool is_complete() const = 0;
 };
@@ -72,7 +72,7 @@ class row_portions
 public:
 	typedef std::shared_ptr<row_portions> ptr;
 
-	static ptr create(matrix_store::const_ptr mat);
+	static ptr create(matrix_store::const_ptr mat, size_t block_size);
 
 	const scalar_type &get_type() const {
 		return portions[0]->get_type();
@@ -566,7 +566,7 @@ public:
 	}
 
 	virtual bool set_data(matrix_store::const_ptr in,
-			matrix_store::ptr out);
+			matrix_store::ptr out, const block_2d_size &block_size);
 
 	virtual std::vector<EM_object *> get_EM_objs() {
 		std::vector<EM_object *> ret;
@@ -849,7 +849,8 @@ spmm_creator<DenseType, SparseType>::spmm_creator(const sparse_matrix &_mat,
 
 template<class DenseType, class SparseType>
 bool spmm_creator<DenseType, SparseType>::set_data(
-		matrix_store::const_ptr in, matrix_store::ptr out)
+		matrix_store::const_ptr in, matrix_store::ptr out,
+		const block_2d_size &block_size)
 {
 	if (in->get_type() != get_scalar_type<DenseType>()
 			|| out->get_type() != get_scalar_type<DenseType>()) {
@@ -857,7 +858,7 @@ bool spmm_creator<DenseType, SparseType>::set_data(
 		return false;
 	}
 	this->output = out;
-	this->in_row_portions = row_portions::create(in);
+	this->in_row_portions = row_portions::create(in, block_size.get_num_cols());
 	if (in_row_portions == NULL)
 		return false;
 	if (!output->is_in_mem())
