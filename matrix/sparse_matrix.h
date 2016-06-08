@@ -628,9 +628,11 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
 	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
 	size_t size = matrix_conf.get_cpu_cache_size() / entry_size
 		/ block_size.get_num_rows() / 2;
+	size = std::max(size, 1UL);
 	size_t max_size
 		= mem_matrix_store::CHUNK_SIZE / block_size.get_num_rows();
-	return std::min(std::max(size, 1UL), max_size);
+	max_size = std::max(max_size, 1UL);
+	return std::min(size, max_size);
 }
 
 }
