@@ -352,7 +352,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 	return async_cres_t(false, ret);
 }
 
-void EM_matrix_store::write_portion_async(
+void EM_matrix_store::_write_portion_async(
 		local_matrix_store::const_ptr portion, off_t start_row,
 		off_t start_col)
 {
@@ -431,6 +431,40 @@ void EM_matrix_store::write_portion_async(
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
 	io.flush_requests();
+}
+
+void EM_matrix_store::write_portion_async(
+		local_matrix_store::const_ptr portion, off_t start_row,
+		off_t start_col)
+{
+	if (stream)
+		stream->write_async(portion, start_row, start_col);
+	else
+		_write_portion_async(portion, start_row, start_col);
+}
+
+namespace
+{
+
+struct empty_deleter {
+	void operator()(EM_matrix_store *addr) {
+	}
+};
+
+}
+
+void EM_matrix_store::start_stream()
+{
+	stream = EM_matrix_stream::create(std::shared_ptr<EM_matrix_store>(this,
+				empty_deleter()));
+}
+
+void EM_matrix_store::end_stream()
+{
+	stream->flush();
+	wait4complete();
+	assert(stream->is_complete());
+	stream = NULL;
 }
 
 void EM_matrix_store::wait4complete()
@@ -1204,7 +1238,7 @@ static inline local_matrix_store::ptr create_local_buf_matrix(
 					arr, start_row, start_col, num_rows, num_cols, type, -1));
 }
 
-EM_matrix_stream::EM_matrix_stream(matrix_store::ptr mat)
+EM_matrix_stream::EM_matrix_stream(EM_matrix_store::ptr mat)
 {
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	this->mat = mat;
@@ -1432,7 +1466,7 @@ void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
 		// If this is the case, we have to make sure all input local matrices
 		// are written through.
 		assert(portion_q->get_num_flushed() == 0);
-		mat->write_portion_async(lmat, start_row, start_col);
+		mat->_write_portion_async(lmat, start_row, start_col);
 		return;
 	}
 
@@ -1447,7 +1481,7 @@ void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
 		else
 			assert(lmat->get_global_start_row() + lmat->get_num_rows()
 					== mat->get_num_rows());
-		mat->write_portion_async(lmat, start_row, start_col);
+		mat->_write_portion_async(lmat, start_row, start_col);
 		return;
 	}
 
@@ -1460,7 +1494,7 @@ void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
 	pthread_spin_unlock(&lock);
 
 	if (merged)
-		mat->write_portion_async(merged, merged->get_global_start_row(),
+		mat->_write_portion_async(merged, merged->get_global_start_row(),
 				merged->get_global_start_col());
 }
 
@@ -1474,7 +1508,7 @@ void EM_matrix_stream::flush()
 	}
 	pthread_spin_unlock(&lock);
 	if (merged)
-		mat->write_portion_async(merged, merged->get_global_start_row(),
+		mat->_write_portion_async(merged, merged->get_global_start_row(),
 				merged->get_global_start_col());
 }
 

@@ -809,7 +809,8 @@ bool spmm_creator<DenseType, SparseType>::set_data(
 	if (in_row_portions == NULL)
 		return false;
 	if (!output->is_in_mem())
-		output_stream = EM_matrix_stream::create(output);
+		output_stream = EM_matrix_stream::create(
+				std::dynamic_pointer_cast<EM_matrix_store>(output));
 	return true;
 }
 

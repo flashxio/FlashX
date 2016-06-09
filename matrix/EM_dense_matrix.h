@@ -38,6 +38,7 @@ namespace detail
 
 class local_matrix_store;
 class mem_matrix_store;
+class EM_matrix_stream;
 
 class EM_matrix_store: public matrix_store, public EM_object
 {
@@ -55,6 +56,8 @@ class EM_matrix_store: public matrix_store, public EM_object
 	matrix_layout_t layout;
 	file_holder::ptr holder;
 	io_set::ptr ios;
+
+	std::shared_ptr<EM_matrix_stream> stream;
 
 	/*
 	 * This indicates whether or not we cache a portion in each worker thread.
@@ -84,6 +87,9 @@ class EM_matrix_store: public matrix_store, public EM_object
 	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
 			size_t ncol, size_t orig_nrow, size_t orig_ncol,
 			matrix_layout_t layout, const scalar_type &type, size_t _data_id);
+	void _write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col);
 public:
 	static const size_t CHUNK_SIZE;
 
@@ -158,6 +164,16 @@ public:
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
+	/*
+	 * This starts a stream that collects users writes and writes them to disks
+	 * with a large I/O. This should be called in the main thread.
+	 */
+	void start_stream();
+	/*
+	 * This ends a stream and makes sure all users' data is written to disks.
+	 * This should be called in the main thread.
+	 */
+	void end_stream();
 	void wait4complete();
 
 	virtual matrix_store::const_ptr get_cols(
@@ -178,6 +194,8 @@ public:
 	 * is deleted after all references to the matrix are gone.
 	 */
 	void unset_persistent() const;
+
+	friend class EM_matrix_stream;
 };
 
 /*
@@ -189,7 +207,7 @@ public:
  */
 class EM_matrix_stream
 {
-	matrix_store::ptr mat;
+	EM_matrix_store::ptr mat;
 
 	/*
 	 * This stores data in a portion of a matrix.
@@ -256,13 +274,13 @@ class EM_matrix_stream
 	// It determines the minimal I/O size.
 	size_t min_io_portions;
 
-	EM_matrix_stream(matrix_store::ptr mat);
+	EM_matrix_stream(EM_matrix_store::ptr mat);
 	void write_portion_async(std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
 public:
 	typedef std::shared_ptr<EM_matrix_stream> ptr;
 
-	static ptr create(matrix_store::ptr mat) {
+	static ptr create(EM_matrix_store::ptr mat) {
 		return ptr(new EM_matrix_stream(mat));
 	}
 

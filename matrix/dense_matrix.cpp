@@ -1479,6 +1479,19 @@ bool __mapply_portion(
 	else {
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 		detail::EM_portion_dispatcher::ptr dispatcher;
+
+		// Start streams for external-memory result matrices.
+		std::vector<EM_matrix_store::ptr> em_outs;
+		for (size_t i = 0; i < out_mats.size(); i++) {
+			if (out_mats[i]->is_in_mem())
+				continue;
+			EM_matrix_store::ptr em_out
+				= std::dynamic_pointer_cast<EM_matrix_store>(out_mats[i]);
+			assert(em_out);
+			em_outs.push_back(em_out);
+			em_out->start_stream();
+		}
+
 		if (par_access)
 			dispatcher = detail::EM_portion_dispatcher::ptr(
 					new EM_mat_mapply_par_dispatcher(mats, out_mats, op,
@@ -1505,6 +1518,10 @@ bool __mapply_portion(
 			threads->process_task(i % threads->get_num_nodes(), task);
 		}
 		threads->wait4complete();
+
+		// End the streams for external-memory result matrices.
+		for (size_t i = 0; i < em_outs.size(); i++)
+			em_outs[i]->end_stream();
 	}
 	return true;
 }
