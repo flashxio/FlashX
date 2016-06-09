@@ -159,6 +159,94 @@ void test_get_row_col()
 		assert(row->get<long>(i) == mat->get_num_cols() * idx + i);
 }
 
+void _test_stream(size_t num_rows, size_t num_cols, matrix_layout_t layout)
+{
+	printf("stream to EM matrix (%ld,%ld) layout: %d\n", num_rows, num_cols,
+			layout);
+	detail::EM_matrix_store::ptr mat = detail::EM_matrix_store::create(
+			num_rows, num_cols, layout, get_scalar_type<long>());
+	detail::mem_matrix_store::ptr mem_mat = detail::mem_matrix_store::create(
+			num_rows, num_cols, layout, mat->get_type(), -1);
+	for (size_t part_size = detail::mem_matrix_store::CHUNK_SIZE / 2;
+			part_size <= detail::mem_matrix_store::CHUNK_SIZE / 2; part_size *= 2) {
+		detail::EM_matrix_stream::ptr stream = detail::EM_matrix_stream::create(mat);
+		size_t num_parts;
+		if (mat->is_wide())
+			num_parts = div_ceil(mat->get_num_cols(), part_size);
+		else
+			num_parts = div_ceil(mat->get_num_rows(), part_size);
+		std::vector<size_t> part_ids(num_parts);
+		for (size_t i = 0; i < part_ids.size(); i++)
+			part_ids[i] = i;
+		while (!part_ids.empty()) {
+			size_t idx = random() % std::min(40UL, part_ids.size());
+			size_t part_id = part_ids[idx];
+			part_ids.erase(part_ids.begin() + idx);
+			size_t actual_part_size;
+			if (mat->is_wide())
+				actual_part_size = std::min(part_size,
+						mat->get_num_cols() - part_id * part_size);
+			else
+				actual_part_size = std::min(part_size,
+						mat->get_num_rows() - part_id * part_size);
+			detail::local_matrix_store::ptr buf;
+			if (mat->is_wide() && mat->store_layout() == matrix_layout_t::L_COL) {
+				buf = detail::local_matrix_store::ptr(
+						new detail::local_buf_col_matrix_store(
+							0, part_id * part_size, mat->get_num_rows(),
+							actual_part_size, mat->get_type(), -1));
+				buf->set_data(set_col_operate(mat->get_num_cols()));
+			}
+			else if (mat->is_wide()) {
+				buf = detail::local_matrix_store::ptr(
+						new detail::local_buf_row_matrix_store(
+							0, part_id * part_size, mat->get_num_rows(),
+							actual_part_size, mat->get_type(), -1));
+				buf->set_data(set_row_operate(mat->get_num_cols()));
+			}
+			else if (mat->store_layout() == matrix_layout_t::L_COL) {
+				buf = detail::local_matrix_store::ptr(
+						new detail::local_buf_col_matrix_store(
+							part_id * part_size, 0, actual_part_size,
+							mat->get_num_cols(), mat->get_type(), -1));
+				buf->set_data(set_col_operate(mat->get_num_cols()));
+			}
+			else {
+				buf = detail::local_matrix_store::ptr(
+						new detail::local_buf_row_matrix_store(
+							part_id * part_size, 0, actual_part_size,
+							mat->get_num_cols(), mat->get_type(), -1));
+				buf->set_data(set_row_operate(mat->get_num_cols()));
+			}
+			mem_mat->write_portion_async(buf, buf->get_global_start_row(),
+					buf->get_global_start_col());
+			stream->write_async(buf, buf->get_global_start_row(),
+					buf->get_global_start_col());
+		}
+		stream->flush();
+		mat->wait4complete();
+
+		dense_matrix::ptr tmp1 = dense_matrix::create(mat);
+		dense_matrix::ptr tmp2 = dense_matrix::create(mem_mat);
+		scalar_variable::ptr sum1 = tmp1->sum();
+		scalar_variable::ptr sum2 = tmp2->sum();
+		dense_matrix::ptr diff = tmp1->minus(*tmp2)->abs();
+		scalar_variable::ptr sum3 = diff->sum();
+		printf("sum1: %ld, sum2: %ld\n", scalar_variable::get_val<long>(*sum1),
+				scalar_variable::get_val<long>(*sum2));
+		printf("sum of diff: %ld\n", scalar_variable::get_val<long>(*sum3));
+		assert(scalar_variable::get_val<long>(*sum3) == 0);
+	}
+}
+
+void test_stream()
+{
+	_test_stream(9999999, 10, matrix_layout_t::L_ROW);
+	_test_stream(10, 9999999, matrix_layout_t::L_COL);
+	_test_stream(10, 9999999, matrix_layout_t::L_ROW);
+	_test_stream(9999999, 10, matrix_layout_t::L_COL);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -170,6 +258,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
+	test_stream();
 	test_get_row_col();
 	test_set_data();
 	test_get_portion();

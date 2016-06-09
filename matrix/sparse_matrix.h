@@ -31,6 +31,7 @@
 #include "local_matrix_store.h"
 #include "local_mem_buffer.h"
 #include "EM_object.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
@@ -55,7 +56,7 @@ public:
 	virtual bool set_data(detail::matrix_store::const_ptr in,
 			detail::matrix_store::ptr out, const block_2d_size &block_size) = 0;
 	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
-	virtual bool is_complete() const = 0;
+	virtual void complete() = 0;
 };
 
 class row_portions
@@ -273,64 +274,6 @@ public:
 
 	virtual void run_on_block(const sparse_block_2d &block) = 0;
 	virtual void notify_complete() = 0;
-};
-
-/*
- * This class helps to stream data to the output dense matrix from SpMM
- * on disks, so the dense matrix is a very tall and skinny matrix.
- * This assumes that the data comes from multiple threads without a specific
- * order. But once we order the incoming data, we can stream data to disks
- * sequentially.
- * This data structure is shared by multiple threads.
- */
-class EM_matrix_stream
-{
-	matrix_store::ptr mat;
-
-	class filled_local_store
-	{
-		local_matrix_store::ptr data;
-		std::atomic<size_t> num_filled_rows;
-	public:
-		typedef std::shared_ptr<filled_local_store> ptr;
-
-		filled_local_store(local_matrix_store::ptr data) {
-			this->data = data;
-			num_filled_rows = 0;
-		}
-		// If the write completely fill the local buffer, it returns true.
-		bool write(local_matrix_store::const_ptr portion,
-				off_t global_start_row, off_t global_start_col);
-
-		local_matrix_store::const_ptr get_whole_portion() const {
-			return data;
-		}
-
-		off_t get_global_start_row() const {
-			return data->get_global_start_row();
-		}
-	};
-
-	pthread_spinlock_t lock;
-	// This keeps the buffers with partial data in EM matrix portions.
-	// If an EM matrix portion is complete, the portion is flushed to disks
-	// and it is deleted from the hashtable.
-	std::unordered_map<off_t, filled_local_store::ptr> portion_bufs;
-
-	EM_matrix_stream(matrix_store::ptr mat) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-		this->mat = mat;
-	}
-public:
-	typedef std::shared_ptr<EM_matrix_stream> ptr;
-
-	static ptr create(matrix_store::ptr mat) {
-		return ptr(new EM_matrix_stream(mat));
-	}
-
-	void write_async(local_matrix_store::const_ptr portion,
-			off_t start_row, off_t start_col);
-	bool is_complete() const;
 };
 
 class block_spmm_task: public block_compute_task
@@ -558,11 +501,15 @@ public:
 					mat, num_in_cols));
 	}
 
-	virtual bool is_complete() const {
-		if (output_stream == NULL)
-			return true;
-		else
-			return output_stream->is_complete();
+	virtual void complete() {
+		if (output_stream) {
+			output_stream->flush();
+			EM_matrix_store::ptr em_out
+				= std::dynamic_pointer_cast<EM_matrix_store>(output);
+			assert(em_out);
+			em_out->wait4complete();
+			assert(output_stream->is_complete());
+		}
 	}
 
 	virtual bool set_data(matrix_store::const_ptr in,
