@@ -254,6 +254,9 @@ void matrix_store::set_data(const set_operate &op)
 		mem_thread_pool::ptr threads = mem_thread_pool::get_global_mem_threads();
 		EM_mat_setdata_dispatcher::ptr dispatcher(
 				new EM_mat_setdata_dispatcher(*this, op));
+		EM_matrix_store *em_this = dynamic_cast<EM_matrix_store *>(this);
+		assert(em_this);
+		em_this->start_stream();
 		for (size_t i = 0; i < threads->get_num_threads(); i++) {
 			io_worker_task *task = new io_worker_task(dispatcher);
 			const EM_object *obj = dynamic_cast<const EM_object *>(this);
@@ -261,6 +264,7 @@ void matrix_store::set_data(const set_operate &op)
 			threads->process_task(i % threads->get_num_nodes(), task);
 		}
 		threads->wait4complete();
+		em_this->end_stream();
 	}
 }
 
