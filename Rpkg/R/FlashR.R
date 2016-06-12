@@ -158,12 +158,14 @@ fm.get.dense.matrix <- function(name)
 }
 
 #' @rdname fm.get.matrix
-fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",")
+fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",",
+								 ncol=.Machine$integer.max)
 {
 	stopifnot(!is.null(name))
 	stopifnot(class(name) == "character")
 	m <- .Call("R_FM_load_dense_matrix", name, as.logical(in.mem),
-			   as.character(ele.type), as.character(delim), PACKAGE="FlashR")
+			   as.character(ele.type), as.character(delim),
+			   ncol=as.integer(ncol), PACKAGE="FlashR")
 	new.fm(m)
 }
 

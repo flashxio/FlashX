@@ -256,15 +256,23 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 }
 
 RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
-		SEXP pele_type, SEXP pdelim)
+		SEXP pele_type, SEXP pdelim, SEXP pncol)
 {
 	std::vector<std::string> mat_files(1);
 	mat_files[0] = CHAR(STRING_ELT(pname, 0));
 	bool in_mem = LOGICAL(pin_mem)[0];
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	int ncol = INTEGER(pncol)[0];
 
-	dense_matrix::ptr mat = read_matrix(mat_files, in_mem, ele_type, delim);
+	// R uses 4-bytes integers.
+	// When it's the maximal integer value, we need to convert it to
+	// the maximal value of 8-byte integer to indicate automatic discovery
+	// of the number of columns.
+	if (ncol == std::numeric_limits<int>::max())
+		ncol = std::numeric_limits<size_t>::max();
+	dense_matrix::ptr mat = read_matrix(mat_files, in_mem, ele_type,
+			delim, ncol);
 	if (mat == NULL)
 		return R_NilValue;
 	return create_FMR_matrix(mat, "");
