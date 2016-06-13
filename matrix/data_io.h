@@ -48,6 +48,18 @@ public:
 	virtual std::string get_col_name(off_t idx) const = 0;
 };
 
+/*
+ * This converts a string to an element.
+ */
+class ele_parser
+{
+public:
+	typedef std::shared_ptr<const ele_parser> const_ptr;
+
+	virtual void parse(const std::string &str, void *buf) const = 0;
+	virtual const scalar_type &get_type() const = 0;
+};
+
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
 std::shared_ptr<data_frame> read_edge_list(const std::vector<std::string> &files,
@@ -56,6 +68,12 @@ std::shared_ptr<data_frame> read_edge_list(const std::vector<std::string> &files
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols = std::numeric_limits<size_t>::max());
+std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		const std::string &col_indicator);
+std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		const std::vector<ele_parser::const_ptr> &parsers);
 
 }
 
