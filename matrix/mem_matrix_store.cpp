@@ -65,10 +65,9 @@ void mem_matrix_store::write_portion_async(local_matrix_store::const_ptr portion
 
 vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
 {
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
 	if (get_num_rows() == 1)
-		return detail::smp_vec_store::create(data, get_type());
+		return detail::smp_vec_store::create(data,
+				get_num_rows() * get_num_cols(), get_type());
 	else {
 		BOOST_LOG_TRIVIAL(error)
 			<< "Can't get a row from a column matrix with multiple rows";
@@ -78,10 +77,8 @@ vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
 
 vec_store::const_ptr mem_col_matrix_store::get_col_vec(off_t col) const
 {
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
-			get_type());
+			get_num_rows() * get_num_cols(), get_type());
 	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
 	return ret;
 }
@@ -97,30 +94,25 @@ vec_store::const_ptr mem_sub_col_matrix_store::get_col_vec(off_t col) const
 {
 	// The original column matrix has at least this many columns.
 	size_t orig_num_cols = orig_col_idxs->at(col) + 1;
-	assert(get_data().get_num_bytes()
-			>= get_num_rows() * orig_num_cols * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
-			get_type());
+			get_num_rows() * orig_num_cols, get_type());
 	ret->expose_sub_vec(orig_col_idxs->at(col) * get_num_rows(), get_num_rows());
 	return ret;
 }
 
 vec_store::const_ptr mem_row_matrix_store::get_row_vec(off_t row) const
 {
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
-			get_type());
+			get_num_rows() * get_num_cols(), get_type());
 	ret->expose_sub_vec(row * get_num_cols(), get_num_cols());
 	return ret;
 }
 
 vec_store::const_ptr mem_row_matrix_store::get_col_vec(off_t col) const
 {
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
 	if (get_num_cols() == 1)
-		return detail::smp_vec_store::create(data, get_type());
+		return detail::smp_vec_store::create(data,
+				get_num_rows() * get_num_cols(), get_type());
 	else {
 		BOOST_LOG_TRIVIAL(error)
 			<< "Can't get a column from a row matrix with multiple columns";
@@ -132,10 +124,8 @@ vec_store::const_ptr mem_sub_row_matrix_store::get_row_vec(off_t row) const
 {
 	// The original row matrix has at least this many rows.
 	size_t orig_num_rows = orig_row_idxs->at(row) + 1;
-	assert(get_data().get_num_bytes()
-			>= get_num_cols() * orig_num_rows * get_entry_size());
 	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
-			get_type());
+			get_num_cols() * orig_num_rows, get_type());
 	ret->expose_sub_vec(orig_row_idxs->at(row) * get_num_cols(), get_num_cols());
 	return ret;
 }

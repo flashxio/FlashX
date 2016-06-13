@@ -82,7 +82,8 @@ class smp_vec_store: public mem_vec_store
 	char *arr;
 	detail::simple_raw_array data;
 
-	smp_vec_store(const detail::simple_raw_array &data, const scalar_type &type);
+	smp_vec_store(const detail::simple_raw_array &data, size_t length,
+			const scalar_type &type);
 	smp_vec_store(size_t length, const scalar_type &type);
 public:
 	typedef std::shared_ptr<smp_vec_store> ptr;
@@ -91,6 +92,8 @@ public:
 	static ptr create(size_t length, const scalar_type &type) {
 		return ptr(new smp_vec_store(length, type));
 	}
+	static ptr create(const detail::simple_raw_array &data,
+			size_t length, const scalar_type &type);
 	static ptr create(const detail::simple_raw_array &data,
 			const scalar_type &type);
 

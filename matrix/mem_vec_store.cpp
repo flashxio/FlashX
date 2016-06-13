@@ -61,10 +61,8 @@ smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_st
 }
 
 smp_vec_store::smp_vec_store(const detail::simple_raw_array &data,
-		const scalar_type &type): mem_vec_store(
-			data.get_num_bytes() / type.get_size(), type)
+		size_t length, const scalar_type &type): mem_vec_store(length, type)
 {
-	assert(data.get_num_bytes() % type.get_size() == 0);
 	this->data = data;
 	this->arr = this->data.get_raw();
 }
@@ -77,7 +75,19 @@ smp_vec_store::ptr smp_vec_store::create(const detail::simple_raw_array &data,
 			<< "The data array has a wrong number of bytes";
 		return smp_vec_store::ptr();
 	}
-	return ptr(new smp_vec_store(data, type));
+	return ptr(new smp_vec_store(data,
+				data.get_num_bytes() / type.get_size(), type));
+}
+
+smp_vec_store::ptr smp_vec_store::create(const detail::simple_raw_array &data,
+			size_t length, const scalar_type &type)
+{
+	if (length * type.get_size() > data.get_num_bytes()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The data array doesn't have enough bytes for the vector";
+		return smp_vec_store::ptr();
+	}
+	return ptr(new smp_vec_store(data, length, type));
 }
 
 smp_vec_store::ptr smp_vec_store::get(const smp_vec_store &idxs) const
