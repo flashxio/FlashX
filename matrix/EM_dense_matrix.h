@@ -97,6 +97,12 @@ public:
 	typedef std::shared_ptr<const EM_matrix_store> const_ptr;
 
 	static ptr create(const std::string &mat_file);
+	static ptr create(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
+			size_t ncol, matrix_layout_t layout, const scalar_type &type,
+			safs::safs_file_group::ptr group = NULL) {
+		return ptr(new EM_matrix_store(holder, ios, nrow, ncol, nrow, ncol,
+					layout, type, mat_counter++));
+	}
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, safs::safs_file_group::ptr group = NULL) {

@@ -35,6 +35,7 @@
 #include "local_vec_store.h"
 #include "matrix_store.h"
 #include "bulk_operate_ext.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
@@ -1454,9 +1455,22 @@ void EM_vec_store::set_data(const set_vec_operate &op)
 matrix_store::ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
 			bool byrow)
 {
-	BOOST_LOG_TRIVIAL(error)
-		<< "can't convert an EM vector to a matrix";
-	return matrix_store::ptr();
+	if (nrow > 1 && ncol > 1) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't convert an EM vector to a multi-row or multi-col matrix";
+		return matrix_store::ptr();
+	}
+
+	// Store the header as the metadata.
+	matrix_layout_t layout
+		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	std::vector<char> header_buf(matrix_header::get_header_size());
+	new (header_buf.data()) matrix_header(matrix_type::DENSE,
+			get_type().get_size(), nrow, ncol, layout, get_type().get_type());
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	bool ret = f.set_user_metadata(header_buf);
+	assert(ret);
+	return EM_matrix_store::create(holder, ios, nrow, ncol, layout, get_type());
 }
 
 bool EM_vec_store::set_persistent(const std::string &name)
