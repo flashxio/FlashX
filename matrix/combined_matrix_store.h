@@ -78,6 +78,9 @@ public:
 	}
 
 	virtual bool is_sparse() const;
+
+	bool set_persistent(const std::string &name) const;
+	void unset_persistent() const;
 };
 }
 

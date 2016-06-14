@@ -357,6 +357,36 @@ bool combined_matrix_store::is_sparse() const
 	return false;
 }
 
+bool combined_matrix_store::set_persistent(const std::string &name) const
+{
+	std::vector<const EM_object *> objs;
+	for (size_t i = 0; i < mats.size(); i++) {
+		const EM_object *obj = dynamic_cast<const EM_object *>(mats[i].get());
+		if (obj)
+			objs.push_back(obj);
+	}
+
+	for (size_t i = 0; i < objs.size(); i++) {
+		bool ret = objs[i]->set_persistent(name + "-" + ltoa(i));
+		if (!ret) {
+			// Unset all previous matrices.
+			for (size_t j = 0; j < i; j++)
+				objs[j]->unset_persistent();
+			return false;
+		}
+	}
+	return true;
+}
+
+void combined_matrix_store::unset_persistent() const
+{
+	for (size_t i = 0; i < mats.size(); i++) {
+		const EM_object *obj = dynamic_cast<const EM_object *>(mats[i].get());
+		if (obj)
+			obj->unset_persistent();
+	}
+}
+
 }
 
 }

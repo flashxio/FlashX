@@ -78,10 +78,20 @@ public:
 	};
 
 	typedef std::shared_ptr<EM_object> ptr;
+	typedef std::shared_ptr<const EM_object> const_ptr;
 	/*
 	 * This creates an I/O instance for the current thread.
 	 */
 	virtual std::vector<safs::io_interface::ptr> create_ios() const = 0;
+
+	/*
+	 * Make the EM object spersistent on SAFS.
+	 */
+	virtual bool set_persistent(const std::string &name) const {
+		return true;
+	}
+	virtual void unset_persistent() const {
+	}
 };
 
 template<class T>
