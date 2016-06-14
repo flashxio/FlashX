@@ -304,46 +304,48 @@ void test_cached_matrix_store()
 	}
 }
 
-void test_combined_matrix_store()
+void test_combined_matrix_store(size_t num_mats, size_t num_cols)
 {
-	detail::matrix_store::ptr mat1 = detail::matrix_store::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<size_t>(), -1, true);
-	mat1->set_data(set_col_long_operate(mat1->get_num_cols()));
-	detail::matrix_store::ptr mat2 = detail::matrix_store::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<size_t>(), -1, true);
-	mat2->set_data(set_col_long_operate(mat2->get_num_cols()));
-	std::vector<detail::matrix_store::const_ptr> mats(2);
-	mats[0] = mat1;
-	mats[1] = mat2;
-	detail::matrix_store::const_ptr mat = detail::combined_matrix_store::create(mats,
-			matrix_layout_t::L_COL);
-	assert(mat->get_num_rows() == mat1->get_num_rows());
-	assert(mat->get_num_cols() == mat1->get_num_cols() + mat2->get_num_cols());
-
+	std::vector<detail::matrix_store::const_ptr> mats(num_mats);
+	for (size_t i = 0; i < num_mats; i++) {
+		dense_matrix::ptr mat = dense_matrix::create(long_dim, num_cols,
+				matrix_layout_t::L_COL, get_scalar_type<size_t>(),
+				set_col_long_operate(num_cols));
+		mat = mat->multiply_scalar<size_t>(i + 1);
+		mat->materialize_self();
+		mats[i] = mat->get_raw_store();
+	}
+	detail::matrix_store::const_ptr mat = detail::combined_matrix_store::create(
+			mats, matrix_layout_t::L_COL);
+	assert(mat->get_num_rows() == long_dim);
+	assert(mat->get_num_cols() == num_cols * num_mats);
 	size_t num_portions = mat->get_num_portions();
+
+	printf("get cols in the ascending order\n");
+	std::vector<off_t> col_idxs;
+	for (size_t i = 0; i < mat->get_num_cols(); i++)
+		if (random() % 2 == 0)
+			col_idxs.push_back(i);
+	for (size_t i = 0; i < col_idxs.size(); i++)
+		printf("col %ld\n", col_idxs[i]);
+	detail::matrix_store::const_ptr sub_mat = mat->get_cols(col_idxs);
 	for (size_t k = 0; k < num_portions; k++) {
-		detail::local_matrix_store::const_ptr part = mat->get_portion(k);
+		detail::local_matrix_store::const_ptr part = sub_mat->get_portion(k);
 		for (size_t i = 0; i < part->get_num_rows(); i++) {
 			for (size_t j = 0; j < part->get_num_cols(); j++) {
 				size_t row_idx = part->get_global_start_row() + i;
-				size_t col_idx = j % mat1->get_num_cols();
-				size_t expected = row_idx * mat1->get_num_cols() + col_idx;
+				size_t col_idx = col_idxs[j];
+				size_t expected = (row_idx * num_cols + col_idx % num_cols) * (col_idx / num_cols + 1);
 				assert(part->get<size_t>(i, j) == expected);
 			}
 		}
 	}
 
-	printf("get the second entire matrix\n");
-	std::vector<off_t> col_idxs(mat1->get_num_cols());
-	for (size_t i = 0; i < col_idxs.size(); i++)
-		col_idxs[i] = i + col_idxs.size();
-	detail::matrix_store::const_ptr sub_mat = mat->get_cols(col_idxs);
-
 	printf("get three cols of the first matrix\n");
-	col_idxs.resize(3);
-	col_idxs[0] = 1;
-	col_idxs[1] = 8;
-	col_idxs[2] = 4;
+	size_t num_fetched = std::min(num_cols, 3UL);
+	col_idxs.resize(num_fetched);
+	for (size_t i = 0; i < num_fetched; i++)
+		col_idxs[i] = random() % num_cols;
 	sub_mat = mat->get_cols(col_idxs);
 	assert(sub_mat);
 	for (size_t k = 0; k < num_portions; k++) {
@@ -352,18 +354,11 @@ void test_combined_matrix_store()
 			for (size_t j = 0; j < part->get_num_cols(); j++) {
 				size_t row_idx = part->get_global_start_row() + i;
 				size_t col_idx = col_idxs[j];
-				size_t expected = row_idx * mat1->get_num_cols() + col_idx;
+				size_t expected = row_idx * num_cols + col_idx;
 				assert(part->get<size_t>(i, j) == expected);
 			}
 		}
 	}
-
-	printf("get three cols from both matrices. It should fail\n");
-	col_idxs[0] = 1;
-	col_idxs[1] = 10;
-	col_idxs[2] = 5;
-	sub_mat = mat->get_cols(col_idxs);
-	assert(sub_mat == NULL);
 }
 
 int main(int argc, char *argv[])
@@ -377,7 +372,8 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_combined_matrix_store();
+	test_combined_matrix_store(10, 1);
+	test_combined_matrix_store(3, 5);
 	test_cached_matrix_store();
 	test_mapply_matrix_store(100000, 10, matrix_layout_t::L_COL);
 	test_mapply_matrix_store(100000, 10, matrix_layout_t::L_ROW);

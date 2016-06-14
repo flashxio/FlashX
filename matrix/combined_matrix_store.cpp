@@ -227,12 +227,88 @@ matrix_store::const_ptr combined_matrix_store::transpose() const
 	return matrix_store::const_ptr(new combined_matrix_store(tmp, layout));
 }
 
+/*
+ * Find the required row from the vector of matrices.
+ * It returns the matrix idx of the matrix with the row and
+ * the local row idx in the matrix.
+ */
+static inline std::pair<off_t, off_t> find_mat(
+		std::vector<matrix_store::const_ptr>::const_iterator start,
+		std::vector<matrix_store::const_ptr>::const_iterator end,
+		off_t start_row, off_t row)
+{
+	for (auto it = start; it != end; it++) {
+		if (row >= start_row
+				&& (size_t) row < start_row + (*it)->get_num_rows()) {
+			return std::pair<off_t, off_t>(it - start, row - start_row);
+		}
+		start_row += (*it)->get_num_rows();
+	}
+	return std::pair<off_t, off_t>(-1, -1);
+}
+
+/*
+ * Find the last location that has the same value as the one at `idx'.
+ */
+off_t find_last(const std::vector<off_t> &vals, off_t idx)
+{
+	for (size_t i = idx; i < vals.size(); i++) {
+		if (vals[i] != vals[idx])
+			return i - 1;
+	}
+	return vals.size() - 1;
+}
+
 matrix_store::const_ptr combined_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
 	if (!is_wide()) {
 		BOOST_LOG_TRIVIAL(error) << "Cannot get rows from a tall matrix";
 		return matrix_store::const_ptr();
+	}
+
+	// If all the idxs are sorted.
+	if (std::is_sorted(idxs.begin(), idxs.end())) {
+		std::vector<off_t> mat_idxs(idxs.size());
+		std::vector<off_t> local_row_idxs(idxs.size());
+		std::vector<off_t> start_rows(mats.size());
+		for (size_t i = 1; i < mats.size(); i++)
+			start_rows[i] = start_rows[i - 1] + mats[i]->get_num_rows();
+		// Find the right matrix.
+		auto loc = find_mat(mats.begin(), mats.end(), start_rows[0], idxs[0]);
+		mat_idxs[0] = loc.first;
+		local_row_idxs[0] = loc.second;
+		for (size_t i = 1; i < idxs.size(); i++) {
+			off_t mat_idx = mat_idxs[i - 1];
+			loc = find_mat(mats.begin() + mat_idx, mats.end(),
+					start_rows[mat_idx], idxs[i]);
+			assert(loc.first >= 0);
+			local_row_idxs[i] = loc.second;
+			// find_mat returns a relative idx in the vector of matrices.
+			mat_idxs[i] = loc.first + mat_idx;
+		}
+		for (size_t i = 0; i < idxs.size(); i++)
+			printf("col %ld: mat %ld, lcol %ld\n", idxs[i], mat_idxs[i],
+					local_row_idxs[i]);
+
+		std::vector<matrix_store::const_ptr> ret;
+		size_t i = 0;
+		while (i < idxs.size()) {
+			size_t last = find_last(mat_idxs, i);
+			size_t local_nrow = last - i + 1;
+			size_t mat_idx = mat_idxs[i];
+			printf("[%ld, %ld) in mat %ld\n", i, i + local_nrow, mat_idx);
+			// We need all rows.
+			if (local_nrow == mats[mat_idx]->get_num_rows())
+				ret.push_back(mats[mat_idx]);
+			else {
+				std::vector<off_t> tmp_rows(local_row_idxs.begin() + i,
+						local_row_idxs.begin() + i + local_nrow);
+				ret.push_back(mats[mat_idx]->get_rows(tmp_rows));
+			}
+			i = last + 1;
+		}
+		return combined_matrix_store::create(ret, store_layout());
 	}
 
 	off_t start_row = 0;
