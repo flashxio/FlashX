@@ -1873,7 +1873,27 @@ RcppExport SEXP R_FM_is_sym(SEXP pmat)
 	return res;
 }
 
-RcppExport SEXP R_FM_rbind(SEXP pmats)
+const scalar_type *get_castup_type(const std::vector<dense_matrix::ptr> &mats)
+{
+	size_t i = 1;
+	for (; i < mats.size(); i++)
+		if (mats[i]->get_type() != mats[0]->get_type())
+			break;
+	// All matrices have the same type.
+	if (i == mats.size())
+		return NULL;
+
+	// There are only two types in a dense matrix: int or double.
+	for (size_t i = 0; i < mats.size(); i++) {
+		assert(mats[i]->get_type() == get_scalar_type<double>()
+				|| mats[i]->get_type() == get_scalar_type<int>());
+		if (mats[i]->get_type() == get_scalar_type<double>())
+			return &get_scalar_type<double>();
+	}
+	return &get_scalar_type<int>();
+}
+
+SEXP fm_bind(SEXP pmats, bool byrow)
 {
 	Rcpp::List rcpp_mats(pmats);
 	std::vector<dense_matrix::ptr> mats(rcpp_mats.size());
@@ -1884,35 +1904,46 @@ RcppExport SEXP R_FM_rbind(SEXP pmats)
 		}
 		mats[i] = get_matrix<dense_matrix>(rcpp_mats[i]);
 	}
-	dense_matrix::ptr combined = dense_matrix::rbind(mats);
+
+	const scalar_type *type = get_castup_type(mats);
+	// If some of the matrices have different types, we should cast them
+	// first.
+	if (type) {
+		for (size_t i = 0; i < mats.size(); i++)
+			if (mats[i]->get_type() != *type)
+				mats[i] = mats[i]->cast_ele_type(*type);
+	}
+	dense_matrix::ptr combined;
+	if (byrow)
+		combined = dense_matrix::rbind(mats);
+	else
+		combined = dense_matrix::cbind(mats);
 	if (combined == NULL)
 		return R_NilValue;
 
 	Rcpp::List ret = create_FMR_matrix(combined, "");
 	Rcpp::S4 rcpp_mat(rcpp_mats[0]);
-	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	if (type == NULL)
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+	else if (*type == get_scalar_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (*type == get_scalar_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else {
+		fprintf(stderr, "unknown type in matrix bind\n");
+		return R_NilValue;
+	}
 	return ret;
+}
+
+RcppExport SEXP R_FM_rbind(SEXP pmats)
+{
+	return fm_bind(pmats, true);
 }
 
 RcppExport SEXP R_FM_cbind(SEXP pmats)
 {
-	Rcpp::List rcpp_mats(pmats);
-	std::vector<dense_matrix::ptr> mats(rcpp_mats.size());
-	for (int i = 0; i < rcpp_mats.size(); i++) {
-		if (is_sparse(rcpp_mats[i])) {
-			fprintf(stderr, "can't bind sparse matrix\n");
-			return R_NilValue;
-		}
-		mats[i] = get_matrix<dense_matrix>(rcpp_mats[i]);
-	}
-	dense_matrix::ptr combined = dense_matrix::cbind(mats);
-	if (combined == NULL)
-		return R_NilValue;
-
-	Rcpp::List ret = create_FMR_matrix(combined, "");
-	Rcpp::S4 rcpp_mat(rcpp_mats[0]);
-	ret["ele_type"] = rcpp_mat.slot("ele_type");
-	return ret;
+	return fm_bind(pmats, false);
 }
 
 template<class BoolType, class T>
