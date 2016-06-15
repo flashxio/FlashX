@@ -287,9 +287,6 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 			// find_mat returns a relative idx in the vector of matrices.
 			mat_idxs[i] = loc.first + mat_idx;
 		}
-		for (size_t i = 0; i < idxs.size(); i++)
-			printf("col %ld: mat %ld, lcol %ld\n", idxs[i], mat_idxs[i],
-					local_row_idxs[i]);
 
 		std::vector<matrix_store::const_ptr> ret;
 		size_t i = 0;
@@ -297,7 +294,6 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 			size_t last = find_last(mat_idxs, i);
 			size_t local_nrow = last - i + 1;
 			size_t mat_idx = mat_idxs[i];
-			printf("[%ld, %ld) in mat %ld\n", i, i + local_nrow, mat_idx);
 			// We need all rows.
 			if (local_nrow == mats[mat_idx]->get_num_rows())
 				ret.push_back(mats[mat_idx]);
