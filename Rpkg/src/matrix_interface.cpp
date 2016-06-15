@@ -1745,6 +1745,12 @@ RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel, SEXP pin_mem)
 	}
 
 	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"can't materialize a matrix on SAFS when SAFS isn't init\n");
+		return R_NilValue;
+	}
+
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	if (in_mem == mat->is_in_mem())
 		mat->set_materialize_level((materialize_level) level);
