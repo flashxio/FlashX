@@ -260,8 +260,8 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		SEXP pele_type, SEXP pdelim, SEXP pncol, SEXP pmat_name)
 {
-	std::vector<std::string> mat_files(1);
-	mat_files[0] = CHAR(STRING_ELT(pname, 0));
+	Rcpp::StringVector rcpp_mats(pname);
+	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
 	bool in_mem = LOGICAL(pin_mem)[0];
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
