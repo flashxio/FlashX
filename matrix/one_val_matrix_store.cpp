@@ -70,7 +70,10 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	return matrix_store::ptr(new one_val_matrix_store(*this));
+	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
+			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
+	ret->set_data(get_type().get_set_const(*val));
+	return ret;
 }
 
 vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
