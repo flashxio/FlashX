@@ -462,13 +462,7 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	if (files.size() == 1)
 		return read_lines(files[0], parser, in_mem);
 
-	data_frame::ptr df = data_frame::create();
-	// TODO should I make these NUMA vectors?
-	df->add_vec(parser.get_col_name(0),
-			detail::vec_store::create(0, parser.get_col_type(0), -1, in_mem));
-	df->add_vec(parser.get_col_name(1),
-			detail::vec_store::create(0, parser.get_col_type(1), -1, in_mem));
-
+	data_frame::ptr df = create_data_frame(parser, in_mem);
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
