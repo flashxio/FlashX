@@ -255,13 +255,21 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 }
 
 RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
-		SEXP pele_type, SEXP pdelim, SEXP pncol)
+		SEXP pele_type, SEXP pdelim, SEXP pncol, SEXP pmat_name)
 {
 	std::vector<std::string> mat_files(1);
 	mat_files[0] = CHAR(STRING_ELT(pname, 0));
 	bool in_mem = LOGICAL(pin_mem)[0];
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string mat_name = CHAR(STRING_ELT(pmat_name, 0));
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
 	dense_matrix::ptr mat;
 	if (TYPEOF(pncol) == INTSXP) {
 		int ncol = INTEGER(pncol)[0];
@@ -279,6 +287,16 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 	}
 	if (mat == NULL)
 		return R_NilValue;
+
+	// If a user provides the name for the matrix and the matrix is stored
+	// on disks, let's make it persistent on disks.
+	if (!mat_name.empty() && !mat->is_in_mem()) {
+		const detail::EM_object *obj
+			= dynamic_cast<const detail::EM_object *>(mat->get_raw_store().get());
+		if (obj)
+			obj->set_persistent(mat_name);
+	}
+
 	return create_FMR_matrix(mat, "");
 }
 
