@@ -121,16 +121,19 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 		num_nodes = -1;
 	vector::ptr vec;
 	if (R_is_real(pinitv)) {
-		vec = create_rep_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
-		return create_FMR_vector(vec->get_raw_store(), "");
+		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+				REAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		return create_FMR_vector(vec, "");
 	}
 	else if (R_is_integer(pinitv)) {
-		vec = create_rep_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
-		return create_FMR_vector(vec->get_raw_store(), "");
+		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+				INTEGER(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		return create_FMR_vector(vec, "");
 	}
 	else if (R_is_logical(pinitv)) {
-		vec = create_rep_vector<int>(len, LOGICAL(pinitv)[0], num_nodes, true);
-		Rcpp::List ret = create_FMR_vector(vec->get_raw_store(), "");
+		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+				LOGICAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		Rcpp::List ret = create_FMR_vector(vec, "");
 		ret["ele_type"] = Rcpp::String("logical");
 		return ret;
 	}
