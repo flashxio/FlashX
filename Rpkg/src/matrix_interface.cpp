@@ -193,12 +193,11 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 		fprintf(stderr, "unsupported type\n");
 
 	if (mat) {
-		detail::EM_matrix_store::const_ptr em_mat
-			= std::dynamic_pointer_cast<const detail::EM_matrix_store>(
+		detail::EM_object::const_ptr em_mat
+			= std::dynamic_pointer_cast<const detail::EM_object>(
 					mat->get_raw_store());
 		if (em_mat && !name.empty()) {
-			bool ret = const_cast<detail::EM_matrix_store &>(
-					*em_mat).set_persistent(name);
+			bool ret = em_mat->set_persistent(name);
 			if (!ret)
 				fprintf(stderr, "Can't set matrix %s persistent\n", name.c_str());
 		}
