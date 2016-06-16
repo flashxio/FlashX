@@ -12,6 +12,7 @@
 #include "mapply_matrix_store.h"
 #include "factor.h"
 #include "block_matrix.h"
+#include "project_matrix_store.h"
 
 #include "eigensolver/block_dense_matrix.h"
 #include "eigensolver/collected_col_matrix_store.h"
@@ -287,6 +288,7 @@ enum matrix_val_t
 {
 	SEQ,
 	DEFAULT,
+	SPARSE,
 	NUM_TYPES,
 } matrix_val = matrix_val_t::SEQ;
 
@@ -368,6 +370,10 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 		case matrix_val_t::SEQ:
 			return create_seq_matrix(nrow, ncol, layout, num_nodes, type,
 					in_mem);
+		case matrix_val_t::SPARSE:
+			return dense_matrix::create(
+					detail::sparse_project_matrix_store::create_sparse_rand(
+						nrow, ncol, layout, type, 0.001));
 		default:
 			assert(0);
 			return dense_matrix::ptr();
@@ -1963,6 +1969,8 @@ void _test_mem_matrix(int num_nodes)
 
 void test_mem_matrix(int num_nodes)
 {
+	matrix_val = matrix_val_t::SPARSE;
+	_test_mem_matrix(num_nodes);
 	matrix_val = matrix_val_t::SEQ;
 	_test_mem_matrix(num_nodes);
 	matrix_val = matrix_val_t::DEFAULT;
