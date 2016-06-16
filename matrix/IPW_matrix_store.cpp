@@ -497,7 +497,7 @@ void multiply_sparse(const detail::local_col_matrix_store &Astore,
 		detail::local_col_matrix_store &Cstore)
 {
 	assert(get_scalar_type<T>() == Bstore.get_type());
-	std::vector<sparse_project_matrix_store::nnz_idx> Bidxs;
+	std::vector<sparse_project_matrix_store::nz_idx> Bidxs;
 	const char * _Brows = Bstore.get_rows_nnz(0, Bstore.get_num_rows(), Bidxs);
 	// If the sparse submatrix doesn't have non-zero values.
 	if (_Brows == NULL)
@@ -520,7 +520,7 @@ void multiply_sparse_trans(const detail::local_row_matrix_store &Astore,
 		detail::local_col_matrix_store &Cstore)
 {
 	assert(get_scalar_type<T>() == Bstore.get_type());
-	std::vector<sparse_project_matrix_store::nnz_idx> Bidxs;
+	std::vector<sparse_project_matrix_store::nz_idx> Bidxs;
 	const char * _Brows = Bstore.get_rows_nnz(0, Bstore.get_num_rows(), Bidxs);
 	// If the sparse submatrix doesn't have non-zero values.
 	if (_Brows == NULL)

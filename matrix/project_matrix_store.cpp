@@ -68,31 +68,31 @@ sparse_project_matrix_store::ptr sparse_project_matrix_store::create_sparse_rand
 	// I intentially increase the density to generate the number of nnz.
 	// It's possible I'll pick the same slot twice in the for loop below.
 	size_t required = density * nrow * ncol;
-	ret->nnz_idxs.resize((density * 1.1) * nrow * ncol);
-	for (size_t i = 0; i < ret->nnz_idxs.size(); i++) {
-		ret->nnz_idxs[i].row_idx = random() % nrow;
-		ret->nnz_idxs[i].col_idx = random() % ncol;
+	ret->nz_idxs.resize((density * 1.1) * nrow * ncol);
+	for (size_t i = 0; i < ret->nz_idxs.size(); i++) {
+		ret->nz_idxs[i].row_idx = random() % nrow;
+		ret->nz_idxs[i].col_idx = random() % ncol;
 	}
 	if (layout == matrix_layout_t::L_ROW && ret->is_wide())
-		std::sort(ret->nnz_idxs.begin(), ret->nnz_idxs.end(),
+		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
 				wide_row_first_comp());
 	else if (ret->is_wide())
-		std::sort(ret->nnz_idxs.begin(), ret->nnz_idxs.end(),
+		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
 				wide_col_first_comp());
 	else if (layout == matrix_layout_t::L_ROW)
-		std::sort(ret->nnz_idxs.begin(), ret->nnz_idxs.end(),
+		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
 				tall_row_first_comp());
 	else
-		std::sort(ret->nnz_idxs.begin(), ret->nnz_idxs.end(),
+		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
 				tall_col_first_comp());
 
 	// There might be duplicates in the vector. We should remove them.
-	auto end = std::unique(ret->nnz_idxs.begin(), ret->nnz_idxs.end());
-	if (end - ret->nnz_idxs.begin() > (off_t) required)
-		ret->nnz_idxs.resize(required);
+	auto end = std::unique(ret->nz_idxs.begin(), ret->nz_idxs.end());
+	if (end - ret->nz_idxs.begin() > (off_t) required)
+		ret->nz_idxs.resize(required);
 
 	mem_col_matrix_store::ptr vals = mem_col_matrix_store::create(
-			ret->nnz_idxs.size(), 1, type);
+			ret->nz_idxs.size(), 1, type);
 	if (type == get_scalar_type<double>())
 		vals->set_data(rand_init<double>());
 	else if (type == get_scalar_type<int>())
@@ -117,10 +117,10 @@ matrix_store::const_ptr sparse_project_matrix_store::transpose() const
 
 	sparse_project_matrix_store *ret = new sparse_project_matrix_store(
 			get_num_cols(), get_num_rows(), new_layout, get_type());
-	ret->nnz_idxs.resize(nnz_idxs.size());
-	for (size_t i = 0; i < nnz_idxs.size(); i++) {
-		ret->nnz_idxs[i].row_idx = nnz_idxs[i].col_idx;
-		ret->nnz_idxs[i].col_idx = nnz_idxs[i].row_idx;
+	ret->nz_idxs.resize(nz_idxs.size());
+	for (size_t i = 0; i < nz_idxs.size(); i++) {
+		ret->nz_idxs[i].row_idx = nz_idxs[i].col_idx;
+		ret->nz_idxs[i].col_idx = nz_idxs[i].row_idx;
 	}
 	ret->vals = vals;
 	return matrix_store::const_ptr(ret);
@@ -161,40 +161,40 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 
 	// Find the starting and ending points in the vector of offsets.
 	// Search for [start, end]
-	sparse_project_matrix_store::nnz_idx start, end;
+	sparse_project_matrix_store::nz_idx start, end;
 	start.row_idx = start_row;
 	start.col_idx = start_col;
 	end.row_idx = start_row + num_rows - 1;
 	end.col_idx = start_col + num_cols - 1;
-	std::vector<nnz_idx>::const_iterator start_it, end_it;
+	std::vector<nz_idx>::const_iterator start_it, end_it;
 	if (layout == matrix_layout_t::L_ROW && is_wide()) {
-		start_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), start,
+		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
 				wide_row_first_comp());
-		end_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), end,
+		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
 				wide_row_first_comp());
 	}
 	else if (is_wide()) {
-		start_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), start,
+		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
 				wide_col_first_comp());
-		end_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), end,
+		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
 				wide_col_first_comp());
 	}
 	else if (layout == matrix_layout_t::L_ROW) {
-		start_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), start,
+		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
 				tall_row_first_comp());
-		end_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), end,
+		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
 				tall_row_first_comp());
 	}
 	else {
-		start_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), start,
+		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
 				tall_col_first_comp());
-		end_it = std::lower_bound(nnz_idxs.begin(), nnz_idxs.end(), end,
+		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
 				tall_col_first_comp());
 	}
 
 	// There isn't nnz in the portion.
-	if (start_it == nnz_idxs.end() || start_it == end_it) {
-		std::vector<sparse_project_matrix_store::nnz_idx> empty_idxs;
+	if (start_it == nz_idxs.end() || start_it == end_it) {
+		std::vector<sparse_project_matrix_store::nz_idx> empty_idxs;
 		local_matrix_store::ptr empty_vals(new local_buf_col_matrix_store(
 					0, 0, 0, 0, vals->get_type(), -1));
 		if (store_layout() == matrix_layout_t::L_COL)
@@ -210,10 +210,10 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 	// We search for [start, end].
 	// If the last element has value `end', we need to move the end iterator
 	// to include the last element.
-	if (end_it != nnz_idxs.end()
+	if (end_it != nz_idxs.end()
 			&& end_it->row_idx == end.row_idx && end_it->col_idx == end.col_idx)
 		end_it++;
-	std::vector<sparse_project_matrix_store::nnz_idx> local_idxs(start_it,
+	std::vector<sparse_project_matrix_store::nz_idx> local_idxs(start_it,
 			end_it);
 	for (size_t i = 0; i < local_idxs.size(); i++) {
 		assert(local_idxs[i].row_idx >= start_row
@@ -224,7 +224,7 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 		local_idxs[i].col_idx -= start_col;
 	}
 	local_matrix_store::const_ptr local_vals = vals->get_portion(
-			start_it - nnz_idxs.begin(), 0, end_it - start_it, 1);
+			start_it - nz_idxs.begin(), 0, end_it - start_it, 1);
 	assert(local_vals);
 
 	if (store_layout() == matrix_layout_t::L_COL)
@@ -322,7 +322,7 @@ const char *lsparse_col_matrix_store::get_col_nnz(off_t col_idx,
 		return NULL;
 	}
 
-	sparse_project_matrix_store::nnz_idx start;
+	sparse_project_matrix_store::nz_idx start;
 	start.row_idx = get_local_start_row();
 	start.col_idx = col_idx + get_local_start_col();
 	auto it = std::lower_bound(local_idxs.begin(), local_idxs.end(), start,
@@ -432,7 +432,7 @@ const char *lsparse_row_matrix_store::get_row_nnz(off_t row_idx,
 		return NULL;
 	}
 
-	sparse_project_matrix_store::nnz_idx start;
+	sparse_project_matrix_store::nz_idx start;
 	start.row_idx = row_idx + get_local_start_row();
 	start.col_idx = get_local_start_col();
 	auto it = std::lower_bound(local_idxs.begin(), local_idxs.end(), start,
@@ -466,9 +466,9 @@ const char *lsparse_row_matrix_store::get_row_nnz(off_t row_idx,
 }
 
 // Test if the current location is inside the specified range.
-static inline bool inside_range(const sparse_project_matrix_store::nnz_idx &start,
-		const sparse_project_matrix_store::nnz_idx &end,
-		const sparse_project_matrix_store::nnz_idx &curr)
+static inline bool inside_range(const sparse_project_matrix_store::nz_idx &start,
+		const sparse_project_matrix_store::nz_idx &end,
+		const sparse_project_matrix_store::nz_idx &curr)
 {
 	return curr.row_idx >= start.row_idx && curr.row_idx <= end.row_idx
 		&& curr.col_idx >= start.col_idx && curr.col_idx < end.col_idx;
@@ -476,7 +476,7 @@ static inline bool inside_range(const sparse_project_matrix_store::nnz_idx &star
 
 const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 		off_t end_row,
-		std::vector<sparse_project_matrix_store::nnz_idx> &idxs) const
+		std::vector<sparse_project_matrix_store::nz_idx> &idxs) const
 {
 	if (store_layout() == matrix_layout_t::L_COL) {
 		idxs.clear();
@@ -488,7 +488,7 @@ const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 		return NULL;
 	}
 
-	sparse_project_matrix_store::nnz_idx start, end;
+	sparse_project_matrix_store::nz_idx start, end;
 	start.row_idx = start_row + get_local_start_row();
 	start.col_idx = get_local_start_col();
 	end.row_idx = end_row - 1 + get_local_start_row();
@@ -525,7 +525,7 @@ const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 		// The local store might have been resized.
 		// The returned indexes should be relative to the current resized
 		// local store.
-		idxs.push_back(sparse_project_matrix_store::nnz_idx(
+		idxs.push_back(sparse_project_matrix_store::nz_idx(
 					it->row_idx - get_local_start_row(),
 					it->col_idx - get_local_start_col()));
 		assert(inside_range(start, end, *it));

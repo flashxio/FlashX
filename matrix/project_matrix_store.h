@@ -32,21 +32,21 @@ namespace detail
 class sparse_project_matrix_store: public mem_matrix_store
 {
 public:
-	struct nnz_idx {
+	struct nz_idx {
 		off_t row_idx;
 		off_t col_idx;
 
-		nnz_idx() {
+		nz_idx() {
 			row_idx = 0;
 			col_idx = 0;
 		}
 
-		nnz_idx(off_t row_idx, off_t col_idx) {
+		nz_idx(off_t row_idx, off_t col_idx) {
 			this->row_idx = row_idx;
 			this->col_idx = col_idx;
 		}
 
-		bool operator==(const nnz_idx &e) const {
+		bool operator==(const nz_idx &e) const {
 			return row_idx == e.row_idx && col_idx == e.col_idx;
 		}
 	};
@@ -55,7 +55,7 @@ public:
 	 * This orders the nnz in row-major order in a tall matrix.
 	 */
 	struct tall_row_first_comp {
-		bool operator()(const nnz_idx &e1, const nnz_idx &e2) const {
+		bool operator()(const nz_idx &e1, const nz_idx &e2) const {
 			if (e1.row_idx < e2.row_idx)
 				return true;
 			else if (e1.row_idx > e2.row_idx)
@@ -70,7 +70,7 @@ public:
 	 * The nnz is first partitioned in chunks.
 	 */
 	struct tall_col_first_comp {
-		bool operator()(const nnz_idx &e1, const nnz_idx &e2) const {
+		bool operator()(const nz_idx &e1, const nz_idx &e2) const {
 			off_t portion1 = e1.row_idx / mem_matrix_store::CHUNK_SIZE;
 			off_t portion2 = e2.row_idx / mem_matrix_store::CHUNK_SIZE;
 			if (portion1 < portion2)
@@ -91,7 +91,7 @@ public:
 	 * The nnz is first partitioned in chunks.
 	 */
 	struct wide_row_first_comp {
-		bool operator()(const nnz_idx &e1, const nnz_idx &e2) const {
+		bool operator()(const nz_idx &e1, const nz_idx &e2) const {
 			off_t portion1 = e1.col_idx / mem_matrix_store::CHUNK_SIZE;
 			off_t portion2 = e2.col_idx / mem_matrix_store::CHUNK_SIZE;
 			if (portion1 < portion2)
@@ -111,7 +111,7 @@ public:
 	 * This orders the nnz in col-major order in a wide matrix.
 	 */
 	struct wide_col_first_comp {
-		bool operator()(const nnz_idx &e1, const nnz_idx &e2) const {
+		bool operator()(const nz_idx &e1, const nz_idx &e2) const {
 			if (e1.col_idx < e2.col_idx)
 				return true;
 			else if (e1.col_idx > e2.col_idx)
@@ -122,7 +122,7 @@ public:
 	};
 
 private:
-	std::vector<nnz_idx> nnz_idxs;
+	std::vector<nz_idx> nz_idxs;
 	mem_col_matrix_store::const_ptr vals;
 	matrix_layout_t layout;
 
@@ -185,7 +185,7 @@ public:
 			off_t start_row, off_t start_col);
 
 	size_t get_nnz() const {
-		return nnz_idxs.size();
+		return nz_idxs.size();
 	}
 
 	matrix_store::const_ptr conv_dense() const;
@@ -194,8 +194,8 @@ public:
 class lsparse_col_matrix_store: public lvirtual_col_matrix_store
 {
 	struct col_first_comp {
-		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
-				const sparse_project_matrix_store::nnz_idx &e2) const {
+		bool operator()(const sparse_project_matrix_store::nz_idx &e1,
+				const sparse_project_matrix_store::nz_idx &e2) const {
 			if (e1.col_idx < e2.col_idx)
 				return true;
 			else if (e1.col_idx > e2.col_idx)
@@ -205,7 +205,7 @@ class lsparse_col_matrix_store: public lvirtual_col_matrix_store
 		}
 	};
 
-	std::vector<sparse_project_matrix_store::nnz_idx> local_idxs;
+	std::vector<sparse_project_matrix_store::nz_idx> local_idxs;
 	local_matrix_store::const_ptr vals;
 
 	local_col_matrix_store::const_ptr buf;
@@ -214,7 +214,7 @@ public:
 	typedef std::shared_ptr<const lsparse_col_matrix_store> const_ptr;
 
 	lsparse_col_matrix_store(off_t start_row, off_t start_col, size_t nrow, size_t ncol,
-			const std::vector<sparse_project_matrix_store::nnz_idx> &local_idxs,
+			const std::vector<sparse_project_matrix_store::nz_idx> &local_idxs,
 			local_matrix_store::const_ptr vals): lvirtual_col_matrix_store(
 				start_row, start_col, nrow, ncol, vals->get_type(),
 				vals->get_node_id()) {
@@ -277,8 +277,8 @@ public:
 class lsparse_row_matrix_store: public lvirtual_row_matrix_store
 {
 	struct row_first_comp {
-		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
-				const sparse_project_matrix_store::nnz_idx &e2) const {
+		bool operator()(const sparse_project_matrix_store::nz_idx &e1,
+				const sparse_project_matrix_store::nz_idx &e2) const {
 			if (e1.row_idx < e2.row_idx)
 				return true;
 			else if (e1.row_idx > e2.row_idx)
@@ -288,7 +288,7 @@ class lsparse_row_matrix_store: public lvirtual_row_matrix_store
 		}
 	};
 
-	std::vector<sparse_project_matrix_store::nnz_idx> local_idxs;
+	std::vector<sparse_project_matrix_store::nz_idx> local_idxs;
 	local_matrix_store::const_ptr vals;
 
 	local_row_matrix_store::const_ptr buf;
@@ -297,7 +297,7 @@ public:
 	typedef std::shared_ptr<const lsparse_row_matrix_store> const_ptr;
 
 	lsparse_row_matrix_store(off_t start_row, off_t start_col, size_t nrow, size_t ncol,
-			const std::vector<sparse_project_matrix_store::nnz_idx> &local_idxs,
+			const std::vector<sparse_project_matrix_store::nz_idx> &local_idxs,
 			local_matrix_store::const_ptr vals): lvirtual_row_matrix_store(
 				start_row, start_col, nrow, ncol, vals->get_type(),
 				vals->get_node_id()) {
@@ -360,7 +360,7 @@ public:
 	// The local store can be resized. The indexes of non-zero entries are
 	// relative in the resized store.
 	const char *get_rows_nnz(off_t start_row, off_t end_row,
-			std::vector<sparse_project_matrix_store::nnz_idx> &idxs) const;
+			std::vector<sparse_project_matrix_store::nz_idx> &idxs) const;
 };
 
 }
