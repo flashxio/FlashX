@@ -334,6 +334,27 @@ dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
 		return dense_matrix::ptr();
 }
 
+dense_matrix::ptr create_const_matrix(size_t nrow, size_t ncol,
+		matrix_layout_t layout, int num_nodes, const scalar_type &type,
+		bool in_mem)
+{
+	if (type == get_scalar_type<int>())
+		return dense_matrix::create_const<int>(1, nrow, ncol, layout,
+				num_nodes, in_mem);
+	else if (type == get_scalar_type<size_t>())
+		return dense_matrix::create_const<size_t>(1, nrow, ncol, layout,
+				num_nodes, in_mem);
+	else if (type == get_scalar_type<double>())
+		return dense_matrix::create_const<double>(1, nrow, ncol, layout,
+				num_nodes, in_mem);
+	else if (type == get_scalar_type<float>())
+		return dense_matrix::create_const<float>(1, nrow, ncol, layout,
+				num_nodes, in_mem);
+	else
+		return dense_matrix::ptr();
+}
+
+
 bool in_mem = true;
 
 dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
@@ -342,12 +363,8 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 {
 	switch (matrix_val) {
 		case matrix_val_t::DEFAULT:
-			if (layout == matrix_layout_t::L_COL)
-				return dense_matrix::create(nrow, ncol, layout,
-						type, num_nodes, in_mem);
-			else
-				return dense_matrix::create(nrow, ncol, layout,
-						type, num_nodes, in_mem);
+			return create_const_matrix(nrow, ncol, layout, num_nodes, type,
+					in_mem);
 		case matrix_val_t::SEQ:
 			return create_seq_matrix(nrow, ncol, layout, num_nodes, type,
 					in_mem);
@@ -676,7 +693,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 	size_t sum = *(size_t *) res->get_raw();
 	size_t num_eles = m1->get_num_rows() * m1->get_num_cols();
 	if (matrix_val == matrix_val_t::DEFAULT)
-		assert(sum == 0);
+		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
@@ -699,15 +716,17 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 				sum_col->get_raw_store());
 	assert(tmp);
 	for (size_t i = 0; i < sum_col->get_num_rows(); i++) {
-		size_t val = 0;
 		size_t ncol = m1->get_num_cols();
+		size_t val;
 		if (matrix_val == matrix_val_t::SEQ)
 			val = i * ncol * ncol + (ncol - 1) * ncol / 2;
+		else
+			val = m1->get_num_cols();
 		assert(tmp->get<size_t>(i, 0) == val);
 	}
 	sum = *(size_t *) res->get_raw();
 	if (matrix_val == matrix_val_t::DEFAULT)
-		assert(sum == 0);
+		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else
 		assert(sum == (num_eles - 1) * num_eles / 2);
 }
@@ -737,7 +756,7 @@ void test_agg_sub_col(int num_nodes)
 	for (size_t i = 0; i < idxs.size(); i++)
 		expected += idxs[i] * nrow;
 	if (matrix_val == matrix_val_t::DEFAULT)
-		assert(sum == 0);
+		assert(sum == sub_m->get_num_rows() * sub_m->get_num_cols());
 	else
 		assert(sum == expected);
 }
@@ -1140,7 +1159,6 @@ void test_conv2(int num_nodes)
 	mat = create_matrix(long_dim, 1, matrix_layout_t::L_COL, num_nodes);
 	printf("conv2 layout of mem matrix of %ld, %ld\n", mat->get_num_rows(),
 			mat->get_num_cols());
-	assert(!mat->is_virtual());
 	mat1 = mat->conv2(matrix_layout_t::L_ROW);
 	assert(mat->get_num_rows() == mat1->get_num_rows());
 	assert(mat->get_num_cols() == mat1->get_num_cols());
@@ -1170,8 +1188,11 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 	detail::mem_vec_store::const_ptr mem_vec
 		= detail::mem_vec_store::cast(vec->get_raw_store());
 	detail::mem_matrix_store::const_ptr mem_m;
-	if (mat->is_in_mem())
-		mem_m = detail::mem_matrix_store::cast(mat->get_raw_store());
+	if (mat->is_in_mem()) {
+		dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
+		tmp->materialize_self();
+		mem_m = detail::mem_matrix_store::cast(tmp->get_raw_store());
+	}
 	else {
 		dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
 		mem_m = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
@@ -1336,19 +1357,24 @@ void test_mul_output(int num_nodes)
 			detail::portion_mapply_op::const_ptr(new split_op()), out);
 	assert(ret);
 
+	std::vector<off_t> cols1(out[0]->get_num_cols());
+	std::vector<off_t> cols2(out[1]->get_num_cols());
+	for (size_t i = 0; i < cols1.size(); i++)
+		cols1[i] = i;
+	for (size_t i = 0; i < cols2.size(); i++)
+		cols2[i] = cols1.back() + 1 + i;
+
 	dense_matrix::ptr out_mat0 = dense_matrix::create(out[0]);
 	dense_matrix::ptr out_mat1 = dense_matrix::create(out[1]);
 	dense_matrix::ptr in_mat = dense_matrix::create(in[0]);
-	scalar_variable::ptr agg0 = out_mat0->aggregate(
-			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
-	scalar_variable::ptr agg1 = out_mat1->aggregate(
-			bulk_operate::conv2ptr(out[1]->get_type().get_basic_ops().get_add()));
-	scalar_variable::ptr agg = in_mat->aggregate(
-			bulk_operate::conv2ptr(out[0]->get_type().get_basic_ops().get_add()));
-	assert(*(double *) agg1->get_raw() - *(double *) agg0->get_raw()
-			== out[0]->get_num_cols() * out[0]->get_num_cols() * out[0]->get_num_rows());
-	assert(*(double *) agg0->get_raw() + *(double *) agg1->get_raw()
-			== *(double *) agg->get_raw());
+	dense_matrix::ptr in_mat0 = in_mat->get_cols(cols1);
+	dense_matrix::ptr in_mat1 = in_mat->get_cols(cols2);
+	dense_matrix::ptr diff0 = out_mat0->minus(*in_mat0);
+	dense_matrix::ptr diff1 = out_mat1->minus(*in_mat1);
+	scalar_variable::ptr agg0 = diff0->sum();
+	scalar_variable::ptr agg1 = diff1->sum();
+	assert(*(double *) agg0->get_raw() == 0);
+	assert(*(double *) agg1->get_raw() == 0);
 }
 
 class set_col_operate1: public type_set_operate<int>
@@ -1884,12 +1910,11 @@ void test_EM_matrix(int num_nodes)
 #endif
 }
 
-void test_mem_matrix(int num_nodes)
+void _test_mem_matrix(int num_nodes)
 {
 	printf("test mem matrix\n");
 	in_mem = true;
 
-	matrix_val = matrix_val_t::SEQ;
 	test_agg(-1, matrix_layout_t::L_COL);
 	test_agg(num_nodes, matrix_layout_t::L_COL);
 	test_agg(-1, matrix_layout_t::L_ROW);
@@ -1910,10 +1935,9 @@ void test_mem_matrix(int num_nodes)
 	test_write2file();
 	test_apply();
 	test_conv_vec2mat();
+
 	test_sum_row_col(-1);
 	test_sum_row_col(num_nodes);
-
-	matrix_val = matrix_val_t::SEQ;
 	test_conv2(-1);
 	test_conv2(num_nodes);
 	test_scale_cols(-1);
@@ -1935,6 +1959,14 @@ void test_mem_matrix(int num_nodes)
 	test_conv_row_col();
 	test_flatten();
 #endif
+}
+
+void test_mem_matrix(int num_nodes)
+{
+	matrix_val = matrix_val_t::SEQ;
+	_test_mem_matrix(num_nodes);
+	matrix_val = matrix_val_t::DEFAULT;
+	_test_mem_matrix(num_nodes);
 }
 
 void test_conv_store()
