@@ -26,13 +26,6 @@ namespace fm
 namespace detail
 {
 
-sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
-		size_t ncol, matrix_layout_t layout, const scalar_type &type): mem_matrix_store(
-			nrow, ncol, type)
-{
-	this->layout = layout;
-}
-
 namespace
 {
 
@@ -53,6 +46,89 @@ public:
 
 }
 
+sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
+		size_t ncol, matrix_layout_t layout,
+		const scalar_type &type): mem_matrix_store(nrow, ncol, type)
+{
+	this->layout = layout;
+}
+
+sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
+		size_t ncol, matrix_layout_t layout, const scalar_type &type,
+		double density): mem_matrix_store(nrow, ncol, type)
+{
+	this->layout = layout;
+
+	// I intentially increase the density to generate the number of nnz.
+	// It's possible I'll pick the same slot twice in the for loop below.
+	size_t required = density * nrow * ncol;
+	nz_idxs.resize((density * 1.1) * nrow * ncol);
+	for (size_t i = 0; i < nz_idxs.size(); i++) {
+		nz_idxs[i].row_idx = random() % nrow;
+		nz_idxs[i].col_idx = random() % ncol;
+	}
+	if (layout == matrix_layout_t::L_ROW && is_wide())
+		std::sort(nz_idxs.begin(), nz_idxs.end(), wide_row_first_comp());
+	else if (is_wide())
+		std::sort(nz_idxs.begin(), nz_idxs.end(), wide_col_first_comp());
+	else if (layout == matrix_layout_t::L_ROW)
+		std::sort(nz_idxs.begin(), nz_idxs.end(), tall_row_first_comp());
+	else
+		std::sort(nz_idxs.begin(), nz_idxs.end(), tall_col_first_comp());
+
+	// There might be duplicates in the vector. We should remove them.
+	auto end = std::unique(nz_idxs.begin(), nz_idxs.end());
+	if (end - nz_idxs.begin() > (off_t) required)
+		nz_idxs.resize(required);
+
+	mem_col_matrix_store::ptr vals = mem_col_matrix_store::create(
+			nz_idxs.size(), 1, type);
+	if (type == get_scalar_type<double>())
+		vals->set_data(rand_init<double>());
+	else if (type == get_scalar_type<int>())
+		vals->set_data(rand_init<int>());
+	this->vals = vals;
+
+	size_t num_portions = get_num_portions();
+	for (size_t i = 0; i < num_portions; i++) {
+		// Get the starting and ending coordinates of a portion.
+		sparse_project_matrix_store::nz_idx start;
+		if (is_wide()) {
+			start.row_idx = 0;
+			start.col_idx = mem_matrix_store::CHUNK_SIZE * i;
+		}
+		else {
+			start.row_idx = mem_matrix_store::CHUNK_SIZE * i;
+			start.col_idx = 0;
+		}
+
+		// Get the starting and ending locations in the nz vector.
+		std::vector<nz_idx>::const_iterator start_it;
+		if (layout == matrix_layout_t::L_ROW && is_wide())
+			start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
+					wide_row_first_comp());
+		else if (is_wide())
+			start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
+					wide_col_first_comp());
+		else if (layout == matrix_layout_t::L_ROW)
+			start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
+					tall_row_first_comp());
+		else
+			start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
+					tall_col_first_comp());
+
+		// There aren't any data in the portion and the following portions.
+		if (start_it == nz_idxs.end())
+			break;
+
+		portion_offs.push_back(start_it - nz_idxs.begin());
+	}
+	// We use the length of the nz vector to indicates the end of the last
+	// portion.
+	while (portion_offs.size() < num_portions + 1)
+		portion_offs.push_back(nz_idxs.size());
+}
+
 sparse_project_matrix_store::ptr sparse_project_matrix_store::create_sparse_rand(
 		size_t nrow, size_t ncol, matrix_layout_t layout,
 		const scalar_type &type, double density)
@@ -64,40 +140,7 @@ sparse_project_matrix_store::ptr sparse_project_matrix_store::create_sparse_rand
 	}
 
 	sparse_project_matrix_store::ptr ret(new sparse_project_matrix_store(nrow,
-				ncol, layout, type));
-	// I intentially increase the density to generate the number of nnz.
-	// It's possible I'll pick the same slot twice in the for loop below.
-	size_t required = density * nrow * ncol;
-	ret->nz_idxs.resize((density * 1.1) * nrow * ncol);
-	for (size_t i = 0; i < ret->nz_idxs.size(); i++) {
-		ret->nz_idxs[i].row_idx = random() % nrow;
-		ret->nz_idxs[i].col_idx = random() % ncol;
-	}
-	if (layout == matrix_layout_t::L_ROW && ret->is_wide())
-		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
-				wide_row_first_comp());
-	else if (ret->is_wide())
-		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
-				wide_col_first_comp());
-	else if (layout == matrix_layout_t::L_ROW)
-		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
-				tall_row_first_comp());
-	else
-		std::sort(ret->nz_idxs.begin(), ret->nz_idxs.end(),
-				tall_col_first_comp());
-
-	// There might be duplicates in the vector. We should remove them.
-	auto end = std::unique(ret->nz_idxs.begin(), ret->nz_idxs.end());
-	if (end - ret->nz_idxs.begin() > (off_t) required)
-		ret->nz_idxs.resize(required);
-
-	mem_col_matrix_store::ptr vals = mem_col_matrix_store::create(
-			ret->nz_idxs.size(), 1, type);
-	if (type == get_scalar_type<double>())
-		vals->set_data(rand_init<double>());
-	else if (type == get_scalar_type<int>())
-		vals->set_data(rand_init<int>());
-	ret->vals = vals;
+				ncol, layout, type, density));
 	return ret;
 }
 
@@ -117,6 +160,7 @@ matrix_store::const_ptr sparse_project_matrix_store::transpose() const
 
 	sparse_project_matrix_store *ret = new sparse_project_matrix_store(
 			get_num_cols(), get_num_rows(), new_layout, get_type());
+	ret->portion_offs = this->portion_offs;
 	ret->nz_idxs.resize(nz_idxs.size());
 	for (size_t i = 0; i < nz_idxs.size(); i++) {
 		ret->nz_idxs[i].row_idx = nz_idxs[i].col_idx;
@@ -126,30 +170,27 @@ matrix_store::const_ptr sparse_project_matrix_store::transpose() const
 	return matrix_store::const_ptr(ret);
 }
 
+bool sparse_project_matrix_store::is_entire_portion(size_t start_row,
+		size_t start_col, size_t num_rows, size_t num_cols) const
+{
+	if (is_wide())
+		return start_row == 0 && num_rows == get_num_rows()
+			&& start_col % mem_matrix_store::CHUNK_SIZE == 0
+			&& (num_cols == mem_matrix_store::CHUNK_SIZE
+					|| start_col + num_cols == get_num_cols());
+	else
+		return start_col == 0 && num_cols == get_num_cols()
+			&& start_row % mem_matrix_store::CHUNK_SIZE == 0
+			&& (num_rows == mem_matrix_store::CHUNK_SIZE
+					|| start_row + num_rows == get_num_rows());
+}
+
 local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols) const
 {
 	// TODO we current only support get the entire portion.
-	if (is_wide() && (start_row > 0 || num_rows != get_num_rows())) {
+	if (!is_entire_portion(start_row, start_col, num_rows, num_cols)) {
 		BOOST_LOG_TRIVIAL(error) << "we only support getting the entire portion";
-		return local_matrix_store::const_ptr();
-	}
-	else if (!is_wide() && (start_col > 0 || num_cols != get_num_cols())) {
-		BOOST_LOG_TRIVIAL(error) << "we only support getting the entire portion";
-		return local_matrix_store::const_ptr();
-	}
-
-	// The requested portion is in the same physical portion.
-	if (is_wide() && start_col / mem_matrix_store::CHUNK_SIZE
-			!= (start_col + num_cols - 1) / mem_matrix_store::CHUNK_SIZE) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "the requested portion should be in the same physical portion";
-		return local_matrix_store::const_ptr();
-	}
-	else if (!is_wide() && start_row / mem_matrix_store::CHUNK_SIZE
-			!= (start_row + num_rows - 1) / mem_matrix_store::CHUNK_SIZE) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "the requested portion should be in the same physical portion";
 		return local_matrix_store::const_ptr();
 	}
 
@@ -159,38 +200,16 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	}
 
-	// Find the starting and ending points in the vector of offsets.
-	// Search for [start, end]
-	sparse_project_matrix_store::nz_idx start, end;
-	start.row_idx = start_row;
-	start.col_idx = start_col;
-	end.row_idx = start_row + num_rows - 1;
-	end.col_idx = start_col + num_cols - 1;
-	std::vector<nz_idx>::const_iterator start_it, end_it;
-	if (layout == matrix_layout_t::L_ROW && is_wide()) {
-		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
-				wide_row_first_comp());
-		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
-				wide_row_first_comp());
-	}
-	else if (is_wide()) {
-		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
-				wide_col_first_comp());
-		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
-				wide_col_first_comp());
-	}
-	else if (layout == matrix_layout_t::L_ROW) {
-		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
-				tall_row_first_comp());
-		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
-				tall_row_first_comp());
-	}
-	else {
-		start_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), start,
-				tall_col_first_comp());
-		end_it = std::lower_bound(nz_idxs.begin(), nz_idxs.end(), end,
-				tall_col_first_comp());
-	}
+	size_t portion_id;
+	if (is_wide())
+		portion_id = start_col / mem_matrix_store::CHUNK_SIZE;
+	else
+		portion_id = start_row / mem_matrix_store::CHUNK_SIZE;
+
+	std::vector<nz_idx>::const_iterator start_it
+		= nz_idxs.begin() + portion_offs[portion_id];
+	std::vector<nz_idx>::const_iterator end_it
+		= nz_idxs.begin() + portion_offs[portion_id + 1];
 
 	// There isn't nnz in the portion.
 	if (start_it == nz_idxs.end() || start_it == end_it) {
@@ -207,12 +226,6 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 						empty_vals));
 	}
 
-	// We search for [start, end].
-	// If the last element has value `end', we need to move the end iterator
-	// to include the last element.
-	if (end_it != nz_idxs.end()
-			&& end_it->row_idx == end.row_idx && end_it->col_idx == end.col_idx)
-		end_it++;
 	std::vector<sparse_project_matrix_store::nz_idx> local_idxs(start_it,
 			end_it);
 	for (size_t i = 0; i < local_idxs.size(); i++) {

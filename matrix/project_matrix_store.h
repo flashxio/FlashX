@@ -122,12 +122,17 @@ public:
 	};
 
 private:
+	std::vector<off_t> portion_offs;
 	std::vector<nz_idx> nz_idxs;
 	mem_col_matrix_store::const_ptr vals;
 	matrix_layout_t layout;
 
 	sparse_project_matrix_store(size_t nrow, size_t ncol,
 			matrix_layout_t layout, const scalar_type &type);
+	sparse_project_matrix_store(size_t nrow, size_t ncol,
+			matrix_layout_t layout, const scalar_type &type, double density);
+	bool is_entire_portion(size_t start_row, size_t start_col,
+			size_t num_rows, size_t num_cols) const;
 public:
 	typedef std::shared_ptr<sparse_project_matrix_store> ptr;
 	typedef std::shared_ptr<const sparse_project_matrix_store> const_ptr;
