@@ -493,7 +493,7 @@ void cblas_axpy(size_t len, float B, const float *Acol, float *dst_col)
  */
 template<class T>
 void multiply_sparse(const detail::local_col_matrix_store &Astore,
-		const detail::local_sparse_matrix_store &Bstore,
+		const detail::lsparse_row_matrix_store &Bstore,
 		detail::local_col_matrix_store &Cstore)
 {
 	assert(get_scalar_type<T>() == Bstore.get_type());
@@ -516,7 +516,7 @@ void multiply_sparse(const detail::local_col_matrix_store &Astore,
  */
 template<class T>
 void multiply_sparse_trans(const detail::local_row_matrix_store &Astore,
-		const detail::local_sparse_matrix_store &Bstore,
+		const detail::lsparse_row_matrix_store &Bstore,
 		detail::local_col_matrix_store &Cstore)
 {
 	assert(get_scalar_type<T>() == Bstore.get_type());
@@ -540,8 +540,9 @@ void multiply_wide_op::run_part_sparse(
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
 	detail::local_matrix_store::const_ptr left = ins[0];
-	const detail::local_sparse_matrix_store &Bstore
-		= static_cast<const detail::local_sparse_matrix_store &>(*ins[1]);
+	assert(ins[1]->store_layout() == matrix_layout_t::L_ROW);
+	const detail::lsparse_row_matrix_store &Bstore
+		= static_cast<const detail::lsparse_row_matrix_store &>(*ins[1]);
 
 	if (res_bufs[thread_id] == NULL) {
 		mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(

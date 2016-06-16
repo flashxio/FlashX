@@ -191,7 +191,7 @@ public:
 	matrix_store::const_ptr conv_dense() const;
 };
 
-class local_sparse_matrix_store: public local_matrix_store
+class lsparse_col_matrix_store: public lvirtual_col_matrix_store
 {
 	struct col_first_comp {
 		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
@@ -204,6 +204,78 @@ class local_sparse_matrix_store: public local_matrix_store
 				return e1.row_idx < e2.row_idx;
 		}
 	};
+
+	std::vector<sparse_project_matrix_store::nnz_idx> local_idxs;
+	local_matrix_store::const_ptr vals;
+
+	local_col_matrix_store::const_ptr buf;
+public:
+	typedef std::shared_ptr<lsparse_col_matrix_store> ptr;
+	typedef std::shared_ptr<const lsparse_col_matrix_store> const_ptr;
+
+	lsparse_col_matrix_store(off_t start_row, off_t start_col, size_t nrow, size_t ncol,
+			const std::vector<sparse_project_matrix_store::nnz_idx> &local_idxs,
+			local_matrix_store::const_ptr vals): lvirtual_col_matrix_store(
+				start_row, start_col, nrow, ncol, vals->get_type(),
+				vals->get_node_id()) {
+		this->local_idxs = local_idxs;
+		this->vals = vals;
+	}
+
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		off_t gstart_row = get_global_start_row() + local_start_row;
+		off_t gstart_col = get_global_start_col() + local_start_col;
+		// If the buffered matrix doesn't have the data for the specified
+		// location.
+		if (buf && (buf->get_global_start_row() != gstart_row
+				|| buf->get_global_start_col() != gstart_col
+				|| buf->get_num_rows() != local_num_rows
+				|| buf->get_num_cols() != local_num_cols))
+			buf = NULL;
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+	}
+	virtual void reset_size() {
+		// If the buffered matrix doesn't have the data for the entire local
+		// matrix.
+		if (buf && (buf->get_global_start_row() != get_global_start_row()
+				|| buf->get_global_start_col() != get_global_start_col()
+				|| buf->get_num_rows() != get_num_rows()
+				|| buf->get_num_cols() != get_num_cols()))
+			buf = NULL;
+		local_matrix_store::reset_size();
+	}
+
+	using lvirtual_col_matrix_store::get_raw_arr;
+	virtual const char *get_raw_arr() const {
+		materialize_self();
+		return buf->get_raw_arr();
+	}
+
+	using lvirtual_col_matrix_store::transpose;
+	virtual matrix_store::const_ptr transpose() const;
+
+	using lvirtual_col_matrix_store::get_col;
+	virtual const char *get_col(size_t col) const {
+		materialize_self();
+		return buf->get_col(col);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const;
+
+	virtual void materialize_self() const;
+
+	const char *get_col_nnz(off_t col_idx, std::vector<off_t> &row_idxs) const;
+	size_t get_nnz() const {
+		return local_idxs.size();
+	}
+};
+
+class lsparse_row_matrix_store: public lvirtual_row_matrix_store
+{
 	struct row_first_comp {
 		bool operator()(const sparse_project_matrix_store::nnz_idx &e1,
 				const sparse_project_matrix_store::nnz_idx &e2) const {
@@ -218,69 +290,70 @@ class local_sparse_matrix_store: public local_matrix_store
 
 	std::vector<sparse_project_matrix_store::nnz_idx> local_idxs;
 	local_matrix_store::const_ptr vals;
-	matrix_layout_t layout;
+
+	local_row_matrix_store::const_ptr buf;
 public:
-	typedef std::shared_ptr<local_sparse_matrix_store> ptr;
-	typedef std::shared_ptr<const local_sparse_matrix_store> const_ptr;
+	typedef std::shared_ptr<lsparse_row_matrix_store> ptr;
+	typedef std::shared_ptr<const lsparse_row_matrix_store> const_ptr;
 
-	local_sparse_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol,
+	lsparse_row_matrix_store(off_t start_row, off_t start_col, size_t nrow, size_t ncol,
 			const std::vector<sparse_project_matrix_store::nnz_idx> &local_idxs,
-			local_matrix_store::const_ptr vals, matrix_layout_t layout);
+			local_matrix_store::const_ptr vals): lvirtual_row_matrix_store(
+				start_row, start_col, nrow, ncol, vals->get_type(),
+				vals->get_node_id()) {
+		this->local_idxs = local_idxs;
+		this->vals = vals;
+	}
 
-	virtual bool read_only() const {
-		return true;
+	virtual bool resize(off_t local_start_row, off_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) {
+		off_t gstart_row = get_global_start_row() + local_start_row;
+		off_t gstart_col = get_global_start_col() + local_start_col;
+		// If the buffered matrix doesn't have the data for the specified
+		// location.
+		if (buf && (buf->get_global_start_row() != gstart_row
+				|| buf->get_global_start_col() != gstart_col
+				|| buf->get_num_rows() != local_num_rows
+				|| buf->get_num_cols() != local_num_cols))
+			buf = NULL;
+		return local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
 	}
-	virtual char *get_raw_arr() {
-		return NULL;
+	virtual void reset_size() {
+		// If the buffered matrix doesn't have the data for the entire local
+		// matrix.
+		if (buf && (buf->get_global_start_row() != get_global_start_row()
+				|| buf->get_global_start_col() != get_global_start_col()
+				|| buf->get_num_rows() != get_num_rows()
+				|| buf->get_num_cols() != get_num_cols()))
+			buf = NULL;
+		local_matrix_store::reset_size();
 	}
+
+	using lvirtual_row_matrix_store::get_raw_arr;
 	virtual const char *get_raw_arr() const {
-		return NULL;
-	}
-	virtual char *get(size_t row, size_t col) {
-		return NULL;
-	}
-	virtual bool copy_from(const local_matrix_store &store) {
-		return false;
-	}
-	virtual matrix_store::ptr transpose() {
-		return matrix_store::ptr();
-	}
-	virtual size_t get_all_rows(std::vector<char *> &rows) {
-		throw unsupported_exception(
-				"don't support getting all rows of a local sparse matrix");
-	}
-	virtual size_t get_all_cols(std::vector<char *> &cols) {
-		throw unsupported_exception(
-				"don't support getting all cols of a local sparse matrix");
-	}
-	virtual std::shared_ptr<local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		throw unsupported_exception("a sparse matrix is read-only");
+		materialize_self();
+		return buf->get_raw_arr();
 	}
 
-	virtual int get_portion_node_id(size_t id) const {
-		return -1;
-	}
-
-	virtual bool is_sparse() const {
-		return true;
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return layout;
-	}
-	virtual std::shared_ptr<const local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const;
-
-	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
-	virtual size_t get_all_rows(std::vector<const char *> &rows) const;
-	virtual size_t get_all_cols(std::vector<const char *> &cols) const;
-	virtual const char *get(size_t row, size_t col) const;
+	using lvirtual_row_matrix_store::transpose;
 	virtual matrix_store::const_ptr transpose() const;
-	const char *get_col_nnz(off_t col_idx, std::vector<off_t> &row_idxs) const;
+
+	using lvirtual_row_matrix_store::get_row;
+	virtual const char *get_row(size_t row) const {
+		materialize_self();
+		return buf->get_row(row);
+	}
+
+	virtual local_matrix_store::const_ptr get_portion(
+			size_t local_start_row, size_t local_start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual void materialize_self() const;
+
+	size_t get_nnz() const {
+		return local_idxs.size();
+	}
+
 	const char *get_row_nnz(off_t row_idx, std::vector<off_t> &col_idxs) const;
 	// This returns rows in the specified range.
 	// The rows must be stored contiguously. Otherwise, it'll return NULL.
@@ -288,9 +361,6 @@ public:
 	// relative in the resized store.
 	const char *get_rows_nnz(off_t start_row, off_t end_row,
 			std::vector<sparse_project_matrix_store::nnz_idx> &idxs) const;
-	size_t get_nnz() const {
-		return local_idxs.size();
-	}
 };
 
 }
