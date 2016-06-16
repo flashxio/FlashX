@@ -216,11 +216,11 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 	std::vector<sparse_project_matrix_store::nz_idx> local_idxs(start_it,
 			end_it);
 	for (size_t i = 0; i < local_idxs.size(); i++) {
-		assert(local_idxs[i].row_idx >= start_row
-				&& local_idxs[i].row_idx < start_row + num_rows);
+		assert(local_idxs[i].row_idx >= (off_t) start_row
+				&& local_idxs[i].row_idx < (off_t) (start_row + num_rows));
 		local_idxs[i].row_idx -= start_row;
-		assert(local_idxs[i].col_idx >= start_col
-				&& local_idxs[i].col_idx < start_col + num_cols);
+		assert(local_idxs[i].col_idx >= (off_t) start_col
+				&& local_idxs[i].col_idx < (off_t) (start_col + num_cols));
 		local_idxs[i].col_idx -= start_col;
 	}
 	local_matrix_store::const_ptr local_vals = vals->get_portion(
@@ -340,7 +340,7 @@ const char *lsparse_col_matrix_store::get_col_nnz(off_t col_idx,
 	// Find the right location in a col.
 	if (it->row_idx < get_local_start_row())
 		it++;
-	if (it->row_idx >= get_local_start_row() + get_num_rows()) {
+	if (it->row_idx >= (off_t) (get_local_start_row() + get_num_rows())) {
 		row_idxs.clear();
 		return NULL;
 	}
@@ -349,7 +349,8 @@ const char *lsparse_col_matrix_store::get_col_nnz(off_t col_idx,
 
 	row_idxs.clear();
 	for (; it != local_idxs.end() && it->col_idx == start.col_idx
-			&& it->row_idx < get_local_start_row() + get_num_rows(); it++) {
+			&& it->row_idx < (off_t) (get_local_start_row() + get_num_rows());
+			it++) {
 		row_idxs.push_back(it->row_idx);
 	}
 	return vals->get(val_off, 0);
@@ -450,7 +451,7 @@ const char *lsparse_row_matrix_store::get_row_nnz(off_t row_idx,
 	// Find the right location in a row.
 	if (it->col_idx < get_local_start_col())
 		it++;
-	if (it->col_idx >= get_local_start_col() + get_num_cols()) {
+	if (it->col_idx >= (off_t) (get_local_start_col() + get_num_cols())) {
 		col_idxs.clear();
 		return NULL;
 	}
@@ -459,7 +460,8 @@ const char *lsparse_row_matrix_store::get_row_nnz(off_t row_idx,
 
 	col_idxs.clear();
 	for (; it != local_idxs.end() && it->row_idx == start.row_idx
-			&& it->col_idx < get_local_start_col() + get_num_cols(); it++) {
+			&& it->col_idx < (off_t) (get_local_start_col() + get_num_cols());
+			it++) {
 		col_idxs.push_back(it->col_idx);
 	}
 	return vals->get(val_off, 0);
@@ -517,7 +519,7 @@ const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 	idxs.clear();
 	for (auto it = start_it; it != end_it; it++) {
 		// Rows have been resized. They can't be stored contiguously.
-		if (it->col_idx >= get_num_cols()) {
+		if (it->col_idx >= (off_t) get_num_cols()) {
 			idxs.clear();
 			return NULL;
 		}
