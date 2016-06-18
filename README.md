@@ -71,6 +71,10 @@ Documentation
 
 Publications
 ========
+Da Zheng, Disa Mhembere, Joshua T. Vogelstein, Carey E. Priebe, and Randal Burns, “FlashMatrix: Parallel, scalable data analysis with generalized matrix operations using commodity ssds,” arXiv preprint arXiv:1604.06414, 2016 [[pdf](http://arxiv.org/pdf/1604.06414v3)]
+
+Da Zheng, Disa Mhembere, Vince Lyzinski, Joshua Vogelstein, Carey E. Priebe, and Randal Burns, “Semi-external memory sparse matrix multiplication on billion-node graphs in a multicore architecture,” CoRR, vol. abs/1602.02864, 2016. [[pdf](http://arxiv.org/pdf/1602.02864v2.pdf)]
+
 Heng Wang, Da Zheng, Randal Burns, Carey Priebe, Active Community Detection in Massive Graphs, SDM-Networks 2015 [[pdf](http://arxiv.org/pdf/1412.8576v3.pdf)]
 
 Da Zheng, Disa Mhembere, Randal Burns, Joshua Vogelstein, Carey E. Priebe, Alexander S. Szalay, FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs, FAST'15, [[pdf](https://www.usenix.org/system/files/conference/fast15/fast15-paper-zheng.pdf)][[bib](https://www.usenix.org/biblio/export/bibtex/188418)]
