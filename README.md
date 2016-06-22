@@ -24,7 +24,7 @@ comparable to state-of-art in-memory graph analysis frameworks and
 significantly outperforms state-of-art distributed graph analysis frameworks
 while being able to scale to graphs with billions of vertices and hundreds
 of billions of edges. Please see
-[the performance result](https://github.com/icoming/FlashX/wiki/FlashGraph-performance).
+[the performance result](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability).
 
 FlashMatrix
 ===========
@@ -65,7 +65,7 @@ Documentation
 
 [FlashR programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 
-[FlashGraph performance and scalability](https://github.com/icoming/FlashGraph/wiki/FlashGraph-performance)
+[FlashX performance and scalability](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability)
 
 [SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
 
