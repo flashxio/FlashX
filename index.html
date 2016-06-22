@@ -201,26 +201,26 @@
     <div class="container content-sm">
     	<!-- Service Blocks -->
     	<div class="row margin-bottom-30">
-        	<div class="col-md-4">
-        		<div class="service">
-                    <i class="fa fa-rocket service-icon"></i>
-        			<div class="desc">
-        				<h4>Performance</h4>
-                        <p> Each of FlashX components has lightning-fast speed when they
-						run in memory. While running on SSDs, they have performance
-						comparable to the state-of-art in-memory performance. FlashR has
-						performance comparable to the optimized parallel C code. </p>
-        			</div>
-        		</div>
-        	</div>
+		<div class="col-md-4">
+			<div class="service">
+				<i class="fa fa-rocket service-icon"></i>
+				<div class="desc">
+					<h4><a href="https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability">Performance</a></h4>
+					<p> Each of FlashX components has lightning-fast speed when they
+					run both in memory and on SSDs. FlashR runs R code with
+					performance comparable to the optimized parallel C code. </p>
+				</div>
+			</div>
+		</div>
         	<div class="col-md-4">
         		<div class="service">
                     <i class="fa fa-compress service-icon"></i>
         			<div class="desc">
-        				<h4>Scalability</h4>
-                        <p>All FlashX components can scales beyond memory capacity. They
-						process graphs with hundreds of billions of edges or even trillions
-						of edges or datasets with terabytes in a single commodity machine.</p>
+					<h4><a href="https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability#flashgraph-scalability">Scalability</a></h4>
+					<p>All FlashX components scale beyond memory capacity. e.g., FlashGraph
+					processes graphs with hundreds of billions of edges or even trillions
+					of edges in a single commodity machine; FlashMatrix can run on matrices
+				       	of terabytes.</p>
         			</div>
         		</div>
         	</div>
@@ -228,12 +228,12 @@
         		<div class="service">
                     <i class="fa fa-cogs service-icon"></i>
         			<div class="desc">
-        				<h4>Flexibility and ease of programming</h4>
-                        <p>FlashR provides a unified R programming interface for users.
-						It mimics the original R programming environment and also provides
-						a set of generalized matrix operations to express varieties machine
-						learning and data mining algorithms. Users do not need to explicitly
-						handle parallelization and external-memory access.</p>
+					<h4>Flexibility and ease of programming</h4>
+					<p> FlashR provides the same R functions as R base package. In addition,
+				       	it provides a set of generalized matrix operations to express
+				       	varieties of data analysis
+					algorithms. Parallelization and external-memory access are completely
+					hidden from users.</p>
         			</div>
         		</div>
         	</div>
@@ -245,69 +245,52 @@
         <div class="row margin-bottom-20">
             <div class="col-md-3 col-sm-6">
                 <div class="thumbnails thumbnail-style thumbnail-kenburn">
-                	<div class="thumbnail-img">
-                        <div class="overflow-hidden">
-                            <img class="img-responsive" src="assets/img/main/img1.jpg" alt="">
-                        </div>
-                        <a class="btn-more hover-effect" href="page_coming_soon1.html">read more +</a>
-                    </div>
-                    <div class="caption">
-                        <h3><a class="hover-effect" href="page_coming_soon1.html">SAFS</a></h3>
-                        <p>A user-space filesystem designed for large SSD arrays. It is
-						capable of achieving the maximal I/O throughput from SSD arrays
-						(millions of I/O per second for random I/O and tens of gigabytes
-						per second for sequential I/O).</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="thumbnails thumbnail-style thumbnail-kenburn">
                     <div class="thumbnail-img">
                         <div class="overflow-hidden">
-                            <img class="img-responsive" src="assets/img/main/img12.jpg" alt="">
+                            <img class="img-responsive" src="graph-small2.png" alt="">
                         </div>
                         <a class="btn-more hover-effect" href="http://www.flashgraph.net/">read more +</a>
                     </div>
                     <div class="caption">
                         <h3><a class="hover-effect" href="http://www.flashgraph.net/">FlashGraph</a></h3>
-                        <p>A general-purpose programming framework for large-scale graph analysis.
-						FlashGraph is able to scale to billion-node graphs
-						and significantly outperforms state-of-art distributed graph analysis
-						frameworks at this scale.</p>
+                        <p>A general-purpose programming framework with a vertex-centric programming
+		       	interface for large-scale graph analysis.
+			FlashGraph is able to scale to billion-node graphs in a single
+		       	machine and significantly outperforms state-of-art distributed graph analysis
+			frameworks at this scale.</p>
                     </div>
                 </div>
             </div>
+	    <div class="col-md-3 col-sm-6">
+		    <div class="thumbnails thumbnail-style thumbnail-kenburn">
+			    <div class="thumbnail-img">
+				    <div class="overflow-hidden">
+					    <img class="img-responsive" src="matrix2.png" alt="">
+				    </div>
+				    <a class="btn-more hover-effect" href="page_coming_soon1.html">read more +</a>
+			    </div>
+			    <div class="caption">
+				    <h3><a class="hover-effect" href="page_coming_soon1.html">FlashMatrix</a></h3>
+				    <p>A matrix computation engine that provides a small set of generalized
+				    matrix operations to express varieties of data mining and machine learning
+				    algorithms. It keeps matrices on SSDs to scale to very large datasets.</p>
+			    </div>
+		    </div>
+	    </div>
             <div class="col-md-3 col-sm-6">
                 <div class="thumbnails thumbnail-style thumbnail-kenburn">
                     <div class="thumbnail-img">
                         <div class="overflow-hidden">
-                            <img class="img-responsive" src="assets/img/main/img3.jpg" alt="">
-                        </div>
-                        <a class="btn-more hover-effect" href="page_coming_soon1.html">read more +</a>
-                    </div>
-                    <div class="caption">
-                        <h3><a class="hover-effect" href="page_coming_soon1.html">FlashMatrix</a></h3>
-                        <p>A matrix computation engine that provides a small set of generalized
-						matrix operations to express varieties of data mining and machine learning
-						algorithms.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="thumbnails thumbnail-style thumbnail-kenburn">
-                    <div class="thumbnail-img">
-                        <div class="overflow-hidden">
-                            <img class="img-responsive" src="assets/img/main/img17.jpg" alt="">
+                            <img class="img-responsive" src="R-Programming-small2.png" alt="">
                         </div>
                         <a class="btn-more hover-effect" href="page_coming_soon1.html">read more +</a>
                     </div>
                     <div class="caption">
                         <h3><a class="hover-effect" href="page_coming_soon1.html">FlashR</a></h3>
-                        <p>An extension of the R programming framework to process datasets
-						at a scale of terabytes with the speed of optimized C code. FlashR integrates
-						FlashMatrix with R. It provides users a familiar R programming environment
-						as well as generalized matrix operators to express many machine learning
-						algorithms completely in R.</p>
+			<p>An extension of the R programming framework to process datasets
+			at a scale of terabytes with the speed of optimized parallel C code.
+			It provides users a familiar R programming environment to express
+		       	many machine learning algorithms completely in R.</p>
                     </div>
                 </div>
             </div>
