@@ -71,6 +71,11 @@ public:
 			size_t num_rows, size_t num_cols, matrix_layout_t layout,
 			size_t block_size, int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL);
+	static dense_matrix::ptr create_seq_layout(scalar_variable::ptr start,
+			scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
+			size_t num_rows, size_t num_cols, matrix_layout_t layout,
+			size_t block_size, bool byrow, int num_nodes = -1,
+			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
 
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,

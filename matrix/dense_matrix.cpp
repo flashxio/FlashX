@@ -1936,6 +1936,30 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 				matrix_conf.get_block_size(), num_nodes, in_mem, group);
 }
 
+dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
+		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
+		size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
+		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
+{
+	size_t long_dim = std::max(nrow, ncol);
+	size_t short_dim = std::min(nrow, ncol);
+	const scalar_type &type = start->get_type();
+	// We don't want to create a small block matrix.
+	if (long_dim < detail::EM_matrix_store::CHUNK_SIZE
+			|| short_dim <= matrix_conf.get_block_size()) {
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, layout, type, num_nodes, in_mem, group);
+		auto op = type.get_set_seq(*start, *stride, *seq_ele_stride,
+				nrow, ncol, byrow);
+		store->set_data(*op);
+		return dense_matrix::ptr(new dense_matrix(store));
+	}
+	else
+		return block_matrix::create_seq_layout(start, stride, seq_ele_stride,
+				nrow, ncol, layout, matrix_conf.get_block_size(), byrow,
+				num_nodes, in_mem, group);
+}
+
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, const set_operate &op,
 		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)

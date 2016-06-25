@@ -149,6 +149,73 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 		return dense_matrix::ptr();
 }
 
+dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
+		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
+		size_t num_rows, size_t num_cols, matrix_layout_t layout,
+		size_t block_size, bool byrow, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
+{
+	if (num_rows > num_cols && num_cols < block_size)
+		return dense_matrix::create_seq(start, stride, seq_ele_stride,
+				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+	else if (num_rows <= num_cols && num_rows < block_size)
+		return dense_matrix::create_seq(start, stride, seq_ele_stride,
+				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+
+	const scalar_type &type = start->get_type();
+	assert(type == stride->get_type());
+	assert(type == seq_ele_stride->get_type());
+
+	size_t num_blocks;
+	if (num_rows > num_cols)
+		num_blocks = div_ceil<size_t>(num_cols, block_size);
+	else
+		num_blocks = div_ceil<size_t>(num_rows, block_size);
+
+	const bulk_operate &mul = type.get_basic_ops().get_multiply();
+	const bulk_operate &add = type.get_basic_ops().get_add();
+	std::vector<detail::matrix_store::const_ptr> stores(num_blocks);
+	for (size_t i = 0; i < stores.size(); i++) {
+		// Calculate the value of the first element of a block.
+		size_t len;
+		if ((num_rows > num_cols && byrow) || (num_rows <= num_cols && !byrow))
+			len = block_size * i;
+		else if (num_rows > num_cols)
+			len = block_size * num_rows * i;
+		else
+			len = block_size * num_cols * i;
+		scalar_variable::ptr len_var(new scalar_variable_impl<size_t>(len));
+		len_var = len_var->cast_type(type);
+		scalar_variable::ptr block_stride = type.create_scalar();
+		mul.runAA(1, len_var->get_raw(), stride->get_raw(), block_stride->get_raw());
+		scalar_variable::ptr lstart = type.create_scalar();
+		add.runAA(1, start->get_raw(), block_stride->get_raw(),
+				lstart->get_raw());
+
+		size_t local_num_cols, local_num_rows;
+		if (num_rows > num_cols) {
+			local_num_rows = num_rows;
+			local_num_cols = std::min(num_cols - i * block_size, block_size);
+		}
+		else {
+			local_num_rows = std::min(num_rows - i * block_size, block_size);
+			local_num_cols = num_cols;
+		}
+
+
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				local_num_rows, local_num_cols, layout, type, num_nodes,
+				in_mem, group);
+		auto op = type.get_set_seq(*lstart, *stride, *seq_ele_stride,
+				num_rows, num_cols, byrow);
+		store->set_data(*op);
+		stores[i] = store;
+	}
+	return block_matrix::create(detail::combined_matrix_store::create(
+				stores, layout));
+
+}
+
 matrix_layout_t block_matrix::store_layout() const
 {
 	// All matrices in the group should have the same data layout.

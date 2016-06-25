@@ -19,66 +19,6 @@
 
 using namespace fm;
 
-class set_col_operate: public type_set_operate<int>
-{
-	size_t num_cols;
-public:
-	set_col_operate(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = (row_idx + i) * num_cols + col_idx;
-		}
-	}
-};
-
-class set_row_operate: public type_set_operate<int>
-{
-	size_t num_cols;
-public:
-	set_row_operate(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = row_idx * num_cols + col_idx + i;
-		}
-	}
-};
-
-class set_col_long_operate: public type_set_operate<size_t>
-{
-	size_t num_cols;
-public:
-	set_col_long_operate(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(size_t *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = (row_idx + i) * num_cols + col_idx;
-		}
-	}
-};
-
-class set_row_long_operate: public type_set_operate<size_t>
-{
-	size_t num_cols;
-public:
-	set_row_long_operate(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(size_t *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = row_idx * num_cols + col_idx + i;
-		}
-	}
-};
-
 size_t long_dim = 9999999;
 
 /*
@@ -296,42 +236,18 @@ dense_matrix::ptr create_seq_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes, const scalar_type &type,
 		bool in_mem)
 {
-	if (type == get_scalar_type<int>()) {
-		if (layout == matrix_layout_t::L_COL)
-			return dense_matrix::create(nrow, ncol, layout,
-					type, set_col_operate(ncol), num_nodes, in_mem);
-		else
-			return dense_matrix::create(nrow, ncol, layout,
-					type, set_row_operate(ncol), num_nodes, in_mem);
-	}
-	else if (type == get_scalar_type<size_t>()) {
-		if (layout == matrix_layout_t::L_COL)
-			return dense_matrix::create(nrow, ncol, layout,
-					type, set_col_long_operate(ncol), num_nodes, in_mem);
-		else
-			return dense_matrix::create(nrow, ncol, layout,
-					type, set_row_long_operate(ncol), num_nodes, in_mem);
-	}
-	else if (type == get_scalar_type<double>()) {
-		if (layout == matrix_layout_t::L_COL)
-			return dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<size_t>(), set_col_long_operate(ncol),
-					num_nodes, in_mem)->cast_ele_type(get_scalar_type<double>());
-		else
-			return dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<size_t>(), set_row_long_operate(ncol),
-					num_nodes, in_mem)->cast_ele_type(get_scalar_type<double>());
-	}
-	else if (type == get_scalar_type<float>()) {
-		if (layout == matrix_layout_t::L_COL)
-			return dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<size_t>(), set_col_long_operate(ncol),
-					num_nodes, in_mem)->cast_ele_type(get_scalar_type<float>());
-		else
-			return dense_matrix::create(nrow, ncol, layout,
-					get_scalar_type<size_t>(), set_row_long_operate(ncol),
-					num_nodes, in_mem)->cast_ele_type(get_scalar_type<float>());
-	}
+	if (type == get_scalar_type<int>())
+		return dense_matrix::create_seq<int>(0, 1, nrow, ncol, layout, true,
+				num_nodes, in_mem);
+	else if (type == get_scalar_type<size_t>())
+		return dense_matrix::create_seq<size_t>(0, 1, nrow, ncol, layout, true,
+				num_nodes, in_mem);
+	else if (type == get_scalar_type<double>())
+		return dense_matrix::create_seq<size_t>(0, 1, nrow, ncol, layout, true,
+				num_nodes, in_mem)->cast_ele_type(get_scalar_type<double>());
+	else if (type == get_scalar_type<float>())
+		return dense_matrix::create_seq<size_t>(0, 1, nrow, ncol, layout, true,
+				num_nodes, in_mem)->cast_ele_type(get_scalar_type<float>());
 	else
 		return dense_matrix::ptr();
 }
@@ -1078,13 +994,9 @@ void test_conv_vec2mat()
 	assert(mat->store_layout() == matrix_layout_t::L_COL);
 }
 
-void test_write2file1(detail::mem_matrix_store::ptr mat)
+void test_write2file1(detail::mem_matrix_store::const_ptr mat)
 {
 	char *tmp_file_name = tempnam(".", "tmp.mat");
-	if (mat->store_layout() == matrix_layout_t::L_ROW)
-		mat->set_data(set_row_operate(mat->get_num_cols()));
-	else
-		mat->set_data(set_col_operate(mat->get_num_cols()));
 	bool ret = mat->write2file(tmp_file_name);
 	assert(ret);
 
@@ -1104,15 +1016,19 @@ void test_write2file1(detail::mem_matrix_store::ptr mat)
 
 void test_write2file()
 {
-	detail::mem_matrix_store::ptr mat;
+	dense_matrix::ptr mat;
+	detail::mem_matrix_store::const_ptr store;
+
 	printf("write a tall row matrix\n");
-	mat = detail::mem_matrix_store::create(1000000, 10,
-			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
-	test_write2file1(mat);
+	mat = dense_matrix::create_seq<int>(0, 1, 1000000, 10,
+			matrix_layout_t::L_ROW, true, -1, true);
+	store = detail::mem_matrix_store::cast(mat->get_raw_store());
+	test_write2file1(store);
 	printf("write a tall column matrix\n");
-	mat = detail::mem_matrix_store::create(1000000, 10,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), -1);
-	test_write2file1(mat);
+	mat = dense_matrix::create_seq<int>(0, 1, 1000000, 10,
+			matrix_layout_t::L_COL, true, -1, true);
+	store = detail::mem_matrix_store::cast(mat->get_raw_store());
+	test_write2file1(store);
 }
 
 void test_cast()
@@ -1383,21 +1299,6 @@ void test_mul_output(int num_nodes)
 	assert(*(double *) agg1->get_raw() == 0);
 }
 
-class set_col_operate1: public type_set_operate<int>
-{
-	size_t num_cols;
-public:
-	set_col_operate1(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = (row_idx + i) * num_cols + col_idx + 1;
-		}
-	}
-};
-
 void test_min()
 {
 	printf("test min\n");
@@ -1405,13 +1306,13 @@ void test_min()
 			*get_scalar_type<int>().get_basic_ops().get_op(
 			basic_ops::op_idx::MIN));
 
-	dense_matrix::ptr mat = dense_matrix::create(2000, 1,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate1(4));
+	dense_matrix::ptr mat = dense_matrix::create_seq<int>(1, 1, 2000, 1,
+			matrix_layout_t::L_COL, true);
 	scalar_variable::ptr res = mat->aggregate(op);
 	assert(*(int *) res->get_raw() == 1);
 
-	mat = dense_matrix::create(long_dim, 1, matrix_layout_t::L_COL,
-			get_scalar_type<int>(), set_col_operate1(4));
+	mat = dense_matrix::create_seq<int>(1, 1, long_dim, 1,
+			matrix_layout_t::L_COL, true);
 	res = mat->aggregate(op);
 	assert(*(int *) res->get_raw() == 1);
 }
@@ -1969,12 +1870,12 @@ void _test_mem_matrix(int num_nodes)
 
 void test_mem_matrix(int num_nodes)
 {
-	matrix_val = matrix_val_t::SPARSE;
-	_test_mem_matrix(num_nodes);
+	auto orig = matrix_val;
 	matrix_val = matrix_val_t::SEQ;
 	_test_mem_matrix(num_nodes);
 	matrix_val = matrix_val_t::DEFAULT;
 	_test_mem_matrix(num_nodes);
+	matrix_val = orig;
 }
 
 void test_conv_store()
@@ -2560,9 +2461,8 @@ void test_bind(int num_nodes)
 	int tot_sum = 0;
 	std::vector<const void *> rows;
 	for (size_t i = 0; i < mats.size(); i++) {
-		mats[i] = dense_matrix::create(random() % 1000000, 10,
-				matrix_layout_t::L_ROW, get_scalar_type<int>(),
-				set_row_operate(10), num_nodes);
+		mats[i] = dense_matrix::create_seq<int>(0, 1, random() % 1000000, 10,
+				matrix_layout_t::L_ROW, true, num_nodes);
 		sums[i] = mats[i]->sum();
 		tot_sum += scalar_variable::get_val<int>(*sums[i]);
 		detail::mem_matrix_store::const_ptr store
@@ -2625,6 +2525,129 @@ void test_bind(int num_nodes)
 	assert(tot_sum == scalar_variable::get_val<int>(*sum));
 }
 
+void test_seq_matrix()
+{
+	dense_matrix::ptr mat, tmp;
+
+	printf("test matrices with sequence numbers\n");
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_COL, true);
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i;
+		size_t end = i + (long_dim - 1) * mat->get_num_cols();
+		assert(scalar_variable::get_val<size_t>(*sum) == (start + end) * long_dim / 2);
+	}
+
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, true);
+	tmp = mat->conv2(matrix_layout_t::L_COL);
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i;
+		size_t end = i + (mat->get_num_rows() - 1) * mat->get_num_cols();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_COL, false);
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i * mat->get_num_rows();
+		size_t end = start + mat->get_num_rows() - 1;
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, false);
+	tmp = mat->conv2(matrix_layout_t::L_COL);
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i * mat->get_num_rows();
+		size_t end = start + mat->get_num_rows() - 1;
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+
+	printf("test block matrices with sequence numbers\n");
+	printf("create tall block matrix1\n");
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim / 10, 100,
+			matrix_layout_t::L_COL, true);
+	assert(mat->get_data().is_virtual());
+	mat->materialize_self();
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i;
+		size_t end = i + (mat->get_num_rows() - 1) * mat->get_num_cols();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+
+	printf("create tall block matrix2\n");
+	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim / 10, 100,
+			matrix_layout_t::L_COL, false);
+	assert(mat->get_data().is_virtual());
+	mat->materialize_self();
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_cols(); i++) {
+		std::vector<off_t> cols(1, i);
+		dense_matrix::ptr col = tmp->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = i * mat->get_num_rows();
+		size_t end = start + mat->get_num_rows() - 1;
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+
+
+	printf("create wide block matrix1\n");
+	mat = dense_matrix::create_seq<size_t>(0, 1, 100, long_dim / 10,
+			matrix_layout_t::L_COL, true);
+	assert(mat->get_data().is_virtual());
+	mat->materialize_self();
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		std::vector<off_t> rows(1, i);
+		dense_matrix::ptr row = tmp->get_rows(rows);
+		auto sum = row->sum();
+		size_t start = i * mat->get_num_cols();
+		size_t end = start + mat->get_num_cols() - 1;
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_cols() / 2);
+	}
+
+	printf("create wide block matrix2\n");
+	mat = dense_matrix::create_seq<size_t>(0, 1, 100, long_dim / 10,
+			matrix_layout_t::L_COL, false);
+	assert(mat->get_data().is_virtual());
+	mat->materialize_self();
+	tmp = mat;
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		std::vector<off_t> rows(1, i);
+		dense_matrix::ptr row = tmp->get_rows(rows);
+		auto sum = row->sum();
+		size_t start = i;
+		size_t end = i + (mat->get_num_cols() - 1) * mat->get_num_rows();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_cols() / 2);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -2637,6 +2660,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_seq_matrix();
 	test_bind(num_nodes);
 	test_materialize_all(num_nodes);
 	test_materialize(num_nodes);

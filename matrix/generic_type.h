@@ -229,6 +229,10 @@ public:
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual std::shared_ptr<const set_operate> get_set_const(
 			const scalar_variable &val) const = 0;
+	virtual std::shared_ptr<const set_operate> get_set_seq(
+			const scalar_variable &start, const scalar_variable &stride,
+			const scalar_variable &seq_ele_stride, size_t num_rows,
+			size_t num_cols, bool byrow) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 	// Create Random generator with the uniform distribution.
 	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
@@ -287,6 +291,10 @@ public:
 	}
 	virtual std::shared_ptr<const set_operate> get_set_const(
 			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_operate> get_set_seq(
+			const scalar_variable &start, const scalar_variable &stride,
+			const scalar_variable &seq_ele_stride, size_t num_rows,
+			size_t num_cols, bool byrow) const;
 	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const;
 
 	virtual prim_type get_type() const {

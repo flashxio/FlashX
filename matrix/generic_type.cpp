@@ -250,6 +250,28 @@ set_operate::const_ptr scalar_type_impl<T>::get_set_const(
 	return set_operate::const_ptr(new const_set_operate<T>(t_val.get()));
 }
 
+template<class T>
+set_operate::const_ptr scalar_type_impl<T>::get_set_seq(
+		const scalar_variable &start, const scalar_variable &stride,
+		const scalar_variable &seq_ele_stride, size_t num_rows, size_t num_cols,
+		bool byrow) const
+{
+	assert(start.get_type() == get_scalar_type<T>());
+	assert(stride.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_start
+		= static_cast<const scalar_variable_impl<T> &>(start);
+	const scalar_variable_impl<T> &t_stride
+		= static_cast<const scalar_variable_impl<T> &>(stride);
+	const scalar_variable_impl<T> &t_seq_ele_stride
+		= static_cast<const scalar_variable_impl<T> &>(seq_ele_stride);
+	if (byrow)
+		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
+					t_stride.get(), t_seq_ele_stride.get(), num_cols, byrow));
+	else
+		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
+					t_stride.get(), t_seq_ele_stride.get(), num_rows, byrow));
+}
+
 namespace
 {
 

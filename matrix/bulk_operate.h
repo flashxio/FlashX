@@ -247,6 +247,47 @@ public:
 };
 
 /*
+ * Set the data of a matrix with sequence numbers.
+ * The sequence numbers are placed in the matrix by rows.
+ */
+template<class T>
+class set_seq: public type_set_operate<T>
+{
+	T start;
+	// The stride between two adjacent elements in a row.
+	T stride;
+	// The stride between two elements stored contiguously.
+	// If the sequence number is placed in matrix by rows,
+	// * For row-major matrices, it's the same as `stride'.
+	// * For col-major matrices, it's `stride * round_len'.
+	// If the sequence number is placed by cols,
+	// * For row-major matrices, it's `stride * round_len'.
+	// * For col-major matrices, it's `stride'.
+	T seq_ele_stride;
+	size_t round_len;
+	bool byrow;
+public:
+	set_seq(T start, T stride, T seq_ele_stride, size_t round_len, bool byrow) {
+		this->start = start;
+		this->stride = stride;
+		this->seq_ele_stride = seq_ele_stride;
+		this->round_len = round_len;
+		this->byrow = byrow;
+	}
+
+	void set(T *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		T curr_start;
+		if (byrow)
+			curr_start = start + (row_idx * round_len + col_idx) * stride;
+		else
+			curr_start = start + (col_idx * round_len + row_idx) * stride;
+
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = curr_start + i * seq_ele_stride;
+	}
+};
+
+/*
  * This operate set values in a vector.
  */
 
