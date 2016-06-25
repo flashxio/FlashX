@@ -52,17 +52,17 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 				get_num_rows());
 		buf_size = get_num_cols() * part_num_rows * get_entry_size();
 	}
-	const set_operate &set = get_type().get_set_const(*val);
+	set_operate::const_ptr set = get_type().get_set_const(*val);
 	if (num_nodes < 0) {
 		this->portion_bufs.resize(1);
 		this->portion_bufs[0] = simple_raw_array(buf_size, -1);
-		set.set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
+		set->set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
 	}
 	else {
 		this->portion_bufs.resize(num_nodes);
 		for (int i = 0; i < num_nodes; i++) {
 			this->portion_bufs[i] = simple_raw_array(buf_size, i);
-			set.set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
+			set->set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
 		}
 	}
 }
@@ -72,7 +72,8 @@ matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 {
 	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
 			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
-	ret->set_data(get_type().get_set_const(*val));
+	auto set = get_type().get_set_const(*val);
+	ret->set_data(*set);
 	return ret;
 }
 

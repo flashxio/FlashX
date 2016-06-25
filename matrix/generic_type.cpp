@@ -241,13 +241,13 @@ const conv_layout &scalar_type_impl<T>::get_conv() const
 }
 
 template<class T>
-const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
+set_operate::const_ptr scalar_type_impl<T>::get_set_const(
+		const scalar_variable &val) const
 {
 	assert(val.get_type() == get_scalar_type<T>());
 	const scalar_variable_impl<T> &t_val
 		= static_cast<const scalar_variable_impl<T> &>(val);
-	static const_set_operate<T> op(t_val.get());
-	return op;
+	return set_operate::const_ptr(new const_set_operate<T>(t_val.get()));
 }
 
 namespace
