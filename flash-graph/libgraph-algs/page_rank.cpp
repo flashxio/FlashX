@@ -21,6 +21,7 @@
 #endif
 
 #include <limits>
+#include <cmath>
 
 #include "graph_engine.h"
 #include "graph_config.h"
