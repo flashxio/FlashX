@@ -524,9 +524,13 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 			matrix_layout_t out_layout) const
 {
 	// Get the right matrix in memory.
-	dense_matrix::ptr m2 = m.conv_store(true, -1);
+	// We don't want the right matrix to be a block matrix either.
+	dense_matrix::ptr m2 = dense_matrix::create(m.get_raw_store());
+	m2 = m2->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr mem_m2
-		= detail::mem_matrix_store::cast(m2->get_raw_store());
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				m2->get_raw_store());
+	assert(mem_m2);
 
 	// Here is to reuse the code for matrix multiplication with BLAS.
 	bool use_blas = left_op == NULL;
