@@ -913,6 +913,7 @@ mapply_matrix_store::mapply_matrix_store(
 	this->par_access = true;
 	this->cache_portion = true;
 	this->layout = layout;
+	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
 	this->op = op;
 	this->num_nodes = is_in_mem() ? fm::detail::get_num_nodes(in_mats) : -1;
 }
@@ -1035,24 +1036,31 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// first.
 	local_matrix_store::const_ptr ret = local_mem_buffer::get_mat_portion(
 			data_id);
-	// If it's in the same portion.
-	if (ret && (((size_t) ret->get_global_start_row() == start_row
-					&& (size_t) ret->get_global_start_col() == start_col
-					&& ret->get_num_rows() == num_rows
-					&& ret->get_num_cols() == num_cols)
-				// If it's in the corresponding portion in the transposed matrix.
-				|| ((size_t) ret->get_global_start_row() == start_col
-					&& (size_t) ret->get_global_start_col() == start_row
-					&& ret->get_num_rows() == num_cols
-					&& ret->get_num_cols() == num_rows))) {
+	bool same_portion = false;
+	bool trans_portion = false;
+	if (ret) {
+		// If it's in the same portion.
+		same_portion = (size_t) ret->get_global_start_row() == start_row
+			&& (size_t) ret->get_global_start_col() == start_col
+			&& ret->get_num_rows() == num_rows
+			&& ret->get_num_cols() == num_cols;
+		// If it's in the corresponding portion in the transposed matrix.
+		trans_portion = (size_t) ret->get_global_start_row() == start_col
+			&& (size_t) ret->get_global_start_col() == start_row
+			&& ret->get_num_rows() == num_cols
+			&& ret->get_num_cols() == num_rows;
+	}
+	if (same_portion || trans_portion) {
 		assert(ret->get_local_start_row() == 0);
 		assert(ret->get_local_start_col() == 0);
-		// If the cached portion has different data layout from the matrix,
-		// the cached portion is transposed. We need to transpose the matrix.
-		if (ret->store_layout() != store_layout())
+		if (trans_portion) {
+			assert(ret->store_layout() != store_layout());
 			return transpose_lmapply(ret);
-		else
+		}
+		else {
+			assert(ret->store_layout() == store_layout());
 			return ret;
+		}
 	}
 
 	// If the virtual matrix store has been materialized, we should return
