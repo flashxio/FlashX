@@ -326,7 +326,7 @@ public:
 	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
-		return store.get_cols(idxs);
+		return store.get_cols(idxs)->transpose();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
