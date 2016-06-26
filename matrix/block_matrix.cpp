@@ -582,7 +582,7 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 		// so the intermediate matrices should be read from SSDs in serial.
 		size_t i = m2_col / get_block_size();
 		dense_matrix::ptr res = mapply_portion(tmp_mats, op,
-				matrix_layout_t::L_COL, false);
+				tmp_mats[0]->store_layout(), false);
 		res->materialize_self();
 		res_blocks[i] = res->get_raw_store();
 	}
@@ -593,7 +593,7 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 		return dense_matrix::create(res_blocks[0]);
 	else
 		return block_matrix::create(detail::combined_matrix_store::create(
-					res_blocks, store->store_layout()));
+					res_blocks, res_blocks[0]->store_layout()));
 }
 
 dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
