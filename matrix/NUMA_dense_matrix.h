@@ -403,9 +403,7 @@ public:
 		return vec_store::const_ptr();
 	}
 	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA wide col matrix";
-		return vec_store::const_ptr();
+		return store.get_col_vec(row);
 	}
 
 	virtual matrix_layout_t store_layout() const {
