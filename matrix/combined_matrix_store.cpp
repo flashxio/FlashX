@@ -307,42 +307,52 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 		return combined_matrix_store::create(ret, store_layout());
 	}
 
-	off_t start_row = 0;
-	matrix_store::const_ptr mat;
-	// Find the right matrix.
-	for (size_t i = 0; i < mats.size(); i++) {
-		// We assume all required rows are from the same matrix.
-		if (idxs[0] >= start_row
-				&& (size_t) idxs[0] < start_row + mats[i]->get_num_rows()) {
-			mat = mats[i];
-			break;
+	// Figure out the physical matrix and the local row index for each row.
+	std::vector<off_t> all_mat_idxs(get_num_rows());
+	std::vector<off_t> all_lrow_idxs(get_num_rows());
+	off_t mat_idx = 0;
+	off_t lrow_idx = 0;
+	for (size_t i = 0; i < get_num_rows(); i++) {
+		assert((size_t) mat_idx < mats.size());
+		assert((size_t) lrow_idx < mats[mat_idx]->get_num_rows());
+		all_mat_idxs[i] = mat_idx;
+		all_lrow_idxs[i] = lrow_idx;
+		lrow_idx++;
+		if ((size_t) lrow_idx == mats[mat_idx]->get_num_rows()) {
+			mat_idx++;
+			lrow_idx = 0;
 		}
-		start_row += mats[i]->get_num_rows();
-	}
-	if (mat == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "row idxs are out of bounds";
-		return matrix_store::const_ptr();
 	}
 
-	assert((size_t) start_row < get_num_rows()
-			&& start_row + mat->get_num_rows() <= get_num_rows());
-	std::vector<off_t> local_idxs(idxs.size());
+	// The requried rows aren't in the sorted order. We need to figure
+	// out the physical matrix and the row index in the matrix for each
+	// required row.
+	std::vector<off_t> mat_idxs(idxs.size());
+	std::vector<off_t> lrow_idxs(idxs.size());
+	bool same_mat = true;
 	for (size_t i = 0; i < idxs.size(); i++) {
-		if (idxs[i] < start_row
-				|| (size_t) idxs[i] >= start_row + mat->get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Not all rows are in the same physical matrix.";
+		if ((size_t) idxs[i] >= get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) << "row idxs are out of bounds";
 			return matrix_store::const_ptr();
 		}
-		local_idxs[i] = idxs[i] - start_row;
+		mat_idxs[i] = all_mat_idxs[idxs[i]];
+		lrow_idxs[i] = all_lrow_idxs[idxs[i]];
+		// If they aren't in the same matrix.
+		if (mat_idxs[i] != mat_idxs[0])
+			same_mat = false;
 	}
-	// If we want to access all rows of the matrix, we can return
-	// the entire matrix directly.
-	if (local_idxs.size() == mat->get_num_rows()
-			&& std::is_sorted(local_idxs.begin(), local_idxs.end()))
-		return mat;
-	else
-		return mat->get_rows(local_idxs);
+
+	if (same_mat)
+		return mats[mat_idxs[0]]->get_rows(lrow_idxs);
+
+	// If rows are from different matrices, we get rows individually and
+	// then combine them to form a new matrix.
+	std::vector<matrix_store::const_ptr> rows(idxs.size());
+	for (size_t i = 0; i < idxs.size(); i++) {
+		std::vector<off_t> lrow_idx(1, lrow_idxs[i]);
+		rows[i] = mats[mat_idxs[i]]->get_rows(lrow_idx);
+	}
+	return combined_matrix_store::create(rows, matrix_layout_t::L_ROW);
 }
 
 bool combined_matrix_store::is_sparse() const
