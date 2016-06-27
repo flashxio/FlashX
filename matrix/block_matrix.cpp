@@ -309,94 +309,22 @@ vector::ptr block_matrix::get_row(off_t idx) const
 	return vector::create(store->get_mat_ref(mat_idx).get_row_vec(local_idx));
 }
 
-static void get_local_idxs(const std::vector<off_t> &idxs, size_t block_size,
-		std::vector<off_t> &mat_idxs, std::vector<std::vector<off_t> > &local_idxs)
-{
-	local_idxs.resize(1);
-	local_idxs[0].push_back(idxs[0] % block_size);
-	mat_idxs.push_back(idxs[0] / block_size);
-	for (size_t i = 1; i < idxs.size(); i++) {
-		off_t mat_idx = idxs[i] / block_size;
-		off_t local_idx = idxs[i] % block_size;
-		// We get to a new block.
-		if (mat_idx != mat_idxs.back()) {
-			mat_idxs.push_back(mat_idx);
-			local_idxs.push_back(std::vector<off_t>(1, local_idx));
-		}
-		else
-			local_idxs.back().push_back(local_idx);
-	}
-	assert(mat_idxs.size() == local_idxs.size());
-}
-
 dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
-	if (is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't get columns from a group of wide matrices";
+	auto cols = store->get_cols(idxs);
+	if (cols == NULL)
 		return dense_matrix::ptr();
-	}
-
-	for (size_t i = 0; i < idxs.size(); i++) {
-		off_t idx = idxs[i];
-		if ((size_t) idx >= get_num_cols() || idx < 0) {
-			BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
-			return dense_matrix::ptr();
-		}
-	}
-
-	if (!std::is_sorted(idxs.begin(), idxs.end())) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "get_cols: the col idxs must be in the ascending order";
-		return dense_matrix::ptr();
-	}
-
-	std::vector<std::vector<off_t> > local_idxs;
-	std::vector<off_t> mat_idxs;
-	get_local_idxs(idxs, get_block_size(), mat_idxs, local_idxs);
-
-	std::vector<detail::matrix_store::const_ptr> stores(mat_idxs.size());
-	for (size_t i = 0; i < mat_idxs.size(); i++)
-		stores[i] = store->get_mat_ref(mat_idxs[i]).get_cols(local_idxs[i]);
-	// The block matrix is designed to deal with a group of matrices with
-	// the same size.
-	return dense_matrix::create(detail::combined_matrix_store::create(stores,
-				matrix_layout_t::L_COL));
+	else
+		return dense_matrix::create(cols);
 }
 
 dense_matrix::ptr block_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
-	if (!is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't get rows from a group of tall matrices";
+	auto rows = store->get_rows(idxs);
+	if (rows == NULL)
 		return dense_matrix::ptr();
-	}
-
-	for (size_t i = 0; i < idxs.size(); i++) {
-		off_t idx = idxs[i];
-		if ((size_t) idx >= get_num_rows() || idx < 0) {
-			BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
-			return dense_matrix::ptr();
-		}
-	}
-
-	if (!std::is_sorted(idxs.begin(), idxs.end())) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "get_rows: the row idxs must be in the ascending order";
-		return dense_matrix::ptr();
-	}
-
-	std::vector<std::vector<off_t> > local_idxs;
-	std::vector<off_t> mat_idxs;
-	get_local_idxs(idxs, get_block_size(), mat_idxs, local_idxs);
-
-	std::vector<detail::matrix_store::const_ptr> stores(mat_idxs.size());
-	for (size_t i = 0; i < mat_idxs.size(); i++)
-		stores[i] = store->get_mat_ref(mat_idxs[i]).get_rows(local_idxs[i]);
-	// The block matrix is designed to deal with a group of matrices with
-	// the same size.
-	return dense_matrix::create(detail::combined_matrix_store::create(stores,
-				matrix_layout_t::L_ROW));
+	else
+		return dense_matrix::create(rows);
 }
 
 dense_matrix::ptr block_matrix::clone() const
