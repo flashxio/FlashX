@@ -126,12 +126,12 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 		return create_FMR_vector(vec, "");
 	}
 	else if (R_is_integer(pinitv)) {
-		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+		dense_matrix::ptr vec = dense_matrix::create_const<int>(
 				INTEGER(pinitv)[0], len, 1, matrix_layout_t::L_COL);
 		return create_FMR_vector(vec, "");
 	}
 	else if (R_is_logical(pinitv)) {
-		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+		dense_matrix::ptr vec = dense_matrix::create_const<int>(
 				LOGICAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
 		Rcpp::List ret = create_FMR_vector(vec, "");
 		ret["ele_type"] = Rcpp::String("logical");
