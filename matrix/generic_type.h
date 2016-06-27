@@ -204,6 +204,7 @@ class conv_layout;
 class scalar_variable;
 class rand_gen;
 class set_operate;
+class set_vec_operate;
 class generic_hashtable;
 class bulk_uoperate;
 
@@ -228,6 +229,8 @@ public:
 	virtual const conv_layout &get_conv() const = 0;
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual std::shared_ptr<const set_operate> get_set_const(
+			const scalar_variable &val) const = 0;
+	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
 			const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<const set_operate> get_set_seq(
 			const scalar_variable &start, const scalar_variable &stride,
@@ -290,6 +293,8 @@ public:
 		return algs;
 	}
 	virtual std::shared_ptr<const set_operate> get_set_const(
+			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
 			const scalar_variable &val) const;
 	virtual std::shared_ptr<const set_operate> get_set_seq(
 			const scalar_variable &start, const scalar_variable &stride,

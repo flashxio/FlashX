@@ -251,6 +251,16 @@ set_operate::const_ptr scalar_type_impl<T>::get_set_const(
 }
 
 template<class T>
+set_vec_operate::const_ptr scalar_type_impl<T>::get_set_vec_const(
+		const scalar_variable &val) const
+{
+	assert(val.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_val
+		= static_cast<const scalar_variable_impl<T> &>(val);
+	return set_vec_operate::const_ptr(new const_set_vec_operate<T>(t_val.get()));
+}
+
+template<class T>
 set_operate::const_ptr scalar_type_impl<T>::get_set_seq(
 		const scalar_variable &start, const scalar_variable &stride,
 		const scalar_variable &seq_ele_stride, size_t num_rows, size_t num_cols,
