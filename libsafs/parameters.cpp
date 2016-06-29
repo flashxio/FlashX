@@ -67,7 +67,7 @@ sys_parameters::sys_parameters()
 	num_nodes = 1;
 	merge_reqs = false;
 	max_obj_alloc_size = 100 * 1024 * 1024;
-	writable = false;
+	writable = true;
 	max_num_pending_ios = 1000;
 	huge_page_enabled = false;
 	busy_wait = false;
