@@ -520,8 +520,12 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 	if (res == NULL)
 		return R_NilValue;
 
-	if (!res->is_type<double>())
+	if (!res->is_type<double>()) {
+		// TODO this is really unnecessary. But we can't run sapply on an IPW
+		// matrix.
+		res->materialize_self();
 		res = res->cast_ele_type(get_scalar_type<double>());
+	}
 
 	bool is_vec = is_vector(pmat);
 	if (res && is_vec) {
