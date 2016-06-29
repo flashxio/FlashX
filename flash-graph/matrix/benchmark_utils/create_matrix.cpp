@@ -25,27 +25,7 @@
 #include <math.h>
 #include "log.h"
 
-#include "../generic_type.h"
-#include "../mem_matrix_store.h"
 #include "convert_util.h"
-
-using namespace fm;
-using namespace fm::detail;
-
-class set_col_operate: public type_set_operate<double>
-{
-	size_t num_cols;
-	public:
-	set_col_operate(size_t num_cols) {
-		this->num_cols = num_cols;
-	}
-
-	void set(double *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = (row_idx + i) * num_cols + col_idx;
-		}
-	}
-};
 
 int main (int argc, char* argv[]) {
 	if (argc < 4) {
@@ -58,39 +38,10 @@ int main (int argc, char* argv[]) {
 	std::string outfn = "matrix_r"+ std::to_string(nrow)+"_c"+std::to_string(ncol);
 	std::string argv1 = std::string(argv[3]);
 
-	const conv_layout lay = argv1 == "row" ? ROW
-		: argv1 == "col" ? COL
-		: argv1 == "rrow" ? RAWROW
+	const conv_layout lay = argv1 == "rrow" ? RAWROW
 		: RAWCOL;
 
-	if (lay == ROW || lay == COL) {
-		const scalar_variable_impl<double> mean(.5);
-		const set_col_operate sco(ncol);
-
-		// L_COL because I expect to get this layout form eigensolver
-		dense_matrix::ptr dmat = dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL, 
-				get_scalar_type<double>(), sco, -1, true);
-
-		if (lay == ROW) {
-			BOOST_LOG_TRIVIAL(info) << "TRANSPOSING matrix to row major ...";
-			dmat = dmat->transpose();
-		} // else leave as col-wise
-
-#if 0
-		BOOST_LOG_TRIVIAL(info) << "Printing row-wise matrix for verification!\n";
-		print_dmat(dmat);
-#endif
-
-		BOOST_LOG_TRIVIAL(info) << "Writing the matrix";
-		// convert to mem_matrix_store
-		mem_matrix_store::const_ptr mms = mem_matrix_store::cast(dmat->get_raw_store());
-
-		if (lay == ROW)
-			mms->write2file(outfn+"_dm_rw.bin");
-		else 
-			mms->write2file(outfn+"_dm_cw.bin");
-
-	} else if (lay == RAWROW || lay == RAWCOL) {
+	if (lay == RAWROW || lay == RAWCOL) {
 		int min = 1; int max = 5;
 
 		double* dmat = new double [nrow*ncol];
@@ -132,6 +83,7 @@ int main (int argc, char* argv[]) {
 #endif
 	} else {
 		fprintf(stderr, "Unknown matrix type '%s'", argv[3]);
+		return EXIT_FAILURE;
 	}
 
 	return EXIT_SUCCESS;

@@ -18,14 +18,10 @@
  */
 
 #include <fstream>
+#include <vector>
+#include <cassert>
 
-#include "../dense_matrix.h"
-#include "../vector.h"
-
-using namespace fm;
-using namespace fm::detail;
-
-enum conv_layout{ROW, COL, RAWROW, RAWCOL};
+enum conv_layout{RAWROW, RAWCOL};
 
 template <typename T>
 static void print_vector(typename std::vector<T>& v) 
@@ -50,14 +46,6 @@ static void print_mat(T* matrix, const unsigned rows, const unsigned cols,
 		}
 		if (lay == RAWROW) { std::cout <<  " ]\n"; }
 		else { std::cout << " |\n"; }
-	}
-}
-
-static void print_dmat(dense_matrix::ptr dmat) {
-	for (size_t row = 0; row < dmat->get_num_rows(); row++) {
-		std::shared_ptr<vector> curr_row = dmat->get_row(row);
-		std::vector<double> stdvec = curr_row->conv2std<double>();
-		print_vector<double>(stdvec);
 	}
 }
 

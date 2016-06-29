@@ -19,21 +19,21 @@ include ../../../Makefile.common
 
 OMP_FLAG = -fopenmp
 CXXFLAGS := -g -std=c++0x -I../../../include -I../../../libcommon -I../../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L../../eigensolver -leigen -L../../ -lFMatrix -L../../../flash-graph -lgraph -L../../../libsafs -lsafs -L../../../libcommon -lcommon $(LDFLAGS)
+#LDFLAGS := $(OMP_FLAG) -L../../eigensolver -leigen -L../../ -lFMatrix -L../../../flash-graph -lgraph -L../../../libsafs -lsafs -L../../../libcommon -lcommon $(LDFLAGS)
+LDFLAGS := $(OMP_FLAG)  -L../../../flash-graph -lgraph -L../../../libsafs -lsafs -L../../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lnuma -lz -laio -lcblas
 
 all: convert_matrix create_matrix read_rrow_data
 
 
-convert_matrix: convert_matrix.o ../../libFMatrix.a
+convert_matrix: convert_matrix.o
 	$(CXX) -o convert_matrix convert_matrix.o $(LDFLAGS)
 
-create_matrix: create_matrix.o ../../libFMatrix.a
+create_matrix: create_matrix.o
 	$(CXX) -o create_matrix create_matrix.o $(LDFLAGS)
 
 read_rrow_data: read_rrow_data.o
 	$(CXX) -o read_rrow_data read_rrow_data.o $(LDFLAGS)
-
 clean:
 	rm -f *.d
 	rm -f *.o
