@@ -1043,24 +1043,19 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 		same_portion = (size_t) ret->get_global_start_row() == start_row
 			&& (size_t) ret->get_global_start_col() == start_col
 			&& ret->get_num_rows() == num_rows
-			&& ret->get_num_cols() == num_cols;
+			&& ret->get_num_cols() == num_cols
+			&& ret->store_layout() == store_layout();
 		// If it's in the corresponding portion in the transposed matrix.
 		trans_portion = (size_t) ret->get_global_start_row() == start_col
 			&& (size_t) ret->get_global_start_col() == start_row
 			&& ret->get_num_rows() == num_cols
-			&& ret->get_num_cols() == num_rows;
+			&& ret->get_num_cols() == num_rows
+			&& ret->store_layout() != store_layout();
 	}
 	if (same_portion || trans_portion) {
 		assert(ret->get_local_start_row() == 0);
 		assert(ret->get_local_start_col() == 0);
-		if (trans_portion) {
-			assert(ret->store_layout() != store_layout());
-			return transpose_lmapply(ret);
-		}
-		else {
-			assert(ret->store_layout() == store_layout());
-			return ret;
-		}
+		return trans_portion ? transpose_lmapply(ret) : ret;
 	}
 
 	// If the virtual matrix store has been materialized, we should return
