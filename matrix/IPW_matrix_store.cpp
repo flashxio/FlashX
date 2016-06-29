@@ -97,7 +97,7 @@ public:
 	}
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		assert(mats.size() == 1);
+		assert(mats.size() == 2);
 		return std::string("inner_prod(") + mats[0]->get_name()
 			+ "," + mats[1]->get_name() + ")";
 	}
