@@ -21,16 +21,20 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/ -DUSE_EIGEN
 
-all: libmatrix
+all: libmatrix benchmark-utils
 
 libmatrix: $(OBJS)
 	rm -f libmatrix.a
 	ar -cvq libmatrix.a $(OBJS)
+
+benchmark-utils:
+	$(MAKE) -C benchmark_utils
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f libmatrix.a
+	$(MAKE) clean -C benchmark_utils
 
 -include $(DEPS) 
