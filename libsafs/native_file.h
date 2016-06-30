@@ -90,14 +90,7 @@ public:
 		return file_name;
 	}
 
-	virtual bool rename(const std::string &new_name) {
-		if (::rename(file_name.c_str(), new_name.c_str()) == 0) {
-			file_name = new_name;
-			return true;
-		}
-		else
-			return false;
-	}
+	virtual bool rename(const std::string &new_name);
 
 	/**
 	 * Create/delete a file on the native file system.

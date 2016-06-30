@@ -105,8 +105,11 @@ ssize_t safs_file::get_size() const
 
 bool safs_file::rename(const std::string &new_name)
 {
-	if (!exist())
+	if (!exist()) {
+		fprintf(stderr, "can't rename: the new name %s exists\n",
+				new_name.c_str());
 		return false;
+	}
 
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_file f(native_dirs[i].get_file_name());
