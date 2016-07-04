@@ -1477,6 +1477,11 @@ bool EM_vec_store::set_persistent(const std::string &name)
 {
 	if (!holder->set_persistent(name))
 		return false;
+
+	// We need to expose the right number of bytes to the user of the file.
+	safs::safs_file f(safs::get_sys_RAID_conf(), name);
+	f.resize(get_length() * get_type().get_size());
+
 	// TODO we have to make sure no other threads are accessing the data
 	// in the vector. How can we do that?
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
