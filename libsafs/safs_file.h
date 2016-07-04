@@ -104,6 +104,7 @@ public:
 
 	bool exist() const;
 	ssize_t get_size() const;
+	bool resize(size_t new_size);
 	bool create_file(size_t file_size,
 			int block_size = params.get_RAID_block_size(),
 			int mapping_option = params.get_RAID_mapping_option(),

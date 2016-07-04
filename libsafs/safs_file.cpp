@@ -103,6 +103,56 @@ ssize_t safs_file::get_size() const
 	return ret;
 }
 
+bool safs_file::resize(size_t new_size)
+{
+	if (!exist()) {
+		fprintf(stderr, "%s doesn't exist\n", name.c_str());
+		return false;
+	}
+	ssize_t phy_size = get_size();
+	if (phy_size < (ssize_t) new_size) {
+		fprintf(stderr, "the file has %ld bytes, new size is %ld\n",
+				phy_size, new_size);
+		return false;
+	}
+
+	std::string header_file = get_header_file();
+	printf("header file: %s\n", header_file.c_str());
+	if (!file_exist(header_file))
+		return false;
+	FILE *f = fopen(header_file.c_str(), "r+");
+	if (f == NULL) {
+		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
+		return false;
+	}
+
+	safs_header header;
+	size_t num_reads = fread(&header, sizeof(header), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		fclose(f);
+		return false;
+	}
+	int seek_ret = fseek(f, 0, SEEK_SET);
+	if (seek_ret < 0) {
+		perror("seek");
+		fclose(f);
+		return false;
+	}
+
+	safs_header new_header(header.get_block_size(),
+			header.get_mapping_option(), header.is_writable(),
+			new_size);
+	size_t num_writes = fwrite(&new_header, sizeof(new_header), 1, f);
+	if (num_writes != 1) {
+		perror("fwrite");
+		fclose(f);
+		return false;
+	}
+	fclose(f);
+	return true;
+}
+
 bool safs_file::rename(const std::string &new_name)
 {
 	if (!exist())
