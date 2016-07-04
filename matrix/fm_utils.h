@@ -90,6 +90,18 @@ fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
 		edge_list::ptr el);
 
 /*
+ * Fetch the subgraph that contains the specified vertices from the graph.
+ * If `compact' is false, the constructed subgraph contains the same number
+ * of vertices as the original graph but the unspecified vertices contains
+ * no neighbors.
+ * If `compact' is true, the constructed subgraph contains only the specified
+ * vertices.
+ */
+fg::FG_graph::ptr fetch_subgraph(fg::FG_graph::ptr graph,
+		const std::vector<fg::vertex_id_t> &vertices,
+		const std::string &graph_name, bool compact);
+
+/*
  * This function creates a 2D-partitioned matrix from a data frame that
  * contains the locations of the non-zero entries in the matrix.
  * The matrix and its index are kept in memory.

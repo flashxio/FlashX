@@ -26,7 +26,9 @@
 #include "vector_vector.h"
 #include "local_vv_store.h"
 #include "mem_vv_store.h"
+#include "EM_vv_store.h"
 #include "EM_vector.h"
+#include "fg_utils.h"
 
 namespace fm
 {
@@ -638,27 +640,23 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 			graph_data);
 }
 
-fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
-		edge_list::ptr el)
+static fg::FG_graph::ptr construct_FG_graph(
+		const std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> &g,
+		const std::string &graph_name)
 {
-	std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> res;
-	if (el->is_directed())
-		res = create_fg_directed_graph(graph_name, el);
-	else
-		res = create_fg_undirected_graph(graph_name, el);
-
-	if (res.second->is_in_mem()) {
+	if (g.second->is_in_mem()) {
 		fg::in_mem_graph::ptr graph = fg::in_mem_graph::create(graph_name,
-				detail::smp_vec_store::cast(res.second)->get_raw_data(),
-				res.second->get_length());
-		return fg::FG_graph::create(graph, res.first, graph_name, NULL);
+				detail::smp_vec_store::cast(g.second)->get_raw_data(),
+				g.second->get_length());
+		return fg::FG_graph::create(graph, g.first, graph_name, NULL);
 	}
 	else {
-		detail::EM_vec_store::ptr graph_data = detail::EM_vec_store::cast(res.second);
+		detail::EM_vec_store::ptr graph_data = detail::EM_vec_store::cast(
+				g.second);
 		detail::EM_vec_store::ptr index_vec = detail::EM_vec_store::create(0,
 				get_scalar_type<char>());
-		local_cref_vec_store index_store((const char *) res.first.get(), 0,
-					res.first->get_index_size(), get_scalar_type<char>(), -1);
+		local_cref_vec_store index_store((const char *) g.first.get(), 0,
+					g.first->get_index_size(), get_scalar_type<char>(), -1);
 		index_vec->append(index_store);
 		std::string graph_file_name = graph_name + ".adj";
 		bool ret = graph_data->set_persistent(graph_file_name);
@@ -668,6 +666,261 @@ fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
 		assert(ret);
 		return fg::FG_graph::create(graph_file_name, index_file_name, NULL);
 	}
+}
+
+fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
+		edge_list::ptr el)
+{
+	std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> res;
+	if (el->is_directed())
+		res = create_fg_directed_graph(graph_name, el);
+	else
+		res = create_fg_undirected_graph(graph_name, el);
+	return construct_FG_graph(res, graph_name);
+}
+
+static vector_vector::ptr conv_fg2vv(fg::FG_graph::ptr graph, bool is_out_edge)
+{
+	auto vindex = graph->get_index_data();
+	std::vector<off_t> offs(vindex->get_num_vertices() + 1);
+	if (is_out_edge)
+		init_out_offs(vindex, offs);
+	else
+		init_in_offs(vindex, offs);
+
+	auto graph_data = graph->get_graph_data();
+	if (graph_data) {
+		size_t len = graph_data->get_data().get_length();
+		detail::smp_vec_store::ptr mem_vec = detail::smp_vec_store::create(
+				len, get_scalar_type<char>());
+		graph_data->get_data().copy_to(mem_vec->get_raw_arr(), len, 0);
+		return vector_vector::create(detail::mem_vv_store::create(offs, mem_vec));
+	}
+	else {
+		safs::file_io_factory::shared_ptr factory = graph->get_graph_io_factory(
+				safs::REMOTE_ACCESS);
+		if (factory == NULL) {
+			fprintf(stderr, "can't access the graph\n");
+			return vector_vector::ptr();
+		}
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(factory);
+		return vector_vector::create(detail::EM_vv_store::create(offs, vec));
+	}
+}
+
+namespace
+{
+
+typedef std::unordered_map<fg::vertex_id_t, fg::vertex_id_t> vertex_map_t;
+
+class subgraph_apply: public gr_apply_operate<local_vv_store>
+{
+	const vertex_map_t &vmap;
+	bool compact;
+	// TODO I should avoid using a global variable.
+	std::atomic<size_t> tot_num_edges;
+public:
+	subgraph_apply(const vertex_map_t &_vmap, bool compact): vmap(_vmap) {
+		this->compact = compact;
+		tot_num_edges = 0;
+	}
+
+	void run(const void *key, const local_vv_store &val,
+			local_vec_store &out) const;
+
+	const scalar_type &get_key_type() const {
+		return get_scalar_type<factor_value_t>();
+	}
+
+	const scalar_type &get_output_type() const {
+		return get_scalar_type<char>();
+	}
+
+	size_t get_num_out_eles() const {
+		return 1;
+	}
+
+	size_t get_tot_num_edges() const {
+		return tot_num_edges.load();
+	}
+};
+
+void subgraph_apply::run(const void *key, const local_vv_store &val,
+		local_vec_store &out) const
+{
+	factor_value_t vid = *(const factor_value_t *) key;
+	const fg::ext_mem_undirected_vertex *v
+		= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(0);
+	assert(vid == v->get_id());
+
+	// If we don't need the vertex, we can jump out now.
+	auto it = vmap.find(vid);
+	if (it == vmap.end() && compact) {
+		out.resize(0);
+		return;
+	}
+	// In this case, I need to add an empty vertex.
+	else if (it == vmap.end() && !compact) {
+		out.resize(fg::ext_mem_undirected_vertex::get_header_size());
+		new (out.get_raw_arr()) fg::ext_mem_undirected_vertex(vid, 0, 0);
+		return;
+	}
+	fg::vertex_id_t new_vid = it->second;
+
+	// Get all the neighbors we need for the new vertex.
+	std::vector<fg::vertex_id_t> neighs;
+	for (size_t i = 0; i < v->get_num_edges(); i++) {
+		auto it = vmap.find(v->get_neighbor(i));
+		if (it != vmap.end())
+			neighs.push_back(it->second);
+	}
+
+	// Construct the new vertex.
+	size_t vsize = fg::ext_mem_undirected_vertex::num_edges2vsize(
+			neighs.size(), 0);
+	out.resize(vsize);
+	fg::ext_mem_undirected_vertex *out_v
+		= new (out.get_raw_arr()) fg::ext_mem_undirected_vertex(new_vid,
+				neighs.size(), 0);
+	for (size_t i = 0; i < neighs.size(); i++)
+		out_v->set_neighbor(i, neighs[i]);
+
+	const_cast<subgraph_apply *>(this)->tot_num_edges += neighs.size();
+}
+
+class set_subgraph_label_operate: public type_set_vec_operate<factor_value_t>
+{
+public:
+	virtual void set(factor_value_t *arr, size_t num_eles,
+			off_t start_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = start_idx + i;
+	}
+};
+
+}
+
+fg::FG_graph::ptr fetch_subgraph(fg::FG_graph::ptr graph,
+		const std::vector<fg::vertex_id_t> &vertices,
+		const std::string &graph_name, bool compact)
+{
+	const size_t attr_size = 0;
+	// map from the original vertex id to the new id.
+	std::unordered_map<fg::vertex_id_t, fg::vertex_id_t> vmap;
+	if (compact) {
+		for (size_t i = 0; i < vertices.size(); i++)
+			vmap.insert(std::pair<fg::vertex_id_t, fg::vertex_id_t>(
+						vertices[i], i));
+	}
+	else {
+		for (size_t i = 0; i < vertices.size(); i++)
+			vmap.insert(std::pair<fg::vertex_id_t, fg::vertex_id_t>(vertices[i],
+						vertices[i]));
+	}
+
+	const fg::graph_header &old_header = graph->get_graph_header();
+	factor f(old_header.get_num_vertices());
+	factor_vector::ptr labels = factor_vector::create(f,
+			old_header.get_num_vertices(), -1, graph->is_in_mem(),
+			set_subgraph_label_operate());
+
+	detail::vec_store::ptr graph_data = detail::vec_store::create(
+			fg::graph_header::get_header_size(),
+			get_scalar_type<char>(), -1, graph->is_in_mem());
+	fg::vertex_index::ptr vindex;
+
+	size_t num_vertices = compact ? vmap.size() : old_header.get_num_vertices();
+	if (old_header.is_directed_graph()) {
+		vector_vector::ptr res, adjs;
+		size_t num_edges;
+
+		// Work on the in-edge lists.
+		subgraph_apply in_apply(vmap, compact);
+		adjs = conv_fg2vv(graph, false);
+		res = adjs->groupby(*labels, in_apply);
+		num_edges = in_apply.get_tot_num_edges();
+		assert(res->get_num_vecs() == num_vertices);
+		// Move in-edge adjacency lists to the final image.
+		const detail::vv_store &in_adj_store
+			= dynamic_cast<const detail::vv_store &>(res->get_data());
+		graph_data->append(in_adj_store.get_data());
+		// Get the number of edges of each vertex.
+		std::vector<fg::vsize_t> num_in_edges(num_vertices);
+		for (size_t i = 0; i < res->get_num_vecs(); i++)
+			num_in_edges[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
+					res->get_length(i), attr_size);
+
+		// Work on the out-edge lists.
+		subgraph_apply out_apply(vmap, compact);
+		adjs = conv_fg2vv(graph, true);
+		res = adjs->groupby(*labels, out_apply);
+		assert(res->get_num_vecs() == num_vertices);
+		assert(num_edges == out_apply.get_tot_num_edges());
+		// Move out-edge adjacency lists to the final image.
+		const detail::vv_store &out_adj_store
+			= dynamic_cast<const detail::vv_store &>(res->get_data());
+		graph_data->append(out_adj_store.get_data());
+		// Get the number of edges of each vertex.
+		std::vector<fg::vsize_t> num_out_edges(num_vertices);
+		for (size_t i = 0; i < res->get_num_vecs(); i++)
+			num_out_edges[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
+					res->get_length(i), attr_size);
+
+		// We need to free the space for these data structures.
+		// They are very large for large graphs.
+		vmap.clear();
+		labels = NULL;
+
+		fg::graph_header header(old_header.get_graph_type(), num_vertices,
+				num_edges, attr_size);
+		vindex = fg::cdirected_vertex_index::construct(num_vertices,
+				num_in_edges.data(), num_out_edges.data(), header);
+
+		// Construct the graph header.
+		local_vec_store::ptr header_store(new local_buf_vec_store(0,
+					fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
+		memcpy(header_store->get_raw_arr(), &header,
+				fg::graph_header::get_header_size());
+		graph_data->set_portion(header_store, 0);
+	}
+	else {
+		size_t num_edges;
+
+		subgraph_apply apply(vmap, compact);
+		vector_vector::ptr adjs = conv_fg2vv(graph, true);
+		vector_vector::ptr res = adjs->groupby(*labels, apply);
+		num_edges = apply.get_tot_num_edges();
+		assert(res->get_num_vecs() == num_vertices);
+		const detail::vv_store &adj_store
+			= dynamic_cast<const detail::vv_store &>(res->get_data());
+		graph_data->append(adj_store.get_data());
+		// Get the number of edges of each vertex.
+		std::vector<fg::vsize_t> num_vedges(num_vertices);
+		for (size_t i = 0; i < res->get_num_vecs(); i++)
+			num_vedges[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
+					res->get_length(i), attr_size);
+
+		// We need to free the space for these data structures.
+		// They are very large for large graphs.
+		vmap.clear();
+		labels = NULL;
+
+		fg::graph_header header(old_header.get_graph_type(), num_vertices,
+				num_edges, attr_size);
+		vindex = fg::cundirected_vertex_index::construct(num_vertices,
+				num_vedges.data(), header);
+
+		// Construct the graph header.
+		local_vec_store::ptr header_store(new local_buf_vec_store(0,
+					fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
+		memcpy(header_store->get_raw_arr(), &header,
+				fg::graph_header::get_header_size());
+		graph_data->set_portion(header_store, 0);
+	}
+
+	return construct_FG_graph(
+			std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
+				graph_data), graph_name);
 }
 
 class set_2d_label_operate: public type_set_vec_operate<factor_value_t>

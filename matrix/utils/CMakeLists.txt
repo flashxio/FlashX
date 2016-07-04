@@ -5,7 +5,7 @@ include_directories("${PROJECT_SOURCE_DIR}")
 add_executable(el2fg el2fg.cpp)
 target_link_libraries(el2fg FMatrix graph safs pthread numa aio cblas)
 
-add_executable(fg2fm fg2fm.cpp fg_utils.cpp)
+add_executable(fg2fm fg2fm.cpp)
 target_link_libraries(fg2fm FMatrix graph safs pthread numa aio cblas)
 
 find_package(hwloc)

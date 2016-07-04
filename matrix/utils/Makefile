@@ -21,19 +21,22 @@ CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver
 LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
-all: el2fg fg2fm fg2crs
+all: el2fg fg2fm fg2crs fg_lcc
 
 el2fg: el2fg.o ../libFMatrix.a
 	$(CXX) -o el2fg el2fg.o $(LDFLAGS)
 
-fg2fm: fg2fm.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o fg2fm fg2fm.o fg_utils.o $(LDFLAGS)
+fg2fm: fg2fm.o ../libFMatrix.a
+	$(CXX) -o fg2fm fg2fm.o $(LDFLAGS)
 
-fg2crs: fg2crs.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o fg2crs fg2crs.o fg_utils.o $(LDFLAGS)
+fg2crs: fg2crs.o ../libFMatrix.a
+	$(CXX) -o fg2crs fg2crs.o $(LDFLAGS)
+
+fg_lcc: fg_lcc.o ../libFMatrix.a
+	$(CXX) -o fg_lcc fg_lcc.o -L../../flash-graph/libgraph-algs -lgraph-algs $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f el2fg fg2fm fg2crs
+	rm -f el2fg fg2fm fg2crs fg_lcc
