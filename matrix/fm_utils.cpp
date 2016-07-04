@@ -660,10 +660,16 @@ static fg::FG_graph::ptr construct_FG_graph(
 		index_vec->append(index_store);
 		std::string graph_file_name = graph_name + ".adj";
 		bool ret = graph_data->set_persistent(graph_file_name);
-		assert(ret);
+		if (!ret) {
+			fprintf(stderr, "can't make the graph file persistent in SAFS\n");
+			return fg::FG_graph::ptr();
+		}
 		std::string index_file_name = graph_name + ".index";
 		ret = index_vec->set_persistent(index_file_name);
-		assert(ret);
+		if (!ret) {
+			fprintf(stderr, "can't make the index file persistent in SAFS\n");
+			return fg::FG_graph::ptr();
+		}
 		return fg::FG_graph::create(graph_file_name, index_file_name, NULL);
 	}
 }

@@ -38,14 +38,16 @@ int main(int argc, char *argv[])
 		if (cc_ids->get(i) == max_cid.first)
 			lcc_vids.push_back(i);
 
-	fg::FG_graph::ptr lcc = fetch_subgraph(g, lcc_vids, new_graph_name, true);
-	const fg::graph_header &header = lcc->get_graph_header();
-	printf("lcc has %ld vertices and %ld edges\n", header.get_num_vertices(),
-			header.get_num_edges());
-	auto graph_data = lcc->get_graph_data();
-	if (graph_data) {
-		graph_data->dump(new_graph_name + ".adj");
-		lcc->get_index_data()->dump(new_graph_name + ".index");
+	fg::FG_graph::ptr lcc = fetch_subgraph(g, lcc_vids, new_graph_name, false);
+	if (lcc) {
+		const fg::graph_header &header = lcc->get_graph_header();
+		printf("lcc has %ld vertices and %ld edges\n", header.get_num_vertices(),
+				header.get_num_edges());
+		auto graph_data = lcc->get_graph_data();
+		if (graph_data) {
+			graph_data->dump(new_graph_name + ".adj");
+			lcc->get_index_data()->dump(new_graph_name + ".index");
+		}
 	}
 
 	destroy_flash_matrix();

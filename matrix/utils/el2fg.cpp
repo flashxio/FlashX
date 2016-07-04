@@ -154,9 +154,9 @@ int main(int argc, char *argv[])
 		printf("start to construct FlashGraph graph\n");
 		fg::FG_graph::ptr graph = create_fg_graph(graph_name, el);
 
-		if (graph->get_index_data())
+		if (graph && graph->get_index_data())
 			graph->get_index_data()->dump(index_file);
-		if (graph->get_graph_data())
+		if (graph && graph->get_graph_data())
 			graph->get_graph_data()->dump(adj_file);
 	}
 	destroy_flash_matrix();
