@@ -375,9 +375,11 @@ public:
 		if (ins.size() == 1)
 			out.copy_from(*ins[0]);
 		else {
-			mapply2(*ins[0], *ins[1], *op, out);
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+			mapply2(*ins[0], *ins[1], *op, dim, out);
 			for (size_t i = 2; i < ins.size(); i++)
-				mapply2(*ins[i], out, *op, out);
+				mapply2(*ins[i], out, *op, dim, out);
 		}
 	}
 
@@ -421,9 +423,11 @@ public:
 		if (ins.size() == 1)
 			out.copy_from(*ins[0]);
 		else {
-			mapply2(*ins[0], *ins[1], *op, out);
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+			mapply2(*ins[0], *ins[1], *op, dim, out);
 			for (size_t i = 2; i < ins.size(); i++)
-				mapply2(*ins[i], out, *op, out);
+				mapply2(*ins[i], out, *op, dim, out);
 		}
 	}
 

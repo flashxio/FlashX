@@ -127,7 +127,8 @@ detail::mem_matrix_store::ptr inner_prod_wide_op::get_combined_result() const
 		// It's possible that the local matrix store doesn't exist
 		// because the input matrix is very small.
 		if (local_ms[j] && local_ms[j] != lmat)
-			detail::mapply2(*local_res, *local_ms[j], *right_op, *local_res);
+			detail::mapply2(*local_res, *local_ms[j], *right_op,
+					part_dim_t::PART_NONE, *local_res);
 	}
 	return res;
 }
@@ -170,10 +171,13 @@ void inner_prod_wide_op::run(
 	if (!require_trans) {
 		assert(ins[0]->get_num_cols() == ins[1]->get_num_rows());
 		if (is_first)
-			detail::inner_prod(*ins[0], *ins[1], *left_op, *right_op, *local_m);
+			detail::inner_prod_wide(*ins[0], *ins[1], *left_op, *right_op, *local_m);
 		else {
-			detail::inner_prod(*ins[0], *ins[1], *left_op, *right_op, *local_tmp);
-			mapply2(*local_m, *local_tmp, *right_op, *local_m);
+			detail::inner_prod_wide(*ins[0], *ins[1], *left_op, *right_op, *local_tmp);
+			// We don't need to further partition the result matrix when
+			// summing them up.
+			mapply2(*local_m, *local_tmp, *right_op, part_dim_t::PART_NONE,
+					*local_m);
 		}
 	}
 	else {
@@ -182,10 +186,13 @@ void inner_prod_wide_op::run(
 			= std::static_pointer_cast<const detail::local_matrix_store>(
 					ins[0]->transpose());
 		if (is_first)
-			detail::inner_prod(*store, *ins[1], *left_op, *right_op, *local_m);
+			detail::inner_prod_wide(*store, *ins[1], *left_op, *right_op, *local_m);
 		else {
-			detail::inner_prod(*store, *ins[1], *left_op, *right_op, *local_tmp);
-			mapply2(*local_m, *local_tmp, *right_op, *local_m);
+			detail::inner_prod_wide(*store, *ins[1], *left_op, *right_op, *local_tmp);
+			// We don't need to further partition the result matrix when
+			// summing them up.
+			mapply2(*local_m, *local_tmp, *right_op, part_dim_t::PART_NONE,
+					*local_m);
 		}
 	}
 }

@@ -21,7 +21,9 @@ public:
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
-		detail::mapply2(*ins[0], *ins[1], op, out);
+		detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+		detail::mapply2(*ins[0], *ins[1], op, dim, out);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -49,7 +51,7 @@ public:
 		out.reset_data();
 		const bulk_operate &left_op = get_output_type().get_basic_ops().get_multiply();
 		const bulk_operate &right_op = get_output_type().get_basic_ops().get_add();
-		detail::inner_prod(*ins[0], *small_mat, left_op, right_op, out);
+		detail::inner_prod_tall(*ins[0], *small_mat, left_op, right_op, out);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const;

@@ -720,11 +720,13 @@ public:
 		if (ins.size() == 1)
 			out.copy_from(*ins[0]);
 		else {
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 			mapply2(*ins[0], *ins[1],
-					out.get_type().get_basic_ops().get_add(), out);
+					out.get_type().get_basic_ops().get_add(), dim, out);
 			for (size_t i = 2; i < ins.size(); i++)
 				mapply2(*ins[i], out,
-						out.get_type().get_basic_ops().get_add(), out);
+						out.get_type().get_basic_ops().get_add(), dim, out);
 		}
 	}
 
@@ -1418,7 +1420,8 @@ dense_matrix::ptr MvTransMv_wide(
 			// It's possible that the local matrix store doesn't exist
 			// because the input matrix is very small.
 			if (local_ms[j])
-				detail::mapply2(*local_res, *local_ms[j], add, *local_res);
+				detail::mapply2(*local_res, *local_ms[j], add,
+						detail::part_dim_t::PART_NONE, *local_res);
 		}
 		start_row += local_res->get_num_rows();
 	}

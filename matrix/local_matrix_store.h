@@ -1176,18 +1176,36 @@ public:
 	}
 };
 
+enum part_dim_t
+{
+	// No need for partition.
+	PART_NONE,
+	// Partition on the first dimension. i.e., we break up columns into parts.
+	PART_DIM1,
+	// Partition on the second dimension.
+	PART_DIM2,
+};
+
 /*
  * These are the general operations on the local matrix store.
  */
 void aggregate(const local_matrix_store &store, const agg_operate &op,
-		int margin, local_matrix_store &res);
+		int margin, part_dim_t dim, local_matrix_store &res);
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
-			const bulk_operate &op, local_matrix_store &res);
+			const bulk_operate &op, part_dim_t dim, local_matrix_store &res);
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
-		local_matrix_store &res);
+		part_dim_t dim, local_matrix_store &res);
 void apply(int margin, const arr_apply_operate &op,
 		const local_matrix_store &in_mat, local_matrix_store &out_mat);
-void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
+/*
+ * We perform inner product differently based on the shape of the left matrix.
+ * We expect inner product on a tall left matrix to output a tall matrix
+ * and inner product on a wide left matrix to output a small matrix.
+ */
+void inner_prod_tall(const local_matrix_store &m1, const local_matrix_store &m2,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		local_matrix_store &res);
+void inner_prod_wide(const local_matrix_store &m1, const local_matrix_store &m2,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		local_matrix_store &res);
 void mapply_cols(const local_matrix_store &m1, const local_vec_store &vals,
@@ -1199,7 +1217,8 @@ void mapply_rows(const local_matrix_store &m1, const local_vec_store &vals,
  */
 bool groupby_row(const detail::local_matrix_store &labels,
 		const detail::local_row_matrix_store &mat, const agg_operate &op,
-		detail::local_row_matrix_store &results, std::vector<bool> &agg_flags);
+		part_dim_t dim, detail::local_row_matrix_store &results,
+		std::vector<bool> &agg_flags);
 
 /*
  * BLAS matrix multiplication: a tall matrix * a small matrix.
@@ -1216,12 +1235,17 @@ void matrix_tall_multiply(const local_matrix_store &left,
  * if data in the input matrices isn't stored in contiguous memory.
  */
 void matrix_wide_multiply(const local_matrix_store &left,
-		const local_matrix_store &right, local_matrix_store &out,
+		const local_matrix_store &right, part_dim_t dim, local_matrix_store &out,
 		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs);
 
 void materialize_tall(const std::vector<detail::local_matrix_store::const_ptr> &ins);
 void materialize_wide(const std::vector<detail::local_matrix_store::const_ptr> &ins);
 
+/*
+ * This returns the length in the partitioned dimension for a matrix partition
+ * that can fit in CPU cache.
+ */
+size_t get_part_dim_len(const local_matrix_store &mat, part_dim_t dim);
 /*
  * This returns the length in the long dimension for a partition of the matrix
  * that can fit in CPU cache.

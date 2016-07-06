@@ -1830,7 +1830,9 @@ void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &i
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == ins[1]->get_global_start_row());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::mapply2(*ins[0], *ins[1], *op, out);
+	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::mapply2(*ins[0], *ins[1], *op, dim, out);
 }
 
 }
@@ -1888,7 +1890,9 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::sapply(*ins[0], *op, out);
+	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::sapply(*ins[0], *op, dim, out);
 }
 
 }
@@ -2162,7 +2166,7 @@ void inner_prod_tall_op::run(
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
 	out.reset_data();
-	detail::inner_prod(*ins[0], *local_right, *left_op, *right_op, out);
+	detail::inner_prod_tall(*ins[0], *local_right, *left_op, *right_op, out);
 }
 
 }
@@ -2280,6 +2284,8 @@ public:
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
 		assert(ins.size() == 1);
+		detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
+			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 		// The output matrix is actually a vector.
 		if (out.get_num_rows() == 1) {
 			assert(out.store_layout() == matrix_layout_t::L_ROW);
@@ -2287,12 +2293,12 @@ public:
 			assert(arr);
 			detail::local_ref_contig_col_matrix_store ref_out(arr, 0, 0,
 					out.get_num_cols(), 1, out.get_type(), out.get_node_id());
-			aggregate(*ins[0], *op, margin, ref_out);
+			aggregate(*ins[0], *op, margin, dim, ref_out);
 		}
 		else {
 			assert(out.store_layout() == matrix_layout_t::L_COL);
 			assert(out.get_num_cols() == 1);
-			aggregate(*ins[0], *op, margin, out);
+			aggregate(*ins[0], *op, margin, dim, out);
 		}
 	}
 
@@ -2792,7 +2798,8 @@ public:
 			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
 		detail::local_row_matrix_store &row_out
 			= static_cast<detail::local_row_matrix_store &>(out);
-		bool ret = detail::groupby_row(*llabels, row_in, *op, row_out, agg_flags);
+		bool ret = detail::groupby_row(*llabels, row_in, *op,
+				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
 		assert(ret);
 	}
 
@@ -2901,7 +2908,8 @@ void groupby_short_row_mapply_op::run(
 	assert(in->store_layout() == matrix_layout_t::L_ROW);
 	bool ret = detail::groupby_row(*labels,
 			static_cast<const detail::local_row_matrix_store &>(*in),
-			*op, *part_results[thread_id], mutable_this->part_agg[thread_id]);
+			*op, detail::part_dim_t::PART_DIM1, *part_results[thread_id],
+			mutable_this->part_agg[thread_id]);
 	if (!ret)
 		mutable_this->part_status[thread_id] = false;
 }

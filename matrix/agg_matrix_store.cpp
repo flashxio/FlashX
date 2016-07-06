@@ -184,7 +184,9 @@ void matrix_long_agg_op::run(
 			= local_matrix_store::ptr(new local_buf_col_matrix_store(0, 0,
 						partial_res->get_num_cols(), 1, partial_res->get_type(),
 						ins[0]->get_node_id()));
-	aggregate(*ins[0], *op, margin, *local_bufs[thread_id]);
+	part_dim_t dim = margin
+		== matrix_margin::MAR_ROW ? part_dim_t::PART_DIM2 : part_dim_t::PART_DIM1;
+	aggregate(*ins[0], *op, margin, dim, *local_bufs[thread_id]);
 
 	// If this is the first time, we should copy the local results to
 	// the corresponding row.
@@ -267,7 +269,7 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	agg_operate::const_ptr combine_agg = agg_operate::create(
 			agg_op->get_agg_op().get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
-			*portion);
+			part_dim_t::PART_NONE, *portion);
 	return res;
 }
 

@@ -342,13 +342,17 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 		int sum = 0;
 		local_ref_contig_col_matrix_store res((char *) &sum, 0, 0, 1, 1,
 				get_scalar_type<int>(), -1);
-		aggregate(*store, *op, matrix_margin::BOTH, res);
+		aggregate(*store, *op, matrix_margin::BOTH,
+				store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+				res);
 		int num_eles = store->get_num_rows() * store->get_num_cols();
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
 		local_buf_col_matrix_store res1(0, 0, store->get_num_rows(), 1,
 				op->get_output_type(), -1);
-		aggregate(*store, *op, matrix_margin::MAR_ROW, res1);
+		aggregate(*store, *op, matrix_margin::MAR_ROW,
+				store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+				res1);
 		for (size_t i = 0; i < res1.get_num_rows(); i++) {
 			int base = i * store->get_num_cols();
 			assert(*(int *) res1.get(i, 0) == base * store->get_num_cols()
@@ -357,7 +361,9 @@ void test_agg1(std::shared_ptr<local_matrix_store> store)
 
 		local_buf_col_matrix_store res2(0, 0, store->get_num_cols(), 1,
 				op->get_output_type(), -1);
-		aggregate(*store, *op, matrix_margin::MAR_COL, res2);
+		aggregate(*store, *op, matrix_margin::MAR_COL,
+				store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+				res2);
 		for (size_t i = 0; i < res2.get_num_rows(); i++) {
 			size_t n = store->get_num_rows();
 			size_t m = store->get_num_cols();
@@ -417,7 +423,9 @@ void test_mapply21(std::shared_ptr<local_matrix_store> store)
 	}
 
 	const bulk_operate &op = store->get_type().get_basic_ops().get_add();
-	mapply2(*store, *store, op, *res);
+	mapply2(*store, *store, op,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) * 2 == res->get<int>(i, j));
@@ -429,7 +437,9 @@ void test_mapply21(std::shared_ptr<local_matrix_store> store)
 		store = local_matrix_store::ptr(new ltest_row_matrix_store(
 					local_row_matrix_store::cast(store)));
 
-	mapply2(*store, *store, op, *res);
+	mapply2(*store, *store, op,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) * 2 == res->get<int>(i, j));
@@ -487,7 +497,9 @@ void test_sapply1(std::shared_ptr<local_matrix_store> store)
 
 	const bulk_uoperate &op = *store->get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::NEG);
-	sapply(*store, op, *res);
+	sapply(*store, op,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) == -res->get<int>(i, j));
@@ -499,7 +511,9 @@ void test_sapply1(std::shared_ptr<local_matrix_store> store)
 		store = local_matrix_store::ptr(new ltest_row_matrix_store(
 					local_row_matrix_store::cast(store)));
 
-	sapply(*store, op, *res);
+	sapply(*store, op,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
 	for (size_t i = 0; i < store->get_num_rows(); i++)
 		for (size_t j = 0; j < store->get_num_cols(); j++)
 			assert(store->get<int>(i, j) == -res->get<int>(i, j));
@@ -583,8 +597,12 @@ void test_inner_prod1(std::shared_ptr<local_matrix_store> m1,
 	// Multiply
 	const scalar_type &type = m1->get_type();
 	res->reset_data();
-	inner_prod(*m1, *m2, type.get_basic_ops().get_multiply(),
-			type.get_basic_ops().get_add(), *res);
+	if (m1->is_wide())
+		inner_prod_wide(*m1, *m2, type.get_basic_ops().get_multiply(),
+				type.get_basic_ops().get_add(), *res);
+	else
+		inner_prod_tall(*m1, *m2, type.get_basic_ops().get_multiply(),
+				type.get_basic_ops().get_add(), *res);
 	std::shared_ptr<local_matrix_store> res1 = naive_multiply(*m1, *m2);
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		for (size_t j = 0; j < res->get_num_cols(); j++)

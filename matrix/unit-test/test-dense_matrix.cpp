@@ -1422,15 +1422,17 @@ public:
 			detail::local_matrix_store::const_ptr in1 = ins[1]->get_portion(0, 0,
 					out.get_num_rows(), out.get_num_cols());
 			assert(in0 && in1);
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 			detail::mapply2(*in0, *in1, out.get_type().get_basic_ops().get_add(),
-					out);
+					dim, out);
 			for (size_t i = 2; i < ins.size(); i++) {
 				assert(ins[i]->store_layout() == matrix_layout_t::L_COL);
 				detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
 						out.get_num_rows(), out.get_num_cols());
 				assert(in);
 				detail::mapply2(out, *in,
-						out.get_type().get_basic_ops().get_add(), out);
+						out.get_type().get_basic_ops().get_add(), dim, out);
 			}
 		}
 	}
@@ -1487,15 +1489,17 @@ public:
 			detail::local_matrix_store::const_ptr in1 = ins[1]->get_portion(0, 0,
 					out.get_num_rows(), out.get_num_cols());
 			assert(in0 && in1);
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 			detail::mapply2(*in0, *in1, out.get_type().get_basic_ops().get_add(),
-					out);
+					dim, out);
 			for (size_t i = 2; i < ins.size(); i++) {
 				assert(ins[i]->store_layout() == matrix_layout_t::L_ROW);
 				detail::local_matrix_store::const_ptr in = ins[i]->get_portion(0, 0,
 						out.get_num_rows(), out.get_num_cols());
 				assert(in);
 				detail::mapply2(out, *in,
-						out.get_type().get_basic_ops().get_add(), out);
+						out.get_type().get_basic_ops().get_add(), dim, out);
 			}
 		}
 	}
