@@ -18,7 +18,9 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[3];
 	std::string new_graph_name = argv[4];
 
+
 	config_map::ptr configs = config_map::create(conf_file);
+	fg::graph_engine::init_flash_graph(configs);
 	init_flash_matrix(configs);
 
 	fg::FG_graph::ptr g = fg::FG_graph::create(graph_file, index_file, configs);
@@ -51,4 +53,5 @@ int main(int argc, char *argv[])
 	}
 
 	destroy_flash_matrix();
+	fg::graph_engine::destroy_flash_graph();
 }
