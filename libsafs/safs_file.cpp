@@ -328,6 +328,115 @@ std::vector<char> safs_file::get_user_metadata() const
 	return data;
 }
 
+namespace
+{
+
+ssize_t complete_read(int fd, char *buf, size_t count)
+{
+	ssize_t bytes = 0;
+	do {
+		ssize_t ret = read(fd, buf, count);
+		if (ret < 0)
+			return ret;
+		if (ret == 0)
+			return bytes;
+		bytes += ret;
+		count -= ret;
+		buf += ret;
+	} while (count > 0);
+	return bytes;
+}
+
+class data_source
+{
+public:
+	virtual ssize_t get_data(off_t off, size_t size, char *buf) const = 0;
+	virtual size_t get_size() const = 0;
+};
+
+class file_data_source: public data_source
+{
+	int fd;
+	size_t file_size;
+
+	file_data_source(int fd, size_t file_size) {
+		this->fd = fd;
+		this->file_size = file_size;
+	}
+public:
+	static std::shared_ptr<file_data_source> create(const std::string &ext_file) {
+		int fd = open(ext_file.c_str(), O_RDONLY);
+		if (fd < 0) {
+			fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(), strerror(errno));
+			return std::shared_ptr<file_data_source>();
+		}
+		native_file f(ext_file);
+		size_t file_size = f.get_size();
+		return std::shared_ptr<file_data_source>(new file_data_source(fd, file_size));
+	}
+
+	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
+		long new_off = lseek(fd, off, SEEK_SET);
+		BOOST_VERIFY(new_off == off);
+		ssize_t ret = complete_read(fd, buf, size);
+		if (ret < 0) {
+			perror("complete_read");
+			exit(-1);
+		}
+		return ret;
+	}
+
+	virtual size_t get_size() const {
+		return file_size;
+	}
+};
+
+const int BUF_SIZE = 1024 * 64 * 4096;
+
+}
+
+bool safs_file::load_data(const std::string &ext_file, size_t block_size)
+{
+	std::shared_ptr<data_source> source = file_data_source::create(ext_file);
+	if (source == NULL)
+		return false;
+
+	// If the file in SAFS doesn't exist, create a new one.
+	if (!exist())
+		create_file(source->get_size(), block_size);
+
+	file_io_factory::shared_ptr factory = create_io_factory(name,
+			REMOTE_ACCESS);
+	if (factory == NULL) {
+		fprintf(stderr, "can't create I/O factory\n");
+		return false;
+	}
+	assert((size_t) factory->get_file_size() >= source->get_size());
+
+	thread *curr_thread = thread::get_curr_thread();
+	assert(curr_thread);
+	io_interface::ptr io = create_io(factory, curr_thread);
+
+	char *buf = (char *) valloc(BUF_SIZE);
+	off_t off = 0;
+
+	while (off < (off_t) source->get_size()) {
+		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
+		size_t ret = source->get_data(off, size, buf);
+		assert(ret == size);
+		ssize_t write_bytes = ROUNDUP(ret, 512);
+		memset(buf + size, 0, write_bytes - size);
+		data_loc_t loc(io->get_file_id(), off);
+		io_request req(buf, loc, write_bytes, WRITE);
+		io->access(&req, 1);
+		io->wait4complete(1);
+		off += write_bytes;
+	}
+	io->cleanup();
+	free(buf);
+	return true;
+}
+
 size_t get_all_safs_files(std::set<std::string> &files)
 {
 	std::set<std::string> all_files;

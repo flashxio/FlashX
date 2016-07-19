@@ -111,6 +111,11 @@ public:
 			std::shared_ptr<safs_file_group> group = NULL);
 	bool delete_file();
 	bool rename(const std::string &new_name);
+	/*
+	 * Load data from a file in the Linux filesystem.
+	 */
+	bool load_data(const std::string &ext_file,
+			size_t block_size = params.get_RAID_block_size());
 };
 
 class safs_file_group
