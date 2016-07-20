@@ -162,12 +162,11 @@ fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",",
 								 ncol=.Machine$integer.max, mat.name="")
 {
 	stopifnot(!is.null(name))
-	stopifnot(class(name) == "character")
 	if (is.double(ncol))
 		ncol = as.integer(ncol)
 	if (is.character(name))
 		name <- c(name)
-	m <- .Call("R_FM_load_dense_matrix", name, as.logical(in.mem),
+	m <- .Call("R_FM_load_dense_matrix", as.character(name), as.logical(in.mem),
 			   as.character(ele.type), as.character(delim),
 			   ncol=ncol, as.character(mat.name), PACKAGE="FlashR")
 	new.fm(m)
