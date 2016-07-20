@@ -300,7 +300,7 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 			obj->set_persistent(mat_name);
 	}
 
-	return create_FMR_matrix(mat, "");
+	return create_FMR_matrix(mat, mat_name);
 }
 
 static const scalar_type *get_scalar_type(const std::string &type_name)
