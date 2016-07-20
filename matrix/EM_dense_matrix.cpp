@@ -1187,6 +1187,10 @@ matrix_store::const_ptr EM_matrix_store::get_rows(
 
 bool EM_matrix_store::set_persistent(const std::string &name) const
 {
+	bool persist_ret = holder->set_persistent(name);
+	if (!persist_ret)
+		return persist_ret;
+
 	// We need to keep holder in a global hashtable, so later on
 	// when someone else creates a matrix to access the file, he can
 	// use the holder directly from the hashtable.
@@ -1194,9 +1198,10 @@ bool EM_matrix_store::set_persistent(const std::string &name) const
 			std::pair<std::string, file_holder::ptr>(name, holder));
 	if (!ret.second) {
 		BOOST_LOG_TRIVIAL(error) << "The matrix name already exists";
+		holder->unset_persistent();
 		return false;
 	}
-	return holder->set_persistent(name);
+	return true;
 }
 
 void EM_matrix_store::unset_persistent() const
