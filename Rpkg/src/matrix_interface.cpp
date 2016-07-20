@@ -303,6 +303,106 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 	return create_FMR_matrix(mat, "");
 }
 
+static const scalar_type *get_scalar_type(const std::string &type_name)
+{
+	if (type_name == "B")
+		return &get_scalar_type<bool>();
+	else if (type_name == "I")
+		return &get_scalar_type<int>();
+	else if (type_name == "L")
+		return &get_scalar_type<long>();
+	else if (type_name == "F")
+		return &get_scalar_type<float>();
+	else if (type_name == "D")
+		return &get_scalar_type<double>();
+	return NULL;
+}
+
+RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
+		SEXP pnrow, SEXP pncol, SEXP pbyrow, SEXP pele_type, SEXP pmat_name)
+{
+	std::string file_name = CHAR(STRING_ELT(pname, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
+	size_t nrow = REAL(pnrow)[0];
+	size_t ncol = REAL(pncol)[0];
+	bool byrow = LOGICAL(pbyrow)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string mat_name = CHAR(STRING_ELT(pmat_name, 0));
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
+	matrix_layout_t layout
+		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	const scalar_type *type_p = get_scalar_type(ele_type);
+	if (type_p == NULL) {
+		fprintf(stderr, "wrong element type\n");
+		return R_NilValue;
+	}
+	const scalar_type &type = *type_p;
+
+	safs::native_file ext_f(file_name);
+	if (!ext_f.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", file_name.c_str());
+		return R_NilValue;
+	}
+	if (ext_f.get_size() < (ssize_t) (nrow * ncol * type.get_size())) {
+		fprintf(stderr, "%s doesn't contain enough data for the matrix\n",
+				file_name.c_str());
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat;
+	// Load the matrix to SAFS.
+	if (!in_mem) {
+		// If a user provides a matrix name, we need to make the matrix
+		// persistent on SAFS.
+		bool temp = true;
+		if (!mat_name.empty())
+			temp = false;
+
+		detail::EM_matrix_store::ptr store = detail::EM_matrix_store::load(
+				file_name, nrow, ncol, layout, type);
+		if (store == NULL) {
+			fprintf(stderr, "can't load %s to SAFS\n", file_name.c_str());
+			return R_NilValue;
+		}
+
+		if (!temp) {
+			const detail::EM_object *obj
+				= dynamic_cast<const detail::EM_object *>(store.get());
+			if (obj)
+				obj->set_persistent(mat_name);
+		}
+		mat = dense_matrix::create(store);
+	}
+	else {
+		detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+				nrow, ncol, layout, type, -1);
+		FILE *f = fopen(file_name.c_str(), "r");
+		if (f == NULL) {
+			fprintf(stderr, "can't open %s: %s\n", file_name.c_str(),
+					strerror(errno));
+			return R_NilValue;
+		}
+		size_t ret = fread(store->get_raw_arr(), nrow * ncol * type.get_size(),
+				1, f);
+		if (ret != 1) {
+			fprintf(stderr, "can't read %s: %s\n", file_name.c_str(),
+					strerror(errno));
+			return R_NilValue;
+		}
+		mat = dense_matrix::create(store);
+	}
+	if (mat->get_type() == get_scalar_type<float>())
+		mat = mat->cast_ele_type(get_scalar_type<double>());
+
+	return create_FMR_matrix(mat, mat_name);
+}
+
 RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));

@@ -174,6 +174,17 @@ fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",",
 }
 
 #' @rdname fm.get.matrix
+fm.load.dense.matrix.bin <- function(name, in.mem, nrow, ncol, byrow, ele.type,
+									 mat.name="")
+{
+	m <- .Call("R_FM_load_dense_matrix_bin", as.character(name),
+			   as.logical(in.mem), as.double(nrow), as.double(ncol),
+			   as.logical(byrow), as.character(ele.type), as.character(mat.name),
+			   PACKAGE="FlashR")
+	new.fm(m)
+}
+
+#' @rdname fm.get.matrix
 fm.load.sparse.matrix <- function(mat, index, t.mat=NULL, t.index=NULL, in.mem=TRUE)
 {
 	if (is.null(t.mat) || is.null(t.index))
