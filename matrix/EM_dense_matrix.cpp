@@ -141,6 +141,23 @@ EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 	return ret_mat;
 }
 
+EM_matrix_store::ptr EM_matrix_store::load(const std::string &ext_file,
+		size_t nrow, size_t ncol, matrix_layout_t layout,
+		const scalar_type &type, safs::safs_file_group::ptr group)
+{
+	EM_matrix_store::ptr store = EM_matrix_store::create(nrow, ncol, layout,
+			type, group);
+	if (store == NULL)
+		return store;
+
+	safs::safs_file f(safs::get_sys_RAID_conf(), store->holder->get_name());
+	bool ret = f.load_data(ext_file);
+	if (!ret)
+		return EM_matrix_store::ptr();
+
+	return store;
+}
+
 std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
 {
 	if (is_wide())

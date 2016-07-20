@@ -109,6 +109,14 @@ public:
 		return ptr(new EM_matrix_store(nrow, ncol, layout, type, group));
 	}
 
+	/*
+	 * This is to load the matrix data from an external file and create
+	 * an EM matrix on SAFS.
+	 */
+	static ptr load(const std::string &ext_file, size_t nrow, size_t ncol,
+			matrix_layout_t layout, const scalar_type &type,
+			safs::safs_file_group::ptr group = NULL);
+
 	static ptr cast(matrix_store::ptr store) {
 		return std::dynamic_pointer_cast<EM_matrix_store>(store);
 	}
