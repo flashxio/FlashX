@@ -364,7 +364,9 @@ class file_data_source: public data_source
 		this->file_size = file_size;
 	}
 public:
-	static std::shared_ptr<file_data_source> create(const std::string &ext_file) {
+	// Create a data source that contains `size' bytes.
+	static std::shared_ptr<file_data_source> create(const std::string &ext_file,
+			size_t size) {
 		int fd = open(ext_file.c_str(), O_RDONLY);
 		if (fd < 0) {
 			fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(), strerror(errno));
@@ -372,7 +374,9 @@ public:
 		}
 		native_file f(ext_file);
 		size_t file_size = f.get_size();
-		return std::shared_ptr<file_data_source>(new file_data_source(fd, file_size));
+		if (size > file_size)
+			size = file_size;
+		return std::shared_ptr<file_data_source>(new file_data_source(fd, size));
 	}
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
@@ -397,7 +401,8 @@ const int BUF_SIZE = 1024 * 64 * 4096;
 
 bool safs_file::load_data(const std::string &ext_file, size_t block_size)
 {
-	std::shared_ptr<data_source> source = file_data_source::create(ext_file);
+	std::shared_ptr<data_source> source = file_data_source::create(ext_file,
+			get_size());
 	if (source == NULL)
 		return false;
 
