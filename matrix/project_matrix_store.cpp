@@ -304,6 +304,25 @@ matrix_store::const_ptr sparse_project_matrix_store::conv_dense() const
 	return __mapply_portion(ins, mapply_op, store_layout());
 }
 
+matrix_store::const_ptr sparse_project_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	throw unsupported_exception(
+			"don't support getting rows from a sparse matrix");
+}
+
+vec_store::const_ptr sparse_project_matrix_store::get_col_vec(off_t idx) const
+{
+	throw unsupported_exception(
+			"don't support getting a col from a sparse matrix");
+}
+
+vec_store::const_ptr sparse_project_matrix_store::get_row_vec(off_t idx) const
+{
+	throw unsupported_exception(
+			"don't support getting a row from a sparse matrix");
+}
+
 matrix_store::const_ptr lsparse_col_matrix_store::transpose() const
 {
 	matrix_info info = get_global_transpose_info();
@@ -384,6 +403,7 @@ void lsparse_col_matrix_store::materialize_self() const
 	std::vector<char *> dst_ptrs;
 	for (size_t i = 0; i < this->get_num_cols(); i++) {
 		const char *in_col = this->get_col_nnz(i, idxs);
+		// TODO this might be expensive. I should optimize it.
 		char *out_col = col_store->get_col(i);
 		dst_ptrs.resize(idxs.size());
 		for (size_t j = 0; j < idxs.size(); j++)

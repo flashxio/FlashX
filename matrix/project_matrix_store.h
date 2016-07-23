@@ -140,6 +140,11 @@ public:
 	static ptr create_sparse_rand(size_t nrow, size_t ncol,
 			matrix_layout_t layout, const scalar_type &type, double density);
 
+	virtual void reset_data() {
+	}
+	virtual void set_data(const set_operate &op) {
+	}
+
 	virtual char *get(size_t row, size_t col) {
 		return NULL;
 	}
@@ -188,6 +193,11 @@ public:
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
+
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const;
+	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
+	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	size_t get_nnz() const {
 		return nz_idxs.size();
