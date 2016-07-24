@@ -30,7 +30,17 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 	if (nv == 0)
 		return(diff)
 	if (type == "svd") {
-		svd <- fm.svd(m, nv=0, nu=nv)
+		# compute class conditional mean.
+		# Here I assume dimension size is larger than the number of samples.
+		# TODO I need to improve groupby to subtract the class conditional mean.
+		rlabels <- fm.conv.FM2R(labels) + 1
+		fm.materialize(gr.mean)
+		mean.list <- list()
+		for (i in 1:length(rlabels))
+			mean.list[[i]] <- gr.mean[,rlabels[i]]
+		mean.mat <- fm.cbind.list(mean.list)
+
+		svd <- fm.svd(m - mean.mat, nv=0, nu=nv)
 		fm.cbind(diff, svd$u)
 	}
 	else if (type == "rand_dense")
