@@ -1344,11 +1344,8 @@ fm.get.cols <- function(fm, idxs)
 	stopifnot(class(fm) == "fm")
 	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.numeric(idxs),
 				 PACKAGE="FlashR")
-	if (!is.null(ret) && length(idxs) > 1)
+	if (!is.null(ret))
 		new.fm(ret)
-	else if (!is.null(ret))
-		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$nrow, type=ret$type,
-			ele_type=ret$ele_type)
 	else
 		NULL
 }
@@ -1360,10 +1357,20 @@ fm.get.rows <- function(fm, idxs)
 	stopifnot(class(fm) == "fm")
 	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.numeric(idxs),
 				 PACKAGE="FlashR")
-	if (!is.null(ret) && length(idxs) > 1)
+	if (!is.null(ret))
 		new.fm(ret)
-	else if (!is.null(ret))
-		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$ncol, type=ret$type,
+	else
+		NULL
+}
+
+#' @rdname fm.get.eles
+fm.get.eles.vec <- function(fm, idxs)
+{
+	stopifnot(!is.null(fm) && !is.null(idxs))
+	stopifnot(class(fm) == "fmV")
+	ret <- .Call("R_FM_get_vec_eles", fm, as.numeric(idxs), PACKAGE="FlashR")
+	if (!is.null(ret))
+		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$len, type=ret$type,
 			ele_type=ret$ele_type)
 	else
 		NULL

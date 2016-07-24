@@ -759,10 +759,34 @@ fmV2scalar <- function(x)
 	fm.conv.FM2R(x)[1]
 }
 
-setMethod("[", signature(x="fm", j="missing", drop="missing"),
-		  function(x, i, j, drop) fm.get.rows(x, i))
+setMethod("[", signature(x="fm", j="missing"),
+		  function(x, i, j, drop=TRUE) {
+			  ret <- fm.get.rows(x, i)
+			  if (drop && length(i) == 1)
+				  ret <- fm.as.vector(ret)
+			  ret
+		  })
 setMethod("[", signature(x="fm", i="missing", drop="missing"),
-		  function(x, i, j, drop) fm.get.cols(x, j))
+		  function(x, i, j, drop=TRUE) {
+			  ret <- fm.get.cols(x, j)
+			  if (drop && length(j) == 1)
+				  ret <- fm.as.vector(ret)
+			  ret
+		  })
+setMethod("[", signature(x="fm"), function(x, i, j, drop=TRUE) {
+		  if (nrow(x) > ncol(x)) {
+			  ret <- fm.get.cols(x, j)
+			  ret <- fm.get.rows(ret, i)
+		  }
+		  else {
+			  ret <- fm.get.rows(x, i)
+			  ret <- fm.get.cols(ret, j)
+		  }
+		  if (drop && (length(i) == 1 || length(j) == 1))
+			  ret <- fm.as.vector(ret)
+		  ret
+		  })
+setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
 
 setMethod("sweep", "fm",
 		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {

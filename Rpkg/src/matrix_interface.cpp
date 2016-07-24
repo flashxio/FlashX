@@ -1599,6 +1599,28 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 	}
 }
 
+RcppExport SEXP R_FM_get_vec_eles(SEXP pvec, SEXP pidxs)
+{
+	Rcpp::NumericVector r_idxs(pidxs);
+	std::vector<off_t> c_idxs(r_idxs.size());
+	for (size_t i = 0; i < c_idxs.size(); i++)
+		// R is 1-based indexing, and C/C++ is 0-based.
+		c_idxs[i] = r_idxs[i] - 1;
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+	dense_matrix::ptr sub_m = mat->get_rows(c_idxs);
+	if (sub_m == NULL) {
+		fprintf(stderr, "can't get elements from the vector\n");
+		return R_NilValue;
+	}
+	else {
+		Rcpp::List ret = create_FMR_vector(sub_m, "");
+		Rcpp::S4 rcpp_vec(pvec);
+		ret["ele_type"] = rcpp_vec.slot("ele_type");
+		return ret;
+	}
+}
+
 RcppExport SEXP R_FM_as_vector(SEXP pmat)
 {
 	if (is_sparse(pmat)) {
