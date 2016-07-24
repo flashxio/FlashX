@@ -788,6 +788,11 @@ setMethod("[", signature(x="fm"), function(x, i, j, drop=TRUE) {
 		  })
 setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
 
+setMethod("head", signature(x="fm"), function(x, n=6L) fm.get.rows(x, 1:n))
+setMethod("tail", signature(x="fm"), function(x, n=6L) fm.get.rows(x, (nrow(x)-n+1):nrow(x)))
+setMethod("head", signature(x="fmV"), function(x, n=6L) x[1:n])
+setMethod("tail", signature(x="fmV"), function(x, n=6L) x[(length(x)-n+1):length(x)])
+
 setMethod("sweep", "fm",
 		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {
 			  if (MARGIN == 2)
