@@ -72,8 +72,6 @@ public:
 		return ret;
 	}
 
-	vector::ptr get(const std::vector<off_t> &offs) const;
-
 	bool is_in_mem() const {
 		return store->is_in_mem();
 	}
@@ -132,7 +130,6 @@ public:
 	std::shared_ptr<data_frame> groupby(
 			std::shared_ptr<const agg_operate> op, bool with_val) const;
 
-	vector::ptr sapply(bulk_uoperate::const_ptr op) const;
 	scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	scalar_variable::ptr dot_prod(const vector &vec) const;
 
