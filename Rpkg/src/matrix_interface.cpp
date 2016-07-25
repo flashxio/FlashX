@@ -511,31 +511,8 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 	return create_FMR_matrix(mat, "mat_file");
 }
 
-static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
-{
-	detail::mem_vec_store::const_ptr in_vec
-		= detail::mem_vec_store::cast(vec->get_raw_store());
-	detail::vec_store::ptr out_vec = detail::mem_vec_store::create(
-			matrix->get_num_rows(), in_vec->get_num_nodes(),
-			in_vec->get_type());
-	// TODO it only supports a binary matrix right now.
-	assert(matrix->get_entry_size() == 0);
-	if (vec->is_type<double>()) {
-		matrix->multiply<double, bool>(in_vec, out_vec);
-		return create_FMR_vector(out_vec, "");
-	}
-	else if (vec->is_type<int>()) {
-		matrix->multiply<int, bool>(in_vec, out_vec);
-		return create_FMR_vector(out_vec, "");
-	}
-	else {
-		fprintf(stderr, "the input vector has an unsupported type in SpMV\n");
-		return R_NilValue;
-	}
-
-}
-
-static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
+static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
+		dense_matrix::ptr right_mat)
 {
 	if (right_mat->store_layout() != matrix_layout_t::L_ROW) {
 		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
@@ -554,7 +531,7 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
 		matrix->multiply<double, bool>(in_mat, out_mat);
-		return create_FMR_matrix(dense_matrix::create(out_mat), "");
+		return dense_matrix::create(out_mat);
 	}
 	else if (right_mat->is_type<int>()) {
 		detail::mem_matrix_store::const_ptr in_mat
@@ -564,43 +541,39 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
 		matrix->multiply<int, bool>(in_mat, out_mat);
-		return create_FMR_matrix(dense_matrix::create(out_mat), "");
+		return dense_matrix::create(out_mat);
 	}
 	else {
 		fprintf(stderr, "the right matrix has an unsupported type in SpMM\n");
-		return R_NilValue;
+		return dense_matrix::ptr();
 	}
 }
 
 RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 {
 	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
-	if (is_vector(pmat)) {
-		vector::ptr vec = get_vector(pmat);
-		if (!is_supported_type(vec->get_type())) {
-			fprintf(stderr, "multiply doesn't support the type\n");
-			return R_NilValue;
-		}
-		if (!vec->is_in_mem()) {
-			fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
-			return R_NilValue;
-		}
-		return SpMV(matrix, vec);
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "the right matrix can't be sparse\n");
+		return R_NilValue;
 	}
-	else {
-		dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
-		if (!is_supported_type(right_mat->get_type())) {
-			fprintf(stderr, "multiply doesn't support the type\n");
-			return R_NilValue;
-		}
-		if (!right_mat->is_in_mem()) {
-			fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
-			return R_NilValue;
-		}
-		// We need to make sure the dense matrix is materialized before SpMM.
-		right_mat->materialize_self();
-		return SpMM(matrix, right_mat);
+
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "multiply doesn't support the type\n");
+		return R_NilValue;
 	}
+	if (!right_mat->is_in_mem()) {
+		fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr ret = SpMM(matrix, right_mat);
+	if (ret == NULL)
+		return R_NilValue;
+
+	if (is_vector(pmat))
+		return create_FMR_vector(ret, "");
+	else
+		return create_FMR_matrix(ret, "");
 }
 
 RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
@@ -685,6 +658,10 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 
 RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 {
+	fprintf(stderr, "doesn't support convert a vector to a matrix\n");
+	return R_NilValue;
+
+#if 0
 	Rcpp::S4 vec_obj(pvec);
 	if (!is_vector(vec_obj)) {
 		fprintf(stderr, "The input object isn't a vector\n");
@@ -707,6 +684,7 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	Rcpp::List ret = create_FMR_matrix(mat, "");
 	ret["ele_type"] = vec_obj.slot("ele_type");
 	return ret;
+#endif
 }
 
 template<class T, class RType>
@@ -1428,6 +1406,9 @@ RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 {
+	fprintf(stderr, "doesn't support sgroupby on a vector\n");
+	return R_NilValue;
+#if 0
 	if (!is_vector(pvec)) {
 		fprintf(stderr, "Doesn't support sgroupby on a matrix\n");
 		return R_NilValue;
@@ -1440,6 +1421,7 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
 	data_frame::ptr groupby_res = vec->groupby(op, true);
 	return create_FMR_data_frame(groupby_res, "");
+#endif
 }
 
 RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)

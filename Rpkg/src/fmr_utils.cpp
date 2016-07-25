@@ -164,26 +164,6 @@ SEXP create_FMR_factor_vector(dense_matrix::ptr m, int num_levels,
 	return ret;
 }
 
-vector::ptr get_vector(const Rcpp::S4 &vec)
-{
-	if (!is_vector(vec)) {
-		fprintf(stderr, "The S4 object isn't a vector\n");
-		return vector::ptr();
-	}
-	object_ref<dense_matrix> *ref
-		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec.slot("pointer"));
-	dense_matrix::ptr mat = ref->get_object();
-	// This should be a column matrix.
-	assert(mat->store_layout == matrix_layout_t::L_COL
-			&& mat->get_num_cols() == 1);
-	detail::vec_store::const_ptr store = mat->get_data().get_col_vec(0);
-	if (store == NULL) {
-		fprintf(stderr, "can't convert a matrix to a vector");
-		return vector::ptr();
-	}
-	return vector::create(store);
-}
-
 factor_col_vector::ptr get_factor_vector(const Rcpp::S4 &vec)
 {
 	if (!is_factor_vector(vec)) {

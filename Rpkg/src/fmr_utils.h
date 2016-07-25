@@ -59,7 +59,6 @@ typename MatrixType::ptr get_matrix(const Rcpp::S4 &matrix)
 	return ref->get_object();
 }
 
-std::shared_ptr<fm::vector> get_vector(const Rcpp::S4 &vec);
 std::shared_ptr<fm::factor_col_vector> get_factor_vector(const Rcpp::S4 &vec);
 
 SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const std::string &name);
