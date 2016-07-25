@@ -75,11 +75,6 @@ public:
 		return ret;
 	}
 
-	virtual matrix_store::const_ptr get_rows(
-			const std::vector<off_t> &idxs) const {
-		assert(0);
-		return matrix_store::const_ptr();
-	}
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;
@@ -356,6 +351,11 @@ public:
 
 	char *get(size_t row_idx, size_t col_idx) {
 		return store.get(col_idx, row_idx);
+	}
+
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return store.get_cols(idxs)->transpose();
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(

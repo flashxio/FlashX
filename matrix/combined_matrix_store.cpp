@@ -300,7 +300,16 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 			else {
 				std::vector<off_t> tmp_rows(local_row_idxs.begin() + i,
 						local_row_idxs.begin() + i + local_nrow);
-				ret.push_back(mats[mat_idx]->get_rows(tmp_rows));
+				auto rows = mats[mat_idx]->get_rows(tmp_rows);
+				if (rows == NULL) {
+					// If we can't get rows the matrix directly, we should try
+					// and use the default solution to get rows.
+					dense_matrix::ptr tmp = dense_matrix::create(mats[mat_idx]);
+					tmp = tmp->get_rows(tmp_rows);
+					assert(tmp);
+					rows = tmp->get_raw_store();
+				}
+				ret.push_back(rows);
 			}
 			i = last + 1;
 		}
@@ -351,6 +360,14 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 	for (size_t i = 0; i < idxs.size(); i++) {
 		std::vector<off_t> lrow_idx(1, lrow_idxs[i]);
 		rows[i] = mats[mat_idxs[i]]->get_rows(lrow_idx);
+		if (rows[i] == NULL) {
+			// If we can't get rows the matrix directly, we should try
+			// and use the default solution to get rows.
+			dense_matrix::ptr tmp = dense_matrix::create(mats[mat_idxs[i]]);
+			tmp = tmp->get_rows(lrow_idx);
+			assert(tmp);
+			rows[i] = tmp->get_raw_store();
+		}
 	}
 	return combined_matrix_store::create(rows, matrix_layout_t::L_ROW);
 }

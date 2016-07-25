@@ -190,8 +190,6 @@ public:
 	void end_stream();
 	void wait4complete();
 
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const;
 

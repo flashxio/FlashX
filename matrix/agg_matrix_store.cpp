@@ -276,15 +276,15 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 matrix_store::const_ptr agg_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	assert(0);
-	return matrix_store::const_ptr();
+	matrix_store::const_ptr ret = materialize(true, -1);
+	return ret->get_cols(idxs);
 }
 
 matrix_store::const_ptr agg_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	assert(0);
-	return matrix_store::const_ptr();
+	matrix_store::const_ptr ret = materialize(true, -1);
+	return ret->get_rows(idxs);
 }
 
 bool agg_matrix_store::has_materialized() const

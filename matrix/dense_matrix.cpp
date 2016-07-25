@@ -1995,6 +1995,138 @@ dense_matrix::ptr dense_matrix::create(data_frame::const_ptr df)
 				matrix_layout_t::L_COL));
 }
 
+dense_matrix::ptr dense_matrix::transpose() const
+{
+	return dense_matrix::ptr(new dense_matrix(get_data().transpose()));
+}
+
+////////////////////////////// Get rows/cols //////////////////////////////////
+
+namespace
+{
+
+class get_rows_op: public detail::portion_mapply_op
+{
+	std::vector<off_t> row_idxs;
+public:
+	get_rows_op(const std::vector<off_t> &row_idxs, size_t num_cols,
+			const scalar_type &type): detail::portion_mapply_op(row_idxs.size(),
+				num_cols, type) {
+		this->row_idxs = row_idxs;
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("get_rows(") + mats[0]->get_name() + ")";
+	}
+};
+
+class get_cols_op: public detail::portion_mapply_op
+{
+	std::vector<off_t> col_idxs;
+public:
+	get_cols_op(const std::vector<off_t> &col_idxs, size_t num_rows,
+			const scalar_type &type): detail::portion_mapply_op(num_rows,
+				col_idxs.size(), type) {
+		this->col_idxs = col_idxs;
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("get_cols(") + mats[0]->get_name() + ")";
+	}
+};
+
+void get_rows_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 1);
+	assert(out.get_num_rows() == row_idxs.size());
+	assert(ins[0]->store_layout() == out.store_layout());
+	// If the data is layout in row major, we can get the rows easily.
+	if (out.store_layout() == matrix_layout_t::L_ROW) {
+		const detail::local_row_matrix_store &row_in
+			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		for (size_t i = 0; i < row_idxs.size(); i++)
+			memcpy(row_out.get_row(i), row_in.get_row(row_idxs[i]),
+					out.get_num_cols() * out.get_entry_size());
+	}
+	// Otherwise, we need to get the wanted elements individually.
+	else {
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		const scatter_gather &sg = out.get_type().get_sg();
+		std::vector<const char *> col_src(row_idxs.size());
+		for (size_t i = 0; i < out.get_num_cols(); i++) {
+			for (size_t j = 0; j < col_src.size(); j++)
+				col_src[j] = ins[0]->get(row_idxs[j], i);
+			sg.gather(col_src, col_out.get_col(i));
+		}
+	}
+}
+
+void get_cols_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 1);
+	assert(out.get_num_cols() == col_idxs.size());
+	assert(ins[0]->store_layout() == out.store_layout());
+	// If the data is layout in col major, we can get cols easily.
+	if (out.store_layout() == matrix_layout_t::L_COL) {
+		const detail::local_col_matrix_store &col_in
+			= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		for (size_t i = 0; i < col_idxs.size(); i++)
+			memcpy(col_out.get_col(i), col_in.get_col(col_idxs[i]),
+					out.get_num_rows() * out.get_entry_size());
+	}
+	// Otherwise, we need to get the wanted elements indivudally.
+	else {
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		const scatter_gather &sg = out.get_type().get_sg();
+		std::vector<const char *> row_src(col_idxs.size());
+		for (size_t i = 0; i < out.get_num_rows(); i++) {
+			for (size_t j = 0; j < row_src.size(); j++)
+				row_src[j] = ins[0]->get(i, col_idxs[j]);
+			sg.gather(row_src, row_out.get_row(i));
+		}
+	}
+}
+
+detail::portion_mapply_op::const_ptr get_rows_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new get_cols_op(row_idxs,
+				get_out_num_cols(), get_output_type()));
+}
+
+detail::portion_mapply_op::const_ptr get_cols_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new get_rows_op(col_idxs,
+				get_out_num_rows(), get_output_type()));
+}
+
+}
+
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	for (size_t i = 0; i < idxs.size(); i++)
@@ -2003,11 +2135,12 @@ dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 			return dense_matrix::ptr();
 		}
 
-	detail::matrix_store::const_ptr ret = get_data().get_cols(idxs);
-	if (ret)
-		return dense_matrix::ptr(new dense_matrix(ret));
-	else
+	dense_matrix::ptr t = transpose();
+	assert(t);
+	dense_matrix::ptr ret = t->get_rows(idxs);
+	if (ret == NULL)
 		return dense_matrix::ptr();
+	return ret->transpose();
 }
 
 dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
@@ -2018,16 +2151,26 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 			return dense_matrix::ptr();
 		}
 
+	// Different matrix stores have their own best way of getting rows.
+	// If a matrix store can't get rows in an optimal way, we can fall back
+	// to the default solution.
 	detail::matrix_store::const_ptr ret = get_data().get_rows(idxs);
 	if (ret)
 		return dense_matrix::ptr(new dense_matrix(ret));
+	// This is the default solution. We construct a virtual matrix that
+	// represents the required rows. However, the default solution only
+	// works for wide matrices.
+	else if (is_wide()) {
+		std::vector<detail::matrix_store::const_ptr> ins(1, store);
+		get_rows_op::const_ptr op(new get_rows_op(idxs, get_num_cols(),
+					get_type()));
+		detail::matrix_store::ptr res = __mapply_portion_virtual(ins, op,
+				store_layout());
+		assert(res);
+		return dense_matrix::create(res);
+	}
 	else
 		return dense_matrix::ptr();
-}
-
-dense_matrix::ptr dense_matrix::transpose() const
-{
-	return dense_matrix::ptr(new dense_matrix(get_data().transpose()));
 }
 
 ////////////////////////////// Inner product //////////////////////////////////

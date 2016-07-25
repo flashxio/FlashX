@@ -981,22 +981,6 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 				par_access);
 }
 
-matrix_store::const_ptr mapply_matrix_store::get_cols(
-		const std::vector<off_t> &idxs) const
-{
-	if (!is_materialized())
-		materialize_self();
-	return res->get_materialize_ref(is_wide()).get_cols(idxs);
-}
-
-matrix_store::const_ptr mapply_matrix_store::get_rows(
-		const std::vector<off_t> &idxs) const
-{
-	if (!is_materialized())
-		materialize_self();
-	return res->get_materialize_ref(is_wide()).get_rows(idxs);
-}
-
 static local_matrix_store::const_ptr transpose_lmapply(
 		local_matrix_store::const_ptr store)
 {

@@ -626,26 +626,28 @@ public:
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
 		if (is_wide()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't get cols from a wide EM sub matrix\n";
-			return matrix_store::const_ptr();
+			matrix_store::const_ptr cols = orig->get_cols(idxs);
+			return cols->get_rows(rc_idxs);
 		}
-		std::vector<off_t> orig_idxs(idxs.size());
-		for (size_t i = 0; i < idxs.size(); i++)
-			orig_idxs[i] = rc_idxs[idxs[i]];
-		return orig->get_cols(orig_idxs);
+		else {
+			std::vector<off_t> orig_idxs(idxs.size());
+			for (size_t i = 0; i < idxs.size(); i++)
+				orig_idxs[i] = rc_idxs[idxs[i]];
+			return orig->get_cols(orig_idxs);
+		}
 	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		if (!is_wide()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't get rows from a tall EM sub matrix\n";
-			return matrix_store::const_ptr();
+			matrix_store::const_ptr rows = orig->get_rows(idxs);
+			return rows->get_cols(rc_idxs);
 		}
-		std::vector<off_t> orig_idxs(idxs.size());
-		for (size_t i = 0; i < idxs.size(); i++)
-			orig_idxs[i] = rc_idxs[idxs[i]];
-		return orig->get_rows(orig_idxs);
+		else {
+			std::vector<off_t> orig_idxs(idxs.size());
+			for (size_t i = 0; i < idxs.size(); i++)
+				orig_idxs[i] = rc_idxs[idxs[i]];
+			return orig->get_rows(orig_idxs);
+		}
 	}
 
 	virtual async_res_t get_portion_async(
@@ -1022,24 +1024,6 @@ async_cres_t sub_EM_matrix_store::get_row_portion_async(
 					0, start_col - start_fetched_col, num_rows, num_cols));
 }
 
-matrix_store::const_ptr EM_matrix_store::get_cols(
-			const std::vector<off_t> &idxs) const
-{
-	if (store_layout() == matrix_layout_t::L_ROW && !is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't support get cols from a tall row-major matrix";
-		return matrix_store::const_ptr();
-	}
-
-	if (is_wide()) {
-		matrix_store::const_ptr tthis = transpose();
-		matrix_store::const_ptr ret = tthis->get_rows(idxs);
-		return ret->transpose();
-	}
-
-	return matrix_store::const_ptr(new sub_EM_matrix_store(idxs, shallow_copy()));
-}
-
 struct comp_row_idx
 {
 	bool operator()(const std::pair<off_t, off_t> &a,
@@ -1051,11 +1035,10 @@ struct comp_row_idx
 matrix_store::const_ptr EM_matrix_store::get_rows(
 			const std::vector<off_t> &idxs) const
 {
-	if (store_layout() == matrix_layout_t::L_COL && is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't support get rows from a wide col-major matrix";
+	// We can't get rows from a wide col-major matrix.
+	// We'll rely on dense_matrix to get the rows.
+	if (store_layout() == matrix_layout_t::L_COL && is_wide())
 		return matrix_store::const_ptr();
-	}
 
 	// If this is a tall matrix, we read portions that contains the specified
 	// rows. This operation is slow, should be used to read a very small number
