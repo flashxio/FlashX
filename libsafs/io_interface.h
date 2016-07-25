@@ -385,7 +385,7 @@ public:
 
 	/**
 	 * Add an I/O instance to the I/O select.
-	 * If the type of I/O stance doesn't match with the I/O select,
+	 * If the type of I/O instance doesn't match with the I/O select,
 	 * the registration fails.
 	 */
 	virtual bool add_io(io_interface::ptr io) = 0;
