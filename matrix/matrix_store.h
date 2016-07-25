@@ -203,14 +203,6 @@ public:
 			const std::vector<off_t> &idxs) const {
 		return matrix_store::const_ptr();
 	}
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const {
-		assert(0);
-		return std::shared_ptr<const vec_store>();
-	}
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const {
-		assert(0);
-		return std::shared_ptr<const vec_store>();
-	}
 
 	virtual bool is_virtual() const {
 		return false;

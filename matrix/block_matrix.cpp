@@ -275,40 +275,6 @@ void block_matrix::assign(const dense_matrix &mat)
 	dense_matrix::assign(mat);
 }
 
-vector::ptr block_matrix::get_col(off_t idx) const
-{
-	if ((size_t) idx >= get_num_cols() || idx < 0) {
-		BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
-		return vector::ptr();
-	}
-	if (is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't get a column from a group of wide matrices";
-		return vector::ptr();
-	}
-
-	off_t mat_idx = idx / get_block_size();
-	off_t local_idx = idx % get_block_size();
-	return vector::create(store->get_mat_ref(mat_idx).get_col_vec(local_idx));
-}
-
-vector::ptr block_matrix::get_row(off_t idx) const
-{
-	if ((size_t) idx >= get_num_rows() || idx < 0) {
-		BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
-		return vector::ptr();
-	}
-	if (!is_wide()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't get a row from a group of tall matrices";
-		return vector::ptr();
-	}
-
-	off_t mat_idx = idx / get_block_size();
-	off_t local_idx = idx % get_block_size();
-	return vector::create(store->get_mat_ref(mat_idx).get_row_vec(local_idx));
-}
-
 dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	auto cols = store->get_cols(idxs);

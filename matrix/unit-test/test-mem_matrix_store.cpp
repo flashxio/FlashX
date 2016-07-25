@@ -133,16 +133,6 @@ void test_sub_col_matrix()
 	assert(sub_store->store_layout() == store->store_layout());
 	assert(sub_store->get_entry_size() == store->get_entry_size());
 	assert(sub_store->get_type() == store->get_type());
-	for (size_t i = 0; i < idxs.size(); i++) {
-		mem_vec_store::const_ptr col1 = mem_vec_store::cast(
-				sub_store->get_col_vec(i));
-		mem_vec_store::const_ptr col2 = mem_vec_store::cast(
-				store->get_col_vec(idxs[i]));
-		assert(col1->get_length() == col2->get_length());
-		assert(col1->get_length() == sub_store->get_num_rows());
-		assert(memcmp(col1->get_raw_arr(), col2->get_raw_arr(),
-				sub_store->get_entry_size() * col1->get_length()) == 0);
-	}
 
 	std::vector<off_t> idxs2(2);
 	idxs2[0] = 0;
@@ -151,16 +141,6 @@ void test_sub_col_matrix()
 			sub_store->get_cols(idxs2));
 	assert(subsub_store != NULL);
 	assert(subsub_store->get_num_cols() == idxs2.size());
-	for (size_t i = 0; i < idxs2.size(); i++) {
-		mem_vec_store::const_ptr col1 = mem_vec_store::cast(
-				subsub_store->get_col_vec(i));
-		mem_vec_store::const_ptr col2 = mem_vec_store::cast(
-				store->get_col_vec(idxs[idxs2[i]]));
-		assert(col1->get_length() == col2->get_length());
-		assert(col1->get_length() == store->get_num_rows());
-		assert(memcmp(col1->get_raw_arr(), col2->get_raw_arr(),
-					store->get_entry_size() * store->get_num_rows()) == 0);
-	}
 }
 
 void test_sub_row_matrix()
@@ -181,16 +161,6 @@ void test_sub_row_matrix()
 	assert(sub_store->store_layout() == store->store_layout());
 	assert(sub_store->get_entry_size() == store->get_entry_size());
 	assert(sub_store->get_type() == store->get_type());
-	for (size_t i = 0; i < idxs.size(); i++) {
-		mem_vec_store::const_ptr row1 = mem_vec_store::cast(
-				sub_store->get_row_vec(i));
-		mem_vec_store::const_ptr row2 = mem_vec_store::cast(
-				store->get_row_vec(idxs[i]));
-		assert(row1->get_length() == row2->get_length());
-		assert(row1->get_length() == sub_store->get_num_cols());
-		assert(memcmp(row1->get_raw_arr(), row2->get_raw_arr(),
-				sub_store->get_entry_size() * sub_store->get_num_cols()) == 0);
-	}
 
 	idxs_set.clear();
 	for (size_t i = 0; i < sub_store->get_num_rows() / 2; i++)
@@ -200,16 +170,6 @@ void test_sub_row_matrix()
 			sub_store->get_rows(idxs2));
 	assert(subsub_store != NULL);
 	assert(subsub_store->get_num_rows() == idxs2.size());
-	for (size_t i = 0; i < idxs2.size(); i++) {
-		mem_vec_store::const_ptr row1 = mem_vec_store::cast(
-				subsub_store->get_row_vec(i));
-		mem_vec_store::const_ptr row2 = mem_vec_store::cast(
-				store->get_row_vec(idxs[idxs2[i]]));
-		assert(row1->get_length() == row2->get_length());
-		assert(row1->get_length() == store->get_num_cols());
-		assert(memcmp(row1->get_raw_arr(), row2->get_raw_arr(),
-					store->get_entry_size() * store->get_num_cols()) == 0);
-	}
 }
 
 void test_io()

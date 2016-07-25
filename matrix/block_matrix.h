@@ -114,8 +114,6 @@ public:
 
 	virtual void assign(const dense_matrix &mat);
 
-	virtual std::shared_ptr<vector> get_col(off_t idx) const;
-	virtual std::shared_ptr<vector> get_row(off_t idx) const;
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 

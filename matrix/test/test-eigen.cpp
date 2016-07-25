@@ -103,7 +103,7 @@ public:
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
-		deg_vec1_2 = col_vec::create(vec->get_col(0));
+		deg_vec1_2 = col_vec::create(vec);
 	}
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {

@@ -865,18 +865,6 @@ matrix_store::const_ptr IPW_matrix_store::materialize(bool in_mem,
 	return get_combine_res();
 }
 
-vec_store::const_ptr IPW_matrix_store::get_col_vec(off_t idx) const
-{
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_col_vec(idx);
-}
-
-vec_store::const_ptr IPW_matrix_store::get_row_vec(off_t idx) const
-{
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_row_vec(idx);
-}
-
 matrix_store::const_ptr IPW_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {

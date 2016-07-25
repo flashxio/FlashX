@@ -10,6 +10,7 @@
 #include "NUMA_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
+#include "col_vec.h"
 
 using namespace fm;
 
@@ -119,10 +120,10 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 			dense_matrix::ptr in_mat = dense_matrix::create(ins[i]);
 			dense_matrix::ptr out_mat = dense_matrix::create(outs[i]);
 			dense_matrix::ptr sum = in_mat->col_sum();
-			vector::ptr sum_vec = sum->get_col(0);
+			col_vec::ptr sum_vec = col_vec::create(sum);
 			std::vector<mat_ele_t> in_col_sum = sum_vec->conv2std<mat_ele_t>();
 			sum = out_mat->col_sum();
-			sum_vec = sum->get_col(0);
+			sum_vec = col_vec::create(sum);
 			std::vector<mat_ele_t> out_col_sum = sum_vec->conv2std<mat_ele_t>();
 			for (size_t k = 0; k < in_mat->get_num_cols(); k++) {
 				printf("%ld: sum of input: %lf, sum of product: %lf\n",

@@ -25,26 +25,33 @@ namespace fm
 
 col_vec::ptr col_vec::create(detail::matrix_store::ptr store)
 {
-	if (store->get_num_cols() > 1) {
+	if (store->get_num_cols() > 1 && store->get_num_rows() > 1) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "can't convert a matrix with more than one col to a vector";
+			<< "can't convert a matrix store with multiple cols&rows to a vector";
+		assert(0);
 		return ptr();
 	}
-	if (store->store_layout() == matrix_layout_t::L_ROW) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't create a col_vec with dense matrix in row-major order";
-		return ptr();
-	}
-	return ptr(new col_vec(store));
+	dense_matrix::ptr mat = dense_matrix::create(store);
+	if (mat->get_num_cols() > 1)
+		mat = mat->transpose();
+	if (mat->get_data().store_layout() == matrix_layout_t::L_ROW)
+		mat = mat->conv2(matrix_layout_t::L_COL);
+	return ptr(new col_vec(mat->get_raw_store()));
 }
 
 col_vec::ptr col_vec::create(dense_matrix::ptr mat)
 {
-	if (mat->get_num_cols() > 1) {
+	if (mat->get_num_cols() > 1 && mat->get_num_rows() > 1) {
+		printf("the input matrix has %ld rows and %ld cols\n",
+				mat->get_num_rows(), mat->get_num_cols());
 		BOOST_LOG_TRIVIAL(error)
-			<< "can't convert a matrix with more than one col to a vector";
+			<< "can't convert a matrix with multiple cols&rows to a vector";
+		assert(0);
 		return ptr();
 	}
+	if (mat->get_num_cols() > 1)
+		mat = mat->transpose();
+
 	if (mat->get_data().store_layout() == matrix_layout_t::L_ROW)
 		mat = mat->conv2(matrix_layout_t::L_COL);
 	return ptr(new col_vec(mat->get_raw_store()));

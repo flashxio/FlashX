@@ -311,18 +311,6 @@ matrix_store::const_ptr sparse_project_matrix_store::get_rows(
 			"don't support getting rows from a sparse matrix");
 }
 
-vec_store::const_ptr sparse_project_matrix_store::get_col_vec(off_t idx) const
-{
-	throw unsupported_exception(
-			"don't support getting a col from a sparse matrix");
-}
-
-vec_store::const_ptr sparse_project_matrix_store::get_row_vec(off_t idx) const
-{
-	throw unsupported_exception(
-			"don't support getting a row from a sparse matrix");
-}
-
 matrix_store::const_ptr lsparse_col_matrix_store::transpose() const
 {
 	matrix_info info = get_global_transpose_info();

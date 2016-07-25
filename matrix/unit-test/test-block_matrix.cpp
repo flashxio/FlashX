@@ -109,10 +109,6 @@ void test_get_rc()
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
 
-	vector::ptr vec1 = mat1->get_col(4);
-	vector::ptr vec2 = mat2->get_col(4);
-	check_vec_equal<double>(vec1, vec2);
-
 	std::vector<off_t> offs(3);
 	offs[0] = 1;
 	offs[1] = 3;
@@ -129,10 +125,6 @@ void test_get_rc()
 
 	assert(is_block_matrix(mat1));
 	assert(!is_block_matrix(mat2));
-
-	vec1 = mat1->get_row(4);
-	vec2 = mat2->get_row(4);
-	check_vec_equal<double>(vec1, vec2);
 
 	sub_m1 = mat1->get_rows(offs);
 	sub_m2 = mat2->get_rows(offs);

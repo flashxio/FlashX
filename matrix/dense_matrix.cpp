@@ -1995,28 +1995,6 @@ dense_matrix::ptr dense_matrix::create(data_frame::const_ptr df)
 				matrix_layout_t::L_COL));
 }
 
-vector::ptr dense_matrix::get_col(off_t idx) const
-{
-	BOOST_LOG_TRIVIAL(warning)
-		<< boost::format("get col %1% from the dense matrix.") % idx;
-	detail::vec_store::const_ptr vec = get_data().get_col_vec(idx);
-	if (vec)
-		return vector::create(vec);
-	else
-		return vector::ptr();
-}
-
-vector::ptr dense_matrix::get_row(off_t idx) const
-{
-	BOOST_LOG_TRIVIAL(warning)
-		<< boost::format("get row %1% from the dense matrix.") % idx;
-	detail::vec_store::const_ptr vec = get_data().get_row_vec(idx);
-	if (vec)
-		return vector::create(vec);
-	else
-		return vector::ptr();
-}
-
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	for (size_t i = 0; i < idxs.size(); i++)
@@ -2565,6 +2543,7 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 	if (store_layout() == layout)
 		return dense_matrix::create(get_raw_store());
 
+#if 0
 	// If the dense matrix has only one row or one column, it's very easy
 	// to convert its layout. We don't need to copy data or run computation
 	// at all. This only works for in-mem non-virtual matrices. If this is
@@ -2583,6 +2562,7 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 		return dense_matrix::create(vec->conv2mat(get_num_rows(),
 					get_num_cols(), layout == matrix_layout_t::L_ROW));
 	}
+#endif
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();

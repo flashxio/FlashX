@@ -21,6 +21,7 @@
  */
 
 #include "dense_matrix.h"
+#include "local_matrix_store.h"
 
 namespace fm
 {
@@ -64,6 +65,30 @@ public:
 
 	col_vec(size_t len, const scalar_type &type): dense_matrix(len, 1,
 			matrix_layout_t::L_COL, type) {
+	}
+
+	template<class T>
+	std::vector<T> conv2std() const {
+		assert(is_type<T>());
+		std::vector<T> ret(get_length());
+		size_t num_portions = get_data().get_num_portions();
+		size_t num_eles = 0;
+		for (size_t i = 0; i < num_portions; i++) {
+			auto portion = get_data().get_portion(i);
+			assert(portion->get_raw_arr());
+			assert(portion->get_num_cols() == 1);
+			detail::local_col_matrix_store::const_ptr col_portion
+				= std::dynamic_pointer_cast<const detail::local_col_matrix_store>(
+						portion);
+			assert(col_portion);
+			size_t num_port_eles
+				= portion->get_num_rows() * portion->get_num_cols();
+			memcpy(ret.data() + num_eles,
+					col_portion->get_col(0), num_port_eles * sizeof(T));
+			num_eles += num_port_eles;
+		}
+		assert(num_eles == ret.size());
+		return ret;
 	}
 
 	size_t get_length() const {

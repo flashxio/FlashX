@@ -273,20 +273,6 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	return res;
 }
 
-vec_store::const_ptr agg_matrix_store::get_col_vec(off_t idx) const
-{
-	// An agg matrix is always a one-column matrix.
-	// We should support this method.
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_col_vec(idx);
-}
-
-vec_store::const_ptr agg_matrix_store::get_row_vec(off_t idx) const
-{
-	assert(0);
-	return vec_store::const_ptr();
-}
-
 matrix_store::const_ptr agg_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {

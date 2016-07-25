@@ -157,7 +157,7 @@ class dotp_matrix_store: public detail::virtual_matrix_store, public detail::EM_
 				basic_uops::op_idx::SQ);
 		dense_matrix::ptr sq_mat = mat->sapply(bulk_uoperate::conv2ptr(*op));
 		dense_matrix::ptr sum = sq_mat->col_sum();
-		vector::ptr sum_vec = sum->get_col(0);
+		col_vec::ptr sum_vec = col_vec::create(sum);
 		col_dot_prods = sum_vec->conv2std<double>();
 	}
 public:

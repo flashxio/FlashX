@@ -981,20 +981,6 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 				par_access);
 }
 
-vec_store::const_ptr mapply_matrix_store::get_col_vec(off_t idx) const
-{
-	if (!is_materialized())
-		materialize_self();
-	return res->get_materialize_ref(is_wide()).get_col_vec(idx);
-}
-
-vec_store::const_ptr mapply_matrix_store::get_row_vec(off_t idx) const
-{
-	if (!is_materialized())
-		materialize_self();
-	return res->get_materialize_ref(is_wide()).get_row_vec(idx);
-}
-
 matrix_store::const_ptr mapply_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {

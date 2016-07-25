@@ -29,13 +29,13 @@ struct edge_equal
 void print_cols(detail::mem_matrix_store::ptr store)
 {
 	dense_matrix::ptr mat = dense_matrix::create(store);
-	if (mat->store_layout() == matrix_layout_t::L_ROW)
-		mat = mat->conv2(matrix_layout_t::L_COL);
-	mat->materialize_self();
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		vector::ptr col = mat->get_col(i);
-		printf("%ld: %f\n", i, col->sum<float>());
-	}
+	dense_matrix::ptr sum = mat->col_sum();
+	sum->materialize_self();
+	detail::mem_matrix_store::const_ptr mem_sum
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum->get_raw_store());
+	for (size_t i = 0; i < mem_sum->get_num_cols(); i++)
+		printf("%ld: %f\n", i, mem_sum->get<float>(0, i));
 }
 
 edge_list::ptr create_rand_el(bool with_attr)

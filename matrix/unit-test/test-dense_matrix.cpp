@@ -953,7 +953,6 @@ void test_apply1(dense_matrix::ptr mat)
 	size_t num_rows = mat->get_num_rows();
 	size_t num_cols = mat->get_num_cols();
 	dense_matrix::ptr res;
-	vector::ptr res_vec;
 
 	printf("Test apply on rows of a %s %s-wise matrix\n",
 			mat->is_wide() ? "wide" : "tall",
@@ -964,11 +963,10 @@ void test_apply1(dense_matrix::ptr mat)
 		assert(res->get_num_cols() == 1 && res->get_num_rows() == mat->get_num_rows());
 		assert(res->is_type<long>());
 		res->materialize_self();
-		res_vec = res->get_col(0);
-		const detail::smp_vec_store &vstore1
-			= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
-		for (size_t i = 0; i < res_vec->get_length(); i++)
-			assert(vstore1.get<long>(i)
+		col_vec::ptr res_vec = col_vec::create(res);
+		std::vector<long> stdvec = res_vec->conv2std<long>();
+		for (size_t i = 0; i < stdvec.size(); i++)
+			assert(stdvec[i]
 					== i * num_cols * num_cols + (num_cols - 1) * num_cols / 2);
 	}
 
@@ -981,11 +979,10 @@ void test_apply1(dense_matrix::ptr mat)
 		assert(res->get_num_rows() == 1 && res->get_num_cols() == mat->get_num_cols());
 		assert(res->is_type<long>());
 		res->materialize_self();
-		res_vec = res->get_row(0);
-		const detail::smp_vec_store &vstore2
-			= dynamic_cast<const detail::smp_vec_store &>(res_vec->get_data());
-		for (size_t i = 0; i < res_vec->get_length(); i++)
-			assert(vstore2.get<long>(i)
+		col_vec::ptr res_vec = col_vec::create(res);
+		std::vector<long> stdvec = res_vec->conv2std<long>();
+		for (size_t i = 0; i < stdvec.size(); i++)
+			assert(stdvec[i]
 					== (num_rows - 1) * num_rows / 2 * num_cols + num_rows * i);
 	}
 }
@@ -1139,12 +1136,12 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 {
 	printf("test row sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
-	vector::ptr vec = mat->row_sum()->get_col(0);
-	assert(vec->is_in_mem());
+	dense_matrix::ptr sum = mat->row_sum();
+	sum->materialize_self();
+	col_vec::ptr vec = col_vec::create(sum);
 	assert(vec->get_length() == mat->get_num_rows());
 
-	detail::mem_vec_store::const_ptr mem_vec
-		= detail::mem_vec_store::cast(vec->get_raw_store());
+	std::vector<int> stdvec = vec->conv2std<int>();
 	detail::mem_matrix_store::const_ptr mem_m;
 	if (mat->is_in_mem()) {
 		dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
@@ -1155,24 +1152,25 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 		dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
 		mem_m = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
 	}
-	for (size_t i = 0; i < vec->get_length(); i++) {
+	for (size_t i = 0; i < stdvec.size(); i++) {
 		int sum = 0;
 		for (size_t j = 0; j < mat->get_num_cols(); j++)
 			sum += mem_m->get<int>(i, j);
-		assert(sum == *(int *) mem_vec->get_sub_arr(i, i + 1));
+		assert(sum == stdvec[i]);
 	}
 
 	printf("test col sum on %s %s matrix\n", mat->is_wide() ? "wide" : "tall",
 			mat->store_layout() == matrix_layout_t::L_COL ? "column" : "row");
-	vec = mat->col_sum()->get_col(0);
-	assert(vec->is_in_mem());
+	sum = mat->col_sum();
+	sum->materialize_self();
+	vec = col_vec::create(sum);
 	assert(vec->get_length() == mat->get_num_cols());
-	mem_vec = detail::mem_vec_store::cast(vec->get_raw_store());
-	for (size_t i = 0; i < vec->get_length(); i++) {
+	stdvec = vec->conv2std<int>();
+	for (size_t i = 0; i < stdvec.size(); i++) {
 		int sum = 0;
 		for (size_t j = 0; j < mat->get_num_rows(); j++)
 			sum += mem_m->get<int>(j, i);
-		assert(sum == *(int *) mem_vec->get_sub_arr(i, i + 1));
+		assert(sum == stdvec[i]);
 	}
 }
 

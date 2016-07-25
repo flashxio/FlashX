@@ -181,14 +181,6 @@ public:
 		return matrix_store::const_ptr();
 	}
 
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
-		assert(0);
-		return vec_store::const_ptr();
-	}
-	virtual vec_store::const_ptr get_row_vec(off_t idx) const {
-		assert(0);
-		return vec_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const {
 		assert(0);
 		return matrix_store::const_ptr();
@@ -456,18 +448,6 @@ std::vector<matrix_store::const_ptr> block_sink_store::get_materialized_blocks()
 	for (size_t i = 0; i < stores.size(); i++)
 		stores[i] = mats[i]->get_raw_store();
 	return stores;
-}
-
-vec_store::const_ptr block_sink_store::get_col_vec(off_t idx) const
-{
-	assert(0);
-	return vec_store::const_ptr();
-}
-
-vec_store::const_ptr block_sink_store::get_row_vec(off_t idx) const
-{
-	assert(0);
-	return vec_store::const_ptr();
 }
 
 matrix_store::const_ptr block_sink_store::get_cols(

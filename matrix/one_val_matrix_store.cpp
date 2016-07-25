@@ -77,26 +77,6 @@ matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 	return ret;
 }
 
-vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	vec_store::ptr ret = vec_store::create(get_num_rows(), get_type(),
-			get_num_nodes(), is_in_mem());
-	auto op = ret->get_type().get_set_vec_const(*val);
-	ret->set_data(*op);
-	return ret;
-}
-
-vec_store::const_ptr one_val_matrix_store::get_row_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	vec_store::ptr ret = vec_store::create(get_num_cols(), get_type(),
-			get_num_nodes(), is_in_mem());
-	auto op = ret->get_type().get_set_vec_const(*val);
-	ret->set_data(*op);
-	return ret;
-}
-
 matrix_store::const_ptr one_val_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {

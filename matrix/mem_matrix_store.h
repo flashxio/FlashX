@@ -208,9 +208,6 @@ public:
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
-
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
@@ -290,8 +287,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -362,9 +357,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
-
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };
 
 /*
@@ -429,8 +421,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };
 
 }

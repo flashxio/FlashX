@@ -160,13 +160,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual int get_portion_node_id(size_t id) const;
 
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA tall row matrix";
-		return vec_store::const_ptr();
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const;
-
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
 
@@ -241,18 +234,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual int get_portion_node_id(size_t id) const;
 
-	virtual vec_store::ptr get_col_vec(off_t col) {
-		return data[col];
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t col) const {
-		return data[col];
-	}
-	virtual vec_store::const_ptr get_row_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA tall column matrix";
-		return vec_store::const_ptr();
-	}
-
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
 
@@ -316,14 +297,6 @@ public:
 		return store.get_portion_node_id(id);
 	}
 
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		return store.get_col_vec(row);
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA wide row matrix";
-		return vec_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		return store.get_cols(idxs)->transpose();
@@ -395,15 +368,6 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual int get_portion_node_id(size_t id) const {
 		return store.get_portion_node_id(id);
-	}
-
-	virtual vec_store::const_ptr get_col_vec(off_t col) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA wide col matrix";
-		return vec_store::const_ptr();
-	}
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		return store.get_col_vec(row);
 	}
 
 	virtual matrix_layout_t store_layout() const {
