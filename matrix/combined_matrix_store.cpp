@@ -273,7 +273,7 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 		std::vector<off_t> local_row_idxs(idxs.size());
 		std::vector<off_t> start_rows(mats.size());
 		for (size_t i = 1; i < mats.size(); i++)
-			start_rows[i] = start_rows[i - 1] + mats[i]->get_num_rows();
+			start_rows[i] = start_rows[i - 1] + mats[i - 1]->get_num_rows();
 		// Find the right matrix.
 		auto loc = find_mat(mats.begin(), mats.end(), start_rows[0], idxs[0]);
 		mat_idxs[0] = loc.first;
