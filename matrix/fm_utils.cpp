@@ -942,17 +942,59 @@ public:
 	}
 };
 
+namespace
+{
+
+class block_edge_map {
+	size_t block_width;
+	std::vector<std::vector<const fg::ext_mem_undirected_vertex *> > map;
+public:
+	block_edge_map(size_t num_blocks, const block_2d_size &block_size): map(
+			num_blocks) {
+		block_width = block_size.get_num_cols();
+	}
+
+	void push(const fg::ext_mem_undirected_vertex *v) {
+		for (size_t i = 0; i < v->get_num_edges(); i++) {
+			size_t vector_idx = v->get_neighbor(i) / block_width;
+			if (map[vector_idx].empty() || map[vector_idx].back() != v)
+				map[vector_idx].push_back(v);
+		}
+	}
+
+	void clear() {
+		for (size_t i = 0; i < map.size(); i++)
+			map[i].clear();
+	}
+
+	const std::vector<const fg::ext_mem_undirected_vertex *> &get_block(
+			size_t idx) const {
+		return map[idx];
+	}
+
+	size_t get_num_blocks() const {
+		return map.size();
+	}
+};
+
+}
+
 class part_2d_apply_operate: public gr_apply_operate<local_vv_store>
 {
 	// The row length (aka. the total number of columns) of the matrix.
 	size_t row_len;
 	size_t nz_size;
 	block_2d_size block_size;
+	std::vector<block_edge_map> maps;
 public:
 	part_2d_apply_operate(const block_2d_size &_size,
 			size_t row_len, size_t nz_size): block_size(_size) {
 		this->row_len = row_len;
 		this->nz_size = nz_size;
+		int num_threads = detail::mem_thread_pool::get_global_num_threads();
+		size_t num_blocks = ceil(((double) row_len) / block_size.get_num_cols());
+		for (int i = 0; i < num_threads; i++)
+			maps.emplace_back(num_blocks, block_size);
 	}
 
 	void run(const void *key, const local_vv_store &val,
@@ -1045,17 +1087,20 @@ public:
 void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	block_edge_map &map
+		= const_cast<part_2d_apply_operate *>(this)->maps[thread_id];
+	map.clear();
+
 	size_t block_height = block_size.get_num_rows();
 	size_t block_width = block_size.get_num_cols();
-	size_t num_blocks = ceil(((double) row_len) / block_width);
 	factor_value_t block_row_id = *(const factor_value_t *) key;
 	size_t tot_num_non_zeros = 0;
 	size_t max_row_parts = 0;
 	const fg::ext_mem_undirected_vertex *first_v
 		= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(0);
 	fg::vertex_id_t start_vid = first_v->get_id();
-	std::vector<std::vector<const fg::ext_mem_undirected_vertex *> > edge_dist_map(
-			num_blocks);
+	size_t num_blocks = map.get_num_blocks();
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
@@ -1068,12 +1113,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		max_row_parts += std::min(num_blocks, v->get_num_edges());
 
 		// Fill the edge distribution map.
-		for (size_t i = 0; i < v->get_num_edges(); i++) {
-			size_t vector_idx = v->get_neighbor(i) / block_width;
-			if (edge_dist_map[vector_idx].empty()
-					|| edge_dist_map[vector_idx].back() != v)
-				edge_dist_map[vector_idx].push_back(v);
-		}
+		map.push(v);
 	}
 
 	// Containers of non-zero values.
@@ -1110,7 +1150,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		data.clear();
 		single_nz_data.clear();
 		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
-			= edge_dist_map[col_idx / block_width];
+			= map.get_block(col_idx / block_width);
 		std::vector<coo_nz_t> single_nnz;
 		// Iterate the vectors in the vector_vector one by one.
 		for (size_t i = 0; i < v_ptrs.size(); i++) {
