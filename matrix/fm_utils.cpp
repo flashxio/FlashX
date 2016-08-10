@@ -1213,8 +1213,12 @@ std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
 	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
 	printf("groupby multiple vectors in the vector vector\n");
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_cols, entry_size));
+	gettimeofday(&end, NULL);
+	printf("groupby takes %f seconds\n", time_diff(start, end));
 
 	prim_type type = prim_type::P_BOOL;
 	if (entry_type)
@@ -1261,8 +1265,12 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 	// TODO I should make this a NUMA vector.
 	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
 			adjs->is_in_mem(), set_2d_label_operate(block_size));
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	vector_vector::ptr res = adjs->groupby(*labels,
 			part_2d_apply_operate(block_size, num_cols, entry_size));
+	gettimeofday(&end, NULL);
+	printf("groupby takes %f seconds\n", time_diff(start, end));
 
 	prim_type type = prim_type::P_BOOL;
 	if (entry_type)
