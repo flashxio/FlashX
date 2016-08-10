@@ -516,11 +516,20 @@ static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_threads = mem_threads->get_num_threads();
-	int num_parts = num_threads;
-	// If the vector is large, we should divide it into many more parts to have
-	// better load balancing.
-	if (sorted_col->get_length() >= 1000000)
-		num_parts *= 10;
+
+	bool is_vec = true;
+	for (size_t i = 0; i < sorted_df.size(); i++) {
+		auto vec = sorted_df[i].second;
+		if (vec->get_num_bytes()
+				!= vec->get_length() * vec->get_type().get_size()) {
+			is_vec = false;
+			break;
+		}
+	}
+	// If all fields in the data frame are vectors, we use a larger
+	// partition size. Otherwise, we use a small partition size.
+	size_t part_size = is_vec ? 1024 * 1024 : 16 * 1024;
+	size_t num_parts = sorted_col->get_length() / part_size;
 
 	groupby_task_queue::ptr q(new groupby_task_queue(sorted_col, num_parts));
 
