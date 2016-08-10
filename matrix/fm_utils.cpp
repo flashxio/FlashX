@@ -945,35 +945,37 @@ public:
 namespace
 {
 
-class block_edge_map {
-	size_t block_width;
-	std::vector<std::vector<const fg::ext_mem_undirected_vertex *> > map;
-public:
-	block_edge_map(size_t num_blocks, const block_2d_size &block_size): map(
-			num_blocks) {
-		block_width = block_size.get_num_cols();
-	}
+struct block_info
+{
+	// The number of non-zero entries.
+	uint32_t nnz;
+	// The number of rows with non-zero entries.
+	uint16_t nrow;
+	// The number of rows with a single non-zero entry.
+	uint16_t num_coos;
 
-	void push(const fg::ext_mem_undirected_vertex *v) {
-		for (size_t i = 0; i < v->get_num_edges(); i++) {
-			size_t vector_idx = v->get_neighbor(i) / block_width;
-			if (map[vector_idx].empty() || map[vector_idx].back() != v)
-				map[vector_idx].push_back(v);
-		}
+	block_info() {
+		nnz = 0;
+		nrow = 0;
+		num_coos = 0;
 	}
+};
 
-	void clear() {
-		for (size_t i = 0; i < map.size(); i++)
-			map[i].clear();
-	}
+struct block_pointers
+{
+	sparse_block_2d *block;
+	// The pointer to the coo region in the block.
+	local_coo_t *coos;
+	// The pointer to the values of SCSR in the block.
+	char *nz_vals;
+	// The pointer to the values of coos in the block.
+	char *coo_vals;
 
-	const std::vector<const fg::ext_mem_undirected_vertex *> &get_block(
-			size_t idx) const {
-		return map[idx];
-	}
-
-	size_t get_num_blocks() const {
-		return map.size();
+	block_pointers() {
+		block = NULL;
+		coos = NULL;
+		nz_vals = NULL;
+		coo_vals = NULL;
 	}
 };
 
@@ -985,16 +987,14 @@ class part_2d_apply_operate: public gr_apply_operate<local_vv_store>
 	size_t row_len;
 	size_t nz_size;
 	block_2d_size block_size;
-	std::vector<block_edge_map> maps;
+
+	size_t collect_block_info(size_t block_row_id, const local_vv_store &val,
+			std::vector<block_info> &infos) const;
 public:
 	part_2d_apply_operate(const block_2d_size &_size,
 			size_t row_len, size_t nz_size): block_size(_size) {
 		this->row_len = row_len;
 		this->nz_size = nz_size;
-		int num_threads = detail::mem_thread_pool::get_global_num_threads();
-		size_t num_blocks = ceil(((double) row_len) / block_size.get_num_cols());
-		for (int i = 0; i < num_threads; i++)
-			maps.emplace_back(num_blocks, block_size);
 	}
 
 	void run(const void *key, const local_vv_store &val,
@@ -1013,240 +1013,191 @@ public:
 	}
 };
 
-namespace
+static void add_nz(block_pointers &ps,
+		const fg::ext_mem_undirected_vertex &v,
+		const std::vector<fg::vertex_id_t> &neighs,
+		block_2d_size block_size, size_t nz_size,
+		char *buf)
 {
+	// There is only one edge from the vertex in the block
+	// We store it in the COO region.
+	if (neighs.size() == 1) {
+		// Add index
+		*ps.coos = local_coo_t(v.get_id() & block_size.get_nrow_mask(),
+				neighs[0] & block_size.get_ncol_mask());
+		// Add the non-zero value.
+		if (nz_size > 0)
+			memcpy(ps.coo_vals, v.get_raw_edge_data(neighs[0]), nz_size);
 
-struct coo_less
+		// move to the next one.
+		ps.coos++;
+		if (nz_size > 0)
+			ps.coo_vals += nz_size;
+	}
+	// There are more than one edge from the vertex.
+	// We store it in SCSR.
+	else if (neighs.size() > 1) {
+		// Add the index
+		size_t row_idx = v.get_id() & block_size.get_nrow_mask();
+		sparse_row_part *part = new (buf) sparse_row_part(row_idx);
+		rp_edge_iterator edge_it = part->get_edge_iterator();
+		for (size_t k = 0; k < neighs.size(); k++)
+			edge_it.append(block_size, neighs[k]);
+		ps.block->append(*part, sparse_row_part::get_size(neighs.size()));
+		// Add the non-zero values.
+		if (nz_size > 0)
+			memcpy(ps.nz_vals, v.get_raw_edge_data(neighs[0]),
+					nz_size * neighs.size());
+
+		// Move to the next one.
+		ps.nz_vals += nz_size * neighs.size();
+	}
+}
+
+size_t part_2d_apply_operate::collect_block_info(size_t block_row_id,
+		const local_vv_store &val, std::vector<block_info> &block_infos) const
 {
-	bool operator()(const coo_nz_t &a, const coo_nz_t &b) {
-		if (a.first == b.first)
-			return a.second < b.second;
-		else
-			return a.first < b.first;
-	}
-};
+	size_t block_height = block_size.get_num_rows();
+	size_t block_width = block_size.get_num_cols();
+	// We calculate the number of bytes in each block accurately.
+	for (size_t i = 0; i < val.get_num_vecs(); i++) {
+		const fg::ext_mem_undirected_vertex *v
+			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
+		assert(val.get_length(i) == v->get_size());
+		assert(v->get_id() / block_height == block_row_id);
 
-class block_nz_data
-{
-	size_t entry_size;
-	std::vector<char> data;
-	size_t num_entries;
-public:
-	block_nz_data(size_t entry_size) {
-		this->entry_size = entry_size;
-		num_entries = 0;
-	}
+		// The id of the current block.
+		size_t curr_bid = 0;
+		// The number of edges in the block.
+		size_t num_edges_block = 0;
+		for (size_t j = 0; j < v->get_num_edges(); j++) {
+			fg::vertex_id_t id = v->get_neighbor(j);
+			size_t block_id = id / block_width;
+			if (curr_bid == block_id)
+				num_edges_block++;
+			// this can happen for the first block.
+			else if (num_edges_block == 0) {
+				curr_bid = block_id;
+				num_edges_block = 1;
+			}
+			else {
+				block_infos[curr_bid].nrow++;
+				block_infos[curr_bid].nnz += num_edges_block;
+				// There is only one edge from the vertex in the block
+				// We store it in the COO region.
+				if (num_edges_block == 1)
+					block_infos[curr_bid].num_coos++;
+				curr_bid = block_id;
+				num_edges_block = 1;
+			}
+		}
 
-	void clear() {
-		num_entries = 0;
-		data.clear();
-	}
-
-	void push_back(char *new_entry) {
-		assert(entry_size > 0);
-		if (data.empty())
-			data.resize(16 * entry_size);
-		// If full
-		else if (data.size() == entry_size * num_entries)
-			data.resize(data.size() * 2);
-		memcpy(&data[num_entries * entry_size], new_entry, entry_size);
-		num_entries++;
-	}
-
-	void append(const char *new_entries, size_t num) {
-		assert(entry_size > 0);
-		if (data.empty())
-			data.resize(num * entry_size);
-		else if (data.size() < (this->num_entries + num) * entry_size)
-			data.resize((this->num_entries + num) * entry_size);
-		memcpy(&data[num_entries * entry_size], new_entries, entry_size * num);
-		num_entries += num;
-	}
-
-	const char *get_data() const {
-		if (entry_size == 0)
-			return NULL;
-		else
-			return data.data();
+		// For the last block
+		if (num_edges_block > 0) {
+			block_infos[curr_bid].nrow++;
+			block_infos[curr_bid].nnz += num_edges_block;
+			// There is only one edge from the vertex in the block
+			// We store it in the COO region.
+			if (num_edges_block == 1)
+				block_infos[curr_bid].num_coos++;
+		}
 	}
 
-	size_t get_size() const {
-		return num_entries;
-	}
+	// Get the total number of bytes in the output vector.
+	size_t tot_num_bytes = 0;
+	for (size_t i = 0; i < block_infos.size(); i++) {
+		// We don't store empty blocks.
+		if (block_infos[i].nnz == 0)
+			continue;
 
-	bool is_empty() const {
-		if (entry_size == 0)
-			return true;
-		else
-			return data.empty();
+		sparse_block_2d block(0, 0, block_infos[i].nnz, block_infos[i].nrow,
+				block_infos[i].num_coos);
+		tot_num_bytes += block.get_size(nz_size);
 	}
-};
-
+	return tot_num_bytes;
 }
 
 void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
-	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-	block_edge_map &map
-		= const_cast<part_2d_apply_operate *>(this)->maps[thread_id];
-	map.clear();
-
-	size_t block_height = block_size.get_num_rows();
 	size_t block_width = block_size.get_num_cols();
 	factor_value_t block_row_id = *(const factor_value_t *) key;
-	size_t tot_num_non_zeros = 0;
-	size_t max_row_parts = 0;
-	const fg::ext_mem_undirected_vertex *first_v
-		= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(0);
-	fg::vertex_id_t start_vid = first_v->get_id();
-	size_t num_blocks = map.get_num_blocks();
-	for (size_t i = 0; i < val.get_num_vecs(); i++) {
-		const fg::ext_mem_undirected_vertex *v
-			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
-		assert(val.get_length(i) == v->get_size());
-		assert(v->get_id() / block_height == (size_t) block_row_id);
-		tot_num_non_zeros += v->get_num_edges();
-		// I definitely over estimate the number of row parts.
-		// If a row doesn't have many non-zero entries, I assume that
-		// the non-zero entries distribute evenly across all row parts.
-		max_row_parts += std::min(num_blocks, v->get_num_edges());
 
-		// Fill the edge distribution map.
-		map.push(v);
-	}
+	size_t num_blocks = div_ceil(row_len, block_size.get_num_cols());
+	std::vector<block_info> block_infos(num_blocks);
+	size_t tot_num_bytes = collect_block_info(block_row_id, val, block_infos);
 
-	// Containers of non-zero values.
-	block_nz_data data(nz_size);
-	block_nz_data single_nz_data(nz_size);
-
-	std::vector<size_t> neigh_idxs(val.get_num_vecs());
-	// The maximal size of a block.
-	size_t max_block_size
-		// Even if a block is empty, its header still exists. The size is
-		// accurate.
-		= sizeof(sparse_block_2d) * num_blocks
-		// Each block has an empty row part in the end to indicate the end
-		// of the block.
-		+ sparse_row_part::get_size(0) * num_blocks
-		// The size for row part headers is highly over estimated.
-		+ sizeof(sparse_row_part) * max_row_parts
-		// The size is accurate.
-		+ sparse_row_part::get_col_entry_size() * tot_num_non_zeros
-		// The size of the non-zero entries.
-		+ nz_size * tot_num_non_zeros;
-	out.resize(max_block_size);
-	size_t curr_size = 0;
-	// The maximal size of a row part.
-	size_t max_row_size = sparse_row_part::get_size(block_width);
-	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
-	std::vector<fg::vertex_id_t> local_neighs;
-	size_t num_non_zeros = 0;
-	// Iterate columns. Actually it strides instead of iterating all columns.
-	for (size_t col_idx = 0; col_idx < row_len; col_idx += block_width) {
-		sparse_block_2d *block
-			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
-					block_row_id, col_idx / block_width);
-		data.clear();
-		single_nz_data.clear();
-		const std::vector<const fg::ext_mem_undirected_vertex *> &v_ptrs
-			= map.get_block(col_idx / block_width);
-		std::vector<coo_nz_t> single_nnz;
-		// Iterate the vectors in the vector_vector one by one.
-		for (size_t i = 0; i < v_ptrs.size(); i++) {
-			const fg::ext_mem_undirected_vertex *v = v_ptrs[i];
-			fg::vertex_id_t row_idx = v->get_id() - start_vid;
-			assert(v->get_edge_data_size() == nz_size);
-			assert(neigh_idxs[row_idx] < v->get_num_edges());
-			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx
-					&& v->get_neighbor(neigh_idxs[row_idx]) < col_idx + block_width);
-
-			size_t idx = neigh_idxs[row_idx];
-			local_neighs.clear();
-			for (; idx < v->get_num_edges()
-					&& v->get_neighbor(idx) < col_idx + block_width; idx++)
-				local_neighs.push_back(v->get_neighbor(idx));
-			// Get all edge data.
-			if (nz_size > 0 && local_neighs.size() == 1)
-				single_nz_data.push_back(v->get_raw_edge_data(neigh_idxs[row_idx]));
-			else if (nz_size > 0) {
-				size_t tmp_idx = neigh_idxs[row_idx];
-				for (; tmp_idx < v->get_num_edges()
-						&& v->get_neighbor(tmp_idx) < col_idx + block_width;
-						tmp_idx++)
-					data.push_back(v->get_raw_edge_data(tmp_idx));
-				assert(tmp_idx == idx);
-			}
-			size_t local_nnz = local_neighs.size();
-			assert(local_nnz <= block_width);
-			neigh_idxs[row_idx] = idx;
-
-			if (local_neighs.size() > 1) {
-				sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
-				rp_edge_iterator edge_it = part->get_edge_iterator();
-				for (size_t k = 0; k < local_neighs.size(); k++)
-					edge_it.append(block_size, local_neighs[k]);
-				assert(block->get_size(nz_size) + sparse_row_part::get_size(local_nnz)
-						+ local_nnz * nz_size <= max_block_size - curr_size);
-				block->append(*part, sparse_row_part::get_size(local_nnz));
-			}
-			else if (local_neighs.size() == 1)
-				single_nnz.push_back(coo_nz_t(row_idx, local_neighs[0]));
-		}
-		if (!single_nnz.empty()) {
-			assert(block->get_size(nz_size)
-					+ single_nnz.size() * sizeof(local_coo_t)
-					+ single_nnz.size() * nz_size <= max_block_size - curr_size);
-			block->add_coo(single_nnz, block_size);
-		}
-		if (!single_nz_data.is_empty())
-			data.append(single_nz_data.get_data(), single_nz_data.get_size());
-		// After we finish adding rows to a block, we need to finalize it.
-		block->finalize(data.get_data(), data.get_size() * nz_size);
-		if (!block->is_empty()) {
-			curr_size += block->get_size(nz_size);
-			block->verify(block_size);
-		}
-		num_non_zeros += block->get_nnz();
-	}
-	assert(tot_num_non_zeros == num_non_zeros);
 	// If the block row doesn't have any non-zero entries, let's insert an
 	// empty block row, so the matrix index can work correctly.
-	if (curr_size == 0) {
-		curr_size = sizeof(sparse_block_2d);
-		const sparse_block_2d *block
-			= (const sparse_block_2d *) out.get_raw_arr();
+	if (tot_num_bytes == 0) {
+		tot_num_bytes = sizeof(sparse_block_2d);
+		out.resize(tot_num_bytes);
+		sparse_block_2d *block = new (out.get_raw_arr()) sparse_block_2d(
+					block_row_id, 0);
 		assert(block->is_empty());
+		return;
 	}
-	out.resize(curr_size);
 
-#ifdef VERIFY_ENABLED
-	std::vector<coo_nz_t> all_coos;
-	block_row_iterator br_it((const sparse_block_2d *) out.get_raw_arr(),
-			(const sparse_block_2d *) (out.get_raw_arr() + curr_size));
-	while (br_it.has_next()) {
-		const sparse_block_2d &block = br_it.next();
-		std::vector<coo_nz_t> coos = block.get_non_zeros(block_size);
-		all_coos.insert(all_coos.end(), coos.begin(), coos.end());
+	out.resize(tot_num_bytes);
+
+	// Get the location where we can fill data to.
+	std::vector<block_pointers> blocks(num_blocks);
+	size_t curr_size = 0;
+	for (size_t i = 0; i < block_infos.size(); i++) {
+		// If the block doesn't have non-zero entries, we will skip it.
+		if (block_infos[i].nnz == 0)
+			continue;
+
+		sparse_block_2d *block
+			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
+					block_row_id, i, block_infos[i].nnz, block_infos[i].nrow,
+					block_infos[i].num_coos);
+		curr_size += block->get_size(nz_size);
+		blocks[i].coos = block->get_coo_start();
+		blocks[i].coo_vals = block->get_coo_val_start(nz_size);
+		// For now we only include single-entry rows.
+		// We'll add other non-zero entries later.
+		blocks[i].block = new (block) sparse_block_2d(
+				block_row_id, i, block_infos[i].num_coos,
+				block_infos[i].num_coos, block_infos[i].num_coos);
 	}
-	assert(tot_num_non_zeros == all_coos.size());
-	std::sort(all_coos.begin(), all_coos.end(), coo_less());
 
-	auto coo_it = all_coos.begin();
+	size_t max_row_size = sparse_row_part::get_size(block_width);
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
+	// Serialize data.
+	std::vector<fg::vertex_id_t> neighs;
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
-		bool correct = true;
+
+		size_t curr_bid = 0;
+		neighs.clear();
 		for (size_t j = 0; j < v->get_num_edges(); j++) {
-			if (v->get_id() != coo_it->first)
-				correct = false;
-			if (v->get_neighbor(j) != coo_it->second)
-				correct = false;
-			coo_it++;
+			fg::vertex_id_t id = v->get_neighbor(j);
+			size_t block_id = id / block_width;
+			if (curr_bid == block_id)
+				neighs.push_back(id);
+			else {
+				add_nz(blocks[curr_bid], *v, neighs, block_size, nz_size,
+						buf.get());
+				curr_bid = block_id;
+				neighs.clear();
+				neighs.push_back(id);
+			}
 		}
-		assert(correct);
+
+		add_nz(blocks[curr_bid], *v, neighs, block_size, nz_size, buf.get());
 	}
-#endif
+
+	// Finalize each block.
+	for (size_t i = 0; i < blocks.size(); i++) {
+		if (blocks[i].block) {
+			// We have fill non-zero values to the output vector,
+			// so we can pass NULL here.
+			blocks[i].block->finalize(NULL, 0);
+//			blocks[i].block->verify(block_size);
+		}
+	}
 }
 
 std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
