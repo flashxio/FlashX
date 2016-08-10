@@ -305,22 +305,137 @@ public:
 	}
 };
 
+class vv_index_append
+{
+	// The offsets of vectors in the vv store.
+	std::map<off_t, std::vector<off_t> > vv_off_map;
+	// The vector that contains the data in the vv store.
+	detail::vec_store::ptr global_vec;
+
+	// The last chunk of vectors added to the buffer.
+	off_t last_chunk_idx;
+	// The buffer contains the vectors from the threads.
+	std::map<off_t, detail::vv_store::const_ptr> buf;
+	spin_lock lock;
+public:
+	typedef std::shared_ptr<vv_index_append> ptr;
+
+	vv_index_append(detail::vec_store::ptr vec) {
+		this->global_vec = vec;
+		last_chunk_idx = -1;
+	}
+
+	void append(off_t idx, detail::vv_store::const_ptr vv);
+	detail::vv_store::ptr get_final();
+
+	bool is_complete() const {
+		return buf.empty();
+	}
+};
+
+detail::vv_store::ptr vv_index_append::get_final()
+{
+	assert(buf.empty());
+	assert(!vv_off_map.empty());
+	auto it = vv_off_map.begin();
+	std::vector<off_t> vv_offs = it->second;
+	for (it++; it != vv_off_map.end(); it++) {
+		assert(vv_offs.back() == it->second.front());
+		vv_offs.insert(vv_offs.end(), it->second.begin() + 1, it->second.end());
+	}
+
+	assert(vv_offs.back() / global_vec->get_type().get_size()
+			== global_vec->get_length());
+	if (global_vec->is_in_mem()) {
+		detail::mem_vec_store::ptr mem_vec
+			= std::dynamic_pointer_cast<detail::mem_vec_store>(global_vec);
+		assert(mem_vec);
+		return detail::mem_vv_store::create(vv_offs, mem_vec);
+	}
+	else {
+		detail::EM_vec_store::ptr EM_vec
+			= std::dynamic_pointer_cast<detail::EM_vec_store>(global_vec);
+		assert(EM_vec);
+		return detail::EM_vv_store::create(vv_offs, EM_vec);
+	}
+}
+
+void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
+{
+	off_t first_idx = -1;
+	std::vector<detail::vv_store::const_ptr> contig;
+	lock.lock();
+	// Add the vv store.
+	buf.insert(std::pair<off_t, detail::vv_store::const_ptr>(idx, vv));
+	// Get contiguous vv.
+	auto it = buf.begin();
+	while (it != buf.end() && last_chunk_idx + 1 == it->first) {
+		if (first_idx < 0)
+			first_idx = it->first;
+		contig.push_back(it->second);
+		last_chunk_idx++;
+		it++;
+	}
+	if (it != buf.begin())
+		buf.erase(buf.begin(), it);
+
+	// If we have contiguous vv, we insert them to the global data structure.
+	// It takes two steps:
+	// * determine the location in the global vector where vvs are written to.
+	// * write data to the determined location.
+	// We can do this because we have reserved space in advance, so we don't
+	// need to reallocate space.
+
+	// Here is to determine the location.
+	size_t num_bytes = 0;
+	size_t num_new_vvs = 0;
+	for (size_t i = 0; i < contig.size(); i++) {
+		num_bytes += contig[i]->get_num_bytes();
+		num_new_vvs += contig[i]->get_num_vecs();
+		vv_off_map.insert(std::pair<off_t, std::vector<off_t> >(
+					first_idx + i, std::vector<off_t>()));
+	}
+	size_t vec_len = global_vec->get_length();
+	// I need to reserve enough space for `global_vec' so they don't
+	// need to allocate memory in the critical area.
+	assert(global_vec->get_reserved_size()
+			>= vec_len + num_bytes / global_vec->get_type().get_size());
+	global_vec->resize(vec_len + num_bytes / global_vec->get_type().get_size());
+	lock.unlock();
+
+	// Here is to write data to the right location.
+	for (size_t i = 0; i < contig.size(); i++) {
+		detail::vv_store::const_ptr vv = contig[i];
+		const detail::vec_store &data = vv->get_data();
+		const local_vec_store::const_ptr buf = data.get_portion(0,
+				data.get_length());
+		global_vec->set_portion(buf, vec_len);
+
+		off_t off = vec_len * vv->get_type().get_size();
+		std::vector<off_t> &vv_offs = vv_off_map[first_idx + i];
+		vv_offs.push_back(off);
+		for (size_t j = 0; j < vv->get_num_vecs(); j++)
+			vv_offs.push_back(vv_offs.back() + vv->get_num_bytes(j));
+		vec_len += vv->get_num_bytes() / vv->get_type().get_size();
+	}
+}
+
 class local_groupby_task: public thread_task
 {
 	groupby_task_queue::ptr q;
 	off_t sorted_col_idx;
 	std::vector<named_cvec_t> sorted_df;
+	vv_index_append::ptr append;
 	const gr_apply_operate<sub_data_frame> &op;
-	std::vector<detail::mem_vv_store::ptr> &sub_results;
 public:
 	local_groupby_task(groupby_task_queue::ptr q, off_t sorted_col_idx,
 			const std::vector<named_cvec_t> &sorted_df,
 			const gr_apply_operate<sub_data_frame> &_op,
-			std::vector<detail::mem_vv_store::ptr> &_sub_results): op(
-				_op), sub_results(_sub_results) {
+			vv_index_append::ptr append): op(_op) {
 		this->q = q;
 		this->sorted_col_idx = sorted_col_idx;
 		this->sorted_df = sorted_df;
+		this->append = append;
 	}
 
 	void run();
@@ -328,6 +443,15 @@ public:
 
 void local_groupby_task::run()
 {
+	size_t out_size;
+	// If the user can predict the number of output elements, we can create
+	// a buffer of the expected size.
+	if (op.get_num_out_eles() > 0)
+		out_size = op.get_num_out_eles();
+	else
+		// If the user can't, we create a small buffer.
+		out_size = 16;
+	local_buf_vec_store row(0, out_size, op.get_output_type(), -1);
 	while (true) {
 		// Get the a partition from the queue.
 		auto t = q->get_task();
@@ -348,20 +472,8 @@ void local_groupby_task::run()
 		}
 		assert(sub_sorted_col);
 
-		size_t out_size;
-		// If the user can predict the number of output elements, we can create
-		// a buffer of the expected size.
-		if (op.get_num_out_eles() > 0)
-			out_size = op.get_num_out_eles();
-		else
-			// If the user can't, we create a small buffer.
-			out_size = 16;
-		local_buf_vec_store row(0, out_size, op.get_output_type(), -1);
-
 		detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
 				op.get_output_type());
-		assert(sub_results.size() > (size_t) idx);
-		sub_results[idx] = ret;
 		agg_operate::const_ptr find_next
 			= sub_sorted_col->get_type().get_agg_ops().get_find_next();
 		size_t loc = 0;
@@ -384,6 +496,7 @@ void local_groupby_task::run()
 				ret->append(row);
 			loc += rel_end;
 		}
+		append->append(idx, ret);
 	}
 }
 
@@ -411,16 +524,29 @@ static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
 
 	groupby_task_queue::ptr q(new groupby_task_queue(sorted_col, num_parts));
 
-	std::vector<detail::mem_vv_store::ptr> sub_results(num_parts);
+	detail::mem_vec_store::ptr result = detail::mem_vec_store::create(0, -1,
+			op.get_output_type());
+	// We use the storage size of the data frame to approximate the storage size
+	// for the groupby result.
+	size_t num_bytes = 0;
+	for (size_t i = 0; i < sorted_df.size(); i++)
+		if (i != (size_t) sorted_col_idx)
+			num_bytes += sorted_df[i].second->get_num_bytes();
+	result->reserve(num_bytes / result->get_type().get_size());
+
+	vv_index_append::ptr append(new vv_index_append(result));
 	for (int i = 0; i < num_threads; i++) {
 		// It's difficult to localize computation.
 		// TODO can we localize computation?
 		int node_id = i % mem_threads->get_num_nodes();
 		mem_threads->process_task(node_id, new local_groupby_task(
-					q, sorted_col_idx, sorted_df, op, sub_results));
+					q, sorted_col_idx, sorted_df, op, append));
 	}
 	mem_threads->wait4complete();
-	return sub_results;
+	detail::vv_store::ptr ret = append->get_final();
+	detail::mem_vv_store::ptr mem_ret
+		= std::dynamic_pointer_cast<detail::mem_vv_store>(ret);
+	return std::vector<detail::mem_vv_store::ptr>(1, mem_ret);
 }
 
 static vector_vector::ptr in_mem_groupby(

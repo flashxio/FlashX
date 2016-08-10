@@ -92,6 +92,19 @@ public:
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
 			size_t size);
 
+	virtual bool reserve(size_t num_eles) {
+		return store->reserve(num_eles);
+	}
+
+	virtual size_t get_reserved_size() const {
+		return store->get_reserved_size();
+	}
+
+	virtual void clear() {
+		vec_offs.clear();
+		store->clear();
+	}
+
 	/*
 	 * The following methods aren't supported in the vv_store.
 	 */

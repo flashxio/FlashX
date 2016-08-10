@@ -86,6 +86,8 @@ public:
 	bool set_persistent(const std::string &name);
 
 	virtual bool resize(size_t length);
+	virtual bool reserve(size_t num_eles);
+	virtual size_t get_reserved_size() const;
 
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);

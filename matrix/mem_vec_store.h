@@ -139,6 +139,9 @@ public:
 
 	virtual smp_vec_store::ptr get(const smp_vec_store &idxs) const;
 
+	virtual bool reserve(size_t length);
+	virtual size_t get_reserved_size() const;
+
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);
 	virtual bool append(const vec_store &vec);

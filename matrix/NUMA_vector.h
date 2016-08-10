@@ -162,6 +162,14 @@ public:
 		return mapper.get_range_size();
 	}
 
+	virtual bool reserve(size_t num_eles) {
+		assert(0);
+		return false;
+	}
+	virtual size_t get_reserved_size() const {
+		assert(0);
+		return 0;
+	}
 	virtual bool resize(size_t new_length) {
 		assert(0);
 		return false;

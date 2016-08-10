@@ -225,6 +225,18 @@ EM_vec_store::~EM_vec_store()
 {
 }
 
+size_t EM_vec_store::get_reserved_size() const
+{
+	assert(0);
+	return 0;
+}
+
+bool EM_vec_store::reserve(size_t num_eles)
+{
+	assert(0);
+	return false;
+}
+
 bool EM_vec_store::resize(size_t length)
 {
 	// TODO

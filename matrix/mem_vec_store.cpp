@@ -182,6 +182,35 @@ bool smp_vec_store::append(const vec_store &vec)
 			mem_vec.get_length() * get_entry_size());
 }
 
+size_t smp_vec_store::get_reserved_size() const
+{
+	return data.get_num_bytes() / get_type().get_size();
+}
+
+bool smp_vec_store::reserve(size_t new_length)
+{
+	if (new_length == get_length())
+		return true;
+
+	size_t tot_len = data.get_num_bytes() / get_type().get_size();
+	if (new_length < tot_len)
+		return true;
+
+	// Keep the old information of the vector.
+	detail::simple_raw_array old_data = data;
+	char *old_arr = arr;
+	size_t old_length = get_length();
+
+	size_t real_length = old_length;
+	if (real_length == 0)
+		real_length = 1;
+	for (; real_length < new_length; real_length *= 2);
+	this->data = detail::simple_raw_array(real_length * get_type().get_size(), -1);
+	this->arr = this->data.get_raw();
+	memcpy(arr, old_arr, std::min(old_length, new_length) * get_type().get_size());
+	return true;
+}
+
 bool smp_vec_store::resize(size_t new_length)
 {
 	if (new_length == get_length())
@@ -204,7 +233,7 @@ bool smp_vec_store::resize(size_t new_length)
 	for (; real_length < new_length; real_length *= 2);
 	this->data = detail::simple_raw_array(real_length * get_type().get_size(), -1);
 	this->arr = this->data.get_raw();
-	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
+	memcpy(arr, old_arr, std::min(old_length, new_length) * get_type().get_size());
 	return vec_store::resize(new_length);
 }
 
