@@ -312,6 +312,8 @@ class vv_index_append
 	// The vector that contains the data in the vv store.
 	detail::vec_store::ptr global_vec;
 
+	size_t tot_num_appends;
+	size_t num_appends;
 	// The last chunk of vectors added to the buffer.
 	off_t last_chunk_idx;
 	// The buffer contains the vectors from the threads.
@@ -320,9 +322,11 @@ class vv_index_append
 public:
 	typedef std::shared_ptr<vv_index_append> ptr;
 
-	vv_index_append(detail::vec_store::ptr vec) {
+	vv_index_append(detail::vec_store::ptr vec, size_t tot_num_appends) {
 		this->global_vec = vec;
 		last_chunk_idx = -1;
+		this->tot_num_appends = tot_num_appends;
+		this->num_appends = 0;
 	}
 
 	void append(off_t idx, detail::vv_store::const_ptr vv);
@@ -335,6 +339,13 @@ public:
 
 detail::vv_store::ptr vv_index_append::get_final()
 {
+	lock.lock();
+	if (num_appends < tot_num_appends) {
+		lock.unlock();
+		return detail::vv_store::ptr();
+	}
+	assert(num_appends == tot_num_appends);
+
 	assert(buf.empty());
 	assert(!vv_off_map.empty());
 	auto it = vv_off_map.begin();
@@ -346,6 +357,7 @@ detail::vv_store::ptr vv_index_append::get_final()
 
 	assert(vv_offs.back() / global_vec->get_type().get_size()
 			== global_vec->get_length());
+	lock.unlock();
 	if (global_vec->is_in_mem()) {
 		detail::mem_vec_store::ptr mem_vec
 			= std::dynamic_pointer_cast<detail::mem_vec_store>(global_vec);
@@ -418,6 +430,10 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 			vv_offs.push_back(vv_offs.back() + vv->get_num_bytes(j));
 		vec_len += vv->get_num_bytes() / vv->get_type().get_size();
 	}
+
+	lock.lock();
+	num_appends += contig.size();
+	lock.unlock();
 }
 
 class local_groupby_task: public thread_task
@@ -502,7 +518,7 @@ void local_groupby_task::run()
 
 }
 
-static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
+static vv_index_append::ptr parallel_groupby_async(
 		const std::vector<named_cvec_t> &sorted_df, off_t sorted_col_idx,
 		const gr_apply_operate<sub_data_frame> &op)
 {
@@ -543,7 +559,7 @@ static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
 			num_bytes += sorted_df[i].second->get_num_bytes();
 	result->reserve(num_bytes / result->get_type().get_size());
 
-	vv_index_append::ptr append(new vv_index_append(result));
+	vv_index_append::ptr append(new vv_index_append(result, q->get_num_parts()));
 	for (int i = 0; i < num_threads; i++) {
 		// It's difficult to localize computation.
 		// TODO can we localize computation?
@@ -551,11 +567,7 @@ static std::vector<detail::mem_vv_store::ptr> parallel_groupby(
 		mem_threads->process_task(node_id, new local_groupby_task(
 					q, sorted_col_idx, sorted_df, op, append));
 	}
-	mem_threads->wait4complete();
-	detail::vv_store::ptr ret = append->get_final();
-	detail::mem_vv_store::ptr mem_ret
-		= std::dynamic_pointer_cast<detail::mem_vv_store>(ret);
-	return std::vector<detail::mem_vv_store::ptr>(1, mem_ret);
+	return append;
 }
 
 static vector_vector::ptr in_mem_groupby(
@@ -572,20 +584,14 @@ static vector_vector::ptr in_mem_groupby(
 	}
 	assert(sorted_col_idx >= 0);
 
-	std::vector<detail::mem_vv_store::ptr> sub_results = parallel_groupby(
-			df_vecs, sorted_col_idx, op);
-	if (sub_results.size() == 1)
-		return vector_vector::create(sub_results[0]);
-	else {
-		detail::mem_vv_store::ptr res_vv = sub_results[0];
-		std::vector<detail::vec_store::const_ptr> remain;
-		for (auto it = sub_results.begin() + 1; it != sub_results.end(); it++)
-			if (*it != NULL)
-				remain.push_back(*it);
-		bool ret = res_vv->append(remain.begin(), remain.end());
-		assert(ret);
-		return vector_vector::create(res_vv);
-	}
+	vv_index_append::ptr append = parallel_groupby_async(df_vecs,
+			sorted_col_idx, op);
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	mem_threads->wait4complete();
+	auto vv = append->get_final();
+	assert(vv);
+	return vector_vector::create(vv);
 }
 
 namespace
@@ -600,7 +606,10 @@ class EM_df_groupby_dispatcher: public detail::task_dispatcher
 	data_frame::const_ptr df;
 	detail::EM_vv_store::ptr out_vv;
 	const gr_apply_operate<sub_data_frame> &op;
+	std::deque<vv_index_append::ptr> append_q;
 public:
+	typedef std::shared_ptr<EM_df_groupby_dispatcher> ptr;
+
 	EM_df_groupby_dispatcher(data_frame::const_ptr df, const std::string &col_name,
 			detail::EM_vv_store::ptr out_vv, size_t portion_size,
 			const gr_apply_operate<sub_data_frame> &_op): op(_op) {
@@ -613,7 +622,27 @@ public:
 	}
 
 	virtual bool issue_task();
+
+	void complete_write();
 };
+
+void EM_df_groupby_dispatcher::complete_write()
+{
+	while (!append_q.empty()) {
+		auto append = append_q.front();
+
+		detail::vv_store::ptr ret = append->get_final();
+		// If the data is ready, we can write data back directly.
+		if (ret) {
+			// TODO data should also be written back asynchronously.
+			out_vv->append(*ret);
+			// Now we can remove it from the queue.
+			append_q.pop_front();
+		}
+		else
+			usleep(100 * 1000);
+	}
+}
 
 bool EM_df_groupby_dispatcher::issue_task()
 {
@@ -679,14 +708,21 @@ bool EM_df_groupby_dispatcher::issue_task()
 		}
 		assert(df_vecs[i].second->get_length() == real_len);
 	}
-
 	assert(sorted_col_idx >= 0);
-	std::vector<detail::mem_vv_store::ptr> sub_vv_results = parallel_groupby(
-			df_vecs, sorted_col_idx, op);
-	std::vector<detail::vec_store::const_ptr> res(sub_vv_results.begin(),
-			sub_vv_results.end());
-	// TODO data should also be written back asynchronously.
-	out_vv->append(res.begin(), res.end());
+
+	vv_index_append::ptr append = parallel_groupby_async(df_vecs,
+			sorted_col_idx, op);
+	append_q.push_back(append);
+	// Let's try if the data for the first one is ready.
+	append = append_q.front();
+	detail::vv_store::ptr ret = append->get_final();
+	// If the data is ready, we can write data back directly.
+	if (ret) {
+		// TODO data should also be written back asynchronously.
+		out_vv->append(*ret);
+		// Now we can remove it from the queue.
+		append_q.pop_front();
+	}
 
 	ele_idx += real_len;
 	return true;
@@ -700,16 +736,16 @@ static vector_vector::ptr EM_groupby(
 {
 	detail::EM_vv_store::ptr out_vv = detail::EM_vv_store::create(
 			op.get_output_type());
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_threads = mem_threads->get_num_threads();
 
-	size_t groupby_entry_size
-		= sorted_df->get_vec_ref(col_name).get_type().get_size();
-	size_t portion_size = matrix_conf.get_groupby_buf_size() / groupby_entry_size;
+	size_t portion_size = num_threads * 1024 * 1024 * 10;
 	// If one of the columns in the data frame is a vector vector,
 	// we should use a smaller portion size.
-	// TODO maybe there is a better way.
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
 		if (sorted_df->get_vec_ref(i).get_entry_size() == 0) {
-			portion_size = matrix_conf.get_vv_groupby_buf_size();
+			portion_size = num_threads * 16 * 1024 * 10;
 			break;
 		}
 
@@ -725,6 +761,7 @@ static vector_vector::ptr EM_groupby(
 	}
 	worker.register_EM_obj(out_vv.get());
 	worker.run();
+	groupby_dispatcher->complete_write();
 	return vector_vector::create(out_vv);
 }
 
