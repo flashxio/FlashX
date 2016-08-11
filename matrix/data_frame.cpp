@@ -307,8 +307,9 @@ public:
 
 class vv_index_append
 {
+	typedef std::shared_ptr<std::vector<off_t> > off_vec_ptr;
 	// The offsets of vectors in the vv store.
-	std::map<off_t, std::vector<off_t> > vv_off_map;
+	std::map<off_t, off_vec_ptr> vv_off_map;
 	// The vector that contains the data in the vv store.
 	detail::vec_store::ptr global_vec;
 
@@ -349,10 +350,11 @@ detail::vv_store::ptr vv_index_append::get_final()
 	assert(buf.empty());
 	assert(!vv_off_map.empty());
 	auto it = vv_off_map.begin();
-	std::vector<off_t> vv_offs = it->second;
+	std::vector<off_t> vv_offs = *it->second;
 	for (it++; it != vv_off_map.end(); it++) {
-		assert(vv_offs.back() == it->second.front());
-		vv_offs.insert(vv_offs.end(), it->second.begin() + 1, it->second.end());
+		assert(vv_offs.back() == it->second->front());
+		vv_offs.insert(vv_offs.end(), it->second->begin() + 1,
+				it->second->end());
 	}
 
 	assert(vv_offs.back() / global_vec->get_type().get_size()
@@ -376,6 +378,7 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 {
 	off_t first_idx = -1;
 	std::vector<detail::vv_store::const_ptr> contig;
+	std::vector<off_vec_ptr> vv_off_vec;
 	lock.lock();
 	// Add the vv store.
 	buf.insert(std::pair<off_t, detail::vv_store::const_ptr>(idx, vv));
@@ -404,8 +407,9 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	for (size_t i = 0; i < contig.size(); i++) {
 		num_bytes += contig[i]->get_num_bytes();
 		num_new_vvs += contig[i]->get_num_vecs();
-		vv_off_map.insert(std::pair<off_t, std::vector<off_t> >(
-					first_idx + i, std::vector<off_t>()));
+		auto p = off_vec_ptr(new std::vector<off_t>());
+		vv_off_vec.push_back(p);
+		vv_off_map.insert(std::pair<off_t, off_vec_ptr>(first_idx + i, p));
 	}
 	size_t vec_len = global_vec->get_length();
 	// I need to reserve enough space for `global_vec' so they don't
@@ -424,7 +428,7 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 		global_vec->set_portion(buf, vec_len);
 
 		off_t off = vec_len * vv->get_type().get_size();
-		std::vector<off_t> &vv_offs = vv_off_map[first_idx + i];
+		std::vector<off_t> &vv_offs = *vv_off_vec[i];
 		vv_offs.push_back(off);
 		for (size_t j = 0; j < vv->get_num_vecs(); j++)
 			vv_offs.push_back(vv_offs.back() + vv->get_num_bytes(j));
