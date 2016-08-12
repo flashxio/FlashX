@@ -218,7 +218,7 @@ bool smp_vec_store::resize(size_t new_length)
 
 	size_t tot_len = data.get_num_bytes() / get_type().get_size();
 	// We don't want to reallocate memory when shrinking the vector.
-	if (new_length < tot_len) {
+	if (new_length <= tot_len) {
 		return vec_store::resize(new_length);
 	}
 
