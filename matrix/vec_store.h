@@ -89,6 +89,10 @@ public:
 		return entry_size;
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
 	virtual size_t get_num_bytes() const {
 		return get_length() * get_type().get_size();
 	}
