@@ -83,11 +83,6 @@ public:
 			std::shared_ptr<detail::portion_compute> compute) const {
 		throw unsupported_exception();
 	}
-	virtual detail::async_res_t get_portion_async(size_t start_row,
-			size_t start_col, size_t num_rows, size_t num_cols,
-			std::shared_ptr<detail::portion_compute> compute) {
-		throw unsupported_exception();
-	}
 	virtual std::shared_ptr<const detail::local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const {

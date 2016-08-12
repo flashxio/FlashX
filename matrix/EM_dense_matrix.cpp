@@ -195,16 +195,6 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion(
 	return ret.second;
 }
 
-async_res_t EM_matrix_store::get_portion_async(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols, portion_compute::ptr compute)
-{
-	// This doesn't need to be used. Changing the data in the local portion
-	// doesn't affect the data in the disks.
-	assert(0);
-	return async_res_t();
-}
-
 async_cres_t EM_matrix_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, portion_compute::ptr compute) const
@@ -648,14 +638,6 @@ public:
 				orig_idxs[i] = rc_idxs[idxs[i]];
 			return orig->get_rows(orig_idxs);
 		}
-	}
-
-	virtual async_res_t get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, portion_compute::ptr compute) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Don't support non-const get_portion_async in a sub EM matrix";
-		return async_res_t();
 	}
 
 	virtual void write_portion_async(local_matrix_store::const_ptr portion,

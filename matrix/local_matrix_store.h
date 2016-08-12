@@ -258,12 +258,6 @@ public:
 		assert(0);
 		return async_cres_t();
 	}
-	virtual async_res_t get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) {
-		assert(0);
-		return async_res_t();
-	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col) {
