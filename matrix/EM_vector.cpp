@@ -159,6 +159,19 @@ void seq_writer::append(local_vec_store::const_ptr data)
 	off_t off_in_new_data = 0;
 	size_t new_data_size = data->get_length();
 
+	// If possible, we want to write data to disks directly
+	// to avoid extra memory copy as below.
+	size_t entry_size = data->get_type().get_size();
+	long addr = (long) data->get_raw_arr();
+	if ((data->get_length() * entry_size) % PAGE_SIZE == 0
+			&& (buf->get_length() * entry_size) % PAGE_SIZE == 0
+			&& addr % PAGE_SIZE == 0) {
+		flush_buffer_data(false);
+		to_vec->write_portion_async(data, merge_end);
+		merge_end += data->get_length();
+		return;
+	}
+
 	while (new_data_size > 0) {
 		size_t copy_data_size = std::min(new_data_size,
 				// The size of the available space in the buffer.
@@ -167,7 +180,6 @@ void seq_writer::append(local_vec_store::const_ptr data)
 		// the local buffer to disks. The reason of doing so is to
 		// make sure the size and offset of data written to disks
 		// are aligned to the I/O block size.
-		// TODO maybe we should remove this extra memory copy.
 		memcpy(buf->get(data_size_in_buf), data->get(off_in_new_data),
 				copy_data_size * buf->get_entry_size());
 		data_size_in_buf += copy_data_size;
