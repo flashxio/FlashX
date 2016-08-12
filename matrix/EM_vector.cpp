@@ -129,6 +129,9 @@ public:
 
 void seq_writer::flush_buffer_data(bool last)
 {
+	if (data_size_in_buf == 0)
+		return;
+
 	if (!last)
 		assert((data_size_in_buf * buf->get_length()) % PAGE_SIZE == 0);
 	else
