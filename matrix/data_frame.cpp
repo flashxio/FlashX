@@ -788,8 +788,7 @@ static vector_vector::ptr in_mem_groupby(
 	// for the groupby result.
 	size_t num_bytes = 0;
 	for (size_t i = 0; i < df_vecs.size(); i++)
-		if (i != (size_t) sorted_col_idx)
-			num_bytes += df_vecs[i].second->get_num_bytes();
+		num_bytes += df_vecs[i].second->get_num_bytes();
 	result->reserve(num_bytes / result->get_type().get_size());
 	vv_index_append::ptr append(new vv_index_append(result));
 
