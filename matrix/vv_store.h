@@ -35,6 +35,7 @@ class vv_store: public vec_store
 	std::vector<off_t> vec_offs;
 	vec_store::ptr store;
 
+protected:
 	std::vector<off_t> get_rel_offs(off_t loc, size_t size) const;
 public:
 	typedef std::shared_ptr<vv_store> ptr;

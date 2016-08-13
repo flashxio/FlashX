@@ -23,6 +23,7 @@
 #include "vv_store.h"
 #include "EM_object.h"
 #include "EM_vector.h"
+#include "local_vv_store.h"
 
 namespace fm
 {
@@ -37,6 +38,10 @@ class EM_vv_store: public vv_store, public EM_object
 	EM_vv_store(const std::vector<off_t> &offs,
 			EM_vec_store::ptr store): vv_store(offs, store) {
 	}
+
+	const EM_vec_store &get_EM_data() const {
+		return static_cast<const EM_vec_store &>(get_data());
+	}
 public:
 	typedef std::shared_ptr<EM_vv_store> ptr;
 	typedef std::shared_ptr<const EM_vv_store> const_ptr;
@@ -47,6 +52,8 @@ public:
 	static ptr create(const std::vector<off_t> &offs, EM_vec_store::ptr store) {
 		return ptr(new EM_vv_store(offs, store));
 	}
+	virtual local_vec_store::ptr get_portion_async(off_t start,
+			size_t len, portion_compute::ptr compute) const;
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {
 		printf("create I/O from %p in vv store\n", &get_data());

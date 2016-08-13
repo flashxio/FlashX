@@ -253,6 +253,8 @@ void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
 				length);
 }
 
+class vv_index_append;
+
 class groupby_task_queue
 {
 	std::vector<off_t> par_starts;
@@ -280,6 +282,9 @@ public:
 			return start >= 0 && end > 0;
 		}
 	};
+
+	static ptr create(const std::vector<named_cvec_t> &sorted_df,
+			off_t sorted_col_idx, std::shared_ptr<vv_index_append> append);
 
 	groupby_task_queue(detail::mem_vec_store::const_ptr sorted_vec,
 			size_t num_parts, size_t first_task_idx) {
@@ -719,20 +724,12 @@ void local_groupby_task::run()
 
 }
 
-static void parallel_groupby_async(const std::vector<named_cvec_t> &sorted_df,
-		off_t sorted_col_idx, const gr_apply_operate<sub_data_frame> &op,
+groupby_task_queue::ptr groupby_task_queue::create(
+		const std::vector<named_cvec_t> &sorted_df, off_t sorted_col_idx,
 		vv_index_append::ptr append)
 {
 	detail::mem_vec_store::const_ptr sorted_col
 		= detail::mem_vec_store::cast(sorted_df[sorted_col_idx].second);
-	// We need to find the start location for each thread.
-	// The start location is where the value in the sorted array
-	// first appears.
-	// TODO this only works for vectors stored contiguously in memory.
-	// It doesn't work for NUMA vector.
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	int num_threads = mem_threads->get_num_threads();
 
 	bool is_vec = true;
 	for (size_t i = 0; i < sorted_df.size(); i++) {
@@ -746,11 +743,22 @@ static void parallel_groupby_async(const std::vector<named_cvec_t> &sorted_df,
 	// If all fields in the data frame are vectors, we use a larger
 	// partition size. Otherwise, we use a small partition size.
 	size_t part_size = is_vec ? 1024 * 1024 : 16 * 1024;
-	groupby_task_queue::ptr q(new groupby_task_queue(sorted_col,
+	return groupby_task_queue::ptr(new groupby_task_queue(sorted_col,
 				sorted_col->get_length() / part_size,
 				append->get_tot_appends()));
+}
+
+static void parallel_groupby_async(const std::vector<named_cvec_t> &sorted_df,
+		off_t sorted_col_idx, const gr_apply_operate<sub_data_frame> &op,
+		vv_index_append::ptr append)
+{
+	groupby_task_queue::ptr q = groupby_task_queue::create(sorted_df,
+			sorted_col_idx, append);
 	append->inc_tot_appends(q->get_num_parts());
 
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_threads = mem_threads->get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
 		// It's difficult to localize computation.
 		// TODO can we localize computation?
@@ -851,6 +859,60 @@ void EM_df_groupby_dispatcher::complete_write()
 	}
 }
 
+class portion_groupby_complete: public detail::portion_compute
+{
+	std::vector<named_cvec_t> df_vecs;
+	size_t sorted_col_idx;
+	int num_EM;
+	groupby_task_queue::ptr groupby_q;
+	const gr_apply_operate<sub_data_frame> &op;
+	vv_index_append::ptr append;
+public:
+	typedef std::shared_ptr<portion_groupby_complete> ptr;
+
+	portion_groupby_complete(vv_index_append::ptr append,
+			const gr_apply_operate<sub_data_frame> &_op): op(_op) {
+		this->append = append;
+		this->num_EM = 0;
+		sorted_col_idx = -1;
+	}
+
+	void run_complete();
+
+	virtual void run(char *buf, size_t size) {
+		assert(num_EM > 0);
+		num_EM--;
+		if (num_EM == 0)
+			run_complete();
+	}
+
+	void set_data(const std::vector<named_cvec_t> &df_vecs,
+			size_t sorted_col_idx, int num_EM) {
+		this->df_vecs = df_vecs;
+		this->num_EM = num_EM;
+		this->sorted_col_idx = sorted_col_idx;
+
+		// We have to make sure this is called here (synchronously),
+		// because this determines the global order of the appends.
+		groupby_q = groupby_task_queue::create(df_vecs, sorted_col_idx, append);
+		append->inc_tot_appends(groupby_q->get_num_parts());
+	}
+};
+
+void portion_groupby_complete::run_complete()
+{
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_threads = mem_threads->get_num_threads();
+	for (int i = 0; i < num_threads; i++) {
+		// It's difficult to localize computation.
+		// TODO can we localize computation?
+		int node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id, new local_groupby_task(
+					groupby_q, sorted_col_idx, df_vecs, op, append));
+	}
+}
+
 bool EM_df_groupby_dispatcher::issue_task()
 {
 	if ((size_t) ele_idx >= groupby_col->get_length())
@@ -898,6 +960,10 @@ bool EM_df_groupby_dispatcher::issue_task()
 				real_len);
 	}
 
+	size_t num_EM = 0;
+	portion_groupby_complete::ptr compute(new portion_groupby_complete(
+				append, op));
+
 	// TODO it should fetch the rest of columns asynchronously.
 	std::vector<named_cvec_t> df_vecs(df->get_num_vecs());
 	off_t sorted_col_idx = -1;
@@ -908,8 +974,27 @@ bool EM_df_groupby_dispatcher::issue_task()
 			sorted_col_idx = i;
 		}
 		else {
-			local_vec_store::const_ptr col = df->get_vec(i)->get_portion(
-					ele_idx, real_len);
+			detail::vec_store::const_ptr vec = df->get_vec(i);
+			local_vec_store::const_ptr col;
+			if (vec->is_in_mem())
+				col = vec->get_portion(ele_idx, real_len);
+			// TODO we need to unify the async get_portion interface of vec store.
+			else if (detail::vv_store::is_vector_vector(*vec)) {
+				detail::EM_vv_store::const_ptr EM_vv
+					= std::dynamic_pointer_cast<const detail::EM_vv_store>(vec);
+				assert(EM_vv);
+				col = EM_vv->get_portion_async(ele_idx, real_len, compute);
+				num_EM++;
+				assert(detail::vv_store::is_vector_vector(*col));
+			}
+			else {
+				detail::EM_vec_store::const_ptr EM_vec
+					= std::dynamic_pointer_cast<const detail::EM_vec_store>(vec);
+				assert(EM_vec);
+				col = EM_vec->get_portion_async(ele_idx, real_len, compute);
+				num_EM++;
+			}
+
 			df_vecs[i].first = df->get_vec_name(i);
 			df_vecs[i].second = col;
 		}
@@ -917,7 +1002,10 @@ bool EM_df_groupby_dispatcher::issue_task()
 	}
 	assert(sorted_col_idx >= 0);
 
-	parallel_groupby_async(df_vecs, sorted_col_idx, op, append);
+	compute->set_data(df_vecs, sorted_col_idx, num_EM);
+	if (num_EM == 0)
+		compute->run_complete();
+
 	// Let's try if the data for the first one is ready.
 	auto filled = append->get_filled_chunks();
 	// If the data is ready, we can write data back directly.
