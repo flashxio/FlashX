@@ -74,6 +74,7 @@ row_portions::ptr row_portions::create(matrix_store::const_ptr mat,
 		size_t num_rows = std::min(block_size, mat->get_num_rows() - row_idx);
 		ret->portions[i] = mat->get_portion(row_idx, 0, num_rows,
 				mat->get_num_cols());
+		row_idx += num_rows;
 		if (ret->portions[i] == NULL) {
 			BOOST_LOG_TRIVIAL(error) << "Can't get row portions";
 			return row_portions::ptr();
