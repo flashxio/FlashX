@@ -1010,8 +1010,8 @@ bool EM_df_groupby_dispatcher::issue_task()
 	auto filled = append->get_filled_chunks();
 	// If the data is ready, we can write data back directly.
 	if (!filled.empty()) {
-		// TODO data should also be written back asynchronously.
-		out_vec->append(filled.begin(), filled.end());
+		bool ret = out_vec->append_async(filled.begin(), filled.end());
+		assert(ret);
 	}
 
 	ele_idx += real_len;

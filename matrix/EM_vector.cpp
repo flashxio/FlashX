@@ -51,14 +51,13 @@ namespace
  */
 class portion_write_complete: public portion_compute
 {
-	local_buf_vec_store::const_ptr store;
+	vec_store::const_ptr store;
 public:
-	portion_write_complete(local_buf_vec_store::const_ptr store) {
+	portion_write_complete(vec_store::const_ptr store) {
 		this->store = store;
 	}
 
 	virtual void run(char *buf, size_t size) {
-		assert(store->get_raw_arr() == buf);
 		assert(store->get_length() * store->get_entry_size() == size);
 	}
 };
@@ -308,6 +307,49 @@ bool EM_vec_append_dispatcher::issue_task()
 
 }
 
+bool EM_vec_store::append_async(
+		std::vector<vec_store::const_ptr>::const_iterator vec_start,
+		std::vector<vec_store::const_ptr>::const_iterator vec_end)
+{
+	size_t entry_size = get_type().get_size();
+	if ((get_length() * entry_size) % PAGE_SIZE) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector needs to have filled the last page";
+		return false;
+	}
+
+	size_t tot_size = 0;
+	for (auto it = vec_start; it != vec_end; it++) {
+		auto vec = *it;
+		tot_size += vec->get_length();
+		if (get_type() != vec->get_type()
+				|| (vec->get_length() * entry_size) % PAGE_SIZE
+				|| !vec->is_in_mem()
+				|| vec->get_num_nodes() > 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't append a vector with different type\n"
+				<< "or with the size not aligned with the page size\n"
+				<< "or stored on disks or in NUMA memory\n";
+			return false;
+		}
+	}
+
+	size_t off = get_length();
+	for (auto it = vec_start; it != vec_end; it++) {
+		auto vec = *it;
+		local_vec_store::const_ptr data = vec->get_portion(0,
+				vec->get_length());
+		assert(((long) data->get_raw_arr()) % PAGE_SIZE == 0);
+		// We need to make sure that the memory in the original input
+		// vector exists until the write completes.
+		portion_compute::ptr compute(new portion_write_complete(vec));
+		write_portion_async(data, compute, off);
+		off += data->get_length();
+	}
+
+	return vec_store::resize(get_length() + tot_size);
+}
+
 bool EM_vec_store::append(
 		std::vector<vec_store::const_ptr>::const_iterator vec_start,
 		std::vector<vec_store::const_ptr>::const_iterator vec_end)
@@ -541,7 +583,7 @@ local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 }
 
 void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
-		off_t off)
+		portion_compute::ptr compute, off_t off)
 {
 	off_t start = off;
 	if (start < 0)
@@ -553,11 +595,17 @@ void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
 	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
 	safs::io_request req(const_cast<char *>(store->get_raw_arr()), loc,
 			store->get_length() * store->get_entry_size(), WRITE);
-	portion_compute::ptr compute(new portion_write_complete(store));
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
 	// TODO I might want to flush requests later.
 	io.flush_requests();
+}
+
+void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
+		off_t off)
+{
+	portion_compute::ptr compute(new portion_write_complete(store));
+	write_portion_async(store, compute, off);
 }
 
 void EM_vec_store::reset_data()
