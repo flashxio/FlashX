@@ -1057,14 +1057,12 @@ static void add_nz(block_pointers &ps,
 size_t part_2d_apply_operate::collect_block_info(size_t block_row_id,
 		const local_vv_store &val, std::vector<block_info> &block_infos) const
 {
-	size_t block_height = block_size.get_num_rows();
-	size_t block_width = block_size.get_num_cols();
 	// We calculate the number of bytes in each block accurately.
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
 		assert(val.get_length(i) == v->get_size());
-		assert(v->get_id() / block_height == block_row_id);
+		assert((v->get_id() >> block_size.get_nrow_log()) == block_row_id);
 
 		// The id of the current block.
 		size_t curr_bid = 0;
@@ -1072,7 +1070,7 @@ size_t part_2d_apply_operate::collect_block_info(size_t block_row_id,
 		size_t num_edges_block = 0;
 		for (size_t j = 0; j < v->get_num_edges(); j++) {
 			fg::vertex_id_t id = v->get_neighbor(j);
-			size_t block_id = id / block_width;
+			size_t block_id = id >> block_size.get_ncol_log();
 			if (curr_bid == block_id)
 				num_edges_block++;
 			// this can happen for the first block.
@@ -1114,13 +1112,13 @@ size_t part_2d_apply_operate::collect_block_info(size_t block_row_id,
 				block_infos[i].num_coos);
 		tot_num_bytes += block.get_size(nz_size);
 	}
+
 	return tot_num_bytes;
 }
 
 void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		local_vec_store &out) const
 {
-	size_t block_width = block_size.get_num_cols();
 	factor_value_t block_row_id = *(const factor_value_t *) key;
 
 	size_t num_blocks = div_ceil(row_len, block_size.get_num_cols());
@@ -1162,7 +1160,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 				block_infos[i].num_coos, block_infos[i].num_coos);
 	}
 
-	size_t max_row_size = sparse_row_part::get_size(block_width);
+	size_t max_row_size = sparse_row_part::get_size(block_size.get_num_cols());
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
 	// Serialize data.
 	std::vector<fg::vertex_id_t> neighs;
@@ -1174,7 +1172,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		neighs.clear();
 		for (size_t j = 0; j < v->get_num_edges(); j++) {
 			fg::vertex_id_t id = v->get_neighbor(j);
-			size_t block_id = id / block_width;
+			size_t block_id = id >> block_size.get_ncol_log();
 			if (curr_bid == block_id)
 				neighs.push_back(id);
 			else {
