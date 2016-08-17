@@ -40,6 +40,12 @@ protected:
 	std::vector<off_t>::const_iterator get_off_it(off_t loc) const {
 		return vec_offs.begin() + loc;
 	}
+
+	size_t get_num_eles(off_t start, size_t len) const {
+		off_t start_ele = get_vec_off(start) / get_type().get_size();
+		off_t end_ele = get_vec_off(start + len) / get_type().get_size();
+		return end_ele - start_ele;
+	}
 public:
 	typedef std::shared_ptr<vv_store> ptr;
 	typedef std::shared_ptr<const vv_store> const_ptr;
