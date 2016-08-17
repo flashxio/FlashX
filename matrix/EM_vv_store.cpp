@@ -39,14 +39,14 @@ local_vec_store::ptr EM_vv_store::get_portion_async(off_t start,
 		return local_vec_store::ptr();
 	}
 
-	std::vector<off_t> offs = get_rel_offs(start, len);
 	off_t start_ele = get_vec_off(start) / get_type().get_size();
 	off_t end_ele = get_vec_off(start + len) / get_type().get_size();
 	size_t num_eles = end_ele - start_ele;
 	local_vec_store::ptr data = get_EM_data().get_portion_async(start_ele,
 			num_eles, compute);
 
-	return local_vv_store::ptr(new local_vv_store(start, offs, data));
+	return local_vv_store::ptr(new local_vv_store(start, get_off_it(start),
+				get_off_it(start + len + 1), data));
 }
 
 }

@@ -64,6 +64,9 @@ public:
 		this->vec = vec;
 	}
 
+	local_vv_store(off_t global_start, std::vector<off_t>::const_iterator start,
+			std::vector<off_t>::const_iterator end, local_vec_store::ptr vec);
+
 	bool is_whole() const {
 		return offs.front() == 0
 			&& offs.size() - 1 == local_vec_store::get_length();

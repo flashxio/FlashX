@@ -24,6 +24,22 @@
 namespace fm
 {
 
+local_vv_store::local_vv_store(off_t global_start,
+		std::vector<off_t>::const_iterator start,
+		std::vector<off_t>::const_iterator end,
+		local_vec_store::ptr vec): local_vec_store(
+			static_cast<const local_vec_store &>(*vec).get_raw_arr(),
+			vec->get_raw_arr(), global_start, end - start - 1, 0,
+			vec->get_type(), -1)
+{
+	assert(!detail::vv_store::is_vector_vector(*vec));
+	offs.resize(end - start);
+	size_t i = 0;
+	for (auto it = start; it != end; it++)
+		offs[i++] = *it - *start;
+	this->vec = vec;
+}
+
 std::vector<off_t> local_vv_store::get_rel_offs(off_t start, size_t len) const
 {
 	// The last entry shows the end of the last vector.
