@@ -38,11 +38,18 @@ data_frame::data_frame(const std::vector<named_vec_t> &named_vecs)
 {
 	assert(!named_vecs.empty());
 	this->named_vecs = named_vecs;
-	bool in_mem = named_vecs.front().second->is_in_mem();
-	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++) {
-		assert(in_mem == it->second->is_in_mem());
+	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
 		vec_map.insert(*it);
-	}
+}
+
+bool data_frame::is_in_mem() const
+{
+	// If one of the vector is on disk, this data frame is considered
+	// external-memory.
+	bool in_mem = true;
+	for (size_t i = 0; i < named_vecs.size(); i++)
+		in_mem &= named_vecs[i].second->is_in_mem();
+	return in_mem;
 }
 
 data_frame::const_ptr data_frame::shuffle_vecs(
@@ -129,7 +136,7 @@ data_frame::const_ptr data_frame::sort(const std::string &col_name) const
 		return this->shallow_copy();
 
 	data_frame::ptr ret(new data_frame());
-	if (sorted_col->is_in_mem()) {
+	if (is_in_mem()) {
 		detail::vec_store::ptr copy_col = sorted_col->deep_copy();
 		detail::smp_vec_store::ptr idxs = detail::smp_vec_store::cast(
 				copy_col->sort_with_index());
@@ -149,9 +156,11 @@ data_frame::const_ptr data_frame::sort(const std::string &col_name) const
 		std::vector<std::string> names;
 		std::vector<detail::EM_vec_store::const_ptr> vecs;
 		names.push_back(col_name);
+		assert(!sorted_col->is_in_mem());
 		vecs.push_back(detail::EM_vec_store::cast(sorted_col));
 		for (size_t i = 0; i < named_vecs.size(); i++) {
 			if (named_vecs[i].second != sorted_col) {
+				assert(!named_vecs[i].second->is_in_mem());
 				vecs.push_back(detail::EM_vec_store::cast(named_vecs[i].second));
 				names.push_back(named_vecs[i].first);
 			}
@@ -189,11 +198,6 @@ bool data_frame::add_vec(const std::string &name, detail::vec_store::ptr vec)
 		if (vec->get_length() != get_num_entries()) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "Add a vector with different number of entries from the data frame";
-			return false;
-		}
-		if (vec->is_in_mem() != named_vecs.front().second->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Add a vector in different storage from the data frame.";
 			return false;
 		}
 	}
@@ -1044,6 +1048,9 @@ static vector_vector::ptr EM_groupby(
 	detail::io_worker_task worker(groupby_dispatcher, 1);
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
 		detail::vec_store::const_ptr col = sorted_df->get_vec(i);
+		if (col->is_in_mem())
+			continue;
+
 		const detail::EM_object *obj
 			= dynamic_cast<const detail::EM_object *>(col.get());
 		worker.register_EM_obj(const_cast<detail::EM_object *>(obj));
@@ -1058,7 +1065,7 @@ vector_vector::ptr data_frame::groupby(const std::string &col_name,
 		const gr_apply_operate<sub_data_frame> &op) const
 {
 	data_frame::const_ptr sorted_df = sort(col_name);
-	if (named_vecs.front().second->is_in_mem())
+	if (is_in_mem())
 		return in_mem_groupby(sorted_df, col_name, op);
 	else
 		return EM_groupby(sorted_df, col_name, op);
