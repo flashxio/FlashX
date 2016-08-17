@@ -58,6 +58,7 @@ add_library(FMatrix STATIC
 	sink_matrix.cpp
 	project_matrix_store.cpp
 	fg_utils.cpp
+	EM_vv_store.cpp
 )
 
 if(ENABLE_TRILINOS)
