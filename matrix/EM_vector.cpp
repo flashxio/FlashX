@@ -337,8 +337,11 @@ bool EM_vec_store::append_async(
 	size_t off = get_length();
 	for (auto it = vec_start; it != vec_end; it++) {
 		auto vec = *it;
-		local_vec_store::const_ptr data = vec->get_portion(0,
-				vec->get_length());
+		// The input vectors might be local vectors.
+		local_vec_store::const_ptr data
+			= std::dynamic_pointer_cast<const local_vec_store>(vec);
+		if (data == NULL)
+			data = vec->get_portion(0, vec->get_length());
 		assert(((long) data->get_raw_arr()) % PAGE_SIZE == 0);
 		// We need to make sure that the memory in the original input
 		// vector exists until the write completes.

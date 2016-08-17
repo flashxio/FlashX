@@ -386,8 +386,6 @@ class vv_index_append
 	std::deque<filled_chunk::ptr> global_chunks;
 	size_t chunk_size;
 
-	std::vector<detail::mem_vec_store::ptr> prealloc_bufs;
-
 	std::atomic<size_t> tot_num_appends;
 	std::atomic<size_t> num_appends;
 	std::atomic<size_t> num_bytes_append;
@@ -412,7 +410,6 @@ public:
 		this->tot_num_appends = 0;
 		this->num_appends = 0;
 		this->num_bytes_append = 0;
-		prealloc_bufs.resize(detail::mem_thread_pool::get_global_num_threads());
 	}
 
 	// This is called in the worker threads.
@@ -477,6 +474,7 @@ std::vector<detail::vec_store::const_ptr> vv_index_append::get_filled_chunks()
 			break;
 	}
 	lock.unlock();
+
 	return ret;
 }
 
@@ -538,13 +536,6 @@ void vv_index_append::fill_chunks(const detail::vec_store &data,
 
 void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 {
-	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-	if (prealloc_bufs[thread_id] == NULL) {
-		prealloc_bufs[thread_id] = detail::mem_vec_store::create(0, -1,
-				ele_type);
-		prealloc_bufs[thread_id]->reserve(chunk_size);
-	}
-
 	off_t first_idx = -1;
 	std::vector<detail::vv_store::const_ptr> contig;
 	std::vector<off_vec_ptr> vv_off_vec;
@@ -604,26 +595,17 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	}
 	while (fill_size > 0) {
 		size_t num_eles = std::min(fill_size, chunk_size);
-		// If this buff is filled completely, we can delay the real memory
-		// allocation.
-		if (num_eles == chunk_size)
-			global_chunks.emplace_back(new filled_chunk());
-		else {
-			// We use the buffer we allocated before the critical area.
-			detail::mem_vec_store::ptr vec = prealloc_bufs[thread_id];
-			prealloc_bufs[thread_id] = NULL;
-			vec->resize(num_eles);
-			global_chunks.emplace_back(new filled_chunk(vec));
-		}
+		// We store data in the local vectors.
+		local_vec_store::ptr buf(new local_buf_vec_store(0, chunk_size,
+					ele_type, -1, true));
+		buf->resize(num_eles);
+		global_chunks.emplace_back(new filled_chunk(buf));
 		fill_size -= num_eles;
 		chunks.push_back(global_chunks.back());
 		off_sizes.emplace_back(0, num_eles);
 	}
 
 	lock.unlock();
-
-	for (size_t i = 0; i < chunks.size(); i++)
-		chunks[i]->alloc_mem(chunk_size, ele_type);
 
 	// Here is to write data to the right location.
 	for (size_t i = 0; i < contig.size(); i++) {
@@ -831,11 +813,12 @@ public:
 		this->df = df;
 		this->out_vec = out_vec;
 
-		detail::mem_vec_store::ptr result = detail::mem_vec_store::create(0, -1,
-				op.get_output_type());
-		result->reserve(
-				matrix_conf.get_write_io_buf_size() / result->get_type().get_size());
-		append = vv_index_append::ptr(new vv_index_append(result));
+		const scalar_type &type = op.get_output_type();
+		size_t chunk_size = matrix_conf.get_write_io_buf_size() / type.get_size();
+		local_vec_store::ptr buf(new local_buf_vec_store(0, chunk_size, type,
+					-1, true));
+		buf->resize(0);
+		append = vv_index_append::ptr(new vv_index_append(buf));
 	}
 
 	virtual bool issue_task();
@@ -967,7 +950,6 @@ bool EM_df_groupby_dispatcher::issue_task()
 	portion_groupby_complete::ptr compute(new portion_groupby_complete(
 				append, op));
 
-	// TODO it should fetch the rest of columns asynchronously.
 	std::vector<named_cvec_t> df_vecs(df->get_num_vecs());
 	off_t sorted_col_idx = -1;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {

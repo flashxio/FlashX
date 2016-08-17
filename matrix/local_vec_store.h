@@ -264,6 +264,9 @@ public:
 			arr(length * type.get_size(), cached) {
 		set_data(arr.get_raw(), arr.get_raw());
 	}
+	virtual size_t get_reserved_size() const {
+		return arr.get_num_bytes() / get_type().get_size();
+	}
 
 	virtual bool resize(size_t new_length);
 
