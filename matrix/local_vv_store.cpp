@@ -33,10 +33,8 @@ local_vv_store::local_vv_store(off_t global_start,
 			vec->get_type(), -1)
 {
 	assert(!detail::vv_store::is_vector_vector(*vec));
-	offs.resize(end - start);
-	size_t i = 0;
-	for (auto it = start; it != end; it++)
-		offs[i++] = *it - *start;
+	this->off_start = start;
+	this->off_end = end;
 	this->vec = vec;
 }
 
@@ -44,9 +42,10 @@ local_vec_store::ptr local_vv_store::get_portion(off_t loc, size_t size)
 {
 	assert(get_raw_arr());
 	assert(loc + size <= get_length());
-	off_t start = get_global_start() + loc;
-	off_t rel_vec_start = offs[loc] / get_type().get_size();
-	return local_vec_store::ptr(new local_vv_store(start, get_off_it(loc),
+	off_t global_start = get_global_start() + loc;
+	loc += get_local_start();
+	off_t rel_vec_start = get_vec_off(loc) / get_type().get_size();
+	return local_vec_store::ptr(new local_vv_store(global_start, get_off_it(loc),
 				get_off_it(loc + size + 1),
 				vec->get_portion(rel_vec_start, get_num_eles(loc, size))));
 }
@@ -56,9 +55,10 @@ local_vec_store::const_ptr local_vv_store::get_portion(off_t loc,
 {
 	assert(get_raw_arr());
 	assert(loc + size <= get_length());
-	off_t start = get_global_start() + loc;
-	off_t rel_vec_start = offs[loc] / get_type().get_size();
-	return local_vec_store::ptr(new local_vv_store(start, get_off_it(loc),
+	off_t global_start = get_global_start() + loc;
+	loc += get_local_start();
+	off_t rel_vec_start = get_vec_off(loc) / get_type().get_size();
+	return local_vec_store::ptr(new local_vv_store(global_start, get_off_it(loc),
 				get_off_it(loc + size + 1),
 				vec->get_portion(rel_vec_start, get_num_eles(loc, size))));
 }
