@@ -39,7 +39,18 @@ class local_vv_store: public local_vec_store
 		return vec->get_raw_arr();
 	}
 
-	std::vector<off_t> get_rel_offs(off_t start, size_t len) const;
+	std::vector<off_t>::const_iterator get_off_it(off_t loc) const {
+		return offs.begin() + loc;
+	}
+	size_t get_num_eles(off_t start, size_t len) const {
+		off_t start_ele = get_vec_off(start) / get_type().get_size();
+		off_t end_ele = get_vec_off(start + len) / get_type().get_size();
+		return end_ele - start_ele;
+	}
+	off_t get_vec_off(off_t idx) const {
+		return offs[idx];
+	}
+
 public:
 	typedef std::shared_ptr<local_vv_store> ptr;
 	typedef std::shared_ptr<const local_vv_store> const_ptr;
@@ -52,16 +63,6 @@ public:
 	static const_ptr cast(local_vec_store::const_ptr vec) {
 		assert(vec->get_entry_size() == 0);
 		return std::static_pointer_cast<const local_vv_store>(vec);
-	}
-
-	local_vv_store(off_t global_start, const std::vector<off_t> &offs,
-			local_vec_store::ptr vec): local_vec_store(
-				static_cast<const local_vec_store &>(*vec).get_raw_arr(),
-				vec->get_raw_arr(), global_start, offs.size() - 1, 0,
-				vec->get_type(), -1) {
-		assert(!detail::vv_store::is_vector_vector(*vec));
-		this->offs = offs;
-		this->vec = vec;
 	}
 
 	local_vv_store(off_t global_start, std::vector<off_t>::const_iterator start,

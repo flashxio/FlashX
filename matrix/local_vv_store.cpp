@@ -40,27 +40,15 @@ local_vv_store::local_vv_store(off_t global_start,
 	this->vec = vec;
 }
 
-std::vector<off_t> local_vv_store::get_rel_offs(off_t start, size_t len) const
-{
-	// The last entry shows the end of the last vector.
-	std::vector<off_t> new_offs(len + 1);
-	off_t start_off = offs[start];
-	for (size_t i = 0; i < new_offs.size(); i++)
-		new_offs[i] = offs[i + start] - start_off;
-	return new_offs;
-}
-
 local_vec_store::ptr local_vv_store::get_portion(off_t loc, size_t size)
 {
 	assert(get_raw_arr());
 	assert(loc + size <= get_length());
 	off_t start = get_global_start() + loc;
-	std::vector<off_t> new_offs = get_rel_offs(loc, size);
-	size_t entry_size = get_type().get_size();
-	off_t rel_vec_start = offs[loc] / entry_size;
-	off_t rel_vec_len = (new_offs.back() - new_offs.front()) / entry_size;
-	return local_vec_store::ptr(new local_vv_store(start, new_offs,
-				vec->get_portion(rel_vec_start, rel_vec_len)));
+	off_t rel_vec_start = offs[loc] / get_type().get_size();
+	return local_vec_store::ptr(new local_vv_store(start, get_off_it(loc),
+				get_off_it(loc + size + 1),
+				vec->get_portion(rel_vec_start, get_num_eles(loc, size))));
 }
 
 local_vec_store::const_ptr local_vv_store::get_portion(off_t loc,
@@ -69,12 +57,10 @@ local_vec_store::const_ptr local_vv_store::get_portion(off_t loc,
 	assert(get_raw_arr());
 	assert(loc + size <= get_length());
 	off_t start = get_global_start() + loc;
-	std::vector<off_t> new_offs = get_rel_offs(loc, size);
-	size_t entry_size = get_type().get_size();
-	off_t rel_vec_start = offs[loc] / entry_size;
-	off_t rel_vec_len = (new_offs.back() - new_offs.front()) / entry_size;
-	return local_vec_store::ptr(new local_vv_store(start, new_offs,
-				vec->get_portion(rel_vec_start, rel_vec_len)));
+	off_t rel_vec_start = offs[loc] / get_type().get_size();
+	return local_vec_store::ptr(new local_vv_store(start, get_off_it(loc),
+				get_off_it(loc + size + 1),
+				vec->get_portion(rel_vec_start, get_num_eles(loc, size))));
 }
 
 namespace detail
