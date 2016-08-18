@@ -52,7 +52,7 @@ public:
 	virtual ~file_io() {
 	}
 
-	virtual std::unique_ptr<char[]> read_lines(size_t wanted_bytes,
+	virtual std::shared_ptr<char> read_lines(size_t wanted_bytes,
 			size_t &read_bytes) = 0;
 
 	virtual bool eof() const = 0;
@@ -60,11 +60,25 @@ public:
 
 class text_file_io: public file_io
 {
-	FILE *f;
+	struct del_off_ptr {
+		void *orig_addr;
+
+		del_off_ptr(void *addr) {
+			this->orig_addr = addr;
+		}
+
+		void operator()(char *buf) {
+			free(orig_addr);
+		}
+	};
+
+	int fd;
+	off_t curr_off;
 	ssize_t file_size;
 
-	text_file_io(FILE *f, const std::string file) {
-		this->f = f;
+	text_file_io(int fd, const std::string file) {
+		this->curr_off = 0;
+		this->fd = fd;
 		safs::native_file local_f(file);
 		file_size = local_f.get_size();
 	}
@@ -72,15 +86,14 @@ public:
 	static ptr create(const std::string file);
 
 	~text_file_io() {
-		if (f)
-			fclose(f);
+		assert(curr_off == file_size);
+		close(fd);
 	}
 
-	std::unique_ptr<char[]> read_lines(size_t wanted_bytes,
+	std::shared_ptr<char> read_lines(size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
-		off_t curr_off = ftell(f);
 		return file_size - curr_off == 0;
 	}
 };
@@ -88,6 +101,12 @@ public:
 #ifdef USE_GZIP
 class gz_file_io: public file_io
 {
+	struct del_arr {
+		void operator()(char *buf) {
+			delete [] buf;
+		}
+	};
+
 	std::vector<char> prev_buf;
 	size_t prev_buf_bytes;
 
@@ -105,7 +124,7 @@ public:
 		gzclose(f);
 	}
 
-	std::unique_ptr<char[]> read_lines(const size_t wanted_bytes,
+	std::shared_ptr<char> read_lines(const size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
@@ -113,14 +132,14 @@ public:
 	}
 };
 
-std::unique_ptr<char[]> gz_file_io::read_lines(
+std::shared_ptr<char> gz_file_io::read_lines(
 		const size_t wanted_bytes1, size_t &read_bytes)
 {
 	read_bytes = 0;
 	size_t wanted_bytes = wanted_bytes1;
 	size_t buf_size = wanted_bytes + PAGE_SIZE;
 	char *buf = new char[buf_size];
-	std::unique_ptr<char[]> ret_buf(buf);
+	std::shared_ptr<char> ret_buf(buf, del_arr());
 	if (prev_buf_bytes > 0) {
 		memcpy(buf, prev_buf.data(), prev_buf_bytes);
 		buf += prev_buf_bytes;
@@ -159,7 +178,7 @@ std::unique_ptr<char[]> gz_file_io::read_lines(
 	}
 	// The line buffer must end with '\0'.
 	assert(read_bytes < buf_size);
-	ret_buf[read_bytes] = 0;
+	ret_buf.get()[read_bytes] = 0;
 	return ret_buf;
 }
 
@@ -191,68 +210,65 @@ file_io::ptr file_io::create(const std::string &file_name)
 
 file_io::ptr text_file_io::create(const std::string file)
 {
-	FILE *f = fopen(file.c_str(), "r");
-	if (f == NULL) {
+	int fd = open(file.c_str(), O_RDONLY | O_DIRECT);
+	if (fd < 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("fail to open %1%: %2%") % file % strerror(errno);
 		return ptr();
 	}
-	return ptr(new text_file_io(f, file));
+	return ptr(new text_file_io(fd, file));
 }
 
-std::unique_ptr<char[]> text_file_io::read_lines(
+void read_complete(int fd, char *buf, size_t buf_size, size_t expected_size)
+{
+	assert(buf_size >= expected_size);
+	while (expected_size > 0) {
+		ssize_t ret = read(fd, buf, buf_size);
+		assert(ret >= 0);
+		buf += ret;
+		buf_size -= ret;
+		expected_size -= ret;
+	}
+}
+
+std::shared_ptr<char> text_file_io::read_lines(
 		size_t wanted_bytes, size_t &read_bytes)
 {
-	off_t curr_off = ftell(f);
-	off_t off = curr_off + wanted_bytes;
-	// After we just to the new location, we need to further read another
-	// page to search for the end of a line. If there isn't enough data,
-	// we can just read all remaining data.
-	if (off + PAGE_SIZE < file_size) {
-		int ret = fseek(f, off, SEEK_SET);
-		if (ret < 0) {
-			perror("fseek");
-			return NULL;
-		}
+	off_t align_start = ROUND_PAGE(curr_off);
+	off_t align_end = ROUNDUP_PAGE(curr_off + wanted_bytes);
+	off_t local_off = curr_off - align_start;
+	off_t seek_ret = lseek(fd, align_start, SEEK_SET);
+	assert(seek_ret >= 0);
 
-		char buf[PAGE_SIZE];
-		ret = fread(buf, sizeof(buf), 1, f);
-		if (ret != 1) {
-			perror("fread");
-			return NULL;
-		}
-		unsigned i;
-		for (i = 0; i < sizeof(buf); i++)
-			if (buf[i] == '\n')
-				break;
-		// A line shouldn't be longer than a page.
-		assert(i != sizeof(buf));
+	size_t buf_size = align_end - align_start;
+	void *addr = NULL;
+	int alloc_ret = posix_memalign(&addr, PAGE_SIZE, buf_size);
+	assert(alloc_ret == 0);
 
-		// We read a little more than asked to make sure that we read
-		// the entire line.
-		read_bytes = wanted_bytes + i + 1;
+	assert(file_size > align_start);
+	size_t expected_size = std::min(buf_size, (size_t) (file_size - align_start));
+	read_complete(fd, (char *) addr, buf_size, expected_size);
 
-		// Go back to the original offset in the file.
-		ret = fseek(f, curr_off, SEEK_SET);
-		assert(ret == 0);
-	}
-	else {
-		read_bytes = file_size - curr_off;
-	}
+	char *line_buf = ((char *) addr) + local_off;
+	if (local_off > 0)
+		assert(*(line_buf - 1) == '\n');
+	char *line_end = ((char *) addr) + expected_size - 2;
+	while (*line_end != '\n')
+		line_end--;
+	line_end++;
+	*line_end = 0;
 
-	// The line buffer must end with '\0'.
-	char *line_buf = new char[read_bytes + 1];
-	BOOST_VERIFY(fread(line_buf, read_bytes, 1, f) == 1);
-	line_buf[read_bytes] = 0;
-
-	return std::unique_ptr<char[]>(line_buf);
+	read_bytes = line_end - line_buf;
+	curr_off += read_bytes;
+	assert(curr_off <= file_size);
+	return std::shared_ptr<char>(line_buf, del_off_ptr(addr));
 }
 
 /*
  * Parse the lines in the character buffer.
  * `size' doesn't include '\0'.
  */
-static size_t parse_lines(std::unique_ptr<char[]> line_buf, size_t size,
+static size_t parse_lines(std::shared_ptr<char> line_buf, size_t size,
 		const line_parser &parser, data_frame &df)
 {
 	char *line_end;
@@ -370,21 +386,21 @@ static data_frame::ptr create_data_frame(const line_parser &parser, bool in_mem)
 
 class parse_task: public thread_task
 {
-	std::unique_ptr<char[]> lines;
+	std::shared_ptr<char> lines;
 	size_t size;
 	const line_parser &parser;
 	data_frame_set &dfs;
 public:
-	parse_task(std::unique_ptr<char[]> _lines, size_t size,
+	parse_task(std::shared_ptr<char> _lines, size_t size,
 			const line_parser &_parser, data_frame_set &_dfs): parser(
 				_parser), dfs(_dfs) {
-		this->lines = std::move(_lines);
+		this->lines = _lines;
 		this->size = size;
 	}
 
 	void run() {
 		data_frame::ptr df = create_data_frame(parser);
-		parse_lines(std::move(lines), size, parser, *df);
+		parse_lines(lines, size, parser, *df);
 		dfs.add(df);
 	}
 };
@@ -407,10 +423,10 @@ void file_parse_task::run()
 {
 	while (!io->eof()) {
 		size_t size = 0;
-		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+		std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 		assert(size > 0);
 		data_frame::ptr df = create_data_frame(parser);
-		parse_lines(std::move(lines), size, parser, *df);
+		parse_lines(lines, size, parser, *df);
 		dfs.add(df);
 	}
 }
@@ -435,10 +451,10 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
 		for (size_t i = 0; i < num_tasks && !io->eof(); i++) {
 			size_t size = 0;
-			std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+			std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 
 			mem_threads->process_task(-1,
-					new parse_task(std::move(lines), size, parser, dfs));
+					new parse_task(lines, size, parser, dfs));
 		}
 		if (dfs.get_num_dfs() > 0) {
 			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
