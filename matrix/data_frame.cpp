@@ -250,17 +250,16 @@ std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 namespace
 {
 
-void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
-{
-	for (size_t i = 0; i < sub_df.size(); i++)
-		const_cast<local_vec_store *>(sub_df[i].get())->expose_sub_vec(loc,
-				length);
-}
-
 class vv_index_append;
 
+/*
+ * This generates a task on a partition of a data frame.
+ */
 class groupby_task_queue
 {
+	// The global offset of the partition on the data frame.
+	off_t global_off;
+	// The local offsets in the partition.
 	std::vector<off_t> par_starts;
 	// This indicates the current task.
 	std::atomic<size_t> curr_idx;
@@ -268,30 +267,52 @@ class groupby_task_queue
 public:
 	typedef std::shared_ptr<groupby_task_queue> ptr;
 
-	struct task {
+	class task {
+		// The start in the global vector.
+		off_t global_start;
 		// The start of the partition.
-		off_t start;
+		off_t lstart;
 		// The end of the partition.
-		off_t end;
+		off_t lend;
 		// The index of the partition in the vector.
 		size_t idx;
-
-		task(off_t start, off_t end, size_t idx) {
-			this->start = start;
-			this->end = end;
+	public:
+		task(off_t global_start, off_t lstart, off_t lend, size_t idx) {
+			this->global_start = global_start;
+			this->lstart = lstart;
+			this->lend = lend;
 			this->idx = idx;
 		}
 
 		bool is_valid() const {
-			return start >= 0 && end > 0;
+			return lstart >= 0 && lend > 0;
+		}
+
+		off_t get_global_start() const {
+			return global_start;
+		}
+
+		off_t get_local_start() const {
+			return lstart;
+		}
+
+		size_t get_length() const {
+			return lend - lstart;
+		}
+
+		size_t get_idx() const {
+			return idx;
 		}
 	};
 
-	static ptr create(const std::vector<named_cvec_t> &sorted_df,
-			off_t sorted_col_idx, std::shared_ptr<vv_index_append> append);
+	static ptr create(off_t global_off,
+			detail::mem_vec_store::const_ptr sorted_vec,
+			bool is_vec, std::shared_ptr<vv_index_append> append);
 
-	groupby_task_queue(detail::mem_vec_store::const_ptr sorted_vec,
+	groupby_task_queue(off_t global_off,
+			detail::mem_vec_store::const_ptr sorted_vec,
 			size_t num_parts, size_t first_task_idx) {
+		this->global_off = global_off;
 		par_starts = partition_vector(*sorted_vec, num_parts);
 		// It's possible that two partitions end up having the same start location
 		// because the vector is small or a partition has only one value.
@@ -310,10 +331,10 @@ public:
 	task get_task() {
 		size_t curr = curr_idx.fetch_add(1);
 		if (curr >= get_num_parts())
-			return task(-1, -1, -1);
+			return task(-1, -1, -1, -1);
 		else
-			return task(par_starts[curr], par_starts[curr + 1],
-					curr + first_task_idx);
+			return task(global_off + par_starts[curr], par_starts[curr],
+					par_starts[curr + 1], curr + first_task_idx);
 	}
 };
 
@@ -628,29 +649,179 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	lock.unlock();
 }
 
+class portion_groupby_complete;
+
 class local_groupby_task: public thread_task
 {
 	groupby_task_queue::ptr q;
-	off_t sorted_col_idx;
-	std::vector<named_cvec_t> sorted_df;
+	detail::mem_vec_store::const_ptr sorted_col;
+	size_t sorted_col_idx;
+	data_frame::const_ptr df;
 	vv_index_append::ptr append;
 	const gr_apply_operate<sub_data_frame> &op;
 public:
-	local_groupby_task(groupby_task_queue::ptr q, off_t sorted_col_idx,
-			const std::vector<named_cvec_t> &sorted_df,
+	local_groupby_task(groupby_task_queue::ptr q, size_t sorted_col_idx,
+			detail::mem_vec_store::const_ptr sorted_col, data_frame::const_ptr df,
 			const gr_apply_operate<sub_data_frame> &_op,
 			vv_index_append::ptr append): op(_op) {
 		this->q = q;
 		this->sorted_col_idx = sorted_col_idx;
-		this->sorted_df = sorted_df;
+		this->sorted_col = sorted_col;
+		this->df = df;
 		this->append = append;
 	}
+
+	std::shared_ptr<portion_groupby_complete> get_part(
+			const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf);
 
 	void run();
 };
 
+class portion_groupby_complete: public detail::portion_compute
+{
+	// The local buf to store the temporary result.
+	// This buffer is shared by many portion_groupby_complete tasks.
+	// However, all of these tasks run in the same thread, it's fine
+	// to share the same buffer. There is no concurrent access to it.
+	local_buf_vec_store::ptr row_buf;
+	// A partition in the data frame for computation in this task.
+	sub_data_frame df;
+	size_t sorted_col_idx;
+	int num_EM;
+	const gr_apply_operate<sub_data_frame> &op;
+	vv_index_append::ptr append;
+	groupby_task_queue::task t;
+public:
+	typedef std::shared_ptr<portion_groupby_complete> ptr;
+
+	portion_groupby_complete(vv_index_append::ptr append,
+			local_buf_vec_store::ptr row_buf,
+			const gr_apply_operate<sub_data_frame> &_op,
+			const groupby_task_queue::task &_t,
+			size_t sorted_col_idx): op(_op), t(_t) {
+		this->row_buf = row_buf;
+		this->append = append;
+		this->num_EM = 0;
+		this->sorted_col_idx = sorted_col_idx;
+	}
+
+	bool is_complete() const {
+		return num_EM == 0;
+	}
+
+	void run_complete();
+
+	virtual void run(char *buf, size_t size) {
+		assert(num_EM > 0);
+		num_EM--;
+		if (num_EM == 0)
+			run_complete();
+	}
+
+	void set_data(const sub_data_frame &df, int num_EM) {
+		this->df = df;;
+		this->num_EM = num_EM;
+	}
+};
+
+void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
+{
+	for (size_t i = 0; i < sub_df.size(); i++)
+		const_cast<local_vec_store *>(sub_df[i].get())->expose_sub_vec(loc,
+				length);
+}
+
+void portion_groupby_complete::run_complete()
+{
+	auto sorted_col = df[sorted_col_idx];
+	detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
+			op.get_output_type());
+	agg_operate::const_ptr find_next
+		= sorted_col->get_type().get_agg_ops().get_find_next();
+	size_t loc = 0;
+	size_t col_len = sorted_col->get_length();
+	// We can't search a vv store.
+	assert(!detail::vv_store::is_vector_vector(*sorted_col));
+	const char *start = sorted_col->get_raw_arr();
+	size_t entry_size = sorted_col->get_type().get_size();
+	while (loc < col_len) {
+		size_t curr_length = col_len - loc;
+		const char *curr_ptr = start + entry_size * loc;
+		size_t rel_end;
+		find_next->runAgg(curr_length, curr_ptr, &rel_end);
+		// This expose a portion of the data frame.
+		expose_portion(df, loc, rel_end);
+		// The first argument is the key and the second one is the value
+		// (a data frame)
+		op.run(curr_ptr, df, *row_buf);
+		if (row_buf->get_length() > 0)
+			ret->append(*row_buf);
+		loc += rel_end;
+	}
+	append->append(t.get_idx(), ret);
+}
+
+portion_groupby_complete::ptr local_groupby_task::get_part(
+		const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf)
+{
+	sub_data_frame sub_df(df->get_num_vecs());
+
+	// Read the part from the data frame.
+	size_t num_EM = 0;
+	portion_groupby_complete::ptr compute(new portion_groupby_complete(
+				append, row_buf, op, t, sorted_col_idx));
+
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		if (i == sorted_col_idx)
+			sub_df[i] = sorted_col->get_portion(t.get_local_start(),
+					t.get_length());
+		else {
+			detail::vec_store::const_ptr vec = df->get_vec(i);
+			local_vec_store::const_ptr col;
+			if (vec->is_in_mem())
+				col = vec->get_portion(t.get_global_start(), t.get_length());
+			// TODO we need to unify the async get_portion interface of vec store.
+			else if (detail::vv_store::is_vector_vector(*vec)) {
+				detail::EM_vv_store::const_ptr EM_vv
+					= std::dynamic_pointer_cast<const detail::EM_vv_store>(vec);
+				assert(EM_vv);
+				col = EM_vv->get_portion_async(t.get_global_start(),
+						t.get_length(), compute);
+				num_EM++;
+				assert(detail::vv_store::is_vector_vector(*col));
+			}
+			else {
+				detail::EM_vec_store::const_ptr EM_vec
+					= std::dynamic_pointer_cast<const detail::EM_vec_store>(vec);
+				assert(EM_vec);
+				col = EM_vec->get_portion_async(t.get_global_start(),
+						t.get_length(), compute);
+				num_EM++;
+			}
+			sub_df[i] = col;
+		}
+	}
+
+	compute->set_data(sub_df, num_EM);
+	return compute;
+}
+
 void local_groupby_task::run()
 {
+	// Prepare I/O.
+	size_t max_pending_ios = 4;
+	std::vector<safs::io_interface::ptr> ios;
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		detail::vec_store::const_ptr vec = df->get_vec(i);
+		const detail::EM_object *obj
+			= dynamic_cast<const detail::EM_object *>(vec.get());
+		if (obj) {
+			std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
+			ios.insert(ios.end(), tmp.begin(), tmp.end());
+		}
+	}
+	safs::io_select::ptr select = safs::create_io_select(ios);
+
 	size_t out_size;
 	// If the user can predict the number of output elements, we can create
 	// a buffer of the expected size.
@@ -659,87 +830,65 @@ void local_groupby_task::run()
 	else
 		// If the user can't, we create a small buffer.
 		out_size = 16;
-	local_buf_vec_store row(0, out_size, op.get_output_type(), -1);
+	local_buf_vec_store::ptr row_buf(new local_buf_vec_store(0,
+				out_size, op.get_output_type(), -1));
 	while (true) {
 		// Get the a partition from the queue.
 		auto t = q->get_task();
 		if (!t.is_valid())
 			break;
-		off_t start_ele = t.start;
-		off_t end_ele = t.end;
-		off_t idx = t.idx;
 
-		sub_data_frame sub_df(sorted_df.size());
-		local_vec_store::const_ptr sub_sorted_col;
-		for (size_t i = 0; i < sorted_df.size(); i++) {
-			sub_df[i] = sorted_df[i].second->get_portion(start_ele,
-					end_ele - start_ele);
-			assert(sub_df[i]);
-			if (i == (size_t) sorted_col_idx)
-				sub_sorted_col = sub_df[i];
-		}
-		assert(sub_sorted_col);
+		portion_groupby_complete::ptr compute = get_part(t, row_buf);
+		if (compute->is_complete())
+			compute->run_complete();
+		safs::wait4ios(select, max_pending_ios);
+	}
 
-		detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
-				op.get_output_type());
-		agg_operate::const_ptr find_next
-			= sub_sorted_col->get_type().get_agg_ops().get_find_next();
-		size_t loc = 0;
-		size_t col_len = sub_sorted_col->get_length();
-		// We can't search a vv store.
-		assert(!detail::vv_store::is_vector_vector(*sub_sorted_col));
-		const char *start = sub_sorted_col->get_raw_arr();
-		size_t entry_size = sub_sorted_col->get_type().get_size();
-		while (loc < col_len) {
-			size_t curr_length = col_len - loc;
-			const char *curr_ptr = start + entry_size * loc;
-			size_t rel_end;
-			find_next->runAgg(curr_length, curr_ptr, &rel_end);
-			// This expose a portion of the data frame.
-			expose_portion(sub_df, loc, rel_end);
-			// The first argument is the key and the second one is the value
-			// (a data frame)
-			op.run(curr_ptr, sub_df, row);
-			if (row.get_length() > 0)
-				ret->append(row);
-			loc += rel_end;
-		}
-		append->append(idx, ret);
+	// wait for all I/O to complete.
+	size_t num_pending = safs::wait4ios(select, 0);
+	assert(num_pending == 0);
+
+	for (size_t i = 0; i < ios.size(); i++) {
+		detail::portion_callback &cb = static_cast<detail::portion_callback &>(
+				ios[i]->get_callback());
+		assert(!cb.has_callback());
 	}
 }
 
-}
-
-groupby_task_queue::ptr groupby_task_queue::create(
-		const std::vector<named_cvec_t> &sorted_df, off_t sorted_col_idx,
+groupby_task_queue::ptr groupby_task_queue::create(off_t global_off,
+		detail::mem_vec_store::const_ptr sorted_col, bool is_vec,
 		vv_index_append::ptr append)
 {
-	detail::mem_vec_store::const_ptr sorted_col
-		= detail::mem_vec_store::cast(sorted_df[sorted_col_idx].second);
-
-	bool is_vec = true;
-	for (size_t i = 0; i < sorted_df.size(); i++) {
-		auto vec = sorted_df[i].second;
-		if (vec->get_num_bytes()
-				!= vec->get_length() * vec->get_type().get_size()) {
-			is_vec = false;
-			break;
-		}
-	}
 	// If all fields in the data frame are vectors, we use a larger
 	// partition size. Otherwise, we use a small partition size.
 	size_t part_size = is_vec ? 1024 * 1024 : 16 * 1024;
-	return groupby_task_queue::ptr(new groupby_task_queue(sorted_col,
-				sorted_col->get_length() / part_size,
+	return groupby_task_queue::ptr(new groupby_task_queue(global_off,
+				sorted_col, sorted_col->get_length() / part_size,
 				append->get_tot_appends()));
 }
 
-static void parallel_groupby_async(const std::vector<named_cvec_t> &sorted_df,
+}
+
+static bool is_all_vec(const data_frame &df)
+{
+	for (size_t i = 0; i < df.get_num_vecs(); i++) {
+		auto vec = df.get_vec(i);
+		if (vec->get_num_bytes()
+				!= vec->get_length() * vec->get_type().get_size())
+			return false;
+	}
+	return true;
+}
+
+static void parallel_groupby_async(data_frame::const_ptr sorted_df,
 		off_t sorted_col_idx, const gr_apply_operate<sub_data_frame> &op,
 		vv_index_append::ptr append)
 {
-	groupby_task_queue::ptr q = groupby_task_queue::create(sorted_df,
-			sorted_col_idx, append);
+	detail::mem_vec_store::const_ptr sorted_col
+		= std::dynamic_pointer_cast<const detail::mem_vec_store>(
+				sorted_df->get_vec(sorted_col_idx));
+	groupby_task_queue::ptr q = groupby_task_queue::create(0,
+			sorted_col, is_all_vec(*sorted_df), append);
 	append->inc_tot_appends(q->get_num_parts());
 
 	detail::mem_thread_pool::ptr mem_threads
@@ -750,7 +899,7 @@ static void parallel_groupby_async(const std::vector<named_cvec_t> &sorted_df,
 		// TODO can we localize computation?
 		int node_id = i % mem_threads->get_num_nodes();
 		mem_threads->process_task(node_id, new local_groupby_task(
-					q, sorted_col_idx, sorted_df, op, append));
+					q, sorted_col_idx, sorted_col, sorted_df, op, append));
 	}
 }
 
@@ -758,12 +907,9 @@ static vector_vector::ptr in_mem_groupby(
 		data_frame::const_ptr sorted_df, const std::string &col_name,
 		const gr_apply_operate<sub_data_frame> &op)
 {
-	std::vector<named_cvec_t> df_vecs(sorted_df->get_num_vecs());
 	off_t sorted_col_idx = -1;
-	for (size_t i = 0; i < df_vecs.size(); i++) {
-		df_vecs[i].first = sorted_df->get_vec_name(i);
-		df_vecs[i].second = sorted_df->get_vec(i);
-		if (df_vecs[i].first == col_name)
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
+		if (sorted_df->get_vec_name(i) == col_name)
 			sorted_col_idx = i;
 	}
 	assert(sorted_col_idx >= 0);
@@ -773,12 +919,12 @@ static vector_vector::ptr in_mem_groupby(
 	// We use the storage size of the data frame to approximate the storage size
 	// for the groupby result.
 	size_t num_bytes = 0;
-	for (size_t i = 0; i < df_vecs.size(); i++)
-		num_bytes += df_vecs[i].second->get_num_bytes();
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
+		num_bytes += sorted_df->get_vec(i)->get_num_bytes();
 	result->reserve(num_bytes / result->get_type().get_size());
 	vv_index_append::ptr append(new vv_index_append(result));
 
-	parallel_groupby_async(df_vecs, sorted_col_idx, op, append);
+	parallel_groupby_async(sorted_df, sorted_col_idx, op, append);
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	mem_threads->wait4complete();
@@ -794,7 +940,7 @@ class EM_df_groupby_dispatcher: public detail::task_dispatcher
 {
 	off_t ele_idx;
 	size_t portion_size;
-	std::string col_name;
+	off_t sorted_col_idx;
 	detail::vec_store::const_ptr groupby_col;
 	data_frame::const_ptr df;
 	detail::EM_vec_store::ptr out_vec;
@@ -808,7 +954,15 @@ public:
 			const gr_apply_operate<sub_data_frame> &_op): op(_op) {
 		ele_idx = 0;
 		this->portion_size = portion_size;
-		this->col_name = col_name;
+
+		sorted_col_idx = -1;
+		for (size_t i = 0; i < df->get_num_vecs(); i++) {
+			if (df->get_vec_name(i) == col_name)
+				sorted_col_idx = i;
+		}
+		assert(sorted_col_idx >= 0);
+
+		this->sorted_col_idx = sorted_col_idx;
 		this->groupby_col = df->get_vec(col_name);
 		this->df = df;
 		this->out_vec = out_vec;
@@ -842,60 +996,6 @@ void EM_df_groupby_dispatcher::complete_write()
 			out_vec->append(vecs.begin(), vecs.end());
 		else
 			usleep(100 * 1000);
-	}
-}
-
-class portion_groupby_complete: public detail::portion_compute
-{
-	std::vector<named_cvec_t> df_vecs;
-	size_t sorted_col_idx;
-	int num_EM;
-	groupby_task_queue::ptr groupby_q;
-	const gr_apply_operate<sub_data_frame> &op;
-	vv_index_append::ptr append;
-public:
-	typedef std::shared_ptr<portion_groupby_complete> ptr;
-
-	portion_groupby_complete(vv_index_append::ptr append,
-			const gr_apply_operate<sub_data_frame> &_op): op(_op) {
-		this->append = append;
-		this->num_EM = 0;
-		sorted_col_idx = -1;
-	}
-
-	void run_complete();
-
-	virtual void run(char *buf, size_t size) {
-		assert(num_EM > 0);
-		num_EM--;
-		if (num_EM == 0)
-			run_complete();
-	}
-
-	void set_data(const std::vector<named_cvec_t> &df_vecs,
-			size_t sorted_col_idx, int num_EM) {
-		this->df_vecs = df_vecs;
-		this->num_EM = num_EM;
-		this->sorted_col_idx = sorted_col_idx;
-
-		// We have to make sure this is called here (synchronously),
-		// because this determines the global order of the appends.
-		groupby_q = groupby_task_queue::create(df_vecs, sorted_col_idx, append);
-		append->inc_tot_appends(groupby_q->get_num_parts());
-	}
-};
-
-void portion_groupby_complete::run_complete()
-{
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	int num_threads = mem_threads->get_num_threads();
-	for (int i = 0; i < num_threads; i++) {
-		// It's difficult to localize computation.
-		// TODO can we localize computation?
-		int node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new local_groupby_task(
-					groupby_q, sorted_col_idx, df_vecs, op, append));
 	}
 }
 
@@ -946,50 +1046,20 @@ bool EM_df_groupby_dispatcher::issue_task()
 				real_len);
 	}
 
-	size_t num_EM = 0;
-	portion_groupby_complete::ptr compute(new portion_groupby_complete(
-				append, op));
+	groupby_task_queue::ptr groupby_q = groupby_task_queue::create(ele_idx,
+			vec, is_all_vec(*df), append);
+	append->inc_tot_appends(groupby_q->get_num_parts());
 
-	std::vector<named_cvec_t> df_vecs(df->get_num_vecs());
-	off_t sorted_col_idx = -1;
-	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		if (df->get_vec_name(i) == col_name) {
-			df_vecs[i].first = col_name;
-			df_vecs[i].second = vec;
-			sorted_col_idx = i;
-		}
-		else {
-			detail::vec_store::const_ptr vec = df->get_vec(i);
-			local_vec_store::const_ptr col;
-			if (vec->is_in_mem())
-				col = vec->get_portion(ele_idx, real_len);
-			// TODO we need to unify the async get_portion interface of vec store.
-			else if (detail::vv_store::is_vector_vector(*vec)) {
-				detail::EM_vv_store::const_ptr EM_vv
-					= std::dynamic_pointer_cast<const detail::EM_vv_store>(vec);
-				assert(EM_vv);
-				col = EM_vv->get_portion_async(ele_idx, real_len, compute);
-				num_EM++;
-				assert(detail::vv_store::is_vector_vector(*col));
-			}
-			else {
-				detail::EM_vec_store::const_ptr EM_vec
-					= std::dynamic_pointer_cast<const detail::EM_vec_store>(vec);
-				assert(EM_vec);
-				col = EM_vec->get_portion_async(ele_idx, real_len, compute);
-				num_EM++;
-			}
-
-			df_vecs[i].first = df->get_vec_name(i);
-			df_vecs[i].second = col;
-		}
-		assert(df_vecs[i].second->get_length() == real_len);
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_threads = mem_threads->get_num_threads();
+	for (int i = 0; i < num_threads; i++) {
+		// It's difficult to localize computation.
+		// TODO can we localize computation?
+		int node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id, new local_groupby_task(
+					groupby_q, sorted_col_idx, vec, df, op, append));
 	}
-	assert(sorted_col_idx >= 0);
-
-	compute->set_data(df_vecs, sorted_col_idx, num_EM);
-	if (num_EM == 0)
-		compute->run_complete();
 
 	// Let's try if the data for the first one is ready.
 	auto filled = append->get_filled_chunks();
