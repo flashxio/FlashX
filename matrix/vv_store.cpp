@@ -32,6 +32,25 @@ namespace fm
 namespace detail
 {
 
+vv_store::ptr vv_store::create(const std::vector<off_t> &offs,
+		vec_store::ptr store)
+{
+	assert(!offs.empty());
+	assert(offs.back() / store->get_type().get_size() == store->get_length());
+	if (store->is_in_mem()) {
+		mem_vec_store::ptr mem_vec
+			= std::dynamic_pointer_cast<mem_vec_store>(store);
+		assert(mem_vec);
+		return mem_vv_store::create(offs, mem_vec);
+	}
+	else {
+		EM_vec_store::ptr em_vec
+			= std::dynamic_pointer_cast<EM_vec_store>(store);
+		assert(em_vec);
+		return EM_vv_store::create(offs, em_vec);
+	}
+}
+
 vv_store::ptr vv_store::create(const scalar_type &type, bool in_mem)
 {
 	if (in_mem)

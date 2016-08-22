@@ -352,16 +352,12 @@ public:
 class vv_index_append
 {
 	class filled_chunk {
-		detail::mem_vec_store::ptr data;
+		local_vec_store::ptr data;
 		std::atomic<size_t> filled_size;
 	public:
 		typedef std::shared_ptr<filled_chunk> ptr;
 
-		filled_chunk() {
-			filled_size = 0;
-		}
-
-		filled_chunk(detail::mem_vec_store::ptr data) {
+		filled_chunk(local_vec_store::ptr data) {
 			this->data = data;
 			filled_size = 0;
 		}
@@ -370,19 +366,16 @@ class vv_index_append
 			return data == NULL;
 		}
 
-		void alloc_mem(size_t size, const scalar_type &type) {
-			if (data == NULL)
-				data = detail::mem_vec_store::create(size, -1, type);
-		}
-
-		bool fully_filled() const {
+		bool fully_filled(bool last) const {
 			if (data == NULL)
 				return false;
-			else
+			else if (last)
 				return data->get_length() == filled_size;
+			else
+				return data->get_reserved_size() == filled_size;
 		}
 
-		detail::mem_vec_store::ptr get_vec() {
+		local_vec_store::ptr get_vec() {
 			return data;
 		}
 
@@ -398,13 +391,16 @@ class vv_index_append
 	// The key is the append index, the value is the offsets of
 	// the vectors from the append in the global vv store.
 	std::map<off_t, off_vec_ptr> vv_off_map;
-	// This contains the data in the global vv store.
-	// For the in-memory vv store, there is only one vector.
-	// For the external-memory vv store, we partition it into many
-	// fixed-size chunks. The reason is that when we write the data
-	// in the chunks on disks, we need to make sure the data is stored
-	// in aligned memory to avoid extra memory copy.
+	// When we write data to the global vector in the external memory,
+	// we need to make sure data is stored in aligned memory and is written
+	// to the aligned offset in a file.
+	// We also need to make sure data is stored in the global order.
+	// Therefore, we partition the data in the global vector into many
+	// fixed-size chunks. Whenever a chunk is full, we write it to the
+	// external-memory vector and reuse the memory for another chunk.
 	std::deque<filled_chunk::ptr> global_chunks;
+	// This is the global vector where we'll write data to.
+	detail::vec_store::ptr global_vec;
 	size_t chunk_size;
 
 	std::atomic<size_t> tot_num_appends;
@@ -424,9 +420,9 @@ class vv_index_append
 public:
 	typedef std::shared_ptr<vv_index_append> ptr;
 
-	vv_index_append(detail::mem_vec_store::ptr vec): ele_type(vec->get_type()) {
-		this->chunk_size = vec->get_reserved_size();
-		this->global_chunks.emplace_back(new filled_chunk(vec));
+	vv_index_append(detail::vec_store::ptr vec): ele_type(vec->get_type()) {
+		this->global_vec = vec;
+		this->chunk_size = matrix_conf.get_write_io_buf_size() / ele_type.get_size();
 		last_append_idx = -1;
 		this->tot_num_appends = 0;
 		this->num_appends = 0;
@@ -442,7 +438,6 @@ public:
 	detail::vv_store::ptr get_vv();
 	std::vector<off_t> get_vv_offs();
 
-	std::vector<detail::vec_store::const_ptr> get_filled_chunks();
 	void inc_tot_appends(size_t new_appends) {
 		tot_num_appends += new_appends;
 	}
@@ -461,43 +456,6 @@ public:
 		return ret;
 	}
 };
-
-std::vector<detail::vec_store::const_ptr> vv_index_append::get_filled_chunks()
-{
-	std::vector<detail::vec_store::const_ptr> ret;
-	lock.lock();
-	while (!global_chunks.empty()) {
-		// If the first chunk doesn't have all data written to the buffer,
-		// we can jump out of the loop now.
-		if (!global_chunks.front()->fully_filled())
-			break;
-		auto vec = global_chunks.front()->get_vec();
-		assert(vec);
-		// If we have used all of the reserved memory in the vector, we can
-		// take it out immediately.
-		if (vec->get_length() == vec->get_reserved_size()) {
-			ret.push_back(vec);
-			global_chunks.pop_front();
-			continue;
-		}
-		// There should be only one chunk in the vector.
-		assert(global_chunks.size() == 1);
-		// We have appended all data. If the last vector is fully filled, we
-		// should return it as well.
-		if (tot_num_appends == num_appends) {
-			ret.push_back(vec);
-			global_chunks.pop_front();
-		}
-		// If the chunk has all data written to it, but we expect that
-		// there will be more data written to it in the future, we should
-		// jump out of the loop now.
-		else
-			break;
-	}
-	lock.unlock();
-
-	return ret;
-}
 
 std::vector<off_t> vv_index_append::get_vv_offs()
 {
@@ -524,9 +482,15 @@ std::vector<off_t> vv_index_append::get_vv_offs()
 detail::vv_store::ptr vv_index_append::get_vv()
 {
 	auto offs = get_vv_offs();
-	assert(global_chunks.size() == 1);
-	assert(global_chunks[0]->fully_filled());
-	return detail::mem_vv_store::create(offs, global_chunks[0]->get_vec());
+	assert(global_chunks.empty() || global_chunks.size() == 1);
+	if (global_chunks.size() == 1) {
+		assert(global_chunks.front()->fully_filled(true));
+		auto vec = global_chunks.front()->get_vec();
+		assert(global_vec->get_length() + vec->get_length()
+				<= global_vec->get_reserved_size());
+		global_vec->append(*vec);
+	}
+	return detail::vv_store::create(offs, global_vec);
 }
 
 /*
@@ -601,30 +565,55 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	last_off_bytes = num_bytes_append.load();
 	num_bytes_append += num_bytes;
 
-	detail::mem_vec_store::ptr last_vec;
-	if (!global_chunks.empty())
-		last_vec = global_chunks.back()->get_vec();
 	size_t fill_size = num_bytes / ele_type.get_size();
-	if (fill_size > 0 && last_vec
-			&& last_vec->get_length() < last_vec->get_reserved_size()) {
-		chunks.push_back(global_chunks.back());
-		size_t num_eles = std::min(fill_size,
-				last_vec->get_reserved_size() - last_vec->get_length());
-		off_sizes.emplace_back(last_vec->get_length(), num_eles);
-		last_vec->resize(last_vec->get_length() + num_eles);
-		fill_size -= num_eles;
+	// We assume the preallocated space is large enough to store all
+	// appended data.
+	assert(global_vec->get_length() + fill_size
+			<= global_vec->get_reserved_size());
+	off_t global_off = global_vec->get_length();
+	size_t global_size = fill_size;
+	// For in-memory vector, we resize the vector and record the location
+	// where we should write data to.
+	if (fill_size > 0 && global_vec->is_in_mem()) {
+		global_vec->resize(global_vec->get_length() + fill_size);
+		fill_size = 0;
 	}
-	while (fill_size > 0) {
-		size_t num_eles = std::min(fill_size, chunk_size);
-		// We store data in the local vectors.
-		local_vec_store::ptr buf(new local_buf_vec_store(0, chunk_size,
-					ele_type, -1, true));
-		buf->resize(num_eles);
-		global_chunks.emplace_back(new filled_chunk(buf));
-		fill_size -= num_eles;
-		chunks.push_back(global_chunks.back());
-		off_sizes.emplace_back(0, num_eles);
+	// For external-memory vector, we first write data to aligned memory
+	// buffers and record the locations where the aligned buffers should be
+	// written to.
+	else if (fill_size > 0 && !global_vec->is_in_mem()) {
+		local_vec_store::ptr last_vec;
+		off_t portion_global_start;
+		if (global_chunks.empty())
+			portion_global_start = global_off;
+		else {
+			last_vec = global_chunks.back()->get_vec();
+			// The next local vector starts at the ending point of this local vector
+			portion_global_start = last_vec->get_global_start() + chunk_size;
+		}
+
+		if (last_vec && last_vec->get_length() < last_vec->get_reserved_size()) {
+			chunks.push_back(global_chunks.back());
+			size_t num_eles = std::min(fill_size,
+					last_vec->get_reserved_size() - last_vec->get_length());
+			off_sizes.emplace_back(last_vec->get_length(), num_eles);
+			last_vec->resize(last_vec->get_length() + num_eles);
+			fill_size -= num_eles;
+		}
+		while (fill_size > 0) {
+			size_t num_eles = std::min(fill_size, chunk_size);
+			// We store data in the local vectors.
+			local_vec_store::ptr buf(new local_buf_vec_store(
+						portion_global_start, chunk_size, ele_type, -1, true));
+			portion_global_start += chunk_size;
+			buf->resize(num_eles);
+			global_chunks.emplace_back(new filled_chunk(buf));
+			fill_size -= num_eles;
+			chunks.push_back(global_chunks.back());
+			off_sizes.emplace_back(0, num_eles);
+		}
 	}
+	assert(fill_size == 0);
 
 	lock.unlock();
 
@@ -632,7 +621,15 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	for (size_t i = 0; i < contig.size(); i++) {
 		detail::vv_store::const_ptr vv = contig[i];
 		const detail::vec_store &data = vv->get_data();
-		fill_chunks(data, chunks, off_sizes);
+		if (global_vec->is_in_mem()) {
+			local_vec_store::const_ptr buf = data.get_portion(0,
+					data.get_length());
+			global_vec->set_portion(buf, global_off);
+			global_off += data.get_length();
+			global_size -= data.get_length();
+		}
+		else
+			fill_chunks(data, chunks, off_sizes);
 
 		// Fill the offsets for each vector in the vv store.
 		std::vector<off_t> &vv_offs = *vv_off_vec[i];
@@ -644,9 +641,35 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	assert(chunks.empty());
 	assert(off_sizes.empty());
 
+	std::vector<local_vec_store::const_ptr> filled_chunks;
 	lock.lock();
 	num_appends += contig.size();
+	// Here is to count the number of chunks that have been completely filled,
+	// so we can write them to the global vector.
+	size_t to_global_size = 0;
+	while (!global_chunks.empty() && global_chunks.front()->fully_filled(false)) {
+		auto vec = global_chunks.front()->get_vec();
+		to_global_size += vec->get_length();
+		assert(global_vec->get_length() + to_global_size
+				>= vec->get_global_start() + vec->get_length());
+		filled_chunks.push_back(vec);
+		global_chunks.pop_front();
+	}
+	if (to_global_size > 0)
+		global_vec->resize(global_vec->get_length() + to_global_size);
+	size_t global_len = global_vec->get_length();
 	lock.unlock();
+
+	if (!filled_chunks.empty()) {
+		assert(!global_vec->is_in_mem());
+		detail::EM_vec_store::ptr em_vec
+			= std::static_pointer_cast<detail::EM_vec_store>(global_vec);
+		for (size_t i = 0; i < filled_chunks.size(); i++) {
+			auto vec = filled_chunks[i];
+			assert(vec->get_global_start() + vec->get_length() <= global_len);
+			em_vec->write_portion_async(vec, vec->get_global_start());
+		}
+	}
 }
 
 class portion_groupby_complete;
@@ -972,38 +995,15 @@ public:
 		this->groupby_col = df->get_vec(col_name);
 		this->df = df;
 		this->out_vec = out_vec;
-
-		const scalar_type &type = op.get_output_type();
-		size_t chunk_size = matrix_conf.get_write_io_buf_size() / type.get_size();
-		local_vec_store::ptr buf(new local_buf_vec_store(0, chunk_size, type,
-					-1, true));
-		buf->resize(0);
-		append = vv_index_append::ptr(new vv_index_append(buf));
+		append = vv_index_append::ptr(new vv_index_append(out_vec));
 	}
 
 	virtual bool issue_task();
 
-	void complete_write();
-
 	detail::vv_store::ptr get_vv() {
-		auto offs = append->get_vv_offs();
-		assert(offs.back() / out_vec->get_type().get_size() == out_vec->get_length());
-		return detail::EM_vv_store::create(offs, out_vec);
+		return append->get_vv();
 	}
 };
-
-void EM_df_groupby_dispatcher::complete_write()
-{
-	while (append->has_data()) {
-		std::vector<detail::vec_store::const_ptr> vecs = append->get_filled_chunks();
-		// If the data is ready, we can write data back directly.
-		if (!vecs.empty())
-			// TODO data should also be written back asynchronously.
-			out_vec->append(vecs.begin(), vecs.end());
-		else
-			usleep(100 * 1000);
-	}
-}
 
 bool EM_df_groupby_dispatcher::issue_task()
 {
@@ -1067,14 +1067,6 @@ bool EM_df_groupby_dispatcher::issue_task()
 					groupby_q, sorted_col_idx, vec, df, op, append));
 	}
 
-	// Let's try if the data for the first one is ready.
-	auto filled = append->get_filled_chunks();
-	// If the data is ready, we can write data back directly.
-	if (!filled.empty()) {
-		bool ret = out_vec->append_async(filled.begin(), filled.end());
-		assert(ret);
-	}
-
 	ele_idx += real_len;
 	return true;
 }
@@ -1085,18 +1077,27 @@ static vector_vector::ptr EM_groupby(
 		data_frame::const_ptr sorted_df, const std::string &col_name,
 		const gr_apply_operate<sub_data_frame> &op)
 {
-	detail::EM_vec_store::ptr out_vec = detail::EM_vec_store::create(0,
-			op.get_output_type());
+	// We use the storage size of the data frame to approximate the storage size
+	// for the groupby result.
+	size_t num_bytes = 0;
+	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
+		num_bytes += sorted_df->get_vec(i)->get_num_bytes();
+	const scalar_type &type = op.get_output_type();
+	detail::EM_vec_store::ptr out_vec = detail::EM_vec_store::create(
+			num_bytes / type.get_size(), type);
+	bool ret = out_vec->resize(0);
+	assert(ret);
+
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_threads = mem_threads->get_num_threads();
 
-	size_t portion_size = num_threads * 1024 * 1024 * 10;
+	size_t portion_size = num_threads * 1024 * 1024 * 5;
 	// If one of the columns in the data frame is a vector vector,
 	// we should use a smaller portion size.
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
 		if (sorted_df->get_vec_ref(i).get_entry_size() == 0) {
-			portion_size = num_threads * 16 * 1024 * 10;
+			portion_size = num_threads * 16 * 1024 * 5;
 			break;
 		}
 
@@ -1115,7 +1116,7 @@ static vector_vector::ptr EM_groupby(
 	}
 	worker.register_EM_obj(out_vec.get());
 	worker.run();
-	groupby_dispatcher->complete_write();
+	mem_threads->wait4complete();
 	return vector_vector::create(groupby_dispatcher->get_vv());
 }
 

@@ -60,6 +60,7 @@ public:
 	}
 
 	static ptr create(const scalar_type &type, bool in_mem);
+	static ptr create(const std::vector<off_t> &offs, vec_store::ptr store);
 
 	vv_store(const scalar_type &type, bool in_mem);
 	vv_store(const std::vector<off_t> &offs, vec_store::ptr store);
