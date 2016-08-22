@@ -919,6 +919,31 @@ io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios)
 	return select;
 }
 
+size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios)
+{
+	size_t num_pending;
+	do {
+		num_pending = select->num_pending_ios();
+
+		// Figure out how many I/O requests we have to wait for in
+		// this iteration.
+		int num_to_process;
+		if (num_pending > max_pending_ios)
+			num_to_process = num_pending - max_pending_ios;
+		else
+			num_to_process = 0;
+		select->wait4complete(num_to_process);
+
+		// Test if all I/O instances have pending I/O requests left.
+		// When a portion of a matrix is ready in memory and being processed,
+		// it may result in writing data to another matrix. Therefore, we
+		// need to process all completed I/O requests (portions with data
+		// in memory) first and then count the number of new pending I/Os.
+		num_pending = select->num_pending_ios();
+	} while (num_pending > max_pending_ios);
+	return num_pending;
+}
+
 const std::vector<int> &get_io_cpus()
 {
 	return global_data.io_cpus;

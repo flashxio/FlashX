@@ -512,6 +512,7 @@ class cache_config;
 class RAID_config;
 
 io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios);
+size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios);
 
 /**
  * This function creates an I/O factory of the specified I/O method.
