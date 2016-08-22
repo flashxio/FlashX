@@ -820,7 +820,10 @@ void local_groupby_task::run()
 			ios.insert(ios.end(), tmp.begin(), tmp.end());
 		}
 	}
-	safs::io_select::ptr select = safs::create_io_select(ios);
+	safs::io_select::ptr select;
+	// If we need to access I/O.
+	if (!ios.empty())
+		select = safs::create_io_select(ios);
 
 	size_t out_size;
 	// If the user can predict the number of output elements, we can create
@@ -841,11 +844,14 @@ void local_groupby_task::run()
 		portion_groupby_complete::ptr compute = get_part(t, row_buf);
 		if (compute->is_complete())
 			compute->run_complete();
-		safs::wait4ios(select, max_pending_ios);
+		if (select)
+			safs::wait4ios(select, max_pending_ios);
 	}
 
 	// wait for all I/O to complete.
-	size_t num_pending = safs::wait4ios(select, 0);
+	size_t num_pending = 0;
+	if (select)
+		num_pending = safs::wait4ios(select, 0);
 	assert(num_pending == 0);
 
 	for (size_t i = 0; i < ios.size(); i++) {
