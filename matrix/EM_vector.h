@@ -54,6 +54,7 @@ class EM_vec_store: public vec_store, public EM_object
 		}
 	};
 
+	size_t file_size;
 	file_holder::ptr holder;
 	io_set::ptr ios;
 

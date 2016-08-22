@@ -216,6 +216,7 @@ EM_vec_store::EM_vec_store(safs::file_io_factory::shared_ptr factory): vec_store
 {
 	holder = file_holder::create(factory->get_name());
 	ios = io_set::ptr(new io_set(factory));
+	file_size = factory->get_file_size();
 }
 
 EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
@@ -223,6 +224,7 @@ EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
 {
 	holder = store.holder;
 	ios = store.ios;
+	file_size = store.file_size;
 }
 
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
@@ -233,6 +235,7 @@ EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
+	file_size = length * type.get_size();
 }
 
 EM_vec_store::~EM_vec_store()
@@ -241,21 +244,50 @@ EM_vec_store::~EM_vec_store()
 
 size_t EM_vec_store::get_reserved_size() const
 {
-	assert(0);
-	return 0;
+	return file_size / get_type().get_size();
 }
 
 bool EM_vec_store::reserve(size_t num_eles)
 {
-	assert(0);
-	return false;
+	size_t new_size = num_eles * get_type().get_size();
+	if (new_size <= file_size)
+		return true;
+
+	// If the vector has data, we don't need to do anything to reserve space
+	// on disks. When we write data to the location behind the end of the file,
+	// the filesystem will automatically allocate space on disks.
+	// The only problem is that the data will be scattered across the disks
+	// if we don't allocate space in advance.
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	bool ret = f.resize(new_size);
+	if (!ret)
+		return false;
+	else {
+		file_size = new_size;
+		return true;
+	}
 }
 
-bool EM_vec_store::resize(size_t length)
+bool EM_vec_store::resize(size_t new_length)
 {
-	// TODO
-	assert(0);
-	return false;
+	if (new_length == get_length())
+		return true;
+
+	size_t tot_len = get_reserved_size();
+	// We don't want to allocate space when shrinking the vector.
+	if (new_length <= tot_len)
+		return vec_store::resize(new_length);
+
+	size_t old_length = get_length();
+	size_t real_length = old_length;
+	if (real_length == 0)
+		real_length = 1;
+	for (; real_length < new_length; real_length *= 2);
+	bool ret = reserve(real_length);
+	if (!ret)
+		return false;
+	else
+		return vec_store::resize(new_length);
 }
 
 namespace
@@ -333,6 +365,12 @@ bool EM_vec_store::append_async(
 			return false;
 		}
 	}
+	bool ret = reserve(get_length() + tot_size);
+	if (!ret) {
+		assert(0);
+		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
+		return false;
+	}
 
 	size_t off = get_length();
 	for (auto it = vec_start; it != vec_end; it++) {
@@ -365,6 +403,12 @@ bool EM_vec_store::append(
 				<< "can't append a vector with different type";
 			return false;
 		}
+	}
+	bool ret = reserve(get_length() + tot_size);
+	if (!ret) {
+		assert(0);
+		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
+		return false;
 	}
 
 	/*
