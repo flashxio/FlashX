@@ -196,31 +196,6 @@ void mem_thread_pool::destroy()
 	global_threads = NULL;
 }
 
-static size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios)
-{
-	size_t num_pending;
-	do {
-		num_pending = select->num_pending_ios();
-
-		// Figure out how many I/O requests we have to wait for in
-		// this iteration.
-		int num_to_process;
-		if (num_pending > max_pending_ios)
-			num_to_process = num_pending - max_pending_ios;
-		else
-			num_to_process = 0;
-		select->wait4complete(num_to_process);
-
-		// Test if all I/O instances have pending I/O requests left.
-		// When a portion of a matrix is ready in memory and being processed,
-		// it may result in writing data to another matrix. Therefore, we
-		// need to process all completed I/O requests (portions with data
-		// in memory) first and then count the number of new pending I/Os.
-		num_pending = select->num_pending_ios();
-	} while (num_pending > max_pending_ios);
-	return num_pending;
-}
-
 void io_worker_task::run()
 {
 	std::vector<safs::io_interface::ptr> ios;
@@ -234,9 +209,9 @@ void io_worker_task::run()
 
 	// The task runs until there are no tasks left in the queue.
 	while (dispatch->issue_task())
-		wait4ios(select, max_pending_ios);
+		safs::wait4ios(select, max_pending_ios);
 	// Test if all I/O instances have processed all requests.
-	size_t num_pending = wait4ios(select, 0);
+	size_t num_pending = safs::wait4ios(select, 0);
 	assert(num_pending == 0);
 
 	pthread_spin_lock(&lock);
