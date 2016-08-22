@@ -56,7 +56,6 @@ public:
 			size_t len, portion_compute::ptr compute) const;
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {
-		printf("create I/O from %p in vv store\n", &get_data());
 		return dynamic_cast<const EM_object &>(get_data()).create_ios();
 	}
 
