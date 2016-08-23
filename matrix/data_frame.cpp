@@ -426,7 +426,8 @@ public:
 		last_append_idx = -1;
 		this->tot_num_appends = 0;
 		this->num_appends = 0;
-		this->num_bytes_append = 0;
+		// The vector might already have some data.
+		this->num_bytes_append = vec->get_length() * vec->get_type().get_size();
 	}
 
 	// This is called in the worker threads.
@@ -934,7 +935,8 @@ static void parallel_groupby_async(data_frame::const_ptr sorted_df,
 
 static vector_vector::ptr in_mem_groupby(
 		data_frame::const_ptr sorted_df, const std::string &col_name,
-		const gr_apply_operate<sub_data_frame> &op)
+		const gr_apply_operate<sub_data_frame> &op,
+		detail::mem_vec_store::ptr out_vec)
 {
 	off_t sorted_col_idx = -1;
 	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++) {
@@ -943,15 +945,7 @@ static vector_vector::ptr in_mem_groupby(
 	}
 	assert(sorted_col_idx >= 0);
 
-	detail::mem_vec_store::ptr result = detail::mem_vec_store::create(0, -1,
-			op.get_output_type());
-	// We use the storage size of the data frame to approximate the storage size
-	// for the groupby result.
-	size_t num_bytes = 0;
-	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
-		num_bytes += sorted_df->get_vec(i)->get_num_bytes();
-	result->reserve(num_bytes / result->get_type().get_size());
-	vv_index_append::ptr append(new vv_index_append(result));
+	vv_index_append::ptr append(new vv_index_append(out_vec));
 
 	parallel_groupby_async(sorted_df, sorted_col_idx, op, append);
 	detail::mem_thread_pool::ptr mem_threads
@@ -1075,19 +1069,9 @@ bool EM_df_groupby_dispatcher::issue_task()
 
 static vector_vector::ptr EM_groupby(
 		data_frame::const_ptr sorted_df, const std::string &col_name,
-		const gr_apply_operate<sub_data_frame> &op)
+		const gr_apply_operate<sub_data_frame> &op,
+		detail::EM_vec_store::ptr out_vec)
 {
-	// We use the storage size of the data frame to approximate the storage size
-	// for the groupby result.
-	size_t num_bytes = 0;
-	for (size_t i = 0; i < sorted_df->get_num_vecs(); i++)
-		num_bytes += sorted_df->get_vec(i)->get_num_bytes();
-	const scalar_type &type = op.get_output_type();
-	detail::EM_vec_store::ptr out_vec = detail::EM_vec_store::create(
-			num_bytes / type.get_size(), type);
-	bool ret = out_vec->resize(0);
-	assert(ret);
-
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_threads = mem_threads->get_num_threads();
@@ -1121,13 +1105,31 @@ static vector_vector::ptr EM_groupby(
 }
 
 vector_vector::ptr data_frame::groupby(const std::string &col_name,
-		const gr_apply_operate<sub_data_frame> &op) const
+		const gr_apply_operate<sub_data_frame> &op,
+		detail::vec_store::ptr store) const
 {
+	const scalar_type &type = op.get_output_type();
+	if (store == NULL) {
+		// We use the storage size of the data frame to approximate the storage size
+		// for the groupby result.
+		size_t num_bytes = 0;
+		for (size_t i = 0; i < get_num_vecs(); i++)
+			num_bytes += get_vec(i)->get_num_bytes();
+		store = detail::vec_store::create(0, type, -1, is_in_mem());
+		store->reserve(num_bytes / type.get_size());
+	}
+
 	data_frame::const_ptr sorted_df = sort(col_name);
-	if (is_in_mem())
-		return in_mem_groupby(sorted_df, col_name, op);
-	else
-		return EM_groupby(sorted_df, col_name, op);
+	if (is_in_mem()) {
+		assert(store->is_in_mem());
+		return in_mem_groupby(sorted_df, col_name, op,
+				std::dynamic_pointer_cast<detail::mem_vec_store>(store));
+	}
+	else {
+		assert(!store->is_in_mem());
+		return EM_groupby(sorted_df, col_name, op,
+				std::dynamic_pointer_cast<detail::EM_vec_store>(store));
+	}
 }
 
 }
