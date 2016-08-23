@@ -1290,6 +1290,7 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 	else {
 		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(0,
 				get_scalar_type<char>());
+		vec->reserve(sizeof(mheader) + res->get_data().get_num_bytes());
 		local_cref_vec_store header_store((const char *) &mheader,
 				0, sizeof(mheader), get_scalar_type<char>(), -1);
 		vec->append(header_store);
