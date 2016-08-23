@@ -640,7 +640,7 @@ static std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> create_fg_undire
 			graph_data);
 }
 
-static fg::FG_graph::ptr construct_FG_graph(
+fg::FG_graph::ptr construct_FG_graph(
 		const std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> &g,
 		const std::string &graph_name)
 {

@@ -72,6 +72,10 @@ public:
 	edge_list::ptr reverse_edge() const;
 };
 
+fg::FG_graph::ptr construct_FG_graph(
+		const std::pair<fg::vertex_index::ptr, detail::vec_store::ptr> &g,
+		const std::string &graph_name);
+
 /*
  * This function creates a row-major matrix from a data frame, which is stored
  * in a vector of vectors. Each row is stored in a byte vector with the FlashGraph

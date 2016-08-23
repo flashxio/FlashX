@@ -21,10 +21,13 @@ CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver
 LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
-all: el2fg fg2fm fg2crs fg_lcc
+all: el2fg fg2fm fg2crs fg_lcc csr2fg
 
 el2fg: el2fg.o ../libFMatrix.a
 	$(CXX) -o el2fg el2fg.o $(LDFLAGS)
+
+csr2fg: csr2fg.o ../libFMatrix.a
+	$(CXX) -o csr2fg csr2fg.o $(LDFLAGS)
 
 fg2fm: fg2fm.o ../libFMatrix.a
 	$(CXX) -o fg2fm fg2fm.o $(LDFLAGS)
