@@ -85,11 +85,12 @@ bool safs_file::exist() const
 	return true;
 }
 
-ssize_t safs_file::get_size() const
+/*
+ * This returns the absolute path of the data files.
+ */
+std::vector<std::string> safs_file::get_data_files() const
 {
-	if (!exist())
-		return -1;
-	size_t ret = 0;
+	std::vector<std::string> files;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[i].get_file_name());
 		std::vector<std::string> local_files;
@@ -97,7 +98,19 @@ ssize_t safs_file::get_size() const
 		if (local_files.size() > 1)
 			local_files = erase_header_file(local_files);
 		assert(local_files.size() == 1);
-		native_file f(dir.get_name() + "/" + local_files[0]);
+		files.push_back(dir.get_name() + "/" + local_files[0]);
+	}
+	return files;
+}
+
+ssize_t safs_file::get_size() const
+{
+	if (!exist())
+		return -1;
+	size_t ret = 0;
+	std::vector<std::string> data_files = get_data_files();
+	for (unsigned i = 0; i < data_files.size(); i++) {
+		native_file f(data_files[i]);
 		ret += f.get_size();
 	}
 	return ret;
@@ -109,13 +122,16 @@ bool safs_file::resize(size_t new_size)
 		fprintf(stderr, "%s doesn't exist\n", name.c_str());
 		return false;
 	}
-	ssize_t phy_size = get_size();
-	if (phy_size < (ssize_t) new_size) {
-		fprintf(stderr, "the file has %ld bytes, new size is %ld\n",
-				phy_size, new_size);
-		return false;
+	std::vector<std::string> data_files = get_data_files();
+	size_t size_per_disk = get_size_per_disk(new_size);
+	for (size_t i = 0; i < data_files.size(); i++) {
+		native_file f(data_files[i]);
+		bool ret = f.resize(size_per_disk);
+		if (!ret)
+			return false;
 	}
 
+	// Save the new file size to the header of the SAFS file.
 	std::string header_file = get_header_file();
 	printf("header file: %s\n", header_file.c_str());
 	if (!file_exist(header_file))
@@ -172,13 +188,18 @@ bool safs_file::rename(const std::string &new_name)
 	return true;
 }
 
-bool safs_file::create_file(size_t file_size, int block_size,
-		int mapping_option, safs_file_group::ptr group)
+size_t safs_file::get_size_per_disk(size_t file_size) const
 {
 	size_t size_per_disk = file_size / native_dirs.size();
 	if (file_size % native_dirs.size() > 0)
 		size_per_disk++;
-	size_per_disk = ROUNDUP(size_per_disk, 512);
+	return ROUNDUP(size_per_disk, 512);
+}
+
+bool safs_file::create_file(size_t file_size, int block_size,
+		int mapping_option, safs_file_group::ptr group)
+{
+	size_t size_per_disk = get_size_per_disk(file_size);
 
 	// We use the random index to reorder the native directories.
 	// So different files map their data chunks to disks in different order.

@@ -82,7 +82,9 @@ class safs_file
 	std::string header_file;
 	std::string name;
 
+	std::vector<std::string> get_data_files() const;
 	std::string get_header_file() const;
+	size_t get_size_per_disk(size_t file_size) const;
 public:
 	static std::vector<std::string> erase_header_file(
 			const std::vector<std::string> &files);

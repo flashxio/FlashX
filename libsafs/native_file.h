@@ -43,6 +43,15 @@ public:
 		this->file_name = file_name;
 	}
 
+	bool resize(size_t new_size) {
+		int ret = truncate(file_name.c_str(), new_size);
+		if (ret < 0) {
+			perror("truncate");
+			return false;
+		}
+		return true;
+	};
+
 	/**
 	 * These are file operations on the native file.
 	 */
