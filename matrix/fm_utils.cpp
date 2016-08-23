@@ -1262,7 +1262,7 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 	factor f(ceil(((double) num_rows) / block_size.get_num_rows()));
 	// TODO I should make this a NUMA vector.
 	factor_vector::ptr labels = factor_vector::create(f, num_rows, -1,
-			adjs->is_in_mem(), set_2d_label_operate(block_size));
+			true, set_2d_label_operate(block_size));
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	vector_vector::ptr res = adjs->groupby(*labels,
