@@ -1265,16 +1265,37 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 			true, set_2d_label_operate(block_size));
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	vector_vector::ptr res = adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_cols, entry_size));
+
+	part_2d_apply_operate op(block_size, num_cols, entry_size);
+
+	// Allocate memory to store the groupby result.
+	const scalar_type &out_type = op.get_output_type();
+	// We use the storage size of the data frame to approximate the storage size
+	// for the groupby result.
+	size_t num_bytes = sizeof(matrix_header) + adjs->get_data().get_num_bytes();
+	detail::vec_store::ptr store = detail::vec_store::create(0, out_type, -1,
+			adjs->is_in_mem());
+	store->reserve(num_bytes / out_type.get_size());
+
+	// Reserve the space for the matrix header.
+	local_buf_vec_store::ptr header_store(new local_buf_vec_store(0,
+				sizeof(matrix_header), get_scalar_type<char>(), -1));
+	store->append(*header_store);
+
+	vector_vector::ptr res = adjs->groupby(*labels, op, store);
 	gettimeofday(&end, NULL);
 	printf("groupby takes %f seconds\n", time_diff(start, end));
 
 	prim_type type = prim_type::P_BOOL;
 	if (entry_type)
 		type = entry_type->get_type();
-	matrix_header mheader(matrix_type::SPARSE, entry_size, num_rows, num_cols,
+	// Save the header.
+	matrix_header *mheader = new(header_store->get_raw_arr()) matrix_header(
+			matrix_type::SPARSE, entry_size, num_rows, num_cols,
 			matrix_layout_t::L_ROW_2D, type, block_size);
+	store->set_portion(header_store, 0);
+
+	// Save the groupby result to disks.
 	if (!to_safs) {
 		FILE *f_2d = fopen(mat_file.c_str(), "w");
 		if (f_2d == NULL) {
@@ -1282,32 +1303,26 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 				% mat_file % strerror(errno);
 			return;
 		}
-		fwrite(&mheader, sizeof(mheader), 1, f_2d);
 		bool ret = res->cat()->export2(f_2d);
 		assert(ret);
 		fclose(f_2d);
 	}
 	else {
-		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(0,
-				get_scalar_type<char>());
-		vec->reserve(sizeof(mheader) + res->get_data().get_num_bytes());
-		local_cref_vec_store header_store((const char *) &mheader,
-				0, sizeof(mheader), get_scalar_type<char>(), -1);
-		vec->append(header_store);
-		vec->append(dynamic_cast<const detail::vv_store &>(
-					res->get_data()).get_data());
-		vec->set_persistent(mat_file);
+		detail::EM_vec_store::ptr em_store
+			= std::dynamic_pointer_cast<detail::EM_vec_store>(store);
+		assert(em_store);
+		em_store->set_persistent(mat_file);
 	}
 
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
-	off_t off = sizeof(mheader);
+	off_t off = sizeof(matrix_header);
 	for (size_t i = 0; i < res->get_num_vecs(); i++) {
 		offsets[i] = off;
 		off += res->get_length(i);
 	}
 	offsets[res->get_num_vecs()] = off;
-	SpM_2d_index::ptr mindex = SpM_2d_index::create(mheader, offsets);
+	SpM_2d_index::ptr mindex = SpM_2d_index::create(*mheader, offsets);
 	if (!to_safs)
 		mindex->dump(mat_idx_file);
 	else
