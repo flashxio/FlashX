@@ -104,7 +104,8 @@ public:
 	virtual std::shared_ptr<vector> cat() const;
 
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
-			const gr_apply_operate<local_vv_store> &op) const;
+			const gr_apply_operate<local_vv_store> &op,
+			detail::vec_store::ptr store = NULL) const;
 	virtual vector_vector::ptr apply(const arr_apply_operate &op) const;
 
 	virtual vector::ptr sort() const {
