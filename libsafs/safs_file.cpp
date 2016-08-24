@@ -122,13 +122,21 @@ bool safs_file::resize(size_t new_size)
 		fprintf(stderr, "%s doesn't exist\n", name.c_str());
 		return false;
 	}
-	std::vector<std::string> data_files = get_data_files();
-	size_t size_per_disk = get_size_per_disk(new_size);
-	for (size_t i = 0; i < data_files.size(); i++) {
-		native_file f(data_files[i]);
-		bool ret = f.resize(size_per_disk);
-		if (!ret)
-			return false;
+
+	// TODO right now we can only extend the file size.
+	// otherwise, the system on top of it doesn't work correctly.
+	// Why?
+	ssize_t orig_size = get_size();
+	assert(orig_size >= 0);
+	if ((size_t) orig_size < new_size) {
+		std::vector<std::string> data_files = get_data_files();
+		size_t size_per_disk = get_size_per_disk(new_size);
+		for (size_t i = 0; i < data_files.size(); i++) {
+			native_file f(data_files[i]);
+			bool ret = f.resize(size_per_disk);
+			if (!ret)
+				return false;
+		}
 	}
 
 	// Save the new file size to the header of the SAFS file.
