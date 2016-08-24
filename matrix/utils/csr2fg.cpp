@@ -126,6 +126,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	{
+		// Store the CSR data in the vv store.
 		auto offs = read_offs(row_ptr_file);
 		auto col_idxs = read_col_idxs(col_file);
 		printf("%ld offs, first: %ld, last: %ld, %ld non-zero\n",
@@ -135,14 +136,12 @@ int main(int argc, char *argv[])
 			offs[i] *= sizeof(col_idx_t);
 		vector_vector::ptr vv = vector_vector::create(detail::vv_store::create(
 					offs, col_idxs));
-		size_t num_vertices = vv->get_num_vecs();
-		factor_vector::ptr labels = factor_vector::create(factor(num_vertices),
-				detail::create_seq_vec_store<factor_value_t>(0, num_vertices - 1, 1));
-		vector_vector::ptr adjs = vv->groupby(*labels, csr2fg_apply());
 
+		// Count the statitistics of the graph.
+		size_t num_vertices = vv->get_num_vecs();
+		size_t num_edges = 0;
 		detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
 				num_vertices, get_scalar_type<fg::vsize_t>());
-		size_t num_edges = 0;
 		for (size_t i = 0; i < num_vertices; i++) {
 			size_t local_num_edges = vv->get_length(i);
 			num_out_edges->set<fg::vsize_t>(i, local_num_edges);
@@ -152,20 +151,29 @@ int main(int argc, char *argv[])
 		num_edges /= 2;
 		printf("There are %ld edges\n", num_edges);
 
-		printf("create the graph image\n");
+		factor_vector::ptr labels = factor_vector::create(factor(num_vertices),
+				detail::create_seq_vec_store<factor_value_t>(0, num_vertices - 1, 1));
+		csr2fg_apply op;
+		const scalar_type &out_type = op.get_output_type();
+
+		// Construct the graph header.
 		fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges,
 				edge_data_size);
 		local_vec_store::ptr header_store(new local_buf_vec_store(0,
 					fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
 		memcpy(header_store->get_raw_arr(), &header,
 				fg::graph_header::get_header_size());
-		detail::vec_store::ptr graph_data = detail::vec_store::create(0,
-				get_scalar_type<char>(), -1, true);
-		const detail::vv_store &adj_store
-			= dynamic_cast<const detail::vv_store &>(adjs->get_data());
-		graph_data->reserve(header_store->get_length() + adj_store.get_num_bytes());
+
+		// Prepare the storage for the groupby result.
+		size_t num_bytes = sizeof(matrix_header) + vv->get_data().get_num_bytes()
+			+ sizeof(fg::ext_mem_undirected_vertex) * num_vertices;
+		detail::vec_store::ptr graph_data = detail::vec_store::create(0, out_type, -1,
+				vv->is_in_mem());
+		graph_data->reserve(num_bytes / out_type.get_size());
 		graph_data->append(*header_store);
-		graph_data->append(adj_store.get_data());
+
+		printf("create the graph image\n");
+		vector_vector::ptr adjs = vv->groupby(*labels, op, graph_data);
 
 		// Construct the vertex index.
 		// The vectors that contains the numbers of edges have the length of #V + 1
