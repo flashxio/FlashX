@@ -846,7 +846,7 @@ portion_groupby_complete::ptr local_groupby_task::get_part(
 void local_groupby_task::run()
 {
 	// Prepare I/O.
-	size_t max_pending_ios = 4;
+	size_t max_pending_ios = 1;
 	std::vector<safs::io_interface::ptr> ios;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
 		detail::vec_store::const_ptr vec = df->get_vec(i);
