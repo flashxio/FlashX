@@ -683,16 +683,18 @@ class local_groupby_task: public thread_task
 	data_frame::const_ptr df;
 	vv_index_append::ptr append;
 	const gr_apply_operate<sub_data_frame> &op;
+	bool last_task;
 public:
 	local_groupby_task(groupby_task_queue::ptr q, size_t sorted_col_idx,
 			detail::mem_vec_store::const_ptr sorted_col, data_frame::const_ptr df,
 			const gr_apply_operate<sub_data_frame> &_op,
-			vv_index_append::ptr append): op(_op) {
+			vv_index_append::ptr append, bool last_task): op(_op) {
 		this->q = q;
 		this->sorted_col_idx = sorted_col_idx;
 		this->sorted_col = sorted_col;
 		this->df = df;
 		this->append = append;
+		this->last_task = last_task;
 	}
 
 	std::shared_ptr<portion_groupby_complete> get_part(
@@ -872,16 +874,18 @@ void local_groupby_task::run()
 			safs::wait4ios(select, max_pending_ios);
 	}
 
-	// wait for all I/O to complete.
-	size_t num_pending = 0;
-	if (select)
-		num_pending = safs::wait4ios(select, 0);
-	assert(num_pending == 0);
+	// If this is the last task, we need to wait for all I/O to complete.
+	if (last_task) {
+		size_t num_pending = 0;
+		if (select)
+			num_pending = safs::wait4ios(select, 0);
+		assert(num_pending == 0);
 
-	for (size_t i = 0; i < ios.size(); i++) {
-		detail::portion_callback &cb = static_cast<detail::portion_callback &>(
-				ios[i]->get_callback());
-		assert(!cb.has_callback());
+		for (size_t i = 0; i < ios.size(); i++) {
+			detail::portion_callback &cb = static_cast<detail::portion_callback &>(
+					ios[i]->get_callback());
+			assert(!cb.has_callback());
+		}
 	}
 }
 
@@ -928,8 +932,8 @@ static void parallel_groupby_async(data_frame::const_ptr sorted_df,
 		// It's difficult to localize computation.
 		// TODO can we localize computation?
 		int node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new local_groupby_task(
-					q, sorted_col_idx, sorted_col, sorted_df, op, append));
+		mem_threads->process_task(node_id, new local_groupby_task(q,
+					sorted_col_idx, sorted_col, sorted_df, op, append, true));
 	}
 }
 
@@ -1058,7 +1062,7 @@ bool EM_df_groupby_dispatcher::issue_task()
 		// TODO can we localize computation?
 		int node_id = i % mem_threads->get_num_nodes();
 		mem_threads->process_task(node_id, new local_groupby_task(
-					groupby_q, sorted_col_idx, vec, df, op, append));
+					groupby_q, sorted_col_idx, vec, df, op, append, last_part));
 	}
 
 	ele_idx += real_len;
