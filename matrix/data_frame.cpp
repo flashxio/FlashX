@@ -430,6 +430,17 @@ public:
 		this->num_bytes_append = vec->get_length() * vec->get_type().get_size();
 	}
 
+	std::vector<safs::io_interface::ptr> create_ios() const {
+		if (global_vec->is_in_mem())
+			return std::vector<safs::io_interface::ptr>();
+		else {
+			detail::EM_object *obj
+				= dynamic_cast<detail::EM_object *>(global_vec.get());
+			assert(obj);
+			return obj->create_ios();
+		}
+	}
+
 	// This is called in the worker threads.
 	void append(off_t idx, detail::vv_store::const_ptr vv);
 
@@ -846,6 +857,8 @@ void local_groupby_task::run()
 			ios.insert(ios.end(), tmp.begin(), tmp.end());
 		}
 	}
+	auto tmp = append->create_ios();
+	ios.insert(ios.end(), tmp.begin(), tmp.end());
 	safs::io_select::ptr select;
 	// If we need to access I/O.
 	if (!ios.empty())
