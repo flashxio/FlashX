@@ -13,7 +13,8 @@ logistic.hessian <- function(X, y, w)
 logistic.cost <- function(X, y, w)
 {
 	m <- length(y)
-	(1/m)*sum(y*(-X %*% t(w)) + log(1 + exp(X %*% t(w))))
+	xw <- X %*% t(w)
+	(1/m)*sum(y*(-xw) + log(1 + exp(xw)))
 }
 
 logistic.regression <- function(X, y, method=c("GD", "Newton"))
