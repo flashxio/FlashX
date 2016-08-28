@@ -40,8 +40,10 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 			mean.list[[i]] <- gr.mean[,rlabels[i]]
 		mean.mat <- fm.cbind.list(mean.list)
 
-		svd <- fm.svd(m - mean.mat, nv=0, nu=nv)
-		fm.cbind(diff, svd$u)
+		svd <- fm.svd(m - mean.mat, nv=nv, nu=nv)
+		diff.l2 <- sqrt(sum(diff * diff))
+		stopifnot(diff.l2 != 0)
+		fm.cbind(diff / diff.l2, svd$u)
 	}
 	else if (type == "rand_dense")
 		fm.cbind(diff, fm.rnorm.matrix(length(diff), nv))
