@@ -417,6 +417,7 @@ class vv_index_append
 	void fill_chunks(const detail::vec_store &data,
 			std::deque<filled_chunk::ptr> &chunks,
 			std::deque<std::pair<off_t, size_t> > &off_sizes);
+	std::vector<off_t> get_vv_offs();
 public:
 	typedef std::shared_ptr<vv_index_append> ptr;
 
@@ -442,13 +443,17 @@ public:
 	}
 
 	// This is called in the worker threads.
+	void append(off_t idx, detail::vv_store::const_ptr vv,
+			size_t max_num_bytes_taken);
 	void append(off_t idx, detail::vv_store::const_ptr vv);
 
 	// The methods below are called in the main thread.
 
 	// This method returns the complete vv store.
+	void flush() {
+		append(-1, NULL, std::numeric_limits<size_t>::max());
+	}
 	detail::vv_store::ptr get_vv();
-	std::vector<off_t> get_vv_offs();
 
 	void inc_tot_appends(size_t new_appends) {
 		tot_num_appends += new_appends;
@@ -493,11 +498,11 @@ std::vector<off_t> vv_index_append::get_vv_offs()
  */
 detail::vv_store::ptr vv_index_append::get_vv()
 {
+	flush();
 	auto offs = get_vv_offs();
-	assert(global_chunks.empty() || global_chunks.size() == 1);
-	if (global_chunks.size() == 1) {
-		assert(global_chunks.front()->fully_filled(true));
-		auto vec = global_chunks.front()->get_vec();
+	for (size_t i = 0; i < global_chunks.size(); i++) {
+		assert(global_chunks[i]->fully_filled(true));
+		auto vec = global_chunks[i]->get_vec();
 		assert(global_vec->get_length() + vec->get_length()
 				<= global_vec->get_reserved_size());
 		global_vec->append(*vec);
@@ -533,6 +538,20 @@ void vv_index_append::fill_chunks(const detail::vec_store &data,
 
 void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 {
+	// We take out at most some number of bytes from the buffer so that writing
+	// data to chunks can be parallelized among multiple threads.
+	size_t max_num_bytes_taken;
+	if (global_vec->is_in_mem())
+		max_num_bytes_taken = std::numeric_limits<size_t>::max();
+	else
+		max_num_bytes_taken = std::max(vv->get_num_bytes() * 2,
+				chunk_size * ele_type.get_size() * 2);
+	append(idx, vv, max_num_bytes_taken);
+}
+
+void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv,
+		size_t max_num_bytes_taken)
+{
 	off_t first_idx = -1;
 	std::vector<detail::vv_store::const_ptr> contig;
 	std::vector<off_vec_ptr> vv_off_vec;
@@ -544,18 +563,25 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	off_t last_off_bytes = 0;
 	lock.lock();
 	// Add the vv store.
-	buf.insert(std::pair<off_t, detail::vv_store::const_ptr>(idx, vv));
+	if (vv)
+		buf.insert(std::pair<off_t, detail::vv_store::const_ptr>(idx, vv));
+
 	// Get contiguous vv.
 	auto it = buf.begin();
-	while (it != buf.end() && last_append_idx + 1 == it->first) {
+	size_t num_bytes = 0;
+	while (it != buf.end() && last_append_idx + 1 == it->first
+			&& num_bytes < max_num_bytes_taken) {
 		if (first_idx < 0)
 			first_idx = it->first;
 		contig.push_back(it->second);
+		num_bytes += contig.back()->get_num_bytes();
 		last_append_idx++;
 		it++;
 	}
 	if (it != buf.begin())
 		buf.erase(buf.begin(), it);
+	size_t max_num_chunks_to_write
+		= num_bytes / (chunk_size * ele_type.get_size()) + 2;
 
 	// If we have contiguous vv, we insert them to the global data structure.
 	// It takes two steps:
@@ -565,10 +591,8 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	// need to reallocate space.
 
 	// Here is to determine the location.
-	size_t num_bytes = 0;
 	size_t num_new_vvs = 0;
 	for (size_t i = 0; i < contig.size(); i++) {
-		num_bytes += contig[i]->get_num_bytes();
 		num_new_vvs += contig[i]->get_num_vecs();
 		auto p = off_vec_ptr(new std::vector<off_t>());
 		vv_off_vec.push_back(p);
@@ -659,7 +683,8 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv)
 	// Here is to count the number of chunks that have been completely filled,
 	// so we can write them to the global vector.
 	size_t to_global_size = 0;
-	while (!global_chunks.empty() && global_chunks.front()->fully_filled(false)) {
+	while (!global_chunks.empty() && global_chunks.front()->fully_filled(false)
+			&& filled_chunks.size() <= max_num_chunks_to_write) {
 		auto vec = global_chunks.front()->get_vec();
 		to_global_size += vec->get_length();
 		assert(global_vec->get_length() + to_global_size
@@ -709,7 +734,8 @@ public:
 	}
 
 	std::shared_ptr<portion_groupby_complete> get_part(
-			const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf);
+			const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf,
+			bool last_task);
 
 	void run();
 };
@@ -728,6 +754,7 @@ class portion_groupby_complete: public detail::portion_compute
 	const gr_apply_operate<sub_data_frame> &op;
 	vv_index_append::ptr append;
 	groupby_task_queue::task t;
+	bool last_task;
 public:
 	typedef std::shared_ptr<portion_groupby_complete> ptr;
 
@@ -735,11 +762,12 @@ public:
 			local_buf_vec_store::ptr row_buf,
 			const gr_apply_operate<sub_data_frame> &_op,
 			const groupby_task_queue::task &_t,
-			size_t sorted_col_idx): op(_op), t(_t) {
+			size_t sorted_col_idx, bool last_task): op(_op), t(_t) {
 		this->row_buf = row_buf;
 		this->append = append;
 		this->num_EM = 0;
 		this->sorted_col_idx = sorted_col_idx;
+		this->last_task = last_task;
 	}
 
 	bool is_complete() const {
@@ -796,17 +824,20 @@ void portion_groupby_complete::run_complete()
 		loc += rel_end;
 	}
 	append->append(t.get_idx(), ret);
+	if (last_task)
+		append->flush();
 }
 
 portion_groupby_complete::ptr local_groupby_task::get_part(
-		const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf)
+		const groupby_task_queue::task &t, local_buf_vec_store::ptr row_buf,
+		bool last_task)
 {
 	sub_data_frame sub_df(df->get_num_vecs());
 
 	// Read the part from the data frame.
 	size_t num_EM = 0;
 	portion_groupby_complete::ptr compute(new portion_groupby_complete(
-				append, row_buf, op, t, sorted_col_idx));
+				append, row_buf, op, t, sorted_col_idx, last_task));
 
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
 		if (i == sorted_col_idx)
@@ -880,7 +911,7 @@ void local_groupby_task::run()
 		if (!t.is_valid())
 			break;
 
-		portion_groupby_complete::ptr compute = get_part(t, row_buf);
+		portion_groupby_complete::ptr compute = get_part(t, row_buf, last_task);
 		if (compute->is_complete())
 			compute->run_complete();
 		if (select)
