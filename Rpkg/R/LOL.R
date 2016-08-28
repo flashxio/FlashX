@@ -20,8 +20,8 @@
 # k specifies #columns of the output matrix
 # The output is a D x k matrix.
 LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
-	counts <- fm.table(labels)
-	num.labels <- length(counts$val)
+	counts <- as.data.frame(table(fm.conv.FM2R(labels)))
+	num.labels <- length(counts$Freq)
 	num.features <- dim(m)[1]
 	nv <- k - (num.labels - 1)
 	gr.sum <- fm.groupby(m, 1, fm.as.factor(labels, 2), fm.bo.add)
