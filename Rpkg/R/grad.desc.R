@@ -1,6 +1,5 @@
-gradient.descent <- function(x, y, grad, cost=NULL, alpha=0.1,
-							 num.iterations=500, threshold=1e-5,
-							 output.path=FALSE)
+gradient.descent <- function(x, y, get.grad, get.hessian, cost=NULL, alpha=0.1,
+							 num.iterations=500, output.path=FALSE)
 {
 	# Add x_0 = 1 as the first column
 	m <- if(is.vector(x)) length(x) else nrow(x)
@@ -18,14 +17,25 @@ gradient.descent <- function(x, y, grad, cost=NULL, alpha=0.1,
 	# Look at the values over each iteration
 	theta.path <- theta
 	for (i in 1:num.iterations) {
-		g <- grad(x, y, theta)
-		cat("L2 of gradient:", L2(g), "\n")
-		theta <- theta - alpha * g
+		g <- get.grad(x, y, theta)
+		if (!is.null(get.hessian) && i > 5) {
+			D2 <- get.hessian(x, y, theta)
+			H <- fm.conv.FM2R(t(x) %*% sweep(x, 1, fm.as.vector(D2), FUN="*"))
+			H <- H / min(abs(H))
+			z <- pcg(H, as.vector(-g))
+			z <- t(z)
+		}
+		else
+			z <- -alpha * g
+
+		# TODO we might need line search here.
+		theta <- theta + z
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
-		if (!is.null(cost))
-			cat("cost:", cost(x, y, theta), "\n")
-		if(i > 2) if(all(abs(theta - theta.path[i-1,]) < threshold)) break 
+		if (is.null(cost))
+			cat(i,  ": L2(g) =", L2(g), "\n")
+		else
+			cat(i,  ": L2(g) =", L2(g), ", cost:", cost(x, y, theta), "\n")
 	}
 
 	if(output.path) return(theta.path) else return(theta.path[nrow(theta.path),])
