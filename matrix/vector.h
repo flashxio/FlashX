@@ -118,17 +118,6 @@ public:
 	 */
 	std::shared_ptr<data_frame> groupby(
 			const gr_apply_operate<local_vec_store> &op, bool with_val) const;
-	/*
-	 * This version of groupby runs aggregation on each group. It only needs
-	 * to scan the vector once. If `with_val' is true, this method returns
-	 * a data frame with two columns: the first column is a vector of unique
-	 * values in the vector; the second column is a vector of aggregation
-	 * result for each unique value in the first column.
-	 * If `with_val' is false, this method returns a data frame with only
-	 * one column, which contains the aggregation result for each unique value.
-	 */
-	std::shared_ptr<data_frame> groupby(
-			std::shared_ptr<const agg_operate> op, bool with_val) const;
 
 	scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	scalar_variable::ptr dot_prod(const vector &vec) const;
