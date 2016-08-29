@@ -78,6 +78,42 @@ public:
 	}
 };
 
+/*
+ * This helps to randomly permute vertices.
+ */
+bool rand_permute = true;
+std::vector<fg::vertex_id_t> vid_map;
+
+void get_rand_map(size_t num_vertices, std::vector<fg::vertex_id_t> &rand_map)
+{
+	typedef fg::vertex_id_t voff_t;
+	typedef std::pair<fg::vertex_id_t, voff_t> vid_off_t;
+	struct comp_vid_off {
+		bool operator()(const vid_off_t &e1, const vid_off_t &e2) const {
+			return e1.second < e2.second;
+		}
+	};
+
+	std::vector<vid_off_t> vid_offs(num_vertices);
+	for (size_t i = 0; i < vid_offs.size(); i++)
+		vid_offs[i].first = i;
+	dense_matrix::ptr offs = dense_matrix::create_randu<voff_t>(0,
+			num_vertices - 1, num_vertices, 1, matrix_layout_t::L_COL);
+	detail::mem_matrix_store::const_ptr off_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				offs->get_raw_store());
+	assert(off_store);
+	const voff_t *off_vec = (const voff_t *) off_store->get_raw_arr();
+	assert(off_vec);
+	for (size_t i = 0; i < num_vertices; i++)
+		vid_offs[i].second = off_vec[i];
+
+	std::sort(vid_offs.begin(), vid_offs.end(), comp_vid_off());
+	rand_map.resize(num_vertices);
+	for (size_t i = 0; i < num_vertices; i++)
+		rand_map[i] = vid_offs[i].first;
+}
+
 matrix<size_t> get_nnzs(const matrix<double> &ps,
 		const std::vector<size_t> &block_sizes)
 {
@@ -158,8 +194,14 @@ sub_data_frame create_edges_block(size_t nnz, size_t start_row, size_t start_col
 		size_t lrow_id = id / num_cols;
 		assert(lrow_id < num_rows);
 		size_t lcol_id = id % num_cols;
-		src_arr[i] = lrow_id + start_row;
-		dst_arr[i] = lcol_id + start_col;
+		size_t row_id = lrow_id + start_row;
+		size_t col_id = lcol_id + start_col;
+		if (rand_permute) {
+			row_id = vid_map[row_id];
+			col_id = vid_map[col_id];
+		}
+		src_arr[i] = row_id;
+		dst_arr[i] = col_id;
 	}
 	return df;
 }
@@ -214,7 +256,7 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	double r = 5;
+	double r = 1;
 	size_t cluster_size = num_vertices / num_clusters;
 	// The number of edges inside clusters is the same as the ones outside clusters.
 	double p0 = ((double) num_edges)
@@ -234,6 +276,16 @@ int main(int argc, char *argv[])
 	assert(num_vertices % num_clusters == 0);
 	for (size_t i = 0; i < cluster_sizes.size(); i++)
 		cluster_sizes[i] = num_vertices / num_clusters;
+
+	if (rand_permute) {
+		get_rand_map(num_vertices, vid_map);
+
+		auto tmp = vid_map;
+		std::sort(tmp.begin(), tmp.end());
+		auto last = std::unique(tmp.begin(), tmp.end());
+		assert(last == tmp.end());
+		assert(tmp.front() < num_vertices && tmp.back() < num_vertices);
+	}
 
 	matrix<double> ps(num_clusters, num_clusters);
 	ps.set(p0);
