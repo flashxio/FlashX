@@ -25,7 +25,7 @@
 
 namespace fm
 {
-	class vector;
+	class col_vec;
 	class factor_col_vector;
 	class dense_matrix;
 	class sparse_matrix;
@@ -59,6 +59,7 @@ typename MatrixType::ptr get_matrix(const Rcpp::S4 &matrix)
 	return ref->get_object();
 }
 
+std::shared_ptr<fm::col_vec> get_vector(const Rcpp::S4 &vec);
 std::shared_ptr<fm::factor_col_vector> get_factor_vector(const Rcpp::S4 &vec);
 
 SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const std::string &name);

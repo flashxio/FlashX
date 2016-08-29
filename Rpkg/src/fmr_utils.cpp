@@ -179,6 +179,16 @@ factor_col_vector::ptr get_factor_vector(const Rcpp::S4 &vec)
 	return factor_col_vector::create(factor(num_levels), mat);
 }
 
+col_vec::ptr get_vector(const Rcpp::S4 &vec)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(vec);
+	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
+		fprintf(stderr, "The input object is a matrix");
+		return col_vec::ptr();
+	}
+	return col_vec::create(mat);
+}
+
 SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)
 {
 	Rcpp::List ret;

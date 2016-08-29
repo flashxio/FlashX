@@ -1406,14 +1406,11 @@ RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 {
-	fprintf(stderr, "doesn't support sgroupby on a vector\n");
-	return R_NilValue;
-#if 0
 	if (!is_vector(pvec)) {
 		fprintf(stderr, "Doesn't support sgroupby on a matrix\n");
 		return R_NilValue;
 	}
-	vector::ptr vec = get_vector(pvec);
+	col_vec::ptr vec = get_vector(pvec);
 	if (!is_supported_type(vec->get_type())) {
 		fprintf(stderr, "The input vector has unsupported type\n");
 		return R_NilValue;
@@ -1421,7 +1418,6 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
 	data_frame::ptr groupby_res = vec->groupby(op, true);
 	return create_FMR_data_frame(groupby_res, "");
-#endif
 }
 
 RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
