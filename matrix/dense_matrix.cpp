@@ -37,6 +37,7 @@
 #include "cached_matrix_store.h"
 #include "agg_matrix_store.h"
 #include "IPW_matrix_store.h"
+#include "groupby_matrix_store.h"
 #include "block_matrix.h"
 #include "col_vec.h"
 #include "sink_matrix.h"
@@ -2933,110 +2934,6 @@ public:
 	}
 };
 
-class groupby_short_row_mapply_op: public detail::portion_mapply_op
-{
-	// This contains a bool vector for each thread.
-	// The bool vector indicates whether a label gets partially aggregated data.
-	std::vector<std::vector<bool> > part_agg;
-	// This contains a local matrix for each thread.
-	// Each row of a local matrix contains partially aggregated data for a label.
-	std::vector<detail::local_row_matrix_store::ptr> part_results;
-	std::vector<bool> part_status;
-	size_t num_levels;
-	agg_operate::const_ptr op;
-public:
-	groupby_short_row_mapply_op(agg_operate::const_ptr op,
-			size_t num_levels): detail::portion_mapply_op(0, 0,
-				op->get_output_type()) {
-		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
-		part_results.resize(num_threads);
-		part_agg.resize(num_threads);
-		part_status.resize(num_threads, true);
-		this->num_levels = num_levels;
-		this->op = op;
-	}
-
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		throw unsupported_exception(
-				"Don't support transpose of groupby_short_row_mapply_op");
-	}
-
-	virtual void run(
-			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
-
-	virtual std::string to_string(
-			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception(
-				"Don't support to_string of groupby_short_row_mapply_op");
-	}
-
-	detail::matrix_store::ptr get_agg() const;
-};
-
-detail::matrix_store::ptr groupby_short_row_mapply_op::get_agg() const
-{
-	for (size_t i = 0; i < part_status.size(); i++) {
-		if (!part_status[i]) {
-			BOOST_LOG_TRIVIAL(error) << "groupby fails on a partition";
-			return detail::matrix_store::ptr();
-		}
-	}
-	size_t first_idx;
-	for (first_idx = 0; first_idx < part_results.size(); first_idx++)
-		if (part_results[first_idx] != NULL)
-			break;
-	assert(first_idx < part_results.size());
-
-	size_t nrow = part_results[first_idx]->get_num_rows();
-	size_t ncol = part_results[first_idx]->get_num_cols();
-	const scalar_type &type = part_results[first_idx]->get_type();
-	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(nrow,
-			ncol, matrix_layout_t::L_ROW, type, -1);
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		memcpy(res->get_row(i), part_results[first_idx]->get_row(i),
-				res->get_num_cols() * res->get_entry_size());
-		for (size_t j = first_idx + 1; j < part_results.size(); j++) {
-			if (part_results[j] != NULL)
-				op->get_combine().runAA(res->get_num_cols(),
-						part_results[j]->get_row(i), res->get_row(i),
-						res->get_row(i));
-		}
-	}
-	return res;
-}
-
-void groupby_short_row_mapply_op::run(
-		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
-{
-	assert(ins.size() == 2);
-	detail::local_matrix_store::const_ptr labels = ins[0];
-	detail::local_matrix_store::const_ptr in = ins[1];
-
-	groupby_short_row_mapply_op *mutable_this
-		= const_cast<groupby_short_row_mapply_op *>(this);
-	// Prepare for the output result.
-	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
-	if (part_results[thread_id] == NULL) {
-		assert(part_agg[thread_id].empty());
-		mutable_this->part_results[thread_id] = detail::local_row_matrix_store::ptr(
-				new detail::local_buf_row_matrix_store(0, 0, num_levels,
-					in->get_num_cols(), op->get_output_type(), -1));
-		mutable_this->part_agg[thread_id].resize(num_levels);
-	}
-	// If there was a failure in this thread, we don't need to perform more
-	// computation.
-	if (!part_status[thread_id])
-		return;
-
-	assert(in->store_layout() == matrix_layout_t::L_ROW);
-	bool ret = detail::groupby_row(*labels,
-			static_cast<const detail::local_row_matrix_store &>(*in),
-			*op, detail::part_dim_t::PART_DIM1, *part_results[thread_id],
-			mutable_this->part_agg[thread_id]);
-	if (!ret)
-		mutable_this->part_status[thread_id] = false;
-}
-
 }
 
 dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
@@ -3079,24 +2976,16 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 			return dense_matrix::create(ret);
 	}
 	else {
-		std::vector<detail::matrix_store::const_ptr> mats(2);
-		mats[0] = labels->get_raw_store();
+		detail::matrix_store::const_ptr mat;
 		if (store_layout() == matrix_layout_t::L_ROW)
-			mats[1] = store;
+			mat = store;
 		else {
 			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
-			mats[1] = tmp->get_raw_store();
+			mat = tmp->get_raw_store();
 		}
-		groupby_short_row_mapply_op *_groupby_op = new groupby_short_row_mapply_op(
-				op, labels->get_factor().get_num_levels());
-		detail::portion_mapply_op::const_ptr groupby_op(_groupby_op);
-		__mapply_portion(mats, groupby_op, matrix_layout_t::L_ROW);
-
-		detail::matrix_store::ptr agg = _groupby_op->get_agg();
-		if (agg == NULL)
-			return dense_matrix::ptr();
-		else
-			return dense_matrix::create(agg);
+		return dense_matrix::create(detail::matrix_store::ptr(
+					new detail::groupby_matrix_store(mat, labels,
+						matrix_margin::MAR_ROW, op)));
 	}
 }
 
