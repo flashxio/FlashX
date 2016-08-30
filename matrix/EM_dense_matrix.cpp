@@ -1142,7 +1142,7 @@ EM_matrix_stream::EM_matrix_stream(EM_matrix_store::ptr mat)
 	min_io_portions = std::max(min_io_portions, 1UL);
 	portion_q = std::shared_ptr<portion_queue>(new portion_queue(
 				mat->is_wide() ? psize.second : psize.first,
-				mat->is_wide(), mat->store_layout()));
+				mat->is_wide()));
 }
 
 void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
@@ -1273,36 +1273,15 @@ void EM_matrix_stream::portion_queue::add(local_matrix_store::const_ptr lmat,
 	}
 }
 
-local_matrix_store::const_ptr EM_matrix_stream::portion_queue::pop_contig(
-		size_t num_portions)
+local_matrix_store::const_ptr EM_matrix_stream::portion_queue::merge_portions(
+		const std::vector<local_matrix_store::const_ptr> &portions,
+		bool is_wide, matrix_layout_t out_layout)
 {
-	// We don't have enough portions.
-	if (bufs.size() < num_portions)
-		return local_matrix_store::const_ptr();
-
-	auto it = bufs.begin();
-	size_t first_portion = it->first / portion_size;
-	// If we can't flush the first portion, we can't do anything.
-	if (first_portion != num_flushed)
-		return local_matrix_store::const_ptr();
-
-	// Now we need to count the number of portions that are stored
-	// contiguously on disks.
-	size_t num = 1;
-	std::vector<local_matrix_store::const_ptr> portions(num_portions);
-	auto first = it->second;
-	portions[0] = it->second;
-	it++;
-	while (it != bufs.end() && num < num_portions) {
-		if (first_portion + num == it->first / portion_size) {
-			portions[num++] = it->second;
-			it++;
-		}
-		else
-			return local_matrix_store::const_ptr();
-	}
-	bufs.erase(bufs.begin(), it);
-
+	auto first = portions.front();
+	size_t num_portions = portions.size();
+	size_t portion_size = is_wide ? first->get_num_cols() : first->get_num_rows();
+	off_t first_portion = is_wide ? first->get_global_start_col() / portion_size :
+		first->get_global_start_row() / portion_size;
 	// Now we need to create a single buffer to contain all portions.
 	off_t start_row, start_col;
 	size_t num_rows, num_cols;
@@ -1341,8 +1320,42 @@ local_matrix_store::const_ptr EM_matrix_stream::portion_queue::pop_contig(
 			= p->get_num_rows() * p->get_num_cols() * p->get_entry_size();
 		memcpy(arr.get_raw() + num_bytes * i, from, num_bytes);
 	}
-	num_flushed += num_portions;
+
 	return buf;
+}
+
+std::vector<local_matrix_store::const_ptr> EM_matrix_stream::portion_queue::pop_contig(
+		size_t num_portions)
+{
+	// We don't have enough portions.
+	if (bufs.size() < num_portions)
+		return std::vector<local_matrix_store::const_ptr>();
+
+	auto it = bufs.begin();
+	size_t first_portion = it->first / portion_size;
+	// If we can't flush the first portion, we can't do anything.
+	if (first_portion != num_flushed)
+		return std::vector<local_matrix_store::const_ptr>();
+
+	// Now we need to count the number of portions that are stored
+	// contiguously on disks.
+	size_t num = 1;
+	std::vector<local_matrix_store::const_ptr> portions(num_portions);
+	auto first = it->second;
+	portions[0] = it->second;
+	it++;
+	while (it != bufs.end() && num < num_portions) {
+		if (first_portion + num == it->first / portion_size) {
+			portions[num++] = it->second;
+			it++;
+		}
+		else
+			return std::vector<local_matrix_store::const_ptr>();
+	}
+	bufs.erase(bufs.begin(), it);
+	num_flushed += num_portions;
+
+	return portions;
 }
 
 void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
@@ -1382,27 +1395,38 @@ void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
 	portion_q->add(lmat, start_row, start_col);
 	// Let's see if we collect enough portions to merge them and write them
 	// with a single I/O.
-	local_matrix_store::const_ptr merged = portion_q->pop_contig(
+	std::vector<local_matrix_store::const_ptr> merged = portion_q->pop_contig(
 			min_io_portions);
 	pthread_spin_unlock(&lock);
 
-	if (merged)
-		mat->_write_portion_async(merged, merged->get_global_start_row(),
-				merged->get_global_start_col());
+	if (!merged.empty()) {
+		local_matrix_store::const_ptr merged_portion
+			= EM_matrix_stream::portion_queue::merge_portions(merged,
+					mat->is_wide(), mat->store_layout());
+		mat->_write_portion_async(merged_portion,
+				merged_portion->get_global_start_row(),
+				merged_portion->get_global_start_col());
+	}
 }
 
 void EM_matrix_stream::flush()
 {
 	pthread_spin_lock(&lock);
-	local_matrix_store::const_ptr merged;
+	std::vector<local_matrix_store::const_ptr> merged;
 	if (portion_q->get_buf_size() > 0) {
 		merged = portion_q->pop_contig(portion_q->get_buf_size());
-		assert(merged);
+		if (portion_q->get_buf_size() > 0)
+			assert(!merged.empty());
 	}
 	pthread_spin_unlock(&lock);
-	if (merged)
-		mat->_write_portion_async(merged, merged->get_global_start_row(),
-				merged->get_global_start_col());
+	if (!merged.empty()) {
+		local_matrix_store::const_ptr merged_portion
+			= EM_matrix_stream::portion_queue::merge_portions(merged,
+					mat->is_wide(), mat->store_layout());
+		mat->_write_portion_async(merged_portion,
+				merged_portion->get_global_start_row(),
+				merged_portion->get_global_start_col());
+	}
 }
 
 EM_matrix_stream::~EM_matrix_stream()

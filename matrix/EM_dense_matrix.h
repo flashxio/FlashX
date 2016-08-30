@@ -250,17 +250,19 @@ class EM_matrix_stream
 
 		const size_t portion_size;
 		const bool is_wide;
-		const matrix_layout_t out_layout;
 	public:
-		portion_queue(size_t _portion_size, bool _is_wide,
-				matrix_layout_t layout): portion_size(_portion_size), is_wide(
-					_is_wide), out_layout(layout) {
+		static std::shared_ptr<const local_matrix_store> merge_portions(
+				const std::vector<std::shared_ptr<const local_matrix_store> > &portions,
+				bool is_wide, matrix_layout_t out_layout);
+		portion_queue(size_t _portion_size, bool _is_wide): portion_size(
+				_portion_size), is_wide(_is_wide) {
 			num_flushed = 0;
 		}
 
 		void add(std::shared_ptr<const local_matrix_store> lmat,
 				off_t start_row, off_t start_col);
-		std::shared_ptr<const local_matrix_store> pop_contig(size_t num_portions);
+		std::vector<std::shared_ptr<const local_matrix_store> > pop_contig(
+				size_t num_portions);
 
 		size_t get_num_flushed() const {
 			return num_flushed;
