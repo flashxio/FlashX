@@ -755,9 +755,8 @@ void multiply_wide_op::run_part_dense(
 
 IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		matrix_store::const_ptr right, bulk_operate::const_ptr left_op,
-		bulk_operate::const_ptr right_op,
-		matrix_layout_t layout): virtual_matrix_store(
-			left->get_num_rows(), left->get_num_cols(),
+		bulk_operate::const_ptr right_op, matrix_layout_t layout): sink_store(
+			left->get_num_rows(), right->get_num_cols(),
 			left->is_in_mem() && right->is_in_mem(), left->get_type())
 {
 	this->left_mat = left;
@@ -865,18 +864,16 @@ matrix_store::const_ptr IPW_matrix_store::materialize(bool in_mem,
 	return get_combine_res();
 }
 
-matrix_store::const_ptr IPW_matrix_store::get_cols(
-		const std::vector<off_t> &idxs) const
+std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
 {
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_cols(idxs);
-}
-
-matrix_store::const_ptr IPW_matrix_store::get_rows(
-		const std::vector<off_t> &idxs) const
-{
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_rows(idxs);
+	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
+	std::unordered_map<size_t, size_t> right = right_mat->get_underlying_mats();
+	for (auto it = right.begin(); it != right.end(); it++) {
+		auto to_it = final_res.find(it->first);
+		if (to_it == final_res.end())
+			final_res.insert(std::pair<size_t, size_t>(it->first, it->second));
+	}
+	return final_res;
 }
 
 static int get_node_id(const local_matrix_store &left,
@@ -1040,48 +1037,6 @@ public:
 	}
 };
 
-}
-
-static local_matrix_store::const_ptr create_lmaterialize_matrix(
-		local_matrix_store::const_ptr left_part,
-		local_matrix_store::const_ptr right_part, const scalar_type &type,
-		portion_mapply_op::const_ptr portion_op)
-{
-	if (left_part->store_layout() == matrix_layout_t::L_ROW)
-		return local_matrix_store::const_ptr(new lmaterialize_row_matrix_store(
-					left_part, right_part, type, portion_op));
-	else
-		return local_matrix_store::const_ptr(new lmaterialize_col_matrix_store(
-					left_part, right_part, type, portion_op));
-}
-
-local_matrix_store::const_ptr IPW_matrix_store::get_portion(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols) const
-{
-	assert(start_row == 0);
-	assert(num_rows == left_mat->get_num_rows());
-	local_matrix_store::const_ptr left_part = left_mat->get_portion(start_row,
-			start_col, num_rows, num_cols);
-	local_matrix_store::const_ptr right_part = right_mat->get_portion(
-			start_col, 0, num_cols, right_mat->get_num_cols());
-	assert(left_part->get_num_cols() == right_part->get_num_rows());
-	return create_lmaterialize_matrix(left_part, right_part, get_type(),
-			portion_op);
-}
-
-local_matrix_store::const_ptr IPW_matrix_store::get_portion(size_t id) const
-{
-	local_matrix_store::const_ptr left_part = left_mat->get_portion(id);
-	local_matrix_store::const_ptr right_part = right_mat->get_portion(id);
-	assert(left_part->get_num_cols() == right_part->get_num_rows());
-	return create_lmaterialize_matrix(left_part, right_part, get_type(),
-			portion_op);
-}
-
-namespace
-{
-
 class collect_portion_compute: public portion_compute
 {
 	size_t num_EM_parts;
@@ -1114,7 +1069,131 @@ public:
 
 }
 
-async_cres_t IPW_matrix_store::get_portion_async(
+matrix_store::const_ptr IPW_matrix_store::transpose() const
+{
+	// TODO do we need this?
+	assert(0);
+	return matrix_store::const_ptr();
+}
+
+std::string IPW_matrix_store::get_name() const
+{
+	std::vector<matrix_store::const_ptr> mats(2);
+	mats[0] = left_mat;
+	mats[1] = right_mat;
+	return portion_op->to_string(mats);
+}
+
+class IPW_compute_store: public sink_compute_store, public EM_object
+{
+	matrix_store::const_ptr left_mat;
+	matrix_store::const_ptr right_mat;
+	bulk_operate::const_ptr left_op;
+	bulk_operate::const_ptr right_op;
+	std::shared_ptr<portion_mapply_op> portion_op;
+	matrix_layout_t layout;
+public:
+	IPW_compute_store(matrix_store::const_ptr left_mat,
+			matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
+			bulk_operate::const_ptr right_op,
+			std::shared_ptr<portion_mapply_op> portion_op, matrix_layout_t layout);
+	using virtual_matrix_store::get_portion;
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t id) const;
+	using virtual_matrix_store::get_portion_async;
+	virtual async_cres_t get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
+
+	virtual int get_portion_node_id(size_t id) const {
+		// If both matrices are stored in NUMA memory, the portion must be
+		// stored on the same NUMA node. Otherwise, we need to return
+		// the node Id from the matrix stored in NUMA.
+		if (left_mat->get_num_nodes() > 0)
+			return left_mat->get_portion_node_id(id);
+		else
+			return right_mat->get_portion_node_id(id);
+	}
+
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		assert(left_mat->get_portion_size().second
+				== right_mat->get_portion_size().first);
+		return left_mat->get_portion_size();
+	}
+
+	virtual int get_num_nodes() const {
+		if (left_mat->get_num_nodes() > 0)
+			return left_mat->get_num_nodes();
+		else
+			return right_mat->get_num_nodes();
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		// TODO what is the right layout?
+		return layout;
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
+};
+
+IPW_compute_store::IPW_compute_store(matrix_store::const_ptr left_mat,
+		matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
+		bulk_operate::const_ptr right_op,
+		std::shared_ptr<portion_mapply_op> portion_op,
+		matrix_layout_t layout): sink_compute_store(left_mat->get_num_rows(),
+			left_mat->get_num_cols(), left_mat->is_in_mem() && right_mat->is_in_mem(),
+			left_mat->get_type())
+{
+	this->left_mat = left_mat;
+	this->right_mat = right_mat;
+	this->left_op = left_op;
+	this->right_op = right_op;
+	this->portion_op = portion_op;
+	this->layout = layout;
+}
+
+static local_matrix_store::const_ptr create_lmaterialize_matrix(
+		local_matrix_store::const_ptr left_part,
+		local_matrix_store::const_ptr right_part, const scalar_type &type,
+		portion_mapply_op::const_ptr portion_op)
+{
+	if (left_part->store_layout() == matrix_layout_t::L_ROW)
+		return local_matrix_store::const_ptr(new lmaterialize_row_matrix_store(
+					left_part, right_part, type, portion_op));
+	else
+		return local_matrix_store::const_ptr(new lmaterialize_col_matrix_store(
+					left_part, right_part, type, portion_op));
+}
+
+local_matrix_store::const_ptr IPW_compute_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	assert(start_row == 0);
+	assert(num_rows == left_mat->get_num_rows());
+	local_matrix_store::const_ptr left_part = left_mat->get_portion(start_row,
+			start_col, num_rows, num_cols);
+	local_matrix_store::const_ptr right_part = right_mat->get_portion(
+			start_col, 0, num_cols, right_mat->get_num_cols());
+	assert(left_part->get_num_cols() == right_part->get_num_rows());
+	return create_lmaterialize_matrix(left_part, right_part, get_type(),
+			portion_op);
+}
+
+local_matrix_store::const_ptr IPW_compute_store::get_portion(size_t id) const
+{
+	local_matrix_store::const_ptr left_part = left_mat->get_portion(id);
+	local_matrix_store::const_ptr right_part = right_mat->get_portion(id);
+	assert(left_part->get_num_cols() == right_part->get_num_rows());
+	return create_lmaterialize_matrix(left_part, right_part, get_type(),
+			portion_op);
+}
+
+async_cres_t IPW_compute_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, std::shared_ptr<portion_compute> compute) const
 {
@@ -1137,14 +1216,7 @@ async_cres_t IPW_matrix_store::get_portion_async(
 	}
 }
 
-matrix_store::const_ptr IPW_matrix_store::transpose() const
-{
-	// TODO do we need this?
-	assert(0);
-	return matrix_store::const_ptr();
-}
-
-std::vector<safs::io_interface::ptr> IPW_matrix_store::create_ios() const
+std::vector<safs::io_interface::ptr> IPW_compute_store::create_ios() const
 {
 	std::vector<safs::io_interface::ptr> ret;
 	if (!left_mat->is_in_mem()) {
@@ -1160,7 +1232,7 @@ std::vector<safs::io_interface::ptr> IPW_matrix_store::create_ios() const
 	return ret;
 }
 
-std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
+std::unordered_map<size_t, size_t> IPW_compute_store::get_underlying_mats() const
 {
 	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
 	std::unordered_map<size_t, size_t> right = right_mat->get_underlying_mats();
@@ -1172,12 +1244,10 @@ std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
 	return final_res;
 }
 
-std::string IPW_matrix_store::get_name() const
+virtual_matrix_store::const_ptr IPW_matrix_store::get_compute_matrix() const
 {
-	std::vector<matrix_store::const_ptr> mats(2);
-	mats[0] = left_mat;
-	mats[1] = right_mat;
-	return portion_op->to_string(mats);
+	return virtual_matrix_store::const_ptr(new IPW_compute_store(left_mat,
+				right_mat, left_op, right_op, portion_op, layout));
 }
 
 }

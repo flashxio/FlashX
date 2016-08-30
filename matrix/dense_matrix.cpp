@@ -3060,8 +3060,6 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 
 	std::vector<detail::block_sink_store::const_ptr> block_sinks;
 	std::vector<detail::matrix_store::const_ptr> virt_stores;
-	bool is_wide = mats[0]->is_wide();
-	size_t long_dim = std::max(mats[0]->get_num_rows(), mats[0]->get_num_cols());
 	for (size_t i = 0; i < mats.size(); i++) {
 		// If this isn't a virtual matrix, skip it.
 		if (!mats[i]->is_virtual())
@@ -3069,29 +3067,41 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 
 		// We collect the block sink matrix stores and will materialize
 		// them differently.
-		detail::block_sink_store::const_ptr sink
+		detail::block_sink_store::const_ptr bsink
 			= std::dynamic_pointer_cast<const detail::block_sink_store>(
 					mats[i]->get_raw_store());
-		if (sink) {
-			block_sinks.push_back(sink);
+		if (bsink) {
+			block_sinks.push_back(bsink);
 			continue;
 		}
 
-		if (mats[i]->is_wide() != is_wide) {
+		detail::virtual_matrix_store::const_ptr mat
+			= std::dynamic_pointer_cast<const detail::virtual_matrix_store>(
+					mats[i]->get_raw_store());
+		assert(mat);
+		detail::sink_store::const_ptr sink
+			= std::dynamic_pointer_cast<const detail::sink_store>(mat);
+		if (sink)
+			mat = sink->get_compute_matrix();
+
+		if (!virt_stores.empty() && mat->is_wide() != virt_stores[0]->is_wide()) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "Can't materialize virtual matrices with diff long dim";
 			return false;
 		}
-		size_t long_dim1 = std::max(mats[i]->get_num_rows(),
-				mats[i]->get_num_cols());
-		if (long_dim != long_dim1) {
+		size_t long_dim = 0;
+		if (!virt_stores.empty())
+			long_dim = std::max(virt_stores[0]->get_num_rows(),
+					virt_stores[0]->get_num_cols());
+		size_t long_dim1 = std::max(mat->get_num_rows(), mat->get_num_cols());
+		if (long_dim > 0 && long_dim != long_dim1) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "Can't materialize virtual matrices with diff long dim sizes.";
 			return false;
 		}
 		// We need to the virtual matrices stores the partial materialized results.
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
-		virt_stores.push_back(mats[i]->get_raw_store());
+		virt_stores.push_back(mat);
 	}
 	if (virt_stores.empty() && block_sinks.empty())
 		return true;

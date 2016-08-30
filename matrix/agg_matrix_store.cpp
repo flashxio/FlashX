@@ -201,10 +201,20 @@ void matrix_long_agg_op::run(
 				partial_res->get_row(thread_id));
 }
 
+static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
+{
+	return margin == matrix_margin::MAR_ROW ? data.get_num_rows() : 1;
+}
+
+static size_t get_num_cols_agg(const matrix_store &data, matrix_margin margin)
+{
+	return margin == matrix_margin::MAR_COL ? data.get_num_cols() : 1;
+}
+
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
-		matrix_margin margin, agg_operate::const_ptr op): virtual_matrix_store(
-			data->get_num_rows(), data->get_num_cols(), data->is_in_mem(),
-			op->get_output_type())
+		matrix_margin margin, agg_operate::const_ptr op): sink_store(
+			get_num_rows_agg(*data, margin), get_num_cols_agg(*data, margin),
+			data->is_in_mem(), op->get_output_type())
 {
 	this->data = data;
 
@@ -271,20 +281,6 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
 			part_dim_t::PART_NONE, *portion);
 	return res;
-}
-
-matrix_store::const_ptr agg_matrix_store::get_cols(
-		const std::vector<off_t> &idxs) const
-{
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_cols(idxs);
-}
-
-matrix_store::const_ptr agg_matrix_store::get_rows(
-		const std::vector<off_t> &idxs) const
-{
-	matrix_store::const_ptr ret = materialize(true, -1);
-	return ret->get_rows(idxs);
 }
 
 bool agg_matrix_store::has_materialized() const
@@ -439,6 +435,58 @@ public:
 
 }
 
+matrix_store::const_ptr agg_matrix_store::transpose() const
+{
+	// TODO This method should also be implemented.
+	assert(0);
+	return matrix_store::const_ptr();
+}
+
+class agg_compute_store: public sink_compute_store, public EM_object
+{
+	std::shared_ptr<portion_mapply_op> portion_op;
+	matrix_store::const_ptr data;
+public:
+	agg_compute_store(matrix_store::const_ptr data,
+			std::shared_ptr<portion_mapply_op> portion_op): sink_compute_store(
+				data->get_num_rows(), data->get_num_cols(), data->is_in_mem(),
+				portion_op->get_output_type()) {
+		this->data = data;
+		this->portion_op = portion_op;
+	}
+	using virtual_matrix_store::get_portion;
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t id) const;
+	using virtual_matrix_store::get_portion_async;
+	virtual async_cres_t get_portion_async(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
+
+	virtual int get_portion_node_id(size_t id) const {
+		return data->get_portion_node_id(id);
+	}
+
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		return data->get_portion_size();
+	}
+
+	virtual int get_num_nodes() const {
+		return data->get_num_nodes();
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		return data->store_layout();
+	}
+
+	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return data->get_underlying_mats();
+	}
+};
+
 static local_matrix_store::const_ptr create_lmaterialize_matrix(
 		local_matrix_store::const_ptr part, const scalar_type &type,
 		portion_mapply_op::const_ptr portion_op)
@@ -451,7 +499,7 @@ static local_matrix_store::const_ptr create_lmaterialize_matrix(
 					part, type, portion_op));
 }
 
-local_matrix_store::const_ptr agg_matrix_store::get_portion(
+local_matrix_store::const_ptr agg_compute_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols) const
 {
@@ -460,13 +508,13 @@ local_matrix_store::const_ptr agg_matrix_store::get_portion(
 	return create_lmaterialize_matrix(part, get_type(), portion_op);
 }
 
-local_matrix_store::const_ptr agg_matrix_store::get_portion(size_t id) const
+local_matrix_store::const_ptr agg_compute_store::get_portion(size_t id) const
 {
 	local_matrix_store::const_ptr part = data->get_portion(id);
 	return create_lmaterialize_matrix(part, get_type(), portion_op);
 }
 
-async_cres_t agg_matrix_store::get_portion_async(
+async_cres_t agg_compute_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, std::shared_ptr<portion_compute> compute) const
 {
@@ -476,20 +524,19 @@ async_cres_t agg_matrix_store::get_portion_async(
 	return ret;
 }
 
-matrix_store::const_ptr agg_matrix_store::transpose() const
-{
-	// TODO This method should also be implemented.
-	assert(0);
-	return matrix_store::const_ptr();
-}
-
-std::vector<safs::io_interface::ptr> agg_matrix_store::create_ios() const
+std::vector<safs::io_interface::ptr> agg_compute_store::create_ios() const
 {
 	const EM_object *obj = dynamic_cast<const EM_object *>(data.get());
 	if (obj)
 		return obj->create_ios();
 	else
 		return std::vector<safs::io_interface::ptr>();
+}
+
+virtual_matrix_store::const_ptr agg_matrix_store::get_compute_matrix() const
+{
+	return virtual_matrix_store::const_ptr(new agg_compute_store(data,
+				portion_op));
 }
 
 }

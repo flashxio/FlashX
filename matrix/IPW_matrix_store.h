@@ -19,7 +19,7 @@
 
 #include "io_interface.h"
 
-#include "virtual_matrix_store.h"
+#include "sink_matrix.h"
 #include "bulk_operate.h"
 #include "EM_object.h"
 
@@ -37,7 +37,7 @@ class portion_mapply_op;
  * This matrix store is to enable lazy evaluation on the inner product
  * on a wide matrix.
  */
-class IPW_matrix_store: public virtual_matrix_store, public EM_object
+class IPW_matrix_store: public sink_store
 {
 	matrix_store::const_ptr left_mat;
 	matrix_store::const_ptr right_mat;
@@ -56,56 +56,26 @@ public:
 
 	virtual void materialize_self() const;
 
+	virtual virtual_matrix_store::const_ptr get_compute_matrix() const;
+	virtual matrix_store::const_ptr get_result() const {
+		if (has_materialized())
+			return get_combine_res();
+		else
+			return matrix_store::const_ptr();
+	}
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 		int num_nodes) const;
 
-	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
-	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-
-	using virtual_matrix_store::get_portion;
-	virtual std::shared_ptr<const local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const;
-	virtual std::shared_ptr<const local_matrix_store> get_portion(
-			size_t id) const;
-	using virtual_matrix_store::get_portion_async;
-	virtual async_cres_t get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
-
 	virtual matrix_store::const_ptr transpose() const;
 
-	virtual int get_portion_node_id(size_t id) const {
-		// If both matrices are stored in NUMA memory, the portion must be
-		// stored on the same NUMA node. Otherwise, we need to return
-		// the node Id from the matrix stored in NUMA.
-		if (left_mat->get_num_nodes() > 0)
-			return left_mat->get_portion_node_id(id);
-		else
-			return right_mat->get_portion_node_id(id);
-	}
-
-	virtual std::pair<size_t, size_t> get_portion_size() const {
-		assert(left_mat->get_portion_size().second
-				== right_mat->get_portion_size().first);
-		return left_mat->get_portion_size();
-	}
-
-	virtual int get_num_nodes() const {
-		if (left_mat->get_num_nodes() > 0)
-			return left_mat->get_num_nodes();
-		else
-			return right_mat->get_num_nodes();
-	}
-
 	virtual matrix_layout_t store_layout() const {
+		// TODO what is the right layout?
 		return layout;
 	}
 
-	virtual std::vector<safs::io_interface::ptr> create_ios() const;
+	std::unordered_map<size_t, size_t> get_underlying_mats() const;
 
 	virtual std::string get_name() const;
-	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 };
 
 }
