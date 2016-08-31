@@ -217,20 +217,31 @@ class EM_matrix_stream
 	EM_matrix_store::ptr mat;
 
 	/*
-	 * This stores data in a portion of a matrix.
+	 * This stores data for multiple portions of a matrix.
 	 */
 	class filled_portion
 	{
 		std::shared_ptr<local_matrix_store> data;
+		std::vector<std::shared_ptr<local_matrix_store> > portions;
 		// The number of filled elements.
 		std::atomic<size_t> num_filled;
+		// The total number of elements to fill.
+		size_t tot_num_eles;
+
+		size_t portion_size;
+		bool is_wide;
 	public:
 		typedef std::shared_ptr<filled_portion> ptr;
 
-		filled_portion(std::shared_ptr<local_matrix_store> data) {
-			this->data = data;
-			num_filled = 0;
-		}
+		filled_portion(local_raw_array &arr, off_t start_row, off_t start_col,
+				size_t num_rows, size_t num_cols, const scalar_type &type,
+				matrix_layout_t layout, size_t portion_size, bool is_wide);
+		std::shared_ptr<local_matrix_store> create_portion(char *arr,
+				off_t start_row, off_t start_col, size_t num_rows,
+				size_t num_cols, matrix_layout_t layout, const scalar_type &type);
+		std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
+				off_t start_col);
+
 		// If the write completely fill the local buffer, it returns true.
 		bool write(std::shared_ptr<const local_matrix_store> portion,
 				off_t global_start_row, off_t global_start_col);
@@ -240,52 +251,17 @@ class EM_matrix_stream
 		}
 	};
 
-	class portion_queue
-	{
-		// All local matrices have the same size as the portion size of
-		// the EM matrix.
-		std::map<off_t, std::shared_ptr<const local_matrix_store> > bufs;
-		// The last portion that has been flushed to disks.
-		size_t num_flushed;
-
-		const size_t portion_size;
-		const bool is_wide;
-	public:
-		static std::shared_ptr<const local_matrix_store> merge_portions(
-				const std::vector<std::shared_ptr<const local_matrix_store> > &portions,
-				bool is_wide, matrix_layout_t out_layout);
-		portion_queue(size_t _portion_size, bool _is_wide): portion_size(
-				_portion_size), is_wide(_is_wide) {
-			num_flushed = 0;
-		}
-
-		void add(std::shared_ptr<const local_matrix_store> lmat,
-				off_t start_row, off_t start_col);
-		std::vector<std::shared_ptr<const local_matrix_store> > pop_contig(
-				size_t num_portions);
-
-		size_t get_num_flushed() const {
-			return num_flushed;
-		}
-		size_t get_buf_size() const {
-			return bufs.size();
-		}
-	};
-
 	pthread_spinlock_t lock;
 	// This keeps the buffers with partial data in EM matrix portions.
 	// If an EM matrix portion is complete, the portion is flushed to disks
 	// and it is deleted from the hashtable.
 	std::unordered_map<off_t, filled_portion::ptr> portion_bufs;
 
-	std::shared_ptr<portion_queue> portion_q;
 	// The number of portions we need to write to disks together.
 	// It determines the minimal I/O size.
 	size_t min_io_portions;
 
 	EM_matrix_stream(EM_matrix_store::ptr mat);
-	void write_portion_async(std::shared_ptr<const local_matrix_store> portion,
-			off_t start_row, off_t start_col);
 public:
 	typedef std::shared_ptr<EM_matrix_stream> ptr;
 
@@ -297,7 +273,6 @@ public:
 
 	void write_async(std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
-	void flush();
 	bool is_complete() const;
 };
 

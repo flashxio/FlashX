@@ -503,7 +503,6 @@ public:
 
 	virtual void complete() {
 		if (output_stream) {
-			output_stream->flush();
 			EM_matrix_store::ptr em_out
 				= std::dynamic_pointer_cast<EM_matrix_store>(output);
 			assert(em_out);

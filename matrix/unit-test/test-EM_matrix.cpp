@@ -189,7 +189,6 @@ void _test_stream(size_t num_rows, size_t num_cols, matrix_layout_t layout)
 			stream->write_async(buf, buf->get_global_start_row(),
 					buf->get_global_start_col());
 		}
-		stream->flush();
 		mat->wait4complete();
 
 		dense_matrix::ptr tmp1 = dense_matrix::create(mat);

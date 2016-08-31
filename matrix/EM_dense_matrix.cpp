@@ -468,7 +468,6 @@ void EM_matrix_store::start_stream()
 
 void EM_matrix_store::end_stream()
 {
-	stream->flush();
 	wait4complete();
 	assert(stream->is_complete());
 	stream = NULL;
@@ -1102,33 +1101,100 @@ void EM_matrix_store::unset_persistent() const
 	holder->unset_persistent();
 }
 
-bool EM_matrix_stream::filled_portion::write(
-		local_matrix_store::const_ptr portion,
-		off_t global_start_row, off_t global_start_col)
+EM_matrix_stream::filled_portion::filled_portion(local_raw_array &arr,
+		off_t start_row, off_t start_col, size_t num_rows, size_t num_cols,
+		const scalar_type &type, matrix_layout_t layout, size_t portion_size,
+		bool is_wide)
 {
-	local_matrix_store::ptr part = data->get_portion(
-			global_start_row - data->get_global_start_row(),
-			global_start_col - data->get_global_start_col(),
-			portion->get_num_rows(), portion->get_num_cols());
-	part->copy_from(*portion);
-	size_t ret = num_filled.fetch_add(
-			portion->get_num_rows() * portion->get_num_cols());
-	// I assume that no region is filled multiple times.
-	return ret + portion->get_num_rows() * portion->get_num_cols()
-		== data->get_num_rows() * data->get_num_cols();
-}
+	size_t num_bytes_portion;
+	if (is_wide)
+		num_bytes_portion = portion_size * num_rows * type.get_size();
+	else
+		num_bytes_portion = portion_size * num_cols * type.get_size();
+	assert(arr.get_num_bytes() % num_bytes_portion == 0);
+	size_t num_portions = arr.get_num_bytes() / num_bytes_portion;
 
-static inline local_matrix_store::ptr create_local_buf_matrix(
-		const local_raw_array &arr, off_t start_row, off_t start_col,
-		size_t num_rows, size_t num_cols, const scalar_type &type,
-		matrix_layout_t layout)
-{
 	if (layout == matrix_layout_t::L_ROW)
-		return local_matrix_store::ptr(new local_buf_row_matrix_store(
+		this->data = local_matrix_store::ptr(new local_buf_row_matrix_store(
 					arr, start_row, start_col, num_rows, num_cols, type, -1));
 	else
-		return local_matrix_store::ptr(new local_buf_col_matrix_store(
+		this->data = local_matrix_store::ptr(new local_buf_col_matrix_store(
 					arr, start_row, start_col, num_rows, num_cols, type, -1));
+
+	num_filled = 0;
+	this->tot_num_eles = num_rows * num_cols;
+	this->portion_size = portion_size;
+	this->is_wide = is_wide;
+	portions.resize(num_portions);
+
+	// create the portions where we can fill data.
+	char *raw_arr = arr.get_raw();
+	if (is_wide) {
+		for (size_t i = 0; i < portions.size(); i++) {
+			size_t portion_start_row = start_row;
+			size_t portion_start_col = start_col + portion_size * i;
+			size_t portion_num_rows = num_rows;
+			size_t portion_num_cols = std::min(num_cols - portion_size * i,
+					portion_size);
+			portions[i] = create_portion(raw_arr + num_bytes_portion * i,
+					portion_start_row, portion_start_col, portion_num_rows,
+					portion_num_cols, layout, type);
+		}
+	}
+	else {
+		for (size_t i = 0; i < portions.size(); i++) {
+			size_t portion_start_row = start_row + portion_size * i;
+			size_t portion_start_col = start_col;
+			size_t portion_num_rows = std::min(num_rows - portion_size * i,
+					portion_size);
+			size_t portion_num_cols = num_cols;
+			portions[i] = create_portion(raw_arr + num_bytes_portion * i,
+					portion_start_row, portion_start_col, portion_num_rows,
+					portion_num_cols, layout, type);
+		}
+	}
+}
+
+local_matrix_store::ptr EM_matrix_stream::filled_portion::create_portion(
+		char *data, off_t start_row, off_t start_col, size_t num_rows,
+		size_t num_cols, matrix_layout_t layout, const scalar_type &type)
+{
+	if (layout == matrix_layout_t::L_COL)
+		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(data,
+					start_row, start_col, num_rows, num_cols, type, -1));
+	else
+		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(data,
+					start_row, start_col, num_rows, num_cols, type, -1));
+}
+
+local_matrix_store::ptr EM_matrix_stream::filled_portion::get_portion(
+		off_t start_row, off_t start_col)
+{
+	size_t id;
+	if (is_wide)
+		id = (start_col - data->get_global_start_col()) / portion_size;
+	else
+		id = (start_row - data->get_global_start_row()) / portion_size;
+	assert(id < portions.size());
+	return portions[id];
+}
+
+bool EM_matrix_stream::filled_portion::write(
+		local_matrix_store::const_ptr in,
+		off_t global_start_row, off_t global_start_col)
+{
+	local_matrix_store::ptr portion = get_portion(global_start_row,
+			global_start_col);
+	assert(portion);
+	local_matrix_store::ptr part = portion->get_portion(
+			global_start_row - portion->get_global_start_row(),
+			global_start_col - portion->get_global_start_col(),
+			in->get_num_rows(), in->get_num_cols());
+	part->copy_from(*in);
+	size_t ret = num_filled.fetch_add(
+			in->get_num_rows() * in->get_num_cols());
+	// I assume that no region is filled multiple times.
+	return ret + in->get_num_rows() * in->get_num_cols() == tot_num_eles;
 }
 
 EM_matrix_stream::EM_matrix_stream(EM_matrix_store::ptr mat)
@@ -1136,13 +1202,15 @@ EM_matrix_stream::EM_matrix_stream(EM_matrix_store::ptr mat)
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	this->mat = mat;
 	auto psize = mat->get_portion_size();
-	min_io_portions = 128 * 1024 * 1024 /
-		(psize.first * psize.second * mat->get_entry_size());
-	// It has to be at least 1.
-	min_io_portions = std::max(min_io_portions, 1UL);
-	portion_q = std::shared_ptr<portion_queue>(new portion_queue(
-				mat->is_wide() ? psize.second : psize.first,
-				mat->is_wide()));
+
+	min_io_portions = div_ceil(matrix_conf.get_write_io_buf_size(),
+			psize.first * psize.second * mat->get_entry_size());
+	// We want the min number of I/O portions to be at least 1 and the smallest
+	// number 2^i that is larger than min_io_portions.
+	if (min_io_portions == 0)
+		min_io_portions = 1;
+	else
+		min_io_portions = 1 << (size_t) ceil(log2(min_io_portions));
 }
 
 void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
@@ -1153,14 +1221,14 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 	else
 		assert(start_col == 0 && portion->get_num_cols() == mat->get_num_cols());
 
-	const size_t CHUNK_SIZE = EM_matrix_store::CHUNK_SIZE;
+	const size_t CHUNK_SIZE = min_io_portions * EM_matrix_store::CHUNK_SIZE;
 	if (mat->is_wide()) {
 		// If the portion is aligned with the default EM matrix portion size.
 		if (start_col % CHUNK_SIZE == 0
 				&& (portion->get_num_cols() % CHUNK_SIZE == 0
 				// If this is the last portion.
 				|| start_col + portion->get_num_cols() == mat->get_num_cols())) {
-			write_portion_async(portion, start_row, start_col);
+			mat->_write_portion_async(portion, start_row, start_col);
 			return;
 		}
 	}
@@ -1170,7 +1238,7 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 				&& (portion->get_num_rows() % CHUNK_SIZE == 0
 				// If this is the last portion.
 				|| start_row + portion->get_num_rows() == mat->get_num_rows())) {
-			write_portion_async(portion, start_row, start_col);
+			mat->_write_portion_async(portion, start_row, start_col);
 			return;
 		}
 	}
@@ -1187,12 +1255,14 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 	if (it == portion_bufs.end()) {
 		size_t portion_num_rows, portion_num_cols;
 		off_t portion_start_row, portion_start_col;
+		size_t num_bytes;
 		if (mat->is_wide()) {
 			portion_start_row = start_row;
 			portion_start_col = EM_portion_start;
 			portion_num_rows = mat->get_num_rows();
 			portion_num_cols = std::min(CHUNK_SIZE,
 					mat->get_num_cols() - EM_portion_start);
+			num_bytes = portion_num_rows * CHUNK_SIZE * mat->get_entry_size();
 		}
 		else  {
 			portion_start_row = EM_portion_start;
@@ -1200,16 +1270,15 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 			portion_num_rows = std::min(CHUNK_SIZE,
 					mat->get_num_rows() - EM_portion_start);
 			portion_num_cols = mat->get_num_cols();
+			num_bytes = CHUNK_SIZE * portion_num_cols * mat->get_entry_size();
 		}
-		size_t num_bytes
-			= portion_num_rows * portion_num_cols * mat->get_entry_size();
 		// We don't want to allocate memory from the local memory buffers
 		// because it's not clear which thread will destroy the raw array.
 		local_raw_array arr(num_bytes, false);
-		local_matrix_store::ptr tmp = create_local_buf_matrix(arr,
-				portion_start_row, portion_start_col, portion_num_rows,
-				portion_num_cols, mat->get_type(), mat->store_layout());
-		buf = filled_portion::ptr(new filled_portion(tmp));
+		buf = filled_portion::ptr(new filled_portion(arr, portion_start_row,
+					portion_start_col, portion_num_rows, portion_num_cols,
+					mat->get_type(), mat->store_layout(),
+					EM_matrix_store::CHUNK_SIZE, mat->is_wide()));
 		auto ret = portion_bufs.insert(std::pair<off_t, filled_portion::ptr>(
 					EM_portion_start, buf));
 		assert(ret.second);
@@ -1227,7 +1296,7 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 		else
 			assert(data->get_global_start_row() == EM_portion_start);
 
-		write_portion_async(data, data->get_global_start_row(),
+		mat->_write_portion_async(data, data->get_global_start_row(),
 				data->get_global_start_col());
 		pthread_spin_lock(&lock);
 		portion_bufs.erase(EM_portion_start);
@@ -1235,204 +1304,9 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 	}
 }
 
-void EM_matrix_stream::portion_queue::add(local_matrix_store::const_ptr lmat,
-		off_t start_row, off_t start_col)
-{
-	assert(start_row % portion_size == 0 || start_col % portion_size == 0);
-	assert(lmat->get_num_rows() % portion_size == 0
-			|| lmat->get_num_cols() % portion_size == 0);
-	// If the matrix is wide and the local matrix has only one portion.
-	if (is_wide && lmat->get_num_cols() == portion_size)
-		bufs.insert(std::pair<off_t, local_matrix_store::const_ptr>(
-					start_col, lmat));
-	// If the local matrix has multiple portion, we should break it.
-	else if (is_wide) {
-		for (size_t local_col = 0; local_col < lmat->get_num_cols();
-				local_col += portion_size) {
-			auto portion = lmat->get_portion(0, local_col,
-					lmat->get_num_rows(), portion_size);
-			assert(portion);
-			bufs.insert(std::pair<off_t, local_matrix_store::const_ptr>(
-						start_col + local_col, portion));
-		}
-	}
-	// If the matrix is tall and the local matrix has only one portion.
-	else if (lmat->get_num_rows() == portion_size)
-		bufs.insert(std::pair<off_t, local_matrix_store::const_ptr>(
-					start_row, lmat));
-	// If the local matrix has multiple portions.
-	else {
-		for (size_t local_row = 0; local_row < lmat->get_num_rows();
-				local_row += portion_size) {
-			auto portion = lmat->get_portion(local_row, 0,
-					portion_size, lmat->get_num_cols());
-			assert(portion);
-			bufs.insert(std::pair<off_t, local_matrix_store::const_ptr>(
-						start_row + local_row, portion));
-		}
-	}
-}
-
-local_matrix_store::const_ptr EM_matrix_stream::portion_queue::merge_portions(
-		const std::vector<local_matrix_store::const_ptr> &portions,
-		bool is_wide, matrix_layout_t out_layout)
-{
-	auto first = portions.front();
-	size_t num_portions = portions.size();
-	size_t portion_size = is_wide ? first->get_num_cols() : first->get_num_rows();
-	off_t first_portion = is_wide ? first->get_global_start_col() / portion_size :
-		first->get_global_start_row() / portion_size;
-	// Now we need to create a single buffer to contain all portions.
-	off_t start_row, start_col;
-	size_t num_rows, num_cols;
-	if (is_wide) {
-		start_row = 0;
-		start_col = first_portion * portion_size;
-		num_rows = first->get_num_rows();
-		num_cols = portion_size * num_portions;
-	}
-	else {
-		start_row = first_portion * portion_size;
-		start_col = 0;
-		num_rows = portion_size * num_portions;
-		num_cols = first->get_num_cols();
-	}
-	local_raw_array arr(first->get_num_rows() * first->get_num_cols() *
-			first->get_entry_size() * num_portions, false);
-	local_matrix_store::ptr buf;
-	if (out_layout == matrix_layout_t::L_ROW)
-		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(arr,
-					start_row, start_col, num_rows, num_cols,
-					first->get_type(), -1));
-	else
-		buf = local_matrix_store::ptr(new local_buf_col_matrix_store(arr,
-					start_row, start_col, num_rows, num_cols,
-					first->get_type(), -1));
-
-	// Copy data to the buffer.
-	// The buffer contains multiple portions. We need to make sure the buffer
-	// contains the portions in the right format.
-	for (size_t i = 0; i < portions.size(); i++) {
-		const char *from = portions[i]->get_raw_arr();
-		assert(from);
-		auto p = portions[i];
-		size_t num_bytes
-			= p->get_num_rows() * p->get_num_cols() * p->get_entry_size();
-		memcpy(arr.get_raw() + num_bytes * i, from, num_bytes);
-	}
-
-	return buf;
-}
-
-std::vector<local_matrix_store::const_ptr> EM_matrix_stream::portion_queue::pop_contig(
-		size_t num_portions)
-{
-	// We don't have enough portions.
-	if (bufs.size() < num_portions)
-		return std::vector<local_matrix_store::const_ptr>();
-
-	auto it = bufs.begin();
-	size_t first_portion = it->first / portion_size;
-	// If we can't flush the first portion, we can't do anything.
-	if (first_portion != num_flushed)
-		return std::vector<local_matrix_store::const_ptr>();
-
-	// Now we need to count the number of portions that are stored
-	// contiguously on disks.
-	size_t num = 1;
-	std::vector<local_matrix_store::const_ptr> portions(num_portions);
-	auto first = it->second;
-	portions[0] = it->second;
-	it++;
-	while (it != bufs.end() && num < num_portions) {
-		if (first_portion + num == it->first / portion_size) {
-			portions[num++] = it->second;
-			it++;
-		}
-		else
-			return std::vector<local_matrix_store::const_ptr>();
-	}
-	bufs.erase(bufs.begin(), it);
-	num_flushed += num_portions;
-
-	return portions;
-}
-
-void EM_matrix_stream::write_portion_async(local_matrix_store::const_ptr lmat,
-		off_t start_row, off_t start_col)
-{
-	auto portion_size = mat->get_portion_size();
-	size_t num_portions = lmat->get_num_rows() * lmat->get_num_cols()
-		/ (portion_size.first * portion_size.second);
-	// If the input local matrix is larger than what should be buffered, we can
-	// write it to disks directly.
-	// TODO there is a problem here. What if the size of the input local matrix
-	// varies? sometimes it's larger and sometimes it's smaller.
-	if (num_portions >= min_io_portions) {
-		// If this is the case, we have to make sure all input local matrices
-		// are written through.
-		assert(portion_q->get_num_flushed() == 0);
-		mat->_write_portion_async(lmat, start_row, start_col);
-		return;
-	}
-
-	// If the size of the local matrix isn't aligned with portion size, this is
-	// probably the last portion in the matrix. We can simply write it to disks
-	// directly to simplify the code in portion_queue.
-	size_t psize = mat->is_wide() ? portion_size.second : portion_size.first;
-	if (lmat->get_num_rows() % psize > 0 && lmat->get_num_cols() % psize > 0) {
-		if (mat->is_wide())
-			assert(lmat->get_global_start_col() + lmat->get_num_cols()
-					== mat->get_num_cols());
-		else
-			assert(lmat->get_global_start_row() + lmat->get_num_rows()
-					== mat->get_num_rows());
-		mat->_write_portion_async(lmat, start_row, start_col);
-		return;
-	}
-
-	pthread_spin_lock(&lock);
-	portion_q->add(lmat, start_row, start_col);
-	// Let's see if we collect enough portions to merge them and write them
-	// with a single I/O.
-	std::vector<local_matrix_store::const_ptr> merged = portion_q->pop_contig(
-			min_io_portions);
-	pthread_spin_unlock(&lock);
-
-	if (!merged.empty()) {
-		local_matrix_store::const_ptr merged_portion
-			= EM_matrix_stream::portion_queue::merge_portions(merged,
-					mat->is_wide(), mat->store_layout());
-		mat->_write_portion_async(merged_portion,
-				merged_portion->get_global_start_row(),
-				merged_portion->get_global_start_col());
-	}
-}
-
-void EM_matrix_stream::flush()
-{
-	pthread_spin_lock(&lock);
-	std::vector<local_matrix_store::const_ptr> merged;
-	if (portion_q->get_buf_size() > 0) {
-		merged = portion_q->pop_contig(portion_q->get_buf_size());
-		if (portion_q->get_buf_size() > 0)
-			assert(!merged.empty());
-	}
-	pthread_spin_unlock(&lock);
-	if (!merged.empty()) {
-		local_matrix_store::const_ptr merged_portion
-			= EM_matrix_stream::portion_queue::merge_portions(merged,
-					mat->is_wide(), mat->store_layout());
-		mat->_write_portion_async(merged_portion,
-				merged_portion->get_global_start_row(),
-				merged_portion->get_global_start_col());
-	}
-}
-
 EM_matrix_stream::~EM_matrix_stream()
 {
 	pthread_spin_lock(&lock);
-	assert(portion_q->get_buf_size() == 0);
 	assert(portion_bufs.empty());
 	pthread_spin_unlock(&lock);
 }
