@@ -75,6 +75,7 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+		assert(((long) addr) % 512 == 0);
 		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
 	else {
@@ -82,9 +83,13 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 		// overhead.
 		if (is_local)
 			ret = local_mem_buffer::alloc(num_bytes);
-		if (ret == NULL)
-			ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
-					aligned_deleter());
+		if (ret == NULL) {
+			void *addr = NULL;
+			int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
+			assert(ret_val == 0);
+			assert(((long) ret.get()) % 512 == 0);
+			ret = std::shared_ptr<char>((char *) addr, aligned_deleter());
+		}
 	}
 	assert(ret);
 	return ret;
@@ -226,19 +231,27 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 	}
 	else if (node_id < 0) {
 		smp_reserved_bytes += num_bytes;
-		return std::shared_ptr<char>(
-				(char *) memalign(PAGE_SIZE, num_bytes), smp_reserved_deleter());
+		void *addr = NULL;
+		int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
+		assert(ret_val == 0);
+		std::shared_ptr<char> ret((char *) addr, smp_reserved_deleter());
+		assert(((long) ret.get()) % 512 == 0);
+		return ret;
 	}
 
 	assert((size_t) node_id < reserved_chunks.size());
 	if (!reserved_chunks[node_id].empty()) {
 		auto ret = reserved_chunks[node_id].back();
 		reserved_chunks[node_id].pop_back();
+		assert(ret);
+		assert(((long) ret) % 512 == 0);
 		return std::shared_ptr<char>(ret, NUMA_reserved_deleter(node_id));
 	}
 	else {
 		reserved_bytes += num_bytes;
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+		assert(addr);
+		assert(((long) addr) % 512 == 0);
 		return std::shared_ptr<char>((char *) addr, NUMA_reserved_deleter(node_id));
 	}
 }
