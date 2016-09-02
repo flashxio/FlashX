@@ -221,7 +221,7 @@ public:
  * Once we order the incoming data, we can stream data to disks sequentially.
  * This data structure is shared by multiple threads.
  */
-class EM_matrix_stream
+class EM_matrix_stream: public matrix_stream
 {
 	EM_matrix_store::ptr mat;
 
@@ -278,11 +278,15 @@ public:
 		return ptr(new EM_matrix_stream(mat));
 	}
 
-	~EM_matrix_stream();
+	virtual ~EM_matrix_stream();
 
-	void write_async(std::shared_ptr<const local_matrix_store> portion,
+	virtual void write_async(std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
-	bool is_complete() const;
+	virtual bool is_complete() const;
+
+	virtual const matrix_store &get_mat() const {
+		return *mat;
+	}
 };
 
 }

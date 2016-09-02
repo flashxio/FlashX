@@ -221,6 +221,19 @@ public:
 	}
 };
 
+class matrix_stream
+{
+public:
+	typedef std::shared_ptr<matrix_stream> ptr;
+
+	static ptr create(matrix_store::ptr store);
+
+	virtual void write_async(std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) = 0;
+	virtual bool is_complete() const = 0;
+	virtual const matrix_store &get_mat() const = 0;
+};
+
 }
 
 }

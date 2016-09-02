@@ -1358,6 +1358,9 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 		EM_portion_start = (start_col / CHUNK_SIZE) * CHUNK_SIZE;
 	else
 		EM_portion_start = (start_row / CHUNK_SIZE) * CHUNK_SIZE;
+	// TODO I might want to have per-thread buffer to keep data for a portion
+	// if the input data is smaller than a portion. It's guaranteed that
+	// an entire portion is written by a single thread.
 	// TODO we might want to a thread-safe hashtable.
 	pthread_spin_lock(&lock);
 	auto it = portion_bufs.find(EM_portion_start);

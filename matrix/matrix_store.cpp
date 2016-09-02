@@ -268,6 +268,32 @@ void matrix_store::set_data(const set_operate &op)
 	}
 }
 
+matrix_stream::ptr matrix_stream::create(matrix_store::ptr store)
+{
+	if (store->is_in_mem()) {
+		mem_matrix_store::ptr mem_store
+			= std::dynamic_pointer_cast<mem_matrix_store>(store);
+		if (mem_store == NULL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "The in-mem matrix store isn't writable";
+			return matrix_stream::ptr();
+		}
+		else
+			return mem_matrix_stream::create(mem_store);
+	}
+	else {
+		EM_matrix_store::ptr em_store
+			= std::dynamic_pointer_cast<EM_matrix_store>(store);
+		if (em_store == NULL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "The ext-mem matrix store isn't writable";
+			return matrix_stream::ptr();
+		}
+		else
+			return EM_matrix_stream::create(em_store);
+	}
+}
+
 }
 
 }

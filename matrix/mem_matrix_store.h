@@ -417,6 +417,31 @@ public:
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 };
 
+class mem_matrix_stream: public matrix_stream
+{
+	mem_matrix_store::ptr store;
+
+	mem_matrix_stream(mem_matrix_store::ptr store) {
+		this->store = store;
+	}
+public:
+	static ptr create(mem_matrix_store::ptr store) {
+		return ptr(new mem_matrix_stream(store));
+	}
+
+	virtual void write_async(std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		store->write_portion_async(portion, start_row, start_col);
+	}
+	virtual bool is_complete() const {
+		// We write data to in-mem matrix directly, so it's always complete.
+		return true;
+	}
+	virtual const matrix_store &get_mat() const {
+		return *store;
+	}
+};
+
 }
 
 }

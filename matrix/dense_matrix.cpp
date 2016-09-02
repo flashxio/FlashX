@@ -689,125 +689,6 @@ public:
 	}
 };
 
-/*
- * This local write buffer helps to write data to part of a portion and
- * keep track of which parts are valid. It can flush data to EM matrix
- * when all parts have valid data.
- * This assumes that each part in the portion has the same size and users
- * always write data of the same size to the portion.
- */
-class local_write_buffer
-{
-	matrix_store::ptr to_mat;
-	size_t portion_start_row;
-	size_t portion_start_col;
-	size_t portion_num_rows;
-	size_t portion_num_cols;
-	local_matrix_store::ptr buf;
-
-	// This indicates which parts of the portion has valid data.
-	std::vector<bool> valid_parts;
-	// This is the number of valid parts in this portion.
-	size_t num_valid_parts;
-	size_t min_portion_size;
-	bool has_flushed;
-
-	local_write_buffer(matrix_store::ptr to_mat, off_t global_start,
-			size_t length, size_t min_portion_size);
-public:
-	typedef std::shared_ptr<local_write_buffer> ptr;
-
-	static ptr create(matrix_store::ptr to_mat, off_t global_start,
-			size_t length, size_t min_portion_size) {
-		return ptr(new local_write_buffer(to_mat, global_start, length,
-					min_portion_size));
-	}
-
-	~local_write_buffer() {
-		assert(has_flushed);
-	}
-
-	bool is_all_valid() const {
-		return num_valid_parts == valid_parts.size();
-	}
-
-	void flush() {
-		assert(!has_flushed);
-		// If the destination matrix isn't in memory, we need to write
-		// data back.
-		if (!to_mat->is_in_mem())
-			to_mat->write_portion_async(buf, buf->get_global_start_row(),
-					buf->get_global_start_col());
-		has_flushed = true;
-	}
-
-	local_matrix_store::ptr set_part(size_t global_start_row,
-			size_t global_start_col, size_t num_rows, size_t num_cols);
-};
-
-local_matrix_store::ptr local_write_buffer::set_part(size_t global_start_row,
-		size_t global_start_col, size_t num_rows, size_t num_cols)
-{
-	assert(global_start_col >= (size_t) portion_start_col);
-	assert(global_start_row >= (size_t) portion_start_row);
-	size_t local_start;
-	if (to_mat->is_wide())
-		local_start = global_start_col - portion_start_col;
-	else
-		local_start = global_start_row - portion_start_row;
-	assert(local_start % min_portion_size == 0);
-	size_t part_idx = local_start / min_portion_size;
-	// The part shouldn't be valid.
-	assert(!valid_parts[part_idx]);
-	valid_parts[part_idx] = true;
-	num_valid_parts++;
-	if (buf)
-		return buf->get_portion(global_start_row - buf->get_global_start_row(),
-				global_start_col - buf->get_global_start_col(),
-				num_rows, num_cols);
-	else
-		// If the destination matrix is in memory, we write data to the matrix
-		// directly.
-		return to_mat->get_portion(global_start_row, global_start_col,
-				num_rows, num_cols);
-}
-
-local_write_buffer::local_write_buffer(matrix_store::ptr to_mat,
-		off_t global_start, size_t length, size_t min_portion_size)
-{
-	if (to_mat->is_wide()) {
-		portion_start_row = 0;
-		portion_start_col = global_start;
-		portion_num_rows = to_mat->get_num_rows();
-		portion_num_cols = length;
-	}
-	else {
-		portion_start_row = global_start;
-		portion_start_col = 0;
-		portion_num_rows = length;
-		portion_num_cols = to_mat->get_num_cols();
-	}
-	size_t num_parts = ceil(((double) length) / min_portion_size);
-	valid_parts.resize(num_parts);
-
-	this->has_flushed = false;
-	this->num_valid_parts = 0;
-	this->min_portion_size = min_portion_size;
-	this->to_mat = to_mat;
-	if (!to_mat->is_in_mem()) {
-		if (to_mat->store_layout() == matrix_layout_t::L_ROW)
-			buf = detail::local_matrix_store::ptr(
-					new detail::local_buf_row_matrix_store(portion_start_row,
-						portion_start_col, portion_num_rows, portion_num_cols,
-						to_mat->get_type(), -1));
-		else
-			buf = detail::local_matrix_store::ptr(
-					new detail::local_buf_col_matrix_store(portion_start_row,
-						portion_start_col, portion_num_rows, portion_num_cols,
-						to_mat->get_type(), -1));
-	}
-}
-
 static size_t cal_min_portion_size(
 		const std::vector<matrix_store::const_ptr> &mats1,
 		const std::vector<matrix_store::ptr> &mats2)
@@ -852,6 +733,7 @@ class EM_mat_mapply_par_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
+	std::vector<matrix_stream::ptr> res_mat_streams;
 	std::vector<matrix_store::const_ptr> EM_mats;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
@@ -873,7 +755,7 @@ public:
 class collected_portions
 {
 	// The output matrices.
-	std::vector<matrix_store::ptr> res_mats;
+	std::vector<matrix_stream::ptr> res_mat_streams;
 	// The portions with partial result.
 	// This is only used when the operation is aggregation.
 	local_matrix_store::ptr res_portion;
@@ -894,10 +776,10 @@ class collected_portions
 public:
 	typedef std::shared_ptr<collected_portions> ptr;
 
-	collected_portions(const std::vector<matrix_store::ptr> &res_mats,
+	collected_portions(const std::vector<matrix_stream::ptr> &res_mat_streams,
 			portion_mapply_op::const_ptr op, size_t num_required,
 			off_t global_start, size_t length) {
-		this->res_mats = res_mats;
+		this->res_mat_streams = res_mat_streams;
 		this->global_start = global_start;
 		this->length = length;
 		this->op = op;
@@ -944,6 +826,7 @@ class EM_mat_mapply_serial_dispatcher: public detail::EM_portion_dispatcher
 
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
+	std::vector<matrix_stream::ptr> res_mat_streams;
 
 	// These maintain per-thread states.
 	std::vector<part_state_t> part_states;
@@ -961,6 +844,9 @@ public:
 		this->op = op;
 		this->min_portion_size = cal_min_portion_size(mats, res_mats);
 		part_states.resize(detail::mem_thread_pool::get_global_num_threads());
+		res_mat_streams.resize(res_mats.size());
+		for (size_t i = 0; i < res_mats.size(); i++)
+			res_mat_streams[i] = matrix_stream::create(res_mats[i]);
 	}
 
 	virtual void create_task(off_t global_start, size_t length);
@@ -970,17 +856,14 @@ public:
 class mapply_portion_compute: public portion_compute
 {
 	std::vector<detail::local_matrix_store::const_ptr> local_stores;
-	std::vector<local_write_buffer::ptr> write_bufs;
-	std::vector<matrix_store::ptr> to_mats;
+	std::vector<matrix_stream::ptr> mat_streams;
 	size_t num_required_reads;
 	size_t num_reads;
 	const portion_mapply_op &op;
 public:
-	mapply_portion_compute(const std::vector<local_write_buffer::ptr> &write_bufs,
-			const std::vector<matrix_store::ptr> mats,
+	mapply_portion_compute(const std::vector<matrix_stream::ptr> mat_streams,
 			const portion_mapply_op &_op): op(_op) {
-		this->write_bufs = write_bufs;
-		this->to_mats = mats;
+		this->mat_streams = mat_streams;
 		this->num_required_reads = 0;
 		this->num_reads = 0;
 	}
@@ -998,25 +881,39 @@ public:
 	void run_complete();
 };
 
+static inline local_matrix_store::ptr create_local_buf_matrix(
+		const matrix_store &to_mat, off_t start_row, off_t start_col,
+		size_t num_rows, size_t num_cols)
+{
+	if (to_mat.store_layout() == matrix_layout_t::L_COL)
+		return local_matrix_store::ptr(new local_buf_col_matrix_store(
+					start_row, start_col, num_rows, num_cols,
+					to_mat.get_type(), -1));
+	else
+		return local_matrix_store::ptr(new local_buf_row_matrix_store(
+					start_row, start_col, num_rows, num_cols,
+					to_mat.get_type(), -1));
+}
+
 void mapply_portion_compute::run_complete()
 {
 	assert(!local_stores.empty());
 	const detail::local_matrix_store &first_mat = *local_stores.front();
-	std::vector<local_matrix_store::ptr> local_res(write_bufs.size());
-	for (size_t i = 0; i < write_bufs.size(); i++) {
+	std::vector<local_matrix_store::ptr> local_res(mat_streams.size());
+	for (size_t i = 0; i < mat_streams.size(); i++) {
 		size_t res_num_rows;
 		size_t res_num_cols;
-		if (to_mats[i]->is_wide()) {
-			res_num_rows = to_mats[i]->get_num_rows();
+		if (mat_streams[i]->get_mat().is_wide()) {
+			res_num_rows = mat_streams[i]->get_mat().get_num_rows();
 			res_num_cols = first_mat.get_num_cols();
 		}
 		else {
 			res_num_rows = first_mat.get_num_rows();
-			res_num_cols = to_mats[i]->get_num_cols();
+			res_num_cols = mat_streams[i]->get_mat().get_num_cols();
 		}
-		local_res[i] = write_bufs[i]->set_part(
-				first_mat.get_global_start_row(),
-				first_mat.get_global_start_col(), res_num_rows, res_num_cols);
+		local_res[i] = create_local_buf_matrix(mat_streams[i]->get_mat(),
+				first_mat.get_global_start_row(), first_mat.get_global_start_col(),
+				res_num_rows, res_num_cols);
 	}
 	if (local_res.empty())
 		op.run(local_stores);
@@ -1024,9 +921,10 @@ void mapply_portion_compute::run_complete()
 		op.run(local_stores, *local_res[0]);
 	else
 		op.run(local_stores, local_res);
-	for (size_t i = 0; i < write_bufs.size(); i++)
-		if (write_bufs[i]->is_all_valid())
-			write_bufs[i]->flush();
+	for (size_t i = 0; i < mat_streams.size(); i++)
+		mat_streams[i]->write_async(local_res[i],
+				local_res[i]->get_global_start_row(),
+				local_res[i]->get_global_start_col());
 }
 
 void mapply_portion_compute::run(char *buf, size_t size)
@@ -1098,6 +996,7 @@ EM_mat_mapply_par_dispatcher::EM_mat_mapply_par_dispatcher(
 			EM_mats.push_back(mats[i]);
 		}
 	}
+	res_mat_streams.resize(res_mats.size());
 	for (size_t i = 0; i < res_mats.size(); i++) {
 		if (!res_mats[i]->is_in_mem()) {
 			size_t prefetch_end = 0;
@@ -1112,6 +1011,8 @@ EM_mat_mapply_par_dispatcher::EM_mat_mapply_par_dispatcher(
 					get_task_size(), std::pair<size_t, size_t>(0, prefetch_end));
 			EM_mats.push_back(res_mats[i]);
 		}
+		res_mat_streams[i] = matrix_stream::create(res_mats[i]);
+		assert(res_mat_streams[i]);
 	}
 }
 
@@ -1131,11 +1032,6 @@ EM_mat_mapply_par_dispatcher::~EM_mat_mapply_par_dispatcher()
 void EM_mat_mapply_par_dispatcher::create_task(off_t global_start,
 		size_t length)
 {
-	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
-	for (size_t i = 0; i < res_mats.size(); i++)
-		write_bufs[i] = local_write_buffer::create(res_mats[i], global_start,
-				length, min_portion_size);
-
 	// We fetch the portions using the minimum portion size among
 	// the matrices. The idea is to reduce the amount of data cached
 	// in virtual matrices.
@@ -1145,7 +1041,7 @@ void EM_mat_mapply_par_dispatcher::create_task(off_t global_start,
 		std::vector<detail::local_matrix_store::const_ptr> local_stores(
 				mats.size());
 		mapply_portion_compute *mapply_compute = new mapply_portion_compute(
-				write_bufs, res_mats, *op);
+				res_mat_streams, *op);
 		mapply_portion_compute::ptr compute(mapply_compute);
 		size_t num_EM_parts = 0;
 		for (size_t j = 0; j < local_stores.size(); j++) {
@@ -1196,7 +1092,7 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 			// eventually, we only use one matrix portion to store
 			// the intermediate aggregation result.
 			size_t start_row, start_col, num_rows, num_cols;
-			if (res_mats.front()->is_wide()) {
+			if (res_mat_streams.front()->get_mat().is_wide()) {
 				start_row = 0;
 				start_col = global_start;
 				num_rows = op->get_out_num_rows();
@@ -1209,7 +1105,8 @@ void collected_portions::add_ready_portion(local_matrix_store::const_ptr portion
 				num_cols = op->get_out_num_cols();
 			}
 
-			if (res_mats.front()->store_layout() == matrix_layout_t::L_COL)
+			if (res_mat_streams.front()->get_mat().store_layout()
+					== matrix_layout_t::L_COL)
 				res_portion = local_matrix_store::ptr(
 						new local_buf_col_matrix_store(start_row, start_col,
 							num_rows, num_cols, op->get_output_type(),
@@ -1250,12 +1147,7 @@ void collected_portions::run_all_portions()
 	if (op->is_agg() && res_portion == NULL)
 		return;
 
-	std::vector<local_write_buffer::ptr> write_bufs(res_mats.size());
-	for (size_t i = 0; i < res_mats.size(); i++)
-		write_bufs[i] = local_write_buffer::create(res_mats[i],
-				global_start, length, length);
-	mapply_portion_compute compute(write_bufs, res_mats, *op);
-
+	mapply_portion_compute compute(res_mat_streams, *op);
 	if (res_portion) {
 		std::vector<detail::local_matrix_store::const_ptr> stores(1);
 		stores[0] = res_portion;
@@ -1349,8 +1241,8 @@ void EM_mat_mapply_serial_dispatcher::create_task(off_t global_start,
 	assert(part_states[thread_id].second == NULL);
 
 	// Here we don't use the minimum portion size.
-	collected_portions::ptr collected(new collected_portions(res_mats, op,
-				mats.size(), global_start, length));
+	collected_portions::ptr collected(new collected_portions(res_mat_streams,
+				op, mats.size(), global_start, length));
 	part_states[thread_id].second = collected;
 	part_states[thread_id].first.insert(part_states[thread_id].first.end(),
 			mats.begin(), mats.end());
