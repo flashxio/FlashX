@@ -217,6 +217,8 @@ public:
 	 */
 	virtual void set_cache_portion(bool cache_portion) {
 	}
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
+	}
 };
 
 }

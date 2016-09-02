@@ -74,6 +74,9 @@ class EM_matrix_store: public matrix_store, public EM_object
 	size_t orig_num_rows;
 	size_t orig_num_cols;
 
+	size_t num_prefetches;
+	std::pair<size_t, size_t> prefetch_range;
+
 	size_t get_orig_num_rows() const {
 		return orig_num_rows;
 	}
@@ -90,6 +93,7 @@ class EM_matrix_store: public matrix_store, public EM_object
 	void _write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
+	virtual std::pair<size_t, size_t> get_orig_portion_size() const;
 public:
 	static const size_t CHUNK_SIZE;
 
@@ -129,6 +133,11 @@ public:
 		return EM_matrix_store::const_ptr(new EM_matrix_store(holder, ios,
 					get_num_rows(), get_num_cols(), orig_num_rows, orig_num_cols,
 					store_layout(), get_type(), data_id));
+	}
+
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
+		this->num_prefetches = num;
+		this->prefetch_range = range;
 	}
 
 	virtual void set_cache_portion(bool cache_portion) {

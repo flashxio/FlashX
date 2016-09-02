@@ -235,6 +235,9 @@ public:
 	virtual size_t get_all_rows(std::vector<char *> &rows);
 	virtual size_t get_all_cols(std::vector<char *> &cols);
 
+	virtual bool hold_orig_data() const = 0;
+	virtual const local_raw_array &get_data_ref() const = 0;
+
 	virtual bool read_only() const = 0;
 	virtual const char *get_raw_arr() const = 0;
 	virtual char *get_raw_arr() = 0;
@@ -315,7 +318,11 @@ public:
 		this->orig_data_ref = data_ref;
 	}
 
-	bool hold_orig_data() const {
+	virtual const local_raw_array &get_data_ref() const {
+		return orig_data_ref;
+	}
+
+	virtual bool hold_orig_data() const {
 		return orig_data_ref.get_raw() != NULL;
 	}
 
@@ -395,7 +402,11 @@ public:
 		this->orig_data_ref = data_ref;
 	}
 
-	bool hold_orig_data() const {
+	virtual const local_raw_array &get_data_ref() const {
+		return orig_data_ref;
+	}
+
+	virtual bool hold_orig_data() const {
 		return orig_data_ref.get_raw() != NULL;
 	}
 

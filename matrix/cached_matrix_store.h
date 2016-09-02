@@ -109,6 +109,7 @@ public:
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const;
 
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range);
 	virtual void set_cache_portion(bool cache_portion);
 
 	size_t get_num_cached_vecs() const {

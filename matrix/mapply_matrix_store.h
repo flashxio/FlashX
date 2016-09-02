@@ -80,6 +80,7 @@ public:
 
 	bool is_materialized() const;
 
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range);
 	virtual void set_cache_portion(bool cache_portion);
 
 	void set_par_access(bool par_access) {

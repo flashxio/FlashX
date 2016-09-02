@@ -66,6 +66,7 @@ EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layou
 		const scalar_type &type, safs::safs_file_group::ptr group): matrix_store(
 			nrow, ncol, false, type), mat_id(mat_counter++), data_id(mat_id)
 {
+	this->num_prefetches = 1;
 	this->cache_portion = true;
 	this->orig_num_rows = nrow;
 	this->orig_num_cols = ncol;
@@ -91,6 +92,7 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 		size_t _data_id): matrix_store(nrow, ncol, false, type), mat_id(
 			mat_counter++), data_id(_data_id)
 {
+	this->num_prefetches = 1;
 	this->cache_portion = true;
 	this->orig_num_rows = orig_nrow;
 	this->orig_num_cols = orig_ncol;
@@ -158,6 +160,14 @@ EM_matrix_store::ptr EM_matrix_store::load(const std::string &ext_file,
 	return store;
 }
 
+std::pair<size_t, size_t> EM_matrix_store::get_orig_portion_size() const
+{
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_orig_num_rows(), CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(CHUNK_SIZE, get_orig_num_cols());
+}
+
 std::pair<size_t, size_t> EM_matrix_store::get_portion_size() const
 {
 	if (is_wide())
@@ -193,6 +203,72 @@ local_matrix_store::const_ptr EM_matrix_store::get_portion(
 	while (!ready)
 		io.wait4complete(1);
 	return ret.second;
+}
+
+static local_matrix_store::const_ptr get_portion_cached(
+		local_matrix_store::const_ptr store, bool is_wide,
+		const std::pair<size_t, size_t> psize, size_t start_row,
+		size_t start_col, size_t num_rows, size_t num_cols)
+{
+	size_t local_start_row = start_row - store->get_global_start_row();
+	size_t local_start_col = start_col - store->get_global_start_col();
+	// If the local matrix has only one portion, we can get the sub-portion
+	// normally.
+	if (store->get_num_rows() <= psize.first
+			&& store->get_num_cols() <= psize.second) {
+		// If what we want is part of the local matrix.
+		if (local_start_row > 0 || local_start_col > 0
+				|| num_rows < store->get_num_rows()
+				|| num_cols < store->get_num_cols())
+			return store->get_portion(local_start_row, local_start_col,
+					num_rows, num_cols);
+		else
+			return store;
+	}
+
+	// In this case, `store' contains multiple portions. We need to get
+	// the right portion from it first.
+	local_matrix_store::const_ptr portion;
+	size_t num_bytes_portion
+		= psize.first * psize.second * store->get_type().get_size();
+	size_t portion_idx;
+	size_t portion_start_row;
+	size_t portion_start_col;
+	if (is_wide) {
+		portion_idx = local_start_col / psize.second;
+		portion_start_row = store->get_global_start_row();
+		portion_start_col
+			= store->get_global_start_col() + portion_idx * psize.second;
+	}
+	else {
+		portion_idx = local_start_row / psize.first;
+		portion_start_row
+			= store->get_global_start_row() + portion_idx * psize.first;
+		portion_start_col = store->get_global_start_col();
+	}
+	const char *raw_data = store->get_raw_arr() + num_bytes_portion * portion_idx;
+	assert(store->hold_orig_data());
+	if (store->store_layout() == matrix_layout_t::L_COL)
+		portion = local_matrix_store::const_ptr(
+				new local_cref_contig_col_matrix_store(store->get_data_ref(),
+					raw_data, portion_start_row, portion_start_col,
+					psize.first, psize.second, store->get_type(), -1));
+	else
+		portion = local_matrix_store::const_ptr(
+				new local_cref_contig_row_matrix_store(store->get_data_ref(),
+					raw_data, portion_start_row, portion_start_col,
+					psize.first, psize.second, store->get_type(), -1));
+
+	local_start_row = start_row - portion->get_global_start_row();
+	local_start_col = start_col - portion->get_global_start_col();
+	// If what we want is part of the portion.
+	if (local_start_row > 0 || local_start_col > 0
+			|| num_rows < portion->get_num_rows()
+			|| num_cols < portion->get_num_cols())
+		return portion->get_portion(local_start_row, local_start_col,
+				num_rows, num_cols);
+	else
+		return portion;
 }
 
 async_cres_t EM_matrix_store::get_portion_async(
@@ -232,6 +308,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 		portion_num_cols = CHUNK_SIZE;
 
 	// The information of the part of data fetched in a portion.
+	// We allow to access part of a portion.
 	size_t fetch_start_row = portion_start_row;
 	size_t fetch_start_col = portion_start_col;
 	size_t fetch_num_rows = portion_num_rows;
@@ -276,6 +353,48 @@ async_cres_t EM_matrix_store::get_portion_async(
 		fetch_num_rows = num_rows;
 	}
 
+	auto psize = get_orig_portion_size();
+	size_t num_bytes_portion = psize.first * psize.second * entry_size;
+	// If we are fetching the entire portion and we want to prefetch more than
+	// one portions. The idea of prefetching is to increase the I/O size.
+	// Therefore, we don't need to prefetch if we don't fetch the entire portion.
+	if (num_bytes == num_bytes_portion && num_prefetches > 1) {
+		if (is_wide()) {
+			size_t portion_id = fetch_start_col / psize.second;
+			size_t prefetch_id = portion_id / num_prefetches;
+			// We only prefetch portions in the specified range.
+			if (portion_id >= prefetch_range.first
+					&& portion_id < prefetch_range.second
+					// We don't prefetch the last few portions to simplify
+					// the code.
+					&& (prefetch_id + 1) * num_prefetches * psize.second
+					<= get_orig_num_cols()) {
+				fetch_start_col = prefetch_id * num_prefetches * psize.second;
+				fetch_num_cols = psize.second * num_prefetches;
+				off = num_bytes_portion * num_prefetches * prefetch_id;
+				num_bytes = fetch_num_rows * fetch_num_cols * entry_size;
+				assert(num_bytes == num_bytes_portion * num_prefetches);
+			}
+		}
+		else {
+			size_t portion_id = fetch_start_row / psize.first;
+			size_t prefetch_id = portion_id / num_prefetches;
+			// We only prefetch portions in the specified range.
+			if (portion_id >= prefetch_range.first
+					&& portion_id < prefetch_range.second
+					// We don't prefetch the last few portions to simplify
+					// the code.
+					&& (prefetch_id + 1) * num_prefetches * psize.first
+					<= get_orig_num_rows()) {
+				fetch_start_row = prefetch_id * num_prefetches * psize.first;
+				fetch_num_rows = psize.first * num_prefetches;
+				off = num_bytes_portion * num_prefetches * prefetch_id;
+				num_bytes = fetch_num_rows * fetch_num_cols * entry_size;
+				assert(num_bytes == num_bytes_portion * num_prefetches);
+			}
+		}
+	}
+
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
@@ -311,13 +430,8 @@ async_cres_t EM_matrix_store::get_portion_async(
 			ret1 = std::static_pointer_cast<const local_matrix_store>(
 					ret1->transpose());
 
-		local_matrix_store::const_ptr ret;
-		if (local_start_row > 0 || local_start_col > 0
-				|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
-			ret = ret1->get_portion(local_start_row, local_start_col,
-					num_rows, num_cols);
-		else
-			ret = ret1;
+		local_matrix_store::const_ptr ret = get_portion_cached(ret1, is_wide(),
+				get_portion_size(), start_row, start_col, num_rows, num_cols);
 		assert((size_t) ret->get_global_start_row() == start_row);
 		assert((size_t) ret->get_global_start_col() == start_col);
 		assert(ret->get_num_rows() == num_rows);
@@ -328,6 +442,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 	local_raw_array data_arr(num_bytes);
 	// Read the portion in a single I/O request.
 	local_matrix_store::ptr buf;
+	// This buffer may actually contain multiple portions.
 	if (store_layout() == matrix_layout_t::L_ROW)
 		buf = local_matrix_store::ptr(new local_buf_row_matrix_store(data_arr,
 					fetch_start_row, fetch_start_col, fetch_num_rows,
@@ -349,13 +464,8 @@ async_cres_t EM_matrix_store::get_portion_async(
 
 	if (cache_portion)
 		local_mem_buffer::cache_portion(data_id, buf);
-	local_matrix_store::const_ptr ret;
-	if (local_start_row > 0 || local_start_col > 0
-			|| num_rows < fetch_num_rows || num_cols < fetch_num_cols)
-		ret = buf->get_portion(local_start_row, local_start_col,
-				num_rows, num_cols);
-	else
-		ret = buf;
+	local_matrix_store::const_ptr ret = get_portion_cached(buf, is_wide(),
+			get_portion_size(), start_row, start_col, num_rows, num_cols);
 	return async_cres_t(false, ret);
 }
 
