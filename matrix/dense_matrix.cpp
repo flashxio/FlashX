@@ -852,6 +852,7 @@ class EM_mat_mapply_par_dispatcher: public detail::EM_portion_dispatcher
 {
 	std::vector<matrix_store::const_ptr> mats;
 	std::vector<matrix_store::ptr> res_mats;
+	std::vector<matrix_store::const_ptr> EM_mats;
 	portion_mapply_op::const_ptr op;
 	size_t min_portion_size;
 public:
@@ -859,13 +860,8 @@ public:
 			const std::vector<matrix_store::const_ptr> &mats,
 			const std::vector<matrix_store::ptr> &res_mats,
 			portion_mapply_op::const_ptr op, size_t tot_len,
-			size_t portion_size): detail::EM_portion_dispatcher(tot_len,
-				portion_size) {
-		this->mats = mats;
-		this->res_mats = res_mats;
-		this->op = op;
-		this->min_portion_size = cal_min_portion_size(mats, res_mats);
-	}
+			size_t portion_size);
+	~EM_mat_mapply_par_dispatcher();
 
 	virtual void create_task(off_t global_start, size_t length);
 };
@@ -1041,8 +1037,96 @@ void mapply_portion_compute::run(char *buf, size_t size)
 		run_complete();
 }
 
+static size_t cal_task_size(const std::vector<matrix_store::const_ptr> &mats,
+		const std::vector<matrix_store::ptr> &res_mats)
+{
+	size_t max_num_bytes = 0;
+	for (size_t i = 0; i < mats.size(); i++) {
+		auto psize = mats[i]->get_portion_size();
+		max_num_bytes = std::max(max_num_bytes,
+				psize.first * psize.second * mats[i]->get_type().get_size());
+	}
+	for (size_t i = 0; i < res_mats.size(); i++) {
+		auto psize = res_mats[i]->get_portion_size();
+		max_num_bytes = std::max(max_num_bytes,
+				psize.first * psize.second * res_mats[i]->get_type().get_size());
+	}
+	size_t num_portions = div_ceil(
+			(size_t) safs::params.get_RAID_block_size() * PAGE_SIZE,
+			max_num_bytes);
+	size_t ret = 1;
+	for (; ret < num_portions; ret *= 2);
+	return ret;
+}
+
+static inline size_t get_reserved_portions()
+{
+	return mem_thread_pool::get_global_num_threads() * 10;
+}
+
+EM_mat_mapply_par_dispatcher::EM_mat_mapply_par_dispatcher(
+		const std::vector<matrix_store::const_ptr> &mats,
+		const std::vector<matrix_store::ptr> &res_mats,
+		portion_mapply_op::const_ptr op, size_t tot_len,
+		size_t portion_size): detail::EM_portion_dispatcher(tot_len,
+			portion_size,
+			// This is the number of portions we reserve to be processed
+			// one at a time.
+			get_reserved_portions(),
+			// This is the number of portions in a regular task.
+			cal_task_size(mats, res_mats))
+{
+	this->mats = mats;
+	this->res_mats = res_mats;
+	this->op = op;
+	this->min_portion_size = cal_min_portion_size(mats, res_mats);
+
+	// Set prefetch on each EM matrix.
+	size_t num_reserved = get_reserved_portions();
+	for (size_t i = 0; i < mats.size(); i++) {
+		if (!mats[i]->is_in_mem()) {
+			size_t prefetch_end = 0;
+			if (mats[i]->get_num_portions() > num_reserved) {
+				prefetch_end = mats[i]->get_num_portions() - num_reserved;
+				// We want the prefetch range to be aligned with the prefetch
+				// size.
+				prefetch_end
+					= (prefetch_end / get_task_size()) * get_task_size();
+			}
+			const_cast<matrix_store &>(*mats[i]).set_prefetches(get_task_size(),
+					std::pair<size_t, size_t>(0, prefetch_end));
+			EM_mats.push_back(mats[i]);
+		}
+	}
+	for (size_t i = 0; i < res_mats.size(); i++) {
+		if (!res_mats[i]->is_in_mem()) {
+			size_t prefetch_end = 0;
+			if (mats[i]->get_num_portions() > num_reserved) {
+				prefetch_end = mats[i]->get_num_portions() - num_reserved;
+				// We want the prefetch range to be aligned with the prefetch
+				// size.
+				prefetch_end
+					= (prefetch_end / get_task_size()) * get_task_size();
+			}
+			const_cast<matrix_store &>(*res_mats[i]).set_prefetches(
+					get_task_size(), std::pair<size_t, size_t>(0, prefetch_end));
+			EM_mats.push_back(res_mats[i]);
+		}
+	}
+}
+
+EM_mat_mapply_par_dispatcher::~EM_mat_mapply_par_dispatcher()
+{
+	for (size_t i = 0; i < EM_mats.size(); i++)
+		const_cast<matrix_store &>(*EM_mats[i]).set_prefetches(1,
+				std::pair<size_t, size_t>(0, 0));
+}
+
 /*
  * This method is invoked in each worker thread.
+ * It reads data portions from each matrix and perform computation.
+ * To be able to adapt to matrices with different shapes, a task may read
+ * multiple portions from a matrix.
  */
 void EM_mat_mapply_par_dispatcher::create_task(off_t global_start,
 		size_t length)
