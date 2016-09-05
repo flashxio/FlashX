@@ -252,7 +252,15 @@ std::shared_ptr<char> text_file_io::read_lines(
 	char *line_buf = ((char *) addr) + local_off;
 	if (local_off > 0)
 		assert(*(line_buf - 1) == '\n');
-	char *line_end = ((char *) addr) + expected_size - 2;
+
+	// Find the end of the last line in the buffer.
+	char *line_end;
+	// If the line ends at the end of the buffer, we need to move one more line
+	// further.
+	if (expected_size == buf_size)
+		line_end = ((char *) addr) + expected_size - 2;
+	else
+		line_end = ((char *) addr) + expected_size - 1;
 	while (*line_end != '\n')
 		line_end--;
 	line_end++;
