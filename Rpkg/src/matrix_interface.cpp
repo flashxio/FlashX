@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 #include <unordered_map>
-#include <boost/filesystem.hpp>
 #include <Rcpp.h>
 
 #include "log.h"
