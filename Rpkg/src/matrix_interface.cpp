@@ -20,7 +20,6 @@
 #include <gperftools/profiler.h>
 #endif
 #include <unordered_map>
-#include <boost/filesystem.hpp>
 #include <Rcpp.h>
 #include <Rmath.h>
 #include <fmr_isna.h>

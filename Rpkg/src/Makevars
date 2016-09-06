@@ -15,7 +15,7 @@ OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/matrix -lFMatrix
 PKG_LIBS += -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs
-PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem -lz -lhwloc
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lz -lhwloc
 PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 ifdef ENABLE_TRILINOS
 	PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen

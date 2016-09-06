@@ -18,7 +18,6 @@
  */
 
 #include <unordered_map>
-#include <boost/filesystem.hpp>
 #include <Rcpp.h>
 
 #include "log.h"
@@ -148,8 +147,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 	set_log_level(c_log_level::warning);
 	std::string conf_file = CHAR(STRING_ELT(pconf, 0));
 
-	boost::filesystem::path p(conf_file);
-	if (boost::filesystem::exists(p)) {
+	if (safs::file_exist(conf_file)) {
 		configs = config_map::create(conf_file);
 		configs->add_options("writable=1");
 	}
