@@ -871,9 +871,10 @@ dense_matrix::ptr block_matrix::sapply(bulk_uoperate::const_ptr op) const
 dense_matrix::ptr block_matrix::apply(matrix_margin margin,
 		arr_apply_operate::const_ptr op) const
 {
-	// TODO
-	assert(0);
-	return dense_matrix::ptr();
+	// When applying the function on the shorter dimension, we have to combine all matrices
+	// first. We can't optimize it.
+	// TODO we currently don't support applying on the longer dimension.
+	return dense_matrix::apply(margin, op);
 }
 
 dense_matrix::ptr block_matrix::conv_store(bool in_mem, int num_nodes) const
