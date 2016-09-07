@@ -1,5 +1,4 @@
-gradient.descent <- function(X, y, get.grad, get.hessian, cost=NULL, alpha=0.1,
-							 num.iterations=500, output.path=FALSE)
+gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 {
 	# Add x_0 = 1 as the first column
 	m <- if(is.vector(X)) length(X) else nrow(X)
@@ -16,7 +15,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost=NULL, alpha=0.1,
 
 	# Look at the values over each iteration
 	theta.path <- theta
-	for (i in 1:num.iterations) {
+	for (i in 1:params$num.iters) {
 		g <- get.grad(X, y, theta)
 		if (!is.null(get.hessian) && i > 5) {
 			D2 <- get.hessian(X, y, theta)
@@ -24,19 +23,30 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost=NULL, alpha=0.1,
 			H <- H / min(abs(H))
 			z <- pcg(H, as.vector(-g))
 			z <- t(z)
+			params$linesearch <- FALSE
 		}
-		else
-			z <- -alpha * g
+		else {
+			params$linesearch <- TRUE
+			z <- -g
+		}
 
-		# TODO we might need line search here.
-		theta <- theta + z
+		eta <- 1
+		if (params$linesearch) {
+			eta <- 0.01
+			l <- cost(X, y, theta)
+			delta = params$c * t(z) %*% g
+			while (cost(X, y, theta + eta * z) >= l + delta * eta)
+				eta <- eta * params$ro
+			print(eta)
+		}
+		if (eta == 1)
+			params$linesearch <- FALSE
+
+		theta <- theta + z * eta
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
-		if (is.null(cost))
-			cat(i,  ": L2(g) =", L2(g), "\n")
-		else
-			cat(i,  ": L2(g) =", L2(g), ", cost:", cost(X, y, theta), "\n")
+		cat(i,  ": L2(g) =", L2(g), ", cost:", cost(X, y, theta), "\n")
 	}
 
-	if(output.path) return(theta.path) else return(theta.path[nrow(theta.path),])
+	if(params$out.path) return(theta.path) else return(theta.path[nrow(theta.path),])
 }

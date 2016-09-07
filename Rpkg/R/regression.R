@@ -23,6 +23,7 @@ logistic.regression <- function(X, y, method=c("GD", "Newton"))
 		get.hessian <- NULL
 	else
 		get.hessian <- logistic.hessian
-	gradient.descent(X, y, logistic.grad, get.hessian,
-					 cost=logistic.cost, alpha=0.00000001)
+	params <- list(c=0.5, ro=0.2, linesearch=is.null(get.hessian),
+				   num.iters=500, out.path=FALSE)
+	gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
 }
