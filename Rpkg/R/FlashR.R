@@ -33,6 +33,7 @@ setClass("fmSink", representation(pointer = "externalptr", name = "character",
 setClass("fm.bo", representation(info = "integer", name = "character"))
 setClass("fm.agg.op", representation(agg = "integer", combine = "integer",
 									 name = "character"))
+setClass("fm.apply.op", representation(info = "integer", name = "character"))
 
 new.fm <- function(fm)
 {
@@ -838,6 +839,12 @@ fm.create.agg.op <- function(agg, combine, name)
 	}
 }
 
+fm.get.apply.op <- function(name)
+{
+	# TODO we are using to `name' to identify an apply operator now.
+	new("fm.apply.op", info=as.integer(0), name=name)
+}
+
 #' Aggregation on a FlashMatrix object.
 #'
 #' This function accepts a basic operator and perform aggregation on
@@ -1237,6 +1244,14 @@ setMethod("fm.sapply", signature(o = "fm", FUN = "ANY", set.na="logical"),
 		  fm.sapply.fm)
 setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY", set.na="logical"),
 		  fm.sapply.fmV)
+
+fm.apply <- function(o, margin, FUN)
+{
+	if (class(FUN) == "character")
+		FUN <- fm.get.apply.op(FUN)
+	ret <- .Call("R_FM_apply", FUN, as.integer(margin), o, PACKAGE="FlashR")
+	new.fm(ret)
+}
 
 #' Groupby on a FlashMatrix vector.
 #'

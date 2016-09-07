@@ -66,6 +66,10 @@ op_id_t get_uop_id(const std::string &name);
 /* This construct an aggregation operator from binary operators. */
 fm::agg_operate::const_ptr get_agg_op(SEXP pfun, const fm::scalar_type &mat_type);
 
+void init_apply_ops();
+fm::arr_apply_operate::const_ptr get_apply_op(SEXP pfun,
+		const fm::scalar_type &mat_type);
+
 }
 
 #endif

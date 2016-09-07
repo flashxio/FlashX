@@ -1266,6 +1266,41 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 		return create_FMR_matrix(out, "");
 }
 
+RcppExport SEXP R_FM_apply(SEXP pfun, SEXP pmargin, SEXP pobj)
+{
+	Rcpp::S4 obj(pobj);
+	if (is_sparse(obj)) {
+		fprintf(stderr, "apply doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	// We only need to test on one vector.
+	bool is_vec = is_vector(obj);
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+
+	fm::arr_apply_operate::const_ptr op = fmr::get_apply_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr out = m->apply((fm::matrix_margin) margin, op);
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
+
 template<class T, class ReturnType>
 ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 {
@@ -2498,6 +2533,7 @@ RcppExport SEXP R_FM_isnan(SEXP px)
 void init_flashmatrixr()
 {
 	fmr::init_udf_ext();
+	fmr::init_apply_ops();
 }
 
 RcppExport SEXP R_FM_print_conf()

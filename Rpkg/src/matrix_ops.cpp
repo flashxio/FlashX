@@ -20,6 +20,8 @@
 #include <unordered_map>
 
 #include "matrix_ops.h"
+#include "mem_worker_thread.h"
+#include "local_vec_store.h"
 
 using namespace fm;
 
@@ -546,6 +548,124 @@ void init_udf_ext()
 	uops.push_back(bulk_uoperate::conv2ptr(
 				get_scalar_type<int>().get_type_cast(get_scalar_type<double>())));
 	register_udf(uops, "as.numeric");
+}
+
+typedef std::vector<arr_apply_operate::const_ptr> app_op_vec;
+
+static std::unordered_map<std::string, app_op_vec> apply_ops;
+
+template<class T>
+class rank_apply_operate: public arr_apply_operate
+{
+	typedef std::pair<T, int> indexed_entry;
+	std::vector<std::vector<indexed_entry> > bufs;
+	struct {
+		bool operator()(const indexed_entry &e1, const indexed_entry &e2) const {
+			return e1.first < e2.first;
+		}
+	} entry_less;
+public:
+	rank_apply_operate() {
+		bufs.resize(detail::mem_thread_pool::get_global_num_threads());
+	}
+
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const {
+		assert(out.get_length() == in.get_length());
+		const T *in_arr = reinterpret_cast<const T *>(in.get_raw_arr());
+		int *out_arr = reinterpret_cast<int *>(out.get_raw_arr());
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+		std::vector<std::pair<T, int> > &buf
+			= const_cast<rank_apply_operate *>(this)->bufs[thread_id];
+		buf.resize(in.get_length());
+		for (size_t i = 0; i < in.get_length(); i++) {
+			buf[i].first = in_arr[i];
+			buf[i].second = i;
+		}
+		std::sort(buf.begin(), buf.end(), entry_less);
+		for (size_t i = 0; i < out.get_length(); i++)
+			out_arr[i] = buf[i].second;
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return num_input;
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<int>();
+	}
+};
+
+template<class T>
+class sort_apply_operate: public arr_apply_operate
+{
+public:
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const {
+		assert(out.get_length() == in.get_length());
+		memcpy(out.get_raw_arr(), in.get_raw_arr(),
+				in.get_entry_size() * in.get_length());
+		T *out_arr = reinterpret_cast<T *>(out.get_raw_arr());
+		std::sort(out_arr, out_arr + out.get_length());
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return num_input;
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+bool register_apply_op(const std::string &name, const app_op_vec &ops)
+{
+	auto ret = apply_ops.insert(std::pair<std::string, app_op_vec>(name, ops));
+	return ret.second;
+}
+
+void init_apply_ops()
+{
+	app_op_vec ops;
+
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<bool>()));
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<int>()));
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<double>()));
+	bool ret = register_apply_op("rank", ops);
+	if (!ret)
+		fprintf(stderr, "can't register rank apply operator\n");
+
+	ops.clear();
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<bool>()));
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<int>()));
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<double>()));
+	ret = register_apply_op("sort", ops);
+	if (!ret)
+		fprintf(stderr, "can't register sort apply operator\n");
+}
+
+arr_apply_operate::const_ptr get_apply_op(SEXP pfun,
+		const fm::scalar_type &type)
+{
+	Rcpp::S4 sym_op(pfun);
+	std::string name = sym_op.slot("name");
+
+	auto it = apply_ops.find(name);
+	if (it == apply_ops.end()) {
+		fprintf(stderr, "apply function %s doesn't exist\n", name.c_str());
+		return arr_apply_operate::const_ptr();
+	}
+
+	const app_op_vec &vec = it->second;
+	for (size_t i = 0; i < vec.size(); i++)
+		if (vec[i]->get_input_type() == type)
+			return vec[i];
+	fprintf(stderr, "can't find the right type for %s\n", name.c_str());
+	return arr_apply_operate::const_ptr();
 }
 
 }
