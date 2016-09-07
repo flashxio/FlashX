@@ -55,8 +55,6 @@ void rand_vertex::set(off_t arr_idx, void *arr, size_t num_eles) const
 class sum_row: public arr_apply_operate
 {
 public:
-	sum_row(): arr_apply_operate(1) {
-	}
 	virtual void run(const local_vec_store &in, local_vec_store &out) const {
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) in.get_raw_arr();
@@ -72,6 +70,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<fg::vertex_id_t>();
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return 1;
 	}
 };
 

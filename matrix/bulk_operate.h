@@ -344,19 +344,16 @@ class local_vec_store;
  */
 class arr_apply_operate
 {
-	size_t num_out_eles;
 public:
 	typedef std::shared_ptr<const arr_apply_operate> const_ptr;
 
-	arr_apply_operate(size_t num_out_eles) {
-		this->num_out_eles = num_out_eles;
-	}
 	/*
 	 * This virtual method accepts an input array and stores the result
 	 * in an output array.
 	 */
 	virtual void run(const local_vec_store &in,
 			local_vec_store &out) const = 0;
+	virtual size_t get_num_out_eles(size_t num_input) const = 0;
 
 	virtual const scalar_type &get_input_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
@@ -367,10 +364,6 @@ public:
 
 	size_t output_entry_size() const {
 		return get_output_type().get_size();
-	}
-
-	size_t get_num_out_eles() const {
-		return num_out_eles;
 	}
 };
 

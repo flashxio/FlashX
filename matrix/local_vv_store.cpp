@@ -70,13 +70,10 @@ detail::mem_vv_store::ptr apply(const local_vv_store &store,
 		const arr_apply_operate &op)
 {
 	const scalar_type &output_type = op.get_output_type();
-	size_t out_size;
-	// If the user can predict the number of output elements, we can create
-	// a buffer of the expected size.
-	if (op.get_num_out_eles() > 0)
-		out_size = op.get_num_out_eles();
-	else
-		// If the user can't, we create a small buffer.
+	size_t out_size = op.get_num_out_eles(store.get_length(0));
+	// If the user can't predict the number of output elements, we create
+	// a small buffer.
+	if (out_size <= 0)
 		out_size = 16;
 	local_buf_vec_store buf(0, out_size, output_type, -1);
 

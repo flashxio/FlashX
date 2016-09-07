@@ -928,9 +928,6 @@ void test_create_const()
 class sum_apply_op: public arr_apply_operate
 {
 public:
-	sum_apply_op(): arr_apply_operate(1) {
-	}
-
 	void run(const local_vec_store &in, local_vec_store &out) const {
 		assert(in.get_type() == get_scalar_type<int>());
 		assert(out.get_type() == get_scalar_type<long>());
@@ -946,6 +943,9 @@ public:
 
 	const scalar_type &get_output_type() const {
 		return get_scalar_type<long>();
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return 1;
 	}
 };
 

@@ -2523,7 +2523,6 @@ public:
 dense_matrix::ptr dense_matrix::apply(matrix_margin margin,
 		arr_apply_operate::const_ptr op) const
 {
-	assert(op->get_num_out_eles() > 0);
 	// In these two cases, we need to convert the matrix store layout
 	// before we can apply the function to the matrix.
 	detail::matrix_store::const_ptr this_mat;
@@ -2601,10 +2600,10 @@ dense_matrix::ptr dense_matrix::apply(matrix_margin margin,
 		size_t out_num_cols;
 		if (margin == matrix_margin::MAR_ROW) {
 			out_num_rows = this->get_num_rows();
-			out_num_cols = op->get_num_out_eles();
+			out_num_cols = op->get_num_out_eles(this->get_num_cols());
 		}
 		else {
-			out_num_rows = op->get_num_out_eles();
+			out_num_rows = op->get_num_out_eles(this->get_num_rows());
 			out_num_cols = this->get_num_cols();
 		}
 		matrix_margin_apply_op::const_ptr apply_op(new matrix_margin_apply_op(
