@@ -1819,14 +1819,13 @@ void test_setdata(int num_nodes)
 	}
 }
 
-void test_EM_matrix(int num_nodes)
+void _test_EM_matrix()
 {
 	printf("test EM matrix\n");
 	in_mem = false;
 
-	matrix_val = matrix_val_t::SEQ;
-	test_agg(-1, matrix_layout_t::L_COL);
 	test_agg(-1, matrix_layout_t::L_ROW);
+	test_agg(-1, matrix_layout_t::L_COL);
 	test_setdata(-1);
 	test_EM_persistent();
 	test_sub_matrix();
@@ -1854,6 +1853,15 @@ void test_EM_matrix(int num_nodes)
 	test_conv_row_col();
 	test_flatten();
 #endif
+}
+
+void test_EM_matrix()
+{
+	block_size = 3;
+	matrix_val = matrix_val_t::SEQ;
+	_test_EM_matrix();
+	block_size = 0;
+	_test_EM_matrix();
 }
 
 void _test_mem_matrix(int num_nodes)
@@ -2724,7 +2732,7 @@ int main(int argc, char *argv[])
 	test_conv_store();
 	test_mapply_mixed(num_nodes);
 	test_mem_matrix(num_nodes);
-	test_EM_matrix(num_nodes);
+	test_EM_matrix();
 	long_dim = 9999;
 	test_mem_matrix(num_nodes);
 
