@@ -2176,6 +2176,18 @@ void test_get_rowcols(int num_nodes)
 	mat = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<int>());
 	_test_get_rowcols(mat);
+
+	printf("test on a row-major tall virtual matrix in SMP\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, -1,
+			get_scalar_type<int>());
+	mat = mat->add(*mat);
+	_test_get_rowcols(mat);
+
+	printf("test on a col-major tall virtual matrix in SMP\n");
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_COL, -1,
+			get_scalar_type<int>());
+	mat = mat->add(*mat);
+	_test_get_rowcols(mat);
 }
 
 void test_materialize(int num_nodes)

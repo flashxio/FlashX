@@ -981,6 +981,61 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 				par_access);
 }
 
+matrix_store::const_ptr mapply_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	if (is_materialized())
+		return res->get_materialize_res(is_wide())->get_rows(idxs);
+	if (is_wide()) {
+		materialize_self();
+		printf("materialize a wide matrix (%ld,%ld) to get %ld rows\n",
+				get_num_rows(), get_num_cols(), idxs.size());
+		// TODO maybe we should optimize it and materialize part of it.
+		// It's possible if the computation is element-wise.
+		return res->get_materialize_res(is_wide())->get_rows(idxs);
+	}
+
+	// In this case, we are dealing with a tall matrix and need to find out
+	// the portions in the matrix that need to be materialized.
+	mem_matrix_store::ptr ret = mem_matrix_store::create(idxs.size(),
+			get_num_cols(), matrix_layout_t::L_ROW, get_type(), -1);
+	std::unordered_map<off_t, local_matrix_store::const_ptr> portions;
+	size_t portion_size = get_portion_size().first;
+	std::vector<const char *> src_eles(get_num_cols());
+	for (size_t i = 0; i < idxs.size(); i++) {
+		off_t portion_idx = idxs[i] / portion_size;
+		auto it = portions.find(portion_idx);
+		local_matrix_store::const_ptr portion;
+		if (it == portions.end()) {
+			// TODO it might be better if we get portions asynchronously.
+			// For in-memory matrix, this approach may waste a lot of computation
+			// because we have to construct the entire portion, which is
+			// unnecessary in some cases.
+			portion = get_portion(portion_idx);
+			portions.insert(std::pair<off_t, local_matrix_store::const_ptr>(
+						portion_idx, portion));
+		}
+		else
+			portion = it->second;
+
+		if (portion->store_layout() == matrix_layout_t::L_ROW) {
+			local_row_matrix_store::const_ptr row_portion
+				= std::static_pointer_cast<const local_row_matrix_store>(portion);
+			memcpy(ret->get_row(i),
+					row_portion->get_row(idxs[i] - portion->get_global_start_row()),
+					get_num_cols() * get_type().get_size());
+		}
+		else {
+			local_col_matrix_store::const_ptr col_portion
+				= std::static_pointer_cast<const local_col_matrix_store>(portion);
+			for (size_t j = 0; j < get_num_cols(); j++)
+				src_eles[j] = portion->get(idxs[i] - portion->get_global_start_row(), j);
+			get_type().get_sg().gather(src_eles, ret->get_row(i));
+		}
+	}
+	return ret;
+}
+
 static local_matrix_store::const_ptr transpose_lmapply(
 		local_matrix_store::const_ptr store)
 {

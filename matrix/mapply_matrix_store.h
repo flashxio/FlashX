@@ -95,6 +95,8 @@ public:
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 		int num_nodes) const;
 
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
