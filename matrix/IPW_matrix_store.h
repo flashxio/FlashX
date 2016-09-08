@@ -56,7 +56,7 @@ public:
 
 	virtual void materialize_self() const;
 
-	virtual virtual_matrix_store::const_ptr get_compute_matrix() const;
+	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const;
 	virtual matrix_store::const_ptr get_result() const {
 		if (has_materialized())
 			return get_combine_res();

@@ -533,10 +533,11 @@ std::vector<safs::io_interface::ptr> agg_compute_store::create_ios() const
 		return std::vector<safs::io_interface::ptr>();
 }
 
-virtual_matrix_store::const_ptr agg_matrix_store::get_compute_matrix() const
+std::vector<virtual_matrix_store::const_ptr> agg_matrix_store::get_compute_matrices() const
 {
-	return virtual_matrix_store::const_ptr(new agg_compute_store(data,
-				portion_op));
+	return std::vector<virtual_matrix_store::const_ptr>(1,
+			virtual_matrix_store::const_ptr(new agg_compute_store(data,
+					portion_op)));
 }
 
 }

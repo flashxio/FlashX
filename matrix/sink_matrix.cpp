@@ -23,6 +23,8 @@
 #include "local_matrix_store.h"
 #include "EM_object.h"
 #include "dense_matrix.h"
+#include "materialize.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -323,197 +325,69 @@ async_cres_t block_group::get_portion_async(size_t start_row, size_t start_col,
 
 }
 
-std::vector<matrix_store::const_ptr> reorg_block_sinks(
-		const std::vector<block_sink_store::const_ptr> &sinks)
+static size_t get_num_rows(const std::vector<sink_store::const_ptr> &stores,
+		size_t num_block_rows, size_t num_block_cols)
 {
-	size_t num_blocks = sinks[0]->get_num_blocks();
-	std::vector<detail::matrix_store::const_ptr> block_groups(num_blocks);
-	for (size_t i = 0; i < num_blocks; i++) {
-		// block i from all sink matrices.
-		std::vector<detail::matrix_store::const_ptr> blocks(sinks.size());
-		for (size_t j = 0; j < sinks.size(); j++)
-			blocks[j] = sinks[j]->get_block(i);
-		for (size_t j = 1; j < blocks.size(); j++) {
-			// The blocks are from the block matrices. They should all be
-			// the same.
-			assert(blocks[j]->get_num_rows() == blocks[0]->get_num_rows());
-			assert(blocks[j]->get_num_cols() == blocks[0]->get_num_cols());
-			assert(blocks[j]->is_in_mem() == blocks[0]->is_in_mem());
-		}
-		block_groups[i] = detail::matrix_store::const_ptr(new block_group(blocks));
-	}
-	return block_groups;
+	size_t num_rows = 0;
+	for (size_t i = 0; i < num_block_rows; i++)
+		num_rows += stores[i * num_block_cols]->get_num_rows();
+	return num_rows;
 }
 
-typedef std::vector<block_sink_store::const_ptr> sink_vec_t;
-
-std::vector<sink_vec_t> group_block_sinks(const sink_vec_t &sinks)
+static size_t get_num_cols(const std::vector<sink_store::const_ptr> &stores,
+		size_t num_block_rows, size_t num_block_cols)
 {
-	// I assume the number of block sink matrices is small.
-	// Maybe we can use hashing to reduce the number of groups we should
-	// search through. For now we only need scan all groups to figure out
-	// which group a sink matrix belongs to.
-	std::vector<sink_vec_t> ret;
-	for (size_t i = 0; i < sinks.size(); i++) {
-		block_sink_store::const_ptr store = sinks[i];
-		// Let's search through all groups and see which group does this sink
-		// matrix belongs to.
-		for (size_t j = 0; j < ret.size(); j++) {
-			if (ret[j].front()->match(*store)) {
-				ret[j].push_back(store);
-				store = NULL;
-			}
-		}
-
-		// This sink matrix doesn't belong to any group, let's create
-		// a new group.
-		if (store)
-			ret.push_back(sink_vec_t(1, store));
-	}
-
-	return ret;
+	size_t num_cols = 0;
+	for (size_t i = 0; i < num_block_cols; i++)
+		num_cols += stores[i]->get_num_cols();
+	return num_cols;
 }
 
-static size_t get_num_rows(const std::vector<matrix_store::const_ptr> &stores)
+block_sink_store::ptr block_sink_store::create(
+		const std::vector<matrix_store::const_ptr> &stores,
+		size_t num_block_rows, size_t num_block_cols)
 {
-	if (stores[0]->is_wide()) {
-		size_t num_rows = 0;
-		for (size_t i = 0; i < stores.size(); i++)
-			num_rows += stores[i]->get_num_rows();
-		return num_rows;
+	std::vector<sink_store::const_ptr> sink_stores(stores.size());
+	for (size_t i = 0; i < stores.size(); i++) {
+		sink_stores[i] = std::dynamic_pointer_cast<const sink_store>(stores[i]);
+		// The input matrices have to be sink matrices.
+		assert(sink_stores[i]);
 	}
-	else
-		return stores[0]->get_num_rows();
-}
-
-static size_t get_num_cols(const std::vector<matrix_store::const_ptr> &stores)
-{
-	if (stores[0]->is_wide())
-		return stores[0]->get_num_cols();
-	else {
-		size_t num_cols = 0;
-		for (size_t i = 0; i < stores.size(); i++)
-			num_cols += stores[i]->get_num_cols();
-		return num_cols;
-	}
+	return block_sink_store::ptr(new block_sink_store(sink_stores,
+				num_block_rows, num_block_cols));
 }
 
 block_sink_store::block_sink_store(
-		const std::vector<matrix_store::const_ptr> &stores): virtual_matrix_store(
-			detail::get_num_rows(stores), detail::get_num_cols(stores),
-			stores[0]->is_in_mem(), stores[0]->get_type())
+		// I assume all matrices are kept in row-major order.
+		const std::vector<sink_store::const_ptr> &stores,
+		size_t num_block_rows, size_t num_block_cols): sink_store(
+			detail::get_num_rows(stores, num_block_rows,
+				num_block_cols), detail::get_num_cols(stores, num_block_rows,
+				num_block_cols), stores[0]->is_in_mem(), stores[0]->get_type())
 {
+	this->num_block_rows = num_block_rows;
+	this->num_block_cols = num_block_cols;
 	this->stores = stores;
-	under_mats.resize(stores.size());
-	// Collect the underlying matrices for each input matrix.
-	for (size_t i = 0; i < stores.size(); i++) {
-		auto ret = stores[i]->get_underlying_mats();
-		for (auto it = ret.begin(); it != ret.end(); it++)
-			under_mats[i].push_back(it->first);
+
+	// all matrices in the block row should have the same number of rows.
+	for (size_t i = 0; i < num_block_rows; i++) {
+		size_t num_rows = stores[num_block_cols * i]->get_num_rows();
+		for (size_t j = 0; j < num_block_cols; j++)
+			assert(stores[num_block_cols * i + j]->get_num_rows() == num_rows);
 	}
-}
-
-/*
- * In order to have two block sink matrices materialized together,
- * all of the following conditions should be met:
- * * both matrices should the same number of blocks.
- * * each block should have the same underlying matrices.
- */
-bool block_sink_store::match(const block_sink_store &store) const
-{
-	if (under_mats.size() != store.under_mats.size())
-		return false;
-
-	for (size_t i = 0; i < under_mats.size(); i++) {
-		if (under_mats[i].size() != store.under_mats[i].size())
-			return false;
-		for (size_t j = 0; j < under_mats[i].size(); j++)
-			if (under_mats[i][j] != store.under_mats[i][j])
-				return false;
+	// all matrices in the block row should have the same number of rows.
+	for (size_t i = 0; i < num_block_cols; i++) {
+		size_t num_cols = stores[i]->get_num_cols();
+		for (size_t j = 0; j < num_block_rows; j++)
+			assert(stores[num_block_cols * j + i]->get_num_cols() == num_cols);
 	}
-	return true;
-}
-
-std::vector<matrix_store::const_ptr> block_sink_store::get_materialized_blocks() const
-{
-	std::vector<dense_matrix::ptr> mats(stores.size());
-	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = dense_matrix::create(stores[i]);
-	// TODO we may need to disable caching on the matrices.
-	bool ret = fm::materialize(mats, false);
-	if (!ret)
-		return std::vector<matrix_store::const_ptr>();
-
-	std::vector<matrix_store::const_ptr> stores(mats.size());
-	for (size_t i = 0; i < stores.size(); i++)
-		stores[i] = mats[i]->get_raw_store();
-	return stores;
-}
-
-matrix_store::const_ptr block_sink_store::get_cols(
-		const std::vector<off_t> &idxs) const
-{
-	assert(0);
-	return matrix_store::const_ptr();
-}
-
-matrix_store::const_ptr block_sink_store::get_rows(
-		const std::vector<off_t> &idxs) const
-{
-	assert(0);
-	return matrix_store::const_ptr();
-}
-
-local_matrix_store::const_ptr block_sink_store::get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const
-{
-	assert(0);
-	return local_matrix_store::const_ptr();
-}
-
-local_matrix_store::const_ptr block_sink_store::get_portion(size_t id) const
-{
-	assert(0);
-	return local_matrix_store::const_ptr();
-}
-
-async_cres_t block_sink_store::get_portion_async(size_t start_row,
-		size_t start_col, size_t num_rows, size_t num_cols,
-		std::shared_ptr<portion_compute> compute) const
-{
-	assert(0);
-	return async_cres_t();
+	assert(num_block_rows * num_block_cols == stores.size());
 }
 
 matrix_store::const_ptr block_sink_store::transpose() const
 {
 	assert(0);
 	return matrix_store::const_ptr();
-}
-
-int block_sink_store::get_portion_node_id(size_t id) const
-{
-	assert(0);
-	return -1;
-}
-
-std::pair<size_t, size_t> block_sink_store::get_portion_size() const
-{
-	assert(0);
-	return std::pair<size_t, size_t>();
-}
-
-int block_sink_store::get_num_nodes() const
-{
-	return stores[0]->get_num_nodes();
-}
-
-matrix_layout_t block_sink_store::store_layout() const
-{
-	// The matrix either contains a vector or a single element.
-	// In either case, it should be stored in column-major order.
-	return matrix_layout_t::L_COL;
 }
 
 std::string block_sink_store::get_name() const
@@ -526,6 +400,68 @@ std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 {
 	assert(0);
 	return std::unordered_map<size_t, size_t>();
+}
+
+matrix_store::const_ptr block_sink_store::get_result() const
+{
+	if (result == NULL)
+		materialize_self();
+	return result;
+}
+
+std::vector<virtual_matrix_store::const_ptr> block_sink_store::get_compute_matrices() const
+{
+	std::vector<virtual_matrix_store::const_ptr> ret;
+	for (size_t i = 0; i < stores.size(); i++) {
+		auto tmp = stores[i]->get_compute_matrices();
+		ret.insert(ret.end(), tmp.begin(), tmp.end());
+	}
+	return ret;
+}
+
+void block_sink_store::materialize_self() const
+{
+	if (result)
+		return;
+
+	std::vector<dense_matrix::ptr> mats(stores.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		mats[i] = dense_matrix::create(stores[i]);
+	// We don't want to materialize all block matrices together because it
+	// might consume a lot of memory.
+	bool ret =fm::materialize(mats, false);
+	assert(ret);
+	std::vector<matrix_store::const_ptr> res_stores(stores.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		res_stores[i] = mats[i]->get_raw_store();
+
+	mem_matrix_store::ptr res = mem_matrix_store::create(get_num_rows(),
+			get_num_cols(), store_layout(), get_type(), -1);
+	off_t start_row = 0;
+	for (size_t i = 0; i < num_block_rows; i++) {
+		off_t start_col = 0;
+		for (size_t j = 0; j < num_block_cols; j++) {
+			local_matrix_store::const_ptr tmp_portion
+				= res_stores[i]->get_portion(0);
+			assert(tmp_portion->get_num_rows() == res_stores[i]->get_num_rows());
+			assert(tmp_portion->get_num_cols() == res_stores[i]->get_num_cols());
+
+			local_matrix_store::ptr res_portion = res->get_portion(start_row,
+					start_col, res_stores[i]->get_num_rows(),
+					res_stores[i]->get_num_cols());
+			res_portion->copy_from(*tmp_portion);
+			start_col += res_stores[i]->get_num_cols();
+		}
+		start_row += get_mat(i, 0).get_num_rows();
+	}
+	const_cast<block_sink_store *>(this)->result = res;
+}
+
+matrix_store::const_ptr block_sink_store::materialize(bool in_mem,
+		int num_nodes) const
+{
+	materialize_self();
+	return result;
 }
 
 }

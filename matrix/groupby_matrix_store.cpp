@@ -481,10 +481,11 @@ std::vector<safs::io_interface::ptr> groupby_compute_store::create_ios() const
 	return ios;
 }
 
-virtual_matrix_store::const_ptr groupby_matrix_store::get_compute_matrix() const
+std::vector<virtual_matrix_store::const_ptr> groupby_matrix_store::get_compute_matrices() const
 {
-	return virtual_matrix_store::const_ptr(new groupby_compute_store(data,
-				label_store, portion_op, margin));
+	return std::vector<virtual_matrix_store::const_ptr>(1,
+			virtual_matrix_store::const_ptr(new groupby_compute_store(data,
+					label_store, portion_op, margin)));
 }
 
 }

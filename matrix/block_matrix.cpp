@@ -26,6 +26,8 @@
 #include "agg_matrix_store.h"
 #include "project_matrix_store.h"
 #include "IPW_matrix_store.h"
+#include "materialize.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -911,154 +913,65 @@ bool block_matrix::move_store(bool in_mem, int num_nodes) const
 namespace
 {
 
-/*
- * This is for aggregating on the long dimensions.
- * When we get the aggregation result from each matrix, we concatenate
- * the results.
- */
-class long_agg_block_sink_store: public detail::block_sink_store
+class agg_block_sink_store: public detail::sink_store
 {
-	detail::matrix_store::const_ptr final_res;
-public:
-	typedef std::vector<detail::matrix_store::const_ptr> mat_vec_t;
-	long_agg_block_sink_store(const mat_vec_t &stores): detail::block_sink_store(
-				stores) {
-	}
-
-	virtual void materialize_self() const;
-
-	virtual matrix_store::const_ptr materialize(bool in_mem,
-			int num_nodes) const;
-};
-
-void long_agg_block_sink_store::materialize_self() const
-{
-	if (final_res == NULL)
-		const_cast<long_agg_block_sink_store *>(this)->final_res
-			= materialize(true, -1);
-}
-
-detail::matrix_store::const_ptr long_agg_block_sink_store::materialize(
-		bool in_mem, int num_nodes) const
-{
-	if (final_res)
-		return final_res;
-
-	// Get the materialized parts.
-	std::vector<matrix_store::const_ptr> parts;
-	detail::agg_matrix_store::const_ptr agg_mat
-		= std::dynamic_pointer_cast<const detail::agg_matrix_store>(get_block(0));
-	assert(agg_mat);
-	bool materialized = agg_mat->has_materialized();
-	if (materialized) {
-		parts.resize(get_num_blocks());
-		parts[0] = agg_mat->materialize(true, -1);
-		for (size_t i = 1; i < get_num_blocks(); i++) {
-			agg_mat = std::dynamic_pointer_cast<const detail::agg_matrix_store>(
-					get_block(i));
-			assert(agg_mat);
-			// If one is materialized, all others should also have been
-			// materialized.
-			assert(agg_mat->has_materialized());
-			parts[i] = agg_mat->materialize(true, -1);
-		}
-	}
-	else
-		parts = get_materialized_blocks();
-
-	size_t num_rows = 0;
-	for (size_t i = 0; i < get_num_blocks(); i++) {
-		assert(parts[i]->get_num_cols() == 1);
-		num_rows += parts[i]->get_num_rows();
-	}
-	detail::mem_col_matrix_store::ptr ret
-		= detail::mem_col_matrix_store::create(num_rows, 1, parts[0]->get_type());
-	size_t row_idx = 0;
-	for (size_t i = 0; i < parts.size(); i++) {
-		assert(parts[i]->is_in_mem());
-		detail::mem_matrix_store::const_ptr part
-			= std::static_pointer_cast<const detail::mem_matrix_store>(parts[i]);
-		memcpy(ret->get_raw_arr() + row_idx * ret->get_entry_size(),
-				part->get_raw_arr(),
-				part->get_num_rows() * part->get_entry_size());
-		row_idx += part->get_num_rows();
-	}
-	return ret;
-}
-
-/*
- * This is for aggregating on all elements and outputting a single value.
- * When we get the aggregation result from each matrix, we combine the results
- * into a single value.
- */
-class agg_block_sink_store: public detail::block_sink_store
-{
+	detail::block_sink_store::const_ptr bsink;
 	agg_operate::const_ptr op;
-	detail::matrix_store::const_ptr final_res;
+
+	static bool is_all_in_mem(
+			const std::vector<detail::matrix_store::const_ptr> &stores) {
+		for (size_t i = 0; i < stores.size(); i++)
+			if (!stores[i]->is_in_mem())
+				return false;
+		return true;
+	}
 public:
-	typedef std::vector<detail::matrix_store::const_ptr> mat_vec_t;
-	agg_block_sink_store(const mat_vec_t &stores,
-			agg_operate::const_ptr op): detail::block_sink_store(stores) {
+	agg_block_sink_store(
+			const std::vector<detail::matrix_store::const_ptr> &stores,
+			agg_operate::const_ptr op): detail::sink_store(1, 1,
+				is_all_in_mem(stores), op->get_output_type()) {
+		bsink = detail::block_sink_store::create(stores, stores.size(), 1);
 		this->op = op;
 	}
 
-	virtual void materialize_self() const;
-
-	virtual matrix_store::const_ptr materialize(bool in_mem,
-			int num_nodes) const;
-};
-
-void agg_block_sink_store::materialize_self() const
-{
-	if (final_res == NULL)
-		const_cast<agg_block_sink_store *>(this)->final_res = materialize(
-				true, -1);
-}
-
-detail::matrix_store::const_ptr agg_block_sink_store::materialize(
-		bool in_mem, int num_nodes) const
-{
-	if (final_res)
-		return final_res;
-
-	// Get the materialized parts.
-	std::vector<matrix_store::const_ptr> blocks;
-	detail::agg_matrix_store::const_ptr agg_mat
-		= std::dynamic_pointer_cast<const detail::agg_matrix_store>(get_block(0));
-	assert(agg_mat);
-	bool materialized = agg_mat->has_materialized();
-	if (materialized) {
-		blocks.resize(get_num_blocks());
-		blocks[0] = agg_mat->materialize(true, -1);
-		for (size_t i = 1; i < get_num_blocks(); i++) {
-			agg_mat = std::dynamic_pointer_cast<const detail::agg_matrix_store>(
-					get_block(i));
-			assert(agg_mat);
-			// If one is materialized, all others should also have been
-			// materialized.
-			assert(agg_mat->has_materialized());
-			blocks[i] = agg_mat->materialize(true, -1);
-		}
-	}
-	else
-		blocks = get_materialized_blocks();
-
-	detail::mem_col_matrix_store::ptr parts
-		= detail::mem_col_matrix_store::create(get_num_blocks(), 1, get_type());
-	for (size_t i = 0; i < get_num_blocks(); i++) {
-		assert(blocks[i]->get_num_cols() == 1 && blocks[i]->get_num_rows() == 1);
-		assert(blocks[i]->is_in_mem());
+	virtual matrix_store::const_ptr get_result() const {
+		detail::matrix_store::const_ptr part_res = bsink->get_result();
 		detail::mem_matrix_store::const_ptr mem_part
-			= std::static_pointer_cast<const detail::mem_matrix_store>(blocks[i]);
-		memcpy(parts->get(i, 0), mem_part->get(0, 0), mem_part->get_entry_size());
+			= std::dynamic_pointer_cast<const detail::mem_matrix_store>(part_res);
+		assert(mem_part);
+		const bulk_operate &combine = op->get_combine();
+		detail::mem_matrix_store::ptr ret = detail::mem_matrix_store::create(
+				1, 1, matrix_layout_t::L_ROW, combine.get_output_type(), -1);
+		combine.runAgg(mem_part->get_num_rows() * mem_part->get_num_cols(),
+				mem_part->get_raw_arr(), ret->get_raw_arr());
+		return ret;
 	}
-	detail::mem_col_matrix_store::ptr ret
-		= detail::mem_col_matrix_store::create(1, 1, parts->get_type());
-	assert(op->has_combine());
-	op->get_combine().runAgg(parts->get_num_rows(), parts->get_raw_arr(),
-			ret->get_raw_arr());
-	return ret;
-}
+
+	virtual std::vector<detail::virtual_matrix_store::const_ptr> get_compute_matrices() const {
+		return bsink->get_compute_matrices();
+	}
+	virtual void materialize_self() const {
+		bsink->materialize_self();
+	}
+	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const {
+		return bsink->materialize(in_mem, num_nodes);
+	}
+
+	virtual detail::matrix_store::const_ptr transpose() const {
+		return bsink->transpose();
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		return bsink->store_layout();
+	}
+
+	virtual std::string get_name() const {
+		return bsink->get_name();
+	}
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		return bsink->get_underlying_mats();
+	}
+};
 
 }
 
@@ -1101,10 +1014,13 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 			sinks[i] = res->get_raw_store();
 		}
 		detail::matrix_store::ptr ret;
-		if (margin == matrix_margin::BOTH)
+		if (margin == matrix_margin::BOTH) {
 			ret = detail::matrix_store::ptr(new agg_block_sink_store(sinks, op));
+		}
+		else if (margin == matrix_margin::MAR_ROW)
+			ret = detail::block_sink_store::create(sinks, sinks.size(), 1);
 		else
-			ret = detail::matrix_store::ptr(new long_agg_block_sink_store(sinks));
+			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
 		return dense_matrix::create(ret);
 	}
 }

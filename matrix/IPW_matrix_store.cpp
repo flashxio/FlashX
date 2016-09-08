@@ -1244,10 +1244,11 @@ std::unordered_map<size_t, size_t> IPW_compute_store::get_underlying_mats() cons
 	return final_res;
 }
 
-virtual_matrix_store::const_ptr IPW_matrix_store::get_compute_matrix() const
+std::vector<virtual_matrix_store::const_ptr> IPW_matrix_store::get_compute_matrices() const
 {
-	return virtual_matrix_store::const_ptr(new IPW_compute_store(left_mat,
-				right_mat, left_op, right_op, portion_op, layout));
+	return std::vector<virtual_matrix_store::const_ptr>(1,
+			virtual_matrix_store::const_ptr(new IPW_compute_store(left_mat,
+					right_mat, left_op, right_op, portion_op, layout)));
 }
 
 }
