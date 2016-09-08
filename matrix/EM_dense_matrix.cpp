@@ -583,7 +583,13 @@ void EM_matrix_store::end_stream()
 	stream = NULL;
 }
 
-void EM_matrix_store::wait4complete()
+void EM_matrix_store::wait4complete(size_t num_ios) const
+{
+	safs::io_interface &io = ios->get_curr_io();
+	io.wait4complete(num_ios);
+}
+
+void EM_matrix_store::wait4complete() const
 {
 	safs::io_interface &io = ios->get_curr_io();
 	io.wait4complete(io.num_pending_ios());
@@ -685,11 +691,7 @@ public:
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) const {
-		// TODO let's not support this first.
-		assert(0);
-		return local_matrix_store::ptr();
-	}
+			size_t num_cols) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) {
@@ -888,6 +890,23 @@ static std::vector<std::pair<off_t, off_t> > split_idxs(
 		}
 	}
 	return vecs;
+}
+
+local_matrix_store::const_ptr sub_EM_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows, size_t num_cols) const
+{
+	bool ready = false;
+	portion_compute::ptr compute(new sync_read_compute(ready));
+	async_cres_t ret = get_portion_async(start_row, start_col,
+			num_rows, num_cols, compute);
+	// If we can't get the specified portion or the portion already has
+	// the valid data.
+	if (ret.second == NULL || ret.first)
+		return ret.second;
+
+	while (!ready)
+		orig->wait4complete(1);
+	return ret.second;
 }
 
 async_cres_t sub_EM_matrix_store::get_col_portion_async(

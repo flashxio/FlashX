@@ -194,7 +194,8 @@ public:
 	 * This should be called in the main thread.
 	 */
 	void end_stream();
-	void wait4complete();
+	void wait4complete() const;
+	void wait4complete(size_t num_ios) const;
 
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const;
