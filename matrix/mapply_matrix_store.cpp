@@ -987,12 +987,11 @@ matrix_store::const_ptr mapply_matrix_store::get_rows(
 	if (is_materialized())
 		return res->get_materialize_res(is_wide())->get_rows(idxs);
 	if (is_wide()) {
-		materialize_self();
-		printf("materialize a wide matrix (%ld,%ld) to get %ld rows\n",
-				get_num_rows(), get_num_cols(), idxs.size());
+		// We rely on get_rows in dense_matrix to materialize the matrix
+		// and get the required rows on the fly.
 		// TODO maybe we should optimize it and materialize part of it.
 		// It's possible if the computation is element-wise.
-		return res->get_materialize_res(is_wide())->get_rows(idxs);
+		return matrix_store::const_ptr();
 	}
 
 	// In this case, we are dealing with a tall matrix and need to find out
