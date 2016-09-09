@@ -177,8 +177,10 @@ int mem_thread_pool::get_curr_thread_id()
 	else {
 		detail::pool_task_thread *curr
 			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-		assert(curr);
-		return curr->get_pool_thread_id();
+		if (curr)
+			return curr->get_pool_thread_id();
+		else
+			return -1;
 	}
 }
 
