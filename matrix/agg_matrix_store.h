@@ -23,7 +23,9 @@
 #include "io_interface.h"
 
 #include "sink_matrix.h"
-#include "dense_matrix.h"
+#include "bulk_operate.h"
+#include "bulk_operate_ext.h"
+#include "materialize.h"
 #include "EM_object.h"
 
 namespace fm

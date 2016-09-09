@@ -48,6 +48,13 @@ enum matrix_layout_t
 	L_NONE,
 };
 
+enum matrix_margin
+{
+	MAR_ROW = 1,
+	MAR_COL = 2,
+	BOTH,
+};
+
 static const size_t block_max_num_rows = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
 static const size_t block_max_num_cols = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
 

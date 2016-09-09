@@ -20,7 +20,7 @@
 #include <numeric>
 
 #include "agg_matrix_store.h"
-#include "dense_matrix.h"
+#include "materialize.h"
 #include "local_matrix_store.h"
 #include "mem_worker_thread.h"
 

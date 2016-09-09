@@ -26,6 +26,8 @@
 namespace fm
 {
 
+class factor_col_vector;
+
 namespace detail
 {
 

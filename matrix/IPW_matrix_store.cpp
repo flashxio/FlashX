@@ -20,7 +20,7 @@
 #include <cblas.h>
 
 #include "IPW_matrix_store.h"
-#include "dense_matrix.h"
+#include "materialize.h"
 #include "local_matrix_store.h"
 #include "project_matrix_store.h"
 

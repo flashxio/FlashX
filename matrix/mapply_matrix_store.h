@@ -21,9 +21,9 @@
  */
 
 #include "virtual_matrix_store.h"
-#include "dense_matrix.h"
 #include "mem_matrix_store.h"
 #include "EM_object.h"
+#include "materialize.h"
 
 namespace fm
 {

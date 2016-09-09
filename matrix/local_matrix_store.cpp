@@ -25,7 +25,7 @@
 
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
-#include "dense_matrix.h"
+#include "materialize.h"
 #include "factor.h"
 
 namespace fm

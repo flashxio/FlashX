@@ -34,6 +34,7 @@
 #include "matrix_store.h"
 #include "mem_matrix_store.h"
 #include "virtual_matrix_store.h"
+#include "materialize.h"
 
 namespace fm
 {
@@ -46,114 +47,6 @@ class vector;
 class factor_col_vector;
 class col_vec;
 class data_frame;
-
-enum matrix_margin
-{
-	MAR_ROW = 1,
-	MAR_COL = 2,
-	BOTH,
-};
-
-class dense_matrix;
-
-namespace detail
-{
-
-class local_matrix_store;
-class sparse_project_matrix_store;
-
-class portion_mapply_op
-{
-	size_t out_num_rows;
-	size_t out_num_cols;
-	const scalar_type &type;
-public:
-	typedef std::shared_ptr<const portion_mapply_op> const_ptr;
-
-	portion_mapply_op(size_t out_num_rows, size_t out_num_cols,
-			const scalar_type &_type): type(_type) {
-		this->out_num_rows = out_num_rows;
-		this->out_num_cols = out_num_cols;
-	}
-
-	virtual portion_mapply_op::const_ptr transpose() const = 0;
-
-	/*
-	 * There are three versions of performing computation on the portions.
-	 * The first version performs computation only on input portions;
-	 * the second version performs computation on input portions and
-	 * outputs only one matrix;
-	 * the third version performs computation on input portions and outputs
-	 * multiple matrices.
-	 */
-
-	virtual void run(
-			const std::vector<std::shared_ptr<const local_matrix_store> > &ins) const;
-	virtual void run(
-			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
-			local_matrix_store &out) const;
-	virtual void run(
-			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
-			const std::vector<std::shared_ptr<local_matrix_store> > &outs) const;
-
-	virtual std::string to_string(
-			const std::vector<matrix_store::const_ptr> &mats) const = 0;
-
-	/*
-	 * Give a hint if this operation is aggregation, so we can optimize
-	 * the backend accordingly. When this is an aggregation operation,
-	 * the second `run' method has to be implemented.
-	 */
-	virtual bool is_agg() const {
-		return false;
-	}
-
-	size_t get_out_num_rows() const {
-		return out_num_rows;
-	}
-	size_t get_out_num_cols() const {
-		return out_num_cols;
-	}
-	const scalar_type &get_output_type() const {
-		return type;
-	}
-};
-
-/*
- * These two functions return a virtual matrix that records the computation.
- */
-
-std::shared_ptr<dense_matrix> mapply_portion(
-		const std::vector<std::shared_ptr<const dense_matrix> > &mats,
-		// A user can specify the layout of the output dense matrix.
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool par_access = true);
-matrix_store::ptr __mapply_portion_virtual(
-		const std::vector<matrix_store::const_ptr> &store,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool par_access = true);
-
-/*
- * These three functions return a materialized matrix.
- * The first version determines the storage of the output matrix automatically.
- * The second version allows users to specify the storage for the output matrix.
- * The third version not only allows users to specify the storage for the output
- * matrix, but also allows multiple output matrices.
- */
-
-matrix_store::ptr __mapply_portion(
-		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool par_access = true);
-matrix_store::ptr __mapply_portion(
-		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
-		bool out_in_mem, int out_num_nodes, bool par_access = true);
-bool __mapply_portion(
-		const std::vector<matrix_store::const_ptr> &mats,
-		portion_mapply_op::const_ptr op,
-		const std::vector<matrix_store::ptr> &out_mats, bool par_access = true);
-}
 
 /*
  * This class represents a dense matrix and is able to perform computation
@@ -588,8 +481,6 @@ inline dense_matrix t(const dense_matrix &m)
 	assert(ret);
 	return *ret;
 }
-
-bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access = true);
 
 }
 

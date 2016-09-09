@@ -21,7 +21,7 @@
 #include "local_matrix_store.h"
 #include "vec_store.h"
 #include "local_mem_buffer.h"
-#include "dense_matrix.h"
+#include "materialize.h"
 #include "EM_dense_matrix.h"
 
 namespace fm
