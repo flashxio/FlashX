@@ -61,7 +61,7 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	# compute its eigenvalues directly.
 	if (!is.null(x.prod) && (n < 100 || nev >= n / 2)) {
 		res <- eigen(x.prod, TRUE, FALSE)
-		res$values <- res$values[nev]
+		res$values <- res$values[1:nev]
 		nev <- nrow(x.prod)
 		res$vectors <- fm.as.matrix(res$vectors)
 	}
