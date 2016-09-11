@@ -17,6 +17,9 @@
  * limitations under the License.
  */
 
+#include <unordered_set>
+#include <unordered_map>
+
 #include "common.h"
 #include "thread.h"
 
@@ -30,6 +33,38 @@
 #include "EM_dense_matrix.h"
 #include "mapply_matrix_store.h"
 #include "sink_matrix.h"
+
+typedef std::vector<size_t> mat_id_set;
+
+namespace std
+{
+
+template<>
+struct hash<mat_id_set>
+{
+	size_t operator() (const mat_id_set &set) const {
+		size_t id = 0;
+		for (size_t i = 0; i < set.size(); i++)
+			id = id * 10 + set[i];
+		return id;
+	}
+};
+
+template<>
+struct equal_to<mat_id_set>
+{
+	bool operator()(const mat_id_set &s1, const mat_id_set &s2) const {
+		if (s1.size() != s2.size())
+			return false;
+
+		for (size_t i = 0; i < s1.size(); i++)
+			if (s1[i] != s2[i])
+				return false;
+		return true;
+	}
+};
+
+}
 
 namespace fm
 {
@@ -1027,6 +1062,8 @@ dense_matrix::ptr mapply_portion(
 	return dense_matrix::create(ret);
 }
 
+}
+
 namespace
 {
 
@@ -1066,18 +1103,266 @@ public:
 	}
 };
 
+/*
+ * This class helps us to identify the underlying matrices that a virtual
+ * matrix relies on. We'll keep two virtual matrices together if
+ * the underlying matrices of a virtual matrix are the subset of the other
+ * virtual matrices. Eventually, a collection of virtual matrices in this
+ * class will be materialized together to reduce I/O.
+ */
+class underlying_mat_set
+{
+	std::unordered_set<size_t> under_mat_set;
+	mat_id_set under_mats;
+	std::vector<detail::virtual_matrix_store::const_ptr> vmats;
+
+	underlying_mat_set(detail::virtual_matrix_store::const_ptr mat) {
+		// TODO If this is a set of mixed IM and EM matrices, we might want to
+		// consider only EM matrices.
+		auto under_map = mat->get_underlying_mats();
+		for (auto it = under_map.begin(); it != under_map.end(); it++)
+			this->under_mats.push_back(it->first);
+		this->under_mat_set.insert(under_mats.begin(), under_mats.end());
+		vmats.push_back(mat);
+	}
+public:
+	typedef std::shared_ptr<underlying_mat_set> ptr;
+
+	static ptr create(detail::virtual_matrix_store::const_ptr mat) {
+		return ptr(new underlying_mat_set(mat));
+	}
+
+	mat_id_set get_underlying() const {
+		return under_mats;
+	}
+
+	size_t get_num_underlying() const {
+		return under_mat_set.size();
+	}
+
+	bool is_subset_of(const underlying_mat_set &set) const {
+		for (size_t i = 0; i < under_mats.size(); i++) {
+			auto it = set.under_mat_set.find(under_mats[i]);
+			// We can't find the underlying matrix in the other set.
+			if (it == set.under_mat_set.end())
+				return false;
+		}
+		return true;
+	}
+
+	bool merge(const underlying_mat_set &set) {
+		// We don't merge two sets if the underlying matrices aren't
+		// the subset of the other.
+		if (!set.is_subset_of(*this))
+			return false;
+		vmats.insert(vmats.end(), set.vmats.begin(), set.vmats.end());
+		return true;
+	}
+
+	void materialize(bool par_access);
+};
+
+void underlying_mat_set::materialize(bool par_access)
+{
+	// TODO we need to deal with the case that some matrices are tall and
+	// some are wide. It's better to materialize tall and wide matrices together.
+	std::vector<detail::matrix_store::const_ptr> wide_vmats;
+	std::vector<detail::matrix_store::const_ptr> tall_vmats;
+	for (size_t i = 0; i < vmats.size(); i++) {
+		if (vmats[i]->is_wide()) {
+			wide_vmats.push_back(vmats[i]);
+			assert(wide_vmats.front()->get_num_cols()
+					== wide_vmats.back()->get_num_cols());
+		}
+		else {
+			tall_vmats.push_back(vmats[i]);
+			assert(tall_vmats.front()->get_num_rows()
+					== tall_vmats.back()->get_num_rows());
+		}
+	}
+
+	// TODO we might want to materialize with matrices from other underlying set
+	// together.
+	if (!wide_vmats.empty()) {
+		detail::portion_mapply_op::const_ptr materialize_op(
+				new materialize_mapply_op(wide_vmats[0]->get_type(),
+					true, !par_access));
+		__mapply_portion(wide_vmats, materialize_op, matrix_layout_t::L_ROW,
+				par_access);
+	}
+	if (!tall_vmats.empty()) {
+		detail::portion_mapply_op::const_ptr materialize_op(
+				new materialize_mapply_op(tall_vmats[0]->get_type(),
+					true, !par_access));
+		__mapply_portion(tall_vmats, materialize_op, matrix_layout_t::L_ROW,
+				par_access);
+	}
 }
 
-static void process_block_sinks(
-		const std::vector<detail::block_sink_store::const_ptr> &sinks)
+class vmat_level
 {
-	std::vector<detail::matrix_store::const_ptr> block_groups
-		= reorg_block_sinks(sinks);
-	detail::portion_mapply_op::const_ptr materialize_op(
-			new materialize_mapply_op(block_groups[0]->get_type(),
-				block_groups.front()->is_wide(), true));
-	__mapply_portion(block_groups, materialize_op, matrix_layout_t::L_ROW,
-			false);
+	// The two containers have the same matrices. The hashtable is used for
+	// merging the matrices in the same level and the vector is used for
+	// the rest cases.
+	std::unordered_map<mat_id_set, underlying_mat_set::ptr> map;
+	std::vector<underlying_mat_set::ptr> vec;
+
+	// Merge the matrix to one of the matrices in the this level.
+	bool merge(const underlying_mat_set &set);
+	// The level of materialization.
+	// It is equal to the number of underlying matrices of a virtual
+	// matrix - 1.
+	size_t level_id;
+public:
+	typedef std::shared_ptr<vmat_level> ptr;
+
+	vmat_level(size_t level_id) {
+		this->level_id = level_id;
+	}
+
+	bool is_empty() const {
+		return vec.empty();
+	}
+
+	size_t get_num_matrices() const {
+		return vec.size();
+	}
+
+	size_t get_num_underlying() const {
+		return level_id + 1;
+	}
+
+	// Add the matrix to this level. It automatically merges the new matrix
+	// to an existing one if possible.
+	void add(underlying_mat_set::ptr set) {
+		assert(set->get_num_underlying() == level_id + 1);
+		auto ret = map.insert(
+				std::pair<mat_id_set, underlying_mat_set::ptr>(
+					set->get_underlying(), set));
+		// If the underlying matrices already exist, we merge them.
+		if (!ret.second) {
+			bool success = ret.first->second->merge(*set);
+			assert(success);
+		}
+		else
+			vec.push_back(set);
+	}
+
+	// Merge the matrices in this level to upper levels
+	// If some of them can't be merged, we create a new one to contain
+	// the unmerged ones.
+	vmat_level::ptr merge_to(
+			std::vector<vmat_level::ptr>::const_iterator ul_begin,
+			std::vector<vmat_level::ptr>::const_iterator ul_end) const;
+
+	void materialize(bool par_access) {
+		for (size_t i = 0; i < vec.size(); i++)
+			vec[i]->materialize(par_access);
+	}
+};
+
+bool vmat_level::merge(const underlying_mat_set &set)
+{
+	std::vector<underlying_mat_set::ptr> mergable;
+	for (size_t i = 0; i < vec.size(); i++)
+		if (set.is_subset_of(*vec[i]))
+			mergable.push_back(vec[i]);
+	// If we can't merge to any of the matrices.
+	if (mergable.empty())
+		return false;
+	if (mergable.size() == 1)
+		mergable[0]->merge(set);
+	else
+		// We just randomly pick one to merge to.
+		mergable[random() % mergable.size()]->merge(set);
+	return true;
+}
+
+vmat_level::ptr vmat_level::merge_to(
+		std::vector<vmat_level::ptr>::const_iterator ul_begin,
+		std::vector<vmat_level::ptr>::const_iterator ul_end) const
+{
+	std::vector<underlying_mat_set::ptr> unmerged;
+	for (auto it = map.begin(); it != map.end(); it++) {
+		auto set = it->second;
+		auto ul_it = ul_begin;
+		for (; ul_it != ul_end; ul_it++) {
+			assert((*ul_it)->get_num_underlying() > get_num_underlying());
+			// If we can merge to a level, we stop here.
+			if ((*ul_it)->merge(*set))
+				break;
+		}
+		// If we can't merge to any upper level, we add to the unmerged set.
+		if (ul_it == ul_end)
+			unmerged.push_back(set);
+	}
+	if (unmerged.empty())
+		return vmat_level::ptr();
+	else {
+		vmat_level::ptr level(new vmat_level(this->level_id));
+		// We don't need to construct the map any more because we won't add
+		// another matrix to this level.
+		level->vec = unmerged;
+		return level;
+	}
+}
+
+class vmat_levels
+{
+	std::vector<vmat_level::ptr> underlying_levels;
+
+	void expand(size_t num_levels);
+public:
+	typedef std::shared_ptr<vmat_levels> ptr;
+
+	void add(underlying_mat_set::ptr set) {
+		assert(set->get_num_underlying() > 0);
+		size_t level_id = set->get_num_underlying() - 1;
+		// If there isn't a level to store the new matrix, we expend the vector.
+		expand(level_id + 1);
+		assert(underlying_levels.size() > level_id);
+		underlying_levels[level_id]->add(set);
+	}
+
+	bool is_empty() const {
+		for (size_t i = 0; i < underlying_levels.size(); i++)
+			if (!underlying_levels[i]->is_empty())
+				return false;
+		return true;
+	}
+
+	void materialize(bool par_access);
+};
+
+void vmat_levels::expand(size_t num_levels)
+{
+	if (underlying_levels.size() < num_levels) {
+		size_t num_orig = underlying_levels.size();
+		underlying_levels.resize(num_levels);
+		for (size_t i = num_orig; i < num_levels; i++) {
+			if (underlying_levels[i] == NULL)
+				underlying_levels[i]
+					= vmat_level::ptr(new vmat_level(i));
+		}
+	}
+}
+
+void vmat_levels::materialize(bool par_access)
+{
+	// We merge them first.
+	for (auto it = underlying_levels.begin();
+			it != underlying_levels.end() - 1; it++) {
+		// we merge the current level to one of the upper levels.
+		// If some matrices in this level can't be merged, we keep
+		// them in this level.
+		vmat_level::ptr unmerged = (*it)->merge_to(it + 1,
+				underlying_levels.end());
+		*it = unmerged;
+	}
+
+	for (size_t i = 0; i < underlying_levels.size(); i++)
+		if (underlying_levels[i])
+			underlying_levels[i]->materialize(par_access);
 }
 
 }
@@ -1086,74 +1371,25 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 {
 	if (mats.empty())
 		return true;
-	// TODO we need to deal with the case that some matrices are tall and
-	// some are wide.
 
-	std::vector<detail::block_sink_store::const_ptr> block_sinks;
-	std::vector<detail::matrix_store::const_ptr> virt_stores;
+	vmat_levels::ptr levels(new vmat_levels());
 	for (size_t i = 0; i < mats.size(); i++) {
 		// If this isn't a virtual matrix, skip it.
 		if (!mats[i]->is_virtual())
 			continue;
 
-		// We collect the block sink matrix stores and will materialize
-		// them differently.
-		detail::block_sink_store::const_ptr bsink
-			= std::dynamic_pointer_cast<const detail::block_sink_store>(
-					mats[i]->get_raw_store());
-		if (bsink) {
-			block_sinks.push_back(bsink);
-			continue;
-		}
-
-		detail::virtual_matrix_store::const_ptr mat
-			= std::dynamic_pointer_cast<const detail::virtual_matrix_store>(
-					mats[i]->get_raw_store());
-		assert(mat);
-		detail::sink_store::const_ptr sink
-			= std::dynamic_pointer_cast<const detail::sink_store>(mat);
-		if (sink)
-			mat = sink->get_compute_matrix();
-
-		if (!virt_stores.empty() && mat->is_wide() != virt_stores[0]->is_wide()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't materialize virtual matrices with diff long dim";
-			return false;
-		}
-		size_t long_dim = 0;
-		if (!virt_stores.empty())
-			long_dim = std::max(virt_stores[0]->get_num_rows(),
-					virt_stores[0]->get_num_cols());
-		size_t long_dim1 = std::max(mat->get_num_rows(), mat->get_num_cols());
-		if (long_dim > 0 && long_dim != long_dim1) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't materialize virtual matrices with diff long dim sizes.";
-			return false;
-		}
-		// We need to the virtual matrices stores the partial materialized results.
+		// If the virtual matrix is a TAS matrix, we want it to save
+		// the materialized result.
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
-		virt_stores.push_back(mat);
+
+		auto vmats = mats[i]->get_compute_matrices();
+		for (size_t i = 0; i < vmats.size(); i++)
+			levels->add(underlying_mat_set::create(vmats[i]));
 	}
-	if (virt_stores.empty() && block_sinks.empty())
+	if (levels->is_empty())
 		return true;
 
-	// If we have normal virtual matrices, including sink matrices.
-	if (!virt_stores.empty()) {
-		detail::portion_mapply_op::const_ptr materialize_op(
-				new materialize_mapply_op(virt_stores[0]->get_type(),
-					virt_stores.front()->is_wide(), !par_access));
-		__mapply_portion(virt_stores, materialize_op, matrix_layout_t::L_ROW,
-				par_access);
-	}
-
-	if (!block_sinks.empty()) {
-		// We group the sink matrices based on their underlying matrices and
-		// process the sink matrices with the same underlying matrices together.
-		auto groups = group_block_sinks(block_sinks);
-		for (size_t i = 0; i < groups.size(); i++) {
-			process_block_sinks(groups[i]);
-		}
-	}
+	levels->materialize(par_access);
 
 	// Now all virtual matrices contain the materialized results.
 	for (size_t i = 0; i < mats.size(); i++)

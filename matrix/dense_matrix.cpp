@@ -518,6 +518,26 @@ void dense_matrix::materialize_self() const
 				store->is_in_mem(), store->get_num_nodes());
 }
 
+std::vector<detail::virtual_matrix_store::const_ptr> dense_matrix::get_compute_matrices() const
+{
+	// If the dense matrix isn't virtual.
+	if (!is_virtual())
+		return std::vector<detail::virtual_matrix_store::const_ptr>();
+
+	detail::sink_store::const_ptr sink
+		= std::dynamic_pointer_cast<const detail::sink_store>(get_raw_store());
+	// If the dense matrix isn't a sink matrix.
+	if (sink == NULL) {
+		detail::virtual_matrix_store::const_ptr vmat
+			= std::dynamic_pointer_cast<const detail::virtual_matrix_store>(
+					get_raw_store());
+		assert(vmat);
+		return std::vector<detail::virtual_matrix_store::const_ptr>(1, vmat);
+	}
+	else
+		return sink->get_compute_matrices();
+}
+
 void dense_matrix::set_materialize_level(materialize_level level,
 		detail::matrix_store::ptr materialize_buf)
 {

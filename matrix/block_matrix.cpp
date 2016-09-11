@@ -268,6 +268,27 @@ void block_matrix::set_materialize_level(materialize_level level,
 	}
 }
 
+std::vector<detail::virtual_matrix_store::const_ptr> block_matrix::get_compute_matrices() const
+{
+	if (!is_virtual())
+		return std::vector<detail::virtual_matrix_store::const_ptr>();
+
+	// Double check that a block matrix shouldn't be a sink matrix.
+	detail::sink_store::const_ptr sink
+		= std::dynamic_pointer_cast<const detail::sink_store>(get_raw_store());
+	assert(sink == NULL);
+
+	std::vector<detail::virtual_matrix_store::const_ptr> vmats;
+	for (size_t i = 0; i < store->get_num_mats(); i++) {
+		detail::virtual_matrix_store::const_ptr vmat
+			= std::dynamic_pointer_cast<const detail::virtual_matrix_store>(
+					store->get_mat(i));
+		if (vmat)
+			vmats.push_back(vmat);
+	}
+	return vmats;
+}
+
 void block_matrix::assign(const dense_matrix &mat)
 {
 	// The input matrix must be a block matrix. Otherwise, dynamic

@@ -108,9 +108,9 @@ public:
 	virtual bool is_virtual() const;
 
 	virtual void materialize_self() const;
-
 	virtual void set_materialize_level(materialize_level level,
 			detail::matrix_store::ptr materialize_buf);
+	virtual std::vector<detail::virtual_matrix_store::const_ptr> get_compute_matrices() const;
 
 	virtual void assign(const dense_matrix &mat);
 
