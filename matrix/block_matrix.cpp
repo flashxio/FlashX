@@ -979,7 +979,7 @@ public:
 		bsink->materialize_self();
 	}
 	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const {
-		return bsink->materialize(in_mem, num_nodes);
+		return get_result();
 	}
 
 	virtual detail::matrix_store::const_ptr transpose() const {
