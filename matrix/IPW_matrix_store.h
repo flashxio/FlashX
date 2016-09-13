@@ -52,7 +52,7 @@ public:
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t layout);
 
-	bool has_materialized() const;
+	virtual bool has_materialized() const;
 
 	virtual void materialize_self() const;
 

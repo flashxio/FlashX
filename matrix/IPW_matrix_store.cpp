@@ -1246,9 +1246,14 @@ std::unordered_map<size_t, size_t> IPW_compute_store::get_underlying_mats() cons
 
 std::vector<virtual_matrix_store::const_ptr> IPW_matrix_store::get_compute_matrices() const
 {
-	return std::vector<virtual_matrix_store::const_ptr>(1,
-			virtual_matrix_store::const_ptr(new IPW_compute_store(left_mat,
-					right_mat, left_op, right_op, portion_op, layout)));
+	// If the IPW matrix has been materialized, we don't need to do
+	// anything.
+	if (has_materialized())
+		return std::vector<virtual_matrix_store::const_ptr>();
+	else
+		return std::vector<virtual_matrix_store::const_ptr>(1,
+				virtual_matrix_store::const_ptr(new IPW_compute_store(left_mat,
+						right_mat, left_op, right_op, portion_op, layout)));
 }
 
 }

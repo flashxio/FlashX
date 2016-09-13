@@ -402,6 +402,14 @@ std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 	return std::unordered_map<size_t, size_t>();
 }
 
+bool block_sink_store::has_materialized() const
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (!stores[i]->has_materialized())
+			return false;
+	return true;
+}
+
 matrix_store::const_ptr block_sink_store::get_result() const
 {
 	if (result == NULL)

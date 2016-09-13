@@ -535,9 +535,14 @@ std::vector<safs::io_interface::ptr> agg_compute_store::create_ios() const
 
 std::vector<virtual_matrix_store::const_ptr> agg_matrix_store::get_compute_matrices() const
 {
-	return std::vector<virtual_matrix_store::const_ptr>(1,
-			virtual_matrix_store::const_ptr(new agg_compute_store(data,
-					portion_op)));
+	// If the agg matrix has been materialized, we don't need to do
+	// anything.
+	if (has_materialized())
+		return std::vector<virtual_matrix_store::const_ptr>();
+	else
+		return std::vector<virtual_matrix_store::const_ptr>(1,
+				virtual_matrix_store::const_ptr(new agg_compute_store(data,
+						portion_op)));
 }
 
 }

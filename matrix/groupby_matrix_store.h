@@ -48,7 +48,7 @@ public:
 			std::shared_ptr<const factor_col_vector> labels,
 			matrix_margin margin, agg_operate::const_ptr op);
 
-	bool has_materialized() const;
+	virtual bool has_materialized() const;
 
 	virtual void materialize_self() const;
 

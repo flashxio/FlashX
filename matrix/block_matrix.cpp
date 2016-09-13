@@ -955,6 +955,10 @@ public:
 		this->op = op;
 	}
 
+	virtual bool has_materialized() const {
+		return bsink->has_materialized();
+	}
+
 	virtual matrix_store::const_ptr get_result() const {
 		detail::matrix_store::const_ptr part_res = bsink->get_result();
 		detail::mem_matrix_store::const_ptr mem_part

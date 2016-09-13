@@ -39,6 +39,8 @@ public:
 				in_mem, type) {
 	}
 
+	// The class has been materialized.
+	virtual bool has_materialized() const = 0;
 	// This returns the materialized result of the sink matrix.
 	virtual matrix_store::const_ptr get_result() const = 0;
 	// This returns a set of computation matrix that can be used for
@@ -154,6 +156,7 @@ public:
 	static ptr create(const std::vector<matrix_store::const_ptr> &stores,
 			size_t num_block_rows, size_t num_block_cols);
 
+	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;
 	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const;
 	virtual void materialize_self() const;
