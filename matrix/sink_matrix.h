@@ -30,6 +30,16 @@ namespace detail
 
 class sink_store: public virtual_matrix_store
 {
+	matrix_store::const_ptr res;
+
+	// When we access the materialized result, we should also save it.
+	// It's especially important when we access a portion of
+	// the materialized matrix.
+	matrix_store::const_ptr get_save_result() const {
+		materialize_self();
+		const_cast<sink_store *>(this)->res = get_result();
+		return res;
+	}
 public:
 	typedef std::shared_ptr<sink_store> ptr;
 	typedef std::shared_ptr<const sink_store> const_ptr;
@@ -48,33 +58,28 @@ public:
 	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const = 0;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const {
-		materialize_self();
-		return get_result()->get_cols(idxs);
+		return get_save_result()->get_cols(idxs);
 	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const {
-		materialize_self();
-		return get_result()->get_rows(idxs);
+		return get_save_result()->get_rows(idxs);
 	}
 
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const {
-		materialize_self();
-		return get_result()->get_portion(start_row, start_col, num_rows,
+		return get_save_result()->get_portion(start_row, start_col, num_rows,
 				num_cols);
 	}
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const {
-		materialize_self();
-		return get_result()->get_portion(id);
+		return get_save_result()->get_portion(id);
 	}
 	using virtual_matrix_store::get_portion_async;
 	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const {
-		materialize_self();
-		return get_result()->get_portion_async(start_row, start_col,
+		return get_save_result()->get_portion_async(start_row, start_col,
 				num_rows, num_cols, compute);
 	}
 
