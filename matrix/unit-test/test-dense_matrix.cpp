@@ -1150,8 +1150,10 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 		mem_m = detail::mem_matrix_store::cast(tmp->get_raw_store());
 	}
 	else {
-		dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
-		mem_m = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+		dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
+		tmp = tmp->conv_store(true, -1);
+		mem_m = detail::mem_matrix_store::cast(tmp->get_raw_store());
+		assert(mem_m);
 	}
 	for (size_t i = 0; i < stdvec.size(); i++) {
 		int sum = 0;
