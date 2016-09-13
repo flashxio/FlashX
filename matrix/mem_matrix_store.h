@@ -63,9 +63,12 @@ public:
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		// TODO for now, we assume that an in-mem matrix doesn't have
-		// underlying matrix.
-		return std::unordered_map<size_t, size_t>();
+		std::unordered_map<size_t, size_t> ret;
+		// TODO right now we only indicate the matrix. We set the number of
+		// bytes to 0
+		// We should also use data_id instead of mat_id.
+		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
+		return ret;
 	}
 	virtual std::string get_name() const {
 		return (boost::format("mem_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
