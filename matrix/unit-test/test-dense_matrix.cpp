@@ -2130,6 +2130,9 @@ void test_get_rowcols(int num_nodes)
 	assert(!tmp->is_in_mem());
 	test_get_cols(tmp);
 	test_get_rows(tmp);
+	tmp = tmp->add(*tmp);
+	test_get_cols(tmp);
+	test_get_rows(tmp);
 
 	printf("test on row-major tall dense matrix in disks\n");
 	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, -1,
@@ -2144,6 +2147,9 @@ void test_get_rowcols(int num_nodes)
 	tmp = test_get_cols(mat);
 	assert(tmp->is_in_mem());
 	tmp = test_get_rows(mat);
+	test_get_cols(tmp);
+	test_get_rows(tmp);
+	tmp = tmp->add(*tmp);
 	test_get_cols(tmp);
 	test_get_rows(tmp);
 
