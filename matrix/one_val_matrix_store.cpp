@@ -32,7 +32,8 @@ namespace detail
 
 one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout,
-		int num_nodes): virtual_matrix_store(nrow, ncol, true, val->get_type())
+		int num_nodes): virtual_matrix_store(nrow, ncol, true,
+			val->get_type()), mat_id(mat_counter++)
 {
 	if (num_nodes > 0)
 		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,

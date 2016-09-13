@@ -31,6 +31,7 @@ namespace detail
 
 class one_val_matrix_store: public virtual_matrix_store
 {
+	const size_t mat_id;
 	scalar_variable::ptr val;
 	matrix_layout_t layout;
 	std::vector<simple_raw_array> portion_bufs;
@@ -76,7 +77,11 @@ public:
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		return std::unordered_map<size_t, size_t>();
+		std::unordered_map<size_t, size_t> ret;
+		// TODO right now we only indicate the matrix. We set the number of
+		// bytes to 0
+		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
+		return ret;
 	}
 };
 
