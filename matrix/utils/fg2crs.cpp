@@ -38,8 +38,6 @@ void read_data(char *data, size_t size, size_t num, off_t off, FILE *stream)
 class adj2crs_apply_operate: public arr_apply_operate
 {
 public:
-	adj2crs_apply_operate(): arr_apply_operate(0) {
-	}
 	virtual void run(const local_vec_store &in,
 			local_vec_store &out) const;
 
@@ -48,6 +46,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<crs_idx_t>();
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return 0;
 	}
 };
 
