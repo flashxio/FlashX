@@ -2304,64 +2304,159 @@ void print_mat(detail::matrix_store::const_ptr mat)
 
 void _test_materialize_all(int num_nodes)
 {
-	printf("materialize two tall matrices\n");
-	dense_matrix::ptr m1 = create_matrix(long_dim, 8, matrix_layout_t::L_COL,
+	std::vector<dense_matrix::ptr> mats;
+	scalar_variable::ptr res;
+	dense_matrix::ptr tmp1, tmp2, tmp3;
+	dense_matrix::ptr agg1, agg2;
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			get_scalar_type<size_t>().get_basic_ops().get_add());
+	agg_operate::const_ptr sum = agg_operate::create(add);
+
+	matrix_val_t matrix_val = matrix_val_t::SEQ;
+	dense_matrix::ptr m1 = create_matrix(long_dim, 10, matrix_layout_t::L_COL,
 			num_nodes, get_scalar_type<int>());
-	dense_matrix::ptr tmp1 = m1->add(*m1);
+	dense_matrix::ptr m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL,
+			num_nodes, get_scalar_type<int>());
+	size_t num_eles = m1->get_num_rows() * m1->get_num_cols();
+
+	printf("compute sum\n");
+	tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+	res = tmp1->sum();
+	printf("compute %ld, expect %ld\n", *(size_t *) res->get_raw(),
+			((num_eles - 1) * num_eles));
+	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+
+	printf("materialize one tall matrix\n");
+	tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+	mats.resize(1);
+	mats[0] = tmp1;
+	materialize(mats);
+	assert(!tmp1->is_virtual());
+	res = tmp1->sum();
+	printf("compute %ld, expect %ld\n", *(size_t *) res->get_raw(),
+			((num_eles - 1) * num_eles));
+	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+
+	printf("materialize two tall matrices\n");
+	tmp2 = m2->add(*m2);
+	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
+	tmp1 = m1->add(*m1);
 	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
 
-	dense_matrix::ptr m2 = create_matrix(long_dim, 8, matrix_layout_t::L_COL,
-			num_nodes, get_scalar_type<int>());
-	dense_matrix::ptr tmp2 = m2->add(*m2);
-	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
-
-	std::vector<dense_matrix::ptr> mats(2);
+	mats.resize(2);
 	mats[0] = tmp1;
 	mats[1] = tmp2;
 	materialize(mats);
 	assert(!tmp1->is_virtual());
 	assert(!tmp2->is_virtual());
-
-	scalar_variable::ptr res = tmp1->sum();
-	size_t num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+	res = tmp1->sum();
 	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
 	res = tmp2->sum();
 	assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+
+	printf("materialize one aggregation\n");
+	tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+	agg1 = tmp1->aggregate(matrix_margin::BOTH, sum);
+	assert(agg1->get_num_rows() == 1 && agg1->get_num_cols() == 1);
+	assert(agg1->is_virtual());
+	mats.resize(1);
+	mats[0] = agg1;
+	materialize(mats);
+	assert(!agg1->is_virtual());
+	{
+		const detail::mem_matrix_store &mem_agg1
+			= dynamic_cast<const detail::mem_matrix_store &>(agg1->get_data());
+		num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+		assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
+	}
 
 	printf("materialize two aggregations\n");
 	tmp1 = m1->add(*m1);
 	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
 	tmp2 = m2->add(*m2);
 	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
-	bulk_operate::const_ptr add
-		= bulk_operate::conv2ptr(tmp1->get_type().get_basic_ops().get_add());
-	agg_operate::const_ptr sum = agg_operate::create(add);
-	dense_matrix::ptr agg1 = tmp1->aggregate(matrix_margin::BOTH, sum);
-	dense_matrix::ptr agg2 = tmp2->aggregate(matrix_margin::BOTH, sum);
+	agg1 = tmp1->aggregate(matrix_margin::BOTH, sum);
+	agg2 = tmp2->aggregate(matrix_margin::BOTH, sum);
+	assert(agg1->get_num_rows() == 1 && agg1->get_num_cols() == 1);
+	assert(agg2->get_num_rows() == 1 && agg2->get_num_cols() == 1);
 	assert(agg1->is_virtual());
 	assert(agg2->is_virtual());
 
+	mats.resize(2);
 	mats[0] = agg1;
 	mats[1] = agg2;
 	materialize(mats);
 	assert(!agg1->is_virtual());
 	assert(!agg2->is_virtual());
-	const detail::mem_matrix_store &mem_agg1
-		= dynamic_cast<const detail::mem_matrix_store &>(agg1->get_data());
-	const detail::mem_matrix_store &mem_agg2
-		= dynamic_cast<const detail::mem_matrix_store &>(agg2->get_data());
-	num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
-	assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
-	assert(*(const size_t *) mem_agg2.get_raw_arr() == ((num_eles - 1) * num_eles));
+	{
+		const detail::mem_matrix_store &mem_agg1
+			= dynamic_cast<const detail::mem_matrix_store &>(agg1->get_data());
+		const detail::mem_matrix_store &mem_agg2
+			= dynamic_cast<const detail::mem_matrix_store &>(agg2->get_data());
+		num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+		assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
+		assert(*(const size_t *) mem_agg2.get_raw_arr() == ((num_eles - 1) * num_eles));
+	}
+
+	printf("materialize a tall virtual matrix and two aggregation together\n");
+	tmp1 = m1->add(*m1);
+	tmp1 = tmp1->cast_ele_type(get_scalar_type<size_t>());
+	tmp2 = m2->add(*m2);
+	tmp2 = tmp2->cast_ele_type(get_scalar_type<size_t>());
+	agg1 = tmp1->aggregate(matrix_margin::BOTH, sum);
+	agg2 = tmp2->aggregate(matrix_margin::BOTH, sum);
+	assert(agg1->get_num_rows() == 1 && agg1->get_num_cols() == 1);
+	assert(agg2->get_num_rows() == 1 && agg2->get_num_cols() == 1);
+	assert(agg1->is_virtual());
+	assert(agg2->is_virtual());
+	tmp3 = m1->add(*m2);
+	tmp3 = tmp3->cast_ele_type(get_scalar_type<size_t>());
+
+	mats.resize(3);
+	mats[0] = agg1;
+	mats[1] = agg2;
+	mats[2] = tmp3;
+	materialize(mats);
+	assert(!agg1->is_virtual());
+	assert(!agg2->is_virtual());
+	assert(!tmp3->is_virtual());
+	{
+		const detail::mem_matrix_store &mem_agg1
+			= dynamic_cast<const detail::mem_matrix_store &>(agg1->get_data());
+		const detail::mem_matrix_store &mem_agg2
+			= dynamic_cast<const detail::mem_matrix_store &>(agg2->get_data());
+		num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+		assert(*(const size_t *) mem_agg1.get_raw_arr() == ((num_eles - 1) * num_eles));
+		assert(*(const size_t *) mem_agg2.get_raw_arr() == ((num_eles - 1) * num_eles));
+
+		size_t num_eles = tmp3->get_num_rows() * tmp3->get_num_cols();
+		res = tmp3->sum();
+		printf("sum: %ld, expect: %ld\n", *(size_t *) res->get_raw(),
+				((num_eles - 1) * num_eles));
+		assert(*(size_t *) res->get_raw() == ((num_eles - 1) * num_eles));
+	}
 }
 
 void test_materialize_all(int num_nodes)
 {
 	// Test the in-mem case.
+	printf("test materialization on multiple virtual matrices in memory\n");
+	_test_materialize_all(num_nodes);
+	printf("test materialization on multiple virtual block matrices in memory\n");
+	block_size = 3;
 	_test_materialize_all(num_nodes);
 	// Test the EM case.
 	in_mem = false;
+	block_size = 0;
+	printf("test materialization on multiple virtual matrices in EM\n");
 	_test_materialize_all(num_nodes);
+	printf("test materialization on multiple virtual block matrices in EM\n");
+	block_size = 3;
+	_test_materialize_all(num_nodes);
+	block_size = 0;
 	in_mem = true;
 }
 
