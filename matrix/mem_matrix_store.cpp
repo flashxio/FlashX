@@ -478,7 +478,7 @@ mem_matrix_store::ptr mem_matrix_store::cast(matrix_store::ptr store)
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_matrix_store::ptr();
 	}
-	return std::static_pointer_cast<mem_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_matrix_store>(store);
 }
 
 mem_matrix_store::const_ptr mem_matrix_store::cast(matrix_store::const_ptr store)
@@ -488,7 +488,7 @@ mem_matrix_store::const_ptr mem_matrix_store::cast(matrix_store::const_ptr store
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_matrix_store::const_ptr();
 	}
-	return std::static_pointer_cast<const mem_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_matrix_store>(store);
 }
 
 mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_ptr store)
@@ -499,7 +499,8 @@ mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_p
 		return mem_col_matrix_store::const_ptr();
 	}
 	mem_matrix_store::const_ptr mem_store
-		= std::static_pointer_cast<const mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<const mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -511,7 +512,7 @@ mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_p
 		return mem_col_matrix_store::const_ptr();
 	}
 
-	return std::static_pointer_cast<const mem_col_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_col_matrix_store>(store);
 }
 
 mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
@@ -522,7 +523,8 @@ mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
 		return mem_col_matrix_store::ptr();
 	}
 	mem_matrix_store::ptr mem_store
-		= std::static_pointer_cast<mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -534,7 +536,7 @@ mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
 		return mem_col_matrix_store::ptr();
 	}
 
-	return std::static_pointer_cast<mem_col_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_col_matrix_store>(store);
 }
 
 mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_ptr store)
@@ -545,7 +547,8 @@ mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_p
 		return mem_row_matrix_store::const_ptr();
 	}
 	mem_matrix_store::const_ptr mem_store
-		= std::static_pointer_cast<const mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<const mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -557,7 +560,7 @@ mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_p
 		return mem_row_matrix_store::const_ptr();
 	}
 
-	return std::static_pointer_cast<const mem_row_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_row_matrix_store>(store);
 }
 
 mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
@@ -568,7 +571,8 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 		return mem_row_matrix_store::ptr();
 	}
 	mem_matrix_store::ptr mem_store
-		= std::static_pointer_cast<mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -580,7 +584,7 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 		return mem_row_matrix_store::ptr();
 	}
 
-	return std::static_pointer_cast<mem_row_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_row_matrix_store>(store);
 }
 
 }
