@@ -294,6 +294,17 @@ matrix_stream::ptr matrix_stream::create(matrix_store::ptr store)
 	}
 }
 
+matrix_store::const_ptr matrix_store::get_cols(
+			const std::vector<off_t> &idxs) const
+{
+	matrix_store::const_ptr tm = transpose();
+	matrix_store::const_ptr rows = tm->get_rows(idxs);
+	if (rows == NULL)
+		return matrix_store::const_ptr();
+	else
+		return rows->transpose();
+}
+
 }
 
 }

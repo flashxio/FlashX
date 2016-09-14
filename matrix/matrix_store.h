@@ -192,14 +192,7 @@ public:
 			off_t start_row, off_t start_col) = 0;
 
 	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		matrix_store::const_ptr tm = transpose();
-		matrix_store::const_ptr rows = tm->get_rows(idxs);
-		if (rows == NULL)
-			return matrix_store::const_ptr();
-		else
-			return rows->transpose();
-	}
+			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		return matrix_store::const_ptr();
