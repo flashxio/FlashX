@@ -263,9 +263,33 @@ off_t find_last(const std::vector<off_t> &vals, off_t idx)
 matrix_store::const_ptr combined_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
+	// Get rows from a tall matrix.
 	if (!is_wide()) {
-		BOOST_LOG_TRIVIAL(error) << "Cannot get rows from a tall matrix";
-		return matrix_store::const_ptr();
+		if (idxs.size() > get_num_cols()) {
+			std::vector<matrix_store::const_ptr> sub_stores(mats.size());
+			for (size_t i = 0; i < sub_stores.size(); i++)
+				sub_stores[i] = mats[i]->get_rows(idxs);
+			return combined_matrix_store::create(sub_stores, store_layout());
+		}
+		else {
+			mem_matrix_store::ptr ret = mem_matrix_store::create(idxs.size(),
+					get_num_cols(), store_layout(), get_type(), -1);
+			size_t start_col = 0;
+			for (size_t i = 0; i < mats.size(); i++) {
+				matrix_store::const_ptr sub_store = mats[i]->get_rows(idxs);
+				local_matrix_store::const_ptr portion = sub_store->get_portion(0);
+				assert(sub_store->get_num_rows() == portion->get_num_rows());
+				assert(sub_store->get_num_cols() == portion->get_num_cols());
+				local_matrix_store::ptr ret_portion = ret->get_portion(0,
+						start_col, idxs.size(), sub_store->get_num_cols());
+				ret_portion->copy_from(*portion);
+				start_col += sub_store->get_num_cols();
+			}
+			return ret;
+		}
+
+		// TODO I'll deal with this later.
+		assert(0);
 	}
 
 	// If all the idxs are sorted.
