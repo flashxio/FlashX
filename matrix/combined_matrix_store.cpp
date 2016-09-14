@@ -260,6 +260,21 @@ off_t find_last(const std::vector<off_t> &vals, off_t idx)
 	return vals.size() - 1;
 }
 
+static inline matrix_store::const_ptr _get_rows(matrix_store::const_ptr store,
+		const std::vector<off_t> &idxs)
+{
+	matrix_store::const_ptr rows = store->get_rows(idxs);
+	if (rows)
+		return rows;
+
+	// If we can't get rows from a matrix directly, we can extract them with
+	// get_rows of dense_matrix.
+	dense_matrix::ptr mat = dense_matrix::create(store);
+	dense_matrix::ptr sub = mat->get_rows(idxs);
+	assert(sub);
+	return sub->get_raw_store();
+}
+
 matrix_store::const_ptr combined_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
@@ -333,15 +348,7 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 			else {
 				std::vector<off_t> tmp_rows(local_row_idxs.begin() + i,
 						local_row_idxs.begin() + i + local_nrow);
-				auto rows = mats[mat_idx]->get_rows(tmp_rows);
-				if (rows == NULL) {
-					// If we can't get rows the matrix directly, we should try
-					// and use the default solution to get rows.
-					dense_matrix::ptr tmp = dense_matrix::create(mats[mat_idx]);
-					tmp = tmp->get_rows(tmp_rows);
-					assert(tmp);
-					rows = tmp->get_raw_store();
-				}
+				auto rows = _get_rows(mats[mat_idx], tmp_rows);
 				ret.push_back(rows);
 			}
 			i = last + 1;
@@ -385,22 +392,14 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 	}
 
 	if (same_mat)
-		return mats[mat_idxs[0]]->get_rows(lrow_idxs);
+		return _get_rows(mats[mat_idxs[0]], lrow_idxs);
 
 	// If rows are from different matrices, we get rows individually and
 	// then combine them to form a new matrix.
 	std::vector<matrix_store::const_ptr> rows(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++) {
 		std::vector<off_t> lrow_idx(1, lrow_idxs[i]);
-		rows[i] = mats[mat_idxs[i]]->get_rows(lrow_idx);
-		if (rows[i] == NULL) {
-			// If we can't get rows the matrix directly, we should try
-			// and use the default solution to get rows.
-			dense_matrix::ptr tmp = dense_matrix::create(mats[mat_idxs[i]]);
-			tmp = tmp->get_rows(lrow_idx);
-			assert(tmp);
-			rows[i] = tmp->get_raw_store();
-		}
+		rows[i] = _get_rows(mats[mat_idxs[i]], lrow_idx);
 	}
 	return combined_matrix_store::create(rows, matrix_layout_t::L_ROW);
 }
