@@ -16,6 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <unordered_set>
 
 #include "combined_matrix_store.h"
 #include "dense_matrix.h"
@@ -294,8 +295,16 @@ matrix_store::const_ptr combined_matrix_store::get_rows(
 			size_t last = find_last(mat_idxs, i);
 			size_t local_nrow = last - i + 1;
 			size_t mat_idx = mat_idxs[i];
-			// We need all rows.
-			if (local_nrow == mats[mat_idx]->get_num_rows())
+
+			// Test if we need all rows from a matrix.
+			bool all_rows = false;
+			if (local_nrow == mats[mat_idx]->get_num_rows()) {
+				std::unordered_set<off_t> uniq(local_row_idxs.begin() + i,
+						local_row_idxs.begin() + i + local_nrow);
+				all_rows = uniq.size() == local_row_idxs.size();
+			}
+
+			if (all_rows)
 				ret.push_back(mats[mat_idx]);
 			else {
 				std::vector<off_t> tmp_rows(local_row_idxs.begin() + i,
