@@ -91,6 +91,7 @@ void test_pagerank(sparse_matrix::ptr mat, size_t max_niters, size_t num_in_mem)
 	gettimeofday(&end, NULL);
 	printf("PageRank takes %.3f seconds\n", time_diff(start, end));
 	pr->move_store(true, -1);
+#if 0
 	data_frame::ptr sorted = pr->get_col(0)->sort_with_index();
 	std::vector<off_t> first10(10);
 	size_t num_vertices = mat->get_num_rows();
@@ -111,6 +112,7 @@ void test_pagerank(sparse_matrix::ptr mat, size_t max_niters, size_t num_in_mem)
 	std::vector<float> std_prs = prs->conv2std<float>();
 	for (size_t i = 0; i < std_vids.size(); i++)
 		printf("%ld: %f\n", std_vids[i], std_prs[i]);
+#endif
 }
 
 void test_nmf(sparse_matrix::ptr mat, size_t k, size_t max_niters,
