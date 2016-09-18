@@ -27,6 +27,9 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 	gr.sum <- fm.groupby(m, 1, fm.as.factor(labels, 2), fm.bo.add)
 	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div, FALSE)
 	diff <- fm.get.cols(gr.mean, 1) - fm.get.cols(gr.mean, 2)
+	diff.l2 <- sqrt(sum(diff * diff))
+	stopifnot(diff.l2 != 0)
+	diff <- diff / diff.l2
 	if (nv == 0)
 		return(diff)
 	if (type == "svd") {
@@ -41,9 +44,7 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 		mean.mat <- fm.cbind.list(mean.list)
 
 		svd <- fm.svd(m - mean.mat, nv=nv, nu=nv)
-		diff.l2 <- sqrt(sum(diff * diff))
-		stopifnot(diff.l2 != 0)
-		fm.cbind(diff / diff.l2, svd$u)
+		fm.cbind(diff, svd$u)
 	}
 	else if (type == "rand_dense")
 		fm.cbind(diff, fm.rnorm.matrix(length(diff), nv))
