@@ -13,6 +13,7 @@ Description: FlashR extends the R programming framework. It executes R code
 	used R functions to provide users a familiar R programming environment to
 	reduce the learning curve. Furthermore, FlashR provides many R wrapper
 	functions for graph algorithms implemented in FlashGraph.
+LinkingTo: Rcpp
 Depends:
     R (>= 3.0),
     igraph,
