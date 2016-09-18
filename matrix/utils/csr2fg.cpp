@@ -107,58 +107,72 @@ public:
 	}
 };
 
+vector_vector::ptr read_csr(const std::string &row_ptr_file,
+		const std::string &col_file)
+{
+	// Store the CSR data in the vv store.
+	auto offs = read_offs(row_ptr_file);
+	auto col_idxs = read_col_idxs(col_file);
+	printf("%ld offs, first: %ld, last: %ld, %ld non-zero\n",
+			offs.size(), offs.front(), offs.back(), col_idxs->get_length());
+	// Offsets in vv store is in bytes.
+	for (size_t i = 0; i < offs.size(); i++)
+		offs[i] *= sizeof(col_idx_t);
+	return vector_vector::create(detail::vv_store::create(offs, col_idxs));
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 5) {
 		fprintf(stderr,
-				"csr2fg conf_file row_ptr_file col_file name\n");
+				"csr2fg conf_file name row_ptr_file col_file [row_ptr_file col_file]\n");
 		return -1;
 	}
 
 	std::string conf_file = argv[1];
-	std::string row_ptr_file = argv[2];
-	std::string col_file = argv[3];
-	std::string adj_file = std::string(argv[4]) + ".adj";
-	std::string index_file = std::string(argv[4]) + ".index";
+	std::string adj_file = std::string(argv[2]) + ".adj";
+	std::string index_file = std::string(argv[2]) + ".index";
+	std::string row_ptr_file1 = argv[3];
+	std::string col_file1 = argv[4];
+	std::string row_ptr_file2, col_file2;
+	fg::graph_type gtype = fg::graph_type::UNDIRECTED;
+	if (argc == 7) {
+		row_ptr_file2 = argv[5];
+		col_file2 = argv[6];
+		gtype = fg::graph_type::DIRECTED;
+	}
 	size_t edge_data_size = 0;
 
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
 	{
-		// Store the CSR data in the vv store.
-		auto offs = read_offs(row_ptr_file);
-		auto col_idxs = read_col_idxs(col_file);
-		printf("%ld offs, first: %ld, last: %ld, %ld non-zero\n",
-				offs.size(), offs.front(), offs.back(), col_idxs->get_length());
-		// Offsets in vv store is in bytes.
-		for (size_t i = 0; i < offs.size(); i++)
-			offs[i] *= sizeof(col_idx_t);
-		vector_vector::ptr vv = vector_vector::create(detail::vv_store::create(
-					offs, col_idxs));
+		vector_vector::ptr vv = read_csr(row_ptr_file1, col_file1);
 
 		// Count the statitistics of the graph.
 		size_t num_vertices = vv->get_num_vecs();
-		size_t num_edges = 0;
-		detail::smp_vec_store::ptr num_out_edges = detail::smp_vec_store::create(
+		size_t tot_edges = 0;
+		detail::smp_vec_store::ptr num_edges = detail::smp_vec_store::create(
 				num_vertices, get_scalar_type<fg::vsize_t>());
 		for (size_t i = 0; i < num_vertices; i++) {
 			size_t local_num_edges = vv->get_length(i);
-			num_out_edges->set<fg::vsize_t>(i, local_num_edges);
-			num_edges += local_num_edges;
+			num_edges->set<fg::vsize_t>(i, local_num_edges);
+			tot_edges += local_num_edges;
 		}
-		assert(num_edges % 2 == 0);
-		num_edges /= 2;
-		printf("There are %ld edges\n", num_edges);
+		// For undirected graphs.
+		if (gtype == fg::graph_type::UNDIRECTED) {
+			assert(tot_edges % 2 == 0);
+			tot_edges /= 2;
+		}
+		printf("There are %ld edges\n", tot_edges);
 
 		factor_vector::ptr labels = factor_vector::create(factor(num_vertices),
 				detail::create_seq_vec_store<factor_value_t>(0, num_vertices - 1, 1));
 		csr2fg_apply op;
-		const scalar_type &out_type = op.get_output_type();
+		const scalar_type &type = op.get_output_type();
 
 		// Construct the graph header.
-		fg::graph_header header(fg::graph_type::UNDIRECTED, num_vertices, num_edges,
-				edge_data_size);
+		fg::graph_header header(gtype, num_vertices, tot_edges, edge_data_size);
 		local_vec_store::ptr header_store(new local_buf_vec_store(0,
 					fg::graph_header::get_header_size(), get_scalar_type<char>(), -1));
 		memcpy(header_store->get_raw_arr(), &header,
@@ -167,22 +181,50 @@ int main(int argc, char *argv[])
 		// Prepare the storage for the groupby result.
 		size_t num_bytes = sizeof(matrix_header) + vv->get_data().get_num_bytes()
 			+ sizeof(fg::ext_mem_undirected_vertex) * num_vertices;
-		detail::vec_store::ptr graph_data = detail::vec_store::create(0, out_type, -1,
+		// The number of in-edges is the same as the number of out-edges.
+		if (gtype == fg::graph_type::DIRECTED)
+			num_bytes += vv->get_data().get_num_bytes();
+		detail::vec_store::ptr graph_data = detail::vec_store::create(0, type, -1,
 				vv->is_in_mem());
-		graph_data->reserve(num_bytes / out_type.get_size());
+		graph_data->reserve(num_bytes / type.get_size());
 		graph_data->append(*header_store);
 
 		printf("create the graph image\n");
-		vector_vector::ptr adjs = vv->groupby(*labels, op, graph_data);
+		vv->groupby(*labels, op, graph_data);
+		vv = NULL;
+
+		detail::smp_vec_store::ptr num_out_edges;
+		if (gtype == fg::graph_type::DIRECTED) {
+			printf("construct out-edges\n");
+			vector_vector::ptr out_vv = read_csr(row_ptr_file2, col_file2);
+			assert(out_vv->get_num_vecs() == num_vertices);
+			out_vv->groupby(*labels, op, graph_data);
+
+			num_out_edges = detail::smp_vec_store::create(num_vertices,
+					get_scalar_type<fg::vsize_t>());
+
+			size_t tot_out_edges = 0;
+			for (size_t i = 0; i < num_vertices; i++) {
+				size_t local_num_out_edges = out_vv->get_length(i);
+				num_out_edges->set<fg::vsize_t>(i, local_num_out_edges);
+				tot_out_edges += local_num_out_edges;
+			}
+			assert(tot_edges == tot_out_edges);
+		}
 
 		// Construct the vertex index.
 		// The vectors that contains the numbers of edges have the length of #V + 1
 		// because we add -1 to the edge lists artificially and the last entries
 		// are the number of vertices.
 		printf("create the vertex index image\n");
-		fg::cundirected_vertex_index::ptr vindex
-			= fg::cundirected_vertex_index::construct(num_vertices,
+		fg::vertex_index::ptr vindex;
+		if (gtype == fg::graph_type::DIRECTED)
+			vindex = fg::cdirected_vertex_index::construct(num_vertices,
+					(const fg::vsize_t *) num_edges->get_raw_arr(),
 					(const fg::vsize_t *) num_out_edges->get_raw_arr(), header);
+		else
+			vindex = fg::cundirected_vertex_index::construct(num_vertices,
+					(const fg::vsize_t *) num_edges->get_raw_arr(), header);
 
 		fg::FG_graph::ptr graph = construct_FG_graph(
 				std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
