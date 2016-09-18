@@ -18,7 +18,7 @@ Depends:
     R (>= 3.0),
     igraph,
     Rcpp
-License: Apache (>= 2)
+License: Apache License 2.0
 URL: https://github.com/icoming/FlashGraph
 SystemRequirements: 
 BugReports: https://github.com/icoming/FlashGraph/issues
