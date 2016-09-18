@@ -27,6 +27,8 @@
 bool R_is_real(SEXP v);
 bool R_is_integer(SEXP v);
 bool R_is_logical(SEXP v);
+bool R_is_null(SEXP v);
+bool R_is_string(SEXP v);
 
 template<class T>
 bool R_get_number(SEXP v, T &ret) {

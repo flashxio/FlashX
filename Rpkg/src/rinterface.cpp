@@ -145,16 +145,21 @@ void init_flashmatrixr();
 RcppExport SEXP R_FG_init(SEXP pconf)
 {
 	set_log_level(c_log_level::warning);
-	std::string conf_file = CHAR(STRING_ELT(pconf, 0));
+	std::string conf_file;
+	if (!R_is_null(pconf) && R_is_string(pconf))
+		conf_file = CHAR(STRING_ELT(pconf, 0));
 
-	if (safs::file_exist(conf_file)) {
+	if (!conf_file.empty() && safs::file_exist(conf_file)) {
 		configs = config_map::create(conf_file);
 		configs->add_options("writable=1");
 	}
-	else {
+	else if (!conf_file.empty()) {
 		fprintf(stderr, "conf file %s doesn't exist.\n", conf_file.c_str());
 		configs = config_map::create();
 	}
+	// If there isn't a conf file, we just use the default settings.
+	else
+		configs = config_map::create();
 
 	bool safs_success;
 	try {
@@ -162,7 +167,8 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		standalone = false;
 		safs_success = true;
 	} catch (init_error &e) {
-		fprintf(stderr, "init SAFS: %s\n", e.what());
+		if (!conf_file.empty())
+			fprintf(stderr, "init SAFS: %s\n", e.what());
 		safs_success = true;
 	} catch (std::exception &e) {
 		fprintf(stderr, "exception in init: %s\n", e.what());
