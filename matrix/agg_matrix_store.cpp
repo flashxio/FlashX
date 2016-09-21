@@ -480,6 +480,11 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return data->store_layout();
 	}
+	virtual std::string get_name() const {
+		std::vector<matrix_store::const_ptr> mats(1);
+		mats[0] = data;
+		return portion_op->to_string(mats);
+	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const;
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {

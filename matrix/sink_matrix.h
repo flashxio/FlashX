@@ -132,10 +132,6 @@ public:
 		assert(0);
 		return matrix_store::const_ptr();
 	}
-
-	virtual std::string get_name() const {
-		return "sink_compute_store";
-	}
 };
 
 /*
