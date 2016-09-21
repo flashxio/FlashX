@@ -1717,16 +1717,14 @@ dense_matrix::ptr dense_matrix::row_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return dense_matrix::create(fm::aggregate(store, matrix_margin::MAR_ROW,
-				agg_operate::create(add)));
+	return aggregate(matrix_margin::MAR_ROW, agg_operate::create(add));
 }
 
 dense_matrix::ptr dense_matrix::col_sum() const
 {
 	bulk_operate::const_ptr add
 		= bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
-	return dense_matrix::create(fm::aggregate(store, matrix_margin::MAR_COL,
-				agg_operate::create(add)));
+	return aggregate(matrix_margin::MAR_COL, agg_operate::create(add));
 }
 
 dense_matrix::ptr dense_matrix::row_norm2() const
