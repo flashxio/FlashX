@@ -593,17 +593,17 @@ static void get_wider_matrices(detail::combined_matrix_store::const_ptr in,
 			in->get_mat_ref(0).get_num_cols());
 	block_size = std::min(block_size, 512UL);
 	// We prefer to round it up.
-	size_t num_blocks = div_ceil(block_size, short_dim);
-	if (num_blocks == 0)
-		num_blocks = 1;
-	if (num_blocks <= 1) {
+	size_t num_block_mats = div_ceil(block_size, short_dim);
+	if (num_block_mats == 0)
+		num_block_mats = 1;
+	if (num_block_mats <= 1) {
 		for (size_t i = 0; i < in->get_num_mats(); i++)
 			mats.push_back(in->get_mat(i));
 	}
 	else {
-		for (size_t i = 0; i < in->get_num_mats(); i += num_blocks) {
+		for (size_t i = 0; i < in->get_num_mats(); i += num_block_mats) {
 			std::vector<detail::matrix_store::const_ptr> tmp(std::min(
-						in->get_num_mats() - i, num_blocks));
+						in->get_num_mats() - i, num_block_mats));
 			for (size_t j = 0; j < tmp.size(); j++)
 				tmp[j] = in->get_mat(i + j);
 			mats.push_back(detail::combined_matrix_store::create(tmp,
