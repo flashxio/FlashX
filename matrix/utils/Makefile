@@ -45,4 +45,4 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f el2fg fg2fm fg2crs fg_lcc
+	rm -f el2fg fg2fm fg2crs fg_lcc csr2fg sbm
