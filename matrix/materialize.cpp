@@ -1383,8 +1383,8 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 
 		auto vmats = mats[i]->get_compute_matrices();
-		for (size_t i = 0; i < vmats.size(); i++)
-			levels->add(underlying_mat_set::create(vmats[i]));
+		for (size_t j = 0; j < vmats.size(); j++)
+			levels->add(underlying_mat_set::create(vmats[j]));
 	}
 	if (levels->is_empty())
 		return true;
