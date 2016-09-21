@@ -592,7 +592,8 @@ static void get_wider_matrices(detail::combined_matrix_store::const_ptr in,
 	size_t short_dim = std::min(in->get_mat_ref(0).get_num_rows(),
 			in->get_mat_ref(0).get_num_cols());
 	block_size = std::min(block_size, 512UL);
-	size_t num_blocks = block_size / short_dim;
+	// We prefer to round it up.
+	size_t num_blocks = div_ceil(block_size, short_dim);
 	if (num_blocks == 0)
 		num_blocks = 1;
 	if (num_blocks <= 1) {
