@@ -7,7 +7,7 @@
 fm.as.vector(obj)
 }
 \arguments{
-\item{fm}{a FlashMatrix matrix}
+\item{obj}{a FlashMatrix matrix}
 }
 \value{
 a FlashMatrix vector

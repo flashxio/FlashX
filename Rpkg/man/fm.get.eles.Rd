@@ -3,12 +3,15 @@
 \name{fm.get.eles}
 \alias{fm.get.cols}
 \alias{fm.get.eles}
+\alias{fm.get.eles.vec}
 \alias{fm.get.rows}
 \title{Get a submatrix from a FlashMatrix matrix}
 \usage{
 fm.get.cols(fm, idxs)
 
 fm.get.rows(fm, idxs)
+
+fm.get.eles.vec(fm, idxs)
 }
 \arguments{
 \item{fm}{A FlashMatrix matrix}

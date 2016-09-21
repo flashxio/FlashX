@@ -12,6 +12,8 @@ fm.KMeans(data, K, max.iters = 10, debug = FALSE)
 \item{K}{the number of clusters}
 
 \item{max.iters}{the maximal number of iterations.}
+
+\item{debug}{This indicates whether to print debug info.}
 }
 \value{
 a vector that contains cluster Ids for each data point.

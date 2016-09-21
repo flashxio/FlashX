@@ -8,6 +8,8 @@ fm.as.factor(fm, num.levels = -1)
 }
 \arguments{
 \item{fm}{a FlashMatrix vector.}
+
+\item{num.levels}{The number of levels in the factor vector.}
 }
 \value{
 a FlashMatrix factor vector.

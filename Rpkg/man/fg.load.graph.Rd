@@ -26,9 +26,6 @@ loaded to FlashR.}
 
 \item{directed}{Indicate whether the input graph is directed. This is
 only used if the input graph use the edge list format.}
-
-\item{nthreads}{The number of threads used to construct a graph to
-the FlashGraph format.}
 }
 \value{
 a FlashGraph object.

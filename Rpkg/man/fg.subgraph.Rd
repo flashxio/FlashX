@@ -18,6 +18,9 @@ fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""),
 the induced subgraph.}
 
 \item{name}{The name of the FlashGraph object.}
+
+\item{compress}{This indicates whether to remove empty vertices in
+the generated subgraph.}
 }
 \value{
 `fg.fetch.subgraph.igraph' returns an iGraph object,

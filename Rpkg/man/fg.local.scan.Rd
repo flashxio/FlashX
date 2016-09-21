@@ -14,6 +14,8 @@ fg.local.scan(graph, order = 1)
 
 \item{order}{An integer scalar, the size of the local neighborhood for
 each vertex. Should be non-negative.}
+
+\item{K}{The number of top scan statistics.}
 }
 \value{
 A numeric vector that contains locality statistic of each vertex.

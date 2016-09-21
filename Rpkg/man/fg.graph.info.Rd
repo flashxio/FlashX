@@ -17,7 +17,7 @@ fg.in.mem(graph)
 fg.is.directed(graph)
 }
 \arguments{
-\item{The}{FlashGraph object}
+\item{graph}{a FlashGraph object}
 }
 \value{
 `fg.vcount' and `fg.ecount' returns integer constants.
