@@ -626,20 +626,20 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 	get_wider_matrices(store, left_mats,
 			std::min(get_num_rows(), m.get_num_cols()));
 
-	detail::matrix_store::ptr res;
 	assert(get_type() == m.get_type());
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
-	res = detail::matrix_store::create(get_num_rows(), m.get_num_cols(),
-			out_layout, get_type(), -1, true);
+	std::vector<detail::matrix_store::const_ptr> blocks(
+			left_mats.size() * right_mats.size());
 	// Each time we take one matrix in the right group and perform inner product
 	// with all matrices in the left group.
 	for (size_t i = 0; i < right_mats.size(); i++) {
 		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
-		std::vector<dense_matrix::ptr> tmp_mats(left_mats.size());
 		for (size_t j = 0; j < left_mats.size(); j++) {
 			dense_matrix::ptr left = dense_matrix::create(left_mats[j]);
-			tmp_mats[j] = left->multiply(*right, out_layout);
+			dense_matrix::ptr res = left->multiply(*right, out_layout);
+			assert(res);
+			blocks[j * right_mats.size() + i] = res->get_raw_store();
 			// This is only necessary for EM matrices.
 			if (!left->is_in_mem()) {
 				detail::matrix_store &tmp
@@ -652,27 +652,9 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 				= const_cast<detail::matrix_store &>(right->get_data());
 			tmp.set_cache_portion(true);
 		}
-		materialize(tmp_mats, false);
-
-		// We now copy the inner product result to the final matrix.
-		size_t right_block_size = right_mats[0]->get_num_cols();
-		size_t left_block_size = left_mats[0]->get_num_rows();
-		size_t col_idx = i * right_block_size;
-		for (size_t j = 0; j < tmp_mats.size(); j++) {
-			size_t row_idx = j * left_block_size;
-			size_t num_rows = std::min(left_block_size, get_num_rows() - row_idx);
-			size_t num_cols = std::min(right_block_size,
-					m.get_num_cols() - col_idx);
-			assert(num_rows == tmp_mats[j]->get_num_rows());
-			assert(num_cols == tmp_mats[j]->get_num_cols());
-			detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
-					col_idx, num_rows, num_cols);
-			detail::local_matrix_store::const_ptr src_part
-				= tmp_mats[j]->get_data().get_portion(0);
-			res_part->copy_from(*src_part);
-		}
 	}
-	return dense_matrix::create(res);
+	return dense_matrix::create(detail::block_sink_store::create(blocks,
+				left_mats.size(), right_mats.size()));
 }
 
 /*
