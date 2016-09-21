@@ -116,5 +116,9 @@ clean:
 	rm -f test-special_matrix_store
 	rm -f test-rounderror
 	rm -f test-EM_vector_vector
+	rm -f test-block_matrix
+	rm -f test-bulk_operate
+	rm -f test-hashtable
+	rm -f test-projection
 
 -include $(DEPS) 
