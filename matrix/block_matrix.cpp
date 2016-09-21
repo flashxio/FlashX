@@ -753,9 +753,14 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 		else
 			return multiply_tall(mat, out_layout);
 	}
-	else
+	else {
 		// This relies on inner product to compute matrix multiplication.
-		return dense_matrix::multiply(mat, out_layout);
+		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
+				get_type().get_basic_ops().get_multiply());
+		bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+				get_type().get_basic_ops().get_add());
+		return inner_prod(mat, multiply, add, out_layout);
+	}
 }
 
 dense_matrix::ptr block_matrix::mapply_cols(col_vec::const_ptr vals,
