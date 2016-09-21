@@ -449,16 +449,19 @@ void block_sink_store::materialize_self() const
 	for (size_t i = 0; i < num_block_rows; i++) {
 		off_t start_col = 0;
 		for (size_t j = 0; j < num_block_cols; j++) {
+			size_t block_idx = i * num_block_cols + j;
 			local_matrix_store::const_ptr tmp_portion
-				= res_stores[i]->get_portion(0);
-			assert(tmp_portion->get_num_rows() == res_stores[i]->get_num_rows());
-			assert(tmp_portion->get_num_cols() == res_stores[i]->get_num_cols());
+				= res_stores[block_idx]->get_portion(0);
+			assert(tmp_portion->get_num_rows()
+					== res_stores[block_idx]->get_num_rows());
+			assert(tmp_portion->get_num_cols()
+					== res_stores[block_idx]->get_num_cols());
 
 			local_matrix_store::ptr res_portion = res->get_portion(start_row,
-					start_col, res_stores[i]->get_num_rows(),
-					res_stores[i]->get_num_cols());
+					start_col, res_stores[block_idx]->get_num_rows(),
+					res_stores[block_idx]->get_num_cols());
 			res_portion->copy_from(*tmp_portion);
-			start_col += res_stores[i]->get_num_cols();
+			start_col += res_stores[block_idx]->get_num_cols();
 		}
 		start_row += get_mat(i, 0).get_num_rows();
 	}
