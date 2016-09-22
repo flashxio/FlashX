@@ -58,7 +58,6 @@ void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tSpM threads: " << num_SpM_threads;
 	BOOST_LOG_TRIVIAL(info) << "\tDM threads: " << num_DM_threads;
 	BOOST_LOG_TRIVIAL(info) << "\tFM_prof_file: " << prof_file;
-	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_io_size: " << rb_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size: " << rb_steal_io_size;
@@ -104,8 +103,6 @@ void matrix_config::init(config_map::ptr map)
 
 	if (map->has_option("FM_prof_file"))
 		map->read_option("FM_prof_file", prof_file);
-	if (map->has_option("in_mem_matrix"))
-		map->read_option_bool("in_mem_matrix", _in_mem_matrix);
 	if (map->has_option("row_block_size"))
 		map->read_option_int("row_block_size", row_block_size);
 	if (map->has_option("rb_io_size"))

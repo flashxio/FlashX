@@ -39,7 +39,6 @@ class matrix_config
 	// The number of threads for dense matrix.
 	int num_DM_threads;
 	std::string prof_file;
-	bool _in_mem_matrix;
 	// With 1D partition, a matrix is partitioned into row blocks.
 	int row_block_size;
 	// For 1D partition, each matrix I/O contains multiple row blocks.
@@ -82,7 +81,6 @@ public:
 	matrix_config() {
 		num_SpM_threads = 4;
 		num_DM_threads = 4;
-		_in_mem_matrix = false;
 		row_block_size = 1024;
 		rb_io_size = 1024;
 		rb_steal_io_size = 1;
@@ -134,15 +132,6 @@ public:
 	 */
 	int get_num_DM_threads() const {
 		return num_DM_threads;
-	}
-
-	/**
-	 * \brief Determine whether to use in-mem matrix data.
-	 * \return true if we loads the entire matrix data in memory
-	 * in advance.
-	 */
-	bool use_in_mem_matrix() const {
-		return _in_mem_matrix;
 	}
 
 	/**
