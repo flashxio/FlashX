@@ -1006,8 +1006,13 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 			dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
 			// If the matrix has only one row or one column, we don't need
 			// to run agg on it.
-			if ((mat->is_wide() && mat->get_num_rows() == 1)
-					|| (!mat->is_wide() && mat->get_num_cols() == 1)) {
+			if (mat->is_wide() && mat->get_num_rows() == 1) {
+				// TODO What if agg and combine are different?
+				assert(op->is_same());
+				// we want a single col matrix.
+				vecs[i] = mat->transpose();
+			}
+			else if (!mat->is_wide() && mat->get_num_cols() == 1) {
 				// TODO What if agg and combine are different?
 				assert(op->is_same());
 				vecs[i] = mat;
@@ -1030,10 +1035,9 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 		if (margin == matrix_margin::BOTH) {
 			ret = detail::matrix_store::ptr(new agg_block_sink_store(sinks, op));
 		}
-		else if (margin == matrix_margin::MAR_ROW)
-			ret = detail::block_sink_store::create(sinks, sinks.size(), 1);
 		else
-			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
+			// For aggregation, we always return a single-col matrix.
+			ret = detail::block_sink_store::create(sinks, sinks.size(), 1);
 		return dense_matrix::create(ret);
 	}
 }
