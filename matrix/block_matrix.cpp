@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "matrix_config.h"
 #include "block_matrix.h"
 #include "vector.h"
 #include "local_matrix_store.h"
@@ -591,7 +592,7 @@ static void get_wider_matrices(detail::combined_matrix_store::const_ptr in,
 {
 	size_t short_dim = std::min(in->get_mat_ref(0).get_num_rows(),
 			in->get_mat_ref(0).get_num_cols());
-	block_size = std::min(block_size, 512UL);
+	block_size = std::min(block_size, matrix_conf.get_max_multiply_block_size());
 	// We prefer to round it up.
 	size_t num_block_mats = div_ceil(block_size, short_dim);
 	if (num_block_mats == 0)

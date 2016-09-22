@@ -73,6 +73,8 @@ class matrix_config
 	bool keep_mem_buf;
 	// The block size for a dense matrix.
 	size_t block_size;
+	// The block size used for matrix multiply on block matrices.
+	size_t max_multiply_block_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -94,6 +96,7 @@ public:
 		stream_io_size = 128 * 1024 * 1024;
 		keep_mem_buf = false;
 		block_size = 32;
+		max_multiply_block_size = 512;
 	}
 
 	/**
@@ -231,6 +234,14 @@ public:
 
 	size_t get_block_size() const {
 		return block_size;
+	}
+
+	size_t get_max_multiply_block_size() const {
+		return max_multiply_block_size;
+	}
+
+	void set_max_multiply_block_size(size_t size) {
+		this->max_multiply_block_size = size;
 	}
 };
 
