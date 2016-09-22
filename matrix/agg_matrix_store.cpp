@@ -203,17 +203,17 @@ void matrix_long_agg_op::run(
 
 static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
 {
-	return margin == matrix_margin::MAR_ROW ? data.get_num_rows() : 1;
-}
-
-static size_t get_num_cols_agg(const matrix_store &data, matrix_margin margin)
-{
-	return margin == matrix_margin::MAR_COL ? data.get_num_cols() : 1;
+	if (margin == matrix_margin::MAR_ROW)
+		return data.get_num_rows();
+	else if (margin == matrix_margin::MAR_COL)
+		return data.get_num_cols();
+	else
+		return 1;
 }
 
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 		matrix_margin margin, agg_operate::const_ptr op): sink_store(
-			get_num_rows_agg(*data, margin), get_num_cols_agg(*data, margin),
+			get_num_rows_agg(*data, margin), 1,
 			data->is_in_mem(), op->get_output_type())
 {
 	this->data = data;
@@ -263,6 +263,8 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 		assert(valid_row >= 0);
 		memcpy(res->get_raw_arr(), partial_res->get_row(valid_row),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
+		assert(res->get_num_rows() == get_num_rows());
+		assert(res->get_num_cols() == get_num_cols());
 		return res;
 	}
 	else
@@ -280,6 +282,8 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 			agg_op->get_agg_op().get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
 			part_dim_t::PART_NONE, *portion);
+	assert(res->get_num_rows() == get_num_rows());
+	assert(res->get_num_cols() == get_num_cols());
 	return res;
 }
 
