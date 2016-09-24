@@ -229,14 +229,15 @@ void io_worker_task::run()
 
 global_counter::global_counter()
 {
-	counts.resize(mem_thread_pool::get_global_num_threads());
+	counts.resize(mem_thread_pool::get_global_num_threads() + 1);
 	reset();
 }
 
 void global_counter::inc(size_t val)
 {
 	int id = mem_thread_pool::get_curr_thread_id();
-	counts[id].count += val;
+	// the main thread has id of -1.
+	counts[id + 1].count += val;
 }
 
 void global_counter::reset()
