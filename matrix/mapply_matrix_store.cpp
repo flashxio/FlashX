@@ -77,10 +77,6 @@ public:
 
 	void set_materialized(matrix_store::const_ptr res);
 
-	matrix_store::ptr get_buf() {
-		return res_buf;
-	}
-
 	bool is_in_mem() const {
 		return tall_res->is_in_mem();
 	}
@@ -155,6 +151,7 @@ void materialized_mapply_tall_store::set_materialized(matrix_store::const_ptr re
 	portion_size = tall_res->get_portion_size();
 	res_buf = NULL;
 	num_res_avails.reset();
+	num_res_avails.inc(res->get_num_rows() * res->get_num_cols());
 }
 
 void materialized_mapply_tall_store::write_portion_async(
@@ -1312,8 +1309,8 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 {
 	// If the matrix has been materialized and it's stored on disks,
 	if (is_materialized() && !res->is_in_mem()) {
-		const EM_object *obj
-			= dynamic_cast<const EM_object *>(res->get_buf().get());
+		const EM_object *obj = dynamic_cast<const EM_object *>(
+				res->get_materialize_res(is_wide()).get());
 		assert(obj);
 		return obj->create_ios();
 	}
@@ -1329,8 +1326,8 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 		}
 	}
 	if (res && !res->is_materialized() && !res->is_in_mem()) {
-		const EM_object *obj
-			= dynamic_cast<const EM_object *>(res->get_buf().get());
+		const EM_object *obj = dynamic_cast<const EM_object *>(
+				res->get_materialize_res(is_wide()).get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
