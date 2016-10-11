@@ -22,6 +22,10 @@
 
 #include <stdlib.h>
 
+#ifdef USE_NUMA
+#include <numa.h>
+#endif
+
 #include <vector>
 #include <atomic>
 
@@ -248,14 +252,22 @@ public:
 	thread_safe_bitmap(size_t max_num_bits, int node_id) {
 		this->max_num_bits = max_num_bits;
 		size_t num_longs = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
+#ifdef USE_NUMA
 		ptr = (std::atomic_ulong *) numa_alloc_onnode(
 				num_longs * sizeof(*ptr), node_id);
+#else
+		ptr = (std::atomic_ulong *) malloc_aligned(num_longs * sizeof(*ptr), 4096);
+#endif
 		clear();
 	}
 
 	~thread_safe_bitmap() {
 		size_t num_longs = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
+#ifdef USE_NUMA
 		numa_free(ptr, num_longs * sizeof(*ptr));
+#else
+		free(ptr);
+#endif
 	}
 
 	size_t get_num_bits() const {
