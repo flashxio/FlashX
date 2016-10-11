@@ -19,7 +19,7 @@ include ../../Makefile.common
 
 CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver
 LDFLAGS := -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
+LDFLAGS += -lz -laio -lcblas #-lprofiler
 
 all: el2fg fg2fm fg2crs fg_lcc csr2fg sbm
 
