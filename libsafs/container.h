@@ -22,7 +22,7 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <numa.h>
+#include <string.h>
 #include <assert.h>
 #include <pthread.h>
 #include <limits.h>

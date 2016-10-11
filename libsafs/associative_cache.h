@@ -22,6 +22,9 @@
 
 #include <pthread.h>
 #include <math.h>
+#ifdef USE_NUMA
+#include <numa.h>
+#endif
 
 #include <vector>
 #include <memory>
@@ -270,7 +273,11 @@ class hash_cell
 public:
 	static hash_cell *create_array(int node_id, int num) {
 		assert(node_id >= 0);
+#ifdef USE_NUMA
 		void *addr = numa_alloc_onnode(sizeof(hash_cell) * num, node_id);
+#else
+		void *addr = malloc_aligned(sizeof(hash_cell) * num, PAGE_SIZE);
+#endif
 		hash_cell *cells = (hash_cell *) addr;
 		for (int i = 0; i < num; i++)
 			new(&cells[i]) hash_cell();
@@ -280,7 +287,11 @@ public:
 	static void destroy_array(hash_cell *cells, int num) {
 		for (int i = 0; i < num; i++)
 			cells[i].~hash_cell();
+#ifdef USE_NUMA
 		numa_free(cells, sizeof(*cells) * num);
+#else
+		free(cells);
+#endif
 	}
 
 	void init(associative_cache *cache, long hash, bool get_pages);

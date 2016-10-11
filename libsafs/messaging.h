@@ -21,7 +21,6 @@
  */
 
 #include <pthread.h>
-#include <numa.h>
 #include <assert.h>
 #include <sys/uio.h>
 

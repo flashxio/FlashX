@@ -21,7 +21,6 @@
  */
 
 #include <pthread.h>
-#include <numa.h>
 
 template<class T>
 class atomic_number
@@ -81,31 +80,6 @@ public:
 	}
 
 	atomic_long(long init): atomic_number<long>(init) {
-	}
-};
-
-template<class T>
-class atomic_array
-{
-	volatile T *arr;
-	int size;
-public:
-	atomic_array(int size) {
-		this->size = size;
-		arr = (T *) numa_alloc_local(sizeof(T) * size);
-		memset((void *) arr, 0, sizeof(T) * size);
-	}
-
-	~atomic_array() {
-		numa_free((void *) arr, sizeof(T) * size);
-	}
-
-	T get(int idx) const {
-		return arr[idx];
-	}
-
-	bool CAS(int idx, T expected, T value) {
-		return __sync_bool_compare_and_swap(&arr[idx], expected, value);
 	}
 };
 

@@ -17,7 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
 #include <numa.h>
+#endif
+#include <string.h>
 #include <sys/mman.h>
 
 #include "slab_allocator.h"
@@ -128,10 +131,14 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 			if (thread_safe)
 				pthread_spin_unlock(&lock);
 			char *objs;
+#ifdef USE_NUMA
 			if (node_id == -1)
 				objs = (char *) numa_alloc_local(increase_size);
 			else
 				objs = (char *) numa_alloc_onnode(increase_size, node_id);
+#else
+			objs = (char *) malloc_aligned(increase_size, PAGE_SIZE);
+#endif
 			assert(objs);
 #ifdef USE_IOAT
 			if (pinned) {
@@ -184,7 +191,11 @@ slab_allocator::~slab_allocator()
 			munlock(alloc_bufs[i], increase_size);
 		}
 #endif
+#ifdef USE_NUMA
 		numa_free(alloc_bufs[i], increase_size);
+#else
+		free(alloc_bufs[i]);
+#endif
 	}
 #ifdef ENABLE_MEM_TRACE
 	printf("%s allocate %ld bytes\n", name.c_str(), alloc_bufs.size() * increase_size);

@@ -63,7 +63,11 @@ void test_in_mem(size_t length, const NUMA_mapper &mapper)
 
 void test_in_mem()
 {
+#ifdef USE_NUMA
 	size_t num_nodes = numa_num_configured_nodes();
+#else
+	size_t num_nodes = 1;
+#endif
 	NUMA_mapper mapper(num_nodes, range_size_log);
 	for (size_t i = 0; i < num_nodes; i++)
 		test_in_mem(i * range_size + range_size / 2, mapper);
@@ -80,7 +84,11 @@ void test_in_mem()
 void test_load_save(size_t length)
 {
 	printf("test load and save\n");
+#ifdef USE_NUMA
 	size_t num_nodes = numa_num_configured_nodes();
+#else
+	size_t num_nodes = 1;
+#endif
 	NUMA_mapper mapper(num_nodes, range_size_log);
 
 	NUMA_buffer::ptr buf = create_buf(length, mapper);
@@ -103,7 +111,11 @@ void test_load_save(size_t length)
 
 void test_load_save()
 {
+#ifdef USE_NUMA
 	size_t num_nodes = numa_num_configured_nodes();
+#else
+	size_t num_nodes = 1;
+#endif
 	for (size_t i = 0; i < num_nodes + 5; i++)
 		test_load_save(i * range_size + range_size / 2);
 }
