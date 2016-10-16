@@ -17,13 +17,14 @@ logistic.cost <- function(X, y, w)
 	(1/m)*sum(y*(-xw) + log(1 + exp(xw)))
 }
 
-logistic.regression <- function(X, y, method=c("GD", "Newton"))
+logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uniform"),
+								hessian_size=0.1)
 {
 	if (method == "GD")
 		get.hessian <- NULL
 	else
 		get.hessian <- logistic.hessian
 	params <- list(c=0.5, ro=0.2, linesearch=is.null(get.hessian),
-				   num.iters=500, out.path=FALSE)
+				   num.iters=500, out.path=FALSE, method=method, hessian_size=hessian_size)
 	gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
 }
