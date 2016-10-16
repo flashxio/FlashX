@@ -20,7 +20,6 @@ endif()
 
 find_package(Boost COMPONENTS system filesystem	REQUIRED)
 find_package(Threads REQUIRED)
-find_package(LibNuma REQUIRED)
 find_package(LibAio REQUIRED)
 find_package(LibRt REQUIRED)
 
@@ -43,6 +42,13 @@ find_package(hwloc)
 if (hwloc_FOUND)
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_HWLOC")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HWLOC")
+endif()
+
+find_package(LibNuma)
+if (LIBNUMA_FOUND)
+	message(STATUS "Find libnuma.")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_NUMA")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NUMA")
 endif()
 
 check_c_compiler_flag("-mavx" HAVE_FLAG_M_AVX)
