@@ -1193,7 +1193,7 @@ void underlying_mat_set::materialize(bool par_access)
 	if (!tall_vmats.empty()) {
 		detail::portion_mapply_op::const_ptr materialize_op(
 				new materialize_mapply_op(tall_vmats[0]->get_type(),
-					true, !par_access));
+					false, !par_access));
 		__mapply_portion(tall_vmats, materialize_op, matrix_layout_t::L_ROW,
 				par_access);
 	}
