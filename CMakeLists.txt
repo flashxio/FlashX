@@ -20,7 +20,6 @@ endif()
 
 find_package(Boost COMPONENTS system filesystem	REQUIRED)
 find_package(Threads REQUIRED)
-find_package(LibAio REQUIRED)
 find_package(LibRt REQUIRED)
 
 # configure a header file to pass some of the CMake settings
@@ -49,6 +48,13 @@ if (LIBNUMA_FOUND)
 	message(STATUS "Find libnuma.")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_NUMA")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NUMA")
+endif()
+
+find_package(LibAio)
+if (LIBAIO_FOUND)
+	message(STATUS "Find libaio.")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_LIBAIO")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_LIBAIO")
 endif()
 
 check_c_compiler_flag("-mavx" HAVE_FLAG_M_AVX)
