@@ -49,6 +49,7 @@ aio_ctx::aio_ctx(int node_id, int max_aio): iocb_allocator(std::string(
 struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)
 {
+#ifdef USE_LIBAIO
 	struct iocb* a_req = iocb_allocator.alloc_obj();
 	if (io_type == A_READ) {
 		io_prep_preadv(a_req, fd, iov, count, offset);
@@ -63,11 +64,15 @@ struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		exit(1);
 	}
 	return a_req;
+#else
+	return NULL;
+#endif
 }
 
 struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb)
 {
+#ifdef USE_LIBAIO
 	struct iocb* a_req = iocb_allocator.alloc_obj();
   if (io_type == A_READ)
   {
@@ -88,10 +93,14 @@ struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
     }
   }
   return a_req;
+#else
+  return NULL;
+#endif
 }
 
 int aio_ctx_impl::io_wait(struct timespec* to, int num)
 {
+#ifdef USE_LIBAIO
   struct io_event events[max_aio];
   struct io_event* ep = events;
   int ret, n;
@@ -125,10 +134,14 @@ int aio_ctx_impl::io_wait(struct timespec* to, int num)
   busy_aio -= n;
   destroy_io_requests(iocbs, n);
   return ret;
+#else
+  return -1;
+#endif
 }
 
 void aio_ctx_impl::submit_io_request(struct iocb* ioq[], int num)
 {
+#ifdef USE_LIBAIO
   int rc;
   rc = io_submit(ctx, num, ioq);
   if (rc < 0)
@@ -137,11 +150,16 @@ void aio_ctx_impl::submit_io_request(struct iocb* ioq[], int num)
     exit(1);
   }
   busy_aio += num;
+#endif
 } 
 
 int aio_ctx_impl::max_io_slot()
 {
+#ifdef USE_LIBAIO
 	return max_aio - busy_aio;
+#else
+	return 0;
+#endif
 }
 
 }
