@@ -29,7 +29,6 @@
 #include <sys/select.h>
 
 #include "wpaio.h"
-#include "virt_aio_ctx.h"
 #include "parameters.h"
 
 #define INIT_CAPACITY 8
