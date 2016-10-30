@@ -20,11 +20,13 @@
 #' Perform k-means clustering on a data matrix.
 #'
 #' @param data the input data matrix where each row is a data point.
-#' @param K the number of clusters
+#' @param centers either the number of clusters, say k, or a set of
+#'		  initial (distinct) cluster centers. If a number, a random set
+#'		  of (distinct) rows in `x' is chosen as the initial centers.
 #' @param max.iters the maximal number of iterations.
 #' @return a vector that contains cluster Ids for each data point.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.KMeans <- function(data, K, max.iters=10, debug=FALSE, use.blas=FALSE)
+fm.KMeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
 	orig.test.na <- fm.env$fm.test.na
 	fm.set.test.na(FALSE)
@@ -52,10 +54,17 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE, use.blas=FALSE)
 		fm.as.matrix(centers)
 	}
 
-#	parts <- fm.as.integer(floor(fm.runif(n, min=0, max=K)))
-#	new.centers <- cal.centers(data, fm.as.factor(parts, K))
-	rand.k <- runif(K, 1, nrow(data))
-	new.centers <- data[rand.k,]
+	# If `centers' is a scalar, we randomly choose some data points from
+	# the data matrix as initial centers.
+	if (length(centers) == 1) {
+		num.centers <- centers
+		rand.k <- runif(num.centers, 1, nrow(data))
+		new.centers <- data[rand.k,]
+	}
+	else {
+		num.centers <- nrow(centers)
+		new.centers <- fm.conv.R2FM(centers)
+	}
 	parts <- NULL
 
 	iter <- 0
@@ -83,7 +92,7 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE, use.blas=FALSE)
 		# Have the vector materialized during the computation.
 		fm.set.materialize.level(parts, 2, TRUE)
 
-		new.centers <- cal.centers(data, fm.as.factor(parts, K))
+		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))
 			num.moves <- sum(fm.as.numeric(old.parts != parts))
 		iter <- iter + 1
