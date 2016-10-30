@@ -24,7 +24,7 @@
 #' @param max.iters the maximal number of iterations.
 #' @return a vector that contains cluster Ids for each data point.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
+fm.KMeans <- function(data, K, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
 	orig.test.na <- fm.env$fm.test.na
 	fm.set.test.na(FALSE)
@@ -61,13 +61,24 @@ fm.KMeans <- function(data, K, max.iters=10, debug=FALSE)
 	iter <- 0
 	start.time <- Sys.time()
 	num.moves <- nrow(data)
+	if (use.blas)
+		rsData2 <- rowSums(data * data)
 	while (num.moves > 0 && iter < max.iters) {
 		if (debug)
 			iter.start <- Sys.time()
 		centers <- new.centers
 		old.parts <- parts
 		gc()
-		m <- fm.inner.prod(data, t(centers), fm.bo.euclidean, fm.bo.add)
+
+		if (use.blas) {
+			rsCenters2 <- rowSums(centers * centers)
+			m <- -2 * data %*% t(centers)
+			m <- m + rsData2
+			m <- sweep(m, 2, rsCenters2, "+")
+		}
+		else
+			m <- fm.inner.prod(data, t(centers), fm.bo.euclidean, fm.bo.add)
+
 		parts <- fm.as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
 		fm.set.materialize.level(parts, 2, TRUE)
