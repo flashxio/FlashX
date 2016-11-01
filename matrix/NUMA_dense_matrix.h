@@ -173,20 +173,15 @@ public:
  */
 class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 {
-	std::vector<NUMA_vec_store::ptr> data;
-
-	NUMA_col_tall_matrix_store(
-			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_matrix_store(
-				cols.front()->get_length(), cols.size(),
-				cols.front()->get_type(), mat_counter++) {
-		this->data = cols;
-	}
+	// This is to map rows to different NUMA nodes.
+	NUMA_mapper mapper;
+	std::vector<detail::chunked_raw_array> data;
 
 	// The copy constructor performs shallow copy.
 	NUMA_col_tall_matrix_store(
 			const NUMA_col_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
-			mat.get_data_id()) {
+			mat.get_data_id()), mapper(mat.mapper) {
 		this->data = mat.data;
 	}
 
@@ -195,27 +190,17 @@ class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 public:
 	typedef std::shared_ptr<NUMA_col_tall_matrix_store> ptr;
 
-	static ptr create(const std::vector<NUMA_vec_store::ptr> &cols) {
-		return ptr(new NUMA_col_tall_matrix_store(cols));
-	}
-
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type) {
 		return ptr(new NUMA_col_tall_matrix_store(nrow, ncol, num_nodes, type));
 	}
 
 	int get_num_nodes() const {
-		return data[0]->get_num_nodes();
+		return data.size();
 	}
 
-	char *get(size_t row_idx, size_t col_idx) {
-		return data[col_idx]->get(row_idx);
-	}
-
-	const char *get(size_t row_idx, size_t col_idx) const {
-		return data[col_idx]->get(row_idx);
-	}
-
+	char *get(size_t row_idx, size_t col_idx);
+	const char *get(size_t row_idx, size_t col_idx) const;
 
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
