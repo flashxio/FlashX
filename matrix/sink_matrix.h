@@ -95,6 +95,9 @@ public:
 	virtual int get_num_nodes() const {
 		return -1;
 	}
+	virtual bool is_sink() const {
+		return true;
+	}
 
 	virtual std::vector<safs::io_interface::ptr> create_ios() const {
 		return std::vector<safs::io_interface::ptr>();

@@ -415,6 +415,12 @@ dense_matrix::ptr dense_matrix::multiply_sparse_combined(
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+	if (mat.store->is_sink())
+		mat.materialize_self();
+
 	// We should treat a sparse matrix differently to improve performance of
 	// matrix multiplication.
 	if (mat.get_data().is_sparse()) {
@@ -721,6 +727,12 @@ dense_matrix::ptr dense_matrix::mapply_cols(col_vec::const_ptr vals,
 		return dense_matrix::ptr();
 	}
 
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+	if (vals->store->is_sink())
+		vals->materialize_self();
+
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	mapply_col_op::const_ptr mapply_op;
@@ -756,6 +768,12 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 			<< "mapply_rows: the input type is different from what the bulk operator expects";
 		return dense_matrix::ptr();
 	}
+
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+	if (vals->store->is_sink())
+		vals->materialize_self();
 
 	// We should handle mapply_row and mapply_col separately, so we don't
 	// mess up the case of square matrices.
@@ -842,6 +860,12 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 	if (!verify_mapply2(m, *op))
 		return dense_matrix::ptr();
 
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+	if (m.store->is_sink())
+		m.materialize_self();
+
 	std::vector<detail::matrix_store::const_ptr> ins(2);
 	ins[0] = this->get_raw_store();
 	if (this->store_layout() == m.store_layout())
@@ -902,6 +926,10 @@ dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 			<< "The matrix type doesn't match with the sapply input type";
 		return dense_matrix::ptr();
 	}
+
+	// If the input matrix is a sink matrix, we materialize it first.
+	if (store->is_sink())
+		materialize_self();
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
@@ -1179,6 +1207,12 @@ dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
 {
 	if (!verify_inner_prod(m, *left_op, *right_op))
 		return dense_matrix::ptr();
+
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+	if (m.store->is_sink())
+		m.materialize_self();
 
 	size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
 	size_t long_dim2 = std::max(m.get_num_rows(), m.get_num_cols());
@@ -1476,6 +1510,9 @@ dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
 			<< "The matrix element type is different from the operator";
 		return dense_matrix::ptr();
 	}
+	// If the input matrix is a sink matrix, we materialize it first.
+	if (store->is_sink())
+		materialize_self();
 	return dense_matrix::create(fm::aggregate(store, margin, op));
 }
 
@@ -1544,6 +1581,10 @@ public:
 dense_matrix::ptr dense_matrix::apply(matrix_margin margin,
 		arr_apply_operate::const_ptr op) const
 {
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
+
 	// In these two cases, we need to convert the matrix store layout
 	// before we can apply the function to the matrix.
 	detail::matrix_store::const_ptr this_mat;
@@ -1947,6 +1988,10 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		BOOST_LOG_TRIVIAL(error) << "agg op needs to have combine";
 		return dense_matrix::ptr();
 	}
+
+	// If input matrices are sink matrices, we materialize them first.
+	if (store->is_sink())
+		materialize_self();
 
 	if (this->is_wide()) {
 		std::vector<detail::matrix_store::const_ptr> mats(1);

@@ -206,6 +206,9 @@ public:
 	virtual bool is_virtual() const {
 		return false;
 	}
+	virtual bool is_sink() const {
+		return false;
+	}
 	virtual void materialize_self() const {
 	}
 
