@@ -187,8 +187,22 @@ class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 
 	NUMA_col_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
+	NUMA_col_tall_matrix_store(
+			const std::vector<detail::chunked_raw_array>& data,
+			size_t nrow, size_t ncol, const NUMA_mapper &_mapper,
+			const scalar_type &type): NUMA_matrix_store(
+				nrow, ncol, type, mat_counter++), mapper(_mapper) {
+		this->data = data;
+	}
 public:
 	typedef std::shared_ptr<NUMA_col_tall_matrix_store> ptr;
+
+	static ptr create(const std::vector<detail::chunked_raw_array>& data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type) {
+		return ptr(new NUMA_col_tall_matrix_store(data, nrow, ncol,
+					mapper, type));
+	}
 
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type) {
