@@ -23,6 +23,7 @@
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
 #include "matrix_stats.h"
+#include "sub_matrix_store.h"
 
 namespace fm
 {
@@ -568,8 +569,8 @@ const char *NUMA_col_tall_matrix_store::get(size_t row_idx, size_t col_idx) cons
 matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	// TODO
-	return matrix_store::const_ptr();
+	NUMA_col_tall_matrix_store::const_ptr copy(new NUMA_col_tall_matrix_store(*this));
+	return matrix_store::const_ptr(new sub_col_matrix_store(idxs, copy));
 }
 
 bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const

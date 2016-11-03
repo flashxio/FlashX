@@ -61,6 +61,7 @@ add_library(FMatrix STATIC
 	EM_vv_store.cpp
 	groupby_matrix_store.cpp
 	materialize.cpp
+	sub_matrix_store.cpp
 )
 
 if(ENABLE_TRILINOS)
