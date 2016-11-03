@@ -34,7 +34,7 @@ static safs_header get_safs_header(const RAID_config &conf,
 	return f.get_header();
 }
 
-file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
+file_mapper::ptr RAID_config::create_file_mapper(const std::string &file_name) const
 {
 	/*
 	 * The individual files on the native file system are partitions of
@@ -51,12 +51,12 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		if (!dir.exist()) {
 			fprintf(stderr, "%s for the SAFS file %s doesn't exist\n",
 					dir_name.c_str(), file_name.c_str());
-			return NULL;
+			return file_mapper::ptr();
 		}
 		if (!dir.is_dir()) {
 			fprintf(stderr, "%s for the SAFS file %s isn't a directory\n",
 					dir_name.c_str(), file_name.c_str());
-			return NULL;
+			return file_mapper::ptr();
 		}
 		std::vector<std::string> part_ids;
 		dir.read_all_files(part_ids);
@@ -66,7 +66,7 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 			fprintf(stderr,
 					"wrong format of the SAFS file %s, check the directory %s\n",
 					file_name.c_str(), dir_name.c_str());
-			return NULL;
+			return file_mapper::ptr();
 		}
 		int part_id = atoi(part_ids[0].c_str());
 		part_file_info info(dir_name + std::string("/") + part_ids[0],
@@ -76,7 +76,7 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	if (file_map.size() < root_paths.size()) {
 		fprintf(stderr, "duplicated partition id of the SAFS file %s\n",
 				file_name.c_str());
-		return NULL;
+		return file_mapper::ptr();
 	}
 
 	std::vector<part_file_info> files;
@@ -95,26 +95,32 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	}
 	switch (mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(file_name, files, block_size);
+			return file_mapper::ptr(new RAID0_mapper(file_name, files,
+						block_size));
 		case RAID5:
-			return new RAID5_mapper(file_name, files, block_size);
+			return file_mapper::ptr(new RAID5_mapper(file_name, files,
+						block_size));
 		case HASH:
-			return new hash_mapper(file_name, files, block_size);
+			return file_mapper::ptr(new hash_mapper(file_name, files,
+						block_size));
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);
 	}
 }
 
-file_mapper *RAID_config::create_file_mapper() const
+file_mapper::ptr RAID_config::create_file_mapper() const
 {
 	switch (RAID_mapping_option) {
 		case RAID0:
-			return new RAID0_mapper("root", root_paths, RAID_block_size);
+			return file_mapper::ptr(new RAID0_mapper("root", root_paths,
+						RAID_block_size));
 		case RAID5:
-			return new RAID5_mapper("root", root_paths, RAID_block_size);
+			return file_mapper::ptr(new RAID5_mapper("root", root_paths,
+						RAID_block_size));
 		case HASH:
-			return new hash_mapper("root", root_paths, RAID_block_size);
+			return file_mapper::ptr(new hash_mapper("root", root_paths,
+						RAID_block_size));
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);

@@ -37,7 +37,7 @@ namespace safs
  */
 class logical_file_partition
 {
-	file_mapper *mapper;
+	file_mapper::ptr mapper;
 	// This contains a vector of chunk IDs in a logical SAFS stripe that
 	// belong to this file partition.
 	std::vector<int> indices;
@@ -45,7 +45,7 @@ class logical_file_partition
 	std::vector<int> file_map;
 public:
 	logical_file_partition(std::vector<int> indices,
-			file_mapper *mapper): file_map(mapper->get_num_files(), -1) {
+			file_mapper::ptr mapper): file_map(mapper->get_num_files(), -1) {
 		this->mapper = mapper;
 		this->indices = indices;
 		for (size_t i = 0; i < indices.size(); i++)
@@ -66,7 +66,7 @@ public:
 		return mapper != NULL;
 	}
 
-	const file_mapper *get_mapper() const {
+	file_mapper::const_ptr get_mapper() const {
 		assert(mapper);
 		return mapper;
 	}

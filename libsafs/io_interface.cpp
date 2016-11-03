@@ -154,7 +154,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		% disk_node_ids.size();
 	init_aio(disk_node_ids);
 
-	file_mapper *mapper = raid_conf->create_file_mapper();
+	file_mapper::ptr mapper = raid_conf->create_file_mapper();
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will
@@ -333,10 +333,11 @@ class posix_io_factory: public file_io_factory
 	int access_option;
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
-	file_mapper &mapper;
+	file_mapper::ptr mapper;
 public:
-	posix_io_factory(file_mapper &_mapper, int access_option): file_io_factory(
-				_mapper.get_name()), mapper(_mapper) {
+	posix_io_factory(file_mapper::ptr mapper, int access_option): file_io_factory(
+				mapper->get_name()) {
+		this->mapper = mapper;
 		this->access_option = access_option;
 		num_ios = 0;
 	}
@@ -359,10 +360,11 @@ class aio_factory: public file_io_factory
 {
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
-	file_mapper &mapper;
+	file_mapper::ptr mapper;
 public:
-	aio_factory(file_mapper &_mapper): file_io_factory(
-			_mapper.get_name()), mapper(_mapper) {
+	aio_factory(file_mapper::ptr mapper): file_io_factory(
+			mapper->get_name()) {
+		this->mapper = mapper;
 		num_ios = 0;
 	}
 
@@ -387,7 +389,7 @@ class remote_io_factory: public file_io_factory
 	std::atomic_ulong tot_accesses;
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
-	file_mapper &mapper;
+	file_mapper::ptr mapper;
 
 	slab_allocator &get_msg_allocator(int node_id) {
 		if (node_id < 0)
@@ -396,7 +398,7 @@ class remote_io_factory: public file_io_factory
 			return *msg_allocators[node_id];
 	}
 public:
-	remote_io_factory(file_mapper &_mapper);
+	remote_io_factory(file_mapper::ptr mapper);
 
 	~remote_io_factory();
 
@@ -405,7 +407,7 @@ public:
 	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
-		return mapper.get_file_id();
+		return mapper->get_file_id();
 	}
 
 	virtual void collect_stat(io_interface &io) {
@@ -415,7 +417,7 @@ public:
 
 	virtual void print_statistics() const {
 		BOOST_LOG_TRIVIAL(info) << boost::format("%1% gets %2% I/O accesses")
-			% mapper.get_name() % tot_accesses.load();
+			% mapper->get_name() % tot_accesses.load();
 	}
 };
 
@@ -430,15 +432,15 @@ class global_cached_io_factory: public file_io_factory
 	page_cache::ptr global_cache;
 	remote_io_factory::shared_ptr remote_factory;
 public:
-	global_cached_io_factory(file_mapper &_mapper,
-			page_cache::ptr cache): file_io_factory(_mapper.get_name()) {
+	global_cached_io_factory(file_mapper::ptr mapper,
+			page_cache::ptr cache): file_io_factory(mapper->get_name()) {
 		this->global_cache = cache;
 		tot_bytes = 0;
 		tot_accesses = 0;
 		tot_pg_accesses = 0;
 		tot_hits = 0;
 		tot_fast_process = 0;
-		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(_mapper));
+		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(mapper));
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
@@ -479,12 +481,12 @@ class direct_comp_io_factory: public file_io_factory
 
 	remote_io_factory::shared_ptr remote_factory;
 public:
-	direct_comp_io_factory(file_mapper &_mapper): file_io_factory(
-				_mapper.get_name()) {
+	direct_comp_io_factory(file_mapper::ptr mapper): file_io_factory(
+				mapper->get_name()) {
 		tot_disk_bytes = 0;
 		tot_req_bytes = 0;
 		tot_accesses = 0;
-		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(_mapper));
+		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(mapper));
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
@@ -516,7 +518,7 @@ class part_global_cached_io_factory: public remote_io_factory
 {
 public:
 	part_global_cached_io_factory(
-			file_mapper &_mapper): remote_io_factory(_mapper) {
+			file_mapper::ptr mapper): remote_io_factory(mapper) {
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
@@ -527,12 +529,12 @@ public:
 
 io_interface::ptr posix_io_factory::create_io(thread *t)
 {
-	int num_files = mapper.get_num_files();
+	int num_files = mapper->get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
 		indices.push_back(i);
 	// The partition contains all files.
-	logical_file_partition global_partition(indices, &mapper);
+	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
 	switch (access_option) {
@@ -557,12 +559,12 @@ void posix_io_factory::destroy_io(io_interface &io)
 
 io_interface::ptr aio_factory::create_io(thread *t)
 {
-	int num_files = mapper.get_num_files();
+	int num_files = mapper->get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
 		indices.push_back(i);
 	// The partition contains all files.
-	logical_file_partition global_partition(indices, &mapper);
+	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(),
@@ -576,9 +578,10 @@ void aio_factory::destroy_io(io_interface &io)
 	num_ios--;
 }
 
-remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
-			_mapper.get_name()), mapper(_mapper)
+remote_io_factory::remote_io_factory(file_mapper::ptr mapper): file_io_factory(
+			mapper->get_name())
 {
+	this->mapper = mapper;
 	msg_allocators.resize(params.get_num_nodes());
 	for (int i = 0; i < params.get_num_nodes(); i++) {
 		msg_allocators[i] = std::shared_ptr<slab_allocator>(new slab_allocator(
@@ -592,12 +595,12 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 				IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, -1));
 	tot_accesses = 0;
 	num_ios = 0;
-	int num_files = mapper.get_num_files();
+	int num_files = mapper->get_num_files();
 	assert((int) global_data.read_threads.size() == num_files);
 
 	for (auto it = global_data.read_thread_set.begin();
 			it != global_data.read_thread_set.end(); it++)
-		(*it)->open_file(&mapper);
+		(*it)->open_file(mapper);
 }
 
 remote_io_factory::~remote_io_factory()
@@ -606,7 +609,7 @@ remote_io_factory::~remote_io_factory()
 	// If the I/O threads haven't been destroyed.
 	for (auto it = global_data.read_thread_set.begin();
 			it != global_data.read_thread_set.end(); it++)
-		(*it)->close_file(&mapper);
+		(*it)->close_file(mapper);
 }
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
@@ -619,7 +622,7 @@ io_interface::ptr remote_io_factory::create_io(thread *t)
 
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
-			get_msg_allocator(t->get_node_id()), &mapper, t, get_header());
+			get_msg_allocator(t->get_node_id()), mapper, t, get_header());
 	return io_interface::ptr(io);
 }
 
@@ -666,7 +669,7 @@ io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
 			new remote_io(global_data.read_threads,
-				get_msg_allocator(t->get_node_id()), &mapper, t),
+				get_msg_allocator(t->get_node_id()), mapper, t),
 			global_data.table);
 	num_ios++;
 	return io_interface::ptr(io);
@@ -706,28 +709,28 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 						% abs_path).str());
 	}
 
-	file_mapper *mapper = global_data.raid_conf->create_file_mapper(file_name);
+	file_mapper::ptr mapper = global_data.raid_conf->create_file_mapper(file_name);
 	file_io_factory *factory = NULL;
 	switch (access_option) {
 		case READ_ACCESS:
 		case DIRECT_ACCESS:
-			factory = new posix_io_factory(*mapper, access_option);
+			factory = new posix_io_factory(mapper, access_option);
 			break;
 		case AIO_ACCESS:
-			factory = new aio_factory(*mapper);
+			factory = new aio_factory(mapper);
 			break;
 		case REMOTE_ACCESS:
-			factory = new remote_io_factory(*mapper);
+			factory = new remote_io_factory(mapper);
 			break;
 		case GLOBAL_CACHE_ACCESS:
 			if (global_data.global_cache)
-				factory = new global_cached_io_factory(*mapper,
+				factory = new global_cached_io_factory(mapper,
 						global_data.global_cache);
 			else
 				throw io_exception("There is no page cache for global cache IO");
 			break;
 		case DIRECT_COMP_ACCESS:
-			factory = new direct_comp_io_factory(*mapper);
+			factory = new direct_comp_io_factory(mapper);
 			break;
 #ifdef PART_IO
 		case PART_GLOBAL_ACCESS:

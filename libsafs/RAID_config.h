@@ -57,11 +57,12 @@ public:
 	/**
 	 * Create a file mapper for the RAID directories.
 	 */
-	file_mapper *create_file_mapper() const;
+	std::shared_ptr<file_mapper> create_file_mapper() const;
 	/**
 	 * Create a file mapper for a file in the RAID.
 	 */
-	file_mapper *create_file_mapper(const std::string &file_name) const;
+	std::shared_ptr<file_mapper> create_file_mapper(
+			const std::string &file_name) const;
 
 	/**
 	 * This returns the nodes where the RAID attaches to.
