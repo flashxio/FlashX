@@ -86,28 +86,6 @@ struct global_data_collection
 
 static global_data_collection global_data;
 
-class file_mapper_set
-{
-	std::unordered_map<std::string, file_mapper *> map;
-	spin_lock lock;
-public:
-	file_mapper &get(const std::string &name) {
-		lock.lock();
-		std::unordered_map<std::string, file_mapper *>::const_iterator it
-			= map.find(name);
-		file_mapper *mapper;
-		if (it == map.end()) {
-			mapper = global_data.raid_conf->create_file_mapper(name);
-			map.insert(std::pair<std::string, file_mapper *>(name, mapper));
-		}
-		else
-			mapper = it->second;
-		lock.unlock();
-		return *mapper;
-	}
-};
-static file_mapper_set file_mappers;
-
 class debug_global_data: public debug_task
 {
 public:
@@ -728,28 +706,28 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 						% abs_path).str());
 	}
 
-	file_mapper &mapper = file_mappers.get(file_name);
+	file_mapper *mapper = global_data.raid_conf->create_file_mapper(file_name);
 	file_io_factory *factory = NULL;
 	switch (access_option) {
 		case READ_ACCESS:
 		case DIRECT_ACCESS:
-			factory = new posix_io_factory(mapper, access_option);
+			factory = new posix_io_factory(*mapper, access_option);
 			break;
 		case AIO_ACCESS:
-			factory = new aio_factory(mapper);
+			factory = new aio_factory(*mapper);
 			break;
 		case REMOTE_ACCESS:
-			factory = new remote_io_factory(mapper);
+			factory = new remote_io_factory(*mapper);
 			break;
 		case GLOBAL_CACHE_ACCESS:
 			if (global_data.global_cache)
-				factory = new global_cached_io_factory(mapper,
+				factory = new global_cached_io_factory(*mapper,
 						global_data.global_cache);
 			else
 				throw io_exception("There is no page cache for global cache IO");
 			break;
 		case DIRECT_COMP_ACCESS:
-			factory = new direct_comp_io_factory(mapper);
+			factory = new direct_comp_io_factory(*mapper);
 			break;
 #ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
