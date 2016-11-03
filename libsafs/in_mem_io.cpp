@@ -17,6 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
+#include <numa.h>
+#endif
+
 #include <boost/format.hpp>
 
 #include "in_mem_io.h"
@@ -39,7 +43,11 @@ public:
 	}
 
 	void operator()(char *buf) const {
+#ifdef USE_NUMA
 		numa_free(buf, size);
+#else
+		free(buf);
+#endif
 	}
 };
 
@@ -101,9 +109,15 @@ NUMA_buffer::NUMA_buffer(size_t length,
 	// Allocate memory for each NUMA node.
 	for (size_t i = 0; i < bufs.size(); i++) {
 		if (buf_lens[i] > 0) {
+#ifdef USE_NUMA
 			bufs[i] = std::shared_ptr<char>(
 					(char *) numa_alloc_onnode(buf_lens[i], i),
 					numa_delete(buf_lens[i]));
+#else
+			bufs[i] = std::shared_ptr<char>(
+					(char *) malloc_aligned(buf_lens[i], PAGE_SIZE),
+					numa_delete(buf_lens[i]));
+#endif
 			assert(bufs[i]);
 		}
 	}

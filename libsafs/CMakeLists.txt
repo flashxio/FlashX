@@ -16,7 +16,6 @@ add_library(safs STATIC
 	io_request.cpp
 	parameters.cpp
 	safs_file.cpp
-	virt_aio_ctx.cpp
 	cache.cpp
 	file_mapper.cpp
 	memory_manager.cpp

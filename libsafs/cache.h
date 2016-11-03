@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <assert.h>
-#include <numa.h>
 
 #include <memory>
 #include <map>

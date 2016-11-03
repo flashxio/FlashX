@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <numa.h>
 #include <assert.h>
 #include <execinfo.h>
 #include <unistd.h>
@@ -129,6 +128,7 @@ static inline int universal_hash(off_t v, int modulo)
  * These two functions should be used to allocate/free large chunks of memory.
  */
 void set_use_huge_page(bool v);
+void *malloc_aligned(size_t size, size_t alignment);
 void *malloc_large(size_t size);
 void free_large(void *addr, size_t size);
 

@@ -19,7 +19,7 @@ include ../../Makefile.common
 
 CXXFLAGS := -g -std=c++0x -I../../libsafs -I../../flash-graph -I.. -fopenmp
 LDFLAGS := -L../eigensolver -leigen -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lnuma -lz -laio -lcblas
+LDFLAGS += -lz -laio -lcblas
 
 all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\

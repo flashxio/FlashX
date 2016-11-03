@@ -19,7 +19,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef USE_NUMA
 #include <numa.h>
+#endif
 #include <pthread.h>
 
 #include "thread.h"
@@ -128,45 +130,13 @@ CPU_hierarchy cpus;
 
 static void bind2node_id(int node_id)
 {
+#ifdef USE_NUMA
 	struct bitmask *bmp = numa_allocate_nodemask();
 	numa_bitmask_setbit(bmp, node_id);
 	numa_bind(bmp);
 	numa_free_nodemask(bmp);
-}
-
-#if 0
-static int get_numa_run_node()
-{
-	struct bitmask *bmp = numa_get_run_node_mask();
-	int nbytes = numa_bitmask_nbytes(bmp);
-	int num_nodes = 0;
-	int node_id = -1;
-	int i;
-	for (i = 0; i < nbytes * 8; i++)
-		if (numa_bitmask_isbitset(bmp, i)) {
-			num_nodes++;
-			printf("bind to node %d\n", i);
-			node_id = i;
-		}
-	return node_id;
-}
-
-static int numa_get_mem_node()
-{
-	struct bitmask *bmp = numa_get_membind();
-	int nbytes = numa_bitmask_nbytes(bmp);
-	int num_nodes = 0;
-	int node_id = -1;
-	int i;
-	for (i = 0; i < nbytes * 8; i++)
-		if (numa_bitmask_isbitset(bmp, i)) {
-			num_nodes++;
-			node_id = i;
-		}
-	assert(num_nodes == 1);
-	return node_id;
-}
 #endif
+}
 
 void *thread_run(void *arg)
 {

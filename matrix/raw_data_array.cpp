@@ -17,7 +17,9 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
 #include <numa.h>
+#endif
 #include <malloc.h>
 
 #include <boost/format.hpp>
@@ -55,7 +57,11 @@ public:
 	}
 
 	void operator()(char *addr) {
+#ifdef USE_NUMA
 		numa_free(addr, size);
+#else
+		free(addr);
+#endif
 	}
 };
 
@@ -74,7 +80,11 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 
 	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
+#ifdef USE_NUMA
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+#else
+		void *addr = malloc_aligned(num_bytes, PAGE_SIZE);
+#endif
 		assert(((long) addr) % 512 == 0);
 		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
@@ -249,7 +259,11 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 	}
 	else {
 		reserved_bytes += num_bytes;
+#ifdef USE_NUMA
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+#else
+		void *addr = malloc_aligned(num_bytes, PAGE_SIZE);
+#endif
 		assert(addr);
 		assert(((long) addr) % 512 == 0);
 		return std::shared_ptr<char>((char *) addr, NUMA_reserved_deleter(node_id));
@@ -293,7 +307,11 @@ void destroy_memchunk_reserve()
 		free(smp_reserved_chunks[i]);
 	for (size_t i = 0; i < reserved_chunks.size(); i++)
 		for (size_t j = 0; j < reserved_chunks[i].size(); j++)
+#ifdef USE_NUMA
 			numa_free(reserved_chunks[i][j], ARR_CHUNK_SIZE);
+#else
+			free(reserved_chunks[i][j]);
+#endif
 	reserved_bytes = 0;
 	smp_reserved_bytes = 0;
 }

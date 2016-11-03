@@ -242,7 +242,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		flags = O_RDWR;
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
+#ifdef USE_LIBAIO
 		global_data.read_threads.resize(num_files);
+#endif
 		// Determine a map to indicate which NUMA nodes the disks are
 		// attached to.
 		std::map<int, std::vector<int> > indices;
@@ -275,6 +277,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 						"The number of disks should be divisible by #I/O threads\n");
 				exit(-1);
 			}
+#ifdef USE_LIBAIO
 			std::vector<disk_io_thread::ptr> ts(num_io_threads);
 			tot_num_threads += num_io_threads;
 			for (size_t i = 0; i < ts.size(); i++) {
@@ -303,6 +306,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 					global_data.read_threads[file_idx] = ts[i];
 				}
 			}
+#endif
 		}
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"SAFS runs on %1% SSDs with %2% I/O threads") % num_files
@@ -375,10 +379,12 @@ void destroy_io_system()
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
 	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
-		num_reads += t->get_num_reads();
-		num_writes += t->get_num_writes();
-		num_read_bytes += t->get_num_read_bytes();
-		num_write_bytes += t->get_num_write_bytes();
+		if (t) {
+			num_reads += t->get_num_reads();
+			num_writes += t->get_num_writes();
+			num_read_bytes += t->get_num_read_bytes();
+			num_write_bytes += t->get_num_write_bytes();
+		}
 	}
 	global_data.read_threads.clear();
 	global_data.read_thread_set.clear();

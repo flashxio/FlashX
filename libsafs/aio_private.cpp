@@ -26,7 +26,6 @@
 #include "read_private.h"
 #include "file_partition.h"
 #include "slab_allocator.h"
-#include "virt_aio_ctx.h"
 
 template class blocking_FIFO_queue<safs::thread_callback_s *>;
 

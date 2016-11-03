@@ -32,8 +32,6 @@
 namespace safs
 {
 
-void aio_callback(io_context_t, struct iocb*, void *, long, long);
-
 struct thread_callback_s;
 
 class buffered_io;

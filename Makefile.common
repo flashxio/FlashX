@@ -22,6 +22,8 @@ CXX = g++
 #MEMTRACE=1
 #BOOST_LOG=1
 #RELEASE=1
+#USE_NUMA=1
+#USE_LIBAIO=1
 HWLOC=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
@@ -34,9 +36,19 @@ CFLAGS += -DUSE_HWLOC
 CXXFLAGS += -DUSE_HWLOC
 LDFLAGS += -lhwloc
 endif
+ifeq ($(USE_LIBAIO), 1)
+	LDFLAGS += -laio
+	CFLAGS += -DUSE_LIBAIO
+	CXXFLAGS += -DUSE_LIBAIO
+endif
+ifeq ($(USE_NUMA), 1)
+	LDFLAGS += -lnuma
+	CFLAGS += -DUSE_NUMA
+	CXXFLAGS += -DUSE_NUMA
+endif
 
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt -fopenmp
+LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -lrt -fopenmp
 CXXFLAGS += -mavx -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK -fopenmp
 ifdef PROF
 	LDFLAGS +=-lprofiler
