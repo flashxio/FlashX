@@ -48,12 +48,6 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	const size_t data_id;
 
 	/*
-	 * This indicates whether or not we cache a portion in each worker thread.
-	 * By default, this is enabled.
-	 */
-	bool cache_portion;
-
-	/*
 	 * This indicates whether the input matrices are accessed in parallel
 	 * when the matrix is materialized.
 	 */

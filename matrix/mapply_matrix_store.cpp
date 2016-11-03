@@ -908,7 +908,6 @@ mapply_matrix_store::mapply_matrix_store(
 		data_id(_data_id), in_mats(_in_mats)
 {
 	this->par_access = true;
-	this->cache_portion = true;
 	this->layout = layout;
 	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
 	this->op = op;
@@ -1113,7 +1112,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 					get_materialize_level(), parts, *op, res.get(), NULL,
 					start_row, start_col, num_rows, num_cols, get_type(),
 					parts.front()->get_node_id()));
-	if (cache_portion)
+	if (is_cache_portion())
 		local_mem_buffer::cache_portion(data_id, ret);
 	return ret;
 }
@@ -1266,7 +1265,7 @@ async_cres_t mapply_matrix_store::get_portion_async(
 					num_cols, get_type(), parts.front()->get_node_id()));
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
-	if (cache_portion)
+	if (is_cache_portion())
 		local_mem_buffer::cache_portion(data_id, ret);
 	// If all parts are from the in-mem matrix store or have been cached by
 	// the underlying matrices, the data in the returned portion is immediately
@@ -1370,7 +1369,7 @@ void mapply_matrix_store::set_prefetches(size_t num,
 
 void mapply_matrix_store::set_cache_portion(bool cache_portion)
 {
-	this->cache_portion = cache_portion;
+	matrix_store::set_cache_portion(cache_portion);
 	for (size_t i = 0; i < in_mats.size(); i++)
 		const_cast<matrix_store &>(*in_mats[i]).set_cache_portion(cache_portion);
 }
