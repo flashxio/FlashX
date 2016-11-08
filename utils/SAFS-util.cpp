@@ -118,9 +118,9 @@ class verify_callback: public callback
 	char *orig_buf;
 	data_source *source;
 	size_t verified_bytes;
-	const file_mapper *fmapper;
+	file_mapper::const_ptr fmapper;
 public:
-	verify_callback(data_source *source, const file_mapper *fmapper) {
+	verify_callback(data_source *source, file_mapper::const_ptr fmapper) {
 		this->source = source;
 		this->fmapper = fmapper;
 		orig_buf = (char *) malloc(BUF_SIZE);
@@ -245,7 +245,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	const RAID_config &conf = get_sys_RAID_conf();
-	file_mapper *fmapper = conf.create_file_mapper();
+	file_mapper::ptr fmapper = conf.create_file_mapper();
 	std::string part_path = fmapper->get_file_name(part_id) + "/"
 		+ int_file_name;
 
