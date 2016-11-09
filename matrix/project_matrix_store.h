@@ -123,6 +123,7 @@ public:
 
 private:
 	std::vector<off_t> portion_offs;
+	// This contains the global row and col indeces for non-zero entries.
 	std::vector<nz_idx> nz_idxs;
 	mem_col_matrix_store::ptr vals;
 	matrix_layout_t layout;
@@ -218,6 +219,8 @@ class lsparse_col_matrix_store: public lvirtual_col_matrix_store
 		}
 	};
 
+	// This contains the local row and col indices of non-zero entries
+	// in the matrix.
 	std::vector<sparse_project_matrix_store::nz_idx> local_idxs;
 	local_matrix_store::const_ptr vals;
 
@@ -281,7 +284,14 @@ public:
 
 	virtual void materialize_self() const;
 
+	// get the non-zero entries in a specified column.
+	// `row_idxs' contains the local row indices.
+	// If the local portion is reiszed, the row indices are relative to
+	// the start row of the resized portion.
 	const char *get_col_nnz(off_t col_idx, std::vector<off_t> &row_idxs) const;
+
+	// This is mainly for testing.
+	// We don't need to do anything after the local portion is resized.
 	size_t get_nnz() const {
 		return local_idxs.size();
 	}
@@ -363,10 +373,16 @@ public:
 			size_t num_cols) const;
 	virtual void materialize_self() const;
 
+	// This is mainly for testing.
+	// We don't need to do anything after the local portion is resized.
 	size_t get_nnz() const {
 		return local_idxs.size();
 	}
 
+	// get the non-zero entries in a specified row.
+	// `col_idxs' contains the local col indices.
+	// If the local portion is reiszed, the col indices are relative to
+	// the start col of the resized portion.
 	const char *get_row_nnz(off_t row_idx, std::vector<off_t> &col_idxs) const;
 	// This returns rows in the specified range.
 	// The rows must be stored contiguously. Otherwise, it'll return NULL.

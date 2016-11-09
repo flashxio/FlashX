@@ -226,6 +226,8 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 						empty_vals));
 	}
 
+	// Right now, the vector contains the global row and col indices.
+	// But we want local indices. We'll convert them to local indices.
 	std::vector<sparse_project_matrix_store::nz_idx> local_idxs(start_it,
 			end_it);
 	for (size_t i = 0; i < local_idxs.size(); i++) {
