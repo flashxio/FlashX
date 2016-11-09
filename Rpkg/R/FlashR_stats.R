@@ -15,49 +15,64 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-for (cl in fm.cls) {
-	setMethod("sd", cl, function(x, na.rm) {
-			  n <- length(x)
-			  x2 <- x * x
-			  test.na <- TRUE
-			  num.na <- 0
-			  if (na.rm) {
-				  zero <- get.zero(typeof(x))
-				  in.is.na <- is.na(x)
-				  x <- ifelse(in.is.na, zero, x)
-				  x2 <- ifelse(in.is.na, zero, x2)
-				  test.na <- FALSE
-			  }
-			  sum.x <- fm.agg.lazy(x, fm.bo.add)
-			  sum.x2 <- fm.agg.lazy(x2, fm.bo.add)
+.sd.int <- function(x, na.rm)
+{
+	n <- length(x)
+	x2 <- x * x
+	test.na <- TRUE
+	num.na <- 0
+	if (na.rm) {
+		zero <- .get.zero(typeof(x))
+		in.is.na <- is.na(x)
+		x <- ifelse(in.is.na, zero, x)
+		x2 <- ifelse(in.is.na, zero, x2)
+		test.na <- FALSE
+	}
+	sum.x <- fm.agg.lazy(x, fm.bo.add)
+	sum.x2 <- fm.agg.lazy(x2, fm.bo.add)
 
-			  if (test.na) {
-				  x.is.na <- fm.agg.lazy(fm.is.na.only(x), fm.bo.or)
-				  res <- fm.materialize(sum.x, sum.x2, x.is.na)
-				  if (fmV2scalar(res[[3]]))
-					  return(get.na(typeof(x)))
-				  sums <- res[1:2]
-			  }
-			  else {
-				  # If we remove NA, we should calculate the number of
-				  # NAs in the vector.
-				  sum.na <- fm.agg.lazy(in.is.na, fm.bo.add)
-				  res <- fm.materialize(sum.x, sum.x2, sum.na)
-				  n <- n - fmV2scalar(res[[3]])
-				  sums <- res[1:2]
-			  }
-			  sum.x <- fmV2scalar(sums[[1]])
-			  sum.x2 <- fmV2scalar(sums[[2]])
-			  avg <- sum.x / n
-			  sqrt((sum.x2 - n * avg * avg) / (n - 1))
-		  })
+	if (test.na) {
+		x.is.na <- fm.agg.lazy(.is.na.only(x), fm.bo.or)
+		res <- fm.materialize(sum.x, sum.x2, x.is.na)
+		if (.fmV2scalar(res[[3]]))
+			return(.get.na(typeof(x)))
+		sums <- res[1:2]
+	}
+	else {
+		# If we remove NA, we should calculate the number of
+		# NAs in the vector.
+		sum.na <- fm.agg.lazy(in.is.na, fm.bo.add)
+		res <- fm.materialize(sum.x, sum.x2, sum.na)
+		n <- n - .fmV2scalar(res[[3]])
+		sums <- res[1:2]
+	}
+	sum.x <- .fmV2scalar(sums[[1]])
+	sum.x2 <- .fmV2scalar(sums[[2]])
+	avg <- sum.x / n
+	sqrt((sum.x2 - n * avg * avg) / (n - 1))
 }
 
-fm.cov <- function(x, y=NULL, use="everything",
+#' Standard Deviation
+#'
+#' This function computes the standard deviation of the values in \code{x}.
+#' If \code{na.rm} is \code{TRUE} then missing values are removed before
+#' computation proceeds.
+#'
+#' @param x a FlashMatrix vector or matrix.
+#' @param na.rm logical. Should missing values be removed?
+#' @name sd
+NULL
+
+#' @rdname sd
+setMethod("sd", "fm", .sd.int)
+#' @rdname sd
+setMethod("sd", "fmV", .sd.int)
+
+.cov.int <- function(x, y=NULL, use="everything",
 				   method=c("pearson", "kendall", "spearman"))
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
@@ -84,15 +99,15 @@ fm.cov <- function(x, y=NULL, use="everything",
 		y.mu <- fm.conv.FM2R(y.mu)
 		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	ret
 }
 
-fm.cor <- function(x, y=NULL, use="everything",
+.cor.int <- function(x, y=NULL, use="everything",
 				   method=c("pearson", "kendall", "spearman"))
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
@@ -124,15 +139,15 @@ fm.cor <- function(x, y=NULL, use="everything",
 		y.sd <- fm.conv.FM2R(y.sd)
 		ret <- (fm.conv.FM2R(ret[[5]]) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	ret
 }
 
-fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
+.cov.wt.int <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
 					       method = c("unbiased", "ML"))
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 	if (is.data.frame(x))
 		x <- as.matrix(x)
 	else if (!is.matrix(x))
@@ -193,17 +208,40 @@ fm.cov.wt <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TR
 		R[] <- Is * cov * rep(Is, each = nrow(cov))
 		y$cor <- R
 	}
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	y
 }
 
-setMethod("cov", "fm",  fm.cov)
-setMethod("cov.wt", "fm", fm.cov.wt)
+#' Correlation, Variance and Covariance (Matrices)
+#'
+#' \code{cov} and \code{cor} compute the covariance or correlation of \code{x}
+#' and \code{y} if these are vectors.  If \code{x}
+#' and \code{y} are matrices then the covariances (or correlations) between
+#' the columns of \code{x} and the columns of \code{y} are computed.
+#' @param x a numeric vector or matrix
+#' @param y \code{NULL} (default) or a vector or matrix with compatible
+#' dimensions to \code{x}. The default is equivalent to \code{y=x}.
+#' @param use an optional character string giving a method for computing
+#'        covariances in the presence of missing values.  This must be
+#'        (an abbreviation of) one of the strings \code{"everything"},
+#'        \code{"all.obs"}, \code{"complete.obs"}, \code{"na.or.complete"}, or
+#'        \code{"pairwise.complete.obs"}.
+#' @param method a character string indicating which correlation coefficient
+#'        (or covariance) is to be computed.  One of \code{"pearson"}
+#'        (default), \code{"kendall"}, or \code{"spearman"}: can be abbreviated.
+#'        Right now this argument isn't used.
+#' @name cor
+NULL
+
+#' @rdname cor
+setMethod("cor", "fm", .cor.int)
+#' @rdname cor
+setMethod("cov", "fm", .cov.int)
 
 fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 	if (fm.is.matrix(covar))
 		covar <- fm.conv.FM2R(covar)
 	covar.inv <- solve(covar)
@@ -218,14 +256,71 @@ fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 		ret <- logret
 	else
 		ret <- exp(logret)
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	ret
 }
 
+#' Weighted Covariance Matrices
+#'
+#' Returns a list containing estimates of the weighted covariance
+#' matrix and the mean of the data, and optionally of the (weighted)
+#' correlation matrix.
+#'
+#' By default, \code{method = "unbiased"}, The covariance matrix is
+#' divided by one minus the sum of squares of the weights, so if the
+#' weights are the default (1/n) the conventional unbiased estimate
+#' of the covariance matrix with divisor (n - 1) is obtained.  This
+#' differs from the behaviour in S-PLUS which corresponds to \code{method
+#' = "ML"} and does not divide.
+#'
+#' @param x a matrix. As usual, rows are observations and columns are variables.
+#' @param wt a non-negative and non-zero vector of weights for each
+#'        observation.  Its length must equal the number of rows of
+#'        \code{x}.
+#' @param cor a logical indicating whether the estimated correlation
+#'        weighted matrix will be returned as well.
+#' @param center either a logical or a numeric vector specifying the centers
+#'        to be used when computing covariances.  If \code{TRUE}, the
+#'        (weighted) mean of each variable is used, if \code{FALSE}, zero is
+#'        used.  If \code{center} is numeric, its length must equal the
+#'        number of columns of \code{x}.
+#' @param method string specifying how the result is scaled, see \code{Details}
+#'        below. Can be abbreviated.
+#' @return A list containing the following named components:
+#' \itemize{
+#' \item{cov}{the estimated (weighted) covariance matrix.}
+#' \item{center}{an estimate for the center (mean) of the data.}
+#' \item{n.obs}{the number of observations (rows) in \code{x}.}
+#' \item{wt}{the weights used in the estimation.  Only returned if given
+#'          as an argument.}
+#' \item{cor}{the estimated correlation matrix.  Only returned if \code{cor} is
+#'          \code{TRUE}}
+#' }
+setMethod("cov.wt", "fm", .cov.wt.int)
+
+#' FlashMatrix Summaries
+#'
+#' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
+#'
+#' It computes the min, max, sum, mean, L1, L2, number of non-zero values if
+#' the argument is a vector, or these statistics for each column if the argument
+#' is a matrix.
+#'
+#' @param x a FlashMatrix vector or matrix.
+#' @return A list containing the following named components:
+#' \itemize{
+#' \item{min}{The minimum value}
+#' \item{max}{The maximum value}
+#' \item{mean}{The average}
+#' \item{normL1}{The L1 norm}
+#' \item{normL2}{The L2 norm}
+#' \item{numNonzeros}{The number of non-zero values}
+#' }
+#'
 fm.summary <- function(x)
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 	lazy.res <- list()
 	if (is.matrix(x)) {
 		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
@@ -247,7 +342,7 @@ fm.summary <- function(x)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }

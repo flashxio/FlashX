@@ -24,12 +24,15 @@
 #'		  initial (distinct) cluster centers. If a number, a random set
 #'		  of (distinct) rows in `x' is chosen as the initial centers.
 #' @param max.iters the maximal number of iterations.
+#' @param debug This indicates whether to print debug info.
+#' @param use.blas a logical value indicating whether to use BLAS to
+#'                 compute Euclidean distance.
 #' @return a vector that contains cluster Ids for each data point.
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.KMeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
 
 	n <- dim(data)[1]
 	m <- dim(data)[2]
@@ -88,13 +91,13 @@ fm.KMeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 		else
 			m <- fm.inner.prod(data, t(centers), fm.bo.euclidean, fm.bo.add)
 
-		parts <- fm.as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
+		parts <- as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
 		fm.set.materialize.level(parts, 2, TRUE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))
-			num.moves <- sum(fm.as.numeric(old.parts != parts))
+			num.moves <- sum(as.numeric(old.parts != parts))
 		iter <- iter + 1
 		if (debug) {
 			iter.end <- Sys.time()
@@ -108,6 +111,6 @@ fm.KMeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and",
 		as.numeric(end.time) - as.numeric(start.time), "seconds\n")
-	fm.set.test.na(orig.test.na)
+	.set.test.na(orig.test.na)
 	parts
 }

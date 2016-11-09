@@ -58,6 +58,6 @@ void R_gc()
 
 SEXP R_create_s4fm(SEXP fm)
 {
-	SEXP create_fm = PROTECT(lang2(install("new.fm"), fm));
+	SEXP create_fm = PROTECT(lang2(install(".new.fm"), fm));
 	return PROTECT(eval(create_fm, R_GlobalEnv));
 }

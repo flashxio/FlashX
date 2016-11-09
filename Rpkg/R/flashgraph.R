@@ -105,8 +105,6 @@ fg.get.params <- function(name)
 #'                   loaded to FlashR.
 #' @param directed   Indicate whether the input graph is directed. This is
 #'                   only used if the input graph use the edge list format.
-#' @param nthreads   The number of threads used to construct a graph to
-#'                   the FlashGraph format.
 #' @return a FlashGraph object.
 #' @name fg.load.graph
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -196,7 +194,7 @@ fg.export.graph <- function(graph, graph.file, index.file)
 #'
 #' `fg.is.directed' indicates whether a graph is directed.
 #'
-#' @param The FlashGraph object
+#' @param graph a FlashGraph object
 #' @return `fg.vcount' and `fg.ecount' returns integer constants.
 #' `fg.in.mem' and `fg.is.directed' returns boolean constants.
 #' @name fg.graph.info
@@ -289,7 +287,7 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 #'             components to search. It is ignored for undirected graphs.
 #' @return a FlashGraph object that contains the largest connected component in
 #'         the graph.
-#' @name fg.cc
+#' @name fg.lcc
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.get.lcc <- function(graph, mode=c("weak", "strong"))
 {
@@ -408,6 +406,7 @@ fg.triangles <- function(graph, type="cycle")
 #' @param graph The FlashGraph object
 #' @param order An integer scalar, the size of the local neighborhood for
 #'              each vertex. Should be non-negative.
+#' @param K The number of top scan statistics.
 #' @return A numeric vector that contains locality statistic of each vertex.
 #' @name fg.local.scan
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -531,6 +530,8 @@ fg.overlap <- function(graph, vids)
 #' @param graph The FlashGraph object
 #' @param vertices A numeric vector that contains the ids of vertices in
 #'                 the induced subgraph.
+#' @param compress This indicates whether to remove empty vertices in
+#'                 the generated subgraph.
 #' @param name The name of the FlashGraph object.
 #' @return `fg.fetch.subgraph.igraph' returns an iGraph object,
 #' `fg.fetch.subgraph' returns a FlashGraph object
