@@ -2095,15 +2095,17 @@ void test_groupby()
 				-1, get_scalar_type<int>()));
 }
 
-dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
+dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
 {
 	std::vector<off_t> idxs;
-	idxs.resize(std::max(mat->get_num_rows() / 5, 1UL));
+	idxs.resize(get_nrow);
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = random() % mat->get_num_rows();
 	dense_matrix::ptr res = mat->get_rows(idxs);
 	assert(res != NULL);
+	mat = dense_matrix::create(mat->get_raw_store());
 	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
+	res = dense_matrix::create(res->get_raw_store());
 	dense_matrix::ptr mem_res = res->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr orig_store
 		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
@@ -2115,28 +2117,46 @@ dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 	return res;
 }
 
-dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
+dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
+{
+	return _test_get_rows(mat, std::max(mat->get_num_rows() / 5, 2UL));
+}
+
+dense_matrix::ptr _test_get_cols(dense_matrix::ptr mat, size_t get_ncol)
 {
 	std::vector<off_t> idxs;
-	idxs.resize(std::max(mat->get_num_cols() / 5, 2UL));
+	idxs.resize(get_ncol);
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = (random() + mat->get_num_cols() / 2) % mat->get_num_cols();
 	dense_matrix::ptr res = mat->get_cols(idxs);
 	assert(res != NULL);
+	res = dense_matrix::create(res->get_raw_store());
 	dense_matrix::ptr mem_res = res->conv_store(true, -1);
+	mat = dense_matrix::create(mat->get_raw_store());
 	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr orig_store
 		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	assert(orig_store);
 	detail::mem_matrix_store::const_ptr res_store
 		= detail::mem_matrix_store::cast(mem_res->get_raw_store());
+	assert(res_store);
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		for (size_t j = 0; j < res->get_num_cols(); j++)
 			assert(res_store->get<int>(i, j) == orig_store->get<int>(i, idxs[j]));
 	return res;
 }
 
+dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
+{
+	return _test_get_cols(mat, std::max(mat->get_num_cols() / 5, 2UL));
+}
+
 void _test_get_rowcols(dense_matrix::ptr mat)
 {
+	if (mat->is_wide())
+		_test_get_cols(mat, 5);
+	else
+		_test_get_rows(mat, 5);
 	dense_matrix::ptr tmp = test_get_rows(mat);
 	test_get_cols(tmp);
 	test_get_rows(tmp);
@@ -2147,6 +2167,7 @@ void _test_get_rowcols(dense_matrix::ptr mat)
 
 void test_get_rowcols(int num_nodes)
 {
+	block_size = 3;
 	dense_matrix::ptr mat, tmp;
 
 	bool orig_in_mem = in_mem;
@@ -2227,6 +2248,8 @@ void test_get_rowcols(int num_nodes)
 			get_scalar_type<int>());
 	mat = mat->add(*mat);
 	_test_get_rowcols(mat);
+
+	block_size = 0;
 }
 
 void test_materialize(int num_nodes)
