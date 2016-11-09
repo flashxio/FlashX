@@ -50,6 +50,7 @@ matrix_store::matrix_store(size_t nrow, size_t ncol, bool in_mem,
 	this->ncol = ncol;
 	this->in_mem = in_mem;
 	this->entry_size = type.get_size();
+	this->cache_portion = true;
 }
 
 size_t matrix_store::get_num_portions() const
