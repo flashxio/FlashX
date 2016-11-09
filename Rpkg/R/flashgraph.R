@@ -666,14 +666,14 @@ fg.spectral.clusters <- function(fg, k, ase)
 	kmeans(eigen$vectors, k, MacQueen)
 }
 
-print.fg <- function(fg)
+print.fg <- function(x, ...)
 {
-	stopifnot(!is.null(fg))
-	stopifnot(class(fg) == "fg")
+	stopifnot(!is.null(x))
+	stopifnot(class(x) == "fg")
 	directed = "U"
-	if (fg.is.directed(fg))
+	if (fg.is.directed(x))
 		directed = "D"
-	cat("FlashGraph ", fg$name, " (", directed, "): ", fg.vcount(fg), " ", fg.ecount(fg),
+	cat("FlashGraph ", x$name, " (", directed, "): ", fg.vcount(x), " ", fg.ecount(x),
 		"\n", sep="")
 }
 
