@@ -593,6 +593,21 @@ void test_multiply(int num_nodes)
 	res->materialize_self();
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test multiplication on wide block matrix X tall block matrix\n");
+	size_t orig_block_size = block_size;
+	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
+	block_size = 3;
+	matrix_conf.set_max_multiply_block_size(6);
+	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+	block_size = orig_block_size;
+	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
 }
 
 void test_multiply_matrix(int num_nodes)
