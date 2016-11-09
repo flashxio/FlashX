@@ -283,6 +283,7 @@ public:
 			size_t num_cols) const;
 
 	virtual void materialize_self() const;
+	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	// get the non-zero entries in a specified column.
 	// `row_idxs' contains the local row indices.
@@ -372,6 +373,7 @@ public:
 			size_t local_start_row, size_t local_start_col, size_t num_rows,
 			size_t num_cols) const;
 	virtual void materialize_self() const;
+	virtual local_matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	// This is mainly for testing.
 	// We don't need to do anything after the local portion is resized.

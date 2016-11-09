@@ -558,6 +558,107 @@ const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 	return vals->get(start_it - local_idxs.begin(), 0);
 }
 
+struct nz_loc
+{
+	sparse_project_matrix_store::nz_idx idx;
+	off_t loc;
+};
+
+struct comp_row_first
+{
+	bool operator()(const nz_loc &e1, const nz_loc &e2) const {
+		if (e1.idx.row_idx < e2.idx.row_idx)
+			return true;
+		else if (e1.idx.row_idx > e2.idx.row_idx)
+			return false;
+		else
+			return e1.idx.col_idx < e2.idx.col_idx;
+	}
+};
+
+struct comp_col_first
+{
+	bool operator()(const nz_loc &e1, const nz_loc &e2) const {
+		if (e1.idx.col_idx < e2.idx.col_idx)
+			return true;
+		else if (e1.idx.col_idx > e2.idx.col_idx)
+			return false;
+		else
+			return e1.idx.row_idx < e2.idx.row_idx;
+	}
+};
+
+static void reshuffle(
+		const std::vector<sparse_project_matrix_store::nz_idx> &local_idxs,
+		local_matrix_store::const_ptr vals, matrix_layout_t layout,
+		std::vector<sparse_project_matrix_store::nz_idx> &new_local_idxs,
+		local_matrix_store::ptr new_vals)
+{
+	// sort the non-zero entries based on their row idxs.
+	std::vector<nz_loc> nz_locs(local_idxs.size());
+	for (size_t i = 0; i < nz_locs.size(); i++) {
+		nz_locs[i].idx = local_idxs[i];
+		nz_locs[i].loc = i;
+	}
+	if (layout == matrix_layout_t::L_ROW)
+		std::sort(nz_locs.begin(), nz_locs.end(), comp_row_first());
+	else
+		std::sort(nz_locs.begin(), nz_locs.end(), comp_col_first());
+
+	// Reshuffle data according to the row-major order.
+	std::vector<char *> ptrs(local_idxs.size());
+	for (size_t i = 0; i < nz_locs.size(); i++) {
+		new_local_idxs[i] = nz_locs[i].idx;
+		ptrs[i] = new_vals->get_raw_arr()
+			+ nz_locs[i].loc * vals->get_type().get_size();
+	}
+	vals->get_type().get_sg().scatter(vals->get_raw_arr(), ptrs);
+}
+
+local_matrix_store::ptr lsparse_col_matrix_store::conv2(
+		matrix_layout_t layout) const
+{
+	// If the layout is the same as the original one,
+	// copy the original portion.
+	if (layout == matrix_layout_t::L_COL)
+		return local_matrix_store::ptr(new lsparse_col_matrix_store(*this));
+
+	// We can't handle the resized portion.
+	assert(get_orig_num_rows() == get_num_rows());
+	assert(get_orig_num_cols() == get_num_cols());
+
+	local_col_matrix_store::ptr new_vals(new local_buf_col_matrix_store(
+				0, 0, vals->get_num_rows(), 1, vals->get_type(), -1));
+	std::vector<sparse_project_matrix_store::nz_idx> new_local_idxs(
+			local_idxs.size());
+	reshuffle(local_idxs, vals, layout, new_local_idxs, new_vals);
+	return local_matrix_store::ptr(new lsparse_row_matrix_store(
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), new_local_idxs, new_vals));
+}
+
+local_matrix_store::ptr lsparse_row_matrix_store::conv2(
+		matrix_layout_t layout) const
+{
+	// If the layout is the same as the original one,
+	// copy the original portion.
+	if (layout == matrix_layout_t::L_ROW)
+		return local_matrix_store::ptr(new lsparse_row_matrix_store(*this));
+
+	// We can't handle the resized portion.
+	assert(get_orig_num_rows() == get_num_rows());
+	assert(get_orig_num_cols() == get_num_cols());
+
+	local_col_matrix_store::ptr new_vals(new local_buf_col_matrix_store(
+				0, 0, vals->get_num_rows(), 1, vals->get_type(), -1));
+	std::vector<sparse_project_matrix_store::nz_idx> new_local_idxs(
+			local_idxs.size());
+	reshuffle(local_idxs, vals, layout, new_local_idxs, new_vals);
+	return local_matrix_store::ptr(new lsparse_row_matrix_store(
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), new_local_idxs, new_vals));
+}
+
 }
 
 }
