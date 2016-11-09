@@ -370,7 +370,7 @@ const char *lsparse_col_matrix_store::get_col_nnz(off_t col_idx,
 	for (; it != local_idxs.end() && it->col_idx == start.col_idx
 			&& it->row_idx < (off_t) (get_local_start_row() + get_num_rows());
 			it++) {
-		row_idxs.push_back(it->row_idx);
+		row_idxs.push_back(it->row_idx - get_local_start_row());
 	}
 	return vals->get(val_off, 0);
 }
@@ -482,7 +482,7 @@ const char *lsparse_row_matrix_store::get_row_nnz(off_t row_idx,
 	for (; it != local_idxs.end() && it->row_idx == start.row_idx
 			&& it->col_idx < (off_t) (get_local_start_col() + get_num_cols());
 			it++) {
-		col_idxs.push_back(it->col_idx);
+		col_idxs.push_back(it->col_idx - get_local_start_col());
 	}
 	return vals->get(val_off, 0);
 }
