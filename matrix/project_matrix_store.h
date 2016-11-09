@@ -124,7 +124,7 @@ public:
 private:
 	std::vector<off_t> portion_offs;
 	std::vector<nz_idx> nz_idxs;
-	mem_col_matrix_store::const_ptr vals;
+	mem_col_matrix_store::ptr vals;
 	matrix_layout_t layout;
 
 	sparse_project_matrix_store(size_t nrow, size_t ncol,

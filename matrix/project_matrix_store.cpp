@@ -83,10 +83,6 @@ sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
 
 	mem_col_matrix_store::ptr vals = mem_col_matrix_store::create(
 			nz_idxs.size(), 1, type);
-	if (type == get_scalar_type<double>())
-		vals->set_data(rand_init<double>());
-	else if (type == get_scalar_type<int>())
-		vals->set_data(rand_init<int>());
 	this->vals = vals;
 
 	size_t num_portions = get_num_portions();
@@ -141,6 +137,10 @@ sparse_project_matrix_store::ptr sparse_project_matrix_store::create_sparse_rand
 
 	sparse_project_matrix_store::ptr ret(new sparse_project_matrix_store(nrow,
 				ncol, layout, type, density));
+	if (type == get_scalar_type<double>())
+		ret->vals->set_data(rand_init<double>());
+	else if (type == get_scalar_type<int>())
+		ret->vals->set_data(rand_init<int>());
 	return ret;
 }
 
