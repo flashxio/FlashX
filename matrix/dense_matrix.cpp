@@ -360,6 +360,8 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
 		right = tmp->get_raw_store();
 	}
+	// TODO we should optimize for the right sparse matrix later.
+	right = conv_dense(right);
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -423,9 +425,9 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 
 	// We should treat a sparse matrix differently to improve performance of
 	// matrix multiplication.
-	if (mat.get_data().is_sparse()) {
-		// We don't know how to multiply two sparse matrices.
-		assert(!get_data().is_sparse());
+	// TODO right now this optimization is only useful for a wide matrix
+	// times a tall matrix.
+	if (mat.get_data().is_sparse() && this->is_wide() && !mat.is_wide()) {
 		detail::sparse_project_matrix_store::const_ptr store
 			= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
 					mat.get_raw_store());
@@ -1341,6 +1343,8 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
 		right = tmp->get_raw_store();
 	}
+	// TODO we should optimize for the right sparse matrix later.
+	right = conv_dense(right);
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);

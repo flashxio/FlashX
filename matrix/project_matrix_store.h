@@ -376,6 +376,19 @@ public:
 			std::vector<sparse_project_matrix_store::nz_idx> &idxs) const;
 };
 
+static matrix_store::const_ptr conv_dense(matrix_store::const_ptr store)
+{
+	if (!store->is_sparse())
+		return store;
+
+	sparse_project_matrix_store::const_ptr proj_store
+		= std::dynamic_pointer_cast<const sparse_project_matrix_store>(store);
+	if (proj_store)
+		return proj_store->conv_dense();
+	else
+		return store;
+}
+
 }
 
 }
