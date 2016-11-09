@@ -506,8 +506,12 @@ const char *lsparse_row_matrix_store::get_rows_nnz(off_t start_row,
 		idxs.clear();
 		return NULL;
 	}
-	// If start col isn't 0, rows aren't stored contiguously.
-	if (get_local_start_col() > 0) {
+	// If the portion is resized and rows aren't stored contiguously.
+	if (get_orig_num_cols() != get_num_cols()) {
+		idxs.clear();
+		return NULL;
+	}
+	if (local_idxs.empty()) {
 		idxs.clear();
 		return NULL;
 	}
