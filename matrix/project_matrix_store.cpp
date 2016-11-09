@@ -307,8 +307,7 @@ matrix_store::const_ptr sparse_project_matrix_store::conv_dense() const
 matrix_store::const_ptr sparse_project_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	throw unsupported_exception(
-			"don't support getting rows from a sparse matrix");
+	return matrix_store::const_ptr();
 }
 
 matrix_store::const_ptr lsparse_col_matrix_store::transpose() const
