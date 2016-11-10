@@ -1,5 +1,5 @@
 AC_INIT(FlashR, @VERSION@, zhengda1936@gmail.com)
-AC_CONFIG_SRCDIR(src/rinterface.cpp)
+AC_CONFIG_SRCDIR(src/matrix_interface.cpp)
 AC_CONFIG_HEADERS(src/config.h)
 AC_CONFIG_MACRO_DIR([/usr/share/aclocal/])
 
