@@ -2,9 +2,12 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.runif}
 \alias{fm.runif}
-\title{Create a FlashMatrix vector with uniformly random numbers.}
+\alias{fm.runif.matrix}
+\title{The Uniform Distribution}
 \usage{
 fm.runif(n, min = 0, max = 1, in.mem = TRUE, name = "")
+
+fm.runif.matrix(nrow, ncol, min = 0, max = 1, in.mem = TRUE, name = "")
 }
 \arguments{
 \item{n}{the number of random numbers to be generated.}
@@ -15,11 +18,18 @@ fm.runif(n, min = 0, max = 1, in.mem = TRUE, name = "")
 
 \item{in.mem}{whether the vector is stored in memory.}
 
-\item{name}{the name of the vector on SAFS if the vector is stored on SAFS
+\item{name}{the name of the vector. It's stored on disks, it's used as
+            the file name.
 persistently.}
+
+\item{nrow}{the number of rows in the generated matrix.}
+
+\item{ncol}{the number of columns in the generated matrix.}
 }
 \description{
-Create a FlashMatrix vector with uniformly random numbers.
+\code{fm.runif} creates a FlashMatrix vector with uniformly random numbers.
+\code{fm.runif.matrix} creates a FlashMatrix matrix with uniformly random
+numbers.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

@@ -2,6 +2,8 @@
 % Please edit documentation in R/FlashR_base.R
 \docType{methods}
 \name{Logic}
+\alias{!.fm}
+\alias{!.fmV}
 \alias{&,ANY,fm-method}
 \alias{&,ANY,fmV-method}
 \alias{&,fm,ANY-method}
@@ -16,6 +18,7 @@
 \alias{|,ANY,fm-method}
 \alias{|,ANY,fmV-method}
 \alias{|,fm,ANY-method}
+\alias{|,fm,fm-method}
 \alias{|,fm,fmV-method}
 \alias{|,fm,matrix-method}
 \alias{|,fmV,ANY-method}
@@ -63,6 +66,10 @@
 \S4method{&}{fmV,ANY}(e1, e2)
 
 \S4method{&}{ANY,fmV}(e1, e2)
+
+\method{!}{fm}(e1)
+
+\method{!}{fmV}(e1)
 }
 \arguments{
 \item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
@@ -73,5 +80,9 @@ the vector.}
 }
 \description{
 These operators act on logical and number-like vectors.
+}
+\details{
+\code{!} indicates logical negation (NOT).
+\code{&} indicates logical AND and \code{|} indicates logical OR.
 }
 

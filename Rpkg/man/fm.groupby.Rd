@@ -7,33 +7,33 @@
 \usage{
 fm.sgroupby(obj, FUN)
 
-fm.groupby(fm, margin, factor, FUN)
+fm.groupby(obj, margin, factor, FUN)
 }
 \arguments{
 \item{obj}{a FlashMatrix vector or matrix}
 
-\item{FUN}{an aggregation operator returned by `fm.create.agg.op'.}
+\item{FUN}{an aggregation operator returned by \code{fm.create.agg.op}.}
 
 \item{margin}{the subscript which the function will be applied over.
-E.g., for a matrix, `1' indicates rows, `2' indicates columns.}
+E.g., for a matrix, \code{1} indicates rows, \code{2} indicates columns.}
 
-\item{labels}{a FlashMatrix vector that indicates the labels of
-each element in `obj'.}
+\item{factor}{a FlashMatrix factor vector that indicates how rows/columns
+in a matrix should be grouped.}
 }
 \value{
-`fm.sgroupby' returns a data frame, where the column `val' stores
-all of the unique values in the original data container, and the column
-`agg' stores the aggregate result of the corresponding value.
+\code{fm.sgroupby} returns a data frame, where the column \code{val}
+stores all of the unique values in the original data container, and the column
+\code{agg} stores the aggregate result of the corresponding value.
 }
 \description{
-`fm.sgroupby' groups elements in a vector based on corresponding `labels'
-and applies `FUN' to the elements in each group. `FUN' is an aggregation
-operator.
+\code{fm.sgroupby} groups elements in a vector based on corresponding
+\code{labels} and applies \code{FUN} to the elements in each group.
+\code{FUN} is an aggregation operator.
 }
 \details{
-`fm.groupby' groups rows/columns of a matrix based on corresponding `labels'
-and applies `FUN' to the rows/columns in each group. `FUN' is an aggregation
-operator.
+\code{fm.groupby} groups rows/columns of a matrix based on corresponding
+\code{labels} and applies \code{FUN} to the rows/columns in each group.
+\code{FUN} is an aggregation operator.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

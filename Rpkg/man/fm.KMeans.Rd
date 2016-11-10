@@ -4,16 +4,21 @@
 \alias{fm.KMeans}
 \title{KMeans clustering}
 \usage{
-fm.KMeans(data, K, max.iters = 10, debug = FALSE)
+fm.KMeans(data, centers, max.iters = 10, debug = FALSE, use.blas = FALSE)
 }
 \arguments{
 \item{data}{the input data matrix where each row is a data point.}
 
-\item{K}{the number of clusters}
+\item{centers}{either the number of clusters, say k, or a set of
+initial (distinct) cluster centers. If a number, a random set
+of (distinct) rows in `x' is chosen as the initial centers.}
 
 \item{max.iters}{the maximal number of iterations.}
 
 \item{debug}{This indicates whether to print debug info.}
+
+\item{use.blas}{a logical value indicating whether to use BLAS to
+compute Euclidean distance.}
 }
 \value{
 a vector that contains cluster Ids for each data point.

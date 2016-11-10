@@ -13,15 +13,15 @@ fm.cal.residul(mul, values, vectors)
 \arguments{
 \item{func}{The function to perform the matrix-vector multiplication.}
 
-\item{extra}{Extra argument to supply to `func'.}
+\item{extra}{Extra argument to supply to \code{func}.}
 
 \item{sym}{Logical scalar, whether the input matrix is symmetric.}
 
 \item{options}{Options to Anasazi.}
 
-\item{env}{The environment in which `func' will bevaluated.
+\item{env}{The environment in which \code{func} will bevaluated.
 
-The `options' argument specifies what kind of computation to perform.
+The \code{options} argument specifies what kind of computation to perform.
 It is a list with the following members, which correspond directly to
 Anasazi parameters:
 
@@ -33,7 +33,7 @@ solver String. The name of the eigensolver to solve the eigenproblems.
 
 tol Numeric scalar. Stopping criterion: the relative accuracy of
                 the Ritz value is considered acceptable if its error is less
-                than `tol' times its estimated value.
+                than \code{tol} times its estimated value.
 
 block_size Numeric scalar. The eigensolvers use a block extension of an
                 eigensolver algorithm. The block size determines the number
@@ -45,10 +45,10 @@ which Specify which eigenvalues/vectors to compute, character
              constant with exactly two characters.
 Possible values for symmetric input matrices:
 \itemize{
-\item{"LA"}{Compute `nev' largest (algebraic) eigenvalues.}
-\item{"SA"}{Compute `nev' smallest (algebraic) eigenvalues.}
-\item{"LM"}{Compute `nev' largest (in magnitude) eigenvalues.}
-\item{"SM"}{Compute `nev' smallest (in magnitude) eigenvalues.}
+\item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
+\item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
+\item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
+\item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
 }}
 
 \item{mul}{The multiply function that perform the matrix-vector multiplication.}

@@ -16,7 +16,7 @@ matrix.}
 a FlashMatrix object.
 }
 \description{
-If the R object is a matrix, `byrow' determines how data in the generated
+If the R object is a matrix, \code{byrow} determines how data in the generated
 FlashMatrix object is organized in memory.
 }
 \author{
