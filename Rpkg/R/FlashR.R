@@ -2183,3 +2183,11 @@ fm.stop.profiler <- function()
 	if (is.loaded("R_stop_profiler"))
 		.Call("R_stop_profiler", PACKAGE="FlashR")
 }
+
+.onLoad <- function(libname, pkgname)
+{
+	library.dynam("FlashR", pkgname, libname, local=FALSE);
+	ret <- .Call("R_FM_init", NULL, PACKAGE="FlashR")
+	stopifnot(ret)
+	fm.init.basic.op()
+}

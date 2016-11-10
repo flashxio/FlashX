@@ -2518,10 +2518,70 @@ RcppExport SEXP R_FM_isnan(SEXP px)
 		return create_FMR_matrix(ret, "");
 }
 
-void init_flashmatrixr()
+RcppExport SEXP R_FM_init(SEXP pconf)
 {
+	set_log_level(c_log_level::warning);
+	std::string conf_file;
+	if (!R_is_null(pconf) && R_is_string(pconf))
+		conf_file = CHAR(STRING_ELT(pconf, 0));
+
+	config_map::ptr configs;
+	if (!conf_file.empty() && safs::file_exist(conf_file)) {
+		configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
+	}
+	else if (!conf_file.empty()) {
+		fprintf(stderr, "conf file %s doesn't exist.\n", conf_file.c_str());
+		configs = config_map::create();
+	}
+	// If there isn't a conf file, we just use the default settings.
+	else
+		configs = config_map::create();
+
+	bool safs_success;
+	bool standalone = true;
+	try {
+		safs::init_io_system(configs);
+		standalone = false;
+		safs_success = true;
+	} catch (safs::init_error &e) {
+		if (!conf_file.empty())
+			fprintf(stderr, "init SAFS: %s\n", e.what());
+		safs_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		safs_success = false;
+	}
+
+	bool fm_success;
+	try {
+		fm::init_flash_matrix(configs);
+		fm_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		fm_success = false;
+	}
+
+	Rcpp::LogicalVector res(1);
+	res[0] = safs_success && fm_success;
+	if (standalone)
+		printf("Run FlashR in standalone mode\n");
+	else if (safs::is_safs_init())
+		printf("Run FlashR\n");
+	else {
+		fprintf(stderr, "Can't enable the SAFS mode of FlashR\n");
+		res[0] = false;
+	}
 	fmr::init_udf_ext();
 	fmr::init_apply_ops();
+	return res;
+}
+
+RcppExport SEXP R_FM_set_conf(SEXP pconf)
+{
+	fm::destroy_flash_matrix();
+	safs::destroy_io_system();
+	return R_FM_init(pconf);
 }
 
 RcppExport SEXP R_FM_print_conf()
