@@ -52,8 +52,6 @@
 
 using namespace fm;
 
-fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
-
 static inline bool is_supported_type(const scalar_type &type)
 {
 	return type == get_scalar_type<int>()
@@ -228,17 +226,6 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 		num_nodes = -1;
 	vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes, true);
 	return create_FMR_vector(vec->get_raw_store(), "");
-}
-
-RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
-{
-	Rcpp::List graph = Rcpp::List(pgraph);
-	Rcpp::LogicalVector res(1);
-	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
-	// TODO does this work if this isn't a binary matrix?
-	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
-	std::string name = graph["name"];
-	return create_FMR_matrix(m, name);
 }
 
 RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
