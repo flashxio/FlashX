@@ -1098,3 +1098,14 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
+
+RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
+{
+	Rcpp::List graph = Rcpp::List(pgraph);
+	Rcpp::LogicalVector res(1);
+	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	// TODO does this work if this isn't a binary matrix?
+	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
+	std::string name = graph["name"];
+	return create_FMR_matrix(m, name);
+}

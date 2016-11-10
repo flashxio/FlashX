@@ -786,3 +786,22 @@ fg.sem.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeans
     .Call("R_FG_sem_kmeans", mat, as.integer(k), init, as.integer(max.iters),
 		  as.double(tol), PACKAGE="FlashR")
 }
+
+#' Load a sparse matrix to FlashR.
+#'
+#' Load a sparse matrix to FlashR from FlashGraph.
+#' 
+#' `fm.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
+#' a matrix represented by a FlashGraph object.
+#'
+#' @examples
+#' fg <- fg.load.graph("graph.adj", "graph.index")
+#' fm <- fm.get.sparse.matrix(fg)
+fm.get.sparse.matrix <- function(fg)
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+	stopifnot(fg.exist.graph(fg$name))
+	m <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashR")
+	new.fm(m)
+}
