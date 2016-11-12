@@ -594,78 +594,6 @@ fg.diameter <- function(graph, directed=FALSE)
 	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashR")
 }
 
-#' Sparse matrix multiplication
-#'
-#' Multiply a sparse matrix with a dense vector or a dense matrix.
-#'
-#' `fg.multiply' multiplies a sparse matrix with a dense vector.
-#'
-#' `fg.multiply.matrix' multiplies a sparse matrix with a dense matrix.
-#'
-#' Note that the sparse matrix is represented by a graph. A symmetric matrix
-#' is represented by an undirected graph and an asymmetric matrix is
-#' represented by a directed graph. For an asymmetric matrix, we can multiply
-#' the vector with the transpose of the matrix without really transposing
-#' the matrix. Right now it only supports multiplication on the adjacency
-#' matrix of the graph.
-#'
-#' @param graph The FlashGraph object
-#' @param vec A numueric vector
-#' @param m A numeric dense matrix.
-#' @param transpose Indicate whether or not to multiply with the transpose of
-#'                  the matrix. It is ignored by an undirected graph.
-#' @return `fg.multiply' returns a numeric vector and `fg.multiply.matrix'
-#' returns a numeric dense matrix.
-#' @name fg.multiply
-#' @author Da Zheng <dzheng5@@jhu.edu>
-
-#' @rdname fg.multiply
-fg.multiply <- function(graph, vec, transpose=FALSE)
-{
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fg")
-	stopifnot(fg.vcount(graph) == length(vec))
-#	stopifnot(graph$directed)
-	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashR")
-}
-
-#' @rdname fg.multiply
-fg.multiply.matrix <- function(graph, m, transpose=FALSE)
-{
-	col.multiply <- function(x) {
-		fg.multiply(graph, x, transpose)
-	}
-	apply(m, 2, col.multiply)
-}
-
-#' Perform spectral clustering
-#'
-#' Spectral clustering partitions an undirected graph into k groups based on
-#' an embedding of the graph, which computes eigenvectors from a variant
-#' of the adjacency matrix of the graph. Spectral clustering runs
-#' KMeans clustering on eigenvectors.
-#'
-#' @param fg The FlashGraph object of the undirected graph.
-#' @param k The number of clusters.
-#' @param ase The function computes spectral embedding and generates
-#'            eigenvectors.
-#' @return A vector of integers (from '1:k') indicating the cluster to which
-#'         each vertex belongs to.
-#' @examples
-#' fg <- fg.load.graph("edge_list.txt")
-#' res <- fg.spectral.clusters(fg, 10)
-#' @name fg.spectral
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fg.spectral.clusters <- function(fg, k, ase)
-{
-	stopifnot(!is.null(fg))
-	stopifnot(class(fg) == "fg")
-	stopifnot(!fg$directed)
-
-	eigen <- ase(fg, k)
-	kmeans(eigen$vectors, k, MacQueen)
-}
-
 print.fg <- function(x, ...)
 {
 	stopifnot(!is.null(x))
@@ -675,46 +603,6 @@ print.fg <- function(x, ...)
 		directed = "D"
 	cat("FlashGraph ", x$name, " (", directed, "): ", fg.vcount(x), " ", fg.ecount(x),
 		"\n", sep="")
-}
-
-#' Perform k-means clustering on a data matrix.
-#'
-#' Assign each row of a matrix to a cluster denoted by a numeric. The clusters
-#' are based on the euclidean distance of each row to one another. The assigned
-#' cluster will have the smallest distance from the cluster center mean.
-#'
-#' @param mat A numeric matrix of data.
-#' @param k The number of clusters.
-#' @param max.iters The maximum number of iterations allowed.
-#' @param max.threads The maximum number of threads allowed (Default is 1 per core).
-#' @param init The form of initialization to use when the algorithm begins.
-#'              The default is "random". For a desciption of each see:
-#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
-#' @param tol The tolerance for convergence. Between 0 and 1 and is the minimum fraction
-#'				of cluster changes necessary to cause non-convergence. Default is -1 which
-#'				represents no cluster changes. 
-#'
-#' @return A named list with the following members:
-#'         iters: The number of (outer) iterations performed.
-#'         centers: A matrix of cluster centers.
-#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
-#'         sizes: The number of points in each cluster.
-#'
-#' @examples
-#' num.clusts <- 3
-#' mat <- replicate(5, rnorm(10))
-#' kms <- fg.kmeans(mat, num.clusts)
-#'
-#' @name fg.kmeans
-#' @author Disa Mhembere <disa@@jhu.edu>
-fg.kmeans <- function(mat, k, max.iters=10, max.threads=256,
-					  init=c("random", "forgy","kmeanspp"), tol=-1)
-{
-    stopifnot(mat != NULL)
-    stopifnot(class(mat) == "matrix")
-	stopifnot(as.integer(max.threads) > 0)
-    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k), as.integer(max.iters),
-		  as.integer(max.threads), init, as.double(tol), PACKAGE="FlashR")
 }
 
 #' Vertex betweenness centrality.
@@ -747,44 +635,6 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 	library.dynam("FlashR", pkgname, libname, local=FALSE);
 	ret <- .Call("R_FG_init", NULL, PACKAGE="FlashR")
 	stopifnot(ret)
-	fm.init.basic.op()
-}
-
-#' Perform semi-extenal memory k-means clustering on a data matrix in FG format.
-#'
-#' Assign each row of a matrix to a cluster denoted by a numeric. The clusters
-#' are based on the distance metric of each row to one another. The assigned
-#' cluster will have the smallest distance from the cluster center mean.
-#'
-#' @param mat A numeric matrix of data in FG format.
-#' @param k The number of clusters.
-#' @param max.iters The maximum number of iterations allowed.
-#' @param init The form of initialization to use when the algorithm begins.
-#'              The default is "forgy". For a desciption of each see:
-#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods.
-#' @param tol The tolerance for convergence. Between 0 and 1 and is the minimum fraction
-#'				of cluster changes necessary to cause non-convergence. Default is -1 which
-#'				represents no cluster changes.
-#' @return A named list with the following members:
-#'         iters: The number of (outer) iterations performed.
-#'         centers: A matrix of cluster centers.
-#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
-#'         sizes: The number of points in each cluster.
-#'
-#' @examples
-#' num.clusts <- 5
-#' mat <- fg.load.graph("mat-adj", "mat-index") # TODO: how to load
-#' kms <- fg.kmeans(mat, num.clusts)
-#'
-#' @name fg.sem.kmeans
-#' @author Disa Mhembere <disa@@jhu.edu>
-fg.sem.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp"),
-                          tol=-1)
-{
-    stopifnot(mat != NULL)
-    stopifnot(class(mat) == "fg")
-    .Call("R_FG_sem_kmeans", mat, as.integer(k), init, as.integer(max.iters),
-		  as.double(tol), PACKAGE="FlashR")
 }
 
 #' Load a sparse matrix to FlashR.
