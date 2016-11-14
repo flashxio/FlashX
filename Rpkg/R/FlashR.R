@@ -266,14 +266,25 @@ fm.rep.int <- function(x, times)
 	.new.fmV(vec)
 }
 
-#' Create a FlashMatrix vector with a sequence of numbers.
+#' Sequence Generation
+#'
+#' \code{fm.seq.int} creates a FlashMatrix vector with a sequence of numbers.
+#' \code{fm.seq.matrix} creates a FlashMatrix matrix with a sequence of numbers.
 #'
 #' @param from the starting value of the sequence.
 #' @param to the end value of the sequence.
-#' @param by number: increment of the sequence.
-#' @return a sequence of numbers that belongs to [from, to]
-#' @name fm.seq.int
+#' @param by number. increment of the sequence.
+#' @param nrow the number of rows in the generated matrix.
+#' @param ncol the number of columns in the generated matrix.
+#' @param byrow logical. If \code{FALSE} (the default) the matrix is filled by
+#'	            columns, otherwise the matrix is filled by rows.
+#' @return a FlashMatrix vector or matrix filled with a sequence of numbers
+#'         that belongs to [from, to]
+#' @name fm.seq
 #' @author Da Zheng <dzheng5@@jhu.edu>
+NULL
+
+#' @rdname fm.seq
 fm.seq.int <- function(from, to, by)
 {
 	if ((to - from) / by <= 0) {
@@ -282,6 +293,14 @@ fm.seq.int <- function(from, to, by)
 	}
 	vec <- .Call("R_FM_create_seq", from, to, by, PACKAGE="FlashR")
 	.new.fmV(vec)
+}
+
+#' @rdname fm.seq
+fm.seq.matrix <- function(from, to, nrow, ncol, byrow = FALSE)
+{
+	mat <- .Call("R_FM_create_seq_matrix", from, to, nrow, ncol, byrow,
+				 PACKAGE="FlashR")
+	.new.fm(mat)
 }
 
 #' The Uniform Distribution

@@ -228,6 +228,34 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 	return create_FMR_vector(vec->get_raw_store(), "");
 }
 
+RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
+		SEXP pncol, SEXP pbyrow)
+{
+	// This function always generates a sequence of real numbers.
+	double from, to;
+	size_t nrow, ncol;
+	bool byrow = false;
+	bool ret1, ret2, ret3, ret4, ret5;
+	ret1 = R_get_number<double>(pfrom, from);
+	ret2 = R_get_number<double>(pto, to);
+	ret3 = R_get_number<size_t>(pnrow, nrow);
+	ret4 = R_get_number<size_t>(pncol, ncol);
+	ret5 = R_get_number<bool>(pbyrow, byrow);
+	if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
+		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
+	double by = (to - from) / (nrow * ncol);
+	dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
+			nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
+	return create_FMR_matrix(mat, "");
+}
+
 RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 {
 	std::string mat_file = CHAR(STRING_ELT(pname, 0));
