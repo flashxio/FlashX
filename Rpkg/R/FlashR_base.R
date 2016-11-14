@@ -143,10 +143,8 @@ setMethod("/", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 setMethod("/", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
 		  fm.mapply.col(e1, e2, fm.bo.div))
 #' @rdname Arithmetic
-setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
-		  print("don't support fmV/fm")
-		  NULL
-		  })
+setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  .mapply2.ANY.fm(1, fm.mapply.col(e2, e1, fm.bo.div), fm.bo.div))
 #' @rdname Arithmetic
 setMethod("/", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
 		  .mapply2.fm.m(e1, e2, fm.bo.div))
@@ -157,8 +155,14 @@ setMethod("/", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
 setMethod("/", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fm.ANY(e1, e2, fm.bo.div))
 #' @rdname Arithmetic
-setMethod("/", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.ANY.fm(e1, e2, fm.bo.div))
+setMethod("/", signature(e1 = "ANY", e2 = "fm"), function(e1, e2) {
+		  if (length(e1) == 1)
+			  .mapply2.ANY.fm(e1, e2, fm.bo.div)
+		  else {
+			  e1 <- fm.conv.R2FM(e1)
+			  e1 / e2
+		  }
+		  })
 #' @rdname Arithmetic
 setMethod("/", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fmV.ANY(e1, e2, fm.bo.div))
@@ -280,7 +284,7 @@ setMethod(">", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
 		  fm.mapply.col(e1, e2, fm.bo.gt))
 #' @rdname Comparison
 setMethod(">", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.le))
+		  fm.mapply.col(e2, e1, fm.bo.lt))
 #' @rdname Comparison
 setMethod(">", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
 		  .mapply2.fm.m(e1, e2, fm.bo.gt))
@@ -292,7 +296,7 @@ setMethod(">", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fm.ANY(e1, e2, fm.bo.gt))
 #' @rdname Comparison
 setMethod(">", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.le))
+		  .mapply2.fm.ANY(e2, e1, fm.bo.lt))
 #' @rdname Comparison
 setMethod(">", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fmV.ANY(e1, e2, fm.bo.gt))
@@ -311,7 +315,7 @@ setMethod(">=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
 		  fm.mapply.col(e1, e2, fm.bo.ge))
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.lt))
+		  fm.mapply.col(e2, e1, fm.bo.le))
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
 		  .mapply2.fm.m(e1, e2, fm.bo.ge))
@@ -323,7 +327,7 @@ setMethod(">=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fm.ANY(e1, e2, fm.bo.ge))
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.lt))
+		  .mapply2.fm.ANY(e2, e1, fm.bo.le))
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fmV.ANY(e1, e2, fm.bo.ge))
@@ -342,7 +346,7 @@ setMethod("<=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
 		  fm.mapply.col(e1, e2, fm.bo.le))
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.gt))
+		  fm.mapply.col(e2, e1, fm.bo.ge))
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
 		  .mapply2.fm.m(e1, e2, fm.bo.le))
@@ -354,7 +358,7 @@ setMethod("<=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fm.ANY(e1, e2, fm.bo.le))
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.gt))
+		  .mapply2.fm.ANY(e2, e1, fm.bo.ge))
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fmV.ANY(e1, e2, fm.bo.le))
@@ -373,7 +377,7 @@ setMethod("<", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
 		  fm.mapply.col(e1, e2, fm.bo.lt))
 #' @rdname Comparison
 setMethod("<", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.ge))
+		  fm.mapply.col(e2, e1, fm.bo.gt))
 #' @rdname Comparison
 setMethod("<", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
 		  .mapply2.fm.m(e1, e2, fm.bo.lt))
@@ -385,7 +389,7 @@ setMethod("<", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fm.ANY(e1, e2, fm.bo.lt))
 #' @rdname Comparison
 setMethod("<", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.ge))
+		  .mapply2.fm.ANY(e2, e1, fm.bo.gt))
 #' @rdname Comparison
 setMethod("<", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 		  .mapply2.fmV.ANY(e1, e2, fm.bo.lt))
@@ -490,8 +494,12 @@ setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #' pmax2 returns the maximum of two objects.
 #' pmin2 returns the minimum of two objects.
 #'
-#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one operand
-#' is a matrix and the other is a vector, we perform the operation
+#' If one of the arguments is a matrix and the other is a vector, \code{pmax2}
+#' or \code{pmin2} return a matrix, each of whose column is parallel maxima
+#' and minima of the column of the input matrix and the input vector.
+#'
+#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one
+#' operand is a matrix and the other is a vector, we perform the operation
 #' on the vector and every column of the matrix. If one operand is a scalar,
 #' we perform the operation on the scalar with every element in the matrix or
 #' the vector.
@@ -502,9 +510,22 @@ setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #'         a FlashMatrix object, and \code{min} and \code{max} return an R scalar.
 #'
 #' @name Extremes
-pmax2 <- function(e1, e2) pmax(e1, e2)
+pmax2 <- function(e1, e2) {
+	# if e1 is a vector and e2 is a matrix, pmax(e1, e2) returns a vector,
+	# which is inconsistent with others, so in this case, we need to switch
+	# the two arguments.
+	if (is.vector(e1) && is.matrix(e2))
+		pmax(e2, e1)
+	else
+		pmax(e1, e2)
+}
 #' @rdname Extremes
-pmin2 <- function(e1, e2) pmin(e1, e2)
+pmin2 <- function(e1, e2) {
+	if (is.vector(e1) && is.matrix(e2))
+		pmin(e2, e1)
+	else
+		pmin(e1, e2)
+}
 setGeneric("pmax2")
 setGeneric("pmin2")
 
