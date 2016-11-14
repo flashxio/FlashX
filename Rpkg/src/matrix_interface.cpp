@@ -642,35 +642,28 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 		return R_NilValue;
 }
 
-RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
+RcppExport SEXP R_FM_create_rep_matrix(SEXP pvec, SEXP pnrow, SEXP pncol,
+		SEXP pbyrow)
 {
-	fprintf(stderr, "doesn't support convert a vector to a matrix\n");
-	return R_NilValue;
-
-#if 0
-	Rcpp::S4 vec_obj(pvec);
-	if (!is_vector(vec_obj)) {
-		fprintf(stderr, "The input object isn't a vector\n");
-		return R_NilValue;
-	}
-
 	size_t nrow = REAL(pnrow)[0];
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
-	vector::ptr vec = get_vector(vec_obj);
-	if (vec == NULL) {
-		fprintf(stderr, "Can't get the vector\n");
+
+	dense_matrix::ptr mat;
+	if (R_is_real(pvec))
+		mat = dense_matrix::create_const<double>(REAL(pvec)[0], nrow, ncol,
+				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+	else if (R_is_integer(pvec))
+		mat = dense_matrix::create_const<int>(INTEGER(pvec)[0], nrow, ncol,
+				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+	else if (R_is_logical(pvec))
+		mat = dense_matrix::create_const<bool>(LOGICAL(pvec)[0], nrow, ncol,
+				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+	else {
+		fprintf(stderr, "can't create a matrix with unknown type\n");
 		return R_NilValue;
 	}
-	dense_matrix::ptr mat = vec->conv2mat(nrow, ncol, byrow);
-	if (mat == NULL) {
-		fprintf(stderr, "can't convert a vector to a matrix\n");
-		return R_NilValue;
-	}
-	Rcpp::List ret = create_FMR_matrix(mat, "");
-	ret["ele_type"] = vec_obj.slot("ele_type");
-	return ret;
-#endif
+	return create_FMR_matrix(mat, "");
 }
 
 template<class T, class RType>

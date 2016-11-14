@@ -407,11 +407,17 @@ setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
 
 #' Matrices
 #'
+#' \code{fm.matrix} creates a matrix from the given set of values.
 #' \code{as.matrix} attempts to turn a FlashMatrix matrix to an R matrix.
 #' \code{fm.as.matrix} attempts to turn its argument into a FlashMatrix matrix.
 #' \code{is.matrix} tests if its argument is a matrix.
 #'
 #' @param x an R object
+#' @param vec an R data vector.
+#' @param nrow the desired number of rows.
+#' @param ncol the desired number of columns.
+#' @param byrow logical. If \code{FALSE} (the default) the matrix is filled by
+#'	            columns, otherwise the matrix is filled by rows.
 #' @name matrix
 NULL
 
@@ -529,21 +535,12 @@ fm.conv.FM2R <- function(obj)
 	}
 }
 
-#' Create a matrix from the given set of values.
-#'
-#' The given set has to be a FlashMatrix vector.
-#'
-#' @param vec a given vector.
-#' @param nrow the number of rows in the output matrix.
-#' @param ncol the number of columns in the output matrix.
-#' @param byrow logical. If FALSE (the default) the matrix is filly
-#'				columns, otherwise the matrix is filled by rows.
-#' @return a FlashMatrix matrix
+#' @rdname matrix
 fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 {
 	stopifnot(!is.null(vec))
-	stopifnot(class(vec) == "fmV")
-	m <- .Call("R_FM_conv_matrix", vec, as.numeric(nrow), as.numeric(ncol),
+	stopifnot(is.atomic(vec))
+	m <- .Call("R_FM_create_rep_matrix", vec, as.numeric(nrow), as.numeric(ncol),
 				 as.logical(byrow), PACKAGE="FlashR")
 	.new.fm(m)
 }
