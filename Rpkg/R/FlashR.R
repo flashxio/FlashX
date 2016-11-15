@@ -422,14 +422,59 @@ fm.rsparse.proj <- function(nrow, ncol, density, name="")
 	.new.fm(mat)
 }
 
+#' Vector
+#'
+#' \code{fm.as.vector} converts an object to a FlashMatrix vector.
+#' \code{as.vector} converts a FlashMatrix vector to an R vector.
+#' \code{fm.is.vector} test whether the input argument is a FlashMatrix vector.
+#'
+#' Right now, \code{fm.as.vector} can only convert a matrix with only one row
+#' or one column. Otherwise, the function returns NULL.
+#'
+#' @param obj an object
+#' @param x a FlashMatrix vector
+#' @return a FlashMatrix vector
+#' @name vector
+NULL
+
+#' @rdname vector
+fm.as.vector <- function(obj)
+{
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fmV")
+		vec
+	else if (class(obj) == "fm") {
+		vec <- .Call("R_FM_as_vector", obj, PACKAGE="FlashR")
+		if (!is.null(vec))
+			.new.fmV(vec)
+		else
+			NULL
+	}
+	else if (is.vector(obj))
+		fm.conv.R2FM(obj)
+	else
+		NULL
+}
+
+#' @rdname vector
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
+#' @rdname vector
+setMethod("as.vector", signature(x = "fm"), function(x)
+		  fm.conv.FM2R(fm.as.vector(x)))
+
+#' @rdname vector
+fm.is.vector <- function(x)
+{
+	stopifnot(!is.null(x))
+	class(x) == "fmV"
+}
 
 #' Matrices
 #'
 #' \code{fm.matrix} creates a matrix from the given set of values.
 #' \code{as.matrix} attempts to turn a FlashMatrix matrix to an R matrix.
 #' \code{fm.as.matrix} attempts to turn its argument into a FlashMatrix matrix.
-#' \code{is.matrix} tests if its argument is a matrix.
+#' \code{fm.is.matrix} indicates whether a FlashMatrix object is a matrix.
 #'
 #' @param x an R object
 #' @param vec an R data vector.
@@ -442,6 +487,36 @@ NULL
 
 #' @rdname matrix
 setMethod("as.matrix", signature(x = "fm"), function(x) fm.conv.FM2R(x))
+#' @rdname matrix
+setMethod("as.matrix", signature(x = "fmV"), function(x)
+		  fm.conv.FM2R(fm.as.matrix(x)))
+
+#' @rdname matrix
+fm.is.matrix <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	class(fm) == "fm"
+}
+
+#' @rdname matrix
+fm.as.matrix <- function(x)
+{
+	stopifnot(!is.null(x))
+	if (class(x) == "fm")
+		x
+	else if (class(x) == "fmV") {
+		# A FlashMatrix vector is actually stored in a dense matrix.
+		# We only need to construct the fm object in R.
+		new("fm", pointer=x@pointer, name=x@name, nrow=x@len,
+			ncol=1, type=x@type)
+	}
+	else {
+		# Let's convert it to a FM object
+		ret <- fm.conv.R2FM(x)
+		# Then try to convert it to a FM matrix.
+		fm.as.matrix(ret)
+	}
+}
 
 #' Convert the data layout of a FlashMatrix matrix.
 #'
@@ -566,17 +641,13 @@ fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 
 #' The information of a FlashMatrix object
 #'
-#' Functions for providing the basic information of a matrix.
+#' These functions provide the basic information of a FlashMatrix object.
 #'
 #' \code{fm.is.sym} indicates whether a matrix is symmetric.
 #'
 #' \code{fm.matrix.layout} indicates how data in a matrix is organized.
 #
 #' \code{fm.is.sparse} indicates whether a matrix is sparse.
-#'
-#' \code{fm.is.vector} indicates whether a FlashMatrix object is a vector.
-#'
-#' \code{fm.is.matrix} indicates whether a FlashMatrix object is a matrix.
 #'
 #' \code{fm.is.sink} indicates whether a FlashMatrix object is a sink matrix.
 #'
@@ -612,20 +683,6 @@ fm.is.sparse <- function(fm)
 }
 
 #' @rdname fm.info
-fm.is.vector <- function(fm)
-{
-	stopifnot(!is.null(fm))
-	class(fm) == "fmV"
-}
-
-#' @rdname fm.info
-fm.is.matrix <- function(fm)
-{
-	stopifnot(!is.null(fm))
-	class(fm) == "fm"
-}
-
-#' @rdname fm.info
 fm.is.sink <- function(fm)
 {
 	stopifnot(!is.null(fm))
@@ -645,51 +702,6 @@ fm.in.mem <- function(fm)
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
 	.Call("R_FM_is_inmem", fm, PACKAGE="FlashR")
-}
-
-#' Convert a FlashMatrix matrix to a FlashMatrix vector.
-#'
-#' The matrix must have only one row or one column. Otherwise, the function
-#' returns an error.
-#'
-#' @param obj a FlashMatrix matrix
-#' @return a FlashMatrix vector
-fm.as.vector <- function(obj)
-{
-	stopifnot(!is.null(obj))
-	if (class(obj) == "fmV")
-		vec
-	else if (class(obj) == "fm") {
-		vec <- .Call("R_FM_as_vector", obj, PACKAGE="FlashR")
-		if (!is.null(vec))
-			.new.fmV(vec)
-		else
-			NULL
-	}
-	else if (is.vector(obj))
-		fm.conv.R2FM(obj)
-	else
-		NULL
-}
-
-#' @rdname matrix
-fm.as.matrix <- function(x)
-{
-	stopifnot(!is.null(x))
-	if (class(x) == "fm")
-		x
-	else if (class(x) == "fmV") {
-		# A FlashMatrix vector is actually stored in a dense matrix.
-		# We only need to construct the fm object in R.
-		new("fm", pointer=x@pointer, name=x@name, nrow=x@len,
-			ncol=1, type=x@type)
-	}
-	else {
-		# Let's convert it to a FM object
-		ret <- fm.conv.R2FM(x)
-		# Then try to convert it to a FM matrix.
-		fm.as.matrix(ret)
-	}
 }
 
 #' Convert a FlashMatrix vector to a FlashMatrix factor vector.
