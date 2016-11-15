@@ -66,7 +66,8 @@ public:
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
-		throw unsupported_exception("Don't support to_string of groupby_op");
+		std::string str = margin == matrix_margin::MAR_ROW ? "row" : "col";
+		return std::string("groupby_") + str + "(" + mats[0]->get_name() + ")";
 	}
 
 	detail::matrix_store::ptr get_agg() const;
