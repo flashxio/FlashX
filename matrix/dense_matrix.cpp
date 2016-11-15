@@ -1956,6 +1956,7 @@ public:
 		assert(ins.size() == 1);
 		assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
 		assert(out.store_layout() == matrix_layout_t::L_ROW);
+		out.reset_data();
 		std::vector<bool> agg_flags(out.get_num_rows());
 		const detail::local_row_matrix_store &row_in
 			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
