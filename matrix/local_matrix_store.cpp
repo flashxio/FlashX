@@ -1380,41 +1380,78 @@ void mapply_cols(const local_matrix_store &store, const local_vec_store &vals,
 	}
 }
 
-static bool _groupby_row(const detail::local_matrix_store &labels,
-		const detail::local_row_matrix_store &mat, const agg_operate &op,
-		detail::local_row_matrix_store &results, std::vector<bool> &agg_flags)
+static bool _groupby(const detail::local_matrix_store &labels,
+		const detail::local_matrix_store &mat, const agg_operate &op,
+		matrix_margin margin, detail::local_matrix_store &results,
+		std::vector<bool> &agg_flags)
 {
-	for (size_t i = 0; i < mat.get_num_rows(); i++) {
-		factor_value_t label_id = labels.get<factor_value_t>(i, 0);
-		if ((size_t) label_id >= agg_flags.size())
-			return false;
-		// If we never get partially aggregated result for a label, we should
-		// copy the data to the corresponding row.
-		if (!agg_flags[label_id])
-			memcpy(results.get_row(label_id), mat.get_row(i),
-					mat.get_num_cols() * mat.get_entry_size());
-		else
-			op.get_agg().runAA(mat.get_num_cols(), mat.get_row(i),
-					results.get_row(label_id), results.get_row(label_id));
-		auto bit = agg_flags[label_id];
-		bit = true;
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(mat.store_layout() == matrix_layout_t::L_ROW);
+		assert(results.store_layout() == matrix_layout_t::L_ROW);
+		assert(labels.get_num_rows() == mat.get_num_rows());
+		const detail::local_row_matrix_store &row_mat
+			= static_cast<const detail::local_row_matrix_store &>(mat);
+		detail::local_row_matrix_store &row_results
+			= static_cast<detail::local_row_matrix_store &>(results);
+		for (size_t i = 0; i < row_mat.get_num_rows(); i++) {
+			factor_value_t label_id = labels.get<factor_value_t>(i, 0);
+			if ((size_t) label_id >= agg_flags.size())
+				return false;
+			// If we never get partially aggregated result for a label, we should
+			// copy the data to the corresponding row.
+			if (!agg_flags[label_id])
+				memcpy(row_results.get_row(label_id), row_mat.get_row(i),
+						row_mat.get_num_cols() * row_mat.get_entry_size());
+			else
+				op.get_agg().runAA(row_mat.get_num_cols(), row_mat.get_row(i),
+						row_results.get_row(label_id),
+						row_results.get_row(label_id));
+			auto bit = agg_flags[label_id];
+			bit = true;
+		}
+	}
+	else {
+		assert(mat.store_layout() == matrix_layout_t::L_COL);
+		assert(results.store_layout() == matrix_layout_t::L_COL);
+		assert(labels.get_num_cols() == mat.get_num_cols());
+		const detail::local_col_matrix_store &col_mat
+			= static_cast<const detail::local_col_matrix_store &>(mat);
+		detail::local_col_matrix_store &col_results
+			= static_cast<detail::local_col_matrix_store &>(results);
+		for (size_t i = 0; i < col_mat.get_num_cols(); i++) {
+			factor_value_t label_id = labels.get<factor_value_t>(0, i);
+			if ((size_t) label_id >= agg_flags.size())
+				return false;
+			// If we never get partially aggregated result for a label, we should
+			// copy the data to the corresponding col.
+			if (!agg_flags[label_id])
+				memcpy(col_results.get_col(label_id), col_mat.get_col(i),
+						col_mat.get_num_rows() * col_mat.get_entry_size());
+			else
+				op.get_agg().runAA(col_mat.get_num_rows(), col_mat.get_col(i),
+						col_results.get_col(label_id),
+						col_results.get_col(label_id));
+			auto bit = agg_flags[label_id];
+			bit = true;
+		}
 	}
 	return true;
 }
 
-bool groupby_row(const detail::local_matrix_store &labels,
-		const detail::local_row_matrix_store &mat, const agg_operate &op,
-		part_dim_t dim, detail::local_row_matrix_store &results,
-		std::vector<bool> &agg_flags)
+bool groupby(const detail::local_matrix_store &labels,
+		const detail::local_matrix_store &mat, const agg_operate &op,
+		matrix_margin margin, part_dim_t dim,
+		detail::local_matrix_store &results, std::vector<bool> &agg_flags)
 {
 	const size_t part_len = get_part_dim_len(mat, dim);
-	// If this is a very wide matrix, we need to resize it.
-	if (dim == part_dim_t::PART_DIM2 && mat.get_num_cols() > part_len) {
+	// Group by rows on a wide matrix.
+	if (dim == part_dim_t::PART_DIM2 && margin == matrix_margin::MAR_ROW
+			&& mat.get_num_cols() > part_len) {
+		// We need to resize the input matrix and the result matrix.
 		size_t orig_num_cols = mat.get_num_cols();
 		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
 		local_matrix_store::exposed_area orig_res = results.get_exposed_area();
-		local_row_matrix_store &mutable_mat
-			= const_cast<local_row_matrix_store &>(mat);
+		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
 		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
 			mutable_mat.resize(orig_in.local_start_row,
@@ -1426,7 +1463,7 @@ bool groupby_row(const detail::local_matrix_store &labels,
 			size_t orig_num = agg_flags.size();
 			agg_flags.clear();
 			agg_flags.resize(orig_num, false);
-			bool ret = _groupby_row(labels, mat, op, results, agg_flags);
+			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
 			if (!ret) {
 				mutable_mat.restore_size(orig_in);
 				results.restore_size(orig_res);
@@ -1437,14 +1474,43 @@ bool groupby_row(const detail::local_matrix_store &labels,
 		results.restore_size(orig_res);
 		return true;
 	}
-	// resize the tall matrix
-	else if (mat.is_virtual() && dim == part_dim_t::PART_DIM1
+	// Group by cols on a tall matrix.
+	else if (dim == part_dim_t::PART_DIM1 && margin == matrix_margin::MAR_COL
 			&& mat.get_num_rows() > part_len) {
 		size_t orig_num_rows = mat.get_num_rows();
 		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = results.get_exposed_area();
+		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
+		// We need to resize the input matrix and the result matrix.
+		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
+			size_t llen = std::min(orig_num_rows - row_idx, part_len);
+			mutable_mat.resize(orig_in.local_start_row + row_idx,
+					orig_in.local_start_col, llen, mat.get_num_cols());
+			results.resize(orig_res.local_start_row + row_idx,
+					orig_res.local_start_col, llen, results.get_num_cols());
+			// We need to reset the flags when we compute on smaller parts.
+			size_t orig_num = agg_flags.size();
+			agg_flags.clear();
+			agg_flags.resize(orig_num, false);
+			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
+			if (!ret) {
+				mutable_mat.restore_size(orig_in);
+				results.restore_size(orig_res);
+				return false;
+			}
+		}
+		mutable_mat.restore_size(orig_in);
+		results.restore_size(orig_res);
+		return true;
+	}
+	// Group by rows on a tall matrix.
+	else if (mat.is_virtual() && dim == part_dim_t::PART_DIM1
+			&& margin == matrix_margin::MAR_ROW && mat.get_num_rows() > part_len) {
+		// Here we need to resize the input matrix and the label vector.
+		size_t orig_num_rows = mat.get_num_rows();
+		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
 		local_matrix_store::exposed_area orig_labels = labels.get_exposed_area();
-		local_row_matrix_store &mutable_mat
-			= const_cast<local_row_matrix_store &>(mat);
+		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
 		local_matrix_store &mutable_labels = const_cast<local_matrix_store &>(
 				labels);
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
@@ -1453,7 +1519,7 @@ bool groupby_row(const detail::local_matrix_store &labels,
 					orig_in.local_start_col, llen, mat.get_num_cols());
 			mutable_labels.resize(orig_labels.local_start_row + row_idx,
 					orig_labels.local_start_col, llen, labels.get_num_cols());
-			bool ret = _groupby_row(labels, mat, op, results, agg_flags);
+			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
 			if (!ret) {
 				mutable_mat.restore_size(orig_in);
 				mutable_labels.restore_size(orig_labels);
@@ -1464,8 +1530,36 @@ bool groupby_row(const detail::local_matrix_store &labels,
 		mutable_labels.restore_size(orig_labels);
 		return true;
 	}
+	// Group by cols on a wide matrix.
+	else if (mat.is_virtual() && dim == part_dim_t::PART_DIM2
+			&& margin == matrix_margin::MAR_COL && mat.get_num_cols() > part_len) {
+		// Here we need to resize the input matrix and the label vector.
+		size_t orig_num_cols = mat.get_num_cols();
+		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
+		local_matrix_store::exposed_area orig_labels = labels.get_exposed_area();
+		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
+		local_matrix_store &mutable_labels = const_cast<local_matrix_store &>(
+				labels);
+		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
+			size_t llen = std::min(orig_num_cols - col_idx, part_len);
+			mutable_mat.resize(orig_in.local_start_row,
+					orig_in.local_start_col + col_idx, mat.get_num_rows(), llen);
+			mutable_labels.resize(orig_labels.local_start_row,
+					orig_labels.local_start_col + col_idx,
+					labels.get_num_rows(), llen);
+			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
+			if (!ret) {
+				mutable_mat.restore_size(orig_in);
+				results.restore_size(orig_labels);
+				return false;
+			}
+		}
+		mutable_mat.restore_size(orig_in);
+		mutable_labels.restore_size(orig_labels);
+		return true;
+	}
 	else
-		return _groupby_row(labels, mat, op, results, agg_flags);
+		return _groupby(labels, mat, op, margin, results, agg_flags);
 }
 
 local_matrix_store::const_ptr local_row_matrix_store::get_portion(

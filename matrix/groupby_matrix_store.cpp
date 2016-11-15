@@ -37,8 +37,9 @@ class groupby_op: public detail::portion_mapply_op
 	// The bool vector indicates whether a label gets partially aggregated data.
 	std::vector<std::vector<bool> > part_agg;
 	// This contains a local matrix for each thread.
-	// Each row of a local matrix contains partially aggregated data for a label.
-	std::vector<detail::local_row_matrix_store::ptr> part_results;
+	// Each row/column of a local matrix contains partially aggregated data
+	// for a label.
+	std::vector<detail::local_matrix_store::ptr> part_results;
 	std::vector<bool> part_status;
 	size_t num_levels;
 	matrix_margin margin;
@@ -89,19 +90,48 @@ detail::matrix_store::ptr groupby_op::get_agg() const
 	size_t nrow = part_results[first_idx]->get_num_rows();
 	size_t ncol = part_results[first_idx]->get_num_cols();
 	const scalar_type &type = part_results[first_idx]->get_type();
-	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(nrow,
-			ncol, matrix_layout_t::L_ROW, type, -1);
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
-		memcpy(res->get_row(i), part_results[first_idx]->get_row(i),
-				res->get_num_cols() * res->get_entry_size());
-		for (size_t j = first_idx + 1; j < part_results.size(); j++) {
-			if (part_results[j] != NULL)
-				op->get_combine().runAA(res->get_num_cols(),
-						part_results[j]->get_row(i), res->get_row(i),
-						res->get_row(i));
+	if (part_results[first_idx]->store_layout() == matrix_layout_t::L_ROW) {
+		detail::mem_row_matrix_store::ptr res
+			= detail::mem_row_matrix_store::create(nrow, ncol, type);
+		for (size_t i = 0; i < res->get_num_rows(); i++) {
+			const local_row_matrix_store &row_res
+				= static_cast<const local_row_matrix_store &>(
+						*part_results[first_idx]);
+			memcpy(res->get_row(i), row_res.get_row(i),
+					res->get_num_cols() * res->get_entry_size());
+			for (size_t j = first_idx + 1; j < part_results.size(); j++) {
+				if (part_results[j] != NULL) {
+					const local_row_matrix_store &row_res
+						= static_cast<const local_row_matrix_store &>(
+								*part_results[j]);
+					op->get_combine().runAA(res->get_num_cols(),
+							row_res.get_row(i), res->get_row(i), res->get_row(i));
+				}
+			}
 		}
+		return res;
 	}
-	return res;
+	else {
+		detail::mem_col_matrix_store::ptr res
+			= detail::mem_col_matrix_store::create(nrow, ncol, type);
+		for (size_t i = 0; i < res->get_num_cols(); i++) {
+			const local_col_matrix_store &col_res
+				= static_cast<const local_col_matrix_store &>(
+						*part_results[first_idx]);
+			memcpy(res->get_col(i), col_res.get_col(i),
+					res->get_num_rows() * res->get_entry_size());
+			for (size_t j = first_idx + 1; j < part_results.size(); j++) {
+				if (part_results[j] != NULL) {
+					const local_col_matrix_store &col_res
+						= static_cast<const local_col_matrix_store &>(
+								*part_results[j]);
+					op->get_combine().runAA(res->get_num_rows(),
+							col_res.get_col(i), res->get_col(i), res->get_col(i));
+				}
+			}
+		}
+		return res;
+	}
 }
 
 bool groupby_op::has_materialized() const
@@ -126,9 +156,22 @@ void groupby_op::run(
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	if (part_results[thread_id] == NULL) {
 		assert(part_agg[thread_id].empty());
-		mutable_this->part_results[thread_id] = detail::local_row_matrix_store::ptr(
-				new detail::local_buf_row_matrix_store(0, 0, num_levels,
-					in->get_num_cols(), op->get_output_type(), -1));
+		if (margin == matrix_margin::MAR_ROW) {
+			mutable_this->part_results[thread_id]
+				= detail::local_matrix_store::ptr(
+					new detail::local_buf_row_matrix_store(0, 0, num_levels,
+						in->get_num_cols(), op->get_output_type(), -1));
+			assert(in->store_layout() == matrix_layout_t::L_ROW);
+		}
+		else {
+			mutable_this->part_results[thread_id]
+				= detail::local_matrix_store::ptr(
+					new detail::local_buf_col_matrix_store(0, 0,
+						in->get_num_rows(), num_levels,
+						op->get_output_type(), -1));
+			assert(in->store_layout() == matrix_layout_t::L_COL);
+		}
+		mutable_this->part_results[thread_id]->reset_data();
 		mutable_this->part_agg[thread_id].resize(num_levels);
 	}
 	// If there was a failure in this thread, we don't need to perform more
@@ -136,40 +179,95 @@ void groupby_op::run(
 	if (!part_status[thread_id])
 		return;
 
-	assert(in->store_layout() == matrix_layout_t::L_ROW);
-	bool ret = detail::groupby_row(*labels,
-			static_cast<const detail::local_row_matrix_store &>(*in),
-			*op, detail::part_dim_t::PART_DIM1, *part_results[thread_id],
-			mutable_this->part_agg[thread_id]);
+	detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
+		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	bool ret = detail::groupby(*labels, *in, *op, margin, dim,
+			*part_results[thread_id], mutable_this->part_agg[thread_id]);
 	if (!ret)
 		mutable_this->part_status[thread_id] = false;
 }
 
 }
 
-static size_t get_num_rows_groupby(const factor_col_vector &labels,
-		matrix_margin margin)
+static size_t get_num_rows_groupby(const matrix_store &mat,
+		size_t num_levels, matrix_margin margin)
 {
-	return margin == matrix_margin::MAR_ROW ? labels.get_length() : 1;
+	return margin == matrix_margin::MAR_ROW ? num_levels : mat.get_num_rows();
 }
 
-static size_t get_num_cols_groupby(const factor_col_vector &labels,
-		matrix_margin margin)
+static size_t get_num_cols_groupby(const matrix_store &mat,
+		size_t num_levels, matrix_margin margin)
 {
-	return margin == matrix_margin::MAR_COL ? labels.get_length() : 1;
+	return margin == matrix_margin::MAR_COL ? num_levels : mat.get_num_cols();
+}
+
+static matrix_store::const_ptr conv_layout(matrix_store::const_ptr data,
+		matrix_layout_t layout)
+{
+	if ((layout == matrix_layout_t::L_ROW
+				&& data->store_layout() == matrix_layout_t::L_ROW)
+			|| (layout == matrix_layout_t::L_COL
+				&& data->store_layout() == matrix_layout_t::L_COL))
+		return data;
+	else {
+		dense_matrix::ptr tmp = dense_matrix::create(data);
+		tmp = tmp->conv2(layout);
+		return tmp->get_raw_store();
+	}
+}
+
+groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
+		matrix_store::const_ptr label_store, const factor &_f,
+		matrix_margin margin, agg_operate::const_ptr op): sink_store(
+			get_num_rows_groupby(*data, _f.get_num_levels(), margin),
+			get_num_cols_groupby(*data, _f.get_num_levels(), margin),
+			data->is_in_mem(), op->get_output_type()), f(_f)
+{
+	this->label_store = label_store;
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(this->label_store->get_num_rows() == data->get_num_rows());
+		this->data = conv_layout(data, matrix_layout_t::L_ROW);
+		assert(!this->data->is_wide());
+	}
+	else {
+		assert(this->label_store->get_num_cols() == data->get_num_cols());
+		this->data = conv_layout(data, matrix_layout_t::L_COL);
+		assert(this->data->is_wide());
+	}
+	this->f = f;
+	this->margin = margin;
+	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
+				f.get_num_levels(), margin));
+	agg_op = op;
 }
 
 groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 		factor_col_vector::const_ptr labels, matrix_margin margin,
-		agg_operate::const_ptr op): sink_store(get_num_rows_groupby(*labels, margin),
-			get_num_cols_groupby(*labels, margin), data->is_in_mem(),
-			op->get_output_type())
+		agg_operate::const_ptr op): sink_store(
+			get_num_rows_groupby(*data, labels->get_num_levels(), margin),
+			get_num_cols_groupby(*data, labels->get_num_levels(), margin),
+			data->is_in_mem(), op->get_output_type()), f(labels->get_factor())
 {
 	this->data = data;
-	this->label_store = labels->get_raw_store();
+	// labels is a col matrix. If we group by columns, we need to transpose
+	// the col matrix.
+	if (margin == matrix_margin::MAR_ROW) {
+		this->data = conv_layout(data, matrix_layout_t::L_ROW);
+		this->label_store = labels->get_raw_store();
+		assert(this->label_store->get_num_rows() == data->get_num_rows());
+		assert(!this->data->is_wide());
+	}
+	else {
+		this->data = conv_layout(data, matrix_layout_t::L_COL);
+		this->label_store = labels->get_raw_store()->transpose();
+		assert(data->store_layout() == matrix_layout_t::L_COL);
+		assert(this->label_store->get_num_cols() == data->get_num_cols());
+		assert(this->data->is_wide());
+	}
 	this->margin = margin;
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				labels->get_factor().get_num_levels(), margin));
+	agg_op = op;
 }
 
 matrix_store::ptr groupby_matrix_store::get_agg_res() const
@@ -350,9 +448,13 @@ public:
 
 matrix_store::const_ptr groupby_matrix_store::transpose() const
 {
-	// TODO This method should also be implemented.
-	assert(0);
-	return matrix_store::const_ptr();
+	matrix_margin new_margin;
+	if (margin == matrix_margin::MAR_ROW)
+		new_margin = matrix_margin::MAR_COL;
+	else
+		new_margin = matrix_margin::MAR_ROW;
+	return matrix_store::const_ptr(new groupby_matrix_store(data->transpose(),
+				label_store->transpose(), f, new_margin, agg_op));
 }
 
 class groupby_compute_store: public sink_compute_store, public EM_object

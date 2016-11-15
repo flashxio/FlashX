@@ -1218,12 +1218,12 @@ void mapply_cols(const local_matrix_store &m1, const local_vec_store &vals,
 void mapply_rows(const local_matrix_store &m1, const local_vec_store &vals,
 		const bulk_operate &op, local_matrix_store &m2);
 /*
- * This groupby on a row-major matrix.
+ * This group by rows/columns on a matrix.
  */
-bool groupby_row(const detail::local_matrix_store &labels,
-		const detail::local_row_matrix_store &mat, const agg_operate &op,
-		part_dim_t dim, detail::local_row_matrix_store &results,
-		std::vector<bool> &agg_flags);
+bool groupby(const detail::local_matrix_store &labels,
+		const detail::local_matrix_store &mat, const agg_operate &op,
+		matrix_margin margin, part_dim_t dim,
+		detail::local_matrix_store &results, std::vector<bool> &agg_flags);
 
 /*
  * BLAS matrix multiplication: a tall matrix * a small matrix.

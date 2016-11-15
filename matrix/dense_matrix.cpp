@@ -1961,7 +1961,7 @@ public:
 			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
 		detail::local_row_matrix_store &row_out
 			= static_cast<detail::local_row_matrix_store &>(out);
-		bool ret = detail::groupby_row(*llabels, row_in, *op,
+		bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
 				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
 		assert(ret);
 	}
