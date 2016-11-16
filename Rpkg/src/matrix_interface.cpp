@@ -2279,15 +2279,6 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
 	}
-	detail::mapply_matrix_store::const_ptr test_store
-		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
-				test->get_raw_store());
-	if (test_store) {
-		detail::matrix_store::const_ptr first
-			= test_store->get_input_mats().front();
-		if (first->get_type() == get_scalar_type<bool>())
-			test = dense_matrix::create(first);
-	}
 
 	// TODO we should cast type if they are different.
 	if (yes->get_type() != no->get_type()) {
@@ -2358,15 +2349,6 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 	if (test->get_type() != get_scalar_type<int>()) {
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
-	}
-	detail::mapply_matrix_store::const_ptr test_store
-		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
-				test->get_raw_store());
-	if (test_store) {
-		detail::matrix_store::const_ptr first
-			= test_store->get_input_mats().front();
-		if (first->get_type() == get_scalar_type<bool>())
-			test = dense_matrix::create(first);
 	}
 
 	// TODO we should cast type if they are different.
