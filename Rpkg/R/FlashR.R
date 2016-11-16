@@ -2131,8 +2131,7 @@ setMethod("is.nan", signature(x = "fm"), function(x) {
 			  .new.fm(ret)
 		  }
 		  else
-			  # TODO construct this matrix shouldn't have data movement.
-			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+			  fm.matrix(FALSE, nrow(x), ncol(x))
 		  })
 #' @rdname is.finite
 setMethod("is.nan", signature(x = "fmV"), function(x) {
@@ -2149,8 +2148,7 @@ setMethod("is.infinite", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double")
 			  fm.mapply2(x, Inf, fm.bo.eq, FALSE)
 		  else
-			  # TODO construct this matrix shouldn't have data movement.
-			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+			  fm.matrix(FALSE, nrow(x), ncol(x))
 		  })
 #' @rdname is.finite
 setMethod("is.infinite", signature(x = "fmV"), function(x) {
@@ -2176,15 +2174,14 @@ setMethod("is.finite", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double")
 			  .test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
 		  else
-			  # TODO construct this matrix shouldn't have data movement.
-			  fm.matrix(fm.rep.int(FALSE, length(x)), nrow(x), ncol(x))
+			  fm.matrix(TRUE, nrow(x), ncol(x))
 		  })
 #' @rdname is.finite
 setMethod("is.finite", signature(x = "fmV"), function(x) {
 		  if (typeof(x) == "double")
 			  .test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
 		  else
-			  fm.rep.int(FALSE, length(x))
+			  fm.rep.int(TRUE, length(x))
 		  })
 
 #' Print the information of a FlashMatrix object
