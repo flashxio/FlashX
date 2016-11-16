@@ -325,11 +325,12 @@ NULL
 #' @rdname fm.runif
 fm.runif <- function(n, min=0, max=1, in.mem=TRUE, name="")
 {
+	n <- floor(as.numeric(n))
 	if (n <= 0) {
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_randmat", "uniform", as.numeric(n), 1,
+	vec <- .Call("R_FM_create_randmat", "uniform", n, 1,
 				 as.logical(in.mem), as.character(name),
 				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
 	if (!is.null(vec))
@@ -361,11 +362,12 @@ NULL
 #' @rdname fm.rnorm
 fm.rnorm <- function(n, mean=0, sd=1, in.mem=TRUE, name="")
 {
+	n <- floor(as.numeric(n))
 	if (n <= 0) {
 		print("we can't generate a vector of 0 elements")
 		return(NULL)
 	}
-	vec <- .Call("R_FM_create_randmat", "norm", as.numeric(n), 1,
+	vec <- .Call("R_FM_create_randmat", "norm", n, 1,
 				 as.logical(in.mem), as.character(name),
 				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
 	if (!is.null(vec))
@@ -378,11 +380,13 @@ fm.rnorm <- function(n, mean=0, sd=1, in.mem=TRUE, name="")
 #' @rdname fm.runif
 fm.runif.matrix <- function(nrow, ncol, min=0, max=1, in.mem=TRUE, name="")
 {
+	nrow <- floor(as.numeric(nrow))
+	ncol <- floor(as.numeric(ncol))
 	if (nrow <= 0 || ncol <= 0)
 		stop("we can't generate a matrix with 0 rows or cols")
 
-	mat <- .Call("R_FM_create_randmat", "uniform", as.numeric(nrow),
-				 as.numeric(ncol), as.logical(in.mem), as.character(name),
+	mat <- .Call("R_FM_create_randmat", "uniform", nrow, ncol,
+				 as.logical(in.mem), as.character(name),
 				 list(min=as.double(min), max=as.double(max)), PACKAGE="FlashR")
 	.new.fm(mat)
 }
@@ -390,11 +394,13 @@ fm.runif.matrix <- function(nrow, ncol, min=0, max=1, in.mem=TRUE, name="")
 #' @rdname fm.rnorm
 fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1, in.mem=TRUE, name="")
 {
+	nrow <- floor(as.numeric(nrow))
+	ncol <- floor(as.numeric(ncol))
 	if (nrow <= 0 || ncol <= 0)
 		stop("we can't generate a matrix with 0 rows or cols")
 
-	mat <- .Call("R_FM_create_randmat", "norm", as.numeric(nrow),
-				 as.numeric(ncol), as.logical(in.mem), as.character(name),
+	mat <- .Call("R_FM_create_randmat", "norm", nrow, ncol,
+				 as.logical(in.mem), as.character(name),
 				 list(mu=as.double(mean), sigma=as.double(sd)), PACKAGE="FlashR")
 	.new.fm(mat)
 }
@@ -414,11 +420,13 @@ fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1, in.mem=TRUE, name="")
 #' @return a FlashMatrix matrix.
 fm.rsparse.proj <- function(nrow, ncol, density, name="")
 {
+	nrow <- floor(as.numeric(nrow))
+	ncol <- floor(as.numeric(ncol))
 	if (nrow <= 0 || ncol <= 0)
 		stop("we can't generate a matrix with 0 rows or cols")
 
-	mat <- .Call("R_FM_rand_sparse_proj", as.numeric(nrow),
-				 as.numeric(ncol), as.numeric(density), PACKAGE="FlashR")
+	mat <- .Call("R_FM_rand_sparse_proj", nrow, ncol, as.numeric(density),
+				 PACKAGE="FlashR")
 	.new.fm(mat)
 }
 
@@ -560,7 +568,8 @@ fm.get.layout <- function(fm)
 #' @param obj a regular R object
 #' @param byrow a logical value to determine the data layout of a FlashMatrix
 #' matrix.
-#' @return a FlashMatrix object.
+#' @return a FlashMatrix object. If the input R object has 0 element,
+#'         \code{fm.conv.R2FM} returns \code{NULL}.
 #' @name fm.conv.R2FM
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.conv.R2FM <- function(obj, byrow=FALSE)
@@ -568,6 +577,9 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 	stopifnot(!is.null(obj))
 	# This function only deals with vectors and matrices of primitive types.
 	stopifnot(is.atomic(obj))
+
+	if (length(obj) == 0)
+		return(NULL)
 
 	if (is.vector(obj)) {
 		vec <- .Call("R_FM_conv_RVec2FM", obj, PACKAGE="FlashR")
