@@ -844,7 +844,7 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 		agg.res <- fm.agg.lazy(fm, op)
 		res <- fm.materialize(any.na, agg.res)
 		if (.fmV2scalar(res[[1]]))
-			.get.na(typeof(agg.res))
+			.get.na(typeof(res[[2]]))
 		else
 			.fmV2scalar(res[[2]])
 	}
