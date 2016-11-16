@@ -954,6 +954,12 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 		bool in_mem, safs::safs_file_group::ptr group)
 {
+	if (nrow == 0 || ncol == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	size_t long_dim = std::max(nrow, ncol);
 	size_t short_dim = std::min(nrow, ncol);
 	// We don't want to create a small block matrix.
@@ -973,6 +979,12 @@ dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
 		size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
 		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
 {
+	if (nrow == 0 || ncol == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	size_t long_dim = std::max(nrow, ncol);
 	size_t short_dim = std::min(nrow, ncol);
 	const scalar_type &type = start->get_type();
@@ -996,6 +1008,12 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, const set_operate &op,
 		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
 {
+	if (nrow == 0 || ncol == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	size_t long_dim = std::max(nrow, ncol);
 	size_t short_dim = std::min(nrow, ncol);
 	// We don't want to create a small block matrix.
