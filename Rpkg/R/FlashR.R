@@ -51,19 +51,6 @@ setClass("fmV", representation(pointer = "externalptr", name = "character",
 #' @slot num.levels an integer indicating the number of levels.
 setClass("fmFactorV", representation(num.levels = "integer"), contains = "fmV")
 
-#' An S4 class to represent a FlashMatrix sink matrix. The definition of a sink
-#' matrix can be found in the paper https://arxiv.org/abs/1604.06414
-#'
-#' @slot pointer points a matrix object in C.
-#' @slot name a string indicating the name of the matrix.
-#' @slot nrow a numeric value indicating the number of rows.
-#' @slot ncol a numeric value indicating the number of columns.
-#' @slot type a string indicating the type of the matrix. This field isn't used.
-#' @slot ele_type a string indicating the element type in the matrix.
-setClass("fmSink", representation(pointer = "externalptr", name = "character",
-								  nrow = "numeric", ncol = "numeric",
-								  type="character", ele_type="character"))
-
 #' An S4 class to represent a binary operator used in generalized matrix
 #' operations.
 #'
@@ -115,13 +102,6 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 			name=fm$name, len=fm$len, type=fm$type, ele_type=fm$ele_type)
 	else
 		NULL
-}
-
-.new.fmSink <- function(fm)
-{
-	if (!is.null(fm))
-		new("fmSink", pointer=fm$pointer, name=fm$name, nrow=fm$nrow, ncol=fm$ncol,
-			type=fm$type, ele_type=fm$ele_type)
 }
 
 #' Reconfigure FlashMatrix
@@ -698,7 +678,7 @@ fm.is.sparse <- function(fm)
 fm.is.sink <- function(fm)
 {
 	stopifnot(!is.null(fm))
-	class(fm) == "fmSink"
+	.Call("R_FM_is_sink", fm, PACKAGE="FlashR")
 }
 
 .typeof.int <- function(fm)
@@ -1138,7 +1118,7 @@ fm.agg.lazy <- function(fm, op)
 		op <- fm.create.agg.op(op, op, op@name)
 	stopifnot(class(op) == "fm.agg.op")
 	ret <- .Call("R_FM_agg_lazy", fm, op, PACKAGE="FlashR")
-	.new.fmSink(ret)
+	.new.fmV(ret)
 }
 
 #' @name fm.basic.op
@@ -1167,7 +1147,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	stopifnot(class(op) == "fm.agg.op")
 	ret <- .Call("R_FM_agg_mat_lazy", fm, as.integer(margin), op,
 				 PACKAGE="FlashR")
-	.new.fmSink(ret)
+	.new.fmV(ret)
 }
 
 .env.int <- new.env()
@@ -1714,19 +1694,14 @@ NULL
 #' @rdname materialize
 fm.materialize.list <- function(args)
 {
-	is.vec <- function(x) {
-		class(x) == "fmV" || (class(x) == "fmSink" && x@type == "vector")
-	}
-
 	if (length(args) == 0)
 		stop("no arguments")
 	else if (length(args) == 1) {
 		obj <- args[[1]]
 		stopifnot(!is.null(obj))
-		stopifnot(class(obj) == "fm" || class(obj) == "fmV"
-				  || class(obj) == "fmSink")
+		stopifnot(class(obj) == "fm" || class(obj) == "fmV")
 		ret <- .Call("R_FM_materialize", obj, PACKAGE="FlashR")
-		if (is.vec(obj))
+		if (fm.is.vector(obj))
 			.new.fmV(ret)
 		else
 			.new.fm(ret)
@@ -1734,15 +1709,14 @@ fm.materialize.list <- function(args)
 	else {
 		for (obj in args) {
 			stopifnot(!is.null(obj))
-			stopifnot(class(obj) == "fm" || class(obj) == "fmV"
-					  || class(obj) == "fmSink")
+			stopifnot(class(obj) == "fm" || class(obj) == "fmV")
 		}
 		rets <- .Call("R_FM_materialize_list", args, PACKAGE="FlashR")
 		if (is.null(rets))
 			return(NULL)
 		stopifnot(length(rets) == length(args))
 		for (i in 1:length(args)) {
-			if (is.vec(args[[i]]))
+			if (fm.is.vector(args[[i]]))
 				rets[[i]] <- .new.fmV(rets[[i]])
 			else
 				rets[[i]] <- .new.fm(rets[[i]])
@@ -2193,7 +2167,7 @@ setMethod("is.finite", signature(x = "fmV"), function(x) {
 #' @param fm a FlashMatrix object
 fm.print.mat.info <- function(fm)
 {
-	stopifnot(class(fm) == "fm" || class(fm) == "fmV" || class(fm) == "fmSink")
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
 	ret <- .Call("R_FM_print_mat_info", fm, PACKAGE="FlashR")
 }
 

@@ -1375,7 +1375,7 @@ RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
 		return R_NilValue;
 
 	dense_matrix::ptr res = m->aggregate(matrix_margin::BOTH, op);
-	return create_FMR_sinkV(res, 1, "");
+	return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
@@ -1443,7 +1443,7 @@ RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
 		len = m->get_num_rows();
 	else
 		len = m->get_num_cols();
-	return create_FMR_sinkV(res, len, "");
+	return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
@@ -1940,14 +1940,7 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 	Rcpp::List ret;
 	Rcpp::S4 rcpp_mat(pmat);
 	Rcpp::String name = rcpp_mat.slot("name");
-	if (is_sink(rcpp_mat)) {
-		std::string sink_type = rcpp_mat.slot("type");
-		if (sink_type == "vector")
-			ret = create_FMR_vector(mat, name);
-		else
-			ret = create_FMR_matrix(mat, name);
-	}
-	else if (is_vector(pmat))
+	if (is_vector(pmat))
 		ret = create_FMR_vector(mat, name);
 	else
 		ret = create_FMR_matrix(mat, name);
@@ -1987,14 +1980,7 @@ RcppExport SEXP R_FM_materialize_list(SEXP plist)
 		Rcpp::S4 rcpp_mat(pmat);
 		Rcpp::String name = rcpp_mat.slot("name");
 		Rcpp::List ret;
-		if (is_sink(rcpp_mat)) {
-			std::string sink_type = rcpp_mat.slot("type");
-			if (sink_type == "vector")
-				ret = create_FMR_vector(mat, name);
-			else
-				ret = create_FMR_matrix(mat, name);
-		}
-		else if (is_vector(pmat))
+		if (is_vector(pmat))
 			ret = create_FMR_vector(mat, name);
 		else
 			ret = create_FMR_matrix(mat, name);
@@ -2048,6 +2034,18 @@ RcppExport SEXP R_FM_is_sym(SEXP pmat)
 	}
 	else
 		res[0] = false;
+	return res;
+}
+
+RcppExport SEXP R_FM_is_sink(SEXP pmat)
+{
+	Rcpp::LogicalVector res(1);
+	if (is_sparse(pmat))
+		res[0] = false;
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		res[0] = mat->get_raw_store()->is_sink();
+	}
 	return res;
 }
 

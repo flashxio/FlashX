@@ -69,6 +69,5 @@ SEXP create_FMR_factor_vector(std::shared_ptr<fm::dense_matrix> m, int num_level
 SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m, const std::string &name);
 SEXP create_FMR_data_frame(std::shared_ptr<fm::data_frame> df, const std::string &name);
-SEXP create_FMR_sinkV(std::shared_ptr<fm::dense_matrix> m, size_t len, const std::string &name);
 
 #endif
