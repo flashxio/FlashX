@@ -13,7 +13,8 @@ fm.conv.R2FM(obj, byrow = FALSE)
 matrix.}
 }
 \value{
-a FlashMatrix object.
+a FlashMatrix object. If the input R object has 0 element,
+        \code{fm.conv.R2FM} returns \code{NULL}.
 }
 \description{
 If the R object is a matrix, \code{byrow} determines how data in the generated

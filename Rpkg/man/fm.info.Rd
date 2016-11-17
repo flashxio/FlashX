@@ -3,11 +3,9 @@
 \name{fm.info}
 \alias{fm.in.mem}
 \alias{fm.info}
-\alias{fm.is.matrix}
 \alias{fm.is.sink}
 \alias{fm.is.sparse}
 \alias{fm.is.sym}
-\alias{fm.is.vector}
 \alias{fm.matrix.layout}
 \title{The information of a FlashMatrix object}
 \usage{
@@ -16,10 +14,6 @@ fm.is.sym(fm)
 fm.matrix.layout(fm)
 
 fm.is.sparse(fm)
-
-fm.is.vector(fm)
-
-fm.is.matrix(fm)
 
 fm.is.sink(fm)
 
@@ -32,17 +26,13 @@ fm.in.mem(fm)
 \code{fm.is.sym} and \code{fm.is.sparse} returns boolean constants.
 }
 \description{
-Functions for providing the basic information of a matrix.
+These functions provide the basic information of a FlashMatrix object.
 }
 \details{
 \code{fm.is.sym} indicates whether a matrix is symmetric.
 
 \code{fm.matrix.layout} indicates how data in a matrix is organized.
 \code{fm.is.sparse} indicates whether a matrix is sparse.
-
-\code{fm.is.vector} indicates whether a FlashMatrix object is a vector.
-
-\code{fm.is.matrix} indicates whether a FlashMatrix object is a matrix.
 
 \code{fm.is.sink} indicates whether a FlashMatrix object is a sink matrix.
 

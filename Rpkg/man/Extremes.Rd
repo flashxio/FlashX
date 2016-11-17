@@ -96,8 +96,8 @@ pmin2(e1, e2)
 \S4method{pmax}{fmV}(..., na.rm = FALSE)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
-is a matrix and the other is a vector, we perform the operation
+\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one
+operand is a matrix and the other is a vector, we perform the operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
 the vector.}
@@ -118,5 +118,9 @@ Returns the (parallel) maxima and minima of the input values.
 \details{
 pmax2 returns the maximum of two objects.
 pmin2 returns the minimum of two objects.
+
+If one of the arguments is a matrix and the other is a vector, \code{pmax2}
+or \code{pmin2} return a matrix, each of whose column is parallel maxima
+and minima of the column of the input matrix and the input vector.
 }
 
