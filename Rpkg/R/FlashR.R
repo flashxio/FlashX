@@ -121,14 +121,14 @@ NULL
 #' @rdname fm.set.conf
 fm.set.conf <- function(conf.file)
 {
-	ret <- .Call("R_FM_set_conf", conf.file, PACKAGE="FlashR")
+	ret <- .Call("R_FM_set_conf", as.character(conf.file), PACKAGE="FlashR")
 	stopifnot(ret);
 }
 
 #' @rdname fm.set.conf
 fm.set.log.level <- function(level)
 {
-	.Call("R_FM_set_log_level", level, PACKAGE="FlashR")
+	.Call("R_FM_set_log_level", as.character(level), PACKAGE="FlashR")
 }
 
 #' @rdname fm.set.conf
@@ -149,7 +149,7 @@ fm.print.conf <- function()
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.exist.matrix <- function(name)
 {
-	.Call("R_FM_exist_matrix", name, PACKAGE="FlashR")
+	.Call("R_FM_exist_matrix", as.character(name), PACKAGE="FlashR")
 }
 
 #' Load a sparse matrix to FlashR.
@@ -187,7 +187,7 @@ fm.get.dense.matrix <- function(name)
 {
 	stopifnot(!is.null(name))
 	stopifnot(class(name) == "character")
-	m <- .Call("R_FM_get_dense_matrix", name, PACKAGE="FlashR")
+	m <- .Call("R_FM_get_dense_matrix", as.character(name), PACKAGE="FlashR")
 	.new.fm(m)
 }
 
@@ -221,9 +221,11 @@ fm.load.dense.matrix.bin <- function(name, in.mem, nrow, ncol, byrow, ele.type,
 fm.load.sparse.matrix <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, in.mem=TRUE)
 {
 	if (is.null(t.spm) || is.null(t.spm.idx))
-		m <- .Call("R_FM_load_matrix_sym", spm, spm.idx, in.mem, PACKAGE="FlashR")
+		m <- .Call("R_FM_load_matrix_sym", as.character(spm), as.character(spm.idx),
+				   as.logical(in.mem), PACKAGE="FlashR")
 	else
-		m <- .Call("R_FM_load_matrix_asym", spm, spm.idx, t.spm, t.spm.idx, in.mem,
+		m <- .Call("R_FM_load_matrix_asym", as.character(spm), as.character(spm.idx),
+				   as.character(t.spm), as.character(t.spm.idx), as.logical(in.mem),
 			  PACKAGE="FlashR")
 	.new.fm(m)
 }
@@ -520,7 +522,9 @@ fm.as.matrix <- function(x)
 fm.conv.layout <- function(fm, byrow=FALSE)
 {
 	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm")
+	if (class(fm) != "fm")
+		return(NULL)
+
 	ret <- .Call("R_FM_conv_layout", fm, as.logical(byrow), PACKAGE="FlashR")
 	if (!is.null(ret))
 		.new.fm(ret)
@@ -536,7 +540,8 @@ fm.conv.layout <- function(fm, byrow=FALSE)
 fm.get.layout <- function(fm)
 {
 	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm")
+	if (class(fm) != "fm")
+		return(NULL)
 	.Call("R_FM_get_layout", fm, PACKAGE="FlashR")
 }
 
@@ -565,10 +570,12 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 		vec <- .Call("R_FM_conv_RVec2FM", obj, PACKAGE="FlashR")
 		.new.fmV(vec)
 	}
-	else {
+	else if(is.matrix(obj)) {
 		m <- .Call("R_FM_conv_RMat2FM", obj, as.logical(byrow), PACKAGE="FlashR")
 		.new.fm(m)
 	}
+	else
+		NULL
 }
 
 #' Convert a FlashMatrix object to a regular R object
@@ -678,7 +685,10 @@ fm.is.sparse <- function(fm)
 fm.is.sink <- function(fm)
 {
 	stopifnot(!is.null(fm))
-	.Call("R_FM_is_sink", fm, PACKAGE="FlashR")
+	if (class(fm) == "fm" || class(fmV) == "fmV")
+		.Call("R_FM_is_sink", fm, PACKAGE="FlashR")
+	else
+		return(FALSE)
 }
 
 .typeof.int <- function(fm)
@@ -876,7 +886,7 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2, lazy.wide=FALSE)
 fm.get.basic.op <- function(name)
 {
 	stopifnot(!is.null(name))
-	op <- .Call("R_FM_get_basic_op", name, PACKAGE="FlashR")
+	op <- .Call("R_FM_get_basic_op", as.character(name), PACKAGE="FlashR")
 	if (!is.null(op))
 		new("fm.bo", info=op$info, name=op$name)
 }
@@ -885,7 +895,7 @@ fm.get.basic.op <- function(name)
 fm.get.basic.uop <- function(name)
 {
 	stopifnot(!is.null(name))
-	op <- .Call("R_FM_get_basic_uop", name, PACKAGE="FlashR")
+	op <- .Call("R_FM_get_basic_uop", as.character(name), PACKAGE="FlashR")
 	if (!is.null(op))
 		new("fm.bo", info=op$info, name=op$name)
 }
@@ -1215,6 +1225,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(class(o1) == "fm" || class(o2) == "fm")
 	stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- .new.fm(ret)
@@ -1228,6 +1239,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(class(o1) == "fmV" || class(o2) == "fmV")
 	stopifnot(length(o1) == length(o2))
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- .new.fmV(ret)
@@ -1241,6 +1253,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(class(o1) == "fm")
 	stopifnot(nrow(o1) == nrow(o2))
 	stopifnot(ncol(o1) == ncol(o2))
 	o2 <- fm.conv.R2FM(o2)
@@ -1258,6 +1271,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
+	stopifnot(class(o2) == "fm")
 	stopifnot(nrow(o1) == nrow(o2))
 	stopifnot(ncol(o1) == ncol(o2))
 	o1 <- fm.conv.R2FM(o1)
@@ -1275,7 +1289,8 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o2) || fm.is.vector(o2))
+	stopifnot(class(o1) == "fm")
+	stopifnot(is.vector(o2))
 	if (length(o2) > 1) {
 		o2 <- fm.conv.R2FM(o2)
 		if (is.null(o2))
@@ -1295,18 +1310,23 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 {
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
+	stopifnot(class(o2) == "fm")
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o1) || fm.is.vector(o1))
-	if (length(o1) > 1) {
+	if (is.vector(o1) && length(o1) > 1) {
 		print("don't support this operation yet.")
 		NULL
 	}
-	else {
+	else if (is.vector(o1)) {
 		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
 		ret <- .new.fm(ret)
 		if (set.na)
 			ret <- .set.na1(o2, ret)
 		ret
+	}
+	else {
+		stopifnot(is.matrix(o1))
+		o1 <- fm.conv.R2FM(o1)
+		.mapply2.fm.fm(o1, o2)
 	}
 }
 
@@ -1315,7 +1335,8 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o2) || fm.is.vector(o2))
+	stopifnot(class(o1) == "fmV")
+	stopifnot(is.vector(o2))
 	if (length(o2) > 1) {
 		stopifnot(length(o2) == length(o1))
 		o2 <- fm.conv.R2FM(o2)
@@ -1336,7 +1357,8 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(is.vector(o1) || fm.is.vector(o1))
+	stopifnot(class(o2) == "fmV")
+	stopifnot(is.vector(o1))
 	if (length(o1) == 1)
 		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
 	else {
@@ -1459,8 +1481,10 @@ setMethod("fm.mapply2",
 
 .sapply.fm <- function(o, FUN, set.na=TRUE)
 {
+	stopifnot(class(o) == "fm")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.uop(FUN)
+	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 	ret <- .new.fm(ret)
 	if (set.na)
@@ -1470,8 +1494,10 @@ setMethod("fm.mapply2",
 
 .sapply.fmV <- function(o, FUN, set.na=TRUE)
 {
+	stopifnot(class(o) == "fmV")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.uop(FUN)
+	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 	ret <- .new.fmV(ret)
 	if (set.na)
@@ -1517,8 +1543,10 @@ setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY", set.na="logical"),
 #' @return a FlashMatrix matrix.
 fm.apply <- function(x, margin, FUN)
 {
+	stopifnot(class(x) == "fm")
 	if (class(FUN) == "character")
 		FUN <- .get.apply.op(FUN)
+	stopifnot(class(FUN) == "fm.apply.bo")
 	ret <- .Call("R_FM_apply", FUN, as.integer(margin), x, PACKAGE="FlashR")
 	.new.fm(ret)
 }
@@ -1762,7 +1790,7 @@ fm.write.obj <- function(fm, file)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.read.obj <- function(file)
 {
-	ret <- .Call("R_FM_read_obj", file, PACKAGE="FlashR")
+	ret <- .Call("R_FM_read_obj", as.character(file), PACKAGE="FlashR")
 	if (class(ret) == "fmV")
 		.new.fmV(ret)
 	else
@@ -1786,7 +1814,7 @@ fm.conv.store <- function(fm, in.mem, name="")
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
 	ret <- .Call("R_FM_conv_store", fm, as.logical(in.mem),
-				 name, PACKAGE="FlashR")
+				 as.character(name), PACKAGE="FlashR")
 	if (class(ret) == "fmV")
 		.new.fmV(ret)
 	else
@@ -2185,7 +2213,7 @@ NULL
 fm.start.profiler <- function(file)
 {
 	if (is.loaded("R_start_profiler"))
-		.Call("R_start_profiler", file, PACKAGE="FlashR")
+		.Call("R_start_profiler", as.character(file), PACKAGE="FlashR")
 }
 
 #' @rdname profile
