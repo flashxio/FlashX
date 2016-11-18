@@ -1626,23 +1626,6 @@ fm.t <- function(m)
 	.new.fm(ret)
 }
 
-#' Set the specified column of a FlashMatrix matrix.
-#'
-#' @param fm A flashMatrixR matrix
-#' @param idxs an array of column indices in fm.
-#' @param m2 A flashMatrixR matrix or vector.
-#' @return a logical value that indicates whether the operation is successful.
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.set.cols <- function(fm, idxs, m2)
-{
-	print("fm.set.cols isn't supported right now.")
-	stopifnot(FALSE)
-#	stopifnot(!is.null(fm) && !is.null(idxs) && !is.null(m2))
-#	stopifnot(class(fm) == "fm")
-#	stopifnot(class(m2) == "fmV" || class(m2) == "fm")
-#	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashR")
-}
-
 #' Get a submatrix from a FlashMatrix matrix
 #'
 #' \code{fm.get.rows} gets specified rows in a FM matrix.
