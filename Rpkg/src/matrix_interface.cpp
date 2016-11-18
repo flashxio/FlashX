@@ -1478,11 +1478,6 @@ RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
 	}
 
 	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
-	size_t len;
-	if (margin == matrix_margin::MAR_ROW)
-		len = m->get_num_rows();
-	else
-		len = m->get_num_cols();
 	return create_FMR_vector(res, "");
 }
 
