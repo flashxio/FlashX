@@ -1332,11 +1332,29 @@ fm.table <- function(x)
 NULL
 
 #' @rdname integer
-setMethod("as.integer", "fm",
-		  function(x) fm.sapply(x, fm.buo.as.int, TRUE))
+setMethod("as.integer", "fm", function(x) {
+		  if (.typeof.int(x) == "integer")
+			  x
+		  # The underlying matrix uses the same C type to store logical values
+		  # and integers.
+		  else if (.typeof.int(x) == "logical")
+			  new("fm", pointer=x@pointer, name=x@name, nrow=x@nrow, ncol=x@ncol,
+				  type=x@type, ele_type="integer")
+		  else
+			  fm.sapply(x, fm.buo.as.int, TRUE)
+	})
 #' @rdname integer
-setMethod("as.integer", "fmV",
-		  function(x) fm.sapply(x, fm.buo.as.int, TRUE))
+setMethod("as.integer", "fmV", function(x) {
+		  if (.typeof.int(x) == "integer")
+			  x
+		  # The underlying vector uses the same C type to store logical values
+		  # and integers.
+		  else if (.typeof.int(x) == "logical")
+			  new("fmV", pointer=x@pointer, name=x@name, len=x@len, type=x@type,
+				  ele_type="integer")
+		  else
+			  fm.sapply(x, fm.buo.as.int, TRUE)
+	})
 
 #' Numeric Vectors
 #'
@@ -1350,11 +1368,19 @@ setMethod("as.integer", "fmV",
 NULL
 
 #' @rdname numeric
-setMethod("as.numeric", "fm",
-		  function(x) fm.sapply(x, fm.buo.as.numeric, TRUE))
+setMethod("as.numeric", "fm", function(x) {
+		  if (.typeof.int(x) == "double")
+			  x
+		  else
+			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+	})
 #' @rdname numeric
-setMethod("as.numeric", "fmV",
-		  function(x) fm.sapply(x, fm.buo.as.numeric, TRUE))
+setMethod("as.numeric", "fmV", function(x) {
+		  if (.typeof.int(x) == "double")
+			  x
+		  else
+			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+	})
 #' @rdname numeric
 setMethod("is.numeric", "fm", function(x)
 		  .typeof.int(x) == "double" || .typeof.int(x) == "integer")
