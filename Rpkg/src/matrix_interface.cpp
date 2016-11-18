@@ -2309,6 +2309,9 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 	}
 
 	scalar_variable::ptr no = conv_R2scalar(pno);
+	if (no == NULL)
+		return R_NilValue;
+
 	bool is_bool = false;
 	if (R_is_logical(pno))
 		is_bool = true;
@@ -2380,6 +2383,9 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 	}
 
 	scalar_variable::ptr yes = conv_R2scalar(pyes);
+	if (yes == NULL)
+		return R_NilValue;
+
 	bool is_bool = false;
 	if (R_is_logical(pyes))
 		is_bool = true;
