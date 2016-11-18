@@ -1177,17 +1177,17 @@ setMethod("sqrt", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.sqrt))
 NULL
 
 #' @rdname round
-setMethod("ceiling", signature(x = "fm"), function(x) .sapply.fm(x, fm.buo.ceil))
+setMethod("ceiling", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.buo.ceil))
 #' @rdname round
-setMethod("ceiling", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.ceil))
+setMethod("ceiling", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.ceil))
 #' @rdname round
-setMethod("floor", signature(x = "fm"), function(x) .sapply.fm(x, fm.buo.floor))
+setMethod("floor", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.buo.floor))
 #' @rdname round
-setMethod("floor", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.floor))
+setMethod("floor", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.floor))
 #' @rdname round
-setMethod("round", signature(x = "fm"), function(x) .sapply.fm(x, fm.buo.round))
+setMethod("round", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.buo.round))
 #' @rdname round
-setMethod("round", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.round))
+setMethod("round", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.round))
 
 #' Logarithms and Exponentials
 #'
@@ -1207,30 +1207,30 @@ setMethod("round", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.round
 NULL
 
 #' @rdname log
-setMethod("log10", signature(x = "fm"), function(x) .sapply.fm(x, fm.buo.log10))
+setMethod("log10", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.buo.log10))
 #' @rdname log
-setMethod("log10", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.log10))
+setMethod("log10", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.log10))
 #' @rdname log
-setMethod("log2", signature(x = "fm"), function(x) .sapply.fm(x, fm.buo.log2))
+setMethod("log2", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.buo.log2))
 #' @rdname log
-setMethod("log2", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.log2))
+setMethod("log2", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.log2))
 #' @rdname log
-setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
 #' @rdname log
-setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), x, fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
 #' @rdname log
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
-			  .sapply.fm(x, fm.buo.log)
+			  .sapply.fm(as.numeric(x), fm.buo.log)
 		  else
-			  .sapply.fm(x, fm.buo.log) / log(base)
+			  .sapply.fm(as.numeric(x), fm.buo.log) / log(base)
 })
 #' @rdname log
 setMethod("log", "fmV", function(x, base=exp(1)) {
 		  if (base == exp(1))
-			  .sapply.fmV(x, fm.buo.log)
+			  .sapply.fmV(as.numeric(x), fm.buo.log)
 		  else
-			  .sapply.fmV(x, fm.buo.log) / log(base)
+			  .sapply.fmV(as.numeric(x), fm.buo.log) / log(base)
 })
 
 #' Form Row and Column Sums and Means
