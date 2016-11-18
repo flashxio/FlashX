@@ -498,7 +498,7 @@ fm.as.matrix <- function(x)
 		# A FlashMatrix vector is actually stored in a dense matrix.
 		# We only need to construct the fm object in R.
 		new("fm", pointer=x@pointer, name=x@name, nrow=x@len,
-			ncol=1, type=x@type)
+			ncol=1, type=x@type, ele_type=x@ele_type)
 	}
 	else {
 		# Let's convert it to a FM object
