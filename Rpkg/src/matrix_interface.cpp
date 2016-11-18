@@ -209,51 +209,91 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 
 RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 {
-	// This function always generates a sequence of real numbers.
-	double from, to, by;
-	bool ret1, ret2, ret3;
-	ret1 = R_get_number<double>(pfrom, from);
-	ret2 = R_get_number<double>(pto, to);
-	ret3 = R_get_number<double>(pby, by);
-	if (!ret1 || !ret2 || !ret3) {
-		fprintf(stderr, "the arguments aren't of the supported type\n");
-		return R_NilValue;
-	}
-
 	int num_nodes = matrix_conf.get_num_nodes();
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes, true);
-	return create_FMR_vector(vec->get_raw_store(), "");
+
+	bool ret1, ret2, ret3;
+	bool any_double = R_is_real(pfrom) || R_is_real(pto) || R_is_real(pby);
+	// If any of the arguments is floating-point, we output a floating-point
+	// matrix.
+	if (any_double) {
+		double from, to, by;
+		ret1 = R_get_number<double>(pfrom, from);
+		ret2 = R_get_number<double>(pto, to);
+		ret3 = R_get_number<double>(pby, by);
+		if (!ret1 || !ret2 || !ret3) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+		vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes,
+				true);
+		return create_FMR_vector(vec->get_raw_store(), "");
+	}
+	else {
+		int from, to, by;
+		ret1 = R_get_number<int>(pfrom, from);
+		ret2 = R_get_number<int>(pto, to);
+		ret3 = R_get_number<int>(pby, by);
+		if (!ret1 || !ret2 || !ret3) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+		vector::ptr vec = create_seq_vector<int>(from, to, by, num_nodes,
+				true);
+		return create_FMR_vector(vec->get_raw_store(), "");
+	}
+
 }
 
 RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
 		SEXP pncol, SEXP pbyrow)
 {
-	// This function always generates a sequence of real numbers.
-	double from, to;
 	size_t nrow, ncol;
 	bool byrow = false;
 	bool ret1, ret2, ret3, ret4, ret5;
-	ret1 = R_get_number<double>(pfrom, from);
-	ret2 = R_get_number<double>(pto, to);
-	ret3 = R_get_number<size_t>(pnrow, nrow);
-	ret4 = R_get_number<size_t>(pncol, ncol);
-	ret5 = R_get_number<bool>(pbyrow, byrow);
-	if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
-		fprintf(stderr, "the arguments aren't of the supported type\n");
-		return R_NilValue;
-	}
 
 	int num_nodes = matrix_conf.get_num_nodes();
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	double by = (to - from) / (nrow * ncol);
-	dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
-			nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
-	return create_FMR_matrix(mat, "");
+
+	ret3 = R_get_number<size_t>(pnrow, nrow);
+	ret4 = R_get_number<size_t>(pncol, ncol);
+	ret5 = R_get_number<bool>(pbyrow, byrow);
+
+	// If from or to is floating-point, we output a floating-point
+	// matrix.
+	bool any_double = R_is_real(pfrom) || R_is_real(pto);
+	if (any_double) {
+		double from, to;
+		ret1 = R_get_number<double>(pfrom, from);
+		ret2 = R_get_number<double>(pto, to);
+		if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+
+		double by = (to - from) / (nrow * ncol);
+		dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
+				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
+		return create_FMR_matrix(mat, "");
+	}
+	else {
+		int from, to;
+		ret1 = R_get_number<int>(pfrom, from);
+		ret2 = R_get_number<int>(pto, to);
+		if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+
+		int by = (to - from) / (nrow * ncol);
+		dense_matrix::ptr mat = dense_matrix::create_seq<int>(from, by,
+				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
+		return create_FMR_matrix(mat, "");
+	}
 }
 
 RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
