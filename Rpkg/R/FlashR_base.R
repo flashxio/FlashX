@@ -170,12 +170,61 @@ setMethod("/", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
 setMethod("/", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 		  .mapply2.ANY.fmV(e1, e2, fm.bo.div))
 
+.replace.pow.special <- function(res, e1, e2)
+{
+	res <- ifelse(e1 == 1, 1, res)
+	if (typeof(e1) == "double" && typeof(e2) == "double")
+		ifelse(e1 == -Inf & floor(e2) != e2, NaN, res)
+	else
+		res
+}
+
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.pow))
+setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2) {
+		  res <- .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.pow))
+setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2) {
+		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "fm", e2 = "fmV"), function(e1, e2) {
+		  res <- fm.mapply.col(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+#setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+#		  fm.mapply.col(as.numeric(e2), as.numeric(e1), fm.bo.pow))
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "fm", e2 = "matrix"), function(e1, e2) {
+		  res <- .mapply2.fm.m(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "matrix", e2 = "fm"), function(e1, e2) {
+		  res <- .mapply2.m.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+#setMethod("^", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+#		  .mapply2.fm.ANY(as.numeric(e2), as.numeric(e1), fm.bo.pow))
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2) {
+		  res <- .mapply2.ANY.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "fm", e2 = "ANY"), function(e1, e2) {
+		  res <- .mapply2.fm.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
+#' @rdname Arithmetic
+setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2) {
+		  res <- .mapply2.fmV.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .replace.pow.special(res, e1, e2)
+		  })
 
 #' Matrix multiplication
 #'
@@ -194,8 +243,17 @@ setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y)
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
 #' @rdname matmult
+setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) fm.multiply(t(y), x))
+#' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
 		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
+#' @rdname matmult
+setMethod("%*%", signature(x = "ANY", y = "fm"), function(x, y) {
+		  if (is.vector(x))
+			  fm.multiply(t(y), fm.conv.R2FM(x))
+		  else
+			  t(fm.multiply(t(y), t(fm.conv.R2FM(x))))
+		  })
 
 #' Relational Operators
 #'
@@ -737,7 +795,13 @@ setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 #'
 #' @param x a FlashMatrix matrix.
 #' @return a matrix.
+#' @name transpose
+NULL
+
+#' @rdname transpose
 setMethod("t", signature(x = "fm"), function(x) fm.t(x))
+#' @rdname transpose
+setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
 .mapply.list <- function(data, FUN, test.na)
 {
