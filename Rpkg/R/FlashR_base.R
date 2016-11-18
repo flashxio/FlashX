@@ -859,6 +859,8 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 .range1 <- function(x, na.rm)
 {
 	test.na <- TRUE
+	if (typeof(x) == "logical")
+		x <- as.integer(x)
 	if (na.rm) {
 		x.min <- ifelse(is.na(x), .get.min.val(typeof(x)), x)
 		x.max <- ifelse(is.na(x), .get.max.val(typeof(x)), x)
