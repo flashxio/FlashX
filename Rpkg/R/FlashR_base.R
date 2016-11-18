@@ -1356,9 +1356,11 @@ setMethod("as.numeric", "fm",
 setMethod("as.numeric", "fmV",
 		  function(x) fm.sapply(x, fm.buo.as.numeric, TRUE))
 #' @rdname numeric
-setMethod("is.numeric", "fm", function(x) .typeof.int(x) == "double")
+setMethod("is.numeric", "fm", function(x)
+		  .typeof.int(x) == "double" || .typeof.int(x) == "integer")
 #' @rdname numeric
-setMethod("is.numeric", "fmV", function(x) .typeof.int(x) == "double")
+setMethod("is.numeric", "fmV", function(x)
+		  .typeof.int(x) == "double" || .typeof.int(x) == "integer")
 
 .fmV2scalar <- function(x)
 {
