@@ -703,7 +703,7 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 		stop("no arguments")
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.min.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.min, FALSE)
+		.mapply.list(args, fm.bo.max, FALSE)
 	}
 	else
 		.mapply.list(args, fm.bo.max, TRUE)
