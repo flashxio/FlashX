@@ -2733,3 +2733,10 @@ RcppExport SEXP R_FM_rand_sparse_proj(SEXP pnrow, SEXP pncol, SEXP pdensity)
 			ncol, layout, get_scalar_type<double>(), density);
 	return create_FMR_matrix(dense_matrix::create(store), "");
 }
+
+RcppExport SEXP R_FM_print_features()
+{
+	std::string features = safs::get_supported_features();
+	printf("%s\n", features.c_str());
+	return R_NilValue;
+}

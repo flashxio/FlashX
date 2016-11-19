@@ -109,6 +109,7 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 #' \code{fm.set.conf} reconfigures FlashMatrix with the settings in
 #' the configuration file. \code{fm.print.conf} prints the current configurations.
 #' \code{fm.set.log.level} sets what levels of messages should be logged.
+#' \code{fm.print.features} prints the features compiled into FlashR.
 #'
 #' The configuration file contains a list of key-value pairs. Each line in
 #' the file is a key-value pair in the form of "key_name=value".
@@ -138,6 +139,12 @@ fm.print.conf <- function()
 	.Call("R_SAFS_print_conf", PACKAGE="FlashR")
 	.Call("R_FM_print_conf", PACKAGE="FlashR")
 	fm.set.log.level("warning")
+}
+
+#' @rdname fm.set.conf
+fm.print.features <- function()
+{
+	.Call("R_FM_print_features", PACKAGE="FlashR")
 }
 
 #' Indicate whether a matrix has been loaded to FlashR
