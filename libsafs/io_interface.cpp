@@ -884,4 +884,21 @@ const std::vector<int> &get_io_cpus()
 	return global_data.io_cpus;
 }
 
+std::string get_supported_features()
+{
+	std::string ret;
+#ifdef USE_NUMA
+	ret += "+NUMA ";
+#else
+	ret += "-NUMA ";
+#endif
+
+#ifdef USE_LIBAIO
+	ret += "+libaio ";
+#else
+	ret += "-libaio ";
+#endif
+	return ret;
+}
+
 }

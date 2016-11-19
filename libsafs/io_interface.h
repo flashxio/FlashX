@@ -577,6 +577,11 @@ void print_io_summary();
  */
 void set_file_weight(const std::string &file_name, int weight);
 
+/**
+ * This gets the string that indicates the features compiled into SAFS.
+ */
+std::string get_supported_features();
+
 }
 
 #endif
