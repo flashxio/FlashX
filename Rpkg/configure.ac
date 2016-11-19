@@ -41,16 +41,15 @@ AC_CHECK_HEADER([boost/algorithm/string.hpp], [], [AC_MSG_ERROR("can't find boos
 
 AC_CHECK_HEADER([hwloc.h], [AC_SUBST(HWLOC_DEF, -DUSE_HWLOC)])
 AC_CHECK_LIB([hwloc], [hwloc_get_obj_by_type], [AC_SUBST(HWLOC_LIB, -lhwloc)])
-AC_SUBST(HWLOC_LIB, -lhwloc)
 
 AC_CHECK_HEADER([pthread.h], [], [AC_MSG_ERROR("can't find pthread")])
 AC_CHECK_LIB([pthread], [pthread_create], [AC_SUBST(PTHREAD_LIB, -lpthread)], [AC_MSG_ERROR("can't find pthread")])
 
-AC_CHECK_HEADER([libaio.h], [], [AC_MSG_ERROR("can't find libaio")])
-AC_CHECK_LIB([aio], [io_submit], [AC_SUBST(AIO_LIB, -laio)], [AC_MSG_ERROR("can't find libaio")])
+AC_CHECK_HEADER([libaio.h], [AC_SUBST(AIO_DEF, -DUSE_LIBAIO)])
+AC_CHECK_LIB([aio], [io_submit], [AC_SUBST(AIO_LIB, -laio)])
 
-AC_CHECK_HEADER([numa.h], [], [AC_MSG_ERROR("can't find libnuma")])
-AC_CHECK_LIB([numa], [numa_alloc_local], [AC_SUBST(NUMA_LIB, -lnuma)], [AC_MSG_ERROR("can't find libnuma")])
+AC_CHECK_HEADER([numa.h], [AC_SUBST(NUMA_DEF, -DUSE_NUMA)])
+AC_CHECK_LIB([numa], [numa_alloc_local], [AC_SUBST(NUMA_LIB, -lnuma)])
 
 #graphml_support=yes
 #AC_ARG_ENABLE(graphml,
