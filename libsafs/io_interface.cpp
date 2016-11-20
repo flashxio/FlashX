@@ -134,6 +134,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		return;
 	}
 
+	// If we don't have libaio, we disable the initialization of SAFS.
+#ifdef USE_LIBAIO
 	if (!configs->has_option("root_conf"))
 		throw init_error("RAID config file doesn't exist");
 	std::string root_conf_file = configs->get_option("root_conf");
@@ -168,9 +170,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		flags = O_RDWR;
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
-#ifdef USE_LIBAIO
 		global_data.read_threads.resize(num_files);
-#endif
 		// Determine a map to indicate which NUMA nodes the disks are
 		// attached to.
 		std::map<int, std::vector<int> > indices;
@@ -203,7 +203,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 						"The number of disks should be divisible by #I/O threads\n");
 				exit(-1);
 			}
-#ifdef USE_LIBAIO
+
 			std::vector<disk_io_thread::ptr> ts(num_io_threads);
 			tot_num_threads += num_io_threads;
 			for (size_t i = 0; i < ts.size(); i++) {
@@ -232,7 +232,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 					global_data.read_threads[file_idx] = ts[i];
 				}
 			}
-#endif
 		}
 		BOOST_LOG_TRIVIAL(info) << boost::format(
 				"SAFS runs on %1% SSDs with %2% I/O threads") % num_files
@@ -277,6 +276,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	}
 #endif
 	pthread_mutex_unlock(&global_data.mutex);
+#else
+	throw init_error("There isn't libaio. SAFS isn't initialized.");
+#endif
 }
 
 void destroy_io_system()
