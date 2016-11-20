@@ -40,7 +40,7 @@ AC_CHECK_HEADER([boost/lexical_cast.hpp], [], [AC_MSG_ERROR("can't find boost st
 AC_CHECK_HEADER([boost/algorithm/string.hpp], [], [AC_MSG_ERROR("can't find boost string")])
 
 AC_CHECK_HEADER([hwloc.h], [AC_SUBST(HWLOC_DEF, -DUSE_HWLOC)])
-AC_CHECK_LIB([hwloc], [hwloc_get_obj_by_type], [AC_SUBST(HWLOC_LIB, -lhwloc)])
+AC_CHECK_LIB([hwloc], [hwloc_topology_load], [AC_SUBST(HWLOC_LIB, -lhwloc)])
 
 AC_CHECK_HEADER([pthread.h], [], [AC_MSG_ERROR("can't find pthread")])
 AC_CHECK_LIB([pthread], [pthread_create], [AC_SUBST(PTHREAD_LIB, -lpthread)], [AC_MSG_ERROR("can't find pthread")])

@@ -3861,9 +3861,9 @@ if test "x$ac_cv_header_hwloc_h" = xyes; then :
 fi
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for hwloc_get_obj_by_type in -lhwloc" >&5
-$as_echo_n "checking for hwloc_get_obj_by_type in -lhwloc... " >&6; }
-if ${ac_cv_lib_hwloc_hwloc_get_obj_by_type+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for hwloc_topology_load in -lhwloc" >&5
+$as_echo_n "checking for hwloc_topology_load in -lhwloc... " >&6; }
+if ${ac_cv_lib_hwloc_hwloc_topology_load+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
@@ -3877,27 +3877,27 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char hwloc_get_obj_by_type ();
+char hwloc_topology_load ();
 int
 main ()
 {
-return hwloc_get_obj_by_type ();
+return hwloc_topology_load ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_hwloc_hwloc_get_obj_by_type=yes
+  ac_cv_lib_hwloc_hwloc_topology_load=yes
 else
-  ac_cv_lib_hwloc_hwloc_get_obj_by_type=no
+  ac_cv_lib_hwloc_hwloc_topology_load=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_hwloc_hwloc_get_obj_by_type" >&5
-$as_echo "$ac_cv_lib_hwloc_hwloc_get_obj_by_type" >&6; }
-if test "x$ac_cv_lib_hwloc_hwloc_get_obj_by_type" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_hwloc_hwloc_topology_load" >&5
+$as_echo "$ac_cv_lib_hwloc_hwloc_topology_load" >&6; }
+if test "x$ac_cv_lib_hwloc_hwloc_topology_load" = xyes; then :
   HWLOC_LIB=-lhwloc
 
 fi
