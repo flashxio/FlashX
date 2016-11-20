@@ -1,7 +1,6 @@
 useDynLib(FlashR)
 
 import(Rcpp)
-import(igraph)
 importFrom(methods, new)
 importFrom("stats", "runif")
 
