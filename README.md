@@ -24,7 +24,7 @@ comparable to state-of-art in-memory graph analysis frameworks and
 significantly outperforms state-of-art distributed graph analysis frameworks
 while being able to scale to graphs with billions of vertices and hundreds
 of billions of edges. Please see
-[the performance result](https://github.com/icoming/FlashX/wiki/FlashGraph-performance).
+[the performance result](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability).
 
 FlashMatrix
 ===========
@@ -65,12 +65,16 @@ Documentation
 
 [FlashR programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 
-[FlashGraph performance and scalability](https://github.com/icoming/FlashGraph/wiki/FlashGraph-performance)
+[FlashX performance and scalability](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability)
 
 [SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
 
 Publications
 ========
+Da Zheng, Disa Mhembere, Joshua T. Vogelstein, Carey E. Priebe, and Randal Burns, “FlashMatrix: Parallel, scalable data analysis with generalized matrix operations using commodity ssds,” arXiv preprint arXiv:1604.06414, 2016 [[pdf](http://arxiv.org/pdf/1604.06414v3)]
+
+Da Zheng, Disa Mhembere, Vince Lyzinski, Joshua Vogelstein, Carey E. Priebe, and Randal Burns, “Semi-external memory sparse matrix multiplication on billion-node graphs”, Transactions on Parallel and Distributed Systems, 2016. [[pdf](https://arxiv.org/pdf/1602.02864v3.pdf)]
+
 Heng Wang, Da Zheng, Randal Burns, Carey Priebe, Active Community Detection in Massive Graphs, SDM-Networks 2015 [[pdf](http://arxiv.org/pdf/1412.8576v3.pdf)]
 
 Da Zheng, Disa Mhembere, Randal Burns, Joshua Vogelstein, Carey E. Priebe, Alexander S. Szalay, FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs, FAST'15, [[pdf](https://www.usenix.org/system/files/conference/fast15/fast15-paper-zheng.pdf)][[bib](https://www.usenix.org/biblio/export/bibtex/188418)]

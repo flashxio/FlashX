@@ -19,7 +19,7 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/ -DUSE_EIGEN
+CXXFLAGS += -I../../libsafs -I.. -I. $(OMP_FLAG)
 
 all: libmatrix
 

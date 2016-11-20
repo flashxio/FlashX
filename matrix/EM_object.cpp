@@ -76,6 +76,13 @@ EM_object::file_holder::~file_holder()
 
 bool EM_object::file_holder::set_persistent(const std::string &new_name)
 {
+	auto ret = new_name.find("/");
+	if (ret != std::string::npos) {
+		fprintf(stderr, "can't rename to %s because it contains '/'\n",
+				new_name.c_str());
+		return false;
+	}
+
 	safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
 	if (!f.rename(new_name))
 		return false;

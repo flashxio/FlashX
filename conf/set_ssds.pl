@@ -85,7 +85,7 @@ for (sort keys %devices) {
 	print "dev: $dev_file, dir: $mount_dir, on node $node_id\n" ;
 	system("mkdir -p $mount_dir");
 	system("mount $dev_file $mount_dir");
-	system("chown -R zhengda.zhengda $mount_dir");
+#	system("chown -R zhengda.zhengda $mount_dir");
 	system("echo noop > /sys/block/${main_name}/queue/scheduler");
 	system("cat /sys/block/${main_name}/queue/scheduler");
 	system("echo 2 > /sys/block/${main_name}/queue/rq_affinity");
