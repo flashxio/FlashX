@@ -186,10 +186,22 @@ RAID_config::ptr RAID_config::create(const std::string &conf_file,
 		int mapping_option, int block_size)
 {
 	RAID_config::ptr conf = RAID_config::ptr(new RAID_config());
-	conf->conf_file = conf_file;
-	int ret = retrieve_data_files(conf->conf_file, conf->root_paths);
-	if (ret == 0)
+	// If the root conf file exists and isn't a directory.
+	// We assume the conf file specifies the directories where SAFS stores
+	// data.
+	if (file_exist(conf_file) && !is_dir(conf_file)) {
+		int ret = retrieve_data_files(conf_file, conf->root_paths);
+		if (ret == 0)
+			return RAID_config::ptr();
+	}
+	// If the root conf file exists and is a directory.
+	// We store data in the directory.
+	else if (file_exist(conf_file) && is_dir(conf_file))
+		conf->root_paths.push_back(part_file_info(conf_file, 0, 0));
+	else {
+		BOOST_LOG_TRIVIAL(error) << conf_file << " doesn't exist";
 		return RAID_config::ptr();
+	}
 
 	conf->RAID_mapping_option = mapping_option;
 	conf->RAID_block_size = block_size;

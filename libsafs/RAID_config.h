@@ -46,7 +46,6 @@ class RAID_config
 	int RAID_mapping_option;
 	int RAID_block_size;
 
-	std::string conf_file;
 	std::vector<part_file_info> root_paths;
 public:
 	typedef std::shared_ptr<RAID_config> ptr;

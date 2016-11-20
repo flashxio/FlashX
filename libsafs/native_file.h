@@ -177,6 +177,12 @@ static inline bool file_exist(const std::string &file)
 	return f.exist();
 }
 
+static inline bool is_dir(const std::string &file)
+{
+	native_dir dir(file);
+	return dir.is_dir();
+}
+
 }
 
 #endif
