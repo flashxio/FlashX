@@ -21,6 +21,7 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include <numeric>
 
 #include "sem_kmeans.h"
 #include "clusters.h"
@@ -190,6 +191,13 @@ namespace {
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
 #endif
                         g_clusters->add_member(count_it, g_kmspp_cluster_idx);
+
+                        // FIXME: Slow
+                        std::vector<vertex_id_t> all_vertices(NUM_ROWS);
+                        std::iota(all_vertices.begin(), all_vertices.end(), 0);
+                        g_kmspp_stage = DIST;
+                        // Activate all
+                        prog.activate_vertices(&all_vertices[0], NUM_ROWS);
                     } else if (g_kmspp_stage == DIST) {
                         vertex_id_t my_id = prog.get_vertex_id(*this);
                         double _dist = dist_comp(vertex,
@@ -427,24 +435,24 @@ namespace {
 
                     // Fire up K engines with 2 iters/engine
                     while (true) {
-                        // TODO: Start 1 vertex which will activate all
                         g_kmspp_stage = ADDMEAN;
 
-                        mat->start(&g_kmspp_next_cluster, 1);
+                        mat->start(&g_kmspp_next_cluster, 1,
+                            vertex_initializer::ptr(),
+                            vertex_program_creater::ptr(
+                                new kmeanspp_vertex_program_creater()));
+
+                        // skip distance comp since we picked clusters
                         mat->wait4complete();
+
 #if VERBOSE
-                        BOOST_LOG_TRIVIAL(info) << "Printing clusters after sample set_mean ...";
+                        BOOST_LOG_TRIVIAL(info) << "Printing clusters "
+                            << "after sample set_mean ...";
                         g_clusters->print_means();
 #endif
-                        // skip distance comp since we picked clusters
                         if (g_kmspp_cluster_idx+1 == K) { break; }
-                        g_kmspp_stage = DIST;
 
-                        mat->start_all(vertex_initializer::ptr(),
-                                vertex_program_creater::ptr(new kmeanspp_vertex_program_creater()));
-                        mat->wait4complete();
                         g_io_reqs += (NUM_ROWS + 1);
-
                         g_kmspp_next_cluster = kmeanspp_get_next_cluster_id(mat);
                     }
                 }
