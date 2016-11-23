@@ -30,9 +30,11 @@
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.svd <- function(x, nu, nv, tol=1e-8)
+fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
+	n <- dim(x)[1]
+	p <- dim(x)[2]
 	tx <- t(x)
 	comp.right <- FALSE
 	if (nrow(x) > ncol(x))
@@ -41,34 +43,34 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	nev <- max(nu, nv)
 	x.prod <- NULL
 	if (fm.is.sparse(x) && comp.right) {
-		n <- ncol(x)
+		size <- ncol(x)
 		multiply <- function(vec, extra) t(x) %*% (x %*% vec)
 	}
 	else if (fm.is.sparse(x)) {
-		n <- nrow(x)
+		size <- nrow(x)
 		multiply <- function(vec, extra) x %*% (t(x) %*% vec)
 	}
 	else if (comp.right) {
-		n <- ncol(x)
+		size <- ncol(x)
 		x.prod <- fm.conv.FM2R(tx %*% x)
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	else {
-		n <- nrow(x)
+		size <- nrow(x)
 		x.prod <- fm.conv.FM2R(x %*% tx)
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	# If it's a very small matrix, we can compute its eigenvalues directly.
 	# Or if we need to compute many eigenvalues, we probably should also
 	# compute its eigenvalues directly.
-	if (!is.null(x.prod) && (n < 100 || nev >= n / 2)) {
+	if (!is.null(x.prod) && (size < 100 || nev >= size / 2)) {
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[1:nev]
 		nev <- nrow(x.prod)
 		res$vectors <- fm.as.matrix(res$vectors)
 	}
 	else
-		res <- fm.eigen(multiply, nev, n, which="LM", sym=TRUE,
+		res <- fm.eigen(multiply, nev, size, which="LM", sym=TRUE,
 					  options=list(tol=tol, ncv=max(nev * 2, 5)))
 	if (fm.is.vector(res$vectors))
 		res$vectors <- fm.as.matrix(res$vectors)
