@@ -16,6 +16,7 @@ Description: FlashR extends the R programming framework. It executes R code
 LinkingTo: Rcpp
 Depends:
     R (>= 3.0),
+	RSpectra,
 	methods,
     Rcpp
 License: Apache License 2.0

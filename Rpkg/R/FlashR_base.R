@@ -1526,3 +1526,113 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 
 #' @rdname matrix
 setMethod("is.matrix", "fm", function(x) TRUE)
+
+#' Eigensolver
+#'
+#' \code{fm.eigen} computes eigenvalues/vectors of a square matrix.
+#' \code{fm.cal.residul} computes the residual of the eigenvalues.
+#'
+#' \code{fm.eigen} uses Anasazi package of Trilinos, if Anasazi is compiled
+#' into FlashR, or eigs to compute eigenvalues.
+#'
+#' The \code{which} specify which eigenvalues/vectors to compute, character
+#' constant with exactly two characters. Possible values for symmetric input
+#' matrices:
+#' \itemize{
+#' \item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
+#' \item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
+#' \item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
+#' \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
+#' }
+#'
+#' @param mul The function to perform the matrix-vector multiplication.
+#' @param k Integer. The number of eigenvalues to compute.
+#' @param which String. Selection criteria.
+#' @param sym Logical scalar, whether the input matrix is symmetric.
+#' @param options List. Additional options to the eigensolver.
+#' @param env The environment in which \code{mul} will bevaluated.
+#' @param values The eigenvalues
+#' @param vectors The eigenvectors
+#'
+#' The \code{options} argument specifies what kind of computation to perform.
+#' It is a list with the following members, which correspond directly to
+#' Anasazi parameters:
+#'
+#' solver String. The name of the eigensolver to solve the eigenproblems.
+#'				Currently, it supports three eigensolvers: KrylovSchur,
+#'				Davidson and LOBPCG. KrylovSchur is the default eigensolver.
+#'
+#' tol Numeric scalar. Stopping criterion: the relative accuracy of
+#'				the Ritz value is considered acceptable if its error is less
+#'				than \code{tol} times its estimated value.
+#'
+#' block_size Numeric scalar. The eigensolvers use a block extension of an
+#'				eigensolver algorithm. The block size determines the number
+#'				of the vectors that operate together.
+#'
+#' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
+#'
+#'
+#' @return \code{fm.eigen} returns a named list with the following members:
+#'         values: Numeric vector, the desired eigenvalues.
+#'         vectors: Numeric matrix, the desired eigenvectors as columns.
+#'         \code{fm.cal.residul} returns the corresponding residuals for
+#'         the eigenvalues.
+#' @name fm.eigen
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
+					 env = parent.frame())
+{
+	if (!sym) {
+		print("fm.eigen only supports symmetric matrices")
+		return(NULL)
+	}
+	# We only want to solve a very large eigenvalue problem with Anasazi.
+	if (is.loaded("R_FM_eigen") && n > 1000000) {
+		if (is.null(options))
+			options <- list()
+		options$nev <- k
+		options$n <- n
+		options$which <- which
+		ret <- .Call("R_FM_eigen", as.function(mul), NULL, as.logical(sym),
+					 as.list(options), PACKAGE="FlashR")
+		ret$vectors <- .new.fm(ret$vectors)
+		ret
+	}
+	else {
+		eigs.opts <- list()
+		if (!is.null(options)) {
+			if (!is.null(options[["tol"]]))
+				eigs.opts$tol <- options$tol
+			if (!is.null(options[["block_size"]])
+				&& !is.null(options[["num_blocks"]]))
+				eigs.opts$ncv <- options$block_size * options$num_blocks
+			# If we compute a small number of eigenvalues, we need a larger
+			# subspace.
+			else if (k <= 2)
+				eigs.opts$ncv <- k * 2 + 3
+			else
+				eigs.opts$ncv <- k * 2
+		}
+		eigs.fun <- function(x, extra) {
+			# TODO this might be slow
+			fm.x <- fm.as.vector(x)
+			ret <- mul(fm.x, extra)
+			# TODO this might be slow
+			as.vector(ret)
+		}
+		if (sym)
+			eigs.ret <- eigs_sym(eigs.fun, k=k, which=which, n=n, opts=eigs.opts)
+		else
+			eigs.ret <- eigs(eigs.fun, k=k, which=which, n=n, opts=eigs.opts)
+		list(values=eigs.ret$values, vectors=fm.as.matrix(eigs.ret$vectors))
+	}
+}
+
+#' @rdname fm.eigen
+fm.cal.residul <- function(mul, values, vectors)
+{
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	l2 <- sqrt(colSums(tmp * tmp))
+	fm.conv.FM2R(l2) / values
+}
