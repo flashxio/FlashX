@@ -1693,3 +1693,82 @@ fm.cal.residul <- function(mul, values, vectors)
 	l2 <- sqrt(colSums(tmp * tmp))
 	fm.conv.FM2R(l2) / values
 }
+
+#' Scaling and Centering of Matrix
+#'
+#' \code{scale} centers and/or scales the columns of a FlashMatrix matrix.
+#'
+#' The value of \code{center} determines how column centering is
+#' performed.  If \code{center} is a numeric vector with length equal to
+#' the number of columns of \code{x}, then each column of \code{x} has the
+#' corresponding value from \code{center} subtracted from it.  If \code{center}
+#' is \code{TRUE} then centering is done by subtracting the column means
+#' (omitting \code{NA}s) of \code{x} from their corresponding columns, and if
+#' \code{center} is \code{FALSE}, no centering is done.
+#'
+#' The value of \code{scale} determines how column scaling is performed
+#' (after centering).  If \code{scale} is a numeric vector with length
+#' equal to the number of columns of \code{x}, then each column of \code{x} is
+#' divided by the corresponding value from \code{scale}.  If \code{scale} is
+#' \code{TRUE} then scaling is done by dividing the (centered) columns of
+#' \code{x} by their standard deviations if \code{center} is \code{TRUE},
+#' and the root mean square otherwise.  If \code{scale} is \code{FALSE},
+#' no scaling is done.
+#'
+#' The root-mean-square for a (possibly centered) column is defined
+#' as sqrt(sum(x^2)/(n-1)), where x is a vector of the non-missing
+#' values and n is the number of non-missing values.  In the case
+#' \code{center = TRUE}, this is the same as the standard deviation, but
+#' in general it is not.
+#'
+#' @param x a FlashMatrix matrix
+#' @param center either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @param sclae either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @return a FlashMatrix matrix.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
+		  # TODO it needs to handle NA.
+		  # If the center is true, center columns by their means.
+		  if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+		  else if (!is.logical(center)) {
+			  if (length(center) != ncol(x)) {
+				  print("The length of center should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+
+		  # If scale is true and center is also true, scale by their standard
+		  # deviation.
+		  if (is.logical(scale) && scale && is.logical(center) && center) {
+			  sum.x <- fm.colSums(x, TRUE)
+			  sum.x2 <- fm.colSums(x * x, TRUE)
+			  res <- fm.materialize(sum.x, sum.x2)
+			  sum.x <- res[[1]]
+			  sum.x2 <- res[[2]]
+			  n <- nrow(x)
+			  avg <- sum.x / n
+			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  x <- fm.mapply.row(x, sd, fm.bo.div)
+		  }
+		  # If scale is true and center is false, scale by their root mean
+		  # square.
+		  else if (is.logical(scale) && scale) {
+			  sum.x2 <- fm.colSums(x * x)
+			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
+			  x <- fm.mapply.row(x, scal, fm.bo.div)
+		  }
+		  else if (!is.logical(scale)) {
+			  if (length(scale) != ncol(x)) {
+				  print("The length of scale should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, scale, fm.bo.div)
+		  }
+		  x
+})
