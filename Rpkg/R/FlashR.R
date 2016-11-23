@@ -1594,7 +1594,7 @@ fm.sgroupby <- function(obj, FUN)
 	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashR")
 	if (is.null(res))
 		return(NULL)
-	list(val=.new.fmV(res$val), Freq=.new.fmV(res$agg))
+	list(val=.new.fmV(res$val), agg=.new.fmV(res$agg))
 }
 
 #' @rdname fm.groupby

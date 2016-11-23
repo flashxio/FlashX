@@ -1318,7 +1318,11 @@ setMethod("print", signature(x = "fm.bo"), function(x)
 fm.table <- function(x)
 {
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
-	fm.sgroupby(x, count)
+	ret <- fm.sgroupby(x, count)
+	if (!is.null(ret))
+		list(val=ret$val, Freq=ret$agg)
+	else
+		NULL
 }
 
 #' Integer Vectors
