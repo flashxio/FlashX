@@ -23,9 +23,11 @@
 #' @slot ncol a numeric value indicating the number of columns.
 #' @slot type a string indicating the type of the matrix. e.g., sparse or dense.
 #' @slot ele_type a string indicating the element type in the matrix.
+#' @slot attrs a list that stores the attributes of the matrix.
 setClass("fm", representation(pointer = "externalptr", name = "character",
 							  nrow = "numeric", ncol = "numeric",
-							  type="character", ele_type="character"))
+							  type="character", ele_type="character",
+							  attrs="list"))
 
 #' An S4 class to represent a FlashMatrix vector.
 #'

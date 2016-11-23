@@ -789,6 +789,38 @@ setMethod("typeof", signature(x = "fm"), function(x) .typeof.int(x))
 #' @rdname typeof
 setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 
+#' Dimnames of an Object
+#'
+#' Retrieve or set the dimnames of a matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @param value a list that provides values for dimension names.
+#' @return \code{dimnames} return NULL if there aren't dimension names.
+#'         Otherwise, return the dimension names.
+#' @name dimnames
+NULL
+
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fm"), function(x) {
+		  if (!is.null(x@attrs[["dimnames"]]))
+			  x@attrs$dimnames
+		  else
+			  NULL
+})
+
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fm", value="list"), function(x, value) {
+		  if (is.null(x@attrs))
+			  x@attrs <- list()
+		  if (is.null(x@attrs[["dimnames"]]))
+			  x@attrs$dimnames <- list(NULL, NULL)
+		  if (length(value) != length(dim(x)))
+			  stop("length of dimnames not equal to array extent")
+		  for (i in 1:length(value))
+			  x@attrs$dimnames[[i]] <- as.character(value[[i]])
+		  x
+})
+
 #' Matrix Transpose
 #'
 #' Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
