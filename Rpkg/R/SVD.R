@@ -15,9 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#' Compute the singular-value decomposition of a large sparse matrix.
+#' Compute the singular-value decomposition on a large matrix.
 #'
-#' @param x a FlashMatrixR object
+#' The current implementation can only compute the largest eigenvalues.
+#'
+#' @param x a FlashMatrix matrix
 #' @param nu the number of left singluar vectors to be computed.
 #' @param nv the number of right singluar vectors to be computed.
 #' @param tol Stopping criterion: the relative accuracy of the Ritz value
@@ -65,14 +67,9 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 		nev <- nrow(x.prod)
 		res$vectors <- fm.as.matrix(res$vectors)
 	}
-	else if (n < 1000000) {
-		res <- arpack(multiply, sym=TRUE,
-					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
-		res$vectors <- fm.as.matrix(res$vectors)
-	}
 	else
-		res <- fm.eigen(multiply, sym=TRUE,
-					  options=list(n=n, nev=nev, tol=tol, ncv=max(nev * 2, 5), which="LM"))
+		res <- fm.eigen(multiply, nev, n, which="LM", sym=TRUE,
+					  options=list(tol=tol, ncv=max(nev * 2, 5)))
 	if (fm.is.vector(res$vectors))
 		res$vectors <- fm.as.matrix(res$vectors)
 
