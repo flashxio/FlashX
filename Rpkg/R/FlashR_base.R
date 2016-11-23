@@ -1804,3 +1804,19 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  }
 		  x
 })
+
+#' Drop Redundant Extent Information
+#'
+#' Delete the dimensions of a FlashMatrix matrix which have only one level.
+#'
+#' If the input matrix has only one row or one column, it works the same as
+#' fm.as.vector. Otherwise, it returns the original matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @return a FlashMatrix matrix or vector.
+setMethod("drop", "fm", function(x) {
+		  if (nrow(x) > 1 && ncol(x) > 1)
+			  x
+		  else
+			  fm.as.vector(x)
+})
