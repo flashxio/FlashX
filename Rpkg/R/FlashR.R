@@ -1811,28 +1811,21 @@ fm.conv.store <- function(fm, in.mem, name="")
 		.new.fm(ret)
 }
 
-#' Combine FlashR matrices by rows or columns.
+#' Combine FlashR Vectors/Matrices by Rows or Columns
 #'
-#' Take a list of FlashR matrices and combine them by Columns or rows
+#' Take a list of FlashR vectors/matrices and combine them by Columns or rows
 #' respectively.
 #'
 #' @param ... A list of FlashR matrices.
 #' @param objs A list of FlashR matrices.
 #'
-#' These functions are similar to the R counterparts: \code{rbind} and
-#' \code{cbind}.
-#' Currently, \code{fm.rbind} and \code{fm.rbind.list} only supports combining
-#' a list of wide matrices. \code{fm.cbind} and \code{fm.cbind.list} can only
-#' combine a list of tall matrices.
+#' All arguments for \code{rbind} and \code{cbind} have to be either all
+#' vectors or all matrices.
 #'
 #' @return A FlashR matrix.
 #' @name fm.bind
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.rbind <- function(...)
-{
-	args <- list(...)
-	fm.rbind.list(args)
-}
+NULL
 
 #' @name fm.bind
 fm.rbind.list <- function(objs)
@@ -1862,13 +1855,6 @@ fm.rbind.list <- function(objs)
 }
 
 #' @name fm.bind
-fm.cbind <- function(...)
-{
-	args <- list(...)
-	fm.cbind.list(args)
-}
-
-#' @name fm.bind
 fm.cbind.list <- function(objs)
 {
 	nobjs <- length(objs)
@@ -1894,6 +1880,30 @@ fm.cbind.list <- function(objs)
 	else
 		.new.fm(ret)
 }
+
+setGeneric("rbind", signature="...")
+setGeneric("cbind", signature="...")
+
+#' @name fm.bind
+setMethod("rbind", "fm", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.rbind.list(args)
+})
+#' @name fm.bind
+setMethod("rbind", "fmV", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.rbind.list(args)
+})
+#' @name fm.bind
+setMethod("cbind", "fm", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.cbind.list(args)
+})
+#' @name fm.bind
+setMethod("cbind", "fmV", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.cbind.list(args)
+})
 
 #' Conditional Element Selection
 #'
