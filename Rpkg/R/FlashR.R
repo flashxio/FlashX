@@ -449,6 +449,8 @@ fm.as.vector <- function(obj)
 	}
 	else if (is.vector(obj))
 		fm.conv.R2FM(obj)
+	else if (is.matrix(obj))
+		fm.conv.R2FM(as.vector(obj))
 	else
 		NULL
 }
@@ -456,8 +458,7 @@ fm.as.vector <- function(obj)
 #' @rdname vector
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
 #' @rdname vector
-setMethod("as.vector", signature(x = "fm"), function(x)
-		  fm.conv.FM2R(fm.as.vector(x)))
+setMethod("as.vector", signature(x = "fm"), function(x) as.vector(fm.conv.FM2R(x)))
 
 #' @rdname vector
 fm.is.vector <- function(x)
