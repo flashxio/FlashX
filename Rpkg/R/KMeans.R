@@ -29,7 +29,7 @@
 #'                 compute Euclidean distance.
 #' @return a vector that contains cluster Ids for each data point.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.KMeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
+fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
 	orig.test.na <- .env.int$fm.test.na
 	.set.test.na(FALSE)
