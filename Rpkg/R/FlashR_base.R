@@ -1531,6 +1531,59 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 #' @rdname matrix
 setMethod("is.matrix", "fm", function(x) TRUE)
 
+#' FlashMatrix Summaries
+#'
+#' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
+#'
+#' It computes the min, max, sum, mean, L1, L2, number of non-zero values if
+#' the argument is a vector, or these statistics for each column if the argument
+#' is a matrix.
+#'
+#' @param x a FlashMatrix vector or matrix.
+#' @return A list containing the following named components:
+#' \itemize{
+#' \item{min}{The minimum value}
+#' \item{max}{The maximum value}
+#' \item{mean}{The average}
+#' \item{normL1}{The L1 norm}
+#' \item{normL2}{The L2 norm}
+#' \item{numNonzeros}{The number of non-zero values}
+#' }
+#'
+fm.summary <- function(x)
+{
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
+	lazy.res <- list()
+	if (fm.is.matrix(x)) {
+		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.mat.lazy(x, 2, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.mat.lazy(x, 2, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.mat.lazy(abs(x), 2, fm.bo.add)
+		lazy.res[[5]] <- fm.agg.mat.lazy(x * x, 2, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.mat.lazy(x != 0, 2, fm.bo.add)
+	}
+	else if (fm.is.vector(x)) {
+		lazy.res[[1]] <- fm.agg.lazy(x, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.lazy(x, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.lazy(x, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.lazy(abs(x), fm.bo.add)
+		lazy.res[[5]] <- fm.agg.lazy(x * x, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
+	}
+	else {
+		print("fm.summary only works on a FlashMatrix object")
+		return(NULL)
+	}
+	res <- fm.materialize.list(lazy.res)
+	res <- lapply(res, function(o) fm.conv.FM2R(o))
+	mean <- res[[3]]/nrow(x)
+	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
+	.set.test.na(orig.test.na)
+	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
+		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
+}
+
 #' Eigensolver
 #'
 #' \code{fm.eigen} computes eigenvalues/vectors of a square matrix.
