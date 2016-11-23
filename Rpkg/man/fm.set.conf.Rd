@@ -2,6 +2,7 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.set.conf}
 \alias{fm.print.conf}
+\alias{fm.print.features}
 \alias{fm.set.conf}
 \alias{fm.set.log.level}
 \title{Reconfigure FlashMatrix}
@@ -11,6 +12,8 @@ fm.set.conf(conf.file)
 fm.set.log.level(level)
 
 fm.print.conf()
+
+fm.print.features()
 }
 \arguments{
 \item{conf.file}{The configuration file.}
@@ -21,6 +24,7 @@ fm.print.conf()
 \code{fm.set.conf} reconfigures FlashMatrix with the settings in
 the configuration file. \code{fm.print.conf} prints the current configurations.
 \code{fm.set.log.level} sets what levels of messages should be logged.
+\code{fm.print.features} prints the features compiled into FlashR.
 }
 \details{
 The configuration file contains a list of key-value pairs. Each line in

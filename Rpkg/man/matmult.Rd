@@ -2,9 +2,11 @@
 % Please edit documentation in R/FlashR_base.R
 \docType{methods}
 \name{matmult}
+\alias{\%*\%,ANY,fm-method}
 \alias{\%*\%,fm,ANY-method}
 \alias{\%*\%,fm,fm-method}
 \alias{\%*\%,fm,fmV-method}
+\alias{\%*\%,fmV,fm-method}
 \alias{matmult}
 \title{Matrix multiplication}
 \usage{
@@ -12,7 +14,11 @@
 
 \S4method{\%*\%}{fm,fmV}(x, y)
 
+\S4method{\%*\%}{fmV,fm}(x, y)
+
 \S4method{\%*\%}{fm,ANY}(x, y)
+
+\S4method{\%*\%}{ANY,fm}(x, y)
 }
 \arguments{
 \item{x}{a FlashMatrix matrix.}
