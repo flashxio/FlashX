@@ -64,16 +64,14 @@ struct timeval graph_start;
 class global_max
 {
 	volatile size_t value;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 public:
 	global_max() {
 		value = 0;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	global_max(size_t init) {
 		value = init;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	bool update(size_t new_v) {
@@ -81,12 +79,12 @@ public:
 			return false;
 
 		bool ret = false;
-		pthread_spin_lock(&lock);
+		lock.lock();
 		if (new_v > value) {
 			value = new_v;
 			ret = true;
 		}
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return ret;
 	}
 
@@ -108,7 +106,7 @@ class scan_collection
 {
 	bool sorted;
 	std::vector<vertex_scan> scans;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 
 	class greater {
 	public:
@@ -118,7 +116,6 @@ class scan_collection
 	};
 public:
 	scan_collection() {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		sorted = false;
 	}
 
@@ -126,28 +123,28 @@ public:
 	 * Get the ith largest scan.
 	 */
 	vertex_scan get(int idx) {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		if (!sorted) {
 			// It needs to stored in the descending order on scan.
 			std::sort(scans.begin(), scans.end(), greater());
 			sorted = true;
 		}
 		vertex_scan ret = scans[idx];
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return ret;
 	}
 
 	void add(vertex_id_t id, size_t scan) {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		sorted = false;
 		scans.push_back(vertex_scan(id, scan));
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 	}
 
 	size_t get_size() {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		size_t ret = scans.size();
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return ret;
 	}
 
@@ -468,14 +465,13 @@ class part_topK_scan_vertex: public part_compute_vertex
 	size_t est_local;
 	int64_t part_local;
 	scan_runtime_data_t *local_data;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 public:
 	part_topK_scan_vertex(vertex_id_t id, int part_id): part_compute_vertex(id,
 			part_id) {
 		est_local = 0;
 		part_local = -1;
 		local_data = NULL;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	void run(vertex_program &prog);
@@ -497,7 +493,7 @@ void part_topK_scan_vertex::run_on_message(vertex_program &prog,
 		const vertex_message &msg1)
 {
 	const part_scan_msg &msg = (const part_scan_msg &) msg1;
-	pthread_spin_lock(&lock);
+	lock.lock();
 	switch (msg.get_type()) {
 		case part_scan_type::EST_LOCAL:
 			est_local = msg.get();
@@ -512,7 +508,7 @@ void part_topK_scan_vertex::run_on_message(vertex_program &prog,
 		default:
 			ABORT_MSG("wrong message type");
 	}
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 }
 
 void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
@@ -523,15 +519,15 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 
 	topK_scan_vertex &self_v
 		= (topK_scan_vertex &) prog.get_graph().get_vertex(get_id());
-	pthread_spin_lock(&lock);
+	lock.lock();
 	if (est_local == 0)
 		est_local = ::get_est_local_scan(prog.get_graph(), self_v, vertex);
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	broadcast_vpart(part_scan_msg(part_scan_type::EST_LOCAL, est_local));
 	if (est_local < max_scan.get())
 		return;
 
-	pthread_spin_lock(&lock);
+	lock.lock();
 	if (local_data == NULL) {
 		local_data = create_runtime(prog.get_graph(), vertex);
 		assert(!local_data->neighbors->empty());
@@ -539,7 +535,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	}
 	else
 		assert(local_data->local_scan == 0);
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	// TODO this is absolute hacking.
 	// There is no guarantee that the message will be delivered.
 	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
