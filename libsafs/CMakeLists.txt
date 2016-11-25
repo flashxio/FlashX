@@ -10,7 +10,6 @@ add_library(safs STATIC
 	io_interface.cpp
 	native_file.cpp
 	remote_access.cpp
-	timer.cpp
 	cache_config.cpp
 	disk_read_thread.cpp
 	io_request.cpp
