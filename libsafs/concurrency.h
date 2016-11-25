@@ -89,8 +89,12 @@ public:
 class spin_lock
 {
 private:    //private copy-ctor and assignment operator ensure the lock never gets copied, which might cause issues.
+#if 0
+	// We can't just simply disable these two. The code won't be compiled.
+	// Will it cause problems if we allow them?
 	spin_lock operator=(const spin_lock & asdf);
 	spin_lock(const spin_lock & asdf);
+#endif
 #ifdef __APPLE__
 	OSSpinLock m_lock;
 public:
