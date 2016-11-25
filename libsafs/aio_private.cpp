@@ -303,11 +303,11 @@ void aio_complete_thread::process_completed_reqs(thread_callback_s *tcbs[],
 	else {
 		// We should try to invoke for as many requests as possible,
 		// so the upper layer has the opportunity to optimize the request completion.
-		std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
+		std::unordered_map<io_interface *, std::vector<io_request *> > map;
 		for (int i = 0; i < num; i++) {
 			thread_callback_s *tcb = tcbs[i];
 			std::vector<io_request *> *v;
-			std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
+			std::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
 			io_interface *io = tcb->req.get_io();
 			if ((it = map.find(io)) == map.end()) {
 				map.insert(std::pair<io_interface *, std::vector<io_request *> >(
@@ -319,7 +319,7 @@ void aio_complete_thread::process_completed_reqs(thread_callback_s *tcbs[],
 
 			v->push_back(&tcb->req);
 		}
-		for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
+		for (std::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
 				= map.begin(); it != map.end(); it++) {
 			io_interface *io = it->first;
 			std::vector<io_request *> *v = &it->second;

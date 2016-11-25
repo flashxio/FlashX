@@ -239,11 +239,10 @@ class thread_safe_page: public page
 
 	original_io_request *reqs;
 	int node_id;
-	pthread_spinlock_t _lock;
+	spin_lock _lock;
 
 public:
 	thread_safe_page(): page() {
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -255,7 +254,6 @@ public:
 
 	thread_safe_page(const page_id_t &pg_id, char *data,
 			int node_id): page(pg_id, data) {
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -266,7 +264,6 @@ public:
 	}
 
 	~thread_safe_page() {
-		pthread_spin_destroy(&_lock);
 #ifdef PTHREAD_WAIT
 		pthread_mutex_destroy(&mutex);
 		pthread_cond_destroy(&ready_cond);
@@ -355,14 +352,14 @@ public:
 	}
 
 	void lock() {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 //		int old;
 //		do {
 //			old = __sync_fetch_and_or(&flags, 0x1 << LOCK_BIT);
 //		} while (old & (0x1 << LOCK_BIT));
 	}
 	void unlock() {
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 //		set_flags_bit(LOCK_BIT, false);
 	}
 

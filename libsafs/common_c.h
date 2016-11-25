@@ -35,6 +35,16 @@
 #define ROUND(off, base) (((long) off) & (~((long) (base) - 1)))
 #define ROUNDUP(off, base) (((long) off + (base) - 1) & (~((long) (base) - 1)))
 
+static inline void print_addr_sym(void *str)
+{
+#ifdef __APPLE__
+#else
+	char syscom[256];
+	sprintf(syscom,"addr2line %p -e %s", str, program_invocation_name);
+	int ret __attribute__((unused)) = system(syscom);
+#endif
+}
+
 #define PRINT_BACKTRACE()							\
 	do {											\
 		void *buf[100];								\
@@ -46,10 +56,8 @@
 			exit(EXIT_FAILURE);						\
 		}											\
 		for (int i = 0; i < nptrs; i++)	{			\
-			char syscom[256];						\
 			printf("[bt] #%d %s\n", i, strings[i]);	\
-			sprintf(syscom,"addr2line %p -e %s", buf[i], program_invocation_name);\
-			int ret __attribute__((unused)) = system(syscom);	\
+			print_addr_sym(buf[i]);			\
 		}											\
 		free(strings);								\
 	} while (0)

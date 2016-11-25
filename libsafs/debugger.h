@@ -43,7 +43,7 @@ class debugger
 	// We have to use map instead of unordered_map here because
 	// we want to preserve the order of the tasks.
 	std::map<int, debug_task *> tasks;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 	atomic_integer task_id_gen;
 public:
 	debugger();
@@ -52,16 +52,16 @@ public:
 
 	int register_task(debug_task *task) {
 		int id = task_id_gen.inc(1);
-		pthread_spin_lock(&lock);
+		lock.lock();
 		tasks.insert(std::pair<int, debug_task *>(id, task));
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return id;
 	}
 
 	void remove_task(int task_id) {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		tasks.erase(task_id);
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 	}
 
 	void run();

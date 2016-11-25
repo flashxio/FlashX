@@ -59,7 +59,6 @@ static void set_enable_debug_signal()
 
 debugger::debugger()
 {
-	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	set_enable_debug_signal();
 }
 
@@ -73,9 +72,9 @@ debugger::~debugger()
 
 void debugger::run()
 {
-	pthread_spin_lock(&lock);
+	lock.lock();
 	std::map<int, debug_task *> task_copies = tasks;
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	for (std::map<int, debug_task *>::const_iterator it
 			= task_copies.begin(); it != task_copies.end(); it++) {
 		it->second->run();

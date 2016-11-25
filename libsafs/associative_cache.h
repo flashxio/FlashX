@@ -231,7 +231,7 @@ class hash_cell
 	int hash;
 	atomic_flags<int> flags;
 
-	pthread_spinlock_t _lock;
+	spin_lock _lock;
 	page_cell<thread_safe_page> buf;
 	associative_cache *table;
 #ifdef USE_LRU
@@ -257,7 +257,6 @@ class hash_cell
 	void init() {
 		table = NULL;
 		hash = -1;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 		num_accesses = 0;
 		num_evictions = 0;
 	}
@@ -267,7 +266,6 @@ class hash_cell
 	}
 
 	~hash_cell() {
-		pthread_spin_destroy(&_lock);
 	}
 
 public:
