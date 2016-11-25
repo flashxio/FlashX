@@ -31,6 +31,7 @@
 #include <boost/assert.hpp>
 
 #include "common.h"
+#include "concurrency.h"
 
 template<class T>
 class queue_interface

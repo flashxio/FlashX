@@ -1,6 +1,7 @@
 useDynLib(FlashR)
 
 import(Rcpp)
+import(RSpectra)
 importFrom(methods, new)
 importFrom("stats", "runif")
 

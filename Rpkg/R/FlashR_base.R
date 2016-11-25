@@ -789,6 +789,38 @@ setMethod("typeof", signature(x = "fm"), function(x) .typeof.int(x))
 #' @rdname typeof
 setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 
+#' Dimnames of an Object
+#'
+#' Retrieve or set the dimnames of a matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @param value a list that provides values for dimension names.
+#' @return \code{dimnames} return NULL if there aren't dimension names.
+#'         Otherwise, return the dimension names.
+#' @name dimnames
+NULL
+
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fm"), function(x) {
+		  if (!is.null(x@attrs[["dimnames"]]))
+			  x@attrs$dimnames
+		  else
+			  NULL
+})
+
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fm", value="list"), function(x, value) {
+		  if (is.null(x@attrs))
+			  x@attrs <- list()
+		  if (is.null(x@attrs[["dimnames"]]))
+			  x@attrs$dimnames <- list(NULL, NULL)
+		  if (length(value) != length(dim(x)))
+			  stop("length of dimnames not equal to array extent")
+		  for (i in 1:length(value))
+			  x@attrs$dimnames[[i]] <- as.character(value[[i]])
+		  x
+})
+
 #' Matrix Transpose
 #'
 #' Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
@@ -1318,7 +1350,11 @@ setMethod("print", signature(x = "fm.bo"), function(x)
 fm.table <- function(x)
 {
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
-	fm.sgroupby(x, count)
+	ret <- fm.sgroupby(x, count)
+	if (!is.null(ret))
+		list(val=ret$val, Freq=ret$agg)
+	else
+		NULL
 }
 
 #' Integer Vectors
@@ -1526,3 +1562,261 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 
 #' @rdname matrix
 setMethod("is.matrix", "fm", function(x) TRUE)
+
+#' FlashMatrix Summaries
+#'
+#' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
+#'
+#' It computes the min, max, sum, mean, L1, L2, number of non-zero values if
+#' the argument is a vector, or these statistics for each column if the argument
+#' is a matrix.
+#'
+#' @param x a FlashMatrix vector or matrix.
+#' @return A list containing the following named components:
+#' \itemize{
+#' \item{min}{The minimum value}
+#' \item{max}{The maximum value}
+#' \item{mean}{The average}
+#' \item{normL1}{The L1 norm}
+#' \item{normL2}{The L2 norm}
+#' \item{numNonzeros}{The number of non-zero values}
+#' }
+#'
+fm.summary <- function(x)
+{
+	orig.test.na <- .env.int$fm.test.na
+	.set.test.na(FALSE)
+	lazy.res <- list()
+	if (fm.is.matrix(x)) {
+		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.mat.lazy(x, 2, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.mat.lazy(x, 2, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.mat.lazy(abs(x), 2, fm.bo.add)
+		lazy.res[[5]] <- fm.agg.mat.lazy(x * x, 2, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.mat.lazy(x != 0, 2, fm.bo.add)
+	}
+	else if (fm.is.vector(x)) {
+		lazy.res[[1]] <- fm.agg.lazy(x, fm.bo.min)
+		lazy.res[[2]] <- fm.agg.lazy(x, fm.bo.max)
+		lazy.res[[3]] <- fm.agg.lazy(x, fm.bo.add)
+		lazy.res[[4]] <- fm.agg.lazy(abs(x), fm.bo.add)
+		lazy.res[[5]] <- fm.agg.lazy(x * x, fm.bo.add)
+		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
+	}
+	else {
+		print("fm.summary only works on a FlashMatrix object")
+		return(NULL)
+	}
+	res <- fm.materialize.list(lazy.res)
+	res <- lapply(res, function(o) fm.conv.FM2R(o))
+	mean <- res[[3]]/nrow(x)
+	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
+	.set.test.na(orig.test.na)
+	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
+		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
+}
+
+#' Eigensolver
+#'
+#' \code{fm.eigen} computes eigenvalues/vectors of a square matrix.
+#' \code{fm.cal.residul} computes the residual of the eigenvalues.
+#'
+#' \code{fm.eigen} uses Anasazi package of Trilinos, if Anasazi is compiled
+#' into FlashR, or eigs to compute eigenvalues.
+#'
+#' The \code{which} specify which eigenvalues/vectors to compute, character
+#' constant with exactly two characters. Possible values for symmetric input
+#' matrices:
+#' \itemize{
+#' \item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
+#' \item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
+#' \item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
+#' \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
+#' }
+#'
+#' @param mul The function to perform the matrix-vector multiplication.
+#' @param k Integer. The number of eigenvalues to compute.
+#' @param which String. Selection criteria.
+#' @param sym Logical scalar, whether the input matrix is symmetric.
+#' @param options List. Additional options to the eigensolver.
+#' @param env The environment in which \code{mul} will bevaluated.
+#' @param values The eigenvalues
+#' @param vectors The eigenvectors
+#'
+#' The \code{options} argument specifies what kind of computation to perform.
+#' It is a list with the following members, which correspond directly to
+#' Anasazi parameters:
+#'
+#' solver String. The name of the eigensolver to solve the eigenproblems.
+#'				Currently, it supports three eigensolvers: KrylovSchur,
+#'				Davidson and LOBPCG. KrylovSchur is the default eigensolver.
+#'
+#' tol Numeric scalar. Stopping criterion: the relative accuracy of
+#'				the Ritz value is considered acceptable if its error is less
+#'				than \code{tol} times its estimated value.
+#'
+#' block_size Numeric scalar. The eigensolvers use a block extension of an
+#'				eigensolver algorithm. The block size determines the number
+#'				of the vectors that operate together.
+#'
+#' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
+#'
+#'
+#' @return \code{fm.eigen} returns a named list with the following members:
+#'         values: Numeric vector, the desired eigenvalues.
+#'         vectors: Numeric matrix, the desired eigenvectors as columns.
+#'         \code{fm.cal.residul} returns the corresponding residuals for
+#'         the eigenvalues.
+#' @name fm.eigen
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
+					 env = parent.frame())
+{
+	if (!sym) {
+		print("fm.eigen only supports symmetric matrices")
+		return(NULL)
+	}
+	# We only want to solve a very large eigenvalue problem with Anasazi.
+	if (is.loaded("R_FM_eigen") && n > 1000000) {
+		if (is.null(options))
+			options <- list()
+		options$nev <- k
+		options$n <- n
+		options$which <- which
+		ret <- .Call("R_FM_eigen", as.function(mul), NULL, as.logical(sym),
+					 as.list(options), PACKAGE="FlashR")
+		ret$vectors <- .new.fm(ret$vectors)
+		ret
+	}
+	else {
+		eigs.opts <- list()
+		if (!is.null(options)) {
+			if (!is.null(options[["tol"]]))
+				eigs.opts$tol <- options$tol
+			if (!is.null(options[["block_size"]])
+				&& !is.null(options[["num_blocks"]]))
+				eigs.opts$ncv <- options$block_size * options$num_blocks
+			# If we compute a small number of eigenvalues, we need a larger
+			# subspace.
+			else if (k <= 2)
+				eigs.opts$ncv <- k * 2 + 3
+			else
+				eigs.opts$ncv <- k * 2
+		}
+		eigs.fun <- function(x, extra) {
+			# TODO this might be slow
+			fm.x <- fm.as.vector(x)
+			ret <- mul(fm.x, extra)
+			# TODO this might be slow
+			as.vector(ret)
+		}
+		if (sym)
+			eigs.ret <- eigs_sym(eigs.fun, k=k, which=which, n=n, opts=eigs.opts)
+		else
+			eigs.ret <- eigs(eigs.fun, k=k, which=which, n=n, opts=eigs.opts)
+		list(values=eigs.ret$values, vectors=fm.as.matrix(eigs.ret$vectors))
+	}
+}
+
+#' @rdname fm.eigen
+fm.cal.residul <- function(mul, values, vectors)
+{
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	l2 <- sqrt(colSums(tmp * tmp))
+	fm.conv.FM2R(l2) / values
+}
+
+#' Scaling and Centering of Matrix
+#'
+#' \code{scale} centers and/or scales the columns of a FlashMatrix matrix.
+#'
+#' The value of \code{center} determines how column centering is
+#' performed.  If \code{center} is a numeric vector with length equal to
+#' the number of columns of \code{x}, then each column of \code{x} has the
+#' corresponding value from \code{center} subtracted from it.  If \code{center}
+#' is \code{TRUE} then centering is done by subtracting the column means
+#' (omitting \code{NA}s) of \code{x} from their corresponding columns, and if
+#' \code{center} is \code{FALSE}, no centering is done.
+#'
+#' The value of \code{scale} determines how column scaling is performed
+#' (after centering).  If \code{scale} is a numeric vector with length
+#' equal to the number of columns of \code{x}, then each column of \code{x} is
+#' divided by the corresponding value from \code{scale}.  If \code{scale} is
+#' \code{TRUE} then scaling is done by dividing the (centered) columns of
+#' \code{x} by their standard deviations if \code{center} is \code{TRUE},
+#' and the root mean square otherwise.  If \code{scale} is \code{FALSE},
+#' no scaling is done.
+#'
+#' The root-mean-square for a (possibly centered) column is defined
+#' as sqrt(sum(x^2)/(n-1)), where x is a vector of the non-missing
+#' values and n is the number of non-missing values.  In the case
+#' \code{center = TRUE}, this is the same as the standard deviation, but
+#' in general it is not.
+#'
+#' @param x a FlashMatrix matrix
+#' @param center either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @param sclae either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @return a FlashMatrix matrix.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
+		  # TODO it needs to handle NA.
+		  # If the center is true, center columns by their means.
+		  if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+		  else if (!is.logical(center)) {
+			  if (length(center) != ncol(x)) {
+				  print("The length of center should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+
+		  # If scale is true and center is also true, scale by their standard
+		  # deviation.
+		  if (is.logical(scale) && scale && is.logical(center) && center) {
+			  sum.x <- fm.colSums(x, TRUE)
+			  sum.x2 <- fm.colSums(x * x, TRUE)
+			  res <- fm.materialize(sum.x, sum.x2)
+			  sum.x <- res[[1]]
+			  sum.x2 <- res[[2]]
+			  n <- nrow(x)
+			  avg <- sum.x / n
+			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  x <- fm.mapply.row(x, sd, fm.bo.div)
+		  }
+		  # If scale is true and center is false, scale by their root mean
+		  # square.
+		  else if (is.logical(scale) && scale) {
+			  sum.x2 <- fm.colSums(x * x)
+			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
+			  x <- fm.mapply.row(x, scal, fm.bo.div)
+		  }
+		  else if (!is.logical(scale)) {
+			  if (length(scale) != ncol(x)) {
+				  print("The length of scale should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, scale, fm.bo.div)
+		  }
+		  x
+})
+
+#' Drop Redundant Extent Information
+#'
+#' Delete the dimensions of a FlashMatrix matrix which have only one level.
+#'
+#' If the input matrix has only one row or one column, it works the same as
+#' fm.as.vector. Otherwise, it returns the original matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @return a FlashMatrix matrix or vector.
+setMethod("drop", "fm", function(x) {
+		  if (nrow(x) > 1 && ncol(x) > 1)
+			  x
+		  else
+			  fm.as.vector(x)
+})

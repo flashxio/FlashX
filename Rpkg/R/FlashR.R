@@ -23,9 +23,11 @@
 #' @slot ncol a numeric value indicating the number of columns.
 #' @slot type a string indicating the type of the matrix. e.g., sparse or dense.
 #' @slot ele_type a string indicating the element type in the matrix.
+#' @slot attrs a list that stores the attributes of the matrix.
 setClass("fm", representation(pointer = "externalptr", name = "character",
 							  nrow = "numeric", ncol = "numeric",
-							  type="character", ele_type="character"))
+							  type="character", ele_type="character",
+							  attrs="list"))
 
 #' An S4 class to represent a FlashMatrix vector.
 #'
@@ -449,6 +451,8 @@ fm.as.vector <- function(obj)
 	}
 	else if (is.vector(obj))
 		fm.conv.R2FM(obj)
+	else if (is.matrix(obj))
+		fm.conv.R2FM(as.vector(obj))
 	else
 		NULL
 }
@@ -456,8 +460,7 @@ fm.as.vector <- function(obj)
 #' @rdname vector
 setMethod("as.vector", signature(x = "fmV"), function(x) fm.conv.FM2R(x))
 #' @rdname vector
-setMethod("as.vector", signature(x = "fm"), function(x)
-		  fm.conv.FM2R(fm.as.vector(x)))
+setMethod("as.vector", signature(x = "fm"), function(x) as.vector(fm.conv.FM2R(x)))
 
 #' @rdname vector
 fm.is.vector <- function(x)
@@ -1593,7 +1596,7 @@ fm.sgroupby <- function(obj, FUN)
 	res <- .Call("R_FM_sgroupby", obj, FUN, PACKAGE="FlashR")
 	if (is.null(res))
 		return(NULL)
-	list(val=.new.fmV(res$val), Freq=.new.fmV(res$agg))
+	list(val=.new.fmV(res$val), agg=.new.fmV(res$agg))
 }
 
 #' @rdname fm.groupby
@@ -1811,138 +1814,21 @@ fm.conv.store <- function(fm, in.mem, name="")
 		.new.fm(ret)
 }
 
-#' Eigensolver
+#' Combine FlashR Vectors/Matrices by Rows or Columns
 #'
-#' Compute eigenvalues/vectors of the adjacency matrix of an undirected graph.
-#'
-#' This eigensolver is powered by Anasazi package of Trilinos.
-#'
-#' @param func The function to perform the matrix-vector multiplication.
-#' @param extra Extra argument to supply to \code{func}.
-#' @param sym Logical scalar, whether the input matrix is symmetric.
-#' @param options Options to Anasazi.
-#' @param env The environment in which \code{func} will bevaluated.
-#'
-#' The \code{options} argument specifies what kind of computation to perform.
-#' It is a list with the following members, which correspond directly to
-#' Anasazi parameters:
-#'
-#' nev Numeric scalar. The number of eigenvalues to be computed.
-#'
-#' solver String. The name of the eigensolver to solve the eigenproblems.
-#'				Currently, it supports three eigensolvers: KrylovSchur,
-#'				Davidson and LOBPCG. KrylovSchur is the default eigensolver.
-#'
-#' tol Numeric scalar. Stopping criterion: the relative accuracy of
-#'				the Ritz value is considered acceptable if its error is less
-#'				than \code{tol} times its estimated value.
-#'
-#' block_size Numeric scalar. The eigensolvers use a block extension of an
-#'				eigensolver algorithm. The block size determines the number
-#'				of the vectors that operate together.
-#'
-#' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
-#'
-#' which Specify which eigenvalues/vectors to compute, character
-#'              constant with exactly two characters.
-#' Possible values for symmetric input matrices:
-#' \itemize{
-#' \item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
-#' \item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
-#' \item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
-#' \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
-#' }
-#'
-#' @return A named list with the following members:
-#'         values: Numeric vector, the desired eigenvalues.
-#'         vectors: Numeric matrix, the desired eigenvectors as columns.
-#' @name fm.eigen
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.eigen <- function(func, extra=NULL, sym=TRUE, options=NULL,
-					 env = parent.frame())
-{
-	if (!sym) {
-		print("fm.eigen only supports symmetric matrices")
-		return(NULL)
-	}
-	if (is.loaded("R_FM_eigen")) {
-		ret <- .Call("R_FM_eigen", as.function(func), extra, as.logical(sym),
-					 as.list(options), PACKAGE="FlashR")
-		ret$vectors <- .new.fm(ret$vectors)
-		ret
-	}
-	else {
-		arpack.opts <- arpack_defaults
-		if (!is.null(options)) {
-			if (!is.null(options[["n"]]))
-				arpack.opts$n <- options$n
-			if (!is.null(options[["nev"]]))
-				arpack.opts$nev <- options$nev
-			if (!is.null(options[["tol"]]))
-				arpack.opts$tol <- options$tol
-			if (!is.null(options[["block_size"]])
-				&& !is.null(options[["num_blocks"]]))
-				arpack.opts$ncv <- options$block_size * options$num_blocks
-			# If we compute a small number of eigenvalues, we need a larger
-			# subspace.
-			else if (arpack.opts$nev <= 2)
-				arpack.opts$ncv <- arpack.opts$nev * 2 + 3
-			else
-				arpack.opts$ncv <- arpack.opts$nev * 2
-			if (!is.null(options[["which"]]))
-				arpack.opts$which <- options$which
-		}
-		arpack.fun <- function(x, extra) {
-			# TODO this might be slow
-			fm.x <- fm.as.vector(x)
-			ret <- func(fm.x, extra)
-			# TODO this might be slow
-			as.vector(ret)
-		}
-		arpack.ret <- arpack(arpack.fun, extra, sym, arpack.opts, env)
-		list(values=arpack.ret$values, vectors=fm.as.matrix(arpack.ret$vectors),
-			 options=arpack.ret$options)
-	}
-}
-
-#' Compute the residual of the eigenvalues.
-#'
-#' @param mul The multiply function that perform the matrix-vector multiplication.
-#' @param values The eigenvalues
-#' @param vectors The eigenvectors
-#' @return The corresponding residuals for the eigenvalues.
-#'
-#' @name fm.eigen
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.cal.residul <- function(mul, values, vectors)
-{
-	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
-	l2 <- sqrt(colSums(tmp * tmp))
-	fm.conv.FM2R(l2) / values
-}
-
-#' Combine FlashR matrices by rows or columns.
-#'
-#' Take a list of FlashR matrices and combine them by Columns or rows
+#' Take a list of FlashR vectors/matrices and combine them by Columns or rows
 #' respectively.
 #'
 #' @param ... A list of FlashR matrices.
 #' @param objs A list of FlashR matrices.
 #'
-#' These functions are similar to the R counterparts: \code{rbind} and
-#' \code{cbind}.
-#' Currently, \code{fm.rbind} and \code{fm.rbind.list} only supports combining
-#' a list of wide matrices. \code{fm.cbind} and \code{fm.cbind.list} can only
-#' combine a list of tall matrices.
+#' All arguments for \code{rbind} and \code{cbind} have to be either all
+#' vectors or all matrices.
 #'
 #' @return A FlashR matrix.
 #' @name fm.bind
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.rbind <- function(...)
-{
-	args <- list(...)
-	fm.rbind.list(args)
-}
+NULL
 
 #' @name fm.bind
 fm.rbind.list <- function(objs)
@@ -1972,13 +1858,6 @@ fm.rbind.list <- function(objs)
 }
 
 #' @name fm.bind
-fm.cbind <- function(...)
-{
-	args <- list(...)
-	fm.cbind.list(args)
-}
-
-#' @name fm.bind
 fm.cbind.list <- function(objs)
 {
 	nobjs <- length(objs)
@@ -2004,6 +1883,30 @@ fm.cbind.list <- function(objs)
 	else
 		.new.fm(ret)
 }
+
+setGeneric("rbind", signature="...")
+setGeneric("cbind", signature="...")
+
+#' @name fm.bind
+setMethod("rbind", "fm", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.rbind.list(args)
+})
+#' @name fm.bind
+setMethod("rbind", "fmV", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.rbind.list(args)
+})
+#' @name fm.bind
+setMethod("cbind", "fm", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.cbind.list(args)
+})
+#' @name fm.bind
+setMethod("cbind", "fmV", function(..., deparse.level = 1) {
+		  args <- list(...)
+		  fm.cbind.list(args)
+})
 
 #' Conditional Element Selection
 #'

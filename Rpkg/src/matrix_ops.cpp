@@ -637,17 +637,13 @@ void init_apply_ops()
 	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<bool>()));
 	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<int>()));
 	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<double>()));
-	bool ret = register_apply_op("rank", ops);
-	if (!ret)
-		fprintf(stderr, "can't register rank apply operator\n");
+	register_apply_op("rank", ops);
 
 	ops.clear();
 	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<bool>()));
 	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<int>()));
 	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<double>()));
-	ret = register_apply_op("sort", ops);
-	if (!ret)
-		fprintf(stderr, "can't register sort apply operator\n");
+	register_apply_op("sort", ops);
 }
 
 arr_apply_operate::const_ptr get_apply_op(SEXP pfun,
