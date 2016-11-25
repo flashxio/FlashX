@@ -22,6 +22,7 @@
 
 #include <memory>
 
+#include "concurrency.h"
 #include "container.h"
 #include "io_request.h"
 
