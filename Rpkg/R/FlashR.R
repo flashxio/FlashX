@@ -161,22 +161,26 @@ fm.exist.matrix <- function(name)
 	.Call("R_FM_exist_matrix", as.character(name), PACKAGE="FlashR")
 }
 
-#' Load a sparse matrix to FlashR.
+#' Load a matrix to FlashR.
 #'
-#' Load a sparse matrix to FlashR from difference sources.
-#' 
-#' \code{fm.get.dense.matrix} gets a FlashMatrix dense matrix from SAFS.
-#'
+#' There are many different ways of loading a matrix to FlashR.
 #' \code{fm.load.dense.matrix} loads a dense matrix in the text format from
 #' the Linux filesystem.
-#'
 #' \code{fm.load.dense.matrix.bin} loads a dense matrix in the binary format
 #' from the Linux filesystem.
-#'
 #' \code{fm.load.sparse.matrix} loads a FlashMatrix sparse matrix from files.
 #' The matrix in the file is in the FlashMatrix format.
+#' \code{fm.get.dense.matrix} returns a named dense matrix that has already
+#' been loaded to FlashR.
 #'
-#' @param name a string indicating the name of the dense matrix in the system.
+#' If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
+#' vector/matrix will be kept on disks persistently. That is, even if a user
+#' exits from R, the vector/matrix will still be kept on disks. A user can
+#' access to the dense matrix with \code{fm.get.dense.matrix} the next time
+#' when he/she opens FlashR.
+#'
+#' @param src.file a string that indicates the file in the Linux filesystem
+#'        that stores data to be loaded to FlashR.
 #' @param spm The file that stores the sparse matrix.
 #' @param spm.idx The file that stores the index of the sparse matrix.
 #' @param t.spm The file that stores the transpose of the sparse matrix.
@@ -188,10 +192,14 @@ fm.exist.matrix <- function(name)
 #' @param ncol the number of columns in the binary dense matrix.
 #' @param byrow a logical value indicating if the data in the binary matrix
 #'              is stored by rows.
-#' @param mat.name a string indicating the name of the matrix to be loaded.
+#' @param name a string indicating the name of the dense matrix after being
+#'        loaded to FlashR.
 #' @return a FlashMatrix matrix.
 #' @name fm.get.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
+NULL
+
+#' @rdname fm.get.matrix
 fm.get.dense.matrix <- function(name)
 {
 	stopifnot(!is.null(name))
@@ -201,27 +209,27 @@ fm.get.dense.matrix <- function(name)
 }
 
 #' @rdname fm.get.matrix
-fm.load.dense.matrix <- function(name, in.mem, ele.type="D", delim=",",
-								 ncol=.Machine$integer.max, mat.name="")
+fm.load.dense.matrix <- function(src.file, in.mem, ele.type="D", delim=",",
+								 ncol=.Machine$integer.max, name="")
 {
-	stopifnot(!is.null(name))
+	stopifnot(!is.null(src.file))
 	if (is.double(ncol))
 		ncol = as.integer(ncol)
-	if (is.character(name))
-		name <- c(name)
-	m <- .Call("R_FM_load_dense_matrix", as.character(name), as.logical(in.mem),
+	if (is.character(src.file))
+		src.file <- c(src.file)
+	m <- .Call("R_FM_load_dense_matrix", as.character(src.file), as.logical(in.mem),
 			   as.character(ele.type), as.character(delim),
-			   ncol=ncol, as.character(mat.name), PACKAGE="FlashR")
+			   ncol=ncol, as.character(name), PACKAGE="FlashR")
 	.new.fm(m)
 }
 
 #' @rdname fm.get.matrix
-fm.load.dense.matrix.bin <- function(name, in.mem, nrow, ncol, byrow, ele.type,
-									 mat.name="")
+fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.type,
+									 name="")
 {
-	m <- .Call("R_FM_load_dense_matrix_bin", as.character(name),
+	m <- .Call("R_FM_load_dense_matrix_bin", as.character(src.file),
 			   as.logical(in.mem), as.double(nrow), as.double(ncol),
-			   as.logical(byrow), as.character(ele.type), as.character(mat.name),
+			   as.logical(byrow), as.character(ele.type), as.character(name),
 			   PACKAGE="FlashR")
 	.new.fm(m)
 }
