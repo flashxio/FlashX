@@ -149,18 +149,6 @@ fm.print.features <- function()
 	.Call("R_FM_print_features", PACKAGE="FlashR")
 }
 
-#' Indicate whether a matrix has been loaded to FlashR
-#'
-#' This function indicates whether a matrix has been loaded to FlashR.
-#' @param name A matrix name.
-#' @return A boolean value: true if the matrix has been loaded to FlashR.
-#' @name fm.exist.matrix
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.exist.matrix <- function(name)
-{
-	.Call("R_FM_exist_matrix", as.character(name), PACKAGE="FlashR")
-}
-
 #' Load a matrix to FlashR.
 #'
 #' There are many different ways of loading a matrix to FlashR.
