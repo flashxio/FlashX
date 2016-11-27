@@ -2,12 +2,12 @@
 % Please edit documentation in R/SVD.R
 \name{fm.svd}
 \alias{fm.svd}
-\title{Compute the singular-value decomposition of a large sparse matrix.}
+\title{Compute the singular-value decomposition on a large matrix.}
 \usage{
-fm.svd(x, nu, nv, tol = 1e-08)
+fm.svd(x, nu = min(n, p), nv = min(n, p), tol = 1e-08)
 }
 \arguments{
-\item{x}{a FlashMatrixR object}
+\item{x}{a FlashMatrix matrix}
 
 \item{nu}{the number of left singluar vectors to be computed.}
 
@@ -24,7 +24,7 @@ Returns a list with three entries
   \item{v}{ nv approximate right singular vectors}
 }
 \description{
-Compute the singular-value decomposition of a large sparse matrix.
+The current implementation can only compute the largest eigenvalues.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

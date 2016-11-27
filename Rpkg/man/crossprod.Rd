@@ -3,19 +3,19 @@
 \docType{methods}
 \name{crossprod}
 \alias{crossprod}
-\alias{crossprod,fm-method}
+\alias{crossprod,fm,ANY-method}
 \alias{fm.crossprod}
 \alias{fm.tcrossprod}
-\alias{tcrossprod,fm-method}
+\alias{tcrossprod,fm,ANY-method}
 \title{Matrix Crossproduct}
 \usage{
 fm.crossprod(x, y = NULL, lazy = FALSE)
 
 fm.tcrossprod(x, y = NULL, lazy = FALSE)
 
-\S4method{crossprod}{fm}(x, y = NULL)
+\S4method{crossprod}{fm,ANY}(x, y = NULL)
 
-\S4method{tcrossprod}{fm}(x, y = NULL)
+\S4method{tcrossprod}{fm,ANY}(x, y = NULL)
 }
 \arguments{
 \item{x,y}{numeric matrices (or vectors): \code{y = NULL} is taken
