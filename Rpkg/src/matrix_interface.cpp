@@ -275,7 +275,7 @@ RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
 			return R_NilValue;
 		}
 
-		double by = (to - from) / (nrow * ncol);
+		double by = (to - from) / (nrow * ncol - 1);
 		dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
 				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
 		return create_FMR_matrix(mat, "");
@@ -289,7 +289,7 @@ RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
 			return R_NilValue;
 		}
 
-		int by = (to - from) / (nrow * ncol);
+		int by = (to - from) / (nrow * ncol - 1);
 		dense_matrix::ptr mat = dense_matrix::create_seq<int>(from, by,
 				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
 		return create_FMR_matrix(mat, "");
