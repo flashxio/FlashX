@@ -727,10 +727,15 @@ fm.in.mem <- function(fm)
 fm.as.factor <- function(fm, num.levels = -1)
 {
 	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fmV")
-	vec <- .Call("R_FM_as_factor_vector", fm, as.integer(num.levels),
-				 PACKAGE="FlashR")
-	.new.fmFactorV(vec)
+	if (class(fm) == "fmFactorV")
+		fm
+	else if (class(fm) == "fmV") {
+		vec <- .Call("R_FM_as_factor_vector", fm, as.integer(num.levels),
+					 PACKAGE="FlashR")
+		.new.fmFactorV(vec)
+	}
+	else
+		stop("The input argument isn't a vector")
 }
 
 #' Matrix multiplication
