@@ -755,12 +755,15 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
 		size_t nrow = ins[0]->get_num_rows();
 		size_t ncol = ins[0]->get_num_cols();
-		for (size_t i = 0; i < nrow; i++) {
-			for (size_t j = 0; j < ncol; j++) {
+		const detail::local_col_matrix_store &col_in
+			= dynamic_cast<const detail::local_col_matrix_store &>(*ins[0]);
+		for (size_t j = 0; j < ncol; j++) {
+			const RType *src_col = reinterpret_cast<const RType *>(
+					col_in.get_col(j));
+			for (size_t i = 0; i < nrow; i++) {
 				off_t global_row = i + ins[0]->get_global_start_row();
 				off_t global_col = j + ins[0]->get_global_start_col();
-				// TODO Maybe we should make it faster.
-				r_vec[global_row + global_col * global_nrow] = ins[0]->get<T>(i, j);
+				r_vec[global_row + global_col * global_nrow] = src_col[i];
 			}
 		}
 	}
@@ -776,20 +779,34 @@ public:
 };
 
 template<class T, class RType>
-void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
+bool copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
 {
-	detail::mem_matrix_store::const_ptr mem_store
-		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
-				mat.get_raw_store());
 	size_t chunk_size = detail::mem_matrix_store::CHUNK_SIZE;
-	// If this is a in-memory store and it's small, we can copy it directly.
-	if (mem_store && mem_store->get_num_rows() < chunk_size
-			&& mem_store->get_num_cols() < chunk_size) {
+	// If the matrix is in memory and is small, we can copy it directly.
+	if (mat.is_in_mem() && mat.get_num_rows() < chunk_size
+			&& mat.get_num_cols() < chunk_size) {
+		detail::mem_matrix_store::const_ptr mem_store;
+		// The matrix might be a block matrix.
+		dense_matrix::ptr tmp = dense_matrix::create(mat.get_raw_store());
+		tmp->materialize_self();
+		mem_store = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				tmp->get_raw_store());
+		if (mem_store == NULL) {
+			fprintf(stderr, "can't convert it to an in-mem matrix\n");
+			return false;
+		}
+
+		detail::local_col_matrix_store::const_ptr col_lstore
+			= std::dynamic_pointer_cast<const detail::local_col_matrix_store>(
+					mem_store->get_portion(0));
 		size_t nrow = mat.get_num_rows();
 		size_t ncol = mat.get_num_cols();
-		for (size_t i = 0; i < nrow; i++)
-			for (size_t j = 0; j < ncol; j++)
-				r_vec[i + j * nrow] = mem_store->get<T>(i, j);
+		for (size_t j = 0; j < ncol; j++) {
+			const RType *src_col = reinterpret_cast<const RType *>(
+					col_lstore->get_col(j));
+			for (size_t i = 0; i < nrow; i++)
+				r_vec[i + j * nrow] = src_col[i];
+		}
 	}
 	else {
 		std::vector<detail::matrix_store::const_ptr> mats(1, mat.get_raw_store());
@@ -797,6 +814,7 @@ void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
 				new FM2R_portion_op<T, RType>(r_vec, mat.get_num_rows()));
 		detail::__mapply_portion(mats, op, matrix_layout_t::L_ROW);
 	}
+	return true;
 }
 
 RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
@@ -813,14 +831,12 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 		fprintf(stderr, "cannot get a dense matrix.\n");
 		return R_NilValue;
 	}
-	if (mat->is_type<double>()) {
-		copy_FM2Rmatrix<double,double>(*mat, REAL(pRmat));
-		ret[0] = true;
-	}
-	else if (mat->is_type<int>()) {
-		copy_FM2Rmatrix<int, int>(*mat, INTEGER(pRmat));
-		ret[0] = true;
-	}
+	// R stores data in col-major order
+	mat = mat->conv2(matrix_layout_t::L_COL);
+	if (mat->is_type<double>())
+		ret[0] = copy_FM2Rmatrix<double,double>(*mat, REAL(pRmat));
+	else if (mat->is_type<int>())
+		ret[0] = copy_FM2Rmatrix<int, int>(*mat, INTEGER(pRmat));
 	else {
 		fprintf(stderr, "the dense matrix doesn't have a right type\n");
 		ret[0] = false;
