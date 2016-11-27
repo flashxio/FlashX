@@ -308,6 +308,10 @@ fm.seq.matrix <- function(from, to, nrow, ncol, byrow = FALSE)
 #' \code{fm.runif.matrix} creates a FlashMatrix matrix with uniformly random
 #' numbers.
 #'
+#' If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
+#' vector/matrix will be kept on disks persistently. That is, even if a user
+#' exits from R, the vector/matrix will still be kept on disks.
+#'
 #' @param n the number of random numbers to be generated.
 #' @param nrow the number of rows in the generated matrix.
 #' @param ncol the number of columns in the generated matrix.
@@ -316,7 +320,6 @@ fm.seq.matrix <- function(from, to, nrow, ncol, byrow = FALSE)
 #' @param in.mem whether the vector is stored in memory.
 #' @param name the name of the vector. It's stored on disks, it's used as
 #'             the file name.
-#' persistently.
 #' @name fm.runif
 #' @author Da Zheng <dzheng5@@jhu.edu>
 NULL
@@ -345,6 +348,10 @@ fm.runif <- function(n, min=0, max=1, in.mem=TRUE, name="")
 #' normal distribution.
 #' \code{fm.rnorm.matrix} creates a FlashMatrix matrix with random numbers from
 #' normal distribution.
+#'
+#' If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
+#' vector/matrix will be kept on disks persistently. That is, even if a user
+#' exits from R, the vector/matrix will still be kept on disks.
 #'
 #' @param n the number of random numbers to be generated.
 #' @param nrow the number of rows in the generated matrix.
@@ -1800,10 +1807,12 @@ fm.read.obj <- function(file)
 
 #' Convert the Storage of an Object.
 #'
-#' This function converts the storage of a FlashMatrix object. The storage
-#' can be memory or disks. This function is used for finely optimizing
-#' the computation of FlashMatrix code. It shouldn't be used to most of
-#' the users.
+#' This function converts the storage of a FlashMatrix vector/matrix.
+#' The storage can be memory or disks.
+#'
+#' If a user provides \code{name} and \code{in.mem} is \code{TRUE},
+#' the vector/matrix will be kept on disks persistently. That is, even if a user
+#' exits from R, the vector/matrix will still be kept on disks.
 #'
 #' @param fm a FlashMatrix object.
 #' @param in.mem a logical value indicating whether to store the FlashMatrix
