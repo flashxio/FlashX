@@ -815,13 +815,13 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2, lazy.wide=FALSE)
 		o <- .Call("R_FM_inner_prod_dense", fm, mat, Fun1, Fun2,
 				   PACKAGE="FlashR")
 		# If it's wide and we don't want to lazy evaluation.
-		if (ncol(fm) > nrow(fm) && !lazy.wide)
+		if (ncol(fm) > nrow(fm) && !lazy.wide) {
+			o <- if (class(mat) == "fmV") .new.fmV(o) else .new.fm(o)
 			o <- fm.materialize(o)
+		}
+		else
+			if (class(mat) == "fmV") .new.fmV(o) else .new.fm(o)
 	}
-	if (class(mat) == "fmV")
-		.new.fmV(o)
-	else
-		.new.fm(o)
 }
 
 #' The basic operators supported by FlashMatrix.
