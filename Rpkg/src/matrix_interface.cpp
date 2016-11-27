@@ -735,51 +735,68 @@ RcppExport SEXP R_FM_create_rep_matrix(SEXP pvec, SEXP pnrow, SEXP pncol,
 }
 
 template<class T, class RType>
-void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
+class FM2R_portion_op: public detail::portion_mapply_op
 {
-	const detail::mem_matrix_store &mem_store
-		= dynamic_cast<const detail::mem_matrix_store &>(mat.get_data());
-	// TODO this is going to be slow. But I don't care about performance
-	// for now.
-	size_t nrow = mat.get_num_rows();
-	size_t ncol = mat.get_num_cols();
-	for (size_t i = 0; i < nrow; i++)
-		for (size_t j = 0; j < ncol; j++)
-			r_vec[i + j * nrow] = mem_store.get<T>(i, j);
-}
+	RType *r_vec;
+	size_t global_nrow;
+public:
+	FM2R_portion_op(RType *r_vec, size_t global_nrow): detail::portion_mapply_op(
+			0, 0, get_scalar_type<int>()) {
+		this->r_vec = r_vec;
+		this->global_nrow = global_nrow;
+	}
 
-template<class T, class RType>
-void copy_FM2R_mem(dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
-{
-	if (is_vec) {
-		const char *raw_arr;
-		size_t len;
-		if (mem_mat->is_wide()) {
-			mem_mat = mem_mat->conv2(matrix_layout_t::L_ROW);
-			mem_mat->materialize_self();
-			detail::mem_row_matrix_store::const_ptr row_store
-				= detail::mem_row_matrix_store::cast(mem_mat->get_raw_store());
-			raw_arr = row_store->get_row(0);
-			len = mem_mat->get_num_cols();
-		}
-		else {
-			mem_mat = mem_mat->conv2(matrix_layout_t::L_COL);
-			mem_mat->materialize_self();
-			detail::mem_col_matrix_store::const_ptr col_store
-				= detail::mem_col_matrix_store::cast(mem_mat->get_raw_store());
-			raw_arr = col_store->get_col(0);
-			len = mem_mat->get_num_rows();
-		}
-		if (sizeof(T) == sizeof(RType))
-			memcpy(ret, raw_arr, len * mem_mat->get_entry_size());
-		else {
-			const T *t_arr = reinterpret_cast<const T *>(raw_arr);
-			for (size_t i = 0; i < len; i++)
-				ret[i] = t_arr[i];
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		fprintf(stderr, "FM2R portion operator doesn't support transpose\n");
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
+		size_t nrow = ins[0]->get_num_rows();
+		size_t ncol = ins[0]->get_num_cols();
+		for (size_t i = 0; i < nrow; i++) {
+			for (size_t j = 0; j < ncol; j++) {
+				off_t global_row = i + ins[0]->get_global_start_row();
+				off_t global_col = j + ins[0]->get_global_start_col();
+				// TODO Maybe we should make it faster.
+				r_vec[global_row + global_col * global_nrow] = ins[0]->get<T>(i, j);
+			}
 		}
 	}
-	else
-		copy_FM2Rmatrix<T>(*mem_mat, ret);
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "FM2R_portion_op";
+	}
+
+	virtual bool is_agg() const {
+		return false;
+	}
+};
+
+template<class T, class RType>
+void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
+{
+	detail::mem_matrix_store::const_ptr mem_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat.get_raw_store());
+	size_t chunk_size = detail::mem_matrix_store::CHUNK_SIZE;
+	// If this is a in-memory store and it's small, we can copy it directly.
+	if (mem_store && mem_store->get_num_rows() < chunk_size
+			&& mem_store->get_num_cols() < chunk_size) {
+		size_t nrow = mat.get_num_rows();
+		size_t ncol = mat.get_num_cols();
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				r_vec[i + j * nrow] = mem_store->get<T>(i, j);
+	}
+	else {
+		std::vector<detail::matrix_store::const_ptr> mats(1, mat.get_raw_store());
+		detail::portion_mapply_op::const_ptr op(
+				new FM2R_portion_op<T, RType>(r_vec, mat.get_num_rows()));
+		detail::__mapply_portion(mats, op, matrix_layout_t::L_ROW);
+	}
 }
 
 RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
@@ -792,20 +809,16 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
-	assert(mat);
-	// If the matrix is stored on disks or in NUMA memory.
-	if (!mat->is_in_mem() || mat->get_data().get_num_nodes() > 0)
-		mat = mat->conv_store(true, -1);
-	else
-		mat->materialize_self();
-
-	bool is_vec = is_vector(pobj);
+	if (mat == NULL) {
+		fprintf(stderr, "cannot get a dense matrix.\n");
+		return R_NilValue;
+	}
 	if (mat->is_type<double>()) {
-		copy_FM2R_mem<double, double>(mat, is_vec, REAL(pRmat));
+		copy_FM2Rmatrix<double,double>(*mat, REAL(pRmat));
 		ret[0] = true;
 	}
 	else if (mat->is_type<int>()) {
-		copy_FM2R_mem<int, int>(mat, is_vec, INTEGER(pRmat));
+		copy_FM2Rmatrix<int, int>(*mat, INTEGER(pRmat));
 		ret[0] = true;
 	}
 	else {
@@ -815,53 +828,6 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 
 	return ret;
 }
-
-#if 0
-template<class T, int SEXPType>
-SEXP conv_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec)
-{
-	if (is_vec) {
-		typename type_mem_vector<T>::ptr mem_vec = type_mem_vector<T>::create(mem_mat);
-		Rcpp::Vector<SEXPType> ret(mem_vec->get_length());
-		copy_FM2Rvector<T, Rcpp::Vector<SEXPType> >(*mem_vec, ret);
-		return ret;
-	}
-	else {
-		Rcpp::Matrix<SEXPType> ret(mem_mat->get_num_rows(),
-				mem_mat->get_num_cols());
-		copy_FM2Rmatrix<T, Rcpp::Matrix<SEXPType>>(
-				*type_mem_dense_matrix<T>::create(mem_mat), ret);
-		return ret;
-	}
-}
-
-RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
-{
-	if (is_sparse(pobj)) {
-		fprintf(stderr, "We can't convert a sparse matrix to an R object\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
-	if (!mat->is_in_mem()) {
-		fprintf(stderr, "We only support in-memory matrix right now\n");
-		return R_NilValue;
-	}
-
-	mem_dense_matrix::ptr mem_mat = mem_dense_matrix::cast(mat);
-	bool is_vec = is_vector(pobj);
-	if (mem_mat->is_type<double>())
-		return conv_FM2R_mem<double, REALSXP>(mem_mat, is_vec);
-	else if (mem_mat->is_type<int>())
-		return conv_FM2R_mem<int, INTSXP>(mem_mat, is_vec);
-	else if (mem_mat->is_type<bool>())
-		return conv_FM2R_mem<bool, LGLSXP>(mem_mat, is_vec);
-	else {
-		fprintf(stderr, "the dense matrix doesn't have a right type\n");
-		return R_NilValue;
-	}
-}
-#endif
 
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
