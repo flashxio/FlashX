@@ -97,15 +97,6 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 		NULL
 }
 
-.new.fmFactorV <- function(fm)
-{
-	if (!is.null(fm))
-		new("fmFactorV", num.levels=fm$levels, pointer=fm$pointer,
-			name=fm$name, len=fm$len, type=fm$type, ele_type=fm$ele_type)
-	else
-		NULL
-}
-
 #' Reconfigure FlashMatrix
 #'
 #' \code{fm.set.conf} reconfigures FlashMatrix with the settings in
@@ -730,9 +721,15 @@ fm.as.factor <- function(fm, num.levels = -1)
 	if (class(fm) == "fmFactorV")
 		fm
 	else if (class(fm) == "fmV") {
-		vec <- .Call("R_FM_as_factor_vector", fm, as.integer(num.levels),
-					 PACKAGE="FlashR")
-		.new.fmFactorV(vec)
+		if (typeof(fm) != "integer")
+			fm <- as.integer(fm)
+		if (num.levels < 0) {
+			r <- range(fm)
+			num.levels <- r[2] - r[1] + 1
+			fm <- fm - r[1]
+		}
+		new("fmFactorV", num.levels=as.integer(num.levels), pointer=fm@pointer,
+			name=fm@name, len=fm@len, type=fm@type, ele_type=fm@ele_type)
 	}
 	else
 		stop("The input argument isn't a vector")

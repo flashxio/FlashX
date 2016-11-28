@@ -64,8 +64,6 @@ std::shared_ptr<fm::factor_col_vector> get_factor_vector(const Rcpp::S4 &vec);
 
 SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const std::string &name);
 SEXP create_FMR_vector(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
-SEXP create_FMR_factor_vector(std::shared_ptr<fm::dense_matrix> m, int num_levels,
-		const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
 SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m, const std::string &name);
 SEXP create_FMR_data_frame(std::shared_ptr<fm::data_frame> df, const std::string &name);
