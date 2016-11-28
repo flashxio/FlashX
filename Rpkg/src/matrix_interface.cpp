@@ -573,7 +573,11 @@ static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 	}
 	// The input matrix in the right operand might be a virtual matrix originally.
 	// When we convert its data layout, it's definitely a virtual matrix.
-	right_mat->materialize_self();
+	bool ret = right_mat->materialize_self();
+	if (!ret) {
+		fprintf(stderr, "can't materialize the right matrix\n");
+		return dense_matrix::ptr();
+	}
 
 	// TODO it only supports a binary matrix right now.
 	assert(matrix->get_entry_size() == 0);
@@ -650,7 +654,11 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 	if (!res->is_type<double>()) {
 		// TODO this is really unnecessary. But we can't run sapply on an IPW
 		// matrix.
-		res->materialize_self();
+		bool ret = res->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the result matrix\n");
+			return R_NilValue;
+		}
 		res = res->cast_ele_type(get_scalar_type<double>());
 	}
 
@@ -788,7 +796,12 @@ bool copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
 		detail::mem_matrix_store::const_ptr mem_store;
 		// The matrix might be a block matrix.
 		dense_matrix::ptr tmp = dense_matrix::create(mat.get_raw_store());
-		tmp->materialize_self();
+		bool ret = tmp->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the matrix\n");
+			return R_NilValue;
+		}
+
 		mem_store = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
 				tmp->get_raw_store());
 		if (mem_store == NULL) {
@@ -1425,8 +1438,13 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
 	// If we aggregate on the long dimension.
 	if ((m->is_wide() && margin == matrix_margin::MAR_ROW)
-			|| (!m->is_wide() && margin == matrix_margin::MAR_COL))
-		res->materialize_self();
+			|| (!m->is_wide() && margin == matrix_margin::MAR_COL)) {
+		bool ret = res->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the result matrix\n");
+			return R_NilValue;
+		}
+	}
 
 	if (res == NULL) {
 		fprintf(stderr, "can't aggregate on the matrix\n");
@@ -1924,7 +1942,11 @@ RcppExport SEXP R_FM_materialize(SEXP pmat)
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	// I think it's OK to materialize on the original matrix.
-	mat->materialize_self();
+	bool mater_ret = mat->materialize_self();
+	if (!mater_ret) {
+		fprintf(stderr, "can't materialize the matrix\n");
+		return R_NilValue;
+	}
 
 	Rcpp::List ret;
 	Rcpp::S4 rcpp_mat(pmat);
@@ -2638,7 +2660,11 @@ RcppExport SEXP R_FM_conv_store(SEXP pmat, SEXP pin_mem, SEXP pname)
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	std::string name = CHAR(STRING_ELT(pname, 0));
 	mat = mat->conv_store(in_mem, matrix_conf.get_num_nodes());
-	mat->materialize_self();
+	bool ret = mat->materialize_self();
+	if (!ret) {
+		fprintf(stderr, "can't materialize the matrix\n");
+		return R_NilValue;
+	}
 	if (!name.empty() && !in_mem) {
 		detail::EM_matrix_store::const_ptr store
 			= detail::EM_matrix_store::cast(mat->get_raw_store());
