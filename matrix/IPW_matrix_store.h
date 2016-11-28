@@ -50,7 +50,7 @@ class IPW_matrix_store: public sink_store
 public:
 	IPW_matrix_store(matrix_store::const_ptr left, matrix_store::const_ptr right,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
-			matrix_layout_t layout);
+			matrix_layout_t layout = matrix_layout_t::L_NONE);
 
 	virtual bool has_materialized() const;
 
