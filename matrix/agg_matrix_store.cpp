@@ -147,8 +147,12 @@ public:
 		return partial_res;
 	}
 
-	const agg_operate &get_agg_op() const {
-		return *op;
+	matrix_margin get_margin() const {
+		return margin;
+	}
+
+	agg_operate::const_ptr get_agg_op() const {
+		return op;
 	}
 
 	virtual void run(const std::vector<local_matrix_store::const_ptr> &ins) const;
@@ -279,7 +283,7 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	// I need to create new aggregation with the combine operation
 	// to run aggregation on the columns of the matrix.
 	agg_operate::const_ptr combine_agg = agg_operate::create(
-			agg_op->get_agg_op().get_combine_ptr(), bulk_operate::const_ptr());
+			agg_op->get_agg_op()->get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
 			part_dim_t::PART_NONE, *portion);
 	assert(res->get_num_rows() == get_num_rows());
@@ -441,9 +445,28 @@ public:
 
 matrix_store::const_ptr agg_matrix_store::transpose() const
 {
-	// TODO This method should also be implemented.
-	assert(0);
-	return matrix_store::const_ptr();
+	if (has_materialized()) {
+		matrix_store::const_ptr res = get_agg_res();
+		return res->transpose();
+	}
+	matrix_store::const_ptr tdata = data->transpose();
+	if (tdata == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't transpose the data matrix";
+		return matrix_store::const_ptr();
+	}
+	std::shared_ptr<const matrix_long_agg_op> agg_portion_op
+		= std::dynamic_pointer_cast<const matrix_long_agg_op>(
+				portion_op);
+	assert(agg_portion_op);
+	matrix_margin tmargin;
+	if (agg_portion_op->get_margin() == matrix_margin::MAR_ROW)
+		tmargin = matrix_margin::MAR_COL;
+	else if (agg_portion_op->get_margin() == matrix_margin::MAR_COL)
+		tmargin = matrix_margin::MAR_ROW;
+	else
+		tmargin = agg_portion_op->get_margin();
+	return matrix_store::const_ptr(new agg_matrix_store(tdata,
+				tmargin, agg_portion_op->get_agg_op()));
 }
 
 class agg_compute_store: public sink_compute_store, public EM_object
