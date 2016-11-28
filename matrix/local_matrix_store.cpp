@@ -1395,8 +1395,12 @@ static bool _groupby(const detail::local_matrix_store &labels,
 			= static_cast<detail::local_row_matrix_store &>(results);
 		for (size_t i = 0; i < row_mat.get_num_rows(); i++) {
 			factor_value_t label_id = labels.get<factor_value_t>(i, 0);
-			if ((size_t) label_id >= agg_flags.size())
+			if ((size_t) label_id >= agg_flags.size()) {
+				BOOST_LOG_TRIVIAL(error) << boost::format(
+						"Factor value %1% is larger than max levels %2%")
+					% (size_t) label_id % agg_flags.size();
 				return false;
+			}
 			// If we never get partially aggregated result for a label, we should
 			// copy the data to the corresponding row.
 			if (!agg_flags[label_id])
@@ -1420,8 +1424,12 @@ static bool _groupby(const detail::local_matrix_store &labels,
 			= static_cast<detail::local_col_matrix_store &>(results);
 		for (size_t i = 0; i < col_mat.get_num_cols(); i++) {
 			factor_value_t label_id = labels.get<factor_value_t>(0, i);
-			if ((size_t) label_id >= agg_flags.size())
+			if ((size_t) label_id >= agg_flags.size()) {
+				BOOST_LOG_TRIVIAL(error) << boost::format(
+						"Factor value %1% is larger than max levels %2%")
+					% (size_t) label_id % agg_flags.size();
 				return false;
+			}
 			// If we never get partially aggregated result for a label, we should
 			// copy the data to the corresponding col.
 			if (!agg_flags[label_id])
