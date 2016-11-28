@@ -231,18 +231,21 @@ bool block_matrix::is_virtual() const
 	return store->get_mat_ref(0).is_virtual();
 }
 
-void block_matrix::materialize_self() const
+bool block_matrix::materialize_self() const
 {
 	if (!is_virtual())
-		return;
+		return true;
 
 	std::vector<detail::matrix_store::const_ptr> res_stores(store->get_num_mats());
+	bool ret = true;
 	// TODO materializing individual matrices in serial may hurt performance.
 	for (size_t i = 0; i < store->get_num_mats(); i++) {
 		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
-		mat->materialize_self();
+		ret = ret && mat->materialize_self();
 		res_stores[i] = mat->get_raw_store();
 	}
+	if (!ret)
+		return false;
 
 	block_matrix *mutable_this = const_cast<block_matrix *>(this);
 	mutable_this->store = detail::combined_matrix_store::create(res_stores,
@@ -251,6 +254,7 @@ void block_matrix::materialize_self() const
 	// This is only way to change the store pointer in dense_matrix.
 	dense_matrix::ptr tmp = dense_matrix::create(this->store);
 	mutable_this->dense_matrix::assign(*tmp);
+	return true;
 }
 
 void block_matrix::set_materialize_level(materialize_level level,

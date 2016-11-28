@@ -209,7 +209,7 @@ public:
 		return store->is_virtual();
 	}
 
-	virtual void materialize_self() const;
+	virtual bool materialize_self() const;
 	virtual void set_materialize_level(materialize_level level,
 			detail::matrix_store::ptr materialize_buf = NULL);
 	/*

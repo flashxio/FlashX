@@ -517,13 +517,19 @@ dense_matrix::ptr dense_matrix::apply_scalar(
 	return sapply(bulk_uoperate::const_ptr(new apply_scalar_op(var, op)));
 }
 
-void dense_matrix::materialize_self() const
+bool dense_matrix::materialize_self() const
 {
 	if (!store->is_virtual())
-		return;
-	const_cast<dense_matrix *>(this)->store
+		return true;
+
+	detail::matrix_store::const_ptr tmp
 		= detail::virtual_matrix_store::cast(store)->materialize(
 				store->is_in_mem(), store->get_num_nodes());
+	if (tmp == NULL)
+		return false;
+
+	const_cast<dense_matrix *>(this)->store = tmp;
+	return true;
 }
 
 std::vector<detail::virtual_matrix_store::const_ptr> dense_matrix::get_compute_matrices() const
@@ -1951,6 +1957,7 @@ class groupby_long_row_mapply_op: public detail::portion_mapply_op
 	factor_col_vector::const_ptr labels;
 	detail::local_matrix_store::const_ptr llabels;
 	agg_operate::const_ptr op;
+	volatile bool success;
 public:
 	groupby_long_row_mapply_op(agg_operate::const_ptr op,
 			factor_col_vector::const_ptr labels,
@@ -1961,6 +1968,7 @@ public:
 		this->labels = labels;
 		this->llabels = labels->get_raw_store()->get_portion(0);
 		assert(this->llabels->get_num_rows() == labels->get_length());
+		success = true;
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -1968,9 +1976,18 @@ public:
 				"Don't support transpose of groupby_long_row_mapply_op");
 	}
 
+	virtual bool is_success() const {
+		return success;
+	}
+
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
+		// If we have failed on some portions, we don't need to run on
+		// the remaining portions.
+		if (!success)
+			return;
+
 		assert(ins.size() == 1);
 		assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
 		assert(out.store_layout() == matrix_layout_t::L_ROW);
@@ -1982,7 +1999,10 @@ public:
 			= static_cast<detail::local_row_matrix_store &>(out);
 		bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
 				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
-		assert(ret);
+		if (!ret)
+			// This operation can only go one direction.
+			// so it's fine if multiple threads want to set it concurrently.
+			const_cast<groupby_long_row_mapply_op *>(this)->success = false;
 	}
 
 	virtual std::string to_string(
