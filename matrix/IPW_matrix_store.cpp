@@ -1089,9 +1089,19 @@ public:
 
 matrix_store::const_ptr IPW_matrix_store::transpose() const
 {
-	// TODO do we need this?
-	assert(0);
-	return matrix_store::const_ptr();
+	if (has_materialized())
+		return get_combine_res()->transpose();
+
+	matrix_store::const_ptr tleft = right_mat->transpose();
+	matrix_store::const_ptr tright = left_mat->transpose();
+	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
+	matrix_layout_t tlayout;
+	if (layout == matrix_layout_t::L_ROW)
+		tlayout = matrix_layout_t::L_COL;
+	else
+		tlayout = matrix_layout_t::L_ROW;
+	return matrix_store::const_ptr(new IPW_matrix_store(tleft, tright,
+				left_op, right_op, tlayout));
 }
 
 std::string IPW_matrix_store::get_name() const
