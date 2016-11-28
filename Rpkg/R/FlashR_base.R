@@ -1327,14 +1327,18 @@ NULL
 
 #' @rdname print
 setMethod("print", signature(x = "fm"), function(x)
-		  cat("FlashMatrixR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
+		  cat("FlashR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
 			  " columns, is sparse: ", fm.is.sparse(x), "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fmV"), function(x)
-	cat("FlashVectorR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+	cat("FlashR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+#' @rdname print
+setMethod("print", signature(x = "fmFactorV"), function(x)
+	cat("FlashR factor vector ", x@name, ": length: ", length(x),
+		", max level: ", x@num.levels, "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fm.bo"), function(x)
-	cat("FLashMatrixR basic operator:", x@name, "\n"))
+	cat("FLashR basic operator:", x@name, "\n"))
 
 #' Count the number of elements
 #'
