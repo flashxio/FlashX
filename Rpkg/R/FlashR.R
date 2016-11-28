@@ -604,8 +604,8 @@ fm.conv.FM2R <- function(obj)
 			print("can't find the type of a dense matrix")
 			return(NULL)
 		}
-		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
-		ret
+		res <- .Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
+		if (res) ret else NULL
 	}
 	else if (class(obj) == "fmV") {
 		len <- length(obj)
@@ -619,8 +619,8 @@ fm.conv.FM2R <- function(obj)
 			print("can't find the type of a vector")
 			return(NULL)
 		}
-		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
-		ret
+		res <- .Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashR")
+		if (res) ret else NULL
 	}
 	else if (class(obj) == "fm" && fm.is.sparse(obj)) {
 		print("doesn't support convert a sparse matrix to R object")
