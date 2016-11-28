@@ -1815,7 +1815,7 @@ fm.conv.store <- function(fm, in.mem, name="")
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
 	ret <- .Call("R_FM_conv_store", fm, as.logical(in.mem),
 				 as.character(name), PACKAGE="FlashR")
-	if (class(ret) == "fmV")
+	if (class(fm) == "fmV")
 		.new.fmV(ret)
 	else
 		.new.fm(ret)
