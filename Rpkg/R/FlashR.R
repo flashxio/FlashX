@@ -1621,11 +1621,12 @@ fm.groupby <- function(obj, margin, factor, FUN)
 	}
 	res <- .Call("R_FM_groupby", obj, as.integer(margin), factor, FUN,
 				 PACKAGE="FlashR")
-	res <- .new.fm(res)
-	if (orig.margin == 1)
-		t(res)
-	else
-		res
+	if (is.null(res))
+		NULL
+	else {
+		res <- .new.fm(res)
+		if (orig.margin == 1) t(res) else res
+	}
 }
 
 #' Transpose a FlashMatrix matrix.
