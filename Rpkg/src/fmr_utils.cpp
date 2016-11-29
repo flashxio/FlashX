@@ -125,6 +125,14 @@ SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name
 
 SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
+	if (m->get_num_cols() > 1)
+		m = m->transpose();
+	if (m->get_num_cols() > 1) {
+		fprintf(stderr,
+				"can't create a vector with a matrix with more than one col\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("vector");
@@ -145,10 +153,7 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	ret["pointer"] = pointer;
 
 	Rcpp::NumericVector len(1);
-	if (m->get_num_cols() == 1)
-		len[0] = m->get_num_rows();
-	else
-		len[0] = m->get_num_cols();
+	len[0] = m->get_num_rows();
 	ret["len"] = len;
 
 	return ret;
