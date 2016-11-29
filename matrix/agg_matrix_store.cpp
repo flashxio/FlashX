@@ -209,7 +209,13 @@ static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
 {
 	if (margin == matrix_margin::MAR_ROW)
 		return data.get_num_rows();
-	else if (margin == matrix_margin::MAR_COL)
+	else
+		return 1;
+}
+
+static size_t get_num_cols_agg(const matrix_store &data, matrix_margin margin)
+{
+	if (margin == matrix_margin::MAR_COL)
 		return data.get_num_cols();
 	else
 		return 1;
@@ -217,7 +223,7 @@ static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
 
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 		matrix_margin margin, agg_operate::const_ptr op): sink_store(
-			get_num_rows_agg(*data, margin), 1,
+			get_num_rows_agg(*data, margin), get_num_cols_agg(*data, margin),
 			data->is_in_mem(), op->get_output_type())
 {
 	this->data = data;
@@ -242,7 +248,7 @@ agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 				partial_res, margin, op));
 }
 
-matrix_store::ptr agg_matrix_store::get_agg_res() const
+matrix_store::const_ptr agg_matrix_store::get_agg_res() const
 {
 	std::shared_ptr<matrix_long_agg_op> agg_op
 		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
@@ -267,9 +273,17 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 		assert(valid_row >= 0);
 		memcpy(res->get_raw_arr(), partial_res->get_row(valid_row),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
-		assert(res->get_num_rows() == get_num_rows());
-		assert(res->get_num_cols() == get_num_cols());
-		return res;
+		if ((get_num_rows() == 1 && get_num_cols() == 1)
+				|| (get_num_rows() > 1 && get_num_cols() == 1)) {
+			assert(res->get_num_rows() == get_num_rows());
+			assert(res->get_num_cols() == get_num_cols());
+			return res;
+		}
+		else {
+			assert(res->get_num_rows() == get_num_cols());
+			assert(res->get_num_cols() == get_num_rows());
+			return res->transpose();
+		}
 	}
 	else
 		local_res = partial_res->get_local_matrix();
@@ -286,9 +300,17 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 			agg_op->get_agg_op()->get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
 			part_dim_t::PART_NONE, *portion);
-	assert(res->get_num_rows() == get_num_rows());
-	assert(res->get_num_cols() == get_num_cols());
-	return res;
+	if ((get_num_rows() == 1 && get_num_cols() == 1)
+			|| (get_num_rows() > 1 && get_num_cols() == 1)) {
+		assert(res->get_num_rows() == get_num_rows());
+		assert(res->get_num_cols() == get_num_cols());
+		return res;
+	}
+	else {
+		assert(res->get_num_rows() == get_num_cols());
+		assert(res->get_num_cols() == get_num_rows());
+		return res->transpose();
+	}
 }
 
 bool agg_matrix_store::has_materialized() const
@@ -450,10 +472,6 @@ matrix_store::const_ptr agg_matrix_store::transpose() const
 		return res->transpose();
 	}
 	matrix_store::const_ptr tdata = data->transpose();
-	if (tdata == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "can't transpose the data matrix";
-		return matrix_store::const_ptr();
-	}
 	std::shared_ptr<const matrix_long_agg_op> agg_portion_op
 		= std::dynamic_pointer_cast<const matrix_long_agg_op>(
 				portion_op);

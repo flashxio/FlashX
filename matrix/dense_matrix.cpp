@@ -1513,8 +1513,12 @@ static detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store
 		}
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = store;
+		size_t out_num_rows
+			= margin == matrix_margin::MAR_ROW ? store->get_num_rows() : 1;
+		size_t out_num_cols
+			= margin == matrix_margin::MAR_COL ? store->get_num_cols() : 1;
 		matrix_short_agg_op::const_ptr agg_op(new matrix_short_agg_op(
-					margin, op, store->get_num_rows(), 1));
+					margin, op, out_num_rows, out_num_cols));
 		return __mapply_portion_virtual(ins, agg_op, matrix_layout_t::L_COL);
 	}
 	if (!op->has_combine()) {

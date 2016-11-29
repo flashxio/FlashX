@@ -1040,9 +1040,10 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 		if (margin == matrix_margin::BOTH) {
 			ret = detail::matrix_store::ptr(new agg_block_sink_store(sinks, op));
 		}
-		else
-			// For aggregation, we always return a single-col matrix.
+		else if (margin == matrix_margin::MAR_ROW)
 			ret = detail::block_sink_store::create(sinks, sinks.size(), 1);
+		else
+			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
 		return dense_matrix::create(ret);
 	}
 }
