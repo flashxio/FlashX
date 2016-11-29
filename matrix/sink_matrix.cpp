@@ -410,8 +410,14 @@ matrix_store::const_ptr block_sink_store::transpose() const
 
 std::string block_sink_store::get_name() const
 {
-	assert(0);
-	return std::string();
+	std::string str = "block_sink(";
+	for (size_t i = 0; i < stores.size(); i++) {
+		str += stores[i]->get_name();
+		if (i < stores.size() - 1)
+			str += ", ";
+	}
+	str += ")";
+	return str;
 }
 
 std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
