@@ -1449,50 +1449,31 @@ fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
 	ret
 }
 
-setGeneric("fm.mapply2", function(o1, o2, FUN, set.na) standardGeneric("fm.mapply2"))
+setGeneric("fm.mapply2", function(o1, o2, FUN, set.na=TRUE) standardGeneric("fm.mapply2"))
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fm", o2 = "fm", FUN = "ANY", set.na="logical"),
-		  .mapply2.fm)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm"), .mapply2.fm)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fmV", o2 = "fmV", FUN = "ANY", set.na="logical"),
-		  .mapply2.fmV)
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV"), .mapply2.fmV)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fm", o2 = "fmV", FUN = "ANY", set.na="logical"),
-		  fm.mapply.col)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fmV"), fm.mapply.col)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fmV", o2 = "fm", FUN = "ANY", set.na="logical"),
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fm"),
 		  function(o1, o2, FUN, set.na) {
 			  print("This isn't supported currently.")
 			  NULL
 		  })
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fm", o2 = "matrix", FUN = "ANY", set.na="logical"),
-		  .mapply2.fm.m)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "matrix"), .mapply2.fm.m)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "matrix", o2 = "fm", FUN = "ANY", set.na="logical"),
-		  .mapply2.m.fm)
+setMethod("fm.mapply2", signature(o1 = "matrix", o2 = "fm"), .mapply2.m.fm)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fm", o2 = "ANY", FUN = "ANY", set.na="logical"),
-		  .mapply2.fm.ANY)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY"), .mapply2.fm.ANY)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "ANY", o2 = "fm", FUN = "ANY", set.na="logical"),
-		  .mapply2.ANY.fm)
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm"), .mapply2.ANY.fm)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "fmV", o2 = "ANY", FUN = "ANY", set.na="logical"),
-		  .mapply2.fmV.ANY)
+setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY"), .mapply2.fmV.ANY)
 #' @rdname fm.mapply2
-setMethod("fm.mapply2",
-		  signature(o1 = "ANY", o2 = "fmV", FUN = "ANY", set.na="logical"),
-		  .mapply2.ANY.fmV)
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 
 .sapply.fm <- function(o, FUN, set.na=TRUE)
 {
@@ -1502,7 +1483,7 @@ setMethod("fm.mapply2",
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 	ret <- .new.fm(ret)
-	if (set.na)
+	if (as.logical(set.na))
 		ret <- .set.na1(o, ret)
 	ret
 }
@@ -1515,7 +1496,7 @@ setMethod("fm.mapply2",
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
 	ret <- .new.fmV(ret)
-	if (set.na)
+	if (as.logical(set.na))
 		ret <- .set.na1(o, ret)
 	ret
 }
@@ -1535,13 +1516,11 @@ setMethod("fm.mapply2",
 #' @return a FlashMatrix vector/matrix.
 #' @name fm.sapply
 #' @author Da Zheng <dzheng5@@jhu.edu>
-setGeneric("fm.sapply", function(o, FUN, set.na)  standardGeneric("fm.sapply"))
+setGeneric("fm.sapply", function(o, FUN, set.na=TRUE)  standardGeneric("fm.sapply"))
 #' @rdname fm.sapply
-setMethod("fm.sapply", signature(o = "fm", FUN = "ANY", set.na="logical"),
-		  .sapply.fm)
+setMethod("fm.sapply", signature(o = "fm"), .sapply.fm)
 #' @rdname fm.sapply
-setMethod("fm.sapply", signature(o = "fmV", FUN = "ANY", set.na="logical"),
-		  .sapply.fmV)
+setMethod("fm.sapply", signature(o = "fmV"), .sapply.fmV)
 
 #' Apply Functions Over Array Margins
 #'
