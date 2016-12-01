@@ -825,6 +825,10 @@ namespace
 class mapply2_op: public detail::portion_mapply_op
 {
 	bulk_operate::const_ptr op;
+
+	bool is_wide() const {
+		return get_out_num_cols() > get_out_num_rows();
+	}
 public:
 	mapply2_op(bulk_operate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
@@ -854,8 +858,8 @@ void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &i
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == ins[1]->get_global_start_row());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
-		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::part_dim_t dim = is_wide()
+		? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1;
 	detail::mapply2(*ins[0], *ins[1], *op, dim, out);
 }
 
@@ -894,6 +898,10 @@ namespace
 class sapply_op: public detail::portion_mapply_op
 {
 	bulk_uoperate::const_ptr op;
+
+	bool is_wide() const {
+		return get_out_num_cols() > get_out_num_rows();
+	}
 public:
 	sapply_op(bulk_uoperate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
@@ -920,8 +928,8 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
-		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::part_dim_t dim = is_wide()
+		? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1;
 	detail::sapply(*ins[0], *op, dim, out);
 }
 
@@ -1465,6 +1473,8 @@ public:
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
 		assert(ins.size() == 1);
+		// If we perform agg on rows, it implies that this matrix is a tall
+		// matrix.
 		detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
 			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 		// The output matrix is actually a vector.
@@ -2001,6 +2011,7 @@ public:
 			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
 		detail::local_row_matrix_store &row_out
 			= static_cast<detail::local_row_matrix_store &>(out);
+		// We are grouping very long rows. So this matrix has to be a wide matrix.
 		bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
 				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
 		if (!ret)
