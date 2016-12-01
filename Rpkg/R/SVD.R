@@ -52,18 +52,20 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	}
 	else if (comp.right) {
 		size <- ncol(x)
-		x.prod <- fm.conv.FM2R(tx %*% x)
+		x.prod <- tx %*% x
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	else {
 		size <- nrow(x)
-		x.prod <- fm.conv.FM2R(x %*% tx)
+		x.prod <- x %*% tx
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	# If it's a very small matrix, we can compute its eigenvalues directly.
 	# Or if we need to compute many eigenvalues, we probably should also
 	# compute its eigenvalues directly.
 	if (!is.null(x.prod) && (size < 100 || nev >= size / 2)) {
+		if (!is.matrix(x.prod))
+			x.prod <- as.matrix(x.prod)
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[1:nev]
 		nev <- nrow(x.prod)
