@@ -29,6 +29,7 @@
 #include "IPW_matrix_store.h"
 #include "materialize.h"
 #include "mem_matrix_store.h"
+#include "set_data_matrix_store.h"
 
 namespace fm
 {
@@ -153,21 +154,19 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 }
 
 dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
-		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
-		size_t num_rows, size_t num_cols, matrix_layout_t layout,
-		size_t block_size, bool byrow, int num_nodes, bool in_mem,
-		safs::safs_file_group::ptr group)
+		scalar_variable::ptr stride, size_t num_rows, size_t num_cols,
+		matrix_layout_t layout, size_t block_size, bool byrow, int num_nodes,
+		bool in_mem, safs::safs_file_group::ptr group)
 {
 	if (num_rows > num_cols && num_cols < block_size)
-		return dense_matrix::create_seq(start, stride, seq_ele_stride,
-				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+		return dense_matrix::create_seq(start, stride, num_rows, num_cols,
+				layout, byrow, num_nodes, in_mem, group);
 	else if (num_rows <= num_cols && num_rows < block_size)
-		return dense_matrix::create_seq(start, stride, seq_ele_stride,
-				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+		return dense_matrix::create_seq(start, stride, num_rows, num_cols,
+				layout, byrow, num_nodes, in_mem, group);
 
 	const scalar_type &type = start->get_type();
 	assert(type == stride->get_type());
-	assert(type == seq_ele_stride->get_type());
 
 	size_t num_blocks;
 	if (num_rows > num_cols)
@@ -205,14 +204,12 @@ dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
 			local_num_cols = num_cols;
 		}
 
-
-		detail::matrix_store::ptr store = detail::matrix_store::create(
-				local_num_rows, local_num_cols, layout, type, num_nodes,
-				in_mem, group);
-		auto op = type.get_set_seq(*lstart, *stride, *seq_ele_stride,
-				num_rows, num_cols, byrow);
-		store->set_data(*op);
-		stores[i] = store;
+		auto row_op = type.get_set_seq(*lstart, *stride, num_rows, num_cols,
+				byrow, matrix_layout_t::L_ROW);
+		auto col_op = type.get_set_seq(*lstart, *stride, num_rows, num_cols,
+				byrow, matrix_layout_t::L_COL);
+		stores[i] = detail::set_data_matrix_store::create(row_op, col_op,
+				local_num_rows, local_num_cols, layout, num_nodes);
 	}
 	return block_matrix::create(detail::combined_matrix_store::create(
 				stores, layout));

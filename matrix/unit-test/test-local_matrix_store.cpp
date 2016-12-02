@@ -161,6 +161,9 @@ public:
 			arr[i] = (row_idx + i) * num_cols + col_idx;
 		}
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 template<class T>
@@ -177,6 +180,9 @@ public:
 			arr[i] = row_idx * num_cols + col_idx + i;
 		}
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set1_col_operate: public type_set_operate<int>
@@ -188,6 +194,9 @@ public:
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = 1;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set1_row_operate: public type_set_operate<int>
@@ -198,6 +207,9 @@ public:
 	void set(int *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = 1;
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
 	}
 };
 

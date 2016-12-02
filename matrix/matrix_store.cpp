@@ -125,6 +125,9 @@ public:
 	virtual const scalar_type &get_type() const {
 		return type;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set_task: public thread_task

@@ -41,6 +41,9 @@ public:
 			// rounding error.
 			arr[i] = (row_idx % 100) * (i + col_idx + 1);
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,

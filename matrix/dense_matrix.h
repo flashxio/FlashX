@@ -94,9 +94,8 @@ public:
 			matrix_layout_t layout, int num_nodes, bool in_mem,
 			safs::safs_file_group::ptr group);
 	static ptr create_seq(scalar_variable::ptr start, scalar_variable::ptr stride,
-			scalar_variable::ptr seq_ele_stride, size_t nrow, size_t ncol,
-			matrix_layout_t layout, bool byrow, int num_nodes, bool in_mem,
-			safs::safs_file_group::ptr group);
+			size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
+			int num_nodes, bool in_mem, safs::safs_file_group::ptr group);
 
 	static ptr create(detail::matrix_store::const_ptr store) {
 		return dense_matrix::ptr(new dense_matrix(store));
@@ -135,22 +134,8 @@ public:
 			bool in_mem = true, safs::safs_file_group::ptr group = NULL) {
 		scalar_variable::ptr start_val(new scalar_variable_impl<T>(start));
 		scalar_variable::ptr stride_val(new scalar_variable_impl<T>(stride));
-		scalar_variable::ptr seq_stride_val;
-
-		if (layout == matrix_layout_t::L_ROW && byrow)
-			seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(
-						stride));
-		else if (layout == matrix_layout_t::L_COL && byrow)
-			seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(
-						stride * ncol));
-		else if (layout == matrix_layout_t::L_ROW)
-			seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(
-						stride * nrow));
-		else
-			seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(
-						stride));
-		return create_seq(start_val, stride_val, seq_stride_val, nrow, ncol,
-				layout, byrow, num_nodes, in_mem, group);
+		return create_seq(start_val, stride_val, nrow, ncol, layout, byrow,
+				num_nodes, in_mem, group);
 	}
 
 	static ptr rbind(const std::vector<dense_matrix::ptr> &mats);

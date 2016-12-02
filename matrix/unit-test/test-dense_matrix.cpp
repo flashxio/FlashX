@@ -287,14 +287,8 @@ dense_matrix::ptr _create_seq_block_matrix(size_t nrow, size_t ncol,
 {
 	scalar_variable::ptr start_val(new scalar_variable_impl<T>(0));
 	scalar_variable::ptr stride_val(new scalar_variable_impl<T>(1));
-	scalar_variable::ptr seq_stride_val;
-
-	if (layout == matrix_layout_t::L_ROW)
-		seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(1));
-	else
-		seq_stride_val = scalar_variable::ptr(new scalar_variable_impl<T>(ncol));
 	return block_matrix::create_seq_layout(start_val, stride_val,
-			seq_stride_val, nrow, ncol, layout, block_size, true, num_nodes, in_mem);
+			nrow, ncol, layout, block_size, true, num_nodes, in_mem);
 }
 
 dense_matrix::ptr create_seq_block_matrix(size_t nrow, size_t ncol,
@@ -367,17 +361,21 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, int num_nodes,
 		const scalar_type &type = get_scalar_type<int>())
 {
+	dense_matrix::ptr mat;
 	switch (matrix_val) {
 		case matrix_val_t::DEFAULT:
 			return create_const_matrix(nrow, ncol, layout, num_nodes, type,
 					in_mem);
 		case matrix_val_t::SEQ:
 			if (block_size == 0)
-				return create_seq_matrix(nrow, ncol, layout, num_nodes, type,
+				mat = create_seq_matrix(nrow, ncol, layout, num_nodes, type,
 						in_mem);
 			else
-				return create_seq_block_matrix(nrow, ncol, block_size, layout,
+				mat = create_seq_block_matrix(nrow, ncol, block_size, layout,
 						num_nodes, type, in_mem);
+			if (!in_mem)
+				mat = mat->conv_store(false, -1);
+			return mat;
 		case matrix_val_t::SPARSE:
 			return create_sparse_matrix(nrow, ncol, layout, num_nodes, type,
 					in_mem);
@@ -1099,11 +1097,13 @@ void test_write2file()
 	printf("write a tall row matrix\n");
 	mat = dense_matrix::create_seq<int>(0, 1, 1000000, 10,
 			matrix_layout_t::L_ROW, true, -1, true);
+	mat->materialize_self();
 	store = detail::mem_matrix_store::cast(mat->get_raw_store());
 	test_write2file1(store);
 	printf("write a tall column matrix\n");
 	mat = dense_matrix::create_seq<int>(0, 1, 1000000, 10,
 			matrix_layout_t::L_COL, true, -1, true);
+	mat->materialize_self();
 	store = detail::mem_matrix_store::cast(mat->get_raw_store());
 	test_write2file1(store);
 }
@@ -2021,6 +2021,9 @@ public:
 			assert(f.is_valid_level(arr[i]));
 		}
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 void _test_vec_groupby()
@@ -2119,6 +2122,7 @@ void test_groupby()
 
 	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW,
 			-1, get_scalar_type<int>());
+	mat->materialize_self();
 	assert(!mat->is_virtual());
 	_test_groupby(mat);
 
@@ -2128,6 +2132,7 @@ void test_groupby()
 
 	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
 			-1, get_scalar_type<int>());
+	mat->materialize_self();
 	assert(!mat->is_virtual());
 	_test_groupby(mat);
 
@@ -2737,6 +2742,7 @@ void test_bind(int num_nodes)
 				matrix_layout_t::L_ROW, true, num_nodes);
 		sums[i] = mats[i]->sum();
 		tot_sum += scalar_variable::get_val<int>(*sums[i]);
+		mats[i]->materialize_self();
 		detail::mem_matrix_store::const_ptr store
 			= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
 					mats[i]->get_raw_store());
@@ -2797,6 +2803,62 @@ void test_bind(int num_nodes)
 	assert(tot_sum == scalar_variable::get_val<int>(*sum));
 }
 
+void _test_seq_byrow(dense_matrix::ptr mat)
+{
+	// Test rows
+	size_t num_tests = std::min(mat->get_num_rows(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t row_idx = random() % mat->get_num_rows();
+		std::vector<off_t> rows(1, row_idx);
+		dense_matrix::ptr row = mat->get_rows(rows);
+		auto sum = row->sum();
+		size_t start = row_idx * mat->get_num_cols();
+		size_t end = start + (mat->get_num_cols() - 1);
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_cols() / 2);
+	}
+	// Test cols
+	num_tests = std::min(mat->get_num_cols(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t col_idx = random() % mat->get_num_cols();
+		std::vector<off_t> cols(1, col_idx);
+		dense_matrix::ptr col = mat->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = col_idx;
+		size_t end = col_idx + (mat->get_num_rows() - 1) * mat->get_num_cols();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+}
+
+void _test_seq_bycol(dense_matrix::ptr mat)
+{
+	// Test rows
+	size_t num_tests = std::min(mat->get_num_rows(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t row_idx = random() % mat->get_num_rows();
+		std::vector<off_t> rows(1, row_idx);
+		dense_matrix::ptr row = mat->get_rows(rows);
+		auto sum = row->sum();
+		size_t start = row_idx;
+		size_t end = start + (mat->get_num_cols() - 1) * mat->get_num_rows();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_cols() / 2);
+	}
+	// Test cols
+	num_tests = std::min(mat->get_num_cols(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t col_idx = random() % mat->get_num_cols();
+		std::vector<off_t> cols(1, col_idx);
+		dense_matrix::ptr col = mat->get_cols(cols);
+		auto sum = col->sum();
+		size_t start = col_idx * mat->get_num_rows();
+		size_t end = start + (mat->get_num_rows() - 1);
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (start + end) * mat->get_num_rows() / 2);
+	}
+}
+
 void test_seq_matrix()
 {
 	dense_matrix::ptr mat, tmp;
@@ -2804,120 +2866,60 @@ void test_seq_matrix()
 	printf("test matrices with sequence numbers\n");
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
 			matrix_layout_t::L_COL, true);
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i;
-		size_t end = i + (long_dim - 1) * mat->get_num_cols();
-		assert(scalar_variable::get_val<size_t>(*sum) == (start + end) * long_dim / 2);
-	}
+	_test_seq_byrow(mat);
+	mat = mat->transpose();
+	_test_seq_bycol(mat);
 
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
 			matrix_layout_t::L_ROW, true);
-	tmp = mat->conv2(matrix_layout_t::L_COL);
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i;
-		size_t end = i + (mat->get_num_rows() - 1) * mat->get_num_cols();
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_rows() / 2);
-	}
+	_test_seq_byrow(mat);
+	mat = mat->transpose();
+	_test_seq_bycol(mat);
 
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
 			matrix_layout_t::L_COL, false);
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i * mat->get_num_rows();
-		size_t end = start + mat->get_num_rows() - 1;
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_rows() / 2);
-	}
+	_test_seq_bycol(mat);
+	mat = mat->transpose();
+	_test_seq_byrow(mat);
 
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
 			matrix_layout_t::L_ROW, false);
-	tmp = mat->conv2(matrix_layout_t::L_COL);
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i * mat->get_num_rows();
-		size_t end = start + mat->get_num_rows() - 1;
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_rows() / 2);
-	}
+	_test_seq_bycol(mat);
+	mat = mat->transpose();
+	_test_seq_byrow(mat);
 
 	printf("test block matrices with sequence numbers\n");
 	printf("create tall block matrix1\n");
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim / 10, 100,
 			matrix_layout_t::L_COL, true);
 	assert(mat->get_data().is_virtual());
-	mat->materialize_self();
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i;
-		size_t end = i + (mat->get_num_rows() - 1) * mat->get_num_cols();
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_rows() / 2);
-	}
+	_test_seq_byrow(mat);
+	mat = mat->transpose();
+	_test_seq_bycol(mat);
 
 	printf("create tall block matrix2\n");
 	mat = dense_matrix::create_seq<size_t>(0, 1, long_dim / 10, 100,
 			matrix_layout_t::L_COL, false);
 	assert(mat->get_data().is_virtual());
-	mat->materialize_self();
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		std::vector<off_t> cols(1, i);
-		dense_matrix::ptr col = tmp->get_cols(cols);
-		auto sum = col->sum();
-		size_t start = i * mat->get_num_rows();
-		size_t end = start + mat->get_num_rows() - 1;
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_rows() / 2);
-	}
-
+	_test_seq_bycol(mat);
+	mat = mat->transpose();
+	_test_seq_byrow(mat);
 
 	printf("create wide block matrix1\n");
 	mat = dense_matrix::create_seq<size_t>(0, 1, 100, long_dim / 10,
 			matrix_layout_t::L_COL, true);
 	assert(mat->get_data().is_virtual());
-	mat->materialize_self();
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		std::vector<off_t> rows(1, i);
-		dense_matrix::ptr row = tmp->get_rows(rows);
-		auto sum = row->sum();
-		size_t start = i * mat->get_num_cols();
-		size_t end = start + mat->get_num_cols() - 1;
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_cols() / 2);
-	}
+	_test_seq_byrow(mat);
+	mat = mat->transpose();
+	_test_seq_bycol(mat);
 
 	printf("create wide block matrix2\n");
 	mat = dense_matrix::create_seq<size_t>(0, 1, 100, long_dim / 10,
 			matrix_layout_t::L_COL, false);
 	assert(mat->get_data().is_virtual());
-	mat->materialize_self();
-	tmp = mat;
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		std::vector<off_t> rows(1, i);
-		dense_matrix::ptr row = tmp->get_rows(rows);
-		auto sum = row->sum();
-		size_t start = i;
-		size_t end = i + (mat->get_num_cols() - 1) * mat->get_num_rows();
-		assert(scalar_variable::get_val<size_t>(*sum)
-				== (start + end) * mat->get_num_cols() / 2);
-	}
+	_test_seq_bycol(mat);
+	mat = mat->transpose();
+	_test_seq_byrow(mat);
 }
 
 int main(int argc, char *argv[])

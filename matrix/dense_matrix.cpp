@@ -43,6 +43,7 @@
 #include "sink_matrix.h"
 #include "data_frame.h"
 #include "project_matrix_store.h"
+#include "set_data_matrix_store.h"
 
 namespace fm
 {
@@ -989,9 +990,9 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 }
 
 dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
-		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
-		size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
-		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
+		scalar_variable::ptr stride, size_t nrow, size_t ncol,
+		matrix_layout_t layout, bool byrow, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
 {
 	if (nrow == 0 || ncol == 0) {
 		BOOST_LOG_TRIVIAL(error)
@@ -1005,17 +1006,17 @@ dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
 	// We don't want to create a small block matrix.
 	if (long_dim < detail::EM_matrix_store::CHUNK_SIZE
 			|| short_dim <= matrix_conf.get_block_size()) {
-		detail::matrix_store::ptr store = detail::matrix_store::create(
-				nrow, ncol, layout, type, num_nodes, in_mem, group);
-		auto op = type.get_set_seq(*start, *stride, *seq_ele_stride,
-				nrow, ncol, byrow);
-		store->set_data(*op);
+		auto row_op = type.get_set_seq(*start, *stride, nrow, ncol, byrow,
+				matrix_layout_t::L_ROW);
+		auto col_op = type.get_set_seq(*start, *stride, nrow, ncol, byrow,
+				matrix_layout_t::L_COL);
+		detail::matrix_store::ptr store = detail::set_data_matrix_store::create(
+				row_op, col_op, nrow, ncol, layout, num_nodes);
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
 	else
-		return block_matrix::create_seq_layout(start, stride, seq_ele_stride,
-				nrow, ncol, layout, matrix_conf.get_block_size(), byrow,
-				num_nodes, in_mem, group);
+		return block_matrix::create_seq_layout(start, stride, nrow, ncol, layout,
+				matrix_conf.get_block_size(), byrow, num_nodes, in_mem, group);
 }
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
@@ -2127,6 +2128,9 @@ public:
 
 	virtual const scalar_type &get_type() const {
 		return stores[0]->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
 	}
 };
 
