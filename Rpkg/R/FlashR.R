@@ -1637,8 +1637,11 @@ fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.numeric(idxs),
-				 PACKAGE="FlashR")
+	if (is.atomic(idxs))
+		ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.numeric(idxs),
+					 PACKAGE="FlashR")
+	else
+		ret <- .Call("R_FM_get_submat", fm, as.integer(2), idxs, PACKAGE="FlashR")
 	if (!is.null(ret))
 		.new.fm(ret)
 	else
@@ -1650,8 +1653,11 @@ fm.get.rows <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
-	ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.numeric(idxs),
-				 PACKAGE="FlashR")
+	if (is.atomic(idxs))
+		ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.numeric(idxs),
+					 PACKAGE="FlashR")
+	else
+		ret <- .Call("R_FM_get_submat", fm, as.integer(1), idxs, PACKAGE="FlashR")
 	if (!is.null(ret))
 		.new.fm(ret)
 	else

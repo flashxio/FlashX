@@ -1630,18 +1630,30 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		return R_NilValue;
 	}
 
-	Rcpp::NumericVector r_idxs(pidxs);
-	std::vector<off_t> c_idxs(r_idxs.size());
-	for (size_t i = 0; i < c_idxs.size(); i++)
-		// R is 1-based indexing, and C/C++ is 0-based.
-		c_idxs[i] = r_idxs[i] - 1;
-
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	dense_matrix::ptr sub_m;
-	if (margin == matrix_margin::MAR_COL)
-		sub_m = mat->get_cols(c_idxs);
-	else
-		sub_m = mat->get_rows(c_idxs);
+
+	if (R_is_real(pidxs)) {
+		Rcpp::NumericVector r_idxs(pidxs);
+		std::vector<off_t> c_idxs(r_idxs.size());
+		for (size_t i = 0; i < c_idxs.size(); i++)
+			// R is 1-based indexing, and C/C++ is 0-based.
+			c_idxs[i] = r_idxs[i] - 1;
+
+		sub_m = margin == matrix_margin::MAR_COL
+			? mat->get_cols(c_idxs) : mat->get_rows(c_idxs);
+	}
+	else {
+		dense_matrix::ptr idxs = get_matrix<dense_matrix>(pidxs);
+		if (idxs->get_num_rows() > 1 && idxs->get_num_cols() > 1) {
+			fprintf(stderr, "the index vector is a matrix\n");
+			return R_NilValue;
+		}
+		col_vec::ptr idx_vec = col_vec::create(idxs);
+		sub_m = margin == matrix_margin::MAR_COL
+			? mat->get_cols(idx_vec) : mat->get_rows(idx_vec);
+	}
+
 	if (sub_m == NULL) {
 		fprintf(stderr, "can't get a submatrix from the matrix\n");
 		return R_NilValue;
