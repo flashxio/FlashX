@@ -256,6 +256,7 @@ void verify_result(const dense_matrix &_m1, const dense_matrix &_m2,
 enum matrix_val_t
 {
 	SEQ,
+	SEQ_MATER,
 	DEFAULT,
 	SPARSE,
 	NUM_TYPES,
@@ -375,6 +376,15 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 						num_nodes, type, in_mem);
 			if (!in_mem)
 				mat = mat->conv_store(false, -1);
+			return mat;
+		case matrix_val_t::SEQ_MATER:
+			if (block_size == 0)
+				mat = create_seq_matrix(nrow, ncol, layout, num_nodes, type,
+						in_mem);
+			else
+				mat = create_seq_block_matrix(nrow, ncol, block_size, layout,
+						num_nodes, type, in_mem);
+			mat = mat->conv_store(in_mem, num_nodes);
 			return mat;
 		case matrix_val_t::SPARSE:
 			return create_sparse_matrix(nrow, ncol, layout, num_nodes, type,
@@ -1967,6 +1977,8 @@ void test_mem_matrix(int num_nodes)
 	matrix_val = matrix_val_t::SPARSE;
 	_test_mem_matrix(num_nodes);
 	block_size = 3;
+	matrix_val = matrix_val_t::SEQ_MATER;
+	_test_mem_matrix(num_nodes);
 	matrix_val = matrix_val_t::SEQ;
 	_test_mem_matrix(num_nodes);
 	block_size = 0;
