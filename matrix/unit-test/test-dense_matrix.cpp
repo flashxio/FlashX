@@ -2922,6 +2922,120 @@ void test_seq_matrix()
 	_test_seq_byrow(mat);
 }
 
+void _test_repeat_byrow(dense_matrix::ptr mat)
+{
+	// Test rows
+	size_t num_tests = std::min(mat->get_num_rows(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t row_idx = random() % mat->get_num_rows();
+		std::vector<off_t> rows(1, row_idx);
+		dense_matrix::ptr row = mat->get_rows(rows);
+		auto sum = row->sum();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (mat->get_num_cols() - 1) * mat->get_num_cols() / 2);
+	}
+	// Test cols
+	num_tests = std::min(mat->get_num_cols(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t col_idx = random() % mat->get_num_cols();
+		std::vector<off_t> cols(1, col_idx);
+		dense_matrix::ptr col = mat->get_cols(cols);
+		auto sum = col->sum();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== col_idx * mat->get_num_rows());
+	}
+}
+
+void _test_repeat_bycol(dense_matrix::ptr mat)
+{
+	// Test rows
+	size_t num_tests = std::min(mat->get_num_rows(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t row_idx = random() % mat->get_num_rows();
+		std::vector<off_t> rows(1, row_idx);
+		dense_matrix::ptr row = mat->get_rows(rows);
+		auto sum = row->sum();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== row_idx * mat->get_num_cols());
+	}
+	// Test cols
+	num_tests = std::min(mat->get_num_cols(), 100UL);
+	for (size_t i = 0; i < num_tests; i++) {
+		off_t col_idx = random() % mat->get_num_cols();
+		std::vector<off_t> cols(1, col_idx);
+		dense_matrix::ptr col = mat->get_cols(cols);
+		auto sum = col->sum();
+		assert(scalar_variable::get_val<size_t>(*sum)
+				== (mat->get_num_rows() - 1) * mat->get_num_rows() / 2);
+	}
+}
+
+void test_repeat()
+{
+	col_vec::ptr vec;
+	dense_matrix::ptr mat;
+
+	printf("test matrices with repeated vectors\n");
+	// skinny matrix.
+	vec = col_vec::create(dense_matrix::create_seq<size_t>(0, 1, 10, 1,
+				matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(vec, long_dim, vec->get_length(),
+			matrix_layout_t::L_ROW, true);
+	_test_repeat_byrow(mat);
+	mat = mat->transpose();
+	_test_repeat_bycol(mat);
+
+	mat = dense_matrix::create_repeat(vec, long_dim, vec->get_length(),
+			matrix_layout_t::L_COL, true);
+	_test_repeat_byrow(mat);
+	mat = mat->transpose();
+	_test_repeat_bycol(mat);
+
+	vec = col_vec::create(dense_matrix::create_seq<size_t>(0, 1, long_dim, 1,
+				matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(vec, vec->get_length(), 10,
+			matrix_layout_t::L_ROW, false);
+	_test_repeat_bycol(mat);
+	mat = mat->transpose();
+	_test_repeat_byrow(mat);
+
+	mat = dense_matrix::create_repeat(vec, vec->get_length(), 10,
+			matrix_layout_t::L_COL, false);
+	_test_repeat_bycol(mat);
+	mat = mat->transpose();
+	_test_repeat_byrow(mat);
+
+	printf("test block matrices with repeated vectors\n");
+	// block matrix
+	vec = col_vec::create(dense_matrix::create_seq<size_t>(0, 1, 100, 1,
+				matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(vec, long_dim, vec->get_length(),
+			matrix_layout_t::L_ROW, true);
+	_test_repeat_byrow(mat);
+	mat = mat->transpose();
+	_test_repeat_bycol(mat);
+
+	mat = dense_matrix::create_repeat(vec, long_dim, vec->get_length(),
+			matrix_layout_t::L_COL, true);
+	_test_repeat_byrow(mat);
+	mat = mat->transpose();
+	_test_repeat_bycol(mat);
+
+	vec = col_vec::create(dense_matrix::create_seq<size_t>(0, 1, long_dim, 1,
+				matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(vec, vec->get_length(), 100,
+			matrix_layout_t::L_ROW, false);
+	_test_repeat_bycol(mat);
+	mat = mat->transpose();
+	_test_repeat_byrow(mat);
+
+	mat = dense_matrix::create_repeat(vec, vec->get_length(), 100,
+			matrix_layout_t::L_COL, false);
+	_test_repeat_bycol(mat);
+	mat = mat->transpose();
+	_test_repeat_byrow(mat);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -2934,6 +3048,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_repeat();
 	test_seq_matrix();
 	test_bind(num_nodes);
 	test_materialize_all(num_nodes);

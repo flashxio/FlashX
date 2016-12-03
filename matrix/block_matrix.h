@@ -76,6 +76,9 @@ public:
 			matrix_layout_t layout, size_t block_size, bool byrow,
 			int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL);
+	static dense_matrix::ptr create_repeat_layout(std::shared_ptr<col_vec> vec,
+			size_t nrow, size_t ncol, matrix_layout_t layout, size_t block_size,
+			bool byrow, int num_nodes);
 
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,

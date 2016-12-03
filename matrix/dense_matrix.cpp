@@ -989,6 +989,138 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 				matrix_conf.get_block_size(), num_nodes, in_mem, group);
 }
 
+namespace
+{
+
+/*
+ * In this case, we copy the entire vector to the destination array each time.
+ */
+class repeat_operate: public set_operate
+{
+	detail::mem_col_matrix_store::const_ptr vec;
+public:
+	repeat_operate(detail::mem_col_matrix_store::const_ptr vec) {
+		this->vec = vec;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		assert(num_eles == vec->get_num_rows());
+		memcpy(arr, vec->get_raw_arr(), num_eles * vec->get_entry_size());
+	}
+
+	virtual const scalar_type &get_type() const {
+		return vec->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new repeat_operate(vec));
+	}
+};
+
+/*
+ * In this case, we repeat one of the elements in the vector in the destination
+ * array each time.
+ */
+class repeat_ele_operate: public set_operate
+{
+	detail::mem_col_matrix_store::const_ptr vec;
+	// Whether or not to repeat an element in a row.
+	bool in_row;
+
+	void repeat_ele(void *dst, const void *src, size_t num_eles) const {
+		for (size_t i = 0; i < num_eles; i++)
+			memcpy(((char *) dst) + i * vec->get_entry_size(), src,
+					vec->get_entry_size());
+	}
+public:
+	repeat_ele_operate(detail::mem_col_matrix_store::const_ptr vec, bool in_row) {
+		this->vec = vec;
+		this->in_row = in_row;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		if (in_row)
+			repeat_ele(arr, vec->get(row_idx, 0), num_eles);
+		else
+			repeat_ele(arr, vec->get(col_idx, 0), num_eles);
+	}
+
+	virtual const scalar_type &get_type() const {
+		return vec->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new repeat_ele_operate(vec, !in_row));
+	}
+};
+
+}
+
+dense_matrix::ptr dense_matrix::create_repeat(col_vec::ptr vec, size_t nrow,
+		size_t ncol, matrix_layout_t layout, bool byrow, int num_nodes)
+{
+	size_t long_dim = std::max(nrow, ncol);
+	size_t short_dim = std::min(nrow, ncol);
+	// We don't want to create a small block matrix.
+	if (long_dim > detail::EM_matrix_store::CHUNK_SIZE
+			&& short_dim > matrix_conf.get_block_size())
+		return block_matrix::create_repeat_layout(vec, nrow, ncol, layout,
+				matrix_conf.get_block_size(), byrow, num_nodes);
+
+	if (byrow && vec->get_length() != ncol) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix width";
+		return dense_matrix::ptr();
+	}
+	else if (!byrow && vec->get_length() != nrow) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix height";
+		return dense_matrix::ptr();
+	}
+
+	// This is a tall matrix and we repeat the vector by rows.
+	if (byrow && nrow > ncol) {
+		dense_matrix::ptr tmp = vec->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr vec
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(vec);
+		set_operate::const_ptr row_op(new repeat_operate(vec));
+		set_operate::const_ptr col_op(new repeat_ele_operate(vec, false));
+		return dense_matrix::create(detail::set_data_matrix_store::create(
+					row_op, col_op, nrow, ncol, layout, num_nodes));
+	}
+	// This is a wide matrix and we repeat the vector by rows.
+	else if (byrow) {
+		detail::matrix_store::const_ptr store = vec->get_raw_store();
+		assert(store->get_num_cols() == 1);
+		std::vector<detail::matrix_store::const_ptr> rows(nrow,
+				store->transpose());
+		return dense_matrix::create(detail::combined_matrix_store::create(rows,
+					layout));
+	}
+	// This is a tall matrix and we repeat the vector by columns.
+	else if (nrow > ncol) {
+		detail::matrix_store::const_ptr store = vec->get_raw_store();
+		assert(store->get_num_cols() == 1);
+		std::vector<detail::matrix_store::const_ptr> cols(ncol, store);
+		return dense_matrix::create(detail::combined_matrix_store::create(cols,
+					layout));
+	}
+	// This is a wide matrix and we repeat the vector by columns.
+	else {
+		dense_matrix::ptr tmp = vec->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr vec
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(vec);
+		set_operate::const_ptr row_op(new repeat_ele_operate(vec, true));
+		set_operate::const_ptr col_op(new repeat_operate(vec));
+		return dense_matrix::create(detail::set_data_matrix_store::create(
+					row_op, col_op, nrow, ncol, layout, num_nodes));
+	}
+}
+
 dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
 		scalar_variable::ptr stride, size_t nrow, size_t ncol,
 		matrix_layout_t layout, bool byrow, int num_nodes, bool in_mem,

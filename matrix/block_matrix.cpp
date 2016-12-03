@@ -216,6 +216,94 @@ dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
 
 }
 
+dense_matrix::ptr block_matrix::create_repeat_layout(col_vec::ptr vec,
+		size_t num_rows, size_t num_cols, matrix_layout_t layout,
+		size_t block_size, bool byrow, int num_nodes)
+{
+	if (num_rows > num_cols && num_cols < block_size)
+		return dense_matrix::create_repeat(vec, num_rows, num_cols, layout,
+				byrow, num_nodes);
+	else if (num_rows <= num_cols && num_rows < block_size)
+		return dense_matrix::create_repeat(vec, num_rows, num_cols, layout,
+				byrow, num_nodes);
+
+	size_t num_blocks;
+	if (num_rows > num_cols)
+		num_blocks = div_ceil<size_t>(num_cols, block_size);
+	else
+		num_blocks = div_ceil<size_t>(num_rows, block_size);
+
+	if (byrow && vec->get_length() != num_cols) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix width";
+		return block_matrix::ptr();
+	}
+	else if (!byrow && vec->get_length() != num_rows) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix height";
+		return block_matrix::ptr();
+	}
+
+	std::vector<detail::matrix_store::const_ptr> stores(num_blocks);
+	// repeat the vector by row and is wide
+	if (byrow && num_cols > num_rows) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t sub_nrow = std::min(block_size, num_rows - i * block_size);
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(vec,
+					sub_nrow, num_cols, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, layout));
+	}
+	// repeat the vector by col and is tall
+	else if (!byrow && num_rows > num_cols) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t sub_ncol = std::min(block_size, num_cols - i * block_size);
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(vec,
+					num_rows, sub_ncol, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, layout));
+	}
+
+	// In the following two cases, we need to break the vector into pieces.
+	dense_matrix::ptr im_vec = vec->conv_store(true, -1);
+	std::vector<col_vec::ptr> sub_vecs(num_blocks);
+	for (size_t i = 0; i < sub_vecs.size(); i++) {
+		size_t sub_nrow = std::min(block_size,
+				vec->get_length() - i * block_size);
+		detail::local_matrix_store::const_ptr part
+			= im_vec->get_data().get_portion(i * block_size, 0, sub_nrow, 1);
+		detail::mem_matrix_store::ptr sub = detail::mem_matrix_store::create(
+				sub_nrow, 1, matrix_layout_t::L_COL, vec->get_type(), -1);
+		memcpy(sub->get_raw_arr(), part->get_raw_arr(),
+				part->get_entry_size() * sub_nrow);
+		sub_vecs[i] = col_vec::create(sub);
+	}
+
+	// repeat the vector by row and is tall
+	if (num_rows > num_cols) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(sub_vecs[i],
+					num_rows, sub_vecs[i]->get_length(), layout, byrow,
+					num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+	}
+	// repeat the vector by col and is wide
+	else {
+		for (size_t i = 0; i < stores.size(); i++) {
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(sub_vecs[i],
+					sub_vecs[i]->get_length(), num_cols, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+	}
+	return block_matrix::create(detail::combined_matrix_store::create(
+				stores, layout));
+}
+
 matrix_layout_t block_matrix::store_layout() const
 {
 	// All matrices in the group should have the same data layout.

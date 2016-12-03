@@ -96,6 +96,8 @@ public:
 	static ptr create_seq(scalar_variable::ptr start, scalar_variable::ptr stride,
 			size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
 			int num_nodes, bool in_mem, safs::safs_file_group::ptr group);
+	static ptr create_repeat(std::shared_ptr<col_vec> vec, size_t nrow, size_t ncol,
+			matrix_layout_t layout, bool byrow, int num_nodes = -1);
 
 	static ptr create(detail::matrix_store::const_ptr store) {
 		return dense_matrix::ptr(new dense_matrix(store));
