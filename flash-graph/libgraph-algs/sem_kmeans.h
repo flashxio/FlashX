@@ -25,6 +25,7 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <atomic>
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
@@ -40,7 +41,7 @@
 #include "kmeans_types.h"
 
 #define PAGE_ROW
-#define KM_TEST 1
+#define KM_TEST 0
 #define VERBOSE 0
 
 using namespace fg;
@@ -55,6 +56,40 @@ namespace {
     static unsigned K;
     static std::map<vertex_id_t, unsigned> g_init_hash; // Used for forgy init
     static std::vector<double> g_kmspp_distance; // Used for kmeans++ init
+
+    class barrier {
+        private:
+            std::atomic<unsigned> ncomplete;
+            unsigned nmembers;
+        public:
+            typedef std::shared_ptr<barrier> ptr;
+
+            barrier(const unsigned nmembers) {
+                ncomplete.store(0);
+                set_nmembers(nmembers);
+            }
+
+            static ptr create(const unsigned nmembers) {
+                return ptr(new barrier(nmembers));
+            }
+
+            void set_nmembers(const unsigned nmembers) {
+                this->nmembers = nmembers;
+            }
+
+            const unsigned get_nmembers() const {
+                return nmembers;
+            }
+
+            bool ping() {
+                ncomplete++;
+                bool complete = nmembers == ncomplete.load();
+                if (complete) {
+                    ncomplete.store(0); // Always reset
+                }
+                return complete;
+            }
+    };
 
     class base_kmeans_vertex: public compute_vertex
     {
