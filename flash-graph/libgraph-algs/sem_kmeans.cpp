@@ -46,8 +46,14 @@ namespace {
     static std::vector<vertex_id_t> all_vertices;
     static barrier::ptr iter_barrier;
     static graph_engine::ptr mat;
+    static unsigned g_max_iters;
+    static std::vector<unsigned> g_num_members_v;
+    static double g_tolerance;
+    static bool g_converged = false;
 
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat);
+    static void update_clusters(graph_engine::ptr mat,
+            std::vector<unsigned>& g_num_members_v);
 
     class kmeans_vertex: public base_kmeans_vertex
     {
@@ -56,7 +62,19 @@ namespace {
 
         void run(vertex_program &prog) {
             vertex_id_t id = prog.get_vertex_id(*this);
-            request_vertices(&id, 1);
+            switch (g_stage) {
+                case INIT:
+                    request_vertices(&id, 1);
+                    break;
+                case ESTEP:
+                    if (!g_converged && (g_iter < g_max_iters)) {
+                        prog.activate_vertices(&id, 1); // Activate for next iter
+                        request_vertices(&id, 1);
+                    }
+                    break;
+                default:
+                    BOOST_ASSERT_MSG(0, "Unknown g_stage!");
+            }
         }
 
         void run(vertex_program& prog, const page_vertex &vertex) {
@@ -99,7 +117,32 @@ namespace {
 
         // Per partition
         virtual void run_on_iteration_end() override {
-            return;
+            if (iter_barrier->ping()) { // Make sure all partitions are complete 1st
+                if (!g_converged) {
+                    BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
+                        " . Computing cluster assignments ...";
+                    g_io_reqs += NUM_ROWS;
+
+                    BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating "
+                        << "cluster means ...";
+                    update_clusters(mat, g_num_members_v);
+
+                    BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
+                    print_vector<unsigned>(g_num_members_v);
+
+                    BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
+                        << g_num_changed << " **\n";
+
+                    if ((g_num_changed == 0 ||
+                            ((g_num_changed/(double)NUM_ROWS)) <= g_tolerance)
+                            && g_iter < g_max_iters) {
+                        g_converged = true;
+                    } else {
+                        g_num_changed = 0;
+                        g_iter++;
+                    }
+                }
+            }
         }
     };
 
@@ -280,7 +323,7 @@ namespace {
         }
 
         static void update_clusters(graph_engine::ptr mat,
-                std::vector<unsigned>& num_members_v) {
+                std::vector<unsigned>& g_num_members_v) {
             g_clusters->clear();
 
             std::vector<vertex_program::ptr> kms_clust_progs;
@@ -294,13 +337,14 @@ namespace {
 
                 BOOST_VERIFY(g_num_changed <= NUM_ROWS);
                 /* Merge the per-thread clusters */
-                // TODO: Pool
                 g_clusters->peq(pt_clusters);
+
+                kms_prog->reset();
             }
 
             for (unsigned cl = 0; cl < K; cl++) {
                 g_clusters->finalize(cl);
-                num_members_v[cl] = g_clusters->get_num_members(cl);
+                g_num_members_v[cl] = g_clusters->get_num_members(cl);
             }
 #if KM_TEST
             long t_members = 0;
@@ -382,6 +426,8 @@ namespace {
             ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
 #endif
             K = k;
+            g_max_iters = max_iters;
+            g_tolerance = tolerance;
 
             // Check Initialization
             if ((NULL == centers) && init.compare("random") && init.compare("kmeanspp") &&
@@ -422,7 +468,7 @@ namespace {
                 g_clusters->set_mean(*centers); // (*centers) // &(*(centers)[0])
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-            std::vector<unsigned> num_members_v(K);
+            g_num_members_v.assign(K, 0);
 
             /*** End VarInit ***/
 
@@ -438,7 +484,7 @@ namespace {
                     mat->wait4complete();
                     g_io_reqs += NUM_ROWS;
 
-                    update_clusters(mat, num_members_v);
+                    update_clusters(mat, g_num_members_v);
                 }
                 if (init == "forgy") {
                     BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
@@ -461,8 +507,6 @@ namespace {
                     all_vertices.resize(NUM_ROWS);
                     std::iota(all_vertices.begin(), all_vertices.end(), 0);
                     g_init = PLUSPLUS;
-                    gettimeofday(&start, NULL);
-
                     // Init g_kmspp_distance to max distance
                     g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
 
@@ -480,49 +524,20 @@ namespace {
                                 new kmeanspp_vertex_program_creater()));
                     mat->wait4complete();
                 }
-                gettimeofday(&end, NULL);
-                BOOST_LOG_TRIVIAL(info) << "\n\nInitialization time taken = " <<
-                    time_diff(start, end) << " sec\n";
             } else
                 g_clusters->print_means();
 
             g_stage = ESTEP;
             BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
-
-            bool converged = false;
-
-            std::string str_iters = max_iters == std::numeric_limits<unsigned>::max() ?
+            std::string str_iters = g_max_iters == std::numeric_limits<unsigned>::max() ?
                 "until convergence ...":
-                std::to_string(max_iters) + " iterations ...";
+                std::to_string(g_max_iters) + " iterations ...";
             BOOST_LOG_TRIVIAL(info) << "Computing " << str_iters;
-            g_iter = 1;
+            g_iter = 0;
 
-            while (g_iter < max_iters) {
-                BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << g_iter <<
-                    " . Computing cluster assignments ...";
-
-                mat->start_all(vertex_initializer::ptr(),
-                        vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
-                mat->wait4complete();
-                g_io_reqs += NUM_ROWS;
-
-                BOOST_LOG_TRIVIAL(info) << "Main: M-step Updating cluster means ...";
-                update_clusters(mat, num_members_v);
-
-                BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                print_vector<unsigned>(num_members_v);
-
-                BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
-                    << g_num_changed << " **\n";
-
-                if (g_num_changed == 0 || ((g_num_changed/(double)NUM_ROWS)) <= tolerance) {
-                    converged = true;
-                    break;
-                } else {
-                    g_num_changed = 0;
-                }
-                g_iter++;
-            }
+            mat->start_all(vertex_initializer::ptr(),vertex_program_creater::ptr(
+                        new kmeans_vertex_program_creater()));
+            mat->wait4complete();
 
             gettimeofday(&end, NULL);
             BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
@@ -535,21 +550,21 @@ namespace {
             printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n\n",
                     g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
 
-            if (converged) {
+            if (g_converged) {
                 BOOST_LOG_TRIVIAL(info) <<
                     "K-means converged in " << g_iter << " iterations";
             } else {
                 BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
-                    << g_iter << " iterations";
+                    << g_max_iters << " iterations";
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            print_vector<unsigned>(num_members_v);
+            print_vector<unsigned>(g_num_members_v);
 
             std::vector<std::vector<double>> means(K);
             copy_means(means);
 
             cluster_assignments = get_membership(mat);
-            return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
+            return sem_kmeans_ret::create(cluster_assignments, means, g_num_members_v, g_iter);
         }
     }
