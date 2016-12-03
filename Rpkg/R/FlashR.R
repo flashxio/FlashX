@@ -2066,6 +2066,29 @@ setMethod("is.finite", signature(x = "fmV"), function(x) {
 			  fm.rep.int(TRUE, length(x))
 		  })
 
+#' The Number of Levels of a Factor
+#'
+#' Return the number of levels which its argument has.
+#'
+#' This is applied to a FlashR factor.
+#'
+#' @param x a FlashR factor
+#' @return The length of \code{levels(x)}, which is zero if \code{x}
+#' has no levels.
+setMethod("nlevels", signature(x = "fmFactorV"), function(x) x@num.levels)
+
+#' Levels Attributes
+#'
+#' \code{levels} returns the levels attribute of a variable.
+#'
+#' Currently, levels of a factor vector is a sequence number from 1 to
+#' the number of levels. FlashR doesn't support other factor values.
+#'
+#' @param x a FlashR factor.
+#' @return a FlashR vector that contains the value of the levels.
+setMethod("levels", signature(x = "fmFactorV"), function(x)
+		  fm.seq.int(1, x@num.levels, 1))
+
 #' Print the information of a FlashMatrix object
 #'
 #' Print the information of the internal storage representation of
