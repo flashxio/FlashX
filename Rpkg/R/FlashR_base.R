@@ -1351,15 +1351,23 @@ setMethod("print", signature(x = "fm.bo"), function(x)
 #' \item{val}{The unique values in the vector.}
 #' \item{Freq}{The number of occurences of each unique value.}
 #' }
+#' @name fm.table
+NULL
+
+setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
+
+#' @rdname fm.table
 fm.table <- function(x)
 {
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
 	ret <- fm.sgroupby(x, count)
 	if (!is.null(ret))
-		list(val=ret$val, Freq=ret$agg)
+		new("fm.table", val=ret$val, Freq=ret$agg)
 	else
 		NULL
 }
+
+setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
 
 #' Integer Vectors
 #'
