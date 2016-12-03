@@ -62,6 +62,7 @@ add_library(FMatrix STATIC
 	groupby_matrix_store.cpp
 	materialize.cpp
 	sub_matrix_store.cpp
+	set_data_matrix_store.cpp
 )
 
 if(ENABLE_TRILINOS)
