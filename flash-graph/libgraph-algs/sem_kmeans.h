@@ -159,6 +159,11 @@ namespace {
         void pt_changed_pp() {
             pt_changed++;
         }
+
+        void reset() {
+            pt_changed = 0;
+            pt_clusters->clear();
+        }
     };
 
     // Begin helpers
