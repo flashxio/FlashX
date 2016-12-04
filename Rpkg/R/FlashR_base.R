@@ -1572,9 +1572,6 @@ setMethod("crossprod", "fm", function(x, y=NULL) fm.crossprod(x, y))
 #' @rdname crossprod
 setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 
-#' @rdname matrix
-setMethod("is.matrix", "fm", function(x) TRUE)
-
 #' FlashMatrix Summaries
 #'
 #' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
