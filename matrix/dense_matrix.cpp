@@ -1198,6 +1198,9 @@ dense_matrix::ptr dense_matrix::transpose() const
 namespace
 {
 
+/*
+ * This gets rows from a wide matrix.
+ */
 class get_rows_op: public detail::portion_mapply_op
 {
 	std::vector<off_t> row_idxs;
@@ -1221,6 +1224,9 @@ public:
 	}
 };
 
+/*
+ * This gets cols from a tall matrix.
+ */
 class get_cols_op: public detail::portion_mapply_op
 {
 	std::vector<off_t> col_idxs;
@@ -1364,6 +1370,250 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 	}
 	else
 		return dense_matrix::ptr();
+}
+
+namespace
+{
+
+/*
+ * This gets rows from a small matrix and outputs a tall matrix.
+ */
+class repeat_rows_op: public detail::portion_mapply_op
+{
+	detail::mem_row_matrix_store::const_ptr store;
+	volatile bool success;
+public:
+	repeat_rows_op(detail::mem_row_matrix_store::const_ptr store,
+			size_t tot_nrow): detail::portion_mapply_op(tot_nrow,
+				store->get_num_cols(), store->get_type()) {
+		this->store = store;
+		this->success = true;
+		assert(tot_nrow > store->get_num_cols());
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("repeat_rows(") + mats[0]->get_name() + ")";
+	}
+};
+
+/*
+ * This gets cols from a small matrix and outputs a wide matrix.
+ */
+class repeat_cols_op: public detail::portion_mapply_op
+{
+	detail::mem_col_matrix_store::const_ptr store;
+	volatile bool success;
+public:
+	repeat_cols_op(detail::mem_col_matrix_store::const_ptr store,
+			size_t tot_ncol): detail::portion_mapply_op(store->get_num_rows(),
+				tot_ncol, store->get_type()) {
+		this->store = store;
+		this->success = true;
+		assert(store->get_num_rows() < tot_ncol);
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("repeat_cols(") + mats[0]->get_name() + ")";
+	}
+};
+
+void repeat_rows_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// The operation might fail in one portion.
+	// If it does, we don't need to perform computation on other portions.
+	if (!success)
+		return;
+
+	assert(ins[0]->get_num_cols() == 1);
+	assert(out.get_num_cols() == store->get_num_cols());
+	assert(out.store_layout() == matrix_layout_t::L_ROW);
+	detail::local_row_matrix_store &row_out
+		= static_cast<detail::local_row_matrix_store &>(out);
+	const size_t *idx
+		= reinterpret_cast<const size_t *>(ins[0]->get_raw_arr());
+	for (size_t i = 0; i < ins[0]->get_num_rows(); i++) {
+		if (idx[i] >= store->get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"index (%1%) exceeds the number of rows (%2%) in the matrix")
+				% idx[i] % store->get_num_rows();
+			const_cast<repeat_rows_op *>(this)->success = false;
+			break;
+		}
+		memcpy(row_out.get_row(i), store->get_row(idx[i]),
+				out.get_num_cols() * out.get_entry_size());
+	}
+}
+
+void repeat_cols_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// The operation might fail in one portion.
+	// If it does, we don't need to perform computation on other portions.
+	if (!success)
+		return;
+
+	assert(ins[0]->get_num_rows() == 1);
+	assert(out.get_num_rows() == store->get_num_rows());
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+	const size_t *idx
+		= reinterpret_cast<const size_t *>(ins[0]->get_raw_arr());
+	for (size_t i = 0; i < ins[0]->get_num_cols(); i++) {
+		if (idx[i] >= store->get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "the index exceeds the number of cols in the matrix";
+			const_cast<repeat_cols_op *>(this)->success = false;
+			break;
+		}
+		memcpy(col_out.get_col(i), store->get_col(idx[i]),
+				out.get_num_rows() * out.get_entry_size());
+	}
+}
+
+detail::portion_mapply_op::const_ptr repeat_rows_op::transpose() const
+{
+	detail::matrix_store::const_ptr t = store->transpose();
+	detail::mem_col_matrix_store::const_ptr col_store
+		= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(t);
+	assert(col_store);
+	return portion_mapply_op::const_ptr(new repeat_cols_op(col_store,
+				get_out_num_rows()));
+}
+
+detail::portion_mapply_op::const_ptr repeat_cols_op::transpose() const
+{
+	detail::matrix_store::const_ptr t = store->transpose();
+	detail::mem_row_matrix_store::const_ptr row_store
+		= std::dynamic_pointer_cast<const detail::mem_row_matrix_store>(t);
+	assert(row_store);
+	return portion_mapply_op::const_ptr(new repeat_rows_op(row_store,
+				get_out_num_cols()));
+}
+
+}
+
+dense_matrix::ptr dense_matrix::get_cols(col_vec::ptr idxs) const
+{
+	dense_matrix::ptr t = transpose();
+	assert(t);
+	dense_matrix::ptr ret = t->get_rows(idxs);
+	if (ret == NULL)
+		return dense_matrix::ptr();
+	return ret->transpose();
+}
+
+static std::vector<detail::mem_row_matrix_store::const_ptr> split_mat_vertial(
+		detail::matrix_store::const_ptr store, size_t block_size)
+{
+	size_t num_blocks = div_ceil<size_t>(store->get_num_cols(), block_size);
+	std::vector<detail::mem_row_matrix_store::const_ptr> blocks(num_blocks);
+	for (size_t i = 0; i < num_blocks; i++) {
+		size_t sub_num_cols = std::min(block_size,
+				store->get_num_cols() - i * block_size);
+		detail::mem_row_matrix_store::ptr row_store
+			= detail::mem_row_matrix_store::create(store->get_num_rows(),
+					sub_num_cols, store->get_type());
+		detail::local_matrix_store::const_ptr src_part
+			= store->get_portion(0, i * block_size, store->get_num_rows(),
+					sub_num_cols);
+		detail::local_matrix_store::ptr dst_part = row_store->get_portion(0, 0,
+				row_store->get_num_rows(), row_store->get_num_cols());
+		dst_part->copy_from(*src_part);
+		blocks[i] = row_store;
+	}
+	return blocks;
+}
+
+dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
+{
+	// In this case, we just read the rows from the current matrix physically
+	// and outputs a materialized matrix.
+	// If the output matrix is still wide
+	if (idxs->get_length() < get_num_cols()
+			// or the number of output rows is smaller than the number of
+			// original rows.
+			|| idxs->get_length() < get_num_rows()) {
+		dense_matrix::ptr tmp = idxs->cast_ele_type(get_scalar_type<off_t>());
+		tmp = tmp->conv2(matrix_layout_t::L_COL);
+		tmp = tmp->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr col_store
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(col_store);
+		std::vector<off_t> std_idxs(idxs->get_length());
+		memcpy(std_idxs.data(), col_store->get_col(0),
+				idxs->get_length() * sizeof(off_t));
+		return get_rows(std_idxs);
+	}
+
+	// In this case, the output matrix is a tall matrix and the number of
+	// output rows is larger than the original matrix.
+	// We use a virtual matrix to represent the output matrix.
+
+	// If the matrix is very skinny or the output matrix is still small enough.
+	if (get_num_cols() <= matrix_conf.get_block_size()
+				|| idxs->get_length() <= detail::EM_matrix_store::CHUNK_SIZE) {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		tmp = tmp->conv_store(true, -1);
+		detail::mem_row_matrix_store::const_ptr row_store
+			= std::dynamic_pointer_cast<const detail::mem_row_matrix_store>(
+					tmp->get_raw_store());
+		assert(row_store);
+
+		std::vector<dense_matrix::const_ptr> mats(1,
+				col_vec::create(idxs->cast_ele_type(get_scalar_type<off_t>())));
+		detail::portion_mapply_op::const_ptr op(new repeat_rows_op(row_store,
+					idxs->get_length()));
+		return detail::mapply_portion(mats, op, matrix_layout_t::L_ROW);
+	}
+	// In this case, we output a wide and a large matrix.
+	else {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		tmp = tmp->conv_store(true, -1);
+		std::vector<detail::mem_row_matrix_store::const_ptr> blocks
+			= split_mat_vertial(tmp->get_raw_store(), matrix_conf.get_block_size());
+
+		std::vector<detail::matrix_store::const_ptr> out_stores(blocks.size());
+		std::vector<dense_matrix::const_ptr> mats(1,
+				col_vec::create(idxs->cast_ele_type(get_scalar_type<off_t>())));
+		for (size_t i = 0; i < blocks.size(); i++) {
+			detail::portion_mapply_op::const_ptr op(new repeat_rows_op(blocks[i],
+						idxs->get_length()));
+			dense_matrix::ptr tmp = detail::mapply_portion(mats, op,
+					matrix_layout_t::L_ROW);
+			out_stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					out_stores, matrix_layout_t::L_ROW));
+	}
 }
 
 ////////////////////////////// Inner product //////////////////////////////////

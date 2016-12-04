@@ -212,8 +212,18 @@ public:
 		store = mat.store;
 	}
 
+	/*
+	 * In these two versions, we get a small number of rows/cols from a matrix.
+	 */
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
+
+	/*
+	 * In these two versions, we get a large number of rows/cols from a matrix.
+	 */
+	virtual dense_matrix::ptr get_cols(std::shared_ptr<col_vec> idxs) const;
+	virtual dense_matrix::ptr get_rows(std::shared_ptr<col_vec> idxs) const;
+
 	/*
 	 * Clone the matrix.
 	 * The class can't modify the matrix data that it points to, but it
