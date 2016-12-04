@@ -51,20 +51,22 @@ enum matrix_margin
 
 /**
  * Here defines the primitive types.
+ * The types in the list are also ordered to help arithmetic conversion.
+ * The types in the front has lower size than the ones in the end.
  */
 enum prim_type
 {
+	P_BOOL,
 	P_CHAR,
 	P_SHORT,
+	P_USHORT,
 	P_INTEGER,
+	P_UINT,
 	P_LONG,
+	P_ULONG,
 	P_FLOAT,
 	P_DOUBLE,
 	P_LDOUBLE,
-	P_BOOL,
-	P_USHORT,
-	P_UINT,
-	P_ULONG,
 	NUM_TYPES,
 };
 

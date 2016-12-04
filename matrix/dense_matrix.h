@@ -298,6 +298,8 @@ public:
 			bulk_operate::const_ptr op) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			bulk_operate::const_ptr op) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			basic_ops::op_idx) const;
 	virtual dense_matrix::ptr sapply(bulk_uoperate::const_ptr op) const;
 	virtual dense_matrix::ptr apply(matrix_margin margin,
 			arr_apply_operate::const_ptr op) const;
@@ -307,44 +309,26 @@ public:
 
 	dense_matrix::ptr cast_ele_type(const scalar_type &type) const;
 
-	dense_matrix::ptr scale_cols(std::shared_ptr<const col_vec> vals) const {
-		bulk_operate::const_ptr multiply
-			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
-		// When we scale columns, it's the same as applying the vector to
-		// each row.
-		return mapply_rows(vals, multiply);
-	}
-	dense_matrix::ptr scale_rows(std::shared_ptr<const col_vec> vals) const {
-		bulk_operate::const_ptr multiply
-			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
-		// When we scale rows, it's the same as applying the vector to
-		// each column.
-		return mapply_cols(vals, multiply);
-	}
+	dense_matrix::ptr scale_cols(std::shared_ptr<const col_vec> vals) const;
+	dense_matrix::ptr scale_rows(std::shared_ptr<const col_vec> vals) const;
 
 	dense_matrix::ptr add(const dense_matrix &mat) const {
-		const bulk_operate &op = get_type().get_basic_ops().get_add();
-		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+		return this->mapply2(mat, basic_ops::op_idx::ADD);
 	}
 	dense_matrix::ptr minus(const dense_matrix &mat) const {
-		const bulk_operate &op = get_type().get_basic_ops().get_sub();
-		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+		return this->mapply2(mat, basic_ops::op_idx::SUB);
 	}
 	/*
 	 * This performs element-wise multiplication between two matrices.
 	 */
 	dense_matrix::ptr multiply_ele(const dense_matrix &mat) const {
-		const bulk_operate &op = get_type().get_basic_ops().get_multiply();
-		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+		return this->mapply2(mat, basic_ops::op_idx::MUL);
 	}
 	dense_matrix::ptr div(const dense_matrix &mat) const {
-		const bulk_operate &op = get_type().get_basic_ops().get_divide();
-		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+		return this->mapply2(mat, basic_ops::op_idx::DIV);
 	}
 	dense_matrix::ptr pmax(const dense_matrix &mat) const {
-		const bulk_operate &op = *get_type().get_basic_ops().get_op(
-				basic_ops::op_idx::MAX);
-		return this->mapply2(mat, bulk_operate::conv2ptr(op));
+		return this->mapply2(mat, basic_ops::op_idx::MAX);
 	}
 
 	dense_matrix::ptr abs() const {

@@ -893,6 +893,39 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 				this->store_layout()));
 }
 
+static std::pair<dense_matrix::ptr, dense_matrix::ptr> match_type(
+		const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr new_m1 = m1.clone();
+	dense_matrix::ptr new_m2 = m2.clone();
+	// If these two matrices don't have the same element type, we need to
+	// cast one of them to match the other.
+	if (m1.get_type() != m2.get_type()) {
+		// The element type is ordered based on the type size.
+		if ((int) m1.get_type().get_type() > (int) m2.get_type().get_type())
+			new_m2 = new_m2->cast_ele_type(new_m1->get_type());
+		else
+			new_m1 = new_m1->cast_ele_type(new_m2->get_type());
+	}
+	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(new_m1, new_m2);
+}
+
+dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
+		basic_ops::op_idx idx) const
+{
+	if (this->get_type() == m.get_type()) {
+		const bulk_operate &op = *get_type().get_basic_ops().get_op(idx);
+		return this->mapply2(m, bulk_operate::conv2ptr(op));
+	}
+	else {
+		auto match_res = match_type(*this, m);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		const bulk_operate &op = *new_this->get_type().get_basic_ops().get_op(idx);
+		return new_this->mapply2(*new_m, bulk_operate::conv2ptr(op));
+	}
+}
+
 namespace
 {
 
@@ -2742,6 +2775,44 @@ dense_matrix::ptr dense_matrix::cbind(const std::vector<dense_matrix::ptr> &mats
 	if (combined)
 		combined = combined->transpose();
 	return combined;
+}
+
+dense_matrix::ptr dense_matrix::scale_cols(col_vec::const_ptr vals) const
+{
+	if (get_type() == vals->get_type()) {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale columns, it's the same as applying the vector to
+		// each row.
+		return mapply_rows(vals, multiply);
+	}
+	else {
+		auto match_res = match_type(*this, *vals);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
+				new_this->get_type().get_basic_ops().get_multiply());
+		return new_this->mapply_rows(col_vec::create(new_m), multiply);
+	}
+}
+
+dense_matrix::ptr dense_matrix::scale_rows(col_vec::const_ptr vals) const
+{
+	if (get_type() == vals->get_type()) {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale rows, it's the same as applying the vector to
+		// each column.
+		return mapply_cols(vals, multiply);
+	}
+	else {
+		auto match_res = match_type(*this, *vals);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
+				new_this->get_type().get_basic_ops().get_multiply());
+		return new_this->mapply_cols(col_vec::create(new_m), multiply);
+	}
 }
 
 }
