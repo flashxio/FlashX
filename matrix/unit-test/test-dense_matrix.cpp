@@ -2310,6 +2310,62 @@ void test_get_rowcols(int num_nodes)
 	block_size = 0;
 }
 
+void _test_repeat_rowcols(dense_matrix::ptr mat, size_t long_dim)
+{
+	col_vec::ptr idxs = col_vec::create(dense_matrix::create_randu<size_t>(0,
+				mat->get_num_rows() - 1, long_dim, 1, matrix_layout_t::L_COL));
+	dense_matrix::ptr tmp = mat->get_rows(idxs);
+	assert(tmp->get_type() == mat->get_type());
+	assert(tmp->get_num_rows() == long_dim);
+	assert(tmp->get_num_cols() == mat->get_num_cols());
+	dense_matrix::ptr rsum = tmp->row_sum();
+	assert(rsum->get_type() == get_scalar_type<int>());
+	dense_matrix::ptr scale_idxs
+		= idxs->multiply_scalar<size_t>(tmp->get_num_cols());
+	scalar_variable::ptr diff_sum = rsum->minus(*scale_idxs)->abs()->sum();
+	assert(diff_sum->get_type() == get_scalar_type<size_t>());
+	assert(scalar_variable::get_val<size_t>(*diff_sum) == 0);
+
+	tmp = tmp->transpose();
+	dense_matrix::ptr csum = tmp->col_sum();
+	csum = csum->transpose();
+	scale_idxs = scale_idxs->transpose();
+	diff_sum = csum->minus(*scale_idxs)->abs()->sum();
+	assert(diff_sum->get_type() == get_scalar_type<size_t>());
+	assert(scalar_variable::get_val<size_t>(*diff_sum) == 0);
+}
+
+void test_repeat_rowcols()
+{
+	col_vec::ptr seq;
+	dense_matrix::ptr mat;
+
+	seq = col_vec::create(dense_matrix::create_seq<int>(0, 1,
+				10, 1, matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(seq, seq->get_length(), 10,
+			matrix_layout_t::L_COL, false);
+	assert(mat->get_num_rows() == 10);
+	assert(mat->get_num_cols() == 10);
+	_test_repeat_rowcols(mat, 1000);
+	_test_repeat_rowcols(mat, long_dim);
+
+	mat = dense_matrix::create_repeat(seq, seq->get_length(), 100,
+			matrix_layout_t::L_COL, false);
+	assert(mat->get_num_rows() == 10);
+	assert(mat->get_num_cols() == 100);
+	_test_repeat_rowcols(mat, 1000);
+	_test_repeat_rowcols(mat, long_dim);
+
+	seq = col_vec::create(dense_matrix::create_seq<int>(0, 1,
+				100000, 1, matrix_layout_t::L_COL, false));
+	mat = dense_matrix::create_repeat(seq, seq->get_length(), 100,
+			matrix_layout_t::L_COL, false);
+	assert(mat->get_num_rows() == 100000);
+	assert(mat->get_num_cols() == 100);
+	_test_repeat_rowcols(mat, 1000);
+	_test_repeat_rowcols(mat, long_dim);
+}
+
 void test_materialize(int num_nodes)
 {
 	// Test in-memory tall matrix
@@ -3060,6 +3116,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_repeat_rowcols();
 	test_repeat();
 	test_seq_matrix();
 	test_bind(num_nodes);
