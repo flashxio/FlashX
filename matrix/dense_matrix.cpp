@@ -745,18 +745,19 @@ dense_matrix::ptr dense_matrix::mapply_cols(col_vec::const_ptr vals,
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	mapply_col_op::const_ptr mapply_op;
-	// If this is a tall matrix, the input vector may also be stored on
-	// disks. We should give it as the input of mapply_portion.
-	if (!is_wide()) {
-		ins.push_back(vals->get_raw_store());
-		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
-					NULL, op, get_num_rows(), get_num_cols()));
-	}
-	else {
+	// If this is a wide matrix or a square matrix.
+	if (is_wide() || get_num_rows() == get_num_cols()) {
 		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
 		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
 					detail::mem_matrix_store::cast(mem_mat->get_raw_store()),
 					op, get_num_rows(), get_num_cols()));
+	}
+	// If this is a tall matrix, the input vector may also be stored on
+	// disks. We should give it as the input of mapply_portion.
+	else {
+		ins.push_back(vals->get_raw_store());
+		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
+					NULL, op, get_num_rows(), get_num_cols()));
 	}
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 			mapply_op, this->store_layout());
@@ -796,6 +797,7 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
 					NULL, op, get_num_rows(), get_num_cols()));
 	}
+	// If this is a tall matrix or a square matrix.
 	else {
 		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
 		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
