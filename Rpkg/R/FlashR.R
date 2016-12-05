@@ -37,9 +37,10 @@ setClass("fm", representation(pointer = "externalptr", name = "character",
 #' @slot type a string indicating the type of the vector. This field isn't
 #'            used for a vector.
 #' @slot ele_type a string indicating the element type in the vector.
+#' @slot attrs a list that stores the attributes of the matrix.
 setClass("fmV", representation(pointer = "externalptr", name = "character",
 							   len = "numeric", type="character",
-							   ele_type="character"))
+							   ele_type="character", attrs="list"))
 
 #' An S4 class to represent a FlashMatrix factor vector. It inherits from
 #' a FlashMatrix vector.

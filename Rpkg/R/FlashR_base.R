@@ -804,26 +804,78 @@ setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 #' @name dimnames
 NULL
 
-#' @rdname dimnames
-setMethod("dimnames", signature(x = "fm"), function(x) {
-		  if (!is.null(x@attrs[["dimnames"]]))
-			  x@attrs$dimnames
-		  else
-			  NULL
-})
+.get.dimnames <- function(x)
+{
+	if (!is.null(x@attrs[["dimnames"]])) x@attrs$dimnames else NULL
+}
+
+.set.dimnames <- function(x, value)
+{
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	if (is.null(x@attrs[["dimnames"]]))
+		x@attrs$dimnames <- list(NULL, NULL)
+	if (length(value) != length(dim(x)))
+		stop("length of dimnames not equal to array extent")
+	for (i in 1:length(value))
+		x@attrs$dimnames[[i]] <- as.character(value[[i]])
+	x
+}
 
 #' @rdname dimnames
-setMethod("dimnames<-", signature(x = "fm", value="list"), function(x, value) {
-		  if (is.null(x@attrs))
-			  x@attrs <- list()
-		  if (is.null(x@attrs[["dimnames"]]))
-			  x@attrs$dimnames <- list(NULL, NULL)
-		  if (length(value) != length(dim(x)))
-			  stop("length of dimnames not equal to array extent")
-		  for (i in 1:length(value))
-			  x@attrs$dimnames[[i]] <- as.character(value[[i]])
-		  x
-})
+setMethod("dimnames", signature(x = "fm"), .get.dimnames)
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fmV"), .get.dimnames)
+
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fm", value="list"), .set.dimnames)
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fmV", value="list"), .set.dimnames)
+
+#' The Names of an Object
+#'
+#' Functions to get or set the names of an object.
+#'
+#' Currently, \code{value} has to have the same length as \code{x} and has
+#' the same shape. FlashR currently doesn't support character vectors yet.
+#'
+#' @param x a FlashR array
+#' @param value a FlashR array.
+#' @return \code{names} returns \code{NULL} or a FlashR array of the same
+#' length as \code{x}. \code{names<-} returns the updated object.
+#' @name names
+NULL
+
+.get.names <- function(x)
+{
+	if (!is.null(x@attrs[["names"]])) x@attrs$names else NULL
+}
+
+.set.names <- function(x, value)
+{
+	if (length(x) != length(value))
+		stop("The number of names isn't equal to the number of elements")
+	# if two inputs have different dimensions.
+	if (length(dim(x)) != length(dim(value))
+		# if both are matrices but they have different shapes.
+		|| (!is.null(dim(x)) && any(dim(x) != dim(value))))
+		stop("x and value have different shapes.")
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	# TODO I should make sure the names are characters.
+	x@attrs$names <- value
+	x
+}
+
+#' @rdname names
+setMethod("names", signature(x = "fm"), .get.names)
+#' @rdname names
+setMethod("names", signature(x = "fmV"), .get.names)
+
+#' @rdname names
+setMethod("names<-", signature(x = "fm", value="fm"), .set.names)
+#' @rdname names
+setMethod("names<-", signature(x = "fmV", value="fmV"), .set.names)
 
 #' Matrix Transpose
 #'
