@@ -165,7 +165,8 @@ size_t mem_thread_pool::get_global_num_threads()
 	if (pool_state == thread_pool_state::INACTIVE)
 		return 1;
 	else
-		return get_global_mem_threads()->get_num_threads();
+		// We also count the main thread.
+		return get_global_mem_threads()->get_num_threads() + 1;
 }
 
 int mem_thread_pool::get_curr_thread_id()
@@ -175,12 +176,13 @@ int mem_thread_pool::get_curr_thread_id()
 	if (pool_state == thread_pool_state::INACTIVE)
 		return 0;
 	else {
+		// It return 0 for the main thread. The worker thread Id starts with 1.
 		detail::pool_task_thread *curr
 			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
 		if (curr)
-			return curr->get_pool_thread_id();
+			return curr->get_pool_thread_id() + 1;
 		else
-			return -1;
+			return 0;
 	}
 }
 
@@ -229,15 +231,14 @@ void io_worker_task::run()
 
 global_counter::global_counter()
 {
-	counts.resize(mem_thread_pool::get_global_num_threads() + 1);
+	counts.resize(mem_thread_pool::get_global_num_threads());
 	reset();
 }
 
 void global_counter::inc(size_t val)
 {
 	int id = mem_thread_pool::get_curr_thread_id();
-	// the main thread has id of -1.
-	counts[id + 1].count += val;
+	counts[id].count += val;
 }
 
 void global_counter::reset()
