@@ -852,7 +852,13 @@ static void agg_rows(const local_matrix_store &store, const agg_operate &op,
 {
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	assert(ncol > 1);
+	if (ncol == 1) {
+		// When we run agg on a single element, we assume we get the same value
+		// as the input.
+		res.copy_from(store);
+		return;
+	}
+
 	// We always assume this is a single-column matrix.
 	assert(res.get_num_cols() == 1);
 	// Aggregate on rows, but the matrix is stored in col-major.
@@ -901,7 +907,13 @@ static void agg_cols(const local_matrix_store &store, const agg_operate &op,
 {
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	assert(nrow > 1);
+	if (nrow == 1) {
+		// When we run agg on a single element, we assume we get the same value
+		// as the input.
+		res.copy_from(store);
+		return;
+	}
+
 	// We always assume this is a single-column matrix.
 	assert(res.get_num_cols() == 1);
 	if (store.store_layout() == matrix_layout_t::L_ROW && op.is_same()) {
