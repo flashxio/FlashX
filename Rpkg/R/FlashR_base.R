@@ -241,9 +241,13 @@ NULL
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
+setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y)
+		  fm.as.matrix(fm.multiply(x, y)))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) fm.multiply(t(y), x))
+setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) {
+		  res <- fm.as.matrix(fm.multiply(t(y), x))
+		  t(res)
+})
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
 		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
