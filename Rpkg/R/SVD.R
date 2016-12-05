@@ -117,3 +117,21 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	}
 	list(d=sqrt(res$values), u=left, v=right, options=res$options)
 }
+
+setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
+		  x <- fm.as.matrix(x)
+		  if (any(!is.finite(x)))
+			  stop("infinite or missing values in 'x'")
+		  dx <- dim(x)
+		  n <- dx[1L]
+		  p <- dx[2L]
+		  if (!n || !p)
+			  stop("a dimension is zero")
+		  fm.res <- fm.svd(x, nu, nv, tol=.Machine$double.eps)
+		  res <- list(d = fm.res$d)
+		  if (nu)
+			  res$u <- fm.res$u
+		  if (nv)
+			  res$v <- fm.res$v
+		  res
+})
