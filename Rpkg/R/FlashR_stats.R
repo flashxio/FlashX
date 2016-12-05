@@ -234,6 +234,12 @@ setMethod("sd", "fmV", .sd.int)
 NULL
 
 #' @rdname cor
+setMethod("var", "fm", function(x, y=NULL, na.rm=FALSE, use) {
+		  if (missing(use))
+			  use <- if (na.rm) "na.or.complete" else "everything"
+		  cor(x, y, use)
+})
+#' @rdname cor
 setMethod("cor", "fm", .cor.int)
 #' @rdname cor
 setMethod("cov", "fm", .cov.int)
