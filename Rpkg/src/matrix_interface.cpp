@@ -58,6 +58,11 @@ static inline bool is_supported_type(const scalar_type &type)
 		|| type == get_scalar_type<double>();
 }
 
+static matrix_layout_t determine_layout(size_t nrow, size_t ncol)
+{
+	return nrow > ncol ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+}
+
 static inline const scalar_type &get_common_type(const scalar_type &left,
 		const scalar_type &right)
 {
@@ -725,21 +730,46 @@ RcppExport SEXP R_FM_create_rep_matrix(SEXP pvec, SEXP pnrow, SEXP pncol,
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
 
-	dense_matrix::ptr mat;
+	bool is_logical = false;
+	dense_matrix::ptr ret;
 	if (R_is_real(pvec))
-		mat = dense_matrix::create_const<double>(REAL(pvec)[0], nrow, ncol,
-				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+		ret = dense_matrix::create_const<double>(REAL(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
 	else if (R_is_integer(pvec))
-		mat = dense_matrix::create_const<int>(INTEGER(pvec)[0], nrow, ncol,
-				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
-	else if (R_is_logical(pvec))
-		mat = dense_matrix::create_const<bool>(LOGICAL(pvec)[0], nrow, ncol,
-				byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
-	else {
-		fprintf(stderr, "can't create a matrix with unknown type\n");
-		return R_NilValue;
+		ret = dense_matrix::create_const<int>(INTEGER(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
+	else if (R_is_logical(pvec)) {
+		ret = dense_matrix::create_const<bool>(LOGICAL(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
+		is_logical = true;
 	}
-	return create_FMR_matrix(mat, "");
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+		if (mat == NULL) {
+			fprintf(stderr, "we only accept FlashR vectors or R vectors\n");
+			return R_NilValue;
+		}
+		if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
+			fprintf(stderr, "we only accept vectors\n");
+			return R_NilValue;
+		}
+		col_vec::ptr vec = col_vec::create(mat);
+		vec->move_store(true, -1);
+		ret = dense_matrix::create_repeat(vec, nrow, ncol,
+				determine_layout(nrow, ncol), byrow, matrix_conf.get_num_nodes());
+		Rcpp::S4 matrix_obj(pvec);
+		if (matrix_obj.slot("ele_type") == "logical")
+			is_logical = true;;
+	}
+
+	if (ret == NULL)
+		return R_NilValue;
+	else {
+		Rcpp::List rret = create_FMR_matrix(ret, "");
+		if (is_logical)
+			rret["ele_type"] = Rcpp::String("logical");
+		return rret;
+	}
 }
 
 template<class T, class RType>

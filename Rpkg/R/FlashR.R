@@ -637,9 +637,16 @@ fm.conv.FM2R <- function(obj)
 fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 {
 	stopifnot(!is.null(vec))
-	stopifnot(is.atomic(vec))
-	m <- .Call("R_FM_create_rep_matrix", vec, as.numeric(nrow), as.numeric(ncol),
-				 as.logical(byrow), PACKAGE="FlashR")
+	if (is.atomic(vec) && length(vec) == 1)
+		m <- .Call("R_FM_create_rep_matrix", vec, as.numeric(nrow), as.numeric(ncol),
+				   as.logical(byrow), PACKAGE="FlashR")
+	else {
+		vec <- fm.as.vector(vec)
+		if (is.null(vec))
+			return(vec)
+		m <- .Call("R_FM_create_rep_matrix", vec, as.numeric(nrow), as.numeric(ncol),
+				   as.logical(byrow), PACKAGE="FlashR")
+	}
 	.new.fm(m)
 }
 
