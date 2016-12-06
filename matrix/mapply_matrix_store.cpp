@@ -61,15 +61,20 @@ public:
 		return tall_res->get_num_cols();
 	}
 
-	const matrix_store &get_materialize_ref(bool is_wide) {
-		if (is_wide)
+	/*
+	 * The materialized matrix should have the same layout as the mapply matrix.
+	 * It's not ambiguous to use the layout to figure out the right matrix.
+	 * In contrast, is_wide() can be ambiguous when it's a square matrix.
+	 */
+	const matrix_store &get_materialize_ref(matrix_layout_t layout) {
+		if (layout == wide_res->store_layout())
 			return *wide_res;
 		else
 			return *tall_res;
 	}
 
-	matrix_store::const_ptr get_materialize_res(bool is_wide) {
-		if (is_wide)
+	matrix_store::const_ptr get_materialize_res(matrix_layout_t layout) {
+		if (layout == wide_res->store_layout())
 			return wide_res;
 		else
 			return tall_res;
@@ -940,7 +945,7 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 	else {
 		res = materialized_mapply_tall_store::ptr(
 				new materialized_mapply_tall_store(materialize_buf));
-		const matrix_store &store = res->get_materialize_ref(is_wide());
+		const matrix_store &store = res->get_materialize_ref(store_layout());
 		assert(store.get_num_rows() == get_num_rows());
 		assert(store.get_num_cols() == get_num_cols());
 	}
@@ -971,7 +976,7 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 		// The input arguments only provide some guidance for where
 		// the materialized data should be stored. If the matrix has been
 		// materialized, we don't need to move the data.
-		return this->res->get_materialize_res(is_wide());
+		return this->res->get_materialize_res(store_layout());
 	else
 		return __mapply_portion(in_mats, op, layout, in_mem, num_nodes,
 				par_access);
@@ -981,7 +986,7 @@ matrix_store::const_ptr mapply_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
 	if (is_materialized())
-		return res->get_materialize_res(is_wide())->get_rows(idxs);
+		return res->get_materialize_res(store_layout())->get_rows(idxs);
 	if (is_wide()) {
 		// We rely on get_rows in dense_matrix to materialize the matrix
 		// and get the required rows on the fly.
@@ -1083,8 +1088,8 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
 	if (is_materialized())
-		return res->get_materialize_ref(is_wide()).get_portion(start_row,
-				start_col, num_rows, num_cols);
+		return res->get_materialize_ref(store_layout()).get_portion(
+				start_row, start_col, num_rows, num_cols);
 
 	std::vector<local_matrix_store::const_ptr> parts(in_mats.size());
 	if (is_wide()) {
@@ -1165,8 +1170,8 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
 	if (is_materialized())
-		return res->get_materialize_ref(is_wide()).get_portion_async(start_row,
-				start_col, num_rows, num_cols, orig_compute);
+		return res->get_materialize_ref(store_layout()).get_portion_async(
+				start_row, start_col, num_rows, num_cols, orig_compute);
 
 	// We should try to get the portion from the local thread memory buffer
 	// first.
@@ -1309,7 +1314,7 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 	// If the matrix has been materialized and it's stored on disks,
 	if (is_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
-				res->get_materialize_res(is_wide()).get());
+				res->get_materialize_res(store_layout()).get());
 		assert(obj);
 		return obj->create_ios();
 	}
@@ -1326,7 +1331,7 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 	}
 	if (res && !res->is_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
-				res->get_materialize_res(is_wide()).get());
+				res->get_materialize_res(store_layout()).get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
@@ -1342,7 +1347,7 @@ std::string mapply_matrix_store::get_name() const
 std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() const
 {
 	if (is_materialized())
-		return res->get_materialize_ref(is_wide()).get_underlying_mats();
+		return res->get_materialize_ref(store_layout()).get_underlying_mats();
 
 	std::unordered_map<size_t, size_t> final_res;
 	for (size_t i = 0; i < in_mats.size(); i++) {
