@@ -115,7 +115,10 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 			right <- rescale(right)
 		}
 	}
-	list(d=sqrt(res$values), u=left, v=right, options=res$options)
+	# If an eigenvalue is very small (close to the machine precision), it's
+	# possible that the eigenvalue is negative but very close to 0.
+	vals <- ifelse(res$values > 0, res$values, 0)
+	list(d=sqrt(vals), u=left, v=right, options=res$options)
 }
 
 setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
