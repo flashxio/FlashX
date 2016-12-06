@@ -281,7 +281,7 @@ public:
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
 		return std::string("(") + (mats[0]->get_name()
-					+ "*") + Bstore->get_name() + std::string(")");
+					+ "%*%") + Bmem->get_name() + std::string(")");
 	}
 };
 
