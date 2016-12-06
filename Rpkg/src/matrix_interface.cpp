@@ -169,8 +169,7 @@ RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
 	if (num_nodes == 1)
 		num_nodes = -1;
 
-	matrix_layout_t layout
-		= nrow > ncol ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+	matrix_layout_t layout = determine_layout(nrow, ncol);
 	dense_matrix::ptr mat;
 	if (type == "uniform") {
 		Rcpp::List params(pparams);
@@ -282,7 +281,7 @@ RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
 
 		double by = (to - from) / (nrow * ncol - 1);
 		dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
-				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
+				nrow, ncol, determine_layout(nrow, ncol), byrow, num_nodes);
 		return create_FMR_matrix(mat, "");
 	}
 	else {
@@ -296,7 +295,7 @@ RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
 
 		int by = (to - from) / (nrow * ncol - 1);
 		dense_matrix::ptr mat = dense_matrix::create_seq<int>(from, by,
-				nrow, ncol, matrix_layout_t::L_COL, byrow, num_nodes);
+				nrow, ncol, determine_layout(nrow, ncol), byrow, num_nodes);
 		return create_FMR_matrix(mat, "");
 	}
 }
