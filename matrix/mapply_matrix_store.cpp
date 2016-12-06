@@ -1340,7 +1340,8 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 
 std::string mapply_matrix_store::get_name() const
 {
-	return (boost::format("vmat-%1%=") % data_id).str()
+	return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id % get_num_rows()
+			% get_num_cols() % (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str()
 		+ op->to_string(in_mats);
 }
 
