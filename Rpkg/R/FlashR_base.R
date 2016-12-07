@@ -1523,7 +1523,7 @@ setMethod("[", signature(x="fm", j="missing"),
 			  ret
 		  })
 #' @rdname Extract
-setMethod("[", signature(x="fm", i="missing", drop="missing"),
+setMethod("[", signature(x="fm", i="missing"),
 		  function(x, i, j, drop=TRUE) {
 			  ret <- fm.get.cols(x, j)
 			  if (drop && length(j) == 1)
