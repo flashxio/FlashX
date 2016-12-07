@@ -70,10 +70,7 @@ public:
 		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
 		return ret;
 	}
-	virtual std::string get_name() const {
-		return (boost::format("mem_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
-			% get_num_cols()).str();
-	}
+	virtual std::string get_name() const;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;

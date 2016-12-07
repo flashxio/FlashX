@@ -79,6 +79,13 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 				layout, type);
 }
 
+std::string mem_matrix_store::get_name() const
+{
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+			% get_num_cols()
+			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
+}
+
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols) const
