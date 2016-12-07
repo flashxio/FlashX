@@ -428,44 +428,7 @@ void mapply_store::materialize_whole()
 		whole_res->reset_size();
 	}
 	else {
-		// We can determine the subchunk size as we do for local_matrix_store.
-		const size_t SUB_CHUNK_SIZE = 1024;
-		std::vector<local_matrix_store *> mutable_ins(ins.size());
-		for (size_t i = 0; i < ins.size(); i++)
-			mutable_ins[i] = const_cast<local_matrix_store *>(ins[i].get());
-
-		if (is_wide) {
-			for (size_t local_start_col = 0; local_start_col < lstore->get_num_cols();
-					local_start_col += SUB_CHUNK_SIZE) {
-				size_t local_num_cols = std::min(SUB_CHUNK_SIZE,
-						lstore->get_num_cols() - local_start_col);
-				for (size_t i = 0; i < mutable_ins.size(); i++) {
-					mutable_ins[i]->resize(0, local_start_col,
-							mutable_ins[i]->get_num_rows(), local_num_cols);
-				}
-				whole_res->resize(0, local_start_col, whole_res->get_num_rows(),
-						local_num_cols);
-				op.run(ins, *whole_res);
-			}
-		}
-		else {
-			// If this is a tall matrix.
-			for (size_t local_start_row = 0; local_start_row < lstore->get_num_rows();
-					local_start_row += SUB_CHUNK_SIZE) {
-				size_t local_num_rows = std::min(SUB_CHUNK_SIZE,
-						lstore->get_num_rows() - local_start_row);
-				for (size_t i = 0; i < mutable_ins.size(); i++) {
-					mutable_ins[i]->resize(local_start_row, 0, local_num_rows,
-							mutable_ins[i]->get_num_cols());
-				}
-				whole_res->resize(local_start_row, 0, local_num_rows,
-						whole_res->get_num_cols());
-				op.run(ins, *whole_res);
-			}
-		}
-		for (size_t i = 0; i < mutable_ins.size(); i++)
-			mutable_ins[i]->reset_size();
-		whole_res->reset_size();
+		op.run(ins, *whole_res);
 		num_materialized_eles
 			= whole_res->get_num_rows() * whole_res->get_num_cols();
 	}
