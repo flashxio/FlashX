@@ -32,7 +32,7 @@
 fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 
 	n <- dim(data)[1]
 	m <- dim(data)[2]
@@ -111,6 +111,6 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and",
 		as.numeric(end.time) - as.numeric(start.time), "seconds\n")
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	parts
 }

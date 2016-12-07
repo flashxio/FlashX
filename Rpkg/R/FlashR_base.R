@@ -1650,7 +1650,7 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 fm.summary <- function(x)
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	lazy.res <- list()
 	if (fm.is.matrix(x)) {
 		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
@@ -1676,7 +1676,7 @@ fm.summary <- function(x)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }

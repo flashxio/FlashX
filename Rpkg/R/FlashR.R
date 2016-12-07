@@ -1186,7 +1186,7 @@ fm.agg.mat.lazy <- function(fm, margin, op)
 .env.int <- new.env()
 .env.int$fm.test.na <- TRUE
 
-.set.test.na <- function(val)
+fm.set.test.na <- function(val)
 {
 	.env.int$fm.test.na <- val
 }
