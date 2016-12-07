@@ -85,6 +85,10 @@ public:
 		return false;
 	}
 
+	bool is_wide() const {
+		return get_out_num_cols() > get_out_num_rows();
+	}
+
 	size_t get_out_num_rows() const {
 		return out_num_rows;
 	}

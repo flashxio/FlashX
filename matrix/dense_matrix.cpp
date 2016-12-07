@@ -828,10 +828,6 @@ namespace
 class mapply2_op: public detail::portion_mapply_op
 {
 	bulk_operate::const_ptr op;
-
-	bool is_wide() const {
-		return get_out_num_cols() > get_out_num_rows();
-	}
 public:
 	mapply2_op(bulk_operate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
@@ -934,10 +930,6 @@ namespace
 class sapply_op: public detail::portion_mapply_op
 {
 	bulk_uoperate::const_ptr op;
-
-	bool is_wide() const {
-		return get_out_num_cols() > get_out_num_rows();
-	}
 public:
 	sapply_op(bulk_uoperate::const_ptr op, size_t out_num_rows,
 			size_t out_num_cols): detail::portion_mapply_op(out_num_rows,
