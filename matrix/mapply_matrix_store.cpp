@@ -291,7 +291,7 @@ public:
 	void materialize() const;
 	void materialize_whole();
 
-	void resize(off_t local_start_row, off_t local_start_col,
+	bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols);
 	void reset_size();
 };
@@ -305,7 +305,7 @@ void mapply_store::reset_size()
 		whole_res->reset_size();
 }
 
-void mapply_store::resize(off_t local_start_row, off_t local_start_col,
+bool mapply_store::resize(off_t local_start_row, off_t local_start_col,
 		size_t local_num_rows, size_t local_num_cols)
 {
 	// When someone accesses the matrix, he might want to access it with
@@ -314,12 +314,37 @@ void mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	// someone wants to resize it, we assume the new size is the partition size.
 	// The part size should 2^n.
 
+	// The portion operator contains some data. We need to make sure
+	// the resize is allowed in the portion operator.
+	if (!op.is_resizable(local_start_row, local_start_col, local_num_rows,
+				local_num_cols))
+		return false;
+
 	size_t num_parts = 0;
 	if (is_wide) {
 		assert(local_start_row == 0 && local_num_rows == lstore->get_num_rows());
-		for (size_t i = 0; i < ins.size(); i++)
-			const_cast<local_matrix_store *>(ins[i].get())->resize(0,
-					local_start_col, ins[i]->get_num_rows(), local_num_cols);
+		off_t orig_in_start_col = ins[0]->get_local_start_col();
+		size_t orig_in_num_cols = ins[0]->get_num_cols();
+		bool success = true;
+		for (size_t i = 0; i < ins.size(); i++) {
+			success = const_cast<local_matrix_store *>(ins[i].get())->resize(
+					0, local_start_col, ins[i]->get_num_rows(), local_num_cols);
+			if (!success)
+				break;
+		}
+		// If we fail, we need to restore the original matrix size.
+		if (!success) {
+			local_matrix_store::exposed_area area;
+			area.local_start_row = 0;
+			area.local_start_col = orig_in_start_col;
+			area.num_cols = orig_in_num_cols;
+			for (size_t i = 0; i < ins.size(); i++) {
+				area.num_rows = ins[i]->get_num_rows();
+				const_cast<local_matrix_store *>(ins[i].get())->restore_size(
+						area);
+			}
+			return false;
+		}
 		if (part_size == orig_num_cols && local_num_cols < orig_num_cols) {
 			assert(local_start_col == 0);
 			part_size = local_num_cols;
@@ -328,23 +353,46 @@ void mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	}
 	else {
 		assert(local_start_col == 0 && local_num_cols == lstore->get_num_cols());
-		for (size_t i = 0; i < ins.size(); i++)
-			const_cast<local_matrix_store *>(ins[i].get())->resize(
+		off_t orig_in_start_row = ins[0]->get_local_start_row();
+		size_t orig_in_num_rows = ins[0]->get_num_rows();
+		bool success = true;
+		for (size_t i = 0; i < ins.size(); i++) {
+			success = const_cast<local_matrix_store *>(ins[i].get())->resize(
 					local_start_row, 0, local_num_rows, ins[i]->get_num_cols());
+			if (!success)
+				break;
+		}
+		// If we fail, we need to restore the original matrix size.
+		if (!success) {
+			local_matrix_store::exposed_area area;
+			area.local_start_row = orig_in_start_row;
+			area.local_start_col = 0;
+			area.num_rows = orig_in_num_rows;
+			for (size_t i = 0; i < ins.size(); i++) {
+				area.num_cols = ins[i]->get_num_cols();
+				const_cast<local_matrix_store *>(ins[i].get())->restore_size(
+						area);
+			}
+			return false;
+		}
 		if (part_size == orig_num_rows && local_num_rows < orig_num_rows) {
 			assert(local_start_row == 0);
 			part_size = local_num_rows;
 			num_parts = div_ceil<size_t>(orig_num_rows, part_size);
 		}
 	}
-	if (whole_res)
-		whole_res->resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+	if (whole_res) {
+		bool ret = whole_res->resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		// Resize the buffer matrix should always succeed.
+		assert(ret);
+	}
 	// We haven't partitioned the matrix yet. We now use the new partition size.
 	if (num_parts > 0 && res_bufs.empty()) {
 		assert(num_parts > 1);
 		res_bufs.resize(num_parts);
 	}
+	return true;
 }
 
 /*
@@ -627,8 +675,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		store.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool ret = store.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!ret)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -694,8 +744,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		store.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool ret = store.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!ret)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -754,8 +806,11 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		const_cast<local_col_matrix_store &>(*store).resize(local_start_col,
-				local_start_row, local_num_cols, local_num_rows);
+		bool ret = const_cast<local_col_matrix_store &>(*store).resize(
+				local_start_col, local_start_row, local_num_cols,
+				local_num_rows);
+		if (!ret)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -807,8 +862,11 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		const_cast<local_row_matrix_store &>(*store).resize(local_start_col,
-				local_start_row, local_num_cols, local_num_rows);
+		bool ret = const_cast<local_row_matrix_store &>(*store).resize(
+				local_start_col, local_start_row, local_num_cols,
+				local_num_rows);
+		if (!ret)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}

@@ -272,6 +272,12 @@ public:
 		res_bufs.resize(num_threads);
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
@@ -305,6 +311,12 @@ public:
 			= std::static_pointer_cast<fm::detail::local_matrix_store>(
 					out.transpose());
 		op.run(t_ins, *t_out);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return op.is_resizable(local_start_col, local_start_row,
+				local_num_cols, local_num_rows);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -586,6 +598,12 @@ public:
 			assert(vals->get_num_cols() == 1);
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
+	}
+
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -614,6 +632,12 @@ public:
 		this->op = op;
 		if (vals)
 			assert(vals->get_num_cols() == 1);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1238,6 +1262,12 @@ public:
 		this->row_idxs = row_idxs;
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
+	}
+
 	virtual portion_mapply_op::const_ptr transpose() const;
 
 	virtual void run(
@@ -1262,6 +1292,12 @@ public:
 			const scalar_type &type): detail::portion_mapply_op(num_rows,
 				col_idxs.size(), type) {
 		this->col_idxs = col_idxs;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
 	}
 
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1418,6 +1454,12 @@ public:
 		assert(tot_nrow > store->get_num_cols());
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
 	virtual portion_mapply_op::const_ptr transpose() const;
 
 	virtual bool is_success() const {
@@ -1449,6 +1491,12 @@ public:
 		this->store = store;
 		this->success = true;
 		assert(store->get_num_rows() < tot_ncol);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
 	}
 
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1706,6 +1754,12 @@ public:
 		this->right_op = right_op;
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1724,6 +1778,12 @@ public:
 	t_inner_prod_tall_op(const inner_prod_tall_op &_op): detail::portion_mapply_op(
 			_op.get_out_num_cols(), _op.get_out_num_rows(),
 			_op.get_output_type()), op(_op) {
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return op.is_resizable(local_start_col, local_start_row,
+				local_num_cols, local_num_rows);
 	}
 
 	virtual void run(
@@ -2009,6 +2069,16 @@ public:
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->margin = margin;
 		this->op = op;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		if (margin == matrix_margin::MAR_ROW)
+			// We can only resize the number of the rows in this operation.
+			return local_num_cols == get_out_num_cols();
+		else
+			// We can only resize the number of the cols in this operation.
+			return local_num_rows == get_out_num_rows();
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -2393,6 +2463,12 @@ public:
 		this->llabels = labels->get_raw_store()->get_portion(0);
 		assert(this->llabels->get_num_rows() == labels->get_length());
 		success = true;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {

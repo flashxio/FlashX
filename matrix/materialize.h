@@ -85,6 +85,11 @@ public:
 		return false;
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return true;
+	}
+
 	bool is_wide() const {
 		return get_out_num_cols() > get_out_num_rows();
 	}

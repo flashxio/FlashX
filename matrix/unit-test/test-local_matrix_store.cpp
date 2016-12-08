@@ -3,6 +3,8 @@
 #include "bulk_operate.h"
 #include "local_matrix_store.h"
 #include "dense_matrix.h"
+#include "col_vec.h"
+#include "factor.h"
 
 using namespace fm;
 using namespace fm::detail;
@@ -1176,8 +1178,226 @@ void test_multiply(size_t long_dim)
 	test_wide_multiply(long_dim);
 }
 
+void verify_resize_tall(matrix_store::const_ptr store)
+{
+	local_matrix_store::const_ptr portion = store->get_portion(0);
+	local_matrix_store *mutable_portion
+		= const_cast<local_matrix_store *>(portion.get());
+	bool ret = mutable_portion->resize(0, 0, 100, portion->get_num_cols());
+	assert(ret);
+
+	portion = store->get_portion(0);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	size_t portion_num_rows = portion->get_num_rows();
+	size_t portion_num_cols = portion->get_num_cols();
+	ret = mutable_portion->resize(0, 0, 100, portion->get_num_cols() - 1);
+	assert(!ret);
+	assert(portion->get_num_rows() == portion_num_rows);
+	assert(portion->get_num_cols() == portion_num_cols);
+	portion->materialize_self();
+
+	portion = std::dynamic_pointer_cast<const local_matrix_store>(
+			portion->transpose());
+	assert(portion);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	ret = mutable_portion->resize(0, 0, portion->get_num_rows(), 100);
+	assert(ret);
+
+	portion = store->get_portion(0);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	portion_num_rows = portion->get_num_rows();
+	portion_num_cols = portion->get_num_cols();
+	ret = mutable_portion->resize(0, 0, portion->get_num_rows() - 1, 100);
+	assert(!ret);
+	assert(portion->get_num_rows() == portion_num_rows);
+	assert(portion->get_num_cols() == portion_num_cols);
+	portion->materialize_self();
+}
+
+void verify_resize_wide(matrix_store::const_ptr store)
+{
+	local_matrix_store::const_ptr portion = store->get_portion(0);
+	local_matrix_store *mutable_portion
+		= const_cast<local_matrix_store *>(portion.get());
+	bool ret = mutable_portion->resize(0, 0, portion->get_num_rows(), 100);
+	assert(ret);
+
+	portion = store->get_portion(0);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	size_t portion_num_rows = portion->get_num_rows();
+	size_t portion_num_cols = portion->get_num_cols();
+	ret = mutable_portion->resize(0, 0, portion->get_num_rows() - 1, 100);
+	assert(!ret);
+	assert(portion->get_num_rows() == portion_num_rows);
+	assert(portion->get_num_cols() == portion_num_cols);
+	portion->materialize_self();
+
+	portion = std::dynamic_pointer_cast<const local_matrix_store>(
+			portion->transpose());
+	assert(portion);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	ret = mutable_portion->resize(0, 0, 100, portion->get_num_cols());
+	assert(ret);
+
+	portion = store->get_portion(0);
+	mutable_portion = const_cast<local_matrix_store *>(portion.get());
+	portion_num_rows = portion->get_num_rows();
+	portion_num_cols = portion->get_num_cols();
+	ret = mutable_portion->resize(0, 0, 100, portion->get_num_cols() - 1);
+	assert(!ret);
+	assert(portion->get_num_rows() == portion_num_rows);
+	assert(portion->get_num_cols() == portion_num_cols);
+	portion->materialize_self();
+}
+
+void test_resize_multiply(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr small = dense_matrix::create_randu<double>(0, 1,
+			10, 9, matrix_layout_t::L_COL);
+
+	printf("verify tall matrix multiply\n");
+	dense_matrix::ptr res = mat->multiply(*small);
+	verify_resize_tall(res->get_raw_store());
+	res = res->transpose();
+	verify_resize_wide(res->get_raw_store());
+
+	printf("verify tall matrix inner product\n");
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::ADD));
+	bulk_operate::const_ptr mul = bulk_operate::conv2ptr(
+			*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::MUL));
+	res = mat->inner_prod(*small, mul, add);
+	verify_resize_tall(res->get_raw_store());
+	res = res->transpose();
+	verify_resize_wide(res->get_raw_store());
+}
+
+void test_resize_mapply_rowcol(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+	col_vec::ptr vec = col_vec::create(dense_matrix::create_randu<double>(0, 1,
+				mat->get_num_cols(), 1, matrix_layout_t::L_COL));
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::ADD));
+
+	printf("verify mapply rows\n");
+	dense_matrix::ptr res = mat->mapply_rows(vec, add);
+	verify_resize_tall(res->get_raw_store());
+
+	printf("verify mapply cols\n");
+	mat = mat->transpose();
+	res = mat->mapply_cols(vec, add);
+	verify_resize_wide(res->get_raw_store());
+}
+
+void test_resize_get_rowcols(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_ROW);
+	mat = mat->add(*mat);
+	std::vector<off_t> idxs(mat->get_num_cols() / 2);
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % mat->get_num_cols();
+
+	printf("verify get cols\n");
+	dense_matrix::ptr res = mat->get_cols(idxs);
+	verify_resize_tall(res->get_raw_store());
+
+	printf("verify get rows\n");
+	mat = mat->transpose();
+	res = mat->get_rows(idxs);
+	verify_resize_wide(res->get_raw_store());
+}
+
+void test_resize_repeat(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			10, 9, matrix_layout_t::L_COL);
+	col_vec::ptr idxs = col_vec::create(dense_matrix::create_randu<size_t>(
+				0, mat->get_num_rows() - 1, long_dim, 1,
+				matrix_layout_t::L_COL));
+
+	printf("verify repeat rows\n");
+	dense_matrix::ptr res = mat->get_rows(idxs);
+	verify_resize_tall(res->get_raw_store());
+
+	printf("verify repeat cols\n");
+	mat = mat->transpose();
+	res = mat->get_cols(idxs);
+	verify_resize_wide(res->get_raw_store());
+}
+
+class sum_apply_op: public arr_apply_operate
+{
+public:
+	void run(const local_vec_store &in, local_vec_store &out) const {
+		assert(in.get_type() == get_scalar_type<double>());
+		assert(out.get_type() == get_scalar_type<double>());
+		double res = 0;
+		for (size_t i = 0; i < in.get_length(); i++)
+			res += in.get<double>(i);
+		out.set<double>(0, res);
+	}
+
+	const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+
+	const scalar_type &get_output_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return 1;
+	}
+};
+
+void test_resize_apply(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			long_dim, 10, matrix_layout_t::L_COL);
+
+	printf("verify apply rows\n");
+	dense_matrix::ptr res = mat->apply(matrix_margin::MAR_ROW,
+			arr_apply_operate::const_ptr(new sum_apply_op()));
+	verify_resize_tall(res->get_raw_store());
+
+	printf("verify apply cols\n");
+	mat = mat->transpose();
+	res = mat->apply(matrix_margin::MAR_COL,
+			arr_apply_operate::const_ptr(new sum_apply_op()));
+	verify_resize_wide(res->get_raw_store());
+}
+
+void test_resize_groupby(size_t long_dim)
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<double>(0, 1,
+			10, long_dim, matrix_layout_t::L_COL);
+	factor_col_vector::ptr labels = factor_col_vector::create(factor(3),
+			dense_matrix::create_randu<int>(0, 2, mat->get_num_rows(), 1,
+				matrix_layout_t::L_COL));
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			*mat->get_type().get_basic_ops().get_op(basic_ops::op_idx::ADD));
+	printf("verify group rows\n");
+	dense_matrix::ptr res = mat->groupby_row(labels, add);
+	verify_resize_wide(res->get_raw_store());
+}
+
+void test_resize(size_t long_dim)
+{
+	test_resize_groupby(long_dim);
+	test_resize_multiply(long_dim);
+	test_resize_mapply_rowcol(long_dim);
+	test_resize_get_rowcols(long_dim);
+	test_resize_repeat(long_dim);
+	test_resize_apply(long_dim);
+}
+
 int main()
 {
+	test_resize(10000);
 	test_multiply(1000);
 	test_multiply(10000);
 	test_conv_layout(1000);
