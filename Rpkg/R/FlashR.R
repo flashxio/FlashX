@@ -436,7 +436,7 @@ fm.as.vector <- function(obj)
 {
 	stopifnot(!is.null(obj))
 	if (class(obj) == "fmV")
-		vec
+		obj
 	else if (class(obj) == "fm") {
 		vec <- .Call("R_FM_as_vector", obj, PACKAGE="FlashR")
 		if (!is.null(vec))
