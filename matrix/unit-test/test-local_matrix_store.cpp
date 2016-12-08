@@ -5,6 +5,7 @@
 #include "dense_matrix.h"
 #include "col_vec.h"
 #include "factor.h"
+#include "mapply_matrix_store.h"
 
 using namespace fm;
 using namespace fm::detail;
@@ -1385,6 +1386,7 @@ void test_resize_groupby(size_t long_dim)
 	verify_resize_wide(res->get_raw_store());
 }
 
+// This is to test if we can resize a local matrix as we expect.
 void test_resize(size_t long_dim)
 {
 	test_resize_groupby(long_dim);
@@ -1395,9 +1397,355 @@ void test_resize(size_t long_dim)
 	test_resize_apply(long_dim);
 }
 
+class nonresize_copy_op: public detail::portion_mapply_op
+{
+	size_t resize_dim;
+public:
+	nonresize_copy_op(size_t num_rows, size_t num_cols, const scalar_type &type,
+			size_t resize_dim): detail::portion_mapply_op(
+				num_rows, num_cols, type) {
+		this->resize_dim = resize_dim;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		if (resize_dim == 1)
+			// non-resizable on cols.
+			return local_num_rows == get_out_num_rows();
+		else if (resize_dim == 2)
+			// non-resizable on rows.
+			return local_num_cols == get_out_num_cols();
+		else
+			return true;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		assert(ins.size() == 1);
+		out.copy_from(*ins[0]);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		assert(0);
+		return detail::portion_mapply_op::const_ptr();
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string();
+	}
+};
+
+matrix_store::const_ptr get_data_mat(size_t nrow, size_t ncol,
+		matrix_layout_t layout, size_t resize_dim)
+{
+	matrix_store::ptr in = mem_matrix_store::create(nrow, ncol, layout,
+			get_scalar_type<double>(), -1);
+	in->set_data(set_seq<double>(0, 1, ncol, true, layout));
+	if (resize_dim == 1 || resize_dim == 2)
+		return matrix_store::const_ptr(new mapply_matrix_store(
+					std::vector<matrix_store::const_ptr>(1, in),
+					portion_mapply_op::const_ptr(new nonresize_copy_op(nrow,
+							ncol, in->get_type(), resize_dim)),
+					layout));
+	else
+		return in;
+}
+
+void verify_equal(const matrix_store &m1, const matrix_store &m2)
+{
+	const mem_matrix_store &mem_m1 = dynamic_cast<const mem_matrix_store &>(m1);
+	const mem_matrix_store &mem_m2 = dynamic_cast<const mem_matrix_store &>(m2);
+	assert(memcmp(mem_m1.get_raw_arr(), mem_m2.get_raw_arr(),
+				m1.get_num_rows() * m1.get_num_cols() * m1.get_entry_size()) == 0);
+}
+
+void test_resize_compute_multiply()
+{
+	matrix_store::const_ptr m1, m2;
+	matrix_store::ptr correct_res, res;
+
+	printf("verify resize compute on inner prod wide\n");
+	// resizable local matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	const bulk_operate &add = m1->get_type().get_basic_ops().get_add();
+	const bulk_operate &mul = m1->get_type().get_basic_ops().get_multiply();
+	correct_res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_wide(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*correct_res->get_portion(0));
+
+	// non-resizable on rows in the left matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_wide(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on cols in the right matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 1);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_wide(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows in the left matrix and cols in the right matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 1);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_wide(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	printf("verify resize compute on inner prod tall\n");
+	// resizable local matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	correct_res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_tall(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*correct_res->get_portion(0));
+
+	// non-resizable on rows in the left matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	inner_prod_tall(*m1->get_portion(0), *m2->get_portion(0), mul, add,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	std::pair<local_matrix_store::ptr, local_matrix_store::ptr> bufs;
+	printf("verify resize compute on multiply tall\n");
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	correct_res = mem_matrix_store::create(500, 500, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	matrix_tall_multiply(*m1->get_portion(0), *m2->get_portion(0),
+			*correct_res->get_portion(0), bufs);
+
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_COL, 1);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	matrix_tall_multiply(*m1->get_portion(0), *m2->get_portion(0),
+			*res->get_portion(0), bufs);
+	verify_equal(*correct_res, *res);
+}
+
+void test_resize_compute_agg()
+{
+	matrix_store::const_ptr m;
+	matrix_store::ptr correct_res, res;
+
+	printf("verify resize compute on agg both\n");
+	// resizable local matrix.
+	m = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			m->get_type().get_basic_ops().get_add());
+	agg_operate::const_ptr agg_add = agg_operate::create(add, add);
+	correct_res = mem_matrix_store::create(1, 1, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	aggregate(*m->get_portion(0), *agg_add, matrix_margin::BOTH,
+			part_dim_t::PART_DIM1, *correct_res->get_portion(0));
+
+	// non-resizable on cols.
+	m = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	res = mem_matrix_store::create(1, 1, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	aggregate(*m->get_portion(0), *agg_add, matrix_margin::BOTH,
+			part_dim_t::PART_DIM2, *res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows.
+	m = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	res = mem_matrix_store::create(1, 1, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	aggregate(*m->get_portion(0), *agg_add, matrix_margin::BOTH,
+			part_dim_t::PART_DIM1, *res->get_portion(0));
+	verify_equal(*correct_res, *res);
+}
+
+void test_resize_compute_mapply2()
+{
+	matrix_store::const_ptr m1, m2;
+	matrix_store::ptr correct_res, res;
+
+	printf("verify resize compute on mapply2\n");
+	// resizable local matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	const bulk_operate &add = m1->get_type().get_basic_ops().get_add();
+	correct_res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	mapply2(*m1->get_portion(0), *m2->get_portion(0), add, part_dim_t::PART_NONE,
+			*correct_res->get_portion(0));
+
+	// non-resizable on cols.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	mapply2(*m1->get_portion(0), *m2->get_portion(0), add, part_dim_t::PART_DIM2,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	mapply2(*m1->get_portion(0), *m2->get_portion(0), add, part_dim_t::PART_DIM2,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	mapply2(*m1->get_portion(0), *m2->get_portion(0), add, part_dim_t::PART_DIM1,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	m2 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	mapply2(*m1->get_portion(0), *m2->get_portion(0), add, part_dim_t::PART_DIM1,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+}
+
+void test_resize_compute_sapply()
+{
+	matrix_store::const_ptr m1;
+	matrix_store::ptr correct_res, res;
+
+	printf("verify resize compute on sapply\n");
+	// resizable local matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	const bulk_uoperate &neg = *m1->get_type().get_basic_uops().get_op(
+			basic_uops::op_idx::NEG);
+	correct_res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	sapply(*m1->get_portion(0), neg, part_dim_t::PART_NONE,
+			*correct_res->get_portion(0));
+
+	// non-resizable on cols.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	sapply(*m1->get_portion(0), neg, part_dim_t::PART_DIM2,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	res = mem_matrix_store::create(500, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	sapply(*m1->get_portion(0), neg, part_dim_t::PART_DIM1,
+			*res->get_portion(0));
+	verify_equal(*correct_res, *res);
+}
+
+void test_resize_compute_groupby()
+{
+	matrix_store::const_ptr m1;
+	matrix_store::ptr correct_res, res;
+
+
+	printf("verify resize compute on groupby\n");
+	// groupby on rows, resizable local matrix.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 0);
+	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
+			m1->get_type().get_basic_ops().get_add());
+	agg_operate::const_ptr agg_add = agg_operate::create(add, add);
+	dense_matrix::ptr labels = factor_col_vector::create(factor(3),
+			dense_matrix::create_randu<int>(0, 2, m1->get_num_rows(), 1,
+				matrix_layout_t::L_COL));
+	std::vector<bool> agg_flags(m1->get_num_rows());
+	correct_res = mem_matrix_store::create(3, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_ROW, part_dim_t::PART_NONE,
+			*correct_res->get_portion(0), agg_flags);
+
+	// non-resizable on cols.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 2);
+	res = mem_matrix_store::create(3, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	agg_flags.clear();
+	agg_flags.resize(m1->get_num_rows());
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_ROW, part_dim_t::PART_DIM2,
+			*res->get_portion(0), agg_flags);
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_ROW, 1);
+	res = mem_matrix_store::create(3, 500, matrix_layout_t::L_ROW,
+			get_scalar_type<double>(), -1);
+	agg_flags.clear();
+	agg_flags.resize(m1->get_num_rows());
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_ROW, part_dim_t::PART_DIM1,
+			*res->get_portion(0), agg_flags);
+	verify_equal(*correct_res, *res);
+
+	// groupby on cols
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_COL, 0);
+	labels = labels->transpose();
+	correct_res = mem_matrix_store::create(500, 3, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	agg_flags.clear();
+	agg_flags.resize(m1->get_num_cols());
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_COL, part_dim_t::PART_DIM2,
+			*correct_res->get_portion(0), agg_flags);
+
+	// non-resizable on cols.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_COL, 2);
+	res = mem_matrix_store::create(500, 3, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	agg_flags.clear();
+	agg_flags.resize(m1->get_num_cols());
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_COL, part_dim_t::PART_DIM2,
+			*res->get_portion(0), agg_flags);
+	verify_equal(*correct_res, *res);
+
+	// non-resizable on rows.
+	m1 = get_data_mat(500, 500, matrix_layout_t::L_COL, 1);
+	res = mem_matrix_store::create(500, 3, matrix_layout_t::L_COL,
+			get_scalar_type<double>(), -1);
+	agg_flags.clear();
+	agg_flags.resize(m1->get_num_cols());
+	groupby(*labels->get_raw_store()->get_portion(0), *m1->get_portion(0),
+			*agg_add, matrix_margin::MAR_COL, part_dim_t::PART_DIM1,
+			*res->get_portion(0), agg_flags);
+	verify_equal(*correct_res, *res);
+}
+
+// This is to test if we can still get the correct results when resize fails.
+void test_resize_compute()
+{
+	test_resize_compute_multiply();
+	test_resize_compute_agg();
+	test_resize_compute_mapply2();
+	test_resize_compute_sapply();
+	test_resize_compute_groupby();
+}
+
 int main()
 {
 	test_resize(10000);
+	test_resize_compute();
 	test_multiply(1000);
 	test_multiply(10000);
 	test_conv_layout(1000);

@@ -627,24 +627,40 @@ void multiply_wide_op::run(
 	local_matrix_store::exposed_area orig_B = ins[1]->get_exposed_area();
 	local_matrix_store &mutableA = const_cast<local_matrix_store &>(*ins[0]);
 	local_matrix_store &mutableB = const_cast<local_matrix_store &>(*ins[1]);
+	bool resize_success = true;
 	for (size_t row_idx = 0; row_idx < long_dim; row_idx += LONG_DIM_LEN) {
 		size_t llen = std::min(long_dim - row_idx, LONG_DIM_LEN);
 		if (require_trans)
-			mutableA.resize(orig_A.local_start_row + row_idx,
+			resize_success = mutableA.resize(orig_A.local_start_row + row_idx,
 					orig_A.local_start_col, llen, mutableA.get_num_cols());
 		else
-			mutableA.resize(orig_A.local_start_row,
+			resize_success = mutableA.resize(orig_A.local_start_row,
 					orig_A.local_start_col + row_idx, mutableA.get_num_rows(),
 					llen);
-		mutableB.resize(orig_B.local_start_row + row_idx,
-				orig_B.local_start_col, llen, mutableB.get_num_cols());
+		if (resize_success)
+			resize_success = mutableB.resize(orig_B.local_start_row + row_idx,
+					orig_B.local_start_col, llen, mutableB.get_num_cols());
+		// If we resize both matrices, we perform computation on the resized
+		// matrix.
+		if (resize_success) {
+			if (is_sparse)
+				run_part_sparse(ins);
+			else
+				run_part_dense(ins);
+		}
+		else
+			break;
+	}
+	mutableA.restore_size(orig_A);
+	mutableB.restore_size(orig_B);
+	// If the resize on one of the matrices failed, we perform the computation
+	// here.
+	if (!resize_success) {
 		if (is_sparse)
 			run_part_sparse(ins);
 		else
 			run_part_dense(ins);
 	}
-	mutableA.restore_size(orig_A);
-	mutableB.restore_size(orig_B);
 }
 
 void multiply_wide_op::run_part_dense(
@@ -941,11 +957,21 @@ public:
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_row == 0);
 		assert(local_num_rows == mutable_left_part.get_num_rows());
-		mutable_left_part.resize(local_start_row, local_start_col,
+
+		local_matrix_store::exposed_area orig_left
+			= mutable_left_part.get_exposed_area();
+		bool success = mutable_left_part.resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
+
 		// We need to resize the portion of the right matrix accordingly.
-		mutable_right_part.resize(local_start_col, 0, local_num_cols,
+		success = mutable_right_part.resize(local_start_col, 0, local_num_cols,
 				mutable_right_part.get_num_cols());
+		if (!success) {
+			mutable_left_part.restore_size(orig_left);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -1011,11 +1037,20 @@ public:
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_row == 0);
 		assert(local_num_rows == mutable_left_part.get_num_rows());
-		mutable_left_part.resize(local_start_row, local_start_col,
+		local_matrix_store::exposed_area orig_left
+			= mutable_left_part.get_exposed_area();
+		bool success = mutable_left_part.resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
+
 		// We need to resize the portion of the right matrix accordingly.
-		mutable_right_part.resize(local_start_col, 0, local_num_cols,
+		success = mutable_right_part.resize(local_start_col, 0, local_num_cols,
 				mutable_right_part.get_num_cols());
+		if (!success) {
+			mutable_left_part.restore_size(orig_left);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}

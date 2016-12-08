@@ -746,14 +746,23 @@ void inner_prod_wide(const local_matrix_store &left, const local_matrix_store &r
 			tmp_res = local_matrix_store::ptr(new local_buf_col_matrix_store(
 						0, 0, res.get_num_rows(), res.get_num_cols(),
 						res.get_type(), -1));
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols;
 				col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			mutable_left.resize(orig_left.local_start_row,
+			success = mutable_left.resize(orig_left.local_start_row,
 					orig_left.local_start_col + col_idx, left.get_num_rows(),
 					llen);
-			mutable_right.resize(orig_right.local_start_row + col_idx,
-					orig_right.local_start_col, llen, right.get_num_cols());
+			if (success)
+				success = mutable_right.resize(
+						orig_right.local_start_row + col_idx,
+						orig_right.local_start_col, llen, right.get_num_cols());
+			if (!success) {
+				// We assume if resize fails, it fails in the first iteration.
+				assert(col_idx == 0);
+				break;
+			}
+
 			if (col_idx > 0) {
 				// We accumulate the product on the result matrix directly.
 				_inner_prod(left, right, left_op, right_op, *tmp_res, tmp_buf);
@@ -764,6 +773,8 @@ void inner_prod_wide(const local_matrix_store &left, const local_matrix_store &r
 		}
 		mutable_left.restore_size(orig_left);
 		mutable_right.restore_size(orig_right);
+		if (!success)
+			_inner_prod(left, right, left_op, right_op, res, tmp_buf);
 	}
 }
 
@@ -785,16 +796,25 @@ void inner_prod_tall(const local_matrix_store &left, const local_matrix_store &r
 		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
 		local_matrix_store &mutable_left = const_cast<local_matrix_store &>(
 				left);
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutable_left.resize(orig_left.local_start_row + row_idx,
+			success = mutable_left.resize(orig_left.local_start_row + row_idx,
 					orig_left.local_start_col, llen, left.get_num_cols());
-			res.resize(orig_res.local_start_row + row_idx,
-					orig_res.local_start_col, llen, res.get_num_cols());
+			if (success)
+				success = res.resize(orig_res.local_start_row + row_idx,
+						orig_res.local_start_col, llen, res.get_num_cols());
+			if (!success) {
+				// We assume if resize fails, it fails in the first iteration.
+				assert(row_idx == 0);
+				break;
+			}
 			_inner_prod(left, right, left_op, right_op, res, tmp_buf);
 		}
 		mutable_left.restore_size(orig_left);
 		res.restore_size(orig_res);
+		if (!success)
+			_inner_prod(left, right, left_op, right_op, res, tmp_buf);
 	}
 }
 
@@ -1009,14 +1029,20 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 			= const_cast<local_matrix_store &>(store);
 		// The res matrix is a single-column matrix.
 		assert(res.get_num_cols() == 1);
+		bool success = true;
 		if (dim == part_dim_t::PART_DIM2) {
 			size_t orig_num_cols = store.get_num_cols();
 			for (size_t col_idx = 0; col_idx < orig_num_cols;
 					col_idx += part_len) {
 				size_t llen = std::min(orig_num_cols - col_idx, part_len);
-				mutable_store.resize(orig_in.local_start_row,
+				success = mutable_store.resize(orig_in.local_start_row,
 						orig_in.local_start_col + col_idx,
 						store.get_num_rows(), llen);
+				if (!success) {
+					assert(col_idx == 0);
+					break;
+				}
+
 				if (resize_res) {
 					res.resize(col_idx, 0, llen, 1);
 					_aggregate(store, op, margin, res);
@@ -1035,8 +1061,13 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 			for (size_t row_idx = 0; row_idx < orig_num_rows;
 					row_idx += part_len) {
 				size_t llen = std::min(orig_num_rows - row_idx, part_len);
-				mutable_store.resize(orig_in.local_start_row + row_idx,
+				success = mutable_store.resize(orig_in.local_start_row + row_idx,
 						orig_in.local_start_col, llen, store.get_num_cols());
+				if (!success) {
+					assert(row_idx == 0);
+					break;
+				}
+
 				if (resize_res) {
 					res.resize(row_idx, 0, llen, 1);
 					_aggregate(store, op, margin, res);
@@ -1053,6 +1084,8 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 		mutable_store.restore_size(orig_in);
 		if (resize_res)
 			res.restore_size(orig_res);
+		if (!success)
+			_aggregate(store, op, margin, res);
 	}
 }
 
@@ -1101,20 +1134,31 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
 		local_matrix_store &mutable_m1 = const_cast<local_matrix_store &>(m1);
 		local_matrix_store &mutable_m2 = const_cast<local_matrix_store &>(m2);
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols;
 				col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			mutable_m1.resize(orig_m1.local_start_row,
+			success = mutable_m1.resize(orig_m1.local_start_row,
 					orig_m1.local_start_col + col_idx, m1.get_num_rows(), llen);
-			mutable_m2.resize(orig_m2.local_start_row,
-					orig_m2.local_start_col + col_idx, m2.get_num_rows(), llen);
-			res.resize(orig_res.local_start_row,
-					orig_res.local_start_col + col_idx, res.get_num_rows(), llen);
+			if (success)
+				success = mutable_m2.resize(orig_m2.local_start_row,
+						orig_m2.local_start_col + col_idx, m2.get_num_rows(),
+						llen);
+			if (success)
+				success = res.resize(orig_res.local_start_row,
+						orig_res.local_start_col + col_idx, res.get_num_rows(),
+						llen);
+			if (!success) {
+				assert(col_idx == 0);
+				break;
+			}
 			_mapply2(m1, m2, op, res);
 		}
 		mutable_m1.restore_size(orig_m1);
 		mutable_m2.restore_size(orig_m2);
 		res.restore_size(orig_res);
+		if (!success)
+			_mapply2(m1, m2, op, res);
 	}
 	// resize the tall matrix
 	else if (is_virt && dim == part_dim_t::PART_DIM1
@@ -1127,19 +1171,28 @@ void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
 		local_matrix_store &mutable_m1 = const_cast<local_matrix_store &>(m1);
 		local_matrix_store &mutable_m2 = const_cast<local_matrix_store &>(m2);
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutable_m1.resize(orig_m1.local_start_row + row_idx,
+			success = mutable_m1.resize(orig_m1.local_start_row + row_idx,
 					orig_m1.local_start_col, llen, m1.get_num_cols());
-			mutable_m2.resize(orig_m2.local_start_row + row_idx,
-					orig_m2.local_start_col, llen, m2.get_num_cols());
-			res.resize(orig_res.local_start_row + row_idx,
-					orig_res.local_start_col, llen, res.get_num_cols());
+			if (success)
+				success = mutable_m2.resize(orig_m2.local_start_row + row_idx,
+						orig_m2.local_start_col, llen, m2.get_num_cols());
+			if (success)
+				success = res.resize(orig_res.local_start_row + row_idx,
+						orig_res.local_start_col, llen, res.get_num_cols());
+			if (!success) {
+				assert(row_idx == 0);
+				break;
+			}
 			_mapply2(m1, m2, op, res);
 		}
 		mutable_m1.restore_size(orig_m1);
 		mutable_m2.restore_size(orig_m2);
 		res.restore_size(orig_res);
+		if (!success)
+			_mapply2(m1, m2, op, res);
 	}
 	else
 		// If the local matrix isn't virtual, we don't need to resize it
@@ -1187,16 +1240,24 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
 		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(
 				store);
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			mutable_store.resize(orig_in.local_start_row,
+			success = mutable_store.resize(orig_in.local_start_row,
 					orig_in.local_start_col + col_idx, store.get_num_rows(), llen);
-			res.resize(orig_res.local_start_row,
-					orig_res.local_start_col + col_idx, res.get_num_rows(), llen);
+			if (success)
+				success = res.resize(orig_res.local_start_row,
+						orig_res.local_start_col + col_idx, res.get_num_rows(), llen);
+			if (!success) {
+				assert(col_idx == 0);
+				break;
+			}
 			_sapply(store, op, res);
 		}
 		mutable_store.restore_size(orig_in);
 		res.restore_size(orig_res);
+		if (!success)
+			_sapply(store, op, res);
 	}
 	// resize the tall matrix
 	else if (store.is_virtual() && dim == part_dim_t::PART_DIM1
@@ -1208,16 +1269,24 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
 		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(
 				store);
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutable_store.resize(orig_in.local_start_row + row_idx,
+			success = mutable_store.resize(orig_in.local_start_row + row_idx,
 					orig_in.local_start_col, llen, store.get_num_cols());
-			res.resize(orig_res.local_start_row + row_idx,
-					orig_res.local_start_col, llen, res.get_num_cols());
+			if (success)
+				success = res.resize(orig_res.local_start_row + row_idx,
+						orig_res.local_start_col, llen, res.get_num_cols());
+			if (!success) {
+				assert(row_idx == 0);
+				break;
+			}
 			_sapply(store, op, res);
 		}
 		mutable_store.restore_size(orig_in);
 		res.restore_size(orig_res);
+		if (!success)
+			_sapply(store, op, res);
 	}
 	else
 		// If the local matrix isn't virtual, we don't need to resize it
@@ -1486,13 +1555,19 @@ bool groupby(const detail::local_matrix_store &labels,
 		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
 		local_matrix_store::exposed_area orig_res = results.get_exposed_area();
 		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			mutable_mat.resize(orig_in.local_start_row,
+			success = mutable_mat.resize(orig_in.local_start_row,
 					orig_in.local_start_col + col_idx, mat.get_num_rows(), llen);
-			results.resize(orig_res.local_start_row,
-					orig_res.local_start_col + col_idx,
-					results.get_num_rows(), llen);
+			if (success)
+				success = results.resize(orig_res.local_start_row,
+						orig_res.local_start_col + col_idx,
+						results.get_num_rows(), llen);
+			if (!success) {
+				assert(col_idx == 0);
+				break;
+			}
 			// We need to reset the flags when we compute on smaller parts.
 			size_t orig_num = agg_flags.size();
 			agg_flags.clear();
@@ -1506,7 +1581,10 @@ bool groupby(const detail::local_matrix_store &labels,
 		}
 		mutable_mat.restore_size(orig_in);
 		results.restore_size(orig_res);
-		return true;
+		if (!success)
+			return _groupby(labels, mat, op, margin, results, agg_flags);
+		else
+			return true;
 	}
 	// Group by cols on a tall matrix.
 	else if (dim == part_dim_t::PART_DIM1 && margin == matrix_margin::MAR_COL
@@ -1517,13 +1595,19 @@ bool groupby(const detail::local_matrix_store &labels,
 		local_matrix_store::exposed_area orig_in = mat.get_exposed_area();
 		local_matrix_store::exposed_area orig_res = results.get_exposed_area();
 		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
+		bool success = true;
 		// We need to resize the input matrix and the result matrix.
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutable_mat.resize(orig_in.local_start_row + row_idx,
+			success = mutable_mat.resize(orig_in.local_start_row + row_idx,
 					orig_in.local_start_col, llen, mat.get_num_cols());
-			results.resize(orig_res.local_start_row + row_idx,
-					orig_res.local_start_col, llen, results.get_num_cols());
+			if (success)
+				success = results.resize(orig_res.local_start_row + row_idx,
+						orig_res.local_start_col, llen, results.get_num_cols());
+			if (!success) {
+				assert(row_idx == 0);
+				break;
+			}
 			// We need to reset the flags when we compute on smaller parts.
 			size_t orig_num = agg_flags.size();
 			agg_flags.clear();
@@ -1537,7 +1621,10 @@ bool groupby(const detail::local_matrix_store &labels,
 		}
 		mutable_mat.restore_size(orig_in);
 		results.restore_size(orig_res);
-		return true;
+		if (!success)
+			return _groupby(labels, mat, op, margin, results, agg_flags);
+		else
+			return true;
 	}
 	// Group by rows on a tall matrix.
 	else if (mat.is_virtual() && dim == part_dim_t::PART_DIM1
@@ -1551,12 +1638,18 @@ bool groupby(const detail::local_matrix_store &labels,
 		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
 		local_matrix_store &mutable_labels = const_cast<local_matrix_store &>(
 				labels);
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutable_mat.resize(orig_in.local_start_row + row_idx,
+			success = mutable_mat.resize(orig_in.local_start_row + row_idx,
 					orig_in.local_start_col, llen, mat.get_num_cols());
-			mutable_labels.resize(orig_labels.local_start_row + row_idx,
-					orig_labels.local_start_col, llen, labels.get_num_cols());
+			if (success)
+				success = mutable_labels.resize(orig_labels.local_start_row + row_idx,
+						orig_labels.local_start_col, llen, labels.get_num_cols());
+			if (!success) {
+				assert(row_idx == 0);
+				break;
+			}
 			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
 			if (!ret) {
 				mutable_mat.restore_size(orig_in);
@@ -1566,7 +1659,10 @@ bool groupby(const detail::local_matrix_store &labels,
 		}
 		mutable_mat.restore_size(orig_in);
 		mutable_labels.restore_size(orig_labels);
-		return true;
+		if (!success)
+			return _groupby(labels, mat, op, margin, results, agg_flags);
+		else
+			return true;
 	}
 	// Group by cols on a wide matrix.
 	else if (mat.is_virtual() && dim == part_dim_t::PART_DIM2
@@ -1580,13 +1676,19 @@ bool groupby(const detail::local_matrix_store &labels,
 		local_matrix_store &mutable_mat = const_cast<local_matrix_store &>(mat);
 		local_matrix_store &mutable_labels = const_cast<local_matrix_store &>(
 				labels);
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			mutable_mat.resize(orig_in.local_start_row,
+			success = mutable_mat.resize(orig_in.local_start_row,
 					orig_in.local_start_col + col_idx, mat.get_num_rows(), llen);
-			mutable_labels.resize(orig_labels.local_start_row,
-					orig_labels.local_start_col + col_idx,
-					labels.get_num_rows(), llen);
+			if (success)
+				success = mutable_labels.resize(orig_labels.local_start_row,
+						orig_labels.local_start_col + col_idx,
+						labels.get_num_rows(), llen);
+			if (!success) {
+				assert(col_idx == 0);
+				break;
+			}
 			bool ret = _groupby(labels, mat, op, margin, results, agg_flags);
 			if (!ret) {
 				mutable_mat.restore_size(orig_in);
@@ -1596,7 +1698,10 @@ bool groupby(const detail::local_matrix_store &labels,
 		}
 		mutable_mat.restore_size(orig_in);
 		mutable_labels.restore_size(orig_labels);
-		return true;
+		if (!success)
+			return _groupby(labels, mat, op, margin, results, agg_flags);
+		else
+			return true;
 	}
 	else
 		return _groupby(labels, mat, op, margin, results, agg_flags);
@@ -1899,12 +2004,16 @@ void matrix_tall_multiply(const local_matrix_store &Astore,
 		local_matrix_store::exposed_area orig_A = Astore.get_exposed_area();
 		local_matrix_store::exposed_area orig_out = out.get_exposed_area();
 		local_matrix_store &mutableA = const_cast<local_matrix_store &>(Astore);
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			mutableA.resize(orig_A.local_start_row + row_idx,
+			success = mutableA.resize(orig_A.local_start_row + row_idx,
 					orig_A.local_start_col, llen, Astore.get_num_cols());
-			out.resize(orig_out.local_start_row + row_idx,
-					orig_out.local_start_col, llen, out.get_num_cols());
+			if (success)
+				success = out.resize(orig_out.local_start_row + row_idx,
+						orig_out.local_start_col, llen, out.get_num_cols());
+			if (!success)
+				break;
 
 			if (Astore.get_type() == get_scalar_type<double>())
 				_matrix_tall_multiply<double>(Astore, Bstore, out, bufs);
@@ -1913,6 +2022,12 @@ void matrix_tall_multiply(const local_matrix_store &Astore,
 		}
 		mutableA.restore_size(orig_A);
 		out.restore_size(orig_out);
+		if (!success) {
+			if (Astore.get_type() == get_scalar_type<double>())
+				_matrix_tall_multiply<double>(Astore, Bstore, out, bufs);
+			else
+				_matrix_tall_multiply<float>(Astore, Bstore, out, bufs);
+		}
 	}
 	else {
 		if (Astore.get_type() == get_scalar_type<double>())
@@ -1957,18 +2072,27 @@ void materialize_tall(
 		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
 		for (size_t i = 0; i < ins.size(); i++)
 			orig_areas[i] = ins[i]->get_exposed_area();
+		bool success = true;
 		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
 			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			for (size_t i = 0; i < ins.size(); i++) {
-				const_cast<local_matrix_store &>(*ins[i]).resize(
+			for (size_t i = 0; i < ins.size() && success; i++)
+				success = const_cast<local_matrix_store &>(*ins[i]).resize(
 						orig_areas[i].local_start_row + row_idx,
 						orig_areas[i].local_start_col, llen,
 						ins[i]->get_num_cols());
-				ins[i]->materialize_self();
+			if (!success) {
+				assert(row_idx == 0);
+				break;
 			}
+			for (size_t i = 0; i < ins.size(); i++)
+				ins[i]->materialize_self();
 		}
 		for (size_t i = 0; i < ins.size(); i++)
 			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
+		if (!success) {
+			for (size_t i = 0; i < ins.size(); i++)
+				ins[i]->materialize_self();
+		}
 	}
 	else {
 		for (size_t i = 0; i < ins.size(); i++)
@@ -2005,18 +2129,27 @@ void materialize_wide(
 		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
 		for (size_t i = 0; i < ins.size(); i++)
 			orig_areas[i] = ins[i]->get_exposed_area();
+		bool success = true;
 		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
 			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			for (size_t i = 0; i < ins.size(); i++) {
-				const_cast<local_matrix_store &>(*ins[i]).resize(
+			for (size_t i = 0; i < ins.size() && success; i++)
+				success = const_cast<local_matrix_store &>(*ins[i]).resize(
 						orig_areas[i].local_start_row,
 						orig_areas[i].local_start_col + col_idx,
 						ins[i]->get_num_rows(), llen);
-				ins[i]->materialize_self();
+			if (!success) {
+				assert(col_idx == 0);
+				break;
 			}
+			for (size_t i = 0; i < ins.size(); i++)
+				ins[i]->materialize_self();
 		}
 		for (size_t i = 0; i < ins.size(); i++)
 			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
+		if (!success) {
+			for (size_t i = 0; i < ins.size(); i++)
+				ins[i]->materialize_self();
+		}
 	}
 	else {
 		for (size_t i = 0; i < ins.size(); i++)

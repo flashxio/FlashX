@@ -365,8 +365,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool success = mutable_part.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -423,8 +425,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool success = mutable_part.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}

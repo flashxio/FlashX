@@ -335,9 +335,18 @@ public:
 		assert(local_start_row == 0
 				&& local_num_rows == mutable_data.get_num_rows());
 		// labels is a column vector, so we can only resize the number of rows.
-		mutable_labels.resize(local_start_col, 0, local_num_cols, 1);
-		mutable_data.resize(local_start_row, local_start_col, local_num_rows,
+		local_matrix_store::exposed_area orig_labels
+			= mutable_labels.get_exposed_area();
+		bool success = mutable_labels.resize(local_start_col, 0, local_num_cols, 1);
+		if (!success)
+			return false;
+
+		success = mutable_data.resize(local_start_row, local_start_col, local_num_rows,
 				local_num_cols);
+		if (!success) {
+			mutable_labels.restore_size(orig_labels);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -403,9 +412,18 @@ public:
 		// We should resize the number of rows.
 		assert(local_start_col == 0
 				&& local_num_cols == mutable_data.get_num_cols());
-		mutable_labels.resize(local_start_row, 0, local_num_rows, 1);
-		mutable_data.resize(local_start_row, local_start_col, local_num_rows,
+		local_matrix_store::exposed_area orig_labels
+			= mutable_labels.get_exposed_area();
+		bool success = mutable_labels.resize(local_start_row, 0, local_num_rows, 1);
+		if (!success)
+			return false;
+
+		success = mutable_data.resize(local_start_row, local_start_col, local_num_rows,
 				local_num_cols);
+		if (!success) {
+			mutable_labels.restore_size(orig_labels);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
