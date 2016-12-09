@@ -314,15 +314,24 @@ bool mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	// someone wants to resize it, we assume the new size is the partition size.
 	// The part size should 2^n.
 
+	// If the new size is the same as the old size, we don't need to do anything.
+	if (local_start_row == 0 && local_num_rows == lstore->get_num_rows()
+			&& local_start_col == 0 && local_num_cols == lstore->get_num_cols())
+		return true;
+
 	// The portion operator contains some data. We need to make sure
 	// the resize is allowed in the portion operator.
 	if (!op.is_resizable(local_start_row, local_start_col, local_num_rows,
 				local_num_cols))
 		return false;
 
+	// We can either resize rows.
+	assert((local_start_row == 0 && local_num_rows == lstore->get_num_rows())
+			// or resize cols.
+			|| (local_start_col == 0 && local_num_cols == lstore->get_num_cols()));
 	size_t num_parts = 0;
-	if (is_wide) {
-		assert(local_start_row == 0 && local_num_rows == lstore->get_num_rows());
+	// Here we resize rows.
+	if (local_start_row == 0 && local_num_rows == lstore->get_num_rows()) {
 		off_t orig_in_start_col = ins[0]->get_local_start_col();
 		size_t orig_in_num_cols = ins[0]->get_num_cols();
 		bool success = true;
@@ -351,8 +360,8 @@ bool mapply_store::resize(off_t local_start_row, off_t local_start_col,
 			num_parts = div_ceil<size_t>(orig_num_cols, part_size);
 		}
 	}
+	// Here we resize cols.
 	else {
-		assert(local_start_col == 0 && local_num_cols == lstore->get_num_cols());
 		off_t orig_in_start_row = ins[0]->get_local_start_row();
 		size_t orig_in_num_rows = ins[0]->get_num_rows();
 		bool success = true;
