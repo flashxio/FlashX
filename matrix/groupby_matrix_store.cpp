@@ -228,12 +228,12 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	if (margin == matrix_margin::MAR_ROW) {
 		assert(this->label_store->get_num_rows() == data->get_num_rows());
 		this->data = conv_layout(data, matrix_layout_t::L_ROW);
-		assert(!this->data->is_wide());
+		assert(this->data->get_num_rows() >= this->data->get_num_cols());
 	}
 	else {
 		assert(this->label_store->get_num_cols() == data->get_num_cols());
 		this->data = conv_layout(data, matrix_layout_t::L_COL);
-		assert(this->data->is_wide());
+		assert(this->data->get_num_cols() >= this->data->get_num_rows());
 	}
 	this->f = f;
 	this->margin = margin;
@@ -256,14 +256,14 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 		this->data = conv_layout(data, matrix_layout_t::L_ROW);
 		this->label_store = labels->get_raw_store();
 		assert(this->label_store->get_num_rows() == data->get_num_rows());
-		assert(!this->data->is_wide());
+		assert(this->data->get_num_rows() >= this->data->get_num_cols());
 	}
 	else {
 		this->data = conv_layout(data, matrix_layout_t::L_COL);
 		this->label_store = labels->get_raw_store()->transpose();
 		assert(data->store_layout() == matrix_layout_t::L_COL);
 		assert(this->label_store->get_num_cols() == data->get_num_cols());
-		assert(this->data->is_wide());
+		assert(this->data->get_num_cols() >= this->data->get_num_rows());
 	}
 	this->margin = margin;
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
