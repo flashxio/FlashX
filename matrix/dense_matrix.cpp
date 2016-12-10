@@ -2460,8 +2460,10 @@ public:
 				op->get_output_type()) {
 		this->op = op;
 		this->labels = labels;
-		this->llabels = labels->get_raw_store()->get_portion(0);
-		assert(this->llabels->get_num_rows() == labels->get_length());
+		detail::matrix_store::const_ptr tmp = labels->get_raw_store();
+		this->llabels = tmp->get_portion(0, 0, labels->get_num_rows(),
+				labels->get_num_cols());
+		assert(this->llabels);
 		success = true;
 	}
 
@@ -2471,10 +2473,7 @@ public:
 		return local_num_rows == get_out_num_rows();
 	}
 
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		throw unsupported_exception(
-				"Don't support transpose of groupby_long_row_mapply_op");
-	}
+	virtual detail::portion_mapply_op::const_ptr transpose() const;
 
 	virtual bool is_success() const {
 		return success;
@@ -2482,29 +2481,7 @@ public:
 
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &out) const {
-		// If we have failed on some portions, we don't need to run on
-		// the remaining portions.
-		if (!success)
-			return;
-
-		assert(ins.size() == 1);
-		assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
-		assert(out.store_layout() == matrix_layout_t::L_ROW);
-		out.reset_data();
-		std::vector<bool> agg_flags(out.get_num_rows());
-		const detail::local_row_matrix_store &row_in
-			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
-		detail::local_row_matrix_store &row_out
-			= static_cast<detail::local_row_matrix_store &>(out);
-		// We are grouping very long rows. So this matrix has to be a wide matrix.
-		bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
-				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
-		if (!ret)
-			// This operation can only go one direction.
-			// so it's fine if multiple threads want to set it concurrently.
-			const_cast<groupby_long_row_mapply_op *>(this)->success = false;
-	}
+			detail::local_matrix_store &out) const;
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
@@ -2512,6 +2489,121 @@ public:
 		return std::string("groupby_row(") + mats[0]->get_name() + ")";
 	}
 };
+
+class groupby_long_col_mapply_op: public detail::portion_mapply_op
+{
+	factor_col_vector::const_ptr labels;
+	detail::local_matrix_store::const_ptr llabels;
+	agg_operate::const_ptr op;
+	volatile bool success;
+public:
+	groupby_long_col_mapply_op(agg_operate::const_ptr op,
+			factor_col_vector::const_ptr labels,
+			size_t num_rows): detail::portion_mapply_op(
+				num_rows, labels->get_factor().get_num_levels(),
+				op->get_output_type()) {
+		this->op = op;
+		this->labels = labels;
+		detail::matrix_store::const_ptr tmp = labels->get_raw_store();
+		this->llabels = tmp->get_portion(0, 0, labels->get_num_rows(),
+				labels->get_num_cols());
+		assert(this->llabels);
+		// We need to make sure the local matrix is wide.
+		if (this->llabels->get_num_cols() == 1 && this->llabels->get_num_rows() > 1)
+			this->llabels
+				= std::static_pointer_cast<const detail::local_matrix_store>(
+						this->llabels->transpose());
+		success = true;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("groupby_col(") + mats[0]->get_name() + ")";
+	}
+};
+
+detail::portion_mapply_op::const_ptr groupby_long_row_mapply_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new groupby_long_col_mapply_op(
+				op, labels, get_out_num_cols()));
+}
+
+void groupby_long_row_mapply_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// If we have failed on some portions, we don't need to run on
+	// the remaining portions.
+	if (!success)
+		return;
+
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+	assert(out.store_layout() == matrix_layout_t::L_ROW);
+	out.reset_data();
+	std::vector<bool> agg_flags(out.get_num_rows());
+	const detail::local_row_matrix_store &row_in
+		= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+	detail::local_row_matrix_store &row_out
+		= static_cast<detail::local_row_matrix_store &>(out);
+	// We are grouping very long rows. So this matrix has to be a wide matrix.
+	bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
+			detail::part_dim_t::PART_DIM2, row_out, agg_flags);
+	if (!ret)
+		// This operation can only go one direction.
+		// so it's fine if multiple threads want to set it concurrently.
+		const_cast<groupby_long_row_mapply_op *>(this)->success = false;
+}
+
+detail::portion_mapply_op::const_ptr groupby_long_col_mapply_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new groupby_long_row_mapply_op(
+				op, labels, get_out_num_rows()));
+}
+
+void groupby_long_col_mapply_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// If we have failed on some portions, we don't need to run on
+	// the remaining portions.
+	if (!success)
+		return;
+
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	out.reset_data();
+	std::vector<bool> agg_flags(out.get_num_cols());
+	const detail::local_col_matrix_store &col_in
+		= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+	// We are grouping very long cols. So this matrix has to be a tall matrix.
+	bool ret = detail::groupby(*llabels, col_in, *op, matrix_margin::MAR_COL,
+			detail::part_dim_t::PART_DIM1, col_out, agg_flags);
+	if (!ret)
+		// This operation can only go one direction.
+		// so it's fine if multiple threads want to set it concurrently.
+		const_cast<groupby_long_col_mapply_op *>(this)->success = false;
+}
 
 }
 
