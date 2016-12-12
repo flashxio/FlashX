@@ -1016,6 +1016,17 @@ dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 				type.create_scalar(), nrow, ncol, layout, num_nodes));
 }
 
+dense_matrix::ptr dense_matrix::create(detail::matrix_store::const_ptr store)
+{
+	if (store->get_num_rows() == 0 || store->get_num_cols() == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
+	return dense_matrix::ptr(new dense_matrix(store));
+}
+
 dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 		bool in_mem, safs::safs_file_group::ptr group)
@@ -1110,6 +1121,12 @@ public:
 dense_matrix::ptr dense_matrix::create_repeat(col_vec::ptr vec, size_t nrow,
 		size_t ncol, matrix_layout_t layout, bool byrow, int num_nodes)
 {
+	if (nrow == 0 || ncol == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	size_t long_dim = std::max(nrow, ncol);
 	size_t short_dim = std::min(nrow, ncol);
 	// We don't want to create a small block matrix.

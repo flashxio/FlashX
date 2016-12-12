@@ -37,6 +37,12 @@ namespace fm
 dense_matrix::ptr block_matrix::create(
 		detail::combined_matrix_store::const_ptr store)
 {
+	if (store->get_num_rows() == 0 || store->get_num_cols() == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	if (store->get_mat_ref(0).is_wide()) {
 		for (size_t i = 1; i < store->get_num_mats() - 1; i++)
 			if (store->get_mat_ref(i).get_num_rows()
