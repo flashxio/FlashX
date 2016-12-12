@@ -390,6 +390,11 @@ void block_matrix::assign(const dense_matrix &mat)
 
 dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
 	auto cols = store->get_cols(idxs);
 	if (cols == NULL)
 		return dense_matrix::ptr();
@@ -399,6 +404,11 @@ dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 
 dense_matrix::ptr block_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
 	auto rows = store->get_rows(idxs);
 	if (rows == NULL)
 		return dense_matrix::ptr();

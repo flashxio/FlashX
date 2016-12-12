@@ -1391,6 +1391,11 @@ detail::portion_mapply_op::const_ptr get_cols_op::transpose() const
 
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
 	for (size_t i = 0; i < idxs.size(); i++)
 		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_cols()) {
 			BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
@@ -1407,6 +1412,11 @@ dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 
 dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
 	for (size_t i = 0; i < idxs.size(); i++)
 		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_rows()) {
 			BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
@@ -1597,6 +1607,11 @@ detail::portion_mapply_op::const_ptr repeat_cols_op::transpose() const
 
 dense_matrix::ptr dense_matrix::get_cols(col_vec::ptr idxs) const
 {
+	if (idxs->get_length() == 0) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
 	dense_matrix::ptr t = transpose();
 	assert(t);
 	dense_matrix::ptr ret = t->get_rows(idxs);
@@ -1629,6 +1644,11 @@ static std::vector<detail::mem_row_matrix_store::const_ptr> split_mat_vertial(
 
 dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
 {
+	if (idxs->get_length() == 0) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
 	// In this case, we just read the rows from the current matrix physically
 	// and outputs a materialized matrix.
 	// If the output matrix is still wide
