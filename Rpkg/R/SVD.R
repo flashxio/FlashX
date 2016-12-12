@@ -138,3 +138,20 @@ setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LI
 			  res$v <- fm.res$v
 		  res
 })
+
+setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
+												  scale.=FALSE, tol=NULL) {
+	scale.x <- scale(x, center, scale.)
+	res <- fm.svd(scale.x, nu=0, tol=.Machine$double.eps)
+	if (!is.null(tol)) {
+		idxs <- which(res$d > tol)
+		rotation <- res$v[, idxs]
+	}
+	else
+		rotation <- res$v
+	if (retx)
+		x <- scale.x %*% rotation
+	else
+		x <- NULL
+	list(sdev=res$d / sqrt(nrow(x)), rotation=rotation, x=x)
+})
