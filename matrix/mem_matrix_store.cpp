@@ -86,6 +86,48 @@ std::string mem_matrix_store::get_name() const
 			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
 }
 
+bool mem_matrix_store::share_data(const matrix_store &store) const
+{
+	const mem_matrix_store *mem_store
+		= dynamic_cast<const mem_matrix_store *>(&store);
+	size_t store_len = store.get_num_rows() * store.get_num_cols();
+	size_t this_len = get_num_rows() * get_num_cols();
+	// If the two matrices store data in the same memory and have
+	// the same number of elements.
+	if (get_raw_arr() && mem_store)
+		return mem_store->get_raw_arr() == get_raw_arr()
+			&& store_len == this_len;
+
+	matrix_store::const_ptr tstore;
+	// If the other matrix might be a transpose of this matrix.
+	if (store.get_num_rows() == get_num_cols()
+			&& store.get_num_cols() == get_num_rows()
+			&& store.store_layout() != store_layout()) {
+		tstore = store.transpose();
+		mem_store = dynamic_cast<const mem_matrix_store *>(tstore.get());
+	}
+	if (!mem_store)
+		return false;
+
+	if (mem_store->get_num_rows() != get_num_rows()
+			|| mem_store->get_num_cols() != get_num_cols()
+			|| mem_store->store_layout() != store_layout())
+		return false;
+
+	if (mem_store->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < get_num_rows(); i++)
+			if (get_row(i) != mem_store->get_row(i))
+				return false;
+		return true;
+	}
+	else {
+		for (size_t i = 0; i < get_num_cols(); i++)
+			if (get_col(i) != mem_store->get_col(i))
+				return false;
+		return true;
+	}
+}
+
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols) const
@@ -594,6 +636,30 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 	}
 
 	return std::dynamic_pointer_cast<mem_row_matrix_store>(store);
+}
+
+size_t mem_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
 }
 
 }

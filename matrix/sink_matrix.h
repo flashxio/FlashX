@@ -48,6 +48,14 @@ public:
 			const scalar_type &type): virtual_matrix_store(nrow, ncol,
 				in_mem, type) {
 	}
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const {
+		// TODO maybe I should check this for each type of sink matrices
+		// as well.
+		return false;
+	}
 
 	// The class has been materialized.
 	virtual bool has_materialized() const = 0;
@@ -118,6 +126,13 @@ public:
 		return false;
 	}
 
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const {
+		return false;
+	}
+
 	virtual void materialize_self() const {
 	}
 
@@ -155,6 +170,14 @@ public:
 
 	static ptr create(const std::vector<matrix_store::const_ptr> &stores,
 			size_t num_block_rows, size_t num_block_cols);
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const {
+		// TODO maybe I should check this for each type of sink matrices
+		// as well.
+		return false;
+	}
 
 	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;

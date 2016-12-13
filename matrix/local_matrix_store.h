@@ -251,6 +251,13 @@ public:
 
 	////// Unsupported methods.
 
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const {
+		return false;
+	}
+
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(0);
 		return std::pair<size_t, size_t>(0, 0);

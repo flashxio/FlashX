@@ -59,6 +59,10 @@ public:
 	static ptr create(const std::vector<detail::matrix_store::const_ptr> &mats,
 			size_t num_cols);
 
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
+
 	virtual std::string get_name() const {
 		assert(merged_mat);
 		return merged_mat->get_name();

@@ -3104,6 +3104,88 @@ void test_repeat()
 	_test_repeat_byrow(mat);
 }
 
+void _test_share_data(dense_matrix::ptr mat1, dense_matrix::ptr mat2)
+{
+	std::vector<off_t> idxs(3);
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % 10;
+
+	assert(mat1->get_raw_store()->share_data(*mat1->get_raw_store()));
+	assert(!mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	mat2 = mat1->transpose();
+	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	mat2 = mat1->get_cols(idxs);
+	assert(!mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	assert(!mat2->get_raw_store()->share_data(*mat1->get_raw_store()));
+	dense_matrix::ptr mat3 = mat2->transpose();
+	assert(mat3->get_raw_store()->share_data(*mat2->get_raw_store()));
+	assert(mat2->get_raw_store()->share_data(*mat3->get_raw_store()));
+}
+
+void test_share_data()
+{
+	dense_matrix::ptr mat1, mat2;
+
+	// Test EM matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, false);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, false);
+	printf("test share data in EM matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test SMP matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	printf("test share data in SMP matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test NUMA matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	printf("test share data in NUMA matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test mapply matrix.
+	mat1 = mat1->conv2(matrix_layout_t::L_COL);
+	mat2 = mat2->conv2(matrix_layout_t::L_COL);
+	assert(mat1->get_raw_store()->is_virtual());
+	assert(mat2->get_raw_store()->is_virtual());
+	printf("test share data in mapply matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test set_data matrix.
+	mat1 = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, true, -1, true);
+	mat2 = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, true, -1, true);
+	printf("test share data in set_data matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test one-val matrix.
+	mat1 = dense_matrix::create_const<size_t>(0, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	mat2 = dense_matrix::create_const<size_t>(1, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	printf("test share data in one-val matrix\n");
+	_test_share_data(mat1, mat2);
+	mat2 = dense_matrix::create_const<size_t>(0, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+
+	// Test block matrix
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	printf("test share data in block matrix\n");
+	_test_share_data(mat1, mat2);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -3116,6 +3198,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_share_data();
 	test_repeat_rowcols();
 	test_repeat();
 	test_seq_matrix();
