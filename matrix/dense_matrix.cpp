@@ -535,9 +535,14 @@ bool dense_matrix::materialize_self() const
 	if (!store->is_virtual())
 		return true;
 
-	detail::matrix_store::const_ptr tmp
-		= detail::virtual_matrix_store::cast(store)->materialize(
+	detail::matrix_store::const_ptr tmp;
+	try {
+		tmp = detail::virtual_matrix_store::cast(store)->materialize(
 				store->is_in_mem(), store->get_num_nodes());
+	} catch (std::exception &e) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("fail to materialize: %1%") % e.what();
+	}
 	if (tmp == NULL)
 		return false;
 

@@ -1380,30 +1380,36 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 	if (mats.empty())
 		return true;
 
-	vmat_levels::ptr levels(new vmat_levels());
-	for (size_t i = 0; i < mats.size(); i++) {
-		// If this isn't a virtual matrix, skip it.
-		if (!mats[i]->is_virtual())
-			continue;
+	try {
+		vmat_levels::ptr levels(new vmat_levels());
+		for (size_t i = 0; i < mats.size(); i++) {
+			// If this isn't a virtual matrix, skip it.
+			if (!mats[i]->is_virtual())
+				continue;
 
-		// If the virtual matrix is a TAS matrix, we want it to save
-		// the materialized result.
-		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
+			// If the virtual matrix is a TAS matrix, we want it to save
+			// the materialized result.
+			mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 
-		auto vmats = mats[i]->get_compute_matrices();
-		for (size_t j = 0; j < vmats.size(); j++)
-			levels->add(underlying_mat_set::create(vmats[j]));
+			auto vmats = mats[i]->get_compute_matrices();
+			for (size_t j = 0; j < vmats.size(); j++)
+				levels->add(underlying_mat_set::create(vmats[j]));
+		}
+		if (levels->is_empty())
+			return true;
+
+		levels->materialize(par_access);
+
+		// Now all virtual matrices contain the materialized results.
+		bool ret = true;
+		for (size_t i = 0; i < mats.size(); i++)
+			ret = ret && mats[i]->materialize_self();
+		return ret;
+	} catch (std::exception &e) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"fail to materialize multiple matrices: %1%") % e.what();
+		return false;
 	}
-	if (levels->is_empty())
-		return true;
-
-	levels->materialize(par_access);
-
-	// Now all virtual matrices contain the materialized results.
-	bool ret = true;
-	for (size_t i = 0; i < mats.size(); i++)
-		ret = ret && mats[i]->materialize_self();
-	return ret;
 }
 
 }
