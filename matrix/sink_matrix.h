@@ -156,12 +156,18 @@ class block_sink_store: public sink_store
 {
 	matrix_store::const_ptr result;
 	std::vector<sink_store::const_ptr> stores;
+	std::vector<size_t> nrow_in_blocks;
+	std::vector<size_t> ncol_in_blocks;
 	size_t num_block_rows;
 	size_t num_block_cols;
 
 	block_sink_store(const std::vector<sink_store::const_ptr> &stores,
 			size_t num_block_rows, size_t num_block_cols);
+	block_sink_store(const std::vector<size_t> &nrow_in_blocks,
+			const std::vector<size_t> &ncol_in_blocks, bool in_mem,
+			const scalar_type &type);
 	const sink_store &get_mat(size_t i, size_t j) const {
+		assert(stores[i * num_block_cols + j]);
 		return *stores[i * num_block_cols + j];
 	}
 public:
@@ -170,6 +176,9 @@ public:
 
 	static ptr create(const std::vector<matrix_store::const_ptr> &stores,
 			size_t num_block_rows, size_t num_block_cols);
+	static ptr create(const std::vector<size_t> &nrow_in_blocks,
+			const std::vector<size_t> &ncol_in_blocks, bool in_mem,
+			const scalar_type &type);
 	virtual size_t get_data_id() const {
 		return INVALID_MAT_ID;
 	}
@@ -193,6 +202,12 @@ public:
 
 	virtual std::string get_name() const;
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
+
+	matrix_store::const_ptr get_store(size_t i, size_t j) const {
+		return stores[i * num_block_cols + j];
+	}
+
+	void set_store(size_t i, size_t j, matrix_store::const_ptr store);
 };
 
 }
