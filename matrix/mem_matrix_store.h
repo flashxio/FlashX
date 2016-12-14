@@ -62,6 +62,12 @@ public:
 
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
+	/*
+	 * This function symmetrizes a matrix.
+	 * It only works for a SMP square matrix.
+	 */
+	bool symmetrize(bool upper2lower);
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		// TODO right now we only indicate the matrix. We set the number of

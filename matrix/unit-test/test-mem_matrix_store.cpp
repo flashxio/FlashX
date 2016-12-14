@@ -245,8 +245,48 @@ void test_transpose()
 					== j * t_store->get_num_rows() + idxs[i]);
 }
 
+bool is_symmetric(mem_matrix_store::const_ptr store)
+{
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = i + 1; j < store->get_num_cols(); j++)
+			if (memcmp(store->get(i, j), store->get(j, i),
+						store->get_entry_size()) != 0)
+				return false;
+	return true;
+}
+
+void test_symmetrize()
+{
+	printf("test symmetrize\n");
+	bool ret;
+	mem_matrix_store::ptr mat = mem_matrix_store::create(1000, 1000,
+			matrix_layout_t::L_ROW, get_scalar_type<size_t>(), -1);
+	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
+				mat->store_layout()));
+	ret = mat->symmetrize(true);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	ret = mat->symmetrize(false);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	mat = mem_matrix_store::create(1000, 1000, matrix_layout_t::L_COL,
+			get_scalar_type<size_t>(), -1);
+	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
+				mat->store_layout()));
+	ret = mat->symmetrize(true);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	ret = mat->symmetrize(false);
+	assert(ret);
+	assert(is_symmetric(mat));
+}
+
 int main()
 {
+	test_symmetrize();
 	test_reset(1000);
 	test_reset(1000000);
 	test_set(1000);

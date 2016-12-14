@@ -36,6 +36,87 @@ namespace detail
 
 const size_t mem_matrix_store::CHUNK_SIZE = 16 * 1024;
 
+bool mem_matrix_store::symmetrize(bool upper2lower)
+{
+	if (get_num_rows() != get_num_cols())
+		return false;
+
+	const scatter_gather &sg = get_type().get_sg();
+	if (upper2lower && store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			non_contig[i] = get_row(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			char *row = get_row(i) + i * get_entry_size();
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (upper2lower) {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			non_contig[i] = get_col(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			char *col = get_col(i) + i * get_entry_size();
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			if (get_row(i) == NULL)
+				return false;
+			non_contig[i] = get_row(i) + (get_num_cols() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_rows() - 1; i > 0; i--) {
+			char *row = get_row(i);
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			if (get_col(i) == NULL)
+				return false;
+			non_contig[i] = get_col(i) + (get_num_rows() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_cols() - 1; i > 0; i--) {
+			char *col = get_col(i);
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	return true;
+}
+
 mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 		const scalar_type &type): matrix_store(nrow, ncol, true,
 			type), mat_id(mat_counter++)
