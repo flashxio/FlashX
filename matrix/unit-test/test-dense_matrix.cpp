@@ -153,7 +153,7 @@ float get_precision<float>()
 template<>
 double get_precision<double>()
 {
-	return 1e-14;
+	return 1e-13;
 }
 
 template<class T>
@@ -441,6 +441,31 @@ void test_multiply(int num_nodes)
 {
 	dense_matrix::ptr m1, m2, correct, res;
 
+	printf("Test multiplication on wide block matrix X tall block matrix\n");
+	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
+	block_size = 3;
+	matrix_conf.set_max_multiply_block_size(6);
+	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test self cross prod\n");
+	m2 = m1->transpose();
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test transpose of self cross prod\n");
+	res = m1->multiply(*m2);
+	res = res->transpose();
+	correct = blas_multiply(*m2->transpose(), *m1->transpose());
+	verify_result(*res, *correct, approx_equal_func<T>());
+	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
+
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 3;
@@ -601,21 +626,6 @@ void test_multiply(int num_nodes)
 	res->materialize_self();
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
-
-	printf("Test multiplication on wide block matrix X tall block matrix\n");
-	size_t orig_block_size = block_size;
-	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
-	block_size = 3;
-	matrix_conf.set_max_multiply_block_size(6);
-	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
-			get_scalar_type<T>());
-	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
-			get_scalar_type<T>());
-	correct = blas_multiply(*m1, *m2);
-	res = m1->multiply(*m2);
-	verify_result(*res, *correct, approx_equal_func<T>());
-	block_size = orig_block_size;
-	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
 }
 
 void test_multiply_matrix(int num_nodes)

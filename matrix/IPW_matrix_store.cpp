@@ -317,6 +317,8 @@ class multiply_wide_op: public combine_op
 	std::vector<detail::local_matrix_store::ptr> tmp_bufs;
 	std::vector<matmul_accumulator::ptr> res_bufs;
 	bool is_sparse;
+	// The output matrix will be symmetric.
+	bool is_sym;
 	size_t out_num_rows;
 	size_t out_num_cols;
 	matrix_layout_t Alayout;
@@ -324,7 +326,7 @@ class multiply_wide_op: public combine_op
 public:
 	multiply_wide_op(size_t num_threads, size_t out_num_rows, size_t out_num_cols,
 			matrix_layout_t required_layout, const scalar_type &type,
-			bool is_sparse): combine_op(0, 0, type) {
+			bool is_sparse, bool is_sym): combine_op(0, 0, type) {
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
 		res_bufs.resize(num_threads);
@@ -335,6 +337,7 @@ public:
 		Blayout = required_layout;
 		this->is_sparse = is_sparse;
 		this->num_tmp_accs.resize(num_threads);
+		this->is_sym = is_sym;
 	}
 
 	virtual bool has_materialized() const {
@@ -383,7 +386,12 @@ detail::mem_matrix_store::ptr multiply_wide_op::get_combined_result() const
 		}
 	}
 	assert(non_empty.size() > 0);
-	return non_empty[0]->combine(non_empty);
+	detail::mem_matrix_store::ptr ret = non_empty[0]->combine(non_empty);
+	if (is_sym)
+		// For self-crossprod, we store data in the upper triangle,
+		// we need to copy the data to the lower triangle.
+		ret->symmetrize(true);
+	return ret;
 }
 
 template<class T>
@@ -442,6 +450,68 @@ void wide_gemm_row<float>(const std::pair<size_t, size_t> &Asize,
 			Bmat, Bsize.second, 0, res_mat, out_num_cols);
 }
 
+template<class T>
+void wide_syrk_col(const std::pair<size_t, size_t> &Asize, const T *Amat,
+		T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void wide_syrk_col<double>(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, double *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.first;
+	size_t ldc = Asize.first;
+	cblas_dsyrk(CblasColMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
+template<>
+void wide_syrk_col<float>(const std::pair<size_t, size_t> &Asize,
+		const float *Amat, float *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.first;
+	size_t ldc = Asize.first;
+	cblas_ssyrk(CblasColMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
+template<class T>
+void wide_syrk_row(const std::pair<size_t, size_t> &Asize, const T *Amat,
+		T *res_mat)
+{
+	assert(0);
+}
+
+template<>
+void wide_syrk_row<double>(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, double *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.second;
+	size_t ldc = Asize.first;
+	cblas_dsyrk(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
+template<>
+void wide_syrk_row<float>(const std::pair<size_t, size_t> &Asize,
+		const float *Amat, float *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.second;
+	size_t ldc = Asize.first;
+	cblas_ssyrk(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
 /*
  * dst_col += B * A[col_idx]
  */
@@ -487,6 +557,9 @@ void multiply_sparse_trans(const detail::local_row_matrix_store &Astore,
 void multiply_wide_op::run_part_sparse(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
+	// We always make the left matrix a dense matrix, so there must be
+	// two matrices as input.
+	assert(ins.size() == 2);
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
 	detail::local_matrix_store::const_ptr left = ins[0];
@@ -536,15 +609,22 @@ void multiply_wide_op::run_part_sparse(
 void multiply_wide_op::run(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
 {
-	assert(ins.size() == 2);
+	assert(ins.size() == 2 || ins.size() == 1);
 	// If one of the matrix is a sparse matrix, some of its portions might
 	// be empty.
-	if (ins[0] == NULL || ins[1] == NULL)
-		return;
+	for (size_t i = 0; i < ins.size(); i++)
+		if (ins[i] == NULL)
+			return;
 
-	size_t LONG_DIM_LEN = get_long_dim_len(*ins[0], *ins[1]);
+	size_t LONG_DIM_LEN;
+	if (ins.size() == 2)
+		LONG_DIM_LEN = get_long_dim_len(*ins[0], *ins[1]);
+	else
+		LONG_DIM_LEN = get_long_dim_len(*ins[0]);
 
-	size_t long_dim = ins[1]->get_num_rows();
+	// ins[0] stores the transpose of the left matrix, so we should
+	// check the number of rows.
+	size_t long_dim = ins[0]->get_num_rows();
 	if (long_dim <= LONG_DIM_LEN) {
 		if (is_sparse)
 			run_part_sparse(ins);
@@ -554,17 +634,19 @@ void multiply_wide_op::run(
 	}
 
 	local_matrix_store::exposed_area orig_A = ins[0]->get_exposed_area();
-	local_matrix_store::exposed_area orig_B = ins[1]->get_exposed_area();
+	local_matrix_store::exposed_area orig_B;
+	if (ins.size() == 2)
+		orig_B = ins[1]->get_exposed_area();
 	local_matrix_store &mutableA = const_cast<local_matrix_store &>(*ins[0]);
-	local_matrix_store &mutableB = const_cast<local_matrix_store &>(*ins[1]);
 	bool resize_success = true;
 	for (size_t row_idx = 0; row_idx < long_dim; row_idx += LONG_DIM_LEN) {
 		size_t llen = std::min(long_dim - row_idx, LONG_DIM_LEN);
 		resize_success = mutableA.resize(orig_A.local_start_row + row_idx,
 				orig_A.local_start_col, llen, mutableA.get_num_cols());
-		if (resize_success)
-			resize_success = mutableB.resize(orig_B.local_start_row + row_idx,
-					orig_B.local_start_col, llen, mutableB.get_num_cols());
+		if (resize_success && ins.size() == 2)
+			resize_success = const_cast<local_matrix_store &>(*ins[1]).resize(
+					orig_B.local_start_row + row_idx, orig_B.local_start_col,
+					llen, ins[1]->get_num_cols());
 		// If we resize both matrices, we perform computation on the resized
 		// matrix.
 		if (resize_success) {
@@ -577,7 +659,8 @@ void multiply_wide_op::run(
 			break;
 	}
 	mutableA.restore_size(orig_A);
-	mutableB.restore_size(orig_B);
+	if (ins.size() == 2)
+		const_cast<local_matrix_store &>(*ins[1]).restore_size(orig_B);
 	// If the resize on one of the matrices failed, we perform the computation
 	// here.
 	if (!resize_success) {
@@ -620,27 +703,30 @@ void multiply_wide_op::run_part_dense(
 	}
 	assert(Amat);
 
-	detail::local_matrix_store::const_ptr Bstore = ins[1];
-	const void *Bmat = Bstore->get_raw_arr();
-	if (Bmat == NULL || Bstore->store_layout() != Blayout) {
-		if (Bbufs[thread_id] == NULL
-				|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
-				|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
-			if (Blayout == matrix_layout_t::L_COL)
-				mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_col_matrix_store(0, 0,
-							Bstore->get_num_rows(), Bstore->get_num_cols(),
-							Bstore->get_type(), -1));
-			else
-				mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_row_matrix_store(0, 0,
-							Bstore->get_num_rows(), Bstore->get_num_cols(),
-							Bstore->get_type(), -1));
+	detail::local_matrix_store::const_ptr Bstore;
+	const void *Bmat = NULL;
+	if (ins.size() == 2) {
+		Bstore = ins[1];
+		Bmat = Bstore->get_raw_arr();
+		if (Bmat == NULL || Bstore->store_layout() != Blayout) {
+			if (Bbufs[thread_id] == NULL
+					|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
+					|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
+				if (Blayout == matrix_layout_t::L_COL)
+					mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_col_matrix_store(0, 0,
+								Bstore->get_num_rows(), Bstore->get_num_cols(),
+								Bstore->get_type(), -1));
+				else
+					mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
+							new fm::detail::local_buf_row_matrix_store(0, 0,
+								Bstore->get_num_rows(), Bstore->get_num_cols(),
+								Bstore->get_type(), -1));
+			}
+			Bbufs[thread_id]->copy_from(*Bstore);
+			Bmat = Bbufs[thread_id]->get_raw_arr();
 		}
-		Bbufs[thread_id]->copy_from(*Bstore);
-		Bmat = Bbufs[thread_id]->get_raw_arr();
 	}
-	assert(Bmat);
 
 	if (res_bufs[thread_id] == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
@@ -655,35 +741,62 @@ void multiply_wide_op::run_part_dense(
 		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
 				out_num_rows, out_num_cols, Blayout, get_output_type());
 	}
-	assert(tmp_bufs[thread_id]->store_layout() == Blayout);
+	assert(tmp_bufs[thread_id]->store_layout() == Alayout);
 	void *tmp_mat = tmp_bufs[thread_id]->get_raw_arr();
-	std::pair<size_t, size_t> Asize, Bsize;
-	Asize.first = Astore->get_num_cols();
-	Asize.second = Astore->get_num_rows();
-	Bsize.first = Bstore->get_num_rows();
-	Bsize.second = Bstore->get_num_cols();
-	assert(out_num_rows == Asize.first && out_num_cols == Bsize.second);
-	if (get_output_type() == get_scalar_type<double>()) {
-		const double *t_Amat = reinterpret_cast<const double *>(Amat);
-		const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
-		double *t_tmp_mat = reinterpret_cast<double *>(tmp_mat);
-		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
-					out_num_rows);
-		else
-			wide_gemm_row<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
-					out_num_cols);
+	// We have two matrices as input.
+	if (Bstore) {
+		std::pair<size_t, size_t> Asize, Bsize;
+		Asize.first = Astore->get_num_cols();
+		Asize.second = Astore->get_num_rows();
+		Bsize.first = Bstore->get_num_rows();
+		Bsize.second = Bstore->get_num_cols();
+		assert(out_num_rows == Asize.first && out_num_cols == Bsize.second);
+		if (get_output_type() == get_scalar_type<double>()) {
+			const double *t_Amat = reinterpret_cast<const double *>(Amat);
+			const double *t_Bmat = reinterpret_cast<const double *>(Bmat);
+			double *t_tmp_mat = reinterpret_cast<double *>(tmp_mat);
+			if (Blayout == matrix_layout_t::L_COL)
+				wide_gemm_col<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
+						out_num_rows);
+			else
+				wide_gemm_row<double>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
+						out_num_cols);
+		}
+		else {
+			const float *t_Amat = reinterpret_cast<const float *>(Amat);
+			const float *t_Bmat = reinterpret_cast<const float *>(Bmat);
+			float *t_tmp_mat = reinterpret_cast<float *>(tmp_mat);
+			if (Blayout == matrix_layout_t::L_COL)
+				wide_gemm_col<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
+						out_num_rows);
+			else
+				wide_gemm_row<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
+						out_num_cols);
+		}
 	}
+	// There is only one matrix as input. The right matrix is the transpose
+	// of the first matrix.
 	else {
-		const float *t_Amat = reinterpret_cast<const float *>(Amat);
-		const float *t_Bmat = reinterpret_cast<const float *>(Bmat);
-		float *t_tmp_mat = reinterpret_cast<float *>(tmp_mat);
-		if (Blayout == matrix_layout_t::L_COL)
-			wide_gemm_col<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
-					out_num_rows);
-		else
-			wide_gemm_row<float>(Asize, t_Amat, Bsize, t_Bmat, t_tmp_mat,
-					out_num_cols);
+		std::pair<size_t, size_t> Asize;
+		Asize.first = Astore->get_num_cols();
+		Asize.second = Astore->get_num_rows();
+		assert(out_num_rows == Asize.first && out_num_cols == Asize.first);
+		if (get_output_type() == get_scalar_type<double>()) {
+			const double *t_Amat = reinterpret_cast<const double *>(Amat);
+			double *t_tmp_mat = reinterpret_cast<double *>(tmp_mat);
+			if (Astore->store_layout() == matrix_layout_t::L_ROW)
+				wide_syrk_col<double>(Asize, t_Amat, t_tmp_mat);
+			else
+				wide_syrk_row<double>(Asize, t_Amat, t_tmp_mat);
+		}
+		else {
+			const float *t_Amat = reinterpret_cast<const float *>(Amat);
+			float *t_tmp_mat = reinterpret_cast<float *>(tmp_mat);
+			if (Astore->store_layout() == matrix_layout_t::L_ROW)
+				wide_syrk_col<float>(Asize, t_Amat, t_tmp_mat);
+			else
+				wide_syrk_row<float>(Asize, t_Amat, t_tmp_mat);
+		}
 	}
 	res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
 }
@@ -707,6 +820,12 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 				|| left->get_type() == get_scalar_type<float>())
 			&& (right->get_type() == get_scalar_type<double>()
 				|| right->get_type() == get_scalar_type<float>())) {
+		// If the two matrices share data, this operation is self-crossprod.
+		// We will optimize for this case because self-crossprod is a very
+		// common operation in machine learning.
+		if (this->left_mat->share_data(*this->right_mat))
+			this->right_mat = NULL;
+
 		this->left_op = NULL;
 		this->right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 
@@ -718,7 +837,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			required_layout = left->store_layout();
 		// If they are different, we convert the smaller matrix.
 		else if (left->get_num_rows() * left->get_num_cols()
-				> right->get_num_rows() * right->get_num_cols())
+				>= right->get_num_rows() * right->get_num_cols())
 			required_layout = left->store_layout();
 		else
 			required_layout = right->store_layout();
@@ -735,7 +854,9 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 					// We only get benefit if the right matrix is sparse
 					// and it's stored in row major.
 					right->is_sparse()
-					&& right->store_layout() == matrix_layout_t::L_ROW));
+					&& right->store_layout() == matrix_layout_t::L_ROW,
+					// If we don't use right_mat, we'll output a symmetric matrix.
+					this->right_mat == NULL));
 	}
 	else {
 		// For inner product, the current implementation only works on
@@ -803,9 +924,10 @@ void IPW_matrix_store::materialize_self() const
 {
 	if (!has_materialized()) {
 		// This computes the partial aggregation result.
-		std::vector<detail::matrix_store::const_ptr> ins(2);
-		ins[0] = left_mat->transpose();
-		ins[1] = right_mat;
+		std::vector<detail::matrix_store::const_ptr> ins;
+		ins.push_back(left_mat->transpose());
+		if (right_mat)
+			ins.push_back(right_mat);
 		__mapply_portion(ins, portion_op, layout);
 	}
 }
@@ -820,25 +942,29 @@ matrix_store::const_ptr IPW_matrix_store::materialize(bool in_mem,
 std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
 {
 	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
-	std::unordered_map<size_t, size_t> right = right_mat->get_underlying_mats();
-	for (auto it = right.begin(); it != right.end(); it++) {
-		auto to_it = final_res.find(it->first);
-		if (to_it == final_res.end())
-			final_res.insert(std::pair<size_t, size_t>(it->first, it->second));
+	if (right_mat) {
+		std::unordered_map<size_t, size_t> right
+			= right_mat->get_underlying_mats();
+		for (auto it = right.begin(); it != right.end(); it++) {
+			auto to_it = final_res.find(it->first);
+			if (to_it == final_res.end())
+				final_res.insert(std::pair<size_t, size_t>(it->first,
+							it->second));
+		}
 	}
 	return final_res;
 }
 
-static int get_node_id(const local_matrix_store &left,
-		const local_matrix_store &right)
+static int get_node_id(local_matrix_store::const_ptr left,
+		local_matrix_store::const_ptr right)
 {
 	// If both matrices are stored in NUMA memory, the portion must be
 	// stored on the same NUMA node. Otherwise, we need to return
 	// the node Id from the matrix stored in NUMA.
-	if (left.get_node_id() < 0)
-		return right.get_node_id();
+	if (left->get_node_id() < 0 && right)
+		return right->get_node_id();
 	else
-		return left.get_node_id();
+		return left->get_node_id();
 }
 
 namespace
@@ -853,9 +979,11 @@ namespace
 class lmaterialize_col_matrix_store: public lvirtual_col_matrix_store
 {
 	std::vector<local_matrix_store::const_ptr> parts;
-	local_matrix_store &mutable_left_part;
-	local_matrix_store &mutable_right_part;
 	portion_mapply_op::const_ptr portion_op;
+
+	local_matrix_store &get_mutable_part(size_t i) {
+		return const_cast<local_matrix_store &>(*parts[i]);
+	}
 public:
 	lmaterialize_col_matrix_store(local_matrix_store::const_ptr left_part,
 			local_matrix_store::const_ptr right_part, const scalar_type &type,
@@ -863,40 +991,39 @@ public:
 				left_part->get_global_start_row(),
 				left_part->get_global_start_col(),
 				left_part->get_num_rows(), left_part->get_num_cols(), type,
-				fm::detail::get_node_id(*left_part, *right_part)),
-			mutable_left_part(const_cast<local_matrix_store &>(*left_part)),
-			mutable_right_part(const_cast<local_matrix_store &>(*right_part)) {
+				fm::detail::get_node_id(left_part, right_part)) {
 		this->portion_op = portion_op;
-		parts.resize(2);
-		parts[0] = left_part;
-		parts[1] = right_part;
+		parts.push_back(left_part);
+		if (right_part)
+			parts.push_back(right_part);
 	}
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_col == 0);
-		assert(local_num_cols == mutable_left_part.get_num_cols());
+		assert(local_num_cols == parts[0]->get_num_cols());
 
-		local_matrix_store::exposed_area orig_left
-			= mutable_left_part.get_exposed_area();
-		bool success = mutable_left_part.resize(local_start_row, local_start_col,
-				local_num_rows, local_num_cols);
+		local_matrix_store::exposed_area orig_left = parts[0]->get_exposed_area();
+		bool success = get_mutable_part(0).resize(local_start_row,
+				local_start_col, local_num_rows, local_num_cols);
 		if (!success)
 			return false;
 
 		// We need to resize the portion of the right matrix accordingly.
-		success = mutable_right_part.resize(local_start_row, 0, local_num_rows,
-				mutable_right_part.get_num_cols());
-		if (!success) {
-			mutable_left_part.restore_size(orig_left);
-			return false;
+		if (parts.size() > 1) {
+			success = get_mutable_part(1).resize(local_start_row, 0,
+					local_num_rows, parts[1]->get_num_cols());
+			if (!success) {
+				get_mutable_part(0).restore_size(orig_left);
+				return false;
+			}
 		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
 	virtual void reset_size() {
-		mutable_left_part.reset_size();
-		mutable_right_part.reset_size();
+		for (size_t i = 0; i < parts.size(); i++)
+			get_mutable_part(i).reset_size();
 		local_matrix_store::reset_size();
 	}
 
@@ -933,9 +1060,11 @@ public:
 class lmaterialize_row_matrix_store: public lvirtual_row_matrix_store
 {
 	std::vector<local_matrix_store::const_ptr> parts;
-	local_matrix_store &mutable_left_part;
-	local_matrix_store &mutable_right_part;
 	portion_mapply_op::const_ptr portion_op;
+
+	local_matrix_store &get_mutable_part(size_t i) {
+		return const_cast<local_matrix_store &>(*parts[i]);
+	}
 public:
 	lmaterialize_row_matrix_store(local_matrix_store::const_ptr left_part,
 			local_matrix_store::const_ptr right_part, const scalar_type &type,
@@ -943,39 +1072,38 @@ public:
 				left_part->get_global_start_row(),
 				left_part->get_global_start_col(),
 				left_part->get_num_rows(), left_part->get_num_cols(), type,
-				fm::detail::get_node_id(*left_part, *right_part)),
-			mutable_left_part(const_cast<local_matrix_store &>(*left_part)),
-			mutable_right_part(const_cast<local_matrix_store &>(*right_part)) {
+				fm::detail::get_node_id(left_part, right_part)) {
 		this->portion_op = portion_op;
-		parts.resize(2);
-		parts[0] = left_part;
-		parts[1] = right_part;
+		parts.push_back(left_part);
+		if (right_part)
+			parts.push_back(right_part);
 	}
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_col == 0);
-		assert(local_num_cols == mutable_left_part.get_num_cols());
-		local_matrix_store::exposed_area orig_left
-			= mutable_left_part.get_exposed_area();
-		bool success = mutable_left_part.resize(local_start_row, local_start_col,
-				local_num_rows, local_num_cols);
+		assert(local_num_cols == parts[0]->get_num_cols());
+		local_matrix_store::exposed_area orig_left = parts[0]->get_exposed_area();
+		bool success = get_mutable_part(0).resize(local_start_row,
+				local_start_col, local_num_rows, local_num_cols);
 		if (!success)
 			return false;
 
 		// We need to resize the portion of the right matrix accordingly.
-		success = mutable_right_part.resize(local_start_row, 0, local_num_rows,
-				mutable_right_part.get_num_cols());
-		if (!success) {
-			mutable_left_part.restore_size(orig_left);
-			return false;
+		if (parts.size() > 1) {
+			success = get_mutable_part(1).resize(local_start_row, 0,
+					local_num_rows, parts[1]->get_num_cols());
+			if (!success) {
+				get_mutable_part(0).restore_size(orig_left);
+				return false;
+			}
 		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
 	virtual void reset_size() {
-		mutable_left_part.reset_size();
-		mutable_right_part.reset_size();
+		for (size_t i = 0; i < parts.size(); i++)
+			get_mutable_part(i).reset_size();
 		local_matrix_store::reset_size();
 	}
 
@@ -1046,23 +1174,30 @@ matrix_store::const_ptr IPW_matrix_store::transpose() const
 	if (has_materialized())
 		return get_combine_res()->transpose();
 
-	matrix_store::const_ptr tleft = right_mat->transpose();
-	matrix_store::const_ptr tright = left_mat->transpose();
-	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
-	matrix_layout_t tlayout;
-	if (layout == matrix_layout_t::L_ROW)
-		tlayout = matrix_layout_t::L_COL;
+	if (right_mat) {
+		matrix_store::const_ptr tleft = right_mat->transpose();
+		matrix_store::const_ptr tright = left_mat->transpose();
+		assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
+		matrix_layout_t tlayout;
+		if (layout == matrix_layout_t::L_ROW)
+			tlayout = matrix_layout_t::L_COL;
+		else
+			tlayout = matrix_layout_t::L_ROW;
+		return matrix_store::const_ptr(new IPW_matrix_store(tleft, tright,
+					left_op, right_op, tlayout));
+	}
 	else
-		tlayout = matrix_layout_t::L_ROW;
-	return matrix_store::const_ptr(new IPW_matrix_store(tleft, tright,
-				left_op, right_op, tlayout));
+		return matrix_store::const_ptr(new IPW_matrix_store(*this));
 }
 
 std::string IPW_matrix_store::get_name() const
 {
 	std::vector<matrix_store::const_ptr> mats(2);
 	mats[0] = left_mat;
-	mats[1] = right_mat;
+	if (right_mat)
+		mats[1] = right_mat;
+	else
+		mats[1] = left_mat;
 	return portion_op->to_string(mats);
 }
 
@@ -1096,21 +1231,26 @@ public:
 		// the node Id from the matrix stored in NUMA.
 		if (left_mat->get_num_nodes() > 0)
 			return left_mat->get_portion_node_id(id);
-		else
+		else if (right_mat)
 			return right_mat->get_portion_node_id(id);
+		else
+			return -1;
 	}
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
-		assert(left_mat->get_portion_size().first
-				== right_mat->get_portion_size().first);
+		if (right_mat)
+			assert(left_mat->get_portion_size().first
+					== right_mat->get_portion_size().first);
 		return left_mat->get_portion_size();
 	}
 
 	virtual int get_num_nodes() const {
 		if (left_mat->get_num_nodes() > 0)
 			return left_mat->get_num_nodes();
-		else
+		else if (right_mat)
 			return right_mat->get_num_nodes();
+		else
+			return -1;
 	}
 
 	virtual matrix_layout_t store_layout() const {
@@ -1121,7 +1261,10 @@ public:
 	std::string get_name() const {
 		std::vector<matrix_store::const_ptr> mats(2);
 		mats[0] = left_mat;
-		mats[1] = right_mat;
+		if (right_mat)
+			mats[1] = right_mat;
+		else
+			mats[1] = left_mat;
 		return portion_op->to_string(mats);
 	}
 
@@ -1129,18 +1272,28 @@ public:
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 };
 
+static inline bool is_in_mem(matrix_store::const_ptr left_mat,
+		matrix_store::const_ptr right_mat)
+{
+	if (right_mat)
+		return left_mat->is_in_mem() && right_mat->is_in_mem();
+	else
+		return left_mat->is_in_mem();
+}
+
 IPW_compute_store::IPW_compute_store(matrix_store::const_ptr left_mat,
 		matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op,
 		std::shared_ptr<portion_mapply_op> portion_op,
 		matrix_layout_t layout): sink_compute_store(left_mat->get_num_rows(),
-			left_mat->get_num_cols(), left_mat->is_in_mem() && right_mat->is_in_mem(),
+			left_mat->get_num_cols(), fm::detail::is_in_mem(left_mat, right_mat),
 			left_mat->get_type())
 {
 	this->left_mat = left_mat;
 	this->right_mat = right_mat;
 	// We always transpose the left matrix, so IPW compute matrix is always tall.
-	assert(left_mat->get_num_rows() == right_mat->get_num_rows());
+	if (right_mat)
+		assert(left_mat->get_num_rows() == right_mat->get_num_rows());
 	this->left_op = left_op;
 	this->right_op = right_op;
 	this->portion_op = portion_op;
@@ -1168,8 +1321,10 @@ local_matrix_store::const_ptr IPW_compute_store::get_portion(
 	assert(num_cols == left_mat->get_num_cols());
 	local_matrix_store::const_ptr left_part = left_mat->get_portion(start_row,
 			start_col, num_rows, num_cols);
-	local_matrix_store::const_ptr right_part = right_mat->get_portion(
-			start_row, 0, num_rows, right_mat->get_num_cols());
+	local_matrix_store::const_ptr right_part;
+	if (right_mat)
+		right_part = right_mat->get_portion(start_row, 0, num_rows,
+				right_mat->get_num_cols());
 	assert(left_part->get_num_rows() == right_part->get_num_rows());
 	return create_lmaterialize_matrix(left_part, right_part, get_type(),
 			portion_op);
@@ -1178,8 +1333,11 @@ local_matrix_store::const_ptr IPW_compute_store::get_portion(
 local_matrix_store::const_ptr IPW_compute_store::get_portion(size_t id) const
 {
 	local_matrix_store::const_ptr left_part = left_mat->get_portion(id);
-	local_matrix_store::const_ptr right_part = right_mat->get_portion(id);
-	assert(left_part->get_num_rows() == right_part->get_num_rows());
+	local_matrix_store::const_ptr right_part;
+	if (right_mat) {
+		right_part = right_mat->get_portion(id);
+		assert(left_part->get_num_rows() == right_part->get_num_rows());
+	}
 	return create_lmaterialize_matrix(left_part, right_part, get_type(),
 			portion_op);
 }
@@ -1194,9 +1352,15 @@ async_cres_t IPW_compute_store::get_portion_async(
 				compute));
 	async_cres_t left_ret = left_mat->get_portion_async(start_row, start_col,
 			num_rows, num_cols, new_compute);
-	async_cres_t right_ret = right_mat->get_portion_async(start_row, 0,
-			num_rows, right_mat->get_num_cols(), new_compute);
-	assert(left_ret.second->get_num_rows() == right_ret.second->get_num_rows());
+	async_cres_t right_ret;
+	if (right_mat) {
+		right_ret = right_mat->get_portion_async(start_row, 0,
+				num_rows, right_mat->get_num_cols(), new_compute);
+		assert(left_ret.second->get_num_rows()
+				== right_ret.second->get_num_rows());
+	}
+	else
+		right_ret.first = true;
 	if (left_ret.first && right_ret.first)
 		return async_cres_t(true, create_lmaterialize_matrix(left_ret.second,
 					right_ret.second, get_type(), portion_op));
@@ -1215,7 +1379,7 @@ std::vector<safs::io_interface::ptr> IPW_compute_store::create_ios() const
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
-	if (!right_mat->is_in_mem()) {
+	if (right_mat && !right_mat->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(right_mat.get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
@@ -1226,11 +1390,13 @@ std::vector<safs::io_interface::ptr> IPW_compute_store::create_ios() const
 std::unordered_map<size_t, size_t> IPW_compute_store::get_underlying_mats() const
 {
 	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
-	std::unordered_map<size_t, size_t> right = right_mat->get_underlying_mats();
-	for (auto it = right.begin(); it != right.end(); it++) {
-		auto to_it = final_res.find(it->first);
-		if (to_it == final_res.end())
-			final_res.insert(std::pair<size_t, size_t>(it->first, it->second));
+	if (right_mat) {
+		std::unordered_map<size_t, size_t> right = right_mat->get_underlying_mats();
+		for (auto it = right.begin(); it != right.end(); it++) {
+			auto to_it = final_res.find(it->first);
+			if (to_it == final_res.end())
+				final_res.insert(std::pair<size_t, size_t>(it->first, it->second));
+		}
 	}
 	return final_res;
 }
