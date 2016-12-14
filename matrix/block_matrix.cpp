@@ -733,7 +733,10 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 	get_wider_matrices(store, left_mats,
 			std::min(get_num_rows(), m.get_num_cols()));
 
-	bool same_mat = store->share_data(*m.get_raw_store());
+	// If this is crossprod with itself, the two matrices need to share
+	// the same matrix data and their store layout is different.
+	bool is_crossprod = store->share_data(*m.get_raw_store())
+		&& store->store_layout() != m.get_raw_store()->store_layout();
 	assert(get_type() == m.get_type());
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
@@ -745,23 +748,25 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 		ncol_in_blocks[i] = right_mats[i]->get_num_cols();
 	detail::block_sink_store::ptr block_sinks
 		= detail::block_sink_store::create(nrow_in_blocks, ncol_in_blocks,
-				is_in_mem() && m.is_in_mem(), get_type());
+				// If this is a self-crossprod, the result matrix is symmetric.
+				is_in_mem() && m.is_in_mem(), get_type(), is_crossprod);
+	assert(block_sinks);
 	// Each time we take one matrix in the right group and perform inner product
 	// with all matrices in the left group.
 	for (size_t i = 0; i < right_mats.size(); i++) {
 		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
 		for (size_t j = 0; j < left_mats.size(); j++) {
 			detail::matrix_store::const_ptr res_store;
-			if (same_mat)
+			if (is_crossprod)
 				res_store = block_sinks->get_store(i, j);
 			dense_matrix::ptr left;
-			if (!res_store) {
+			if (res_store == NULL) {
 				left = dense_matrix::create(left_mats[j]);
 				dense_matrix::ptr res = left->multiply(*right, out_layout);
 				assert(res);
 				res_store = res->get_raw_store();
+				block_sinks->set_store(j, i, res_store);
 			}
-			block_sinks->set_store(j, i, res_store);
 			// This is only necessary for EM matrices.
 			if (left && !left->is_in_mem()) {
 				detail::matrix_store &tmp

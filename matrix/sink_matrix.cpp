@@ -348,22 +348,21 @@ block_sink_store::ptr block_sink_store::create(
 		size_t num_block_rows, size_t num_block_cols)
 {
 	std::vector<sink_store::const_ptr> sink_stores(stores.size());
+	size_t num_stores = 0;
 	for (size_t i = 0; i < stores.size(); i++) {
+		if (stores[i] == NULL)
+			continue;
+
+		num_stores++;
 		sink_stores[i] = std::dynamic_pointer_cast<const sink_store>(stores[i]);
 		// The input matrices have to be sink matrices.
 		assert(sink_stores[i]);
 	}
-	return block_sink_store::ptr(new block_sink_store(sink_stores,
-				num_block_rows, num_block_cols));
-}
+	if (num_stores != num_block_rows * num_block_cols)
+		return block_sink_store::ptr();
 
-block_sink_store::ptr block_sink_store::create(
-		const std::vector<size_t> &nrow_in_blocks,
-		const std::vector<size_t> &ncol_in_blocks,
-		bool in_mem, const scalar_type &type)
-{
-	return block_sink_store::ptr(new block_sink_store(nrow_in_blocks,
-				ncol_in_blocks, in_mem, type));
+	return block_sink_store::ptr(new block_sink_store(sink_stores,
+				num_block_rows, num_block_cols, false));
 }
 
 static inline size_t sum(const std::vector<size_t> &v)
@@ -371,45 +370,58 @@ static inline size_t sum(const std::vector<size_t> &v)
 	return std::accumulate(v.begin(), v.end(), 0);
 }
 
+block_sink_store::ptr block_sink_store::create(
+		const std::vector<size_t> &nrow_in_blocks,
+		const std::vector<size_t> &ncol_in_blocks,
+		bool in_mem, const scalar_type &type, bool is_sym)
+{
+	if (is_sym && sum(nrow_in_blocks) != sum(ncol_in_blocks))
+		return block_sink_store::ptr();
+
+	return block_sink_store::ptr(new block_sink_store(nrow_in_blocks,
+				ncol_in_blocks, in_mem, type, is_sym));
+}
+
 block_sink_store::block_sink_store(const std::vector<size_t> &nrow_in_blocks,
 		const std::vector<size_t> &ncol_in_blocks, bool in_mem,
-		const scalar_type &type): sink_store(sum(nrow_in_blocks),
+		const scalar_type &type, bool is_sym): sink_store(sum(nrow_in_blocks),
 			sum(ncol_in_blocks), in_mem, type)
 {
-	this->num_block_rows = nrow_in_blocks.size();
-	this->num_block_cols = ncol_in_blocks.size();
-	stores.resize(num_block_rows * num_block_cols);
+	stores.resize(nrow_in_blocks.size() * ncol_in_blocks.size());
 	this->nrow_in_blocks = nrow_in_blocks;
 	this->ncol_in_blocks = ncol_in_blocks;
+	this->is_sym = is_sym;
 }
 
 block_sink_store::block_sink_store(
 		// I assume all matrices are kept in row-major order.
 		const std::vector<sink_store::const_ptr> &stores,
-		size_t num_block_rows, size_t num_block_cols): sink_store(
+		size_t num_block_rows, size_t num_block_cols, bool is_sym): sink_store(
 			detail::get_num_rows(stores, num_block_rows,
 				num_block_cols), detail::get_num_cols(stores, num_block_rows,
 				num_block_cols), stores[0]->is_in_mem(), stores[0]->get_type())
 {
-	this->num_block_rows = num_block_rows;
-	this->num_block_cols = num_block_cols;
+	// If we have all sink matrices, we don't care about this flag.
+	this->is_sym = is_sym;
 	this->stores = stores;
 	nrow_in_blocks.resize(num_block_rows);
 	ncol_in_blocks.resize(num_block_cols);
 
 	// all matrices in the block row should have the same number of rows.
 	for (size_t i = 0; i < num_block_rows; i++) {
-		size_t num_rows = stores[num_block_cols * i]->get_num_rows();
+		size_t num_rows = stores[get_idx(i, 0)]->get_num_rows();
 		nrow_in_blocks[i] = num_rows;
 		for (size_t j = 1; j < num_block_cols; j++)
-			assert(stores[num_block_cols * i + j]->get_num_rows() == num_rows);
+			assert(stores[get_idx(i, j)]
+					&& stores[get_idx(i, j)]->get_num_rows() == num_rows);
 	}
 	// all matrices in the block col should have the same number of cols.
 	for (size_t i = 0; i < num_block_cols; i++) {
 		size_t num_cols = stores[i]->get_num_cols();
 		ncol_in_blocks[i] = num_cols;
 		for (size_t j = 1; j < num_block_rows; j++)
-			assert(stores[num_block_cols * j + i]->get_num_cols() == num_cols);
+			assert(stores[get_idx(j, i)]
+					&& stores[get_idx(j, i)]->get_num_cols() == num_cols);
 	}
 	assert(num_block_rows * num_block_cols == stores.size());
 }
@@ -419,29 +431,40 @@ matrix_store::const_ptr block_sink_store::transpose() const
 	if (result)
 		return result->transpose();
 
-	std::vector<sink_store::const_ptr> new_stores;
-	for (size_t j = 0; j < num_block_cols; j++)
-		for (size_t i = 0; i < num_block_rows; i++) {
-			assert(stores[num_block_cols * i + j]);
-			matrix_store::const_ptr t
-				= stores[num_block_cols * i + j]->transpose();
-			sink_store::const_ptr sink
-				= std::dynamic_pointer_cast<const sink_store>(t);
-			assert(sink);
-			new_stores.push_back(sink);
-		}
-	return matrix_store::const_ptr(new block_sink_store(new_stores,
-				num_block_cols, num_block_rows));
+	// If this is a symmetric matrix, the transpose will be the same
+	// as the original matrix.
+	if (is_sym) {
+		block_sink_store *new_store = new block_sink_store(*this);
+		return matrix_store::const_ptr(new_store);
+	}
+	else {
+		std::vector<sink_store::const_ptr> new_stores(stores.size());
+		for (size_t j = 0; j < get_num_block_cols(); j++)
+			for (size_t i = 0; i < get_num_block_rows(); i++) {
+				auto store = stores[get_idx(i, j)];
+				if (store == NULL)
+					continue;
+
+				matrix_store::const_ptr t = store->transpose();
+				sink_store::const_ptr sink
+					= std::dynamic_pointer_cast<const sink_store>(t);
+				assert(sink);
+				new_stores[get_idx(j, i)] = sink;
+			}
+		return matrix_store::const_ptr(new block_sink_store(new_stores,
+					get_num_block_cols(), get_num_block_rows(), is_sym));
+	}
 }
 
 std::string block_sink_store::get_name() const
 {
 	std::string str = "block_sink(";
 	for (size_t i = 0; i < stores.size(); i++) {
-		assert(stores[i]);
-		str += stores[i]->get_name();
-		if (i < stores.size() - 1)
-			str += ", ";
+		if (stores[i]) {
+			str += stores[i]->get_name();
+			if (i < stores.size() - 1)
+				str += ", ";
+		}
 	}
 	str += ")";
 	return str;
@@ -456,8 +479,7 @@ std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 bool block_sink_store::has_materialized() const
 {
 	for (size_t i = 0; i < stores.size(); i++) {
-		assert(stores[i]);
-		if (!stores[i]->has_materialized())
+		if (stores[i] && !stores[i]->has_materialized())
 			return false;
 	}
 	return true;
@@ -474,9 +496,10 @@ std::vector<virtual_matrix_store::const_ptr> block_sink_store::get_compute_matri
 {
 	std::vector<virtual_matrix_store::const_ptr> ret;
 	for (size_t i = 0; i < stores.size(); i++) {
-		assert(stores[i]);
-		auto tmp = stores[i]->get_compute_matrices();
-		ret.insert(ret.end(), tmp.begin(), tmp.end());
+		if (stores[i]) {
+			auto tmp = stores[i]->get_compute_matrices();
+			ret.insert(ret.end(), tmp.begin(), tmp.end());
+		}
 	}
 	return ret;
 }
@@ -486,18 +509,13 @@ void block_sink_store::materialize_self() const
 	if (result)
 		return;
 
-	// There might be duplicated matrices (e.g., crossprod on a block matrix).
 	std::vector<dense_matrix::ptr> mat_vec;
-	std::unordered_map<sink_store::const_ptr, dense_matrix::ptr> uniq_mats;
+	std::vector<dense_matrix::ptr> mat_map(stores.size());
 	for (size_t i = 0; i < stores.size(); i++) {
-		assert(stores[i]);
-		auto it = uniq_mats.find(stores[i]);
-		// If the store hasn't been added to the hashtable yet.
-		if (it == uniq_mats.end()) {
+		if (stores[i]) {
 			dense_matrix::ptr mat = dense_matrix::create(stores[i]);
-			uniq_mats.insert(std::pair<sink_store::const_ptr, dense_matrix::ptr>(
-						stores[i], mat));
 			mat_vec.push_back(mat);
+			mat_map[i] = mat;
 		}
 	}
 	// We don't want to materialize all block matrices together because it
@@ -505,33 +523,31 @@ void block_sink_store::materialize_self() const
 	bool ret =fm::materialize(mat_vec, false);
 	assert(ret);
 
-	std::vector<matrix_store::const_ptr> res_stores(stores.size());
-	for (size_t i = 0; i < stores.size(); i++) {
-		auto it = uniq_mats.find(stores[i]);
-		assert(it != uniq_mats.end());
-		res_stores[i] = it->second->get_raw_store();
-	}
 	mem_matrix_store::ptr res = mem_matrix_store::create(get_num_rows(),
 			get_num_cols(), store_layout(), get_type(), -1);
 	off_t start_row = 0;
-	for (size_t i = 0; i < num_block_rows; i++) {
+	for (size_t i = 0; i < get_num_block_rows(); i++) {
 		off_t start_col = 0;
-		for (size_t j = 0; j < num_block_cols; j++) {
-			size_t block_idx = i * num_block_cols + j;
+		for (size_t j = 0; j < get_num_block_cols(); j++) {
+			auto mat = mat_map[get_idx(i, j)];
+			if (mat == NULL) {
+				mat = mat_map[get_idx(j, i)];
+				assert(mat);
+				mat = mat->transpose();
+			}
+			auto res_store = mat->get_raw_store();
 			local_matrix_store::const_ptr tmp_portion
-				= res_stores[block_idx]->get_portion(0);
-			assert(tmp_portion->get_num_rows()
-					== res_stores[block_idx]->get_num_rows());
-			assert(tmp_portion->get_num_cols()
-					== res_stores[block_idx]->get_num_cols());
+				= res_store->get_portion(0);
+			assert(tmp_portion->get_num_rows() == res_store->get_num_rows());
+			assert(tmp_portion->get_num_cols() == res_store->get_num_cols());
 
 			local_matrix_store::ptr res_portion = res->get_portion(start_row,
-					start_col, res_stores[block_idx]->get_num_rows(),
-					res_stores[block_idx]->get_num_cols());
+					start_col, res_store->get_num_rows(),
+					res_store->get_num_cols());
 			res_portion->copy_from(*tmp_portion);
-			start_col += res_stores[block_idx]->get_num_cols();
+			start_col += res_store->get_num_cols();
 		}
-		start_row += get_mat(i, 0).get_num_rows();
+		start_row += nrow_in_blocks[i];
 	}
 	const_cast<block_sink_store *>(this)->result = res;
 }
@@ -552,9 +568,22 @@ void block_sink_store::set_store(size_t i, size_t j, matrix_store::const_ptr sto
 	assert(nrow_in_blocks[i] == store->get_num_rows());
 	assert(ncol_in_blocks[j] == store->get_num_cols());
 	assert(store->is_in_mem() == is_in_mem());
-	stores[i * num_block_cols + j]
+	stores[get_idx(i, j)]
 		= std::dynamic_pointer_cast<const sink_store>(store);
-	assert(stores[i * num_block_cols + j]);
+	assert(stores[get_idx(i, j)]);
+}
+
+matrix_store::const_ptr block_sink_store::get_store(size_t i, size_t j) const
+{
+	matrix_store::const_ptr ret = stores[get_idx(i, j)];
+	if (ret)
+		return ret;
+
+	ret = stores[get_idx(j, i)];
+	if (is_sym && ret)
+		return ret->transpose();
+	else
+		return matrix_store::const_ptr();
 }
 
 }
