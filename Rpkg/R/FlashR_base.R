@@ -1424,6 +1424,9 @@ fm.table <- function(x)
 }
 
 setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
+setMethod("as.data.frame", signature(x = "fm.table"),
+		  function(x, row.names = NULL, optional = FALSE, ...)
+			  list(val=x@val, Freq=x@Freq))
 
 #' Integer Vectors
 #'
