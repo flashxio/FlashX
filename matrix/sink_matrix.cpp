@@ -396,11 +396,6 @@ matrix_store::const_ptr block_sink_store::transpose() const
 				= stores[num_block_cols * i + j]->transpose();
 			sink_store::const_ptr sink
 				= std::dynamic_pointer_cast<const sink_store>(t);
-			printf("block %ld: orig: %ld,%ld, t: %ld,%ld\n",
-					num_block_cols * i + j,
-					stores[num_block_cols * i + j]->get_num_rows(),
-					stores[num_block_cols * i + j]->get_num_cols(),
-					t->get_num_rows(), t->get_num_cols());
 			assert(sink);
 			new_stores.push_back(sink);
 		}
