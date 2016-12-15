@@ -947,7 +947,6 @@ bool __mapply_portion(
 	// If all matrices are in memory and all matrices have only one portion,
 	// we should perform computation in the local thread.
 	if (all_in_mem && num_chunks == 1) {
-		detail::mem_thread_pool::disable_thread_pool();
 		mapply_task task(mats, 0, *op, out_mats);
 		task.run();
 		// After computation, some matrices buffer local portions in the thread,
@@ -960,7 +959,6 @@ bool __mapply_portion(
 					detail::local_mem_buffer::MAT_PORTION);
 		else
 			detail::local_mem_buffer::clear_bufs();
-		detail::mem_thread_pool::enable_thread_pool();
 	}
 	else if (all_in_mem) {
 		detail::mem_thread_pool::ptr threads
