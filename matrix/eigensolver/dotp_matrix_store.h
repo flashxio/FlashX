@@ -69,6 +69,9 @@ public:
 	matrix_layout_t store_layout() const {
 		return orig_store->store_layout();
 	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
@@ -169,6 +172,9 @@ public:
 
 	const std::vector<double> get_col_dot_prods() const {
 		return col_dot_prods;
+	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
 	}
 
 	virtual matrix_store::const_ptr get_cols(

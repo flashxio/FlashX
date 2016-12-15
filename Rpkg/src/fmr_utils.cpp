@@ -51,6 +51,11 @@ static void fm_clean_DM(SEXP p)
 
 SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create an empty matrix\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("sparse");
@@ -85,6 +90,11 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 
 SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create an empty matrix\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("dense");
@@ -125,6 +135,11 @@ SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name
 
 SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create a vector from an empty matrix\n");
+		return R_NilValue;
+	}
+
 	if (m->get_num_cols() > 1)
 		m = m->transpose();
 	if (m->get_num_cols() > 1) {

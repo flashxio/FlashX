@@ -65,9 +65,13 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
-	size_t get_data_id() const {
+	virtual size_t get_data_id() const {
 		return data_id;
 	}
+	virtual bool share_data(const matrix_store &store) const {
+		return matrix_store::share_data(store);
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		ret.insert(std::pair<size_t, size_t>(data_id,

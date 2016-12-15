@@ -206,6 +206,14 @@ combined_matrix_store::combined_matrix_store(
 	this->mats = mats;
 }
 
+combined_matrix_store::combined_matrix_store(
+		const std::vector<matrix_store::const_ptr> &mats,
+		matrix_layout_t layout, size_t data_id): mapply_matrix_store(
+			mats, get_combine_op(mats), layout, data_id)
+{
+	this->mats = mats;
+}
+
 std::string combined_matrix_store::get_name() const
 {
 	std::string name = std::string("combine(") + mats[0]->get_name();
@@ -225,7 +233,8 @@ matrix_store::const_ptr combined_matrix_store::transpose() const
 		layout = matrix_layout_t::L_COL;
 	else
 		layout = matrix_layout_t::L_ROW;
-	return matrix_store::const_ptr(new combined_matrix_store(tmp, layout));
+	return matrix_store::const_ptr(new combined_matrix_store(tmp, layout,
+				get_data_id()));
 }
 
 /*
@@ -440,6 +449,20 @@ void combined_matrix_store::unset_persistent() const
 		if (obj)
 			obj->unset_persistent();
 	}
+}
+
+bool combined_matrix_store::share_data(const matrix_store &store) const
+{
+	const combined_matrix_store *combined_store
+		= dynamic_cast<const combined_matrix_store *>(&store);
+	if (combined_store == NULL)
+		return false;
+	if (mats.size() != combined_store->mats.size())
+		return false;
+	for (size_t i = 0; i < mats.size(); i++)
+		if (!mats[i]->share_data(*combined_store->mats[i]))
+			return false;
+	return true;
 }
 
 }

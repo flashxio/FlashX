@@ -41,6 +41,11 @@ public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
 
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const;
+
 	virtual std::string get_name() const {
 		return (boost::format("one_val_mat(%1%,%2%)") % get_num_rows()
 			% get_num_cols()).str();

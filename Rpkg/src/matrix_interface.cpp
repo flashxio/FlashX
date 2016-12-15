@@ -135,9 +135,13 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	else if (R_is_logical(pinitv)) {
 		dense_matrix::ptr vec = dense_matrix::create_const<int>(
 				LOGICAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
-		Rcpp::List ret = create_FMR_vector(vec, "");
-		ret["ele_type"] = Rcpp::String("logical");
-		return ret;
+		if (vec) {
+			Rcpp::List ret = create_FMR_vector(vec, "");
+			ret["ele_type"] = Rcpp::String("logical");
+			return ret;
+		}
+		else
+			return R_NilValue;
 	}
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
@@ -455,10 +459,13 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		}
 		mat = dense_matrix::create(store);
 	}
-	if (mat->get_type() == get_scalar_type<float>())
-		mat = mat->cast_ele_type(get_scalar_type<double>());
-
-	return create_FMR_matrix(mat, mat_name);
+	if (mat) {
+		if (mat->get_type() == get_scalar_type<float>())
+			mat = mat->cast_ele_type(get_scalar_type<double>());
+		return create_FMR_matrix(mat, mat_name);
+	}
+	else
+		return R_NilValue;
 }
 
 RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)

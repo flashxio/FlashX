@@ -121,6 +121,9 @@ public:
 		assert(!store->is_wide());
 		assert(idxs.size() > 0);
 	}
+	virtual size_t get_data_id() const {
+		return data_id;
+	}
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual std::string get_name() const {
@@ -176,6 +179,9 @@ public:
 		this->rc_idxs = idxs;
 		assert(store->is_wide());
 		assert(idxs.size() > 0);
+	}
+	virtual size_t get_data_id() const {
+		return data_id;
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

@@ -62,6 +62,12 @@ public:
 
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
+	/*
+	 * This function symmetrizes a matrix.
+	 * It only works for a SMP square matrix.
+	 */
+	bool symmetrize(bool upper2lower);
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		// TODO right now we only indicate the matrix. We set the number of
@@ -71,6 +77,7 @@ public:
 		return ret;
 	}
 	virtual std::string get_name() const;
+	virtual bool share_data(const matrix_store &store) const;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
@@ -173,6 +180,8 @@ public:
 		return data.get_raw();
 	}
 
+	virtual size_t get_data_id() const;
+
 	virtual const char *get_col(size_t col) const {
 		return data.get_raw() + col * get_num_rows() * get_entry_size();
 	}
@@ -253,6 +262,8 @@ public:
 		return data.get_raw();
 	}
 
+	virtual size_t get_data_id() const;
+
 	virtual const char *get_row(size_t row) const {
 		return data.get_raw() + row * get_num_cols() * get_entry_size();
 	}
@@ -325,6 +336,8 @@ public:
 		return ptr(new mem_sub_col_matrix_store(store, idxs));
 	}
 
+	virtual size_t get_data_id() const;
+
 	virtual char *get_col(size_t col) {
 		return mem_col_matrix_store::get_col(orig_col_idxs->at(col));
 	}
@@ -388,6 +401,8 @@ public:
 		*idxs = abs_row_idxs;
 		return ptr(new mem_sub_row_matrix_store(store, idxs));
 	}
+
+	virtual size_t get_data_id() const;
 
 	virtual char *get_row(size_t row) {
 		return mem_row_matrix_store::get_row(orig_row_idxs->at(row));
