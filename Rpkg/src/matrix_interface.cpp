@@ -1924,7 +1924,7 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 }
 #endif
 
-RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel, SEXP pin_mem)
+RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP pcached, SEXP pin_mem)
 {
 	Rcpp::LogicalVector res(1);
 	if (is_sparse(pmat)) {
@@ -1932,14 +1932,10 @@ RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel, SEXP pin_mem)
 		res[0] = false;
 		return res;
 	}
-	Rcpp::IntegerVector level_vec(plevel);
-	int level = level_vec[0];
-	if (level < materialize_level::MATER_CPU
-			|| level > materialize_level::MATER_FULL) {
-		fprintf(stderr, "unknown materialization level: %d\n", level);
-		res[0] = false;
-		return res;
-	}
+
+	bool cached = LOGICAL(pcached)[0];
+	materialize_level level
+		= cached ? materialize_level::MATER_FULL : materialize_level::MATER_CPU;
 
 	bool in_mem = LOGICAL(pin_mem)[0];
 	if (!in_mem && !safs::is_safs_init()) {
@@ -1950,7 +1946,7 @@ RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP plevel, SEXP pin_mem)
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	if (in_mem == mat->is_in_mem())
-		mat->set_materialize_level((materialize_level) level);
+		mat->set_materialize_level(level);
 	else {
 		// The store buffer has to be a tall matrix.
 		size_t nrow = std::max(mat->get_num_rows(), mat->get_num_cols());

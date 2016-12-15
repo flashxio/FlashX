@@ -93,7 +93,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 
 		parts <- as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
-		fm.set.materialize.level(parts, 2, TRUE)
+		fm.set.cached(parts, TRUE, TRUE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))

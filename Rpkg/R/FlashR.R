@@ -1706,7 +1706,7 @@ fm.get.eles.vec <- function(fm, idxs)
 #' computation. By default, FlashMatrix only saves the computation results
 #' specified by the arguments of \code{fm.materialize.list} and
 #' \code{fm.materialize}. However, by setting the materialization level of
-#' a virtualized computation with \code{fm.set.materialize.level}, even if
+#' a virtualized computation with \code{fm.set.cached}, even if
 #' the virtualized computation is not specified in \code{fm.materialize.list}
 #' and \code{fm.materialize}, its computation result can still be saved.
 #'
@@ -1764,11 +1764,11 @@ fm.materialize <- function(...)
 }
 
 #' @rdname materialize
-fm.set.materialize.level <- function(fm, level, in.mem=fm.in.mem(fm))
+fm.set.cached <- function(fm, cached, in.mem=fm.in.mem(fm))
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
-	.Call("R_FM_set_materialize_level", fm, as.integer(level),
+	.Call("R_FM_set_materialize_level", fm, as.logical(cached),
 		  as.logical(in.mem), PACKAGE="FlashR")
 }
 
