@@ -2308,6 +2308,8 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 					get_num_cols(), layout == matrix_layout_t::L_ROW));
 	}
 #endif
+	if (store->is_sink())
+		materialize_self();
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
