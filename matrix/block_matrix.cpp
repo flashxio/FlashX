@@ -944,14 +944,14 @@ dense_matrix::ptr block_matrix::mapply2(const dense_matrix &m,
 		return dense_matrix::ptr();
 	}
 	const block_matrix *block_m = dynamic_cast<const block_matrix *>(&m);
-	if (block_m == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "The input matrix isn't a block matrix";
-		return dense_matrix::ptr();
-	}
-	if (block_m->get_block_size() != get_block_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The input matrix has a different block size";
-		return dense_matrix::ptr();
+	if (block_m == NULL || block_m->get_block_size() != get_block_size()) {
+		// TODO if this matrix is a wide matrix and `m' is stored in row major
+		// order or if this matrix is a tall matrix and `m' is stored in col
+		// major order, we can still split `m' into smaller sizes to improve
+		// performance.
+		dense_matrix::ptr this_mat = dense_matrix::create(get_raw_store());
+		dense_matrix::ptr mat2 = dense_matrix::create(m.get_raw_store());
+		return this_mat->mapply2(*mat2, op);
 	}
 
 	std::vector<detail::matrix_store::const_ptr> res_stores(
