@@ -823,33 +823,25 @@ public:
 };
 
 template<class T, class RType>
-bool copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
+bool copy_FM2Rmatrix(dense_matrix::ptr mat, RType *r_vec)
 {
 	size_t chunk_size = detail::mem_matrix_store::CHUNK_SIZE;
 	// If the matrix is in memory and is small, we can copy it directly.
-	if (mat.is_in_mem() && mat.get_num_rows() < chunk_size
-			&& mat.get_num_cols() < chunk_size) {
-		detail::mem_matrix_store::const_ptr mem_store;
-		// The matrix might be a block matrix.
-		dense_matrix::ptr tmp = dense_matrix::create(mat.get_raw_store());
-		bool ret = tmp->materialize_self();
+	if (mat->is_in_mem() && mat->get_num_rows() < chunk_size
+			&& mat->get_num_cols() < chunk_size) {
+		bool ret = mat->materialize_self();
 		if (!ret) {
 			fprintf(stderr, "can't materialize the matrix\n");
 			return R_NilValue;
 		}
-
-		mem_store = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
-				tmp->get_raw_store());
-		if (mem_store == NULL) {
-			fprintf(stderr, "can't convert it to an in-mem matrix\n");
-			return false;
-		}
+		if (mat->store_layout() == matrix_layout_t::L_ROW)
+			mat = mat->conv2(matrix_layout_t::L_COL);
 
 		detail::local_col_matrix_store::const_ptr col_lstore
 			= std::dynamic_pointer_cast<const detail::local_col_matrix_store>(
-					mem_store->get_portion(0));
-		size_t nrow = mat.get_num_rows();
-		size_t ncol = mat.get_num_cols();
+					mat->get_raw_store()->get_portion(0));
+		size_t nrow = mat->get_num_rows();
+		size_t ncol = mat->get_num_cols();
 		for (size_t j = 0; j < ncol; j++) {
 			const RType *src_col = reinterpret_cast<const RType *>(
 					col_lstore->get_col(j));
@@ -858,9 +850,11 @@ bool copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
 		}
 	}
 	else {
-		std::vector<detail::matrix_store::const_ptr> mats(1, mat.get_raw_store());
+		// R stores data in col-major order
+		mat = mat->conv2(matrix_layout_t::L_COL);
+		std::vector<detail::matrix_store::const_ptr> mats(1, mat->get_raw_store());
 		detail::portion_mapply_op::const_ptr op(
-				new FM2R_portion_op<T, RType>(r_vec, mat.get_num_rows()));
+				new FM2R_portion_op<T, RType>(r_vec, mat->get_num_rows()));
 		detail::__mapply_portion(mats, op, matrix_layout_t::L_ROW);
 	}
 	return true;
@@ -880,12 +874,10 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 		fprintf(stderr, "cannot get a dense matrix.\n");
 		return R_NilValue;
 	}
-	// R stores data in col-major order
-	mat = mat->conv2(matrix_layout_t::L_COL);
 	if (mat->is_type<double>())
-		ret[0] = copy_FM2Rmatrix<double,double>(*mat, REAL(pRmat));
+		ret[0] = copy_FM2Rmatrix<double,double>(mat, REAL(pRmat));
 	else if (mat->is_type<int>())
-		ret[0] = copy_FM2Rmatrix<int, int>(*mat, INTEGER(pRmat));
+		ret[0] = copy_FM2Rmatrix<int, int>(mat, INTEGER(pRmat));
 	else {
 		fprintf(stderr, "the dense matrix doesn't have a right type\n");
 		ret[0] = false;
