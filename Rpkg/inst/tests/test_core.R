@@ -219,7 +219,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(length, 1000000, depth - 1)
+		tmp <- get.mats(length, 100000, depth - 1)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
@@ -237,7 +237,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(1000000, length, depth - 1)
+		tmp <- get.mats(100000, length, depth - 1)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
@@ -266,7 +266,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		# Create in-memory matrices.
 		logical.mat <- fm.matrix(TRUE, nrow, ncol)
 		int.mat <- fm.seq.matrix(as.integer(1), as.integer(nrow * ncol), nrow, ncol)
-		if (nrow > ncol && nrow == 1000000) {
+		if (nrow > ncol && nrow == 100000) {
 			if (ncol %in% names(IM.large.talls))
 				double.mat <- IM.large.talls[[ncol + nrow]]
 			else {
@@ -274,7 +274,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 				IM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
-		else if (ncol > nrow && ncol == 1000000) {
+		else if (ncol > nrow && ncol == 100000) {
 			if (nrow %in% names(IM.large.wides))
 				double.mat <- IM.large.wides[[nrow + ncol]]
 			else {
@@ -294,7 +294,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		names <- c(names, paste("proj-mat-", nrow, "-", ncol, sep=""))
 
 		# Create external-memory matrices
-		if (nrow > ncol && nrow == 1000000) {
+		if (nrow > ncol && nrow == 100000) {
 			if (ncol %in% names(EM.large.talls))
 				double.mat <- EM.large.talls[[ncol + nrow]]
 			else {
@@ -302,7 +302,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 				EM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
-		else if (ncol > nrow && ncol == 1000000) {
+		else if (ncol > nrow && ncol == 100000) {
 			if (nrow %in% names(EM.large.wides))
 				double.mat <- EM.large.wides[[nrow + ncol]]
 			else {
@@ -457,10 +457,10 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	res.names <- list()
 
 	if (nrow < 2000 && ncol < 2000) {
-		tmp <- get.mats(nrow, 1000000, depth - 1, lazy)
+		tmp <- get.mats(nrow, 100000, depth - 1, lazy)
 		mats1 <- tmp$mats
 		names1 <- tmp$names
-		tmp <- get.mats(1000000, ncol, depth - 1, lazy)
+		tmp <- get.mats(100000, ncol, depth - 1, lazy)
 		mats2 <- tmp$mats
 		names2 <- tmp$names
 		for (i in 1:length(mats1)) {
@@ -589,11 +589,11 @@ test_that("test lazy evals on matrices", {
 		  # regular block matrix
 		  # wide block matrix
 		  for (ncol in c(10, 100, 500)) {
-			  print(paste("tall mat of 1000000 x", ncol))
-			  tmp <- get.mats(1000000, ncol, depth, TRUE)
+			  print(paste("tall mat of 100000 x", ncol))
+			  tmp <- get.mats(100000, ncol, depth, TRUE)
 			  objs.lazy <- tmp$mats
 			  obj.names <- tmp$names
-			  tmp <- get.mats(1000000, ncol, depth, FALSE)
+			  tmp <- get.mats(100000, ncol, depth, FALSE)
 			  objs <- tmp$mats
 			  for (i in 1:length(objs)) {
 				  print(i)
