@@ -175,7 +175,7 @@ get.mapply.vecs <- function(length, depth, lazy)
 	res <- list()
 	res.names <- list()
 
-	print("get mapply vec of", length, ", depth:", depth, "\n")
+	print(paste("get mapply vec of", length, ", depth:", depth))
 	tmp <- get.vecs(length, depth - 1, lazy)
 	vecs <- tmp$vecs
 	names <- tmp$names
@@ -191,7 +191,7 @@ get.mapply.vecs <- function(length, depth, lazy)
 
 get.sapply.vecs <- function(length, depth, lazy)
 {
-	print("get sapply vec of", length, ", depth:", depth, "\n")
+	print(paste("get sapply vec of", length, ", depth:", depth))
 	res <- list()
 	res.names <- list()
 	tmp <- get.vecs(length, depth - 1, lazy)
@@ -206,7 +206,7 @@ get.sapply.vecs <- function(length, depth, lazy)
 
 get.agg.vecs <- function(length, depth, lazy)
 {
-	print("get agg vec of", length, ", depth:", depth, "\n")
+	print(paste("get agg vec of", length, ", depth:", depth))
 	res <- list()
 	res.names <- list()
 
@@ -263,24 +263,23 @@ get.mats <- function(nrow, ncol, depth, lazy)
 	names <- list()
 
 	if (depth == 0) {
-		stopifnot(nrow <= 1000000 && ncol <= 1000000)
 		# Create in-memory matrices.
 		logical.mat <- fm.matrix(TRUE, nrow, ncol)
 		int.mat <- fm.seq.matrix(as.integer(1), as.integer(nrow * ncol), nrow, ncol)
 		if (nrow > ncol && nrow == 1000000) {
 			if (ncol %in% names(IM.large.talls))
-				double.mat <- IM.large.talls[[ncol]]
+				double.mat <- IM.large.talls[[ncol + nrow]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol)
-				IM.large.talls[[ncol]] <- double.mat
+				IM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
 		else if (ncol > nrow && ncol == 1000000) {
 			if (nrow %in% names(IM.large.wides))
-				double.mat <- IM.large.wides[[nrow]]
+				double.mat <- IM.large.wides[[nrow + ncol]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol)
-				IM.large.wides[[nrow]] <- double.mat
+				IM.large.wides[[nrow + ncol]] <- double.mat
 			}
 		}
 		else
@@ -297,18 +296,18 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		# Create external-memory matrices
 		if (nrow > ncol && nrow == 1000000) {
 			if (ncol %in% names(EM.large.talls))
-				double.mat <- EM.large.talls[[ncol]]
+				double.mat <- EM.large.talls[[ncol + nrow]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol, in.mem=FALSE)
-				EM.large.talls[[ncol]] <- double.mat
+				EM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
 		else if (ncol > nrow && ncol == 1000000) {
 			if (nrow %in% names(EM.large.wides))
-				double.mat <- EM.large.wides[[nrow]]
+				double.mat <- EM.large.wides[[nrow + ncol]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol, in.mem=FALSE)
-				EM.large.wides[[nrow]] <- double.mat
+				EM.large.wides[[nrow + ncol]] <- double.mat
 			}
 		}
 		else
@@ -319,7 +318,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 				   paste("EM-D-mat-", nrow, "-", ncol, sep=""))
 	}
 	else {
-		tmp <- get.mats(nrow, ncol, depth - 1)
+		tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 
@@ -367,7 +366,7 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 		}
 	}
 
-	vecs <- get.vecs(nrow(mats[[1]]), depth - 1)
+	vecs <- get.vecs(nrow(mats[[1]]), depth - 1, lazy)
 	for (i in 1:length(mats)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, fm.mapply.col(mats[[i]], vecs$vecs[[j]], "+"))
@@ -376,7 +375,7 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 		}
 	}
 
-	vecs <- get.vecs(ncol(mats[[1]]), depth - 1)
+	vecs <- get.vecs(ncol(mats[[1]]), depth - 1, lazy)
 	for (i in 1:length(mats)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, fm.mapply.row(mats[[i]], vecs$vecs[[j]], "+"))
@@ -589,8 +588,8 @@ test_that("test lazy evals on matrices", {
 		  # regular skinny matrix
 		  # regular block matrix
 		  # wide block matrix
-		  for (ncol in c(10, 100, 1000)) {
-			  print(paste("tall mat of 1000000 x", ncol, "\n"))
+		  for (ncol in c(10, 100, 500)) {
+			  print(paste("tall mat of 1000000 x", ncol))
 			  tmp <- get.mats(1000000, ncol, depth, TRUE)
 			  objs.lazy <- tmp$mats
 			  obj.names <- tmp$names
@@ -755,8 +754,8 @@ test_that("test groupby rows", {
 		  rmat <- fm.conv.FM2R(m)
 		  rlabels <- fm.conv.FM2R(v)
 		  rres <- matrix(nrow=2, ncol=10)
-		  rres[1,] <- colSums(rmat[rlabels == 0,])
-		  rres[2,] <- colSums(rmat[rlabels == 1,])
+		  rres[1,] <- colSums(rmat[rlabels == 0,, drop=FALSE])
+		  rres[2,] <- colSums(rmat[rlabels == 1,, drop=FALSE])
 		  expect_equal(fm.conv.FM2R(res), rres)
 })
 
@@ -776,8 +775,8 @@ test_that("test groupby cols", {
 		  rmat <- fm.conv.FM2R(m)
 		  rlabels <- fm.conv.FM2R(v)
 		  rres <- matrix(nrow=100, ncol=2)
-		  rres[,1] <- rowSums(rmat[,rlabels == 0])
-		  rres[,2] <- rowSums(rmat[,rlabels == 1])
+		  rres[,1] <- rowSums(rmat[,rlabels == 0, drop=FALSE])
+		  rres[,2] <- rowSums(rmat[,rlabels == 1, drop=FALSE])
 		  expect_equal(fm.conv.FM2R(res), rres)
 })
 
