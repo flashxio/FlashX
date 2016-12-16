@@ -849,7 +849,10 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		matrix_info info;
 		info.num_rows = left->get_num_rows();
 		info.num_cols = right->get_num_cols();
-		info.layout = this->layout;
+		if (left->store_layout() == matrix_layout_t::L_COL)
+			info.layout = matrix_layout_t::L_COL;
+		else
+			info.layout = matrix_layout_t::L_ROW;
 		portion_op = std::shared_ptr<portion_mapply_op>(new inner_prod_wide_op(
 					left_op, right_op, info, nthreads));
 	}
