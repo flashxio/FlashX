@@ -177,8 +177,8 @@ get.vecs <- function(length, depth, lazy) {
 		names <- c(names, tmp$names)
 
 		if (!lazy)
-			for (i in 1:length(mats))
-				mats[[i]] <- fm.materialize(mats[[i]])
+			for (i in 1:length(vecs))
+				vecs[[i]] <- fm.materialize(vecs[[i]])
 	}
 	list(vecs=vecs, names=names)
 }
@@ -226,7 +226,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	res <- list()
 	res.names <- list()
 
-	tmp <- get.mats(length, 100, depth - 1)
+	tmp <- get.mats(length, 100, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	print.depth(depth, length(mats), "mats from the lower level")
@@ -236,7 +236,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(length, 100000, depth - 1)
+		tmp <- get.mats(length, 100000, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
@@ -245,7 +245,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		}
 	}
 
-	tmp <- get.mats(100, length, depth - 1)
+	tmp <- get.mats(100, length, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	for (i in 1:length(mats)) {
@@ -254,7 +254,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(100000, length, depth - 1)
+		tmp <- get.mats(100000, length, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
