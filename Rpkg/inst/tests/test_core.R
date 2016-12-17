@@ -125,6 +125,9 @@ test_that(paste("create a random vector/matrix under normal distribution"), {
 		  expect_true(abs(1 - sd(vec)) < 0.001)
 })
 
+data.map <- list()
+name.map <- list()
+
 print.depth <- function(depth, ...)
 {
 	space <- ""
@@ -140,6 +143,10 @@ print.depth <- function(depth, ...)
 get.vecs <- function(length, depth, lazy) {
 	key <- paste("vec-", length, depth, lazy)
 	print.depth(depth, key)
+	if (key %in% names(data.map)) {
+		print.depth(depth, "The vectors exist")
+		return(list(vecs=data.map[[key]], names=name.map[[key]]))
+	}
 
 	vecs <- list()
 	names <- list()
@@ -180,6 +187,8 @@ get.vecs <- function(length, depth, lazy) {
 			for (i in 1:length(vecs))
 				vecs[[i]] <- fm.materialize(vecs[[i]])
 	}
+	data.map[[key]] <- vecs
+	name.map[[key]] <- names
 	list(vecs=vecs, names=names)
 }
 
@@ -281,6 +290,10 @@ get.mats <- function(nrow, ncol, depth, lazy)
 
 	key <- paste("mat-", nrow, ncol, depth, lazy)
 	print.depth(depth, key)
+	if (key %in% names(data.map)) {
+		print.depth(depth, "The matrices exist")
+		return(list(mats=data.map[[key]], names=name.map[[key]]))
+	}
 
 	if (depth == 0) {
 		# Create in-memory matrices.
@@ -366,6 +379,8 @@ get.mats <- function(nrow, ncol, depth, lazy)
 			for (i in 1:length(mats))
 				mats[[i]] <- fm.materialize(mats[[i]])
 	}
+	data.map[[key]] <- mats
+	name.map[[key]] <- names
 	list(mats=mats, names=names)
 }
 
@@ -590,6 +605,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <- list()
+		  name.map <- list()
 		  gc()
 
 		  print("mat 100x100")
@@ -606,6 +623,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <- list()
+		  name.map <- list()
 		  gc()
 
 		  print("mat 1000x1000")
@@ -622,6 +641,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <- list()
+		  name.map <- list()
 		  gc()
 
 		  # regular skinny matrix
@@ -642,6 +663,8 @@ test_that("test lazy evals on matrices", {
 				  obj <- objs[[i]]
 				  expect_true(sum(abs(obj - obj.lazy)) == 0)
 			  }
+			  data.map <- list()
+			  name.map <- list()
 			  gc()
 		  }
 })
