@@ -125,8 +125,22 @@ test_that(paste("create a random vector/matrix under normal distribution"), {
 		  expect_true(abs(1 - sd(vec)) < 0.001)
 })
 
+print.depth <- function(depth, ...)
+{
+	space <- ""
+	if (2 - depth > 0) {
+		for (i in 1:(2 - depth))
+			space <- c(space, "    ")
+		space <- paste(space, collapse = '')
+	}
+	print(paste(space, ...))
+}
+
 # This creates in-memory and external-memory vectors of different types.
 get.vecs <- function(length, depth, lazy) {
+	key <- paste("vec-", length, depth, lazy)
+	print.depth(depth, key)
+
 	vecs <- list()
 	names <- list()
 	if (depth == 0) {
@@ -172,13 +186,14 @@ get.vecs <- function(length, depth, lazy) {
 # All vectors have the same length.
 get.mapply.vecs <- function(length, depth, lazy)
 {
+	print.depth(depth, "get mapply vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 
-	print(paste("get mapply vec of", length, ", depth:", depth))
 	tmp <- get.vecs(length, depth - 1, lazy)
 	vecs <- tmp$vecs
 	names <- tmp$names
+	print.depth(depth, length(vecs), "vecs from the lower level")
 	for (i in 1:length(vecs)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, vecs[[i]] + vecs[[j]])
@@ -191,12 +206,13 @@ get.mapply.vecs <- function(length, depth, lazy)
 
 get.sapply.vecs <- function(length, depth, lazy)
 {
-	print(paste("get sapply vec of", length, ", depth:", depth))
+	print.depth(depth, "get sapply vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 	tmp <- get.vecs(length, depth - 1, lazy)
 	vecs <- tmp$vecs
 	names <- tmp$names
+	print.depth(depth, length(vecs), "vecs from the lower level")
 	for (i in 1:length(vecs)) {
 		res <- c(res, -vecs[[i]])
 		res.names <- c(res.names, paste("-(", names[[i]], ")", sep=""))
@@ -206,13 +222,14 @@ get.sapply.vecs <- function(length, depth, lazy)
 
 get.agg.vecs <- function(length, depth, lazy)
 {
-	print(paste("get agg vec of", length, ", depth:", depth))
+	print.depth(depth, "get agg vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 
 	tmp <- get.mats(length, 100, depth - 1)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, length(mats), "mats from the lower level")
 	for (i in 1:length(mats)) {
 		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
 		res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
@@ -261,6 +278,9 @@ get.mats <- function(nrow, ncol, depth, lazy)
 {
 	mats <- list()
 	names <- list()
+
+	key <- paste("mat-", nrow, ncol, depth, lazy)
+	print.depth(depth, key)
 
 	if (depth == 0) {
 		# Create in-memory matrices.
@@ -352,9 +372,12 @@ get.mats <- function(nrow, ncol, depth, lazy)
 # All matrices have the same shape
 get.mapply.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get mapply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -389,9 +412,12 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 
 get.sapply.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get sapply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -405,9 +431,12 @@ get.sapply.mats <- function(nrow, ncol, depth, lazy)
 
 get.t.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get tmats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(ncol, nrow, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -424,9 +453,12 @@ get.groupby.mats <- function(nrow, ncol, depth, lazy)
 	res <- list()
 	res.names <- list()
 
+	print.depth(depth, "get groupby mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow * 10, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "taller mats from the lower level")
 	labels <- fm.as.factor(as.integer(fm.runif(nrow(mats[[1]])) * nrow))
 	for (i in 1:length(mats)) {
 		mat <- fm.groupby(mats[[i]], 2, labels, "+")
@@ -439,6 +471,7 @@ get.groupby.mats <- function(nrow, ncol, depth, lazy)
 	tmp <- get.mats(nrow, ncol * 10, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "wider mats from the lower level")
 	labels <- fm.as.factor(as.integer(fm.runif(ncol(mats[[1]])) * ncol))
 	for (i in 1:length(mats)) {
 		mat <- fm.groupby(mats[[i]], 1, labels, "+")
@@ -456,13 +489,17 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	res <- list()
 	res.names <- list()
 
+	print.depth(depth, "get multiply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	if (nrow < 2000 && ncol < 2000) {
 		tmp <- get.mats(nrow, 100000, depth - 1, lazy)
 		mats1 <- tmp$mats
 		names1 <- tmp$names
+		print.depth(depth, "get", length(mats1), "wide mats from the lower level")
 		tmp <- get.mats(100000, ncol, depth - 1, lazy)
 		mats2 <- tmp$mats
 		names2 <- tmp$names
+		print.depth(depth, "get", length(mats2), "tall mats from the lower level")
 		for (i in 1:length(mats1)) {
 			for (j in 1:length(mats2)) {
 				res <- c(res, fm.multiply(mats1[[i]], mats2[[j]], lazy.wide=TRUE))
@@ -483,9 +520,11 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	tmp <- get.mats(nrow, 100, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "tall mats from the lower level")
 	tmp <- get.mats(100, ncol, depth - 1, lazy)
 	smalls <- tmp$mats
 	small.names <- tmp$names
+	print.depth(depth, "get", length(smalls), "small mats from the lower level")
 	for (i in 1:length(mats)) {
 		for (j in 1:length(smalls)) {
 			res <- c(res, fm.multiply(mats[[i]], smalls[[i]], lazy.wide=TRUE))
