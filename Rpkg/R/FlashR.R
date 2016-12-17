@@ -749,13 +749,11 @@ fm.as.factor <- function(fm, num.levels = -1)
 #'
 #' @param fm A FlashMatrix matrix
 #' @param mat A FlashMatrix dense matrix.
-#' @param lazy.wide whether to lazily evaluate multiplication of a wide matrix
-#' with a tall matrix.
 #' @return a FlashMatrix vector if the second argument is a vector;
 #' a FlashMatrix matrix if the second argument is a matrix.
 #' @name fm.multiply
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.multiply <- function(fm, mat, lazy.wide=FALSE)
+fm.multiply <- function(fm, mat)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
@@ -772,14 +770,9 @@ fm.multiply <- function(fm, mat, lazy.wide=FALSE)
 	else
 		o <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashR")
 	if (class(mat) == "fmV")
-		ret <- .new.fmV(o)
+		.new.fmV(o)
 	else
-		ret <- .new.fm(o)
-	# If it's a dense and wide matrix and we don't want to lazy evaluation.
-	if (!fm.is.sparse(fm) && ncol(fm) > nrow(fm) && !lazy.wide)
-		fm.materialize(ret)
-	else
-		ret
+		.new.fm(o)
 }
 
 #' Matrix inner product
@@ -793,13 +786,11 @@ fm.multiply <- function(fm, mat, lazy.wide=FALSE)
 #' operators.
 #' @param Fun2 The reference or the name of one of the predefined basic binary
 #' operators.
-#' @param lazy.wide whether to lazily evaluate inner product of a wide matrix
-#' with a tall matrix.
 #' @return a FlashMatrix vector if the second argument is a vector;
 #' a FlashMatrix matrix if the second argument is a matrix.
 #' @name fm.inner.prod
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.inner.prod <- function(fm, mat, Fun1, Fun2, lazy.wide=FALSE)
+fm.inner.prod <- function(fm, mat, Fun1, Fun2)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
@@ -824,13 +815,7 @@ fm.inner.prod <- function(fm, mat, Fun1, Fun2, lazy.wide=FALSE)
 	else {
 		o <- .Call("R_FM_inner_prod_dense", fm, mat, Fun1, Fun2,
 				   PACKAGE="FlashR")
-		# If it's wide and we don't want to lazy evaluation.
-		if (ncol(fm) > nrow(fm) && !lazy.wide) {
-			o <- if (class(mat) == "fmV") .new.fmV(o) else .new.fm(o)
-			o <- fm.materialize(o)
-		}
-		else
-			if (class(mat) == "fmV") .new.fmV(o) else .new.fm(o)
+		if (class(mat) == "fmV") .new.fmV(o) else .new.fm(o)
 	}
 }
 

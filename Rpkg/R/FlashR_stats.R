@@ -82,7 +82,7 @@ setMethod("sd", "fmV", .sd.int)
 		# only works on a set of matrices the same the long dimension and
 		# dimension size. TODO I need to change that.
 		x.sum <- fm.rowSums(t(x), TRUE)
-		x.prod <- fm.multiply(t(x), x, TRUE)
+		x.prod <- fm.multiply(t(x), x)
 		ret <- fm.materialize(x.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.mu <- fm.conv.FM2R(x.mu)
@@ -91,7 +91,7 @@ setMethod("sd", "fmV", .sd.int)
 	else {
 		x.sum <- fm.rowSums(t(x), TRUE)
 		y.sum <- fm.rowSums(t(y), TRUE)
-		xy.prod <- fm.multiply(t(x), y, TRUE)
+		xy.prod <- fm.multiply(t(x), y)
 		ret <- fm.materialize(x.sum, y.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		y.mu <- ret[[2]] / n
@@ -114,7 +114,7 @@ setMethod("sd", "fmV", .sd.int)
 	if (is.null(y)) {
 		x.sum <- fm.rowSums(t(x), TRUE)
 		x2.sum <- fm.rowSums(t(x * x), TRUE)
-		x.prod <- fm.multiply(t(x), x, TRUE)
+		x.prod <- fm.multiply(t(x), x)
 		ret <- fm.materialize(x.sum, x2.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[2]] - n * x.mu * x.mu) / (n - 1))
@@ -127,7 +127,7 @@ setMethod("sd", "fmV", .sd.int)
 		y.sum <- fm.rowSums(t(y), TRUE)
 		x2.sum <- fm.rowSums(t(x * x), TRUE)
 		y2.sum <- fm.rowSums(t(y * y), TRUE)
-		xy.prod <- fm.multiply(t(x), y, TRUE)
+		xy.prod <- fm.multiply(t(x), y)
 		ret <- fm.materialize(x.sum, y.sum, x2.sum, y2.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[3]] - n * x.mu * x.mu) / (n - 1))

@@ -1599,9 +1599,6 @@ setMethod("sweep", "fm",
 #' faster than) the call \code{t(x) \%*\% y} (\code{crossprod}) or
 #' \code{x \%*\% t(y)} (\code{tcrossprod}).
 #'
-#' \code{fm.crossprod} and \code{fm.tcrossprod} allows to evaluate
-#' the computation lazily.
-#'
 #' @param x,y numeric matrices (or vectors): \code{y = NULL} is taken
 #' to be the same matrix as \code{x}. Vectors are promoted to single-column
 #' or single-row matrices, depending on the context.
@@ -1611,25 +1608,17 @@ setMethod("sweep", "fm",
 NULL
 
 #' @rdname crossprod
-fm.crossprod <- function(x, y=NULL, lazy=FALSE)
-{
-	if (is.null(y))
-		y <- x
-	fm.multiply(t(x), y, lazy)
-}
-
+setMethod("crossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  fm.multiply(t(x), y)
+})
 #' @rdname crossprod
-fm.tcrossprod <- function(x, y=NULL, lazy=FALSE)
-{
-	if (is.null(y))
-		y <- x
-	fm.multiply(x, t(y), lazy)
-}
-
-#' @rdname crossprod
-setMethod("crossprod", "fm", function(x, y=NULL) fm.crossprod(x, y))
-#' @rdname crossprod
-setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
+setMethod("tcrossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  fm.multiply(x, t(y))
+})
 
 #' FlashMatrix Summaries
 #'

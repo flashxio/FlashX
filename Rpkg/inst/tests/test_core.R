@@ -517,15 +517,14 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 		print.depth(depth, "get", length(mats2), "tall mats from the lower level")
 		for (i in 1:length(mats1)) {
 			for (j in 1:length(mats2)) {
-				res <- c(res, fm.multiply(mats1[[i]], mats2[[j]], lazy.wide=TRUE))
+				res <- c(res, fm.multiply(mats1[[i]], mats2[[j]]))
 				res.names <- c(res.names, paste("crossprod(", names1[[i]], ", ",
 												names2[[j]], ")", sep=""))
 			}
 		}
 		for (i in 1:length(mats1)) {
 			for (j in 1:length(mats2)) {
-				res <- c(res, fm.inner.prod(mats1[[i]], mats2[[j]], "*", "+",
-											lazy.wide=TRUE))
+				res <- c(res, fm.inner.prod(mats1[[i]], mats2[[j]], "*", "+"))
 				res.names <- c(res.names, paste("innerprod(t(", names1[[i]], "), ",
 												names2[[j]], ")", sep=""))
 			}
@@ -542,13 +541,13 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	print.depth(depth, "get", length(smalls), "small mats from the lower level")
 	for (i in 1:length(mats)) {
 		for (j in 1:length(smalls)) {
-			res <- c(res, fm.multiply(mats[[i]], smalls[[i]], lazy.wide=TRUE))
+			res <- c(res, fm.multiply(mats[[i]], smalls[[i]]))
 			res.names <- c(res.names, paste("multiply(", names[[i]], ", ",
 											small.names[[i]], ")", sep=""))
 		}
 	}
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.inner.prod(mats[[i]], smalls[[i]], "*", "+", lazy.wide=TRUE))
+		res <- c(res, fm.inner.prod(mats[[i]], smalls[[i]], "*", "+"))
 		res.names <- c(res.names, paste("inner prod(", names[[i]], ", ",
 										small.names[[i]], ")", sep=""))
 	}
