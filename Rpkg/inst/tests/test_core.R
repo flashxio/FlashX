@@ -535,7 +535,9 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	print.depth(depth, "get", length(mats), "tall mats from the lower level")
-	tmp <- get.mats(100, ncol, depth - 1, lazy)
+	# The right matrix will be materialized before multiplication.
+	# so we don't need to create virtual matrices.
+	tmp <- get.mats(100, ncol, 0, lazy)
 	smalls <- tmp$mats
 	small.names <- tmp$names
 	print.depth(depth, "get", length(smalls), "small mats from the lower level")
