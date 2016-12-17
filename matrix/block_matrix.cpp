@@ -788,7 +788,10 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
 	if (mat.get_data().is_sparse()) {
-		assert(is_wide());
+		if (!is_wide()) {
+			BOOST_LOG_TRIVIAL(error) << "the sparse matrix has to be wide";
+			return dense_matrix::ptr();
+		}
 
 		// TODO we need to deal with tall matrix.
 		detail::combined_matrix_store::const_ptr combined
@@ -822,7 +825,10 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
 			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
-			return t_res->transpose();
+			if (t_res)
+				return t_res->transpose();
+			else
+				return dense_matrix::ptr();
 		}
 
 		if (is_wide())

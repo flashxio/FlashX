@@ -474,7 +474,10 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
 			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
-			return t_res->transpose();
+			if (t_res)
+				return t_res->transpose();
+			else
+				return dense_matrix::ptr();
 		}
 
 		if (is_wide())
