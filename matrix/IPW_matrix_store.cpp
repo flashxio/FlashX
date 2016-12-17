@@ -775,9 +775,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			left->get_num_rows(), right->get_num_cols(),
 			left->is_in_mem() && right->is_in_mem(), left->get_type())
 {
-	// We want the left matrix to be a dense matrix.
-	// TODO we need to optimize this later.
-	this->left_mat = conv_dense(left);
+	this->left_mat = left;
 	this->right_mat = right;
 
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
@@ -817,9 +815,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 					&& right->store_layout() == matrix_layout_t::L_ROW));
 	}
 	else {
-		// For inner product, the current implementation only works on
-		// dense matrices. TODO we need to optimize this later.
-		this->right_mat = conv_dense(right);
+		this->right_mat = right;
 
 		if (left_op) {
 			this->left_op = left_op;

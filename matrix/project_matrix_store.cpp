@@ -51,14 +51,16 @@ public:
 
 sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
 		size_t ncol, matrix_layout_t layout,
-		const scalar_type &type): mem_matrix_store(nrow, ncol, type)
+		const scalar_type &type): virtual_matrix_store(nrow, ncol, true,
+			type), mat_id(mat_counter++)
 {
 	this->layout = layout;
 }
 
 sparse_project_matrix_store::sparse_project_matrix_store(size_t nrow,
 		size_t ncol, matrix_layout_t layout, const scalar_type &type,
-		double density): mem_matrix_store(nrow, ncol, type)
+		double density): virtual_matrix_store(nrow, ncol, true,
+			type), mat_id(mat_counter++)
 {
 	this->layout = layout;
 
@@ -255,10 +257,10 @@ local_matrix_store::const_ptr sparse_project_matrix_store::get_portion(
 					local_vals));
 }
 
-void sparse_project_matrix_store::write_portion_async(
-		local_matrix_store::const_ptr portion, off_t start_row, off_t start_col)
+matrix_store::const_ptr sparse_project_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
 {
-	throw unsupported_exception("don't support write_portion_async");
+	return matrix_store::const_ptr();
 }
 
 namespace
@@ -299,20 +301,24 @@ struct empty_deleter {
 
 }
 
-matrix_store::const_ptr sparse_project_matrix_store::conv_dense() const
+matrix_store::const_ptr sparse_project_matrix_store::materialize(bool in_mem,
+		int num_nodes) const
 {
-	std::vector<matrix_store::const_ptr> ins(1);
-	ins[0] = std::shared_ptr<const matrix_store>(this, empty_deleter());
-	conv_dense_op::const_ptr mapply_op(new conv_dense_op(get_num_rows(),
-				get_num_cols(), get_type()));
-	// TODO we should virtualize it.
-	return __mapply_portion(ins, mapply_op, store_layout());
+	std::vector<matrix_store::const_ptr> stores(1);
+	stores[0] = matrix_store::const_ptr(this, empty_deleter());
+	portion_mapply_op::const_ptr op(new conv_dense_op(get_num_rows(), get_num_cols(),
+				get_type()));
+	return __mapply_portion(stores, op, store_layout(), in_mem, num_nodes, true);
 }
 
-matrix_store::const_ptr sparse_project_matrix_store::get_rows(
-		const std::vector<off_t> &idxs) const
+std::pair<size_t, size_t> sparse_project_matrix_store::get_portion_size() const
 {
-	return matrix_store::const_ptr();
+	if (is_wide())
+		return std::pair<size_t, size_t>(get_num_rows(),
+				mem_matrix_store::CHUNK_SIZE);
+	else
+		return std::pair<size_t, size_t>(mem_matrix_store::CHUNK_SIZE,
+				get_num_cols());
 }
 
 matrix_store::const_ptr lsparse_col_matrix_store::transpose() const

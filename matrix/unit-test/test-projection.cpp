@@ -74,7 +74,8 @@ int main(int argc, char *argv[])
 	dense_matrix::ptr res = data->multiply(*proj);
 	res->materialize_self();
 
-	dense_matrix::ptr dense_proj = dense_matrix::create(proj_store->conv_dense());
+	dense_matrix::ptr dense_proj = dense_matrix::create(proj_store);
+	dense_proj->materialize_self();
 	tmps[0] = mean;
 	tmps[1] = dense_proj;
 	dense_proj = dense_matrix::cbind(tmps);

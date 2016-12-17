@@ -373,8 +373,9 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -1893,8 +1894,9 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -2364,6 +2366,9 @@ dense_matrix::ptr dense_matrix::col_norm2() const
 	return sums->sapply(bulk_uoperate::conv2ptr(*op));
 }
 
+namespace
+{
+
 class copy_op: public detail::portion_mapply_op
 {
 public:
@@ -2396,6 +2401,8 @@ public:
 		return std::string();
 	}
 };
+
+}
 
 detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 		int num_nodes) const

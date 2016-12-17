@@ -23,19 +23,6 @@ using namespace fm;
 
 size_t long_dim = 9999999;
 
-dense_matrix::ptr conv_dense(dense_matrix::ptr tmp1)
-{
-	detail::sparse_project_matrix_store::const_ptr proj_store
-		= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
-				tmp1->get_raw_store());
-	if (proj_store) {
-		detail::matrix_store::const_ptr dense = proj_store->conv_dense();
-		return dense_matrix::create(dense);
-	}
-	else
-		return tmp1;
-}
-
 /*
  * This is a naive implementation of matrix multiplication.
  * It should be correct
@@ -44,8 +31,6 @@ dense_matrix::ptr naive_multiply(const dense_matrix &_m1, const dense_matrix &_m
 {
 	dense_matrix::ptr m1 = dense_matrix::create(_m1.get_raw_store());
 	dense_matrix::ptr m2 = dense_matrix::create(_m2.get_raw_store());
-	m1 = conv_dense(m1);
-	m2 = conv_dense(m2);
 	m1->materialize_self();
 	m2->materialize_self();
 	detail::mem_matrix_store::ptr res_store = detail::mem_matrix_store::create(
@@ -85,8 +70,6 @@ dense_matrix::ptr blas_multiply(const dense_matrix &m1, const dense_matrix &m2)
 	dense_matrix::ptr tmp2 = dense_matrix::create(m2.get_raw_store());
 	tmp1 = tmp1->conv2(matrix_layout_t::L_COL);
 	tmp2 = tmp2->conv2(matrix_layout_t::L_COL);
-	tmp1 = conv_dense(tmp1);
-	tmp2 = conv_dense(tmp2);
 	tmp1->materialize_self();
 	tmp2->materialize_self();
 	detail::mem_col_matrix_store::ptr col_res = detail::mem_col_matrix_store::create(
@@ -227,8 +210,6 @@ void verify_result(const dense_matrix &_m1, const dense_matrix &_m2,
 	assert(m1->get_num_rows() == m2->get_num_rows());
 	assert(m1->get_num_cols() == m2->get_num_cols());
 
-	m1 = conv_dense(m1);
-	m2 = conv_dense(m2);
 	m1->materialize_self();
 	m2->materialize_self();
 
@@ -873,7 +854,6 @@ void test_scale_cols1(dense_matrix::ptr orig)
 	res = dense_matrix::create(res->get_raw_store());
 	res->materialize_self();
 	orig = dense_matrix::create(orig->get_raw_store());
-	orig = conv_dense(orig);
 	orig->materialize_self();
 	if (res->is_in_mem()) {
 		assert(orig->is_in_mem());
@@ -920,7 +900,6 @@ void test_scale_rows1(dense_matrix::ptr orig)
 	res = dense_matrix::create(res->get_raw_store());
 	res->materialize_self();
 	orig = dense_matrix::create(orig->get_raw_store());
-	orig = conv_dense(orig);
 	orig->materialize_self();
 	if (res->is_in_mem()) {
 		assert(orig->is_in_mem());
@@ -1199,7 +1178,6 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 	detail::mem_matrix_store::const_ptr mem_m;
 	if (mat->is_in_mem()) {
 		dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
-		tmp = conv_dense(tmp);
 		tmp->materialize_self();
 		mem_m = detail::mem_matrix_store::cast(tmp->get_raw_store());
 	}
