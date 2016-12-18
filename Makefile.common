@@ -24,6 +24,7 @@ CXX = g++
 #RELEASE=1
 #USE_NUMA=1
 #USE_LIBAIO=1
+USE_OPENBLAS=1
 HWLOC=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
@@ -45,6 +46,13 @@ ifeq ($(USE_NUMA), 1)
 	LDFLAGS += -lnuma
 	CFLAGS += -DUSE_NUMA
 	CXXFLAGS += -DUSE_NUMA
+endif
+ifeq ($(USE_OPENBLAS), 1)
+	LDFLAGS += -lopenblas
+	CFLAGS += -DUSE_OPENBLAS
+	CXXFLAGS += -DUSE_OPENBLAS
+else
+	LDFLAGS += -lcblas
 endif
 
 CLANG_FLAGS = -Wno-attributes
