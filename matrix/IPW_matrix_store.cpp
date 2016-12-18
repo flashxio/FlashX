@@ -616,11 +616,32 @@ void multiply_wide_op::run(
 		if (ins[i] == NULL)
 			return;
 
+	/*
+	 * We can't determine the partition size for dense matrix multiplication
+	 * in the same way as other computations, because dense matrix multiplication
+	 * is implemented with BLAS. To get better performance from BLAS, we should
+	 * use larger partition sizes. For crossprod, we even use a larger block
+	 * size to partition the input matrices. As such, the short dimension
+	 * is usually larger. We want to the partition dimension length have
+	 * a larger size (at least 4 times larger than the short dimension).
+	 */
 	size_t LONG_DIM_LEN;
-	if (ins.size() == 2)
+	size_t short_dim_len;
+	if (ins.size() == 2) {
 		LONG_DIM_LEN = get_long_dim_len(*ins[0], *ins[1]);
-	else
+		size_t short_dim1 = std::min(ins[0]->get_num_rows(),
+				ins[0]->get_num_cols());
+		size_t short_dim2 = std::min(ins[1]->get_num_rows(),
+				ins[1]->get_num_cols());
+		short_dim_len = std::max(short_dim1, short_dim2);
+	}
+	else {
 		LONG_DIM_LEN = get_long_dim_len(*ins[0]);
+		short_dim_len = std::min(ins[0]->get_num_rows(),
+				ins[0]->get_num_cols());
+	}
+	if (!is_sparse)
+		LONG_DIM_LEN = std::max(short_dim_len * 4, LONG_DIM_LEN);
 
 	// ins[0] stores the transpose of the left matrix, so we should
 	// check the number of rows.
