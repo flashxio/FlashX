@@ -21,10 +21,11 @@ fm.cbind.list(objs)
 
 \item{objs}{A list of FlashR matrices.
 
-These functions are similar to the R counterparts: `rbind' and `cbind'.
-Currently, `fm.rbind' and `fm.rbind.list' only supports combining
-a list of wide matrices. `fm.cbind' and `fm.cbind.list' can only combine
-a list of tall matrices.}
+These functions are similar to the R counterparts: \code{rbind} and
+\code{cbind}.
+Currently, \code{fm.rbind} and \code{fm.rbind.list} only supports combining
+a list of wide matrices. \code{fm.cbind} and \code{fm.cbind.list} can only
+combine a list of tall matrices.}
 }
 \value{
 A FlashR matrix.

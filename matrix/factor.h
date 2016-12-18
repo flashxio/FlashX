@@ -94,6 +94,10 @@ public:
 	const factor &get_factor() const {
 		return f;
 	}
+
+	size_t get_num_levels() const {
+		return f.get_num_levels();
+	}
 };
 
 /*
@@ -122,6 +126,10 @@ public:
 
 	const factor &get_factor() const {
 		return f;
+	}
+
+	size_t get_num_levels() const {
+		return f.get_num_levels();
 	}
 };
 

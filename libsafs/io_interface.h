@@ -385,7 +385,7 @@ public:
 
 	/**
 	 * Add an I/O instance to the I/O select.
-	 * If the type of I/O stance doesn't match with the I/O select,
+	 * If the type of I/O instance doesn't match with the I/O select,
 	 * the registration fails.
 	 */
 	virtual bool add_io(io_interface::ptr io) = 0;
@@ -576,6 +576,11 @@ void print_io_summary();
  * \param weight The new weight of the file.
  */
 void set_file_weight(const std::string &file_name, int weight);
+
+/**
+ * This gets the string that indicates the features compiled into SAFS.
+ */
+std::string get_supported_features();
 
 }
 

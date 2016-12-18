@@ -759,18 +759,18 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			left->get_num_rows(), right->get_num_cols(),
 			left->is_in_mem() && right->is_in_mem(), left->get_type())
 {
-	this->left_mat = left;
+	// We want the left matrix to be a dense matrix.
+	// TODO we need to optimize this later.
+	this->left_mat = conv_dense(left);
 	this->right_mat = right;
 
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
 	bool use_blas = left_op == NULL;
-	if (use_blas) {
-		assert(!left->is_sparse());
+	if (use_blas && (left->get_type() == get_scalar_type<double>()
+				|| left->get_type() == get_scalar_type<float>())
+			&& (right->get_type() == get_scalar_type<double>()
+				|| right->get_type() == get_scalar_type<float>())) {
 		this->left_op = NULL;
-		assert(left->get_type() == get_scalar_type<double>()
-				|| left->get_type() == get_scalar_type<float>());
-		assert(right->get_type() == get_scalar_type<double>()
-				|| right->get_type() == get_scalar_type<float>());
 		this->right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 
 		matrix_layout_t required_layout;
@@ -795,13 +795,31 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		portion_op = std::shared_ptr<portion_mapply_op>(
 				new multiply_wide_op(nthreads, left->get_num_rows(),
 					right->get_num_cols(), required_layout, left->get_type(),
-					right->is_sparse()));
+					// We only get benefit if the right matrix is sparse
+					// and it's stored in row major.
+					right->is_sparse()
+					&& right->store_layout() == matrix_layout_t::L_ROW));
 	}
 	else {
-		assert(!left->is_sparse());
-		assert(!right->is_sparse());
-		this->left_op = left_op;
-		this->right_op = right_op;
+		// For inner product, the current implementation only works on
+		// dense matrices. TODO we need to optimize this later.
+		this->right_mat = conv_dense(right);
+
+		if (left_op) {
+			this->left_op = left_op;
+			this->right_op = right_op;
+		}
+		else {
+			left_op = bulk_operate::conv2ptr(
+					left->get_type().get_basic_ops().get_multiply());
+			right_op = bulk_operate::conv2ptr(
+					left->get_type().get_basic_ops().get_add());
+			assert(left->get_type() == right->get_type());
+			this->left_op = left_op;
+			this->right_op = right_op;
+		}
+		assert(left_op);
+		assert(right_op);
 
 		if (layout != matrix_layout_t::L_NONE)
 			this->layout = layout;

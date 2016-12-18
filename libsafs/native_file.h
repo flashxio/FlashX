@@ -99,14 +99,7 @@ public:
 		return file_name;
 	}
 
-	virtual bool rename(const std::string &new_name) {
-		if (::rename(file_name.c_str(), new_name.c_str()) == 0) {
-			file_name = new_name;
-			return true;
-		}
-		else
-			return false;
-	}
+	virtual bool rename(const std::string &new_name);
 
 	/**
 	 * Create/delete a file on the native file system.
@@ -175,6 +168,12 @@ static inline bool file_exist(const std::string &file)
 {
 	native_file f(file);
 	return f.exist();
+}
+
+static inline bool is_dir(const std::string &file)
+{
+	native_dir dir(file);
+	return dir.is_dir();
 }
 
 }

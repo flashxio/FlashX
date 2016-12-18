@@ -23,8 +23,10 @@ a FlashMatrix vector if getting one row or column;
 a FlashMatrix matrix if getting more than one row or column.
 }
 \description{
-`fm.get.rows' gets specified rows in a FM matrix.
-`fm.get.cols' gets specified columns in a FM matrix.
+\code{fm.get.rows} gets specified rows in a FM matrix.
+}
+\details{
+\code{fm.get.cols} gets specified columns in a FM matrix.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

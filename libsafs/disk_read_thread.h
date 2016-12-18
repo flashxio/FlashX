@@ -93,11 +93,11 @@ class disk_io_thread: public thread
 	 */
 	class open_comm: public remote_comm
 	{
-		file_mapper *mapper;
+		file_mapper::ptr mapper;
 		async_io *aio;
 		disk_io_thread &t;
 	public:
-		open_comm(async_io *aio, file_mapper *mapper,
+		open_comm(async_io *aio, file_mapper::ptr mapper,
 				disk_io_thread &_t): t(_t) {
 			this->aio = aio;
 			this->mapper = mapper;
@@ -204,12 +204,12 @@ public:
 	}
 
 	// It open a new file. The mapping is still the same.
-	int open_file(file_mapper *mapper) {
+	int open_file(file_mapper::ptr mapper) {
 		remote_comm *comm = new open_comm(aio, mapper, *this);
 		return execute_remote_comm(comm);
 	}
 
-	int close_file(file_mapper *mapper) {
+	int close_file(file_mapper::ptr mapper) {
 		remote_comm *comm = new close_comm(aio, mapper->get_file_id());
 		return execute_remote_comm(comm);
 	}

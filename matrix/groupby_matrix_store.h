@@ -22,11 +22,13 @@
 
 #include "sink_matrix.h"
 #include "EM_object.h"
+#include "factor.h"
 
 namespace fm
 {
 
 class factor_col_vector;
+class agg_operate;
 
 namespace detail
 {
@@ -36,11 +38,17 @@ class portion_mapply_op;
 class groupby_matrix_store: public sink_store
 {
 	std::shared_ptr<portion_mapply_op> portion_op;
+	std::shared_ptr<const agg_operate> agg_op;
 	matrix_store::const_ptr data;
 	matrix_store::const_ptr label_store;
 	matrix_margin margin;
+	factor f;
 
 	matrix_store::ptr get_agg_res() const;
+
+	groupby_matrix_store(matrix_store::const_ptr data,
+			matrix_store::const_ptr label_store, const factor &f,
+			matrix_margin margin, agg_operate::const_ptr op);
 public:
 	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 

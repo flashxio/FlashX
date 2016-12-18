@@ -35,6 +35,7 @@
 \alias{==,ANY,fm-method}
 \alias{==,ANY,fmV-method}
 \alias{==,fm,ANY-method}
+\alias{==,fm,fm-method}
 \alias{==,fm,fmV-method}
 \alias{==,fm,matrix-method}
 \alias{==,fmV,ANY-method}

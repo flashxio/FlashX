@@ -2,9 +2,12 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.rnorm}
 \alias{fm.rnorm}
-\title{Create a FlashMatrix vector with random numbers from normal distribution.}
+\alias{fm.rnorm.matrix}
+\title{The Normal Distribution}
 \usage{
 fm.rnorm(n, mean = 0, sd = 1, in.mem = TRUE, name = "")
+
+fm.rnorm.matrix(nrow, ncol, mean = 0, sd = 1, in.mem = TRUE, name = "")
 }
 \arguments{
 \item{n}{the number of random numbers to be generated.}
@@ -14,9 +17,19 @@ fm.rnorm(n, mean = 0, sd = 1, in.mem = TRUE, name = "")
 \item{sd}{the standard deviation of the distribution.}
 
 \item{in.mem}{whether the vector is stored in memory.}
+
+\item{name}{the name of the matrix. It's stored on disks, it's used as
+the file name.}
+
+\item{nrow}{the number of rows in the generated matrix.}
+
+\item{ncol}{the number of columns in the generated matrix.}
 }
 \description{
-Create a FlashMatrix vector with random numbers from normal distribution.
+\code{fm.rnorm} creates a FlashMatrix vector with random numbers from
+normal distribution.
+\code{fm.rnorm.matrix} creates a FlashMatrix matrix with random numbers from
+normal distribution.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

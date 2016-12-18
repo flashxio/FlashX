@@ -57,6 +57,11 @@ class matrix_store
 	// The type is a reference. It makes the dense matrix object uncopiable.
 	// Maybe this is what we want.
 	const scalar_type &type;
+	/*
+	 * This indicates whether or not we cache a portion in each worker thread.
+	 * By default, this is enabled.
+	 */
+	bool cache_portion;
 protected:
 	static std::atomic<size_t> mat_counter;
 public:
@@ -201,6 +206,9 @@ public:
 	virtual bool is_virtual() const {
 		return false;
 	}
+	virtual bool is_sink() const {
+		return false;
+	}
 	virtual void materialize_self() const {
 	}
 
@@ -209,6 +217,10 @@ public:
 	 * It's used by EM matrix and mapply virtual matrix.
 	 */
 	virtual void set_cache_portion(bool cache_portion) {
+		this->cache_portion = cache_portion;
+	}
+	virtual bool is_cache_portion() const {
+		return cache_portion;
 	}
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
 	}

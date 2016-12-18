@@ -60,12 +60,6 @@ class EM_matrix_store: public matrix_store, public EM_object
 	std::shared_ptr<EM_matrix_stream> stream;
 
 	/*
-	 * This indicates whether or not we cache a portion in each worker thread.
-	 * By default, this is enabled.
-	 */
-	bool cache_portion;
-
-	/*
 	 * These two fields are used for sub matrix.
 	 * They indicates the actual number of rows and columns stored on disks.
 	 * In contrast, get_num_rows() and get_num_cols() are #rows and columns
@@ -138,14 +132,6 @@ public:
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
 		this->num_prefetches = num;
 		this->prefetch_range = range;
-	}
-
-	virtual void set_cache_portion(bool cache_portion) {
-		this->cache_portion = cache_portion;
-	}
-
-	bool is_cache_portion() const {
-		return cache_portion;
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {

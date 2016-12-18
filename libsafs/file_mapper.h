@@ -68,6 +68,9 @@ protected:
 public:
 	const int STRIPE_BLOCK_SIZE;
 public:
+	typedef std::shared_ptr<file_mapper> ptr;
+	typedef std::shared_ptr<const file_mapper> const_ptr;
+
 	file_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->file_name = name;

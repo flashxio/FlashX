@@ -215,6 +215,11 @@ void cached_matrix_store::set_cache_portion(bool cache_portion)
 	const_cast<matrix_store &>(*mixed).set_cache_portion(cache_portion);
 }
 
+bool cached_matrix_store::is_cache_portion() const
+{
+	return mixed->is_cache_portion();
+}
+
 void cached_matrix_store::set_prefetches(size_t num,
 		std::pair<size_t, size_t> range)
 {

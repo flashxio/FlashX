@@ -111,6 +111,7 @@ public:
 
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range);
 	virtual void set_cache_portion(bool cache_portion);
+	virtual bool is_cache_portion() const;
 
 	size_t get_num_cached_vecs() const {
 		if (cached == NULL)

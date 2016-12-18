@@ -109,7 +109,7 @@ void mapply_task::run()
 	}
 	for (size_t j = 0; j < out_mats.size(); j++) {
 		local_out_stores[j] = out_mats[j]->get_portion(portion_idx);
-		if (local_stores[j] && local_out_stores[j]->get_node_id() >= 0
+		if (local_out_stores[j] && local_out_stores[j]->get_node_id() >= 0
 				&& !one_portion)
 			assert(node_id == local_out_stores[j]->get_node_id());
 	}

@@ -67,13 +67,6 @@ class local_matrix_store: public matrix_store
 	// Which node the matrix data is stored.
 	int node_id;
 protected:
-	size_t get_orig_num_rows() const {
-		return num_rows;
-	}
-	size_t get_orig_num_cols() const {
-		return num_cols;
-	}
-
 	struct matrix_info {
 		off_t start_row;
 		off_t start_col;
@@ -151,6 +144,13 @@ public:
 		this->local_start_row = 0;
 		this->local_start_col = 0;
 		this->node_id = node_id;
+	}
+
+	size_t get_orig_num_rows() const {
+		return num_rows;
+	}
+	size_t get_orig_num_cols() const {
+		return num_cols;
 	}
 
 	/*
@@ -1218,12 +1218,12 @@ void mapply_cols(const local_matrix_store &m1, const local_vec_store &vals,
 void mapply_rows(const local_matrix_store &m1, const local_vec_store &vals,
 		const bulk_operate &op, local_matrix_store &m2);
 /*
- * This groupby on a row-major matrix.
+ * This group by rows/columns on a matrix.
  */
-bool groupby_row(const detail::local_matrix_store &labels,
-		const detail::local_row_matrix_store &mat, const agg_operate &op,
-		part_dim_t dim, detail::local_row_matrix_store &results,
-		std::vector<bool> &agg_flags);
+bool groupby(const detail::local_matrix_store &labels,
+		const detail::local_matrix_store &mat, const agg_operate &op,
+		matrix_margin margin, part_dim_t dim,
+		detail::local_matrix_store &results, std::vector<bool> &agg_flags);
 
 /*
  * BLAS matrix multiplication: a tall matrix * a small matrix.

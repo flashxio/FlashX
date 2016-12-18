@@ -3,6 +3,12 @@
 \docType{methods}
 \name{Extremes}
 \alias{Extremes}
+\alias{max,fm-method}
+\alias{max,fmV-method}
+\alias{min,fm-method}
+\alias{min,fmV-method}
+\alias{pmax,fm-method}
+\alias{pmax,fmV-method}
 \alias{pmax2}
 \alias{pmax2,ANY,fm-method}
 \alias{pmax2,ANY,fmV-method}
@@ -14,6 +20,9 @@
 \alias{pmax2,fmV,fm-method}
 \alias{pmax2,fmV,fmV-method}
 \alias{pmax2,matrix,fm-method}
+\alias{pmin,fm-method}
+\alias{pmin,fmV-method}
+\alias{pmin2}
 \alias{pmin2,ANY,fm-method}
 \alias{pmin2,ANY,fmV-method}
 \alias{pmin2,fm,ANY-method}
@@ -27,6 +36,8 @@
 \title{Maxima and Minima}
 \usage{
 pmax2(e1, e2)
+
+pmin2(e1, e2)
 
 \S4method{pmax2}{fm,fm}(e1, e2)
 
@@ -67,13 +78,39 @@ pmax2(e1, e2)
 \S4method{pmin2}{fmV,ANY}(e1, e2)
 
 \S4method{pmin2}{ANY,fmV}(e1, e2)
+
+\S4method{min}{fm}(x, ..., na.rm = FALSE)
+
+\S4method{min}{fmV}(x, ..., na.rm = FALSE)
+
+\S4method{max}{fm}(x, ..., na.rm = FALSE)
+
+\S4method{max}{fmV}(x, ..., na.rm = FALSE)
+
+\S4method{pmin}{fm}(..., na.rm = FALSE)
+
+\S4method{pmin}{fmV}(..., na.rm = FALSE)
+
+\S4method{pmax}{fm}(..., na.rm = FALSE)
+
+\S4method{pmax}{fmV}(..., na.rm = FALSE)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
-is a matrix and the other is a vector, we perform the arithmetic operation
+\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one
+operand is a matrix and the other is a vector, we perform the operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
 the vector.}
+
+\item{x}{a FlashMatrix vector or matrix.}
+
+\item{...}{FlashMatrix vectors or matrices.}
+
+\item{na.rm}{a logical indicating whether missing values should be removed.}
+}
+\value{
+\code{pmin2}, \code{pmax2}, \code{pmin} and \code{pmax} return
+        a FlashMatrix object, and \code{min} and \code{max} return an R scalar.
 }
 \description{
 Returns the (parallel) maxima and minima of the input values.
@@ -81,5 +118,9 @@ Returns the (parallel) maxima and minima of the input values.
 \details{
 pmax2 returns the maximum of two objects.
 pmin2 returns the minimum of two objects.
+
+If one of the arguments is a matrix and the other is a vector, \code{pmax2}
+or \code{pmin2} return a matrix, each of whose column is parallel maxima
+and minima of the column of the input matrix and the input vector.
 }
 

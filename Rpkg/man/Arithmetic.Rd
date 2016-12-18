@@ -28,6 +28,7 @@
 \alias{-,fm,fm-method}
 \alias{-,fm,fmV-method}
 \alias{-,fm,matrix-method}
+\alias{-,fm,missing-method}
 \alias{-,fmV,ANY-method}
 \alias{-,fmV,fm-method}
 \alias{-,fmV,fmV-method}
@@ -44,16 +45,19 @@
 \alias{/,fmV,fmV-method}
 \alias{/,matrix,fm-method}
 \alias{Arithmetic}
-\alias{\%*\%,fm,ANY-method}
-\alias{\%*\%,fm,fm-method}
-\alias{\%*\%,fm,fmV-method}
+\alias{^,ANY,fmV-method}
 \alias{^,fm,ANY-method}
+\alias{^,fm,fm-method}
+\alias{^,fm,fmV-method}
+\alias{^,fm,matrix-method}
 \alias{^,fmV,ANY-method}
+\alias{^,fmV,fmV-method}
+\alias{^,matrix,fm-method}
 \title{Arithmetic Operators}
 \usage{
-\S4method{-}{fm,missing}(e1)
+\S4method{-}{fm,missing}(e1, e2)
 
-\S4method{-}{fmV,missing}(e1)
+\S4method{-}{fmV,missing}(e1, e2)
 
 \S4method{+}{fm,fm}(e1, e2)
 
@@ -135,11 +139,17 @@
 
 \S4method{/}{ANY,fmV}(e1, e2)
 
-\S4method{\%*\%}{fm,fm}(x, y)
+\S4method{^}{fm,fm}(e1, e2)
 
-\S4method{\%*\%}{fm,fmV}(x, y)
+\S4method{^}{fmV,fmV}(e1, e2)
 
-\S4method{\%*\%}{fm,ANY}(x, y)
+\S4method{^}{fm,fmV}(e1, e2)
+
+\S4method{^}{fm,matrix}(e1, e2)
+
+\S4method{^}{matrix,fm}(e1, e2)
+
+\S4method{^}{ANY,fmV}(e1, e2)
 
 \S4method{^}{fm,ANY}(e1, e2)
 

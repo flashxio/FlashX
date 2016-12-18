@@ -23,6 +23,19 @@ using namespace fm;
 
 size_t long_dim = 9999999;
 
+dense_matrix::ptr conv_dense(dense_matrix::ptr tmp1)
+{
+	detail::sparse_project_matrix_store::const_ptr proj_store
+		= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
+				tmp1->get_raw_store());
+	if (proj_store) {
+		detail::matrix_store::const_ptr dense = proj_store->conv_dense();
+		return dense_matrix::create(dense);
+	}
+	else
+		return tmp1;
+}
+
 /*
  * This is a naive implementation of matrix multiplication.
  * It should be correct
@@ -31,6 +44,8 @@ dense_matrix::ptr naive_multiply(const dense_matrix &_m1, const dense_matrix &_m
 {
 	dense_matrix::ptr m1 = dense_matrix::create(_m1.get_raw_store());
 	dense_matrix::ptr m2 = dense_matrix::create(_m2.get_raw_store());
+	m1 = conv_dense(m1);
+	m2 = conv_dense(m2);
 	m1->materialize_self();
 	m2->materialize_self();
 	detail::mem_matrix_store::ptr res_store = detail::mem_matrix_store::create(
@@ -70,6 +85,8 @@ dense_matrix::ptr blas_multiply(const dense_matrix &m1, const dense_matrix &m2)
 	dense_matrix::ptr tmp2 = dense_matrix::create(m2.get_raw_store());
 	tmp1 = tmp1->conv2(matrix_layout_t::L_COL);
 	tmp2 = tmp2->conv2(matrix_layout_t::L_COL);
+	tmp1 = conv_dense(tmp1);
+	tmp2 = conv_dense(tmp2);
 	tmp1->materialize_self();
 	tmp2->materialize_self();
 	detail::mem_col_matrix_store::ptr col_res = detail::mem_col_matrix_store::create(
@@ -210,6 +227,8 @@ void verify_result(const dense_matrix &_m1, const dense_matrix &_m2,
 	assert(m1->get_num_rows() == m2->get_num_rows());
 	assert(m1->get_num_cols() == m2->get_num_cols());
 
+	m1 = conv_dense(m1);
+	m2 = conv_dense(m2);
 	m1->materialize_self();
 	m2->materialize_self();
 
@@ -318,6 +337,29 @@ dense_matrix::ptr create_const_matrix(size_t nrow, size_t ncol,
 		return dense_matrix::ptr();
 }
 
+dense_matrix::ptr create_sparse_matrix(size_t nrow, size_t ncol,
+		matrix_layout_t layout, int num_nodes, const scalar_type &type,
+		bool in_mem)
+{
+	if (type == get_scalar_type<int>())
+		return dense_matrix::create(detail::sparse_project_matrix_store::create_sparse_rand(
+				nrow, ncol, layout, get_scalar_type<int>(), 0.001));
+	else if (type == get_scalar_type<size_t>())
+		return dense_matrix::create(detail::sparse_project_matrix_store::create_sparse_rand(
+					nrow, ncol, layout, get_scalar_type<int>(),
+					0.001))->cast_ele_type(get_scalar_type<size_t>());
+	else if (type == get_scalar_type<double>())
+		return dense_matrix::create(detail::sparse_project_matrix_store::create_sparse_rand(
+				nrow, ncol, layout, get_scalar_type<double>(), 0.001));
+	else if (type == get_scalar_type<float>())
+		return dense_matrix::create(detail::sparse_project_matrix_store::create_sparse_rand(
+					nrow, ncol, layout, get_scalar_type<int>(),
+					0.001))->cast_ele_type(get_scalar_type<float>());
+	else
+		return dense_matrix::ptr();
+}
+
+
 bool in_mem = true;
 size_t block_size = 0;
 
@@ -337,9 +379,8 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 				return create_seq_block_matrix(nrow, ncol, block_size, layout,
 						num_nodes, type, in_mem);
 		case matrix_val_t::SPARSE:
-			return dense_matrix::create(
-					detail::sparse_project_matrix_store::create_sparse_rand(
-						nrow, ncol, layout, type, 0.001));
+			return create_sparse_matrix(nrow, ncol, layout, num_nodes, type,
+					in_mem);
 		default:
 			assert(0);
 			return dense_matrix::ptr();
@@ -366,9 +407,7 @@ void test_ele_wise(int num_nodes)
 	printf("Test element-wise operations\n");
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			matrix_layout_t::L_COL, num_nodes);
-	dense_matrix::ptr m2 = create_matrix(long_dim, 10,
-			matrix_layout_t::L_COL, num_nodes);
-	dense_matrix::ptr res = m1->add(*m2);
+	dense_matrix::ptr res = m1->add(*m1);
 	assert(res->is_virtual());
 	assert(res->is_in_mem() == m1->is_in_mem());
 	verify_result(*res, *m1, scale_equal_func<int>(1, 2));
@@ -439,7 +478,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	assert(res->is_in_mem() == m1->is_in_mem());
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -450,7 +488,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_COL);
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	assert(res->is_in_mem() == m1->is_in_mem());
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
@@ -461,7 +498,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -471,7 +507,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -481,7 +516,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_ROW, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_ROW);
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -491,7 +525,6 @@ void test_multiply(int num_nodes)
 	m2 = create_matrix(10, 9, matrix_layout_t::L_COL, num_nodes,
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -503,7 +536,6 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -515,7 +547,6 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_COL);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -527,7 +558,6 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -539,7 +569,6 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -551,7 +580,6 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_ROW);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_ROW);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
 
@@ -563,9 +591,23 @@ void test_multiply(int num_nodes)
 			get_scalar_type<T>());
 	res = m1->multiply(*m2, matrix_layout_t::L_NONE);
 	res->materialize_self();
-	assert(res->store_layout() == matrix_layout_t::L_COL);
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test multiplication on wide block matrix X tall block matrix\n");
+	size_t orig_block_size = block_size;
+	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
+	block_size = 3;
+	matrix_conf.set_max_multiply_block_size(6);
+	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+	block_size = orig_block_size;
+	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
 }
 
 void test_multiply_matrix(int num_nodes)
@@ -649,7 +691,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 	size_t num_eles = m1->get_num_rows() * m1->get_num_cols();
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
-	else
+	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
 	dense_matrix::ptr sum_col = m1->aggregate(matrix_margin::MAR_ROW,
@@ -672,17 +714,16 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 	assert(tmp);
 	for (size_t i = 0; i < sum_col->get_num_rows(); i++) {
 		size_t ncol = m1->get_num_cols();
-		size_t val;
 		if (matrix_val == matrix_val_t::SEQ)
-			val = i * ncol * ncol + (ncol - 1) * ncol / 2;
-		else
-			val = m1->get_num_cols();
-		assert(tmp->get<size_t>(i, 0) == val);
+			assert(tmp->get<size_t>(i, 0)
+					== i * ncol * ncol + (ncol - 1) * ncol / 2);
+		else if (matrix_val == matrix_val_t::DEFAULT)
+			assert(tmp->get<size_t>(i, 0) == m1->get_num_cols());
 	}
 	sum = *(size_t *) res->get_raw();
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
-	else
+	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
 }
 
@@ -712,7 +753,7 @@ void test_agg_sub_col(int num_nodes)
 		expected += idxs[i] * nrow;
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == sub_m->get_num_rows() * sub_m->get_num_cols());
-	else
+	else if (matrix_val_t::SEQ)
 		assert(sum == expected);
 }
 
@@ -824,6 +865,7 @@ void test_scale_cols1(dense_matrix::ptr orig)
 	res = dense_matrix::create(res->get_raw_store());
 	res->materialize_self();
 	orig = dense_matrix::create(orig->get_raw_store());
+	orig = conv_dense(orig);
 	orig->materialize_self();
 	if (res->is_in_mem()) {
 		assert(orig->is_in_mem());
@@ -870,6 +912,7 @@ void test_scale_rows1(dense_matrix::ptr orig)
 	res = dense_matrix::create(res->get_raw_store());
 	res->materialize_self();
 	orig = dense_matrix::create(orig->get_raw_store());
+	orig = conv_dense(orig);
 	orig->materialize_self();
 	if (res->is_in_mem()) {
 		assert(orig->is_in_mem());
@@ -1146,6 +1189,7 @@ void test_sum_row_col1(dense_matrix::ptr mat)
 	detail::mem_matrix_store::const_ptr mem_m;
 	if (mat->is_in_mem()) {
 		dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
+		tmp = conv_dense(tmp);
 		tmp->materialize_self();
 		mem_m = detail::mem_matrix_store::cast(tmp->get_raw_store());
 	}
@@ -1920,6 +1964,8 @@ void _test_mem_matrix(int num_nodes)
 void test_mem_matrix(int num_nodes)
 {
 	auto orig = matrix_val;
+	matrix_val = matrix_val_t::SPARSE;
+	_test_mem_matrix(num_nodes);
 	block_size = 3;
 	matrix_val = matrix_val_t::SEQ;
 	_test_mem_matrix(num_nodes);
@@ -2064,15 +2110,17 @@ void test_groupby()
 				-1, get_scalar_type<int>()));
 }
 
-dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
+dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
 {
 	std::vector<off_t> idxs;
-	idxs.resize(std::max(mat->get_num_rows() / 5, 1UL));
+	idxs.resize(get_nrow);
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = random() % mat->get_num_rows();
 	dense_matrix::ptr res = mat->get_rows(idxs);
 	assert(res != NULL);
+	mat = dense_matrix::create(mat->get_raw_store());
 	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
+	res = dense_matrix::create(res->get_raw_store());
 	dense_matrix::ptr mem_res = res->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr orig_store
 		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
@@ -2084,28 +2132,46 @@ dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 	return res;
 }
 
-dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
+dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
+{
+	return _test_get_rows(mat, std::max(mat->get_num_rows() / 5, 2UL));
+}
+
+dense_matrix::ptr _test_get_cols(dense_matrix::ptr mat, size_t get_ncol)
 {
 	std::vector<off_t> idxs;
-	idxs.resize(std::max(mat->get_num_cols() / 5, 2UL));
+	idxs.resize(get_ncol);
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = (random() + mat->get_num_cols() / 2) % mat->get_num_cols();
 	dense_matrix::ptr res = mat->get_cols(idxs);
 	assert(res != NULL);
+	res = dense_matrix::create(res->get_raw_store());
 	dense_matrix::ptr mem_res = res->conv_store(true, -1);
+	mat = dense_matrix::create(mat->get_raw_store());
 	dense_matrix::ptr mem_mat = mat->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr orig_store
 		= detail::mem_matrix_store::cast(mem_mat->get_raw_store());
+	assert(orig_store);
 	detail::mem_matrix_store::const_ptr res_store
 		= detail::mem_matrix_store::cast(mem_res->get_raw_store());
+	assert(res_store);
 	for (size_t i = 0; i < res->get_num_rows(); i++)
 		for (size_t j = 0; j < res->get_num_cols(); j++)
 			assert(res_store->get<int>(i, j) == orig_store->get<int>(i, idxs[j]));
 	return res;
 }
 
+dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
+{
+	return _test_get_cols(mat, std::max(mat->get_num_cols() / 5, 2UL));
+}
+
 void _test_get_rowcols(dense_matrix::ptr mat)
 {
+	if (mat->is_wide())
+		_test_get_cols(mat, 5);
+	else
+		_test_get_rows(mat, 5);
 	dense_matrix::ptr tmp = test_get_rows(mat);
 	test_get_cols(tmp);
 	test_get_rows(tmp);
@@ -2116,6 +2182,7 @@ void _test_get_rowcols(dense_matrix::ptr mat)
 
 void test_get_rowcols(int num_nodes)
 {
+	block_size = 3;
 	dense_matrix::ptr mat, tmp;
 
 	bool orig_in_mem = in_mem;
@@ -2196,6 +2263,8 @@ void test_get_rowcols(int num_nodes)
 			get_scalar_type<int>());
 	mat = mat->add(*mat);
 	_test_get_rowcols(mat);
+
+	block_size = 0;
 }
 
 void test_materialize(int num_nodes)

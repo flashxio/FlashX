@@ -3,6 +3,7 @@
 \docType{methods}
 \name{dim}
 \alias{dim}
+\alias{dim,fm-method}
 \title{Dimensions of an FlashMatrix Object}
 \usage{
 \S4method{dim}{fm}(x)
