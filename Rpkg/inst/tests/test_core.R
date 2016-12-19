@@ -187,8 +187,8 @@ get.vecs <- function(length, depth, lazy) {
 			for (i in 1:length(vecs))
 				vecs[[i]] <- fm.materialize(vecs[[i]])
 	}
-	data.map[[key]] <- vecs
-	name.map[[key]] <- names
+	data.map[[key]] <<- vecs
+	name.map[[key]] <<- names
 	list(vecs=vecs, names=names)
 }
 
@@ -378,9 +378,15 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		if (!lazy)
 			for (i in 1:length(mats))
 				mats[[i]] <- fm.materialize(mats[[i]])
+		if (!lazy) {
+			ret <- list()
+			for (mat in mats)
+				ret <- c(ret, fm.materialize(mat))
+			mats <- ret
+		}
 	}
-	data.map[[key]] <- mats
-	name.map[[key]] <- names
+	data.map[[key]] <<- mats
+	name.map[[key]] <<- names
 	list(mats=mats, names=names)
 }
 
@@ -543,15 +549,17 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	print.depth(depth, "get", length(smalls), "small mats from the lower level")
 	for (i in 1:length(mats)) {
 		for (j in 1:length(smalls)) {
-			res <- c(res, fm.multiply(mats[[i]], smalls[[i]]))
+			res <- c(res, fm.multiply(mats[[i]], smalls[[j]]))
 			res.names <- c(res.names, paste("multiply(", names[[i]], ", ",
-											small.names[[i]], ")", sep=""))
+											small.names[[j]], ")", sep=""))
 		}
 	}
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.inner.prod(mats[[i]], smalls[[i]], "*", "+"))
-		res.names <- c(res.names, paste("inner prod(", names[[i]], ", ",
-										small.names[[i]], ")", sep=""))
+		for (j in 1:length(smalls)) {
+			res <- c(res, fm.inner.prod(mats[[i]], smalls[[j]], "*", "+"))
+			res.names <- c(res.names, paste("inner prod(", names[[i]], ", ",
+											small.names[[j]], ")", sep=""))
+		}
 	}
 
 	list(mats=res, names=res.names)
@@ -606,8 +614,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
-		  data.map <- list()
-		  name.map <- list()
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  print("mat 100x100")
@@ -624,8 +632,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
-		  data.map <- list()
-		  name.map <- list()
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  print("mat 1000x1000")
@@ -642,8 +650,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
-		  data.map <- list()
-		  name.map <- list()
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  # regular skinny matrix
@@ -664,8 +672,8 @@ test_that("test lazy evals on matrices", {
 				  obj <- objs[[i]]
 				  expect_true(sum(abs(obj - obj.lazy)) == 0)
 			  }
-			  data.map <- list()
-			  name.map <- list()
+			  data.map <<- list()
+			  name.map <<- list()
 			  gc()
 		  }
 })
