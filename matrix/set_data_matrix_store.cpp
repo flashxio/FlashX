@@ -32,6 +32,9 @@ matrix_store::const_ptr set_data_matrix_store::materialize(bool in_mem,
 {
 	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
 			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
+	if (ret == NULL)
+		return matrix_store::const_ptr();
+
 	if (store_layout() == matrix_layout_t::L_ROW)
 		ret->set_data(*row_op);
 	else

@@ -827,7 +827,9 @@ matrix_store::ptr __mapply_portion(
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				op->get_out_num_rows(), op->get_out_num_cols(),
 				out_layout, op->get_output_type(), num_nodes, out_in_mem);
-		assert(res);
+		if (res == NULL)
+			return matrix_store::ptr();
+
 		out_mats.push_back(res);
 	}
 	bool ret = __mapply_portion(mats, op, out_mats, par_access);
@@ -847,7 +849,9 @@ matrix_store::ptr __mapply_portion(
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				op->get_out_num_rows(), op->get_out_num_cols(),
 				out_layout, op->get_output_type(), out_num_nodes, out_in_mem);
-		assert(res);
+		if (res == NULL)
+			return matrix_store::ptr();
+
 		out_mats.push_back(res);
 	}
 	bool ret = __mapply_portion(mats, op, out_mats, par_access);

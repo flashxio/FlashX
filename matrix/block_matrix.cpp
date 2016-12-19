@@ -126,6 +126,9 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 					block_size);
 			stores[i] = detail::matrix_store::create(num_rows, local_num_cols,
 					layout, type, num_nodes, in_mem, group);
+			if (stores[i] == NULL)
+				return dense_matrix::ptr();
+
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}
@@ -146,6 +149,9 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 					block_size);
 			stores[i] = detail::matrix_store::create(local_num_rows, num_cols,
 					layout, type, num_nodes, in_mem, group);
+			if (stores[i] == NULL)
+				return dense_matrix::ptr();
+
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}

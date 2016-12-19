@@ -73,6 +73,9 @@ matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 {
 	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
 			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
+	if (ret == NULL)
+		return matrix_store::const_ptr();
+
 	auto set = get_type().get_set_const(*val);
 	ret->set_data(*set);
 	return ret;
