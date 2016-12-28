@@ -1360,9 +1360,7 @@ void global_cached_io::process_user_req(
 		 * it's a cache hit.
 		 */
 		if (old_id.get_offset() == -1) {
-#ifdef STATISTICS
 			cache_hits++;
-#endif
 			if (p->data_ready())
 				num_pages_ready++;
 			// Let's optimize for cached single-page requests by stealing
