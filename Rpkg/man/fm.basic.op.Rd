@@ -2,10 +2,6 @@
 % Please edit documentation in R/FlashR.R
 \docType{data}
 \name{fm.basic.op}
-\alias{fm.agg}
-\alias{fm.agg.lazy}
-\alias{fm.agg.mat}
-\alias{fm.agg.mat.lazy}
 \alias{fm.basic.op}
 \alias{fm.bo.add}
 \alias{fm.bo.and}
@@ -112,40 +108,17 @@ fm.buo.as.int
 fm.buo.as.numeric
 
 fm.init.basic.op()
-
-fm.agg(fm, op)
-
-fm.agg.lazy(fm, op)
-
-fm.agg.mat(fm, margin, op)
-
-fm.agg.mat.lazy(fm, margin, op)
 }
 \arguments{
 \item{name}{the name of the basic operator.}
-
-\item{fm}{a FlashMatrix object}
-
-\item{op}{the reference or the name of a predefined basic operator or
-the reference to an aggregation operator returned by
-\code{fm.create.agg.op}.}
-
-\item{margin}{the subscript which the function will be applied over.}
 }
 \value{
 a reference to the specified basic operator.
-
-\code{fm.agg} returns a scalar, \code{fm.agg.mat} returns
-        a FlashMatrix vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
-        return a FlashMatrix sink matrix.
 }
 \description{
 The basic operators are mainly used by the FlashMatrix functions that
 accept operators as arguments. Such a function includes \code{fm.mapply},
 \code{fm.inner.prod}, etc.
-
-This function accepts a basic operator and perform aggregation on
-the FlashMatrix object with the basic operator.
 }
 \details{
 \code{fm.get.basic.op} gets the predefined basic binary operator specified by a user.
@@ -208,18 +181,6 @@ value, respectively.}
 \item{\code{fm.buo.as.numeric}}{the predefined basic unary operator of
       casting an integer to a numeric value.}
 }
-
-\code{fm.agg} aggregates over the entire object.
-
-\code{fm.agg.lazy} aggregates over the entire object, but it performs
-aggregation lazily.
-
-\code{fm.agg.mat} aggregates on the rows or columns of a matrix. It performs
-aggregation on the shorter dimension lazily, but on the longer dimension
-immediately.
-
-\code{fm.agg.mat.lazy} aggregates on the rows or columns of a matrix and
-performs aggregation lazily regardless the dimension.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>
