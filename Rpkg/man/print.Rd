@@ -5,12 +5,15 @@
 \alias{print}
 \alias{print,fm-method}
 \alias{print,fm.bo-method}
+\alias{print,fmFactorV-method}
 \alias{print,fmV-method}
 \title{Print FlashMatrix objects.}
 \usage{
 \S4method{print}{fm}(x)
 
 \S4method{print}{fmV}(x)
+
+\S4method{print}{fmFactorV}(x)
 
 \S4method{print}{fm.bo}(x)
 }

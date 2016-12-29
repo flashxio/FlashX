@@ -5,13 +5,13 @@
 \alias{Extract}
 \alias{[,fm,ANY,ANY,ANY-method}
 \alias{[,fm,ANY,missing,ANY-method}
-\alias{[,fm,missing,ANY,missing-method}
+\alias{[,fm,missing,ANY,ANY-method}
 \alias{[,fmV,ANY,ANY,ANY-method}
 \title{Extract Parts of an object}
 \usage{
 \S4method{[}{fm,ANY,missing,ANY}(x, i, j, drop = TRUE)
 
-\S4method{[}{fm,missing,ANY,missing}(x, i, j, drop = TRUE)
+\S4method{[}{fm,missing,ANY,ANY}(x, i, j, drop = TRUE)
 
 \S4method{[}{fm,ANY,ANY,ANY}(x, i, j, drop = TRUE)
 

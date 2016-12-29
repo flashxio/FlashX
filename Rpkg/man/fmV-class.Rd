@@ -20,5 +20,7 @@ An S4 class to represent a FlashMatrix vector.
 used for a vector.}
 
 \item{\code{ele_type}}{a string indicating the element type in the vector.}
+
+\item{\code{attrs}}{a list that stores the attributes of the matrix.}
 }}
 

@@ -4,12 +4,18 @@
 \name{dimnames}
 \alias{dimnames}
 \alias{dimnames,fm-method}
+\alias{dimnames,fmV-method}
 \alias{dimnames<-,fm,list-method}
+\alias{dimnames<-,fmV,list-method}
 \title{Dimnames of an Object}
 \usage{
 \S4method{dimnames}{fm}(x)
 
+\S4method{dimnames}{fmV}(x)
+
 \S4method{dimnames}{fm,list}(x) <- value
+
+\S4method{dimnames}{fmV,list}(x) <- value
 }
 \arguments{
 \item{x}{a FlashMatrix matrix.}

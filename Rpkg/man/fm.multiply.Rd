@@ -4,15 +4,12 @@
 \alias{fm.multiply}
 \title{Matrix multiplication}
 \usage{
-fm.multiply(fm, mat, lazy.wide = FALSE)
+fm.multiply(fm, mat)
 }
 \arguments{
 \item{fm}{A FlashMatrix matrix}
 
 \item{mat}{A FlashMatrix dense matrix.}
-
-\item{lazy.wide}{whether to lazily evaluate multiplication of a wide matrix
-with a tall matrix.}
 }
 \value{
 a FlashMatrix vector if the second argument is a vector;

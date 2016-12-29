@@ -3,15 +3,15 @@
 \docType{methods}
 \name{fm.sapply}
 \alias{fm.sapply}
-\alias{fm.sapply,fm,ANY,logical-method}
-\alias{fm.sapply,fmV,ANY,logical-method}
+\alias{fm.sapply,fm-method}
+\alias{fm.sapply,fmV-method}
 \title{Apply a Function to a FlashMatrix vector/matrix.}
 \usage{
-fm.sapply(o, FUN, set.na)
+fm.sapply(o, FUN, set.na = TRUE)
 
-\S4method{fm.sapply}{fm,ANY,logical}(o, FUN, set.na = TRUE)
+\S4method{fm.sapply}{fm}(o, FUN, set.na = TRUE)
 
-\S4method{fm.sapply}{fmV,ANY,logical}(o, FUN, set.na = TRUE)
+\S4method{fm.sapply}{fmV}(o, FUN, set.na = TRUE)
 }
 \arguments{
 \item{o}{a FlashMatrix vector/matrix.}

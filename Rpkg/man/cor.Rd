@@ -5,8 +5,11 @@
 \alias{cor}
 \alias{cor,fm-method}
 \alias{cov,fm-method}
+\alias{var,fm-method}
 \title{Correlation, Variance and Covariance (Matrices)}
 \usage{
+\S4method{var}{fm}(x, y = NULL, na.rm = FALSE, use)
+
 \S4method{cor}{fm}(x, y = NULL, use = "everything", method = c("pearson",
   "kendall", "spearman"))
 

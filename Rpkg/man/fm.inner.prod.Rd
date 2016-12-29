@@ -4,7 +4,7 @@
 \alias{fm.inner.prod}
 \title{Matrix inner product}
 \usage{
-fm.inner.prod(fm, mat, Fun1, Fun2, lazy.wide = FALSE)
+fm.inner.prod(fm, mat, Fun1, Fun2)
 }
 \arguments{
 \item{fm}{A FlashMatrix matrix}
@@ -16,9 +16,6 @@ operators.}
 
 \item{Fun2}{The reference or the name of one of the predefined basic binary
 operators.}
-
-\item{lazy.wide}{whether to lazily evaluate inner product of a wide matrix
-with a tall matrix.}
 }
 \value{
 a FlashMatrix vector if the second argument is a vector;
