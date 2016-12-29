@@ -1690,17 +1690,14 @@ fm.get.eles.vec <- function(fm, idxs)
 #' these virtualized computations triggers materialization of other virtualized
 #' computation. By default, FlashMatrix only saves the computation results
 #' specified by the arguments of \code{fm.materialize.list} and
-#' \code{fm.materialize}. However, by setting the materialization level of
-#' a virtualized computation with \code{fm.set.cached}, even if
-#' the virtualized computation is not specified in \code{fm.materialize.list}
-#' and \code{fm.materialize}, its computation result can still be saved.
+#' \code{fm.materialize}.  \code{fm.set.cached} changes the default behavior and
+#' notifies FlashR to save the materialized computation results of a virtual
+#' matrix in memory or on disks.
 #'
 #'
 #' @param args a list of virtual FlashMatrix objects.
 #' @param ... a list of virtual FlashMatrix objects.
 #' @param fm a FlashMatrix object.
-#' @param level an integer. 1 means not saving computation results, 2 means
-#'              saving computation results.
 #' @param in.mem a logical value, indicating whether to save the computation
 #'               results in memory.
 #' @return a list of materialized compuation results.
