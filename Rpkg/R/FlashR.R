@@ -1112,7 +1112,7 @@ fm.create.agg.op <- function(agg, combine, name)
 #' @return \code{fm.agg} returns a scalar, \code{fm.agg.mat} returns
 #'         a FlashMatrix vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
 #'         return a FlashMatrix sink matrix.
-#' @name fm.basic.op
+#' @name fm.agg
 fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -1125,7 +1125,7 @@ fm.agg <- function(fm, op)
 	.Call("R_FM_agg", fm, op, PACKAGE="FlashR")
 }
 
-#' @name fm.basic.op
+#' @name fm.agg
 fm.agg.lazy <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -1139,7 +1139,7 @@ fm.agg.lazy <- function(fm, op)
 	.new.fmV(ret)
 }
 
-#' @name fm.basic.op
+#' @name fm.agg
 fm.agg.mat <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -1153,7 +1153,7 @@ fm.agg.mat <- function(fm, margin, op)
 	.new.fmV(ret)
 }
 
-#' @name fm.basic.op
+#' @name fm.agg
 fm.agg.mat.lazy <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
