@@ -1582,6 +1582,7 @@ setMethod("tail", signature(x="fmV"), function(x, n=6L) x[(length(x)-n+1):length
 #' @param ... optional arguments to \code{FUN}.
 #' @return A matrix with the same shape as \code{x}, but with the summary
 #' statistics swept out.
+#' @name sweep
 setMethod("sweep", "fm",
 		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {
 			  if (MARGIN == 2)
@@ -1817,6 +1818,7 @@ fm.cal.residul <- function(mul, values, vectors)
 #'        the number of columns of \code{x}.
 #' @return a FlashMatrix matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#' @name scale
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
@@ -1871,6 +1873,7 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 #'
 #' @param x a FlashMatrix matrix.
 #' @return a FlashMatrix matrix or vector.
+#' @name drop
 setMethod("drop", "fm", function(x) {
 		  if (nrow(x) > 1 && ncol(x) > 1)
 			  x

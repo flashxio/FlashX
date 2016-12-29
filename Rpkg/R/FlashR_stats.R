@@ -280,4 +280,5 @@ setMethod("cov", "fm", .cov.int)
 #' \item{cor}{the estimated correlation matrix.  Only returned if \code{cor} is
 #'          \code{TRUE}}
 #' }
+#' @name cov.wt
 setMethod("cov.wt", "fm", .cov.wt.int)
