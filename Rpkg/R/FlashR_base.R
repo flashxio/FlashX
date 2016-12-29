@@ -1231,7 +1231,7 @@ setMethod("mean", "fm", .mean.int)
 #' @rdname mean
 setMethod("mean", "fmV", .mean.int)
 
-# Miscellaneous Mathematical Functions
+#' Miscellaneous Mathematical Functions
 #'
 #' \code{abs(x)} computes the absolute value of x, \code{sqrt(x)} computes the square
 #' root of x.
