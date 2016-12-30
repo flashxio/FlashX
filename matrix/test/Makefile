@@ -22,7 +22,7 @@ LDFLAGS := ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../../flash-grap
 LDFLAGS += -lz -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	test-sort test-eigen test-dgemm rand_mat_gen test-algs
+	test-sort test-dgemm rand_mat_gen test-algs
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
