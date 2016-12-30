@@ -733,49 +733,247 @@ public:
 	}
 };
 
-template class basic_ops_impl<char, char, char>;
-template class basic_ops_impl<short, short, short>;
-template class basic_ops_impl<int, int, int>;
-template class basic_ops_impl<long, long, long>;
-template class basic_ops_impl<float, float, float>;
-template class basic_ops_impl<double, double, double>;
-template class basic_ops_impl<long double, long double, long double>;
-template class basic_ops_impl<bool, bool, bool>;
-template class basic_ops_impl<unsigned short, unsigned short, unsigned short>;
-template class basic_ops_impl<unsigned int, unsigned int, unsigned int>;
-template class basic_ops_impl<unsigned long, unsigned long, unsigned long>;
+/*
+ * Find the first location where its element is different from the first
+ * element in the array.
+ */
+template<class T>
+class find_next_impl: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
 
-template class basic_uops_impl<char, char>;
-template class basic_uops_impl<short, short>;
-template class basic_uops_impl<int, int>;
-template class basic_uops_impl<long, long>;
-template class basic_uops_impl<float, float>;
-template class basic_uops_impl<double, double>;
-template class basic_uops_impl<long double, long double>;
-template class basic_uops_impl<bool, bool>;
-template class basic_uops_impl<unsigned short, unsigned short>;
-template class basic_uops_impl<unsigned int, unsigned int>;
-template class basic_uops_impl<unsigned long, unsigned long>;
+	/*
+	 * The first element in the array is pointed by `left_arr' and there are
+	 * `num_eles' in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
+	virtual void runAgg(size_t num_eles, const void *left_arr,
+			void *output) const {
+		const T *curr = (const T *) left_arr;
+		T val = *curr;
+		size_t loc = 1;
+		for (; loc < num_eles && curr[loc] == val; loc++);
+		*(size_t *) output = loc;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<size_t>();
+	}
+	virtual std::string get_name() const {
+		return "find_next";
+	}
+};
+
+/*
+ * Search backwards and find the first location where its element is different
+ * from the last element in the array.
+ */
+template<class T>
+class find_prev_impl: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
+	/*
+	 * The end of the array is indicated by `arr_end'. The last element
+	 * is right before `arr_end'. There are `num_eles' elements in the array.
+	 * If all elements are the same, it returns the number of elements
+	 * in the array.
+	 */
+	virtual void runAgg(size_t num_eles, const void *arr_end,
+			void *output) const {
+		const T *curr = ((const T *) arr_end) - 1;
+		T val = *curr;
+		const T *first = ((const T *) arr_end) - num_eles;
+		for (; curr > first && *curr == val; curr--);
+		if (*curr != val)
+			curr++;
+		assert(*curr == val);
+		*(size_t *) output = ((const T *) arr_end) - curr;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<size_t>();
+	}
+	virtual std::string get_name() const {
+		return "find_prev";
+	}
+};
 
 template<class T>
-const basic_uops &scalar_type_impl<T>::get_basic_uops() const
+class count_operate: public bulk_operate
 {
-	static basic_uops_impl<T, T> uops;
-	return uops;
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
+		size_t *t_out = (size_t *) output;
+		t_out[0] = num_eles;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<size_t>();
+	}
+	virtual std::string get_name() const {
+		return "count";
+	}
+};
+
+template<class InType, class OutType>
+class agg_ops_impl: public agg_ops
+{
+public:
+	agg_ops_impl() {
+		bulk_operate::const_ptr count_agg
+			= bulk_operate::const_ptr(new count_operate<InType>());
+		count = agg_operate::create(count_agg,
+				bulk_operate::conv2ptr(
+					count_agg->get_output_type().get_basic_ops().get_add()));
+		find_next = agg_operate::create(
+				bulk_operate::const_ptr(new find_next_impl<InType>()),
+				bulk_operate::const_ptr());
+		find_prev = agg_operate::create(
+				bulk_operate::const_ptr(new find_prev_impl<InType>()),
+				bulk_operate::const_ptr());
+	}
+};
+
+static std::vector<basic_ops::ptr> basic_ops_impls((int) prim_type::NUM_TYPES);
+static std::vector<basic_uops::ptr> basic_uops_impls((int) prim_type::NUM_TYPES);
+static std::vector<agg_ops::ptr> agg_ops_impls((int) prim_type::NUM_TYPES);
+
+template<class T> void set_basic_ops_impl()
+{
+	int idx = (int) get_type<T>();
+	basic_ops_impls[idx] = basic_ops::ptr(new basic_ops_impl<T, T, T>());
 }
 
-template<class T>
-const basic_ops &scalar_type_impl<T>::get_basic_ops() const
+template<class T> void set_basic_uops_impl()
 {
-	static basic_ops_impl<T, T, T> ops;
-	return ops;
+	int idx = (int) get_type<T>();
+	basic_uops_impls[idx] = basic_uops::ptr(new basic_uops_impl<T, T>());
 }
 
-template<class T>
-const agg_ops &scalar_type_impl<T>::get_agg_ops() const
+template<class T> void set_agg_ops_impl()
 {
-	static agg_ops_impl<T, T> aops;
-	return aops;
+	int idx = (int) get_type<T>();
+	agg_ops_impls[idx] = agg_ops::ptr(new agg_ops_impl<T, T>());
+}
+
+void init_ops_impls()
+{
+	set_basic_ops_impl<char>();
+	set_basic_ops_impl<short>();
+	set_basic_ops_impl<int>();
+	set_basic_ops_impl<long>();
+	set_basic_ops_impl<float>();
+	set_basic_ops_impl<double>();
+	set_basic_ops_impl<long double>();
+	set_basic_ops_impl<bool>();
+	set_basic_ops_impl<unsigned short>();
+	set_basic_ops_impl<unsigned int>();
+	set_basic_ops_impl<unsigned long>();
+	for (size_t i = 0; i < basic_ops_impls.size(); i++)
+		if (basic_ops_impls[i] == NULL)
+			throw unsupported_exception("find an unsupported type");
+
+	set_basic_uops_impl<char>();
+	set_basic_uops_impl<short>();
+	set_basic_uops_impl<int>();
+	set_basic_uops_impl<long>();
+	set_basic_uops_impl<float>();
+	set_basic_uops_impl<double>();
+	set_basic_uops_impl<long double>();
+	set_basic_uops_impl<bool>();
+	set_basic_uops_impl<unsigned short>();
+	set_basic_uops_impl<unsigned int>();
+	set_basic_uops_impl<unsigned long>();
+	for (size_t i = 0; i < basic_uops_impls.size(); i++)
+		if (basic_uops_impls[i] == NULL)
+			throw unsupported_exception("find an unsupported type");
+
+	set_agg_ops_impl<char>();
+	set_agg_ops_impl<short>();
+	set_agg_ops_impl<int>();
+	set_agg_ops_impl<long>();
+	set_agg_ops_impl<float>();
+	set_agg_ops_impl<double>();
+	set_agg_ops_impl<long double>();
+	set_agg_ops_impl<bool>();
+	set_agg_ops_impl<unsigned short>();
+	set_agg_ops_impl<unsigned int>();
+	set_agg_ops_impl<unsigned long>();
+	for (size_t i = 0; i < agg_ops_impls.size(); i++)
+		if (agg_ops_impls[i] == NULL)
+			throw unsupported_exception("find an unsupported type");
+}
+
+const basic_ops &get_basic_ops(prim_type type)
+{
+	return *basic_ops_impls[type];
+}
+
+const basic_uops &get_basic_uops(prim_type type)
+{
+	return *basic_uops_impls[type];
+}
+
+const agg_ops &get_agg_ops(prim_type type)
+{
+	return *agg_ops_impls[type];
 }
 
 namespace
