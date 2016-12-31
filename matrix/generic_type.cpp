@@ -32,6 +32,9 @@ namespace fm
 {
 
 std::vector<scalar_type::ptr> scalar_type::types;
+std::vector<basic_ops::ptr> scalar_type::basic_ops_impls;
+std::vector<basic_uops::ptr> scalar_type::basic_uops_impls;
+std::vector<agg_ops::ptr> scalar_type::agg_ops_impls;
 
 /*
  * Here we implement the scalar type.
@@ -43,13 +46,16 @@ public:
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
 			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const {
-		return fm::get_basic_uops(fm::get_type<T>());
+		int type = (int) fm::get_type<T>();
+		return *basic_uops_impls[type];
 	}
 	virtual const basic_ops &get_basic_ops() const {
-		return fm::get_basic_ops(fm::get_type<T>());
+		int type = (int) fm::get_type<T>();
+		return *basic_ops_impls[type];
 	}
 	virtual const agg_ops &get_agg_ops() const {
-		return fm::get_agg_ops(fm::get_type<T>());
+		int type = (int) fm::get_type<T>();
+		return *agg_ops_impls[type];
 	}
 
 	virtual std::shared_ptr<scalar_variable> create_scalar() const;
@@ -115,7 +121,7 @@ void scalar_type::init()
 		if (types[i] == NULL)
 			throw unsupported_exception("find an unsupported type");
 
-	init_ops_impls();
+	init_ops();
 }
 
 // This initializes all of the scalar types supported by FlashMatrix.

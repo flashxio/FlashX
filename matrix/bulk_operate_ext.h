@@ -115,8 +115,6 @@ public:
 	}
 };
 
-const agg_ops &get_agg_ops(prim_type type);
-
 }
 
 #endif

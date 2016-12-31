@@ -891,93 +891,72 @@ public:
 	}
 };
 
-static std::vector<basic_ops::ptr> basic_ops_impls;
-static std::vector<basic_uops::ptr> basic_uops_impls;
-static std::vector<agg_ops::ptr> agg_ops_impls;
+#define set_basic_ops_impl(T) do {\
+	int idx = (int) fm::get_type<T>(); \
+	basic_ops_impls[idx] = basic_ops::ptr(new basic_ops_impl<T, T, T>()); \
+} while (0)
 
-template<class T> void set_basic_ops_impl()
-{
-	int idx = (int) get_type<T>();
-	basic_ops_impls[idx] = basic_ops::ptr(new basic_ops_impl<T, T, T>());
-}
+#define set_basic_uops_impl(T) do {\
+	int idx = (int) fm::get_type<T>(); \
+	basic_uops_impls[idx] = basic_uops::ptr(new basic_uops_impl<T, T>()); \
+} while(0)
 
-template<class T> void set_basic_uops_impl()
-{
-	int idx = (int) get_type<T>();
-	basic_uops_impls[idx] = basic_uops::ptr(new basic_uops_impl<T, T>());
-}
+#define set_agg_ops_impl(T) do {   \
+	int idx = (int) fm::get_type<T>(); \
+	agg_ops_impls[idx] = agg_ops::ptr(new agg_ops_impl<T, T>()); \
+} while(0)
 
-template<class T> void set_agg_ops_impl()
-{
-	int idx = (int) get_type<T>();
-	agg_ops_impls[idx] = agg_ops::ptr(new agg_ops_impl<T, T>());
-}
-
-void init_ops_impls()
+void scalar_type::init_ops()
 {
 	basic_ops_impls.resize((int) prim_type::NUM_TYPES);
 	basic_uops_impls.resize((int) prim_type::NUM_TYPES);
 	agg_ops_impls.resize((int) prim_type::NUM_TYPES);
+	printf("Initialize ops. There are %ld types\n", agg_ops_impls.size());
 
-	set_basic_ops_impl<char>();
-	set_basic_ops_impl<short>();
-	set_basic_ops_impl<int>();
-	set_basic_ops_impl<long>();
-	set_basic_ops_impl<float>();
-	set_basic_ops_impl<double>();
-	set_basic_ops_impl<long double>();
-	set_basic_ops_impl<bool>();
-	set_basic_ops_impl<unsigned short>();
-	set_basic_ops_impl<unsigned int>();
-	set_basic_ops_impl<unsigned long>();
+	set_basic_ops_impl(char);
+	set_basic_ops_impl(short);
+	set_basic_ops_impl(int);
+	set_basic_ops_impl(long);
+	set_basic_ops_impl(float);
+	set_basic_ops_impl(double);
+	set_basic_ops_impl(long double);
+	set_basic_ops_impl(bool);
+	set_basic_ops_impl(unsigned short);
+	set_basic_ops_impl(unsigned int);
+	set_basic_ops_impl(unsigned long);
 	for (size_t i = 0; i < basic_ops_impls.size(); i++)
 		if (basic_ops_impls[i] == NULL)
 			throw unsupported_exception("find an unsupported type");
 
-	set_basic_uops_impl<char>();
-	set_basic_uops_impl<short>();
-	set_basic_uops_impl<int>();
-	set_basic_uops_impl<long>();
-	set_basic_uops_impl<float>();
-	set_basic_uops_impl<double>();
-	set_basic_uops_impl<long double>();
-	set_basic_uops_impl<bool>();
-	set_basic_uops_impl<unsigned short>();
-	set_basic_uops_impl<unsigned int>();
-	set_basic_uops_impl<unsigned long>();
+	set_basic_uops_impl(char);
+	set_basic_uops_impl(short);
+	set_basic_uops_impl(int);
+	set_basic_uops_impl(long);
+	set_basic_uops_impl(float);
+	set_basic_uops_impl(double);
+	set_basic_uops_impl(long double);
+	set_basic_uops_impl(bool);
+	set_basic_uops_impl(unsigned short);
+	set_basic_uops_impl(unsigned int);
+	set_basic_uops_impl(unsigned long);
 	for (size_t i = 0; i < basic_uops_impls.size(); i++)
 		if (basic_uops_impls[i] == NULL)
 			throw unsupported_exception("find an unsupported type");
 
-	set_agg_ops_impl<char>();
-	set_agg_ops_impl<short>();
-	set_agg_ops_impl<int>();
-	set_agg_ops_impl<long>();
-	set_agg_ops_impl<float>();
-	set_agg_ops_impl<double>();
-	set_agg_ops_impl<long double>();
-	set_agg_ops_impl<bool>();
-	set_agg_ops_impl<unsigned short>();
-	set_agg_ops_impl<unsigned int>();
-	set_agg_ops_impl<unsigned long>();
+	set_agg_ops_impl(char);
+	set_agg_ops_impl(short);
+	set_agg_ops_impl(int);
+	set_agg_ops_impl(long);
+	set_agg_ops_impl(float);
+	set_agg_ops_impl(double);
+	set_agg_ops_impl(long double);
+	set_agg_ops_impl(bool);
+	set_agg_ops_impl(unsigned short);
+	set_agg_ops_impl(unsigned int);
+	set_agg_ops_impl(unsigned long);
 	for (size_t i = 0; i < agg_ops_impls.size(); i++)
 		if (agg_ops_impls[i] == NULL)
 			throw unsupported_exception("find an unsupported type");
-}
-
-const basic_ops &get_basic_ops(prim_type type)
-{
-	return *basic_ops_impls[type];
-}
-
-const basic_uops &get_basic_uops(prim_type type)
-{
-	return *basic_uops_impls[type];
-}
-
-const agg_ops &get_agg_ops(prim_type type)
-{
-	return *agg_ops_impls[type];
 }
 
 namespace

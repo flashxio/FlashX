@@ -379,11 +379,6 @@ public:
 			const std::vector<char *> &arrs) const = 0;
 };
 
-void init_ops_impls();
-
-const basic_ops &get_basic_ops(prim_type type);
-const basic_uops &get_basic_uops(prim_type type);
-
 }
 
 #endif

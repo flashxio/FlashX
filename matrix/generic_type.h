@@ -232,16 +232,22 @@ class bulk_uoperate;
 class scalar_type
 {
 	static std::vector<std::shared_ptr<scalar_type> > types;
+
+	static std::vector<std::shared_ptr<basic_ops> > basic_ops_impls;
+	static std::vector<std::shared_ptr<basic_uops> > basic_uops_impls;
+	static std::vector<std::shared_ptr<agg_ops> > agg_ops_impls;
 public:
 	typedef std::shared_ptr<scalar_type> ptr;
 
 	// This registers all scalar types supported by FlashMatrix.
 	static void init();
+	static void init_ops();
+
 	static const scalar_type &get_type(prim_type type) {
 		return *types[(int) type];
 	}
 
-	/**
+	/*
 	 * The operators that work on this type.
 	 */
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
