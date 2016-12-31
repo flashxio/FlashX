@@ -891,9 +891,9 @@ public:
 	}
 };
 
-static std::vector<basic_ops::ptr> basic_ops_impls((int) prim_type::NUM_TYPES);
-static std::vector<basic_uops::ptr> basic_uops_impls((int) prim_type::NUM_TYPES);
-static std::vector<agg_ops::ptr> agg_ops_impls((int) prim_type::NUM_TYPES);
+static std::vector<basic_ops::ptr> basic_ops_impls;
+static std::vector<basic_uops::ptr> basic_uops_impls;
+static std::vector<agg_ops::ptr> agg_ops_impls;
 
 template<class T> void set_basic_ops_impl()
 {
@@ -915,6 +915,10 @@ template<class T> void set_agg_ops_impl()
 
 void init_ops_impls()
 {
+	basic_ops_impls.resize((int) prim_type::NUM_TYPES);
+	basic_uops_impls.resize((int) prim_type::NUM_TYPES);
+	agg_ops_impls.resize((int) prim_type::NUM_TYPES);
+
 	set_basic_ops_impl<char>();
 	set_basic_ops_impl<short>();
 	set_basic_ops_impl<int>();
