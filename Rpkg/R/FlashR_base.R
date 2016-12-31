@@ -31,6 +31,16 @@
 #' a FlashR object and the right operand has to be a scalar.
 #'
 #' @name Arithmetic
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- -mat1
+#' mat <- mat1 + mat2
+#' mat <- mat1 - mat2
+#' mat <- mat1 * mat2
+#' mat <- mat1 / mat2
+#' mat <- mat1 ^ 2
 NULL
 
 #' @rdname Arithmetic
@@ -236,6 +246,11 @@ setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2) {
 #' @param y can be a FlashR vector or matrix, an R vector or matrix.
 #' @return a FlashR matrix.
 #' @name matmult
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(10, 10)
+#' mat <- mat1 %*% mat2
 NULL
 
 #' @rdname matmult
@@ -271,6 +286,16 @@ setMethod("%*%", signature(x = "ANY", y = "fm"), function(x, y) {
 #' the vector.
 #'
 #' @name Comparison
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- mat1 == mat2
+#' mat <- mat1 != mat2
+#' mat <- mat1 < mat2
+#' mat <- mat1 <= mat2
+#' mat <- mat1 > mat2
+#' mat <- mat1 >= mat2
 NULL
 
 #' @rdname Comparison
@@ -473,6 +498,15 @@ setMethod("<", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #' the vector.
 #'
 #' @name Logic
+#'
+#' @examples
+#' tmp1 <- fm.runif.matrix(100, 10)
+#' tmp2 <- fm.runif.matrix(100, 10)
+#' mat1 <- tmp1 > tmp2
+#' mat2 <- tmp1 < tmp2
+#' mat1 | mat2
+#' mat1 & mat2
+#' !mat1
 NULL
 
 #' @rdname Logic
@@ -572,6 +606,16 @@ setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #'         a FlashR object, and \code{min} and \code{max} return an R scalar.
 #'
 #' @name Extremes
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' res <- pmax2(mat1, mat2)
+#' res <- pmin2(mat1, mat2)
+#' res <- pmax(mat1, mat2)
+#' res <- pmin(mat1, mat2)
+#' res <- max(mat1, mat2)
+#' res <- min(mat1, mat2)
 pmax2 <- function(e1, e2) {
 	# if e1 is a vector and e2 is a matrix, pmax(e1, e2) returns a vector,
 	# which is inconsistent with others, so in this case, we need to switch
@@ -743,6 +787,10 @@ setMethod("pmax", "fmV", .pmax.int)
 #' @param x A FlashR matrix.
 #'
 #' @name dim
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' dim(mat)
 NULL
 
 #' @rdname dim
@@ -756,6 +804,11 @@ setMethod("dim", signature(x = "fm"), function(x) c(x@nrow, x@ncol))
 #' @param x a matrix.
 #' @return an integer of length 1 or NULL.
 #' @name nrow
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' nrow(mat)
+#' ncol(mat)
 NULL
 
 #' @rdname nrow
@@ -771,6 +824,10 @@ setMethod("ncol", signature(x = "fm"), function(x) x@ncol)
 #' @return an integer of length 1 or a double if the object has more than
 #' 2^31-1 elements.
 #' @name length
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' length(mat)
 NULL
 
 #' @rdname length
@@ -786,6 +843,10 @@ setMethod("length", signature(x = "fm"), function(x) x@nrow * x@ncol)
 #' @return A character string. Current values are "logical", "integer",
 #' "double".
 #' @name typeof
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' typeof(mat)
 NULL
 
 #' @rdname typeof
@@ -802,6 +863,11 @@ setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 #' @return \code{dimnames} return NULL if there aren't dimension names.
 #'         Otherwise, return the dimension names.
 #' @name dimnames
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' dimnames(mat)
+#' dimnames(mat) <- list("dim1", "dim2")
 NULL
 
 .get.dimnames <- function(x)
@@ -884,6 +950,10 @@ setMethod("names<-", signature(x = "fmV", value="fmV"), .set.names)
 #' @param x a FlashR matrix.
 #' @return a matrix.
 #' @name transpose
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' t(mat)
 NULL
 
 #' @rdname transpose
@@ -1009,7 +1079,7 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 #' Are some Values True?
 #'
 #' \code{any} tests whether some of the values in a set of logical vectors are
-#' true? \code{fm.all} tests whether some of the values in a single vector are
+#' true? \code{fm.any} tests whether some of the values in a single vector are
 #' true. \code{fm.any} can evaluate it lazily.
 #'
 #' @param x a logical FlashR vector.
@@ -1018,6 +1088,11 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 #' @param na.rm a logical indicating whether missing values should be removed.
 #' @return The value is a logical vector of length one.
 #' @name any
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10) > 0.5
+#' any(mat)
+#' fm.any(mat)
 fm.any <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1077,6 +1152,11 @@ setMethod("any", "fmV", .any.int)
 #' @param na.rm a logical indicating whether missing values should be removed.
 #' @return The value is a logical vector of length one.
 #' @name all
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10) > 0.5
+#' all(mat)
+#' fm.all(mat)
 fm.all <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1136,6 +1216,11 @@ setMethod("all", "fmV", .all.int)
 #' @param na.rm logical. Should missing values (including \code{NaN}) be removed?
 #' @return The sum.
 #' @name sum
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sum(mat)
+#' fm.sum(mat)
 fm.sum <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1196,6 +1281,10 @@ setMethod("sum", "fmV", .sum.int)
 #' @param ... any FlashR vectors or matrices.
 #' @param na.rm logical, indicating if \code{NA} should be omitted.
 #' @name range
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' range(mat)
 NULL
 
 #' @rdname range
@@ -1224,6 +1313,10 @@ setMethod("range", "fmV", .range.int)
 #' @param x A FlashR vector or matrix.
 #' @param ... further arguments passed to or from other methods.
 #' @name mean
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mean(mat)
 NULL
 
 #' @rdname mean
@@ -1238,6 +1331,10 @@ setMethod("mean", "fmV", .mean.int)
 #'
 #' @param x a numeric vector or array.
 #' @name MathFun
+#'
+#' @examples
+#' mat <- abs(fm.runif.matrix(100, 10))
+#' mat <- sqrt(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname MathFun
@@ -1264,6 +1361,11 @@ setMethod("sqrt", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.sqrt))
 #'
 #' @param x a numeric vector.
 #' @name round
+#'
+#' @examples
+#' mat <- ceiling(fm.runif.matrix(100, 10))
+#' mat <- floor(fm.runif.matrix(100, 10))
+#' mat <- round(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname round
@@ -1294,6 +1396,12 @@ setMethod("round", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), 
 #' values. \code{log(0)} gives \code{-Inf}, and \code{log(x)} for negative
 #' values of \code{x} is \code{NaN}.  \code{exp(-Inf)} is 0.
 #' @name log
+#'
+#' @examples
+#' mat <- log(fm.runif.matrix(100, 10))
+#' mat <- log10(fm.runif.matrix(100, 10))
+#' mat <- log2(fm.runif.matrix(100, 10))
+#' mat <- exp(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname log
@@ -1333,6 +1441,15 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #' from the calculations?
 #' @return a FlashR vector.
 #' @name colSums
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat <- fm.rowSums(mat)
+#' mat <- fm.colSums(mat)
+#' mat <- rowSums(mat)
+#' mat <- colSums(mat)
+#' mat <- rowMeans(mat)
+#' mat <- colMeans(mat)
 fm.rowSums <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1398,16 +1515,23 @@ setMethod("print", signature(x = "fm.bo"), function(x)
 
 #' Count the number of elements
 #'
-#' This function counts the number of occurences of each unique value
+#' \code{fm.table} counts the number of occurences of each unique value
 #' in a FlashR vector.
 #'
-#' @param x a FlashR vector.
-#' @return a list of elements.
+#' @param x a FlashR vector or a "table" object for \code{as.vector} and
+#'          \code{as.data.frame}.
+#' @return a table object.
 #' \itemize{
 #' \item{val}{The unique values in the vector.}
 #' \item{Freq}{The number of occurences of each unique value.}
 #' }
 #' @name fm.table
+#'
+#' @examples
+#' vec <- as.integer(fm.runif(1000, min=0, max=10))
+#' tbl <- fm.table(vec)
+#' cnts <- as.vector(tbl)
+#' df <- as.data.frame(tbl)
 NULL
 
 setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
@@ -1423,7 +1547,9 @@ fm.table <- function(x)
 		NULL
 }
 
+#' @rdname fm.table
 setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
+#' @rdname fm.table
 setMethod("as.data.frame", signature(x = "fm.table"),
 		  function(x, row.names = NULL, optional = FALSE, ...)
 			  list(val=x@val, Freq=x@Freq))
@@ -1438,6 +1564,9 @@ setMethod("as.data.frame", signature(x = "fm.table"),
 #' @return \code{as.integer} returns an integer FlashR object,
 #' \code{is.integer} returns a logical value.
 #' @name integer
+#'
+#' @examples
+#' vec <- as.integer(fm.runif(1000, min=0, max=10))
 NULL
 
 #' @rdname integer
@@ -1474,6 +1603,10 @@ setMethod("as.integer", "fmV", function(x) {
 #' @return \code{as.numeric} returns a numeric FlashR object,
 #' \code{is.numeric} returns a logical value.
 #' @name numeric
+#'
+#' @examples
+#' vec <- as.numeric(fm.runif(1000, min=0, max=10))
+#' is.numeric(vec)
 NULL
 
 #' @rdname numeric
@@ -1515,6 +1648,12 @@ setMethod("is.numeric", "fmV", function(x)
 #'        or numeric vectors.
 #' @param drop for matrices. If \code{TRUE}, the result is coerced to a vector.
 #' @name Extract
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat[1:5,]
+#' mat[,1:5]
+#' mat[1:5,1:5]
 NULL
 
 #' @rdname Extract
@@ -1558,6 +1697,11 @@ setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
 #' @param n a positive integer.
 #' @return An object (usually) like \code{x} but generally smaller.
 #' @name head
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' head(mat)
+#' tail(mat)
 NULL
 
 #' @rdname head
@@ -1583,6 +1727,10 @@ setMethod("tail", signature(x="fmV"), function(x, n=6L) x[(length(x)-n+1):length
 #' @return A matrix with the same shape as \code{x}, but with the summary
 #' statistics swept out.
 #' @name sweep
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sweep(mat, 1, runif(100))
 setMethod("sweep", "fm",
 		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {
 			  if (MARGIN == 2)
@@ -1606,6 +1754,11 @@ setMethod("sweep", "fm",
 #' @param lazy a logical value, indicating to perform the computation lazily.
 #' @return a double matrix
 #' @name crossprod
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' crossprod(mat)
+#' tcrossprod(mat)
 NULL
 
 #' @rdname crossprod
@@ -1640,6 +1793,9 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) {
 #' \item{numNonzeros}{The number of non-zero values}
 #' }
 #'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' fm.summary(mat)
 fm.summary <- function(x)
 {
 	orig.test.na <- .env.int$fm.test.na
@@ -1727,6 +1883,12 @@ fm.summary <- function(x)
 #'         the eigenvalues.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx")
+#" mul <- function(x, extra) mat %*% x
+#' res <- fm.eigen(mul, 10, nrow(mat))
+#' fm.cal.residul(mul, res$values, res$vectors)
 fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
 					 env = parent.frame())
 {
@@ -1819,6 +1981,10 @@ fm.cal.residul <- function(mul, values, vectors)
 #' @return a FlashR matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
 #' @name scale
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat <- scale(mat)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
@@ -1874,6 +2040,10 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 #' @param x a FlashR matrix.
 #' @return a FlashR matrix or vector.
 #' @name drop
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 1)
+#' vec <- drop(mat)
 setMethod("drop", "fm", function(x) {
 		  if (nrow(x) > 1 && ncol(x) > 1)
 			  x
