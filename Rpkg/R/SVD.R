@@ -17,7 +17,9 @@
 
 #' Compute the singular-value decomposition on a large matrix.
 #'
-#' The current implementation can only compute the largest eigenvalues.
+#' The difference between \code{svd} and \code{fm.svd} is that \code{fm.svd}
+#' allows a user-specified tol. \code{svd} computes eigenvalues in machine
+#' precision.
 #'
 #' @param x a FlashR matrix
 #' @param nu the number of left singluar vectors to be computed.
@@ -30,6 +32,15 @@
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#' @name svd
+#'
+#' @examples
+#' mat <- fm.runif.matrix(1000, 100)
+#' res <- fm.svd(mat, nu=10, nv=0)
+#' res <- svd(mat, nu=10, nv=0)
+NULL
+
+#' @rdname svd
 fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
@@ -121,6 +132,7 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	list(d=sqrt(vals), u=left, v=right, options=res$options)
 }
 
+#' @rdname svd
 setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
 		  x <- fm.as.matrix(x)
 		  if (any(!is.finite(x)))

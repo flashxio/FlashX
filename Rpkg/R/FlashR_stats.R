@@ -61,6 +61,10 @@
 #' @param x a FlashR vector or matrix.
 #' @param na.rm logical. Should missing values be removed?
 #' @name sd
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sd(mat)
 NULL
 
 #' @rdname sd
@@ -218,6 +222,7 @@ setMethod("sd", "fmV", .sd.int)
 #' and \code{y} if these are vectors.  If \code{x}
 #' and \code{y} are matrices then the covariances (or correlations) between
 #' the columns of \code{x} and the columns of \code{y} are computed.
+#'
 #' @param x a numeric vector or matrix
 #' @param y \code{NULL} (default) or a vector or matrix with compatible
 #' dimensions to \code{x}. The default is equivalent to \code{y=x}.
@@ -231,6 +236,12 @@ setMethod("sd", "fmV", .sd.int)
 #'        (default), \code{"kendall"}, or \code{"spearman"}: can be abbreviated.
 #'        Right now this argument isn't used.
 #' @name cor
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' var(mat)
+#' cor(mat)
+#' cov(mat)
 NULL
 
 #' @rdname cor
@@ -281,4 +292,8 @@ setMethod("cov", "fm", .cov.int)
 #'          \code{TRUE}}
 #' }
 #' @name cov.wt
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' cov.wt(mat, fm.runif(nrow(mat)))
 setMethod("cov.wt", "fm", .cov.wt.int)
