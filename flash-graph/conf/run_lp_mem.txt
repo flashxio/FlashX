@@ -13,5 +13,4 @@ prof_file=graph.prof
 merge_reqs=
 index_file_weight=50
 SA_cell_size=16
-in_mem_index=
 in_mem_graph=

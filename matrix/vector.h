@@ -50,7 +50,7 @@ public:
 	static ptr create(detail::vec_store::const_ptr store) {
 		return ptr(new vector(store));
 	}
-	static ptr create(size_t length, const scalar_type &type,
+	static ptr create(size_t length, const scalar_type &type, int num_nodes,
 			bool in_mem, const set_vec_operate &op);
 
 	~vector() {
@@ -106,11 +106,19 @@ public:
 	std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const;
 
-	// It should return data frame instead of vector.
+	/*
+	 * This is a general version of groupby. It requires sorting on the entire
+	 * vector. If `with_val' is true, this method returns a data frame with two
+	 * columns: the first column is a vector of unique values in the vector;
+	 * the second column is a vector of vectors and contains the aggregation
+	 * result for each unique value in the first column.
+	 * If `with_val' is false, this method returns a data frame with only
+	 * one column, which is a vector of vectors and contains the aggregation
+	 * result for each unique value.
+	 */
 	std::shared_ptr<data_frame> groupby(
 			const gr_apply_operate<local_vec_store> &op, bool with_val) const;
 
-	vector::ptr sapply(bulk_uoperate::const_ptr op) const;
 	scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	scalar_variable::ptr dot_prod(const vector &vec) const;
 
@@ -136,9 +144,11 @@ public:
  * Create a sequence of values in [start, end]. `end' is inclusive.
  */
 template<class EntryType>
-vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
+vector::ptr create_seq_vector(EntryType start, EntryType end, EntryType stride,
+		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(start, end, stride);
+	detail::vec_store::ptr store = detail::create_seq_vec_store(start, end, stride,
+			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();
 	return vector::create(store);
@@ -148,9 +158,11 @@ vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
  * Create a vector filled with a constant value.
  */
 template<class EntryType>
-vector::ptr create_vector(size_t length, EntryType initv)
+vector::ptr create_rep_vector(size_t length, EntryType initv,
+		int num_nodes = -1, bool in_mem = true)
 {
-	detail::vec_store::ptr store = detail::create_vec_store(length, initv);
+	detail::vec_store::ptr store = detail::create_rep_vec_store(length, initv,
+			num_nodes, in_mem);
 	if (store == NULL)
 		return vector::ptr();
 	return vector::create(store);

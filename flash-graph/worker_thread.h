@@ -1,7 +1,7 @@
 #ifndef __WORKER_THREAD_H__
 #define __WORKER_THREAD_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -154,7 +154,7 @@ public:
 	void fetch_reset_active_vertices(std::vector<local_vid_t> &local_ids);
 };
 
-/**
+/*
  * The queue for active vertices.
  */
 class active_vertex_queue
@@ -175,13 +175,13 @@ public:
 	}
 };
 
-/**
+/*
  * This vertex queue is sorted based on the vertex ID.
  */
 class default_vertex_queue: public active_vertex_queue
 {
 	static const size_t VERTEX_BUF_SIZE = 64 * 1024;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 	// It contains the offset of the vertex in the local partition
 	// instead of the real vertex Ids.
 	std::vector<compute_vertex_pointer> vertex_buf;
@@ -203,7 +203,6 @@ public:
 	default_vertex_queue(graph_engine &_graph, int part_id,
 			int node_id): buf_fetch_idx(0, true), graph(_graph), index(
 				_graph.get_graph_index()) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		num_active = 0;
 		this->part_id = part_id;
 		size_t num_local_vertices = _graph.get_partitioner()->get_part_size(
@@ -228,7 +227,7 @@ public:
 
 class customized_vertex_queue: public active_vertex_queue
 {
-	pthread_spinlock_t lock;
+	spin_lock lock;
 	std::vector<compute_vertex_pointer> sorted_vertices;
 	scan_pointer fetch_idx;
 	vertex_scheduler::ptr scheduler;
@@ -244,7 +243,6 @@ public:
 			vertex_scheduler::ptr scheduler, int part_id): fetch_idx(0,
 				true), graph(vprog->get_graph()), index(
 				graph.get_graph_index()) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
 		this->part_id = part_id;
 		this->vprog = vprog;
@@ -254,7 +252,7 @@ public:
 	void init(worker_thread &);
 
 	int fetch(compute_vertex_pointer vertices[], int num) {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		int num_fetches = min(num, fetch_idx.get_num_remaining());
 		if (num_fetches > 0) {
 			size_t curr_loc = fetch_idx.get_curr_loc();
@@ -262,21 +260,21 @@ public:
 			memcpy(vertices, sorted_vertices.data() + min(curr_loc, new_loc),
 					num_fetches * sizeof(vertices[0]));
 		}
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return num_fetches;
 	}
 
 	bool is_empty() {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		bool ret = fetch_idx.get_num_remaining() == 0;
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return ret;
 	}
 
 	size_t get_num_vertices() {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		size_t num = fetch_idx.get_num_remaining();
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 		return num;
 	}
 };
@@ -316,7 +314,7 @@ class worker_thread: public thread
 	// This points to the vertex that is currently being processed.
 	compute_vertex_pointer curr_vertex;
 
-	/**
+	/*
 	 * A vertex is allowed to send messages to other vertices.
 	 * The message passing scheme between vertices are implemented as follows:
 	 * all non-empty vertices (with edges) have a message holder;
@@ -354,7 +352,7 @@ class worker_thread: public thread
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
 
-	/**
+	/*
 	 * Get the number of vertices being processed in the current level.
 	 */
 	int get_num_vertices_processing() const {
@@ -378,7 +376,7 @@ public:
 	void run();
 	void init();
 
-	/**
+	/*
 	 * When a vertex has been completed for the current iteration, this
 	 * method is invoked to notify the worker thread, so that the worker
 	 * thread can update its statistics on the number of completed vertices.
@@ -422,7 +420,7 @@ public:
 	}
 	vertex_compute *get_vertex_compute(compute_vertex_pointer v);
 
-	/**
+	/*
 	 * Activate the vertex in its own partition for the next iteration.
 	 */
 	void activate_vertex(local_vid_t id) {

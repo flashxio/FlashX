@@ -32,6 +32,7 @@ namespace fm
 namespace detail
 {
 
+#ifdef USE_HWLOC
 std::vector<int> get_cpus(int node_id)
 {
 	std::vector<int> io_cpus = safs::get_io_cpus();
@@ -42,6 +43,7 @@ std::vector<int> get_cpus(int node_id)
 		cpu_set.erase(io_cpus[j]);
 	return std::vector<int>(cpu_set.begin(), cpu_set.end());
 }
+#endif
 
 mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 {
@@ -49,11 +51,14 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 	threads.resize(num_nodes);
 	for (int i = 0; i < num_nodes; i++) {
 		// Get the CPU cores that are in node i.
+#ifdef USE_HWLOC
 		std::vector<int> cpus = get_cpus(i);
+#endif
 		threads[i].resize(nthreads_per_node);
 		for (int j = 0; j < nthreads_per_node; j++) {
 			std::string name
 				= std::string("mem-worker-") + itoa(i) + "-" + itoa(j);
+#ifdef USE_HWLOC
 			if (safs::get_io_cpus().empty())
 				threads[i][j] = std::shared_ptr<pool_task_thread>(
 						new pool_task_thread(i * nthreads_per_node + j, name, i));
@@ -61,6 +66,10 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 				threads[i][j] = std::shared_ptr<pool_task_thread>(
 						new pool_task_thread(i * nthreads_per_node + j, name,
 							cpus, i));
+#else
+			threads[i][j] = std::shared_ptr<pool_task_thread>(
+					new pool_task_thread(i * nthreads_per_node + j, name, i));
+#endif
 			threads[i][j]->start();
 		}
 	}
@@ -112,62 +121,83 @@ size_t mem_thread_pool::get_num_pending() const
 }
 
 static mem_thread_pool::ptr global_threads;
+enum thread_pool_state {
+	UNINIT,
+	ACTIVE,
+	INACTIVE,
+};
+static thread_pool_state pool_state = thread_pool_state::UNINIT;
+
+/*
+ * When we disable thread pool, we use the main thread to perform
+ * computation.
+ */
+bool mem_thread_pool::disable_thread_pool()
+{
+	pool_state = thread_pool_state::INACTIVE;
+	return true;
+}
+
+bool mem_thread_pool::enable_thread_pool()
+{
+	pool_state = thread_pool_state::ACTIVE;
+	return true;
+}
 
 mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 {
+	assert(pool_state != thread_pool_state::INACTIVE);
 	if (global_threads == NULL) {
 		int nthreads_per_node
 			= matrix_conf.get_num_DM_threads() / matrix_conf.get_num_nodes();
 		assert(nthreads_per_node > 0);
 		global_threads = mem_thread_pool::create(matrix_conf.get_num_nodes(),
 				nthreads_per_node);
+		enable_thread_pool();
 	}
 	return global_threads;
 }
 
 size_t mem_thread_pool::get_global_num_threads()
 {
-	return get_global_mem_threads()->get_num_threads();
+	// When we disable the thread pool, we use the main thread for computation.
+	// So the number of threads is 1.
+	if (pool_state == thread_pool_state::INACTIVE)
+		return 1;
+	else
+		// We also count the main thread.
+		return get_global_mem_threads()->get_num_threads() + 1;
 }
 
 int mem_thread_pool::get_curr_thread_id()
 {
-	detail::pool_task_thread *curr
-		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	assert(curr);
-	return curr->get_pool_thread_id();
+	// When we disable the thread pool, we use the main thread for computation.
+	// And we use 0 as the thread id of the main thread.
+	if (pool_state == thread_pool_state::INACTIVE)
+		return 0;
+	else {
+		// It return 0 for the main thread. The worker thread Id starts with 1.
+		detail::pool_task_thread *curr
+			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+		if (curr)
+			return curr->get_pool_thread_id() + 1;
+		else
+			return 0;
+	}
 }
 
 void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		int nthreads_per_node)
 {
-	if (global_threads == NULL)
+	if (global_threads == NULL) {
 		global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
+		enable_thread_pool();
+	}
 }
 
-static size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios)
+void mem_thread_pool::destroy()
 {
-	size_t num_pending;
-	do {
-		num_pending = select->num_pending_ios();
-
-		// Figure out how many I/O requests we have to wait for in
-		// this iteration.
-		int num_to_process;
-		if (num_pending > max_pending_ios)
-			num_to_process = num_pending - max_pending_ios;
-		else
-			num_to_process = 0;
-		select->wait4complete(num_to_process);
-
-		// Test if all I/O instances have pending I/O requests left.
-		// When a portion of a matrix is ready in memory and being processed,
-		// it may result in writing data to another matrix. Therefore, we
-		// need to process all completed I/O requests (portions with data
-		// in memory) first and then count the number of new pending I/Os.
-		num_pending = select->num_pending_ios();
-	} while (num_pending > max_pending_ios);
-	return num_pending;
+	global_threads = NULL;
 }
 
 void io_worker_task::run()
@@ -183,9 +213,9 @@ void io_worker_task::run()
 
 	// The task runs until there are no tasks left in the queue.
 	while (dispatch->issue_task())
-		wait4ios(select, max_pending_ios);
+		safs::wait4ios(select, max_pending_ios);
 	// Test if all I/O instances have processed all requests.
-	size_t num_pending = wait4ios(select, 0);
+	size_t num_pending = safs::wait4ios(select, 0);
 	assert(num_pending == 0);
 
 	pthread_spin_lock(&lock);
@@ -197,6 +227,32 @@ void io_worker_task::run()
 				ios[i]->get_callback());
 		assert(!cb.has_callback());
 	}
+}
+
+global_counter::global_counter()
+{
+	counts.resize(mem_thread_pool::get_global_num_threads());
+	reset();
+}
+
+void global_counter::inc(size_t val)
+{
+	int id = mem_thread_pool::get_curr_thread_id();
+	counts[id].count += val;
+}
+
+void global_counter::reset()
+{
+	for (size_t i = 0; i < counts.size(); i++)
+		counts[i].count = 0;
+}
+
+size_t global_counter::get() const
+{
+	size_t tot = 0;
+	for (size_t i = 0; i < counts.size(); i++)
+		tot += counts[i].count;
+	return tot;
 }
 
 }

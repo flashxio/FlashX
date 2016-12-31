@@ -17,17 +17,22 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. -I../eigensolver $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver -I../libmatrix-algs
+LDFLAGS := ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	el2al al22d al2crs test-sort test-eigen test-dgemm
+	test-sort test-eigen test-dgemm rand_mat_gen test-algs
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
 mkl: test-mkl_multiply test-mkl_dgemm
+
+rand_mat_gen: rand_mat_gen.o ../libFMatrix.a
+	$(CXX) -o rand_mat_gen rand_mat_gen.o $(LDFLAGS)
+
+test-algs: test-algs.o ../libFMatrix.a ../libmatrix-algs/libFMatrix-algs.a
+	$(CXX) -o test-algs test-algs.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
 	$(CXX) -o test-2d_multiply test-2d_multiply.o $(LDFLAGS)
@@ -41,20 +46,13 @@ test-block_mv: test-block_mv.o ../libFMatrix.a ../eigensolver/libeigen.a
 test-dense_matrix: test-dense_matrix.o ../libFMatrix.a
 	$(CXX) -o test-dense_matrix test-dense_matrix.o $(LDFLAGS)
 
-el2al: el2al.o ../libFMatrix.a
-	$(CXX) -o el2al el2al.o $(LDFLAGS)
-
-al22d: al22d.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o al22d al22d.o fg_utils.o $(LDFLAGS)
-
-al2crs: al2crs.o fg_utils.o ../libFMatrix.a
-	$(CXX) -o al2crs al2crs.o fg_utils.o $(LDFLAGS)
-
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
-TRILINOSMPILIBPATH=-L/home/zhengda/trilinos-12.0.1-mpi/lib/
-TRILINOSMPIINCPATH=-I/home/zhengda/trilinos-12.0.1-mpi/include/
+#TRILINOSMPILIBPATH=-L/home/zhengda/trilinos-12.0.1-mpi/lib/
+#TRILINOSMPIINCPATH=-I/home/zhengda/trilinos-12.0.1-mpi/include/
+#TRILCC = mpic++
+TRILCC = g++
 
 TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
 				 -ltpetraclassicnodeapi -ltpetrakernels -lteuchoscomm \
@@ -63,19 +61,19 @@ TRILINOSMPILIB = $(TRILINOSMPILIBPATH) -ltpetra \
 				 -lteuchoskokkoscompat
 
 FG2Tpetra.o: FG2Tpetra.cpp
-	mpic++ -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c FG2Tpetra.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_MV_multiply.o: test-tpetra_MV_multiply.cpp
-	mpic++ -c test-tpetra_MV_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-tpetra_MV_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_MV_multiply: test-tpetra_MV_multiply.o FG2Tpetra.o ../libFMatrix.a
-	mpic++ -o test-tpetra_MV_multiply test-tpetra_MV_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB) -llapack -lblas
+	$(TRILCC) -o test-tpetra_MV_multiply test-tpetra_MV_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB) -llapack -lblas
 
 test-tpetra_multiply.o: test-tpetra_multiply.cpp
-	mpic++ -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-tpetra_multiply.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-tpetra_multiply: test-tpetra_multiply.o FG2Tpetra.o ../libFMatrix.a
-	mpic++ -o test-tpetra_multiply test-tpetra_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB)
+	$(TRILCC) -o test-tpetra_multiply test-tpetra_multiply.o FG2Tpetra.o $(LDFLAGS) $(TRILINOSMPILIB)
 
 test-mkl_eigen.o: test-mkl_eigen.cpp
 	$(CXX) -O3 -c test-mkl_eigen.cpp -std=c++0x -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
@@ -86,10 +84,10 @@ test-mkl_eigen: test-mkl_eigen.o
 		-lteuchoscore -lanasazi -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
 
 test-anasazi_eigen.o: test-anasazi_eigen.cpp
-	mpic++ -c test-anasazi_eigen.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
+	$(TRILCC) -c test-anasazi_eigen.cpp $(TRILINOSMPIINCPATH) $(CXXFLAGS)
 
 test-anasazi_eigen: test-anasazi_eigen.o FG2Tpetra.o
-	mpic++ test-anasazi_eigen.o FG2Tpetra.o -o test-anasazi_eigen $(TRILINOSMPILIB) $(LDFLAGS) -llapack -lblas
+	$(TRILCC) test-anasazi_eigen.o FG2Tpetra.o -o test-anasazi_eigen $(TRILINOSMPILIB) $(LDFLAGS) -llapack -lblas
 
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
@@ -137,5 +135,12 @@ clean:
 	rm -f test-mkl_multiply
 	rm -f test-eigen
 	rm -f BlockDavidsonTpetra
+	rm -f rand_mat_gen
+	rm -f test-algs
+	rm -f test-anasazi_eigen
+	rm -f test-block_mv
+	rm -f test-dgemm
+	rm -f test-tpetra_MV_multiply
+	rm -f test-mkl_dgemm
 
 -include $(DEPS) 

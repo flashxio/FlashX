@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -68,9 +68,9 @@ int thread_safe_msg_sender<T>::send_cached(T *msg, int num)
 	// We expect the method is always successful.
 	// so we try again and again until we succeed.
 	while (true) {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		int ret = buf.add(msg, num);
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		msg += ret;
 		num -= ret;
 		num_added += ret;

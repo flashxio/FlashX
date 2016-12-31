@@ -39,8 +39,8 @@ namespace fg
 class compute_vertex;
 class part_compute_vertex;
 
-/**
- * \brief A pointer to the vertically partitioned vertices in the graph index.
+/*
+ * A pointer to the vertically partitioned vertices in the graph index.
  */
 class vpart_vertex_pointer
 {

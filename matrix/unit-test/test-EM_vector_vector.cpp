@@ -91,7 +91,7 @@ void test_groupby()
 	vector_vector::ptr vv = create_vv();
 
 	factor f(50);
-	factor_vector::ptr labels = factor_vector::create(f, vv->get_num_vecs(),
+	factor_vector::ptr labels = factor_vector::create(f, vv->get_num_vecs(), -1,
 			false, set_label_operate(f, vv->get_num_vecs()));
 	assert(!labels->is_in_mem());
 	labels->sort();

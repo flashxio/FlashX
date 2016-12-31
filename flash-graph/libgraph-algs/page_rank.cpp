@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
@@ -21,6 +21,7 @@
 #endif
 
 #include <limits>
+#include <cmath>
 
 #include "graph_engine.h"
 #include "graph_config.h"

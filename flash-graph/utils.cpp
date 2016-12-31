@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -18,9 +18,6 @@
  */
 
 #include <unistd.h>
-#ifdef USE_GZIP
-#include <zlib.h>
-#endif
 
 #include <memory>
 #include <algorithm>
@@ -33,7 +30,7 @@
 
 #include "thread.h"
 #include "native_file.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "comm_exception.h"
 
 #include "graph.h"

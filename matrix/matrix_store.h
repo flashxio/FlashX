@@ -41,8 +41,9 @@ class portion_compute;
 class local_matrix_store;
 class vec_store;
 
-typedef std::pair<bool, std::shared_ptr<local_matrix_store> > async_res_t;
 typedef std::pair<bool, std::shared_ptr<const local_matrix_store> > async_cres_t;
+
+const size_t INVALID_MAT_ID = std::numeric_limits<size_t>::max();
 
 class matrix_store
 {
@@ -58,6 +59,11 @@ class matrix_store
 	// The type is a reference. It makes the dense matrix object uncopiable.
 	// Maybe this is what we want.
 	const scalar_type &type;
+	/*
+	 * This indicates whether or not we cache a portion in each worker thread.
+	 * By default, this is enabled.
+	 */
+	bool cache_portion;
 protected:
 	static std::atomic<size_t> mat_counter;
 public:
@@ -70,6 +76,18 @@ public:
 
 	matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &_type);
+
+	template<class T>
+	void init_randu(T min, T max) {
+		std::shared_ptr<const set_operate> op = create_urand_init<T>(min, max);
+		set_data(*op);
+	}
+
+	template<class T>
+	void init_randn(T mean, T var) {
+		std::shared_ptr<const set_operate> op = create_nrand_init<T>(mean, var);
+		set_data(*op);
+	}
 
 	virtual ~matrix_store() {
 	}
@@ -99,6 +117,12 @@ public:
 		return in_mem;
 	}
 
+	// A matrix can represent a sparse matrix.
+	// By default, we assume all matrices are dense.
+	virtual bool is_sparse() const {
+		return false;
+	}
+
 	virtual int get_num_nodes() const {
 		return -1;
 	}
@@ -108,9 +132,22 @@ public:
 	 * We care about the shape of a large matrix. We deal with a tall matrix
 	 * different from a wide matrix.
 	 */
-	bool is_wide() const {
+	virtual bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
+
+	/*
+	 * Data Id is used to identify the data in a matrix.
+	 * When a matrix is transposed or move to a different storage memory or
+	 * converted into a different data layout, it should have the same data
+	 * Id.
+	 */
+	virtual size_t get_data_id() const = 0;
+
+	/*
+	 * Test if this matrix shares the same data as the other matrix.
+	 */
+	virtual bool share_data(const matrix_store &store) const;
 
 	/*
 	 * This method gets underlying materialized matrix IDs and the number of
@@ -121,8 +158,8 @@ public:
 
 	virtual matrix_layout_t store_layout() const = 0;
 
-	virtual void reset_data() = 0;
-	virtual void set_data(const set_operate &op) = 0;
+	virtual void reset_data();
+	virtual void set_data(const set_operate &op);
 
 	virtual matrix_store::const_ptr transpose() const = 0;
 
@@ -135,22 +172,24 @@ public:
 	size_t get_num_portions() const;
 	virtual std::pair<size_t, size_t> get_portion_size() const = 0;
 	/*
-	 * These two versions get a portion of data from the matrix asynchronously.
+	 * This method gets a portion of data from the matrix asynchronously.
+	 * We only need one version for asynchronous access to portions because
+	 * the returned portion from this method is a copy from the original
+	 * matrix and modification on the portion doesn't change the data in
+	 * the original matrix.
+	 *
 	 * When a local matrix store is returned, it's not guaranteed that the
 	 * data in the local matrix store is valid. A status in the returned value
 	 * indicates whether the data is valid. If the data is invalid when it's
-	 * returned from the two methods, the computation passed to
-	 * these two methods are invoked when the portion of data is loaded
-	 * in memory. During the time between returning from the methods and
+	 * returned, the computation passed to
+	 * this method is invoked when the portion of data is loaded
+	 * in memory. During the time between returning from the method and
 	 * the portion of data becomes available, it's users' responsibility
 	 * of keep the local matrix store alive.
 	 */
 	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
 			size_t num_rows, size_t num_cols,
 			std::shared_ptr<portion_compute> compute) const = 0;
-	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
-			size_t num_rows, size_t num_cols,
-			std::shared_ptr<portion_compute> compute) = 0;
 	/*
 	 * These versions fetches the portion of data. It's guaranteed that
 	 * the data in the returned local matrix store is valid.
@@ -164,28 +203,25 @@ public:
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	/*
+	 * This gets the node Id of the specified portion.
+	 */
+	virtual int get_portion_node_id(size_t id) const = 0;
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col) = 0;
 
 	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		return matrix_store::const_ptr();
-	}
+			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
 		return matrix_store::const_ptr();
 	}
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const {
-		assert(0);
-		return std::shared_ptr<const vec_store>();
-	}
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const {
-		assert(0);
-		return std::shared_ptr<const vec_store>();
-	}
 
 	virtual bool is_virtual() const {
+		return false;
+	}
+	virtual bool is_sink() const {
 		return false;
 	}
 	virtual void materialize_self() const {
@@ -196,7 +232,26 @@ public:
 	 * It's used by EM matrix and mapply virtual matrix.
 	 */
 	virtual void set_cache_portion(bool cache_portion) {
+		this->cache_portion = cache_portion;
 	}
+	virtual bool is_cache_portion() const {
+		return cache_portion;
+	}
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
+	}
+};
+
+class matrix_stream
+{
+public:
+	typedef std::shared_ptr<matrix_stream> ptr;
+
+	static ptr create(matrix_store::ptr store);
+
+	virtual void write_async(std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) = 0;
+	virtual bool is_complete() const = 0;
+	virtual const matrix_store &get_mat() const = 0;
 };
 
 }

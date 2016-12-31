@@ -23,31 +23,50 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <sstream>
+#include <string>
 #include <memory>
 
 #include "sorter.h"
 #include "stl_algs.h"
-#include "type_cast.h"
 
 namespace fm
 {
 
+enum matrix_layout_t
+{
+	L_COL,
+	L_ROW,
+	L_ROW_2D,
+	// It indicates that the layout isn't defined.
+	L_NONE,
+};
+
+enum matrix_margin
+{
+	MAR_ROW = 1,
+	MAR_COL = 2,
+	BOTH,
+};
+
 /**
  * Here defines the primitive types.
+ * The types in the list are also ordered to help arithmetic conversion.
+ * The types in the front has lower size than the ones in the end.
  */
 enum prim_type
 {
+	P_BOOL,
 	P_CHAR,
 	P_SHORT,
+	P_USHORT,
 	P_INTEGER,
+	P_UINT,
 	P_LONG,
+	P_ULONG,
 	P_FLOAT,
 	P_DOUBLE,
 	P_LDOUBLE,
-	P_BOOL,
-	P_USHORT,
-	P_UINT,
-	P_ULONG,
 	NUM_TYPES,
 };
 
@@ -123,13 +142,89 @@ inline prim_type get_type<unsigned long>()
 	return prim_type::P_ULONG;
 }
 
+template<class T>
+std::string get_type_str()
+{
+	return "unknown";
+}
+
+template<>
+inline std::string get_type_str<char>()
+{
+	return "char";
+}
+
+template<>
+inline std::string get_type_str<short>()
+{
+	return "short";
+}
+
+template<>
+inline std::string get_type_str<int>()
+{
+	return "int";
+}
+
+template<>
+inline std::string get_type_str<long>()
+{
+	return "long";
+}
+
+template<>
+inline std::string get_type_str<float>()
+{
+	return "float";
+}
+
+template<>
+inline std::string get_type_str<double>()
+{
+	return "double";
+}
+
+template<>
+inline std::string get_type_str<long double>()
+{
+	return "ldouble";
+}
+
+template<>
+inline std::string get_type_str<bool>()
+{
+	return "bool";
+}
+
+template<>
+inline std::string get_type_str<unsigned short>()
+{
+	return "ushort";
+}
+
+template<>
+inline std::string get_type_str<unsigned int>()
+{
+	return "uint";
+}
+
+template<>
+inline std::string get_type_str<unsigned long>()
+{
+	return "ulong";
+}
+
 class basic_uops;
 class basic_ops;
 class agg_ops;
 class scatter_gather;
+class conv_layout;
 class scalar_variable;
 class rand_gen;
 class set_operate;
+class set_vec_operate;
+class generic_hashtable;
+class bulk_uoperate;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -140,6 +235,8 @@ public:
 	/**
 	 * The operators that work on this type.
 	 */
+	virtual std::shared_ptr<generic_hashtable> create_hashtable(
+			const scalar_type &val_type) const = 0;
 	virtual const basic_uops &get_basic_uops() const = 0;
 	virtual const basic_ops &get_basic_ops() const = 0;
 	virtual const agg_ops &get_agg_ops() const = 0;
@@ -147,8 +244,16 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual const conv_layout &get_conv() const = 0;
 	virtual const stl_algs &get_stl_algs() const = 0;
-	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
+	virtual std::shared_ptr<const set_operate> get_set_const(
+			const scalar_variable &val) const = 0;
+	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
+			const scalar_variable &val) const = 0;
+	virtual std::shared_ptr<const set_operate> get_set_seq(
+			const scalar_variable &start, const scalar_variable &stride,
+			size_t num_rows, size_t num_cols, bool byrow,
+			matrix_layout_t layout) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 	// Create Random generator with the uniform distribution.
 	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
@@ -160,7 +265,7 @@ public:
 			const scalar_variable &var) const = 0;
 	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
 			const scalar_variable &var, const scalar_variable &seed) const = 0;
-	virtual const type_cast &get_type_cast(const scalar_type &type) const = 0;
+	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -178,6 +283,8 @@ template<class T>
 class scalar_type_impl: public scalar_type
 {
 public:
+	virtual std::shared_ptr<generic_hashtable> create_hashtable(
+			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const;
 	virtual const basic_ops &get_basic_ops() const;
 	virtual const agg_ops &get_agg_ops() const;
@@ -198,12 +305,20 @@ public:
 	}
 
 	virtual const scatter_gather &get_sg() const;
+	virtual const conv_layout &get_conv() const;
 	virtual const stl_algs &get_stl_algs() const {
 		static stl_algs_impl<T> algs;
 		return algs;
 	}
-	virtual const set_operate &get_set_const(const scalar_variable &val) const;
-	virtual const type_cast &get_type_cast(const scalar_type &type) const;
+	virtual std::shared_ptr<const set_operate> get_set_const(
+			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
+			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_operate> get_set_seq(
+			const scalar_variable &start, const scalar_variable &stride,
+			size_t num_rows, size_t num_cols, bool byrow,
+			matrix_layout_t layout) const;
+	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();
@@ -232,6 +347,13 @@ class scalar_variable
 public:
 	typedef std::shared_ptr<scalar_variable> ptr;
 	typedef std::shared_ptr<const scalar_variable> const_ptr;
+
+	template<class T>
+	static T get_val(const scalar_variable &var) {
+		assert(var.get_type() == get_scalar_type<T>());
+		const T *val = reinterpret_cast<const T *>(var.get_raw());
+		return *val;
+	}
 	/**
 	 * Get the raw representation of the type.
 	 */
@@ -250,9 +372,16 @@ public:
 	 */
 	virtual bool equals(const char *addr) const = 0;
 
+	/*
+	 * Get the text representation of the variable.
+	 */
+	virtual std::string get_name() const = 0;
+
 	virtual size_t get_size() const {
 		return get_type().get_size();
 	}
+
+	scalar_variable::ptr cast_type(const scalar_type &type) const;
 };
 
 template<class T>
@@ -298,7 +427,37 @@ public:
 	void set(T v) {
 		this->v = v;
 	}
+
+	virtual std::string get_name() const {
+		std::ostringstream conv;
+		conv << v;
+		return conv.str();
+	}
 };
+
+bool require_cast(const scalar_type &t1, const scalar_type &t2);
+
+class set_operate;
+
+template<class T>
+std::shared_ptr<const set_operate> create_urand_init(T _min, T _max)
+{
+	extern std::shared_ptr<const set_operate> create_urand_init(
+			scalar_variable::const_ptr min, scalar_variable::const_ptr max);
+	scalar_variable::const_ptr min(new scalar_variable_impl<T>(_min));
+	scalar_variable::const_ptr max(new scalar_variable_impl<T>(_max));
+	return create_urand_init(min, max);
+}
+
+template<class T>
+std::shared_ptr<const set_operate> create_nrand_init(T _mean, T _var)
+{
+	extern std::shared_ptr<const set_operate> create_nrand_init(
+			scalar_variable::const_ptr mean, scalar_variable::const_ptr var);
+	scalar_variable::const_ptr mean(new scalar_variable_impl<T>(_mean));
+	scalar_variable::const_ptr var(new scalar_variable_impl<T>(_var));
+	return create_nrand_init(mean, var);
+}
 
 }
 

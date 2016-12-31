@@ -3,7 +3,9 @@
 use strict;
 
 # This is optimized for sequential I/O on SSDs.
-my $max_block_size = 4096;
+# This block size is for OCZ SSDs. We need to set the size differently
+# for different SSDs.
+my $max_block_size = 8192;
 
 # this file mounts SSDs to their corresponding directories and sets
 # up data files correctly.

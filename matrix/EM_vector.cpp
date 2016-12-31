@@ -34,6 +34,8 @@
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
 #include "matrix_store.h"
+#include "bulk_operate_ext.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
@@ -49,14 +51,13 @@ namespace
  */
 class portion_write_complete: public portion_compute
 {
-	local_buf_vec_store::const_ptr store;
+	vec_store::const_ptr store;
 public:
-	portion_write_complete(local_buf_vec_store::const_ptr store) {
+	portion_write_complete(vec_store::const_ptr store) {
 		this->store = store;
 	}
 
 	virtual void run(char *buf, size_t size) {
-		assert(store->get_raw_arr() == buf);
 		assert(store->get_length() * store->get_entry_size() == size);
 	}
 };
@@ -127,6 +128,9 @@ public:
 
 void seq_writer::flush_buffer_data(bool last)
 {
+	if (data_size_in_buf == 0)
+		return;
+
 	if (!last)
 		assert((data_size_in_buf * buf->get_length()) % PAGE_SIZE == 0);
 	else
@@ -154,6 +158,19 @@ void seq_writer::append(local_vec_store::const_ptr data)
 	off_t off_in_new_data = 0;
 	size_t new_data_size = data->get_length();
 
+	// If possible, we want to write data to disks directly
+	// to avoid extra memory copy as below.
+	size_t entry_size = data->get_type().get_size();
+	long addr = (long) data->get_raw_arr();
+	if ((data->get_length() * entry_size) % PAGE_SIZE == 0
+			&& (buf->get_length() * entry_size) % PAGE_SIZE == 0
+			&& addr % PAGE_SIZE == 0) {
+		flush_buffer_data(false);
+		to_vec->write_portion_async(data, merge_end);
+		merge_end += data->get_length();
+		return;
+	}
+
 	while (new_data_size > 0) {
 		size_t copy_data_size = std::min(new_data_size,
 				// The size of the available space in the buffer.
@@ -162,7 +179,6 @@ void seq_writer::append(local_vec_store::const_ptr data)
 		// the local buffer to disks. The reason of doing so is to
 		// make sure the size and offset of data written to disks
 		// are aligned to the I/O block size.
-		// TODO maybe we should remove this extra memory copy.
 		memcpy(buf->get(data_size_in_buf), data->get(off_in_new_data),
 				copy_data_size * buf->get_entry_size());
 		data_size_in_buf += copy_data_size;
@@ -200,6 +216,7 @@ EM_vec_store::EM_vec_store(safs::file_io_factory::shared_ptr factory): vec_store
 {
 	holder = file_holder::create(factory->get_name());
 	ios = io_set::ptr(new io_set(factory));
+	file_size = factory->get_file_size();
 }
 
 EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
@@ -207,6 +224,7 @@ EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(
 {
 	holder = store.holder;
 	ios = store.ios;
+	file_size = store.file_size;
 }
 
 EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
@@ -217,17 +235,59 @@ EM_vec_store::EM_vec_store(size_t length, const scalar_type &type): vec_store(
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
 	ios = io_set::ptr(new io_set(factory));
+	file_size = length * type.get_size();
 }
 
 EM_vec_store::~EM_vec_store()
 {
 }
 
-bool EM_vec_store::resize(size_t length)
+size_t EM_vec_store::get_reserved_size() const
 {
-	// TODO
-	assert(0);
-	return false;
+	return file_size / get_type().get_size();
+}
+
+bool EM_vec_store::reserve(size_t num_eles)
+{
+	size_t new_size = num_eles * get_type().get_size();
+	if (new_size <= file_size)
+		return true;
+
+	// If the vector has data, we don't need to do anything to reserve space
+	// on disks. When we write data to the location behind the end of the file,
+	// the filesystem will automatically allocate space on disks.
+	// The only problem is that the data will be scattered across the disks
+	// if we don't allocate space in advance.
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	bool ret = f.resize(new_size);
+	if (!ret)
+		return false;
+	else {
+		file_size = new_size;
+		return true;
+	}
+}
+
+bool EM_vec_store::resize(size_t new_length)
+{
+	if (new_length == get_length())
+		return true;
+
+	size_t tot_len = get_reserved_size();
+	// We don't want to allocate space when shrinking the vector.
+	if (new_length <= tot_len)
+		return vec_store::resize(new_length);
+
+	size_t old_length = get_length();
+	size_t real_length = old_length;
+	if (real_length == 0)
+		real_length = 1;
+	for (; real_length < new_length; real_length *= 2);
+	bool ret = reserve(real_length);
+	if (!ret)
+		return false;
+	else
+		return vec_store::resize(new_length);
 }
 
 namespace
@@ -279,6 +339,58 @@ bool EM_vec_append_dispatcher::issue_task()
 
 }
 
+bool EM_vec_store::append_async(
+		std::vector<vec_store::const_ptr>::const_iterator vec_start,
+		std::vector<vec_store::const_ptr>::const_iterator vec_end)
+{
+	size_t entry_size = get_type().get_size();
+	if ((get_length() * entry_size) % PAGE_SIZE) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector needs to have filled the last page";
+		return false;
+	}
+
+	size_t tot_size = 0;
+	for (auto it = vec_start; it != vec_end; it++) {
+		auto vec = *it;
+		tot_size += vec->get_length();
+		if (get_type() != vec->get_type()
+				|| (vec->get_length() * entry_size) % PAGE_SIZE
+				|| !vec->is_in_mem()
+				|| vec->get_num_nodes() > 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "can't append a vector with different type\n"
+				<< "or with the size not aligned with the page size\n"
+				<< "or stored on disks or in NUMA memory\n";
+			return false;
+		}
+	}
+	bool ret = reserve(get_length() + tot_size);
+	if (!ret) {
+		assert(0);
+		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
+		return false;
+	}
+
+	size_t off = get_length();
+	for (auto it = vec_start; it != vec_end; it++) {
+		auto vec = *it;
+		// The input vectors might be local vectors.
+		local_vec_store::const_ptr data
+			= std::dynamic_pointer_cast<const local_vec_store>(vec);
+		if (data == NULL)
+			data = vec->get_portion(0, vec->get_length());
+		assert(((long) data->get_raw_arr()) % PAGE_SIZE == 0);
+		// We need to make sure that the memory in the original input
+		// vector exists until the write completes.
+		portion_compute::ptr compute(new portion_write_complete(vec));
+		write_portion_async(data, compute, off);
+		off += data->get_length();
+	}
+
+	return vec_store::resize(get_length() + tot_size);
+}
+
 bool EM_vec_store::append(
 		std::vector<vec_store::const_ptr>::const_iterator vec_start,
 		std::vector<vec_store::const_ptr>::const_iterator vec_end)
@@ -291,6 +403,12 @@ bool EM_vec_store::append(
 				<< "can't append a vector with different type";
 			return false;
 		}
+	}
+	bool ret = reserve(get_length() + tot_size);
+	if (!ret) {
+		assert(0);
+		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
+		return false;
 	}
 
 	/*
@@ -492,7 +610,7 @@ local_vec_store::const_ptr EM_vec_store::get_portion(off_t loc, size_t size) con
 local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 {
 	if (orig_loc + orig_size > get_length()) {
-		BOOST_LOG_TRIVIAL(error) << "Out of boundary";
+		BOOST_LOG_TRIVIAL(error) << "get_portion: out of boundary";
 		return local_vec_store::ptr();
 	}
 
@@ -512,7 +630,7 @@ local_vec_store::ptr EM_vec_store::get_portion(off_t orig_loc, size_t orig_size)
 }
 
 void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
-		off_t off)
+		portion_compute::ptr compute, off_t off)
 {
 	off_t start = off;
 	if (start < 0)
@@ -524,11 +642,17 @@ void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
 	safs::data_loc_t loc(io.get_file_id(), off_in_bytes);
 	safs::io_request req(const_cast<char *>(store->get_raw_arr()), loc,
 			store->get_length() * store->get_entry_size(), WRITE);
-	portion_compute::ptr compute(new portion_write_complete(store));
 	static_cast<portion_callback &>(io.get_callback()).add(req, compute);
 	io.access(&req, 1);
 	// TODO I might want to flush requests later.
 	io.flush_requests();
+}
+
+void EM_vec_store::write_portion_async(local_vec_store::const_ptr store,
+		off_t off)
+{
+	portion_compute::ptr compute(new portion_write_complete(store));
+	write_portion_async(store, compute, off);
 }
 
 void EM_vec_store::reset_data()
@@ -961,6 +1085,7 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 		size_t merge_size = 0;
 		local_buf_vec_store::const_ptr prev_leftover
 			= dispatcher.get_prev_leftover(0);
+		agg_operate::const_ptr find_next = type.get_agg_ops().get_find_next();
 		// We go through all the buffers to be merged and merge elements
 		// that are smaller than `min_val' and keep all elements in the `leftover'
 		// buffer, which have been read from the disks but are larger than
@@ -982,8 +1107,7 @@ void EM_vec_merge_compute::run(char *buf, size_t size)
 				if ((size_t) leftover_start < tot_len && min_val->equals(start
 							+ leftover_start * entry_size)) {
 					size_t rel_loc;
-					type.get_agg_ops().get_find_next().run(
-							tot_len - leftover_start,
+					find_next->runAgg(tot_len - leftover_start,
 							start + leftover_start * entry_size, &rel_loc);
 					// There is at least one element with the same value as
 					// `min_val'.
@@ -1450,18 +1574,36 @@ void EM_vec_store::set_data(const set_vec_operate &op)
 	threads->wait4complete();
 }
 
-matrix_store::const_ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
-			bool byrow) const
+matrix_store::ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
+			bool byrow)
 {
-	BOOST_LOG_TRIVIAL(error)
-		<< "can't convert an EM vector to a matrix";
-	return matrix_store::ptr();
+	if (nrow > 1 && ncol > 1) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't convert an EM vector to a multi-row or multi-col matrix";
+		return matrix_store::ptr();
+	}
+
+	// Store the header as the metadata.
+	matrix_layout_t layout
+		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	std::vector<char> header_buf(matrix_header::get_header_size());
+	new (header_buf.data()) matrix_header(matrix_type::DENSE,
+			get_type().get_size(), nrow, ncol, layout, get_type().get_type());
+	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	bool ret = f.set_user_metadata(header_buf);
+	assert(ret);
+	return EM_matrix_store::create(holder, ios, nrow, ncol, layout, get_type());
 }
 
 bool EM_vec_store::set_persistent(const std::string &name)
 {
 	if (!holder->set_persistent(name))
 		return false;
+
+	// We need to expose the right number of bytes to the user of the file.
+	safs::safs_file f(safs::get_sys_RAID_conf(), name);
+	f.resize(get_length() * get_type().get_size());
+
 	// TODO we have to make sure no other threads are accessing the data
 	// in the vector. How can we do that?
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(

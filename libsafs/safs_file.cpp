@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -85,11 +85,12 @@ bool safs_file::exist() const
 	return true;
 }
 
-ssize_t safs_file::get_size() const
+/*
+ * This returns the absolute path of the data files.
+ */
+std::vector<std::string> safs_file::get_data_files() const
 {
-	if (!exist())
-		return -1;
-	size_t ret = 0;
+	std::vector<std::string> files;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[i].get_file_name());
 		std::vector<std::string> local_files;
@@ -97,16 +98,92 @@ ssize_t safs_file::get_size() const
 		if (local_files.size() > 1)
 			local_files = erase_header_file(local_files);
 		assert(local_files.size() == 1);
-		native_file f(dir.get_name() + "/" + local_files[0]);
+		files.push_back(dir.get_name() + "/" + local_files[0]);
+	}
+	return files;
+}
+
+ssize_t safs_file::get_size() const
+{
+	if (!exist())
+		return -1;
+	size_t ret = 0;
+	std::vector<std::string> data_files = get_data_files();
+	for (unsigned i = 0; i < data_files.size(); i++) {
+		native_file f(data_files[i]);
 		ret += f.get_size();
 	}
 	return ret;
 }
 
+bool safs_file::resize(size_t new_size)
+{
+	if (!exist()) {
+		fprintf(stderr, "%s doesn't exist\n", name.c_str());
+		return false;
+	}
+
+	// TODO right now we can only extend the file size.
+	// otherwise, the system on top of it doesn't work correctly.
+	// Why?
+	ssize_t orig_size = get_size();
+	assert(orig_size >= 0);
+	if ((size_t) orig_size < new_size) {
+		std::vector<std::string> data_files = get_data_files();
+		size_t size_per_disk = get_size_per_disk(new_size);
+		for (size_t i = 0; i < data_files.size(); i++) {
+			native_file f(data_files[i]);
+			bool ret = f.resize(size_per_disk);
+			if (!ret)
+				return false;
+		}
+	}
+
+	// Save the new file size to the header of the SAFS file.
+	std::string header_file = get_header_file();
+	printf("header file: %s\n", header_file.c_str());
+	if (!file_exist(header_file))
+		return false;
+	FILE *f = fopen(header_file.c_str(), "r+");
+	if (f == NULL) {
+		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
+		return false;
+	}
+
+	safs_header header;
+	size_t num_reads = fread(&header, sizeof(header), 1, f);
+	if (num_reads != 1) {
+		perror("fread");
+		fclose(f);
+		return false;
+	}
+	int seek_ret = fseek(f, 0, SEEK_SET);
+	if (seek_ret < 0) {
+		perror("seek");
+		fclose(f);
+		return false;
+	}
+
+	safs_header new_header(header.get_block_size(),
+			header.get_mapping_option(), header.is_writable(),
+			new_size);
+	size_t num_writes = fwrite(&new_header, sizeof(new_header), 1, f);
+	if (num_writes != 1) {
+		perror("fwrite");
+		fclose(f);
+		return false;
+	}
+	fclose(f);
+	return true;
+}
+
 bool safs_file::rename(const std::string &new_name)
 {
-	if (!exist())
+	if (!exist()) {
+		fprintf(stderr, "can't rename: the new name %s exists\n",
+				new_name.c_str());
 		return false;
+	}
 
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_file f(native_dirs[i].get_file_name());
@@ -122,13 +199,18 @@ bool safs_file::rename(const std::string &new_name)
 	return true;
 }
 
-bool safs_file::create_file(size_t file_size, int block_size,
-		int mapping_option, safs_file_group::ptr group)
+size_t safs_file::get_size_per_disk(size_t file_size) const
 {
 	size_t size_per_disk = file_size / native_dirs.size();
 	if (file_size % native_dirs.size() > 0)
 		size_per_disk++;
-	size_per_disk = ROUNDUP(size_per_disk, 512);
+	return ROUNDUP(size_per_disk, 512);
+}
+
+bool safs_file::create_file(size_t file_size, int block_size,
+		int mapping_option, safs_file_group::ptr group)
+{
+	size_t size_per_disk = get_size_per_disk(file_size);
 
 	// We use the random index to reorder the native directories.
 	// So different files map their data chunks to disks in different order.
@@ -150,7 +232,6 @@ bool safs_file::create_file(size_t file_size, int block_size,
 		// We store the metadata of the SAFS in the directory that
 		// stores the first part.
 		if (i == 0) {
-			printf("the first part is in %s\n", dir.get_name().c_str());
 			header_file = dir.get_name() + "/header";
 			FILE *f = fopen(header_file.c_str(), "w");
 			if (f == NULL) {
@@ -204,10 +285,8 @@ std::string safs_file::get_header_file() const
 safs_header safs_file::get_header() const
 {
 	std::string header_file = get_header_file();
-	if (!file_exist(header_file)) {
-		fprintf(stderr, "%s doesn't exist\n", header_file.c_str());
+	if (!file_exist(header_file))
 		return safs_header();
-	}
 	FILE *f = fopen(header_file.c_str(), "r");
 	if (f == NULL) {
 		fprintf(stderr, "fopen %s: %s\n", header_file.c_str(), strerror(errno));
@@ -279,6 +358,120 @@ std::vector<char> safs_file::get_user_metadata() const
 	ret = fclose(f);
 	assert(ret == 0);
 	return data;
+}
+
+namespace
+{
+
+ssize_t complete_read(int fd, char *buf, size_t count)
+{
+	ssize_t bytes = 0;
+	do {
+		ssize_t ret = read(fd, buf, count);
+		if (ret < 0)
+			return ret;
+		if (ret == 0)
+			return bytes;
+		bytes += ret;
+		count -= ret;
+		buf += ret;
+	} while (count > 0);
+	return bytes;
+}
+
+class data_source
+{
+public:
+	virtual ssize_t get_data(off_t off, size_t size, char *buf) const = 0;
+	virtual size_t get_size() const = 0;
+};
+
+class file_data_source: public data_source
+{
+	int fd;
+	size_t file_size;
+
+	file_data_source(int fd, size_t file_size) {
+		this->fd = fd;
+		this->file_size = file_size;
+	}
+public:
+	// Create a data source that contains `size' bytes.
+	static std::shared_ptr<file_data_source> create(const std::string &ext_file,
+			size_t size) {
+		int fd = open(ext_file.c_str(), O_RDONLY);
+		if (fd < 0) {
+			fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(), strerror(errno));
+			return std::shared_ptr<file_data_source>();
+		}
+		native_file f(ext_file);
+		size_t file_size = f.get_size();
+		if (size > file_size)
+			size = file_size;
+		return std::shared_ptr<file_data_source>(new file_data_source(fd, size));
+	}
+
+	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
+		long new_off = lseek(fd, off, SEEK_SET);
+		BOOST_VERIFY(new_off == off);
+		ssize_t ret = complete_read(fd, buf, size);
+		if (ret < 0) {
+			perror("complete_read");
+			exit(-1);
+		}
+		return ret;
+	}
+
+	virtual size_t get_size() const {
+		return file_size;
+	}
+};
+
+const int BUF_SIZE = 1024 * 64 * 4096;
+
+}
+
+bool safs_file::load_data(const std::string &ext_file, size_t block_size)
+{
+	std::shared_ptr<data_source> source = file_data_source::create(ext_file,
+			get_size());
+	if (source == NULL)
+		return false;
+
+	// If the file in SAFS doesn't exist, create a new one.
+	if (!exist())
+		create_file(source->get_size(), block_size);
+
+	file_io_factory::shared_ptr factory = create_io_factory(name,
+			REMOTE_ACCESS);
+	if (factory == NULL) {
+		fprintf(stderr, "can't create I/O factory\n");
+		return false;
+	}
+	assert((size_t) factory->get_file_size() >= source->get_size());
+
+	thread *curr_thread = thread::get_curr_thread();
+	assert(curr_thread);
+	io_interface::ptr io = create_io(factory, curr_thread);
+
+	char *buf = (char *) valloc(BUF_SIZE);
+	off_t off = 0;
+
+	while (off < (off_t) source->get_size()) {
+		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
+		size_t ret = source->get_data(off, size, buf);
+		assert(ret == size);
+		ssize_t write_bytes = ROUNDUP(ret, 512);
+		memset(buf + size, 0, write_bytes - size);
+		data_loc_t loc(io->get_file_id(), off);
+		io_request req(buf, loc, write_bytes, WRITE);
+		io->access(&req, 1);
+		io->wait4complete(1);
+		off += write_bytes;
+	}
+	io->cleanup();
+	free(buf);
+	return true;
 }
 
 size_t get_all_safs_files(std::set<std::string> &files)
@@ -409,6 +602,24 @@ safs_file_group::ptr safs_file_group::create(const RAID_config &conf,
 			fprintf(stderr, "unknow group type: %d\n", type);
 			return safs_file_group::ptr();
 	}
+}
+
+bool exist_safs_file(const std::string &name)
+{
+	if (!is_safs_init())
+		return false;
+
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), name);
+	return mat_f.exist();
+}
+
+ssize_t get_safs_size(const std::string &name)
+{
+	if (!is_safs_init())
+		return -1;
+
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), name);
+	return mat_f.get_size();
 }
 
 }

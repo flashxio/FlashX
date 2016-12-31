@@ -19,18 +19,93 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#ifdef USE_OPENBLAS
+#include <openblas/cblas.h>
+#endif
 
 #include "sparse_matrix.h"
-#include "matrix_worker_thread.h"
 #include "matrix_io.h"
 #include "matrix_config.h"
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
 
 matrix_config matrix_conf;
+
+namespace detail
+{
+
+row_portions::row_portions()
+{
+	portion_size_log = 0;
+	portion_mask = 0;
+	num_cols = 0;
+	entry_size = 0;
+	tot_num_rows = 0;
+}
+
+row_portions::ptr row_portions::create(matrix_store::const_ptr mat,
+		size_t block_size)
+{
+	if (mat->is_wide()) {
+		BOOST_LOG_TRIVIAL(error) << "the matrix needs to be tall-and-skinny";
+		return row_portions::ptr();
+	}
+
+	// The portion size of the input dense matrix and the block size
+	// of the sparse matrix may not match. If the block size is too small,
+	// we can use the portion size directly.
+	size_t portion_size = mat->get_portion_size().first;
+	if (block_size < portion_size) {
+		assert(portion_size % block_size == 0);
+		block_size = portion_size;
+	}
+	row_portions::ptr ret(new row_portions());
+	ret->portion_size_log = log2(block_size);
+	ret->portion_mask = (1UL << ret->portion_size_log) - 1;
+	ret->num_cols = mat->get_num_cols();
+	ret->entry_size = mat->get_entry_size();
+	ret->tot_num_rows = mat->get_num_rows();
+	size_t num_portions = div_ceil<size_t>(mat->get_num_rows(), block_size);
+	ret->portions.resize(num_portions);
+	ret->raw_portions.resize(num_portions);
+	size_t row_idx = 0;
+	for (size_t i = 0; i < ret->portions.size(); i++) {
+		size_t num_rows = std::min(block_size, mat->get_num_rows() - row_idx);
+		ret->portions[i] = mat->get_portion(row_idx, 0, num_rows,
+				mat->get_num_cols());
+		row_idx += num_rows;
+		if (ret->portions[i] == NULL) {
+			BOOST_LOG_TRIVIAL(error) << "Can't get row portions";
+			return row_portions::ptr();
+		}
+		ret->raw_portions[i] = ret->portions[i]->get_raw_arr();
+		if (ret->raw_portions[i] == NULL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Data in portions isn't stored contiguously";
+			return row_portions::ptr();
+		}
+	}
+	return ret;
+}
+
+const char *row_portions::get_rows(size_t start_row, size_t end_row) const
+{
+	size_t local_row_idx = start_row & portion_mask;
+	size_t portion_idx = start_row >> portion_size_log;
+	if (portion_idx != ((end_row - 1) >> portion_size_log)) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"The required rows [%1%, %2%) aren't in the same portion")
+			% start_row % end_row;
+		return NULL;
+	}
+	else
+		return raw_portions[portion_idx]
+			+ local_row_idx * num_cols * entry_size;
+}
 
 /*
  * This processes the blocks in the their original order.
@@ -152,13 +227,13 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 	off_t orig_off = io.get_loc().get_offset();
 	off = ROUND_PAGE(orig_off);
 	real_io_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
-	buf = detail::local_mem_buffer::get_irreg();
+	buf = local_mem_buffer::get_irreg();
 	// If there isn't a buffer available in the local thread or the local buffer
 	// is smaller than required, we allocate a new buffer.
 	// The smaller buffer will be deallocated if it exists.
 	if (buf.second == NULL || buf.first < real_io_size) {
 		std::shared_ptr<char> tmp((char *) valloc(real_io_size), buf_deleter());
-		buf = detail::local_mem_buffer::irreg_buf_t(real_io_size, tmp);
+		buf = local_mem_buffer::irreg_buf_t(real_io_size, tmp);
 	}
 
 	// The last entry in the vector indicates the end of the last block row.
@@ -184,7 +259,7 @@ block_compute_task::block_compute_task(const matrix_io &_io,
 
 block_compute_task::~block_compute_task()
 {
-	detail::local_mem_buffer::cache_irreg(buf);
+	local_mem_buffer::cache_irreg(buf);
 }
 
 /*
@@ -222,6 +297,7 @@ void block_compute_task::run(char *buf, size_t size)
 	do {
 		has_blocks = false;
 		// Get a super block.
+		// TODO this process might be computationally expensive itself.
 		for (size_t i = 0; i < num_blocks; i++) {
 			for (size_t j = 0; j < num_blocks; j++) {
 				size_t idx = i * num_blocks + j;
@@ -255,21 +331,17 @@ void block_compute_task::run(char *buf, size_t size)
 	notify_complete();
 }
 
-block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
-		detail::mem_matrix_store &_output, const matrix_io &io,
-		const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
-			io, mat, order), input(_input), output(_output)
+block_spmm_task::block_spmm_task(row_portions::ptr in_row_portions,
+		matrix_store &_output, EM_matrix_stream::ptr stream,
+		const matrix_io &io, const sparse_matrix &mat,
+		block_exec_order::ptr order): block_compute_task(
+			io, mat, order), output(_output)
 {
+	this->in_row_portions = in_row_portions;
+	this->output_stream = stream;
 	entry_size = mat.get_entry_size();
 	// We have to make sure the task processes the entire block rows.
 	assert(io.get_num_cols() == mat.get_num_cols());
-}
-
-const char *block_spmm_task::get_in_rows(size_t start_row, size_t num_rows)
-{
-	const char *ret = input.get_rows(start_row, start_row + num_rows);
-	assert(ret);
-	return ret;
 }
 
 char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
@@ -280,16 +352,10 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 	size_t block_num_rows = std::min(get_io().get_num_rows(),
 			output.get_num_rows() - block_row_start);
 	if (out_part == NULL) {
-		size_t out_part_size = output.get_portion_size().first;
-		size_t out_part_id = block_row_start / out_part_size;
-		// It's guaranteed that all output rows are stored contiguously together.
-		assert((block_row_start + block_num_rows - 1) / out_part_size
-				== out_part_id);
-
 		// We maintain a local buffer for the corresponding part of
 		// the output matrix.
-		out_part = detail::local_row_matrix_store::ptr(
-				new detail::local_buf_row_matrix_store(block_row_start, 0,
+		out_part = local_row_matrix_store::ptr(
+				new local_buf_row_matrix_store(block_row_start, 0,
 					block_num_rows, output.get_num_cols(), output.get_type(),
 					// we allocate the buffer in the local node.
 					-1));
@@ -298,9 +364,9 @@ char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 
 	// Get the contiguous rows in the input and output matrices.
 	size_t local_start = start_row - out_part->get_global_start_row();
-	size_t local_end = std::min(local_start + num_rows,
-			out_part->get_num_rows());
-	return out_part->get_rows(local_start, local_end);
+	assert(local_start + num_rows <= out_part->get_num_rows());
+	return out_part->get_raw_arr()
+		+ local_start * out_part->get_num_cols() * out_part->get_entry_size();
 }
 
 void block_spmm_task::notify_complete()
@@ -312,41 +378,106 @@ void block_spmm_task::notify_complete()
 		size_t block_row_start = get_io().get_top_left().get_row_idx();
 		size_t block_num_rows = std::min(get_io().get_num_rows(),
 				output.get_num_rows() - block_row_start);
-		detail::local_matrix_store::ptr tmp = output.get_portion(
-				block_row_start, 0, block_num_rows, output.get_num_cols());
-		assert(tmp);
-		tmp->reset_data();
+		if (output.is_in_mem()) {
+			local_matrix_store::ptr tmp = output.get_portion(
+					block_row_start, 0, block_num_rows, output.get_num_cols());
+			assert(tmp);
+			tmp->reset_data();
+		}
+		else {
+			local_matrix_store::ptr out_part(
+					new local_buf_row_matrix_store(block_row_start, 0,
+						block_num_rows, output.get_num_cols(), output.get_type(),
+						// we allocate the buffer in the local node.
+						-1));
+			out_part->reset_data();
+			output_stream->write_async(out_part, block_row_start, 0);
+		}
 	}
-	else
-		output.get_portion(out_part->get_global_start_row(),
-				out_part->get_global_start_col(), out_part->get_num_rows(),
-				out_part->get_num_cols())->copy_from(*out_part);
+	else {
+		if (output.is_in_mem()) {
+			local_matrix_store::ptr tmp = output.get_portion(
+					out_part->get_global_start_row(),
+					out_part->get_global_start_col(), out_part->get_num_rows(),
+					out_part->get_num_cols());
+			assert(tmp);
+			tmp->copy_from(*out_part);
+		}
+		else
+			output_stream->write_async(out_part,
+					out_part->get_global_start_row(),
+					out_part->get_global_start_col());
+	}
 }
 
-void sparse_matrix::compute(task_creator::ptr creator,
-		size_t num_block_rows) const
+/*
+ * This is shared by all threads.
+ */
+class spm_dispatcher: public task_dispatcher
+{
+	matrix_io_generator::ptr io_gen;
+	EM_object::io_set::ptr ios;
+	task_creator::ptr tcreator;
+public:
+	spm_dispatcher(matrix_io_generator::ptr io_gen,
+			EM_object::io_set::ptr ios, task_creator::ptr tcreator) {
+		this->io_gen = io_gen;
+		this->ios = ios;
+		this->tcreator = tcreator;
+	}
+
+	virtual bool issue_task();
+};
+
+bool spm_dispatcher::issue_task()
+{
+	matrix_io mio = io_gen->get_next_io();
+	if (!mio.is_valid())
+		return false;
+
+	compute_task::ptr task = tcreator->create(mio);
+	safs::io_request req = task->get_request();
+	safs::io_interface &io = ios->get_curr_io();
+	portion_callback &cb = static_cast<portion_callback &>(io.get_callback());
+	cb.add(req, task);
+	io.access(&req, 1);
+	return true;
+}
+
+}
+
+void sparse_matrix::compute(detail::task_creator::ptr creator,
+		const detail::matrix_store &in) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
 	// allocation. We should delete them all before running SpMM.
 	detail::local_mem_buffer::clear_bufs();
-	int num_workers = matrix_conf.get_num_SpM_threads();
-	int num_nodes = safs::params.get_num_nodes();
-	std::vector<matrix_worker_thread::ptr> workers(num_workers);
-	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
-	init_io_gens(num_block_rows, io_gens);
+	detail::mem_thread_pool::ptr threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int num_workers = threads->get_num_threads();
+	matrix_io_generator::ptr io_gen = create_io_gen(in);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
-	for (int i = 0; i < num_workers; i++) {
-		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
-				get_io_factory(), io_gens, creator);
-		t->start();
-		workers[i] = t;
+	if (ios == NULL) {
+		sparse_matrix *mutable_this = const_cast<sparse_matrix *>(this);
+		mutable_this->ios = detail::EM_object::io_set::ptr(
+				new detail::EM_object::io_set(get_io_factory()));
 	}
-	for (int i = 0; i < num_workers; i++)
-		workers[i]->join();
+	detail::spm_dispatcher::ptr dispatcher(new detail::spm_dispatcher(io_gen,
+				ios, creator));
+	for (int i = 0; i < num_workers; i++) {
+		detail::io_worker_task *task = new detail::io_worker_task(dispatcher);
+		const detail::EM_object *sp_obj = this;
+		task->register_EM_obj(const_cast<detail::EM_object *>(sp_obj));
+		std::vector<detail::EM_object *> em_objs = creator->get_EM_objs();
+		for (size_t i = 0; i < em_objs.size(); i++)
+			task->register_EM_obj(em_objs[i]);
+		threads->process_task(i % threads->get_num_nodes(), task);
+	}
+	threads->wait4complete();
+	creator->complete();
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -355,6 +486,9 @@ void sparse_matrix::compute(task_creator::ptr creator,
 }
 
 ///////////// The code for sparse matrix of the FlashGraph format //////////////
+
+namespace detail
+{
 
 void fg_row_compute_task::run(char *buf, size_t size)
 {
@@ -392,15 +526,24 @@ public:
 	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
+	virtual sparse_matrix::ptr transpose() const {
+		return sparse_matrix::ptr(new fg_sparse_sym_matrix(*this));
 	}
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
 		return factory;
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const;
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		assert(!in.is_wide());
+		size_t num_rows = in.get_portion_size().first;
+		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
+				num_rows / matrix_conf.get_row_block_size());
+		row_block_mapper mapper(blocks, num_brows);
+		return matrix_io_generator::create(blocks, get_num_rows(),
+				get_num_cols(), factory->get_file_id(), mapper);
+	}
 
 	virtual const block_2d_size &get_block_size() const {
 		return block_size;
@@ -460,17 +603,6 @@ sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg,
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_sym_matrix::init_io_gens(size_t num_block_rows,
-		std::vector<matrix_io_generator::ptr> &io_gens) const
-{
-	for (size_t i = 0; i < io_gens.size(); i++) {
-		row_block_mapper mapper(blocks, i, io_gens.size(),
-				matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
-}
-
 /*
  * Sparse asymmetric square matrix. It is partitioned in rows.
  */
@@ -479,17 +611,19 @@ class fg_sparse_asym_matrix: public sparse_matrix
 	block_2d_size block_size;
 	// These work like the index of the sparse matrix.
 	// out_blocks index the original matrix.
-	std::vector<row_block> out_blocks;
+	std::shared_ptr<std::vector<row_block> > out_blocks;
 	// in_blocks index the transpose of the matrix.
-	std::vector<row_block> in_blocks;
+	std::shared_ptr<std::vector<row_block> > in_blocks;
 	safs::file_io_factory::shared_ptr factory;
-	bool transposed;
 
 	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
 			size_t nrows, const scalar_type *entry_type): sparse_matrix(
 				nrows, entry_type, false) {
-		transposed = false;
 		this->factory = factory;
+		out_blocks = std::shared_ptr<std::vector<row_block> >(
+				new std::vector<row_block>());
+		in_blocks = std::shared_ptr<std::vector<row_block> >(
+				new std::vector<row_block>());
 	}
 public:
 	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
@@ -498,13 +632,24 @@ public:
 		return factory;
 	}
 
-	virtual void transpose() {
-		transposed = !transposed;
-		sparse_matrix::transpose();
+	virtual sparse_matrix::ptr transpose() const {
+		fg_sparse_asym_matrix *ret = new fg_sparse_asym_matrix(*this);
+		ret->sparse_matrix::_transpose();
+		ret->out_blocks = this->in_blocks;
+		ret->in_blocks = this->out_blocks;
+		return sparse_matrix::ptr(ret);
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const;
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		assert(!in.is_wide());
+		size_t num_rows = in.get_portion_size().first;
+		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
+				num_rows / matrix_conf.get_row_block_size());
+		row_block_mapper mapper(*out_blocks, num_brows);
+		return matrix_io_generator::create(*out_blocks, get_num_rows(),
+				get_num_cols(), factory->get_file_id(), mapper);
+	}
 
 	virtual const block_2d_size &get_block_size() const {
 		return block_size;
@@ -543,13 +688,13 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 		for (size_t i = 0; i < num_vertices;
 				i += matrix_conf.get_row_block_size()) {
 			fg::directed_vertex_entry ventry = dindex->get_vertex(i);
-			m->out_blocks.emplace_back(ventry.get_out_off());
-			m->in_blocks.emplace_back(ventry.get_in_off());
+			m->out_blocks->emplace_back(ventry.get_out_off());
+			m->in_blocks->emplace_back(ventry.get_in_off());
 		}
 		fg::directed_vertex_entry ventry = dindex->get_vertex(num_vertices - 1);
-		m->out_blocks.emplace_back(ventry.get_out_off()
+		m->out_blocks->emplace_back(ventry.get_out_off()
 				+ dindex->get_out_size(num_vertices - 1));
-		m->in_blocks.emplace_back(ventry.get_in_off()
+		m->in_blocks->emplace_back(ventry.get_in_off()
 				+ dindex->get_in_size(num_vertices - 1));
 	}
 	else {
@@ -559,31 +704,21 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
 		for (size_t i = 0; i < num_vertices;
 				i += matrix_conf.get_row_block_size()) {
 			fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
-			m->out_blocks.emplace_back(info.get_off());
+			m->out_blocks->emplace_back(info.get_off());
 
 			info = dindex->get_vertex_info_in(i);
-			m->in_blocks.emplace_back(info.get_off());
+			m->in_blocks->emplace_back(info.get_off());
 		}
 		fg::ext_mem_vertex_info info
 			= dindex->get_vertex_info_out(num_vertices - 1);
-		m->out_blocks.emplace_back(info.get_off() + info.get_size());
+		m->out_blocks->emplace_back(info.get_off() + info.get_size());
 		info = dindex->get_vertex_info_in(num_vertices - 1);
-		m->in_blocks.emplace_back(info.get_off() + info.get_size());
+		m->in_blocks->emplace_back(info.get_off() + info.get_size());
 	}
 
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_asym_matrix::init_io_gens(size_t num_block_rows,
-		std::vector<matrix_io_generator::ptr> &io_gens) const
-{
-	for (size_t i = 0; i < io_gens.size(); i++) {
-		row_block_mapper mapper(transposed ? in_blocks : out_blocks,
-				i, io_gens.size(), matrix_conf.get_rb_io_size());
-		io_gens[i] = matrix_io_generator::create(
-				transposed ? in_blocks : out_blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
 }
 
 sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg,
@@ -591,12 +726,15 @@ sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg,
 {
 	const fg::graph_header &header = fg->get_graph_header();
 	if (header.is_directed_graph())
-		return fg_sparse_asym_matrix::create(fg, entry_type);
+		return detail::fg_sparse_asym_matrix::create(fg, entry_type);
 	else
-		return fg_sparse_sym_matrix::create(fg, entry_type);
+		return detail::fg_sparse_sym_matrix::create(fg, entry_type);
 }
 
 /////////////// The code for native 2D-partitioned sparse matrix ///////////////
+
+namespace detail
+{
 
 class block_sparse_matrix: public sparse_matrix
 {
@@ -631,16 +769,23 @@ public:
 	}
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
+	virtual sparse_matrix::ptr transpose() const {
+		return sparse_matrix::ptr(new block_sparse_matrix(*this));
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const {
-		for (size_t i = 0; i < io_gens.size(); i++) {
-			row_block_mapper mapper(*index, i, io_gens.size(), num_block_rows);
-			io_gens[i] = matrix_io_generator::create(index,
-					factory->get_file_id(), mapper);
-		}
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		// For 2D-partitioned sparse matrix, we access blocks in super blocks.
+		// The super block size should be CPU-cache friendly as well as I/O
+		// friendly. That is, the super block size should be large enough to
+		// fill the rows from the dense matrices involed in the computation
+		// should fill the entire CPU cache. If the output matrix is written
+		// to disks, the super block should also be large enough so that
+		// each write to disks is large enough to have high I/O throughput.
+		size_t sblock_size = detail::cal_super_block_size(get_block_size(),
+				in.get_entry_size() * in.get_num_cols());
+		return matrix_io_generator::create(index, factory->get_file_id(),
+				sblock_size, 1);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -710,16 +855,18 @@ public:
 	}
 
 	// Nothing should happen for a symmetric matrix.
-	virtual void transpose() {
-		block_sparse_matrix::ptr tmp = mat;
-		mat = t_mat;
-		t_mat = tmp;
-		sparse_matrix::transpose();
+	virtual sparse_matrix::ptr transpose() const {
+		block_sparse_asym_matrix *ret = new block_sparse_asym_matrix(*this);
+		ret->mat = this->t_mat;
+		ret->t_mat = this->mat;
+		ret->sparse_matrix::_transpose();
+		ret->reset_ios();
+		return sparse_matrix::ptr(ret);
 	}
 
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const {
-		mat->init_io_gens(num_block_rows, io_gens);
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const {
+		return mat->create_io_gen(in);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -737,24 +884,27 @@ public:
 	}
 };
 
+}
+
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 		SpM_2d_storage::ptr mat)
 {
-	return sparse_matrix::ptr(new block_sparse_matrix(index, mat));
+	return sparse_matrix::ptr(new detail::block_sparse_matrix(index, mat));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 		SpM_2d_storage::ptr mat, SpM_2d_index::ptr t_index,
 		SpM_2d_storage::ptr t_mat)
 {
-	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat,
+	return sparse_matrix::ptr(new detail::block_sparse_asym_matrix(index, mat,
 				t_index, t_mat));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 			safs::file_io_factory::shared_ptr mat_io_fac)
 {
-	return sparse_matrix::ptr(new block_sparse_matrix(index, mat_io_fac));
+	return sparse_matrix::ptr(new detail::block_sparse_matrix(index,
+				mat_io_fac));
 }
 
 sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
@@ -762,39 +912,89 @@ sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 			SpM_2d_index::ptr t_index,
 			safs::file_io_factory::shared_ptr t_mat_io_fac)
 {
-	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat_io_fac,
-				t_index, t_mat_io_fac));
+	return sparse_matrix::ptr(new detail::block_sparse_asym_matrix(index,
+				mat_io_fac, t_index, t_mat_io_fac));
 }
 
-static std::atomic<size_t> init_count;
+bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
+		detail::matrix_store::ptr out, detail::task_creator::ptr create) const
+{
+	if (in->get_num_rows() != ncols
+			|| in->get_num_cols() != out->get_num_cols()
+			|| out->get_num_rows() != this->get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) <<
+			"the input and output matrix have incompatible dimensions";
+		return false;
+	}
+
+	dense_matrix::ptr in_tmp;
+	if (in->store_layout() != matrix_layout_t::L_ROW) {
+		in_tmp = dense_matrix::create(in);
+		in_tmp = in_tmp->conv2(matrix_layout_t::L_ROW);
+	}
+	if (in->is_virtual() && in_tmp == NULL)
+		in_tmp = dense_matrix::create(in);
+	if (!in->is_in_mem()) {
+		if (in_tmp == NULL)
+			in_tmp = dense_matrix::create(in);
+		in_tmp = in_tmp->conv_store(true, matrix_conf.get_num_nodes());
+	}
+
+	if (in_tmp) {
+		in_tmp->materialize_self();
+		in = in_tmp->get_raw_store();
+	}
+	bool ret = create->set_data(in, out, get_block_size());
+	if (ret)
+		compute(create, *in);
+	return ret;
+}
+
+std::vector<safs::io_interface::ptr> sparse_matrix::create_ios() const
+{
+	std::vector<safs::io_interface::ptr> ret(1);
+	assert(ios);
+	ret[0] = ios->create_io();
+	return ret;
+}
+
+static std::atomic<long> init_count;
 
 void init_flash_matrix(config_map::ptr configs)
 {
+#ifdef USE_OPENBLAS
+	openblas_set_num_threads(1);
+#endif
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {
-		matrix_conf.init(configs);
+		// We should initialize SAFS first.
 		try {
 			safs::init_io_system(configs);
 		} catch (std::exception &e) {
-			// If SAFS fails to initialize, we should remove the count
-			// increase at the beginning of the function.
-			init_count--;
-			throw e;
+			BOOST_LOG_TRIVIAL(warning)
+				<< "FlashMatrix: fail to initialize SAFS";
 		}
+
+		if (configs)
+			matrix_conf.init(configs);
 		size_t num_nodes = matrix_conf.get_num_nodes();
 		size_t num_threads = matrix_conf.get_num_DM_threads();
 		detail::local_mem_buffer::init();
 		detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 				num_threads / num_nodes);
+		detail::init_memchunk_reserve(num_nodes);
 	}
 }
 
 void destroy_flash_matrix()
 {
-	if (init_count.fetch_sub(1) == 1) {
-		safs::destroy_io_system();
+	long count = init_count.fetch_sub(1);
+	assert(count > 0);
+	if (count == 1) {
+		detail::destroy_memchunk_reserve();
 		detail::local_mem_buffer::destroy();
-		// TODO I should also destroy the worker thread here.
+		detail::mem_thread_pool::destroy();
+		safs::destroy_io_system();
 	}
 }
 

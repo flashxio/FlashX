@@ -19,7 +19,7 @@
 
 #include <fstream>
 
-#include "log.h"
+#include "../../libsafs/log.h"
 
 #include "convert_util.h"
 #include "libgraph-algs/sem_kmeans_util.h"

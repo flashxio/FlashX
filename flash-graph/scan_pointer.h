@@ -1,7 +1,7 @@
 #ifndef __SCAN_POINTER_H__
 #define __SCAN_POINTER_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -25,7 +25,7 @@
 namespace fg
 {
 
-/**
+/*
  * This class helps to scan a list from the beginning to the end
  * or from the end to the beginning.
  */

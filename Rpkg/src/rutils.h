@@ -26,6 +26,9 @@
 
 bool R_is_real(SEXP v);
 bool R_is_integer(SEXP v);
+bool R_is_logical(SEXP v);
+bool R_is_null(SEXP v);
+bool R_is_string(SEXP v);
 
 template<class T>
 bool R_get_number(SEXP v, T &ret) {
@@ -37,6 +40,10 @@ bool R_get_number(SEXP v, T &ret) {
 		ret = INTEGER(v)[0];
 		return true;
 	}
+	else if (R_is_logical(v)) {
+		ret = LOGICAL(v)[0];
+		return true;
+	}
 	else
 		return false;
 }
@@ -44,18 +51,23 @@ bool R_get_number(SEXP v, T &ret) {
 /*
  * Test if this is a sparse matrix.
  */
-static inline bool is_sparse(const Rcpp::List &matrix)
+static inline bool is_sparse(const Rcpp::S4 &matrix)
 {
-	std::string type = matrix["type"];
+	std::string type = matrix.slot("type");
 	return type == "sparse";
 }
 
-static inline bool is_vector(const Rcpp::List &matrix)
+static inline bool is_vector(const Rcpp::S4 &vec)
 {
-	std::string type = matrix["type"];
-	return type == "vector";
+	return vec.is("fmV");
+}
+
+static inline bool is_factor_vector(const Rcpp::S4 &vec)
+{
+	return vec.is("fmFactorV");
 }
 
 void R_gc();
+SEXP R_create_s4fm(SEXP fm);
 
 #endif

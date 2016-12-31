@@ -33,6 +33,7 @@
 
 #include "in_mem_storage.h"
 #include "graph_file_header.h"
+#include "graph_exception.h"
 
 using namespace safs;
 
@@ -47,6 +48,15 @@ struct deleter
 		free(buf);
 	}
 };
+
+in_mem_graph::ptr in_mem_graph::create(const std::string &graph_name,
+		std::shared_ptr<char> data, size_t size)
+{
+	// TODO It only supports one NUMA node in this setting right now.
+	NUMA_mapper mapper(1, GRAPH_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr buf = safs::NUMA_buffer::create(data, size, mapper);
+	return create(graph_name, buf, size);
+}
 
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
@@ -63,8 +73,8 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
 	assert(data.first);
 	graph_header *header = (graph_header *) data.first;
-	header->verify();
-
+	if (!header->is_graph_file() || !header->is_right_version())
+		throw wrong_format("wrong graph file or format version");
 	return graph;
 }
 
@@ -87,8 +97,8 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
 	assert(data.first);
 	graph_header *header = (graph_header *) data.first;
-	header->verify();
-
+	if (!header->is_graph_file() || !header->is_right_version())
+		throw wrong_format("wrong graph file or format version");
 	return graph;
 }
 

@@ -15,6 +15,5 @@ threads=32
 #print_io_stat=
 prof_file=graph.prof
 merge_reqs=
-in_mem_index=
 #in_mem_graph=
 serial_run=

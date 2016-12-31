@@ -17,7 +17,10 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "matrix_header.h"
+#include "matrix_exception.h"
 
 namespace fm
 {
@@ -48,14 +51,12 @@ matrix_header::matrix_header(matrix_type mat_type, size_t entry_size,
 
 void matrix_header::verify() const
 {
-	if (!is_matrix_file()) {
-		fprintf(stderr, "wrong magic number: %ld\n", u.d.magic_number);
-	}
-	if (!is_right_version()) {
-		fprintf(stderr, "wrong version number: %d\n", u.d.version_number);
-	}
-	assert(is_matrix_file());
-	assert(is_right_version());
+	if (!is_matrix_file())
+		throw wrong_format(boost::str(boost::format("wrong magic number: %1%")
+					% u.d.magic_number));
+	if (!is_right_version())
+		throw wrong_format(boost::str(boost::format("wrong version number: %1%")
+					% u.d.version_number));
 }
 
 }

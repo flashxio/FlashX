@@ -1,10 +1,10 @@
 FG <- TRUE
 verbose <- FALSE
 fgcheck <- function() {
-	if ("FlashGraphR" %in% rownames(installed.packages()) == FALSE) {
+	if ("FlashR" %in% rownames(installed.packages()) == FALSE) {
 		assign("FG", FALSE, envir = .GlobalEnv)
 	} else {
-		require(FlashGraphR)
+		require(FlashR)
 	}
 }
 

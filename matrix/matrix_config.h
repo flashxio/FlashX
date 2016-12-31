@@ -1,7 +1,7 @@
 #ifndef __MATRIX_CONFIG_H__
 #define __MATRIX_CONFIG_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -39,7 +39,6 @@ class matrix_config
 	// The number of threads for dense matrix.
 	int num_DM_threads;
 	std::string prof_file;
-	bool _in_mem_matrix;
 	// With 1D partition, a matrix is partitioned into row blocks.
 	int row_block_size;
 	// For 1D partition, each matrix I/O contains multiple row blocks.
@@ -72,6 +71,10 @@ class matrix_config
 	// operations. Allocating the memory buffer for every dense matrix operation
 	// is expensive.
 	bool keep_mem_buf;
+	// The block size for a dense matrix.
+	size_t block_size;
+	// The block size used for matrix multiply on block matrices.
+	size_t max_multiply_block_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -80,7 +83,6 @@ public:
 	matrix_config() {
 		num_SpM_threads = 4;
 		num_DM_threads = 4;
-		_in_mem_matrix = false;
 		row_block_size = 1024;
 		rb_io_size = 1024;
 		rb_steal_io_size = 1;
@@ -93,6 +95,8 @@ public:
 		write_io_buf_size = 128 * 1024 * 1024;
 		stream_io_size = 128 * 1024 * 1024;
 		keep_mem_buf = false;
+		block_size = 32;
+		max_multiply_block_size = 512;
 	}
 
 	/**
@@ -131,15 +135,6 @@ public:
 	 */
 	int get_num_DM_threads() const {
 		return num_DM_threads;
-	}
-
-	/**
-	 * \brief Determine whether to use in-mem matrix data.
-	 * \return true if we loads the entire matrix data in memory
-	 * in advance.
-	 */
-	bool use_in_mem_matrix() const {
-		return _in_mem_matrix;
 	}
 
 	/**
@@ -236,106 +231,26 @@ public:
 	bool is_keep_mem_buf() const {
 		return keep_mem_buf;
 	}
+
+	size_t get_block_size() const {
+		return block_size;
+	}
+
+	size_t get_max_multiply_block_size() const {
+		return max_multiply_block_size;
+	}
+
+	void set_max_multiply_block_size(size_t size) {
+		this->max_multiply_block_size = size;
+	}
 };
-
-inline void matrix_config::print_help()
-{
-	printf("Configuration parameters in matrix operations.\n");
-	printf("\tthreads: the number of threads processing the matrix\n");
-	printf("\tFM_prof_file: the output file containing CPU profiling\n");
-	printf("\tin_mem_matrix: indicate whether to load the entire matrix to memory in advance\n");
-	printf("\trow_block_size: the size of a row block (the number of rows)\n");
-	printf("\trb_io_size: the size of a matrix I/O in 1D (the number of row blocks)\n");
-	printf("\trb_steal_io_size: the size of a stolen matrix I/O(the number of row blocks)\n");
-	printf("\tcpu_cache_size: the cpu cache size that can be used by a thread\n");
-	printf("\thilbert_order: use the hilbert order\n");
-	printf("\tnum_nodes: The number of NUMA nodes\n");
-	printf("\tsort_buf_size: the buffer size for EM sorting\n");
-	printf("\tgroupby_buf_size: the buffer size for EM groupby on vectors\n");
-	printf("\tvv_groupby_buf_size: the buffer size for EM groupby on vector vectors\n");
-	printf("\twrite_io_buf_size: the I/O buffer size for writing merge results\n");
-	printf("\tstream_io_size: the I/O size used for streaming\n");
-	printf("\tkeep_mem_buf: indicate whether to keep memory buffer for I/O in dense matrix operation\n");
-}
-
-inline void matrix_config::print()
-{
-	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in matrix operations.";
-	BOOST_LOG_TRIVIAL(info) << "\tSpM threads: " << num_SpM_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tDM threads: " << num_DM_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tFM_prof_file: " << prof_file;
-	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
-	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
-	BOOST_LOG_TRIVIAL(info) << "\trb_io_size" << rb_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size" << rb_steal_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size" << cpu_cache_size;
-	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
-	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
-	BOOST_LOG_TRIVIAL(info) << "\tsort_buf_size" << sort_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tgroupby_buf_size" << groupby_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tvv_groupby_buf_size" << vv_groupby_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\twrite_io_buf_size" << write_io_buf_size;
-	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size" << stream_io_size;
-	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf" << keep_mem_buf;
-}
-
-inline void matrix_config::init(config_map::ptr map)
-{
-	if (map->has_option("SpM_threads"))
-		map->read_option_int("SpM_threads", num_SpM_threads);
-	if (map->has_option("DM_threads"))
-		map->read_option_int("DM_threads", num_DM_threads);
-	if (map->has_option("FM_prof_file"))
-		map->read_option("FM_prof_file", prof_file);
-	if (map->has_option("in_mem_matrix"))
-		map->read_option_bool("in_mem_matrix", _in_mem_matrix);
-	if (map->has_option("row_block_size"))
-		map->read_option_int("row_block_size", row_block_size);
-	if (map->has_option("rb_io_size"))
-		map->read_option_int("rb_io_size", rb_io_size);
-	if (map->has_option("rb_steal_io_size"))
-		map->read_option_int("rb_steal_io_size", rb_steal_io_size);
-	if (map->has_option("cpu_cache_size"))
-		map->read_option_int("cpu_cache_size", cpu_cache_size);
-	if (map->has_option("hilbert_order"))
-		map->read_option_bool("hilbert_order", hilbert_order);
-	if (map->has_option("num_nodes"))
-		map->read_option_int("num_nodes", num_nodes);
-	if (map->has_option("sort_buf_size")) {
-		long tmp = 0;
-		map->read_option_long("sort_buf_size", tmp);
-		sort_buf_size = tmp;
-	}
-	if (map->has_option("groupby_buf_size")) {
-		long tmp = 0;
-		map->read_option_long("groupby_buf_size", tmp);
-		groupby_buf_size = tmp;
-	}
-	if (map->has_option("vv_groupby_buf_size")) {
-		long tmp = 0;
-		map->read_option_long("vv_groupby_buf_size", tmp);
-		vv_groupby_buf_size = tmp;
-	}
-	if (map->has_option("write_io_buf_size")) {
-		long tmp = 0;
-		map->read_option_long("write_io_buf_size", tmp);
-		write_io_buf_size = tmp;
-	}
-	if (map->has_option("stream_io_size")) {
-		long tmp = 0;
-		map->read_option_long("stream_io_size", tmp);
-		stream_io_size = tmp;
-	}
-	if (map->has_option("keep_mem_buf"))
-		map->read_option_bool("keep_mem_buf", keep_mem_buf);
-}
 
 extern matrix_config matrix_conf;
 
 static const int PAGE_SIZE = 4096;
 
 // TODO We need to try different range size to get better performance.
-static const size_t NUMA_range_size_log = 20;
+static const size_t NUMA_range_size_log = 18;
 
 }
 

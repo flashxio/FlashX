@@ -190,12 +190,14 @@ public:
 
 	void sync_fm2ep() {
 #ifdef FM_VERIFY
-		BOOST_LOG_TRIVIAL(info) << boost::format(
-				"There are %1% blocks and each block has %2% cols")
-			% mat->get_num_blocks() % mat->get_block(0)->get_num_cols();
+		BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% blocks")
+			% mat->get_num_blocks();
 		size_t ep_col_idx = 0;
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
 			dense_matrix::ptr block = mat->get_block(i);
+			if (block == NULL)
+				continue;
+
 			detail::local_matrix_store::const_ptr portion
 				= block->get_data().get_portion(0);
 			assert(block->get_num_rows() == portion->get_num_rows());
@@ -415,6 +417,11 @@ public:
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
+		fm_A.verify();
+		this->verify();
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << "gemm takes " << time_diff(start, end)
+			<< " seconds";
 		// In KrylovSchur, if the input MV isn't in the subspace, we can drop
 		// the dense matrix in MV to save memory.
 		if (solver == "KrylovSchur" && fm_A.mat->get_num_blocks() == 1
@@ -423,11 +430,6 @@ public:
 			BOOST_LOG_TRIVIAL(info) << "Drop the matrix to save space";
 			fm_A.mat->set_block(0, fm::dense_matrix::const_ptr());
 		}
-		fm_A.verify();
-		this->verify();
-		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << "gemm takes " << time_diff(start, end)
-			<< " seconds";
 	}
 
 	//! Replace \c *this with \c alpha * \c A + \c beta * \c B.
@@ -639,11 +641,11 @@ public:
 		num_col_reads_concept += index.size();
 		num_col_writes_concept += index.size();
 
-		sync_fm2ep();
 		assert((size_t) A.GetNumberVecs() == index.size());
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		BOOST_LOG_TRIVIAL(info) << get_curr_time_str() << ":" << boost::format(
 				"this(%1%)[%2%] = A(%3%)") % name % vec2str(index) % fm_A.name;
+		sync_fm2ep();
 		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
@@ -771,30 +773,30 @@ public:
 namespace Anasazi
 {
 
-/// \brief Specialization of MultiVecTraits for Belos::MultiVec.
-///
-/// Anasazi interfaces to every multivector implementation through a
-/// specialization of MultiVecTraits.  Thus, we provide a
-/// specialization of MultiVecTraits for the MultiVec run-time
-/// polymorphic interface above.
-///
-/// \tparam ScalarType The type of entries in the multivector; the
-///   template parameter of MultiVec.
+// \brief Specialization of MultiVecTraits for Belos::MultiVec.
+//
+// Anasazi interfaces to every multivector implementation through a
+// specialization of MultiVecTraits.  Thus, we provide a
+// specialization of MultiVecTraits for the MultiVec run-time
+// polymorphic interface above.
+//
+// \tparam ScalarType The type of entries in the multivector; the
+//   template parameter of MultiVec.
 template<class ScalarType>
 class MultiVecTraits<ScalarType, fm::eigen::FM_MultiVector<ScalarType> > {
 public:
 	//! @name Creation methods
 	//@{ 
 
-	/// \brief Create a new empty \c MultiVec containing \c numvecs columns.
-	/// \return Reference-counted pointer to the new \c MultiVec.
+	// \brief Create a new empty \c MultiVec containing \c numvecs columns.
+	// \return Reference-counted pointer to the new \c MultiVec.
 	static Teuchos::RCP<fm::eigen::FM_MultiVector<ScalarType> > Clone (
 			const fm::eigen::FM_MultiVector<ScalarType>& mv, const int numvecs) {
 		return Teuchos::rcp ((fm::eigen::FM_MultiVector<ScalarType> *)
 				const_cast<fm::eigen::FM_MultiVector<ScalarType>&> (mv).Clone(numvecs)); 
 	}
 
-	/*!
+	/*
 	 * \brief Creates a new \c Anasazi::MultiVec and copies contents of \c mv
 	 * into the new vector (deep copy).
 	  \return Reference-counted pointer to the new \c Anasazi::MultiVec.
@@ -805,7 +807,7 @@ public:
 				const_cast<fm::eigen::FM_MultiVector<ScalarType>&>(mv).CloneCopy());
 	}
 
-	/*! \brief Creates a new \c Anasazi::MultiVec and copies the selected
+	/* \brief Creates a new \c Anasazi::MultiVec and copies the selected
 	 * contents of \c mv into the new vector (deep copy).  
 
 	  The copied vectors from \c mv are indicated by the \c index.size() indices in \c index.      
@@ -819,7 +821,7 @@ public:
 					mv).CloneCopy(index));
 	}
 
-	/*! \brief Creates a new \c Anasazi::MultiVec that shares the selected
+	/* \brief Creates a new \c Anasazi::MultiVec that shares the selected
 	 * contents of \c mv (shallow copy).
 
 	  The index of the \c numvecs vectors shallow copied from \c mv are indicated
@@ -833,7 +835,7 @@ public:
 				mv.CloneViewNonConst(index));
 	}
 
-	/*! \brief Creates a new const \c Anasazi::MultiVec that shares
+	/* \brief Creates a new const \c Anasazi::MultiVec that shares
 	 * the selected contents of \c mv (shallow copy).
 
 	  The index of the \c numvecs vectors shallow copied from \c mv are
@@ -853,23 +855,23 @@ public:
 	//! @name Attribute methods
 	//@{ 
 
-	//! Obtain the vector length of \c mv.
+	// Obtain the vector length of \c mv.
 	ANASAZI_DEPRECATED static int GetVecLength(
 			const fm::eigen::FM_MultiVector<ScalarType>& mv) {
 		return mv.GetGlobalLength();
 	}
 
-	//! Obtain the number of vectors in \c mv
+	// Obtain the number of vectors in \c mv
 	static int GetNumberVecs(const fm::eigen::FM_MultiVector<ScalarType>& mv) {
 		return mv.GetNumberVecs();
 	}
 
 	//@}
 
-	//! @name Update methods
+	// @name Update methods
 	//@{ 
 
-	/*! \brief Update \c mv with \f$ \alpha AB + \beta mv \f$.
+	/* \brief Update \c mv with \f$ \alpha AB + \beta mv \f$.
 	*/
 	static void MvTimesMatAddMv( ScalarType alpha,
 			const fm::eigen::FM_MultiVector<ScalarType>& A, 
@@ -877,7 +879,7 @@ public:
 			ScalarType beta, fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.MvTimesMatAddMv(alpha, A, B, beta); }
 
-	/*! \brief Replace \c mv with \f$\alpha A + \beta B\f$.
+	/* \brief Replace \c mv with \f$\alpha A + \beta B\f$.
 	*/
 	static void MvAddMv( ScalarType alpha,
 			const fm::eigen::FM_MultiVector<ScalarType>& A,
@@ -885,7 +887,7 @@ public:
 			fm::eigen::FM_MultiVector<ScalarType>& mv)
 	{ mv.MvAddMv(alpha, A, beta, B); }
 
-	/*! \brief Compute a dense matrix \c B through the matrix-matrix multiply \f$ \alpha A^Tmv \f$.
+	/* \brief Compute a dense matrix \c B through the matrix-matrix multiply \f$ \alpha A^Tmv \f$.
 	*/
 	static void MvTransMv( ScalarType alpha,
 			const fm::eigen::FM_MultiVector<ScalarType>& A,
@@ -901,7 +903,7 @@ public:
 #endif
 			); }
 
-	/*! \brief Compute a vector \c b where the components are the individual dot-products of the \c i-th columns of \c A and \c mv, i.e.\f$b[i] = A[i]^H mv[i]\f$.
+	/* \brief Compute a vector \c b where the components are the individual dot-products of the \c i-th columns of \c A and \c mv, i.e.\f$b[i] = A[i]^H mv[i]\f$.
 	*/
 	static void MvDot( const fm::eigen::FM_MultiVector<ScalarType>& mv,
 			const fm::eigen::FM_MultiVector<ScalarType>& A,
@@ -916,7 +918,7 @@ public:
 #endif
 			); }
 
-	//! Scale each element of the vectors in \c *this with \c alpha.
+	// Scale each element of the vectors in \c *this with \c alpha.
 	static void MvScale ( fm::eigen::FM_MultiVector<ScalarType>& mv, ScalarType alpha )
 	{ mv.MvScale( alpha ); }
 
@@ -926,10 +928,10 @@ public:
 	{ mv.MvScale( alpha ); }
 
 	//@}
-	//! @name Norm method
+	// @name Norm method
 	//@{ 
 
-	/*! \brief Compute the 2-norm of each individual vector of \c mv.  
+	/* \brief Compute the 2-norm of each individual vector of \c mv.  
 	  Upon return, \c normvec[i] holds the value of \f$||mv_i||_2\f$, the \c i-th column of \c mv.
 	  */
 	static void MvNorm( const fm::eigen::FM_MultiVector<ScalarType>& mv,
@@ -937,9 +939,9 @@ public:
 	{ mv.MvNorm(normvec); }
 
 	//@}
-	//! @name Initialization methods
+	// @name Initialization methods
 	//@{ 
-	/*! \brief Copy the vectors in \c A to a set of vectors in \c mv indicated by the indices given in \c index.
+	/* \brief Copy the vectors in \c A to a set of vectors in \c mv indicated by the indices given in \c index.
 
 	  The \c numvecs vectors in \c A are copied to a subset of vectors in \c mv indicated by the indices given in \c index,
 	  i.e.<tt> mv[index[i]] = A[i]</tt>.
@@ -949,22 +951,22 @@ public:
 			fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.SetBlock(A, index); }
 
-	/*! \brief Replace the vectors in \c mv with random vectors.
+	/* \brief Replace the vectors in \c mv with random vectors.
 	*/
 	static void MvRandom( fm::eigen::FM_MultiVector<ScalarType>& mv )
 	{ mv.MvRandom(); }
 
-	/*! \brief Replace each element of the vectors in \c mv with \c alpha.
+	/* \brief Replace each element of the vectors in \c mv with \c alpha.
 	*/
 	static void MvInit( fm::eigen::FM_MultiVector<ScalarType>& mv,
 			ScalarType alpha = Teuchos::ScalarTraits<ScalarType>::zero() )
 	{ mv.MvInit(alpha); }
 
 	//@}
-	//! @name Print method
+	// @name Print method
 	//@{ 
 
-	//! Print the \c mv multi-vector to the \c os output stream.
+	// Print the \c mv multi-vector to the \c os output stream.
 	static void MvPrint( const fm::eigen::FM_MultiVector<ScalarType>& mv,
 			std::ostream& os )
 	{ mv.MvPrint(os); }
@@ -972,19 +974,19 @@ public:
 	//@}
 
 #ifdef HAVE_ANASAZI_TSQR
-	/// \typedef tsqr_adaptor_type
-	/// \brief TSQR adapter for MultiVec.
-	///
-	/// Our TSQR adapter for MultiVec calls MultiVec's virtual
-	/// methods.  If you want to use TSQR with your MultiVec subclass,
-	/// you must implement these methods yourself, as the default
-	/// implementations throw std::logic_error.
+	// \typedef tsqr_adaptor_type
+	// \brief TSQR adapter for MultiVec.
+	//
+	// Our TSQR adapter for MultiVec calls MultiVec's virtual
+	// methods.  If you want to use TSQR with your MultiVec subclass,
+	// you must implement these methods yourself, as the default
+	// implementations throw std::logic_error.
 	typedef details::MultiVecTsqrAdapter<ScalarType> tsqr_adaptor_type;
 #endif // HAVE_ANASAZI_TSQR
 
 #if TRILINOS_VERSION >= 12
-	//! Obtain the vector length of \c mv.
-	//! \note This method supersedes GetVecLength, which will be deprecated.
+	// Obtain the vector length of \c mv.
+	// \note This method supersedes GetVecLength, which will be deprecated.
 	static ptrdiff_t GetGlobalLength( const fm::eigen::FM_MultiVector<ScalarType>& mv ) {
 		return mv.GetGlobalLength();
 	}
@@ -994,29 +996,29 @@ public:
 #if TRILINOS_VERSION < 12
 
 // \brief An extension of the MultiVecTraits class that adds a new vector length method.
-/// \ingroup anasazi_opvec_interfaces
-///
-/// This traits class provides an additional method to the multivector
-/// operations for finding the number of rows that is 64-bit compatible.
-/// The method in this traits class will replace the GetVecLength()
-/// method, which will be deprecated, and removed in the next major
-/// Trilinos release.  At this time, this traits class will call the
-/// GetVecLength() method by default for any traits implementation that
-/// does not specialize this template.  However, for 64-bit support this
-/// template will need to be specialized.
-///
-/// \note You do <i>not</i> need to write a specialization of
-///   MultiVecTraitsExt if you are using Epetra, Tpetra, or Thyra
-///   multivectors.  Anasazi already provides specializations for
-///   these types.  Just relax and enjoy using the solvers!
+// \ingroup anasazi_opvec_interfaces
+//
+// This traits class provides an additional method to the multivector
+// operations for finding the number of rows that is 64-bit compatible.
+// The method in this traits class will replace the GetVecLength()
+// method, which will be deprecated, and removed in the next major
+// Trilinos release.  At this time, this traits class will call the
+// GetVecLength() method by default for any traits implementation that
+// does not specialize this template.  However, for 64-bit support this
+// template will need to be specialized.
+//
+// \note You do <i>not</i> need to write a specialization of
+//   MultiVecTraitsExt if you are using Epetra, Tpetra, or Thyra
+//   multivectors.  Anasazi already provides specializations for
+//   these types.  Just relax and enjoy using the solvers!
 template<class ScalarType>
 class MultiVecTraitsExt<ScalarType, fm::eigen::FM_MultiVector<ScalarType> > {
 public:
-	//! @name New attribute methods
+	// @name New attribute methods
 	//@{
 
-	//! Obtain the vector length of \c mv.
-	//! \note This method supersedes GetVecLength, which will be deprecated.
+	// Obtain the vector length of \c mv.
+	// \note This method supersedes GetVecLength, which will be deprecated.
 	static ptrdiff_t GetGlobalLength( const fm::eigen::FM_MultiVector<ScalarType>& mv ) {
 		return mv.GetGlobalLength();
 	}

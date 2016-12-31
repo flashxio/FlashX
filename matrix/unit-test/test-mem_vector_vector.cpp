@@ -90,7 +90,7 @@ void test_groupby()
 
 	factor f(50);
 	factor_vector::ptr labels = factor_vector::create(f, res->get_num_entries(),
-			true, set_label_operate(f, res->get_num_entries()));
+			-1, true, set_label_operate(f, res->get_num_entries()));
 	labels->sort();
 	vector_vector::ptr gr_res = vv->groupby(*labels, part_apply_operate());
 	const detail::mem_vv_store &res_store
@@ -219,8 +219,6 @@ void test_append_vvs()
 class time2_apply_operate: public arr_apply_operate
 {
 public:
-	time2_apply_operate(): arr_apply_operate(0) {
-	}
 	virtual void run(const local_vec_store &in,
 			local_vec_store &out) const {
 		out.resize(in.get_length());
@@ -235,6 +233,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<long>();
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return 0;
 	}
 };
 

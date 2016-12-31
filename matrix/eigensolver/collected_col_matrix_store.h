@@ -59,6 +59,10 @@ public:
 	static ptr create(const std::vector<detail::matrix_store::const_ptr> &mats,
 			size_t num_cols);
 
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
+
 	virtual std::string get_name() const {
 		assert(merged_mat);
 		return merged_mat->get_name();
@@ -68,6 +72,7 @@ public:
 			const std::vector<off_t> &idxs) const;
 	virtual detail::matrix_store::const_ptr transpose() const;
 
+	using virtual_matrix_store::get_portion_async;
 	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
@@ -75,10 +80,14 @@ public:
 		return merged_mat->get_portion_async(start_row, start_col,
 				num_rows, num_cols, compute);
 	}
+	using virtual_matrix_store::get_portion;
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		assert(merged_mat);
 		return merged_mat->get_portion(start_row, start_col, num_rows, num_cols);
+	}
+	virtual int get_portion_node_id(size_t id) const {
+		return merged_mat->get_portion_node_id(id);
 	}
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(merged_mat);
@@ -109,6 +118,10 @@ public:
 				merged_mat.get());
 		assert(obj);
 		return obj->create_ios();
+	}
+
+	virtual bool is_cache_portion() const {
+		return merged_mat->is_cache_portion();
 	}
 
 	virtual void set_cache_portion(bool cache_portion) {

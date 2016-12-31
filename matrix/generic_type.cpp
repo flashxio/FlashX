@@ -25,9 +25,34 @@
 #include "generic_type.h"
 #include "rand_gen.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
+#include "generic_hashtable.h"
 
 namespace fm
 {
+
+template<class T>
+generic_hashtable::ptr scalar_type_impl<T>::create_hashtable(
+		const scalar_type &val_type) const
+{
+	switch(val_type.get_size()) {
+		case 4: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 4>(val_type));
+		case 8: return generic_hashtable::ptr(
+						new generic_hashtable_impl<T, 8>(val_type));
+		default: BOOST_LOG_TRIVIAL(error) << "Can't create a generic hashtable";
+				 return generic_hashtable::ptr();
+	}
+}
+
+scalar_variable::ptr scalar_variable::cast_type(const scalar_type &type) const
+{
+	const scalar_type &vtype = get_type();
+	const bulk_uoperate &cast_op = vtype.get_type_cast(type);
+	scalar_variable::ptr ret = vtype.create_scalar();
+	cast_op.runA(1, get_raw(), ret->get_raw());
+	return ret;
+}
 
 template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
@@ -209,38 +234,66 @@ const scatter_gather &scalar_type_impl<T>::get_sg() const
 }
 
 template<class T>
-const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
+const conv_layout &scalar_type_impl<T>::get_conv() const
+{
+	static type_conv_layout<T> sg;
+	return sg;
+}
+
+template<class T>
+set_operate::const_ptr scalar_type_impl<T>::get_set_const(
+		const scalar_variable &val) const
 {
 	assert(val.get_type() == get_scalar_type<T>());
 	const scalar_variable_impl<T> &t_val
 		= static_cast<const scalar_variable_impl<T> &>(val);
-	static const_set_operate<T> op(t_val.get());
-	return op;
+	return set_operate::const_ptr(new const_set_operate<T>(t_val.get()));
 }
 
 template<class T>
-const basic_uops &scalar_type_impl<T>::get_basic_uops() const
+set_vec_operate::const_ptr scalar_type_impl<T>::get_set_vec_const(
+		const scalar_variable &val) const
 {
-	static basic_uops_impl<T, T> uops;
-	return uops;
+	assert(val.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_val
+		= static_cast<const scalar_variable_impl<T> &>(val);
+	return set_vec_operate::const_ptr(new const_set_vec_operate<T>(t_val.get()));
 }
 
 template<class T>
-const basic_ops &scalar_type_impl<T>::get_basic_ops() const
+set_operate::const_ptr scalar_type_impl<T>::get_set_seq(
+		const scalar_variable &start, const scalar_variable &stride,
+		size_t num_rows, size_t num_cols, bool byrow,
+		matrix_layout_t layout) const
 {
-	static basic_ops_impl<T, T, T> ops;
-	return ops;
+	assert(start.get_type() == get_scalar_type<T>());
+	assert(stride.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_start
+		= static_cast<const scalar_variable_impl<T> &>(start);
+	const scalar_variable_impl<T> &t_stride
+		= static_cast<const scalar_variable_impl<T> &>(stride);
+	if (byrow)
+		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
+					t_stride.get(), num_cols, byrow, layout));
+	else
+		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
+					t_stride.get(), num_rows, byrow, layout));
 }
 
-template<class T>
-const agg_ops &scalar_type_impl<T>::get_agg_ops() const
+namespace
 {
-	static agg_ops_impl<T, T> aops;
-	return aops;
+
+template<class T1, class T2>
+const bulk_uoperate &get_type_cast()
+{
+	static type_cast<T1, T2> cast;
+	return cast;
+}
+
 }
 
 template<class T>
-const type_cast &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
+const bulk_uoperate &scalar_type_impl<T>::get_type_cast(const scalar_type &type) const
 {
 	switch(type.get_type()) {
 		case P_CHAR:
@@ -298,6 +351,35 @@ const scalar_type &get_scalar_type(prim_type type)
 		default:
 			throw invalid_arg_exception("invalid prim type");
 	}
+}
+
+bool require_cast(const scalar_type &t1, const scalar_type &t2)
+{
+	if (t1 == t2)
+		return false;
+	// If the two types require different memory storage size, we definitely
+	// need to cast them.
+	if (t1.get_size() != t2.get_size())
+		return true;
+
+	if ((t1.get_type() == prim_type::P_SHORT
+				&& t2.get_type() == prim_type::P_USHORT)
+			|| (t1.get_type() == prim_type::P_INTEGER
+				&& t2.get_type() == prim_type::P_UINT)
+			|| (t1.get_type() == prim_type::P_LONG
+				&& t2.get_type() == prim_type::P_ULONG))
+		return false;
+
+	if ((t2.get_type() == prim_type::P_SHORT
+				&& t1.get_type() == prim_type::P_USHORT)
+			|| (t2.get_type() == prim_type::P_INTEGER
+				&& t1.get_type() == prim_type::P_UINT)
+			|| (t2.get_type() == prim_type::P_LONG
+				&& t1.get_type() == prim_type::P_ULONG))
+		return false;
+
+	// We need to cast the rest of the type pairs.
+	return true;
 }
 
 }

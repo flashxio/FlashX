@@ -30,19 +30,20 @@
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
 #include "local_mem_buffer.h"
+#include "EM_object.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
 
-class compute_task
+namespace detail
+{
+
+class compute_task: public detail::portion_compute
 {
 public:
 	typedef std::shared_ptr<compute_task> ptr;
 
-	virtual ~compute_task() {
-	}
-
-	virtual void run(char *buf, size_t size) = 0;
 	virtual safs::io_request get_request() const = 0;
 };
 
@@ -52,6 +53,49 @@ public:
 	typedef std::shared_ptr<task_creator> ptr;
 
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
+	virtual bool set_data(detail::matrix_store::const_ptr in,
+			detail::matrix_store::ptr out, const block_2d_size &block_size) = 0;
+	virtual std::vector<detail::EM_object *> get_EM_objs() = 0;
+	virtual void complete() = 0;
+};
+
+class row_portions
+{
+	size_t portion_size_log;
+	size_t portion_mask;
+	size_t num_cols;
+	size_t entry_size;
+	size_t tot_num_rows;
+	std::vector<local_matrix_store::const_ptr> portions;
+	std::vector<const char *> raw_portions;
+
+	row_portions();
+public:
+	typedef std::shared_ptr<row_portions> ptr;
+
+	static ptr create(matrix_store::const_ptr mat, size_t block_size);
+
+	const scalar_type &get_type() const {
+		return portions[0]->get_type();
+	}
+
+	/*
+	 * This method is called very frequently. Let's avoid the overhead
+	 * of function calls by inlining the function.
+	 */
+	const char *get_row(size_t row_idx) const {
+		size_t local_row_idx = row_idx & portion_mask;
+		size_t portion_idx = row_idx >> portion_size_log;
+		return raw_portions[portion_idx]
+			+ local_row_idx * num_cols * entry_size;
+	}
+	const char *get_rows(size_t start_row, size_t end_row) const;
+	size_t get_num_cols() const {
+		return num_cols;
+	}
+	size_t get_tot_num_rows() const {
+		return tot_num_rows;
+	}
 };
 
 /*
@@ -63,12 +107,26 @@ class fg_row_compute_task: public compute_task
 	off_t off;
 	char *buf;
 	size_t buf_size;
+protected:
+	// rows in the input matrix.
+	row_portions::ptr in_row_portions;
+	// rows in the output matrix.
+	local_matrix_store::ptr out_rows;
+	char *raw_out_rows;
 public:
-	fg_row_compute_task(const matrix_io &_io): io(_io) {
+	fg_row_compute_task(matrix_store &output, const matrix_io &_io,
+			row_portions::ptr in_row_portions): io(_io) {
 		off_t orig_off = io.get_loc().get_offset();
 		off = ROUND_PAGE(orig_off);
 		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
 		buf = (char *) valloc(buf_size);
+
+		this->in_row_portions = in_row_portions;
+		this->out_rows = output.get_portion(_io.get_top_left().get_row_idx(),
+				0, _io.get_num_rows(), output.get_num_cols());
+		assert(out_rows);
+		this->raw_out_rows = out_rows->get_raw_arr();
+		assert(raw_out_rows);
 	}
 
 	~fg_row_compute_task() {
@@ -91,17 +149,15 @@ public:
 template<class DenseType, class SparseType, int ROW_WIDTH>
 class fg_row_spmm_task: public fg_row_compute_task
 {
-	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	matrix_store &output;
 public:
-	fg_row_spmm_task(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output,
-			const matrix_io &_io): fg_row_compute_task(_io),
-				input(_input), output(_output) {
-		assert(input.get_type() == get_scalar_type<DenseType>());
+	fg_row_spmm_task(row_portions::ptr in_row_portions,
+			matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+				_output, _io, in_row_portions), output(_output) {
+		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
-		assert(input.get_num_cols() == output.get_num_cols());
-		assert(input.get_num_cols() == (size_t) ROW_WIDTH);
+		assert(in_row_portions->get_num_cols() == output.get_num_cols());
+		assert(in_row_portions->get_num_cols() == (size_t) ROW_WIDTH);
 	}
 
 	void run_on_row(const fg::ext_mem_undirected_vertex &v);
@@ -121,33 +177,32 @@ void fg_row_spmm_task<DenseType, SparseType, ROW_WIDTH>::run_on_row(
 		SparseType data = 1;
 		if (has_val)
 			data = v.get_edge_data<SparseType>(i);
-		// TODO It's fairly expensive to get a row because it requires a function
-		// call on a virtual method.
-		const DenseType *row = (const DenseType *) input.get_row(id);
+		const DenseType *row = (const DenseType *) in_row_portions->get_row(id);
 		for (size_t j = 0; j < (size_t) ROW_WIDTH; j++)
 			res[j] += row[j] * data;
 	}
-	memcpy(output.get_row(v.get_id()), res, sizeof(DenseType) * ROW_WIDTH);
+	size_t rel_row_idx = v.get_id() - out_rows->get_global_start_row();
+	assert(rel_row_idx < out_rows->get_num_rows());
+	char *row = raw_out_rows + rel_row_idx * ROW_WIDTH * sizeof(DenseType);
+	memcpy(row, res, sizeof(DenseType) * ROW_WIDTH);
 }
 
 template<class DenseType, class SparseType>
 class fg_row_spmm_task<DenseType, SparseType, 0>: public fg_row_compute_task
 {
-	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	matrix_store &output;
 public:
-	fg_row_spmm_task(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output,
-			const matrix_io &_io): fg_row_compute_task(_io),
-				input(_input), output(_output) {
-		assert(input.get_type() == get_scalar_type<DenseType>());
+	fg_row_spmm_task(row_portions::ptr in_row_portions,
+			matrix_store &_output, const matrix_io &_io): fg_row_compute_task(
+				_output, _io, in_row_portions), output(_output) {
+		assert(in_row_portions->get_type() == get_scalar_type<DenseType>());
 		assert(output.get_type() == get_scalar_type<DenseType>());
-		assert(input.get_num_cols() == output.get_num_cols());
+		assert(in_row_portions->get_num_cols() == output.get_num_cols());
 	}
 
 	void run_on_row(const fg::ext_mem_undirected_vertex &v) {
-		DenseType res[input.get_num_cols()];
-		for (size_t i = 0; i < input.get_num_cols(); i++)
+		DenseType res[in_row_portions->get_num_cols()];
+		for (size_t i = 0; i < in_row_portions->get_num_cols(); i++)
 			res[i] = 0;
 
 		bool has_val = v.has_edge_data();
@@ -156,14 +211,15 @@ public:
 			SparseType data = 1;
 			if (has_val)
 				data = v.get_edge_data<SparseType>(i);
-			// It's fairly expensive to get a row because it requires a function
-			// call on a virtual method.
-			const DenseType *row = (const DenseType *) input.get_row(id);
-			for (size_t j = 0; j < input.get_num_cols(); j++)
+			const DenseType *row = (const DenseType *) in_row_portions->get_row(id);
+			for (size_t j = 0; j < in_row_portions->get_num_cols(); j++)
 				res[j] += row[j] * data;
 		}
-		memcpy(output.get_row(v.get_id()), res,
-				sizeof(DenseType) * input.get_num_cols());
+		size_t rel_row_idx = v.get_id() - out_rows->get_global_start_row();
+		assert(rel_row_idx < out_rows->get_num_rows());
+		char *row = raw_out_rows
+			+ rel_row_idx * output.get_num_cols() * sizeof(DenseType);
+		memcpy(row, res, sizeof(DenseType) * output.get_num_cols());
 	}
 };
 
@@ -185,7 +241,7 @@ public:
 };
 
 /*
- * A compute task runs on a 2D-partitioned block of a sparse matrix.
+ * A compute task runs on multiple 2D-partitioned block rows of a sparse matrix.
  */
 class block_compute_task: public compute_task
 {
@@ -194,7 +250,7 @@ class block_compute_task: public compute_task
 	std::vector<char *> block_rows;
 	matrix_io io;
 	off_t off;
-	detail::local_mem_buffer::irreg_buf_t buf;
+	local_mem_buffer::irreg_buf_t buf;
 	size_t real_io_size;
 	size_t entry_size;
 protected:
@@ -225,34 +281,29 @@ class block_spmm_task: public block_compute_task
 	// The size of the non-zero entries.
 	size_t entry_size;
 
-	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	matrix_store &output;
+	EM_matrix_stream::ptr output_stream;
 
 	/*
 	 * A task is responsible for processing the entire block rows.
 	 * The result is stored in out_part.
 	 */
-	detail::local_row_matrix_store::ptr out_part;
+	local_row_matrix_store::ptr out_part;
+protected:
+	row_portions::ptr in_row_portions;
 public:
-	block_spmm_task(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const matrix_io &io,
-			const sparse_matrix &mat, block_exec_order::ptr order);
+	block_spmm_task(row_portions::ptr in_row_portions,
+			matrix_store &_output, EM_matrix_stream::ptr stream,
+			const matrix_io &io, const sparse_matrix &mat,
+			block_exec_order::ptr order);
 
-	const detail::mem_matrix_store &get_in_matrix() const {
-		return input;
-	}
-	const detail::mem_matrix_store &get_out_matrix() const {
+	const matrix_store &get_out_matrix() const {
 		return output;
 	}
 
 	size_t get_entry_size() const {
 		return entry_size;
 	}
-
-	/*
-	 * Get the rows in the input matrix required by SpMM.
-	 */
-	const char *get_in_rows(size_t in_row, size_t num_rows);
 
 	/*
 	 * Get the rows in the output matrix required by SpMM.
@@ -384,11 +435,11 @@ template<class RpFuncType, class COOFuncType>
 class block_spmm_task_impl: public block_spmm_task
 {
 public:
-	block_spmm_task_impl(const detail::mem_matrix_store &input,
-			detail::mem_matrix_store &output, const matrix_io &io,
-			const sparse_matrix &mat,
-			block_exec_order::ptr order): block_spmm_task(input,
-				output, io, mat, order) {
+	block_spmm_task_impl(row_portions::ptr in_row_portions,
+			matrix_store &output, EM_matrix_stream::ptr stream
+			, const matrix_io &io, const sparse_matrix &mat,
+			block_exec_order::ptr order): block_spmm_task(in_row_portions,
+				output, stream, io, mat, order) {
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
@@ -397,8 +448,9 @@ public:
 
 		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
 		size_t num_in_rows = std::min(block_size.get_num_cols(),
-				get_in_matrix().get_num_rows() - in_row_start);
-		const char *in_rows = get_in_rows(in_row_start, num_in_rows);
+				in_row_portions->get_tot_num_rows() - in_row_start);
+		const char *in_rows = in_row_portions->get_rows(in_row_start,
+				in_row_start + num_in_rows);
 
 		size_t out_row_start = block.get_block_row_idx() * block_size.get_num_rows();
 		size_t num_out_rows = std::min(block_size.get_num_rows(),
@@ -426,13 +478,13 @@ public:
 template<class DenseType, class SparseType>
 class spmm_creator: public task_creator
 {
-	const detail::mem_matrix_store &input;
-	detail::mem_matrix_store &output;
+	row_portions::ptr in_row_portions;
+	matrix_store::ptr output;
+	EM_matrix_stream::ptr output_stream;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	spmm_creator(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const sparse_matrix &_mat);
+	spmm_creator(const sparse_matrix &_mat, size_t num_in_cols);
 
 	template<int ROW_WIDTH>
 	compute_task::ptr create_block_compute_task(const matrix_io &io) const {
@@ -440,23 +492,40 @@ class spmm_creator: public task_creator
 		typedef coo_func<DenseType, SparseType, ROW_WIDTH> width_coo_func;
 		return compute_task::ptr(
 				new block_spmm_task_impl<width_rp_func,  width_coo_func>(
-					input, output, io, mat, order));
+					in_row_portions, *output, output_stream, io, mat, order));
 	}
 public:
-	static task_creator::ptr create(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const sparse_matrix &mat) {
-		if (_input.get_type() != get_scalar_type<DenseType>()
-				|| _output.get_type() != get_scalar_type<DenseType>()) {
-			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
-			return task_creator::ptr();
-		}
+	static task_creator::ptr create(const sparse_matrix &mat,
+			size_t num_in_cols) {
 		return task_creator::ptr(new spmm_creator<DenseType, SparseType>(
-					_input, _output, mat));
+					mat, num_in_cols));
+	}
+
+	virtual void complete() {
+		if (output_stream) {
+			EM_matrix_store::ptr em_out
+				= std::dynamic_pointer_cast<EM_matrix_store>(output);
+			assert(em_out);
+			em_out->wait4complete();
+			assert(output_stream->is_complete());
+		}
+	}
+
+	virtual bool set_data(matrix_store::const_ptr in,
+			matrix_store::ptr out, const block_2d_size &block_size);
+
+	virtual std::vector<EM_object *> get_EM_objs() {
+		std::vector<EM_object *> ret;
+		if (!output->is_in_mem()) {
+			const EM_object *obj = dynamic_cast<const EM_object *>(output.get());
+			ret.push_back(const_cast<EM_object *>(obj));
+		}
+		return ret;
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		if (order) {
-			switch (output.get_num_cols()) {
+			switch (output->get_num_cols()) {
 				case 1: return create_block_compute_task<1>(io);
 				case 2: return create_block_compute_task<2>(io);
 				case 4: return create_block_compute_task<4>(io);
@@ -466,19 +535,20 @@ public:
 			}
 		}
 		else {
-			switch (output.get_num_cols()) {
+			assert(in_row_portions);
+			switch (output->get_num_cols()) {
 				case 1: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 1>(input, output, io));
+								SparseType, 1>(in_row_portions, *output, io));
 				case 2: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 2>(input, output, io));
+								SparseType, 2>(in_row_portions, *output, io));
 				case 4: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 4>(input, output, io));
+								SparseType, 4>(in_row_portions, *output, io));
 				case 8: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								SparseType, 8>(input, output, io));
+								SparseType, 8>(in_row_portions, *output, io));
 				case 16: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 16>(input, output, io));
+								 SparseType, 16>(in_row_portions, *output, io));
 				default: return compute_task::ptr(new fg_row_spmm_task<DenseType,
-								 SparseType, 0>(input, output, io));
+								 SparseType, 0>(in_row_portions, *output, io));
 			}
 		}
 	}
@@ -504,9 +574,13 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
 	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
 	size_t size = matrix_conf.get_cpu_cache_size() / entry_size
 		/ block_size.get_num_rows() / 2;
+	size = std::max(size, 1UL);
 	size_t max_size
-		= detail::mem_matrix_store::CHUNK_SIZE / block_size.get_num_rows();
-	return std::min(std::max(size, 1UL), max_size);
+		= mem_matrix_store::CHUNK_SIZE / block_size.get_num_rows();
+	max_size = std::max(max_size, 1UL);
+	return std::min(size, max_size);
+}
+
 }
 
 /*
@@ -517,7 +591,7 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
  * is in memory, we can use in_mem_io to access the sparse matrix in memory
  * while reusing all the existing code for computation.
  */
-class sparse_matrix
+class sparse_matrix: public detail::EM_object
 {
 	// Whether the matrix is represented by the FlashGraph format.
 	bool is_fg;
@@ -526,11 +600,12 @@ class sparse_matrix
 	// The type of a non-zero entry.
 	const scalar_type *entry_type;
 	bool symmetric;
+	detail::EM_object::io_set::ptr ios;
 
 	template<class DenseType, class SparseType>
-	task_creator::ptr get_multiply_creator(const detail::mem_matrix_store &in,
-			detail::mem_matrix_store &out) const {
-		return spmm_creator<DenseType, SparseType>::create(in, out, *this);
+	detail::task_creator::ptr get_multiply_creator(size_t num_in_cols) const {
+		return detail::spmm_creator<DenseType, SparseType>::create(*this,
+				num_in_cols);
 	}
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -551,6 +626,16 @@ protected:
 		this->nrows = nrows;
 		this->ncols = ncols;
 		this->entry_type = entry_type;
+	}
+
+	void reset_ios() {
+		ios = NULL;
+	}
+
+	void _transpose() {
+		size_t tmp = nrows;
+		nrows = ncols;
+		ncols = tmp;
 	}
 public:
 	typedef std::shared_ptr<sparse_matrix> ptr;
@@ -589,25 +674,22 @@ public:
 		return is_fg;
 	}
 
+	std::vector<safs::io_interface::ptr> create_ios() const;
+
 	/*
 	 * When customizing computatin on a sparse matrix (regardless of
 	 * the storage format and the computation), we need to define two things:
 	 * how data is accessed and what computation runs on the data fetched
 	 * from the external memory. matrix_io_generator defines data access
 	 * and compute_task defines the computation.
-	 * `num_block_rows' will affect the behavior of matrix_io_generator.
-	 * More explanation of `num_block_rows' is seen in the comments of
-	 * `init_io_gens'.
 	 */
-	void compute(task_creator::ptr creator, size_t num_block_rows) const;
+	void compute(detail::task_creator::ptr creator,
+			const detail::matrix_store &in) const;
 	/*
 	 * This method defines how data in the matrix is accessed.
-	 * Since we need to perform computation in parallel, we need to have
-	 * a matrix I/O generator for each thread.
-	 * `num_block_rows' defines how many block rows are accessed in an I/O.
 	 */
-	virtual void init_io_gens(size_t num_block_rows,
-			std::vector<matrix_io_generator::ptr> &io_gens) const = 0;
+	virtual matrix_io_generator::ptr create_io_gen(
+			const detail::matrix_store &in) const = 0;
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
 	/*
@@ -626,7 +708,7 @@ public:
 	 * multiplying this sparse matrix with a dense matrix.
 	 * All blocks are organized in a rectangular area.
 	 */
-	virtual block_exec_order::ptr get_multiply_order(
+	virtual detail::block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const = 0;
 
 	/*
@@ -641,7 +723,10 @@ public:
 	}
 	template<class T>
 	bool is_type() const {
-		if (entry_type == NULL)
+		// If entry_type doesn't exist, it's a bool sparse matrix.
+		if (entry_type == NULL && get_scalar_type<bool>() == get_scalar_type<T>())
+			return true;
+		else if (entry_type == NULL)
 			return false;
 		else
 			return *entry_type == get_scalar_type<T>();
@@ -659,49 +744,37 @@ public:
 		return symmetric;
 	}
 
-	virtual void transpose() {
-		size_t tmp = nrows;
-		nrows = ncols;
-		ncols = tmp;
-	}
+	virtual sparse_matrix::ptr transpose() const = 0;
+
+	bool multiply(detail::matrix_store::const_ptr in,
+			detail::matrix_store::ptr out, detail::task_creator::ptr create) const;
 
 	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
 	template<class DenseType, class SparseType>
-	bool multiply(const detail::matrix_store &in, detail::matrix_store &out) const {
-		if (in.get_num_rows() != ncols
-				|| in.get_num_cols() != out.get_num_cols()
-				|| out.get_num_rows() != this->get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error) <<
-					"the input and output matrix have incompatible dimensions";
-			return false;
-		}
-		else if (!in.is_in_mem() || !out.is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
-			return false;
-		}
-		// We allow the output matrix in column major.
-		// TODO we should also allow the input matrix to be column-major.
-		else if (in.store_layout() != matrix_layout_t::L_ROW) {
-			BOOST_LOG_TRIVIAL(error) << "the dense matrix isn't row major.";
-			return false;
-		}
+	bool multiply(detail::matrix_store::const_ptr in,
+			detail::matrix_store::ptr out) const {
+		return multiply(in, out, get_multiply_creator<DenseType, SparseType>(
+					in->get_num_cols()));
+	}
 
-		compute(get_multiply_creator<DenseType, SparseType>(
-					dynamic_cast<const detail::mem_matrix_store &>(in),
-					dynamic_cast<detail::mem_matrix_store &>(out)),
-				cal_super_block_size(get_block_size(),
-					sizeof(DenseType) * in.get_num_cols()));
-		return true;
+	template<class DenseType, class SparseType>
+	bool multiply(detail::vec_store::const_ptr in,
+			detail::vec_store::ptr out) const {
+		return multiply<DenseType, SparseType>(
+				in->conv2mat(in->get_length(), 1, true),
+				out->conv2mat(out->get_length(), 1, true));
 	}
 };
 
+namespace detail
+{
+
 template<class DenseType, class SparseType>
-spmm_creator<DenseType, SparseType>::spmm_creator(
-		const detail::mem_matrix_store &_input, detail::mem_matrix_store &_output,
-		const sparse_matrix &_mat): input(_input), output(_output), mat(_mat)
+spmm_creator<DenseType, SparseType>::spmm_creator(const sparse_matrix &_mat,
+		size_t num_in_cols): mat(_mat)
 {
 	// This initialization only for 2D partitioned sparse matrix.
 	if (!mat.is_fg_matrix()) {
@@ -712,13 +785,34 @@ spmm_creator<DenseType, SparseType>::spmm_creator(
 		// of 2^n that is close to the number of columns in the input matrix
 		// to calculate the super block size, so that the super block has 2^n
 		// block rows and columns.
-		size_t num_cols = input.get_num_cols();
+		size_t num_cols = num_in_cols;
 		num_cols = 1 << ((size_t) log2(num_cols));
 		size_t sb_size = cal_super_block_size(mat.get_block_size(),
 				sizeof(DenseType) * num_cols);
-		assert(input.get_num_cols() == output.get_num_cols());
 		order = mat.get_multiply_order(sb_size, sb_size);
 	}
+}
+
+template<class DenseType, class SparseType>
+bool spmm_creator<DenseType, SparseType>::set_data(
+		matrix_store::const_ptr in, matrix_store::ptr out,
+		const block_2d_size &block_size)
+{
+	if (in->get_type() != get_scalar_type<DenseType>()
+			|| out->get_type() != get_scalar_type<DenseType>()) {
+		BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
+		return false;
+	}
+	this->output = out;
+	this->in_row_portions = row_portions::create(in, block_size.get_num_cols());
+	if (in_row_portions == NULL)
+		return false;
+	if (!output->is_in_mem())
+		output_stream = EM_matrix_stream::create(
+				std::dynamic_pointer_cast<EM_matrix_store>(output));
+	return true;
+}
+
 }
 
 void init_flash_matrix(config_map::ptr configs);

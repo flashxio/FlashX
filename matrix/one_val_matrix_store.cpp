@@ -32,7 +32,8 @@ namespace detail
 
 one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout,
-		int num_nodes): virtual_matrix_store(nrow, ncol, true, val->get_type())
+		int num_nodes): virtual_matrix_store(nrow, ncol, true,
+			val->get_type()), mat_id(mat_counter++)
 {
 	if (num_nodes > 0)
 		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
@@ -52,37 +53,47 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 				get_num_rows());
 		buf_size = get_num_cols() * part_num_rows * get_entry_size();
 	}
-	const set_operate &set = get_type().get_set_const(*val);
+	set_operate::const_ptr set = get_type().get_set_const(*val);
 	if (num_nodes < 0) {
 		this->portion_bufs.resize(1);
-		this->portion_bufs[0] = raw_data_array(buf_size, -1);
-		set.set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
+		this->portion_bufs[0] = simple_raw_array(buf_size, -1);
+		set->set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
 	}
 	else {
 		this->portion_bufs.resize(num_nodes);
 		for (int i = 0; i < num_nodes; i++) {
-			this->portion_bufs[i] = raw_data_array(buf_size, i);
-			set.set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
+			this->portion_bufs[i] = simple_raw_array(buf_size, i);
+			set->set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
 		}
 	}
+}
+
+bool one_val_matrix_store::share_data(const matrix_store &store) const
+{
+	if ((store.get_num_rows() == get_num_rows()
+				&& store.get_num_cols() == get_num_cols())
+			|| (store.get_num_rows() == get_num_cols()
+				&& store.get_num_cols() == get_num_rows())) {
+		const one_val_matrix_store *mat1
+			= dynamic_cast<const one_val_matrix_store *>(&store);
+		if (mat1)
+			return memcmp(mat1->val->get_raw(), val->get_raw(),
+					mat1->val->get_size()) == 0;
+		else
+			return false;
+	}
+	else
+		return false;
 }
 
 matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	return matrix_store::ptr(new one_val_matrix_store(*this));
-}
-
-vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	return vec_store::const_ptr();
-}
-
-vec_store::const_ptr one_val_matrix_store::get_row_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	return vec_store::const_ptr();
+	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
+			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
+	auto set = get_type().get_set_const(*val);
+	ret->set_data(*set);
+	return ret;
 }
 
 matrix_store::const_ptr one_val_matrix_store::get_cols(
@@ -97,6 +108,21 @@ matrix_store::const_ptr one_val_matrix_store::get_rows(
 {
 	return matrix_store::const_ptr(new one_val_matrix_store(val,
 				idxs.size(), get_num_cols(), layout, get_num_nodes()));
+}
+
+int one_val_matrix_store::get_portion_node_id(size_t id) const
+{
+	if (get_num_nodes() < 0)
+		return -1;
+
+	if (is_wide()) {
+		size_t start_col = mem_matrix_store::CHUNK_SIZE * id;
+		return mapper->map2physical(start_col).first;
+	}
+	else {
+		size_t start_row = mem_matrix_store::CHUNK_SIZE * id;
+		return mapper->map2physical(start_row).first;
+	}
 }
 
 local_matrix_store::const_ptr one_val_matrix_store::get_portion(

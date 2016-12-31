@@ -32,6 +32,7 @@ namespace eigen
 
 size_t num_cached_mats = 1;
 std::deque<dense_matrix::ptr> cached_mats;
+bool verify_correct = false;
 
 size_t num_col_writes = 0;
 size_t num_col_writes_concept = 0;
@@ -41,6 +42,79 @@ size_t num_multiply_concept = 0;
 void set_num_cached_mats(size_t num)
 {
 	num_cached_mats = num;
+}
+
+/*
+ * This is to verify that the eigensolver never uses an uninitialized matrix.
+ */
+class uninit_matrix_store: public detail::matrix_store
+{
+public:
+	uninit_matrix_store(size_t nrow, size_t ncol,
+			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
+	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
+
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		throw unsupported_exception();
+	}
+	virtual std::string get_name() const {
+		return "uninitialized matrix";
+	}
+
+	virtual matrix_layout_t store_layout() const {
+		throw unsupported_exception();
+	}
+
+	virtual void reset_data() {
+		throw unsupported_exception();
+	}
+	virtual void set_data(const set_operate &op) {
+		throw unsupported_exception();
+	}
+
+	virtual detail::matrix_store::const_ptr transpose() const {
+		throw unsupported_exception();
+	}
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		throw unsupported_exception();
+	}
+	virtual detail::async_cres_t get_portion_async(size_t start_row,
+			size_t start_col, size_t num_rows, size_t num_cols,
+			std::shared_ptr<detail::portion_compute> compute) const {
+		throw unsupported_exception();
+	}
+	virtual std::shared_ptr<const detail::local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const {
+		throw unsupported_exception();
+	}
+	virtual std::shared_ptr<detail::local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) {
+		throw unsupported_exception();
+	}
+	virtual int get_portion_node_id(size_t id) const {
+		throw unsupported_exception();
+	}
+	virtual void write_portion_async(
+			std::shared_ptr<const detail::local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		throw unsupported_exception();
+	}
+};
+
+static dense_matrix::ptr create_uninit(size_t nrow, size_t ncol,
+		const scalar_type &type, int num_nodes)
+{
+	if (verify_correct)
+		return dense_matrix::create(detail::matrix_store::ptr(
+					new uninit_matrix_store(nrow, ncol, type)));
+	else
+		return dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_COL, type, num_nodes, true);
 }
 
 class mirror_block_multi_vector: public block_multi_vector
@@ -247,8 +321,7 @@ block_multi_vector::block_multi_vector(size_t nrow, size_t ncol,
 	this->is_subspace = is_subspace;
 	mats.resize(ncol / block_size);
 	for (size_t i = 0; i < mats.size(); i++)
-		mats[i] = dense_matrix::create(nrow, block_size,
-				matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
+		mats[i] = create_uninit(nrow, block_size, type, get_num_nodes());
 }
 
 dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
@@ -388,7 +461,11 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 				detail::matrix_stats.print_diff(orig_stats);
 			}
 			// We only need to cache matrices in the EM mode.
-			if (!in_mem && num_cached_mats > 0 && mats[0]->is_in_mem()) {
+			if (!in_mem && num_cached_mats > 0
+					// We should keep the new matrix in the matrix cache if
+					// there is still space in the cache. The new matrix
+					// might be on disks, but we don't care.
+					&& cached_mats.size() < num_cached_mats) {
 				cached_mats.push_back(mats[0]);
 			}
 		}
@@ -445,7 +522,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 std::atomic<size_t> num_spmm;
 
 void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
-		const block_multi_vector &X, block_multi_vector &Y)
+		const block_multi_vector &X, block_multi_vector &Y, bool out_mat_in_mem)
 {
 	assert(multiply.get_num_cols() == X.get_num_rows());
 	assert(multiply.get_num_rows() == Y.get_num_rows());
@@ -511,6 +588,8 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 			detail::matrix_stats.print_diff(orig_stats);
 		}
 		res = multiply.run(row_in);
+		if (res == NULL)
+			throw std::runtime_error("can't perform sparse matrix multiplication");
 		row_in = NULL;
 		if (res->store_layout() == matrix_layout_t::L_ROW)
 			res = res->conv2(matrix_layout_t::L_COL);
@@ -518,7 +597,7 @@ void block_multi_vector::sparse_matrix_multiply(const spm_function &multiply,
 		// EM matrix.
 		if (!in_mem)
 			num_col_writes_concept += res->get_num_cols();
-		if (!in_mem && num_cached_mats == 0) {
+		if (!out_mat_in_mem) {
 			BOOST_LOG_TRIVIAL(info) << "write the output matrix of SpMM to disks";
 			num_col_writes += res->get_num_cols();
 			detail::matrix_stats_t orig_stats = detail::matrix_stats;
@@ -639,11 +718,13 @@ public:
 		if (ins.size() == 1)
 			out.copy_from(*ins[0]);
 		else {
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 			mapply2(*ins[0], *ins[1],
-					out.get_type().get_basic_ops().get_add(), out);
+					out.get_type().get_basic_ops().get_add(), dim, out);
 			for (size_t i = 2; i < ins.size(); i++)
 				mapply2(*ins[i], out,
-						out.get_type().get_basic_ops().get_add(), out);
+						out.get_type().get_basic_ops().get_add(), dim, out);
 		}
 	}
 
@@ -745,13 +826,12 @@ void gemm_op<T>::run(
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
 	assert(A_num_blocks + C_num_blocks == ins.size());
-
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	T *res_mat;
 	res_mat = (T *) out.get_raw_arr();
+	// Indicate whether we need to copy the result back.
+	bool copy_res = false;
 	if (res_mat == NULL) {
 		if (res_bufs[thread_id] == NULL
 				|| res_bufs[thread_id]->get_num_rows() != out.get_num_rows()
@@ -767,6 +847,9 @@ void gemm_op<T>::run(
 			copy_from_blocks(ins.begin() + A_num_blocks, ins.end(),
 					*res_bufs[thread_id]);
 		res_mat = (T *) res_bufs[thread_id]->get_raw_arr();
+		// If the data is stored in the buffer, we need to copy
+		// the data back to the output store.
+		copy_res = true;
 	}
 	else {
 		if (beta && C_num_blocks == 1)
@@ -824,8 +907,10 @@ void gemm_op<T>::run(
 			Astore->get_num_cols(), alpha, Amat,
 			Astore->get_num_rows(), Bmat, Bstore->get_num_rows(),
 			beta, res_mat, out.get_num_rows());
-	if (res_bufs[thread_id])
+	if (copy_res) {
+		assert(res_bufs[thread_id]);
 		out.copy_from(*res_bufs[thread_id]);
+	}
 }
 
 /*
@@ -920,9 +1005,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		return block_multi_vector::ptr();
 	}
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -1193,9 +1276,7 @@ void multiply_wide_op<T>::run(
 			ins[0]->get_num_rows() * out.get_num_rows() * out.get_num_cols());
 
 	assert(ins.size() >= 2);
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	const T *Amat = NULL;
 	size_t num_Arows;
@@ -1277,9 +1358,7 @@ dense_matrix::ptr MvTransMv_wide(
 		const std::vector<detail::matrix_store::const_ptr> &blocks1,
 		detail::matrix_store::const_ptr in2, const size_t MAX_MUL_BLOCKS)
 {
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	std::vector<detail::matrix_store::const_ptr> tmp_res;
 	std::vector<detail::portion_mapply_op::const_ptr> mul_ops;
 	for (size_t i = 0; i < blocks1.size(); i += MAX_MUL_BLOCKS) {
@@ -1339,7 +1418,8 @@ dense_matrix::ptr MvTransMv_wide(
 			// It's possible that the local matrix store doesn't exist
 			// because the input matrix is very small.
 			if (local_ms[j])
-				detail::mapply2(*local_res, *local_ms[j], add, *local_res);
+				detail::mapply2(*local_res, *local_ms[j], add,
+						detail::part_dim_t::PART_NONE, *local_res);
 		}
 		start_row += local_res->get_num_rows();
 	}
@@ -1381,7 +1461,8 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 						this->get_num_cols()));
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
-				matrix_layout_t::L_NONE, true);
+				matrix_layout_t::L_NONE);
+		ret->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 		return ret;
 	}
@@ -1441,8 +1522,9 @@ std::vector<double> block_multi_vector::MvDot(const block_multi_vector &mv) cons
 		dense_matrix::ptr mat1 = get_block(i);
 		dense_matrix::ptr mat2 = mv.get_block(i);
 		dense_matrix::ptr res = mat1->multiply_ele(*mat2);
-		vector::ptr sum = res->col_sum();
-		std::vector<double> tmp = sum->conv2std<double>();
+		dense_matrix::ptr sum = res->col_sum();
+		col_vec::ptr sum_vec = col_vec::create(sum);
+		std::vector<double> tmp = sum_vec->conv2std<double>();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
 	return ret;
@@ -1517,16 +1599,17 @@ void block_multi_vector::set_block(const block_multi_vector &mv,
 {
 	// We have to set the entire block.
 	if (index[0] % get_block_size() == 0 && index.size() % get_block_size() == 0) {
+		// Because some of the matrices in the subspace are cached in memory,
+		// we may now need to delete them.
 		// Normally, the KrylovSchur eigensolver only sets a single block.
 		// It needs to assign more than one block in restart.
 		// TODO This method of detecting restart may not reliable.
 		if (is_subspace && index.size() > get_block_size()) {
-			printf("restart the subspace\n");
 			// When restarting the subspace, we can delete all vectors
 			// in the subspace.
 			for (size_t i = 0; i < mats.size(); i++)
-				mats[i] = dense_matrix::create(num_rows, block_size,
-						matrix_layout_t::L_COL, type, get_num_nodes(), in_mem);
+				mats[i] = create_uninit(num_rows, block_size, type,
+						get_num_nodes());
 		}
 		size_t num_blocks = index.size() / get_block_size();
 		size_t block_start = index[0] / get_block_size();

@@ -31,14 +31,20 @@ namespace detail
 
 class one_val_matrix_store: public virtual_matrix_store
 {
+	const size_t mat_id;
 	scalar_variable::ptr val;
 	matrix_layout_t layout;
-	std::vector<raw_data_array> portion_bufs;
+	std::vector<simple_raw_array> portion_bufs;
 	int num_nodes;
 	std::shared_ptr<NUMA_mapper> mapper;
 public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
+
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const;
 
 	virtual std::string get_name() const {
 		return (boost::format("one_val_mat(%1%,%2%)") % get_num_rows()
@@ -46,8 +52,6 @@ public:
 	}
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 			int num_nodes) const;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
@@ -57,6 +61,7 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
+	using virtual_matrix_store::get_portion_async;
 	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const {
@@ -65,6 +70,7 @@ public:
 	}
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
+	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -76,7 +82,11 @@ public:
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		return std::unordered_map<size_t, size_t>();
+		std::unordered_map<size_t, size_t> ret;
+		// TODO right now we only indicate the matrix. We set the number of
+		// bytes to 0
+		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
+		return ret;
 	}
 };
 

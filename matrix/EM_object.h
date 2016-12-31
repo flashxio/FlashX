@@ -78,10 +78,20 @@ public:
 	};
 
 	typedef std::shared_ptr<EM_object> ptr;
+	typedef std::shared_ptr<const EM_object> const_ptr;
 	/*
 	 * This creates an I/O instance for the current thread.
 	 */
 	virtual std::vector<safs::io_interface::ptr> create_ios() const = 0;
+
+	/*
+	 * Make the EM object spersistent on SAFS.
+	 */
+	virtual bool set_persistent(const std::string &name) const {
+		return true;
+	}
+	virtual void unset_persistent() const {
+	}
 };
 
 template<class T>
@@ -164,31 +174,36 @@ class EM_portion_dispatcher: public task_dispatcher
 	off_t portion_idx;
 	pthread_spinlock_t lock;
 	size_t portion_size;
+	// This is the number of portions.
+	// When the number of remaining portions is smaller than this, we return
+	// one portion at a time. Otherwise, we can return the number of portions
+	// specified by the user.
+	// The idea is that when a task is larger, we can issue larger I/O requests
+	// to achieve better I/O performance. But larger tasks cause load
+	// imbalancing. As such, we dynamically adapt the task size to achieve both.
+	size_t balance_thres;
+	// This indicates the number of portions in a task.
+	size_t num_portions_task;
 public:
-	EM_portion_dispatcher(size_t tot_len, size_t portion_size) {
+	EM_portion_dispatcher(size_t tot_len, size_t portion_size,
+			size_t balance_thres = 0, size_t num_portions_task = 1) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		portion_idx = 0;
 		this->tot_len = tot_len;
 		this->portion_size = portion_size;
+		this->balance_thres = balance_thres;
+		this->num_portions_task = num_portions_task;
+	}
+
+	size_t get_task_size() const {
+		return num_portions_task;
 	}
 
 	size_t get_portion_size() const {
 		return portion_size;
 	}
 
-	virtual bool issue_task() {
-		pthread_spin_lock(&lock);
-		off_t global_start = portion_idx * portion_size;
-		if ((size_t) global_start >= tot_len) {
-			pthread_spin_unlock(&lock);
-			return false;
-		}
-		size_t length = std::min(portion_size, tot_len - global_start);
-		portion_idx++;
-		pthread_spin_unlock(&lock);
-		create_task(global_start, length);
-		return true;
-	}
+	virtual bool issue_task();
 
 	virtual void create_task(off_t global_start, size_t length) = 0;
 };

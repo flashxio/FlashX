@@ -23,7 +23,7 @@
 #include <fstream>
 
 #include <math.h>
-#include "log.h"
+#include "../../libsafs/log.h"
 
 #include "convert_util.h"
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -37,7 +37,6 @@ size_t ext_mem_undirected_vertex::serialize(const in_mem_vertex &v, char *buf,
 	else
 		ext_v->edge_data_size = 0;
 	size_t mem_size = ext_v->get_size();
-	assert(mem_size <= MAX_VERTEX_SIZE);
 	assert(size >= mem_size);
 	v.serialize_edges(ext_v->neighbors, type);
 	// serialize edge data

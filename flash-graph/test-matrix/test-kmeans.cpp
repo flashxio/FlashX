@@ -1,3 +1,4 @@
+#include <numa.h>
 #include "signal.h"
 #include "FGlib.h"
 #include "matrix/kmeans.h"

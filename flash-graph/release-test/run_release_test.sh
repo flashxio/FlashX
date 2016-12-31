@@ -7,8 +7,7 @@ wget http://snap.stanford.edu/data/wiki-Vote.txt.gz
 gunzip wiki-Vote.txt.gz
 rm wiki-Vote.adj*
 rm wiki-Vote.index*
-../tools/el2al -v -w wiki-Vote.adj wiki-Vote.index wiki-Vote.txt
-../tools/el2al -v -w -d -c run_test.txt wiki-Vote wiki-Vote-index wiki-Vote.txt
+../../matrix/test/el2al ../conf/run_test.txt wiki-Vote.txt wiki-Vote
 sed '/^#/d' wiki-Vote.txt > wiki-Vote1.txt
 rm wiki-Vote.txt
 
@@ -16,12 +15,11 @@ wget http://snap.stanford.edu/data/facebook_combined.txt.gz
 gunzip facebook_combined.txt.gz
 rm facebook.adj*
 rm facebook.index*
-../tools/el2al -v -u -w facebook.adj facebook.index facebook_combined.txt
-../tools/el2al -v -u -w -d -c run_test.txt facebook facebook-index facebook_combined.txt
+../../matrix/test/el2al -u ../conf/run_test.txt facebook_combined.txt facebook
 sed '/^#/d' facebook_combined.txt > facebook_combined1.txt
 
-perl add_rand_weight.pl < facebook_combined.txt > fb-weighted.txt
-../tools/el2al -v -u -w -t count fb-weighted.adj fb-weighted.index fb-weighted.txt
+#perl add_rand_weight.pl < facebook_combined.txt > fb-weighted.txt
+#../../matrix/test/el2al -u -t I ../conf/run_test.txt fb-weighted.txt fb-weighted
 
 rm facebook_combined.txt
 

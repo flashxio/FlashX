@@ -28,7 +28,7 @@
 #include <iostream>
 
 #include <boost/assert.hpp>
-#include "log.h"
+#include "../../libsafs/log.h"
 #include "kmeans_types.h"
 
 namespace {

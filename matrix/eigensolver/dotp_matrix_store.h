@@ -69,6 +69,9 @@ public:
 	matrix_layout_t store_layout() const {
 		return orig_store->store_layout();
 	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
 
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const {
@@ -82,6 +85,7 @@ public:
 					sub_dot_prods, orig_idxs));
 	}
 
+	using virtual_matrix_store::get_portion;
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		assert(!orig_store->is_wide());
@@ -98,6 +102,9 @@ public:
 					store->get_num_rows() * store->get_entry_size());
 		return detail::local_matrix_store::const_ptr(store);
 	}
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_store->get_portion_node_id(id);
+	}
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(!orig_store->is_wide());
@@ -109,6 +116,7 @@ public:
 		return orig_store->get_cols(idxs)->transpose();
 	}
 
+	using virtual_matrix_store::get_portion_async;
 	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
@@ -151,13 +159,9 @@ class dotp_matrix_store: public detail::virtual_matrix_store, public detail::EM_
 		const bulk_uoperate *op = get_type().get_basic_uops().get_op(
 				basic_uops::op_idx::SQ);
 		dense_matrix::ptr sq_mat = mat->sapply(bulk_uoperate::conv2ptr(*op));
-		vector::ptr sums = sq_mat->col_sum();
-
-		const fm::detail::smp_vec_store &smp_res
-			= dynamic_cast<const fm::detail::smp_vec_store &>(sums->get_data());
-		col_dot_prods.resize(sums->get_length());
-		for (size_t i = 0; i < sums->get_length(); i++)
-			col_dot_prods[i] = smp_res.get<double>(i);
+		dense_matrix::ptr sum = sq_mat->col_sum();
+		col_vec::ptr sum_vec = col_vec::create(sum);
+		col_dot_prods = sum_vec->conv2std<double>();
 	}
 public:
 	typedef std::shared_ptr<dotp_matrix_store> ptr;
@@ -168,6 +172,9 @@ public:
 
 	const std::vector<double> get_col_dot_prods() const {
 		return col_dot_prods;
+	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
 	}
 
 	virtual matrix_store::const_ptr get_cols(
@@ -191,15 +198,20 @@ public:
 		return orig_store->transpose();
 	}
 
+	using virtual_matrix_store::get_portion_async;
 	virtual detail::async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows, size_t num_cols,
 			detail::portion_compute::ptr compute) const {
 		return orig_store->get_portion_async(start_row, start_col, num_rows,
 				num_cols, compute);
 	}
+	using virtual_matrix_store::get_portion;
 	virtual detail::local_matrix_store::const_ptr get_portion(size_t start_row,
 			size_t start_col, size_t num_rows, size_t num_cols) const {
 		return orig_store->get_portion(start_row, start_col, num_rows, num_cols);
+	}
+	virtual int get_portion_node_id(size_t id) const {
+		return orig_store->get_portion_node_id(id);
 	}
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		return orig_store->get_portion_size();

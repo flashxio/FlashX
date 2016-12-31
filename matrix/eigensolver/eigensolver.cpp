@@ -28,6 +28,15 @@ using std::endl;
 
 using namespace fm::eigen;
 
+namespace fm
+{
+namespace eigen
+{
+extern size_t num_cached_mats;
+size_t num_ops;
+}
+}
+
 namespace Anasazi
 {
 
@@ -44,11 +53,18 @@ public:
 				"SpMM: y(%1%) = A * x(%2%)") % y.get_name() % x.get_name();
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data());
+		bool out_mat_in_mem;
+		if (x.get_data()->is_in_mem())
+			out_mat_in_mem = true;
+		else
+			out_mat_in_mem = num_cached_mats > 0;
+		block_multi_vector::sparse_matrix_multiply(Op, *x.get_data(), *y.get_data(),
+				out_mat_in_mem);
 		gettimeofday(&end, NULL);
 		BOOST_LOG_TRIVIAL(info) << "SpMM takes " << time_diff(start, end)
 			<< " seconds";
 		y.sync_fm2ep();
+		num_ops += x.get_data()->get_num_cols();
 	}
 
 };
@@ -61,16 +77,21 @@ namespace fm
 namespace eigen
 {
 
-eigen_options::eigen_options(int nev, std::string solver)
+eigen_options::eigen_options()
 {
 	tol = 1.0e-8;
 	max_restarts = 100;
 	max_iters = 500;
-	this->nev = nev;
-	this->solver = solver;
+	this->nev = 1;
+	this->solver = "KrylovSchur";
 	which="LM";
 	in_mem = true;
+}
 
+bool eigen_options::init(int nev, std::string solver)
+{
+	this->nev = nev;
+	this->solver = solver;
 	if (solver == "KrylovSchur") {
 		block_size = 1;
 		// The KrylovSchur solver wants the number of blocks to be at least 3.
@@ -86,15 +107,19 @@ eigen_options::eigen_options(int nev, std::string solver)
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "Unknown solver: " << solver;
-		exit(1);
+		return false;
 	}
+
+	return true;
 }
 
 eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &_opts)
+		struct eigen_options &_opts, bool verbose)
 {
 	using Teuchos::RCP;
 	using Teuchos::rcp;
+
+	num_ops = 0;
 
 	// Anasazi solvers have the following template parameters:
 	//
@@ -156,10 +181,14 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	anasaziPL.set ("Which", which.c_str());
 	anasaziPL.set ("Block Size", blockSize);
 	anasaziPL.set ("Convergence Tolerance", tol);
-	anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
-			Anasazi::TimingDetails + Anasazi::FinalSummary);
+	if (verbose)
+		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
+				Anasazi::TimingDetails + Anasazi::FinalSummary);
+	else
+		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings);
 
 	Anasazi::ReturnType returnCode;
+	size_t num_iters = 0;
 	if (solver == "Davidson") {
 		anasaziPL.set ("Num Blocks", numBlocks);
 		anasaziPL.set ("Maximum Restarts", maxRestarts);
@@ -173,7 +202,13 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "KrylovSchur") {
 		anasaziPL.set ("Num Blocks", numBlocks);
@@ -188,7 +223,13 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else if (solver == "LOBPCG") {
 		anasaziPL.set ("Maximum Iterations", maxIters);
@@ -204,7 +245,13 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 		// After creating the eigensolver, you may call solve() multiple
 		// times with different parameters or initial vectors.  This lets
 		// you reuse intermediate state, like allocated basis vectors.
-		returnCode = anasaziSolver.solve ();
+		try {
+			returnCode = anasaziSolver.solve ();
+			num_iters = anasaziSolver.getNumIters();
+		} catch (std::runtime_error e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+			return eigen_res();
+		}
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "a wrong solver: " << solver;
@@ -224,6 +271,8 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	// eigenvalues, since the matrix pencil is symmetric.
 	std::vector<Anasazi::Value<double> > evals = sol.Evals;
 	RCP<MV> evecs = sol.Evecs;
+	if (evecs.is_null() || evecs->get_data() == NULL)
+		return eigen_res();
 
 	// Compute residuals.
 	std::vector<double> normR (sol.numVecs);
@@ -236,45 +285,46 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 			T(i,i) = evals[i].realpart;
 		}
 		block_multi_vector::sparse_matrix_multiply(*A, *evecs->get_data(),
-				*tempAevec.get_data());
+				*tempAevec.get_data(), evecs->get_data()->is_in_mem());
 		MVT::MvTimesMatAddMv (-1.0, *evecs, T, 1.0, tempAevec);
 		MVT::MvNorm (tempAevec, normR);
 	}
 
 	// Print the results on MPI process 0.
-	cout << "Solver manager returned "
-		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.")
-		<< endl << endl
-		<< "------------------------------------------------------" << endl
+	BOOST_LOG_TRIVIAL(info) << "Solver manager returned "
+		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.");
+	BOOST_LOG_TRIVIAL(info)
+		<< "------------------------------------------------------";
+	BOOST_LOG_TRIVIAL(info)
 		<< std::setw(16) << "Eigenvalue"
 		<< std::setw(18) << "Direct Residual"
-		<< endl
-		<< "------------------------------------------------------" << endl;
+		<< "------------------------------------------------------";
 
 	struct eigen_res res;
 	res.vecs = evecs->get_data()->conv2matrix();
 	res.vals.resize(sol.numVecs);
 	for (int i=0; i<sol.numVecs; ++i) {
 		res.vals[i] = evals[i].realpart;
-		cout << std::setw(16) << evals[i].realpart
-			<< std::setw(18) << normR[i] / evals[i].realpart
-			<< endl;
+		BOOST_LOG_TRIVIAL(info) << std::setw(16) << evals[i].realpart
+			<< std::setw(18) << normR[i] / evals[i].realpart;
 	}
-	cout << "------------------------------------------------------" << endl;
-	cout << "#col writes: " << num_col_writes << endl;
-	cout << "#col reads: " << num_col_reads_concept << " in concept" << endl;
-	cout << "#col writes: " << num_col_writes_concept << " in concept" << endl;
-	cout << "#multiply: " << num_multiply_concept << " in concept" << endl;
-	cout << "#mem read bytes: " << detail::matrix_stats.get_read_bytes(true)
-		<< endl;
-	cout << "#mem write bytes: " << detail::matrix_stats.get_write_bytes(true)
-		<< endl;
-	cout << "#EM read bytes: " << detail::matrix_stats.get_read_bytes(false)
-		<< endl;
-	cout << "#EM write bytes: " << detail::matrix_stats.get_write_bytes(false)
-		<< endl;
-	cout << "#double float-point multiplies: "
-		<< detail::matrix_stats.get_multiplies() << endl;
+	res.status.num_iters = num_iters;
+	res.status.num_ops = num_ops;
+	BOOST_LOG_TRIVIAL(info) << "---------------------------------------------";
+	BOOST_LOG_TRIVIAL(info) << "#col writes: " << num_col_writes;
+	BOOST_LOG_TRIVIAL(info) << "#col reads: " << num_col_reads_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#col writes: " << num_col_writes_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#multiply: " << num_multiply_concept << " in concept";
+	BOOST_LOG_TRIVIAL(info) << "#mem read bytes: "
+		<< detail::matrix_stats.get_read_bytes(true);
+	BOOST_LOG_TRIVIAL(info) << "#mem write bytes: "
+		<< detail::matrix_stats.get_write_bytes(true);
+	BOOST_LOG_TRIVIAL(info) << "#EM read bytes: "
+		<< detail::matrix_stats.get_read_bytes(false);
+	BOOST_LOG_TRIVIAL(info) << "#EM write bytes: "
+		<< detail::matrix_stats.get_write_bytes(false);
+	BOOST_LOG_TRIVIAL(info) << "#double float-point multiplies: "
+		<< detail::matrix_stats.get_multiplies();
 	cached_mats.clear();
 
 	return res;

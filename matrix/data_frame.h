@@ -78,6 +78,10 @@ public:
 		return ptr(new data_frame(named_vecs));
 	}
 
+	bool is_in_mem() const;
+
+	data_frame::const_ptr shuffle_vecs(const std::vector<off_t> &vec_idxs) const;
+
 	bool add_vec(const std::string &name, detail::vec_store::ptr vec);
 
 	/*
@@ -139,7 +143,8 @@ public:
 	 * We group the rows of the data frame by the values in the specified column.
 	 */
 	virtual std::shared_ptr<vector_vector> groupby(const std::string &col_name,
-			const gr_apply_operate<sub_data_frame> &op) const;
+			const gr_apply_operate<sub_data_frame> &op,
+			detail::vec_store::ptr store = NULL) const;
 	/*
 	 * This method sorts all rows in the data frame according to the give column.
 	 */

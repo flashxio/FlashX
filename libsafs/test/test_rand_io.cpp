@@ -31,8 +31,6 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
-#include <numa.h>
-#include <numaif.h>
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif

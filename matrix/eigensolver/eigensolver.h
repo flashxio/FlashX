@@ -50,6 +50,10 @@ struct eigen_res
 {
 	std::vector<double> vals;
 	fm::dense_matrix::ptr vecs;
+	struct eigen_status {
+		size_t num_iters;
+		size_t num_ops;
+	} status;
 };
 
 struct eigen_options
@@ -64,14 +68,16 @@ struct eigen_options
 	std::string which;
 	bool in_mem;
 
-	eigen_options(int nev, std::string solver = "KrylovSchur");
+	eigen_options();
+
+	bool init(int nev, std::string solver = "KrylovSchur");
 };
 
 /*
  * `func' will be destroyed by this function.
  */
 eigen_res compute_eigen(spm_function *func, bool sym,
-		struct eigen_options &opts);
+		struct eigen_options &opts, bool verbose=false);
 
 }
 

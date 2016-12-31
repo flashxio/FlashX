@@ -127,8 +127,8 @@ public:
 	virtual detail::vec_store::ptr sort_with_index();
 	virtual void sort();
 	virtual bool is_sorted() const;
-	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
-			size_t nrow, size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<detail::matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow);
 
 	local_vec_store::ptr get(std::vector<off_t> &idxs) const;
 
@@ -182,6 +182,14 @@ public:
 	virtual detail::vec_store::ptr deep_copy() const {
 		assert(0);
 		return detail::vec_store::ptr();
+	}
+	virtual bool reserve(size_t num_eles) {
+		assert(0);
+		return false;
+	}
+	virtual size_t get_reserved_size() const {
+		assert(0);
+		return 0;
 	}
 };
 
@@ -243,13 +251,21 @@ public:
 
 class local_buf_vec_store: public local_vec_store
 {
-	detail::raw_data_array arr;
+	detail::local_raw_array arr;
 public:
-	local_buf_vec_store(off_t global_start, size_t length,
-			const scalar_type &type, int node_id): local_vec_store(NULL,
-				NULL, global_start, length, type, node_id),
-			arr(length * type.get_size()) {
+	local_buf_vec_store(off_t global_start, size_t length, const scalar_type &type,
+			// Let's not cache the memory used for local vectors first.
+			// It's very frequent that we need to allocate memory for vectors
+			// of different lengths. We need to deallocate the memory for these
+			// vectors once they aren't used. Otherwise, we get memory leak.
+			// TODO are there cases we actually need to keep allocated memory.
+			int node_id, bool cached = false): local_vec_store(NULL, NULL,
+				global_start, length, type, node_id),
+			arr(length * type.get_size(), cached) {
 		set_data(arr.get_raw(), arr.get_raw());
+	}
+	virtual size_t get_reserved_size() const {
+		return arr.get_num_bytes() / get_type().get_size();
 	}
 
 	virtual bool resize(size_t new_length);

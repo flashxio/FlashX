@@ -1,7 +1,7 @@
 #ifndef __LOAD_BALANCER_H__
 #define __LOAD_BALANCER_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -33,7 +33,7 @@ class graph_engine;
 class compute_vertex;
 class compute_vertex_pointer;
 
-/**
+/*
  * This class is to help balance the load.
  * If the owner thread has finished the work originally assigned to it,
  * it can steal work from other threads through this class.

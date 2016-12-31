@@ -55,21 +55,19 @@ bool mem_vec_store::copy_from(const char *buf, size_t num_bytes)
 }
 
 smp_vec_store::smp_vec_store(size_t length, const scalar_type &type): mem_vec_store(
-		length, type), data(length * type.get_size())
+		length, type), data(length * type.get_size(), -1)
 {
 	this->arr = data.get_raw();
 }
 
-smp_vec_store::smp_vec_store(const detail::raw_data_array &data,
-		const scalar_type &type): mem_vec_store(
-			data.get_num_bytes() / type.get_size(), type)
+smp_vec_store::smp_vec_store(const detail::simple_raw_array &data,
+		size_t length, const scalar_type &type): mem_vec_store(length, type)
 {
-	assert(data.get_num_bytes() % type.get_size() == 0);
 	this->data = data;
 	this->arr = this->data.get_raw();
 }
 
-smp_vec_store::ptr smp_vec_store::create(const detail::raw_data_array &data,
+smp_vec_store::ptr smp_vec_store::create(const detail::simple_raw_array &data,
 			const scalar_type &type)
 {
 	if (data.get_num_bytes() % type.get_size() != 0) {
@@ -77,7 +75,19 @@ smp_vec_store::ptr smp_vec_store::create(const detail::raw_data_array &data,
 			<< "The data array has a wrong number of bytes";
 		return smp_vec_store::ptr();
 	}
-	return ptr(new smp_vec_store(data, type));
+	return ptr(new smp_vec_store(data,
+				data.get_num_bytes() / type.get_size(), type));
+}
+
+smp_vec_store::ptr smp_vec_store::create(const detail::simple_raw_array &data,
+			size_t length, const scalar_type &type)
+{
+	if (length * type.get_size() > data.get_num_bytes()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The data array doesn't have enough bytes for the vector";
+		return smp_vec_store::ptr();
+	}
+	return ptr(new smp_vec_store(data, length, type));
 }
 
 smp_vec_store::ptr smp_vec_store::get(const smp_vec_store &idxs) const
@@ -172,19 +182,22 @@ bool smp_vec_store::append(const vec_store &vec)
 			mem_vec.get_length() * get_entry_size());
 }
 
-bool smp_vec_store::resize(size_t new_length)
+size_t smp_vec_store::get_reserved_size() const
+{
+	return data.get_num_bytes() / get_type().get_size();
+}
+
+bool smp_vec_store::reserve(size_t new_length)
 {
 	if (new_length == get_length())
 		return true;
 
 	size_t tot_len = data.get_num_bytes() / get_type().get_size();
-	// We don't want to reallocate memory when shrinking the vector.
-	if (new_length < tot_len) {
-		return vec_store::resize(new_length);
-	}
+	if (new_length < tot_len)
+		return true;
 
 	// Keep the old information of the vector.
-	detail::raw_data_array old_data = data;
+	detail::simple_raw_array old_data = data;
 	char *old_arr = arr;
 	size_t old_length = get_length();
 
@@ -192,9 +205,35 @@ bool smp_vec_store::resize(size_t new_length)
 	if (real_length == 0)
 		real_length = 1;
 	for (; real_length < new_length; real_length *= 2);
-	this->data = detail::raw_data_array(real_length * get_type().get_size());
+	this->data = detail::simple_raw_array(real_length * get_type().get_size(), -1);
 	this->arr = this->data.get_raw();
-	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
+	memcpy(arr, old_arr, std::min(old_length, new_length) * get_type().get_size());
+	return true;
+}
+
+bool smp_vec_store::resize(size_t new_length)
+{
+	if (new_length == get_length())
+		return true;
+
+	size_t tot_len = data.get_num_bytes() / get_type().get_size();
+	// We don't want to reallocate memory when shrinking the vector.
+	if (new_length <= tot_len) {
+		return vec_store::resize(new_length);
+	}
+
+	// Keep the old information of the vector.
+	detail::simple_raw_array old_data = data;
+	char *old_arr = arr;
+	size_t old_length = get_length();
+
+	size_t real_length = old_length;
+	if (real_length == 0)
+		real_length = 1;
+	for (; real_length < new_length; real_length *= 2);
+	this->data = detail::simple_raw_array(real_length * get_type().get_size(), -1);
+	this->arr = this->data.get_raw();
+	memcpy(arr, old_arr, std::min(old_length, new_length) * get_type().get_size());
 	return vec_store::resize(new_length);
 }
 
@@ -215,7 +254,7 @@ bool smp_vec_store::expose_sub_vec(off_t start, size_t length)
 vec_store::ptr smp_vec_store::deep_copy() const
 {
 	assert(get_raw_arr() == data.get_raw());
-	detail::raw_data_array copy = this->data.deep_copy();
+	detail::simple_raw_array copy = this->data.deep_copy();
 	smp_vec_store::ptr ret = smp_vec_store::create(copy, get_type());
 	ret->resize(this->get_length());
 	return ret;
@@ -288,8 +327,7 @@ size_t smp_vec_store::get_portion_size() const
 	return 64 * 1024;
 }
 
-matrix_store::const_ptr smp_vec_store::conv2mat(size_t nrow, size_t ncol,
-			bool byrow) const
+matrix_store::ptr smp_vec_store::conv2mat(size_t nrow, size_t ncol, bool byrow)
 {
 	assert(arr == data.get_raw());
 	if (get_length() < nrow * ncol) {
@@ -301,30 +339,6 @@ matrix_store::const_ptr smp_vec_store::conv2mat(size_t nrow, size_t ncol,
 		return mem_row_matrix_store::create(data, nrow, ncol, get_type());
 	else
 		return mem_col_matrix_store::create(data, nrow, ncol, get_type());
-}
-
-template<>
-vec_store::ptr create_vec_store<double>(double start, double end,
-		double stride)
-{
-	// The result of division may generate a real number slightly smaller than
-	// what we want because of the representation precision in the machine.
-	// When we convert the real number to an integer, we may find the number
-	// is smaller than exepcted. We need to add a very small number to
-	// the real number to correct the problem.
-	// TODO is it the right way to correct the problem?
-	long n = (end - start) / stride + 1e-9;
-	if (n < 0) {
-		BOOST_LOG_TRIVIAL(error) <<"wrong sign in 'by' argument";
-		return vec_store::ptr();
-	}
-	// We need to count the start element.
-	n++;
-
-	detail::smp_vec_store::ptr v = detail::smp_vec_store::create(n,
-			get_scalar_type<double>());
-	v->set_data(seq_set_vec_operate<double>(n, start, stride));
-	return v;
 }
 
 }

@@ -17,9 +17,8 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I.
 
 TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
 			test_sem_kmeans test_clusters test_lazy_cache test_partition_cache\
@@ -62,6 +61,7 @@ test_thd_safe_bool_vector: test_thd_safe_bool_vector.o
 
 test_kmeans_task_thread: test_kmeans_task_thread.o
 	$(CXX) -o test_kmeans_task_thread test_kmeans_task_thread.o \
+		../matrix/kmeans_task_coordinator.o ../matrix/base_kmeans_coordinator.o\
 		../libgraph-algs/clusters.o ../matrix/kmeans_task_thread.o \
 		../libgraph-algs/dist_matrix.o $(LDFLAGS)
 

@@ -2,16 +2,19 @@ project (FlashGraph)
 
 include_directories("${PROJECT_SOURCE_DIR}")
 
-find_package(OpenMP)
-if (OPENMP_FOUND)
-	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+find_package(BLAS REQUIRED)
+message( STATUS BLAS found: ${BLAS_LIBRARIES} )
+
+find_package(ZLIB)
+if (ZLIB_FOUND)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_GZIP")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_GZIP")
 endif()
+
 
 add_library(FMatrix STATIC
 	dense_matrix.cpp
 	EM_vector.cpp
-	matrix_worker_thread.cpp
 	sparse_matrix.cpp
 	EM_dense_matrix.cpp
 	matrix_io.cpp
@@ -22,7 +25,6 @@ add_library(FMatrix STATIC
 	hilbert_curve.cpp
 	NUMA_dense_matrix.cpp
 	NUMA_vector.cpp
-	NUMA_mapper.cpp
 	raw_data_array.cpp
 	mem_worker_thread.cpp
 	local_matrix_store.cpp
@@ -37,13 +39,33 @@ add_library(FMatrix STATIC
 	matrix_store.cpp
 	mem_vv_store.cpp
 	local_vv_store.cpp
-	type_cast.cpp
 	vec_store.cpp
 	vector.cpp
 	vector_vector.cpp
 	vv_store.cpp
 	EM_object.cpp
 	local_mem_buffer.cpp
+	bulk_operate.cpp
+	factor.cpp
+	col_vec.cpp
+	combined_matrix_store.cpp
+	cached_matrix_store.cpp
+	matrix_config.cpp
+	agg_matrix_store.cpp
+	matrix_stats.cpp
+	block_matrix.cpp
+	IPW_matrix_store.cpp
+	sink_matrix.cpp
+	project_matrix_store.cpp
+	fg_utils.cpp
+	EM_vv_store.cpp
+	groupby_matrix_store.cpp
+	materialize.cpp
+	sub_matrix_store.cpp
+	set_data_matrix_store.cpp
 )
 
-subdirs(eigensolver)
+if(ENABLE_TRILINOS)
+	subdirs(eigensolver)
+endif()
+subdirs(utils)

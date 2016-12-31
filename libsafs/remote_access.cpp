@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -76,8 +76,8 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 }
 
 remote_io::remote_io(const std::vector<disk_io_thread::ptr> &remotes,
-		slab_allocator &_msg_allocator, file_mapper *mapper, thread *t,
-		const safs_header &header, int max_reqs): io_interface(t,
+		slab_allocator &_msg_allocator, std::shared_ptr<file_mapper> mapper,
+		thread *t, const safs_header &header, int max_reqs): io_interface(t,
 			header), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
 					"disk_complete_queue-") + itoa(t->get_node_id()), t->get_node_id(),
 				COMPLETE_QUEUE_SIZE, std::numeric_limits<int>::max()),

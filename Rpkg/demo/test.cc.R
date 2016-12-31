@@ -1,4 +1,4 @@
-library("FlashGraphR")
+library("FlashR")
 library("igraph")
 
 test.fg.cc <- function(fg, cc.type)

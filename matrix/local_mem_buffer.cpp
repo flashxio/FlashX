@@ -73,10 +73,14 @@ std::shared_ptr<char> local_mem_buffer::_alloc(size_t num_bytes)
 		q = &it->second;
 	if (q->empty()) {
 		num_allocs++;
+
+		void *addr = NULL;
+		int alloc_ret = posix_memalign(&addr, PAGE_SIZE, num_bytes);
+		assert(alloc_ret == 0);
 		// When the piece of memory is deallocated, it'll be pushed back to
 		// the deque.
-		ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
-				local_deleter(*q));
+		ret = std::shared_ptr<char>((char *) addr, local_deleter(*q));
+		assert(((long) ret.get()) % 512 == 0);
 	}
 	else {
 		char *tmp = q->front();
@@ -243,9 +247,13 @@ local_mem_buffer::irreg_buf_t local_mem_buffer::get_irreg()
 	void *addr = pthread_getspecific(mem_key);
 	if (addr) {
 		local_mem_buffer *local_buf = (local_mem_buffer *) addr;
-		irreg_buf_t ret = local_buf->irreg_bufs.front();
-		local_buf->irreg_bufs.pop_front();
-		return ret;
+		if (local_buf->irreg_bufs.empty())
+			return irreg_buf_t();
+		else {
+			irreg_buf_t ret = local_buf->irreg_bufs.front();
+			local_buf->irreg_bufs.pop_front();
+			return ret;
+		}
 	}
 	else
 		return irreg_buf_t();

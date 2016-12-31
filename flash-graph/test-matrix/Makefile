@@ -17,9 +17,8 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lz $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/ -DUSE_EIGEN
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I. -I/usr/include/eigen3/ -DUSE_EIGEN
 
 all: test-kmeans
 

@@ -1,7 +1,7 @@
 #ifndef __VERTEX_INDEX_READER__
 #define __VERTEX_INDEX_READER__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -1240,7 +1240,7 @@ public:
 
 	void request_num_edges(vertex_id_t ids[], int num, vertex_compute &compute) {
 		// TODO it should only work for undirected vertices.
-		ABORT_MSG("request_num_edges isn't supported currently");
+//		ABORT_MSG("request_num_edges isn't supported currently");
 		for (int i = 0; i < num; i++)
 			edge_comps.push_back(id_compute_t(ids[i], &compute));
 	}

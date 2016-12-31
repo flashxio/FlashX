@@ -96,7 +96,7 @@ public:
 	}
 };
 
-/**
+/*
  * The information of vertex header.
  * It contains the vertex ID and the number of edges.
  */
@@ -119,7 +119,7 @@ public:
 	}
 };
 
-/**
+/*
  * The information of directed vertex header.
  * In addition to the vertex header, it has the number of in-edges
  * and out-edges.
@@ -546,6 +546,10 @@ public:
 
 	vertex_id_t get_neighbor(size_t idx) const {
 		return neighbors[idx];
+	}
+
+	void set_neighbor(size_t idx, vertex_id_t id) {
+		neighbors[idx] = id;
 	}
 
 	char *get_raw_edge_data(size_t idx) const {

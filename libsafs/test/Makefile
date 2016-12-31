@@ -17,10 +17,10 @@
 
 include ../../Makefile.common
 
-CFLAGS = -g -I../../include $(TRACE_FLAGS)
+CFLAGS = -g -I../ $(TRACE_FLAGS)
 
-LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
-CXXFLAGS += -I.. -I../../include -I../../libcommon
+LDFLAGS := -L.. -lsafs $(LDFLAGS)
+CXXFLAGS += -I.. -I../
 
 all: test_rand_io workload-gen workload-stat
 

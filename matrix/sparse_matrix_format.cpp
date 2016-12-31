@@ -89,7 +89,6 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 
 void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 {
-	assert(num_coo_vals == 0);
 	memcpy(get_rpart_end(), &part, part_size);
 	size_t num_entries = part.get_num_entries(part_size);
 	if (num_entries > 0) {
@@ -119,12 +118,8 @@ void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nz,
 
 void sparse_block_2d::finalize(const char *data, size_t num_bytes)
 {
-	// If there are row parts but we haven't added the empty row to indicate
-	// the end of the row part region.
-	if (num_coo_vals == 0) {
-		sparse_row_part end(std::numeric_limits<uint16_t>::max());
-		append(end, sparse_row_part::get_size(0));
-	}
+	sparse_row_part end(std::numeric_limits<uint16_t>::max());
+	append(end, sparse_row_part::get_size(0));
 
 	if (data)
 		memcpy(get_nz_data(), data, num_bytes);
@@ -227,25 +222,9 @@ off_t SpM_2d_index::get_block_row_off(size_t idx) const
 
 SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 {
-	if (!safs::is_safs_init()) {
-		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
-		return SpM_2d_index::ptr();
-	}
-
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			idx_file, safs::GLOBAL_CACHE_ACCESS);
-	if (io_fac == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io factory for %1%") % idx_file;
-		return SpM_2d_index::ptr();
-	}
-
 	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
-	if (io == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't create io instance for %1%") % idx_file;
-		return SpM_2d_index::ptr();
-	}
 
 	size_t size = safs::safs_file(safs::get_sys_RAID_conf(),
 			idx_file).get_size();
@@ -259,21 +238,18 @@ SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 {
 	FILE *f = fopen(idx_file.c_str(), "r");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
-			% idx_file % strerror(errno);
-		return SpM_2d_index::ptr();
-	}
+	if (f == NULL)
+		throw safs::io_exception(boost::str(boost::format("can't open %1%: %2%")
+					% idx_file % strerror(errno)));
 
 	size_t size = safs::native_file(idx_file).get_size();
 	char *data = (char *) malloc(size);
 	size_t ret = fread(data, size, 1, f);
 	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
-			% idx_file % strerror(errno);
 		fclose(f);
 		free(data);
-		return SpM_2d_index::ptr();
+		throw safs::io_exception(boost::str(boost::format("can't read %1%: %2%")
+					% idx_file % strerror(errno)));
 	}
 
 	fclose(f);
@@ -284,7 +260,7 @@ SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 
 void SpM_2d_storage::verify() const
 {
-	matrix_header *header = (matrix_header *) data.get();
+	matrix_header *header = (matrix_header *) data->get_data(0, PAGE_SIZE).first;
 	header->verify();
 #if 0
 	block_2d_size block_size = index->get_header().get_2d_block_size();
@@ -308,11 +284,6 @@ void SpM_2d_storage::verify() const
 SpM_2d_storage::ptr SpM_2d_storage::safs_load(const std::string &mat_file,
 		SpM_2d_index::ptr index)
 {
-	if (!safs::is_safs_init()) {
-		BOOST_LOG_TRIVIAL(error) << "safs isn't init";
-		return SpM_2d_storage::ptr();
-	}
-
 	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
 	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::load_safs(mat_file, mapper);
 	safs::NUMA_buffer::cdata_info header_data = data->get_data(0, PAGE_SIZE);
@@ -413,6 +384,11 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 		free(data);
 	}
 	fclose(f);
+}
+
+void SpM_2d_storage::dump(const std::string &mat_file) const
+{
+	data->dump(mat_file);
 }
 
 }

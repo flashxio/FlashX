@@ -34,7 +34,88 @@ namespace fm
 namespace detail
 {
 
-const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
+const size_t mem_matrix_store::CHUNK_SIZE = 16 * 1024;
+
+bool mem_matrix_store::symmetrize(bool upper2lower)
+{
+	if (get_num_rows() != get_num_cols())
+		return false;
+
+	const scatter_gather &sg = get_type().get_sg();
+	if (upper2lower && store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			non_contig[i] = get_row(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			char *row = get_row(i) + i * get_entry_size();
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (upper2lower) {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			non_contig[i] = get_col(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			char *col = get_col(i) + i * get_entry_size();
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			if (get_row(i) == NULL)
+				return false;
+			non_contig[i] = get_row(i) + (get_num_cols() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_rows() - 1; i > 0; i--) {
+			char *row = get_row(i);
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			if (get_col(i) == NULL)
+				return false;
+			non_contig[i] = get_col(i) + (get_num_rows() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_cols() - 1; i > 0; i--) {
+			char *col = get_col(i);
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	return true;
+}
 
 mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 		const scalar_type &type): matrix_store(nrow, ncol, true,
@@ -42,94 +123,33 @@ mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 {
 }
 
-vec_store::const_ptr mem_col_matrix_store::get_row_vec(off_t row) const
+void mem_matrix_store::write_portion_async(local_matrix_store::const_ptr portion,
+			off_t start_row, off_t start_col)
 {
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
-	if (get_num_rows() == 1)
-		return detail::smp_vec_store::create(data, get_type());
-	else {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a column matrix with multiple rows";
-		return vec_store::const_ptr();
+	if (is_wide()) {
+		assert(start_row == 0);
+		assert(portion->get_num_rows() == get_num_rows());
+		local_matrix_store::ptr lstore = get_portion(start_row,
+				start_col, portion->get_num_rows(), portion->get_num_cols());
+		assert(lstore);
+		lstore->copy_from(*portion);
 	}
-}
-
-vec_store::const_ptr mem_col_matrix_store::get_col_vec(off_t col) const
-{
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
-	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
-			get_type());
-	ret->expose_sub_vec(col * get_num_rows(), get_num_rows());
-	return ret;
-}
-
-vec_store::const_ptr mem_sub_col_matrix_store::get_row_vec(off_t row) const
-{
-	BOOST_LOG_TRIVIAL(error)
-		<< "Can't get a row from a column sub matrix";
-	return vec_store::const_ptr();
-}
-
-vec_store::const_ptr mem_sub_col_matrix_store::get_col_vec(off_t col) const
-{
-	// The original column matrix has at least this many columns.
-	size_t orig_num_cols = orig_col_idxs[col] + 1;
-	assert(get_data().get_num_bytes()
-			>= get_num_rows() * orig_num_cols * get_entry_size());
-	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
-			get_type());
-	ret->expose_sub_vec(orig_col_idxs[col] * get_num_rows(), get_num_rows());
-	return ret;
-}
-
-vec_store::const_ptr mem_row_matrix_store::get_row_vec(off_t row) const
-{
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
-	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(data,
-			get_type());
-	ret->expose_sub_vec(row * get_num_cols(), get_num_cols());
-	return ret;
-}
-
-vec_store::const_ptr mem_row_matrix_store::get_col_vec(off_t col) const
-{
-	assert(data.get_num_bytes()
-			== get_num_rows() * get_num_cols() * get_entry_size());
-	if (get_num_cols() == 1)
-		return detail::smp_vec_store::create(data, get_type());
 	else {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a row matrix with multiple columns";
-		return vec_store::const_ptr();
+		assert(start_col == 0);
+		assert(portion->get_num_cols() == get_num_cols());
+		local_matrix_store::ptr lstore = get_portion(start_row, start_col,
+				portion->get_num_rows(), portion->get_num_cols());
+		assert(lstore);
+		lstore->copy_from(*portion);
 	}
-}
-
-vec_store::const_ptr mem_sub_row_matrix_store::get_row_vec(off_t row) const
-{
-	// The original row matrix has at least this many rows.
-	size_t orig_num_rows = orig_row_idxs[row] + 1;
-	assert(get_data().get_num_bytes()
-			>= get_num_cols() * orig_num_rows * get_entry_size());
-	detail::smp_vec_store::ptr ret = detail::smp_vec_store::create(get_data(),
-			get_type());
-	ret->expose_sub_vec(orig_row_idxs[row] * get_num_cols(), get_num_cols());
-	return ret;
-}
-
-vec_store::const_ptr mem_sub_row_matrix_store::get_col_vec(off_t row) const
-{
-	BOOST_LOG_TRIVIAL(error)
-		<< "Can't get a column from a row sub matrix";
-	return vec_store::const_ptr();
 }
 
 mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes)
 {
-	if (num_nodes < 0) {
+	// If the number of nodes aren't specified, or this isn't a very tall or
+	// wide matrix, we use a simple way of storing the matrix.
+	if (num_nodes < 0 || (nrow <= CHUNK_SIZE && ncol <= CHUNK_SIZE)) {
 		if (layout == matrix_layout_t::L_ROW)
 			return detail::mem_row_matrix_store::create(nrow, ncol, type);
 		else
@@ -138,6 +158,55 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 	else
 		return detail::NUMA_matrix_store::create(nrow, ncol, num_nodes,
 				layout, type);
+}
+
+std::string mem_matrix_store::get_name() const
+{
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+			% get_num_cols()
+			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
+}
+
+bool mem_matrix_store::share_data(const matrix_store &store) const
+{
+	const mem_matrix_store *mem_store
+		= dynamic_cast<const mem_matrix_store *>(&store);
+	size_t store_len = store.get_num_rows() * store.get_num_cols();
+	size_t this_len = get_num_rows() * get_num_cols();
+	// If the two matrices store data in the same memory and have
+	// the same number of elements.
+	if (get_raw_arr() && mem_store)
+		return mem_store->get_raw_arr() == get_raw_arr()
+			&& store_len == this_len;
+
+	matrix_store::const_ptr tstore;
+	// If the other matrix might be a transpose of this matrix.
+	if (store.get_num_rows() == get_num_cols()
+			&& store.get_num_cols() == get_num_rows()
+			&& store.store_layout() != store_layout()) {
+		tstore = store.transpose();
+		mem_store = dynamic_cast<const mem_matrix_store *>(tstore.get());
+	}
+	if (!mem_store)
+		return false;
+
+	if (mem_store->get_num_rows() != get_num_rows()
+			|| mem_store->get_num_cols() != get_num_cols()
+			|| mem_store->store_layout() != store_layout())
+		return false;
+
+	if (mem_store->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < get_num_rows(); i++)
+			if (get_row(i) != mem_store->get_row(i))
+				return false;
+		return true;
+	}
+	else {
+		for (size_t i = 0; i < get_num_cols(); i++)
+			if (get_col(i) != mem_store->get_col(i))
+				return false;
+		return true;
+	}
 }
 
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
@@ -363,6 +432,22 @@ matrix_store::const_ptr mem_col_matrix_store::get_cols(
 	return mem_sub_col_matrix_store::create(*this, idxs);
 }
 
+matrix_store::const_ptr mem_col_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	mem_col_matrix_store::ptr res = mem_col_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		const char *src_col = get_col(i);
+		for (size_t j = 0; j < idxs.size(); j++)
+			src_data[j] = src_col + idxs[j] * get_entry_size();
+		char *dst_col = res->get_col(i);
+		get_type().get_sg().gather(src_data, dst_col);
+	}
+	return res;
+}
+
 matrix_store::const_ptr mem_row_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
@@ -375,11 +460,10 @@ matrix_store::const_ptr mem_sub_col_matrix_store::get_cols(
 	std::vector<off_t> direct_idxs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_cols()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "a column index is out of bounds";
+			BOOST_LOG_TRIVIAL(error) << "a column index is out of bounds";
 			return matrix_store::ptr();
 		}
-		direct_idxs[i] = orig_col_idxs[idxs[i]];
+		direct_idxs[i] = orig_col_idxs->at(idxs[i]);
 	}
 
 	return mem_sub_col_matrix_store::create(*this, direct_idxs);
@@ -391,11 +475,10 @@ matrix_store::const_ptr mem_sub_row_matrix_store::get_rows(
 	std::vector<off_t> direct_idxs(idxs.size());
 	for (size_t i = 0; i < idxs.size(); i++) {
 		if ((size_t) idxs[i] >= get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "a row index is out of bounds";
+			BOOST_LOG_TRIVIAL(error) << "a row index is out of bounds";
 			return matrix_store::ptr();
 		}
-		direct_idxs[i] = orig_row_idxs[idxs[i]];
+		direct_idxs[i] = orig_row_idxs->at(idxs[i]);
 	}
 
 	return mem_sub_row_matrix_store::create(*this, direct_idxs);
@@ -476,7 +559,6 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 
 	FILE *f = fopen(file_name.c_str(), "r");
 	if (f == NULL) {
-		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% file_name % strerror(errno);
 		return mem_matrix_store::ptr();
@@ -501,7 +583,7 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 	size_t ncol = header.get_num_cols();
 	const scalar_type &type = header.get_data_type();
 	size_t mat_size = nrow * ncol * type.get_size();
-	detail::raw_data_array data(mat_size);
+	detail::simple_raw_array data(mat_size, -1);
 	ret = fread(data.get_raw(), mat_size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error)
@@ -528,7 +610,7 @@ mem_matrix_store::ptr mem_matrix_store::cast(matrix_store::ptr store)
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_matrix_store::ptr();
 	}
-	return std::static_pointer_cast<mem_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_matrix_store>(store);
 }
 
 mem_matrix_store::const_ptr mem_matrix_store::cast(matrix_store::const_ptr store)
@@ -538,7 +620,7 @@ mem_matrix_store::const_ptr mem_matrix_store::cast(matrix_store::const_ptr store
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_matrix_store::const_ptr();
 	}
-	return std::static_pointer_cast<const mem_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_matrix_store>(store);
 }
 
 mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_ptr store)
@@ -549,7 +631,8 @@ mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_p
 		return mem_col_matrix_store::const_ptr();
 	}
 	mem_matrix_store::const_ptr mem_store
-		= std::static_pointer_cast<const mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<const mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -561,7 +644,7 @@ mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_p
 		return mem_col_matrix_store::const_ptr();
 	}
 
-	return std::static_pointer_cast<const mem_col_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_col_matrix_store>(store);
 }
 
 mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
@@ -572,7 +655,8 @@ mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
 		return mem_col_matrix_store::ptr();
 	}
 	mem_matrix_store::ptr mem_store
-		= std::static_pointer_cast<mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -584,7 +668,7 @@ mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
 		return mem_col_matrix_store::ptr();
 	}
 
-	return std::static_pointer_cast<mem_col_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_col_matrix_store>(store);
 }
 
 mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_ptr store)
@@ -595,7 +679,8 @@ mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_p
 		return mem_row_matrix_store::const_ptr();
 	}
 	mem_matrix_store::const_ptr mem_store
-		= std::static_pointer_cast<const mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<const mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -607,7 +692,7 @@ mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_p
 		return mem_row_matrix_store::const_ptr();
 	}
 
-	return std::static_pointer_cast<const mem_row_matrix_store>(store);
+	return std::dynamic_pointer_cast<const mem_row_matrix_store>(store);
 }
 
 mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
@@ -618,7 +703,8 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 		return mem_row_matrix_store::ptr();
 	}
 	mem_matrix_store::ptr mem_store
-		= std::static_pointer_cast<mem_matrix_store>(store);
+		= std::dynamic_pointer_cast<mem_matrix_store>(store);
+	assert(mem_store);
 	if (mem_store->get_num_nodes() >= 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't cast from a NUMA matrix store";
@@ -630,92 +716,31 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 		return mem_row_matrix_store::ptr();
 	}
 
-	return std::static_pointer_cast<mem_row_matrix_store>(store);
+	return std::dynamic_pointer_cast<mem_row_matrix_store>(store);
 }
 
-namespace
+size_t mem_col_matrix_store::get_data_id() const
 {
-
-class reset_task: public thread_task
-{
-	detail::local_matrix_store::ptr local_store;
-public:
-	reset_task(detail::local_matrix_store::ptr local_store) {
-		this->local_store = local_store;
-	}
-
-	void run() {
-		local_store->reset_data();
-	}
-};
-
-class set_task: public thread_task
-{
-	detail::local_matrix_store::ptr local_store;
-	const set_operate &op;
-public:
-	set_task(detail::local_matrix_store::ptr local_store,
-			const set_operate &_op): op(_op) {
-		this->local_store = local_store;
-	}
-
-	void run() {
-		local_store->set_data(op);
-	}
-};
-
-class copy_task: public thread_task
-{
-	detail::local_matrix_store::const_ptr src_store;
-	detail::local_matrix_store::ptr dest_store;
-public:
-	copy_task(detail::local_matrix_store::const_ptr src_store,
-			detail::local_matrix_store::ptr dest_store) {
-		this->src_store = src_store;
-		this->dest_store = dest_store;
-	}
-
-	void run() {
-		dest_store->copy_from(*src_store);
-	}
-};
-
+	// TODO
+	return INVALID_MAT_ID;
 }
 
-void mem_matrix_store::reset_data()
+size_t mem_row_matrix_store::get_data_id() const
 {
-	size_t num_chunks = get_num_portions();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	for (size_t i = 0; i < num_chunks; i++) {
-		detail::local_matrix_store::ptr local_store = get_portion(i);
-
-		int node_id = local_store->get_node_id();
-		// If the local matrix portion is not assigned to any node, 
-		// assign the tasks in round robin fashion.
-		if (node_id < 0)
-			node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new reset_task(local_store));
-	}
-	mem_threads->wait4complete();
+	// TODO
+	return INVALID_MAT_ID;
 }
 
-void mem_matrix_store::set_data(const set_operate &op)
+size_t mem_sub_col_matrix_store::get_data_id() const
 {
-	size_t num_chunks = get_num_portions();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	for (size_t i = 0; i < num_chunks; i++) {
-		detail::local_matrix_store::ptr local_store = get_portion(i);
+	// TODO
+	return INVALID_MAT_ID;
+}
 
-		int node_id = local_store->get_node_id();
-		// If the local matrix portion is not assigned to any node, 
-		// assign the tasks in round robin fashion.
-		if (node_id < 0)
-			node_id = i % mem_threads->get_num_nodes();
-		mem_threads->process_task(node_id, new set_task(local_store, op));
-	}
-	mem_threads->wait4complete();
+size_t mem_sub_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
 }
 
 }

@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "workload.h"
 
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
 	// calculate which pages are accessed and how many times a page is accessed.
-	std::tr1::unordered_map<off_t, int> page_map;
+	std::unordered_map<off_t, int> page_map;
 
 	rand_rehasher rehasher(0, 100 * 1024 * 1024);
 
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
 		off_t begin_page_off = ROUND_PAGE(workload.off);
 		off_t end_page_off = ROUNDUP_PAGE(workload.off + workload.size);
 		for (off_t off = begin_page_off; off < end_page_off; off += PAGE_SIZE) {
-			std::tr1::unordered_map<off_t, int>::iterator it = page_map.find(off);
+			std::unordered_map<off_t, int>::iterator it = page_map.find(off);
 			if (it == page_map.end()) {
 				page_map.insert(std::pair<off_t, int>(off, 1));
 			}
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 
 	if (histogram) {
 		std::map<int, int> count_nums;
-		for (std::tr1::unordered_map<off_t, int>::iterator it = page_map.begin();
+		for (std::unordered_map<off_t, int>::iterator it = page_map.begin();
 				it != page_map.end(); it++) {
 			int num_accesses = it->second;
 			std::map<int, int>::iterator it1 = count_nums.find(num_accesses);

@@ -33,6 +33,20 @@ namespace fm
 namespace detail
 {
 
+/*
+ * NUMA_matrix_store is optimized for storing large matrices. It mainly targets
+ * large NUMA machines, but it should also be used to for large matrices in
+ * a SMP machine. It has the same format as the external-memory dense matrix.
+ * It chunks a dense matrix into portions horizontally for tall matrices and
+ * vertically for wide matrices and stores all elements in a portion
+ * contiguously. In this way, we can allocate memory in chunks to store
+ * a matrix and memory chunks can be reused when the matrix is destroyed.
+ * The reason that we want to reuse memory chunks is that it is expensive
+ * to allocate large memory chunks. When we allocate large memory chunks
+ * and populate them with pages, we keep them and reuse them to avoid
+ * the overhead of populating memory with pages.
+ */
+
 class NUMA_matrix_store: public mem_matrix_store
 {
 	const size_t data_id;
@@ -51,9 +65,13 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
-	size_t get_data_id() const {
+	virtual size_t get_data_id() const {
 		return data_id;
 	}
+	virtual bool share_data(const matrix_store &store) const {
+		return matrix_store::share_data(store);
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		ret.insert(std::pair<size_t, size_t>(data_id,
@@ -61,57 +79,9 @@ public:
 		return ret;
 	}
 
-	virtual matrix_store::const_ptr get_cols(
-			const std::vector<off_t> &idxs) const {
-		assert(0);
-		return matrix_store::const_ptr();
-	}
-	virtual matrix_store::const_ptr get_rows(
-			const std::vector<off_t> &idxs) const {
-		assert(0);
-		return matrix_store::const_ptr();
-	}
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;
-	}
-};
-
-class NUMA_row_matrix_store: public NUMA_matrix_store
-{
-protected:
-	NUMA_row_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
-	}
-public:
-	typedef std::shared_ptr<NUMA_row_matrix_store> ptr;
-
-	static ptr cast(matrix_store::ptr store) {
-		// TODO check store type.
-		return std::static_pointer_cast<NUMA_row_matrix_store>(store);
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_ROW;
-	}
-};
-
-class NUMA_col_matrix_store: public NUMA_matrix_store
-{
-protected:
-	NUMA_col_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			size_t data_id): NUMA_matrix_store(nrow, ncol, type, data_id) {
-	}
-public:
-	typedef std::shared_ptr<NUMA_col_matrix_store> ptr;
-
-	static ptr cast(matrix_store::ptr store) {
-		// TODO check store type.
-		return std::static_pointer_cast<NUMA_col_matrix_store>(store);
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_COL;
 	}
 };
 
@@ -125,19 +95,33 @@ class NUMA_row_wide_matrix_store;
  * NUMA node. Multiple adjacent rows are stored in contiguous memory and
  * a single row is guaranteed to be stored together.
  */
-class NUMA_row_tall_matrix_store: public NUMA_row_matrix_store
+class NUMA_row_tall_matrix_store: public NUMA_matrix_store
 {
 	// This is to map rows to different NUMA nodes.
 	NUMA_mapper mapper;
-	std::vector<detail::raw_data_array> data;
+	std::vector<detail::chunked_raw_array> data;
 
 	// The copy constructor performs shallow copy.
 	NUMA_row_tall_matrix_store(const NUMA_row_tall_matrix_store &mat);
 
 	NUMA_row_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
+	NUMA_row_tall_matrix_store(const std::vector<detail::chunked_raw_array> &data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type);
+
+	bool get_portion_check(size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+
 public:
 	typedef std::shared_ptr<NUMA_row_tall_matrix_store> ptr;
+
+	static ptr create(const std::vector<detail::chunked_raw_array> &data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type) {
+		return ptr(new NUMA_row_tall_matrix_store(data, nrow, ncol,
+					mapper, type));
+	}
 
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type) {
@@ -151,8 +135,6 @@ public:
 	const char *get_row(size_t row_idx) const;
 	char *get_row(size_t row_idx);
 	using NUMA_matrix_store::get_rows;
-	const char *get_rows(size_t row_start, size_t row_end) const;
-	char *get_rows(size_t row_start, size_t row_end);
 
 	const char *get(size_t row_idx, size_t col_idx) const {
 		const char *row = get_row(row_idx);
@@ -165,6 +147,8 @@ public:
 	}
 
 
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -173,20 +157,14 @@ public:
 			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
-
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA tall row matrix";
-		return vec_store::const_ptr();
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA tall row matrix";
-		return vec_store::const_ptr();
-	}
+	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
+
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_ROW;
+	}
 
 	friend class NUMA_col_wide_matrix_store;
 };
@@ -197,32 +175,37 @@ public:
  * for a NUMA machine. Each column in the matrix are distributed across multiple
  * NUMA nodes.
  */
-class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
+class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 {
-	std::vector<NUMA_vec_store::ptr> data;
-
-	NUMA_col_tall_matrix_store(
-			const std::vector<NUMA_vec_store::ptr> &cols): NUMA_col_matrix_store(
-				cols.front()->get_length(), cols.size(),
-				cols.front()->get_type(), mat_counter++) {
-		this->data = cols;
-	}
+	// This is to map rows to different NUMA nodes.
+	NUMA_mapper mapper;
+	std::vector<detail::chunked_raw_array> data;
 
 	// The copy constructor performs shallow copy.
 	NUMA_col_tall_matrix_store(
-			const NUMA_col_tall_matrix_store &mat): NUMA_col_matrix_store(
+			const NUMA_col_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
-			mat.get_data_id()) {
+			mat.get_data_id()), mapper(mat.mapper) {
 		this->data = mat.data;
 	}
 
 	NUMA_col_tall_matrix_store(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
+	NUMA_col_tall_matrix_store(
+			const std::vector<detail::chunked_raw_array>& data,
+			size_t nrow, size_t ncol, const NUMA_mapper &_mapper,
+			const scalar_type &type): NUMA_matrix_store(
+				nrow, ncol, type, mat_counter++), mapper(_mapper) {
+		this->data = data;
+	}
 public:
 	typedef std::shared_ptr<NUMA_col_tall_matrix_store> ptr;
 
-	static ptr create(const std::vector<NUMA_vec_store::ptr> &cols) {
-		return ptr(new NUMA_col_tall_matrix_store(cols));
+	static ptr create(const std::vector<detail::chunked_raw_array>& data,
+			size_t nrow, size_t ncol, const NUMA_mapper &mapper,
+			const scalar_type &type) {
+		return ptr(new NUMA_col_tall_matrix_store(data, nrow, ncol,
+					mapper, type));
 	}
 
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
@@ -231,18 +214,14 @@ public:
 	}
 
 	int get_num_nodes() const {
-		return data[0]->get_num_nodes();
+		return data.size();
 	}
 
-	char *get(size_t row_idx, size_t col_idx) {
-		return data[col_idx]->get(row_idx);
-	}
+	char *get(size_t row_idx, size_t col_idx);
+	const char *get(size_t row_idx, size_t col_idx) const;
 
-	const char *get(size_t row_idx, size_t col_idx) const {
-		return data[col_idx]->get(row_idx);
-	}
-
-
+	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -251,33 +230,24 @@ public:
 			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
-
-	virtual vec_store::ptr get_col_vec(off_t col) {
-		return data[col];
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t col) const {
-		return data[col];
-	}
-	virtual vec_store::const_ptr get_row_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA tall column matrix";
-		return vec_store::const_ptr();
-	}
-
-	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
+	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual bool write2file(const std::string &file_name) const;
 
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_COL;
+	}
+
 	friend class NUMA_row_wide_matrix_store;
 };
 
-class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
+class NUMA_row_wide_matrix_store: public NUMA_matrix_store
 {
 	NUMA_col_tall_matrix_store store;
 
 	NUMA_row_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
@@ -285,7 +255,7 @@ class NUMA_row_wide_matrix_store: public NUMA_row_matrix_store
 	 * The constructed matrix store will be the transpose of _store.
 	 */
 	NUMA_row_wide_matrix_store(
-			const NUMA_col_tall_matrix_store &_store): NUMA_row_matrix_store(
+			const NUMA_col_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
 				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
@@ -321,29 +291,28 @@ public:
 			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
+	virtual int get_portion_node_id(size_t id) const {
+		return store.get_portion_node_id(id);
+	}
 
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		return store.get_col_vec(row);
-	}
-	virtual vec_store::const_ptr get_col_vec(off_t idx) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA wide row matrix";
-		return vec_store::const_ptr();
-	}
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
-		return store.get_cols(idxs);
+		return store.get_cols(idxs)->transpose();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
+
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_ROW;
+	}
 };
 
-class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
+class NUMA_col_wide_matrix_store: public NUMA_matrix_store
 {
 	NUMA_row_tall_matrix_store store;
 
 	NUMA_col_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_col_matrix_store(nrow, ncol,
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
 	}
 
@@ -351,7 +320,7 @@ class NUMA_col_wide_matrix_store: public NUMA_col_matrix_store
 	 * The constructed matrix store will be the transpose of _store.
 	 */
 	NUMA_col_wide_matrix_store(
-			const NUMA_row_tall_matrix_store &_store): NUMA_col_matrix_store(
+			const NUMA_row_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
 				_store.get_type(), _store.get_data_id()), store(_store) {
 	}
@@ -379,21 +348,17 @@ public:
 		return store.get_row(col_idx);
 	}
 
-	using NUMA_matrix_store::get_cols;
-	const char *get_cols(size_t col_start, size_t col_end) const {
-		return store.get_rows(col_start, col_end);
-	}
-
-	char *get_cols(size_t col_start, size_t col_end) {
-		return store.get_rows(col_start, col_end);
-	}
-
 	const char *get(size_t row_idx, size_t col_idx) const {
 		return store.get(col_idx, row_idx);
 	}
 
 	char *get(size_t row_idx, size_t col_idx) {
 		return store.get(col_idx, row_idx);
+	}
+
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return store.get_cols(idxs)->transpose();
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
@@ -404,16 +369,12 @@ public:
 			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
-
-	virtual vec_store::const_ptr get_col_vec(off_t col) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a column from a NUMA wide col matrix";
-		return vec_store::const_ptr();
+	virtual int get_portion_node_id(size_t id) const {
+		return store.get_portion_node_id(id);
 	}
-	virtual vec_store::const_ptr get_row_vec(off_t row) const {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Can't get a row from a NUMA wide col matrix";
-		return vec_store::const_ptr();
+
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_COL;
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

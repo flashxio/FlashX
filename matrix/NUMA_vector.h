@@ -51,15 +51,23 @@ class NUMA_vec_store: public mem_vec_store
 {
 	NUMA_mapper mapper;
 
-	std::vector<raw_data_array> data;
+	std::vector<chunked_raw_array> data;
 
 	// The copy constructor performs shallow copy.
 	NUMA_vec_store(const NUMA_vec_store &vec);
+	NUMA_vec_store(size_t length, const scalar_type &type,
+			const std::vector<chunked_raw_array> &data,
+			const NUMA_mapper &_mapper): mem_vec_store(length,
+				type), mapper(_mapper) {
+		this->data = data;
+	}
 	NUMA_vec_store(size_t length, size_t num_nodes, const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_vec_store> ptr;
 	typedef std::shared_ptr<const NUMA_vec_store> const_ptr;
 
+	static ptr create(size_t length, const scalar_type &type,
+			const std::vector<chunked_raw_array> &data, const NUMA_mapper &mapper);
 	static ptr create(size_t length, size_t num_nodes, const scalar_type &type) {
 		return ptr(new NUMA_vec_store(length, num_nodes, type));
 	}
@@ -116,25 +124,24 @@ public:
 	 * This copies a piece of contiguous memory to the NUMA vector.
 	 */
 	virtual bool copy_from(const char *buf, size_t num_bytes);
-	bool copy_from(const NUMA_vec_store &vec);
 
 	virtual int get_num_nodes() const {
 		return data.size();
 	}
 
-	virtual std::shared_ptr<const matrix_store> conv2mat(
-			size_t nrow, size_t ncol, bool byrow) const;
+	virtual std::shared_ptr<matrix_store> conv2mat(
+			size_t nrow, size_t ncol, bool byrow);
 
 	char *get(off_t idx) {
 		std::pair<int, size_t> loc = mapper.map2physical(idx);
 		size_t off = loc.second * get_entry_size();
-		return data[loc.first].get_raw() + off;
+		return data[loc.first].get_raw(off);
 	}
 
 	const char *get(off_t idx) const {
 		std::pair<int, size_t> loc = mapper.map2physical(idx);
 		size_t off = loc.second * get_entry_size();
-		return data[loc.first].get_raw() + off;
+		return data[loc.first].get_raw(off);
 	}
 
 	template<class T>
@@ -155,6 +162,14 @@ public:
 		return mapper.get_range_size();
 	}
 
+	virtual bool reserve(size_t num_eles) {
+		assert(0);
+		return false;
+	}
+	virtual size_t get_reserved_size() const {
+		assert(0);
+		return 0;
+	}
 	virtual bool resize(size_t new_length) {
 		assert(0);
 		return false;

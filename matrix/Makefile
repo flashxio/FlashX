@@ -17,17 +17,18 @@
 
 include ../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -DUSE_GZIP -I../include -I../libcommon -I../flash-graph $(OMP_FLAG)
-LDFLAGS += $(OMP_FLAG)
+CXXFLAGS += -DUSE_GZIP -I../libsafs -I../flash-graph
 
-all: libmatrix eigensolver test unit-test
+all: libmatrix eigensolver test unit-test libmatrix-algs utils
 
 libmatrix: $(OBJS)
 	rm -f libFMatrix.a
 	ar -cvq libFMatrix.a $(OBJS)
 
-test: libmatrix eigensolver
+libmatrix-algs: libmatrix
+	$(MAKE) -C libmatrix-algs
+
+test: libmatrix eigensolver libmatrix-algs
 	$(MAKE) -C test
 
 unit-test: libmatrix eigensolver
@@ -35,6 +36,9 @@ unit-test: libmatrix eigensolver
 
 eigensolver: libmatrix
 	$(MAKE) -C eigensolver
+
+utils: libmatrix
+	$(MAKE) -C utils
 
 clean:
 	rm -f *.d
@@ -45,5 +49,8 @@ clean:
 	$(MAKE) -C test clean
 	$(MAKE) -C unit-test clean
 	$(MAKE) -C eigensolver clean
+	$(MAKE) -C libmatrix-algs clean
+	$(MAKE) -C utils clean
+	$(MAKE) -C libmatrix-algs clean
 
 -include $(DEPS) 

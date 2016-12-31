@@ -23,6 +23,7 @@
 #include "dense_matrix.h"
 #include "generic_type.h"
 #include "vector.h"
+#include "col_vec.h"
 #include "sparse_matrix.h"
 
 #include "eigensolver.h"
@@ -63,13 +64,19 @@ public:
 	typedef std::shared_ptr<block_multi_vector> ptr;
 
 	static void sparse_matrix_multiply(const spm_function &multiply,
-			const block_multi_vector &X, block_multi_vector &Y);
+			// in_mem indicates where Y is stored.
+			const block_multi_vector &X, block_multi_vector &Y,
+			bool out_mat_in_mem);
 
 	static ptr create(size_t nrow, size_t ncol, size_t block_size,
 			const fm::scalar_type &type, bool in_mem, bool is_subspace) {
 		assert(ncol % block_size == 0);
 		return ptr(new block_multi_vector(nrow, ncol, block_size,
 					type, in_mem, is_subspace));
+	}
+
+	bool is_in_mem() const {
+		return in_mem;
 	}
 
 	void set_multiply_blocks(size_t num) {
@@ -181,7 +188,8 @@ public:
 			for (size_t k = 0; k < block_size; k++)
 				sub_vec->set<Type>(k, vec[i * block_size + k]);
 			fm::vector::ptr sub_vec1 = fm::vector::create(sub_vec);
-			ret_vecs->set_block(i, get_block(i)->scale_cols(sub_vec1));
+			ret_vecs->set_block(i,
+					get_block(i)->scale_cols(col_vec::create(sub_vec1)));
 		}
 		return ret_vecs;
 	}

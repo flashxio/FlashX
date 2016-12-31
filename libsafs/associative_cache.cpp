@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -25,7 +25,7 @@
 #include "io_interface.h"
 #include "associative_cache.h"
 #include "dirty_page_flusher.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "memory_manager.h"
 
 namespace safs
@@ -141,7 +141,6 @@ int page_cell<T>::get_num_used_pages() const
 void hash_cell::init(associative_cache *cache, long hash, bool get_pages) {
 	this->hash = hash;
 	assert(hash < INT_MAX);
-	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	this->table = cache;
 	if (get_pages) {
 		char *pages[CELL_SIZE];
@@ -156,10 +155,10 @@ void hash_cell::init(associative_cache *cache, long hash, bool get_pages) {
 
 void hash_cell::sanity_check()
 {
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	buf.sanity_check();
 	assert(!is_referenced());
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 }
 
 void hash_cell::add_pages(char *pages[], int num)
@@ -181,8 +180,8 @@ int hash_cell::add_pages_to_min(char *pages[], int num)
 
 void hash_cell::merge(hash_cell *cell)
 {
-	pthread_spin_lock(&_lock);
-	pthread_spin_lock(&cell->_lock);
+	_lock.lock();
+	cell->_lock.lock();
 
 	assert(cell->get_num_pages() + this->get_num_pages() <= CELL_SIZE);
 	thread_safe_page pages[CELL_SIZE];
@@ -191,8 +190,8 @@ void hash_cell::merge(hash_cell *cell)
 	cell->buf.steal_pages(pages, npages);
 	buf.inject_pages(pages, npages);
 
-	pthread_spin_unlock(&cell->_lock);
-	pthread_spin_unlock(&_lock);
+	cell->_lock.unlock();
+	_lock.unlock();
 }
 
 /**
@@ -200,8 +199,8 @@ void hash_cell::merge(hash_cell *cell)
  */
 void hash_cell::rehash(hash_cell *expanded)
 {
-	pthread_spin_lock(&_lock);
-	pthread_spin_lock(&expanded->_lock);
+	_lock.lock();
+	expanded->_lock.lock();
 	thread_safe_page *exchanged_pages_pointers[CELL_SIZE];
 	int num_exchanges = 0;
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
@@ -277,8 +276,8 @@ void hash_cell::rehash(hash_cell *expanded)
 		expanded->buf.inject_pages(empty_pages, num_empty);
 		delete [] empty_pages;
 	}
-	pthread_spin_unlock(&expanded->_lock);
-	pthread_spin_unlock(&_lock);
+	expanded->_lock.unlock();
+	_lock.unlock();
 }
 
 void hash_cell::steal_pages(char *pages[], int &npages)
@@ -304,7 +303,7 @@ void hash_cell::rebalance(hash_cell *cell)
 
 page *hash_cell::search(const page_id_t &pg_id)
 {
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	page *ret = NULL;
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		if (buf.get_page(i)->get_offset() == pg_id.get_offset()
@@ -315,7 +314,7 @@ page *hash_cell::search(const page_id_t &pg_id)
 	}
 	if (ret)
 		ret->inc_ref();
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 	return ret;
 }
 
@@ -326,7 +325,7 @@ page *hash_cell::search(const page_id_t &pg_id)
 page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
 {
 	thread_safe_page *ret = NULL;
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	num_accesses++;
 
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
@@ -340,7 +339,7 @@ page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
 		num_evictions++;
 		ret = get_empty_page();
 		if (ret == NULL) {
-			pthread_spin_unlock(&_lock);
+			_lock.unlock();
 			return NULL;
 		}
 		// We need to clear flags here.
@@ -390,7 +389,7 @@ page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
 #endif
 	}
 	ret->hit();
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 #ifdef DEBUG
 	if (enable_debug && ret->is_old_dirty())
 		print_cell();
@@ -400,7 +399,7 @@ page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
 
 void hash_cell::print_cell()
 {
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	printf("cell %ld: in queue: %d\n", get_hash(), is_in_queue());
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
@@ -409,7 +408,7 @@ void hash_cell::print_cell()
 				p->get_ref(), p->data_ready(), p->is_io_pending(), p->is_dirty(),
 				p->is_old_dirty(), p->is_prepare_writeback());
 	}
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 }
 
 /* this function has to be called with lock held */
@@ -1444,20 +1443,20 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 int hash_cell::num_pages(char set_flags, char clear_flags)
 {
 	int num = 0;
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
 		if (p->test_flags(set_flags) && !p->test_flags(clear_flags))
 			num++;
 	}
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 	return num;
 }
 
 void hash_cell::predict_evicted_pages(int num_pages, char set_flags,
 		char clear_flags, std::map<off_t, thread_safe_page *> &pages)
 {
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	policy.predict_evicted_pages(buf, num_pages, set_flags,
 			clear_flags, pages);
 	bool print = false;
@@ -1467,7 +1466,7 @@ void hash_cell::predict_evicted_pages(int num_pages, char set_flags,
 		if (it->second->get_flush_score() >= MAX_NUM_WRITEBACK)
 			print = true;
 	}
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 
 	if (print) {
 		for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
@@ -1481,7 +1480,7 @@ void hash_cell::predict_evicted_pages(int num_pages, char set_flags,
 void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 		std::map<off_t, thread_safe_page *> &pages)
 {
-	pthread_spin_lock(&_lock);
+	_lock.lock();
 	for (int i = 0; i < (int) buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
 		if (p->test_flags(set_flags) && !p->test_flags(clear_flags)) {
@@ -1490,7 +1489,7 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 						p->get_offset(), p));
 		}
 	}
-	pthread_spin_unlock(&_lock);
+	_lock.unlock();
 }
 
 void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],

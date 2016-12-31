@@ -1,7 +1,7 @@
 #ifndef __VERTEX_COMPUTE_H__
 #define __VERTEX_COMPUTE_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -39,7 +39,7 @@ class graph_engine;
 class compute_vertex;
 class compute_directed_vertex;
 
-/**
+/*
  * This data structure represents an active vertex that is being processed
  * in a worker thread. It is used to handle two types of asynchronous
  * requests: for the adjacency list and the number of edges.

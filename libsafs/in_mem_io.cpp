@@ -17,6 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
+#include <numa.h>
+#endif
+
 #include <boost/format.hpp>
 
 #include "in_mem_io.h"
@@ -39,10 +43,43 @@ public:
 	}
 
 	void operator()(char *buf) const {
+#ifdef USE_NUMA
 		numa_free(buf, size);
+#else
+		free(buf);
+#endif
 	}
 };
 
+struct cfree
+{
+public:
+	void operator()(char *buf) const {
+		free(buf);
+	}
+};
+
+}
+
+NUMA_buffer::NUMA_buffer(std::shared_ptr<char> data, size_t length,
+		const NUMA_mapper &_mapper): mapper(_mapper)
+{
+	assert(mapper.get_num_nodes() == 1);
+	bufs.resize(1);
+	buf_lens.resize(1);
+	if (length % PAGE_SIZE == 0) {
+		bufs[0] = data;
+		buf_lens[0] = length;
+		this->length = length;
+	}
+	else {
+		size_t aligned_len = ROUNDUP(length, PAGE_SIZE);
+		bufs[0] = std::shared_ptr<char>((char *) memalign(
+					PAGE_SIZE, aligned_len), cfree());
+		memcpy(bufs[0].get(), data.get(), length);
+		buf_lens[0] = aligned_len;
+		this->length = aligned_len;
+	}
 }
 
 NUMA_buffer::NUMA_buffer(size_t length,
@@ -72,9 +109,15 @@ NUMA_buffer::NUMA_buffer(size_t length,
 	// Allocate memory for each NUMA node.
 	for (size_t i = 0; i < bufs.size(); i++) {
 		if (buf_lens[i] > 0) {
+#ifdef USE_NUMA
 			bufs[i] = std::shared_ptr<char>(
 					(char *) numa_alloc_onnode(buf_lens[i], i),
 					numa_delete(buf_lens[i]));
+#else
+			bufs[i] = std::shared_ptr<char>(
+					(char *) malloc_aligned(buf_lens[i], PAGE_SIZE),
+					numa_delete(buf_lens[i]));
+#endif
 			assert(bufs[i]);
 		}
 	}
@@ -174,7 +217,8 @@ NUMA_buffer::ptr NUMA_buffer::load(const std::string &file_name,
 {
 	native_file local_f(file_name);
 	if (!local_f.exist())
-		throw io_exception(file_name + std::string(" doesn't exist"));
+		throw io_exception(boost::str(
+					boost::format("Linux file %1% doesn't exist") % file_name));
 
 	ssize_t file_size = local_f.get_size();
 	assert(file_size > 0);
@@ -270,16 +314,30 @@ NUMA_buffer::ptr NUMA_buffer::load_safs(const std::string &file_name,
 	return numa_buf;
 }
 
+NUMA_buffer::ptr NUMA_buffer::create(std::shared_ptr<char> data, size_t length,
+		const NUMA_mapper &mapper)
+{
+	if (mapper.get_num_nodes() != 1) {
+		throw io_exception(
+				"can't create a NUMA buffer from a raw byte array on multiple nodes");
+	}
+	return NUMA_buffer::ptr(new NUMA_buffer(data, length, mapper));
+}
+
 class in_mem_byte_array: public page_byte_array
 {
 	off_t off;
 	size_t size;
 	const char *pages;
+	// We might need to allocate memory to keep data in `pages'.
+	// We use this to hold the allocated memory.
+	std::shared_ptr<char> data_holder;
 
 	void assign(in_mem_byte_array &arr) {
 		this->off = arr.off;
 		this->size = arr.size;
 		this->pages = arr.pages;
+		this->data_holder = arr.data_holder;
 	}
 
 	in_mem_byte_array(in_mem_byte_array &arr) {
@@ -298,10 +356,12 @@ public:
 	}
 
 	in_mem_byte_array(const io_request &req, const char *pages,
+			std::shared_ptr<char> holder,
 			byte_array_allocator &alloc): page_byte_array(alloc) {
 		this->off = req.get_offset();
 		this->size = req.get_size();
 		this->pages = pages;
+		this->data_holder = holder;
 	}
 
 	virtual off_t get_offset() const {
@@ -385,6 +445,7 @@ void in_mem_io::process_req(const io_request &req)
 	NUMA_buffer::data_info info = data->get_data(off, size);
 	assert(info.first);
 	char *first_page = info.first;
+	std::shared_ptr<char> holder;
 	// If the data in the buffer isn't stored in contiguous memory,
 	// we need to copy them to a piece of contiguous memory.
 	// This should happen very rarely if the range size in the NUMA mapper
@@ -392,16 +453,13 @@ void in_mem_io::process_req(const io_request &req)
 	if (info.second < size) {
 		first_page = (char *) malloc(size);
 		data->copy_to(first_page, size, off);
+		holder = std::shared_ptr<char>(first_page, cfree());
 	}
 
-	in_mem_byte_array byte_arr(req, first_page, *array_allocator);
+	in_mem_byte_array byte_arr(req, first_page, holder, *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
 	comp_io_sched->post_comp_process(compute);
-
-	// If we allocate memory to store the data, we need to delete it now.
-	if (info.second < size)
-		free(first_page);
 }
 
 void in_mem_io::process_computes()
@@ -463,6 +521,11 @@ in_mem_io::in_mem_io(NUMA_buffer::ptr data, int file_id,
 	comp_io_sched = comp_io_scheduler::ptr(
 			new default_comp_io_scheduler(get_node_id()));
 	comp_io_sched->set_io(this);
+}
+
+io_select::ptr in_mem_io::create_io_select() const
+{
+	return io_select::ptr();
 }
 
 }

@@ -26,15 +26,18 @@
 #include "local_vec_store.h"
 #include "mem_worker_thread.h"
 #include "dense_matrix.h"
+#include "bulk_operate_ext.h"
+#include "local_matrix_store.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
 
 vector::ptr vector::create(size_t length, const scalar_type &type,
-		bool in_mem, const set_vec_operate &op)
+		int num_nodes, bool in_mem, const set_vec_operate &op)
 {
-	// TODO I should allow users to create a NUMA vector store as well.
-	detail::vec_store::ptr vec = detail::vec_store::create(length, type, in_mem);
+	detail::vec_store::ptr vec = detail::vec_store::create(length, type,
+			num_nodes, in_mem);
 	vec->set_data(op);
 	return ptr(new vector(vec));
 }
@@ -88,13 +91,13 @@ public:
 std::vector<off_t> partition_vector(const detail::mem_vec_store &sorted_vec,
 		int num_parts)
 {
-	const agg_operate &find_next
+	agg_operate::const_ptr find_next
 		= sorted_vec.get_type().get_agg_ops().get_find_next();
 	std::vector<off_t> par_starts(num_parts + 1);
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = sorted_vec.get_length() / num_parts * i;
 		// This returns the relative start location of the next value.
-		find_next.run(sorted_vec.get_length() - start,
+		find_next->runAgg(sorted_vec.get_length() - start,
 				sorted_vec.get_raw_arr() + sorted_vec.get_entry_size() * start,
 				&par_starts[i]);
 		// This is the absolute start location of this partition.
@@ -169,10 +172,19 @@ bool vector::equals(const vector &vec) const
 		return false;
 	else {
 		assert(is_in_mem());
-		return memcmp(
-				dynamic_cast<const detail::mem_vec_store &>(get_data()).get_raw_arr(),
-				dynamic_cast<const detail::mem_vec_store &>(vec.get_data()).get_raw_arr(),
-				get_length() * get_entry_size()) == 0;
+		const detail::mem_vec_store &v1
+			= dynamic_cast<const detail::mem_vec_store &>(get_data());
+		const detail::mem_vec_store &v2
+			= dynamic_cast<const detail::mem_vec_store &>(vec.get_data());
+		size_t portion_size = std::min(v1.get_portion_size(),
+				v2.get_portion_size());
+		for (size_t idx = 0; idx < v1.get_length(); idx += portion_size) {
+			size_t llen = std::min(v1.get_length() - idx, portion_size);
+			if (memcmp(v1.get_sub_arr(idx, llen), v2.get_sub_arr(idx, llen),
+						llen * get_entry_size()) != 0)
+				return false;
+		}
+		return true;
 	}
 }
 
@@ -192,7 +204,7 @@ public:
 	}
 
 	void run() {
-		op.runA(sub_vec->get_length(), sub_vec->get_raw_arr(), agg_res);
+		op.runAgg(sub_vec->get_length(), sub_vec->get_raw_arr(), agg_res);
 	}
 };
 
@@ -203,6 +215,7 @@ scalar_variable::ptr vector::aggregate(const bulk_operate &op) const
 	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	size_t num_portions = get_data().get_num_portions();
 	size_t portion_size = get_data().get_portion_size();
+	// TODO we don't need to allocate a slot for every portion.
 	std::unique_ptr<char[]> raw_res(new char[res->get_size() * num_portions]);
 
 	detail::mem_thread_pool::ptr mem_threads
@@ -222,7 +235,7 @@ scalar_variable::ptr vector::aggregate(const bulk_operate &op) const
 	}
 	mem_threads->wait4complete();
 	char final_res[res->get_size()];
-	op.runA(num_portions, raw_res.get(), final_res);
+	op.runAgg(num_portions, raw_res.get(), final_res);
 	res->set_raw(final_res, res->get_size());
 	return res;
 }
@@ -287,6 +300,8 @@ dense_matrix::ptr vector::conv2mat(size_t nrow, size_t ncol,
 		bool byrow) const
 {
 	detail::matrix_store::const_ptr mat = get_data().conv2mat(nrow, ncol, byrow);
+	if (mat == NULL)
+		return dense_matrix::ptr();
 	return dense_matrix::create(mat);
 }
 
@@ -307,13 +322,6 @@ bool vector::export2(FILE *f) const
 		return false;
 	}
 	return true;
-}
-
-vector::ptr vector::sapply(bulk_uoperate::const_ptr op) const
-{
-	dense_matrix::ptr tmp = conv2mat(get_length(), 1, false);
-	dense_matrix::ptr tmp1 = tmp->sapply(op);
-	return tmp1->get_col(0);
 }
 
 }

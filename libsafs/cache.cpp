@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -62,10 +62,7 @@ void page_byte_array::memcpy(off_t rel_off, char buf[], size_t size) const
 
 void page::hit()
 {
-	int get_file_weight(file_id_t file_id);
-	// Not all files are treated equally. We make the pages of the files with
-	// higher weight stay in the page cache longer.
-	hits += get_file_weight(file_id);
+	hits++;
 }
 
 }

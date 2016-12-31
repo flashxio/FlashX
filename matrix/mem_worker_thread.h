@@ -76,10 +76,13 @@ class mem_thread_pool
 public:
 	typedef std::shared_ptr<mem_thread_pool> ptr;
 
+	static bool disable_thread_pool();
+	static bool enable_thread_pool();
 	static ptr get_global_mem_threads();
 	static size_t get_global_num_threads();
 	static int get_curr_thread_id();
 	static void init_global_mem_threads(int num_nodes, int nthreads_per_node);
+	static void destroy();
 
 	static ptr create(int num_nodes, int nthreads_per_node) {
 		return ptr(new mem_thread_pool(num_nodes, nthreads_per_node));
@@ -139,13 +142,33 @@ public:
 
 	void register_EM_obj(EM_object *obj) {
 		pthread_spin_lock(&lock);
-		auto it = EM_objs.find(obj);
-		assert(it == EM_objs.end());
+		assert(obj);
+		// If the object was registered before, we can just ignore it.
 		EM_objs.insert(obj);
 		pthread_spin_unlock(&lock);
 	}
 
 	virtual void run();
+};
+
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 32
+#endif
+
+class global_counter
+{
+	union count_t {
+		size_t count;
+		// The cache line size to avoid false sharing.
+		char data[CACHE_LINE_SIZE];
+	};
+	std::vector<count_t> counts;
+public:
+	global_counter();
+
+	void inc(size_t val);
+	void reset();
+	size_t get() const;
 };
 
 }

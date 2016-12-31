@@ -1,7 +1,7 @@
 #ifndef __GRAPH_FILE_HEADER_H__
 #define __GRAPH_FILE_HEADER_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *

@@ -27,6 +27,25 @@
 namespace fm
 {
 
+enum materialize_level
+{
+	// Materialize in the CPU cache.
+	// This delivers the best performance when materializing a sequence of
+	// matrix operations. However, if a virtual matrix appears in multiple
+	// operands, it requires to materialize the virtual matrix multiple times.
+	// This is the default level for materialization.
+	MATER_CPU,
+	// Materialize the entire portion of a virtual matrix.
+	// This requires to allocate a much larger memory buffer to keep
+	// the materialization result, but it can avoid recomputation if a virtual
+	// matrix is used in multiple operands of a function.
+	MATER_MEM,
+	// Materialize the entire matrix.
+	// This is especially expensive if the matrix is stored on disks.
+	// We should avoid it as much as possible.
+	MATER_FULL,
+};
+
 namespace detail
 {
 
@@ -37,6 +56,7 @@ namespace detail
  */
 class virtual_matrix_store: public matrix_store
 {
+	materialize_level mater_level;
 public:
 	typedef std::shared_ptr<const virtual_matrix_store> const_ptr;
 
@@ -47,6 +67,16 @@ public:
 
 	virtual_matrix_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &type): matrix_store(nrow, ncol, in_mem, type) {
+		this->mater_level = materialize_level::MATER_CPU;
+	}
+
+	virtual void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf) {
+		this->mater_level = level;
+	}
+
+	materialize_level get_materialize_level() const {
+		return mater_level;
 	}
 
 	virtual bool is_virtual() const {
@@ -55,7 +85,10 @@ public:
 
 	/*
 	 * When we materialize the matrix, we can specify where the materialized
-	 * matrix is stored.
+	 * matrix is stored. However, the input arguments only provide guidance
+	 * for the place where the materialized data should be stored. If
+	 * the data of the matrix has been materialized, we don't need to move
+	 * the data to the specified store.
 	 */
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 			int num_nodes) const = 0;
@@ -77,12 +110,6 @@ public:
 			size_t num_cols) {
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
-	}
-	virtual async_res_t get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) {
-		assert(0);
-		return async_res_t();
 	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,

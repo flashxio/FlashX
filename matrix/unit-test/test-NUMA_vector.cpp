@@ -1,6 +1,9 @@
 #include "NUMA_vector.h"
+#include "NUMA_dense_matrix.h"
 #include "matrix_config.h"
 #include "mem_worker_thread.h"
+#include "matrix_store.h"
+#include "sparse_matrix.h"
 
 const size_t num_eles = 1024 * 1024 * 10;
 size_t num_nodes = 1;
@@ -67,14 +70,6 @@ void test_copy()
 	vec->copy_from((char *) raw_arr.get(), vec->get_length() * sizeof(long));
 	for (size_t i = 0; i < vec->get_length(); i++)
 		assert(raw_arr[i] == vec->get<long>(i));
-
-	NUMA_vec_store::ptr vec1 = NUMA_vec_store::create(vec->get_length(), num_nodes,
-			get_scalar_type<long>());
-	bool ret = vec1->copy_from(*vec);
-	assert(ret);
-	assert(vec1->get_length() == vec->get_length());
-	for (size_t i = 0; i < vec->get_length(); i++)
-		assert(vec1->get<long>(i) == vec->get<long>(i));
 }
 
 void test_deep_copy()
@@ -107,20 +102,103 @@ void test_sort()
 		assert(raw_arr[i] == vec->get<long>(i));
 }
 
-int main(int argc, char *argv[])
+void test_conv2mat()
 {
-	if (argc >= 3) {
-		num_nodes = atoi(argv[1]);
-		nthreads = atoi(argv[2]);
+	printf("test converting a NUMA vector to a matrix\n");
+	size_t nrow = (random() % num_eles) + num_eles;
+	size_t ncol = 3;
+	NUMA_vec_store::ptr vec = NUMA_vec_store::create(nrow * ncol, num_nodes,
+			get_scalar_type<long>());
+	matrix_store::const_ptr mat = vec->conv2mat(nrow * ncol, 1, true);
+	assert(mat->get_num_rows() == nrow * ncol);
+	assert(mat->get_num_cols() == 1);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+
+	mat = vec->conv2mat(nrow * ncol, 1, false);
+	assert(mat->get_num_rows() == nrow * ncol);
+	assert(mat->get_num_cols() == 1);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+
+	mat = vec->conv2mat(1, nrow * ncol, true);
+	assert(mat->get_num_rows() == 1);
+	assert(mat->get_num_cols() == nrow * ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+
+	mat = vec->conv2mat(1, nrow * ncol, false);
+	assert(mat->get_num_rows() == 1);
+	assert(mat->get_num_cols() == nrow * ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+
+	mat = vec->conv2mat(nrow, ncol, true);
+	assert(mat->get_num_rows() == nrow);
+	assert(mat->get_num_cols() == ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+	{
+		NUMA_row_tall_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_row_tall_matrix_store>(mat);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				assert(*(long *) numa_mat->get(i, j) == vec->get<long>(
+							i * ncol + j));
 	}
 
-	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_DM_threads(nthreads);
-	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
-			nthreads / num_nodes);
+	mat = vec->conv2mat(nrow, ncol, false);
+	assert(mat->get_num_rows() == nrow);
+	assert(mat->get_num_cols() == ncol);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+	{
+		NUMA_col_tall_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_col_tall_matrix_store>(mat);
+		for (size_t i = 0; i < ncol; i++)
+			for (size_t j = 0; j < nrow; j++)
+				assert(*(long *) numa_mat->get(j, i) == vec->get<long>(
+							i * nrow + j));
+	}
+
+	mat = vec->conv2mat(ncol, nrow, true);
+	assert(mat->get_num_rows() == ncol);
+	assert(mat->get_num_cols() == nrow);
+	assert(mat->store_layout() == matrix_layout_t::L_ROW);
+	{
+		NUMA_row_wide_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_row_wide_matrix_store>(mat);
+		for (size_t i = 0; i < ncol; i++)
+			for (size_t j = 0; j < nrow; j++)
+				assert(*(long *) numa_mat->get(i, j) == vec->get<long>(
+							i * nrow + j));
+	}
+
+	mat = vec->conv2mat(ncol, nrow, false);
+	assert(mat->get_num_rows() == ncol);
+	assert(mat->get_num_cols() == nrow);
+	assert(mat->store_layout() == matrix_layout_t::L_COL);
+	{
+		NUMA_col_wide_matrix_store::const_ptr numa_mat
+			= std::dynamic_pointer_cast<const NUMA_col_wide_matrix_store>(mat);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				assert(*(long *) numa_mat->get(j, i) == vec->get<long>(
+							i * ncol + j));
+	}
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
+	}
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
 	test_init();
 	test_mapping();
 	test_copy();
 	test_deep_copy();
 	test_sort();
+	test_conv2mat();
+
+	destroy_flash_matrix();
 }

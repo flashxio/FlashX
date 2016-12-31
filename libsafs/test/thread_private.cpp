@@ -21,7 +21,7 @@
 
 #include "thread_private.h"
 #include "parameters.h"
-#include "exception.h"
+#include "safs_exception.h"
 #include "slab_allocator.h"
 
 bool align_req = false;
@@ -47,7 +47,7 @@ class cleanup_callback: public callback
 public:
 	typedef std::shared_ptr<cleanup_callback> ptr;
 #ifdef DEBUG
-	std::tr1::unordered_map<char *, issued_workload_t> pending_reqs;
+	std::unordered_map<char *, issued_workload_t> pending_reqs;
 #endif
 
 	cleanup_callback(int idx, thread_private *thread, int file_id) {
@@ -671,7 +671,7 @@ void thread_private::print_stat()
 #ifdef DEBUG
 	assert(num_pending.get() == (int) cb->pending_reqs.size());
 	if (cb->pending_reqs.size() > 0) {
-		for (std::tr1::unordered_map<char *, issued_workload_t>::const_iterator it
+		for (std::unordered_map<char *, issued_workload_t>::const_iterator it
 				= cb->pending_reqs.begin(); it != cb->pending_reqs.end(); it++) {
 			workload_t work = it->second.work;
 			printf("missing req %lx, size %d, read: %d, issued at %ld\n",

@@ -264,10 +264,6 @@ class sparse_block_2d
 				- sparse_row_part::get_row_id_size());
 	}
 
-	local_coo_t *get_coo_start() {
-		return (local_coo_t *) (row_parts + get_rheader_size());
-	}
-
 	char *get_nz_data() {
 		return (char *) (row_parts + get_rindex_size());
 	}
@@ -282,6 +278,14 @@ public:
 		nnz = 0;
 		nrow = 0;
 		num_coo_vals = 0;
+	}
+	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx,
+			size_t nnz, size_t nrow, size_t num_coos) {
+		this->block_row_idx = block_row_idx;
+		this->block_col_idx = block_col_idx;
+		this->nnz = nnz;
+		this->nrow = nrow;
+		this->num_coo_vals = num_coos;
 	}
 
 	size_t get_block_row_idx() const {
@@ -364,7 +368,13 @@ public:
 	const local_coo_t *get_coo_start() const {
 		return (local_coo_t *) (row_parts + get_rheader_size());
 	}
+	local_coo_t *get_coo_start() {
+		return (local_coo_t *) (row_parts + get_rheader_size());
+	}
 	const char *get_coo_val_start(size_t entry_size) const {
+		return get_nz_data() + (nnz - num_coo_vals) * entry_size;
+	}
+	char *get_coo_val_start(size_t entry_size) {
 		return get_nz_data() + (nnz - num_coo_vals) * entry_size;
 	}
 
@@ -516,6 +526,7 @@ public:
 	}
 
 	void verify() const;
+	void dump(const std::string &file) const;
 
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };

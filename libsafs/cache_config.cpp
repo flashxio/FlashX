@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include <boost/assert.hpp>
 
@@ -122,7 +122,7 @@ file_map_cache_config::file_map_cache_config(long size, int type,
 			it->second++;
 	}
 
-	std::tr1::unordered_map<int, long> part_sizes;
+	std::unordered_map<int, long> part_sizes;
 	int tot_files = 0;
 	for (size_t i = 0; i < node_ids.size(); i++) {
 		int node_id = node_ids[i];

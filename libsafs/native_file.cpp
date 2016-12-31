@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -19,6 +19,8 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
 
 #include "common.h"
 #include "native_file.h"
@@ -118,6 +120,19 @@ bool native_dir::delete_dir(bool recursive)
 		if (ret < 0)
 			fprintf(stderr, "rm %s: %s\n", name.c_str(), strerror(errno));
 		return ret == 0;
+	}
+}
+
+bool native_file::rename(const std::string &new_name)
+{
+	if (::rename(file_name.c_str(), new_name.c_str()) == 0) {
+		file_name = new_name;
+		return true;
+	}
+	else {
+		fprintf(stderr, "can't renmae to %s: %s\n", new_name.c_str(),
+				strerror(errno));
+		return false;
 	}
 }
 

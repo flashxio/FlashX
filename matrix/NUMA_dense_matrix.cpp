@@ -23,6 +23,7 @@
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
 #include "matrix_stats.h"
+#include "sub_matrix_store.h"
 
 namespace fm
 {
@@ -78,7 +79,7 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 }
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
-		const NUMA_row_tall_matrix_store &mat): NUMA_row_matrix_store(
+		const NUMA_row_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(),
 			mat.get_type(), mat.get_data_id()), mapper(mat.get_num_nodes(),
 			NUMA_range_size_log)
@@ -86,61 +87,91 @@ NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 	this->data = mat.data;
 }
 
+NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
+		const std::vector<detail::chunked_raw_array> &data, size_t nrow, size_t ncol,
+		const NUMA_mapper &_mapper, const scalar_type &type): NUMA_matrix_store(
+			nrow, ncol, type, mat_counter++), mapper(_mapper)
+{
+	this->data = data;
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
+	assert(data.size() == mapper.get_num_nodes());
+	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
+	for (size_t node_id = 0; node_id < mapper.get_num_nodes(); node_id++) {
+		assert((size_t) data[node_id].get_node_id() == node_id);
+		assert(data[node_id].get_num_bytes()
+				>= local_lens[node_id] * ncol * get_entry_size());
+		assert(data[node_id].get_contig_block_size() % block_bytes == 0);
+	}
+}
+
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
-		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
+		int num_nodes, const scalar_type &type): NUMA_matrix_store(nrow, ncol,
 			type, mat_counter++), mapper(num_nodes, NUMA_range_size_log)
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
+	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
 	for (int node_id = 0; node_id < num_nodes; node_id++)
-		data[node_id] = detail::raw_data_array(
-				local_lens[node_id] * ncol * get_entry_size(), node_id);
+		data[node_id] = detail::chunked_raw_array(
+				local_lens[node_id] * ncol * get_entry_size(), block_bytes,
+				node_id);
 }
 
 char *NUMA_row_tall_matrix_store::get_row(size_t row_idx)
 {
 	auto phy_loc = mapper.map2physical(row_idx);
-	return data[phy_loc.first].get_raw()
-		+ phy_loc.second * get_num_cols() * get_entry_size();
+	return data[phy_loc.first].get_raw(
+			phy_loc.second * get_num_cols() * get_entry_size());
 }
 
 const char *NUMA_row_tall_matrix_store::get_row(size_t row_idx) const
 {
 	auto phy_loc = mapper.map2physical(row_idx);
-	return data[phy_loc.first].get_raw()
-		+ phy_loc.second * get_num_cols() * get_entry_size();
+	return data[phy_loc.first].get_raw(
+			phy_loc.second * get_num_cols() * get_entry_size());
 }
 
-const char *NUMA_row_tall_matrix_store::get_rows(size_t row_start,
-		size_t row_end) const
+matrix_store::const_ptr NUMA_row_tall_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
 {
-	if (mapper.get_logical_range_id(row_start)
-			!= mapper.get_logical_range_id(row_end - 1)) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same range") % row_start % row_end;
-		return NULL;
-	}
-	return get_row(row_start);
+	// I assume we only need to get a small number of rows from the matrix.
+	// So it's sufficient to output a SMP matrix to store the result.
+	// TODO this might be slow
+	mem_row_matrix_store::ptr ret = mem_row_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(ret->get_row(i), get_row(idxs[i]),
+				get_entry_size() * get_num_cols());
+	return ret;
 }
 
-char *NUMA_row_tall_matrix_store::get_rows(size_t row_start, size_t row_end)
+matrix_store::const_ptr NUMA_row_tall_matrix_store::get_cols(
+		const std::vector<off_t> &idxs) const
 {
-	if (mapper.get_logical_range_id(row_start)
-			!= mapper.get_logical_range_id(row_end - 1)) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"[%1%, %2%) isn't in the same range") % row_start % row_end;
-		return NULL;
+	NUMA_row_tall_matrix_store::ptr ret = NUMA_row_tall_matrix_store::create(
+			get_num_rows(), idxs.size(), get_num_nodes(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_rows(); i++) {
+		const char *src_row = get_row(i);
+		for (size_t j = 0; j < src_data.size(); j++)
+			src_data[j] = src_row + idxs[j] * get_entry_size();
+		get_type().get_sg().gather(src_data, ret->get_row(i));
 	}
-	return (char *) get_row(row_start);
+	return ret;
 }
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
-		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
-			nrow, ncol, type, mat_counter++)
+		size_t ncol, int num_nodes, const scalar_type &type): NUMA_matrix_store(
+			nrow, ncol, type, mat_counter++), mapper(num_nodes,
+			NUMA_range_size_log)
 {
-	data.resize(ncol);
-	for (size_t i = 0; i < ncol; i++)
-		data[i] = NUMA_vec_store::create(nrow, num_nodes, type);
+	data.resize(num_nodes);
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
+	size_t block_bytes = mem_matrix_store::CHUNK_SIZE * ncol * get_entry_size();
+	for (int node_id = 0; node_id < num_nodes; node_id++)
+		data[node_id] = detail::chunked_raw_array(
+				local_lens[node_id] * ncol * get_entry_size(), block_bytes,
+				node_id);
 }
 
 matrix_store::const_ptr NUMA_row_tall_matrix_store::transpose() const
@@ -163,64 +194,96 @@ matrix_store::const_ptr NUMA_col_wide_matrix_store::transpose() const
 	return matrix_store::const_ptr(new NUMA_row_tall_matrix_store(store));
 }
 
-local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
-		size_t start_row, size_t start_col, size_t num_rows,
-		size_t num_cols) const
+bool NUMA_row_tall_matrix_store::get_portion_check(size_t start_row,
+		size_t start_col, size_t num_rows, size_t num_cols) const
 {
 	if (start_row + num_rows > get_num_rows()) {
 		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
 	// We have to retrieve the entire rows.
 	if (num_cols != get_num_cols() || start_col != 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
 
-	// Let's only count read bytes from the const version of get_portion.
-	detail::matrix_stats.inc_read_bytes(
-			num_rows * num_cols * get_entry_size(), true);
 	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
 	size_t range_size = mapper.get_range_size();
 	if (ROUND(start_row, range_size)
 			!= ROUND(start_row + num_rows - 1, range_size)) {
 		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
-		return local_matrix_store::const_ptr();
+		return false;
 	}
-	auto phy_loc = mapper.map2physical(start_row);
-	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-				get_row(start_row), start_row, start_col, num_rows, num_cols,
-				get_type(), phy_loc.first));
+	return true;
+}
+
+local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (!get_portion_check(start_row, start_col, num_rows, num_cols))
+		return local_matrix_store::const_ptr();
+
+	// Let's only count read bytes from the const version of get_portion.
+	detail::matrix_stats.inc_read_bytes(
+			num_rows * num_cols * get_entry_size(), true);
+
+	auto phy_loc_start = mapper.map2physical(start_row);
+	auto phy_loc_end = mapper.map2physical(start_row + num_rows - 1);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	const char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	// If all rows are stored in contiguous memory, we can return them immediately.
+	if (addr)
+		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+					addr, start_row, start_col, num_rows, num_cols,
+					get_type(), phy_loc_start.first));
+
+	// If the required data isn't stored in contiguous memory, let's copy them
+	// to a piece of contiguous memory. This doesn't happen very frequently.
+	// Normally, it only happens when we perform operations on matrices with
+	// different portion sizes. so it should be fine.
+	// TODO In the future, we should avoid memory copy here.
+	size_t num_sub_portions
+		= ceil(((double) num_rows) / mem_matrix_store::CHUNK_SIZE);
+	size_t local_start_row = 0;
+	local_buf_row_matrix_store::ptr ret(new local_buf_row_matrix_store(
+				start_row, start_col, num_rows, num_cols, get_type(), -1));
+	for (size_t i = 0; i < num_sub_portions; i++) {
+		addr = get_row(start_row + local_start_row);
+		size_t local_num_rows = std::min(mem_matrix_store::CHUNK_SIZE,
+				num_rows - local_start_row);
+		local_cref_contig_row_matrix_store sub_portion(addr,
+				start_row + local_start_row, start_col, local_num_rows,
+				num_cols, get_type(), -1);
+		ret->resize(local_start_row, 0, local_num_rows, ret->get_num_cols());
+		ret->copy_from(sub_portion);
+		local_start_row += local_num_rows;
+	}
+	ret->reset_size();
+	return ret;
 }
 
 local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols)
 {
-	if (start_row + num_rows > get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
+	if (!get_portion_check(start_row, start_col, num_rows, num_cols))
 		return local_matrix_store::ptr();
-	}
-	// We have to retrieve the entire rows.
-	if (num_cols != get_num_cols() || start_col != 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::ptr();
-	}
-	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = mapper.get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
-		return local_matrix_store::ptr();
-	}
-	auto phy_loc = mapper.map2physical(start_row);
+
+	auto phy_loc_start = mapper.map2physical(start_row);
+	auto phy_loc_end = mapper.map2physical(start_row + num_rows - 1);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	// TODO let's hope all data is stored in contiguous memory.
+	assert(addr);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-				get_row(start_row), start_row, start_col, num_rows, num_cols,
-				get_type(), phy_loc.first));
+				addr, start_row, start_col, num_rows, num_cols,
+				get_type(), phy_loc_start.first));
 }
 
 local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
@@ -254,6 +317,32 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 				get_type(), phy_loc.first));
 }
 
+int NUMA_row_tall_matrix_store::get_portion_node_id(size_t id) const
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
+	auto phy_loc = mapper.map2physical(start_row);
+	return phy_loc.first;
+}
+
+matrix_store::const_ptr NUMA_col_tall_matrix_store::get_rows(
+		const std::vector<off_t> &idxs) const
+{
+	// I assume we only need to get a small number of rows from the matrix.
+	// So it's sufficient to output a SMP matrix to store the result.
+	mem_col_matrix_store::ptr res = mem_col_matrix_store::create(
+			idxs.size(), get_num_cols(), get_type());
+	std::vector<const char *> src_data(idxs.size());
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		// TODO this is too expensive.
+		for (size_t j = 0; j < idxs.size(); j++)
+			src_data[j] = get(idxs[j], i);
+		char *dst_col = res->get_col(i);
+		get_type().get_sg().gather(src_data, dst_col);
+	}
+	return res;
+}
+
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols) const
@@ -262,34 +351,44 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
 		return local_matrix_store::const_ptr();
 	}
-	// We have to retrieve the entire rows.
-	if (num_cols != get_num_cols() || start_col != 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::const_ptr();
-	}
-	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = data.front()->get_mapper().get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
-		return local_matrix_store::const_ptr();
-	}
 
 	// Let's only count read bytes from the const version of get_portion.
 	detail::matrix_stats.inc_read_bytes(
 			num_rows * num_cols * get_entry_size(), true);
-	int node_id = data.front()->get_node_id(start_row);
-	std::vector<const char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++) {
-		cols[i] = data[i + start_col]->get_sub_arr(start_row,
-				start_row + num_rows);
-		assert(node_id == data[i + start_col]->get_node_id(start_row));
+
+	size_t chunk_size = get_portion_size().first;
+	size_t portion_id = start_row / chunk_size;
+	// We can't get a portion stored across multiple chunks.
+	if ((start_row + num_rows - 1) / chunk_size != portion_id) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get data across multiple chunks";
+		return local_matrix_store::ptr();
 	}
-	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				cols, start_row, start_col, num_rows, num_cols, get_type(),
-				node_id));
+
+	local_col_matrix_store::const_ptr ret
+		= std::static_pointer_cast<const local_col_matrix_store>(
+				get_portion(portion_id));
+	// If we want all rows in the portion.
+	if (start_row % chunk_size == 0 && (num_rows == chunk_size
+				|| start_row + num_rows == get_num_rows())) {
+		// If we want the entire portion. It should be a common case.
+		if (start_col == 0 && num_cols == get_num_cols())
+			return ret;
+		else
+			return local_matrix_store::const_ptr(
+					new local_cref_contig_col_matrix_store(
+						ret->get_col(start_col), start_row, start_col,
+						num_rows, num_cols, get_type(), ret->get_node_id()));
+	}
+	else {
+		std::vector<const char *> cols(num_cols);
+		off_t off
+			= (start_row - ret->get_global_start_row()) * ret->get_entry_size();
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = ret->get_col(i + start_col) + off;
+		return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
+					cols, start_row, start_col, num_rows, num_cols,
+					get_type(), ret->get_node_id()));
+	}
 }
 
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
@@ -300,78 +399,93 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
 		BOOST_LOG_TRIVIAL(error) << "get a portion out of boundary";
 		return local_matrix_store::ptr();
 	}
-	// We have to retrieve the entire rows.
-	if (num_cols != get_num_cols() || start_col != 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "has to get a portion with all elements in the short dimension";
-		return local_matrix_store::ptr();
-	}
-	// The retrieved rows have to be stored contiguously.
-	// range size has to be 2^n.
-	size_t range_size = data.front()->get_mapper().get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
-		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
+
+	size_t chunk_size = get_portion_size().first;
+	size_t portion_id = start_row / chunk_size;
+	// We can't get a portion stored across multiple chunks.
+	if ((start_row + num_rows - 1) / chunk_size != portion_id) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get data across multiple chunks";
 		return local_matrix_store::ptr();
 	}
 
-	int node_id = data.front()->get_node_id(start_row);
-	std::vector<char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++) {
-		cols[i] = data[i + start_col]->get_sub_arr(start_row,
-				start_row + num_rows);
-		assert(node_id == data[i + start_col]->get_node_id(start_row));
+	local_col_matrix_store::ptr ret
+		= std::static_pointer_cast<local_col_matrix_store>(
+				get_portion(portion_id));
+	// If we want all rows in the portion.
+	if (start_row % chunk_size == 0 && (num_rows == chunk_size
+				|| start_row + num_rows == get_num_rows())) {
+		// If we want the entire portion. It should be a common case.
+		if (start_col == 0 && num_cols == get_num_cols())
+			return ret;
+		else
+			return local_matrix_store::ptr(
+					new local_ref_contig_col_matrix_store(
+						ret->get_col(start_col), start_row, start_col,
+						num_rows, num_cols, get_type(), ret->get_node_id()));
 	}
-	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				cols, start_row, start_col, num_rows, num_cols, get_type(),
-				node_id));
+	else {
+		std::vector<char *> cols(num_cols);
+		off_t off
+			= (start_row - ret->get_global_start_row()) * ret->get_entry_size();
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = ret->get_col(i + start_col) + off;
+		return local_matrix_store::ptr(new local_ref_col_matrix_store(
+					cols, start_row, start_col, num_rows, num_cols,
+					get_type(), ret->get_node_id()));
+	}
 }
 
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		size_t id) const
 {
-	assert(!data.empty());
 	size_t chunk_size = get_portion_size().first;
-	size_t start_row = id * chunk_size;
+	size_t start_row = chunk_size * id;
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
-	assert(!data.empty());
-	int node_id = data.front()->get_node_id(start_row);
-	std::vector<const char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++) {
-		cols[i] = data[i + start_col]->get_sub_arr(start_row,
-				start_row + num_rows);
-		assert(node_id == data[i + start_col]->get_node_id(start_row));
-	}
-
 	// Let's only count read bytes from the const version of get_portion.
 	detail::matrix_stats.inc_read_bytes(
 			num_rows * num_cols * get_entry_size(), true);
-	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				cols, start_row, start_col, num_rows, num_cols, get_type(),
-				node_id));
+
+	auto phy_loc_start = mapper.map2physical(start_row);
+	off_t last_row = start_row + num_rows - 1;
+	auto phy_loc_end = mapper.map2physical(last_row);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	const char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	assert(addr);
+	return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
+				addr, start_row, start_col, num_rows, num_cols,
+				get_type(), phy_loc_start.first));
 }
 
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 {
-	assert(!data.empty());
 	size_t chunk_size = get_portion_size().first;
-	size_t start_row = id * chunk_size;
+	size_t start_row = chunk_size * id;
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
-	assert(!data.empty());
-	int node_id = data.front()->get_node_id(start_row);
-	std::vector<char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++) {
-		cols[i] = data[i + start_col]->get_sub_arr(start_row,
-				start_row + num_rows);
-		assert(node_id == data[i + start_col]->get_node_id(start_row));
-	}
-	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				cols, start_row, start_col, num_rows, num_cols, get_type(),
-				node_id));
+	auto phy_loc_start = mapper.map2physical(start_row);
+	off_t last_row = start_row + num_rows - 1;
+	auto phy_loc_end = mapper.map2physical(last_row);
+	assert(phy_loc_start.first == phy_loc_end.first);
+	char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size(),
+			(phy_loc_end.second + 1) * get_num_cols() * get_entry_size());
+	assert(addr);
+	return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+				addr, start_row, start_col, num_rows, num_cols,
+				get_type(), phy_loc_start.first));
+}
+
+int NUMA_col_tall_matrix_store::get_portion_node_id(size_t id) const
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
+	auto phy_loc_start = mapper.map2physical(start_row);
+	return phy_loc_start.first;
 }
 
 local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(
@@ -424,13 +538,39 @@ local_matrix_store::ptr NUMA_col_wide_matrix_store::get_portion(size_t id)
 	return local_matrix_store::cast(store.get_portion(id)->transpose());
 }
 
+char *NUMA_col_tall_matrix_store::get(size_t row_idx, size_t col_idx)
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t portion_start_row = ROUND(row_idx, chunk_size);
+	size_t portion_num_rows = portion_start_row + chunk_size
+		> get_num_rows() ? get_num_rows() - portion_start_row : chunk_size;
+	auto phy_loc_start = mapper.map2physical(portion_start_row);
+	char *addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size());
+	assert(addr);
+	off_t local_row_idx = row_idx - portion_start_row;
+	return addr + (portion_num_rows * col_idx + local_row_idx) * get_entry_size();
+}
+
+const char *NUMA_col_tall_matrix_store::get(size_t row_idx, size_t col_idx) const
+{
+	size_t chunk_size = get_portion_size().first;
+	size_t portion_start_row = ROUND(row_idx, chunk_size);
+	size_t portion_num_rows = portion_start_row + chunk_size
+		> get_num_rows() ? get_num_rows() - portion_start_row : chunk_size;
+	auto phy_loc_start = mapper.map2physical(portion_start_row);
+	const char * addr = data[phy_loc_start.first].get_raw(
+			phy_loc_start.second * get_num_cols() * get_entry_size());
+	assert(addr);
+	off_t local_row_idx = row_idx - portion_start_row;
+	return addr + (portion_num_rows * col_idx + local_row_idx) * get_entry_size();
+}
+
 matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	std::vector<NUMA_vec_store::ptr> wanted(idxs.size());
-	for (size_t i = 0; i < wanted.size(); i++)
-		wanted[i] = data[idxs[i]];
-	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(wanted));
+	NUMA_col_tall_matrix_store::const_ptr copy(new NUMA_col_tall_matrix_store(*this));
+	return matrix_store::const_ptr(new sub_col_matrix_store(idxs, copy));
 }
 
 bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const
@@ -467,18 +607,6 @@ bool NUMA_row_tall_matrix_store::write2file(const std::string &file_name) const
 	return true;
 }
 
-static void copy_vec(const NUMA_vec_store &vec, char *buf)
-{
-	size_t portion_size = vec.get_portion_size();
-	for (size_t idx = 0; idx < vec.get_length(); idx += portion_size) {
-		size_t local_len = std::min(portion_size, vec.get_length() - idx);
-		const char *portion = vec.get_sub_arr(idx, idx + local_len);
-		assert(portion);
-		memcpy(buf + idx * vec.get_entry_size(), portion,
-				local_len * vec.get_entry_size());
-	}
-}
-
 bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
 {
 	FILE *f = fopen(file_name.c_str(), "w");
@@ -490,13 +618,22 @@ bool NUMA_col_tall_matrix_store::write2file(const std::string &file_name) const
 	if (!write_header(f))
 		return false;
 
+	std::vector<local_col_matrix_store::const_ptr> portions(get_num_portions());
+	for (size_t i = 0; i < portions.size(); i++)
+		portions[i] = std::static_pointer_cast<const local_col_matrix_store>(
+				get_portion(i));
+
 	size_t tot_size = 0;
 	for (size_t i = 0; i < get_num_cols(); i++) {
-		NUMA_vec_store::const_ptr col = data[i];
-		size_t col_size = col->get_length() * col->get_entry_size();
+		size_t col_size = get_num_rows() * get_entry_size();
 		tot_size += col_size;
 		std::unique_ptr<char[]> tmp(new char[col_size]);
-		copy_vec(*col, tmp.get());
+		for (size_t j = 0; j < portions.size(); j++) {
+			size_t off = portions[j]->get_global_start_row()
+				* portions[j]->get_entry_size();
+			memcpy(tmp.get() + off, portions[j]->get_col(i),
+					portions[j]->get_num_rows() * portions[j]->get_entry_size());
+		}
 		size_t ret = fwrite(tmp.get(), col_size, 1, f);
 		if (ret == 0) {
 			BOOST_LOG_TRIVIAL(error)

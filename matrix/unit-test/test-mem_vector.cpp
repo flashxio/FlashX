@@ -2,6 +2,7 @@
 
 #include "vector.h"
 #include "bulk_operate.h"
+#include "bulk_operate_ext.h"
 #include "data_frame.h"
 #include "local_vec_store.h"
 #include "dense_matrix.h"
@@ -46,8 +47,8 @@ void test_groupby()
 		store->set<int>(i, random() % 1000);
 	vector::ptr vec = vector::create(store);
 	count_impl<int> count;
-	data_frame::ptr res = vec->groupby(count, true);
-	printf("size: %ld\n", res->get_num_entries());
+	data_frame::ptr res1 = vec->groupby(count, true);
+	printf("#entries in res1: %ld\n", res1->get_num_entries());
 
 	std::map<int, size_t> ele_counts;
 	const detail::smp_vec_store &vstore
@@ -61,11 +62,12 @@ void test_groupby()
 			it->second++;
 	}
 
-	smp_vec_store::ptr vals = smp_vec_store::cast(res->get_vec("val"));
-	smp_vec_store::ptr aggs = smp_vec_store::cast(res->get_vec("agg"));
-	for (size_t i = 0; i < vals->get_length(); i++) {
-		int val = vals->get<int>(i);
-		size_t count = aggs->get<size_t>(i);
+	smp_vec_store::ptr vals1 = smp_vec_store::cast(res1->get_vec("val"));
+	smp_vec_store::ptr aggs1 = smp_vec_store::cast(res1->get_vec("agg"));
+	assert(vals1->get_length() == aggs1->get_length());
+	for (size_t i = 0; i < vals1->get_length(); i++) {
+		int val = vals1->get<int>(i);
+		size_t count = aggs1->get<size_t>(i);
 		auto it = ele_counts.find(val);
 		assert(it != ele_counts.end());
 		assert(it->second == count);
@@ -141,7 +143,7 @@ void test_max()
 void test_resize()
 {
 	printf("test resize\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	const detail::smp_vec_store &vstore
 		= dynamic_cast<const detail::smp_vec_store &>(vec->get_data());
 	smp_vec_store::ptr copy = smp_vec_store::cast(vec->get_data().deep_copy());
@@ -165,7 +167,7 @@ void test_resize()
 void test_get_sub()
 {
 	printf("test get sub\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	smp_vec_store::ptr idxs = smp_vec_store::create(1000, get_scalar_type<off_t>());
 	for (size_t i = 0; i < idxs->get_length(); i++)
 		idxs->set<off_t>(i, random() % idxs->get_length());
@@ -193,7 +195,7 @@ void test_copy_from()
 void test_conv2std()
 {
 	printf("test convert to a std vector\n");
-	vector::ptr vec = create_vector<int>(1, 10000, 2);
+	vector::ptr vec = create_seq_vector<int>(1, 10000, 2);
 	std::vector<int> stl_vec = vec->conv2std<int>();
 	assert(stl_vec.size() == vec->get_length());
 	for (size_t i = 0; i < stl_vec.size(); i++)

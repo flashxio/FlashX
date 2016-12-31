@@ -23,16 +23,21 @@
 
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "log.h"
 #include "native_file.h"
 #include "thread.h"
+
+#include "vertex.h"
 
 #include "data_io.h"
 #include "generic_type.h"
 #include "matrix_config.h"
 #include "data_frame.h"
 #include "mem_worker_thread.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -361,7 +366,7 @@ static data_frame::ptr create_data_frame(const line_parser &parser, bool in_mem)
 	data_frame::ptr df = data_frame::create();
 	for (size_t i = 0; i < parser.get_num_cols(); i++)
 		df->add_vec(parser.get_col_name(i),
-				detail::vec_store::create(0, parser.get_col_type(i), in_mem));
+				detail::vec_store::create(0, parser.get_col_type(i), -1, in_mem));
 	return df;
 }
 
@@ -457,12 +462,7 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	if (files.size() == 1)
 		return read_lines(files[0], parser, in_mem);
 
-	data_frame::ptr df = data_frame::create();
-	df->add_vec(parser.get_col_name(0),
-			detail::vec_store::create(0, parser.get_col_type(0), in_mem));
-	df->add_vec(parser.get_col_name(1),
-			detail::vec_store::create(0, parser.get_col_type(1), in_mem));
-
+	data_frame::ptr df = create_data_frame(parser, in_mem);
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
@@ -510,6 +510,499 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	}
 
 	return df;
+}
+
+/*
+ * This class parses a line into an edge (source, destination).
+ */
+class edge_parser: public line_parser
+{
+public:
+	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
+	size_t get_num_cols() const {
+		return 2;
+	}
+
+	std::string get_col_name(off_t idx) const {
+		if (idx == 0)
+			return "source";
+		else
+			return "dest";
+	}
+
+	const scalar_type &get_col_type(off_t idx) const {
+		return get_scalar_type<fg::vertex_id_t>();
+	}
+};
+
+size_t edge_parser::parse(const std::vector<std::string> &lines,
+		data_frame &df) const
+{
+	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	size_t entry_idx = 0;
+	for (size_t i = 0; i < lines.size(); i++) {
+		const char *line = lines[i].c_str();
+		int len = strlen(line);
+		const char *first = line;
+		// Skip space
+		for (; isspace(*first); first++);
+		if (*first == '#')
+			continue;
+
+		// Make sure we get a number.
+		if (!isdigit(*first)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the first entry isn't a number: ") + first;
+			continue;
+		}
+		fg::vertex_id_t from = atol(first);
+		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
+
+		const char *second = first;
+		// Go to the end of the first number.
+		for (; isdigit(*second); second++);
+		if (second - line == len) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("there isn't second entry: ") + line;
+			continue;
+		}
+		// Skip space between two numbers.
+		for (; isspace(*second); second++);
+		// Make sure we get a number.
+		if (!isdigit(*second)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the second entry isn't a number: ") + second;
+			continue;
+		}
+		fg::vertex_id_t to = atol(second);
+		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
+
+		froms->set(entry_idx, from);
+		tos->set(entry_idx, to);
+		entry_idx++;
+	}
+	froms->resize(entry_idx);
+	tos->resize(entry_idx);
+
+	df.get_vec(0)->append(*froms);
+	df.get_vec(1)->append(*tos);
+	return froms->get_length();
+}
+
+template<class AttrType>
+class attr_edge_parser: public line_parser
+{
+public:
+	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
+	size_t get_num_cols() const {
+		return 3;
+	}
+
+	std::string get_col_name(off_t idx) const {
+		switch(idx) {
+			case 0:
+				return "source";
+			case 1:
+				return "dest";
+			case 2:
+				return "attr";
+			default:
+				throw std::invalid_argument("invalid index");
+		}
+	}
+
+	const scalar_type &get_col_type(off_t idx) const {
+		switch(idx) {
+			case 0:
+			case 1:
+				return get_scalar_type<fg::vertex_id_t>();
+			case 2:
+				return get_scalar_type<AttrType>();
+			default:
+				throw std::invalid_argument("invalid index");
+		}
+	}
+};
+
+template<class AttrType>
+size_t attr_edge_parser<AttrType>::parse(const std::vector<std::string> &lines,
+		data_frame &df) const
+{
+	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	detail::smp_vec_store::ptr attrs = detail::smp_vec_store::create(lines.size(),
+			get_scalar_type<AttrType>());
+
+	size_t entry_idx = 0;
+	for (size_t i = 0; i < lines.size(); i++) {
+		const char *line = lines[i].c_str();
+		int len = strlen(line);
+		const char *first = line;
+		// Skip space
+		for (; isspace(*first); first++);
+		if (*first == '#')
+			continue;
+
+		// Make sure we get a number.
+		if (!isdigit(*first)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the first entry isn't a number: ") + first;
+			continue;
+		}
+		fg::vertex_id_t from = atol(first);
+		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
+
+		const char *second = first;
+		// Go to the end of the first number.
+		for (; isdigit(*second); second++);
+		if (second - line == len) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("there isn't second entry: ") + line;
+			continue;
+		}
+		// Skip space between two numbers.
+		for (; isspace(*second); second++);
+		// Make sure we get a number.
+		if (!isdigit(*second)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("the second entry isn't a number: ") + second;
+			continue;
+		}
+		fg::vertex_id_t to = atol(second);
+		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
+
+		const char *third = second;
+		// Go to the end of the second number.
+		for (; isdigit(*third); third++);
+		if (third - line == len) {
+			BOOST_LOG_TRIVIAL(error)
+				<< std::string("there isn't third entry: ") + line;
+			continue;
+		}
+		// Skip space between two numbers.
+		for (; isspace(*third); third++);
+		AttrType attr = boost::lexical_cast<AttrType>(third);
+
+		froms->set<fg::vertex_id_t>(entry_idx, from);
+		tos->set<fg::vertex_id_t>(entry_idx, to);
+		attrs->set<AttrType>(entry_idx, attr);
+		entry_idx++;
+	}
+	froms->resize(entry_idx);
+	tos->resize(entry_idx);
+	attrs->resize(entry_idx);
+
+	df.get_vec(0)->append(*froms);
+	df.get_vec(1)->append(*tos);
+	df.get_vec(2)->append(*attrs);
+	return froms->get_length();
+}
+
+data_frame::ptr read_edge_list(const std::vector<std::string> &files,
+		bool in_mem, const std::string &edge_attr_type)
+{
+	std::shared_ptr<line_parser> parser;
+	if (edge_attr_type.empty())
+		parser = std::shared_ptr<line_parser>(new edge_parser());
+	else if (edge_attr_type == "I")
+		parser = std::shared_ptr<line_parser>(new attr_edge_parser<int>());
+	else if (edge_attr_type == "L")
+		parser = std::shared_ptr<line_parser>(new attr_edge_parser<long>());
+	else if (edge_attr_type == "F")
+		parser = std::shared_ptr<line_parser>(new attr_edge_parser<float>());
+	else if (edge_attr_type == "D")
+		parser = std::shared_ptr<line_parser>(new attr_edge_parser<double>());
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
+		return data_frame::ptr();
+	}
+	return read_lines(files, *parser, in_mem);
+}
+
+/*
+ * Convert a string of decimal to an integer.
+ */
+template<class T>
+class int_parser: public ele_parser
+{
+	int base;
+public:
+	int_parser() {
+		base = 10;
+	}
+
+	int_parser(int base) {
+		this->base = base;
+	}
+
+	virtual void parse(const std::string &str, void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		val[0] = strtol(str.c_str(), NULL, base);
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+class float_parser: public ele_parser
+{
+public:
+	virtual void parse(const std::string &str, void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		val[0] = atof(str.c_str());
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+/*
+ * This parses one row of a dense matrix at a time.
+ */
+template<class T>
+class row_parser: public line_parser
+{
+	const std::string delim;
+	const size_t num_cols;
+	std::vector<ele_parser::const_ptr> parsers;
+public:
+	row_parser(const std::string &_delim,
+			const std::vector<ele_parser::const_ptr> &_parsers): delim(
+				_delim), num_cols(_parsers.size()) {
+		this->parsers = _parsers;
+	}
+
+	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
+	size_t get_num_cols() const {
+		return num_cols;
+	}
+
+	std::string get_col_name(off_t idx) const {
+		return boost::str(boost::format("c%1%") % idx);
+	}
+
+	const scalar_type &get_col_type(off_t idx) const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+T get_zero()
+{
+	return 0;
+}
+
+template<class T>
+size_t row_parser<T>::parse(const std::vector<std::string> &lines,
+		data_frame &df) const
+{
+	std::vector<detail::smp_vec_store::ptr> cols(num_cols);
+	for (size_t i = 0; i < cols.size(); i++)
+		cols[i] = detail::smp_vec_store::create(lines.size(), get_scalar_type<T>());
+	size_t num_rows = 0;
+	std::vector<std::string> strs;
+	std::vector<T> row(num_cols);
+	for (size_t i = 0; i < lines.size(); i++) {
+		const char *line = lines[i].c_str();
+		// Skip space
+		for (; isspace(*line); line++);
+		if (*line == '#')
+			continue;
+
+		// Split a string
+		strs.clear();
+		boost::split(strs, line, boost::is_any_of(delim));
+		// If the line doesn't have enough values than expected, we fill
+		// the remaining elements in the row with 0.
+		while (strs.size() < num_cols)
+			strs.push_back("0");
+
+		// Parse each element.
+		try {
+			for (size_t j = 0; j < num_cols; j++) {
+				// If the value is missing. We make it 0.
+				if (strs[j].empty())
+					row[j] = get_zero<T>();
+				else if (parsers[j] == NULL)
+					row[j] = boost::lexical_cast<T>(strs[j]);
+				else
+					parsers[j]->parse(strs[j], &row[j]);
+			}
+		}
+		catch (boost::bad_lexical_cast const&e) {
+			BOOST_LOG_TRIVIAL(error) << e.what();
+		}
+
+		// If everything goes right, we store the results in the vectors.
+		for (size_t j = 0; j < num_cols; j++)
+			cols[j]->set<T>(num_rows, row[j]);
+		num_rows++;
+	}
+	for (size_t j = 0; j < num_cols; j++) {
+		cols[j]->resize(num_rows);
+		df.get_vec(j)->append(*cols[j]);
+	}
+	return num_rows;
+}
+
+dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		size_t num_cols)
+{
+	// We need to discover the number of columns ourselves.
+	if (num_cols == std::numeric_limits<size_t>::max()) {
+		FILE *f = fopen(files.front().c_str(), "r");
+		if (f == NULL) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("cannot open %1%: %2%")
+				% files.front() % strerror(errno);
+			return dense_matrix::ptr();
+		}
+
+		// Read at max 1M
+		safs::native_file in_file(files.front());
+		long buf_size = 1024 * 1024;
+		// If the input file is small, we read the entire file.
+		bool read_all = false;
+		if (buf_size > in_file.get_size()) {
+			buf_size = in_file.get_size();
+			read_all = true;
+		}
+		std::unique_ptr<char[]> buf(new char[buf_size]);
+		int ret = fread(buf.get(), buf_size, 1, f);
+		if (ret != 1) {
+			BOOST_LOG_TRIVIAL(error) << boost::format("cannot read %1%: %2%")
+				% files.front() % strerror(errno);
+			fclose(f);
+			return dense_matrix::ptr();
+		}
+
+		// Find the first line.
+		char *res = strchr(buf.get(), '\n');
+		// If the buffer doesn't have '\n' and we didn't read the entire file
+		if (res == NULL && !read_all) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "read 1M data, can't find the end of the line";
+			fclose(f);
+			return dense_matrix::ptr();
+		}
+		*res = 0;
+
+		// Split a string
+		std::string line = buf.get();
+		std::vector<std::string> strs;
+		boost::split(strs, line, boost::is_any_of(delim));
+		num_cols = strs.size();
+		fclose(f);
+	}
+
+	std::shared_ptr<line_parser> parser;
+	std::vector<ele_parser::const_ptr> ele_parsers(num_cols);
+	if (ele_type == "I") {
+		for (size_t i = 0; i < num_cols; i++)
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
+		parser = std::shared_ptr<line_parser>(new row_parser<int>(delim,
+					ele_parsers));
+	}
+	else if (ele_type == "L") {
+		for (size_t i = 0; i < num_cols; i++)
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
+		parser = std::shared_ptr<line_parser>(new row_parser<long>(delim,
+					ele_parsers));
+	}
+	else if (ele_type == "F") {
+		for (size_t i = 0; i < num_cols; i++)
+			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
+		parser = std::shared_ptr<line_parser>(new row_parser<float>(delim,
+					ele_parsers));
+	}
+	else if (ele_type == "D") {
+		for (size_t i = 0; i < num_cols; i++)
+			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
+		parser = std::shared_ptr<line_parser>(new row_parser<double>(delim,
+					ele_parsers));
+	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
+		return dense_matrix::ptr();
+	}
+	data_frame::ptr df = read_lines(files, *parser, in_mem);
+	return dense_matrix::create(df);
+}
+
+dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		const std::string &col_indicator)
+{
+	std::vector<std::string> strs;
+	boost::split(strs, col_indicator, boost::is_any_of(" "));
+	std::vector<ele_parser::const_ptr> ele_parsers(strs.size());
+	assert(strs.size());
+	for (size_t i = 0; i < ele_parsers.size(); i++) {
+		if (strs[i] == "I")
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
+		else if (strs[i] == "L")
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
+		else if (strs[i] == "F")
+			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
+		else if (strs[i] == "D")
+			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
+		else if (strs[i] == "H")
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>(16));
+		else if (strs[i] == "LH")
+			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>(16));
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unknown element parser";
+			return dense_matrix::ptr();
+		}
+	}
+
+	for (size_t i = 1; i < ele_parsers.size(); i++)
+		if (ele_parsers[i]->get_type() != ele_parsers[0]->get_type()) {
+			BOOST_LOG_TRIVIAL(error) << "element parsers output different types";
+			return dense_matrix::ptr();
+		}
+
+	return read_matrix(files, in_mem, ele_type, delim, ele_parsers);
+}
+
+dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
+		bool in_mem, const std::string &ele_type, const std::string &delim,
+		const std::vector<ele_parser::const_ptr> &ele_parsers)
+{
+	std::shared_ptr<line_parser> parser;
+	if (ele_type == "I")
+		parser = std::shared_ptr<line_parser>(new row_parser<int>(delim,
+					ele_parsers));
+	else if (ele_type == "L")
+		parser = std::shared_ptr<line_parser>(new row_parser<long>(delim,
+					ele_parsers));
+	else if (ele_type == "F")
+		parser = std::shared_ptr<line_parser>(new row_parser<float>(delim,
+					ele_parsers));
+	else if (ele_type == "D")
+		parser = std::shared_ptr<line_parser>(new row_parser<double>(delim,
+					ele_parsers));
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
+		return dense_matrix::ptr();
+	}
+
+	for (size_t i = 0; i < ele_parsers.size(); i++)
+		if (ele_parsers[i]
+				&& ele_parsers[i]->get_type() != parser->get_col_type(0)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "element parsers output different types from line parser";
+			return dense_matrix::ptr();
+		}
+
+	data_frame::ptr df = read_lines(files, *parser, in_mem);
+	return dense_matrix::create(df);
 }
 
 }

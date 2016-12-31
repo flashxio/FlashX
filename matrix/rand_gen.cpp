@@ -67,46 +67,6 @@ void urand_gen_impl<bool>::gen(void *buf, size_t len)
 
 ////////////////////////// Normal distribution /////////////////////////////
 
-template<>
-class nrand_gen_impl<double>: public rand_gen
-{
-	typedef std::mt19937_64 base_generator_type;
-	typedef std::normal_distribution<double> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	nrand_gen_impl(double mean, double stddev,
-			double seed): generator((int64_t) seed), dist(mean, stddev) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<double>();
-	}
-};
-
-template<>
-class nrand_gen_impl<long double>: public rand_gen
-{
-	typedef std::mt19937_64 base_generator_type;
-	typedef std::normal_distribution<double> distribution_type;
-
-	base_generator_type generator;
-	distribution_type dist;
-public:
-	nrand_gen_impl(long double mean, long double stddev,
-			long double seed): generator((int64_t) seed), dist(mean, stddev) {
-	}
-
-	void gen(void *buf, size_t len);
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<long double>();
-	}
-};
-
 void nrand_gen_impl<double>::gen(void *buf, size_t len)
 {
 	double *t_buf = (double *) buf;

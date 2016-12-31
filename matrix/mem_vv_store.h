@@ -57,18 +57,33 @@ public:
 		return ptr(new mem_vv_store(type));
 	}
 
-	static ptr create(const detail::raw_data_array &data,
+	static ptr create(const std::vector<off_t> &offs, const scalar_type &type) {
+		smp_vec_store::ptr vec = smp_vec_store::create(offs.back(), type);
+		return ptr(new mem_vv_store(offs, vec));
+	}
+
+	static ptr create(const detail::simple_raw_array &data,
 			const std::vector<off_t> &offs, const scalar_type &type) {
 		assert(offs.front() == 0 && (size_t) offs.back() == data.get_num_bytes());
 		smp_vec_store::ptr vec = smp_vec_store::create(data, type);
 		return ptr(new mem_vv_store(offs, vec));
 	}
 
+	static ptr create(const std::vector<off_t> &offs, mem_vec_store::ptr store) {
+		return ptr(new mem_vv_store(offs, store));
+	}
+
+	virtual void set_data(const set_vv_operate &op);
+
 	char *get_raw_arr() {
 		return get_mem_data().get_raw_arr();
 	}
 	const char *get_raw_arr() const {
 		return get_mem_data().get_raw_arr();
+	}
+
+	char*get_raw_arr(off_t idx) {
+		return get_raw_arr() + get_vec_off(idx);
 	}
 
 	const char*get_raw_arr(off_t idx) const {

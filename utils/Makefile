@@ -17,10 +17,10 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I.. -I../include -I../libcommon
-CFLAGS = -g -O3 -I.. -I../include -I../libcommon $(TRACE_FLAGS)
-LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
-LIBFILE = ../libsafs/libsafs.a ../libcommon/libcommon.a
+CXXFLAGS += -I.. -I../libsafs
+CFLAGS = -g -O3 -I.. -I../libsafs $(TRACE_FLAGS)
+LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
+LIBFILE = ../libsafs/libsafs.a
 
 TARGETS = SAFS-util
 
