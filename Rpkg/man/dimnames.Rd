@@ -18,7 +18,7 @@
 \S4method{dimnames}{fmV,list}(x) <- value
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 
 \item{value}{a list that provides values for dimension names.}
 }

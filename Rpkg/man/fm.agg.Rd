@@ -5,7 +5,7 @@
 \alias{fm.agg.lazy}
 \alias{fm.agg.mat}
 \alias{fm.agg.mat.lazy}
-\title{Aggregation on a FlashMatrix object.}
+\title{Aggregation on a FlashR object.}
 \usage{
 fm.agg(fm, op)
 
@@ -16,7 +16,7 @@ fm.agg.mat(fm, margin, op)
 fm.agg.mat.lazy(fm, margin, op)
 }
 \arguments{
-\item{fm}{a FlashMatrix object}
+\item{fm}{a FlashR object}
 
 \item{op}{the reference or the name of a predefined basic operator or
 the reference to an aggregation operator returned by
@@ -26,12 +26,12 @@ the reference to an aggregation operator returned by
 }
 \value{
 \code{fm.agg} returns a scalar, \code{fm.agg.mat} returns
-        a FlashMatrix vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
-        return a FlashMatrix sink matrix.
+        a FlashR vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
+        return a FlashR sink matrix.
 }
 \description{
 This function accepts a basic operator and perform aggregation on
-the FlashMatrix object with the basic operator.
+the FlashR object with the basic operator.
 }
 \details{
 \code{fm.agg} aggregates over the entire object.

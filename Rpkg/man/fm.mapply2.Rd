@@ -15,7 +15,7 @@
 \alias{fm.mapply2,fmV,fm-method}
 \alias{fm.mapply2,fmV,fmV-method}
 \alias{fm.mapply2,matrix,fm-method}
-\title{Apply a Function to two FlashMatrix vectors/matrices.}
+\title{Apply a Function to two FlashR vectors/matrices.}
 \usage{
 fm.mapply.row(o1, o2, FUN, set.na = TRUE)
 
@@ -42,7 +42,7 @@ fm.mapply.col(o1, o2, FUN, set.na = TRUE)
 \S4method{fm.mapply2}{ANY,fmV}(o1, o2, FUN, set.na = TRUE)
 }
 \arguments{
-\item{o1,o2}{a FlashMatrix vector/matrix.}
+\item{o1,o2}{a FlashR vector/matrix.}
 
 \item{FUN}{the reference or the name of one of the predefined basic binary
 operators.}
@@ -52,7 +52,7 @@ the output matrix to NA if the value in the corresponding
 location of the input matrix is NA.}
 }
 \value{
-a FlashMatrix vector/matrix.
+a FlashR vector/matrix.
 }
 \description{
 \code{fm.mapply2} applies \code{FUN} to the first elements of each

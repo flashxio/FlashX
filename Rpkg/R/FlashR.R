@@ -2079,6 +2079,7 @@ setMethod("is.finite", signature(x = "fmV"), function(x) {
 #' @param x a FlashR factor
 #' @return The length of \code{levels(x)}, which is zero if \code{x}
 #' has no levels.
+#' @name nlevels
 setMethod("nlevels", signature(x = "fmFactorV"), function(x) x@num.levels)
 
 #' Levels Attributes
@@ -2090,6 +2091,7 @@ setMethod("nlevels", signature(x = "fmFactorV"), function(x) x@num.levels)
 #'
 #' @param x a FlashR factor.
 #' @return a FlashR vector that contains the value of the levels.
+#' @name levels
 setMethod("levels", signature(x = "fmFactorV"), function(x)
 		  fm.seq.int(1, x@num.levels, 1))
 

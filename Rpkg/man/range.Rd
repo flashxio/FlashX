@@ -12,9 +12,9 @@
 \S4method{range}{fmV}(x, ..., na.rm = FALSE)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
-\item{...}{any FlashMatrix vectors or matrices.}
+\item{...}{any FlashR vectors or matrices.}
 
 \item{na.rm}{logical, indicating if \code{NA} should be omitted.}
 }

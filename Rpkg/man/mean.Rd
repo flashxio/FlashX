@@ -12,7 +12,7 @@
 \S4method{mean}{fmV}(x, ...)
 }
 \arguments{
-\item{x}{A FlashMatrix vector or matrix.}
+\item{x}{A FlashR vector or matrix.}
 
 \item{...}{further arguments passed to or from other methods.}
 }

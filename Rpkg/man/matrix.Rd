@@ -34,8 +34,8 @@ columns, otherwise the matrix is filled by rows.}
 }
 \description{
 \code{fm.matrix} creates a matrix from the given set of values.
-\code{as.matrix} attempts to turn a FlashMatrix matrix to an R matrix.
-\code{fm.as.matrix} attempts to turn its argument into a FlashMatrix matrix.
-\code{fm.is.matrix} indicates whether a FlashMatrix object is a matrix.
+\code{as.matrix} attempts to turn a FlashR matrix to an R matrix.
+\code{fm.as.matrix} attempts to turn its argument into a FlashR matrix.
+\code{fm.is.matrix} indicates whether a FlashR object is a matrix.
 }
 

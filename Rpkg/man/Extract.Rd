@@ -26,7 +26,7 @@ or numeric vectors.}
 \item{drop}{for matrices. If \code{TRUE}, the result is coerced to a vector.}
 }
 \description{
-Operators acting on FlashMatrix vectors and matrices to extract parts of
+Operators acting on FlashR vectors and matrices to extract parts of
 the objects.
 }
 \details{

@@ -20,15 +20,15 @@ fm.is.vector(x)
 \arguments{
 \item{obj}{an object}
 
-\item{x}{a FlashMatrix vector}
+\item{x}{a FlashR vector}
 }
 \value{
-a FlashMatrix vector
+a FlashR vector
 }
 \description{
-\code{fm.as.vector} converts an object to a FlashMatrix vector.
-\code{as.vector} converts a FlashMatrix vector to an R vector.
-\code{fm.is.vector} test whether the input argument is a FlashMatrix vector.
+\code{fm.as.vector} converts an object to a FlashR vector.
+\code{as.vector} converts a FlashR vector to an R vector.
+\code{fm.is.vector} test whether the input argument is a FlashR vector.
 }
 \details{
 Right now, \code{fm.as.vector} can only convert a matrix with only one row

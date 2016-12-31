@@ -7,8 +7,7 @@
 \alias{abs,fmV-method}
 \alias{sqrt,fm-method}
 \alias{sqrt,fmV-method}
-\title{\code{abs(x)} computes the absolute value of x, \code{sqrt(x)} computes the square
-root of x.}
+\title{Miscellaneous Mathematical Functions}
 \usage{
 \S4method{abs}{fm}(x)
 

@@ -5,7 +5,7 @@
 \alias{fm.get.eles}
 \alias{fm.get.eles.vec}
 \alias{fm.get.rows}
-\title{Get a submatrix from a FlashMatrix matrix}
+\title{Get a submatrix from a FlashR matrix}
 \usage{
 fm.get.cols(fm, idxs)
 
@@ -14,13 +14,13 @@ fm.get.rows(fm, idxs)
 fm.get.eles.vec(fm, idxs)
 }
 \arguments{
-\item{fm}{A FlashMatrix matrix}
+\item{fm}{A FlashR matrix}
 
 \item{idxs}{an array of column indices in fm.}
 }
 \value{
-a FlashMatrix vector if getting one row or column;
-a FlashMatrix matrix if getting more than one row or column.
+a FlashR vector if getting one row or column;
+a FlashR matrix if getting more than one row or column.
 }
 \description{
 \code{fm.get.rows} gets specified rows in a FM matrix.

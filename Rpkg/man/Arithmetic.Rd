@@ -156,16 +156,16 @@
 \S4method{^}{fmV,ANY}(e1, e2)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
+\item{e1,e2}{One of the operands need to be a FlashR object. If one operand
 is a matrix and the other is a vector, we perform the arithmetic operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
 the vector.
 
 There are a few exceptions. For example, the left operand of "^" has to be
-a FlashMatrix object and the right operand has to be a scalar.}
+a FlashR object and the right operand has to be a scalar.}
 }
 \description{
-Perform unary or binary arithmetic operations on FlashMatrix objects.
+Perform unary or binary arithmetic operations on FlashR objects.
 }
 

@@ -7,18 +7,18 @@
 fm.conv.store(fm, in.mem, name = "")
 }
 \arguments{
-\item{fm}{a FlashMatrix object.}
+\item{fm}{a FlashR object.}
 
-\item{in.mem}{a logical value indicating whether to store the FlashMatrix
+\item{in.mem}{a logical value indicating whether to store the FlashR
 object in memory.}
 
-\item{name}{a string to indicate the name of the new FlashMatrix object.}
+\item{name}{a string to indicate the name of the new FlashR object.}
 }
 \value{
-a new FlashMatrix object with data stored in specified storage.
+a new FlashR object with data stored in specified storage.
 }
 \description{
-This function converts the storage of a FlashMatrix vector/matrix.
+This function converts the storage of a FlashR vector/matrix.
 The storage can be memory or disks.
 }
 \details{

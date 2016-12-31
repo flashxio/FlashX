@@ -24,7 +24,7 @@
 \S4method{is.finite}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix object}
+\item{x}{a FlashR object}
 }
 \value{
 A logical vector of the same length as \code{x}

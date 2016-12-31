@@ -26,9 +26,9 @@ the file name.}
 \item{ncol}{the number of columns in the generated matrix.}
 }
 \description{
-\code{fm.rnorm} creates a FlashMatrix vector with random numbers from
+\code{fm.rnorm} creates a FlashR vector with random numbers from
 normal distribution.
-\code{fm.rnorm.matrix} creates a FlashMatrix matrix with random numbers from
+\code{fm.rnorm.matrix} creates a FlashR matrix with random numbers from
 normal distribution.
 }
 \details{

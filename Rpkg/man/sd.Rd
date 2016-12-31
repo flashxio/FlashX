@@ -12,7 +12,7 @@
 \S4method{sd}{fmV}(x, na.rm = FALSE)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
 \item{na.rm}{logical. Should missing values be removed?}
 }

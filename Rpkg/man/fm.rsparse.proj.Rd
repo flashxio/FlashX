@@ -17,7 +17,7 @@ fm.rsparse.proj(nrow, ncol, density, name = "")
 the file name.}
 }
 \value{
-a FlashMatrix matrix.
+a FlashR matrix.
 }
 \description{
 \code{fm.rsparse.proj} creates a sparse projection matrix stored in memory.

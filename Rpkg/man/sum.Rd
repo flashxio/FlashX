@@ -15,7 +15,7 @@ fm.sum(x, lazy = FALSE)
 \S4method{sum}{fmV}(x, ..., na.rm = FALSE)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
 \item{lazy}{indicates whether or not to evaluate it lazily.}
 

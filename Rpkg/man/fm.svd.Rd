@@ -7,7 +7,7 @@
 fm.svd(x, nu = min(n, p), nv = min(n, p), tol = 1e-08)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix}
+\item{x}{a FlashR matrix}
 
 \item{nu}{the number of left singluar vectors to be computed.}
 

@@ -2,18 +2,18 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.conv.FM2R}
 \alias{fm.conv.FM2R}
-\title{Convert a FlashMatrix object to a regular R object}
+\title{Convert a FlashR object to a regular R object}
 \usage{
 fm.conv.FM2R(obj)
 }
 \arguments{
-\item{obj}{a FlashMatrix object}
+\item{obj}{a FlashR object}
 }
 \value{
 a regular R object.
 }
 \description{
-Convert a FlashMatrix object to a regular R object
+Convert a FlashR object to a regular R object
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

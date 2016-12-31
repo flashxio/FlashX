@@ -48,7 +48,7 @@ is stored by rows.}
 \item{t.spm.idx}{The file that stores the index of the transpose of the sparse matrix.}
 }
 \value{
-a FlashMatrix matrix.
+a FlashR matrix.
 }
 \description{
 There are many different ways of loading a matrix to FlashR.
@@ -56,8 +56,8 @@ There are many different ways of loading a matrix to FlashR.
 the Linux filesystem.
 \code{fm.load.dense.matrix.bin} loads a dense matrix in the binary format
 from the Linux filesystem.
-\code{fm.load.sparse.matrix} loads a FlashMatrix sparse matrix from files.
-The matrix in the file is in the FlashMatrix format.
+\code{fm.load.sparse.matrix} loads a FlashR sparse matrix from files.
+The matrix in the file is in the FlashR format.
 \code{fm.get.dense.matrix} returns a named dense matrix that has already
 been loaded to FlashR.
 }

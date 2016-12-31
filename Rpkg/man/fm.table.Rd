@@ -7,7 +7,7 @@
 fm.table(x)
 }
 \arguments{
-\item{x}{a FlashMatrix vector.}
+\item{x}{a FlashR vector.}
 }
 \value{
 a list of elements.
@@ -18,6 +18,6 @@ a list of elements.
 }
 \description{
 This function counts the number of occurences of each unique value
-in a FlashMatrix vector.
+in a FlashR vector.
 }
 

@@ -18,7 +18,7 @@
 \S4method{tail}{fmV}(x, n = 6L)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
 \item{n}{a positive integer.}
 }
@@ -26,6 +26,6 @@
 An object (usually) like \code{x} but generally smaller.
 }
 \description{
-Returns the first or last parts of a FlashMatrix vector or matrix.
+Returns the first or last parts of a FlashR vector or matrix.
 }
 

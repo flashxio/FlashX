@@ -15,7 +15,7 @@ fm.all(x, lazy = FALSE)
 \S4method{all}{fmV}(x, ..., na.rm = FALSE)
 }
 \arguments{
-\item{x}{a logical FlashMatrix vector.}
+\item{x}{a logical FlashR vector.}
 
 \item{lazy}{indicates whether or not to evaluate it lazily.}
 

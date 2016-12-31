@@ -19,7 +19,7 @@ a \code{fm.agg.op} operator.
 }
 \description{
 This function creates an aggregate operator for aggregation operations
-on a FlashMatrix object.
+on a FlashR object.
 }
 \details{
 An Aggregate operator has two parts. \code{agg} computes partial

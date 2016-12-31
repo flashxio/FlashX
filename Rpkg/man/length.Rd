@@ -12,7 +12,7 @@
 \S4method{length}{fm}(x)
 }
 \arguments{
-\item{x}{an FlashMatrix object.}
+\item{x}{an FlashR object.}
 }
 \value{
 an integer of length 1 or a double if the object has more than

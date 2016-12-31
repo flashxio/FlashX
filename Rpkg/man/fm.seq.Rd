@@ -25,12 +25,12 @@ fm.seq.matrix(from, to, nrow, ncol, byrow = FALSE)
 columns, otherwise the matrix is filled by rows.}
 }
 \value{
-a FlashMatrix vector or matrix filled with a sequence of numbers
+a FlashR vector or matrix filled with a sequence of numbers
         that belongs to [from, to]
 }
 \description{
-\code{fm.seq.int} creates a FlashMatrix vector with a sequence of numbers.
-\code{fm.seq.matrix} creates a FlashMatrix matrix with a sequence of numbers.
+\code{fm.seq.int} creates a FlashR vector with a sequence of numbers.
+\code{fm.seq.matrix} creates a FlashR matrix with a sequence of numbers.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

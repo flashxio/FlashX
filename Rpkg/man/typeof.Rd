@@ -12,13 +12,13 @@
 \S4method{typeof}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix object.}
+\item{x}{a FlashR object.}
 }
 \value{
 A character string. Current values are "logical", "integer",
 "double".
 }
 \description{
-\code{typeof} determines the R type of an FlashMatrix object.
+\code{typeof} determines the R type of an FlashR object.
 }
 

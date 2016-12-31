@@ -96,21 +96,21 @@ pmin2(e1, e2)
 \S4method{pmax}{fmV}(..., na.rm = FALSE)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one
+\item{e1,e2}{One of the operands need to be a FlashR object. If one
 operand is a matrix and the other is a vector, we perform the operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
 the vector.}
 
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
-\item{...}{FlashMatrix vectors or matrices.}
+\item{...}{FlashR vectors or matrices.}
 
 \item{na.rm}{a logical indicating whether missing values should be removed.}
 }
 \value{
 \code{pmin2}, \code{pmax2}, \code{pmin} and \code{pmax} return
-        a FlashMatrix object, and \code{min} and \code{max} return an R scalar.
+        a FlashR object, and \code{min} and \code{max} return an R scalar.
 }
 \description{
 Returns the (parallel) maxima and minima of the input values.

@@ -18,14 +18,14 @@
 \S4method{ifelse}{fmV,ANY,fmV}(test, yes, no)
 }
 \arguments{
-\item{test}{a logical FlashMatrix vector or matrix.}
+\item{test}{a logical FlashR vector or matrix.}
 
-\item{yes}{a FlashMatrix vector or matrix or an R scalar.}
+\item{yes}{a FlashR vector or matrix or an R scalar.}
 
-\item{no}{a FlashMatrix vector or matrix or an R scalar.}
+\item{no}{a FlashR vector or matrix or an R scalar.}
 }
 \value{
-A FlashMatrix vector or matrix of the same size and attributes
+A FlashR vector or matrix of the same size and attributes
 (including dimensions) as \code{test} and data values from the values
 of \code{yes} or \code{no}.
 }

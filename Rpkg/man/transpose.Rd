@@ -12,7 +12,7 @@
 \S4method{t}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 }
 \value{
 a matrix.

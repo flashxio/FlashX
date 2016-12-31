@@ -26,8 +26,8 @@ the file name.}
 \item{ncol}{the number of columns in the generated matrix.}
 }
 \description{
-\code{fm.runif} creates a FlashMatrix vector with uniformly random numbers.
-\code{fm.runif.matrix} creates a FlashMatrix matrix with uniformly random
+\code{fm.runif} creates a FlashR vector with uniformly random numbers.
+\code{fm.runif.matrix} creates a FlashR matrix with uniformly random
 numbers.
 }
 \details{

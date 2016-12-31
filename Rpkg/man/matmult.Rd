@@ -21,12 +21,12 @@
 \S4method{\%*\%}{ANY,fm}(x, y)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 
-\item{y}{can be a FlashMatrix vector or matrix, an R vector or matrix.}
+\item{y}{can be a FlashR vector or matrix, an R vector or matrix.}
 }
 \value{
-a FlashMatrix matrix.
+a FlashR matrix.
 }
 \description{
 Multiplies two matrices, if they are conformable. If one argument is

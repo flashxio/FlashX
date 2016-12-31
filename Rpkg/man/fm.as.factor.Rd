@@ -2,19 +2,19 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.as.factor}
 \alias{fm.as.factor}
-\title{Convert a FlashMatrix vector to a FlashMatrix factor vector.}
+\title{Convert a FlashR vector to a FlashR factor vector.}
 \usage{
 fm.as.factor(fm, num.levels = -1)
 }
 \arguments{
-\item{fm}{a FlashMatrix vector.}
+\item{fm}{a FlashR vector.}
 
 \item{num.levels}{The number of levels in the factor vector.}
 }
 \value{
-a FlashMatrix factor vector.
+a FlashR factor vector.
 }
 \description{
-Convert a FlashMatrix vector to a FlashMatrix factor vector.
+Convert a FlashR vector to a FlashR factor vector.
 }
 

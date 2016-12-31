@@ -5,7 +5,7 @@
 \alias{fm.sapply}
 \alias{fm.sapply,fm-method}
 \alias{fm.sapply,fmV-method}
-\title{Apply a Function to a FlashMatrix vector/matrix.}
+\title{Apply a Function to a FlashR vector/matrix.}
 \usage{
 fm.sapply(o, FUN, set.na = TRUE)
 
@@ -14,7 +14,7 @@ fm.sapply(o, FUN, set.na = TRUE)
 \S4method{fm.sapply}{fmV}(o, FUN, set.na = TRUE)
 }
 \arguments{
-\item{o}{a FlashMatrix vector/matrix.}
+\item{o}{a FlashR vector/matrix.}
 
 \item{FUN}{the reference or the name of a predefined uniary operator.}
 
@@ -24,7 +24,7 @@ the corresponding location of the input vector or matrix
 is NA.}
 }
 \value{
-a FlashMatrix vector/matrix.
+a FlashR vector/matrix.
 }
 \description{
 \code{sapply} applies \code{FUN} to every element of a vector/matrix.
