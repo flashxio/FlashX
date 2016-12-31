@@ -1649,7 +1649,7 @@ fm.apply <- function(x, margin, FUN)
 	stopifnot(class(x) == "fm")
 	if (class(FUN) == "character")
 		FUN <- .get.apply.op(FUN)
-	stopifnot(class(FUN) == "fm.apply.bo")
+	stopifnot(class(FUN) == "fm.apply.op")
 	ret <- .Call("R_FM_apply", FUN, as.integer(margin), x, PACKAGE="FlashR")
 	.new.fm(ret)
 }
