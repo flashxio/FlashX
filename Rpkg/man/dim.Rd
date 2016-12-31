@@ -14,4 +14,8 @@
 \description{
 Retrieve the dimension of an FlashR object.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+dim(mat)
+}
 

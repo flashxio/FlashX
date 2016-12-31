@@ -28,7 +28,12 @@ The value is a logical vector of length one.
 }
 \description{
 \code{any} tests whether some of the values in a set of logical vectors are
-true? \code{fm.all} tests whether some of the values in a single vector are
+true? \code{fm.any} tests whether some of the values in a single vector are
 true. \code{fm.any} can evaluate it lazily.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10) > 0.5
+any(mat)
+fm.any(mat)
 }
 

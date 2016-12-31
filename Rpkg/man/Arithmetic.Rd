@@ -168,4 +168,14 @@ a FlashR object and the right operand has to be a scalar.}
 \description{
 Perform unary or binary arithmetic operations on FlashR objects.
 }
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- -mat1
+mat <- mat1 + mat2
+mat <- mat1 - mat2
+mat <- mat1 * mat2
+mat <- mat1 / mat2
+mat <- mat1 ^ 2
+}
 

@@ -24,4 +24,8 @@
 \code{abs(x)} computes the absolute value of x, \code{sqrt(x)} computes the square
 root of x.
 }
+\examples{
+mat <- abs(fm.runif.matrix(100, 10))
+mat <- sqrt(fm.runif.matrix(100, 10))
+}
 

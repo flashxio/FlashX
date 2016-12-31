@@ -33,4 +33,9 @@ Multiplies two matrices, if they are conformable. If one argument is
 a vector, it will be promoted to either a row or column matrix to make
 the two arguments conformable.
 }
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(10, 10)
+mat <- mat1 \%*\% mat2
+}
 

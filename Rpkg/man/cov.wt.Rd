@@ -52,4 +52,8 @@ of the covariance matrix with divisor (n - 1) is obtained.  This
 differs from the behaviour in S-PLUS which corresponds to \code{method
 = "ML"} and does not divide.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+cov.wt(mat, fm.runif(nrow(mat)))
+}
 

@@ -123,4 +123,14 @@ If one of the arguments is a matrix and the other is a vector, \code{pmax2}
 or \code{pmin2} return a matrix, each of whose column is parallel maxima
 and minima of the column of the input matrix and the input vector.
 }
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(100, 10)
+res <- pmax2(mat1, mat2)
+res <- pmin2(mat1, mat2)
+res <- pmax(mat1, mat2)
+res <- pmin(mat1, mat2)
+res <- max(mat1, mat2)
+res <- min(mat1, mat2)
+}
 

@@ -33,4 +33,10 @@ the objects.
 FlashR only supports extracting data from an object. It doesn't support
 replace data in an object.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat[1:5,]
+mat[,1:5]
+mat[1:5,1:5]
+}
 

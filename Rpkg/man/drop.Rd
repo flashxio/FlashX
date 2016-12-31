@@ -20,4 +20,8 @@ Delete the dimensions of a FlashR matrix which have only one level.
 If the input matrix has only one row or one column, it works the same as
 fm.as.vector. Otherwise, it returns the original matrix.
 }
+\examples{
+mat <- fm.runif.matrix(100, 1)
+vec <- drop(mat)
+}
 

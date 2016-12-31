@@ -27,4 +27,9 @@ cross-product. This is formally equivalent to (but usually slightly
 faster than) the call \code{t(x) \%*\% y} (\code{crossprod}) or
 \code{x \%*\% t(y)} (\code{tcrossprod}).
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+crossprod(mat)
+tcrossprod(mat)
+}
 

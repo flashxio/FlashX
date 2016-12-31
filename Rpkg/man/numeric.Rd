@@ -28,4 +28,8 @@
 Coerces or test objects of type \code{"numeric"}. \code{is.numeric}
 is a more general test of an object being interpretable as numbers.
 }
+\examples{
+vec <- as.numeric(fm.runif(1000, min=0, max=10))
+is.numeric(vec)
+}
 

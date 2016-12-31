@@ -22,4 +22,8 @@
 \code{range} returns a vector containing the minimum and maximum of all
 the given arguments.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+range(mat)
+}
 

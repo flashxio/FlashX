@@ -46,6 +46,10 @@ values and n is the number of non-missing values.  In the case
 \code{center = TRUE}, this is the same as the standard deviation, but
 in general it is not.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat <- scale(mat)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

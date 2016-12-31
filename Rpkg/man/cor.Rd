@@ -39,4 +39,10 @@ and \code{y} if these are vectors.  If \code{x}
 and \code{y} are matrices then the covariances (or correlations) between
 the columns of \code{x} and the columns of \code{y} are computed.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+var(mat)
+cor(mat)
+cov(mat)
+}
 

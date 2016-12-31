@@ -70,6 +70,11 @@ matrices:
 \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
 }
 }
+\examples{
+mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx")
+res <- fm.eigen(mul, 10, nrow(mat))
+fm.cal.residul(mul, res$values, res$vectors)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

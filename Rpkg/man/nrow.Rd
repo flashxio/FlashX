@@ -21,4 +21,9 @@ an integer of length 1 or NULL.
 \code{nrow} and \code{ncol} return the number of rows or columns
 present in \code{x}.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+nrow(mat)
+ncol(mat)
+}
 

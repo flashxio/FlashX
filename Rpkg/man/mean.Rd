@@ -19,4 +19,8 @@
 \description{
 Compute arithmetic mean.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mean(mat)
+}
 

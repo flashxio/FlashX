@@ -29,4 +29,8 @@ statistics swept out.
 Return an array obtained from an input array by sweeping out a
 summary statistic.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sweep(mat, 1, runif(100))
+}
 

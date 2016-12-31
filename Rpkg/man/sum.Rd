@@ -31,4 +31,9 @@ The sum.
 \code{fm.sum} returns the sum of all the values in the input object. It can
 evaluate the summation lazily.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sum(mat)
+fm.sum(mat)
+}
 

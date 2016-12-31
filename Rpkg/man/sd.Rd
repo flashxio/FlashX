@@ -21,4 +21,8 @@ This function computes the standard deviation of the values in \code{x}.
 If \code{na.rm} is \code{TRUE} then missing values are removed before
 computation proceeds.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sd(mat)
+}
 

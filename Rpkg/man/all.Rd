@@ -31,4 +31,9 @@ The value is a logical vector of length one.
 true? \code{fm.all} tests whether all values in a single vector are true.
 \code{fm.all} can evaluate it lazily.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10) > 0.5
+all(mat)
+fm.all(mat)
+}
 

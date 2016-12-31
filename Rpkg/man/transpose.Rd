@@ -20,4 +20,8 @@ a matrix.
 \description{
 Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+t(mat)
+}
 

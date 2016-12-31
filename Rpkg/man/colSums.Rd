@@ -37,4 +37,13 @@ a FlashR vector.
 \description{
 Form row and column sums and means for numeric arrays.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat <- fm.rowSums(mat)
+mat <- fm.colSums(mat)
+mat <- rowSums(mat)
+mat <- colSums(mat)
+mat <- rowMeans(mat)
+mat <- colMeans(mat)
+}
 

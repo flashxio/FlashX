@@ -23,4 +23,7 @@
 \code{is.integer} is a more general test of an object being
 interpretable as integers.
 }
+\examples{
+vec <- as.integer(fm.runif(1000, min=0, max=10))
+}
 

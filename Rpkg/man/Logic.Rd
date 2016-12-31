@@ -85,4 +85,13 @@ These operators act on logical and number-like vectors.
 \code{!} indicates logical negation (NOT).
 \code{&} indicates logical AND and \code{|} indicates logical OR.
 }
+\examples{
+tmp1 <- fm.runif.matrix(100, 10)
+tmp2 <- fm.runif.matrix(100, 10)
+mat1 <- tmp1 > tmp2
+mat2 <- tmp1 < tmp2
+mat1 | mat2
+mat1 & mat2
+!mat1
+}
 

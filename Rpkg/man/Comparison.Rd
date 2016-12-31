@@ -196,4 +196,14 @@ the vector.}
 Binary operators which allow the comparison of values in atomic
 vectors.
 }
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- mat1 == mat2
+mat <- mat1 != mat2
+mat <- mat1 < mat2
+mat <- mat1 <= mat2
+mat <- mat1 > mat2
+mat <- mat1 >= mat2
+}
 

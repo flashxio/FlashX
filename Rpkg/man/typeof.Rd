@@ -21,4 +21,8 @@ A character string. Current values are "logical", "integer",
 \description{
 \code{typeof} determines the R type of an FlashR object.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+typeof(mat)
+}
 

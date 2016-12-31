@@ -29,4 +29,9 @@
 \description{
 Retrieve or set the dimnames of a matrix.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+dimnames(mat)
+dimnames(mat) <- list("dim1", "dim2")
+}
 

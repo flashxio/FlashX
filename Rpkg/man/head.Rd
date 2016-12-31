@@ -28,4 +28,9 @@ An object (usually) like \code{x} but generally smaller.
 \description{
 Returns the first or last parts of a FlashR vector or matrix.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+head(mat)
+tail(mat)
+}
 
