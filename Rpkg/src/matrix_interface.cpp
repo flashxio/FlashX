@@ -2057,21 +2057,6 @@ RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
 	return ret;
 }
 
-RcppExport SEXP R_FM_get_layout(SEXP pmat)
-{
-	Rcpp::StringVector ret(1);
-	if (is_sparse(pmat))
-		ret[0] = Rcpp::String("row-oriented");
-	else {
-		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		if (mat->store_layout() == matrix_layout_t::L_ROW)
-			ret[0] = Rcpp::String("row-oriented");
-		else
-			ret[0] = Rcpp::String("col-oriented");
-	}
-	return ret;
-}
-
 RcppExport SEXP R_FM_is_sym(SEXP pmat)
 {
 	Rcpp::LogicalVector res(1);

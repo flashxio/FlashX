@@ -585,22 +585,6 @@ fm.conv.layout <- function(fm, byrow=FALSE)
 		NULL
 }
 
-#' Get the data layout of a FlashR matrix.
-#'
-#' @param fm a FlashR matrix
-#' @return a string that indicates the data layout.
-#' @author Da Zheng <dzheng5@@jhu.edu>
-#'
-#' @examples
-#' fm.get.layout(fm.runif.matrix(100, 2))
-fm.get.layout <- function(fm)
-{
-	stopifnot(!is.null(fm))
-	if (class(fm) != "fm")
-		return(NULL)
-	.Call("R_FM_get_layout", fm, PACKAGE="FlashR")
-}
-
 #' Convert a regular R object to a FlashR object.
 #'
 #' If the R object is a matrix, \code{byrow} determines how data in the generated
