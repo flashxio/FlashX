@@ -193,30 +193,39 @@ namespace fg
     class sem_kmeans_ret
     {
         private:
-            FG_vector<unsigned>::ptr cluster_assignments;
-            std::vector<std::vector<double>> centers;
-            std::vector<unsigned> size;
+            std::vector<unsigned> cluster_assignments;
+            std::vector<double> centers;
+            std::vector<unsigned> sizes;
             unsigned iters;
+            size_t nrow, ncol;
 
             sem_kmeans_ret(const FG_vector<unsigned>::ptr cluster_assignments,
-                    const std::vector<std::vector<double>> centers,
-                    const std::vector<unsigned>& size, const unsigned iters) {
-                this->cluster_assignments = cluster_assignments;
+                    const std::vector<double>& centers,
+                    const std::vector<unsigned>& sizes, const unsigned iters,
+                    const size_t nrow, const size_t ncol) {
+
+                this->cluster_assignments.resize(cluster_assignments->get_size());
+                cluster_assignments->copy_to(&(this->cluster_assignments[0]),
+                            cluster_assignments->get_size());
                 this->centers = centers;
-                this->size = size;
+                this->sizes = sizes;
                 this->iters = iters;
+                this->nrow = nrow;
+                this->ncol = ncol;
             }
 
         public:
             typedef typename std::shared_ptr<sem_kmeans_ret> ptr;
 
             static ptr create(const FG_vector<unsigned>::ptr cluster_assignments,
-                    const std::vector<std::vector<double>> centers,
-                    const std::vector<unsigned>& size, const unsigned iters) {
-                return ptr(new sem_kmeans_ret(cluster_assignments, centers, size, iters));
+                    const std::vector<double>& centers,
+                    const std::vector<unsigned>& sizes, const unsigned iters,
+                    const size_t nrow, const size_t ncol) {
+                return ptr(new sem_kmeans_ret(cluster_assignments,
+                            centers, sizes, iters, nrow, ncol));
             }
 
-            const FG_vector<unsigned>::ptr get_cluster_assignments() const {
+            const std::vector<unsigned> get_cluster_assignments() const {
                 return this->cluster_assignments;
             }
 
@@ -224,12 +233,20 @@ namespace fg
                 return this->iters;
             }
 
-            const std::vector<unsigned>& get_size() const {
-                return this->size;
+            const std::vector<unsigned>& get_sizes() const {
+                return this->sizes;
             }
 
-            const std::vector<std::vector<double>>& get_centers() const {
+            const std::vector<double>& get_centers() const {
                 return this->centers;
+            }
+
+            const unsigned get_nrow() const {
+                return this->nrow;
+            }
+
+            const unsigned get_ncol() const {
+                return this->ncol;
             }
     };
 

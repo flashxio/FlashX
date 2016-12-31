@@ -70,6 +70,8 @@ namespace {
                     if (!g_converged && (g_iter < g_max_iters)) {
                         prog.activate_vertices(&id, 1); // Activate for next iter
                         request_vertices(&id, 1);
+                    } else {
+                        return;
                     }
                     break;
                 default:
@@ -227,7 +229,7 @@ namespace {
             dist += diff*diff;
         }
         BOOST_VERIFY(nid == NUM_COLS);
-        return sqrt(dist); // TODO: sqrt
+        return sqrt(dist);
     }
 
     void kmeans_vertex::run_init(vertex_program& prog,
@@ -401,16 +403,6 @@ namespace {
             exit(EXIT_FAILURE);
         }
 
-        // Return all the cluster means only
-        static void copy_means(std::vector<std::vector<double>>& means) {
-           for (unsigned cl = 0; cl < K; cl++) {
-               means[cl].resize(NUM_COLS);
-               std::copy(&(g_clusters->get_means()[cl*NUM_COLS]),
-                     &(g_clusters->get_means()[(cl*NUM_COLS)+NUM_COLS]),
-                     means[cl].begin());
-           }
-        }
-
         static inline bool fexists(const std::string& name) {
             struct stat buffer;
             return (stat (name.c_str(), &buffer) == 0);
@@ -503,7 +495,7 @@ namespace {
 
                 } else if (init == "kmeanspp") {
                     BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
-                    // FIXME: Slow & wasteful
+                    // FIXME: Wasteful
                     all_vertices.resize(NUM_ROWS);
                     std::iota(all_vertices.begin(), all_vertices.end(), 0);
                     g_init = PLUSPLUS;
@@ -561,10 +553,8 @@ namespace {
 
             print_vector<unsigned>(g_num_members_v);
 
-            std::vector<std::vector<double>> means(K);
-            copy_means(means);
-
-            cluster_assignments = get_membership(mat);
-            return sem_kmeans_ret::create(cluster_assignments, means, g_num_members_v, g_iter);
+            return sem_kmeans_ret::create(get_membership(mat),
+                    g_clusters->get_means(), g_num_members_v, g_iter,
+                    NUM_ROWS, NUM_COLS);
         }
     }

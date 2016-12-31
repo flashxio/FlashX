@@ -261,7 +261,7 @@ namespace {
         virtual void run_on_iteration_end() override {
             if (iter_barrier->ping()) { // Make sure all partitions are complete 1st
                 if (g_kmspp_stage == DIST) {
-#if 1
+#if KM_TEST
                         BOOST_LOG_TRIVIAL(info) << "Printing clusters "
                             << "after sample set_mean ...";
                         g_clusters->print_means();
@@ -311,7 +311,6 @@ namespace {
                 prog.activate_vertices(&id, 1); // Activate for next iter
             else
                 return;
-
 
             recalculated = false;
             if (!g_prune_init) {
@@ -831,7 +830,7 @@ namespace {
 #endif
             cuml_sum -= g_kmspp_distance[row];
             if (cuml_sum <= 0) {
-#if 1
+#if KM_TEST
                 BOOST_LOG_TRIVIAL(info) << "Choosing v:" << row
                     << " as center K = " << g_kmspp_cluster_idx;
 #endif
@@ -840,16 +839,6 @@ namespace {
         }
         BOOST_ASSERT_MSG(false, "Cumulative sum of distances was > than distances!");
         exit(EXIT_FAILURE);
-    }
-
-    // Return all the cluster means only
-    static void copy_means(std::vector<std::vector<double>>& means) {
-        for (unsigned cl = 0; cl < K; cl++) {
-            means[cl].resize(NUM_COLS);
-            std::copy(&(g_clusters->get_means()[cl*NUM_COLS]),
-                    &(g_clusters->get_means()[(cl*NUM_COLS)+NUM_COLS]),
-                    means[cl].begin());
-        }
     }
 
     static inline bool fexists(const std::string& name) {
@@ -1023,14 +1012,12 @@ namespace fg
                     << " as first cluster";
                 g_kmspp_distance[g_kmspp_next_cluster] = 0;
 
-#if 1
                 g_kmspp_stage = ADDMEAN;
                 mat->start(&g_kmspp_next_cluster, 1,
                         vertex_initializer::ptr(),
                         vertex_program_creater::ptr(
                             new kmeanspp_vertex_program_creater()));
                 mat->wait4complete();
-#endif
             }
         } else
             g_clusters->print_means();
@@ -1102,10 +1089,8 @@ namespace fg
 
         print_vector<unsigned>(g_num_members_v);
 
-        std::vector<std::vector<double>> means(K);
-        copy_means(means);
-
-        cluster_assignments = get_membership(mat);
-        return sem_kmeans_ret::create(cluster_assignments, means, g_num_members_v, g_iter);
+        return sem_kmeans_ret::create(get_membership(mat),
+                g_clusters->get_means(), g_num_members_v, g_iter,
+                NUM_ROWS, NUM_COLS);
     }
 }
