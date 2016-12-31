@@ -34,13 +34,13 @@ tools: libgraph
 unit-test: libgraph
 	$(MAKE) -C unit-test
 
-test: libgraph
+test: libgraph libgraph-algs
 	$(MAKE) -C test
 
 matrix: libgraph
 	$(MAKE) -C matrix
 
-test-algs: libgraph libgraph-algs matrix
+test-algs: libgraph libgraph-algs
 	$(MAKE) -C test-algs
 
 LOL: libgraph matrix

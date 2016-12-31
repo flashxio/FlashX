@@ -39,7 +39,7 @@ test_fake_index: test_fake_index.o
 make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
-test_sem_kmeans: test_sem_kmeans.o
+test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
 	$(CXX) -o test_sem_kmeans test_sem_kmeans.o ../libgraph-algs/clusters.o\
 		../libgraph-algs/dist_matrix.o $(LDFLAGS)
 
