@@ -58,7 +58,7 @@
 #' If \code{na.rm} is \code{TRUE} then missing values are removed before
 #' computation proceeds.
 #'
-#' @param x a FlashMatrix vector or matrix.
+#' @param x a FlashR vector or matrix.
 #' @param na.rm logical. Should missing values be removed?
 #' @name sd
 NULL

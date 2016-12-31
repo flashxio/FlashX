@@ -36,7 +36,7 @@
 #' For the Laplacian matrix and the normalized Laplacian matrix, it computes
 #' the eigenvectors for the smallest eigenvalues.
 #'
-#' @param fm The FlashMatrixR object
+#' @param fm The FlashR object
 #' @param nev The number of eigenvalues/vectors required.
 #' @param which The type of the embedding.
 #' @param c The constant used in the Aug variant of embedding.

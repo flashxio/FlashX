@@ -19,7 +19,7 @@
 #'
 #' The current implementation can only compute the largest eigenvalues.
 #'
-#' @param x a FlashMatrix matrix
+#' @param x a FlashR matrix
 #' @param nu the number of left singluar vectors to be computed.
 #' @param nv the number of right singluar vectors to be computed.
 #' @param tol Stopping criterion: the relative accuracy of the Ritz value
