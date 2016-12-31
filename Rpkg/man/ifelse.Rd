@@ -38,4 +38,8 @@ on whether the element of \code{test} is \code{TRUE} or \code{FALSE}.
 The current implementation requires either \code{yes} or \code{no} to be
 a scalar value.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat <- ifelse(mat > 0.5, mat, 0)
+}
 

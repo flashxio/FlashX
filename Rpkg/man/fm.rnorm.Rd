@@ -36,6 +36,10 @@ If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
 vector/matrix will be kept on disks persistently. That is, even if a user
 exits from R, the vector/matrix will still be kept on disks.
 }
+\examples{
+vec <- fm.rnorm(10) # a vector of 10 elements filled with random numbers under normal distribution.
+mat <- fm.rnorm.matrix(10, 2) # a 10x2 matrix.
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

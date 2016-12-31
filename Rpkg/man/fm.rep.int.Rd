@@ -17,6 +17,9 @@ A FlashR vector
 \description{
 Create a FlashR vector with replicated elements.
 }
+\examples{
+vec <- fm.rep.int(0, 10) # create a FlashR vector with 10 elements.
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

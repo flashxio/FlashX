@@ -35,6 +35,13 @@ stores all of the unique values in the original data container, and the column
 \code{labels} and applies \code{FUN} to the rows/columns in each group.
 \code{FUN} is an aggregation operator.
 }
+\examples{
+vec <- fm.runif(100)
+res <- fm.sgroupby(vec, "+")
+mat <- fm.runif.matrix(100, 10)
+fact <- fm.as.factor(as.integer(fm.runif(nrow(mat), min=0, max=3)))
+res <- fm.groupby(mat, 2, fact, "+")
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

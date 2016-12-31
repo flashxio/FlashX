@@ -20,4 +20,8 @@ a FlashR vector that contains the value of the levels.
 Currently, levels of a factor vector is a sequence number from 1 to
 the number of levels. FlashR doesn't support other factor values.
 }
+\examples{
+vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
+levels(vec)
+}
 

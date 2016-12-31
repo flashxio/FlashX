@@ -68,6 +68,11 @@ exits from R, the vector/matrix will still be kept on disks. A user can
 access to the dense matrix with \code{fm.get.dense.matrix} the next time
 when he/she opens FlashR.
 }
+\examples{
+mat <- fm.get.dense.matrix("mat123")	# get a dense matrix named "mat123", stored in SAFS.
+mat <- fm.load.dense.matrix("./mat123.cvs", TRUE) # load a dense matrix from a local file "mat123.cvs" to memory.
+mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx") # load a symmetric sparse matrix in FlashMatrix format (whose data is stored in "spm123.mat" and the index is stored in "spm123.mat_idx") to memory.
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

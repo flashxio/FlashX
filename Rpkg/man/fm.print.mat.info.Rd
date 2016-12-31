@@ -7,7 +7,11 @@
 fm.print.mat.info(fm)
 }
 \arguments{
-\item{fm}{a FlashR object}
+\item{fm}{a FlashR object
+mat <- fm.runif.matrix(100, 10)
+fm.print.mat.info(mat)
+mat <- fm.runif.matrix(100, 10) + fm.runif.matrix(100, 10)
+fm.print.mat.info(mat)}
 }
 \description{
 Print the information of the internal storage representation of

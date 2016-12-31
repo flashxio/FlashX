@@ -15,6 +15,9 @@ a string that indicates the data layout.
 \description{
 Get the data layout of a FlashR matrix.
 }
+\examples{
+fm.get.layout(fm.runif.matrix(100, 2))
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

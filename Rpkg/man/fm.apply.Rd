@@ -24,4 +24,8 @@ the output of \code{fm.apply} is a matrix.
 \details{
 Currently, the predefined functions include \code{"rank"} and
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.apply(mat, 1, "rank")
+}
 

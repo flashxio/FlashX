@@ -32,6 +32,10 @@ a FlashR vector or matrix filled with a sequence of numbers
 \code{fm.seq.int} creates a FlashR vector with a sequence of numbers.
 \code{fm.seq.matrix} creates a FlashR matrix with a sequence of numbers.
 }
+\examples{
+vec <- fm.seq.int(1, 10, 1) # create a FlashR vector of 10 elements whose values are from 1 to 10.
+mat <- fm.seq.matrix(1, 20, 10, 2) # create a 10x2 FlashR matrix whose rows are sequence numbers from 1 to 10.
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

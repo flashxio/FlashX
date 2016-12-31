@@ -26,4 +26,8 @@ If a user provides \code{name} and \code{in.mem} is \code{TRUE},
 the vector/matrix will be kept on disks persistently. That is, even if a user
 exits from R, the vector/matrix will still be kept on disks.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10, in.mem=TRUE)
+mat <- fm.conv.store(mat, FALSE)
+}
 

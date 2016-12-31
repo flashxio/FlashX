@@ -18,6 +18,11 @@ a FlashR matrix if the second argument is a matrix.
 \description{
 Multiply a sparse/dense matrix with a dense vector/matrix.
 }
+\examples{
+mat1 <- fm.runif.matrix(1000, 100)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- fm.multiply(mat1, mat2)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

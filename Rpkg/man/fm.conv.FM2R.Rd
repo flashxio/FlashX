@@ -15,6 +15,10 @@ a regular R object.
 \description{
 Convert a FlashR object to a regular R object
 }
+\examples{
+vec <- fm.conv.FM2R(fm.runif(100))
+mat <- fm.conv.FM2R(fm.runif.matrix(100, 2))
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

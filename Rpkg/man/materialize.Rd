@@ -38,4 +38,14 @@ specified by the arguments of \code{fm.materialize.list} and
 notifies FlashR to save the materialized computation results of a virtual
 matrix in memory or on disks.
 }
+\examples{
+mat <- fm.mapply2(fm.runif.matrix(100, 10), fm.runif.matrix(100, 10), "+")
+mat <- fm.materialize(mat)
+mat2 <- fm.sapply(fm.runif.matrix(100, 10), "sqrt")
+mat.list <- list(mat, mat2)
+mat.list <- fm.materialize.list(mat.list)
+mat <- fm.mapply2(fm.runif.matrix(100, 10), fm.runif.matrix(100, 10), "+")
+fm.set.cached(mat, TRUE)
+res <- fm.agg(mat, "+")
+}
 

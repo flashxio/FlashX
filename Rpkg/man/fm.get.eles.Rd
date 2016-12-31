@@ -23,10 +23,16 @@ a FlashR vector if getting one row or column;
 a FlashR matrix if getting more than one row or column.
 }
 \description{
-\code{fm.get.rows} gets specified rows in a FM matrix.
+\code{fm.get.rows} gets specified rows in a FlashR matrix.
+\code{fm.get.cols} gets specified columns in a FlashR matrix.
+\code{fm.get.eles.vec} gets specified elements from a FlashR vector.
 }
-\details{
-\code{fm.get.cols} gets specified columns in a FM matrix.
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sub <- fm.get.cols(mat, as.integer(runif(5, min=1, max=10)))
+sub <- fm.get.rows(mat, as.integer(runif(5, min=1, max=100)))
+vec <- fm.runif(100)
+sub <- fm.get.eles.vec(vec, as.integer(runif(5, min=1, max=100)))
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

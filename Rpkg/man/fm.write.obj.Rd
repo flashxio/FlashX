@@ -18,6 +18,10 @@ successfully. Otherwise, FALSE.
 \description{
 Write a FlashR object (vector/matrix) to a file
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+fm.write.obj(mat, "/tmp/tmp.mat")
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

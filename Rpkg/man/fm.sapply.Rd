@@ -31,6 +31,10 @@ a FlashR vector/matrix.
 Currently, \code{sapply} only accepts predefined basic operators
 returned by \code{fm.get.basic.uop}.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.sapply(mat, "abs")
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

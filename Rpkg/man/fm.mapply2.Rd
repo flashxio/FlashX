@@ -69,6 +69,13 @@ argument. \code{fm.mapply.col} applies \code{FUN} element-wise to
 each column of the matrix in the left argument and the vector in the right
 argument.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.mapply.row(mat, runif(10), "+")
+res <- fm.mapply.col(mat, runif(100), "+")
+mat2 <- fm.runif.matrix(100, 10)
+res <- fm.mapply2(mat, mat2, "+")
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

@@ -46,4 +46,12 @@ immediately.
 \code{fm.agg.mat.lazy} aggregates on the rows or columns of a matrix and
 performs aggregation lazily regardless the dimension.
 }
+\examples{
+mat <- fm.runif.matrix(100, 2)
+res <- fm.agg(mat, "+")
+res <- fm.agg(mat, fm.bo.add)
+sum <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
+res <- fm.agg(mat, sum)
+res <- fm.agg.mat(mat, 1, sum)
+}
 

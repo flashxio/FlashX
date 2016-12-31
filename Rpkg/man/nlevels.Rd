@@ -20,4 +20,8 @@ Return the number of levels which its argument has.
 \details{
 This is applied to a FlashR factor.
 }
+\examples{
+vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
+nlevels(vec)
+}
 

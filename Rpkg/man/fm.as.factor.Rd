@@ -2,7 +2,7 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.as.factor}
 \alias{fm.as.factor}
-\title{Convert a FlashR vector to a FlashR factor vector.}
+\title{FlashR factor vector.}
 \usage{
 fm.as.factor(fm, num.levels = -1)
 }
@@ -15,6 +15,15 @@ fm.as.factor(fm, num.levels = -1)
 a FlashR factor vector.
 }
 \description{
-Convert a FlashR vector to a FlashR factor vector.
+\code{fm.as.factor} converts a FlashR vector to a FlashR factor vector.
+}
+\details{
+Currently, this function only works for integer input vectors. If
+the input vector isn't integers, it converts the vector to an integer
+vector. By default, it uses the maximal value as the number of levels
+for the factor.
+}
+\examples{
+vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
 }
 

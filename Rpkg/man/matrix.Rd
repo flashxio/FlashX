@@ -38,4 +38,16 @@ columns, otherwise the matrix is filled by rows.}
 \code{fm.as.matrix} attempts to turn its argument into a FlashR matrix.
 \code{fm.is.matrix} indicates whether a FlashR object is a matrix.
 }
+\details{
+Currently, \code{fm.matrix} takes an R vector or a FlashR vector as input
+and the length of the vector must be the same as the number of rows if
+\code{byrow} is \code{FALSE} or the same as the number of columns if
+\code{byrow} is \code{TRUE}.
+}
+\examples{
+mat <- fm.matrix(runif(100), 100, 2)
+mat <- as.matrix(fm.runif.matrix(100, 2))
+mat <- fm.as.matrix(matrix(runif(200), 100, 2))
+res <- fm.is.matrix(mat)
+}
 

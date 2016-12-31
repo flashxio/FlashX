@@ -15,6 +15,9 @@ a FlashR object (vector/matrix)
 \description{
 Read a FlashR object (vector/matrix) from a file.
 }
+\examples{
+mat <- fm.read.obj("/tmp/tmp.mat")
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

@@ -19,6 +19,10 @@ a FlashR object. If the input R object has 0 element,
 If the R object is a matrix, \code{byrow} determines how data in the generated
 FlashR object is organized in memory.
 }
+\examples{
+vec <- fm.conv.R2FM(runif(100))
+mat <- fm.conv.R2FM(matrix(runif(100), 100, 2))
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

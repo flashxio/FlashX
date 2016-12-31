@@ -34,4 +34,10 @@ A logical vector of the same length as \code{x}
 as \code{x}, indicating which elements are finite (not infinite and not
 missing) or infinite.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+is.finite(mat)
+is.infinite(mat)
+is.nan(mat)
+}
 

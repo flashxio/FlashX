@@ -34,6 +34,15 @@ A FlashR matrix.
 Take a list of FlashR vectors/matrices and combine them by Columns or rows
 respectively.
 }
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- rbind(mat1, mat2)
+mat <- cbind(mat1, mat2)
+mat.list <- list(mat1, mat2)
+mat <- fm.rbind.list(mat.list)
+mat <- fm.cbind.list(mat.list)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

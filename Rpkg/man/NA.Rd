@@ -20,4 +20,8 @@ a logical FlashR vector or matrix.
 \description{
 This function indicates which elements are missing.
 }
+\examples{
+mat <- fm.runif.matrix(100, 10)
+is.na(mat)
+}
 

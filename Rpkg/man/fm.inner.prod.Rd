@@ -24,6 +24,12 @@ a FlashR matrix if the second argument is a matrix.
 \description{
 It takes two operators and performs inner product on a dense matrix
 }
+\examples{
+mat1 <- fm.runif.matrix(1000, 100)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- fm.inner.prod(mat1, mat2, "*", "+")
+mat <- fm.inner.prod(mat1, mat2, fm.bo.mul, fm.bo.add)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

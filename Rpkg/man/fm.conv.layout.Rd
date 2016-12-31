@@ -19,6 +19,9 @@ A FMR matrix can store elements in a row-major or column-major order.
 By changing the data layout, we can improve efficiency of some matrix
 operations.
 }
+\examples{
+mat <- fm.conv.layout(fm.runif.matrix(100, 2), byrow=TRUE)
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

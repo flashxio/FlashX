@@ -26,4 +26,7 @@ a FlashR matrix.
 The non-zero values in the sparse projection matrix are either 1 or -1.
 Their values are uniformly randomly chosen to be 1 or -1.
 }
+\examples{
+mat <- fm.rsparse.proj(10000, 100, 0.001) # a sparse projection matrix.
+}
 

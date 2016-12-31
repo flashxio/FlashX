@@ -15,6 +15,9 @@ a FlashR matrix
 \description{
 Transpose a FlashR matrix.
 }
+\examples{
+mat <- fm.t(fm.runif.matrix(100, 10))
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }

@@ -32,6 +32,7 @@ These functions provide the basic information of a FlashR object.
 \code{fm.is.sym} indicates whether a matrix is symmetric.
 
 \code{fm.matrix.layout} indicates how data in a matrix is organized.
+
 \code{fm.is.sparse} indicates whether a matrix is sparse.
 
 \code{fm.is.sink} indicates whether a FlashR object is a sink matrix.

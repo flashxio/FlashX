@@ -30,6 +30,12 @@ the configuration file. \code{fm.print.conf} prints the current configurations.
 The configuration file contains a list of key-value pairs. Each line in
 the file is a key-value pair in the form of "key_name=value".
 }
+\examples{
+fm.set.conf("conf/run_test.txt")	# configure FlashR with the config file conf/run_test.txt
+fm.set.log.level("info")			# FlashR prints more information when it runs.
+fm.print.conf()
+fm.print.features()
+}
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }
