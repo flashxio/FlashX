@@ -111,6 +111,12 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 #' @param level a string, including "debug", "info", "warning", "error", "fatal".
 #' @name fm.set.conf
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' fm.set.conf("conf/run_test.txt")	# configure FlashR with the config file conf/run_test.txt
+#' fm.set.log.level("info")			# FlashR prints more information when it runs.
+#' fm.print.conf()
+#' fm.print.features()
 NULL
 
 #' @rdname fm.set.conf
@@ -177,6 +183,12 @@ fm.print.features <- function()
 #' @return a FlashR matrix.
 #' @name fm.get.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.get.dense.matrix("mat123")	# get a dense matrix named "mat123", stored in SAFS.
+#' mat <- fm.load.dense.matrix("./mat123.cvs", TRUE) # load a dense matrix from a local file "mat123.cvs" to memory.
+#" mat <- fm.load.dense.matrix.bin("./mat123.bin", TRUE, 10000, 1000, TRUE, "D") # Load a binary dense matrix from a local file "mat123.bin" to memory. The loaded dense matrix has 10000 rows and 1000 columns and its element type is double floating-points.
+#' mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx") # load a symmetric sparse matrix in FlashMatrix format (whose data is stored in "spm123.mat" and the index is stored in "spm123.mat_idx") to memory.
 NULL
 
 #' @rdname fm.get.matrix
@@ -234,6 +246,9 @@ fm.load.sparse.matrix <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, in.m
 #' @return A FlashR vector
 #' @name fm.rep.int
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.rep.int(0, 10) # create a FlashR vector with 10 elements.
 fm.rep.int <- function(x, times)
 {
 	if (times <= 0) {
@@ -261,6 +276,10 @@ fm.rep.int <- function(x, times)
 #'         that belongs to [from, to]
 #' @name fm.seq
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.seq.int(1, 10, 1) # create a FlashR vector of 10 elements whose values are from 1 to 10.
+#' mat <- fm.seq.matrix(1, 20, 10, 2) # create a 10x2 FlashR matrix whose rows are sequence numbers from 1 to 10.
 NULL
 
 #' @rdname fm.seq
@@ -302,6 +321,10 @@ fm.seq.matrix <- function(from, to, nrow, ncol, byrow = FALSE)
 #'             the file name.
 #' @name fm.runif
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.runif(10) # a vector of 10 elements filled with uniform random numbers.
+#' mat <- fm.runif.matrix(10, 2) a 10x2 matrix filled with uniform random numbers.
 NULL
 
 #' @rdname fm.runif
@@ -343,6 +366,10 @@ fm.runif <- function(n, min=0, max=1, in.mem=TRUE, name="")
 #'             the file name.
 #' @name fm.rnorm
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.rnorm(10) # a vector of 10 elements filled with random numbers under normal distribution.
+#' mat <- fm.rnorm.matrix(10, 2) # a 10x2 matrix.
 NULL
 
 #' @rdname fm.rnorm
@@ -404,6 +431,9 @@ fm.rnorm.matrix <- function(nrow, ncol, mean=0, sd=1, in.mem=TRUE, name="")
 #' @param name the name of the matrix. It's stored on disks, it's used as
 #'             the file name.
 #' @return a FlashR matrix.
+#'
+#' @examples
+#' mat <- fm.rsparse.proj(10000, 100, 0.001) # a sparse projection matrix.
 fm.rsparse.proj <- function(nrow, ncol, density, name="")
 {
 	nrow <- floor(as.numeric(nrow))
@@ -429,6 +459,11 @@ fm.rsparse.proj <- function(nrow, ncol, density, name="")
 #' @param x a FlashR vector
 #' @return a FlashR vector
 #' @name vector
+#'
+#' @examples
+#' vec <- fm.as.vector(runif(100)) # Convert an R vector to a FlashR vector.
+#' vec <- as.vector(fm.runif(100)) # Convert a FlashR vector to an R vector.
+#' res <- fm.is.vector(vec) # Test if an object is a FlashR vector.
 NULL
 
 #' @rdname vector
@@ -471,6 +506,11 @@ fm.is.vector <- function(x)
 #' \code{fm.as.matrix} attempts to turn its argument into a FlashR matrix.
 #' \code{fm.is.matrix} indicates whether a FlashR object is a matrix.
 #'
+#' Currently, \code{fm.matrix} takes an R vector or a FlashR vector as input
+#' and the length of the vector must be the same as the number of rows if
+#' \code{byrow} is \code{FALSE} or the same as the number of columns if
+#' \code{byrow} is \code{TRUE}.
+#'
 #' @param x an R object
 #' @param vec an R data vector.
 #' @param nrow the desired number of rows.
@@ -478,6 +518,12 @@ fm.is.vector <- function(x)
 #' @param byrow logical. If \code{FALSE} (the default) the matrix is filled by
 #'	            columns, otherwise the matrix is filled by rows.
 #' @name matrix
+#'
+#' @examples
+#' mat <- fm.matrix(runif(100), 100, 2)
+#' mat <- as.matrix(fm.runif.matrix(100, 2))
+#' mat <- fm.as.matrix(matrix(runif(200), 100, 2))
+#' res <- fm.is.matrix(mat)
 NULL
 
 #' @rdname matrix
@@ -523,6 +569,9 @@ fm.as.matrix <- function(x)
 #' @param byrow a logical value to determine the data layout of a FlashR matrix.
 #' @return a FlashR matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.conv.layout(fm.runif.matrix(100, 2), byrow=TRUE)
 fm.conv.layout <- function(fm, byrow=FALSE)
 {
 	stopifnot(!is.null(fm))
@@ -541,6 +590,9 @@ fm.conv.layout <- function(fm, byrow=FALSE)
 #' @param fm a FlashR matrix
 #' @return a string that indicates the data layout.
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' fm.get.layout(fm.runif.matrix(100, 2))
 fm.get.layout <- function(fm)
 {
 	stopifnot(!is.null(fm))
@@ -560,6 +612,10 @@ fm.get.layout <- function(fm)
 #'         \code{fm.conv.R2FM} returns \code{NULL}.
 #' @name fm.conv.R2FM
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.conv.R2FM(runif(100))
+#' mat <- fm.conv.R2FM(matrix(runif(100), 100, 2))
 fm.conv.R2FM <- function(obj, byrow=FALSE)
 {
 	stopifnot(!is.null(obj))
@@ -587,6 +643,10 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 #' @return a regular R object.
 #' @name fm.conv.FM2R
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.conv.FM2R(fm.runif(100))
+#' mat <- fm.conv.FM2R(fm.runif.matrix(100, 2))
 fm.conv.FM2R <- function(obj)
 {
 	stopifnot(!is.null(obj))
@@ -655,7 +715,7 @@ fm.matrix <- function(vec, nrow, ncol, byrow=FALSE)
 #' \code{fm.is.sym} indicates whether a matrix is symmetric.
 #'
 #' \code{fm.matrix.layout} indicates how data in a matrix is organized.
-#
+#'
 #' \code{fm.is.sparse} indicates whether a matrix is sparse.
 #'
 #' \code{fm.is.sink} indicates whether a FlashR object is a sink matrix.
@@ -716,11 +776,21 @@ fm.in.mem <- function(fm)
 	.Call("R_FM_is_inmem", fm, PACKAGE="FlashR")
 }
 
-#' Convert a FlashR vector to a FlashR factor vector.
+#' FlashR factor vector.
+#'
+#' \code{fm.as.factor} converts a FlashR vector to a FlashR factor vector.
+#'
+#' Currently, this function only works for integer input vectors. If
+#' the input vector isn't integers, it converts the vector to an integer
+#' vector. By default, it uses the maximal value as the number of levels
+#' for the factor.
 #'
 #' @param fm a FlashR vector.
 #' @param num.levels The number of levels in the factor vector.
 #' @return a FlashR factor vector.
+#'
+#' @examples
+#' vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
 fm.as.factor <- function(fm, num.levels = -1)
 {
 	stopifnot(!is.null(fm))
@@ -751,6 +821,11 @@ fm.as.factor <- function(fm, num.levels = -1)
 #' a FlashR matrix if the second argument is a matrix.
 #' @name fm.multiply
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(1000, 100)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- fm.multiply(mat1, mat2)
 fm.multiply <- function(fm, mat)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
@@ -788,6 +863,12 @@ fm.multiply <- function(fm, mat)
 #' a FlashR matrix if the second argument is a matrix.
 #' @name fm.inner.prod
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(1000, 100)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- fm.inner.prod(mat1, mat2, "*", "+")
+#' mat <- fm.inner.prod(mat1, mat2, fm.bo.mul, fm.bo.add)
 fm.inner.prod <- function(fm, mat, Fun1, Fun2)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
@@ -1064,6 +1145,9 @@ fm.init.basic.op <- function()
 #' @param combine a \code{fm.basic.op} operator that computes the final result.
 #' @param name a string indicating the name of the aggregation operator.
 #' @return a \code{fm.agg.op} operator.
+#'
+#' @examples
+#' agg.op <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
 fm.create.agg.op <- function(agg, combine, name)
 {
 	stopifnot(class(agg) == "fm.bo")
@@ -1110,6 +1194,14 @@ fm.create.agg.op <- function(agg, combine, name)
 #'         a FlashR vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
 #'         return a FlashR sink matrix.
 #' @name fm.agg
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 2)
+#' res <- fm.agg(mat, "+")
+#' res <- fm.agg(mat, fm.bo.add)
+#' sum <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
+#' res <- fm.agg(mat, sum)
+#' res <- fm.agg.mat(mat, 1, sum)
 fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
@@ -1408,6 +1500,13 @@ fm.set.test.na <- function(val)
 #' @return a FlashR vector/matrix.
 #' @name fm.mapply2
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' res <- fm.mapply.row(mat, runif(10), "+")
+#' res <- fm.mapply.col(mat, runif(100), "+")
+#' mat2 <- fm.runif.matrix(100, 10)
+#' res <- fm.mapply2(mat, mat2, "+")
 NULL
 
 #' @rdname fm.mapply2
@@ -1517,7 +1616,12 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 #' @return a FlashR vector/matrix.
 #' @name fm.sapply
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' res <- fm.sapply(mat, "abs")
 setGeneric("fm.sapply", function(o, FUN, set.na=TRUE)  standardGeneric("fm.sapply"))
+
 #' @rdname fm.sapply
 setMethod("fm.sapply", signature(o = "fm"), .sapply.fm)
 #' @rdname fm.sapply
@@ -1536,6 +1640,10 @@ setMethod("fm.sapply", signature(o = "fmV"), .sapply.fmV)
 #' @param margin an integer. \code{1} indicates rows and \code{2} indicates columns.
 #' @param FUN a string that indicates the name of the predefined function.
 #' @return a FlashR matrix.
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' res <- fm.apply(mat, 1, "rank")
 fm.apply <- function(x, margin, FUN)
 {
 	stopifnot(class(x) == "fm")
@@ -1567,6 +1675,13 @@ fm.apply <- function(x, margin, FUN)
 #' \code{agg} stores the aggregate result of the corresponding value.
 #' @name fm.groupby
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' vec <- fm.runif(100)
+#' res <- fm.sgroupby(vec, "+")
+#' mat <- fm.runif.matrix(100, 10)
+#' fact <- fm.as.factor(as.integer(fm.runif(nrow(mat), min=0, max=3)))
+#' res <- fm.groupby(mat, 2, fact, "+")
 NULL
 
 #' @rdname fm.groupby
@@ -1614,6 +1729,9 @@ fm.groupby <- function(obj, margin, factor, FUN)
 #' @param m a FlashR matrix
 #' @return a FlashR matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.t(fm.runif.matrix(100, 10))
 fm.t <- function(m)
 {
 	stopifnot(!is.null(m))
@@ -1624,9 +1742,9 @@ fm.t <- function(m)
 
 #' Get a submatrix from a FlashR matrix
 #'
-#' \code{fm.get.rows} gets specified rows in a FM matrix.
-#'
-#' \code{fm.get.cols} gets specified columns in a FM matrix.
+#' \code{fm.get.rows} gets specified rows in a FlashR matrix.
+#' \code{fm.get.cols} gets specified columns in a FlashR matrix.
+#' \code{fm.get.eles.vec} gets specified elements from a FlashR vector.
 #'
 #' @param fm A FlashR matrix
 #' @param idxs an array of column indices in fm.
@@ -1634,6 +1752,13 @@ fm.t <- function(m)
 #' a FlashR matrix if getting more than one row or column.
 #' @name fm.get.eles
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sub <- fm.get.cols(mat, as.integer(runif(5, min=1, max=10)))
+#' sub <- fm.get.rows(mat, as.integer(runif(5, min=1, max=100)))
+#' vec <- fm.runif(100)
+#' sub <- fm.get.eles.vec(vec, as.integer(runif(5, min=1, max=100)))
 fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
@@ -1699,6 +1824,16 @@ fm.get.eles.vec <- function(fm, idxs)
 #'               results in memory.
 #' @return a list of materialized compuation results.
 #' @name materialize
+#'
+#' @examples
+#' mat <- fm.mapply2(fm.runif.matrix(100, 10), fm.runif.matrix(100, 10), "+")
+#' mat <- fm.materialize(mat)
+#' mat2 <- fm.sapply(fm.runif.matrix(100, 10), "sqrt")
+#' mat.list <- list(mat, mat2)
+#' mat.list <- fm.materialize.list(mat.list)
+#' mat <- fm.mapply2(fm.runif.matrix(100, 10), fm.runif.matrix(100, 10), "+")
+#' fm.set.cached(mat, TRUE)
+#' res <- fm.agg(mat, "+")
 NULL
 
 #' @rdname materialize
@@ -1758,6 +1893,10 @@ fm.set.cached <- function(fm, cached, in.mem=fm.in.mem(fm))
 #' @return a logical value. True if the object is written to a file
 #' successfully. Otherwise, FALSE.
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' fm.write.obj(mat, "/tmp/tmp.mat")
 fm.write.obj <- function(fm, file)
 {
 	stopifnot(!is.null(fm))
@@ -1770,6 +1909,9 @@ fm.write.obj <- function(fm, file)
 #' @param file a file in the local filesystem.
 #' @return a FlashR object (vector/matrix)
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.read.obj("/tmp/tmp.mat")
 fm.read.obj <- function(file)
 {
 	ret <- .Call("R_FM_read_obj", as.character(file), PACKAGE="FlashR")
@@ -1793,6 +1935,10 @@ fm.read.obj <- function(file)
 #'               object in memory.
 #' @param name a string to indicate the name of the new FlashR object.
 #' @return a new FlashR object with data stored in specified storage.
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10, in.mem=TRUE)
+#' mat <- fm.conv.store(mat, FALSE)
 fm.conv.store <- function(fm, in.mem, name="")
 {
 	stopifnot(!is.null(fm))
@@ -1819,6 +1965,15 @@ fm.conv.store <- function(fm, in.mem, name="")
 #' @return A FlashR matrix.
 #' @name fm.bind
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- rbind(mat1, mat2)
+#' mat <- cbind(mat1, mat2)
+#' mat.list <- list(mat1, mat2)
+#' mat <- fm.rbind.list(mat.list)
+#' mat <- fm.cbind.list(mat.list)
 NULL
 
 #' @name fm.bind
@@ -1915,6 +2070,10 @@ setMethod("cbind", "fmV", function(..., deparse.level = 1) {
 #' (including dimensions) as \code{test} and data values from the values
 #' of \code{yes} or \code{no}.
 #' @name ifelse
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat <- ifelse(mat > 0.5, mat, 0)
 NULL
 
 #' @rdname ifelse
@@ -1976,6 +2135,10 @@ setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 #' @param x an FlashR vector or matrix.
 #' @return a logical FlashR vector or matrix.
 #' @name NA
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' is.na(mat)
 NULL
 
 #' @rdname NA
@@ -2008,6 +2171,12 @@ setMethod("is.na", signature(x = "fmV"), function(x) {
 #' @param x a FlashR object
 #' @return A logical vector of the same length as \code{x}
 #' @name is.finite
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' is.finite(mat)
+#' is.infinite(mat)
+#' is.nan(mat)
 NULL
 
 #' @rdname is.finite
@@ -2080,6 +2249,10 @@ setMethod("is.finite", signature(x = "fmV"), function(x) {
 #' @return The length of \code{levels(x)}, which is zero if \code{x}
 #' has no levels.
 #' @name nlevels
+#'
+#' @examples
+#' vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
+#' nlevels(vec)
 setMethod("nlevels", signature(x = "fmFactorV"), function(x) x@num.levels)
 
 #' Levels Attributes
@@ -2092,6 +2265,10 @@ setMethod("nlevels", signature(x = "fmFactorV"), function(x) x@num.levels)
 #' @param x a FlashR factor.
 #' @return a FlashR vector that contains the value of the levels.
 #' @name levels
+#'
+#' @examples
+#' vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
+#' levels(vec)
 setMethod("levels", signature(x = "fmFactorV"), function(x)
 		  fm.seq.int(1, x@num.levels, 1))
 
@@ -2102,6 +2279,10 @@ setMethod("levels", signature(x = "fmFactorV"), function(x)
 #' \code{fm.print.mat.info} prints the internal computation dependancy.
 #'
 #' @param fm a FlashR object
+#' mat <- fm.runif.matrix(100, 10)
+#' fm.print.mat.info(mat)
+#' mat <- fm.runif.matrix(100, 10) + fm.runif.matrix(100, 10)
+#' fm.print.mat.info(mat)
 fm.print.mat.info <- function(fm)
 {
 	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
