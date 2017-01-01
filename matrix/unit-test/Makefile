@@ -124,5 +124,6 @@ clean:
 	rm -f test-bulk_operate
 	rm -f test-hashtable
 	rm -f test-projection
+	rm -f test-sink_matrix
 
 -include $(DEPS) 
