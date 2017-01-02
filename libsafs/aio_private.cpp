@@ -50,7 +50,7 @@ struct thread_callback_s
 	async_io *aio;
 	callback_allocator *cb_allocator;
 	io_request req;
-	embedded_array<struct iovec, MAX_EMBED_BUFS> vec;
+	embedded_array<struct ::iovec, MAX_EMBED_BUFS> vec;
 };
 
 /**

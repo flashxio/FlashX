@@ -21,7 +21,9 @@
  */
 
 #include <string.h>
+#include <sys/types.h>
 #include <sys/uio.h>
+#include <unistd.h>
 #include <sys/time.h>
 #include <limits.h>
 
@@ -910,15 +912,15 @@ public:
 		return get_extension()->get_buf(idx);
 	}
 
-	const struct iovec get(int idx) const {
-		struct iovec ret;
+	const struct ::iovec get(int idx) const {
+		struct ::iovec ret;
 		io_req_extension *ext = get_extension();
 		ret.iov_base = ext->get_buf(idx).get_buf();
 		ret.iov_len = ext->get_buf(idx).get_size();
 		return ret;
 	}
 
-	const int get_vec(struct iovec *vec, int num) const {
+	const int get_vec(struct ::iovec *vec, int num) const {
 		num = min(get_num_bufs(), num);
 		for (int i = 0; i < num; i++) {
 			io_req_extension *ext = get_extension();

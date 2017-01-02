@@ -24,6 +24,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <sys/uio.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -58,7 +59,7 @@ public:
 
 	struct iocb* make_io_request(int fd, size_t iosize, long long offset,
 			void* buffer, int io_type, struct io_callback_s *cb);
-	struct iocb *make_iovec_request(int fd, const struct iovec iov[],
+	struct iocb *make_iovec_request(int fd, const struct ::iovec iov[],
 			int count, long long offset, int io_type, struct io_callback_s *cb);
 	void destroy_io_requests(struct iocb **iocbs, int num) {
 		iocb_allocator.free(iocbs, num);
