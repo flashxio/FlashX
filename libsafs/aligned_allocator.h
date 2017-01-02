@@ -20,7 +20,9 @@
  * limitations under the License.
  */
 
+#ifndef __APPLE__
 #include <malloc.h>
+#endif
 
 #include "common.h"
 
