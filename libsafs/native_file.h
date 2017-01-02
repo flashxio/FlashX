@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
@@ -115,12 +116,14 @@ public:
 		}
 		bool bret = true;
 		if (size > 0) {
+#if _POSIX_C_SOURCE >= 200112L
 			int ret = posix_fallocate(fd, 0, size);
 			if (ret != 0) {
 				fprintf(stderr, "can't allocate %ld bytes for %s, error: %s\n",
 						size, file_name.c_str(), strerror(ret));
 				bret = false;
 			}
+#endif
 		}
 		close(fd);
 		return bret;
