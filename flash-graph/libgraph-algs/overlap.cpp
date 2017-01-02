@@ -24,7 +24,7 @@
 
 #include <signal.h>
 
-#include <tr1/unordered_set>
+#include <unordered_set>
 
 #include "FGlib.h"
 #include "graph_engine.h"
