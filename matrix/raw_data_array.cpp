@@ -32,6 +32,7 @@
 #include "matrix_config.h"
 #include "bulk_operate.h"
 #include "local_mem_buffer.h"
+#include "matrix_exception.h"
 
 namespace fm
 {
@@ -326,8 +327,12 @@ void init_memchunk_reserve(int num_nodes)
 chunked_raw_array::chunked_raw_array(size_t num_bytes, size_t block_size,
 		int node_id): raw_array(num_bytes, node_id)
 {
+	if (block_size > ARR_CHUNK_SIZE)
+		throw alloc_error((boost::format(
+						"The block size (%1%) is larger than max (%2%)")
+					% block_size % ARR_CHUNK_SIZE).str());
+
 	this->contig_block_size = block_size;
-	assert(block_size <= ARR_CHUNK_SIZE);
 	// Total number of blocks to store data. We need to round it up.
 	size_t num_blocks = ceil(((double) num_bytes) / block_size);
 	// The number of blocks in a memory chunk. We need to round it down.

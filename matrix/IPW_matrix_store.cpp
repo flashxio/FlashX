@@ -627,24 +627,40 @@ void multiply_wide_op::run(
 	local_matrix_store::exposed_area orig_B = ins[1]->get_exposed_area();
 	local_matrix_store &mutableA = const_cast<local_matrix_store &>(*ins[0]);
 	local_matrix_store &mutableB = const_cast<local_matrix_store &>(*ins[1]);
+	bool resize_success = true;
 	for (size_t row_idx = 0; row_idx < long_dim; row_idx += LONG_DIM_LEN) {
 		size_t llen = std::min(long_dim - row_idx, LONG_DIM_LEN);
 		if (require_trans)
-			mutableA.resize(orig_A.local_start_row + row_idx,
+			resize_success = mutableA.resize(orig_A.local_start_row + row_idx,
 					orig_A.local_start_col, llen, mutableA.get_num_cols());
 		else
-			mutableA.resize(orig_A.local_start_row,
+			resize_success = mutableA.resize(orig_A.local_start_row,
 					orig_A.local_start_col + row_idx, mutableA.get_num_rows(),
 					llen);
-		mutableB.resize(orig_B.local_start_row + row_idx,
-				orig_B.local_start_col, llen, mutableB.get_num_cols());
+		if (resize_success)
+			resize_success = mutableB.resize(orig_B.local_start_row + row_idx,
+					orig_B.local_start_col, llen, mutableB.get_num_cols());
+		// If we resize both matrices, we perform computation on the resized
+		// matrix.
+		if (resize_success) {
+			if (is_sparse)
+				run_part_sparse(ins);
+			else
+				run_part_dense(ins);
+		}
+		else
+			break;
+	}
+	mutableA.restore_size(orig_A);
+	mutableB.restore_size(orig_B);
+	// If the resize on one of the matrices failed, we perform the computation
+	// here.
+	if (!resize_success) {
 		if (is_sparse)
 			run_part_sparse(ins);
 		else
 			run_part_dense(ins);
 	}
-	mutableA.restore_size(orig_A);
-	mutableB.restore_size(orig_B);
 }
 
 void multiply_wide_op::run_part_dense(
@@ -759,9 +775,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 			left->get_num_rows(), right->get_num_cols(),
 			left->is_in_mem() && right->is_in_mem(), left->get_type())
 {
-	// We want the left matrix to be a dense matrix.
-	// TODO we need to optimize this later.
-	this->left_mat = conv_dense(left);
+	this->left_mat = left;
 	this->right_mat = right;
 
 	size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
@@ -801,9 +815,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 					&& right->store_layout() == matrix_layout_t::L_ROW));
 	}
 	else {
-		// For inner product, the current implementation only works on
-		// dense matrices. TODO we need to optimize this later.
-		this->right_mat = conv_dense(right);
+		this->right_mat = right;
 
 		if (left_op) {
 			this->left_op = left_op;
@@ -833,7 +845,10 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		matrix_info info;
 		info.num_rows = left->get_num_rows();
 		info.num_cols = right->get_num_cols();
-		info.layout = this->layout;
+		if (left->store_layout() == matrix_layout_t::L_COL)
+			info.layout = matrix_layout_t::L_COL;
+		else
+			info.layout = matrix_layout_t::L_ROW;
 		portion_op = std::shared_ptr<portion_mapply_op>(new inner_prod_wide_op(
 					left_op, right_op, info, nthreads));
 	}
@@ -941,11 +956,21 @@ public:
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_row == 0);
 		assert(local_num_rows == mutable_left_part.get_num_rows());
-		mutable_left_part.resize(local_start_row, local_start_col,
+
+		local_matrix_store::exposed_area orig_left
+			= mutable_left_part.get_exposed_area();
+		bool success = mutable_left_part.resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
+
 		// We need to resize the portion of the right matrix accordingly.
-		mutable_right_part.resize(local_start_col, 0, local_num_cols,
+		success = mutable_right_part.resize(local_start_col, 0, local_num_cols,
 				mutable_right_part.get_num_cols());
+		if (!success) {
+			mutable_left_part.restore_size(orig_left);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -1011,11 +1036,20 @@ public:
 			size_t local_num_rows, size_t local_num_cols) {
 		assert(local_start_row == 0);
 		assert(local_num_rows == mutable_left_part.get_num_rows());
-		mutable_left_part.resize(local_start_row, local_start_col,
+		local_matrix_store::exposed_area orig_left
+			= mutable_left_part.get_exposed_area();
+		bool success = mutable_left_part.resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
+
 		// We need to resize the portion of the right matrix accordingly.
-		mutable_right_part.resize(local_start_col, 0, local_num_cols,
+		success = mutable_right_part.resize(local_start_col, 0, local_num_cols,
 				mutable_right_part.get_num_cols());
+		if (!success) {
+			mutable_left_part.restore_size(orig_left);
+			return false;
+		}
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -1089,9 +1123,19 @@ public:
 
 matrix_store::const_ptr IPW_matrix_store::transpose() const
 {
-	// TODO do we need this?
-	assert(0);
-	return matrix_store::const_ptr();
+	if (has_materialized())
+		return get_combine_res()->transpose();
+
+	matrix_store::const_ptr tleft = right_mat->transpose();
+	matrix_store::const_ptr tright = left_mat->transpose();
+	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
+	matrix_layout_t tlayout;
+	if (layout == matrix_layout_t::L_ROW)
+		tlayout = matrix_layout_t::L_COL;
+	else
+		tlayout = matrix_layout_t::L_ROW;
+	return matrix_store::const_ptr(new IPW_matrix_store(tleft, tright,
+				left_op, right_op, tlayout));
 }
 
 std::string IPW_matrix_store::get_name() const

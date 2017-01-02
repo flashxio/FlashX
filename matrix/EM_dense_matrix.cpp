@@ -63,19 +63,20 @@ public:
 
 }
 
-EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
-		const scalar_type &type, safs::safs_file_group::ptr group): matrix_store(
-			nrow, ncol, false, type), mat_id(mat_counter++), data_id(mat_id)
+EM_matrix_store::ptr EM_matrix_store::create(size_t nrow, size_t ncol,
+		matrix_layout_t layout, const scalar_type &type,
+		safs::safs_file_group::ptr group)
 {
-	this->num_prefetches = 1;
-	this->orig_num_rows = nrow;
-	this->orig_num_cols = ncol;
-	this->layout = layout;
-	holder = file_holder::create_temp("mat", nrow * ncol * type.get_size(),
-			group);
+	file_holder::ptr holder = file_holder::create_temp("mat",
+			nrow * ncol * type.get_size(), group);
+	if (holder == NULL)
+		return EM_matrix_store::ptr();
+
 	safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
 			holder->get_name(), safs::REMOTE_ACCESS);
-	ios = io_set::ptr(new io_set(factory));
+	if (factory == NULL)
+		return EM_matrix_store::ptr();
+	io_set::ptr ios = io_set::ptr(new io_set(factory));
 
 	// Store the header as the metadata.
 	std::vector<char> header_buf(matrix_header::get_header_size());
@@ -83,7 +84,24 @@ EM_matrix_store::EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layou
 			nrow, ncol, layout, type.get_type());
 	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
 	bool ret = f.set_user_metadata(header_buf);
-	assert(ret);
+	if (!ret)
+		return EM_matrix_store::ptr();
+
+	return ptr(new EM_matrix_store(holder, ios, nrow, ncol, layout, type,
+				group));
+}
+
+EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
+		size_t nrow, size_t ncol, matrix_layout_t layout, const scalar_type &type,
+		safs::safs_file_group::ptr group): matrix_store(nrow, ncol, false,
+			type), mat_id(mat_counter++), data_id(mat_id)
+{
+	this->num_prefetches = 1;
+	this->orig_num_rows = nrow;
+	this->orig_num_cols = ncol;
+	this->layout = layout;
+	this->holder = holder;
+	this->ios = ios;
 }
 
 EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,

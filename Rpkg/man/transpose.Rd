@@ -12,12 +12,16 @@
 \S4method{t}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 }
 \value{
 a matrix.
 }
 \description{
 Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+t(mat)
 }
 

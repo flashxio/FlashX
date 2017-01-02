@@ -2,23 +2,25 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.conv.layout}
 \alias{fm.conv.layout}
-\title{Convert the data layout of a FlashMatrix matrix.}
+\title{Convert the data layout of a FlashR matrix.}
 \usage{
 fm.conv.layout(fm, byrow = FALSE)
 }
 \arguments{
-\item{fm}{a FlashMatrix matrix}
+\item{fm}{a FlashR matrix}
 
-\item{byrow}{a logical value to determine the data layout of a FlashMatrix
-matrix.}
+\item{byrow}{a logical value to determine the data layout of a FlashR matrix.}
 }
 \value{
-a FlashMatrix matrix
+a FlashR matrix
 }
 \description{
 A FMR matrix can store elements in a row-major or column-major order.
 By changing the data layout, we can improve efficiency of some matrix
 operations.
+}
+\examples{
+mat <- fm.conv.layout(fm.runif.matrix(100, 2), byrow=TRUE)
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

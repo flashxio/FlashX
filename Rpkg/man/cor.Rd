@@ -5,8 +5,11 @@
 \alias{cor}
 \alias{cor,fm-method}
 \alias{cov,fm-method}
+\alias{var,fm-method}
 \title{Correlation, Variance and Covariance (Matrices)}
 \usage{
+\S4method{var}{fm}(x, y = NULL, na.rm = FALSE, use)
+
 \S4method{cor}{fm}(x, y = NULL, use = "everything", method = c("pearson",
   "kendall", "spearman"))
 
@@ -35,5 +38,11 @@ Right now this argument isn't used.}
 and \code{y} if these are vectors.  If \code{x}
 and \code{y} are matrices then the covariances (or correlations) between
 the columns of \code{x} and the columns of \code{y} are computed.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+var(mat)
+cor(mat)
+cov(mat)
 }
 

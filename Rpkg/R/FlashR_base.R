@@ -19,18 +19,28 @@
 
 #' Arithmetic Operators
 #'
-#' Perform unary or binary arithmetic operations on FlashMatrix objects.
+#' Perform unary or binary arithmetic operations on FlashR objects.
 #'
-#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one operand
+#' @param e1,e2 One of the operands need to be a FlashR object. If one operand
 #' is a matrix and the other is a vector, we perform the arithmetic operation
 #' on the vector and every column of the matrix. If one operand is a scalar,
 #' we perform the operation on the scalar with every element in the matrix or
 #' the vector.
 #'
 #' There are a few exceptions. For example, the left operand of "^" has to be
-#' a FlashMatrix object and the right operand has to be a scalar.
+#' a FlashR object and the right operand has to be a scalar.
 #'
 #' @name Arithmetic
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- -mat1
+#' mat <- mat1 + mat2
+#' mat <- mat1 - mat2
+#' mat <- mat1 * mat2
+#' mat <- mat1 / mat2
+#' mat <- mat1 ^ 2
 NULL
 
 #' @rdname Arithmetic
@@ -232,18 +242,27 @@ setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2) {
 #' a vector, it will be promoted to either a row or column matrix to make
 #' the two arguments conformable.
 #'
-#' @param x a FlashMatrix matrix.
-#' @param y can be a FlashMatrix vector or matrix, an R vector or matrix.
-#' @return a FlashMatrix matrix.
+#' @param x a FlashR matrix.
+#' @param y can be a FlashR vector or matrix, an R vector or matrix.
+#' @return a FlashR matrix.
 #' @name matmult
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(10, 10)
+#' mat <- mat1 %*% mat2
 NULL
 
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
+setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y)
+		  fm.as.matrix(fm.multiply(x, y)))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) fm.multiply(t(y), x))
+setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) {
+		  res <- fm.as.matrix(fm.multiply(t(y), x))
+		  t(res)
+})
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
 		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
@@ -260,13 +279,23 @@ setMethod("%*%", signature(x = "ANY", y = "fm"), function(x, y) {
 #' Binary operators which allow the comparison of values in atomic
 #' vectors.
 #'
-#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one operand
+#' @param e1,e2 One of the operands need to be a FlashR object. If one operand
 #' is a matrix and the other is a vector, we perform the arithmetic operation
 #' on the vector and every column of the matrix. If one operand is a scalar,
 #' we perform the operation on the scalar with every element in the matrix or
 #' the vector.
 #'
 #' @name Comparison
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' mat <- mat1 == mat2
+#' mat <- mat1 != mat2
+#' mat <- mat1 < mat2
+#' mat <- mat1 <= mat2
+#' mat <- mat1 > mat2
+#' mat <- mat1 >= mat2
 NULL
 
 #' @rdname Comparison
@@ -462,13 +491,22 @@ setMethod("<", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #' \code{!} indicates logical negation (NOT).
 #' \code{&} indicates logical AND and \code{|} indicates logical OR.
 #'
-#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one operand
+#' @param e1,e2 One of the operands need to be a FlashR object. If one operand
 #' is a matrix and the other is a vector, we perform the arithmetic operation
 #' on the vector and every column of the matrix. If one operand is a scalar,
 #' we perform the operation on the scalar with every element in the matrix or
 #' the vector.
 #'
 #' @name Logic
+#'
+#' @examples
+#' tmp1 <- fm.runif.matrix(100, 10)
+#' tmp2 <- fm.runif.matrix(100, 10)
+#' mat1 <- tmp1 > tmp2
+#' mat2 <- tmp1 < tmp2
+#' mat1 | mat2
+#' mat1 & mat2
+#' !mat1
 NULL
 
 #' @rdname Logic
@@ -556,18 +594,28 @@ setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 #' or \code{pmin2} return a matrix, each of whose column is parallel maxima
 #' and minima of the column of the input matrix and the input vector.
 #'
-#' @param e1,e2 One of the operands need to be a FlashMatrix object. If one
+#' @param e1,e2 One of the operands need to be a FlashR object. If one
 #' operand is a matrix and the other is a vector, we perform the operation
 #' on the vector and every column of the matrix. If one operand is a scalar,
 #' we perform the operation on the scalar with every element in the matrix or
 #' the vector.
-#' @param x a FlashMatrix vector or matrix.
-#' @param ... FlashMatrix vectors or matrices.
+#' @param x a FlashR vector or matrix.
+#' @param ... FlashR vectors or matrices.
 #' @param na.rm a logical indicating whether missing values should be removed.
 #' @return \code{pmin2}, \code{pmax2}, \code{pmin} and \code{pmax} return
-#'         a FlashMatrix object, and \code{min} and \code{max} return an R scalar.
+#'         a FlashR object, and \code{min} and \code{max} return an R scalar.
 #'
 #' @name Extremes
+#'
+#' @examples
+#' mat1 <- fm.runif.matrix(100, 10)
+#' mat2 <- fm.runif.matrix(100, 10)
+#' res <- pmax2(mat1, mat2)
+#' res <- pmin2(mat1, mat2)
+#' res <- pmax(mat1, mat2)
+#' res <- pmin(mat1, mat2)
+#' res <- max(mat1, mat2)
+#' res <- min(mat1, mat2)
 pmax2 <- function(e1, e2) {
 	# if e1 is a vector and e2 is a matrix, pmax(e1, e2) returns a vector,
 	# which is inconsistent with others, so in this case, we need to switch
@@ -732,13 +780,17 @@ setMethod("pmax", "fm", .pmax.int)
 #' @rdname Extremes
 setMethod("pmax", "fmV", .pmax.int)
 
-#' Dimensions of an FlashMatrix Object
+#' Dimensions of an FlashR Object
 #'
-#' Retrieve the dimension of an FlashMatrix object.
+#' Retrieve the dimension of an FlashR object.
 #'
-#' @param x A FlashMatrix matrix.
+#' @param x A FlashR matrix.
 #'
 #' @name dim
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' dim(mat)
 NULL
 
 #' @rdname dim
@@ -752,6 +804,11 @@ setMethod("dim", signature(x = "fm"), function(x) c(x@nrow, x@ncol))
 #' @param x a matrix.
 #' @return an integer of length 1 or NULL.
 #' @name nrow
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' nrow(mat)
+#' ncol(mat)
 NULL
 
 #' @rdname nrow
@@ -763,10 +820,14 @@ setMethod("ncol", signature(x = "fm"), function(x) x@ncol)
 #'
 #' Get the length of a vector or a matrix.
 #'
-#' @param x an FlashMatrix object.
+#' @param x an FlashR object.
 #' @return an integer of length 1 or a double if the object has more than
 #' 2^31-1 elements.
 #' @name length
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' length(mat)
 NULL
 
 #' @rdname length
@@ -776,12 +837,16 @@ setMethod("length", signature(x = "fm"), function(x) x@nrow * x@ncol)
 
 #' The Type of an Object
 #'
-#' \code{typeof} determines the R type of an FlashMatrix object.
+#' \code{typeof} determines the R type of an FlashR object.
 #'
-#' @param x a FlashMatrix object.
+#' @param x a FlashR object.
 #' @return A character string. Current values are "logical", "integer",
 #' "double".
 #' @name typeof
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' typeof(mat)
 NULL
 
 #' @rdname typeof
@@ -793,41 +858,102 @@ setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 #'
 #' Retrieve or set the dimnames of a matrix.
 #'
-#' @param x a FlashMatrix matrix.
+#' @param x a FlashR matrix.
 #' @param value a list that provides values for dimension names.
 #' @return \code{dimnames} return NULL if there aren't dimension names.
 #'         Otherwise, return the dimension names.
 #' @name dimnames
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' dimnames(mat)
+#' dimnames(mat) <- list("dim1", "dim2")
 NULL
 
-#' @rdname dimnames
-setMethod("dimnames", signature(x = "fm"), function(x) {
-		  if (!is.null(x@attrs[["dimnames"]]))
-			  x@attrs$dimnames
-		  else
-			  NULL
-})
+.get.dimnames <- function(x)
+{
+	if (!is.null(x@attrs[["dimnames"]])) x@attrs$dimnames else NULL
+}
+
+.set.dimnames <- function(x, value)
+{
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	if (is.null(x@attrs[["dimnames"]]))
+		x@attrs$dimnames <- list(NULL, NULL)
+	if (length(value) != length(dim(x)))
+		stop("length of dimnames not equal to array extent")
+	for (i in 1:length(value))
+		x@attrs$dimnames[[i]] <- as.character(value[[i]])
+	x
+}
 
 #' @rdname dimnames
-setMethod("dimnames<-", signature(x = "fm", value="list"), function(x, value) {
-		  if (is.null(x@attrs))
-			  x@attrs <- list()
-		  if (is.null(x@attrs[["dimnames"]]))
-			  x@attrs$dimnames <- list(NULL, NULL)
-		  if (length(value) != length(dim(x)))
-			  stop("length of dimnames not equal to array extent")
-		  for (i in 1:length(value))
-			  x@attrs$dimnames[[i]] <- as.character(value[[i]])
-		  x
-})
+setMethod("dimnames", signature(x = "fm"), .get.dimnames)
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fmV"), .get.dimnames)
+
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fm", value="list"), .set.dimnames)
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fmV", value="list"), .set.dimnames)
+
+#' The Names of an Object
+#'
+#' Functions to get or set the names of an object.
+#'
+#' Currently, \code{value} has to have the same length as \code{x} and has
+#' the same shape. FlashR currently doesn't support character vectors yet.
+#'
+#' @param x a FlashR array
+#' @param value a FlashR array.
+#' @return \code{names} returns \code{NULL} or a FlashR array of the same
+#' length as \code{x}. \code{names<-} returns the updated object.
+#' @name names
+NULL
+
+.get.names <- function(x)
+{
+	if (!is.null(x@attrs[["names"]])) x@attrs$names else NULL
+}
+
+.set.names <- function(x, value)
+{
+	if (length(x) != length(value))
+		stop("The number of names isn't equal to the number of elements")
+	# if two inputs have different dimensions.
+	if (length(dim(x)) != length(dim(value))
+		# if both are matrices but they have different shapes.
+		|| (!is.null(dim(x)) && any(dim(x) != dim(value))))
+		stop("x and value have different shapes.")
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	# TODO I should make sure the names are characters.
+	x@attrs$names <- value
+	x
+}
+
+#' @rdname names
+setMethod("names", signature(x = "fm"), .get.names)
+#' @rdname names
+setMethod("names", signature(x = "fmV"), .get.names)
+
+#' @rdname names
+setMethod("names<-", signature(x = "fm", value="fm"), .set.names)
+#' @rdname names
+setMethod("names<-", signature(x = "fmV", value="fmV"), .set.names)
 
 #' Matrix Transpose
 #'
 #' Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
 #'
-#' @param x a FlashMatrix matrix.
+#' @param x a FlashR matrix.
 #' @return a matrix.
 #' @name transpose
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' t(mat)
 NULL
 
 #' @rdname transpose
@@ -953,15 +1079,20 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 #' Are some Values True?
 #'
 #' \code{any} tests whether some of the values in a set of logical vectors are
-#' true? \code{fm.all} tests whether some of the values in a single vector are
+#' true? \code{fm.any} tests whether some of the values in a single vector are
 #' true. \code{fm.any} can evaluate it lazily.
 #'
-#' @param x a logical FlashMatrix vector.
+#' @param x a logical FlashR vector.
 #' @param ... zero or more logical vectors.
 #' @param lazy indicates whether or not to evaluate it lazily.
 #' @param na.rm a logical indicating whether missing values should be removed.
 #' @return The value is a logical vector of length one.
 #' @name any
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10) > 0.5
+#' any(mat)
+#' fm.any(mat)
 fm.any <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1015,12 +1146,17 @@ setMethod("any", "fmV", .any.int)
 #' true? \code{fm.all} tests whether all values in a single vector are true.
 #' \code{fm.all} can evaluate it lazily.
 #'
-#' @param x a logical FlashMatrix vector.
+#' @param x a logical FlashR vector.
 #' @param ... zero or more logical vectors.
 #' @param lazy indicates whether or not to evaluate it lazily.
 #' @param na.rm a logical indicating whether missing values should be removed.
 #' @return The value is a logical vector of length one.
 #' @name all
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10) > 0.5
+#' all(mat)
+#' fm.all(mat)
 fm.all <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1074,12 +1210,17 @@ setMethod("all", "fmV", .all.int)
 #' \code{fm.sum} returns the sum of all the values in the input object. It can
 #' evaluate the summation lazily.
 #'
-#' @param x a FlashMatrix vector or matrix.
+#' @param x a FlashR vector or matrix.
 #' @param ... zero or more vectors or matrices.
 #' @param lazy indicates whether or not to evaluate it lazily.
 #' @param na.rm logical. Should missing values (including \code{NaN}) be removed?
 #' @return The sum.
 #' @name sum
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sum(mat)
+#' fm.sum(mat)
 fm.sum <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1136,10 +1277,14 @@ setMethod("sum", "fmV", .sum.int)
 #' \code{range} returns a vector containing the minimum and maximum of all
 #' the given arguments.
 #'
-#' @param x a FlashMatrix vector or matrix.
-#' @param ... any FlashMatrix vectors or matrices.
+#' @param x a FlashR vector or matrix.
+#' @param ... any FlashR vectors or matrices.
 #' @param na.rm logical, indicating if \code{NA} should be omitted.
 #' @name range
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' range(mat)
 NULL
 
 #' @rdname range
@@ -1165,9 +1310,13 @@ setMethod("range", "fmV", .range.int)
 #'
 #' Compute arithmetic mean.
 #'
-#' @param x A FlashMatrix vector or matrix.
+#' @param x A FlashR vector or matrix.
 #' @param ... further arguments passed to or from other methods.
 #' @name mean
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mean(mat)
 NULL
 
 #' @rdname mean
@@ -1175,13 +1324,17 @@ setMethod("mean", "fm", .mean.int)
 #' @rdname mean
 setMethod("mean", "fmV", .mean.int)
 
-# Miscellaneous Mathematical Functions
+#' Miscellaneous Mathematical Functions
 #'
 #' \code{abs(x)} computes the absolute value of x, \code{sqrt(x)} computes the square
 #' root of x.
 #'
 #' @param x a numeric vector or array.
 #' @name MathFun
+#'
+#' @examples
+#' mat <- abs(fm.runif.matrix(100, 10))
+#' mat <- sqrt(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname MathFun
@@ -1208,6 +1361,11 @@ setMethod("sqrt", signature(x = "fmV"), function(x) .sapply.fmV(x, fm.buo.sqrt))
 #'
 #' @param x a numeric vector.
 #' @name round
+#'
+#' @examples
+#' mat <- ceiling(fm.runif.matrix(100, 10))
+#' mat <- floor(fm.runif.matrix(100, 10))
+#' mat <- round(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname round
@@ -1238,6 +1396,12 @@ setMethod("round", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), 
 #' values. \code{log(0)} gives \code{-Inf}, and \code{log(x)} for negative
 #' values of \code{x} is \code{NaN}.  \code{exp(-Inf)} is 0.
 #' @name log
+#'
+#' @examples
+#' mat <- log(fm.runif.matrix(100, 10))
+#' mat <- log10(fm.runif.matrix(100, 10))
+#' mat <- log2(fm.runif.matrix(100, 10))
+#' mat <- exp(fm.runif.matrix(100, 10))
 NULL
 
 #' @rdname log
@@ -1271,12 +1435,21 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #'
 #' Form row and column sums and means for numeric arrays.
 #'
-#' @param x a FlashMatrix matrix.
+#' @param x a FlashR matrix.
 #' @param lazy logical. indicates whether to evaluate the expression lazily.
 #' @param na.rm logical. Should missing values (including NaN) be omitted
 #' from the calculations?
-#' @return a FlashMatrix vector.
+#' @return a FlashR vector.
 #' @name colSums
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat <- fm.rowSums(mat)
+#' mat <- fm.colSums(mat)
+#' mat <- rowSums(mat)
+#' mat <- colSums(mat)
+#' mat <- rowMeans(mat)
+#' mat <- colMeans(mat)
 fm.rowSums <- function(x, lazy=FALSE)
 {
 	if (lazy)
@@ -1316,46 +1489,70 @@ setMethod("colMeans", signature(x = "fm", na.rm = "ANY"),
 			  colSums(x, na.rm) / dim(x)[1]
 		  })
 
-#' Print FlashMatrix objects.
+#' Print FlashR objects.
 #'
-#' \code{print} prints the information of a FlashMatrix object.
+#' \code{print} prints the information of a FlashR object.
 #'
-#' @param x a FlashMatrix object. It can be a vector, a matrix or a FlashMatrix
+#' @param x a FlashR object. It can be a vector, a matrix or a FlashR
 #' binary operator.
 #' @name print
 NULL
 
 #' @rdname print
 setMethod("print", signature(x = "fm"), function(x)
-		  cat("FlashMatrixR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
+		  cat("FlashR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
 			  " columns, is sparse: ", fm.is.sparse(x), "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fmV"), function(x)
-	cat("FlashVectorR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+	cat("FlashR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+#' @rdname print
+setMethod("print", signature(x = "fmFactorV"), function(x)
+	cat("FlashR factor vector ", x@name, ": length: ", length(x),
+		", max level: ", x@num.levels, "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fm.bo"), function(x)
-	cat("FLashMatrixR basic operator:", x@name, "\n"))
+	cat("FLashR basic operator:", x@name, "\n"))
 
 #' Count the number of elements
 #'
-#' This function counts the number of occurences of each unique value
-#' in a FlashMatrix vector.
+#' \code{fm.table} counts the number of occurences of each unique value
+#' in a FlashR vector.
 #'
-#' @param x a FlashMatrix vector.
-#' @return a list of elements.
+#' @param x a FlashR vector or a "table" object for \code{as.vector} and
+#'          \code{as.data.frame}.
+#' @return a table object.
 #' \itemize{
 #' \item{val}{The unique values in the vector.}
 #' \item{Freq}{The number of occurences of each unique value.}
 #' }
+#' @name fm.table
+#'
+#' @examples
+#' vec <- as.integer(fm.runif(1000, min=0, max=10))
+#' tbl <- fm.table(vec)
+#' cnts <- as.vector(tbl)
+#' df <- as.data.frame(tbl)
+NULL
+
+setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
+
+#' @rdname fm.table
 fm.table <- function(x)
 {
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
 	ret <- fm.sgroupby(x, count)
 	if (!is.null(ret))
-		list(val=ret$val, Freq=ret$agg)
+		new("fm.table", val=ret$val, Freq=ret$agg)
 	else
 		NULL
 }
+
+#' @rdname fm.table
+setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
+#' @rdname fm.table
+setMethod("as.data.frame", signature(x = "fm.table"),
+		  function(x, row.names = NULL, optional = FALSE, ...)
+			  list(val=x@val, Freq=x@Freq))
 
 #' Integer Vectors
 #'
@@ -1363,10 +1560,13 @@ fm.table <- function(x)
 #' \code{is.integer} is a more general test of an object being
 #' interpretable as integers.
 #'
-#' @param x a FlashMatrix object to be coerced or tested.
-#' @return \code{as.integer} returns an integer FlashMatrix object,
+#' @param x a FlashR object to be coerced or tested.
+#' @return \code{as.integer} returns an integer FlashR object,
 #' \code{is.integer} returns a logical value.
 #' @name integer
+#'
+#' @examples
+#' vec <- as.integer(fm.runif(1000, min=0, max=10))
 NULL
 
 #' @rdname integer
@@ -1399,10 +1599,14 @@ setMethod("as.integer", "fmV", function(x) {
 #' Coerces or test objects of type \code{"numeric"}. \code{is.numeric}
 #' is a more general test of an object being interpretable as numbers.
 #'
-#' @param x a FlashMatrix object to be coerced or tested.
-#' @return \code{as.numeric} returns a numeric FlashMatrix object,
+#' @param x a FlashR object to be coerced or tested.
+#' @return \code{as.numeric} returns a numeric FlashR object,
 #' \code{is.numeric} returns a logical value.
 #' @name numeric
+#'
+#' @examples
+#' vec <- as.numeric(fm.runif(1000, min=0, max=10))
+#' is.numeric(vec)
 NULL
 
 #' @rdname numeric
@@ -1433,7 +1637,7 @@ setMethod("is.numeric", "fmV", function(x)
 
 #' Extract Parts of an object
 #'
-#' Operators acting on FlashMatrix vectors and matrices to extract parts of
+#' Operators acting on FlashR vectors and matrices to extract parts of
 #' the objects.
 #'
 #' FlashR only supports extracting data from an object. It doesn't support
@@ -1444,6 +1648,12 @@ setMethod("is.numeric", "fmV", function(x)
 #'        or numeric vectors.
 #' @param drop for matrices. If \code{TRUE}, the result is coerced to a vector.
 #' @name Extract
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat[1:5,]
+#' mat[,1:5]
+#' mat[1:5,1:5]
 NULL
 
 #' @rdname Extract
@@ -1455,7 +1665,7 @@ setMethod("[", signature(x="fm", j="missing"),
 			  ret
 		  })
 #' @rdname Extract
-setMethod("[", signature(x="fm", i="missing", drop="missing"),
+setMethod("[", signature(x="fm", i="missing"),
 		  function(x, i, j, drop=TRUE) {
 			  ret <- fm.get.cols(x, j)
 			  if (drop && length(j) == 1)
@@ -1481,12 +1691,17 @@ setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
 
 #' Return the First or Last part of an Object
 #'
-#' Returns the first or last parts of a FlashMatrix vector or matrix.
+#' Returns the first or last parts of a FlashR vector or matrix.
 #'
-#' @param x a FlashMatrix vector or matrix.
+#' @param x a FlashR vector or matrix.
 #' @param n a positive integer.
 #' @return An object (usually) like \code{x} but generally smaller.
 #' @name head
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' head(mat)
+#' tail(mat)
 NULL
 
 #' @rdname head
@@ -1502,7 +1717,7 @@ setMethod("tail", signature(x="fmV"), function(x, n=6L) x[(length(x)-n+1):length
 #'
 #' Return an array obtained from an input array by sweeping out a
 #' summary statistic.
-#' @param x a FlashMatrix matrix.
+#' @param x a FlashR matrix.
 #' @param MARGIN an integer giving the extent of \code{x} which
 #'        correspond to \code{STATS}.
 #' @param STATS the summary statistic which is to be swept out.
@@ -1511,6 +1726,11 @@ setMethod("tail", signature(x="fmV"), function(x, n=6L) x[(length(x)-n+1):length
 #' @param ... optional arguments to \code{FUN}.
 #' @return A matrix with the same shape as \code{x}, but with the summary
 #' statistics swept out.
+#' @name sweep
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sweep(mat, 1, runif(100))
 setMethod("sweep", "fm",
 		  function(x, MARGIN, STATS, FUN="-", check.margin=TRUE, ...) {
 			  if (MARGIN == 2)
@@ -1528,50 +1748,41 @@ setMethod("sweep", "fm",
 #' faster than) the call \code{t(x) \%*\% y} (\code{crossprod}) or
 #' \code{x \%*\% t(y)} (\code{tcrossprod}).
 #'
-#' \code{fm.crossprod} and \code{fm.tcrossprod} allows to evaluate
-#' the computation lazily.
-#'
 #' @param x,y numeric matrices (or vectors): \code{y = NULL} is taken
 #' to be the same matrix as \code{x}. Vectors are promoted to single-column
 #' or single-row matrices, depending on the context.
 #' @param lazy a logical value, indicating to perform the computation lazily.
 #' @return a double matrix
 #' @name crossprod
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' crossprod(mat)
+#' tcrossprod(mat)
 NULL
 
 #' @rdname crossprod
-fm.crossprod <- function(x, y=NULL, lazy=FALSE)
-{
-	if (is.null(y))
-		y <- x
-	fm.multiply(t(x), y, lazy)
-}
-
+setMethod("crossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  fm.multiply(t(x), y)
+})
 #' @rdname crossprod
-fm.tcrossprod <- function(x, y=NULL, lazy=FALSE)
-{
-	if (is.null(y))
-		y <- x
-	fm.multiply(x, t(y), lazy)
-}
+setMethod("tcrossprod", "fm", function(x, y=NULL) {
+		  if (is.null(y))
+			  y <- x
+		  fm.multiply(x, t(y))
+})
 
-#' @rdname crossprod
-setMethod("crossprod", "fm", function(x, y=NULL) fm.crossprod(x, y))
-#' @rdname crossprod
-setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
-
-#' @rdname matrix
-setMethod("is.matrix", "fm", function(x) TRUE)
-
-#' FlashMatrix Summaries
+#' FlashR Summaries
 #'
-#' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
+#' \code{fm.summary} produces summaries of a FlashR vector or matrix.
 #'
 #' It computes the min, max, sum, mean, L1, L2, number of non-zero values if
 #' the argument is a vector, or these statistics for each column if the argument
 #' is a matrix.
 #'
-#' @param x a FlashMatrix vector or matrix.
+#' @param x a FlashR vector or matrix.
 #' @return A list containing the following named components:
 #' \itemize{
 #' \item{min}{The minimum value}
@@ -1582,10 +1793,13 @@ setMethod("is.matrix", "fm", function(x) TRUE)
 #' \item{numNonzeros}{The number of non-zero values}
 #' }
 #'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' fm.summary(mat)
 fm.summary <- function(x)
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	lazy.res <- list()
 	if (fm.is.matrix(x)) {
 		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
@@ -1604,14 +1818,14 @@ fm.summary <- function(x)
 		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
 	}
 	else {
-		print("fm.summary only works on a FlashMatrix object")
+		print("fm.summary only works on a FlashR object")
 		return(NULL)
 	}
 	res <- fm.materialize.list(lazy.res)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
@@ -1669,6 +1883,12 @@ fm.summary <- function(x)
 #'         the eigenvalues.
 #' @name fm.eigen
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx")
+#" mul <- function(x, extra) mat %*% x
+#' res <- fm.eigen(mul, 10, nrow(mat))
+#' fm.cal.residul(mul, res$values, res$vectors)
 fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
 					 env = parent.frame())
 {
@@ -1728,7 +1948,7 @@ fm.cal.residul <- function(mul, values, vectors)
 
 #' Scaling and Centering of Matrix
 #'
-#' \code{scale} centers and/or scales the columns of a FlashMatrix matrix.
+#' \code{scale} centers and/or scales the columns of a FlashR matrix.
 #'
 #' The value of \code{center} determines how column centering is
 #' performed.  If \code{center} is a numeric vector with length equal to
@@ -1753,13 +1973,18 @@ fm.cal.residul <- function(mul, values, vectors)
 #' \code{center = TRUE}, this is the same as the standard deviation, but
 #' in general it is not.
 #'
-#' @param x a FlashMatrix matrix
+#' @param x a FlashR matrix
 #' @param center either a logical value or a numeric vector of length equal to
 #'        the number of columns of \code{x}.
 #' @param sclae either a logical value or a numeric vector of length equal to
 #'        the number of columns of \code{x}.
-#' @return a FlashMatrix matrix.
+#' @return a FlashR matrix.
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#' @name scale
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' mat <- scale(mat)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
@@ -1807,13 +2032,18 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 
 #' Drop Redundant Extent Information
 #'
-#' Delete the dimensions of a FlashMatrix matrix which have only one level.
+#' Delete the dimensions of a FlashR matrix which have only one level.
 #'
 #' If the input matrix has only one row or one column, it works the same as
 #' fm.as.vector. Otherwise, it returns the original matrix.
 #'
-#' @param x a FlashMatrix matrix.
-#' @return a FlashMatrix matrix or vector.
+#' @param x a FlashR matrix.
+#' @return a FlashR matrix or vector.
+#' @name drop
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 1)
+#' vec <- drop(mat)
 setMethod("drop", "fm", function(x) {
 		  if (nrow(x) > 1 && ncol(x) > 1)
 			  x

@@ -15,7 +15,7 @@ fm.sum(x, lazy = FALSE)
 \S4method{sum}{fmV}(x, ..., na.rm = FALSE)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
 \item{lazy}{indicates whether or not to evaluate it lazily.}
 
@@ -30,5 +30,10 @@ The sum.
 \code{sum} returns the sum of all the values in its arguments.
 \code{fm.sum} returns the sum of all the values in the input object. It can
 evaluate the summation lazily.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sum(mat)
+fm.sum(mat)
 }
 

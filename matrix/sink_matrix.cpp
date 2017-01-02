@@ -372,13 +372,13 @@ block_sink_store::block_sink_store(
 	// all matrices in the block row should have the same number of rows.
 	for (size_t i = 0; i < num_block_rows; i++) {
 		size_t num_rows = stores[num_block_cols * i]->get_num_rows();
-		for (size_t j = 0; j < num_block_cols; j++)
+		for (size_t j = 1; j < num_block_cols; j++)
 			assert(stores[num_block_cols * i + j]->get_num_rows() == num_rows);
 	}
-	// all matrices in the block row should have the same number of rows.
+	// all matrices in the block col should have the same number of cols.
 	for (size_t i = 0; i < num_block_cols; i++) {
 		size_t num_cols = stores[i]->get_num_cols();
-		for (size_t j = 0; j < num_block_rows; j++)
+		for (size_t j = 1; j < num_block_rows; j++)
 			assert(stores[num_block_cols * j + i]->get_num_cols() == num_cols);
 	}
 	assert(num_block_rows * num_block_cols == stores.size());
@@ -386,14 +386,33 @@ block_sink_store::block_sink_store(
 
 matrix_store::const_ptr block_sink_store::transpose() const
 {
-	assert(0);
-	return matrix_store::const_ptr();
+	if (result)
+		return result->transpose();
+
+	std::vector<sink_store::const_ptr> new_stores;
+	for (size_t j = 0; j < num_block_cols; j++)
+		for (size_t i = 0; i < num_block_rows; i++) {
+			matrix_store::const_ptr t
+				= stores[num_block_cols * i + j]->transpose();
+			sink_store::const_ptr sink
+				= std::dynamic_pointer_cast<const sink_store>(t);
+			assert(sink);
+			new_stores.push_back(sink);
+		}
+	return matrix_store::const_ptr(new block_sink_store(new_stores,
+				num_block_cols, num_block_rows));
 }
 
 std::string block_sink_store::get_name() const
 {
-	assert(0);
-	return std::string();
+	std::string str = "block_sink(";
+	for (size_t i = 0; i < stores.size(); i++) {
+		str += stores[i]->get_name();
+		if (i < stores.size() - 1)
+			str += ", ";
+	}
+	str += ")";
+	return str;
 }
 
 std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const

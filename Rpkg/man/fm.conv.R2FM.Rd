@@ -2,23 +2,26 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.conv.R2FM}
 \alias{fm.conv.R2FM}
-\title{Convert a regular R object to a FlashMatrix object.}
+\title{Convert a regular R object to a FlashR object.}
 \usage{
 fm.conv.R2FM(obj, byrow = FALSE)
 }
 \arguments{
 \item{obj}{a regular R object}
 
-\item{byrow}{a logical value to determine the data layout of a FlashMatrix
-matrix.}
+\item{byrow}{a logical value to determine the data layout of a FlashR matrix.}
 }
 \value{
-a FlashMatrix object. If the input R object has 0 element,
+a FlashR object. If the input R object has 0 element,
         \code{fm.conv.R2FM} returns \code{NULL}.
 }
 \description{
 If the R object is a matrix, \code{byrow} determines how data in the generated
-FlashMatrix object is organized in memory.
+FlashR object is organized in memory.
+}
+\examples{
+vec <- fm.conv.R2FM(runif(100))
+mat <- fm.conv.R2FM(matrix(runif(100), 100, 2))
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

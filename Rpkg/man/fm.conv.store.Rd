@@ -7,20 +7,27 @@
 fm.conv.store(fm, in.mem, name = "")
 }
 \arguments{
-\item{fm}{a FlashMatrix object.}
+\item{fm}{a FlashR object.}
 
-\item{in.mem}{a logical value indicating whether to store the FlashMatrix
+\item{in.mem}{a logical value indicating whether to store the FlashR
 object in memory.}
 
-\item{name}{a string to indicate the name of the new FlashMatrix object.}
+\item{name}{a string to indicate the name of the new FlashR object.}
 }
 \value{
-a new FlashMatrix object with data stored in specified storage.
+a new FlashR object with data stored in specified storage.
 }
 \description{
-This function converts the storage of a FlashMatrix object. The storage
-can be memory or disks. This function is used for finely optimizing
-the computation of FlashMatrix code. It shouldn't be used to most of
-the users.
+This function converts the storage of a FlashR vector/matrix.
+The storage can be memory or disks.
+}
+\details{
+If a user provides \code{name} and \code{in.mem} is \code{TRUE},
+the vector/matrix will be kept on disks persistently. That is, even if a user
+exits from R, the vector/matrix will still be kept on disks.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10, in.mem=TRUE)
+mat <- fm.conv.store(mat, FALSE)
 }
 

@@ -19,14 +19,15 @@ include ../../Makefile.common
 
 CXXFLAGS := -g -std=c++0x -I../../libsafs -I../../flash-graph -I.. -fopenmp
 LDFLAGS := -L../eigensolver -leigen -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lz -laio -lcblas
+LDFLAGS += -lz -lcblas
 
 all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
 	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
 	test-special_matrix_store test-EM_vector_vector test-rounderror \
-	test-hashtable test-bulk_operate test-block_matrix test-projection
+	test-hashtable test-bulk_operate test-block_matrix test-projection \
+	test-sink_matrix
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -93,6 +94,9 @@ test-block_matrix: test-block_matrix.o ../libFMatrix.a
 
 test-projection: test-projection.o ../libFMatrix.a
 	$(CXX) -o test-projection test-projection.o $(LDFLAGS)
+
+test-sink_matrix: test-sink_matrix.o ../libFMatrix.a
+	$(CXX) -o test-sink_matrix test-sink_matrix.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

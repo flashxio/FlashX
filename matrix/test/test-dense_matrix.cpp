@@ -1,5 +1,4 @@
 #include <signal.h>
-#include <gperftools/profiler.h>
 
 #include <boost/format.hpp>
 
@@ -19,6 +18,9 @@ public:
 			            off_t col_idx) const {
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = i;
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
 	}
 };
 

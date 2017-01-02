@@ -17,9 +17,11 @@
 
 #' Compute the singular-value decomposition on a large matrix.
 #'
-#' The current implementation can only compute the largest eigenvalues.
+#' The difference between \code{svd} and \code{fm.svd} is that \code{fm.svd}
+#' allows a user-specified tol. \code{svd} computes eigenvalues in machine
+#' precision.
 #'
-#' @param x a FlashMatrix matrix
+#' @param x a FlashR matrix
 #' @param nu the number of left singluar vectors to be computed.
 #' @param nv the number of right singluar vectors to be computed.
 #' @param tol Stopping criterion: the relative accuracy of the Ritz value
@@ -30,6 +32,15 @@
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#' @name svd
+#'
+#' @examples
+#' mat <- fm.runif.matrix(1000, 100)
+#' res <- fm.svd(mat, nu=10, nv=0)
+#' res <- svd(mat, nu=10, nv=0)
+NULL
+
+#' @rdname svd
 fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
@@ -52,18 +63,20 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	}
 	else if (comp.right) {
 		size <- ncol(x)
-		x.prod <- fm.conv.FM2R(tx %*% x)
+		x.prod <- tx %*% x
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	else {
 		size <- nrow(x)
-		x.prod <- fm.conv.FM2R(x %*% tx)
+		x.prod <- x %*% tx
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	# If it's a very small matrix, we can compute its eigenvalues directly.
 	# Or if we need to compute many eigenvalues, we probably should also
 	# compute its eigenvalues directly.
 	if (!is.null(x.prod) && (size < 100 || nev >= size / 2)) {
+		if (!is.matrix(x.prod))
+			x.prod <- as.matrix(x.prod)
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[1:nev]
 		nev <- nrow(x.prod)
@@ -80,7 +93,7 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	rescale <- function(x) {
 		if (fm.is.vector(x))
 			x <- fm.as.matrix(x)
-		fm.set.materialize.level(x, 2)
+		fm.set.cached(x, TRUE)
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
 #		x <- fm.materialize(x)
@@ -113,5 +126,44 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 			right <- rescale(right)
 		}
 	}
-	list(d=sqrt(res$values), u=left, v=right, options=res$options)
+	# If an eigenvalue is very small (close to the machine precision), it's
+	# possible that the eigenvalue is negative but very close to 0.
+	vals <- ifelse(res$values > 0, res$values, 0)
+	list(d=sqrt(vals), u=left, v=right, options=res$options)
 }
+
+#' @rdname svd
+setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
+		  x <- fm.as.matrix(x)
+		  if (any(!is.finite(x)))
+			  stop("infinite or missing values in 'x'")
+		  dx <- dim(x)
+		  n <- dx[1L]
+		  p <- dx[2L]
+		  if (!n || !p)
+			  stop("a dimension is zero")
+		  fm.res <- fm.svd(x, nu, nv, tol=.Machine$double.eps)
+		  res <- list(d = fm.res$d)
+		  if (nu)
+			  res$u <- fm.res$u
+		  if (nv)
+			  res$v <- fm.res$v
+		  res
+})
+
+setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
+												  scale.=FALSE, tol=NULL) {
+	scale.x <- scale(x, center, scale.)
+	res <- fm.svd(scale.x, nu=0, tol=.Machine$double.eps)
+	if (!is.null(tol)) {
+		idxs <- which(res$d > tol)
+		rotation <- res$v[, idxs]
+	}
+	else
+		rotation <- res$v
+	if (retx)
+		x <- scale.x %*% rotation
+	else
+		x <- NULL
+	list(sdev=res$d / sqrt(nrow(x)), rotation=rotation, x=x)
+})

@@ -5,7 +5,7 @@
 \alias{fm.print.features}
 \alias{fm.set.conf}
 \alias{fm.set.log.level}
-\title{Reconfigure FlashMatrix}
+\title{Reconfigure FlashR}
 \usage{
 fm.set.conf(conf.file)
 
@@ -21,7 +21,7 @@ fm.print.features()
 \item{level}{a string, including "debug", "info", "warning", "error", "fatal".}
 }
 \description{
-\code{fm.set.conf} reconfigures FlashMatrix with the settings in
+\code{fm.set.conf} reconfigures FlashR with the settings in
 the configuration file. \code{fm.print.conf} prints the current configurations.
 \code{fm.set.log.level} sets what levels of messages should be logged.
 \code{fm.print.features} prints the features compiled into FlashR.
@@ -29,6 +29,12 @@ the configuration file. \code{fm.print.conf} prints the current configurations.
 \details{
 The configuration file contains a list of key-value pairs. Each line in
 the file is a key-value pair in the form of "key_name=value".
+}
+\examples{
+fm.set.conf("conf/run_test.txt")	# configure FlashR with the config file conf/run_test.txt
+fm.set.log.level("info")			# FlashR prints more information when it runs.
+fm.print.conf()
+fm.print.features()
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

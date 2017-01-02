@@ -3,19 +3,13 @@
 \docType{methods}
 \name{crossprod}
 \alias{crossprod}
-\alias{crossprod,fm-method}
-\alias{fm.crossprod}
-\alias{fm.tcrossprod}
-\alias{tcrossprod,fm-method}
+\alias{crossprod,fm,ANY-method}
+\alias{tcrossprod,fm,ANY-method}
 \title{Matrix Crossproduct}
 \usage{
-fm.crossprod(x, y = NULL, lazy = FALSE)
+\S4method{crossprod}{fm,ANY}(x, y = NULL)
 
-fm.tcrossprod(x, y = NULL, lazy = FALSE)
-
-\S4method{crossprod}{fm}(x, y = NULL)
-
-\S4method{tcrossprod}{fm}(x, y = NULL)
+\S4method{tcrossprod}{fm,ANY}(x, y = NULL)
 }
 \arguments{
 \item{x,y}{numeric matrices (or vectors): \code{y = NULL} is taken
@@ -33,8 +27,9 @@ cross-product. This is formally equivalent to (but usually slightly
 faster than) the call \code{t(x) \%*\% y} (\code{crossprod}) or
 \code{x \%*\% t(y)} (\code{tcrossprod}).
 }
-\details{
-\code{fm.crossprod} and \code{fm.tcrossprod} allows to evaluate
-the computation lazily.
+\examples{
+mat <- fm.runif.matrix(100, 10)
+crossprod(mat)
+tcrossprod(mat)
 }
 

@@ -18,14 +18,18 @@
 \S4method{is.numeric}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix object to be coerced or tested.}
+\item{x}{a FlashR object to be coerced or tested.}
 }
 \value{
-\code{as.numeric} returns a numeric FlashMatrix object,
+\code{as.numeric} returns a numeric FlashR object,
 \code{is.numeric} returns a logical value.
 }
 \description{
 Coerces or test objects of type \code{"numeric"}. \code{is.numeric}
 is a more general test of an object being interpretable as numbers.
+}
+\examples{
+vec <- as.numeric(fm.runif(1000, min=0, max=10))
+is.numeric(vec)
 }
 

@@ -4,14 +4,18 @@
 \name{dim}
 \alias{dim}
 \alias{dim,fm-method}
-\title{Dimensions of an FlashMatrix Object}
+\title{Dimensions of an FlashR Object}
 \usage{
 \S4method{dim}{fm}(x)
 }
 \arguments{
-\item{x}{A FlashMatrix matrix.}
+\item{x}{A FlashR matrix.}
 }
 \description{
-Retrieve the dimension of an FlashMatrix object.
+Retrieve the dimension of an FlashR object.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+dim(mat)
 }
 

@@ -29,6 +29,7 @@
 #include "IPW_matrix_store.h"
 #include "materialize.h"
 #include "mem_matrix_store.h"
+#include "set_data_matrix_store.h"
 
 namespace fm
 {
@@ -36,6 +37,12 @@ namespace fm
 dense_matrix::ptr block_matrix::create(
 		detail::combined_matrix_store::const_ptr store)
 {
+	if (store->get_num_rows() == 0 || store->get_num_cols() == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
 	if (store->get_mat_ref(0).is_wide()) {
 		for (size_t i = 1; i < store->get_num_mats() - 1; i++)
 			if (store->get_mat_ref(i).get_num_rows()
@@ -119,6 +126,9 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 					block_size);
 			stores[i] = detail::matrix_store::create(num_rows, local_num_cols,
 					layout, type, num_nodes, in_mem, group);
+			if (stores[i] == NULL)
+				return dense_matrix::ptr();
+
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}
@@ -139,6 +149,9 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 					block_size);
 			stores[i] = detail::matrix_store::create(local_num_rows, num_cols,
 					layout, type, num_nodes, in_mem, group);
+			if (stores[i] == NULL)
+				return dense_matrix::ptr();
+
 			// TODO we lose some information if we initialize them individually.
 			stores[i]->set_data(op);
 		}
@@ -153,21 +166,19 @@ dense_matrix::ptr block_matrix::create_layout(size_t num_rows, size_t num_cols,
 }
 
 dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
-		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
-		size_t num_rows, size_t num_cols, matrix_layout_t layout,
-		size_t block_size, bool byrow, int num_nodes, bool in_mem,
-		safs::safs_file_group::ptr group)
+		scalar_variable::ptr stride, size_t num_rows, size_t num_cols,
+		matrix_layout_t layout, size_t block_size, bool byrow, int num_nodes,
+		bool in_mem, safs::safs_file_group::ptr group)
 {
 	if (num_rows > num_cols && num_cols < block_size)
-		return dense_matrix::create_seq(start, stride, seq_ele_stride,
-				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+		return dense_matrix::create_seq(start, stride, num_rows, num_cols,
+				layout, byrow, num_nodes, in_mem, group);
 	else if (num_rows <= num_cols && num_rows < block_size)
-		return dense_matrix::create_seq(start, stride, seq_ele_stride,
-				num_rows, num_cols, layout, byrow, num_nodes, in_mem, group);
+		return dense_matrix::create_seq(start, stride, num_rows, num_cols,
+				layout, byrow, num_nodes, in_mem, group);
 
 	const scalar_type &type = start->get_type();
 	assert(type == stride->get_type());
-	assert(type == seq_ele_stride->get_type());
 
 	size_t num_blocks;
 	if (num_rows > num_cols)
@@ -205,18 +216,104 @@ dense_matrix::ptr block_matrix::create_seq_layout(scalar_variable::ptr start,
 			local_num_cols = num_cols;
 		}
 
-
-		detail::matrix_store::ptr store = detail::matrix_store::create(
-				local_num_rows, local_num_cols, layout, type, num_nodes,
-				in_mem, group);
-		auto op = type.get_set_seq(*lstart, *stride, *seq_ele_stride,
-				num_rows, num_cols, byrow);
-		store->set_data(*op);
-		stores[i] = store;
+		auto row_op = type.get_set_seq(*lstart, *stride, num_rows, num_cols,
+				byrow, matrix_layout_t::L_ROW);
+		auto col_op = type.get_set_seq(*lstart, *stride, num_rows, num_cols,
+				byrow, matrix_layout_t::L_COL);
+		stores[i] = detail::set_data_matrix_store::create(row_op, col_op,
+				local_num_rows, local_num_cols, layout, num_nodes);
 	}
 	return block_matrix::create(detail::combined_matrix_store::create(
 				stores, layout));
 
+}
+
+dense_matrix::ptr block_matrix::create_repeat_layout(col_vec::ptr vec,
+		size_t num_rows, size_t num_cols, matrix_layout_t layout,
+		size_t block_size, bool byrow, int num_nodes)
+{
+	if (num_rows > num_cols && num_cols < block_size)
+		return dense_matrix::create_repeat(vec, num_rows, num_cols, layout,
+				byrow, num_nodes);
+	else if (num_rows <= num_cols && num_rows < block_size)
+		return dense_matrix::create_repeat(vec, num_rows, num_cols, layout,
+				byrow, num_nodes);
+
+	size_t num_blocks;
+	if (num_rows > num_cols)
+		num_blocks = div_ceil<size_t>(num_cols, block_size);
+	else
+		num_blocks = div_ceil<size_t>(num_rows, block_size);
+
+	if (byrow && vec->get_length() != num_cols) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix width";
+		return block_matrix::ptr();
+	}
+	else if (!byrow && vec->get_length() != num_rows) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix height";
+		return block_matrix::ptr();
+	}
+
+	std::vector<detail::matrix_store::const_ptr> stores(num_blocks);
+	// repeat the vector by row and is wide
+	if (byrow && num_cols > num_rows) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t sub_nrow = std::min(block_size, num_rows - i * block_size);
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(vec,
+					sub_nrow, num_cols, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, layout));
+	}
+	// repeat the vector by col and is tall
+	else if (!byrow && num_rows > num_cols) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			size_t sub_ncol = std::min(block_size, num_cols - i * block_size);
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(vec,
+					num_rows, sub_ncol, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					stores, layout));
+	}
+
+	// In the following two cases, we need to break the vector into pieces.
+	dense_matrix::ptr im_vec = vec->conv_store(true, -1);
+	std::vector<col_vec::ptr> sub_vecs(num_blocks);
+	for (size_t i = 0; i < sub_vecs.size(); i++) {
+		size_t sub_nrow = std::min(block_size,
+				vec->get_length() - i * block_size);
+		detail::local_matrix_store::const_ptr part
+			= im_vec->get_data().get_portion(i * block_size, 0, sub_nrow, 1);
+		detail::mem_matrix_store::ptr sub = detail::mem_matrix_store::create(
+				sub_nrow, 1, matrix_layout_t::L_COL, vec->get_type(), -1);
+		memcpy(sub->get_raw_arr(), part->get_raw_arr(),
+				part->get_entry_size() * sub_nrow);
+		sub_vecs[i] = col_vec::create(sub);
+	}
+
+	// repeat the vector by row and is tall
+	if (num_rows > num_cols) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(sub_vecs[i],
+					num_rows, sub_vecs[i]->get_length(), layout, byrow,
+					num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+	}
+	// repeat the vector by col and is wide
+	else {
+		for (size_t i = 0; i < stores.size(); i++) {
+			dense_matrix::ptr tmp = dense_matrix::create_repeat(sub_vecs[i],
+					sub_vecs[i]->get_length(), num_cols, layout, byrow, num_nodes);
+			stores[i] = tmp->get_raw_store();
+		}
+	}
+	return block_matrix::create(detail::combined_matrix_store::create(
+				stores, layout));
 }
 
 matrix_layout_t block_matrix::store_layout() const
@@ -231,18 +328,21 @@ bool block_matrix::is_virtual() const
 	return store->get_mat_ref(0).is_virtual();
 }
 
-void block_matrix::materialize_self() const
+bool block_matrix::materialize_self() const
 {
 	if (!is_virtual())
-		return;
+		return true;
 
 	std::vector<detail::matrix_store::const_ptr> res_stores(store->get_num_mats());
+	bool ret = true;
 	// TODO materializing individual matrices in serial may hurt performance.
 	for (size_t i = 0; i < store->get_num_mats(); i++) {
 		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
-		mat->materialize_self();
+		ret = ret && mat->materialize_self();
 		res_stores[i] = mat->get_raw_store();
 	}
+	if (!ret)
+		return false;
 
 	block_matrix *mutable_this = const_cast<block_matrix *>(this);
 	mutable_this->store = detail::combined_matrix_store::create(res_stores,
@@ -251,6 +351,7 @@ void block_matrix::materialize_self() const
 	// This is only way to change the store pointer in dense_matrix.
 	dense_matrix::ptr tmp = dense_matrix::create(this->store);
 	mutable_this->dense_matrix::assign(*tmp);
+	return true;
 }
 
 void block_matrix::set_materialize_level(materialize_level level,
@@ -301,6 +402,11 @@ void block_matrix::assign(const dense_matrix &mat)
 
 dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
 	auto cols = store->get_cols(idxs);
 	if (cols == NULL)
 		return dense_matrix::ptr();
@@ -310,6 +416,11 @@ dense_matrix::ptr block_matrix::get_cols(const std::vector<off_t> &idxs) const
 
 dense_matrix::ptr block_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
 	auto rows = store->get_rows(idxs);
 	if (rows == NULL)
 		return dense_matrix::ptr();
@@ -522,6 +633,10 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
 			matrix_layout_t out_layout) const
 {
+	bool use_blas = left_op == NULL;
+	if (use_blas)
+		return multiply_wide(m, out_layout);
+
 	std::vector<detail::matrix_store::const_ptr> right_mats;
 	const block_matrix *block_m = dynamic_cast<const block_matrix *>(&m);
 	if (block_m == NULL)
@@ -531,54 +646,20 @@ dense_matrix::ptr block_matrix::inner_prod_wide(const dense_matrix &m,
 			right_mats.push_back(block_m->store->get_mat(i));
 	}
 
-	detail::matrix_store::ptr res;
-	// If the left operator isn't defined, we assume it uses BLAS for matrix
-	// multiplication.
-	bool use_blas = left_op == NULL;
-	if (use_blas) {
-		assert(get_type() == m.get_type());
-		assert(get_type() == get_scalar_type<double>()
-				|| get_type() == get_scalar_type<float>());
-		res = detail::matrix_store::create(get_num_rows(), m.get_num_cols(),
-				out_layout, get_type(), -1, true);
-	}
-	else
-		res = detail::matrix_store::create(get_num_rows(), m.get_num_cols(),
-				out_layout, right_op->get_output_type(), -1, true);
-	// Each time we take one matrix in the right group and perform inner product
-	// with all matrices in the left group.
-	size_t right_block_size = right_mats[0]->get_num_cols();
+	std::vector<detail::matrix_store::const_ptr> blocks(
+			store->get_num_mats() * right_mats.size());
 	for (size_t i = 0; i < right_mats.size(); i++) {
 		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
-		std::vector<dense_matrix::ptr> tmp_mats(store->get_num_mats());
+		dense_matrix::ptr res;
 		for (size_t j = 0; j < store->get_num_mats(); j++) {
 			dense_matrix::ptr left = dense_matrix::create(store->get_mat(j));
-			if (use_blas)
-				tmp_mats[j] = left->multiply(*right, out_layout);
-			else
-				tmp_mats[j] = left->inner_prod(*right, left_op, right_op,
-						out_layout);
+			res = left->inner_prod(*right, left_op, right_op, out_layout);
 			const_cast<detail::matrix_store &>(left->get_data()).set_cache_portion(false);
-		}
-		materialize(tmp_mats, false);
-
-		// We now copy the inner product result to the final matrix.
-		size_t col_idx = i * right_block_size;
-		for (size_t j = 0; j < tmp_mats.size(); j++) {
-			size_t row_idx = j * block_size;
-			size_t num_rows = std::min(block_size, get_num_rows() - row_idx);
-			size_t num_cols = std::min(right_block_size,
-					m.get_num_cols() - col_idx);
-			assert(num_rows == tmp_mats[j]->get_num_rows());
-			assert(num_cols == tmp_mats[j]->get_num_cols());
-			detail::local_matrix_store::ptr res_part = res->get_portion(row_idx,
-					col_idx, num_rows, num_cols);
-			detail::local_matrix_store::const_ptr src_part
-				= tmp_mats[j]->get_data().get_portion(0);
-			res_part->copy_from(*src_part);
+			blocks[j * right_mats.size() + i] = res->get_raw_store();
 		}
 	}
-	return dense_matrix::create(res);
+	return dense_matrix::create(detail::block_sink_store::create(blocks,
+				store->get_num_mats(), right_mats.size()));
 }
 
 dense_matrix::ptr block_matrix::multiply_tall(const dense_matrix &m,
@@ -713,7 +794,10 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
 	if (mat.get_data().is_sparse()) {
-		assert(is_wide());
+		if (!is_wide()) {
+			BOOST_LOG_TRIVIAL(error) << "the sparse matrix has to be wide";
+			return dense_matrix::ptr();
+		}
 
 		// TODO we need to deal with tall matrix.
 		detail::combined_matrix_store::const_ptr combined
@@ -747,7 +831,10 @@ dense_matrix::ptr block_matrix::multiply(const dense_matrix &mat,
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
 			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
-			return t_res->transpose();
+			if (t_res)
+				return t_res->transpose();
+			else
+				return dense_matrix::ptr();
 		}
 
 		if (is_wide())
@@ -839,14 +926,14 @@ dense_matrix::ptr block_matrix::mapply2(const dense_matrix &m,
 		return dense_matrix::ptr();
 	}
 	const block_matrix *block_m = dynamic_cast<const block_matrix *>(&m);
-	if (block_m == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "The input matrix isn't a block matrix";
-		return dense_matrix::ptr();
-	}
-	if (block_m->get_block_size() != get_block_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The input matrix has a different block size";
-		return dense_matrix::ptr();
+	if (block_m == NULL || block_m->get_block_size() != get_block_size()) {
+		// TODO if this matrix is a wide matrix and `m' is stored in row major
+		// order or if this matrix is a tall matrix and `m' is stored in col
+		// major order, we can still split `m' into smaller sizes to improve
+		// performance.
+		dense_matrix::ptr this_mat = dense_matrix::create(get_raw_store());
+		dense_matrix::ptr mat2 = dense_matrix::create(m.get_raw_store());
+		return this_mat->mapply2(*mat2, op);
 	}
 
 	std::vector<detail::matrix_store::const_ptr> res_stores(
@@ -1036,9 +1123,10 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 		if (margin == matrix_margin::BOTH) {
 			ret = detail::matrix_store::ptr(new agg_block_sink_store(sinks, op));
 		}
-		else
-			// For aggregation, we always return a single-col matrix.
+		else if (margin == matrix_margin::MAR_ROW)
 			ret = detail::block_sink_store::create(sinks, sinks.size(), 1);
+		else
+			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
 		return dense_matrix::create(ret);
 	}
 }

@@ -7,7 +7,7 @@
 \alias{fm.is.sparse}
 \alias{fm.is.sym}
 \alias{fm.matrix.layout}
-\title{The information of a FlashMatrix object}
+\title{The information of a FlashR object}
 \usage{
 fm.is.sym(fm)
 
@@ -20,23 +20,24 @@ fm.is.sink(fm)
 fm.in.mem(fm)
 }
 \arguments{
-\item{fm}{The FlashMatrix object}
+\item{fm}{The FlashR object}
 }
 \value{
 \code{fm.is.sym} and \code{fm.is.sparse} returns boolean constants.
 }
 \description{
-These functions provide the basic information of a FlashMatrix object.
+These functions provide the basic information of a FlashR object.
 }
 \details{
 \code{fm.is.sym} indicates whether a matrix is symmetric.
 
 \code{fm.matrix.layout} indicates how data in a matrix is organized.
+
 \code{fm.is.sparse} indicates whether a matrix is sparse.
 
-\code{fm.is.sink} indicates whether a FlashMatrix object is a sink matrix.
+\code{fm.is.sink} indicates whether a FlashR object is a sink matrix.
 
-\code{fm.in.mem} indicates whether a FlashMatrix object is stored in memory.
+\code{fm.in.mem} indicates whether a FlashR object is stored in memory.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

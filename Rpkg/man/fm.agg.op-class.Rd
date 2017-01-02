@@ -4,10 +4,10 @@
 \name{fm.agg.op-class}
 \alias{fm.agg.op-class}
 \title{An S4 class to represent an aggregation operator used in aggregation
-operations in FlashMatrix.}
+operations in FlashR.}
 \description{
 An S4 class to represent an aggregation operator used in aggregation
-operations in FlashMatrix.
+operations in FlashR.
 }
 \section{Slots}{
 

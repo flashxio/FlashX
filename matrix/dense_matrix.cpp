@@ -43,6 +43,7 @@
 #include "sink_matrix.h"
 #include "data_frame.h"
 #include "project_matrix_store.h"
+#include "set_data_matrix_store.h"
 
 namespace fm
 {
@@ -271,6 +272,12 @@ public:
 		res_bufs.resize(num_threads);
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
@@ -280,7 +287,7 @@ public:
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
 		assert(mats.size() == 1);
 		return std::string("(") + (mats[0]->get_name()
-					+ "*") + Bstore->get_name() + std::string(")");
+					+ "%*%") + Bmem->get_name() + std::string(")");
 	}
 };
 
@@ -304,6 +311,12 @@ public:
 			= std::static_pointer_cast<fm::detail::local_matrix_store>(
 					out.transpose());
 		op.run(t_ins, *t_out);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return op.is_resizable(local_start_col, local_start_row,
+				local_num_cols, local_num_rows);
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -360,8 +373,9 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -461,7 +475,10 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
 			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
-			return t_res->transpose();
+			if (t_res)
+				return t_res->transpose();
+			else
+				return dense_matrix::ptr();
 		}
 
 		if (is_wide())
@@ -517,13 +534,24 @@ dense_matrix::ptr dense_matrix::apply_scalar(
 	return sapply(bulk_uoperate::const_ptr(new apply_scalar_op(var, op)));
 }
 
-void dense_matrix::materialize_self() const
+bool dense_matrix::materialize_self() const
 {
 	if (!store->is_virtual())
-		return;
-	const_cast<dense_matrix *>(this)->store
-		= detail::virtual_matrix_store::cast(store)->materialize(
+		return true;
+
+	detail::matrix_store::const_ptr tmp;
+	try {
+		tmp = detail::virtual_matrix_store::cast(store)->materialize(
 				store->is_in_mem(), store->get_num_nodes());
+	} catch (std::exception &e) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("fail to materialize: %1%") % e.what();
+	}
+	if (tmp == NULL)
+		return false;
+
+	const_cast<dense_matrix *>(this)->store = tmp;
+	return true;
 }
 
 std::vector<detail::virtual_matrix_store::const_ptr> dense_matrix::get_compute_matrices() const
@@ -579,6 +607,12 @@ public:
 			assert(vals->get_num_cols() == 1);
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
+	}
+
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -607,6 +641,12 @@ public:
 		this->op = op;
 		if (vals)
 			assert(vals->get_num_cols() == 1);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -738,18 +778,19 @@ dense_matrix::ptr dense_matrix::mapply_cols(col_vec::const_ptr vals,
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
 	mapply_col_op::const_ptr mapply_op;
-	// If this is a tall matrix, the input vector may also be stored on
-	// disks. We should give it as the input of mapply_portion.
-	if (!is_wide()) {
-		ins.push_back(vals->get_raw_store());
-		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
-					NULL, op, get_num_rows(), get_num_cols()));
-	}
-	else {
+	// If this is a wide matrix or a square matrix.
+	if (is_wide() || get_num_rows() == get_num_cols()) {
 		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
 		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
 					detail::mem_matrix_store::cast(mem_mat->get_raw_store()),
 					op, get_num_rows(), get_num_cols()));
+	}
+	// If this is a tall matrix, the input vector may also be stored on
+	// disks. We should give it as the input of mapply_portion.
+	else {
+		ins.push_back(vals->get_raw_store());
+		mapply_op = mapply_col_op::const_ptr(new mapply_col_op(
+					NULL, op, get_num_rows(), get_num_cols()));
 	}
 	detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
 			mapply_op, this->store_layout());
@@ -789,6 +830,7 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
 					NULL, op, get_num_rows(), get_num_cols()));
 	}
+	// If this is a tall matrix or a square matrix.
 	else {
 		dense_matrix::ptr mem_mat = vals->conv_store(true, -1);
 		mapply_op = mapply_row_op::const_ptr(new mapply_row_op(
@@ -848,8 +890,8 @@ void mapply2_op::run(const std::vector<detail::local_matrix_store::const_ptr> &i
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == ins[1]->get_global_start_row());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
-		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::part_dim_t dim = is_wide()
+		? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1;
 	detail::mapply2(*ins[0], *ins[1], *op, dim, out);
 }
 
@@ -880,6 +922,39 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 				get_num_cols()));
 	return dense_matrix::create(__mapply_portion_virtual(ins, mapply_op,
 				this->store_layout()));
+}
+
+static std::pair<dense_matrix::ptr, dense_matrix::ptr> match_type(
+		const dense_matrix &m1, const dense_matrix &m2)
+{
+	dense_matrix::ptr new_m1 = m1.clone();
+	dense_matrix::ptr new_m2 = m2.clone();
+	// If these two matrices don't have the same element type, we need to
+	// cast one of them to match the other.
+	if (m1.get_type() != m2.get_type()) {
+		// The element type is ordered based on the type size.
+		if ((int) m1.get_type().get_type() > (int) m2.get_type().get_type())
+			new_m2 = new_m2->cast_ele_type(new_m1->get_type());
+		else
+			new_m1 = new_m1->cast_ele_type(new_m2->get_type());
+	}
+	return std::pair<dense_matrix::ptr, dense_matrix::ptr>(new_m1, new_m2);
+}
+
+dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
+		basic_ops::op_idx idx) const
+{
+	if (this->get_type() == m.get_type()) {
+		const bulk_operate &op = *get_type().get_basic_ops().get_op(idx);
+		return this->mapply2(m, bulk_operate::conv2ptr(op));
+	}
+	else {
+		auto match_res = match_type(*this, m);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		const bulk_operate &op = *new_this->get_type().get_basic_ops().get_op(idx);
+		return new_this->mapply2(*new_m, bulk_operate::conv2ptr(op));
+	}
 }
 
 namespace
@@ -914,8 +989,8 @@ void sapply_op::run(const std::vector<detail::local_matrix_store::const_ptr> &in
 	assert(ins.size() == 1);
 	assert(ins[0]->get_global_start_col() == out.get_global_start_col());
 	assert(ins[0]->get_global_start_row() == out.get_global_start_row());
-	detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
-		? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+	detail::part_dim_t dim = is_wide()
+		? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1;
 	detail::sapply(*ins[0], *op, dim, out);
 }
 
@@ -950,6 +1025,17 @@ dense_matrix::dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 				type.create_scalar(), nrow, ncol, layout, num_nodes));
 }
 
+dense_matrix::ptr dense_matrix::create(detail::matrix_store::const_ptr store)
+{
+	if (store->get_num_rows() == 0 || store->get_num_cols() == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
+	return dense_matrix::ptr(new dense_matrix(store));
+}
+
 dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes,
 		bool in_mem, safs::safs_file_group::ptr group)
@@ -974,10 +1060,148 @@ dense_matrix::ptr dense_matrix::create_const(scalar_variable::ptr val,
 				matrix_conf.get_block_size(), num_nodes, in_mem, group);
 }
 
+namespace
+{
+
+/*
+ * In this case, we copy the entire vector to the destination array each time.
+ */
+class repeat_operate: public set_operate
+{
+	detail::mem_col_matrix_store::const_ptr vec;
+public:
+	repeat_operate(detail::mem_col_matrix_store::const_ptr vec) {
+		this->vec = vec;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		assert(num_eles == vec->get_num_rows());
+		memcpy(arr, vec->get_raw_arr(), num_eles * vec->get_entry_size());
+	}
+
+	virtual const scalar_type &get_type() const {
+		return vec->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new repeat_operate(vec));
+	}
+};
+
+/*
+ * In this case, we repeat one of the elements in the vector in the destination
+ * array each time.
+ */
+class repeat_ele_operate: public set_operate
+{
+	detail::mem_col_matrix_store::const_ptr vec;
+	// Whether or not to repeat an element in a row.
+	bool in_row;
+
+	void repeat_ele(void *dst, const void *src, size_t num_eles) const {
+		for (size_t i = 0; i < num_eles; i++)
+			memcpy(((char *) dst) + i * vec->get_entry_size(), src,
+					vec->get_entry_size());
+	}
+public:
+	repeat_ele_operate(detail::mem_col_matrix_store::const_ptr vec, bool in_row) {
+		this->vec = vec;
+		this->in_row = in_row;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		if (in_row)
+			repeat_ele(arr, vec->get(row_idx, 0), num_eles);
+		else
+			repeat_ele(arr, vec->get(col_idx, 0), num_eles);
+	}
+
+	virtual const scalar_type &get_type() const {
+		return vec->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new repeat_ele_operate(vec, !in_row));
+	}
+};
+
+}
+
+dense_matrix::ptr dense_matrix::create_repeat(col_vec::ptr vec, size_t nrow,
+		size_t ncol, matrix_layout_t layout, bool byrow, int num_nodes)
+{
+	if (nrow == 0 || ncol == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't create a matrix with 0 rows/cols";
+		return dense_matrix::ptr();
+	}
+
+	size_t long_dim = std::max(nrow, ncol);
+	size_t short_dim = std::min(nrow, ncol);
+	// We don't want to create a small block matrix.
+	if (long_dim > detail::EM_matrix_store::CHUNK_SIZE
+			&& short_dim > matrix_conf.get_block_size())
+		return block_matrix::create_repeat_layout(vec, nrow, ncol, layout,
+				matrix_conf.get_block_size(), byrow, num_nodes);
+
+	if (byrow && vec->get_length() != ncol) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix width";
+		return dense_matrix::ptr();
+	}
+	else if (!byrow && vec->get_length() != nrow) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't repeat a vector whose length doesn't match matrix height";
+		return dense_matrix::ptr();
+	}
+
+	// This is a tall matrix and we repeat the vector by rows.
+	if (byrow && nrow > ncol) {
+		dense_matrix::ptr tmp = vec->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr vec
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(vec);
+		set_operate::const_ptr row_op(new repeat_operate(vec));
+		set_operate::const_ptr col_op(new repeat_ele_operate(vec, false));
+		return dense_matrix::create(detail::set_data_matrix_store::create(
+					row_op, col_op, nrow, ncol, layout, num_nodes));
+	}
+	// This is a wide matrix and we repeat the vector by rows.
+	else if (byrow) {
+		detail::matrix_store::const_ptr store = vec->get_raw_store();
+		assert(store->get_num_cols() == 1);
+		std::vector<detail::matrix_store::const_ptr> rows(nrow,
+				store->transpose());
+		return dense_matrix::create(detail::combined_matrix_store::create(rows,
+					layout));
+	}
+	// This is a tall matrix and we repeat the vector by columns.
+	else if (nrow > ncol) {
+		detail::matrix_store::const_ptr store = vec->get_raw_store();
+		assert(store->get_num_cols() == 1);
+		std::vector<detail::matrix_store::const_ptr> cols(ncol, store);
+		return dense_matrix::create(detail::combined_matrix_store::create(cols,
+					layout));
+	}
+	// This is a wide matrix and we repeat the vector by columns.
+	else {
+		dense_matrix::ptr tmp = vec->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr vec
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(vec);
+		set_operate::const_ptr row_op(new repeat_ele_operate(vec, true));
+		set_operate::const_ptr col_op(new repeat_operate(vec));
+		return dense_matrix::create(detail::set_data_matrix_store::create(
+					row_op, col_op, nrow, ncol, layout, num_nodes));
+	}
+}
+
 dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
-		scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
-		size_t nrow, size_t ncol, matrix_layout_t layout, bool byrow,
-		int num_nodes, bool in_mem, safs::safs_file_group::ptr group)
+		scalar_variable::ptr stride, size_t nrow, size_t ncol,
+		matrix_layout_t layout, bool byrow, int num_nodes, bool in_mem,
+		safs::safs_file_group::ptr group)
 {
 	if (nrow == 0 || ncol == 0) {
 		BOOST_LOG_TRIVIAL(error)
@@ -991,17 +1215,17 @@ dense_matrix::ptr dense_matrix::create_seq(scalar_variable::ptr start,
 	// We don't want to create a small block matrix.
 	if (long_dim < detail::EM_matrix_store::CHUNK_SIZE
 			|| short_dim <= matrix_conf.get_block_size()) {
-		detail::matrix_store::ptr store = detail::matrix_store::create(
-				nrow, ncol, layout, type, num_nodes, in_mem, group);
-		auto op = type.get_set_seq(*start, *stride, *seq_ele_stride,
-				nrow, ncol, byrow);
-		store->set_data(*op);
+		auto row_op = type.get_set_seq(*start, *stride, nrow, ncol, byrow,
+				matrix_layout_t::L_ROW);
+		auto col_op = type.get_set_seq(*start, *stride, nrow, ncol, byrow,
+				matrix_layout_t::L_COL);
+		detail::matrix_store::ptr store = detail::set_data_matrix_store::create(
+				row_op, col_op, nrow, ncol, layout, num_nodes);
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
 	else
-		return block_matrix::create_seq_layout(start, stride, seq_ele_stride,
-				nrow, ncol, layout, matrix_conf.get_block_size(), byrow,
-				num_nodes, in_mem, group);
+		return block_matrix::create_seq_layout(start, stride, nrow, ncol, layout,
+				matrix_conf.get_block_size(), byrow, num_nodes, in_mem, group);
 }
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
@@ -1021,6 +1245,9 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 			|| short_dim <= matrix_conf.get_block_size()) {
 		detail::matrix_store::ptr store = detail::matrix_store::create(
 				nrow, ncol, layout, type, num_nodes, in_mem, group);
+		if (store == NULL)
+			return dense_matrix::ptr();
+
 		store->set_data(op);
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
@@ -1051,6 +1278,9 @@ dense_matrix::ptr dense_matrix::transpose() const
 namespace
 {
 
+/*
+ * This gets rows from a wide matrix.
+ */
 class get_rows_op: public detail::portion_mapply_op
 {
 	std::vector<off_t> row_idxs;
@@ -1059,6 +1289,12 @@ public:
 			const scalar_type &type): detail::portion_mapply_op(row_idxs.size(),
 				num_cols, type) {
 		this->row_idxs = row_idxs;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
 	}
 
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1074,6 +1310,9 @@ public:
 	}
 };
 
+/*
+ * This gets cols from a tall matrix.
+ */
 class get_cols_op: public detail::portion_mapply_op
 {
 	std::vector<off_t> col_idxs;
@@ -1082,6 +1321,12 @@ public:
 			const scalar_type &type): detail::portion_mapply_op(num_rows,
 				col_idxs.size(), type) {
 		this->col_idxs = col_idxs;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
 	}
 
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1175,6 +1420,11 @@ detail::portion_mapply_op::const_ptr get_cols_op::transpose() const
 
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
 	for (size_t i = 0; i < idxs.size(); i++)
 		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_cols()) {
 			BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
@@ -1191,6 +1441,11 @@ dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 
 dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
+	if (idxs.empty()) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
 	for (size_t i = 0; i < idxs.size(); i++)
 		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_rows()) {
 			BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
@@ -1217,6 +1472,272 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 	}
 	else
 		return dense_matrix::ptr();
+}
+
+namespace
+{
+
+/*
+ * This gets rows from a small matrix and outputs a tall matrix.
+ */
+class repeat_rows_op: public detail::portion_mapply_op
+{
+	detail::mem_row_matrix_store::const_ptr store;
+	volatile bool success;
+public:
+	repeat_rows_op(detail::mem_row_matrix_store::const_ptr store,
+			size_t tot_nrow): detail::portion_mapply_op(tot_nrow,
+				store->get_num_cols(), store->get_type()) {
+		this->store = store;
+		this->success = true;
+		assert(tot_nrow > store->get_num_cols());
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("repeat_rows(") + mats[0]->get_name() + ")";
+	}
+};
+
+/*
+ * This gets cols from a small matrix and outputs a wide matrix.
+ */
+class repeat_cols_op: public detail::portion_mapply_op
+{
+	detail::mem_col_matrix_store::const_ptr store;
+	volatile bool success;
+public:
+	repeat_cols_op(detail::mem_col_matrix_store::const_ptr store,
+			size_t tot_ncol): detail::portion_mapply_op(store->get_num_rows(),
+				tot_ncol, store->get_type()) {
+		this->store = store;
+		this->success = true;
+		assert(store->get_num_rows() < tot_ncol);
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("repeat_cols(") + mats[0]->get_name() + ")";
+	}
+};
+
+void repeat_rows_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// The operation might fail in one portion.
+	// If it does, we don't need to perform computation on other portions.
+	if (!success)
+		return;
+
+	assert(ins[0]->get_num_cols() == 1);
+	assert(out.get_num_cols() == store->get_num_cols());
+	assert(out.store_layout() == matrix_layout_t::L_ROW);
+	detail::local_row_matrix_store &row_out
+		= static_cast<detail::local_row_matrix_store &>(out);
+	const size_t *idx
+		= reinterpret_cast<const size_t *>(ins[0]->get_raw_arr());
+	for (size_t i = 0; i < ins[0]->get_num_rows(); i++) {
+		if (idx[i] >= store->get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"index (%1%) exceeds the number of rows (%2%) in the matrix")
+				% idx[i] % store->get_num_rows();
+			const_cast<repeat_rows_op *>(this)->success = false;
+			break;
+		}
+		memcpy(row_out.get_row(i), store->get_row(idx[i]),
+				out.get_num_cols() * out.get_entry_size());
+	}
+}
+
+void repeat_cols_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// The operation might fail in one portion.
+	// If it does, we don't need to perform computation on other portions.
+	if (!success)
+		return;
+
+	assert(ins[0]->get_num_rows() == 1);
+	assert(out.get_num_rows() == store->get_num_rows());
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+	const size_t *idx
+		= reinterpret_cast<const size_t *>(ins[0]->get_raw_arr());
+	for (size_t i = 0; i < ins[0]->get_num_cols(); i++) {
+		if (idx[i] >= store->get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "the index exceeds the number of cols in the matrix";
+			const_cast<repeat_cols_op *>(this)->success = false;
+			break;
+		}
+		memcpy(col_out.get_col(i), store->get_col(idx[i]),
+				out.get_num_rows() * out.get_entry_size());
+	}
+}
+
+detail::portion_mapply_op::const_ptr repeat_rows_op::transpose() const
+{
+	detail::matrix_store::const_ptr t = store->transpose();
+	detail::mem_col_matrix_store::const_ptr col_store
+		= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(t);
+	assert(col_store);
+	return portion_mapply_op::const_ptr(new repeat_cols_op(col_store,
+				get_out_num_rows()));
+}
+
+detail::portion_mapply_op::const_ptr repeat_cols_op::transpose() const
+{
+	detail::matrix_store::const_ptr t = store->transpose();
+	detail::mem_row_matrix_store::const_ptr row_store
+		= std::dynamic_pointer_cast<const detail::mem_row_matrix_store>(t);
+	assert(row_store);
+	return portion_mapply_op::const_ptr(new repeat_rows_op(row_store,
+				get_out_num_cols()));
+}
+
+}
+
+dense_matrix::ptr dense_matrix::get_cols(col_vec::ptr idxs) const
+{
+	if (idxs->get_length() == 0) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 cols";
+		return dense_matrix::ptr();
+	}
+
+	dense_matrix::ptr t = transpose();
+	assert(t);
+	dense_matrix::ptr ret = t->get_rows(idxs);
+	if (ret == NULL)
+		return dense_matrix::ptr();
+	return ret->transpose();
+}
+
+static std::vector<detail::mem_row_matrix_store::const_ptr> split_mat_vertial(
+		detail::matrix_store::const_ptr store, size_t block_size)
+{
+	size_t num_blocks = div_ceil<size_t>(store->get_num_cols(), block_size);
+	std::vector<detail::mem_row_matrix_store::const_ptr> blocks(num_blocks);
+	for (size_t i = 0; i < num_blocks; i++) {
+		size_t sub_num_cols = std::min(block_size,
+				store->get_num_cols() - i * block_size);
+		detail::mem_row_matrix_store::ptr row_store
+			= detail::mem_row_matrix_store::create(store->get_num_rows(),
+					sub_num_cols, store->get_type());
+		detail::local_matrix_store::const_ptr src_part
+			= store->get_portion(0, i * block_size, store->get_num_rows(),
+					sub_num_cols);
+		detail::local_matrix_store::ptr dst_part = row_store->get_portion(0, 0,
+				row_store->get_num_rows(), row_store->get_num_cols());
+		dst_part->copy_from(*src_part);
+		blocks[i] = row_store;
+	}
+	return blocks;
+}
+
+dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
+{
+	if (idxs->get_length() == 0) {
+		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
+		return dense_matrix::ptr();
+	}
+
+	// In this case, we just read the rows from the current matrix physically
+	// and outputs a materialized matrix.
+	// If the output matrix is still wide
+	if (idxs->get_length() < get_num_cols()
+			// or the number of output rows is smaller than the number of
+			// original rows.
+			|| idxs->get_length() < get_num_rows()) {
+		dense_matrix::ptr tmp = idxs->cast_ele_type(get_scalar_type<off_t>());
+		tmp = tmp->conv2(matrix_layout_t::L_COL);
+		tmp = tmp->conv_store(true, -1);
+		detail::mem_col_matrix_store::const_ptr col_store
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					tmp->get_raw_store());
+		assert(col_store);
+		std::vector<off_t> std_idxs(idxs->get_length());
+		memcpy(std_idxs.data(), col_store->get_col(0),
+				idxs->get_length() * sizeof(off_t));
+		return get_rows(std_idxs);
+	}
+
+	// In this case, the output matrix is a tall matrix and the number of
+	// output rows is larger than the original matrix.
+	// We use a virtual matrix to represent the output matrix.
+
+	// If the matrix is very skinny or the output matrix is still small enough.
+	if (get_num_cols() <= matrix_conf.get_block_size()
+				|| idxs->get_length() <= detail::EM_matrix_store::CHUNK_SIZE) {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		tmp = tmp->conv_store(true, -1);
+		detail::mem_row_matrix_store::const_ptr row_store
+			= std::dynamic_pointer_cast<const detail::mem_row_matrix_store>(
+					tmp->get_raw_store());
+		assert(row_store);
+
+		std::vector<dense_matrix::const_ptr> mats(1,
+				col_vec::create(idxs->cast_ele_type(get_scalar_type<off_t>())));
+		detail::portion_mapply_op::const_ptr op(new repeat_rows_op(row_store,
+					idxs->get_length()));
+		return detail::mapply_portion(mats, op, matrix_layout_t::L_ROW);
+	}
+	// In this case, we output a wide and a large matrix.
+	else {
+		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+		tmp = tmp->conv_store(true, -1);
+		std::vector<detail::mem_row_matrix_store::const_ptr> blocks
+			= split_mat_vertial(tmp->get_raw_store(), matrix_conf.get_block_size());
+
+		std::vector<detail::matrix_store::const_ptr> out_stores(blocks.size());
+		std::vector<dense_matrix::const_ptr> mats(1,
+				col_vec::create(idxs->cast_ele_type(get_scalar_type<off_t>())));
+		for (size_t i = 0; i < blocks.size(); i++) {
+			detail::portion_mapply_op::const_ptr op(new repeat_rows_op(blocks[i],
+						idxs->get_length()));
+			dense_matrix::ptr tmp = detail::mapply_portion(mats, op,
+					matrix_layout_t::L_ROW);
+			out_stores[i] = tmp->get_raw_store();
+		}
+		return block_matrix::create(detail::combined_matrix_store::create(
+					out_stores, matrix_layout_t::L_ROW));
+	}
 }
 
 ////////////////////////////// Inner product //////////////////////////////////
@@ -1282,6 +1803,12 @@ public:
 		this->right_op = right_op;
 	}
 
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const;
 	virtual portion_mapply_op::const_ptr transpose() const;
@@ -1300,6 +1827,12 @@ public:
 	t_inner_prod_tall_op(const inner_prod_tall_op &_op): detail::portion_mapply_op(
 			_op.get_out_num_cols(), _op.get_out_num_rows(),
 			_op.get_output_type()), op(_op) {
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return op.is_resizable(local_start_col, local_start_row,
+				local_num_cols, local_num_rows);
 	}
 
 	virtual void run(
@@ -1361,8 +1894,9 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -1459,6 +1993,8 @@ public:
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
 			detail::local_matrix_store &out) const {
 		assert(ins.size() == 1);
+		// If we perform agg on rows, it implies that this matrix is a tall
+		// matrix.
 		detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
 			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 		// The output matrix is actually a vector.
@@ -1507,8 +2043,12 @@ static detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store
 		}
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = store;
+		size_t out_num_rows
+			= margin == matrix_margin::MAR_ROW ? store->get_num_rows() : 1;
+		size_t out_num_cols
+			= margin == matrix_margin::MAR_COL ? store->get_num_cols() : 1;
 		matrix_short_agg_op::const_ptr agg_op(new matrix_short_agg_op(
-					margin, op, store->get_num_rows(), 1));
+					margin, op, out_num_rows, out_num_cols));
 		return __mapply_portion_virtual(ins, agg_op, matrix_layout_t::L_COL);
 	}
 	if (!op->has_combine()) {
@@ -1579,6 +2119,16 @@ public:
 				out_num_rows, out_num_cols, op->get_output_type()) {
 		this->margin = margin;
 		this->op = op;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		if (margin == matrix_margin::MAR_ROW)
+			// We can only resize the number of the rows in this operation.
+			return local_num_cols == get_out_num_cols();
+		else
+			// We can only resize the number of the cols in this operation.
+			return local_num_rows == get_out_num_rows();
 	}
 
 	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
@@ -1766,6 +2316,8 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 					get_num_cols(), layout == matrix_layout_t::L_ROW));
 	}
 #endif
+	if (store->is_sink())
+		materialize_self();
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
@@ -1814,6 +2366,9 @@ dense_matrix::ptr dense_matrix::col_norm2() const
 	return sums->sapply(bulk_uoperate::conv2ptr(*op));
 }
 
+namespace
+{
+
 class copy_op: public detail::portion_mapply_op
 {
 public:
@@ -1847,6 +2402,8 @@ public:
 	}
 };
 
+}
+
 detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 		int num_nodes) const
 {
@@ -1869,6 +2426,8 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 		std::vector<detail::matrix_store::ptr> out_mats(1);
 		out_mats[0] = detail::matrix_store::create(get_num_rows(), get_num_cols(),
 				store_layout(), get_type(), num_nodes, in_mem);
+		if (out_mats[0] == NULL)
+			return detail::matrix_store::const_ptr();
 
 		detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
 					get_num_cols(), get_type()));
@@ -1951,6 +2510,7 @@ class groupby_long_row_mapply_op: public detail::portion_mapply_op
 	factor_col_vector::const_ptr labels;
 	detail::local_matrix_store::const_ptr llabels;
 	agg_operate::const_ptr op;
+	volatile bool success;
 public:
 	groupby_long_row_mapply_op(agg_operate::const_ptr op,
 			factor_col_vector::const_ptr labels,
@@ -1959,31 +2519,28 @@ public:
 				op->get_output_type()) {
 		this->op = op;
 		this->labels = labels;
-		this->llabels = labels->get_raw_store()->get_portion(0);
-		assert(this->llabels->get_num_rows() == labels->get_length());
+		detail::matrix_store::const_ptr tmp = labels->get_raw_store();
+		this->llabels = tmp->get_portion(0, 0, labels->get_num_rows(),
+				labels->get_num_cols());
+		assert(this->llabels);
+		success = true;
 	}
 
-	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		throw unsupported_exception(
-				"Don't support transpose of groupby_long_row_mapply_op");
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the cols in this operation.
+		return local_num_rows == get_out_num_rows();
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
 	}
 
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins,
-			detail::local_matrix_store &out) const {
-		assert(ins.size() == 1);
-		assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
-		assert(out.store_layout() == matrix_layout_t::L_ROW);
-		out.reset_data();
-		std::vector<bool> agg_flags(out.get_num_rows());
-		const detail::local_row_matrix_store &row_in
-			= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
-		detail::local_row_matrix_store &row_out
-			= static_cast<detail::local_row_matrix_store &>(out);
-		bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
-				detail::part_dim_t::PART_DIM2, row_out, agg_flags);
-		assert(ret);
-	}
+			detail::local_matrix_store &out) const;
 
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
@@ -1991,6 +2548,121 @@ public:
 		return std::string("groupby_row(") + mats[0]->get_name() + ")";
 	}
 };
+
+class groupby_long_col_mapply_op: public detail::portion_mapply_op
+{
+	factor_col_vector::const_ptr labels;
+	detail::local_matrix_store::const_ptr llabels;
+	agg_operate::const_ptr op;
+	volatile bool success;
+public:
+	groupby_long_col_mapply_op(agg_operate::const_ptr op,
+			factor_col_vector::const_ptr labels,
+			size_t num_rows): detail::portion_mapply_op(
+				num_rows, labels->get_factor().get_num_levels(),
+				op->get_output_type()) {
+		this->op = op;
+		this->labels = labels;
+		detail::matrix_store::const_ptr tmp = labels->get_raw_store();
+		this->llabels = tmp->get_portion(0, 0, labels->get_num_rows(),
+				labels->get_num_cols());
+		assert(this->llabels);
+		// We need to make sure the local matrix is wide.
+		if (this->llabels->get_num_cols() == 1 && this->llabels->get_num_rows() > 1)
+			this->llabels
+				= std::static_pointer_cast<const detail::local_matrix_store>(
+						this->llabels->transpose());
+		success = true;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		// We can only resize the number of the rows in this operation.
+		return local_num_cols == get_out_num_cols();
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("groupby_col(") + mats[0]->get_name() + ")";
+	}
+};
+
+detail::portion_mapply_op::const_ptr groupby_long_row_mapply_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new groupby_long_col_mapply_op(
+				op, labels, get_out_num_cols()));
+}
+
+void groupby_long_row_mapply_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// If we have failed on some portions, we don't need to run on
+	// the remaining portions.
+	if (!success)
+		return;
+
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+	assert(out.store_layout() == matrix_layout_t::L_ROW);
+	out.reset_data();
+	std::vector<bool> agg_flags(out.get_num_rows());
+	const detail::local_row_matrix_store &row_in
+		= static_cast<const detail::local_row_matrix_store &>(*ins[0]);
+	detail::local_row_matrix_store &row_out
+		= static_cast<detail::local_row_matrix_store &>(out);
+	// We are grouping very long rows. So this matrix has to be a wide matrix.
+	bool ret = detail::groupby(*llabels, row_in, *op, matrix_margin::MAR_ROW,
+			detail::part_dim_t::PART_DIM2, row_out, agg_flags);
+	if (!ret)
+		// This operation can only go one direction.
+		// so it's fine if multiple threads want to set it concurrently.
+		const_cast<groupby_long_row_mapply_op *>(this)->success = false;
+}
+
+detail::portion_mapply_op::const_ptr groupby_long_col_mapply_op::transpose() const
+{
+	return detail::portion_mapply_op::const_ptr(new groupby_long_row_mapply_op(
+				op, labels, get_out_num_rows()));
+}
+
+void groupby_long_col_mapply_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	// If we have failed on some portions, we don't need to run on
+	// the remaining portions.
+	if (!success)
+		return;
+
+	assert(ins.size() == 1);
+	assert(ins[0]->store_layout() == matrix_layout_t::L_COL);
+	assert(out.store_layout() == matrix_layout_t::L_COL);
+	out.reset_data();
+	std::vector<bool> agg_flags(out.get_num_cols());
+	const detail::local_col_matrix_store &col_in
+		= static_cast<const detail::local_col_matrix_store &>(*ins[0]);
+	detail::local_col_matrix_store &col_out
+		= static_cast<detail::local_col_matrix_store &>(out);
+	// We are grouping very long cols. So this matrix has to be a tall matrix.
+	bool ret = detail::groupby(*llabels, col_in, *op, matrix_margin::MAR_COL,
+			detail::part_dim_t::PART_DIM1, col_out, agg_flags);
+	if (!ret)
+		// This operation can only go one direction.
+		// so it's fine if multiple threads want to set it concurrently.
+		const_cast<groupby_long_col_mapply_op *>(this)->success = false;
+}
 
 }
 
@@ -2030,7 +2702,7 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 		detail::portion_mapply_op::const_ptr groupby_op(
 				new groupby_long_row_mapply_op(op, labels, get_num_cols()));
 		// TODO I need to make this step virtual.
-		detail::matrix_store::ptr ret = __mapply_portion(mats,
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(mats,
 				groupby_op, matrix_layout_t::L_ROW);
 		if (ret == NULL)
 			return dense_matrix::ptr();
@@ -2092,6 +2764,9 @@ public:
 
 	virtual const scalar_type &get_type() const {
 		return stores[0]->get_type();
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
 	}
 };
 
@@ -2160,6 +2835,9 @@ static dense_matrix::ptr rbind_block(const std::vector<block_matrix::ptr> &mats)
 				nrow, mem_stores[0]->get_num_cols(), matrix_layout_t::L_ROW,
 				mem_stores[0]->get_type(), matrix_conf.get_num_nodes(),
 				mem_stores[0]->is_in_mem());
+		if (indiv_store == NULL)
+			return dense_matrix::ptr();
+
 		// Copy the data over.
 		indiv_store->set_data(combined_set_operate(mem_stores));
 		indiv_stores[i] = indiv_store;
@@ -2217,6 +2895,9 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 	if (small) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(nrow,
 				ncol, mats[0]->store_layout(), type, -1, true);
+		if (res == NULL)
+			return dense_matrix::ptr();
+
 		off_t row_idx = 0;
 		for (size_t i = 0; i < mats.size(); i++) {
 			dense_matrix::ptr tmp = mats[i];
@@ -2283,6 +2964,9 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 		combined = detail::matrix_store::create(nrow, ncol,
 				matrix_layout_t::L_ROW, type, matrix_conf.get_num_nodes(),
 				in_mem);
+		if (combined == NULL)
+			return dense_matrix::ptr();
+
 		combined->set_data(combined_set_operate(mem_stores));
 	}
 	else {
@@ -2321,6 +3005,44 @@ dense_matrix::ptr dense_matrix::cbind(const std::vector<dense_matrix::ptr> &mats
 	if (combined)
 		combined = combined->transpose();
 	return combined;
+}
+
+dense_matrix::ptr dense_matrix::scale_cols(col_vec::const_ptr vals) const
+{
+	if (get_type() == vals->get_type()) {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale columns, it's the same as applying the vector to
+		// each row.
+		return mapply_rows(vals, multiply);
+	}
+	else {
+		auto match_res = match_type(*this, *vals);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
+				new_this->get_type().get_basic_ops().get_multiply());
+		return new_this->mapply_rows(col_vec::create(new_m), multiply);
+	}
+}
+
+dense_matrix::ptr dense_matrix::scale_rows(col_vec::const_ptr vals) const
+{
+	if (get_type() == vals->get_type()) {
+		bulk_operate::const_ptr multiply
+			= bulk_operate::conv2ptr(get_type().get_basic_ops().get_multiply());
+		// When we scale rows, it's the same as applying the vector to
+		// each column.
+		return mapply_cols(vals, multiply);
+	}
+	else {
+		auto match_res = match_type(*this, *vals);
+		dense_matrix::ptr new_this = match_res.first;
+		dense_matrix::ptr new_m = match_res.second;
+		bulk_operate::const_ptr multiply = bulk_operate::conv2ptr(
+				new_this->get_type().get_basic_ops().get_multiply());
+		return new_this->mapply_cols(col_vec::create(new_m), multiply);
+	}
 }
 
 }

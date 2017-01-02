@@ -147,8 +147,12 @@ public:
 		return partial_res;
 	}
 
-	const agg_operate &get_agg_op() const {
-		return *op;
+	matrix_margin get_margin() const {
+		return margin;
+	}
+
+	agg_operate::const_ptr get_agg_op() const {
+		return op;
 	}
 
 	virtual void run(const std::vector<local_matrix_store::const_ptr> &ins) const;
@@ -205,7 +209,13 @@ static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
 {
 	if (margin == matrix_margin::MAR_ROW)
 		return data.get_num_rows();
-	else if (margin == matrix_margin::MAR_COL)
+	else
+		return 1;
+}
+
+static size_t get_num_cols_agg(const matrix_store &data, matrix_margin margin)
+{
+	if (margin == matrix_margin::MAR_COL)
 		return data.get_num_cols();
 	else
 		return 1;
@@ -213,7 +223,7 @@ static size_t get_num_rows_agg(const matrix_store &data, matrix_margin margin)
 
 agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 		matrix_margin margin, agg_operate::const_ptr op): sink_store(
-			get_num_rows_agg(*data, margin), 1,
+			get_num_rows_agg(*data, margin), get_num_cols_agg(*data, margin),
 			data->is_in_mem(), op->get_output_type())
 {
 	this->data = data;
@@ -238,7 +248,7 @@ agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 				partial_res, margin, op));
 }
 
-matrix_store::ptr agg_matrix_store::get_agg_res() const
+matrix_store::const_ptr agg_matrix_store::get_agg_res() const
 {
 	std::shared_ptr<matrix_long_agg_op> agg_op
 		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
@@ -263,9 +273,17 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 		assert(valid_row >= 0);
 		memcpy(res->get_raw_arr(), partial_res->get_row(valid_row),
 				partial_res->get_num_cols() * partial_res->get_entry_size());
-		assert(res->get_num_rows() == get_num_rows());
-		assert(res->get_num_cols() == get_num_cols());
-		return res;
+		if ((get_num_rows() == 1 && get_num_cols() == 1)
+				|| (get_num_rows() > 1 && get_num_cols() == 1)) {
+			assert(res->get_num_rows() == get_num_rows());
+			assert(res->get_num_cols() == get_num_cols());
+			return res;
+		}
+		else {
+			assert(res->get_num_rows() == get_num_cols());
+			assert(res->get_num_cols() == get_num_rows());
+			return res->transpose();
+		}
 	}
 	else
 		local_res = partial_res->get_local_matrix();
@@ -279,12 +297,20 @@ matrix_store::ptr agg_matrix_store::get_agg_res() const
 	// I need to create new aggregation with the combine operation
 	// to run aggregation on the columns of the matrix.
 	agg_operate::const_ptr combine_agg = agg_operate::create(
-			agg_op->get_agg_op().get_combine_ptr(), bulk_operate::const_ptr());
+			agg_op->get_agg_op()->get_combine_ptr(), bulk_operate::const_ptr());
 	detail::aggregate(*local_res, *combine_agg, matrix_margin::MAR_COL,
 			part_dim_t::PART_NONE, *portion);
-	assert(res->get_num_rows() == get_num_rows());
-	assert(res->get_num_cols() == get_num_cols());
-	return res;
+	if ((get_num_rows() == 1 && get_num_cols() == 1)
+			|| (get_num_rows() > 1 && get_num_cols() == 1)) {
+		assert(res->get_num_rows() == get_num_rows());
+		assert(res->get_num_cols() == get_num_cols());
+		return res;
+	}
+	else {
+		assert(res->get_num_rows() == get_num_cols());
+		assert(res->get_num_cols() == get_num_rows());
+		return res->transpose();
+	}
 }
 
 bool agg_matrix_store::has_materialized() const
@@ -339,8 +365,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool success = mutable_part.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -397,8 +425,10 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		mutable_part.resize(local_start_row, local_start_col, local_num_rows,
-				local_num_cols);
+		bool success = mutable_part.resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!success)
+			return false;
 		return local_matrix_store::resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
 	}
@@ -441,9 +471,24 @@ public:
 
 matrix_store::const_ptr agg_matrix_store::transpose() const
 {
-	// TODO This method should also be implemented.
-	assert(0);
-	return matrix_store::const_ptr();
+	if (has_materialized()) {
+		matrix_store::const_ptr res = get_agg_res();
+		return res->transpose();
+	}
+	matrix_store::const_ptr tdata = data->transpose();
+	std::shared_ptr<const matrix_long_agg_op> agg_portion_op
+		= std::dynamic_pointer_cast<const matrix_long_agg_op>(
+				portion_op);
+	assert(agg_portion_op);
+	matrix_margin tmargin;
+	if (agg_portion_op->get_margin() == matrix_margin::MAR_ROW)
+		tmargin = matrix_margin::MAR_COL;
+	else if (agg_portion_op->get_margin() == matrix_margin::MAR_COL)
+		tmargin = matrix_margin::MAR_ROW;
+	else
+		tmargin = agg_portion_op->get_margin();
+	return matrix_store::const_ptr(new agg_matrix_store(tdata,
+				tmargin, agg_portion_op->get_agg_op()));
 }
 
 class agg_compute_store: public sink_compute_store, public EM_object

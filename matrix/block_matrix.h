@@ -72,10 +72,13 @@ public:
 			size_t block_size, int num_nodes = -1, bool in_mem = true,
 			safs::safs_file_group::ptr group = NULL);
 	static dense_matrix::ptr create_seq_layout(scalar_variable::ptr start,
-			scalar_variable::ptr stride, scalar_variable::ptr seq_ele_stride,
-			size_t num_rows, size_t num_cols, matrix_layout_t layout,
-			size_t block_size, bool byrow, int num_nodes = -1,
-			bool in_mem = true, safs::safs_file_group::ptr group = NULL);
+			scalar_variable::ptr stride, size_t num_rows, size_t num_cols,
+			matrix_layout_t layout, size_t block_size, bool byrow,
+			int num_nodes = -1, bool in_mem = true,
+			safs::safs_file_group::ptr group = NULL);
+	static dense_matrix::ptr create_repeat_layout(std::shared_ptr<col_vec> vec,
+			size_t nrow, size_t ncol, matrix_layout_t layout, size_t block_size,
+			bool byrow, int num_nodes);
 
 	static dense_matrix::ptr create(size_t num_rows, size_t num_cols,
 			size_t block_size, const scalar_type &type, const set_operate &op,
@@ -107,7 +110,7 @@ public:
 
 	virtual bool is_virtual() const;
 
-	virtual void materialize_self() const;
+	virtual bool materialize_self() const;
 	virtual void set_materialize_level(materialize_level level,
 			detail::matrix_store::ptr materialize_buf);
 	virtual std::vector<detail::virtual_matrix_store::const_ptr> get_compute_matrices() const;

@@ -5,20 +5,23 @@
 \alias{print}
 \alias{print,fm-method}
 \alias{print,fm.bo-method}
+\alias{print,fmFactorV-method}
 \alias{print,fmV-method}
-\title{Print FlashMatrix objects.}
+\title{Print FlashR objects.}
 \usage{
 \S4method{print}{fm}(x)
 
 \S4method{print}{fmV}(x)
 
+\S4method{print}{fmFactorV}(x)
+
 \S4method{print}{fm.bo}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix object. It can be a vector, a matrix or a FlashMatrix
+\item{x}{a FlashR object. It can be a vector, a matrix or a FlashR
 binary operator.}
 }
 \description{
-\code{print} prints the information of a FlashMatrix object.
+\code{print} prints the information of a FlashR object.
 }
 

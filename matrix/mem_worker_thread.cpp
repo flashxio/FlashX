@@ -121,76 +121,42 @@ size_t mem_thread_pool::get_num_pending() const
 }
 
 static mem_thread_pool::ptr global_threads;
-enum thread_pool_state {
-	UNINIT,
-	ACTIVE,
-	INACTIVE,
-};
-static thread_pool_state pool_state = thread_pool_state::UNINIT;
-
-/*
- * When we disable thread pool, we use the main thread to perform
- * computation.
- */
-bool mem_thread_pool::disable_thread_pool()
-{
-	pool_state = thread_pool_state::INACTIVE;
-	return true;
-}
-
-bool mem_thread_pool::enable_thread_pool()
-{
-	pool_state = thread_pool_state::ACTIVE;
-	return true;
-}
 
 mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 {
-	assert(pool_state != thread_pool_state::INACTIVE);
 	if (global_threads == NULL) {
 		int nthreads_per_node
 			= matrix_conf.get_num_DM_threads() / matrix_conf.get_num_nodes();
 		assert(nthreads_per_node > 0);
 		global_threads = mem_thread_pool::create(matrix_conf.get_num_nodes(),
 				nthreads_per_node);
-		enable_thread_pool();
 	}
 	return global_threads;
 }
 
 size_t mem_thread_pool::get_global_num_threads()
 {
-	// When we disable the thread pool, we use the main thread for computation.
-	// So the number of threads is 1.
-	if (pool_state == thread_pool_state::INACTIVE)
-		return 1;
-	else
-		return get_global_mem_threads()->get_num_threads();
+	// We also count the main thread.
+	return get_global_mem_threads()->get_num_threads() + 1;
 }
 
 int mem_thread_pool::get_curr_thread_id()
 {
-	// When we disable the thread pool, we use the main thread for computation.
-	// And we use 0 as the thread id of the main thread.
-	if (pool_state == thread_pool_state::INACTIVE)
+	// It return 0 for the main thread. The worker thread Id starts with 1.
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	if (curr)
+		return curr->get_pool_thread_id() + 1;
+	// If this isn't a pool thread, it must be the main thread.
+	else
 		return 0;
-	else {
-		detail::pool_task_thread *curr
-			= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-		if (curr)
-			return curr->get_pool_thread_id();
-		else
-			return -1;
-	}
 }
 
 void mem_thread_pool::init_global_mem_threads(int num_nodes,
 		int nthreads_per_node)
 {
-	if (global_threads == NULL) {
+	if (global_threads == NULL)
 		global_threads = mem_thread_pool::create(num_nodes, nthreads_per_node);
-		enable_thread_pool();
-	}
 }
 
 void mem_thread_pool::destroy()
@@ -229,15 +195,14 @@ void io_worker_task::run()
 
 global_counter::global_counter()
 {
-	counts.resize(mem_thread_pool::get_global_num_threads() + 1);
+	counts.resize(mem_thread_pool::get_global_num_threads());
 	reset();
 }
 
 void global_counter::inc(size_t val)
 {
 	int id = mem_thread_pool::get_curr_thread_id();
-	// the main thread has id of -1.
-	counts[id + 1].count += val;
+	counts[id].count += val;
 }
 
 void global_counter::reset()

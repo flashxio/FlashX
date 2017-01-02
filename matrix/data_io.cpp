@@ -818,11 +818,10 @@ size_t row_parser<T>::parse(const std::vector<std::string> &lines,
 		// Split a string
 		strs.clear();
 		boost::split(strs, line, boost::is_any_of(delim));
-		if (strs.size() < num_cols) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("a row has only %1% entries") % strs.size();
-			continue;
-		}
+		// If the line doesn't have enough values than expected, we fill
+		// the remaining elements in the row with 0.
+		while (strs.size() < num_cols)
+			strs.push_back("0");
 
 		// Parse each element.
 		try {

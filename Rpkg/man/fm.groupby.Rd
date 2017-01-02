@@ -3,21 +3,21 @@
 \name{fm.groupby}
 \alias{fm.groupby}
 \alias{fm.sgroupby}
-\title{Groupby on a FlashMatrix vector.}
+\title{Groupby on a FlashR vector.}
 \usage{
 fm.sgroupby(obj, FUN)
 
 fm.groupby(obj, margin, factor, FUN)
 }
 \arguments{
-\item{obj}{a FlashMatrix vector or matrix}
+\item{obj}{a FlashR vector or matrix}
 
 \item{FUN}{an aggregation operator returned by \code{fm.create.agg.op}.}
 
 \item{margin}{the subscript which the function will be applied over.
 E.g., for a matrix, \code{1} indicates rows, \code{2} indicates columns.}
 
-\item{factor}{a FlashMatrix factor vector that indicates how rows/columns
+\item{factor}{a FlashR factor vector that indicates how rows/columns
 in a matrix should be grouped.}
 }
 \value{
@@ -34,6 +34,13 @@ stores all of the unique values in the original data container, and the column
 \code{fm.groupby} groups rows/columns of a matrix based on corresponding
 \code{labels} and applies \code{FUN} to the rows/columns in each group.
 \code{FUN} is an aggregation operator.
+}
+\examples{
+vec <- fm.runif(100)
+res <- fm.sgroupby(vec, "+")
+mat <- fm.runif.matrix(100, 10)
+fact <- fm.as.factor(as.integer(fm.runif(nrow(mat), min=0, max=3)))
+res <- fm.groupby(mat, 2, fact, "+")
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

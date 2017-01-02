@@ -66,7 +66,9 @@ void mem_matrix_store::write_portion_async(local_matrix_store::const_ptr portion
 mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes)
 {
-	if (num_nodes < 0) {
+	// If the number of nodes aren't specified, or this isn't a very tall or
+	// wide matrix, we use a simple way of storing the matrix.
+	if (num_nodes < 0 || (nrow <= CHUNK_SIZE && ncol <= CHUNK_SIZE)) {
 		if (layout == matrix_layout_t::L_ROW)
 			return detail::mem_row_matrix_store::create(nrow, ncol, type);
 		else
@@ -75,6 +77,13 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 	else
 		return detail::NUMA_matrix_store::create(nrow, ncol, num_nodes,
 				layout, type);
+}
+
+std::string mem_matrix_store::get_name() const
+{
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+			% get_num_cols()
+			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
 }
 
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(

@@ -18,14 +18,14 @@
 \S4method{ifelse}{fmV,ANY,fmV}(test, yes, no)
 }
 \arguments{
-\item{test}{a logical FlashMatrix vector or matrix.}
+\item{test}{a logical FlashR vector or matrix.}
 
-\item{yes}{a FlashMatrix vector or matrix or an R scalar.}
+\item{yes}{a FlashR vector or matrix or an R scalar.}
 
-\item{no}{a FlashMatrix vector or matrix or an R scalar.}
+\item{no}{a FlashR vector or matrix or an R scalar.}
 }
 \value{
-A FlashMatrix vector or matrix of the same size and attributes
+A FlashR vector or matrix of the same size and attributes
 (including dimensions) as \code{test} and data values from the values
 of \code{yes} or \code{no}.
 }
@@ -37,5 +37,9 @@ on whether the element of \code{test} is \code{TRUE} or \code{FALSE}.
 \details{
 The current implementation requires either \code{yes} or \code{no} to be
 a scalar value.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat <- ifelse(mat > 0.5, mat, 0)
 }
 

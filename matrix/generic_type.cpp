@@ -31,6 +31,109 @@
 namespace fm
 {
 
+std::vector<scalar_type::ptr> scalar_type::types;
+std::vector<basic_ops::ptr> scalar_type::basic_ops_impls;
+std::vector<basic_uops::ptr> scalar_type::basic_uops_impls;
+std::vector<agg_ops::ptr> scalar_type::agg_ops_impls;
+
+/*
+ * Here we implement the scalar type.
+ */
+template<class T>
+class scalar_type_impl: public scalar_type
+{
+public:
+	virtual std::shared_ptr<generic_hashtable> create_hashtable(
+			const scalar_type &val_type) const;
+	virtual const basic_uops &get_basic_uops() const {
+		int type = (int) fm::get_type<T>();
+		return *basic_uops_impls[type];
+	}
+	virtual const basic_ops &get_basic_ops() const {
+		int type = (int) fm::get_type<T>();
+		return *basic_ops_impls[type];
+	}
+	virtual const agg_ops &get_agg_ops() const {
+		int type = (int) fm::get_type<T>();
+		return *agg_ops_impls[type];
+	}
+
+	virtual std::shared_ptr<scalar_variable> create_scalar() const;
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
+			const scalar_variable &max) const;
+	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
+			const scalar_variable &max, const scalar_variable &seed) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var) const;
+	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
+			const scalar_variable &var, const scalar_variable &seed) const;
+
+	virtual const sorter &get_sorter() const {
+		static type_sorter<T> sort;
+		return sort;
+	}
+
+	virtual const scatter_gather &get_sg() const;
+	virtual const conv_layout &get_conv() const;
+	virtual const stl_algs &get_stl_algs() const {
+		static stl_algs_impl<T> algs;
+		return algs;
+	}
+	virtual std::shared_ptr<const set_operate> get_set_const(
+			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
+			const scalar_variable &val) const;
+	virtual std::shared_ptr<const set_operate> get_set_seq(
+			const scalar_variable &start, const scalar_variable &stride,
+			size_t num_rows, size_t num_cols, bool byrow,
+			matrix_layout_t layout) const;
+	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const;
+
+	virtual prim_type get_type() const {
+		return fm::get_type<T>();
+	}
+
+	virtual size_t get_size() const {
+		return sizeof(T);
+	}
+};
+
+void scalar_type::init()
+{
+	/*
+	 * We need to initialize all the types first before we can initialize
+	 * the operations on the types.
+	 */
+	types.resize((int) prim_type::NUM_TYPES);
+	types[fm::get_type<char>()] = scalar_type::ptr(new scalar_type_impl<char>());
+	types[fm::get_type<short>()] = scalar_type::ptr(new scalar_type_impl<short>());
+	types[fm::get_type<int>()] = scalar_type::ptr(new scalar_type_impl<int>());
+	types[fm::get_type<long>()] = scalar_type::ptr(new scalar_type_impl<long>());
+	types[fm::get_type<float>()] = scalar_type::ptr(new scalar_type_impl<float>());
+	types[fm::get_type<double>()] = scalar_type::ptr(new scalar_type_impl<double>());
+	types[fm::get_type<long double>()] = scalar_type::ptr(new scalar_type_impl<long double>());
+	types[fm::get_type<bool>()] = scalar_type::ptr(new scalar_type_impl<bool>());
+	types[fm::get_type<unsigned short>()] = scalar_type::ptr(new scalar_type_impl<unsigned short>());
+	types[fm::get_type<unsigned int>()] = scalar_type::ptr(new scalar_type_impl<unsigned int>());
+	types[fm::get_type<unsigned long>()] = scalar_type::ptr(new scalar_type_impl<unsigned long>());
+
+	for (size_t i = 0; i < types.size(); i++)
+		if (types[i] == NULL)
+			throw unsupported_exception("find an unsupported type");
+
+	init_ops();
+}
+
+// This initializes all of the scalar types supported by FlashMatrix.
+class scalar_type_initializer
+{
+public:
+	scalar_type_initializer() {
+		scalar_type::init();
+	}
+};
+static scalar_type_initializer initializer;
+
 template<class T>
 generic_hashtable::ptr scalar_type_impl<T>::create_hashtable(
 		const scalar_type &val_type) const
@@ -226,6 +329,118 @@ rand_gen::ptr scalar_type_impl<T>::create_randn_gen(const scalar_variable &mean,
 	return rand_gen::create_randn<T>(t_mean.get(), t_var.get(), t_seed.get());
 }
 
+namespace
+{
+
+template<class T>
+class type_scatter_gather: public scatter_gather
+{
+public:
+	virtual void scatter(const char *arr, std::vector<char *> &arrs) const {
+		const T *t_arr = (const T *) arr;
+		for (size_t i = 0; i < arrs.size(); i++)
+			*(T *) arrs[i] = t_arr[i];
+	}
+
+	virtual void gather(const std::vector<const char *> &arrs,
+			char *arr) const {
+		T *t_arr = (T *) arr;
+		for (size_t i = 0; i < arrs.size(); i++)
+			t_arr[i] = *(const T *) arrs[i];
+	}
+};
+
+template<class T>
+class type_conv_layout: public conv_layout
+{
+public:
+	virtual void conv1(const std::vector<const char *> &arrs, size_t arr_len,
+			char *contig_arr) const {
+		std::vector<const T *> t_arrs(arrs.size());
+		for (size_t i = 0; i < arrs.size(); i++)
+			t_arrs[i] = reinterpret_cast<const T *>(arrs[i]);
+		T *t_res = reinterpret_cast<T *>(contig_arr);
+		for (size_t j = 0; j < t_arrs.size(); j++)
+			for (size_t i = 0; i < arr_len; i++)
+				t_res[i * arrs.size() + j] = t_arrs[j][i];
+	}
+	virtual void conv2(const char *contig_arr, size_t arr_len,
+			const std::vector<char *> &arrs) const {
+		const T *t_arr = reinterpret_cast<const T *>(contig_arr);
+		std::vector<T *> t_res(arrs.size());
+		for (size_t i = 0; i < t_res.size(); i++)
+			t_res[i] = reinterpret_cast<T *>(arrs[i]);
+		size_t each_len = arr_len / arrs.size();
+		size_t src_idx = 0;
+		for (size_t i = 0; i < each_len; i++)
+			for (size_t j = 0; j < t_res.size(); j++)
+				t_res[j][i] = t_arr[src_idx++];
+	}
+};
+
+/*
+ * Set the data of a matrix with sequence numbers.
+ */
+template<class T>
+class set_seq: public type_set_operate<T>
+{
+	T start;
+	// The stride between two adjacent elements in the sequence.
+	T stride;
+	// The stride between two elements stored contiguously.
+	// If the sequence number is placed in matrix by rows,
+	// * For row-major matrices, it's the same as `stride'.
+	// * For col-major matrices, it's `stride * round_len'.
+	// If the sequence number is placed by cols,
+	// * For row-major matrices, it's `stride * round_len'.
+	// * For col-major matrices, it's `stride'.
+	T seq_ele_stride;
+	size_t round_len;
+	bool byrow;
+	set_seq(T start, T stride, T seq_ele_stride, size_t round_len, bool byrow) {
+		this->start = start;
+		this->stride = stride;
+		this->seq_ele_stride = seq_ele_stride;
+		this->round_len = round_len;
+		this->byrow = byrow;
+	}
+public:
+	set_seq(T start, T stride, size_t round_len, bool byrow,
+			matrix_layout_t layout) {
+		this->start = start;
+		this->stride = stride;
+		this->round_len = round_len;
+		this->byrow = byrow;
+
+		if (layout == matrix_layout_t::L_ROW && byrow)
+			this->seq_ele_stride = stride;
+		else if (layout == matrix_layout_t::L_COL && byrow)
+			this->seq_ele_stride = stride * round_len;
+		else if (layout == matrix_layout_t::L_ROW)
+			this->seq_ele_stride = stride * round_len;
+		else
+			this->seq_ele_stride = stride;
+	}
+
+	void set(T *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		T curr_start;
+		if (byrow)
+			curr_start = start + (row_idx * round_len + col_idx) * stride;
+		else
+			curr_start = start + (col_idx * round_len + row_idx) * stride;
+
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = curr_start + i * seq_ele_stride;
+	}
+
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new set_seq<T>(start, stride,
+					seq_ele_stride, round_len, !byrow));
+	}
+};
+
+}
+
 template<class T>
 const scatter_gather &scalar_type_impl<T>::get_sg() const
 {
@@ -263,8 +478,8 @@ set_vec_operate::const_ptr scalar_type_impl<T>::get_set_vec_const(
 template<class T>
 set_operate::const_ptr scalar_type_impl<T>::get_set_seq(
 		const scalar_variable &start, const scalar_variable &stride,
-		const scalar_variable &seq_ele_stride, size_t num_rows, size_t num_cols,
-		bool byrow) const
+		size_t num_rows, size_t num_cols, bool byrow,
+		matrix_layout_t layout) const
 {
 	assert(start.get_type() == get_scalar_type<T>());
 	assert(stride.get_type() == get_scalar_type<T>());
@@ -272,18 +487,38 @@ set_operate::const_ptr scalar_type_impl<T>::get_set_seq(
 		= static_cast<const scalar_variable_impl<T> &>(start);
 	const scalar_variable_impl<T> &t_stride
 		= static_cast<const scalar_variable_impl<T> &>(stride);
-	const scalar_variable_impl<T> &t_seq_ele_stride
-		= static_cast<const scalar_variable_impl<T> &>(seq_ele_stride);
 	if (byrow)
 		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
-					t_stride.get(), t_seq_ele_stride.get(), num_cols, byrow));
+					t_stride.get(), num_cols, byrow, layout));
 	else
 		return set_operate::const_ptr(new set_seq<T>(t_start.get(),
-					t_stride.get(), t_seq_ele_stride.get(), num_rows, byrow));
+					t_stride.get(), num_rows, byrow, layout));
 }
 
 namespace
 {
+
+template<class T1, class T2>
+class type_cast: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num, const void *in, void *out) const {
+		const T1 *t_in = (const T1 *) in;
+		T2 *t_out = (T2 *) out;
+		for (size_t i = 0; i < num; i++)
+			t_out[i] = t_in[i];
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T1>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T2>();
+	}
+	virtual std::string get_name() const {
+		return boost::str(boost::format("cast_%1%2%2%") % get_type_str<T1>()
+				% get_type_str<T2>());
+	}
+};
 
 template<class T1, class T2>
 const bulk_uoperate &get_type_cast()
@@ -320,36 +555,6 @@ const bulk_uoperate &scalar_type_impl<T>::get_type_cast(const scalar_type &type)
 			return fm::get_type_cast<T, unsigned int>();
 		case P_ULONG:
 			return fm::get_type_cast<T, unsigned long>();
-		default:
-			throw invalid_arg_exception("invalid prim type");
-	}
-}
-
-const scalar_type &get_scalar_type(prim_type type)
-{
-	switch(type) {
-		case P_CHAR:
-			return get_scalar_type<char>();
-		case P_SHORT:
-			return get_scalar_type<short>();
-		case P_INTEGER:
-			return get_scalar_type<int>();
-		case P_LONG:
-			return get_scalar_type<long>();
-		case P_FLOAT:
-			return get_scalar_type<float>();
-		case P_DOUBLE:
-			return get_scalar_type<double>();
-		case P_LDOUBLE:
-			return get_scalar_type<long double>();
-		case P_BOOL:
-			return get_scalar_type<bool>();
-		case P_USHORT:
-			return get_scalar_type<unsigned short>();
-		case P_UINT:
-			return get_scalar_type<unsigned int>();
-		case P_ULONG:
-			return get_scalar_type<unsigned long>();
 		default:
 			throw invalid_arg_exception("invalid prim type");
 	}

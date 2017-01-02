@@ -12,7 +12,7 @@
 \S4method{sd}{fmV}(x, na.rm = FALSE)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 
 \item{na.rm}{logical. Should missing values be removed?}
 }
@@ -20,5 +20,9 @@
 This function computes the standard deviation of the values in \code{x}.
 If \code{na.rm} is \code{TRUE} then missing values are removed before
 computation proceeds.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+sd(mat)
 }
 

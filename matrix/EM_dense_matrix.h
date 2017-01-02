@@ -79,8 +79,9 @@ class EM_matrix_store: public matrix_store, public EM_object
 		return orig_num_cols;
 	}
 
-	EM_matrix_store(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, safs::safs_file_group::ptr group);
+	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
+			size_t ncol, matrix_layout_t layout, const scalar_type &type,
+			safs::safs_file_group::ptr group);
 	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
 			size_t ncol, size_t orig_nrow, size_t orig_ncol,
 			matrix_layout_t layout, const scalar_type &type, size_t _data_id);
@@ -103,9 +104,7 @@ public:
 	}
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, safs::safs_file_group::ptr group = NULL) {
-		return ptr(new EM_matrix_store(nrow, ncol, layout, type, group));
-	}
+			const scalar_type &type, safs::safs_file_group::ptr group = NULL);
 
 	/*
 	 * This is to load the matrix data from an external file and create

@@ -125,6 +125,9 @@ public:
 	virtual const scalar_type &get_type() const {
 		return type;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set_task: public thread_task
@@ -214,7 +217,6 @@ void matrix_store::set_data(const set_operate &op)
 {
 	size_t num_chunks = get_num_portions();
 	if (is_in_mem() && num_chunks == 1) {
-		detail::mem_thread_pool::disable_thread_pool();
 		local_matrix_store::ptr buf;
 		if (store_layout() == matrix_layout_t::L_ROW)
 			buf = local_matrix_store::ptr(new local_buf_row_matrix_store(0, 0,
@@ -234,7 +236,6 @@ void matrix_store::set_data(const set_operate &op)
 					detail::local_mem_buffer::MAT_PORTION);
 		else
 			detail::local_mem_buffer::clear_bufs();
-		detail::mem_thread_pool::enable_thread_pool();
 	}
 	else if (is_in_mem()) {
 		detail::mem_thread_pool::ptr mem_threads

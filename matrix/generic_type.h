@@ -33,22 +33,40 @@
 namespace fm
 {
 
+enum matrix_layout_t
+{
+	L_COL,
+	L_ROW,
+	L_ROW_2D,
+	// It indicates that the layout isn't defined.
+	L_NONE,
+};
+
+enum matrix_margin
+{
+	MAR_ROW = 1,
+	MAR_COL = 2,
+	BOTH,
+};
+
 /**
  * Here defines the primitive types.
+ * The types in the list are also ordered to help arithmetic conversion.
+ * The types in the front has lower size than the ones in the end.
  */
 enum prim_type
 {
+	P_BOOL,
 	P_CHAR,
 	P_SHORT,
+	P_USHORT,
 	P_INTEGER,
+	P_UINT,
 	P_LONG,
+	P_ULONG,
 	P_FLOAT,
 	P_DOUBLE,
 	P_LDOUBLE,
-	P_BOOL,
-	P_USHORT,
-	P_UINT,
-	P_ULONG,
 	NUM_TYPES,
 };
 
@@ -213,8 +231,23 @@ class bulk_uoperate;
  */
 class scalar_type
 {
+	static std::vector<std::shared_ptr<scalar_type> > types;
+
+	static std::vector<std::shared_ptr<basic_ops> > basic_ops_impls;
+	static std::vector<std::shared_ptr<basic_uops> > basic_uops_impls;
+	static std::vector<std::shared_ptr<agg_ops> > agg_ops_impls;
 public:
-	/**
+	typedef std::shared_ptr<scalar_type> ptr;
+
+	// This registers all scalar types supported by FlashMatrix.
+	static void init();
+	static void init_ops();
+
+	static const scalar_type &get_type(prim_type type) {
+		return *types[(int) type];
+	}
+
+	/*
 	 * The operators that work on this type.
 	 */
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
@@ -234,8 +267,8 @@ public:
 			const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<const set_operate> get_set_seq(
 			const scalar_variable &start, const scalar_variable &stride,
-			const scalar_variable &seq_ele_stride, size_t num_rows,
-			size_t num_cols, bool byrow) const = 0;
+			size_t num_rows, size_t num_cols, bool byrow,
+			matrix_layout_t layout) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 	// Create Random generator with the uniform distribution.
 	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
@@ -258,67 +291,16 @@ public:
 	}
 };
 
-/*
- * Here we implement the scalar type.
- */
-template<class T>
-class scalar_type_impl: public scalar_type
-{
-public:
-	virtual std::shared_ptr<generic_hashtable> create_hashtable(
-			const scalar_type &val_type) const;
-	virtual const basic_uops &get_basic_uops() const;
-	virtual const basic_ops &get_basic_ops() const;
-	virtual const agg_ops &get_agg_ops() const;
-
-	virtual std::shared_ptr<scalar_variable> create_scalar() const;
-	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
-			const scalar_variable &max) const;
-	virtual std::shared_ptr<rand_gen> create_randu_gen(const scalar_variable &min,
-			const scalar_variable &max, const scalar_variable &seed) const;
-	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
-			const scalar_variable &var) const;
-	virtual std::shared_ptr<rand_gen> create_randn_gen(const scalar_variable &mean,
-			const scalar_variable &var, const scalar_variable &seed) const;
-
-	virtual const sorter &get_sorter() const {
-		static type_sorter<T> sort;
-		return sort;
-	}
-
-	virtual const scatter_gather &get_sg() const;
-	virtual const conv_layout &get_conv() const;
-	virtual const stl_algs &get_stl_algs() const {
-		static stl_algs_impl<T> algs;
-		return algs;
-	}
-	virtual std::shared_ptr<const set_operate> get_set_const(
-			const scalar_variable &val) const;
-	virtual std::shared_ptr<const set_vec_operate> get_set_vec_const(
-			const scalar_variable &val) const;
-	virtual std::shared_ptr<const set_operate> get_set_seq(
-			const scalar_variable &start, const scalar_variable &stride,
-			const scalar_variable &seq_ele_stride, size_t num_rows,
-			size_t num_cols, bool byrow) const;
-	virtual const bulk_uoperate &get_type_cast(const scalar_type &type) const;
-
-	virtual prim_type get_type() const {
-		return fm::get_type<T>();
-	}
-
-	virtual size_t get_size() const {
-		return sizeof(T);
-	}
-};
-
 template<class T>
 const scalar_type &get_scalar_type()
 {
-	static scalar_type_impl<T> t;
-	return t;
+	return scalar_type::get_type(get_type<T>());
 }
 
-const scalar_type &get_scalar_type(prim_type type);
+static inline const scalar_type &get_scalar_type(prim_type type)
+{
+	return scalar_type::get_type(type);
+}
 
 /**
  * This class defines a generic type for a scalar variable.

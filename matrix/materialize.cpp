@@ -827,7 +827,9 @@ matrix_store::ptr __mapply_portion(
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				op->get_out_num_rows(), op->get_out_num_cols(),
 				out_layout, op->get_output_type(), num_nodes, out_in_mem);
-		assert(res);
+		if (res == NULL)
+			return matrix_store::ptr();
+
 		out_mats.push_back(res);
 	}
 	bool ret = __mapply_portion(mats, op, out_mats, par_access);
@@ -847,7 +849,9 @@ matrix_store::ptr __mapply_portion(
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				op->get_out_num_rows(), op->get_out_num_cols(),
 				out_layout, op->get_output_type(), out_num_nodes, out_in_mem);
-		assert(res);
+		if (res == NULL)
+			return matrix_store::ptr();
+
 		out_mats.push_back(res);
 	}
 	bool ret = __mapply_portion(mats, op, out_mats, par_access);
@@ -890,6 +894,7 @@ bool __mapply_portion(
 			numa_mats.push_back(out_mats[i]);
 	}
 	assert(mats.size() >= 1);
+	assert(op->is_success());
 
 	// Collect all NUMA matrices in the input matrices.
 	for (size_t i = 0; i < mats.size(); i++) {
@@ -902,7 +907,11 @@ bool __mapply_portion(
 	std::pair<size_t, size_t> first_size = mats.front()->get_portion_size();
 	size_t tot_len;
 	size_t portion_size;
-	if (mats.front()->is_wide()) {
+	bool in_square = mats.front()->get_num_rows() == mats.front()->get_num_cols();
+	// The input matrix is wide.
+	if (mats.front()->is_wide()
+			// The input matrix is square and the output matrix is wide.
+			|| (in_square && op->is_wide())) {
 		tot_len = mats.front()->get_num_cols();
 		portion_size = first_size.second;
 		if (op->get_out_num_cols() > 0)
@@ -914,6 +923,9 @@ bool __mapply_portion(
 			all_in_mem = all_in_mem && mats[i]->is_in_mem();
 		}
 	}
+	// There are two cases that we are here.
+	// The input matrix is tall.
+	// The input matrix is square and the output matrix isn't wide.
 	else {
 		tot_len = mats.front()->get_num_rows();
 		portion_size = first_size.first;
@@ -939,7 +951,6 @@ bool __mapply_portion(
 	// If all matrices are in memory and all matrices have only one portion,
 	// we should perform computation in the local thread.
 	if (all_in_mem && num_chunks == 1) {
-		detail::mem_thread_pool::disable_thread_pool();
 		mapply_task task(mats, 0, *op, out_mats);
 		task.run();
 		// After computation, some matrices buffer local portions in the thread,
@@ -952,7 +963,6 @@ bool __mapply_portion(
 					detail::local_mem_buffer::MAT_PORTION);
 		else
 			detail::local_mem_buffer::clear_bufs();
-		detail::mem_thread_pool::enable_thread_pool();
 	}
 	else if (all_in_mem) {
 		detail::mem_thread_pool::ptr threads
@@ -1035,7 +1045,7 @@ bool __mapply_portion(
 		for (size_t i = 0; i < em_outs.size(); i++)
 			em_outs[i]->end_stream();
 	}
-	return true;
+	return op->is_success();
 }
 
 matrix_store::ptr __mapply_portion_virtual(
@@ -1372,29 +1382,36 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 	if (mats.empty())
 		return true;
 
-	vmat_levels::ptr levels(new vmat_levels());
-	for (size_t i = 0; i < mats.size(); i++) {
-		// If this isn't a virtual matrix, skip it.
-		if (!mats[i]->is_virtual())
-			continue;
+	try {
+		vmat_levels::ptr levels(new vmat_levels());
+		for (size_t i = 0; i < mats.size(); i++) {
+			// If this isn't a virtual matrix, skip it.
+			if (!mats[i]->is_virtual())
+				continue;
 
-		// If the virtual matrix is a TAS matrix, we want it to save
-		// the materialized result.
-		mats[i]->set_materialize_level(materialize_level::MATER_FULL);
+			// If the virtual matrix is a TAS matrix, we want it to save
+			// the materialized result.
+			mats[i]->set_materialize_level(materialize_level::MATER_FULL);
 
-		auto vmats = mats[i]->get_compute_matrices();
-		for (size_t j = 0; j < vmats.size(); j++)
-			levels->add(underlying_mat_set::create(vmats[j]));
+			auto vmats = mats[i]->get_compute_matrices();
+			for (size_t j = 0; j < vmats.size(); j++)
+				levels->add(underlying_mat_set::create(vmats[j]));
+		}
+		if (levels->is_empty())
+			return true;
+
+		levels->materialize(par_access);
+
+		// Now all virtual matrices contain the materialized results.
+		bool ret = true;
+		for (size_t i = 0; i < mats.size(); i++)
+			ret = ret && mats[i]->materialize_self();
+		return ret;
+	} catch (std::exception &e) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"fail to materialize multiple matrices: %1%") % e.what();
+		return false;
 	}
-	if (levels->is_empty())
-		return true;
-
-	levels->materialize(par_access);
-
-	// Now all virtual matrices contain the materialized results.
-	for (size_t i = 0; i < mats.size(); i++)
-		mats[i]->materialize_self();
-	return true;
 }
 
 }
