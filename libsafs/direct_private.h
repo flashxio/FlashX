@@ -22,6 +22,10 @@
 
 #include "read_private.h"
 
+#ifdef __APPLE__
+#define O_DIRECT 0
+#endif
+
 namespace safs
 {
 

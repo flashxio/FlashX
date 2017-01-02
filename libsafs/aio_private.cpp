@@ -29,6 +29,10 @@
 
 template class blocking_FIFO_queue<safs::thread_callback_s *>;
 
+#ifdef __APPLE__
+#define O_DIRECT 0
+#endif
+
 namespace safs
 {
 
