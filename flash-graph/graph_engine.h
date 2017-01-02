@@ -22,6 +22,8 @@
 
 #include <atomic>
 
+#include "pthread_barrier.h"
+
 #include "vertex.h"
 #include "vertex_index.h"
 #include "trace_logger.h"
