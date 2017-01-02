@@ -144,17 +144,8 @@ void *thread_run(void *arg)
 	pthread_setspecific(thread::thread_key, t);
 	t->tid = gettid();
 
-	std::vector<int> cpus = t->get_cpu_affinity();
 	int node_id = t->get_node_id();
-	if (!cpus.empty()) {
-		cpu_set_t set;
-		CPU_ZERO(&set);
-		for (size_t i = 0; i < cpus.size(); i++)
-			CPU_SET(cpus[i] + 1, &set);
-		if (sched_setaffinity(t->tid, sizeof(set), &set) == -1)
-			fprintf(stderr, "can't set CPU affinity on thread %d\n", t->tid);
-	}
-	else if (node_id >= 0)
+	if (node_id >= 0)
 		bind2node_id(node_id);
 
 	t->init();
@@ -190,25 +181,6 @@ thread::thread(std::string name, int node_id, bool blocking)
 	construct_init();
 
 	this->node_id = node_id;
-	this->name = name + "-" + itoa(thread_idx);
-	this->blocking = blocking;
-}
-
-thread::thread(std::string name, const std::vector<int> &cpu_affinity,
-		bool blocking)
-{
-	thread_class_init();
-	construct_init();
-
-#ifdef USE_HWLOC
-	std::vector<int> node_ids = cpus.lus2node(cpu_affinity);
-	this->node_id = node_ids.front();
-	for (size_t i = 1; i < cpu_affinity.size(); i++)
-		assert(node_id == node_ids[i]);
-#else
-	this->node_id = 0;
-#endif
-	this->cpu_affinity = cpu_affinity;
 	this->name = name + "-" + itoa(thread_idx);
 	this->blocking = blocking;
 }

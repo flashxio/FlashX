@@ -41,8 +41,6 @@ class thread
 	volatile pid_t tid;
 	int thread_idx;
 	int node_id;
-	// Indicate which CPU cores the thread is bound to.
-	std::vector<int> cpu_affinity;
 	pthread_t id;
 	bool blocking;
 	std::string name;
@@ -63,8 +61,6 @@ class thread
 	friend void *thread_run(void *arg);
 public:
 	thread(std::string name, int node_id, bool blocking = true);
-	thread(std::string name, const std::vector<int> &cpu_affinity,
-			bool blocking = true);
 
 	void set_user_data(void *user_data) {
 		assert(this->user_data == NULL);
@@ -116,10 +112,6 @@ public:
 
 	int get_node_id() const {
 		return node_id;
-	}
-
-	const std::vector<int> get_cpu_affinity() const {
-		return cpu_affinity;
 	}
 
 	void stop() {
