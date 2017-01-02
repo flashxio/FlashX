@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <limits.h>
+#include <boost/format.hpp>
 
 #include <algorithm>
 #include <queue>
@@ -955,8 +956,9 @@ public:
 		// the input request.
 		bool check = has_overlap(off, size);
 		if (!check)
-			fprintf(stderr, "req %lx, size: %lx, page off: %lx\n",
-					this->get_offset(), this->get_size(), off);
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"req %1%, size: %2%, page off: %3%")
+				% this->get_offset() % this->get_size() % off;
 		assert(check);
 		// this is the first page in the request.
 		if (off <= this->get_offset()) {
