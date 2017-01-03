@@ -212,6 +212,7 @@ public:
 	virtual void set(void *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const = 0;
 	virtual const scalar_type &get_type() const = 0;
+	virtual set_operate::const_ptr transpose() const = 0;
 };
 
 template<class T>
@@ -244,17 +245,20 @@ public:
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = val;
 	}
+
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new const_set_operate<T>(val));
+	}
 };
 
 /*
  * Set the data of a matrix with sequence numbers.
- * The sequence numbers are placed in the matrix by rows.
  */
 template<class T>
 class set_seq: public type_set_operate<T>
 {
 	T start;
-	// The stride between two adjacent elements in a row.
+	// The stride between two adjacent elements in the sequence.
 	T stride;
 	// The stride between two elements stored contiguously.
 	// If the sequence number is placed in matrix by rows,
@@ -266,13 +270,29 @@ class set_seq: public type_set_operate<T>
 	T seq_ele_stride;
 	size_t round_len;
 	bool byrow;
-public:
 	set_seq(T start, T stride, T seq_ele_stride, size_t round_len, bool byrow) {
 		this->start = start;
 		this->stride = stride;
 		this->seq_ele_stride = seq_ele_stride;
 		this->round_len = round_len;
 		this->byrow = byrow;
+	}
+public:
+	set_seq(T start, T stride, size_t round_len, bool byrow,
+			matrix_layout_t layout) {
+		this->start = start;
+		this->stride = stride;
+		this->round_len = round_len;
+		this->byrow = byrow;
+
+		if (layout == matrix_layout_t::L_ROW && byrow)
+			this->seq_ele_stride = stride;
+		else if (layout == matrix_layout_t::L_COL && byrow)
+			this->seq_ele_stride = stride * round_len;
+		else if (layout == matrix_layout_t::L_ROW)
+			this->seq_ele_stride = stride * round_len;
+		else
+			this->seq_ele_stride = stride;
 	}
 
 	void set(T *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
@@ -284,6 +304,11 @@ public:
 
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = curr_start + i * seq_ele_stride;
+	}
+
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr(new set_seq<T>(start, stride,
+					seq_ele_stride, round_len, !byrow));
 	}
 };
 

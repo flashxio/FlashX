@@ -1,3 +1,4 @@
+#include <cblas.h>
 #include <set>
 
 #include "bulk_operate.h"
@@ -56,6 +57,9 @@ public:
 			arr[i] = (row_idx + i) * num_cols + col_idx;
 		}
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set_row_operate: public type_set_operate<int>
@@ -70,6 +74,9 @@ public:
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = row_idx * num_cols + col_idx + i;
 		}
+	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
 	}
 };
 
@@ -239,8 +246,143 @@ void test_transpose()
 					== j * t_store->get_num_rows() + idxs[i]);
 }
 
+bool is_symmetric(mem_matrix_store::const_ptr store)
+{
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = i + 1; j < store->get_num_cols(); j++)
+			if (memcmp(store->get(i, j), store->get(j, i),
+						store->get_entry_size()) != 0)
+				return false;
+	return true;
+}
+
+void test_symmetrize()
+{
+	printf("test symmetrize\n");
+	bool ret;
+	mem_matrix_store::ptr mat = mem_matrix_store::create(1000, 1000,
+			matrix_layout_t::L_ROW, get_scalar_type<size_t>(), -1);
+	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
+				mat->store_layout()));
+	ret = mat->symmetrize(true);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	ret = mat->symmetrize(false);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	mat = mem_matrix_store::create(1000, 1000, matrix_layout_t::L_COL,
+			get_scalar_type<size_t>(), -1);
+	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
+				mat->store_layout()));
+	ret = mat->symmetrize(true);
+	assert(ret);
+	assert(is_symmetric(mat));
+
+	ret = mat->symmetrize(false);
+	assert(ret);
+	assert(is_symmetric(mat));
+}
+
+void wide_dsyrk_row(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, double *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.second;
+	size_t ldc = Asize.first;
+	cblas_dsyrk(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
+void wide_dsyrk_col(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, double *res_mat)
+{
+	size_t n = Asize.first;
+	size_t k = Asize.second;
+	size_t lda = Asize.first;
+	size_t ldc = Asize.first;
+	cblas_dsyrk(CblasColMajor, CblasUpper, CblasNoTrans, n, k, 1, Amat, lda,
+			0, res_mat, ldc);
+}
+
+void wide_dgemm_row(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, const std::pair<size_t, size_t> &Bsize,
+		const double *Bmat, double *res_mat, size_t out_num_cols)
+{
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.second,
+			Bmat, Bsize.second, 0, res_mat, out_num_cols);
+}
+
+void wide_dgemm_col(const std::pair<size_t, size_t> &Asize,
+		const double *Amat, const std::pair<size_t, size_t> &Bsize,
+		const double *Bmat, double *res_mat, size_t out_num_rows)
+{
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			Asize.first, Bsize.second, Asize.second, 1, Amat, Asize.first,
+			Bmat, Bsize.first, 0, res_mat, out_num_rows);
+}
+
+bool same_data(mem_matrix_store::const_ptr mat1, mem_matrix_store::const_ptr mat2)
+{
+	for (size_t i = 0; i < mat1->get_num_rows(); i++)
+		for (size_t j = 0; j < mat1->get_num_cols(); j++)
+			if (memcmp(mat1->get(i, j), mat2->get(i, j), mat1->get_entry_size()))
+				return false;
+	return true;
+}
+
+void test_multiply(matrix_layout_t layout)
+{
+	printf("test multiply\n");
+	mem_matrix_store::ptr mat1 = mem_matrix_store::create(10, 1000, layout,
+			get_scalar_type<double>(), -1);
+	mat1->set_data(set_seq<double>(1, 1, mat1->get_num_rows(), true,
+				mat1->store_layout()));
+	mem_matrix_store::ptr mat2 = mem_matrix_store::create(1000, 10, layout,
+			get_scalar_type<double>(), -1);
+	mat2->set_data(set_seq<double>(1, 1, mat2->get_num_cols(), false,
+				mat2->store_layout()));
+	assert(same_data(mat1, std::dynamic_pointer_cast<const mem_matrix_store>(
+					mat2->transpose())));
+	mem_matrix_store::ptr res1 = mem_matrix_store::create(10, 10, layout,
+			get_scalar_type<double>(), -1);
+	res1->reset_data();
+	mem_matrix_store::ptr res2 = mem_matrix_store::create(10, 10, layout,
+			get_scalar_type<double>(), -1);
+	res2->reset_data();
+
+	std::pair<size_t, size_t> Asize(mat1->get_num_rows(), mat1->get_num_cols());
+	std::pair<size_t, size_t> Bsize(mat2->get_num_rows(), mat2->get_num_cols());
+	size_t out_size
+		= res1->get_num_rows() * res1->get_num_cols() * res1->get_entry_size();
+	if (layout == matrix_layout_t::L_COL) {
+		wide_dgemm_col(Asize, (double *) mat1->get_raw_arr(), Bsize,
+				(double *) mat2->get_raw_arr(), (double *) res1->get_raw_arr(),
+				res1->get_num_rows());
+		wide_dsyrk_col(Asize, (double *) mat1->get_raw_arr(),
+				(double *) res2->get_raw_arr());
+		res2->symmetrize(true);
+		assert(memcmp(res1->get_raw_arr(), res2->get_raw_arr(), out_size) == 0);
+	}
+	else {
+		wide_dgemm_row(Asize, (double *) mat1->get_raw_arr(), Bsize,
+				(double *) mat2->get_raw_arr(), (double *) res1->get_raw_arr(),
+				res1->get_num_cols());
+		wide_dsyrk_row(Asize, (double *) mat1->get_raw_arr(),
+				(double *) res2->get_raw_arr());
+		res2->symmetrize(true);
+		assert(memcmp(res1->get_raw_arr(), res2->get_raw_arr(), out_size) == 0);
+	}
+}
+
 int main()
 {
+	test_multiply(matrix_layout_t::L_COL);
+	test_multiply(matrix_layout_t::L_ROW);
+	test_symmetrize();
 	test_reset(1000);
 	test_reset(1000000);
 	test_set(1000);

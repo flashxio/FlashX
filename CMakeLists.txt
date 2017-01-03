@@ -18,7 +18,7 @@ else()
 	message(FATAL_ERROR "We require GCC")
 endif()
 
-find_package(Boost COMPONENTS system filesystem	REQUIRED)
+find_package(Boost REQUIRED)
 find_package(Threads REQUIRED)
 find_package(LibRt REQUIRED)
 

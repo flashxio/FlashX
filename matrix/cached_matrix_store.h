@@ -66,6 +66,10 @@ public:
 
 	static void drop_all_cache();
 
+	virtual size_t get_data_id() const {
+		return em_store->get_data_id();
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		return em_store->get_underlying_mats();
 	}

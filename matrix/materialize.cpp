@@ -890,6 +890,7 @@ bool __mapply_portion(
 			numa_mats.push_back(out_mats[i]);
 	}
 	assert(mats.size() >= 1);
+	assert(op->is_success());
 
 	// Collect all NUMA matrices in the input matrices.
 	for (size_t i = 0; i < mats.size(); i++) {
@@ -902,7 +903,11 @@ bool __mapply_portion(
 	std::pair<size_t, size_t> first_size = mats.front()->get_portion_size();
 	size_t tot_len;
 	size_t portion_size;
-	if (mats.front()->is_wide()) {
+	bool in_square = mats.front()->get_num_rows() == mats.front()->get_num_cols();
+	// The input matrix is wide.
+	if (mats.front()->is_wide()
+			// The input matrix is square and the output matrix is wide.
+			|| (in_square && op->is_wide())) {
 		tot_len = mats.front()->get_num_cols();
 		portion_size = first_size.second;
 		if (op->get_out_num_cols() > 0)
@@ -914,6 +919,9 @@ bool __mapply_portion(
 			all_in_mem = all_in_mem && mats[i]->is_in_mem();
 		}
 	}
+	// There are two cases that we are here.
+	// The input matrix is tall.
+	// The input matrix is square and the output matrix isn't wide.
 	else {
 		tot_len = mats.front()->get_num_rows();
 		portion_size = first_size.first;
@@ -1035,7 +1043,7 @@ bool __mapply_portion(
 		for (size_t i = 0; i < em_outs.size(); i++)
 			em_outs[i]->end_stream();
 	}
-	return true;
+	return op->is_success();
 }
 
 matrix_store::ptr __mapply_portion_virtual(
@@ -1392,9 +1400,10 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 	levels->materialize(par_access);
 
 	// Now all virtual matrices contain the materialized results.
+	bool ret = true;
 	for (size_t i = 0; i < mats.size(); i++)
-		mats[i]->materialize_self();
-	return true;
+		ret = ret && mats[i]->materialize_self();
+	return ret;
 }
 
 }

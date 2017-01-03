@@ -19,8 +19,7 @@ fm.runif.matrix(nrow, ncol, min = 0, max = 1, in.mem = TRUE, name = "")
 \item{in.mem}{whether the vector is stored in memory.}
 
 \item{name}{the name of the vector. It's stored on disks, it's used as
-            the file name.
-persistently.}
+the file name.}
 
 \item{nrow}{the number of rows in the generated matrix.}
 
@@ -30,6 +29,11 @@ persistently.}
 \code{fm.runif} creates a FlashMatrix vector with uniformly random numbers.
 \code{fm.runif.matrix} creates a FlashMatrix matrix with uniformly random
 numbers.
+}
+\details{
+If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
+vector/matrix will be kept on disks persistently. That is, even if a user
+exits from R, the vector/matrix will still be kept on disks.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

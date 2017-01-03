@@ -18,9 +18,12 @@ object in memory.}
 a new FlashMatrix object with data stored in specified storage.
 }
 \description{
-This function converts the storage of a FlashMatrix object. The storage
-can be memory or disks. This function is used for finely optimizing
-the computation of FlashMatrix code. It shouldn't be used to most of
-the users.
+This function converts the storage of a FlashMatrix vector/matrix.
+The storage can be memory or disks.
+}
+\details{
+If a user provides \code{name} and \code{in.mem} is \code{TRUE},
+the vector/matrix will be kept on disks persistently. That is, even if a user
+exits from R, the vector/matrix will still be kept on disks.
 }
 

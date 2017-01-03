@@ -241,9 +241,13 @@ NULL
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "fm"), function(x, y) fm.multiply(x, y))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y) fm.multiply(x, y))
+setMethod("%*%", signature(x = "fm", y = "fmV"), function(x, y)
+		  fm.as.matrix(fm.multiply(x, y)))
 #' @rdname matmult
-setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) fm.multiply(t(y), x))
+setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) {
+		  res <- fm.as.matrix(fm.multiply(t(y), x))
+		  t(res)
+})
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
 		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
@@ -789,6 +793,90 @@ setMethod("typeof", signature(x = "fm"), function(x) .typeof.int(x))
 #' @rdname typeof
 setMethod("typeof", signature(x = "fmV"), function(x) .typeof.int(x))
 
+#' Dimnames of an Object
+#'
+#' Retrieve or set the dimnames of a matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @param value a list that provides values for dimension names.
+#' @return \code{dimnames} return NULL if there aren't dimension names.
+#'         Otherwise, return the dimension names.
+#' @name dimnames
+NULL
+
+.get.dimnames <- function(x)
+{
+	if (!is.null(x@attrs[["dimnames"]])) x@attrs$dimnames else NULL
+}
+
+.set.dimnames <- function(x, value)
+{
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	if (is.null(x@attrs[["dimnames"]]))
+		x@attrs$dimnames <- list(NULL, NULL)
+	if (length(value) != length(dim(x)))
+		stop("length of dimnames not equal to array extent")
+	for (i in 1:length(value))
+		x@attrs$dimnames[[i]] <- as.character(value[[i]])
+	x
+}
+
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fm"), .get.dimnames)
+#' @rdname dimnames
+setMethod("dimnames", signature(x = "fmV"), .get.dimnames)
+
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fm", value="list"), .set.dimnames)
+#' @rdname dimnames
+setMethod("dimnames<-", signature(x = "fmV", value="list"), .set.dimnames)
+
+#' The Names of an Object
+#'
+#' Functions to get or set the names of an object.
+#'
+#' Currently, \code{value} has to have the same length as \code{x} and has
+#' the same shape. FlashR currently doesn't support character vectors yet.
+#'
+#' @param x a FlashR array
+#' @param value a FlashR array.
+#' @return \code{names} returns \code{NULL} or a FlashR array of the same
+#' length as \code{x}. \code{names<-} returns the updated object.
+#' @name names
+NULL
+
+.get.names <- function(x)
+{
+	if (!is.null(x@attrs[["names"]])) x@attrs$names else NULL
+}
+
+.set.names <- function(x, value)
+{
+	if (length(x) != length(value))
+		stop("The number of names isn't equal to the number of elements")
+	# if two inputs have different dimensions.
+	if (length(dim(x)) != length(dim(value))
+		# if both are matrices but they have different shapes.
+		|| (!is.null(dim(x)) && any(dim(x) != dim(value))))
+		stop("x and value have different shapes.")
+	if (is.null(x@attrs))
+		x@attrs <- list()
+	# TODO I should make sure the names are characters.
+	x@attrs$names <- value
+	x
+}
+
+#' @rdname names
+setMethod("names", signature(x = "fm"), .get.names)
+#' @rdname names
+setMethod("names", signature(x = "fmV"), .get.names)
+
+#' @rdname names
+setMethod("names<-", signature(x = "fm", value="fm"), .set.names)
+#' @rdname names
+setMethod("names<-", signature(x = "fmV", value="fmV"), .set.names)
+
 #' Matrix Transpose
 #'
 #' Given a matrix \code{x}, \code{t} returns the transpose of \code{x}.
@@ -1295,14 +1383,18 @@ NULL
 
 #' @rdname print
 setMethod("print", signature(x = "fm"), function(x)
-		  cat("FlashMatrixR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
+		  cat("FlashR matrix ", x@name, ": ", dim(x)[1], " rows, ", dim(x)[2],
 			  " columns, is sparse: ", fm.is.sparse(x), "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fmV"), function(x)
-	cat("FlashVectorR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+	cat("FlashR vector ", x@name, ": length: ", length(x), "\n", sep=""))
+#' @rdname print
+setMethod("print", signature(x = "fmFactorV"), function(x)
+	cat("FlashR factor vector ", x@name, ": length: ", length(x),
+		", max level: ", x@num.levels, "\n", sep=""))
 #' @rdname print
 setMethod("print", signature(x = "fm.bo"), function(x)
-	cat("FLashMatrixR basic operator:", x@name, "\n"))
+	cat("FLashR basic operator:", x@name, "\n"))
 
 #' Count the number of elements
 #'
@@ -1315,15 +1407,23 @@ setMethod("print", signature(x = "fm.bo"), function(x)
 #' \item{val}{The unique values in the vector.}
 #' \item{Freq}{The number of occurences of each unique value.}
 #' }
+#' @name fm.table
+NULL
+
+setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
+
+#' @rdname fm.table
 fm.table <- function(x)
 {
 	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
 	ret <- fm.sgroupby(x, count)
 	if (!is.null(ret))
-		list(val=ret$val, Freq=ret$agg)
+		new("fm.table", val=ret$val, Freq=ret$agg)
 	else
 		NULL
 }
+
+setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
 
 #' Integer Vectors
 #'
@@ -1423,7 +1523,7 @@ setMethod("[", signature(x="fm", j="missing"),
 			  ret
 		  })
 #' @rdname Extract
-setMethod("[", signature(x="fm", i="missing", drop="missing"),
+setMethod("[", signature(x="fm", i="missing"),
 		  function(x, i, j, drop=TRUE) {
 			  ret <- fm.get.cols(x, j)
 			  if (drop && length(j) == 1)
@@ -1528,9 +1628,6 @@ setMethod("crossprod", "fm", function(x, y=NULL) fm.crossprod(x, y))
 #' @rdname crossprod
 setMethod("tcrossprod", "fm", function(x, y=NULL) fm.tcrossprod(x, y))
 
-#' @rdname matrix
-setMethod("is.matrix", "fm", function(x) TRUE)
-
 #' FlashMatrix Summaries
 #'
 #' \code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
@@ -1553,7 +1650,7 @@ setMethod("is.matrix", "fm", function(x) TRUE)
 fm.summary <- function(x)
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	lazy.res <- list()
 	if (fm.is.matrix(x)) {
 		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
@@ -1579,7 +1676,7 @@ fm.summary <- function(x)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
@@ -1693,3 +1790,98 @@ fm.cal.residul <- function(mul, values, vectors)
 	l2 <- sqrt(colSums(tmp * tmp))
 	fm.conv.FM2R(l2) / values
 }
+
+#' Scaling and Centering of Matrix
+#'
+#' \code{scale} centers and/or scales the columns of a FlashMatrix matrix.
+#'
+#' The value of \code{center} determines how column centering is
+#' performed.  If \code{center} is a numeric vector with length equal to
+#' the number of columns of \code{x}, then each column of \code{x} has the
+#' corresponding value from \code{center} subtracted from it.  If \code{center}
+#' is \code{TRUE} then centering is done by subtracting the column means
+#' (omitting \code{NA}s) of \code{x} from their corresponding columns, and if
+#' \code{center} is \code{FALSE}, no centering is done.
+#'
+#' The value of \code{scale} determines how column scaling is performed
+#' (after centering).  If \code{scale} is a numeric vector with length
+#' equal to the number of columns of \code{x}, then each column of \code{x} is
+#' divided by the corresponding value from \code{scale}.  If \code{scale} is
+#' \code{TRUE} then scaling is done by dividing the (centered) columns of
+#' \code{x} by their standard deviations if \code{center} is \code{TRUE},
+#' and the root mean square otherwise.  If \code{scale} is \code{FALSE},
+#' no scaling is done.
+#'
+#' The root-mean-square for a (possibly centered) column is defined
+#' as sqrt(sum(x^2)/(n-1)), where x is a vector of the non-missing
+#' values and n is the number of non-missing values.  In the case
+#' \code{center = TRUE}, this is the same as the standard deviation, but
+#' in general it is not.
+#'
+#' @param x a FlashMatrix matrix
+#' @param center either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @param sclae either a logical value or a numeric vector of length equal to
+#'        the number of columns of \code{x}.
+#' @return a FlashMatrix matrix.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
+		  # TODO it needs to handle NA.
+		  # If the center is true, center columns by their means.
+		  if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+		  else if (!is.logical(center)) {
+			  if (length(center) != ncol(x)) {
+				  print("The length of center should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+
+		  # If scale is true and center is also true, scale by their standard
+		  # deviation.
+		  if (is.logical(scale) && scale && is.logical(center) && center) {
+			  sum.x <- fm.colSums(x, TRUE)
+			  sum.x2 <- fm.colSums(x * x, TRUE)
+			  res <- fm.materialize(sum.x, sum.x2)
+			  sum.x <- res[[1]]
+			  sum.x2 <- res[[2]]
+			  n <- nrow(x)
+			  avg <- sum.x / n
+			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  x <- fm.mapply.row(x, sd, fm.bo.div)
+		  }
+		  # If scale is true and center is false, scale by their root mean
+		  # square.
+		  else if (is.logical(scale) && scale) {
+			  sum.x2 <- fm.colSums(x * x)
+			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
+			  x <- fm.mapply.row(x, scal, fm.bo.div)
+		  }
+		  else if (!is.logical(scale)) {
+			  if (length(scale) != ncol(x)) {
+				  print("The length of scale should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, scale, fm.bo.div)
+		  }
+		  x
+})
+
+#' Drop Redundant Extent Information
+#'
+#' Delete the dimensions of a FlashMatrix matrix which have only one level.
+#'
+#' If the input matrix has only one row or one column, it works the same as
+#' fm.as.vector. Otherwise, it returns the original matrix.
+#'
+#' @param x a FlashMatrix matrix.
+#' @return a FlashMatrix matrix or vector.
+setMethod("drop", "fm", function(x) {
+		  if (nrow(x) > 1 && ncol(x) > 1)
+			  x
+		  else
+			  fm.as.vector(x)
+})

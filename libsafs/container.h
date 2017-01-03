@@ -31,6 +31,7 @@
 #include <boost/assert.hpp>
 
 #include "common.h"
+#include "concurrency.h"
 
 template<class T>
 class queue_interface
@@ -263,7 +264,7 @@ class thread_safe_FIFO_queue: public fifo_queue<T>
 	 * lock is still needed because we need to check whether the buffer
 	 * has entries or has space.
 	 */
-	pthread_spinlock_t _lock;
+	spin_lock _lock;
 	int max_size;
 	std::string name;
 
@@ -272,7 +273,6 @@ public:
 			int size): fifo_queue<T>(node_id, size, false) {
 		this->name = name;
 		this->max_size = size;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	thread_safe_FIFO_queue(const std::string &name, int node_id, int init_size,
@@ -280,11 +280,9 @@ public:
 				max_size > init_size) {
 		this->name = name;
 		this->max_size = max_size;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	virtual ~thread_safe_FIFO_queue() {
-		pthread_spin_destroy(&_lock);
 	}
 
 	static thread_safe_FIFO_queue<T> *create(const std::string &name,
@@ -297,14 +295,14 @@ public:
 	}
 
 	virtual int fetch(T *entries, int num) {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		int ret = fifo_queue<T>::fetch(entries, num);
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return ret;
 	}
 
 	virtual int add(T *entries, int num) {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		int ret = fifo_queue<T>::add(entries, num);
 		int orig_size = fifo_queue<T>::get_size();
 		if (ret < num && orig_size < max_size) {
@@ -317,11 +315,11 @@ public:
 			ret += ret2;
 			assert(ret == num);
 		}
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return ret;
 	}
 	virtual int add(fifo_queue<T> *queue) {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		int ret = fifo_queue<T>::add(queue);
 		int orig_size = fifo_queue<T>::get_size();
 		if (!queue->is_empty() && orig_size < max_size) {
@@ -334,7 +332,7 @@ public:
 			ret += ret2;
 			assert(queue->is_empty());
 		}
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return 0;
 	}
 
@@ -363,24 +361,24 @@ public:
 	 * It locks the buffer, so don't over use it.
 	 */
 	int get_num_entries() {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		int num_entries = fifo_queue<T>::get_num_entries();
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return num_entries;
 	}
 
 	// TODO these are bugs. They should be protected by locks.
 	bool is_full() {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		bool ret = fifo_queue<T>::is_full();
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return ret;
 	}
 
 	bool is_empty() {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		bool ret = fifo_queue<T>::is_empty();
-		pthread_spin_unlock(&_lock);
+		_lock.unlock();
 		return ret;
 	}
 

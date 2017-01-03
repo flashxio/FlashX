@@ -42,6 +42,9 @@ public:
 				arr[i] = -1;
 		}
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 }

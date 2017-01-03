@@ -72,7 +72,7 @@ setMethod("sd", "fmV", .sd.int)
 				   method=c("pearson", "kendall", "spearman"))
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
@@ -99,7 +99,7 @@ setMethod("sd", "fmV", .sd.int)
 		y.mu <- fm.conv.FM2R(y.mu)
 		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	ret
 }
 
@@ -107,7 +107,7 @@ setMethod("sd", "fmV", .sd.int)
 				   method=c("pearson", "kendall", "spearman"))
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	if (!is.null(y))
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
@@ -139,7 +139,7 @@ setMethod("sd", "fmV", .sd.int)
 		y.sd <- fm.conv.FM2R(y.sd)
 		ret <- (fm.conv.FM2R(ret[[5]]) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	ret
 }
 
@@ -147,7 +147,7 @@ setMethod("sd", "fmV", .sd.int)
 					       method = c("unbiased", "ML"))
 {
 	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
+	fm.set.test.na(FALSE)
 	if (is.data.frame(x))
 		x <- as.matrix(x)
 	else if (!is.matrix(x))
@@ -208,7 +208,7 @@ setMethod("sd", "fmV", .sd.int)
 		R[] <- Is * cov * rep(Is, each = nrow(cov))
 		y$cor <- R
 	}
-	.set.test.na(orig.test.na)
+	fm.set.test.na(orig.test.na)
 	y
 }
 
@@ -233,6 +233,12 @@ setMethod("sd", "fmV", .sd.int)
 #' @name cor
 NULL
 
+#' @rdname cor
+setMethod("var", "fm", function(x, y=NULL, na.rm=FALSE, use) {
+		  if (missing(use))
+			  use <- if (na.rm) "na.or.complete" else "everything"
+		  cor(x, y, use)
+})
 #' @rdname cor
 setMethod("cor", "fm", .cor.int)
 #' @rdname cor

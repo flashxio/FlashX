@@ -30,9 +30,11 @@
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.svd <- function(x, nu, nv, tol=1e-8)
+fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
+	n <- dim(x)[1]
+	p <- dim(x)[2]
 	tx <- t(x)
 	comp.right <- FALSE
 	if (nrow(x) > ncol(x))
@@ -41,34 +43,36 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 	nev <- max(nu, nv)
 	x.prod <- NULL
 	if (fm.is.sparse(x) && comp.right) {
-		n <- ncol(x)
+		size <- ncol(x)
 		multiply <- function(vec, extra) t(x) %*% (x %*% vec)
 	}
 	else if (fm.is.sparse(x)) {
-		n <- nrow(x)
+		size <- nrow(x)
 		multiply <- function(vec, extra) x %*% (t(x) %*% vec)
 	}
 	else if (comp.right) {
-		n <- ncol(x)
-		x.prod <- fm.conv.FM2R(tx %*% x)
+		size <- ncol(x)
+		x.prod <- tx %*% x
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	else {
-		n <- nrow(x)
-		x.prod <- fm.conv.FM2R(x %*% tx)
+		size <- nrow(x)
+		x.prod <- x %*% tx
 		multiply <- function(vec, extra) x.prod %*% vec
 	}
 	# If it's a very small matrix, we can compute its eigenvalues directly.
 	# Or if we need to compute many eigenvalues, we probably should also
 	# compute its eigenvalues directly.
-	if (!is.null(x.prod) && (n < 100 || nev >= n / 2)) {
+	if (!is.null(x.prod) && (size < 100 || nev >= size / 2)) {
+		if (!is.matrix(x.prod))
+			x.prod <- as.matrix(x.prod)
 		res <- eigen(x.prod, TRUE, FALSE)
 		res$values <- res$values[1:nev]
 		nev <- nrow(x.prod)
 		res$vectors <- fm.as.matrix(res$vectors)
 	}
 	else
-		res <- fm.eigen(multiply, nev, n, which="LM", sym=TRUE,
+		res <- fm.eigen(multiply, nev, size, which="LM", sym=TRUE,
 					  options=list(tol=tol, ncv=max(nev * 2, 5)))
 	if (fm.is.vector(res$vectors))
 		res$vectors <- fm.as.matrix(res$vectors)
@@ -111,5 +115,43 @@ fm.svd <- function(x, nu, nv, tol=1e-8)
 			right <- rescale(right)
 		}
 	}
-	list(d=sqrt(res$values), u=left, v=right, options=res$options)
+	# If an eigenvalue is very small (close to the machine precision), it's
+	# possible that the eigenvalue is negative but very close to 0.
+	vals <- ifelse(res$values > 0, res$values, 0)
+	list(d=sqrt(vals), u=left, v=right, options=res$options)
 }
+
+setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
+		  x <- fm.as.matrix(x)
+		  if (any(!is.finite(x)))
+			  stop("infinite or missing values in 'x'")
+		  dx <- dim(x)
+		  n <- dx[1L]
+		  p <- dx[2L]
+		  if (!n || !p)
+			  stop("a dimension is zero")
+		  fm.res <- fm.svd(x, nu, nv, tol=.Machine$double.eps)
+		  res <- list(d = fm.res$d)
+		  if (nu)
+			  res$u <- fm.res$u
+		  if (nv)
+			  res$v <- fm.res$v
+		  res
+})
+
+setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
+												  scale.=FALSE, tol=NULL) {
+	scale.x <- scale(x, center, scale.)
+	res <- fm.svd(scale.x, nu=0, tol=.Machine$double.eps)
+	if (!is.null(tol)) {
+		idxs <- which(res$d > tol)
+		rotation <- res$v[, idxs]
+	}
+	else
+		rotation <- res$v
+	if (retx)
+		x <- scale.x %*% rotation
+	else
+		x <- NULL
+	list(sdev=res$d / sqrt(nrow(x)), rotation=rotation, x=x)
+})

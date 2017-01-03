@@ -20,6 +20,9 @@ public:
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = i;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 void test_mapply()

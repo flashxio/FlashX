@@ -41,6 +41,9 @@ public:
 		for (size_t i = 0; i < num_eles; i++)
 			arr[i] = 1.0 / num_vertices;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 detail::matrix_store::ptr get_out_degree(sparse_matrix::ptr mat, bool in_mem)

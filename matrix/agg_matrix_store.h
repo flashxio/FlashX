@@ -45,7 +45,7 @@ class agg_matrix_store: public sink_store
 	std::shared_ptr<portion_mapply_op> portion_op;
 	matrix_store::const_ptr data;
 
-	matrix_store::ptr get_agg_res() const;
+	matrix_store::const_ptr get_agg_res() const;
 public:
 	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 

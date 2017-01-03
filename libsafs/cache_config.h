@@ -21,7 +21,7 @@
  */
 
 #include <vector>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "common.h"
 #include "cache.h"
@@ -54,7 +54,7 @@ class cache_config
 	long size;
 	int type;
 	// node id <-> the size of each partition
-	std::tr1::unordered_map<int, long> part_sizes;
+	std::unordered_map<int, long> part_sizes;
 
 	class create_cache_thread: public thread
 	{
@@ -82,7 +82,7 @@ class cache_config
 	std::shared_ptr<page_cache> __create_cache_on_node(int node_id,
 			int max_num_pending_flush) const;
 protected:
-	void init(const std::tr1::unordered_map<int, long> &part_sizes) {
+	void init(const std::unordered_map<int, long> &part_sizes) {
 		this->part_sizes = part_sizes;
 	}
 
@@ -109,7 +109,7 @@ public:
 	}
 
 	long get_part_size(int node_id) const {
-		std::tr1::unordered_map<int, long>::const_iterator it
+		std::unordered_map<int, long>::const_iterator it
 			= part_sizes.find(node_id);
 		assert(it != part_sizes.end());
 		return it->second;
@@ -118,7 +118,7 @@ public:
 	virtual int page2cache(const page_id_t &pg_id) const = 0;
 
 	void get_node_ids(std::vector<int> &node_ids) const {
-		for (std::tr1::unordered_map<int, long>::const_iterator it
+		for (std::unordered_map<int, long>::const_iterator it
 				= part_sizes.begin(); it != part_sizes.end(); it++)
 			node_ids.push_back(it->first);
 	}
@@ -141,7 +141,7 @@ public:
 	even_cache_config(long size, int type,
 			const std::vector<int> &node_ids): cache_config(size, type) {
 		long part_size = size / node_ids.size();
-		std::tr1::unordered_map<int, long> part_sizes;
+		std::unordered_map<int, long> part_sizes;
 		for (size_t i = 0; i < node_ids.size(); i++)
 			part_sizes.insert(std::pair<int, long>(node_ids[i], part_size));
 		init(part_sizes);
@@ -170,7 +170,7 @@ public:
 		map[1] = 2;
 		map[2] = 3;
 		assert(node_ids.size() == 4);
-		std::tr1::unordered_map<int, long> part_sizes;
+		std::unordered_map<int, long> part_sizes;
 		part_sizes.insert(std::pair<int, long>(0, size));
 		part_sizes.insert(std::pair<int, long>(1, 0));
 		part_sizes.insert(std::pair<int, long>(2, 0));

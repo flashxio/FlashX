@@ -117,7 +117,7 @@ static void split_vertices(const graph_index &index, int part_id,
 
 void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
 {
-	pthread_spin_lock(&lock);
+	lock.lock();
 	vertex_buf.clear();
 	vpart_ps.clear();
 	active_vertices->clear();
@@ -138,13 +138,13 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 	buf_fetch_idx = scan_pointer(vertex_buf.size(), true);
 	num_active = vertex_buf.size() + vpart_ps.size() * graph_conf.get_num_vparts();
 
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	curr_vpart = 0;
 }
 
 void default_vertex_queue::init(worker_thread &t)
 {
-	pthread_spin_lock(&lock);
+	lock.lock();
 	vertex_buf.clear();
 	vpart_ps.clear();
 	assert(active_vertices->get_num_active_vertices() == 0);
@@ -184,7 +184,7 @@ void default_vertex_queue::init(worker_thread &t)
 		forward = graph.get_curr_level() % 2;
 	active_vertices->set_dir(forward);
 	buf_fetch_idx = scan_pointer(0, true);
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	curr_vpart = 0;
 }
 
@@ -226,7 +226,7 @@ int default_vertex_queue::fetch(compute_vertex_pointer vertices[], int num)
 		return 0;
 
 	int num_fetched = 0;
-	pthread_spin_lock(&lock);
+	lock.lock();
 	if (buf_fetch_idx.get_num_remaining() > 0) {
 		int num_to_fetch = min(num, buf_fetch_idx.get_num_remaining());
 		size_t curr_loc = buf_fetch_idx.get_curr_loc();
@@ -258,7 +258,7 @@ int default_vertex_queue::fetch(compute_vertex_pointer vertices[], int num)
 		num_fetched += fetch_again;
 	}
 	num_active -= num_fetched;
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 	return num_fetched;
 }
 
@@ -286,7 +286,7 @@ void customized_vertex_queue::get_compute_vertex_pointers(
 void customized_vertex_queue::init(const vertex_id_t buf[],
 		size_t size, bool sorted)
 {
-	pthread_spin_lock(&lock);
+	lock.lock();
 	sorted_vertices.clear();
 
 	// The unpartitioned vertices
@@ -305,12 +305,12 @@ void customized_vertex_queue::init(const vertex_id_t buf[],
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
 	this->fetch_idx = scan_pointer(sorted_vertices.size(), forward);
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 }
 
 void customized_vertex_queue::init(worker_thread &t)
 {
-	pthread_spin_lock(&lock);
+	lock.lock();
 	sorted_vertices.clear();
 	std::vector<local_vid_t> local_ids;
 	t.next_activated_vertices->fetch_reset_active_vertices(local_ids);
@@ -334,7 +334,7 @@ void customized_vertex_queue::init(worker_thread &t)
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
 	fetch_idx = scan_pointer(sorted_vertices.size(), forward);
-	pthread_spin_unlock(&lock);
+	lock.unlock();
 }
 
 worker_thread::worker_thread(graph_engine *graph,

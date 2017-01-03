@@ -21,5 +21,7 @@ An S4 class to represent a FlashMatrix matrix.
 \item{\code{type}}{a string indicating the type of the matrix. e.g., sparse or dense.}
 
 \item{\code{ele_type}}{a string indicating the element type in the matrix.}
+
+\item{\code{attrs}}{a list that stores the attributes of the matrix.}
 }}
 

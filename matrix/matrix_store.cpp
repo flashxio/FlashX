@@ -125,6 +125,9 @@ public:
 	virtual const scalar_type &get_type() const {
 		return type;
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 class set_task: public thread_task
@@ -304,6 +307,14 @@ matrix_store::const_ptr matrix_store::get_cols(
 		return matrix_store::const_ptr();
 	else
 		return rows->transpose();
+}
+
+bool matrix_store::share_data(const matrix_store &store) const
+{
+	// By default, we can use data id to determine if two matrices have
+	// the same data.
+	return get_data_id() == store.get_data_id()
+		&& get_data_id() != INVALID_MAT_ID;
 }
 
 }

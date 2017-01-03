@@ -387,7 +387,7 @@ public:
 template<class T>
 class thread_safe_msg_sender
 {
-	pthread_spinlock_t _lock;
+	spin_lock _lock;
 	message<T> buf;
 
 	slab_allocator *alloc;
@@ -400,7 +400,6 @@ class thread_safe_msg_sender
 			msg_queue<T> *queue): buf(alloc, queue->is_accept_inline()) {
 		this->alloc = alloc;
 		dest_queue = queue;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 public:
@@ -419,18 +418,18 @@ public:
 	 * return the number of entries that have been flushed.
 	 */
 	int flush() {
-		pthread_spin_lock(&_lock);
+		_lock.lock();
 		if (!buf.is_empty()) {
 			message<T> tmp = buf;
 			message<T> tmp1(alloc, dest_queue->is_accept_inline());
 			buf = tmp1;
-			pthread_spin_unlock(&_lock);
+			_lock.unlock();
 			int ret = dest_queue->add(&tmp, 1);
 			assert(ret == 1);
 			return ret;
 		}
 		else {
-			pthread_spin_unlock(&_lock);
+			_lock.unlock();
 			return 0;
 		}
 	}

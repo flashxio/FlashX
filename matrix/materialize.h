@@ -70,6 +70,12 @@ public:
 	virtual std::string to_string(
 			const std::vector<matrix_store::const_ptr> &mats) const = 0;
 
+	// A portion operation may fail. If so, the portion operation should
+	// notify the main thread that the operation failed by override this method.
+	virtual bool is_success() const {
+		return true;
+	}
+
 	/*
 	 * Give a hint if this operation is aggregation, so we can optimize
 	 * the backend accordingly. When this is an aggregation operation,
@@ -77,6 +83,15 @@ public:
 	 */
 	virtual bool is_agg() const {
 		return false;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return true;
+	}
+
+	bool is_wide() const {
+		return get_out_num_cols() > get_out_num_rows();
 	}
 
 	size_t get_out_num_rows() const {

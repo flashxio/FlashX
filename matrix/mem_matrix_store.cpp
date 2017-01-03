@@ -36,6 +36,87 @@ namespace detail
 
 const size_t mem_matrix_store::CHUNK_SIZE = 16 * 1024;
 
+bool mem_matrix_store::symmetrize(bool upper2lower)
+{
+	if (get_num_rows() != get_num_cols())
+		return false;
+
+	const scatter_gather &sg = get_type().get_sg();
+	if (upper2lower && store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			non_contig[i] = get_row(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			char *row = get_row(i) + i * get_entry_size();
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (upper2lower) {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			non_contig[i] = get_col(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			char *col = get_col(i) + i * get_entry_size();
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			if (get_row(i) == NULL)
+				return false;
+			non_contig[i] = get_row(i) + (get_num_cols() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_rows() - 1; i > 0; i--) {
+			char *row = get_row(i);
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			if (get_col(i) == NULL)
+				return false;
+			non_contig[i] = get_col(i) + (get_num_rows() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_cols() - 1; i > 0; i--) {
+			char *col = get_col(i);
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	return true;
+}
+
 mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 		const scalar_type &type): matrix_store(nrow, ncol, true,
 			type), mat_id(mat_counter++)
@@ -66,7 +147,9 @@ void mem_matrix_store::write_portion_async(local_matrix_store::const_ptr portion
 mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes)
 {
-	if (num_nodes < 0) {
+	// If the number of nodes aren't specified, or this isn't a very tall or
+	// wide matrix, we use a simple way of storing the matrix.
+	if (num_nodes < 0 || (nrow <= CHUNK_SIZE && ncol <= CHUNK_SIZE)) {
 		if (layout == matrix_layout_t::L_ROW)
 			return detail::mem_row_matrix_store::create(nrow, ncol, type);
 		else
@@ -75,6 +158,55 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 	else
 		return detail::NUMA_matrix_store::create(nrow, ncol, num_nodes,
 				layout, type);
+}
+
+std::string mem_matrix_store::get_name() const
+{
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+			% get_num_cols()
+			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
+}
+
+bool mem_matrix_store::share_data(const matrix_store &store) const
+{
+	const mem_matrix_store *mem_store
+		= dynamic_cast<const mem_matrix_store *>(&store);
+	size_t store_len = store.get_num_rows() * store.get_num_cols();
+	size_t this_len = get_num_rows() * get_num_cols();
+	// If the two matrices store data in the same memory and have
+	// the same number of elements.
+	if (get_raw_arr() && mem_store)
+		return mem_store->get_raw_arr() == get_raw_arr()
+			&& store_len == this_len;
+
+	matrix_store::const_ptr tstore;
+	// If the other matrix might be a transpose of this matrix.
+	if (store.get_num_rows() == get_num_cols()
+			&& store.get_num_cols() == get_num_rows()
+			&& store.store_layout() != store_layout()) {
+		tstore = store.transpose();
+		mem_store = dynamic_cast<const mem_matrix_store *>(tstore.get());
+	}
+	if (!mem_store)
+		return false;
+
+	if (mem_store->get_num_rows() != get_num_rows()
+			|| mem_store->get_num_cols() != get_num_cols()
+			|| mem_store->store_layout() != store_layout())
+		return false;
+
+	if (mem_store->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < get_num_rows(); i++)
+			if (get_row(i) != mem_store->get_row(i))
+				return false;
+		return true;
+	}
+	else {
+		for (size_t i = 0; i < get_num_cols(); i++)
+			if (get_col(i) != mem_store->get_col(i))
+				return false;
+		return true;
+	}
 }
 
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
@@ -585,6 +717,30 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 	}
 
 	return std::dynamic_pointer_cast<mem_row_matrix_store>(store);
+}
+
+size_t mem_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
 }
 
 }

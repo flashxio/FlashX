@@ -1,8 +1,8 @@
-#ifndef __ONE_VAL_MATRIX_STORE_H__
-#define __ONE_VAL_MATRIX_STORE_H__
+#ifndef __SET_DATA_MATRIX_STORE_H__
+#define __SET_DATA_MATRIX_STORE_H__
 
 /*
- * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Copyright 2016 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of FlashMatrix.
@@ -20,8 +20,10 @@
  * limitations under the License.
  */
 
-#include "virtual_matrix_store.h"
+#include "matrix_config.h"
+#include "bulk_operate.h"
 #include "NUMA_mapper.h"
+#include "virtual_matrix_store.h"
 
 namespace fm
 {
@@ -29,25 +31,65 @@ namespace fm
 namespace detail
 {
 
-class one_val_matrix_store: public virtual_matrix_store
+/*
+ * This matrix assumes that set_operate can deterministically set the data
+ * of the matrix and set_operate doesn't need to maintain a large volume of
+ * data. This matrix is perfect for the matrices that has sequential numbers
+ * or repeated data.
+ */
+class set_data_matrix_store: public virtual_matrix_store
 {
 	const size_t mat_id;
-	scalar_variable::ptr val;
+	const size_t data_id;
+	set_operate::const_ptr row_op;
+	set_operate::const_ptr col_op;
 	matrix_layout_t layout;
-	std::vector<simple_raw_array> portion_bufs;
-	int num_nodes;
 	std::shared_ptr<NUMA_mapper> mapper;
-public:
-	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes);
+	int num_nodes;
 
-	virtual size_t get_data_id() const {
-		return INVALID_MAT_ID;
+	set_data_matrix_store(set_operate::const_ptr row_op,
+			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes): virtual_matrix_store(nrow,
+				ncol, true, row_op->get_type()), mat_id(mat_counter++),
+			data_id(mat_id) {
+		this->row_op = row_op;
+		this->col_op = col_op;
+		this->layout = layout;
+		this->num_nodes = num_nodes;
+		if (num_nodes > 0)
+			this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
+						NUMA_range_size_log));
 	}
-	virtual bool share_data(const matrix_store &store) const;
+	set_data_matrix_store(set_operate::const_ptr row_op,
+			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes,
+			size_t _data_id): virtual_matrix_store(nrow, ncol, true,
+				row_op->get_type()), mat_id(mat_counter++), data_id(_data_id) {
+		this->row_op = row_op;
+		this->col_op = col_op;
+		this->layout = layout;
+		this->num_nodes = num_nodes;
+		if (num_nodes > 0)
+			this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
+						NUMA_range_size_log));
+	}
+public:
+	static ptr create(set_operate::const_ptr row_op,
+			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes) {
+		if (row_op->transpose() == NULL || col_op->transpose() == NULL) {
+			BOOST_LOG_TRIVIAL(error) << "set_operate doesn't have transpose";
+			return ptr();
+		}
+		return ptr(new set_data_matrix_store(row_op, col_op, nrow, ncol,
+					layout, num_nodes));
+	}
+	virtual size_t get_data_id() const {
+		return data_id;
+	}
 
 	virtual std::string get_name() const {
-		return (boost::format("one_val_mat(%1%,%2%)") % get_num_rows()
+		return (boost::format("set_data_mat(%1%,%2%)") % get_num_rows()
 			% get_num_cols()).str();
 	}
 	virtual matrix_store::const_ptr materialize(bool in_mem,
