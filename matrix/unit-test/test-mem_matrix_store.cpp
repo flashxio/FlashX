@@ -262,8 +262,12 @@ void test_symmetrize()
 	bool ret;
 	mem_matrix_store::ptr mat = mem_matrix_store::create(1000, 1000,
 			matrix_layout_t::L_ROW, get_scalar_type<size_t>(), -1);
-	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
-				mat->store_layout()));
+	scalar_variable_impl<size_t> start(1);
+	scalar_variable_impl<size_t> stride(1);
+	auto set = get_scalar_type<size_t>().get_set_seq(start, stride,
+			mat->get_num_rows(), mat->get_num_cols(), true,
+			mat->store_layout());
+	mat->set_data(*set);
 	ret = mat->symmetrize(true);
 	assert(ret);
 	assert(is_symmetric(mat));
@@ -274,8 +278,7 @@ void test_symmetrize()
 
 	mat = mem_matrix_store::create(1000, 1000, matrix_layout_t::L_COL,
 			get_scalar_type<size_t>(), -1);
-	mat->set_data(set_seq<size_t>(1, 1, mat->get_num_rows(), true,
-				mat->store_layout()));
+	mat->set_data(*set);
 	ret = mat->symmetrize(true);
 	assert(ret);
 	assert(is_symmetric(mat));
@@ -339,12 +342,18 @@ void test_multiply(matrix_layout_t layout)
 	printf("test multiply\n");
 	mem_matrix_store::ptr mat1 = mem_matrix_store::create(10, 1000, layout,
 			get_scalar_type<double>(), -1);
-	mat1->set_data(set_seq<double>(1, 1, mat1->get_num_rows(), true,
-				mat1->store_layout()));
+	scalar_variable_impl<double> start(1);
+	scalar_variable_impl<double> stride(1);
+	auto set = get_scalar_type<double>().get_set_seq(start, stride,
+			mat1->get_num_rows(), mat1->get_num_cols(), true,
+			mat1->store_layout());
+	mat1->set_data(*set);
 	mem_matrix_store::ptr mat2 = mem_matrix_store::create(1000, 10, layout,
 			get_scalar_type<double>(), -1);
-	mat2->set_data(set_seq<double>(1, 1, mat2->get_num_cols(), false,
-				mat2->store_layout()));
+	set = get_scalar_type<double>().get_set_seq(start, stride,
+			mat2->get_num_rows(), mat2->get_num_cols(), false,
+			mat2->store_layout());
+	mat2->set_data(*set);
 	assert(same_data(mat1, std::dynamic_pointer_cast<const mem_matrix_store>(
 					mat2->transpose())));
 	mem_matrix_store::ptr res1 = mem_matrix_store::create(10, 10, layout,
