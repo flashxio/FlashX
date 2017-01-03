@@ -9,7 +9,7 @@ fm.spectral.embedding(fm, nev, which = c("A, Aug, L, nL"), c = 1/nrow(fm),
   ncv = 2 * nev, tol = 1e-12)
 }
 \arguments{
-\item{fm}{The FlashMatrixR object}
+\item{fm}{The FlashR object}
 
 \item{nev}{The number of eigenvalues/vectors required.}
 

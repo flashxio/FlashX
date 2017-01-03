@@ -7,21 +7,25 @@
 fm.apply(x, margin, FUN)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 
 \item{margin}{an integer. \code{1} indicates rows and \code{2} indicates columns.}
 
 \item{FUN}{a string that indicates the name of the predefined function.}
 }
 \value{
-a FlashMatrix matrix.
+a FlashR matrix.
 }
 \description{
-Apply a predefined function on rows/columns of a FlashMatrix matrix.
+Apply a predefined function on rows/columns of a FlashR matrix.
 The predefined function always output a vector of the same length. Thus,
 the output of \code{fm.apply} is a matrix.
 }
 \details{
 Currently, the predefined functions include \code{"rank"} and
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.apply(mat, 1, "rank")
 }
 

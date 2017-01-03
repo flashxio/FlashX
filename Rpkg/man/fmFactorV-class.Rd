@@ -3,11 +3,11 @@
 \docType{class}
 \name{fmFactorV-class}
 \alias{fmFactorV-class}
-\title{An S4 class to represent a FlashMatrix factor vector. It inherits from
-a FlashMatrix vector.}
+\title{An S4 class to represent a FlashR factor vector. It inherits from
+a FlashR vector.}
 \description{
-An S4 class to represent a FlashMatrix factor vector. It inherits from
-a FlashMatrix vector.
+An S4 class to represent a FlashR factor vector. It inherits from
+a FlashR vector.
 }
 \section{Slots}{
 

@@ -17,9 +17,11 @@
 
 #' Compute the singular-value decomposition on a large matrix.
 #'
-#' The current implementation can only compute the largest eigenvalues.
+#' The difference between \code{svd} and \code{fm.svd} is that \code{fm.svd}
+#' allows a user-specified tol. \code{svd} computes eigenvalues in machine
+#' precision.
 #'
-#' @param x a FlashMatrix matrix
+#' @param x a FlashR matrix
 #' @param nu the number of left singluar vectors to be computed.
 #' @param nv the number of right singluar vectors to be computed.
 #' @param tol Stopping criterion: the relative accuracy of the Ritz value
@@ -30,6 +32,15 @@
 #'   \item{u}{ nu approximate left singular vectors (only when right_only=FALSE)}
 #'   \item{v}{ nv approximate right singular vectors}
 #' @author Da Zheng <dzheng5@@jhu.edu>
+#' @name svd
+#'
+#' @examples
+#' mat <- fm.runif.matrix(1000, 100)
+#' res <- fm.svd(mat, nu=10, nv=0)
+#' res <- svd(mat, nu=10, nv=0)
+NULL
+
+#' @rdname svd
 fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
@@ -82,7 +93,7 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	rescale <- function(x) {
 		if (fm.is.vector(x))
 			x <- fm.as.matrix(x)
-		fm.set.materialize.level(x, 2)
+		fm.set.cached(x, TRUE)
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
 #		x <- fm.materialize(x)
@@ -121,6 +132,7 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 	list(d=sqrt(vals), u=left, v=right, options=res$options)
 }
 
+#' @rdname svd
 setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LINPACK) {
 		  x <- fm.as.matrix(x)
 		  if (any(!is.finite(x)))

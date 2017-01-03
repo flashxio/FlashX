@@ -4,15 +4,21 @@
 \name{dimnames}
 \alias{dimnames}
 \alias{dimnames,fm-method}
+\alias{dimnames,fmV-method}
 \alias{dimnames<-,fm,list-method}
+\alias{dimnames<-,fmV,list-method}
 \title{Dimnames of an Object}
 \usage{
 \S4method{dimnames}{fm}(x)
 
+\S4method{dimnames}{fmV}(x)
+
 \S4method{dimnames}{fm,list}(x) <- value
+
+\S4method{dimnames}{fmV,list}(x) <- value
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 
 \item{value}{a list that provides values for dimension names.}
 }
@@ -22,5 +28,10 @@
 }
 \description{
 Retrieve or set the dimnames of a matrix.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+dimnames(mat)
+dimnames(mat) <- list("dim1", "dim2")
 }
 

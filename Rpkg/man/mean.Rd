@@ -12,11 +12,15 @@
 \S4method{mean}{fmV}(x, ...)
 }
 \arguments{
-\item{x}{A FlashMatrix vector or matrix.}
+\item{x}{A FlashR vector or matrix.}
 
 \item{...}{further arguments passed to or from other methods.}
 }
 \description{
 Compute arithmetic mean.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mean(mat)
 }
 

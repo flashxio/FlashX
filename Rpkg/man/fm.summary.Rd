@@ -2,12 +2,12 @@
 % Please edit documentation in R/FlashR_base.R
 \name{fm.summary}
 \alias{fm.summary}
-\title{FlashMatrix Summaries}
+\title{FlashR Summaries}
 \usage{
 fm.summary(x)
 }
 \arguments{
-\item{x}{a FlashMatrix vector or matrix.}
+\item{x}{a FlashR vector or matrix.}
 }
 \value{
 A list containing the following named components:
@@ -21,11 +21,15 @@ A list containing the following named components:
 }
 }
 \description{
-\code{fm.summary} produces summaries of a FlashMatrix vector or matrix.
+\code{fm.summary} produces summaries of a FlashR vector or matrix.
 }
 \details{
 It computes the min, max, sum, mean, L1, L2, number of non-zero values if
 the argument is a vector, or these statistics for each column if the argument
 is a matrix.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+fm.summary(mat)
 }
 

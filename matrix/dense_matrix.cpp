@@ -373,8 +373,9 @@ dense_matrix::ptr blas_multiply_tall(const dense_matrix &m1,
 		dense_matrix::ptr tmp = m2.conv2(out_layout);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -474,7 +475,10 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 			else if (t_layout == matrix_layout_t::L_COL)
 				t_layout = matrix_layout_t::L_ROW;
 			dense_matrix::ptr t_res = t_mat2->multiply(*t_mat1, t_layout);
-			return t_res->transpose();
+			if (t_res)
+				return t_res->transpose();
+			else
+				return dense_matrix::ptr();
 		}
 
 		if (is_wide())
@@ -535,9 +539,14 @@ bool dense_matrix::materialize_self() const
 	if (!store->is_virtual())
 		return true;
 
-	detail::matrix_store::const_ptr tmp
-		= detail::virtual_matrix_store::cast(store)->materialize(
+	detail::matrix_store::const_ptr tmp;
+	try {
+		tmp = detail::virtual_matrix_store::cast(store)->materialize(
 				store->is_in_mem(), store->get_num_nodes());
+	} catch (std::exception &e) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("fail to materialize: %1%") % e.what();
+	}
 	if (tmp == NULL)
 		return false;
 
@@ -1236,6 +1245,9 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 			|| short_dim <= matrix_conf.get_block_size()) {
 		detail::matrix_store::ptr store = detail::matrix_store::create(
 				nrow, ncol, layout, type, num_nodes, in_mem, group);
+		if (store == NULL)
+			return dense_matrix::ptr();
+
 		store->set_data(op);
 		return dense_matrix::ptr(new dense_matrix(store));
 	}
@@ -1882,8 +1894,9 @@ dense_matrix::ptr dense_matrix::inner_prod_tall(
 		dense_matrix::ptr tmp = m.conv2(matrix_layout_t::L_COL);
 		right = tmp->get_raw_store();
 	}
-	// TODO we should optimize for the right sparse matrix later.
-	right = conv_dense(right);
+	// TODO the right matrix might be a sparse matrix. conv_store
+	// will turn it into a dense matrix.
+	// We should optimize for the right sparse matrix later.
 	if (right->is_virtual() || !right->is_in_mem() || right->get_num_nodes() > 0) {
 		dense_matrix::ptr tmp = dense_matrix::create(right);
 		tmp = tmp->conv_store(true, -1);
@@ -2303,6 +2316,8 @@ dense_matrix::ptr dense_matrix::conv2(matrix_layout_t layout) const
 					get_num_cols(), layout == matrix_layout_t::L_ROW));
 	}
 #endif
+	if (store->is_sink())
+		materialize_self();
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
@@ -2351,6 +2366,9 @@ dense_matrix::ptr dense_matrix::col_norm2() const
 	return sums->sapply(bulk_uoperate::conv2ptr(*op));
 }
 
+namespace
+{
+
 class copy_op: public detail::portion_mapply_op
 {
 public:
@@ -2384,6 +2402,8 @@ public:
 	}
 };
 
+}
+
 detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 		int num_nodes) const
 {
@@ -2406,6 +2426,8 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 		std::vector<detail::matrix_store::ptr> out_mats(1);
 		out_mats[0] = detail::matrix_store::create(get_num_rows(), get_num_cols(),
 				store_layout(), get_type(), num_nodes, in_mem);
+		if (out_mats[0] == NULL)
+			return detail::matrix_store::const_ptr();
 
 		detail::portion_mapply_op::const_ptr op(new copy_op(get_num_rows(),
 					get_num_cols(), get_type()));
@@ -2813,6 +2835,9 @@ static dense_matrix::ptr rbind_block(const std::vector<block_matrix::ptr> &mats)
 				nrow, mem_stores[0]->get_num_cols(), matrix_layout_t::L_ROW,
 				mem_stores[0]->get_type(), matrix_conf.get_num_nodes(),
 				mem_stores[0]->is_in_mem());
+		if (indiv_store == NULL)
+			return dense_matrix::ptr();
+
 		// Copy the data over.
 		indiv_store->set_data(combined_set_operate(mem_stores));
 		indiv_stores[i] = indiv_store;
@@ -2870,6 +2895,9 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 	if (small) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(nrow,
 				ncol, mats[0]->store_layout(), type, -1, true);
+		if (res == NULL)
+			return dense_matrix::ptr();
+
 		off_t row_idx = 0;
 		for (size_t i = 0; i < mats.size(); i++) {
 			dense_matrix::ptr tmp = mats[i];
@@ -2936,6 +2964,9 @@ dense_matrix::ptr dense_matrix::rbind(const std::vector<dense_matrix::ptr> &mats
 		combined = detail::matrix_store::create(nrow, ncol,
 				matrix_layout_t::L_ROW, type, matrix_conf.get_num_nodes(),
 				in_mem);
+		if (combined == NULL)
+			return dense_matrix::ptr();
+
 		combined->set_data(combined_set_operate(mem_stores));
 	}
 	else {

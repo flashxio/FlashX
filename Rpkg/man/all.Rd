@@ -15,7 +15,7 @@ fm.all(x, lazy = FALSE)
 \S4method{all}{fmV}(x, ..., na.rm = FALSE)
 }
 \arguments{
-\item{x}{a logical FlashMatrix vector.}
+\item{x}{a logical FlashR vector.}
 
 \item{lazy}{indicates whether or not to evaluate it lazily.}
 
@@ -30,5 +30,10 @@ The value is a logical vector of length one.
 \code{all} tests whether all of the values in a set of logical vectors are
 true? \code{fm.all} tests whether all values in a single vector are true.
 \code{fm.all} can evaluate it lazily.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10) > 0.5
+all(mat)
+fm.all(mat)
 }
 

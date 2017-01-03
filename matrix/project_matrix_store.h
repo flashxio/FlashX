@@ -20,7 +20,7 @@
  * limitations under the License.
  */
 
-#include "mem_matrix_store.h"
+#include "virtual_matrix_store.h"
 #include "local_matrix_store.h"
 
 namespace fm
@@ -29,7 +29,7 @@ namespace fm
 namespace detail
 {
 
-class sparse_project_matrix_store: public mem_matrix_store
+class sparse_project_matrix_store: public virtual_matrix_store
 {
 public:
 	struct nz_idx {
@@ -122,6 +122,7 @@ public:
 	};
 
 private:
+	const size_t mat_id;
 	std::vector<off_t> portion_offs;
 	// This contains the global row and col indeces for non-zero entries.
 	std::vector<nz_idx> nz_idxs;
@@ -145,24 +146,10 @@ public:
 		return INVALID_MAT_ID;
 	}
 
-	virtual void reset_data() {
-	}
-	virtual void set_data(const set_operate &op) {
-	}
-
 	virtual char *get(size_t row, size_t col) {
 		return NULL;
 	}
 
-	virtual bool write2file(const std::string &file_name) const {
-		throw unsupported_exception(
-				"don't support writing a sparse matrix to a file");
-	}
-	virtual std::shared_ptr<local_matrix_store> get_portion(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols) {
-		throw unsupported_exception("a sparse matrix is read-only");
-	}
 	virtual int get_portion_node_id(size_t id) const {
 		return -1;
 	}
@@ -174,7 +161,7 @@ public:
 	virtual const char *get(size_t row, size_t col) const;
 
 	virtual std::string get_name() const {
-		return (boost::format("sparse_mat-%1%(%2%,%3%)") % get_mat_id()
+		return (boost::format("sparse_mat-%1%(%2%,%3%)") % mat_id
 				% get_num_rows() % get_num_cols()).str();
 	}
 
@@ -195,18 +182,23 @@ public:
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
 
-	virtual void write_portion_async(
-			std::shared_ptr<const local_matrix_store> portion,
-			off_t start_row, off_t start_col);
-
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr materialize(bool in_mem,
+			int num_nodes) const;
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
+		std::unordered_map<size_t, size_t> ret;
+		// TODO right now we only indicate the matrix. We set the number of
+		// bytes to 0
+		// We should also use data_id instead of mat_id.
+		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
+		return ret;
+	}
+	virtual std::pair<size_t, size_t> get_portion_size() const;
 
 	size_t get_nnz() const {
 		return nz_idxs.size();
 	}
-
-	matrix_store::const_ptr conv_dense() const;
 };
 
 class lsparse_col_matrix_store: public lvirtual_col_matrix_store
@@ -397,19 +389,6 @@ public:
 	const char *get_rows_nnz(off_t start_row, off_t end_row,
 			std::vector<sparse_project_matrix_store::nz_idx> &idxs) const;
 };
-
-static matrix_store::const_ptr conv_dense(matrix_store::const_ptr store)
-{
-	if (!store->is_sparse())
-		return store;
-
-	sparse_project_matrix_store::const_ptr proj_store
-		= std::dynamic_pointer_cast<const sparse_project_matrix_store>(store);
-	if (proj_store)
-		return proj_store->conv_dense();
-	else
-		return store;
-}
 
 }
 

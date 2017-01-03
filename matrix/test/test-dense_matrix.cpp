@@ -1,5 +1,4 @@
 #include <signal.h>
-#include <gperftools/profiler.h>
 
 #include <boost/format.hpp>
 

@@ -12,7 +12,7 @@
 \S4method{length}{fm}(x)
 }
 \arguments{
-\item{x}{an FlashMatrix object.}
+\item{x}{an FlashR object.}
 }
 \value{
 an integer of length 1 or a double if the object has more than
@@ -20,5 +20,9 @@ an integer of length 1 or a double if the object has more than
 }
 \description{
 Get the length of a vector or a matrix.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+length(mat)
 }
 

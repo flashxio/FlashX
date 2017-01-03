@@ -125,8 +125,29 @@ test_that(paste("create a random vector/matrix under normal distribution"), {
 		  expect_true(abs(1 - sd(vec)) < 0.001)
 })
 
+data.map <- list()
+name.map <- list()
+
+print.depth <- function(depth, ...)
+{
+	space <- ""
+	if (2 - depth > 0) {
+		for (i in 1:(2 - depth))
+			space <- c(space, "    ")
+		space <- paste(space, collapse = '')
+	}
+	print(paste(space, ...))
+}
+
 # This creates in-memory and external-memory vectors of different types.
 get.vecs <- function(length, depth, lazy) {
+	key <- paste("vec-", length, depth, lazy)
+	print.depth(depth, key)
+	if (key %in% names(data.map)) {
+		print.depth(depth, "The vectors exist")
+		return(list(vecs=data.map[[key]], names=name.map[[key]]))
+	}
+
 	vecs <- list()
 	names <- list()
 	if (depth == 0) {
@@ -163,22 +184,25 @@ get.vecs <- function(length, depth, lazy) {
 		names <- c(names, tmp$names)
 
 		if (!lazy)
-			for (i in 1:length(mats))
-				mats[[i]] <- fm.materialize(mats[[i]])
+			for (i in 1:length(vecs))
+				vecs[[i]] <- fm.materialize(vecs[[i]])
 	}
+	data.map[[key]] <<- vecs
+	name.map[[key]] <<- names
 	list(vecs=vecs, names=names)
 }
 
 # All vectors have the same length.
 get.mapply.vecs <- function(length, depth, lazy)
 {
+	print.depth(depth, "get mapply vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 
-	print("get mapply vec of", length, ", depth:", depth, "\n")
 	tmp <- get.vecs(length, depth - 1, lazy)
 	vecs <- tmp$vecs
 	names <- tmp$names
+	print.depth(depth, length(vecs), "vecs from the lower level")
 	for (i in 1:length(vecs)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, vecs[[i]] + vecs[[j]])
@@ -191,12 +215,13 @@ get.mapply.vecs <- function(length, depth, lazy)
 
 get.sapply.vecs <- function(length, depth, lazy)
 {
-	print("get sapply vec of", length, ", depth:", depth, "\n")
+	print.depth(depth, "get sapply vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 	tmp <- get.vecs(length, depth - 1, lazy)
 	vecs <- tmp$vecs
 	names <- tmp$names
+	print.depth(depth, length(vecs), "vecs from the lower level")
 	for (i in 1:length(vecs)) {
 		res <- c(res, -vecs[[i]])
 		res.names <- c(res.names, paste("-(", names[[i]], ")", sep=""))
@@ -206,20 +231,21 @@ get.sapply.vecs <- function(length, depth, lazy)
 
 get.agg.vecs <- function(length, depth, lazy)
 {
-	print("get agg vec of", length, ", depth:", depth, "\n")
+	print.depth(depth, "get agg vec of", length, ", depth:", depth, ", lazy:", lazy)
 	res <- list()
 	res.names <- list()
 
-	tmp <- get.mats(length, 100, depth - 1)
+	tmp <- get.mats(length, 100, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, length(mats), "mats from the lower level")
 	for (i in 1:length(mats)) {
 		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
 		res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(length, 1000000, depth - 1)
+		tmp <- get.mats(length, 100000, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
@@ -228,7 +254,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		}
 	}
 
-	tmp <- get.mats(100, length, depth - 1)
+	tmp <- get.mats(100, length, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	for (i in 1:length(mats)) {
@@ -237,7 +263,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	}
 
 	if (length < 2000) {
-		tmp <- get.mats(1000000, length, depth - 1)
+		tmp <- get.mats(100000, length, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
@@ -262,25 +288,31 @@ get.mats <- function(nrow, ncol, depth, lazy)
 	mats <- list()
 	names <- list()
 
+	key <- paste("mat-", nrow, ncol, depth, lazy)
+	print.depth(depth, key)
+	if (key %in% names(data.map)) {
+		print.depth(depth, "The matrices exist")
+		return(list(mats=data.map[[key]], names=name.map[[key]]))
+	}
+
 	if (depth == 0) {
-		stopifnot(nrow <= 1000000 && ncol <= 1000000)
 		# Create in-memory matrices.
 		logical.mat <- fm.matrix(TRUE, nrow, ncol)
 		int.mat <- fm.seq.matrix(as.integer(1), as.integer(nrow * ncol), nrow, ncol)
-		if (nrow > ncol && nrow == 1000000) {
+		if (nrow > ncol && nrow == 100000) {
 			if (ncol %in% names(IM.large.talls))
-				double.mat <- IM.large.talls[[ncol]]
+				double.mat <- IM.large.talls[[ncol + nrow]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol)
-				IM.large.talls[[ncol]] <- double.mat
+				IM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
-		else if (ncol > nrow && ncol == 1000000) {
+		else if (ncol > nrow && ncol == 100000) {
 			if (nrow %in% names(IM.large.wides))
-				double.mat <- IM.large.wides[[nrow]]
+				double.mat <- IM.large.wides[[nrow + ncol]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol)
-				IM.large.wides[[nrow]] <- double.mat
+				IM.large.wides[[nrow + ncol]] <- double.mat
 			}
 		}
 		else
@@ -295,20 +327,20 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		names <- c(names, paste("proj-mat-", nrow, "-", ncol, sep=""))
 
 		# Create external-memory matrices
-		if (nrow > ncol && nrow == 1000000) {
+		if (nrow > ncol && nrow == 100000) {
 			if (ncol %in% names(EM.large.talls))
-				double.mat <- EM.large.talls[[ncol]]
+				double.mat <- EM.large.talls[[ncol + nrow]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol, in.mem=FALSE)
-				EM.large.talls[[ncol]] <- double.mat
+				EM.large.talls[[ncol + nrow]] <- double.mat
 			}
 		}
-		else if (ncol > nrow && ncol == 1000000) {
+		else if (ncol > nrow && ncol == 100000) {
 			if (nrow %in% names(EM.large.wides))
-				double.mat <- EM.large.wides[[nrow]]
+				double.mat <- EM.large.wides[[nrow + ncol]]
 			else {
 				double.mat <- fm.runif.matrix(nrow, ncol, in.mem=FALSE)
-				EM.large.wides[[nrow]] <- double.mat
+				EM.large.wides[[nrow + ncol]] <- double.mat
 			}
 		}
 		else
@@ -319,7 +351,7 @@ get.mats <- function(nrow, ncol, depth, lazy)
 				   paste("EM-D-mat-", nrow, "-", ncol, sep=""))
 	}
 	else {
-		tmp <- get.mats(nrow, ncol, depth - 1)
+		tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 
@@ -346,16 +378,27 @@ get.mats <- function(nrow, ncol, depth, lazy)
 		if (!lazy)
 			for (i in 1:length(mats))
 				mats[[i]] <- fm.materialize(mats[[i]])
+		if (!lazy) {
+			ret <- list()
+			for (mat in mats)
+				ret <- c(ret, fm.materialize(mat))
+			mats <- ret
+		}
 	}
+	data.map[[key]] <<- mats
+	name.map[[key]] <<- names
 	list(mats=mats, names=names)
 }
 
 # All matrices have the same shape
 get.mapply.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get mapply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -367,7 +410,7 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 		}
 	}
 
-	vecs <- get.vecs(nrow(mats[[1]]), depth - 1)
+	vecs <- get.vecs(nrow(mats[[1]]), depth - 1, lazy)
 	for (i in 1:length(mats)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, fm.mapply.col(mats[[i]], vecs$vecs[[j]], "+"))
@@ -376,7 +419,7 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 		}
 	}
 
-	vecs <- get.vecs(ncol(mats[[1]]), depth - 1)
+	vecs <- get.vecs(ncol(mats[[1]]), depth - 1, lazy)
 	for (i in 1:length(mats)) {
 		for (j in 1:length(vecs)) {
 			res <- c(res, fm.mapply.row(mats[[i]], vecs$vecs[[j]], "+"))
@@ -390,9 +433,12 @@ get.mapply.mats <- function(nrow, ncol, depth, lazy)
 
 get.sapply.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get sapply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -406,9 +452,12 @@ get.sapply.mats <- function(nrow, ncol, depth, lazy)
 
 get.t.mats <- function(nrow, ncol, depth, lazy)
 {
+	print.depth(depth, "get tmats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(ncol, nrow, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "mats from the lower level")
 
 	res <- list()
 	res.names <- list()
@@ -425,9 +474,12 @@ get.groupby.mats <- function(nrow, ncol, depth, lazy)
 	res <- list()
 	res.names <- list()
 
+	print.depth(depth, "get groupby mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	tmp <- get.mats(nrow * 10, ncol, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "taller mats from the lower level")
 	labels <- fm.as.factor(as.integer(fm.runif(nrow(mats[[1]])) * nrow))
 	for (i in 1:length(mats)) {
 		mat <- fm.groupby(mats[[i]], 2, labels, "+")
@@ -440,6 +492,7 @@ get.groupby.mats <- function(nrow, ncol, depth, lazy)
 	tmp <- get.mats(nrow, ncol * 10, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
+	print.depth(depth, "get", length(mats), "wider mats from the lower level")
 	labels <- fm.as.factor(as.integer(fm.runif(ncol(mats[[1]])) * ncol))
 	for (i in 1:length(mats)) {
 		mat <- fm.groupby(mats[[i]], 1, labels, "+")
@@ -457,24 +510,27 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	res <- list()
 	res.names <- list()
 
+	print.depth(depth, "get multiply mats of", nrow, "x", ncol,
+				", depth:", depth, ", lazy:", lazy)
 	if (nrow < 2000 && ncol < 2000) {
-		tmp <- get.mats(nrow, 1000000, depth - 1, lazy)
+		tmp <- get.mats(nrow, 100000, depth - 1, lazy)
 		mats1 <- tmp$mats
 		names1 <- tmp$names
-		tmp <- get.mats(1000000, ncol, depth - 1, lazy)
+		print.depth(depth, "get", length(mats1), "wide mats from the lower level")
+		tmp <- get.mats(100000, ncol, depth - 1, lazy)
 		mats2 <- tmp$mats
 		names2 <- tmp$names
+		print.depth(depth, "get", length(mats2), "tall mats from the lower level")
 		for (i in 1:length(mats1)) {
 			for (j in 1:length(mats2)) {
-				res <- c(res, fm.multiply(mats1[[i]], mats2[[j]], lazy.wide=TRUE))
+				res <- c(res, fm.multiply(mats1[[i]], mats2[[j]]))
 				res.names <- c(res.names, paste("crossprod(", names1[[i]], ", ",
 												names2[[j]], ")", sep=""))
 			}
 		}
 		for (i in 1:length(mats1)) {
 			for (j in 1:length(mats2)) {
-				res <- c(res, fm.inner.prod(mats1[[i]], mats2[[j]], "*", "+",
-											lazy.wide=TRUE))
+				res <- c(res, fm.inner.prod(mats1[[i]], mats2[[j]], "*", "+"))
 				res.names <- c(res.names, paste("innerprod(t(", names1[[i]], "), ",
 												names2[[j]], ")", sep=""))
 			}
@@ -484,20 +540,26 @@ get.multiply.mats <- function(nrow, ncol, depth, lazy)
 	tmp <- get.mats(nrow, 100, depth - 1, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
-	tmp <- get.mats(100, ncol, depth - 1, lazy)
+	print.depth(depth, "get", length(mats), "tall mats from the lower level")
+	# The right matrix will be materialized before multiplication.
+	# so we don't need to create virtual matrices.
+	tmp <- get.mats(100, ncol, 0, lazy)
 	smalls <- tmp$mats
 	small.names <- tmp$names
+	print.depth(depth, "get", length(smalls), "small mats from the lower level")
 	for (i in 1:length(mats)) {
 		for (j in 1:length(smalls)) {
-			res <- c(res, fm.multiply(mats[[i]], smalls[[i]], lazy.wide=TRUE))
+			res <- c(res, fm.multiply(mats[[i]], smalls[[j]]))
 			res.names <- c(res.names, paste("multiply(", names[[i]], ", ",
-											small.names[[i]], ")", sep=""))
+											small.names[[j]], ")", sep=""))
 		}
 	}
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.inner.prod(mats[[i]], smalls[[i]], "*", "+", lazy.wide=TRUE))
-		res.names <- c(res.names, paste("inner prod(", names[[i]], ", ",
-										small.names[[i]], ")", sep=""))
+		for (j in 1:length(smalls)) {
+			res <- c(res, fm.inner.prod(mats[[i]], smalls[[j]], "*", "+"))
+			res.names <- c(res.names, paste("inner prod(", names[[i]], ", ",
+											small.names[[j]], ")", sep=""))
+		}
 	}
 
 	list(mats=res, names=res.names)
@@ -552,6 +614,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  print("mat 100x100")
@@ -568,6 +632,8 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  print("mat 1000x1000")
@@ -584,17 +650,19 @@ test_that("test lazy evals on matrices", {
 			  obj <- objs[[i]]
 			  expect_true(sum(abs(obj - obj.lazy)) == 0)
 		  }
+		  data.map <<- list()
+		  name.map <<- list()
 		  gc()
 
 		  # regular skinny matrix
 		  # regular block matrix
 		  # wide block matrix
-		  for (ncol in c(10, 100, 1000)) {
-			  print(paste("tall mat of 1000000 x", ncol, "\n"))
-			  tmp <- get.mats(1000000, ncol, depth, TRUE)
+		  for (ncol in c(10, 100, 500)) {
+			  print(paste("tall mat of 100000 x", ncol))
+			  tmp <- get.mats(100000, ncol, depth, TRUE)
 			  objs.lazy <- tmp$mats
 			  obj.names <- tmp$names
-			  tmp <- get.mats(1000000, ncol, depth, FALSE)
+			  tmp <- get.mats(100000, ncol, depth, FALSE)
 			  objs <- tmp$mats
 			  for (i in 1:length(objs)) {
 				  print(i)
@@ -604,6 +672,8 @@ test_that("test lazy evals on matrices", {
 				  obj <- objs[[i]]
 				  expect_true(sum(abs(obj - obj.lazy)) == 0)
 			  }
+			  data.map <<- list()
+			  name.map <<- list()
 			  gc()
 		  }
 })
@@ -755,8 +825,8 @@ test_that("test groupby rows", {
 		  rmat <- fm.conv.FM2R(m)
 		  rlabels <- fm.conv.FM2R(v)
 		  rres <- matrix(nrow=2, ncol=10)
-		  rres[1,] <- colSums(rmat[rlabels == 0,])
-		  rres[2,] <- colSums(rmat[rlabels == 1,])
+		  rres[1,] <- colSums(rmat[rlabels == 0,, drop=FALSE])
+		  rres[2,] <- colSums(rmat[rlabels == 1,, drop=FALSE])
 		  expect_equal(fm.conv.FM2R(res), rres)
 })
 
@@ -776,8 +846,8 @@ test_that("test groupby cols", {
 		  rmat <- fm.conv.FM2R(m)
 		  rlabels <- fm.conv.FM2R(v)
 		  rres <- matrix(nrow=100, ncol=2)
-		  rres[,1] <- rowSums(rmat[,rlabels == 0])
-		  rres[,2] <- rowSums(rmat[,rlabels == 1])
+		  rres[,1] <- rowSums(rmat[,rlabels == 0, drop=FALSE])
+		  rres[,2] <- rowSums(rmat[,rlabels == 1, drop=FALSE])
 		  expect_equal(fm.conv.FM2R(res), rres)
 })
 

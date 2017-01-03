@@ -19,7 +19,7 @@ a \code{fm.agg.op} operator.
 }
 \description{
 This function creates an aggregate operator for aggregation operations
-on a FlashMatrix object.
+on a FlashR object.
 }
 \details{
 An Aggregate operator has two parts. \code{agg} computes partial
@@ -36,5 +36,8 @@ For example, in the case of summation, both \code{agg} and \code{combine}
 are simply \code{+}. In some cases, these two operators can be different.
 For example, when counting the occurences of unique values, \code{agg}
 is \code{count} and \code{combine} is \code{+}.
+}
+\examples{
+agg.op <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
 }
 

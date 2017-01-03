@@ -24,7 +24,7 @@ fm.colSums(x, lazy = FALSE)
 \S4method{colMeans}{fm}(x, na.rm)
 }
 \arguments{
-\item{x}{a FlashMatrix matrix.}
+\item{x}{a FlashR matrix.}
 
 \item{lazy}{logical. indicates whether to evaluate the expression lazily.}
 
@@ -32,9 +32,18 @@ fm.colSums(x, lazy = FALSE)
 from the calculations?}
 }
 \value{
-a FlashMatrix vector.
+a FlashR vector.
 }
 \description{
 Form row and column sums and means for numeric arrays.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+mat <- fm.rowSums(mat)
+mat <- fm.colSums(mat)
+mat <- rowSums(mat)
+mat <- colSums(mat)
+mat <- rowMeans(mat)
+mat <- colMeans(mat)
 }
 

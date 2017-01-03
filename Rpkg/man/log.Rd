@@ -48,4 +48,10 @@ with \code{base}.
 \details{
 \code{exp} computes the exponential function.
 }
+\examples{
+mat <- log(fm.runif.matrix(100, 10))
+mat <- log10(fm.runif.matrix(100, 10))
+mat <- log2(fm.runif.matrix(100, 10))
+mat <- exp(fm.runif.matrix(100, 10))
+}
 

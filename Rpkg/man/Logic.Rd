@@ -72,7 +72,7 @@
 \method{!}{fmV}(e1)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
+\item{e1,e2}{One of the operands need to be a FlashR object. If one operand
 is a matrix and the other is a vector, we perform the arithmetic operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
@@ -84,5 +84,14 @@ These operators act on logical and number-like vectors.
 \details{
 \code{!} indicates logical negation (NOT).
 \code{&} indicates logical AND and \code{|} indicates logical OR.
+}
+\examples{
+tmp1 <- fm.runif.matrix(100, 10)
+tmp2 <- fm.runif.matrix(100, 10)
+mat1 <- tmp1 > tmp2
+mat2 <- tmp1 < tmp2
+mat1 | mat2
+mat1 & mat2
+!mat1
 }
 

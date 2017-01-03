@@ -12,12 +12,16 @@
 \S4method{is.na}{fmV}(x)
 }
 \arguments{
-\item{x}{an FlashMatrix vector or matrix.}
+\item{x}{an FlashR vector or matrix.}
 }
 \value{
-a logical FlashMatrix vector or matrix.
+a logical FlashR vector or matrix.
 }
 \description{
 This function indicates which elements are missing.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+is.na(mat)
 }
 

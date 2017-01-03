@@ -41,6 +41,9 @@ static detail::matrix_store::ptr create_factor_store(size_t len,
 	detail::matrix_store::ptr ret = detail::matrix_store::create(len, 1,
 			matrix_layout_t::L_COL, get_scalar_type<factor_value_t>(),
 			num_nodes, in_mem);
+	if (ret == NULL)
+		return detail::matrix_store::ptr();
+
 	ret->set_data(op);
 	return ret;
 }

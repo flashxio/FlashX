@@ -3,18 +3,18 @@
 \docType{methods}
 \name{fm.sapply}
 \alias{fm.sapply}
-\alias{fm.sapply,fm,ANY,logical-method}
-\alias{fm.sapply,fmV,ANY,logical-method}
-\title{Apply a Function to a FlashMatrix vector/matrix.}
+\alias{fm.sapply,fm-method}
+\alias{fm.sapply,fmV-method}
+\title{Apply a Function to a FlashR vector/matrix.}
 \usage{
-fm.sapply(o, FUN, set.na)
+fm.sapply(o, FUN, set.na = TRUE)
 
-\S4method{fm.sapply}{fm,ANY,logical}(o, FUN, set.na = TRUE)
+\S4method{fm.sapply}{fm}(o, FUN, set.na = TRUE)
 
-\S4method{fm.sapply}{fmV,ANY,logical}(o, FUN, set.na = TRUE)
+\S4method{fm.sapply}{fmV}(o, FUN, set.na = TRUE)
 }
 \arguments{
-\item{o}{a FlashMatrix vector/matrix.}
+\item{o}{a FlashR vector/matrix.}
 
 \item{FUN}{the reference or the name of a predefined uniary operator.}
 
@@ -24,12 +24,16 @@ the corresponding location of the input vector or matrix
 is NA.}
 }
 \value{
-a FlashMatrix vector/matrix.
+a FlashR vector/matrix.
 }
 \description{
 \code{sapply} applies \code{FUN} to every element of a vector/matrix.
 Currently, \code{sapply} only accepts predefined basic operators
 returned by \code{fm.get.basic.uop}.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.sapply(mat, "abs")
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

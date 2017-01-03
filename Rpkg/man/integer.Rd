@@ -12,15 +12,18 @@
 \S4method{as.integer}{fmV}(x)
 }
 \arguments{
-\item{x}{a FlashMatrix object to be coerced or tested.}
+\item{x}{a FlashR object to be coerced or tested.}
 }
 \value{
-\code{as.integer} returns an integer FlashMatrix object,
+\code{as.integer} returns an integer FlashR object,
 \code{is.integer} returns a logical value.
 }
 \description{
 \code{as.integer} coerces objects of type \code{"integer"}.
 \code{is.integer} is a more general test of an object being
 interpretable as integers.
+}
+\examples{
+vec <- as.integer(fm.runif(1000, min=0, max=10))
 }
 

@@ -2,16 +2,20 @@
 % Please edit documentation in R/FlashR.R
 \name{fm.print.mat.info}
 \alias{fm.print.mat.info}
-\title{Print the information of a FlashMatrix object}
+\title{Print the information of a FlashR object}
 \usage{
 fm.print.mat.info(fm)
 }
 \arguments{
-\item{fm}{a FlashMatrix object}
+\item{fm}{a FlashR object
+mat <- fm.runif.matrix(100, 10)
+fm.print.mat.info(mat)
+mat <- fm.runif.matrix(100, 10) + fm.runif.matrix(100, 10)
+fm.print.mat.info(mat)}
 }
 \description{
 Print the information of the internal storage representation of
-a FlashMatrix object. For a virtualized computation result,
+a FlashR object. For a virtualized computation result,
 \code{fm.print.mat.info} prints the internal computation dependancy.
 }
 

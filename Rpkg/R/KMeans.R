@@ -42,7 +42,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	cal.centers <- function(data, parts) {
 		centers1 <- fm.groupby(data, 2, parts, agg.sum)
 		centers1 <- as.matrix(centers1)
-		cnts <- fm.table(parts)
+		cnts <- as.data.frame(fm.table(parts))
 		centers.idx <- as.vector(cnts$val) + 1
 		# Some centers may not have been initialized if no data points
 		# are assigned to them. I need to reset those data centers.
@@ -93,7 +93,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 
 		parts <- as.integer(fm.agg.mat(m, 1, agg.which.min) - 1)
 		# Have the vector materialized during the computation.
-		fm.set.materialize.level(parts, 2, TRUE)
+		fm.set.cached(parts, TRUE, TRUE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))

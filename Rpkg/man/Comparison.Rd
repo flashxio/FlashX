@@ -186,7 +186,7 @@
 \S4method{<}{ANY,fmV}(e1, e2)
 }
 \arguments{
-\item{e1,e2}{One of the operands need to be a FlashMatrix object. If one operand
+\item{e1,e2}{One of the operands need to be a FlashR object. If one operand
 is a matrix and the other is a vector, we perform the arithmetic operation
 on the vector and every column of the matrix. If one operand is a scalar,
 we perform the operation on the scalar with every element in the matrix or
@@ -195,5 +195,15 @@ the vector.}
 \description{
 Binary operators which allow the comparison of values in atomic
 vectors.
+}
+\examples{
+mat1 <- fm.runif.matrix(100, 10)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- mat1 == mat2
+mat <- mat1 != mat2
+mat <- mat1 < mat2
+mat <- mat1 <= mat2
+mat <- mat1 > mat2
+mat <- mat1 >= mat2
 }
 

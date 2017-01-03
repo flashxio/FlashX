@@ -3,9 +3,9 @@
 \docType{class}
 \name{fm-class}
 \alias{fm-class}
-\title{An S4 class to represent a FlashMatrix matrix.}
+\title{An S4 class to represent a FlashR matrix.}
 \description{
-An S4 class to represent a FlashMatrix matrix.
+An S4 class to represent a FlashR matrix.
 }
 \section{Slots}{
 

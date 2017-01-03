@@ -58,9 +58,13 @@
 #' If \code{na.rm} is \code{TRUE} then missing values are removed before
 #' computation proceeds.
 #'
-#' @param x a FlashMatrix vector or matrix.
+#' @param x a FlashR vector or matrix.
 #' @param na.rm logical. Should missing values be removed?
 #' @name sd
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' sd(mat)
 NULL
 
 #' @rdname sd
@@ -82,7 +86,7 @@ setMethod("sd", "fmV", .sd.int)
 		# only works on a set of matrices the same the long dimension and
 		# dimension size. TODO I need to change that.
 		x.sum <- fm.rowSums(t(x), TRUE)
-		x.prod <- fm.multiply(t(x), x, TRUE)
+		x.prod <- fm.multiply(t(x), x)
 		ret <- fm.materialize(x.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.mu <- fm.conv.FM2R(x.mu)
@@ -91,7 +95,7 @@ setMethod("sd", "fmV", .sd.int)
 	else {
 		x.sum <- fm.rowSums(t(x), TRUE)
 		y.sum <- fm.rowSums(t(y), TRUE)
-		xy.prod <- fm.multiply(t(x), y, TRUE)
+		xy.prod <- fm.multiply(t(x), y)
 		ret <- fm.materialize(x.sum, y.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		y.mu <- ret[[2]] / n
@@ -114,7 +118,7 @@ setMethod("sd", "fmV", .sd.int)
 	if (is.null(y)) {
 		x.sum <- fm.rowSums(t(x), TRUE)
 		x2.sum <- fm.rowSums(t(x * x), TRUE)
-		x.prod <- fm.multiply(t(x), x, TRUE)
+		x.prod <- fm.multiply(t(x), x)
 		ret <- fm.materialize(x.sum, x2.sum, x.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[2]] - n * x.mu * x.mu) / (n - 1))
@@ -127,7 +131,7 @@ setMethod("sd", "fmV", .sd.int)
 		y.sum <- fm.rowSums(t(y), TRUE)
 		x2.sum <- fm.rowSums(t(x * x), TRUE)
 		y2.sum <- fm.rowSums(t(y * y), TRUE)
-		xy.prod <- fm.multiply(t(x), y, TRUE)
+		xy.prod <- fm.multiply(t(x), y)
 		ret <- fm.materialize(x.sum, y.sum, x2.sum, y2.sum, xy.prod)
 		x.mu <- ret[[1]] / n
 		x.sd <- sqrt((ret[[3]] - n * x.mu * x.mu) / (n - 1))
@@ -218,6 +222,7 @@ setMethod("sd", "fmV", .sd.int)
 #' and \code{y} if these are vectors.  If \code{x}
 #' and \code{y} are matrices then the covariances (or correlations) between
 #' the columns of \code{x} and the columns of \code{y} are computed.
+#'
 #' @param x a numeric vector or matrix
 #' @param y \code{NULL} (default) or a vector or matrix with compatible
 #' dimensions to \code{x}. The default is equivalent to \code{y=x}.
@@ -231,6 +236,12 @@ setMethod("sd", "fmV", .sd.int)
 #'        (default), \code{"kendall"}, or \code{"spearman"}: can be abbreviated.
 #'        Right now this argument isn't used.
 #' @name cor
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' var(mat)
+#' cor(mat)
+#' cov(mat)
 NULL
 
 #' @rdname cor
@@ -280,4 +291,9 @@ setMethod("cov", "fm", .cov.int)
 #' \item{cor}{the estimated correlation matrix.  Only returned if \code{cor} is
 #'          \code{TRUE}}
 #' }
+#' @name cov.wt
+#'
+#' @examples
+#' mat <- fm.runif.matrix(100, 10)
+#' cov.wt(mat, fm.runif(nrow(mat)))
 setMethod("cov.wt", "fm", .cov.wt.int)

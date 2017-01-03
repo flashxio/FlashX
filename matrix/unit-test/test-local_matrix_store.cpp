@@ -1441,7 +1441,11 @@ matrix_store::const_ptr get_data_mat(size_t nrow, size_t ncol,
 {
 	matrix_store::ptr in = mem_matrix_store::create(nrow, ncol, layout,
 			get_scalar_type<double>(), -1);
-	in->set_data(set_seq<double>(0, 1, ncol, true, layout));
+	scalar_variable_impl<double> start(0);
+	scalar_variable_impl<double> stride(1);
+	auto set = get_scalar_type<double>().get_set_seq(start, stride, nrow, ncol,
+			true, layout);
+	in->set_data(*set);
 	if (resize_dim == 1 || resize_dim == 2)
 		return matrix_store::const_ptr(new mapply_matrix_store(
 					std::vector<matrix_store::const_ptr>(1, in),

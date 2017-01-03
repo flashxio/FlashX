@@ -43,9 +43,6 @@ class materialized_mapply_tall_store
 public:
 	typedef std::shared_ptr<materialized_mapply_tall_store> ptr;
 
-	materialized_mapply_tall_store(size_t num_rows, size_t num_cols,
-			matrix_layout_t layout, const scalar_type &type, int num_nodes,
-			bool in_mem);
 	materialized_mapply_tall_store(matrix_store::ptr res);
 	materialized_mapply_tall_store(matrix_store::const_ptr res) {
 		set_materialized(res);
@@ -111,26 +108,6 @@ public:
 				% num_res_avails.get();
 	}
 };
-
-materialized_mapply_tall_store::materialized_mapply_tall_store(
-		size_t num_rows, size_t num_cols, matrix_layout_t layout,
-		const scalar_type &type, int num_nodes, bool in_mem)
-{
-	if (num_rows < num_cols) {
-		size_t tmp = num_rows;
-		num_rows = num_cols;
-		num_cols = tmp;
-		if (layout == matrix_layout_t::L_ROW)
-			layout = matrix_layout_t::L_COL;
-		else
-			layout = matrix_layout_t::L_ROW;
-	}
-	res_buf = matrix_store::create(num_rows, num_cols, layout, type,
-			num_nodes, in_mem);
-	portion_size = res_buf->get_portion_size();
-	tall_res = res_buf;
-	wide_res = res_buf->transpose();
-}
 
 materialized_mapply_tall_store::materialized_mapply_tall_store(
 		matrix_store::ptr buf)
@@ -968,17 +945,34 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 	if (res)
 		return;
 
-	if (materialize_buf == NULL)
+	if (materialize_buf == NULL) {
+		size_t num_rows, num_cols;
+		matrix_layout_t layout = store_layout();
+		if (get_num_rows() < get_num_cols()) {
+			num_cols = get_num_rows();
+			num_rows = get_num_cols();
+			if (layout == matrix_layout_t::L_ROW)
+				layout = matrix_layout_t::L_COL;
+			else
+				layout = matrix_layout_t::L_ROW;
+		}
+		else {
+			num_cols = get_num_cols();
+			num_rows = get_num_rows();
+		}
+		matrix_store::ptr res_buf = matrix_store::create(num_rows, num_cols,
+				layout, get_type(), get_num_nodes(), is_in_mem());
+		assert(res_buf);
 		res = materialized_mapply_tall_store::ptr(
-				new materialized_mapply_tall_store(get_num_rows(), get_num_cols(),
-					store_layout(), get_type(), get_num_nodes(), is_in_mem()));
+				new materialized_mapply_tall_store(res_buf));
+	}
 	else {
 		res = materialized_mapply_tall_store::ptr(
 				new materialized_mapply_tall_store(materialize_buf));
-		const matrix_store &store = res->get_materialize_ref(store_layout());
-		assert(store.get_num_rows() == get_num_rows());
-		assert(store.get_num_cols() == get_num_cols());
 	}
+	const matrix_store &store = res->get_materialize_ref(store_layout());
+	assert(store.get_num_rows() == get_num_rows());
+	assert(store.get_num_cols() == get_num_cols());
 }
 
 void mapply_matrix_store::materialize_self() const
@@ -1370,9 +1364,13 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 
 std::string mapply_matrix_store::get_name() const
 {
-	return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id % get_num_rows()
-			% get_num_cols() % (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str()
-		+ op->to_string(in_mats);
+	if (is_materialized())
+		return this->res->get_materialize_res(store_layout())->get_name();
+	else
+		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id
+				% get_num_rows() % get_num_cols()
+				% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str()
+			+ op->to_string(in_mats);
 }
 
 std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() const

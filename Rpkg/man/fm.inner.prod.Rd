@@ -4,28 +4,31 @@
 \alias{fm.inner.prod}
 \title{Matrix inner product}
 \usage{
-fm.inner.prod(fm, mat, Fun1, Fun2, lazy.wide = FALSE)
+fm.inner.prod(fm, mat, Fun1, Fun2)
 }
 \arguments{
-\item{fm}{A FlashMatrix matrix}
+\item{fm}{A FlashR matrix}
 
-\item{mat}{A FlashMatrix dense matrix.}
+\item{mat}{A FlashR dense matrix.}
 
 \item{Fun1}{The reference or the name of one of the predefined basic binary
 operators.}
 
 \item{Fun2}{The reference or the name of one of the predefined basic binary
 operators.}
-
-\item{lazy.wide}{whether to lazily evaluate inner product of a wide matrix
-with a tall matrix.}
 }
 \value{
-a FlashMatrix vector if the second argument is a vector;
-a FlashMatrix matrix if the second argument is a matrix.
+a FlashR vector if the second argument is a vector;
+a FlashR matrix if the second argument is a matrix.
 }
 \description{
 It takes two operators and performs inner product on a dense matrix
+}
+\examples{
+mat1 <- fm.runif.matrix(1000, 100)
+mat2 <- fm.runif.matrix(100, 10)
+mat <- fm.inner.prod(mat1, mat2, "*", "+")
+mat <- fm.inner.prod(mat1, mat2, fm.bo.mul, fm.bo.add)
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

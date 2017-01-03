@@ -38,6 +38,23 @@ public:
 		return msg.c_str();
 	}
 };
+
+class alloc_error: public std::exception
+{
+	std::string msg;
+public:
+	alloc_error(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~alloc_error() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
+
 }
 
 #endif

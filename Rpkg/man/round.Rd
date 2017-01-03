@@ -39,4 +39,9 @@ elements of \code{x}.
 \code{round} rounds the values in its first argument to the specified number
 of decimal places (default 0).
 }
+\examples{
+mat <- ceiling(fm.runif.matrix(100, 10))
+mat <- floor(fm.runif.matrix(100, 10))
+mat <- round(fm.runif.matrix(100, 10))
+}
 

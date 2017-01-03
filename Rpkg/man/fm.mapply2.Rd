@@ -5,44 +5,44 @@
 \alias{fm.mapply.col}
 \alias{fm.mapply.row}
 \alias{fm.mapply2}
-\alias{fm.mapply2,ANY,fm,ANY,logical-method}
-\alias{fm.mapply2,ANY,fmV,ANY,logical-method}
-\alias{fm.mapply2,fm,ANY,ANY,logical-method}
-\alias{fm.mapply2,fm,fm,ANY,logical-method}
-\alias{fm.mapply2,fm,fmV,ANY,logical-method}
-\alias{fm.mapply2,fm,matrix,ANY,logical-method}
-\alias{fm.mapply2,fmV,ANY,ANY,logical-method}
-\alias{fm.mapply2,fmV,fm,ANY,logical-method}
-\alias{fm.mapply2,fmV,fmV,ANY,logical-method}
-\alias{fm.mapply2,matrix,fm,ANY,logical-method}
-\title{Apply a Function to two FlashMatrix vectors/matrices.}
+\alias{fm.mapply2,ANY,fm-method}
+\alias{fm.mapply2,ANY,fmV-method}
+\alias{fm.mapply2,fm,ANY-method}
+\alias{fm.mapply2,fm,fm-method}
+\alias{fm.mapply2,fm,fmV-method}
+\alias{fm.mapply2,fm,matrix-method}
+\alias{fm.mapply2,fmV,ANY-method}
+\alias{fm.mapply2,fmV,fm-method}
+\alias{fm.mapply2,fmV,fmV-method}
+\alias{fm.mapply2,matrix,fm-method}
+\title{Apply a Function to two FlashR vectors/matrices.}
 \usage{
 fm.mapply.row(o1, o2, FUN, set.na = TRUE)
 
 fm.mapply.col(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fm,fm,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fm,fm}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fmV,fmV,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fmV,fmV}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fm,fmV,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fm,fmV}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fmV,fm,ANY,logical}(o1, o2, FUN, set.na)
+\S4method{fm.mapply2}{fmV,fm}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fm,matrix,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fm,matrix}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{matrix,fm,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{matrix,fm}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fm,ANY,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fm,ANY}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{ANY,fm,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{ANY,fm}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{fmV,ANY,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{fmV,ANY}(o1, o2, FUN, set.na = TRUE)
 
-\S4method{fm.mapply2}{ANY,fmV,ANY,logical}(o1, o2, FUN, set.na = TRUE)
+\S4method{fm.mapply2}{ANY,fmV}(o1, o2, FUN, set.na = TRUE)
 }
 \arguments{
-\item{o1,o2}{a FlashMatrix vector/matrix.}
+\item{o1,o2}{a FlashR vector/matrix.}
 
 \item{FUN}{the reference or the name of one of the predefined basic binary
 operators.}
@@ -52,7 +52,7 @@ the output matrix to NA if the value in the corresponding
 location of the input matrix is NA.}
 }
 \value{
-a FlashMatrix vector/matrix.
+a FlashR vector/matrix.
 }
 \description{
 \code{fm.mapply2} applies \code{FUN} to the first elements of each
@@ -68,6 +68,13 @@ each row of the matrix in the left argument and the vector in the right
 argument. \code{fm.mapply.col} applies \code{FUN} element-wise to
 each column of the matrix in the left argument and the vector in the right
 argument.
+}
+\examples{
+mat <- fm.runif.matrix(100, 10)
+res <- fm.mapply.row(mat, runif(10), "+")
+res <- fm.mapply.col(mat, runif(100), "+")
+mat2 <- fm.runif.matrix(100, 10)
+res <- fm.mapply2(mat, mat2, "+")
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

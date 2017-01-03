@@ -1,3 +1,5 @@
+#ifdef ENABLE_TRILINOS
+
 // Include header for block Davidson eigensolver
 #include "AnasaziBlockDavidsonSolMgr.hpp"
 // Include header for LOBPCG eigensolver
@@ -333,3 +335,5 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 }
 
 }
+
+#endif
