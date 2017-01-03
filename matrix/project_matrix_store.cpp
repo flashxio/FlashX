@@ -324,9 +324,14 @@ std::pair<size_t, size_t> sparse_project_matrix_store::get_portion_size() const
 matrix_store::const_ptr lsparse_col_matrix_store::transpose() const
 {
 	matrix_info info = get_global_transpose_info();
+	std::vector<sparse_project_matrix_store::nz_idx> new_local_idxs(local_idxs.size());
+	for (size_t i = 0; i < local_idxs.size(); i++) {
+		new_local_idxs[i].row_idx = local_idxs[i].col_idx;
+		new_local_idxs[i].col_idx = local_idxs[i].row_idx;
+	}
 	lsparse_row_matrix_store::ptr ret(new lsparse_row_matrix_store(
 				info.start_row, info.start_col, info.num_rows, info.num_cols,
-				local_idxs, vals));
+				new_local_idxs, vals));
 	// If the matrix is smaller than its original size, we should resize it.
 	if (get_num_rows() != info.num_cols || get_num_cols() != info.num_rows) {
 		info = get_local_transpose_info();
@@ -413,9 +418,14 @@ void lsparse_col_matrix_store::materialize_self() const
 matrix_store::const_ptr lsparse_row_matrix_store::transpose() const
 {
 	matrix_info info = get_global_transpose_info();
+	std::vector<sparse_project_matrix_store::nz_idx> new_local_idxs(local_idxs.size());
+	for (size_t i = 0; i < local_idxs.size(); i++) {
+		new_local_idxs[i].row_idx = local_idxs[i].col_idx;
+		new_local_idxs[i].col_idx = local_idxs[i].row_idx;
+	}
 	lsparse_col_matrix_store::ptr ret(new lsparse_col_matrix_store(
 				info.start_row, info.start_col, info.num_rows, info.num_cols,
-				local_idxs, vals));
+				new_local_idxs, vals));
 	// If the matrix is smaller than its original size, we should resize it.
 	if (get_num_rows() != info.num_cols || get_num_cols() != info.num_rows) {
 		info = get_local_transpose_info();
