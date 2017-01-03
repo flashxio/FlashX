@@ -236,17 +236,18 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		off_t gstart_row = get_global_start_row() + local_start_row;
-		off_t gstart_col = get_global_start_col() + local_start_col;
+		bool ret = local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!ret)
+			return false;
 		// If the buffered matrix doesn't have the data for the specified
 		// location.
-		if (buf && (buf->get_global_start_row() != gstart_row
-				|| buf->get_global_start_col() != gstart_col
+		if (buf && (buf->get_global_start_row() != get_global_start_row()
+				|| buf->get_global_start_col() != get_global_start_col()
 				|| buf->get_num_rows() != local_num_rows
 				|| buf->get_num_cols() != local_num_cols))
 			buf = NULL;
-		return local_matrix_store::resize(local_start_row, local_start_col,
-				local_num_rows, local_num_cols);
+		return true;
 	}
 	virtual void reset_size() {
 		// If the buffered matrix doesn't have the data for the entire local
@@ -327,19 +328,21 @@ public:
 
 	virtual bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols) {
-		off_t gstart_row = get_global_start_row() + local_start_row;
-		off_t gstart_col = get_global_start_col() + local_start_col;
+		bool ret = local_matrix_store::resize(local_start_row, local_start_col,
+				local_num_rows, local_num_cols);
+		if (!ret)
+			return false;
 		// If the buffered matrix doesn't have the data for the specified
 		// location.
-		if (buf && (buf->get_global_start_row() != gstart_row
-				|| buf->get_global_start_col() != gstart_col
+		if (buf && (buf->get_global_start_row() != get_global_start_row()
+				|| buf->get_global_start_col() != get_global_start_col()
 				|| buf->get_num_rows() != local_num_rows
 				|| buf->get_num_cols() != local_num_cols))
 			buf = NULL;
-		return local_matrix_store::resize(local_start_row, local_start_col,
-				local_num_rows, local_num_cols);
+		return true;
 	}
 	virtual void reset_size() {
+		local_matrix_store::reset_size();
 		// If the buffered matrix doesn't have the data for the entire local
 		// matrix.
 		if (buf && (buf->get_global_start_row() != get_global_start_row()
@@ -347,7 +350,6 @@ public:
 				|| buf->get_num_rows() != get_num_rows()
 				|| buf->get_num_cols() != get_num_cols()))
 			buf = NULL;
-		local_matrix_store::reset_size();
 	}
 
 	using lvirtual_row_matrix_store::get_raw_arr;
