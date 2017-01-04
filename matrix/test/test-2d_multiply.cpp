@@ -106,8 +106,11 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 	printf("Start SpMM\n");
 	for (size_t k = 0; k < repeats; k++) {
 		gettimeofday(&start, NULL);
-		for (size_t i = 0; i < ins.size(); i++)
-			mat->multiply<mat_ele_t, float>(ins[i], outs[i]);
+		for (size_t i = 0; i < ins.size(); i++) {
+			auto create = detail::spmm_creator<mat_ele_t, float>::create(*mat,
+					ins[i]->get_num_cols());
+			mat->multiply(ins[i], outs[i], create);
+		}
 		gettimeofday(&end, NULL);
 		printf("it takes %.3f seconds\n", time_diff(start, end));
 	}

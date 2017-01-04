@@ -479,11 +479,6 @@ class sparse_matrix: public detail::EM_object
 	bool symmetric;
 	detail::EM_object::io_set::ptr ios;
 
-	template<class DenseType, class SparseType>
-	detail::task_creator::ptr get_multiply_creator(size_t num_in_cols) const {
-		return detail::spmm_creator<DenseType, SparseType>::create(*this,
-				num_in_cols);
-	}
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
@@ -578,6 +573,9 @@ public:
 	virtual detail::block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const = 0;
 
+	virtual detail::task_creator::ptr get_multiply_creator(
+			const scalar_type &type, size_t num_in_cols) const = 0;
+
 	/*
 	 * The size of a non-zero entry.
 	 */
@@ -620,18 +618,28 @@ public:
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
-	template<class DenseType, class SparseType>
 	bool multiply(detail::matrix_store::const_ptr in,
 			detail::matrix_store::ptr out) const {
-		return multiply(in, out, get_multiply_creator<DenseType, SparseType>(
-					in->get_num_cols()));
+		if (in->get_type() != out->get_type()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "input and output matrices need to have the same type";
+			return false;
+		}
+		if (entry_type && *entry_type != get_scalar_type<bool>()
+				&& *entry_type != in->get_type()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "the input matrix and the sparse matrix need to have the same type";
+			return false;
+		}
+		auto create = get_multiply_creator(in->get_type(), in->get_num_cols());
+		if (create == NULL)
+			return false;
+		return multiply(in, out, create);
 	}
 
-	template<class DenseType, class SparseType>
 	bool multiply(detail::vec_store::const_ptr in,
 			detail::vec_store::ptr out) const {
-		return multiply<DenseType, SparseType>(
-				in->conv2mat(in->get_length(), 1, true),
+		return multiply(in->conv2mat(in->get_length(), 1, true),
 				out->conv2mat(out->get_length(), 1, true));
 	}
 };

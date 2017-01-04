@@ -547,6 +547,24 @@ public:
 		else
 			return block_exec_order::ptr(new seq_exec_order());
 	}
+
+	virtual detail::task_creator::ptr get_multiply_creator(
+			const scalar_type &type, size_t num_in_cols) const {
+		if (type == get_scalar_type<int>())
+			return detail::spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<long>())
+			return detail::spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<size_t>())
+			return detail::spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<float>())
+			return detail::spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<double>())
+			return detail::spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return detail::task_creator::ptr();
+		}
+	}
 };
 
 class block_sparse_asym_matrix: public sparse_matrix
@@ -612,6 +630,24 @@ public:
 	virtual block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const {
 		return mat->get_multiply_order(num_block_rows, num_block_cols);
+	}
+
+	virtual detail::task_creator::ptr get_multiply_creator(
+			const scalar_type &type, size_t num_in_cols) const {
+		if (type == get_scalar_type<int>())
+			return detail::spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<long>())
+			return detail::spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<size_t>())
+			return detail::spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<float>())
+			return detail::spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<double>())
+			return detail::spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return detail::task_creator::ptr();
+		}
 	}
 };
 

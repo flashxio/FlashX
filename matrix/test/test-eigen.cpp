@@ -44,7 +44,9 @@ public:
 				matrix_layout_t::L_COL, x->get_type(),
 				x->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(x->get_raw_store(), res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				x->get_num_cols());
+		mat->multiply(x->get_raw_store(), res, create);
 		return dense_matrix::create(res);
 	}
 
@@ -99,7 +101,8 @@ public:
 				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(vec->get_raw_store(), deg);
+		auto create = detail::spmm_creator<double, float>::create(*mat, 1);
+		mat->multiply(vec->get_raw_store(), deg, create);
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
@@ -116,7 +119,9 @@ public:
 				matrix_layout_t::L_COL, tmp->get_type(),
 				tmp->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(tmp->get_raw_store(), res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				tmp->get_num_cols());
+		mat->multiply(tmp->get_raw_store(), res, create);
 		dense_matrix::ptr tmp2 = dense_matrix::create(res);
 		return tmp2->scale_rows(deg_vec1_2);
 	}
@@ -147,14 +152,18 @@ public:
 				matrix_layout_t::L_ROW, x->get_type(),
 				x->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(x->get_raw_store(), tmp);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				x->get_num_cols());
+		mat->multiply(x->get_raw_store(), tmp, create);
 		x = NULL;
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				t_mat->get_num_rows(), tmp->get_num_cols(),
 				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
 		assert(t_mat->get_entry_size() == 0 || t_mat->is_type<float>());
-		t_mat->multiply<double, float>(tmp, res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				tmp->get_num_cols());
+		t_mat->multiply(tmp, res, create);
 		return dense_matrix::create(res);
 	}
 
