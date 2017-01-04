@@ -17,7 +17,7 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I../libsafs
+CXXFLAGS += -I../libsafs -I../matrix
 
 all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix
 

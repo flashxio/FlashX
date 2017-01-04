@@ -24,6 +24,7 @@
 
 #include "FGlib.h"
 #include "ts_graph.h"
+#include "sparse_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
 #include "libgraph-algs/sem_kmeans.h"
 
@@ -718,6 +719,54 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
     compute_sem_kmeans(graph, k, init, max_iters, tolerance);
 }
 
+void run_spmm(FG_graph::ptr fg, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+	std::string entry_type;
+	int num_cols = 1;
+
+	while ((opt = getopt(argc, argv, "e:c:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'e':
+				entry_type = optarg;
+				num_opts++;
+				break;
+			case 'c':
+				num_cols = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	fm::sparse_matrix::ptr mat;
+	if (entry_type.empty())
+		mat = create_sparse_matrix(fg, NULL);
+	else if (entry_type == "I")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<int>());
+	else if (entry_type == "L")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<long>());
+	else if (entry_type == "F")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<float>());
+	else if (entry_type == "D")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<double>());
+	else {
+		fprintf(stderr, "unknown entry type\n");
+		return;
+	}
+	int num_nodes = safs::params.get_num_nodes();
+	fm::dense_matrix::ptr in = fm::dense_matrix::create_randu<double>(0, 1,
+			mat->get_num_cols(), num_cols, fm::matrix_layout_t::L_ROW, num_nodes);
+	fm::detail::matrix_store::ptr out = fm::detail::mem_matrix_store::create(
+			mat->get_num_rows(), num_cols, fm::matrix_layout_t::L_ROW,
+			fm::get_scalar_type<double>(), num_nodes);
+	mat->multiply<double, double>(in->get_raw_store(), out);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -901,6 +950,9 @@ int main(int argc, char *argv[])
 		run_louvain(graph, argc, argv);
 	} else if (alg == "sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv);
+	}
+	else if (alg == "spmm") {
+		run_spmm(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
