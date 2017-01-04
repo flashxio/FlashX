@@ -262,14 +262,6 @@ class sparse_block_2d
 				// Let's exclude the last empty row part.
 				- sparse_row_part::get_row_id_size());
 	}
-
-	char *get_nz_data() {
-		return (char *) (row_parts + get_rindex_size());
-	}
-
-	const char *get_nz_data() const {
-		return (char *) (row_parts + get_rindex_size());
-	}
 public:
 	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx) {
 		this->block_row_idx = block_row_idx;
@@ -369,6 +361,13 @@ public:
 	}
 	local_coo_t *get_coo_start() {
 		return (local_coo_t *) (row_parts + get_rheader_size());
+	}
+
+	char *get_nz_data() {
+		return (char *) (row_parts + get_rindex_size());
+	}
+	const char *get_nz_data() const {
+		return (char *) (row_parts + get_rindex_size());
 	}
 	const char *get_coo_val_start(size_t entry_size) const {
 		return get_nz_data() + (nnz - num_coo_vals) * entry_size;
