@@ -17,9 +17,9 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -DUSE_GZIP -I../libsafs -I../flash-graph
+CXXFLAGS += -DUSE_GZIP -I../libsafs
 
-all: libmatrix eigensolver test unit-test libmatrix-algs utils
+all: libmatrix eigensolver test unit-test libmatrix-algs
 
 libmatrix: $(OBJS)
 	rm -f libFMatrix.a

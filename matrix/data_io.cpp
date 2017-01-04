@@ -30,8 +30,6 @@
 #include "native_file.h"
 #include "thread.h"
 
-#include "vertex.h"
-
 #include "data_io.h"
 #include "generic_type.h"
 #include "matrix_config.h"
@@ -512,266 +510,6 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 }
 
 /*
- * This class parses a line into an edge (source, destination).
- */
-class edge_parser: public line_parser
-{
-public:
-	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
-	size_t get_num_cols() const {
-		return 2;
-	}
-
-	std::string get_col_name(off_t idx) const {
-		if (idx == 0)
-			return "source";
-		else
-			return "dest";
-	}
-
-	const scalar_type &get_col_type(off_t idx) const {
-		return get_scalar_type<fg::vertex_id_t>();
-	}
-};
-
-size_t edge_parser::parse(const std::vector<std::string> &lines,
-		data_frame &df) const
-{
-	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
-			get_scalar_type<fg::vertex_id_t>());
-	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
-			get_scalar_type<fg::vertex_id_t>());
-	size_t entry_idx = 0;
-	for (size_t i = 0; i < lines.size(); i++) {
-		const char *line = lines[i].c_str();
-		int len = strlen(line);
-		const char *first = line;
-		// Skip space
-		for (; isspace(*first); first++);
-		if (*first == '#')
-			continue;
-
-		// Make sure we get a number.
-		if (!isdigit(*first)) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("the first entry isn't a number: ") + first;
-			continue;
-		}
-		fg::vertex_id_t from = atol(first);
-		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
-
-		const char *second = first;
-		// Go to the end of the first number.
-		for (; isdigit(*second); second++);
-		if (second - line == len) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("there isn't second entry: ") + line;
-			continue;
-		}
-		// Skip space between two numbers.
-		for (; isspace(*second); second++);
-		// Make sure we get a number.
-		if (!isdigit(*second)) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("the second entry isn't a number: ") + second;
-			continue;
-		}
-		fg::vertex_id_t to = atol(second);
-		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
-
-		froms->set(entry_idx, from);
-		tos->set(entry_idx, to);
-		entry_idx++;
-	}
-	froms->resize(entry_idx);
-	tos->resize(entry_idx);
-
-	df.get_vec(0)->append(*froms);
-	df.get_vec(1)->append(*tos);
-	return froms->get_length();
-}
-
-template<class AttrType>
-class attr_edge_parser: public line_parser
-{
-public:
-	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
-	size_t get_num_cols() const {
-		return 3;
-	}
-
-	std::string get_col_name(off_t idx) const {
-		switch(idx) {
-			case 0:
-				return "source";
-			case 1:
-				return "dest";
-			case 2:
-				return "attr";
-			default:
-				throw std::invalid_argument("invalid index");
-		}
-	}
-
-	const scalar_type &get_col_type(off_t idx) const {
-		switch(idx) {
-			case 0:
-			case 1:
-				return get_scalar_type<fg::vertex_id_t>();
-			case 2:
-				return get_scalar_type<AttrType>();
-			default:
-				throw std::invalid_argument("invalid index");
-		}
-	}
-};
-
-template<class AttrType>
-size_t attr_edge_parser<AttrType>::parse(const std::vector<std::string> &lines,
-		data_frame &df) const
-{
-	detail::smp_vec_store::ptr froms = detail::smp_vec_store::create(lines.size(),
-			get_scalar_type<fg::vertex_id_t>());
-	detail::smp_vec_store::ptr tos = detail::smp_vec_store::create(lines.size(),
-			get_scalar_type<fg::vertex_id_t>());
-	detail::smp_vec_store::ptr attrs = detail::smp_vec_store::create(lines.size(),
-			get_scalar_type<AttrType>());
-
-	size_t entry_idx = 0;
-	for (size_t i = 0; i < lines.size(); i++) {
-		const char *line = lines[i].c_str();
-		int len = strlen(line);
-		const char *first = line;
-		// Skip space
-		for (; isspace(*first); first++);
-		if (*first == '#')
-			continue;
-
-		// Make sure we get a number.
-		if (!isdigit(*first)) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("the first entry isn't a number: ") + first;
-			continue;
-		}
-		fg::vertex_id_t from = atol(first);
-		assert(from >= 0 && from < fg::MAX_VERTEX_ID);
-
-		const char *second = first;
-		// Go to the end of the first number.
-		for (; isdigit(*second); second++);
-		if (second - line == len) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("there isn't second entry: ") + line;
-			continue;
-		}
-		// Skip space between two numbers.
-		for (; isspace(*second); second++);
-		// Make sure we get a number.
-		if (!isdigit(*second)) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("the second entry isn't a number: ") + second;
-			continue;
-		}
-		fg::vertex_id_t to = atol(second);
-		assert(to >= 0 && to < fg::MAX_VERTEX_ID);
-
-		const char *third = second;
-		// Go to the end of the second number.
-		for (; isdigit(*third); third++);
-		if (third - line == len) {
-			BOOST_LOG_TRIVIAL(error)
-				<< std::string("there isn't third entry: ") + line;
-			continue;
-		}
-		// Skip space between two numbers.
-		for (; isspace(*third); third++);
-		AttrType attr = boost::lexical_cast<AttrType>(third);
-
-		froms->set<fg::vertex_id_t>(entry_idx, from);
-		tos->set<fg::vertex_id_t>(entry_idx, to);
-		attrs->set<AttrType>(entry_idx, attr);
-		entry_idx++;
-	}
-	froms->resize(entry_idx);
-	tos->resize(entry_idx);
-	attrs->resize(entry_idx);
-
-	df.get_vec(0)->append(*froms);
-	df.get_vec(1)->append(*tos);
-	df.get_vec(2)->append(*attrs);
-	return froms->get_length();
-}
-
-data_frame::ptr read_edge_list(const std::vector<std::string> &files,
-		bool in_mem, const std::string &edge_attr_type)
-{
-	std::shared_ptr<line_parser> parser;
-	if (edge_attr_type.empty())
-		parser = std::shared_ptr<line_parser>(new edge_parser());
-	else if (edge_attr_type == "I")
-		parser = std::shared_ptr<line_parser>(new attr_edge_parser<int>());
-	else if (edge_attr_type == "L")
-		parser = std::shared_ptr<line_parser>(new attr_edge_parser<long>());
-	else if (edge_attr_type == "F")
-		parser = std::shared_ptr<line_parser>(new attr_edge_parser<float>());
-	else if (edge_attr_type == "D")
-		parser = std::shared_ptr<line_parser>(new attr_edge_parser<double>());
-	else {
-		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
-		return data_frame::ptr();
-	}
-	return read_lines(files, *parser, in_mem);
-}
-
-/*
- * Convert a string of decimal to an integer.
- */
-template<class T>
-class int_parser: public ele_parser
-{
-	int base;
-public:
-	int_parser() {
-		base = 10;
-	}
-
-	int_parser(int base) {
-		this->base = base;
-	}
-
-	virtual void set_zero(void *buf) const {
-		T *val = reinterpret_cast<T *>(buf);
-		*val = 0;
-	}
-
-	virtual void parse(const std::string &str, void *buf) const {
-		T *val = reinterpret_cast<T *>(buf);
-		val[0] = strtol(str.c_str(), NULL, base);
-	}
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<T>();
-	}
-};
-
-template<class T>
-class float_parser: public ele_parser
-{
-public:
-	virtual void parse(const std::string &str, void *buf) const {
-		T *val = reinterpret_cast<T *>(buf);
-		val[0] = atof(str.c_str());
-	}
-
-	virtual void set_zero(void *buf) const {
-		T *val = reinterpret_cast<T *>(buf);
-		*val = 0;
-	}
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<T>();
-	}
-};
-
-/*
  * This parses one row of a dense matrix at a time.
  */
 class row_parser: public line_parser
@@ -838,6 +576,15 @@ size_t row_parser::parse(const std::vector<std::string> &lines,
 		df.get_vec(j)->append(*cols[j]);
 	}
 	return num_rows;
+}
+
+data_frame::ptr read_data_frame(const std::vector<std::string> &files,
+		bool in_mem, const std::string &delim,
+		const std::vector<ele_parser::const_ptr> &ele_parsers)
+{
+	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
+			new row_parser(delim, ele_parsers));
+	return read_lines(files, *parser, in_mem);
 }
 
 dense_matrix::ptr read_matrix(const std::vector<std::string> &files,

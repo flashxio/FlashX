@@ -23,7 +23,6 @@
 #include "in_mem_io.h"
 #include "io_interface.h"
 
-#include "vertex.h"
 #include "matrix_header.h"
 #include "vector_vector.h"
 
