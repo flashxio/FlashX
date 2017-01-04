@@ -427,7 +427,6 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 	if (io == NULL)
 		return data_frame::ptr();
 
-	printf("parse edge list\n");
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
@@ -740,6 +739,11 @@ public:
 		this->base = base;
 	}
 
+	virtual void set_zero(void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		*val = 0;
+	}
+
 	virtual void parse(const std::string &str, void *buf) const {
 		T *val = reinterpret_cast<T *>(buf);
 		val[0] = strtol(str.c_str(), NULL, base);
@@ -757,6 +761,11 @@ public:
 		T *val = reinterpret_cast<T *>(buf);
 		val[0] = atof(str.c_str());
 	}
+
+	virtual void set_zero(void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		*val = 0;
+	}
 	virtual const scalar_type &get_type() const {
 		return get_scalar_type<T>();
 	}
@@ -765,7 +774,6 @@ public:
 /*
  * This parses one row of a dense matrix at a time.
  */
-template<class T>
 class row_parser: public line_parser
 {
 	const std::string delim;
@@ -788,26 +796,18 @@ public:
 	}
 
 	const scalar_type &get_col_type(off_t idx) const {
-		return get_scalar_type<T>();
+		return parsers[idx]->get_type();
 	}
 };
 
-template<class T>
-T get_zero()
-{
-	return 0;
-}
-
-template<class T>
-size_t row_parser<T>::parse(const std::vector<std::string> &lines,
+size_t row_parser::parse(const std::vector<std::string> &lines,
 		data_frame &df) const
 {
 	std::vector<detail::smp_vec_store::ptr> cols(num_cols);
 	for (size_t i = 0; i < cols.size(); i++)
-		cols[i] = detail::smp_vec_store::create(lines.size(), get_scalar_type<T>());
+		cols[i] = detail::smp_vec_store::create(lines.size(), get_col_type(i));
 	size_t num_rows = 0;
 	std::vector<std::string> strs;
-	std::vector<T> row(num_cols);
 	for (size_t i = 0; i < lines.size(); i++) {
 		const char *line = lines[i].c_str();
 		// Skip space
@@ -824,24 +824,13 @@ size_t row_parser<T>::parse(const std::vector<std::string> &lines,
 			strs.push_back("0");
 
 		// Parse each element.
-		try {
-			for (size_t j = 0; j < num_cols; j++) {
-				// If the value is missing. We make it 0.
-				if (strs[j].empty())
-					row[j] = get_zero<T>();
-				else if (parsers[j] == NULL)
-					row[j] = boost::lexical_cast<T>(strs[j]);
-				else
-					parsers[j]->parse(strs[j], &row[j]);
-			}
+		for (size_t j = 0; j < num_cols; j++) {
+			// If the value is missing. We make it 0.
+			if (strs[j].empty())
+				parsers[j]->set_zero(cols[j]->get(num_rows));
+			else
+				parsers[j]->parse(strs[j], cols[j]->get(num_rows));
 		}
-		catch (boost::bad_lexical_cast const&e) {
-			BOOST_LOG_TRIVIAL(error) << e.what();
-		}
-
-		// If everything goes right, we store the results in the vectors.
-		for (size_t j = 0; j < num_cols; j++)
-			cols[j]->set<T>(num_rows, row[j]);
 		num_rows++;
 	}
 	for (size_t j = 0; j < num_cols; j++) {
@@ -906,31 +895,24 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 	if (ele_type == "I") {
 		for (size_t i = 0; i < num_cols; i++)
 			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
-		parser = std::shared_ptr<line_parser>(new row_parser<int>(delim,
-					ele_parsers));
 	}
 	else if (ele_type == "L") {
 		for (size_t i = 0; i < num_cols; i++)
 			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
-		parser = std::shared_ptr<line_parser>(new row_parser<long>(delim,
-					ele_parsers));
 	}
 	else if (ele_type == "F") {
 		for (size_t i = 0; i < num_cols; i++)
 			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
-		parser = std::shared_ptr<line_parser>(new row_parser<float>(delim,
-					ele_parsers));
 	}
 	else if (ele_type == "D") {
 		for (size_t i = 0; i < num_cols; i++)
 			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
-		parser = std::shared_ptr<line_parser>(new row_parser<double>(delim,
-					ele_parsers));
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
 		return dense_matrix::ptr();
 	}
+	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }
@@ -968,39 +950,8 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 			return dense_matrix::ptr();
 		}
 
-	return read_matrix(files, in_mem, ele_type, delim, ele_parsers);
-}
-
-dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
-		bool in_mem, const std::string &ele_type, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &ele_parsers)
-{
-	std::shared_ptr<line_parser> parser;
-	if (ele_type == "I")
-		parser = std::shared_ptr<line_parser>(new row_parser<int>(delim,
-					ele_parsers));
-	else if (ele_type == "L")
-		parser = std::shared_ptr<line_parser>(new row_parser<long>(delim,
-					ele_parsers));
-	else if (ele_type == "F")
-		parser = std::shared_ptr<line_parser>(new row_parser<float>(delim,
-					ele_parsers));
-	else if (ele_type == "D")
-		parser = std::shared_ptr<line_parser>(new row_parser<double>(delim,
-					ele_parsers));
-	else {
-		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
-		return dense_matrix::ptr();
-	}
-
-	for (size_t i = 0; i < ele_parsers.size(); i++)
-		if (ele_parsers[i]
-				&& ele_parsers[i]->get_type() != parser->get_col_type(0)) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "element parsers output different types from line parser";
-			return dense_matrix::ptr();
-		}
-
+	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
+			new row_parser(delim, ele_parsers));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }

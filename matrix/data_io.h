@@ -56,6 +56,7 @@ class ele_parser
 public:
 	typedef std::shared_ptr<const ele_parser> const_ptr;
 
+	virtual void set_zero(void *buf) const = 0;
 	virtual void parse(const std::string &str, void *buf) const = 0;
 	virtual const scalar_type &get_type() const = 0;
 };
@@ -71,9 +72,6 @@ std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		const std::string &col_indicator);
-std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
-		bool in_mem, const std::string &ele_type, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &parsers);
 
 }
 
