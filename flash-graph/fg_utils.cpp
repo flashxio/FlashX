@@ -1257,6 +1257,7 @@ void part_2d_apply_operate::run(const void *key, const local_vv_store &val,
 		curr_size += block->get_size(nz_size);
 		blocks[i].coos = block->get_coo_start();
 		blocks[i].coo_vals = block->get_coo_val_start(nz_size);
+		blocks[i].nz_vals = block->get_nz_data();
 		// For now we only include single-entry rows.
 		// We'll add other non-zero entries later.
 		blocks[i].block = new (block) sparse_block_2d(
