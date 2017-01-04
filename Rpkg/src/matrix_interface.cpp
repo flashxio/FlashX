@@ -28,7 +28,6 @@
 #include "safs_file.h"
 #include "io_interface.h"
 
-#include "FGlib.h"
 #include "data_frame.h"
 #include "sparse_matrix.h"
 #include "bulk_operate.h"
