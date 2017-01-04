@@ -163,7 +163,8 @@ class spmm_creator: public fm::detail::task_creator
 	fm::detail::EM_matrix_stream::ptr output_stream;
 	const fm::sparse_matrix &mat;
 
-	spmm_creator(const fm::sparse_matrix &_mat, size_t num_in_cols);
+	spmm_creator(const fm::sparse_matrix &_mat, size_t num_in_cols): mat(_mat) {
+	}
 
 public:
 	static fm::detail::task_creator::ptr create(const fm::sparse_matrix &mat,
@@ -280,6 +281,24 @@ public:
 			size_t num_block_rows, size_t num_block_cols) const {
 		return fm::detail::block_exec_order::ptr(new fm::detail::seq_exec_order());
 	}
+
+	virtual fm::detail::task_creator::ptr get_multiply_creator(
+			const fm::scalar_type &type, size_t num_in_cols) const {
+		if (type == fm::get_scalar_type<int>())
+			return spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<long>())
+			return spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<size_t>())
+			return spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<float>())
+			return spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<double>())
+			return spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return fm::detail::task_creator::ptr();
+		}
+	}
 };
 
 fm::sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg,
@@ -385,6 +404,24 @@ public:
 	virtual fm::detail::block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const {
 		return fm::detail::block_exec_order::ptr(new fm::detail::seq_exec_order());
+	}
+
+	virtual fm::detail::task_creator::ptr get_multiply_creator(
+			const fm::scalar_type &type, size_t num_in_cols) const {
+		if (type == fm::get_scalar_type<int>())
+			return spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<long>())
+			return spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<size_t>())
+			return spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<float>())
+			return spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == fm::get_scalar_type<double>())
+			return spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return fm::detail::task_creator::ptr();
+		}
 	}
 };
 

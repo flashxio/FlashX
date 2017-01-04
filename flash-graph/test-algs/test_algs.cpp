@@ -764,7 +764,7 @@ void run_spmm(FG_graph::ptr fg, int argc, char *argv[])
 	fm::detail::matrix_store::ptr out = fm::detail::mem_matrix_store::create(
 			mat->get_num_rows(), num_cols, fm::matrix_layout_t::L_ROW,
 			fm::get_scalar_type<double>(), num_nodes);
-	mat->multiply<double, double>(in->get_raw_store(), out);
+	mat->multiply(in->get_raw_store(), out);
 }
 
 std::string supported_algs[] = {
