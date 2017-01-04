@@ -599,7 +599,7 @@ static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<double, bool>(in_mat, out_mat);
+		matrix->multiply(in_mat, out_mat);
 		return dense_matrix::create(out_mat);
 	}
 	else if (right_mat->is_type<int>()) {
@@ -609,7 +609,7 @@ static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<int, bool>(in_mat, out_mat);
+		matrix->multiply(in_mat, out_mat);
 		return dense_matrix::create(out_mat);
 	}
 	else {
