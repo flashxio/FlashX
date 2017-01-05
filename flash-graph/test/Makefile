@@ -21,7 +21,7 @@ LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
 CXXFLAGS += -I../../libsafs -I.. -I.
 
 TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
-			test_sem_kmeans test_clusters test_lazy_cache test_partition_cache\
+			test_sem_kmeans test_clusters test_partition_cache\
 			test_kmeans_thread test_thd_safe_bool_vector test_kmeans_task_thread\
 			test_task_queue
 
@@ -45,9 +45,6 @@ test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
 
 test_clusters: test_clusters.o
 	$(CXX) -o test_clusters test_clusters.o ../libgraph-algs/clusters.o $(LDFLAGS)
-
-test_lazy_cache: test_lazy_cache.o
-	$(CXX) -o test_lazy_cache test_lazy_cache.o $(LDFLAGS)
 
 test_partition_cache: test_partition_cache.o
 	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
