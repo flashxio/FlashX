@@ -31,12 +31,13 @@
 #include "FGlib.h"
 #include "utils.h"
 #include "in_mem_storage.h"
-#include "rutils.h"
+#include "fg_utils.h"
 
 #include "mem_vec_store.h"
 #include "data_frame.h"
-#include "fm_utils.h"
 #include "data_io.h"
+
+#include "rutils.h"
 
 using namespace safs;
 using namespace fg;
@@ -131,14 +132,6 @@ FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 	}
 }
 
-namespace fm
-{
-void init_flash_matrix(config_map::ptr configs);
-void destroy_flash_matrix();
-}
-
-void init_flashmatrixr();
-
 /**
  * Initialize FlashGraph.
  */
@@ -184,17 +177,8 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		fg_success = false;
 	}
 
-	bool fm_success;
-	try {
-		fm::init_flash_matrix(configs);
-		fm_success = true;
-	} catch (std::exception &e) {
-		fprintf(stderr, "exception in init: %s\n", e.what());
-		fm_success = false;
-	}
-
 	Rcpp::LogicalVector res(1);
-	res[0] = safs_success && fg_success && fm_success;
+	res[0] = safs_success && fg_success;
 	if (standalone)
 		printf("Run FlashR in standalone mode\n");
 	else if (is_safs_init())
@@ -203,7 +187,6 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		fprintf(stderr, "Can't enable the SAFS mode of FlashR\n");
 		res[0] = false;
 	}
-	init_flashmatrixr();
 	return res;
 }
 
@@ -226,7 +209,6 @@ RcppExport SEXP R_FG_destroy()
 	}
 	if (num_refs == 0)
 		graphs.clear();
-	fm::destroy_flash_matrix();
 	graph_engine::destroy_flash_graph();
 	safs::destroy_io_system();
 	return R_NilValue;
@@ -235,7 +217,6 @@ RcppExport SEXP R_FG_destroy()
 RcppExport SEXP R_FG_set_conf(SEXP pconf)
 {
 	graph_engine::destroy_flash_graph();
-	fm::destroy_flash_matrix();
 	safs::destroy_io_system();
 	return R_FG_init(pconf);
 }
@@ -590,8 +571,8 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 	fm::data_frame::ptr df = fm::data_frame::create();
 	df->add_vec("source", from_store);
 	df->add_vec("dest", to_store);
-	fm::edge_list::ptr el = fm::edge_list::create(df, directed);
-	fg::FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	edge_list::ptr el = edge_list::create(df, directed);
+	FG_graph::ptr fg = create_fg_graph("graph_name", el);
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
@@ -619,9 +600,10 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 
 	std::vector<std::string> edge_list_files(1);
 	edge_list_files[0] = graph_file;
-	fm::data_frame::ptr df = fm::read_edge_list(edge_list_files, true, "");
-	fm::edge_list::ptr el = fm::edge_list::create(df, directed);
-	fg::FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	// TODO give more options when loading an edge list.
+	fm::data_frame::ptr df = utils::read_edge_list(edge_list_files, true, ",", "");
+	edge_list::ptr el = edge_list::create(df, directed);
+	FG_graph::ptr fg = create_fg_graph("graph_name", el);
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
@@ -1097,15 +1079,4 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	Rcpp::NumericVector res(fg_vec->get_size());
 	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
-}
-
-RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
-{
-	Rcpp::List graph = Rcpp::List(pgraph);
-	Rcpp::LogicalVector res(1);
-	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
-	// TODO does this work if this isn't a binary matrix?
-	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
-	std::string name = graph["name"];
-	return create_FMR_matrix(m, name);
 }

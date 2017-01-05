@@ -1,7 +1,7 @@
 # Copyright 2014 Open Connectome Project (http://openconnecto.me)
 # Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of FlashR.
+# This file is part of FlashGraphR.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#' Reconfigure FlashR
+#' Reconfigure FlashGraphR
 #'
-#' This reconfigures FlashR with the settings in the configuration file.
+#' This reconfigures FlashGraphR with the settings in the configuration file.
 #' The configuration file contains a list of key-value pairs. Each line in
 #' the file is a key-value pair in the form of "key_name=value".
 #' @param conf.file The configuration file.
@@ -25,18 +25,18 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.set.conf <- function(conf.file)
 {
-	ret <- .Call("R_FG_set_conf", conf.file, PACKAGE="FlashR")
+	ret <- .Call("R_FG_set_conf", conf.file, PACKAGE="FlashGraphR")
 	stopifnot(ret);
 }
 
 fg.set.log.level <- function(level)
 {
-	.Call("R_FG_set_log_level", level, PACKAGE="FlashR")
+	.Call("R_FG_set_log_level", level, PACKAGE="FlashGraphR")
 }
 
-#' List graphs loaded to FlashR
+#' List graphs loaded to FlashGraphR
 #'
-#' This function lists all graphs that have been loaded to FlashR.
+#' This function lists all graphs that have been loaded to FlashGraphR.
 #' @return A list of graphs in a data frame. The first column of the data
 #' frame is the graph name. The second column indicates whether a graph
 #' is stored in memory or on disks.
@@ -44,29 +44,29 @@ fg.set.log.level <- function(level)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.list.graphs <- function()
 {
-	.Call("R_FG_list_graphs", PACKAGE="FlashR")
+	.Call("R_FG_list_graphs", PACKAGE="FlashGraphR")
 }
 
-#' Indicate whether a graph has been loaded to FlashR
+#' Indicate whether a graph has been loaded to FlashGraphR
 #'
-#' This function indicates whether a graph has been loaded to FlashR.
+#' This function indicates whether a graph has been loaded to FlashGraphR.
 #' @param graph A graph name.
-#' @return A boolean value: true if the graph has been loaded to FlashR.
+#' @return A boolean value: true if the graph has been loaded to FlashGraphR.
 #' @name fg.exist.graph
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.exist.graph <- function(graph)
 {
-	.Call("R_FG_exist_graph", graph, PACKAGE="FlashR")
+	.Call("R_FG_exist_graph", graph, PACKAGE="FlashGraphR")
 }
 
 fg.get.params <- function(name)
 {
-	.Call("R_FG_get_params", name, PACKAGE="FlashR")
+	.Call("R_FG_get_params", name, PACKAGE="FlashGraphR")
 }
 
-#' Load a graph to FlashR.
+#' Load a graph to FlashGraphR.
 #'
-#' Load a graph to FlashR from difference sources.
+#' Load a graph to FlashGraphR from difference sources.
 #' 
 #' `fg.load.graph' loads a graph from the following sources: an edge list
 #' file in the text format and an adjacency list file in the FlashGraph format.
@@ -74,11 +74,11 @@ fg.get.params <- function(name)
 #' `fg.load.igraph' loads a graph from an iGraph object.
 #'
 #' `fg.get.graph' gets a FlashGraph object that references a graph
-#' that has been loaded to FlashR.
+#' that has been loaded to FlashGraphR.
 #'
-#' Once a graph is loaded to FlashR, FlashR will maintain it.
+#' Once a graph is loaded to FlashGraphR, FlashGraphR will maintain it.
 #' A user can use fg.list.graphs() to list all graphs that have been loaded
-#' FlashR and use fg.get.graph() to get a reference to a graph. A user
+#' FlashGraphR and use fg.get.graph() to get a reference to a graph. A user
 #' should provide a name for the graph so later on he or she will be able
 #' to identify the graph more easily. By default, the graph name is
 #' the input graph file name.
@@ -88,12 +88,12 @@ fg.get.params <- function(name)
 #' an index file, the input graph file is considered as an adjacency list
 #' file, otherwise, an edge list file.
 #'
-#' When loading a graph from an edge list file, FlashR will construct
+#' When loading a graph from an edge list file, FlashGraphR will construct
 #' it into the FlashGraph format. A user needs to indicate whether the edge
 #' list represents a directed graph. A user can also use multiple threads
 #' to accelerate constructing a graph.
 #'
-#' When loading a graph from iGraph, FlashR
+#' When loading a graph from iGraph, FlashGraphR
 #' will construct it into the FlashGraph format. A user can use multiple
 #' threads to accelerate graph construction.
 #'
@@ -102,7 +102,7 @@ fg.get.params <- function(name)
 #'                   to provide an index file if the input graph uses
 #'                   the FlashGraph format.
 #' @param graph.name The graph name a user provides when a graph is
-#'                   loaded to FlashR.
+#'                   loaded to FlashGraphR.
 #' @param directed   Indicate whether the input graph is directed. This is
 #'                   only used if the input graph use the edge list format.
 #' @return a FlashGraph object.
@@ -118,7 +118,7 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 {
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
-			  as.logical(directed), PACKAGE="FlashR")
+			  as.logical(directed), PACKAGE="FlashGraphR")
 		if (is.null(ret))
 			ret
 		else
@@ -126,7 +126,7 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 	}
 	else {
 		ret <- .Call("R_FG_load_graph_adj", graph.name, graph, index.file,
-			  PACKAGE="FlashR")
+			  PACKAGE="FlashGraphR")
 		if (is.null(ret))
 			ret
 		else
@@ -145,7 +145,7 @@ fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 	df["from"] <- df["from"] - 1
 	df["to"] <- df["to"] - 1
 	ret <- .Call("R_FG_load_graph_el_df", graph.name, df,
-				 as.logical(is.directed(graph)), PACKAGE="FlashR")
+				 as.logical(is.directed(graph)), PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
 	else
@@ -156,7 +156,7 @@ fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 fg.get.graph <- function(graph.name)
 {
 	stopifnot(fg.exist.graph(graph.name))
-	ret <- .Call("R_FG_get_graph_obj", graph.name, PACKAGE="FlashR")
+	ret <- .Call("R_FG_get_graph_obj", graph.name, PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
 	else
@@ -165,7 +165,7 @@ fg.get.graph <- function(graph.name)
 
 #' Export graph image.
 #'
-#' This function exports a graph image in FlashR to the local filesystem.
+#' This function exports a graph image in FlashGraphR to the local filesystem.
 #'
 #' @param graph The FlashGraph object
 #' @param graph.file The graph file in the local filesystem to which
@@ -179,7 +179,7 @@ fg.export.graph <- function(graph, graph.file, index.file)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	.Call("R_FG_export_graph", graph, graph.file, index.file,
-		  PACKAGE="FlashR")
+		  PACKAGE="FlashGraphR")
 }
 
 #' Graph information
@@ -265,11 +265,11 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (!graph$directed)
-		.Call("R_FG_compute_cc", graph, PACKAGE="FlashR")
+		.Call("R_FG_compute_cc", graph, PACKAGE="FlashGraphR")
 	else if (mode == "weak")
-		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashR")
+		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraphR")
 	else if (mode == "strong")
-		.Call("R_FG_compute_scc", graph, PACKAGE="FlashR")
+		.Call("R_FG_compute_scc", graph, PACKAGE="FlashGraphR")
 	else
 		stop("a wrong mode")
 }
@@ -304,7 +304,7 @@ fg.get.lcc <- function(graph, mode=c("weak", "strong"))
 #	stopifnot(!is.null(graph))
 #	stopifnot(class(graph) == "fg")
 #	stopifnot(graph$directed)
-#	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashR")
+#	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraphR")
 #}
 
 #' Degree of the vertices in a graph
@@ -322,7 +322,7 @@ fg.degree <- function(graph, mode=c("both", "in", "out"))
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_get_degree", graph, mode, PACKAGE="FlashR")
+	.Call("R_FG_get_degree", graph, mode, PACKAGE="FlashGraphR")
 }
 
 #' PageRank
@@ -358,7 +358,7 @@ fg.page.rank <- function(graph, no.iters=1000, damping=0.85)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_compute_pagerank", graph, no.iters, damping,
-		  PACKAGE="FlashR")
+		  PACKAGE="FlashGraphR")
 }
 
 #' Triangle counting
@@ -384,10 +384,10 @@ fg.triangles <- function(graph, type="cycle")
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
 		.Call("R_FG_compute_directed_triangles", graph, type,
-			  PACKAGE="FlashR")
+			  PACKAGE="FlashGraphR")
 	}
 	else {
-		.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashR")
+		.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraphR")
 	}
 }
 
@@ -420,7 +420,7 @@ fg.topK.scan <- function(graph, order=1, K=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashR")
+	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
 }
 
 #' @rdname fg.local.scan
@@ -430,7 +430,7 @@ fg.local.scan <- function(graph, order=1)
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
 		.Call("R_FG_compute_local_scan", graph, as.integer(order),
-			  PACKAGE="FlashR")
+			  PACKAGE="FlashGraphR")
 	}
 	else if (order == 0) {
 		fg.degree(graph)
@@ -505,7 +505,7 @@ fg.kcore <- function(graph, k.start=2, k.end=10)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashR")
+	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraphR")
 }
 
 fg.overlap <- function(graph, vids)
@@ -513,7 +513,7 @@ fg.overlap <- function(graph, vids)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashR")
+	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraphR")
 }
 
 #' Generate an induced subgraph
@@ -544,7 +544,7 @@ fg.fetch.subgraph.igraph <- function(graph, vertices)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	edge.list = .Call("R_FG_fetch_subgraph_el", graph, vertices,
-					  PACKAGE="FlashR")
+					  PACKAGE="FlashGraphR")
 	dframe = data.frame(edge.list$src, edge.list$dst)
 	graph.data.frame(dframe, graph$directed)
 }
@@ -556,7 +556,7 @@ fg.fetch.subgraph <- function(graph, vertices,
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	ret <- .Call("R_FG_fetch_subgraph", graph, vertices, name, compress,
-				 PACKAGE="FlashR")
+				 PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
 	else
@@ -591,7 +591,7 @@ fg.diameter <- function(graph, directed=FALSE)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashR")
+	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraphR")
 }
 
 print.fg <- function(x, ...)
@@ -627,19 +627,19 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
-    .Call("R_FG_compute_betweenness", fg, vids, PACKAGE="FlashR")
+    .Call("R_FG_compute_betweenness", fg, vids, PACKAGE="FlashGraphR")
 }
 
 .onLoad <- function(libname, pkgname)
 {
-	library.dynam("FlashR", pkgname, libname, local=FALSE);
-	ret <- .Call("R_FG_init", NULL, PACKAGE="FlashR")
+	library.dynam("FlashGraphR", pkgname, libname, local=FALSE);
+	ret <- .Call("R_FG_init", NULL, PACKAGE="FlashGraphR")
 	stopifnot(ret)
 }
 
-#' Load a sparse matrix to FlashR.
+#' Load a sparse matrix to FlashGraphR.
 #'
-#' Load a sparse matrix to FlashR from FlashGraph.
+#' Load a sparse matrix to FlashGraphR from FlashGraph.
 #' 
 #' `fm.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
 #' a matrix represented by a FlashGraph object.
@@ -652,6 +652,6 @@ fm.get.sparse.matrix <- function(fg)
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
-	m <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashR")
+	m <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashGraphR")
 	new.fm(m)
 }
