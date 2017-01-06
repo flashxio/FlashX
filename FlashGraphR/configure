@@ -624,6 +624,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+FlashR_lib
 NUMA_LIB
 NUMA_DEF
 AIO_LIB
@@ -3876,6 +3877,20 @@ if test "x$ac_cv_lib_numa_numa_alloc_local" = xyes; then :
 
 fi
 
+
+echo "search for FlashR"
+libpaths=`R -e 'cat(.libPaths(), "\n")' --no-save --slave`
+FlashR_lib=""
+for x in $libpaths
+do
+	if test -f "$x/FlashR/libs/FlashR.so"; then :
+  FlashR_lib="$x/FlashR/libs/FlashR.so"
+
+fi
+done
+if test "$FlashR_lib" = "" ; then :
+  as_fn_error $? "\"cannot find FlashR\"" "$LINENO" 5
+fi
 
 #graphml_support=yes
 #AC_ARG_ENABLE(graphml,

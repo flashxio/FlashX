@@ -51,6 +51,15 @@ AC_CHECK_LIB([aio], [io_submit], [AC_SUBST(AIO_LIB, -laio)])
 AC_CHECK_HEADER([numa.h], [AC_SUBST(NUMA_DEF, -DUSE_NUMA)])
 AC_CHECK_LIB([numa], [numa_alloc_local], [AC_SUBST(NUMA_LIB, -lnuma)])
 
+echo "search for FlashR"
+libpaths=`R -e 'cat(.libPaths(), "\n")' --no-save --slave`
+FlashR_lib=""
+for x in $libpaths
+do
+	AS_IF([test -f "$x/FlashR/libs/FlashR.so"], [AC_SUBST(FlashR_lib, "$x/FlashR/libs/FlashR.so")], [])
+done
+AS_IF([test "$FlashR_lib" = "" ], [AC_MSG_ERROR("cannot find FlashR")], [])
+
 #graphml_support=yes
 #AC_ARG_ENABLE(graphml,
 #              AC_HELP_STRING([--disable-graphml], [Disable support for GraphML format]),
