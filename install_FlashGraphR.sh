@@ -18,12 +18,23 @@ if [ -z "$path" ]; then
 	path=`find /usr/local -name Rcpp.h`
 fi
 
-fg_lib=`pwd`/build
-eigen_path=`find $fg_lib/matrix -name libeigen.a`
-if [ -n "$eigen_path" ]; then
-	echo "find libeigen.a"
-	export ENABLE_TRILINOS=1
+echo "search for FlashR"
+libpaths=`R -e 'cat(.libPaths(), "\n")' --no-save --slave`
+FlashR_dir=""
+for x in $libpaths
+do
+	if [ -f "$x/FlashR/libs/FlashR.so" ]; then
+		FlashR_dir="$x/FlashR/libs/"
+	fi
+done
+
+if [ "$FlashR_dir" = "" ]; then
+	echo "cannot find FlashR"
+	exit 1
 fi
+
+export FlashR_dir
+fg_lib=`pwd`/build
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
