@@ -637,21 +637,30 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 	stopifnot(ret)
 }
 
+.new.fm <- function(fm)
+{
+	if (!is.null(fm))
+		new("fm", pointer=fm$pointer, name=fm$name, nrow=fm$nrow, ncol=fm$ncol,
+			type=fm$type, ele_type=fm$ele_type)
+	else
+		NULL
+}
+
 #' Load a sparse matrix to FlashGraphR.
 #'
 #' Load a sparse matrix to FlashGraphR from FlashGraph.
 #' 
-#' `fm.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
+#' `fg.get.sparse.matrix' gets a FlashMatrix sparse matrix that references
 #' a matrix represented by a FlashGraph object.
 #'
 #' @examples
 #' fg <- fg.load.graph("graph.adj", "graph.index")
-#' fm <- fm.get.sparse.matrix(fg)
-fm.get.sparse.matrix <- function(fg)
+#' fm <- fg.get.sparse.matrix(fg)
+fg.get.sparse.matrix <- function(fg)
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
-	m <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashGraphR")
-	new.fm(m)
+	m <- .Call("R_FG_get_matrix_fg", fg, PACKAGE="FlashGraphR")
+	.new.fm(m)
 }

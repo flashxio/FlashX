@@ -36,6 +36,7 @@
 #include "mem_vec_store.h"
 #include "data_frame.h"
 #include "data_io.h"
+#include "sparse_matrix.h"
 
 #include "rutils.h"
 
@@ -1062,4 +1063,23 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	Rcpp::NumericVector res(fg_vec->get_size());
 	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
+}
+
+SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, const std::string &name);
+
+namespace fg
+{
+fm::sparse_matrix::ptr create_sparse_matrix(FG_graph::ptr fg,
+		const fm::scalar_type *entry_type);
+}
+
+RcppExport SEXP R_FG_get_matrix_fg(SEXP pgraph)
+{
+	Rcpp::List graph = Rcpp::List(pgraph);
+	Rcpp::LogicalVector res(1);
+	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	// TODO does this work if this isn't a binary matrix?
+	fm::sparse_matrix::ptr m = fg::create_sparse_matrix(fg, NULL);
+	std::string name = graph["name"];
+	return create_FMR_matrix(m, name);
 }
