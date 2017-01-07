@@ -789,7 +789,7 @@ public:
 	}
 };
 
-void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
+static void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
 {
 	for (size_t i = 0; i < sub_df.size(); i++)
 		const_cast<local_vec_store *>(sub_df[i].get())->expose_sub_vec(loc,
