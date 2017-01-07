@@ -27,8 +27,8 @@ fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
-	RCPP_INCLUDE=$path FG_DIR=`pwd` FG_LIB=$fg_lib R CMD INSTALL --no-configure FlashR_0.3-0.tar.gz
+	RCPP_INCLUDE=$path FG_DIR=`pwd` FG_LIB=$fg_lib R CMD INSTALL --no-configure FlashR_0.1-0.tar.gz
 else
-	FG_DIR=`pwd` FG_LIB=$fg_lib R CMD INSTALL --no-configure FlashR_0.3-0.tar.gz
+	FG_DIR=`pwd` FG_LIB=$fg_lib R CMD INSTALL --no-configure FlashR_0.1-0.tar.gz
 fi
-rm FlashR_0.3-0.tar.gz
+rm FlashR_0.1-0.tar.gz
