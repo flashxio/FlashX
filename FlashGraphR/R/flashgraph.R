@@ -105,6 +105,7 @@ fg.get.params <- function(name)
 #'                   loaded to FlashGraphR.
 #' @param directed   Indicate whether the input graph is directed. This is
 #'                   only used if the input graph use the edge list format.
+#' @param delim The delimiter of separating elements in the text format.
 #' @return a FlashGraph object.
 #' @name fg.load.graph
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -114,11 +115,11 @@ fg.get.params <- function(name)
 #' ig <- read.graph("edge_list.txt")
 #' fg <- fg.load.igraph(ig)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
-						  directed=TRUE)
+						  directed=TRUE, delim=",")
 {
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
-			  as.logical(directed), PACKAGE="FlashGraphR")
+			  as.logical(directed), as.character(delim), PACKAGE="FlashGraphR")
 		if (is.null(ret))
 			ret
 		else

@@ -569,12 +569,13 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
  * Load a graph from edge lists in a file.
  */
 RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
-		SEXP pdirected)
+		SEXP pdirected, SEXP pdelim)
 {
 	Rcpp::LogicalVector res(1);
 	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	bool directed = INTEGER(pdirected)[0];
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
 
 	native_file f(graph_file);
 	if (!f.exist()) {
@@ -585,7 +586,7 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 	std::vector<std::string> edge_list_files(1);
 	edge_list_files[0] = graph_file;
 	// TODO give more options when loading an edge list.
-	fm::data_frame::ptr df = utils::read_edge_list(edge_list_files, true, ",", "");
+	fm::data_frame::ptr df = utils::read_edge_list(edge_list_files, true, delim, "");
 	edge_list::ptr el = edge_list::create(df, directed);
 	FG_graph::ptr fg = create_fg_graph("graph_name", el);
 
