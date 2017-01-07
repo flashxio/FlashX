@@ -27,6 +27,7 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 #include "matrix_stats.h"
+#include "mem_vec_store.h"
 
 namespace fm
 {
@@ -140,6 +141,16 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(
 					cols, start_row, start_col, num_rows, num_cols, get_type(),
 					node_id));
 	}
+}
+
+vec_store::const_ptr mem_col_matrix_store::conv2vec() const
+{
+	return smp_vec_store::create(get_data(), get_type());
+}
+
+vec_store::const_ptr mem_row_matrix_store::conv2vec() const
+{
+	return smp_vec_store::create(get_data(), get_type());
 }
 
 local_matrix_store::const_ptr mem_row_matrix_store::get_portion(

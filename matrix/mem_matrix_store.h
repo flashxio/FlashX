@@ -163,6 +163,8 @@ public:
 	static const_ptr cast(matrix_store::const_ptr store);
 	static ptr cast(matrix_store::ptr store);
 
+	virtual std::shared_ptr<const vec_store> conv2vec() const;
+
 	const simple_raw_array &get_data() const {
 		return data;
 	}
@@ -242,6 +244,8 @@ public:
 
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
+
+	virtual std::shared_ptr<const vec_store> conv2vec() const;
 
 	const simple_raw_array &get_data() const {
 		return data;

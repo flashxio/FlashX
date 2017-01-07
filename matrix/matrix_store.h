@@ -196,6 +196,10 @@ public:
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col) = 0;
 
+	virtual std::shared_ptr<const vec_store> conv2vec() const {
+		return std::shared_ptr<const vec_store>();
+	}
+
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(
