@@ -13,10 +13,10 @@ endif
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS += -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
+PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 PKG_LIBS += $(FlashR_dir)/FlashR.so
 # TODO how do we make aio and numa optional?
 PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -lhwloc
-PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
