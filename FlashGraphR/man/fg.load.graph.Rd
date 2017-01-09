@@ -7,7 +7,7 @@
 \title{Load a graph to FlashGraphR.}
 \usage{
 fg.load.graph(graph, index.file = NULL, graph.name = graph,
-  directed = TRUE, in.mem = TRUE, delim = ",")
+  directed = TRUE, in.mem = TRUE, delim = ",", attr.type = "")
 
 fg.load.igraph(graph, graph.name = paste("igraph-v", vcount(graph), "-e",
   ecount(graph), sep = ""))
