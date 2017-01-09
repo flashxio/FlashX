@@ -182,6 +182,8 @@ public:
 	void wait4complete() const;
 	void wait4complete(size_t num_ios) const;
 
+	virtual std::shared_ptr<const vec_store> conv2vec() const;
+
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const;
 
