@@ -2,7 +2,7 @@
 #include "in_mem_storage.h"
 
 #include "sparse_matrix.h"
-#include "fm_utils.h"
+#include "fg_utils.h"
 
 using namespace fm;
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 		if (cc_ids->get(i) == max_cid.first)
 			lcc_vids.push_back(i);
 
-	fg::FG_graph::ptr lcc = fetch_subgraph(g, lcc_vids, new_graph_name, false);
+	fg::FG_graph::ptr lcc = fg::fetch_subgraph(g, lcc_vids, new_graph_name, false);
 	if (lcc) {
 		const fg::graph_header &header = lcc->get_graph_header();
 		printf("lcc has %ld vertices and %ld edges\n", header.get_num_vertices(),

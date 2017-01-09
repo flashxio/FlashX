@@ -16,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "fg_utils.h"
 
 #include "vertex_index.h"
 
 #include "vector_vector.h"
-#include "fm_utils.h"
-#include "fg_utils.h"
 #include "crs_header.h"
 #include "local_vec_store.h"
 
@@ -124,12 +123,12 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	size_t out_size = get_out_size(vindex);
-	off_t out_off = get_out_off(vindex);
+	size_t out_size = fg::get_out_size(vindex);
+	off_t out_off = fg::get_out_off(vindex);
 	detail::simple_raw_array out_data(out_size, -1);
 	read_data(out_data.get_raw(), out_size, 1, out_off, f);
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
-	init_out_offs(vindex, out_offs);
+	fg::init_out_offs(vindex, out_offs);
 	for (size_t i = 0; i < out_offs.size(); i++)
 		out_offs[i] -= out_off;
 	vector_vector::ptr out_adjs = vector_vector::create(
@@ -141,12 +140,12 @@ int main(int argc, char *argv[])
 	if (vindex->get_graph_header().is_directed_graph()) {
 		std::string t_crs_file = std::string("t_") + crs_file;
 
-		size_t in_size = get_in_size(vindex);
-		off_t in_off = get_in_off(vindex);
+		size_t in_size = fg::get_in_size(vindex);
+		off_t in_off = fg::get_in_off(vindex);
 		detail::simple_raw_array in_data(in_size, -1);
 		read_data(in_data.get_raw(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
-		init_in_offs(vindex, in_offs);
+		fg::init_in_offs(vindex, in_offs);
 		for (size_t i = 0; i < in_offs.size(); i++)
 			in_offs[i] -= in_off;
 		vector_vector::ptr in_adjs = vector_vector::create(

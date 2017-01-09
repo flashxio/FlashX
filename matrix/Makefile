@@ -37,9 +37,6 @@ unit-test: libmatrix eigensolver
 eigensolver: libmatrix
 	$(MAKE) -C eigensolver
 
-utils: libmatrix
-	$(MAKE) -C utils
-
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -50,7 +47,6 @@ clean:
 	$(MAKE) -C unit-test clean
 	$(MAKE) -C eigensolver clean
 	$(MAKE) -C libmatrix-algs clean
-	$(MAKE) -C utils clean
 	$(MAKE) -C libmatrix-algs clean
 
 -include $(DEPS) 

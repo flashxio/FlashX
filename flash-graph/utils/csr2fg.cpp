@@ -20,12 +20,12 @@
 
 #include "FGlib.h"
 #include "in_mem_storage.h"
+#include "fg_utils.h"
 
 #include "factor.h"
 #include "mem_vec_store.h"
 #include "vector_vector.h"
 #include "local_vv_store.h"
-#include "fm_utils.h"
 #include "sparse_matrix.h"
 
 using namespace fm;
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
 			vindex = fg::cundirected_vertex_index::construct(num_vertices,
 					(const fg::vsize_t *) num_edges->get_raw_arr(), header);
 
-		fg::FG_graph::ptr graph = construct_FG_graph(
+		fg::FG_graph::ptr graph = fg::construct_FG_graph(
 				std::pair<fg::vertex_index::ptr, detail::vec_store::ptr>(vindex,
 					graph_data), "");
 		if (graph && graph->get_index_data())

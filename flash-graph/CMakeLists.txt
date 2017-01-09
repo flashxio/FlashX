@@ -25,8 +25,10 @@ add_library(graph STATIC
 	fg_sparse_matrix.cpp
 )
 
+find_package(ZLIB)
 subdirs(libgraph-algs
 	matrix
 	test-algs
 	tools
 )
+subdirs(utils)
