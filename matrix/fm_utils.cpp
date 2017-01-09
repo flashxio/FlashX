@@ -115,10 +115,10 @@ class SpM_apply_operate: public gr_apply_operate<sub_data_frame>
 	size_t num_cols;
 	size_t attr_size;
 public:
-	SpM_apply_operate(block_2d_size block_size, size_t num_cols) {
+	SpM_apply_operate(block_2d_size block_size, size_t num_cols, size_t attr_size) {
 		this->block_size = block_size;
 		this->num_cols = num_cols;
-		this->attr_size = 0;
+		this->attr_size = attr_size;
 	}
 
 	size_t get_attr_size() const {
@@ -157,7 +157,7 @@ class binary_apply_operate: public SpM_apply_operate
 {
 public:
 	binary_apply_operate(block_2d_size block_size,
-			size_t num_cols): SpM_apply_operate(block_size, num_cols) {
+			size_t num_cols): SpM_apply_operate(block_size, num_cols, 0) {
 	}
 	virtual void run_row(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
@@ -169,9 +169,22 @@ public:
 template<class T>
 class attr_apply_operate: public SpM_apply_operate
 {
+	typedef std::pair<ele_idx_t, T> edge_type;
+
+	struct edge_compare {
+		bool operator()(const edge_type &e1, const edge_type &e2) {
+			return e1.first < e2.first;
+		}
+	};
+
+	struct edge_predicate {
+		bool operator()(const edge_type &e1, const edge_type &e2) {
+			return e1.first == e2.first;
+		}
+	};
 public:
 	attr_apply_operate(block_2d_size block_size,
-			size_t num_cols): SpM_apply_operate(block_size, num_cols) {
+			size_t num_cols): SpM_apply_operate(block_size, num_cols, sizeof(T)) {
 	}
 	virtual void run_row(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
@@ -454,44 +467,47 @@ void attr_apply_operate<T>::run_row(const void *key, const sub_data_frame &val,
 		return;
 	}
 
-	assert(val.size() == 2);
+	assert(val.size() == 3);
 	assert(out.is_type<char>());
 	// The data frame is sorted based on the first vector and now we need
 	// to access the entries in the second vector.
-	const local_vec_store &vec = *val[0];
+	const local_vec_store &vec = *val[1];
+	const local_vec_store &attr_vec = *val[2];
 	assert(vec.get_type() == get_scalar_type<ele_idx_t>());
 
 	// I added an invalid edge for each vertex.
 	// The invalid edge is the maximal integer.
 	ele_idx_t num_edges = vec.get_length() - 1;
 	// TODO we actually don't need to alloate memory multiple times.
-	std::unique_ptr<ele_idx_t[]> edge_buf
-		= std::unique_ptr<ele_idx_t[]>(new ele_idx_t[num_edges]);
+	std::unique_ptr<edge_type[]> edge_buf
+		= std::unique_ptr<edge_type[]>(new edge_type[num_edges]);
 	size_t edge_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
 		if (vec.get<ele_idx_t>(i) == INVALID_IDX_VAL
 				// skip self-edges.
 				|| (remove_selfe && vec.get<ele_idx_t>(i) == vid))
 			continue;
-		edge_buf[edge_idx++] = vec.get<ele_idx_t>(i);
+		edge_buf[edge_idx].first = vec.get<ele_idx_t>(i);
+		edge_buf[edge_idx].second = attr_vec.get<T>(i);
+		edge_idx++;
 	}
 	assert(edge_idx <= num_edges);
-	// TODO we need to shuffle non-zero values accordingly.
 	// If there are self-edges, edge_idx has the actual number of edges.
 	num_edges = edge_idx;
-	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
+	std::sort(edge_buf.get(), edge_buf.get() + num_edges, edge_compare());
 	if (deduplicate) {
-		ele_idx_t *end = std::unique(edge_buf.get(),
-				edge_buf.get() + num_edges);
+		edge_type *end = std::unique(edge_buf.get(),
+				edge_buf.get() + num_edges, edge_predicate());
 		num_edges = end - edge_buf.get();
 	}
+	assert(get_attr_size() == attr_vec.get_entry_size());
 	size_t size = serialized_row::cal_row_size(num_edges, get_attr_size());
 	out.resize(size);
 
 	new (out.get_raw_arr()) serialized_row(vid, get_attr_size(), num_edges);
 	serialized_row *row = (serialized_row *) out.get_raw_arr();
 	for (size_t i = 0; i < num_edges; i++)
-		row->set_val(i, edge_buf[i]);
+		row->set_val(i, edge_buf[i].first, (const char *) &edge_buf[i].second);
 }
 
 static void expose_portion(const sub_data_frame &sub_df, off_t loc, size_t length)
@@ -621,7 +637,6 @@ std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr> create_2d_matrix(
 				std::shared_ptr<detail::vec_store>(const_cast<detail::vec_store *>(sorted_df->get_vec(2).get()),
 					empty_deleter()));
 	}
-	sorted_df = NULL;
 
 	gettimeofday(&start, NULL);
 	vector_vector::ptr res;
@@ -694,7 +709,7 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 	detail::vec_store::ptr attr_extra;
 	detail::vec_store::ptr attr_vec;
 	if (df->get_num_vecs() > 2)
-		attr_vec = df->get_vec("attr");
+		attr_vec = df->get_vec(2);
 	if (attr_vec && attr_vec->get_type() == get_scalar_type<int>())
 		attr_extra = detail::create_rep_vec_store<int>(max_vid + 1, 0);
 	else if (attr_vec && attr_vec->get_type() == get_scalar_type<long>())
@@ -715,25 +730,25 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() == 3) {
-			assert(attr_vec);
-			new_df->add_vec(df->get_vec_name(2), attr_vec);
+		if (df->get_num_vecs() > 2) {
+			assert(attr_extra);
+			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
 		df->append(new_df);
 
 		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
 		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
 		detail::vec_store::ptr vec2;
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			vec2 = df->get_vec(2)->deep_copy();
 		vec0->append(df->get_vec_ref(1));
 		vec1->append(df->get_vec_ref(0));
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			vec2->append(df->get_vec_ref(2));
 		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), vec0);
 		new_df->add_vec(df->get_vec_name(1), vec1);
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			new_df->add_vec(df->get_vec_name(2), vec2);
 		df = new_df;
 	}
@@ -743,7 +758,7 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() == 3) {
+		if (df->get_num_vecs() > 2) {
 			assert(attr_extra);
 			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
@@ -753,7 +768,7 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(1), seq_vec);
 		new_df->add_vec(df->get_vec_name(0), rep_vec);
-		if (df->get_num_vecs() == 3) {
+		if (df->get_num_vecs() > 2) {
 			assert(attr_extra);
 			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
