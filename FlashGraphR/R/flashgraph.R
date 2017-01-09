@@ -524,9 +524,6 @@ fg.overlap <- function(graph, vids)
 #' Generate an induced subgraph that contains the specified vertices from
 #' the input given graph.
 #'
-#' `fg.fetch.subgraph.igraph' generates the induced subgraph and converts
-#' it into an iGraph object
-#'
 #' `fg.fetch.subgraph' generates the induced subgraph and returns
 #' a FlashGraph object.
 #'
@@ -536,23 +533,9 @@ fg.overlap <- function(graph, vids)
 #' @param compress This indicates whether to remove empty vertices in
 #'                 the generated subgraph.
 #' @param name The name of the FlashGraph object.
-#' @return `fg.fetch.subgraph.igraph' returns an iGraph object,
-#' `fg.fetch.subgraph' returns a FlashGraph object
+#' @return `fg.fetch.subgraph' returns a FlashGraph object
 #' @name fg.subgraph
 #' @author Da Zheng <dzheng5@@jhu.edu>
-
-#' @rdname fg.subgraph
-fg.fetch.subgraph.igraph <- function(graph, vertices)
-{
-	stopifnot(!is.null(graph))
-	stopifnot(class(graph) == "fg")
-	edge.list = .Call("R_FG_fetch_subgraph_el", graph, vertices,
-					  PACKAGE="FlashGraphR")
-	dframe = data.frame(edge.list$src, edge.list$dst)
-	graph.data.frame(dframe, graph$directed)
-}
-
-#' @rdname fg.subgraph
 fg.fetch.subgraph <- function(graph, vertices,
 							  name = paste(graph$name, "-sub", sep=""), compress=TRUE)
 {
