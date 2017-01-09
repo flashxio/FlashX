@@ -482,6 +482,14 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::vector<ele_parser::const_ptr> parsers;
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
+	if (ele_type == "I")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<int>()));
+	else if (ele_type == "L")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<long>()));
+	else if (ele_type == "F")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<float>()));
+	else if (ele_type == "D")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
 	std::vector<std::string> files(1, file);
 	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers);
 
