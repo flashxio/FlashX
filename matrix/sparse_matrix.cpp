@@ -108,27 +108,6 @@ const char *row_portions::get_rows(size_t start_row, size_t end_row) const
 }
 
 /*
- * This processes the blocks in the their original order.
- * It can process an arbitrary number of blocks.
- */
-class seq_exec_order: public block_exec_order
-{
-public:
-	virtual bool is_valid_size(size_t height, size_t width) const {
-		return true;
-	}
-
-	virtual bool exec(block_compute_task &task,
-			std::vector<const sparse_block_2d *> &blocks) const {
-		BOOST_FOREACH(const sparse_block_2d *b, blocks)
-			// We allow null blocks.
-			if (b)
-				task.run_on_block(*b);
-		return true;
-	}
-};
-
-/*
  * This class processes the blocks in the hilbert order.
  * The hilbert order gives us very high CPU cache hits regardless of
  * the CPU cache size. It's kind of like cache oblivious algorithms,
@@ -485,251 +464,6 @@ void sparse_matrix::compute(detail::task_creator::ptr creator,
 	detail::local_mem_buffer::clear_bufs();
 }
 
-///////////// The code for sparse matrix of the FlashGraph format //////////////
-
-namespace detail
-{
-
-void fg_row_compute_task::run(char *buf, size_t size)
-{
-	assert(this->buf == buf);
-	assert(this->buf_size == size);
-
-	char *buf_p = buf + (io.get_loc().get_offset() - off);
-	fg::ext_mem_undirected_vertex *v = (fg::ext_mem_undirected_vertex *) buf_p;
-	for (size_t i = 0; i < io.get_num_rows(); i++) {
-		size_t vsize = v->get_size();
-		assert(buf_size >= vsize);
-		buf_size -= vsize;
-		buf_p += vsize;
-		run_on_row(*v);
-		v = (fg::ext_mem_undirected_vertex *) buf_p;
-	}
-}
-
-/*
- * Sparse square symmetric matrix. It is partitioned in rows.
- */
-class fg_sparse_sym_matrix: public sparse_matrix
-{
-	block_2d_size block_size;
-	// This works like the index of the sparse matrix.
-	std::vector<row_block> blocks;
-	safs::file_io_factory::shared_ptr factory;
-
-	fg_sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows, const scalar_type *entry_type): sparse_matrix(
-				nrows, entry_type, true) {
-		this->factory = factory;
-	}
-public:
-	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
-
-	// Nothing should happen for a symmetric matrix.
-	virtual sparse_matrix::ptr transpose() const {
-		return sparse_matrix::ptr(new fg_sparse_sym_matrix(*this));
-	}
-
-	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
-		return factory;
-	}
-
-	virtual matrix_io_generator::ptr create_io_gen(
-			const detail::matrix_store &in) const {
-		assert(!in.is_wide());
-		size_t num_rows = in.get_portion_size().first;
-		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
-				num_rows / matrix_conf.get_row_block_size());
-		row_block_mapper mapper(blocks, num_brows);
-		return matrix_io_generator::create(blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
-
-	virtual const block_2d_size &get_block_size() const {
-		return block_size;
-	}
-
-	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
-			std::vector<off_t> &offs) const {
-		throw unsupported_exception(
-				"get_block_row_offs isn't supported in fg_sparse_sym_matrix");
-	}
-
-	virtual block_exec_order::ptr get_multiply_order(
-			size_t num_block_rows, size_t num_block_cols) const {
-		return block_exec_order::ptr(new seq_exec_order());
-	}
-};
-
-sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg,
-		const scalar_type *entry_type)
-{
-	// Initialize vertex index.
-	fg::vertex_index::ptr index = fg->get_index_data();
-	assert(index != NULL);
-	assert(!index->get_graph_header().is_directed_graph());
-
-	if (entry_type)
-		assert(entry_type->get_size()
-				== (size_t) index->get_graph_header().get_edge_data_size());
-	fg::vsize_t num_vertices = index->get_num_vertices();
-	fg_sparse_sym_matrix *m = new fg_sparse_sym_matrix(fg->get_graph_io_factory(
-				safs::REMOTE_ACCESS), num_vertices, entry_type);
-
-	// Generate the matrix index from the vertex index.
-	if (index->is_compressed()) {
-		fg::in_mem_cundirected_vertex_index::ptr uindex
-			= fg::in_mem_cundirected_vertex_index::create(*index);
-		for (size_t i = 0; i < num_vertices;
-				i += matrix_conf.get_row_block_size()) {
-			fg::vertex_offset off = uindex->get_vertex(i);
-			m->blocks.emplace_back(off.get_off());
-		}
-		size_t graph_size = uindex->get_vertex(num_vertices - 1).get_off()
-			+ uindex->get_size(num_vertices - 1);
-		m->blocks.emplace_back(graph_size);
-	}
-	else {
-		fg::undirected_vertex_index::ptr uindex
-			= fg::undirected_vertex_index::cast(index);
-		for (size_t i = 0; i < num_vertices;
-				i += matrix_conf.get_row_block_size()) {
-			fg::ext_mem_vertex_info info = uindex->get_vertex_info(i);
-			m->blocks.emplace_back(info.get_off());
-		}
-		m->blocks.emplace_back(uindex->get_graph_size());
-	}
-
-	return sparse_matrix::ptr(m);
-}
-
-/*
- * Sparse asymmetric square matrix. It is partitioned in rows.
- */
-class fg_sparse_asym_matrix: public sparse_matrix
-{
-	block_2d_size block_size;
-	// These work like the index of the sparse matrix.
-	// out_blocks index the original matrix.
-	std::shared_ptr<std::vector<row_block> > out_blocks;
-	// in_blocks index the transpose of the matrix.
-	std::shared_ptr<std::vector<row_block> > in_blocks;
-	safs::file_io_factory::shared_ptr factory;
-
-	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows, const scalar_type *entry_type): sparse_matrix(
-				nrows, entry_type, false) {
-		this->factory = factory;
-		out_blocks = std::shared_ptr<std::vector<row_block> >(
-				new std::vector<row_block>());
-		in_blocks = std::shared_ptr<std::vector<row_block> >(
-				new std::vector<row_block>());
-	}
-public:
-	static ptr create(fg::FG_graph::ptr, const scalar_type *entry_type);
-
-	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
-		return factory;
-	}
-
-	virtual sparse_matrix::ptr transpose() const {
-		fg_sparse_asym_matrix *ret = new fg_sparse_asym_matrix(*this);
-		ret->sparse_matrix::_transpose();
-		ret->out_blocks = this->in_blocks;
-		ret->in_blocks = this->out_blocks;
-		return sparse_matrix::ptr(ret);
-	}
-
-	virtual matrix_io_generator::ptr create_io_gen(
-			const detail::matrix_store &in) const {
-		assert(!in.is_wide());
-		size_t num_rows = in.get_portion_size().first;
-		size_t num_brows = std::min((size_t) matrix_conf.get_rb_io_size(),
-				num_rows / matrix_conf.get_row_block_size());
-		row_block_mapper mapper(*out_blocks, num_brows);
-		return matrix_io_generator::create(*out_blocks, get_num_rows(),
-				get_num_cols(), factory->get_file_id(), mapper);
-	}
-
-	virtual const block_2d_size &get_block_size() const {
-		return block_size;
-	}
-
-	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
-			std::vector<off_t> &offs) const {
-		throw unsupported_exception(
-				"get_block_row_offs isn't supported in fg_sparse_asym_matrix");
-	}
-
-	virtual block_exec_order::ptr get_multiply_order(
-			size_t num_block_rows, size_t num_block_cols) const {
-		return block_exec_order::ptr(new seq_exec_order());
-	}
-};
-
-sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg,
-		const scalar_type *entry_type)
-{
-	// Initialize vertex index.
-	fg::vertex_index::ptr index = fg->get_index_data();
-	assert(index != NULL);
-	assert(index->get_graph_header().is_directed_graph());
-
-	if (entry_type)
-		assert(entry_type->get_size()
-				== (size_t) index->get_graph_header().get_edge_data_size());
-	fg::vsize_t num_vertices = index->get_num_vertices();
-	fg_sparse_asym_matrix *m = new fg_sparse_asym_matrix(fg->get_graph_io_factory(
-				safs::REMOTE_ACCESS), num_vertices, entry_type);
-
-	if (index->is_compressed()) {
-		fg::in_mem_cdirected_vertex_index::ptr dindex
-			= fg::in_mem_cdirected_vertex_index::create(*index);
-		for (size_t i = 0; i < num_vertices;
-				i += matrix_conf.get_row_block_size()) {
-			fg::directed_vertex_entry ventry = dindex->get_vertex(i);
-			m->out_blocks->emplace_back(ventry.get_out_off());
-			m->in_blocks->emplace_back(ventry.get_in_off());
-		}
-		fg::directed_vertex_entry ventry = dindex->get_vertex(num_vertices - 1);
-		m->out_blocks->emplace_back(ventry.get_out_off()
-				+ dindex->get_out_size(num_vertices - 1));
-		m->in_blocks->emplace_back(ventry.get_in_off()
-				+ dindex->get_in_size(num_vertices - 1));
-	}
-	else {
-		fg::directed_vertex_index::ptr dindex
-			= fg::directed_vertex_index::cast(index);
-		// Generate the matrix index from the vertex index.
-		for (size_t i = 0; i < num_vertices;
-				i += matrix_conf.get_row_block_size()) {
-			fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
-			m->out_blocks->emplace_back(info.get_off());
-
-			info = dindex->get_vertex_info_in(i);
-			m->in_blocks->emplace_back(info.get_off());
-		}
-		fg::ext_mem_vertex_info info
-			= dindex->get_vertex_info_out(num_vertices - 1);
-		m->out_blocks->emplace_back(info.get_off() + info.get_size());
-		info = dindex->get_vertex_info_in(num_vertices - 1);
-		m->in_blocks->emplace_back(info.get_off() + info.get_size());
-	}
-
-	return sparse_matrix::ptr(m);
-}
-
-}
-
-sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg,
-		const scalar_type *entry_type)
-{
-	const fg::graph_header &header = fg->get_graph_header();
-	if (header.is_directed_graph())
-		return detail::fg_sparse_asym_matrix::create(fg, entry_type);
-	else
-		return detail::fg_sparse_sym_matrix::create(fg, entry_type);
-}
 
 /////////////// The code for native 2D-partitioned sparse matrix ///////////////
 
@@ -816,6 +550,24 @@ public:
 		else
 			return block_exec_order::ptr(new seq_exec_order());
 	}
+
+	virtual detail::task_creator::ptr get_multiply_creator(
+			const scalar_type &type, size_t num_in_cols) const {
+		if (type == get_scalar_type<int>())
+			return detail::spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<long>())
+			return detail::spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<size_t>())
+			return detail::spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<float>())
+			return detail::spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<double>())
+			return detail::spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return detail::task_creator::ptr();
+		}
+	}
 };
 
 class block_sparse_asym_matrix: public sparse_matrix
@@ -881,6 +633,24 @@ public:
 	virtual block_exec_order::ptr get_multiply_order(
 			size_t num_block_rows, size_t num_block_cols) const {
 		return mat->get_multiply_order(num_block_rows, num_block_cols);
+	}
+
+	virtual detail::task_creator::ptr get_multiply_creator(
+			const scalar_type &type, size_t num_in_cols) const {
+		if (type == get_scalar_type<int>())
+			return detail::spmm_creator<int, int>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<long>())
+			return detail::spmm_creator<long, long>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<size_t>())
+			return detail::spmm_creator<size_t, size_t>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<float>())
+			return detail::spmm_creator<float, float>::create(*this, num_in_cols);
+		else if (type == get_scalar_type<double>())
+			return detail::spmm_creator<double, double>::create(*this, num_in_cols);
+		else {
+			BOOST_LOG_TRIVIAL(error) << "unsupported type";
+			return detail::task_creator::ptr();
+		}
 	}
 };
 

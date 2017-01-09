@@ -17,7 +17,7 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
 CXXFLAGS += -I../../libsafs -I.. -I.
 
 all: test_load_balancer test_comm

@@ -24,8 +24,6 @@
 #include "log.h"
 #include "config_map.h"
 
-#include "graph_exception.h"
-
 namespace fm
 {
 

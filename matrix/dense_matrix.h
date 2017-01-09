@@ -148,6 +148,8 @@ public:
 	virtual ~dense_matrix() {
 	}
 
+	std::shared_ptr<vector> conv2vec() const;
+
 	const detail::matrix_store &get_data() const {
 		return *store;
 	}

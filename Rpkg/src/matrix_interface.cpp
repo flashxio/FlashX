@@ -28,7 +28,6 @@
 #include "safs_file.h"
 #include "io_interface.h"
 
-#include "FGlib.h"
 #include "data_frame.h"
 #include "sparse_matrix.h"
 #include "bulk_operate.h"
@@ -44,6 +43,7 @@
 #include "block_matrix.h"
 #include "col_vec.h"
 #include "project_matrix_store.h"
+#include "fm_utils.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
@@ -468,7 +468,37 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 }
 
-RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
+RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
+		SEXP pele_type, SEXP pdelim, SEXP pname)
+{
+	std::string file = CHAR(STRING_ELT(pfile, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
+	bool is_sym = LOGICAL(pis_sym)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string mat_name = CHAR(STRING_ELT(pname, 0));
+	const scalar_type *type_p = get_scalar_type(ele_type);
+
+	std::vector<ele_parser::const_ptr> parsers;
+	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
+	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
+	if (ele_type == "I")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<int>()));
+	else if (ele_type == "L")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<long>()));
+	else if (ele_type == "F")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<float>()));
+	else if (ele_type == "D")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
+	std::vector<std::string> files(1, file);
+	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers);
+
+	sparse_matrix::ptr spm = create_2d_matrix(df,
+			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym);
+	return create_FMR_matrix(spm, mat_name);
+}
+
+RcppExport SEXP R_FM_load_spm_bin_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
@@ -508,7 +538,7 @@ RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_
 	return create_FMR_matrix(mat, "mat_file");
 }
 
-RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
+RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 		SEXP ptmat_file, SEXP ptindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
@@ -599,7 +629,7 @@ static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<double, bool>(in_mat, out_mat);
+		matrix->multiply(in_mat, out_mat);
 		return dense_matrix::create(out_mat);
 	}
 	else if (right_mat->is_type<int>()) {
@@ -609,7 +639,7 @@ static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<int, bool>(in_mat, out_mat);
+		matrix->multiply(in_mat, out_mat);
 		return dense_matrix::create(out_mat);
 	}
 	else {

@@ -2,14 +2,12 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
-#include "in_mem_storage.h"
 #include "matrix_config.h"
 #include "io_interface.h"
 #include "safs_file.h"
 #include "sparse_matrix.h"
 #include "NUMA_dense_matrix.h"
 #include "EM_dense_matrix.h"
-#include "matrix/FG_sparse_matrix.h"
 #include "col_vec.h"
 
 using namespace fm;
@@ -108,8 +106,11 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width, size_t indiv_mat_width,
 	printf("Start SpMM\n");
 	for (size_t k = 0; k < repeats; k++) {
 		gettimeofday(&start, NULL);
-		for (size_t i = 0; i < ins.size(); i++)
-			mat->multiply<mat_ele_t, float>(ins[i], outs[i]);
+		for (size_t i = 0; i < ins.size(); i++) {
+			auto create = detail::spmm_creator<mat_ele_t, float>::create(*mat,
+					ins[i]->get_num_cols());
+			mat->multiply(ins[i], outs[i], create);
+		}
 		gettimeofday(&end, NULL);
 		printf("it takes %.3f seconds\n", time_diff(start, end));
 	}
@@ -163,27 +164,6 @@ sparse_matrix::ptr load_2d_matrix(const std::string &matrix_file,
 	return mat;
 }
 
-sparse_matrix::ptr load_fg_matrix(const std::string &matrix_file,
-		const std::string &index_file, bool in_mem, config_map::ptr configs,
-		const std::string &entry_type)
-{
-	fg::FG_graph::ptr fg = fg::FG_graph::create(matrix_file, index_file, configs);
-	if (entry_type.empty())
-		return sparse_matrix::create(fg, NULL);
-	else if (entry_type == "I")
-		return sparse_matrix::create(fg, &get_scalar_type<int>());
-	else if (entry_type == "L")
-		return sparse_matrix::create(fg, &get_scalar_type<long>());
-	else if (entry_type == "F")
-		return sparse_matrix::create(fg, &get_scalar_type<float>());
-	else if (entry_type == "D")
-		return sparse_matrix::create(fg, &get_scalar_type<double>());
-	else {
-		fprintf(stderr, "unknown entry type\n");
-		return sparse_matrix::ptr();
-	}
-}
-
 void print_usage()
 {
 	fprintf(stderr, "test conf_file matrix_file index_file [options]\n");
@@ -193,7 +173,6 @@ void print_usage()
 	fprintf(stderr, "-c cache_size: cpu cache size\n");
 	fprintf(stderr, "-m: force to run in memory\n");
 	fprintf(stderr, "-r number: the number of repeats\n");
-	fprintf(stderr, "-g: the matrix is stored in FlashGraph format\n");
 	fprintf(stderr, "-n number: the number of NUMA nodes\n");
 	fprintf(stderr, "-t type: the type of non-zero entries\n");
 	fprintf(stderr, "-e: output matrix in external memory\n");
@@ -215,11 +194,10 @@ int main(int argc, char *argv[])
 	int opt;
 	bool in_mem = false;
 	size_t repeats = 1;
-	bool use_fg = false;
 	int num_nodes = 0;
 	bool ext_mem = false;
 	std::string entry_type;
-	while ((opt = getopt(argc, argv, "w:o:c:mr:gn:t:ei:d")) != -1) {
+	while ((opt = getopt(argc, argv, "w:o:c:mr:n:t:ei:d")) != -1) {
 		switch (opt) {
 			case 'w':
 				mat_width = atoi(optarg);
@@ -238,9 +216,6 @@ int main(int argc, char *argv[])
 				break;
 			case 'r':
 				repeats = atoi(optarg);
-				break;
-			case 'g':
-				use_fg = true;
 				break;
 			case 'n':
 				num_nodes = atoi(optarg);
@@ -283,11 +258,7 @@ int main(int argc, char *argv[])
 
 	sparse_matrix::ptr mat;
 	try {
-		if (use_fg)
-			mat = load_fg_matrix(matrix_file, index_file, in_mem, configs,
-					entry_type);
-		else
-			mat = load_2d_matrix(matrix_file, index_file, in_mem);
+		mat = load_2d_matrix(matrix_file, index_file, in_mem);
 	} catch (std::exception &e) {
 		fprintf(stderr, "%s\n", e.what());
 		exit(-1);

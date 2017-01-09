@@ -30,6 +30,12 @@ namespace safs
 	class file_io_factory;
 };
 
+namespace fm
+{
+	class sparse_matrix;
+	class scalar_type;
+}
+
 namespace fg
 {
 
@@ -375,5 +381,8 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
  * \param levels The number of levels of the hierarchy to do.
  */
 void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
+
+std::shared_ptr<fm::sparse_matrix> create_sparse_matrix(fg::FG_graph::ptr fg,
+		const fm::scalar_type *entry_type);
 }
 #endif

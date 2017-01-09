@@ -21,8 +21,8 @@ all: build_lib utils
 
 build_lib:
 	$(MAKE) -C libsafs
-	$(MAKE) -C flash-graph
 	$(MAKE) -C matrix
+	$(MAKE) -C flash-graph
 
 utils: build_lib
 	$(MAKE) -C utils

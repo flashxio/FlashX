@@ -36,7 +36,7 @@ static size_t get_nnz(sparse_matrix::ptr mat)
 			get_scalar_type<size_t>(), num_nodes, true);
 	dense_matrix::ptr one = dense_matrix::create_const<size_t>(1,
 			mat->get_num_cols(), 1, matrix_layout_t::L_ROW, num_nodes, true);
-	mat->multiply<size_t, size_t>(one->get_raw_store(), out_store);
+	mat->multiply(one->get_raw_store(), out_store);
 	dense_matrix::ptr out_deg = dense_matrix::create(out_store);
 	scalar_variable::ptr v = out_deg->sum();
 	return scalar_variable::get_val<size_t>(*v);
@@ -62,7 +62,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), D->get_raw_store()->get_num_nodes());
-		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
+		S->multiply(D->get_raw_store(), res);
 		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem > k) {
@@ -70,14 +70,14 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 				S->get_num_rows(), D->get_num_cols(),
 				D->get_raw_store()->get_num_nodes(), D->get_type(),
 				num_in_mem - k, matrix_layout_t::L_COL);
-		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
+		S->multiply(D->get_raw_store(), res);
 		ret = dense_matrix::create(res);
 	}
 	else if (num_in_mem == k) {
 		detail::matrix_store::ptr res = detail::matrix_store::create(
 				S->get_num_rows(), D->get_num_cols(), matrix_layout_t::L_ROW,
 				D->get_type(), -1, false);
-		S->multiply<mat_ele_t, mat_ele_t>(D->get_raw_store(), res);
+		S->multiply(D->get_raw_store(), res);
 		D->drop_cache();
 		ret = dense_matrix::create(res);
 	}
@@ -92,7 +92,7 @@ static dense_matrix::ptr multiply(sparse_matrix::ptr S, dense_matrix::ptr D,
 			detail::matrix_store::ptr out = detail::matrix_store::create(
 					S->get_num_rows(), sub_in->get_num_cols(),
 					matrix_layout_t::L_COL, D->get_type(), -1, false);
-			S->multiply<mat_ele_t, mat_ele_t>(sub_in->get_raw_store(), out);
+			S->multiply(sub_in->get_raw_store(), out);
 			D->drop_cache();
 			res_mats.push_back(out);
 		}

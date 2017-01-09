@@ -172,7 +172,9 @@ fm.print.features <- function()
 #' @param t.spm The file that stores the transpose of the sparse matrix.
 #' @param t.spm.idx The file that stores the index of the transpose of the sparse matrix.
 #' @param in.mem Determine the loaded matrix is stored in memory or on SAFS.
-#' @param ele.type The element type in a matrix.
+#' @param ele.type A string that represents the element type in a matrix.
+#'        "B" means binary, "I" means integer, "L" means long integer,
+#'        "F" means single-precision floating point, "D" means double-precision floating point.
 #' @param delim The delimiter of separating elements in the text format.
 #' @param nrow the number of rows in the binary dense matrix.
 #' @param ncol the number of columns in the binary dense matrix.
@@ -227,13 +229,23 @@ fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.ty
 }
 
 #' @rdname fm.get.matrix
-fm.load.sparse.matrix <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, in.mem=TRUE)
+fm.load.sparse.matrix <- function(file, in.mem=TRUE, is.sym=FALSE, ele.type="B",
+								  delim=",", name="")
+{
+	m <- .Call("R_FM_load_spm", as.character(file), as.logical(in.mem),
+			   as.logical(is.sym), as.character(ele.type), as.character(delim),
+			   as.character(name))
+	.new.fm(m)
+}
+
+#' @rdname fm.get.matrix
+fm.load.sparse.matrix.bin <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, in.mem=TRUE)
 {
 	if (is.null(t.spm) || is.null(t.spm.idx))
-		m <- .Call("R_FM_load_matrix_sym", as.character(spm), as.character(spm.idx),
+		m <- .Call("R_FM_load_spm_bin_sym", as.character(spm), as.character(spm.idx),
 				   as.logical(in.mem), PACKAGE="FlashR")
 	else
-		m <- .Call("R_FM_load_matrix_asym", as.character(spm), as.character(spm.idx),
+		m <- .Call("R_FM_load_spm_bin_asym", as.character(spm), as.character(spm.idx),
 				   as.character(t.spm), as.character(t.spm.idx), as.logical(in.mem),
 			  PACKAGE="FlashR")
 	.new.fm(m)

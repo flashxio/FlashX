@@ -128,6 +128,11 @@ public:
 		return ptr(new NUMA_row_tall_matrix_store(nrow, ncol, num_nodes, type));
 	}
 
+	virtual vec_store::const_ptr conv2vec() const {
+		return NUMA_vec_store::create(get_num_rows() * get_num_cols(), get_type(),
+				data, mapper);
+	}
+
 	int get_num_nodes() const {
 		return data.size();
 	}
@@ -213,6 +218,11 @@ public:
 		return ptr(new NUMA_col_tall_matrix_store(nrow, ncol, num_nodes, type));
 	}
 
+	virtual vec_store::const_ptr conv2vec() const {
+		return NUMA_vec_store::create(get_num_rows() * get_num_cols(), get_type(),
+				data, mapper);
+	}
+
 	int get_num_nodes() const {
 		return data.size();
 	}
@@ -269,6 +279,10 @@ public:
 
 	static ptr create_transpose(const NUMA_col_tall_matrix_store &store) {
 		return ptr(new NUMA_row_wide_matrix_store(store));
+	}
+
+	virtual vec_store::const_ptr conv2vec() const {
+		return store.conv2vec();
 	}
 
 	int get_num_nodes() const {
@@ -334,6 +348,10 @@ public:
 
 	static ptr create_transpose(const NUMA_row_tall_matrix_store &store) {
 		return ptr(new NUMA_col_wide_matrix_store(store));
+	}
+
+	virtual vec_store::const_ptr conv2vec() const {
+		return store.conv2vec();
 	}
 
 	int get_num_nodes() const {

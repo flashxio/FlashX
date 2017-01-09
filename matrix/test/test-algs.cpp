@@ -2,7 +2,6 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
-#include "in_mem_storage.h"
 #include "io_interface.h"
 #include "safs_file.h"
 
