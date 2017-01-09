@@ -210,13 +210,12 @@ EM_vec_store::const_ptr EM_vec_store::cast(vec_store::const_ptr vec)
 	return std::static_pointer_cast<const EM_vec_store>(vec);
 }
 
-EM_vec_store::EM_vec_store(safs::file_io_factory::shared_ptr factory): vec_store(
-		// Without giving any information, we assume this is a byte array.
-		factory->get_file_size(), get_scalar_type<char>(), false)
+EM_vec_store::EM_vec_store(file_holder::ptr holder, io_set::ptr ios, size_t len,
+			const scalar_type &type): vec_store(len, type, false)
 {
-	holder = file_holder::create(factory->get_name());
-	ios = io_set::ptr(new io_set(factory));
-	file_size = factory->get_file_size();
+	this->holder = holder;
+	this->ios = ios;
+	this->file_size = type.get_size() * len;
 }
 
 EM_vec_store::EM_vec_store(const EM_vec_store &store): vec_store(

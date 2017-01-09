@@ -59,7 +59,8 @@ class EM_vec_store: public vec_store, public EM_object
 	io_set::ptr ios;
 
 	EM_vec_store(size_t length, const scalar_type &type);
-	EM_vec_store(safs::file_io_factory::shared_ptr factory);
+	EM_vec_store(file_holder::ptr holder, io_set::ptr ios, size_t len,
+			const scalar_type &type);
 	EM_vec_store(const EM_vec_store &store);
 	virtual void write_portion_async(local_vec_store::const_ptr portion,
 			portion_compute::ptr compute, off_t off = -1);
@@ -75,8 +76,9 @@ public:
 	}
 
 	// This creates a byte array.
-	static ptr create(safs::file_io_factory::shared_ptr factory) {
-		return ptr(new EM_vec_store(factory));
+	static ptr create(file_holder::ptr holder, io_set::ptr ios, size_t len,
+			const scalar_type &type) {
+		return ptr(new EM_vec_store(holder, ios, len, type));
 	}
 
 	~EM_vec_store();
