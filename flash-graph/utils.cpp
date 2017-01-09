@@ -518,7 +518,7 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<float>()));
 	else if (edge_attr_type == "D")
 		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<double>()));
-	else if (!edge_attr_type.empty()) {
+	else if (!edge_attr_type.empty() && edge_attr_type != "B") {
 		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
 		return fm::data_frame::ptr();
 	}
