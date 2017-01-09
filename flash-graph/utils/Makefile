@@ -17,28 +17,28 @@
 
 include ../../Makefile.common
 
-CXXFLAGS += -I../../libsafs -I.. -I../eigensolver
-LDFLAGS := -L.. -lFMatrix -L../../libsafs -lsafs $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I../../matrix
+LDFLAGS := -L../ -lgraph -L../../matrix -lFMatrix -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lcblas #-lprofiler
 
 all: el2fg fg2fm fg2crs fg_lcc csr2fg sbm
 
-el2fg: el2fg.o ../libFMatrix.a
+el2fg: el2fg.o ../libgraph.a
 	$(CXX) -o el2fg el2fg.o $(LDFLAGS)
 
-csr2fg: csr2fg.o ../libFMatrix.a
+csr2fg: csr2fg.o ../libgraph.a
 	$(CXX) -o csr2fg csr2fg.o $(LDFLAGS)
 
-fg2fm: fg2fm.o ../libFMatrix.a
+fg2fm: fg2fm.o ../libgraph.a
 	$(CXX) -o fg2fm fg2fm.o $(LDFLAGS)
 
-fg2crs: fg2crs.o ../libFMatrix.a
+fg2crs: fg2crs.o ../libgraph.a
 	$(CXX) -o fg2crs fg2crs.o $(LDFLAGS)
 
-fg_lcc: fg_lcc.o ../libFMatrix.a
+fg_lcc: fg_lcc.o ../libgraph.a
 	$(CXX) -o fg_lcc fg_lcc.o -L../../flash-graph/libgraph-algs -lgraph-algs $(LDFLAGS)
 
-sbm: sbm.o ../libFMatrix.a
+sbm: sbm.o ../libgraph.a
 	$(CXX) -o sbm sbm.o $(LDFLAGS)
 
 clean:

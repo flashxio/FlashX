@@ -33,7 +33,6 @@
 #include "safs_exception.h"
 #include "comm_exception.h"
 
-#include "graph.h"
 //#include "edge_type.h"
 #include "vertex.h"
 #include "in_mem_storage.h"

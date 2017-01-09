@@ -20,12 +20,12 @@
 #include <chrono>
 
 #include "vertex.h"
+#include "fg_utils.h"
 
 #include "vec_store.h"
 #include "data_frame.h"
 #include "rand_gen.h"
 #include "local_vec_store.h"
-#include "fm_utils.h"
 #include "sparse_matrix.h"
 
 typedef std::pair<off_t, size_t> off_size_t;
@@ -206,7 +206,7 @@ sub_data_frame create_edges_block(size_t nnz, size_t start_row, size_t start_col
 	return df;
 }
 
-edge_list::ptr create_sbm(const matrix<double> &ps,
+fg::edge_list::ptr create_sbm(const matrix<double> &ps,
 		const std::vector<size_t> &block_sizes, bool in_mem)
 {
 	matrix<size_t> nnzs = get_nnzs(ps, block_sizes);
@@ -238,7 +238,7 @@ edge_list::ptr create_sbm(const matrix<double> &ps,
 	data_frame::ptr df = data_frame::create();
 	df->add_vec("src", src);
 	df->add_vec("dst", dst);
-	return edge_list::create(df, true);
+	return fg::edge_list::create(df, true);
 }
 
 int main(int argc, char *argv[])
@@ -295,7 +295,7 @@ int main(int argc, char *argv[])
 	{
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		edge_list::ptr el = create_sbm(ps, cluster_sizes, true);
+		fg::edge_list::ptr el = create_sbm(ps, cluster_sizes, true);
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to create edges\n", time_diff(start, end));
 

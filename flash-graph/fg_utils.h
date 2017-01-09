@@ -1,5 +1,5 @@
-#ifndef __FORMAT_UTILS_H__
-#define __FORMAT_UTILS_H__
+#ifndef __FG_UTILS_H__
+#define __FG_UTILS_H__
 
 /*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)

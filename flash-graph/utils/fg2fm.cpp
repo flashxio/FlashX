@@ -21,6 +21,9 @@
 #include "safs_file.h"
 #include "io_interface.h"
 
+#include "utils.h"
+#include "fg_utils.h"
+
 #include "vertex_index.h"
 
 #include "vector_vector.h"
@@ -82,9 +85,9 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 	std::vector<off_t> offs(vindex->get_num_vertices() + 1);
 	printf("find the location of adjacency lists\n");
 	if (is_out_edge)
-		init_out_offs(vindex, offs);
+		fg::init_out_offs(vindex, offs);
 	else
-		init_in_offs(vindex, offs);
+		fg::init_in_offs(vindex, offs);
 
 	size_t size;
 	off_t off;
@@ -225,7 +228,7 @@ int main(int argc, char *argv[])
 	bool to_safs = !out_adjs->is_in_mem();
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
-	export_2d_matrix(out_adjs, out_adjs->get_num_vecs(), block_size, type,
+	fg::export_2d_matrix(out_adjs, out_adjs->get_num_vecs(), block_size, type,
 			mat_file, mat_idx_file, to_safs);
 	if (verify) {
 		printf("verify 2d matrix for the out-adjacency lists\n");
@@ -240,7 +243,7 @@ int main(int argc, char *argv[])
 		vector_vector::ptr in_adjs = load_graph(graph_file, vindex, false);
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
-		export_2d_matrix(in_adjs, in_adjs->get_num_vecs(), block_size, type,
+		fg::export_2d_matrix(in_adjs, in_adjs->get_num_vecs(), block_size, type,
 				t_mat_file, t_mat_idx_file, to_safs);
 		if (verify) {
 			printf("verify 2d matrix for the in-adjacency lists\n");

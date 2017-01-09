@@ -28,6 +28,38 @@ using namespace fg;
 
 namespace {
 
+static void unique_merge(const std::vector<vertex_id_t> &v1,
+		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)
+{
+	std::vector<vertex_id_t>::const_iterator it1 = v1.begin();
+	std::vector<vertex_id_t>::const_iterator it2 = v2.begin();
+	while (it1 != v1.end() && it2 != v2.end()) {
+		if (*it1 > *it2) {
+			v.push_back(*it2);
+			it2++;
+		}
+		else if (*it1 < *it2) {
+			v.push_back(*it1);
+			it1++;
+		}
+		else {
+			v.push_back(*it1);
+			it1++;
+			it2++;
+		}
+	}
+
+	while (it1 != v1.end()) {
+		v.push_back(*it1);
+		it1++;
+	}
+
+	while (it2 != v2.end()) {
+		v.push_back(*it2);
+		it2++;
+	}
+}
+
 struct directed_runtime_data_t: public runtime_data_t
 {
 	std::vector<vertex_id_t> in_edges;
