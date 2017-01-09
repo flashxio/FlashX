@@ -116,12 +116,12 @@ fg.get.params <- function(name)
 #' ig <- read.graph("edge_list.txt")
 #' fg <- fg.load.igraph(ig)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
-						  directed=TRUE, in.mem=TRUE, delim=",")
+						  directed=TRUE, in.mem=TRUE, delim=",", attr.type="")
 {
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
 			  as.logical(directed), as.logical(in.mem), as.character(delim),
-			  PACKAGE="FlashGraphR")
+			  as.character(attr.type), PACKAGE="FlashGraphR")
 		if (is.null(ret))
 			ret
 		else
