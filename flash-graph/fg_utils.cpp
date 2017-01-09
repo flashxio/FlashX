@@ -163,7 +163,7 @@ edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
 	detail::vec_store::ptr attr_extra;
 	detail::vec_store::ptr attr_vec;
 	if (df->get_num_vecs() > 2)
-		attr_vec = df->get_vec("attr");
+		attr_vec = df->get_vec(2);
 	if (attr_vec && attr_vec->get_type() == get_scalar_type<int>())
 		attr_extra = detail::create_rep_vec_store<int>(max_vid + 1, 0);
 	else if (attr_vec && attr_vec->get_type() == get_scalar_type<long>())
@@ -184,7 +184,7 @@ edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
 		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() == 3) {
+		if (df->get_num_vecs() > 2) {
 			assert(attr_extra);
 			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
@@ -194,7 +194,7 @@ edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
 		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(1), seq_vec);
 		new_df->add_vec(df->get_vec_name(0), rep_vec);
-		if (df->get_num_vecs() == 3) {
+		if (df->get_num_vecs() > 2) {
 			assert(attr_extra);
 			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
@@ -206,25 +206,25 @@ edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
 		data_frame::ptr new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), seq_vec);
 		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() == 3) {
-			assert(attr_vec);
-			new_df->add_vec(df->get_vec_name(2), attr_vec);
+		if (df->get_num_vecs() > 2) {
+			assert(attr_extra);
+			new_df->add_vec(df->get_vec_name(2), attr_extra);
 		}
 		df->append(new_df);
 
 		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
 		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
 		detail::vec_store::ptr vec2;
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			vec2 = df->get_vec(2)->deep_copy();
 		vec0->append(df->get_vec_ref(1));
 		vec1->append(df->get_vec_ref(0));
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			vec2->append(df->get_vec_ref(2));
 		new_df = data_frame::create();
 		new_df->add_vec(df->get_vec_name(0), vec0);
 		new_df->add_vec(df->get_vec_name(1), vec1);
-		if (df->get_num_vecs() == 3)
+		if (df->get_num_vecs() > 2)
 			new_df->add_vec(df->get_vec_name(2), vec2);
 		df = new_df;
 	}
@@ -1131,7 +1131,7 @@ static void add_nz(block_pointers &ps,
 				neighs[0] & block_size.get_ncol_mask());
 		// Add the non-zero value.
 		if (nz_size > 0)
-			memcpy(ps.coo_vals, v.get_raw_edge_data(neighs[0]), nz_size);
+			memcpy(ps.coo_vals, v.get_raw_edge_data(0), nz_size);
 
 		// move to the next one.
 		ps.coos++;
@@ -1150,8 +1150,7 @@ static void add_nz(block_pointers &ps,
 		ps.block->append(*part, sparse_row_part::get_size(neighs.size()));
 		// Add the non-zero values.
 		if (nz_size > 0)
-			memcpy(ps.nz_vals, v.get_raw_edge_data(neighs[0]),
-					nz_size * neighs.size());
+			memcpy(ps.nz_vals, v.get_raw_edge_data(0), nz_size * neighs.size());
 
 		// Move to the next one.
 		ps.nz_vals += nz_size * neighs.size();
