@@ -125,7 +125,13 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 					graph_file.c_str());
 			return vector_vector::ptr();
 		}
-		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(factory);
+
+		detail::EM_object::file_holder::ptr holder
+			= detail::EM_object::file_holder::create(factory->get_name());
+		detail::EM_object::io_set::ptr ios(new detail::EM_object::io_set(factory));
+		size_t file_size = factory->get_file_size();
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(holder, ios,
+				file_size, get_scalar_type<char>());
 		vv = detail::EM_vv_store::create(offs, vec);
 	}
 

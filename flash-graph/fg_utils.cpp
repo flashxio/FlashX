@@ -813,7 +813,13 @@ static vector_vector::ptr conv_fg2vv(fg::FG_graph::ptr graph, bool is_out_edge)
 			fprintf(stderr, "can't access the graph\n");
 			return vector_vector::ptr();
 		}
-		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(factory);
+
+		detail::EM_object::file_holder::ptr holder
+			= detail::EM_object::file_holder::create(factory->get_name());
+		detail::EM_object::io_set::ptr ios(new detail::EM_object::io_set(factory));
+		size_t file_size = factory->get_file_size();
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(holder, ios,
+				file_size, get_scalar_type<char>());
 		return vector_vector::create(detail::EM_vv_store::create(offs, vec));
 	}
 }
