@@ -25,7 +25,6 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 #include "sparse_matrix.h"
-#include "matrix/FG_sparse_matrix.h"
 #include "libgraph-algs/sem_kmeans.h"
 
 using namespace fg;
@@ -638,31 +637,6 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 			start_vertex, num_vertices, edge);
 }
 
-void run_spmv(FG_graph::ptr graph, int argc, char* argv[])
-{
-	int opt;
-	FG_adj_matrix::ptr m = FG_adj_matrix::create(graph);
-	while ((opt = getopt(argc, argv, "t")) != -1) {
-		switch (opt) {
-			case 't':
-				m = m->transpose();
-				break;
-			default:
-				print_usage();
-				abort();
-		}
-	}
-
-	FG_vector<double>::ptr in = FG_vector<double>::create(m->get_num_cols());
-	in->init(1);
-	FG_vector<double>::ptr out = FG_vector<double>::create(m->get_num_rows());
-	m->multiply<double>(*in, *out);
-	printf("the graph has %ld vertices and %ld edges\n",
-			graph->get_graph_header().get_num_vertices(),
-			graph->get_graph_header().get_num_edges());
-	printf("SpMV returns %lf\n", out->sum());
-}
-
 void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 {
 	int opt;
@@ -783,7 +757,6 @@ std::string supported_algs[] = {
 	"betweenness",
 	"overlap",
 	"bfs",
-	"spmv",
 	"louvain",
     "sem_kmeans"
 };
@@ -842,9 +815,6 @@ void print_usage()
 	fprintf(stderr, "bfs\n");
 	fprintf(stderr, "-e edge type: the type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "-s vertex id: the vertex where the BFS starts\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "spmv\n");
-	fprintf(stderr, "-t: transpose the sparse matrix.\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
@@ -942,9 +912,6 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "bfs") {
 		run_bfs(graph, argc, argv);
-	}
-	else if (alg == "spmv") {
-		run_spmv(graph, argc, argv);
 	}
 	else if (alg == "louvain") {
 		run_louvain(graph, argc, argv);
