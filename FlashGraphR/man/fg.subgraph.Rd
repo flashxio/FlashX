@@ -2,12 +2,9 @@
 % Please edit documentation in R/flashgraph.R
 \name{fg.subgraph}
 \alias{fg.fetch.subgraph}
-\alias{fg.fetch.subgraph.igraph}
 \alias{fg.subgraph}
 \title{Generate an induced subgraph}
 \usage{
-fg.fetch.subgraph.igraph(graph, vertices)
-
 fg.fetch.subgraph(graph, vertices, name = paste(graph$name, "-sub", sep = ""),
   compress = TRUE)
 }
@@ -23,7 +20,6 @@ the induced subgraph.}
 the generated subgraph.}
 }
 \value{
-`fg.fetch.subgraph.igraph' returns an iGraph object,
 `fg.fetch.subgraph' returns a FlashGraph object
 }
 \description{
@@ -31,9 +27,6 @@ Generate an induced subgraph that contains the specified vertices from
 the input given graph.
 }
 \details{
-`fg.fetch.subgraph.igraph' generates the induced subgraph and converts
-it into an iGraph object
-
 `fg.fetch.subgraph' generates the induced subgraph and returns
 a FlashGraph object.
 }
