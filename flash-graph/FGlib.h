@@ -21,7 +21,6 @@
  */
 
 #include "graph_engine.h"
-#include "graph.h"
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
@@ -285,16 +284,6 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
 
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
-
-/**
- * \brief Fetch the clusters with the wanted cluster IDs.
- *  
- * \param fg The FlashGraph graph object for which you want to compute.
- * \param vertices The vertices that the induced subgraph has.
- * \return A subgraph.
- */
-in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr graph,
-		const std::vector<vertex_id_t> &vertices);
 
 /**
  * \brief Compute the k-core/coreness of a graph. The algorithm will 

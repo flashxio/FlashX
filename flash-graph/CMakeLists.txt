@@ -5,7 +5,6 @@ include_directories("${PROJECT_SOURCE_DIR}")
 add_library(graph STATIC
 	FGlib.cpp
 	graph_engine.cpp
-	graph.cpp
 	in_mem_storage.cpp
 	load_balancer.cpp
 	message_processor.cpp

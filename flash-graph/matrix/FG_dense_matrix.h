@@ -24,7 +24,6 @@
 #include <memory>
 
 #include "FG_vector.h"
-#include "graph.h"
 
 namespace fg
 {
