@@ -15,7 +15,7 @@ OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/matrix -lFMatrix
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs
 # TODO how do we make aio and numa optional?
-PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -lhwloc
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -lhwloc -laio -lnuma
 ifdef ENABLE_TRILINOS
 	PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
 	PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
