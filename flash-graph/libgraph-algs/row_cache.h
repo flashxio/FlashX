@@ -32,25 +32,32 @@
 #include "sem_kmeans_util.h"
 
 namespace {
-    static std::vector<unsigned> g_cache_hits;
-
     template <typename T>
     class partition_cache {
         private:
-            std::vector<double> data;
-            std::vector<unsigned> ids;
+            // Each thread has it's own
+            typedef typename std::vector<std::unordered_map<unsigned,
+                    std::vector<T> > > local_caches;
+            typedef typename std::unordered_map<unsigned,
+                    std::vector<T> >::iterator cache_iter;
+
+             local_caches pt_data;
+
             std::unordered_map<unsigned, T*> data_map;
 
-            std::vector<unsigned> elem_added; // elems added since we updated the global count
+            // elems added since we updated the global count
+            std::vector<unsigned> elem_added;
             std::vector<unsigned> tot_elem_added; // total elems added
-            std::vector<size_t> end_index;
 
             std::atomic<unsigned> numel;
             unsigned max_numel, numel_sync, elem_len;
             unsigned pt_elem, nthread;
             static constexpr unsigned MAX_SYNC_ELEM = 200;
 
-            typedef typename std::unordered_map<unsigned, T*>::iterator cache_map_iter;
+            typedef typename std::unordered_map<unsigned, T*>::iterator
+                cache_map_iter;
+
+            std::vector<size_t> cache_hits; // Per thread so no locks
 
             /**
               * \param numel_sync how many items to insert into a single threads
@@ -63,22 +70,19 @@ namespace {
                 this->elem_len = elem_len;
                 this->pt_elem = ceil(max_numel/(float)nthread);
 
-                data.resize(nthread*pt_elem*elem_len);
-                ids.resize(nthread*pt_elem);
-                tot_elem_added.resize(nthread);
-
-                for (unsigned thd = 0; thd < nthread; thd++)
-                    end_index.push_back(thd*pt_elem*elem_len);
-
-                elem_added.resize(nthread); // Default == 0
-                if (g_cache_hits.empty()) {
-                    printf("Resizing g_cache_hits!\n");
-                    g_cache_hits.resize(nthread);
+                for (unsigned thd = 0; thd < nthread; thd++) {
+                    // All on the stack!
+                    std::unordered_map<unsigned, std::vector<T> > cache;
+                    pt_data.push_back(cache);
                 }
 
-                this->max_numel = max_numel;
-                this->numel = 0; // TODO: See if ok non-volatile in practice
+                tot_elem_added.assign(nthread, 0);
 
+                elem_added.assign(nthread, 0); // Default == 0
+                cache_hits.assign(nthread, 0);
+
+                this->max_numel = max_numel;
+                this->numel = 0;
                 this->numel_sync = (0 == numel_sync) ? 1 :
                     numel_sync > MAX_SYNC_ELEM ? MAX_SYNC_ELEM:
                     numel_sync;
@@ -100,11 +104,12 @@ namespace {
             const void print_data_mat() {
                 BOOST_LOG_TRIVIAL(info) << "\nEchoing the per-thread data";
                 for (unsigned thd = 0; thd < this->elem_added.size(); thd++) {
-                    for(unsigned idx = 0; idx < tot_elem_added[thd]; idx++) {
-                        if (idx == 0) printf("thd: %u:\n", thd);
+                    printf("thd: %u:\n", thd);
+                    cache_iter it = pt_data[thd].begin();
 
-                        printf("row: %u ==> ", ids[(thd*pt_elem)+idx]);
-                        print_arr(&(data[(thd*pt_elem*elem_len)+idx]), elem_len);
+                    for (; it != pt_data[thd].end(); ++it) {
+                        printf("row: %u ==> ", it->first);
+                        print_vector<T>(it->second);
                     }
                 }
             }
@@ -117,61 +122,73 @@ namespace {
                             elem_len, numel_sync, max_numel));
             }
 
-            // Get ids associated with a thread
-            const unsigned* get_ids(const unsigned thd) {
-                return &(ids[thd*pt_elem]);
-            }
-
             // Each id is added by thread
-            // If I cannot add any more ids then this returns false
+            // If I cannot add any more vids OR I already have this vid,
+                // then return false
             bool add_id(const unsigned thd, const unsigned id) {
                 if (is_full(thd)) /* Ok because || is short-circuiting */
                     return false;
 
-                unsigned tmp = thd*pt_elem;
-                std::vector<unsigned>::iterator begin = ids.begin()+tmp;
-                std::vector<unsigned>::iterator end = begin + tot_elem_added[thd];
-                if (std::find(begin, end, id) != end)
+                cache_iter it = pt_data[thd].find(id);
+                if (it != pt_data[thd].end()) {
+                    // vid already exists in cache
                     return false;
+                }
 
-                ids[tmp+tot_elem_added[thd]++] = id;
                 elem_added[thd]++;
+                tot_elem_added[thd]++;
                 return true;
             }
 
-            // Each vector is added one elem at a time
-            void add(const unsigned thd, const T elem, const bool is_end) {
-                data[end_index[thd]++] = elem;
-                if (is_end) {
-                    if (elem_added[thd] == numel_sync) {
-                        numel = numel + elem_added[thd];
-                        elem_added[thd] = 0; // reset
-                    }
+            void add(const unsigned thd, const unsigned id,
+                    const std::vector<T>& row) {
+                pt_data[thd][id] = row; // TODO: Verify - Calls copy constructor
+
+                if (elem_added[thd] == numel_sync) {
+                    numel = numel + elem_added[thd];
+                    elem_added[thd] = 0; // reset
                 }
+
+                if (pt_data[thd].size() > pt_elem)
+                    BOOST_LOG_TRIVIAL(info) << "thd: " << thd << " has " <<
+                        pt_data[thd].size() << " items";
+                BOOST_VERIFY(pt_data[thd].size() < (pt_elem + 1));
             }
 
             const bool is_full(const unsigned thd) const {
                 return tot_elem_added[thd] == pt_elem;
             }
 
+            const size_t size() {
+                return std::accumulate(tot_elem_added.begin(),
+                        tot_elem_added.end(), 0);
+            }
+
             const bool index_empty() {
                 return data_map.empty();
             }
 
+            /** \brief Build an index of vids => addresses.
+              *     The hope is to reduce the cost of merging per thread maps
+              *     with data into a single queriably item. This reduces the
+              *     cost of copying actual data.
+              */
             void build_index() {
-                //BOOST_LOG_TRIVIAL(info) << "Printing data matrix";
-                //print_data_mat();
-                //BOOST_LOG_TRIVIAL(info) << "Building hash index";
-
+#ifdef KM_TEST
+                BOOST_LOG_TRIVIAL(info) << "Printing data matrix";
+                print_data_mat();
+                BOOST_LOG_TRIVIAL(info) << "Building hash index";
+#endif
                 for (unsigned thd = 0; thd < nthread; thd++) {
-                    T* start_addr = &(data[thd*pt_elem*elem_len]);
-                    unsigned tmp = thd*pt_elem;
-                    for (unsigned idx = 0; idx < tot_elem_added[thd]; idx++) {
-                        data_map[ids[tmp+idx]] = start_addr + (idx*elem_len);
+                    for (cache_iter it = pt_data[thd].begin();
+                            it != pt_data[thd].end(); ++it) {
+                        data_map[it->first] = &(it->second[0]);
                     }
                 }
-                //printf("Printing the cache:\n"); print();
-                //verify();
+#ifdef KM_TEST
+                print();
+                verify();
+#endif
             }
 
             T* get(const unsigned id, const unsigned thd){
@@ -179,17 +196,18 @@ namespace {
                 if (it == data_map.end())
                     return NULL;
                 else {
-                    g_cache_hits[thd]++;
+                    cache_hits[thd]++;
                     return it->second;
                 }
             }
 
             const size_t get_cache_hits() {
-                return std::accumulate(g_cache_hits.begin(), g_cache_hits.end(), 0);
+                return std::accumulate(cache_hits.begin(),
+                        cache_hits.end(), 0);
             }
 
             void print() {
-                printf("Printing hashed data with %lu #elems & "
+                printf("Printing cache data with %lu #elems & "
                         "numel = %u\n", data_map.size(), (unsigned)numel);
                 for (cache_map_iter it = data_map.begin(); it != data_map.end();
                         ++it) {
@@ -210,10 +228,11 @@ namespace {
             }
 
             void verify() {
-                for (cache_map_iter it=data_map.begin(); it != data_map.end(); ++it) {
+                for (cache_map_iter it = data_map.begin();
+                        it != data_map.end(); ++it) {
                     none_nan(it->second, elem_len, it->first);
-                    /*BOOST_ASSERT_MSG(none_nan(it->second, elem_len, it->first),
-                            "[Error] in cache row ID");*/
+                    BOOST_ASSERT_MSG(none_nan(it->second, elem_len, it->first),
+                            "[Error] in cache row ID");
                 }
             }
     };
