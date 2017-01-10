@@ -118,8 +118,7 @@ public:
 	}
 
 	~seq_writer() {
-		if (data_size_in_buf > 0)
-			flush_buffer_data(true);
+		assert(data_size_in_buf == 0);
 	}
 
 	void flush_buffer_data(bool last);
@@ -132,7 +131,7 @@ void seq_writer::flush_buffer_data(bool last)
 		return;
 
 	if (!last)
-		assert((data_size_in_buf * buf->get_length()) % PAGE_SIZE == 0);
+		assert((data_size_in_buf * buf->get_entry_size()) % PAGE_SIZE == 0);
 	else
 		data_size_in_buf = ROUNDUP((data_size_in_buf * buf->get_entry_size()),
 				PAGE_SIZE) / buf->get_entry_size();
@@ -163,7 +162,7 @@ void seq_writer::append(local_vec_store::const_ptr data)
 	size_t entry_size = data->get_type().get_size();
 	long addr = (long) data->get_raw_arr();
 	if ((data->get_length() * entry_size) % PAGE_SIZE == 0
-			&& (buf->get_length() * entry_size) % PAGE_SIZE == 0
+			&& (data_size_in_buf * entry_size) % PAGE_SIZE == 0
 			&& addr % PAGE_SIZE == 0) {
 		flush_buffer_data(false);
 		to_vec->write_portion_async(data, merge_end);
