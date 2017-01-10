@@ -31,6 +31,8 @@
 #include <vector>
 #include <limits>
 
+#include "generic_type.h"
+
 namespace fm
 {
 
@@ -56,24 +58,71 @@ class ele_parser
 public:
 	typedef std::shared_ptr<const ele_parser> const_ptr;
 
+	virtual void set_zero(void *buf) const = 0;
 	virtual void parse(const std::string &str, void *buf) const = 0;
 	virtual const scalar_type &get_type() const = 0;
 };
 
+/*
+ * Convert a string of decimal to an integer.
+ */
+template<class T>
+class int_parser: public ele_parser
+{
+	int base;
+public:
+	int_parser() {
+		base = 10;
+	}
+
+	int_parser(int base) {
+		this->base = base;
+	}
+
+	virtual void set_zero(void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		*val = 0;
+	}
+
+	virtual void parse(const std::string &str, void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		val[0] = strtol(str.c_str(), NULL, base);
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+template<class T>
+class float_parser: public ele_parser
+{
+public:
+	virtual void parse(const std::string &str, void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		val[0] = atof(str.c_str());
+	}
+
+	virtual void set_zero(void *buf) const {
+		T *val = reinterpret_cast<T *>(buf);
+		*val = 0;
+	}
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
-std::shared_ptr<data_frame> read_edge_list(const std::vector<std::string> &files,
-		bool in_mem, const std::string &attr_type);
 
+std::shared_ptr<data_frame> read_data_frame(const std::vector<std::string> &files,
+		bool in_mem, const std::string &delim,
+		const std::vector<ele_parser::const_ptr> &parsers);
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols = std::numeric_limits<size_t>::max());
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		const std::string &col_indicator);
-std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
-		bool in_mem, const std::string &ele_type, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &parsers);
 
 }
 

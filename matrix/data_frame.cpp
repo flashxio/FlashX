@@ -789,7 +789,7 @@ public:
 	}
 };
 
-void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
+static void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
 {
 	for (size_t i = 0; i < sub_df.size(); i++)
 		const_cast<local_vec_store *>(sub_df[i].get())->expose_sub_vec(loc,
@@ -941,7 +941,7 @@ groupby_task_queue::ptr groupby_task_queue::create(off_t global_off,
 	// partition size. Otherwise, we use a small partition size.
 	size_t part_size = is_vec ? 1024 * 1024 : 16 * 1024;
 	return groupby_task_queue::ptr(new groupby_task_queue(global_off,
-				sorted_col, sorted_col->get_length() / part_size,
+				sorted_col, std::max(sorted_col->get_length() / part_size, 1UL),
 				append->get_tot_appends()));
 }
 

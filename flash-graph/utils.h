@@ -28,6 +28,11 @@
 #include "graph_file_header.h"
 #include "FG_basic_types.h"
 
+namespace fm
+{
+	class data_frame;
+}
+
 namespace fg
 {
 
@@ -160,6 +165,9 @@ public:
 	static ptr create(bool directed, size_t edge_data_size);
 	virtual void add_empty_vertex(vertex_id_t id) = 0;
 };
+
+std::shared_ptr<fm::data_frame> read_edge_list(const std::vector<std::string> &files,
+		bool in_mem, const std::string &delim, const std::string &edge_attr_type);
 
 }
 

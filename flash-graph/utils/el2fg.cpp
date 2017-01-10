@@ -32,13 +32,15 @@
 #include "graph_file_header.h"
 #include "vertex_index.h"
 #include "in_mem_storage.h"
+#include "FGlib.h"
+#include "utils.h"
+#include "fg_utils.h"
 
 #include "generic_type.h"
 #include "data_io.h"
 #include "data_frame.h"
 #include "vector.h"
 #include "vector_vector.h"
-#include "fm_utils.h"
 #include "matrix_config.h"
 #include "sparse_matrix.h"
 
@@ -54,6 +56,7 @@ void print_usage()
 	fprintf(stderr, "-s size: sort buffer size\n");
 	fprintf(stderr, "-g size: groupby buffer size\n");
 	fprintf(stderr, "-t type: the edge attribute type\n");
+	fprintf(stderr, "-d delim: specified the string as delimiter\n");
 }
 
 int main(int argc, char *argv[])
@@ -66,7 +69,8 @@ int main(int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	std::string edge_attr_type;
-	while ((opt = getopt(argc, argv, "uUes:g:t:")) != -1) {
+	std::string delim = ",";
+	while ((opt = getopt(argc, argv, "uUes:g:t:d:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -88,6 +92,10 @@ int main(int argc, char *argv[])
 				break;
 			case 't':
 				edge_attr_type = optarg;
+				num_opts++;
+				break;
+			case 'd':
+				delim = optarg;
 				num_opts++;
 				break;
 			default:
@@ -131,7 +139,7 @@ int main(int argc, char *argv[])
 	matrix_conf.set_groupby_buf_size(groupby_buf_size);
 	printf("sort buf size: %ld, groupby buf size: %ld\n",
 			matrix_conf.get_sort_buf_size(), matrix_conf.get_groupby_buf_size());
-	set_deduplicate(uniq_edge);
+	fg::set_deduplicate(uniq_edge);
 
 	{
 		struct timeval start, end;
@@ -142,7 +150,7 @@ int main(int argc, char *argv[])
 		 */
 		printf("start to read and parse edge list\n");
 		gettimeofday(&start, NULL);
-		data_frame::ptr df = read_edge_list(files, in_mem, edge_attr_type);
+		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim, edge_attr_type);
 		assert(df);
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds to parse the edge lists\n",
@@ -150,7 +158,7 @@ int main(int argc, char *argv[])
 		printf("There are %ld edges\n", df->get_num_entries());
 		assert(df->get_num_entries() > 0);
 
-		edge_list::ptr el = edge_list::create(df, directed);
+		fg::edge_list::ptr el = fg::edge_list::create(df, directed);
 		printf("start to construct FlashGraph graph\n");
 		fg::FG_graph::ptr graph = create_fg_graph(graph_name, el);
 

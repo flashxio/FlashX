@@ -21,7 +21,6 @@
  */
 
 #include "graph_engine.h"
-#include "graph.h"
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
@@ -29,6 +28,12 @@ namespace safs
 {
 	class file_io_factory;
 };
+
+namespace fm
+{
+	class sparse_matrix;
+	class scalar_type;
+}
 
 namespace fg
 {
@@ -281,16 +286,6 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
 
 /**
- * \brief Fetch the clusters with the wanted cluster IDs.
- *  
- * \param fg The FlashGraph graph object for which you want to compute.
- * \param vertices The vertices that the induced subgraph has.
- * \return A subgraph.
- */
-in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr graph,
-		const std::vector<vertex_id_t> &vertices);
-
-/**
  * \brief Compute the k-core/coreness of a graph. The algorithm will 
  *        determine which vertices are between core `k` and `kmax` --
  *        all other vertices will be assigned to core 0.
@@ -375,5 +370,8 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
  * \param levels The number of levels of the hierarchy to do.
  */
 void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
+
+std::shared_ptr<fm::sparse_matrix> create_sparse_matrix(fg::FG_graph::ptr fg,
+		const fm::scalar_type *entry_type);
 }
 #endif

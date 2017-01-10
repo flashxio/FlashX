@@ -79,6 +79,16 @@ void portion_mapply_op::run(
 
 }
 
+vector::ptr dense_matrix::conv2vec() const
+{
+	materialize_self();
+	auto ret = store->conv2vec();
+	if (ret)
+		return vector::create(ret);
+	else
+		return vector::ptr();
+}
+
 bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {

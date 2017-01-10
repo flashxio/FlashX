@@ -17,19 +17,22 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
-CXXFLAGS = -I.. -I../../libsafs -g -std=c++0x
+LDFLAGS := -L.. -lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+CXXFLAGS = -I.. -I../../libsafs -I../../matrix -g -std=c++0x
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-UNITTEST = test-bitmap test-partitioner test-vertex_index
+UNITTEST = test-bitmap test-partitioner test-vertex_index test-sparse_matrix
 
 all: $(UNITTEST)
 
 test-bitmap: test-bitmap.o ../libgraph.a
 	$(CXX) -o test-bitmap test-bitmap.o $(LDFLAGS)
+
+test-sparse_matrix: test-sparse_matrix.o ../libgraph.a
+	$(CXX) -o test-sparse_matrix test-sparse_matrix.o $(LDFLAGS)
 
 test-partitioner: test-partitioner.o ../libgraph.a
 	$(CXX) -o test-partitioner test-partitioner.o $(LDFLAGS)

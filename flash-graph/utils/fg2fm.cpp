@@ -21,6 +21,9 @@
 #include "safs_file.h"
 #include "io_interface.h"
 
+#include "utils.h"
+#include "fg_utils.h"
+
 #include "vertex_index.h"
 
 #include "vector_vector.h"
@@ -82,9 +85,9 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 	std::vector<off_t> offs(vindex->get_num_vertices() + 1);
 	printf("find the location of adjacency lists\n");
 	if (is_out_edge)
-		init_out_offs(vindex, offs);
+		fg::init_out_offs(vindex, offs);
 	else
-		init_in_offs(vindex, offs);
+		fg::init_in_offs(vindex, offs);
 
 	size_t size;
 	off_t off;
@@ -122,7 +125,13 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 					graph_file.c_str());
 			return vector_vector::ptr();
 		}
-		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(factory);
+
+		detail::EM_object::file_holder::ptr holder
+			= detail::EM_object::file_holder::create(factory->get_name());
+		detail::EM_object::io_set::ptr ios(new detail::EM_object::io_set(factory));
+		size_t file_size = factory->get_file_size();
+		detail::EM_vec_store::ptr vec = detail::EM_vec_store::create(holder, ios,
+				file_size, get_scalar_type<char>());
 		vv = detail::EM_vv_store::create(offs, vec);
 	}
 
@@ -225,7 +234,7 @@ int main(int argc, char *argv[])
 	bool to_safs = !out_adjs->is_in_mem();
 	// Construct 2D partitioning of the adjacency matrix.
 	printf("export 2d matrix for the out-adjacency lists\n");
-	export_2d_matrix(out_adjs, out_adjs->get_num_vecs(), block_size, type,
+	fg::export_2d_matrix(out_adjs, out_adjs->get_num_vecs(), block_size, type,
 			mat_file, mat_idx_file, to_safs);
 	if (verify) {
 		printf("verify 2d matrix for the out-adjacency lists\n");
@@ -240,7 +249,7 @@ int main(int argc, char *argv[])
 		vector_vector::ptr in_adjs = load_graph(graph_file, vindex, false);
 		// Construct 2D partitioning of the adjacency matrix.
 		printf("export 2d matrix for the in-adjacency lists\n");
-		export_2d_matrix(in_adjs, in_adjs->get_num_vecs(), block_size, type,
+		fg::export_2d_matrix(in_adjs, in_adjs->get_num_vecs(), block_size, type,
 				t_mat_file, t_mat_idx_file, to_safs);
 		if (verify) {
 			printf("verify 2d matrix for the in-adjacency lists\n");

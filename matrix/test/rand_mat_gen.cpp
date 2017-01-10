@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 		vector::ptr vec = create_seq_vector<fg::vertex_id_t>(0, ncol - 1, 1);
 		detail::smp_vec_store::ptr spmv_tmp = detail::smp_vec_store::create(nrow,
 				get_scalar_type<fg::vertex_id_t>());
-		mat->multiply<fg::vertex_id_t, fg::vertex_id_t>(detail::mem_vec_store::cast(
+		mat->multiply(detail::mem_vec_store::cast(
 					vec->get_raw_store()), spmv_tmp);
 		vector::ptr spmv_res = vector::create(spmv_tmp);
 

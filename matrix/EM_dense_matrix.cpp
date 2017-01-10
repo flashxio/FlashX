@@ -31,6 +31,7 @@
 #include "matrix_stats.h"
 #include "local_mem_buffer.h"
 #include "sub_matrix_store.h"
+#include "EM_vector.h"
 
 namespace fm
 {
@@ -725,6 +726,12 @@ void EM_matrix_store::unset_persistent() const
 		return;
 	}
 	holder->unset_persistent();
+}
+
+vec_store::const_ptr EM_matrix_store::conv2vec() const
+{
+	return EM_vec_store::create(holder, ios, get_num_rows() * get_num_cols(),
+			get_type());
 }
 
 EM_matrix_stream::filled_portion::filled_portion(local_raw_array &arr,

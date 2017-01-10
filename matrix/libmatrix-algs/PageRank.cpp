@@ -54,7 +54,7 @@ detail::matrix_store::ptr get_out_degree(sparse_matrix::ptr mat, bool in_mem)
 			get_scalar_type<float>(), num_nodes, in_mem);
 	dense_matrix::ptr one = dense_matrix::create_const<float>(1,
 			mat->get_num_cols(), 1, matrix_layout_t::L_ROW, num_nodes, true);
-	mat->multiply<float, float>(one->get_raw_store(), out_deg);
+	mat->multiply(one->get_raw_store(), out_deg);
 	return out_deg;
 }
 
@@ -105,7 +105,7 @@ dense_matrix::ptr PageRank(sparse_matrix::ptr mat, size_t max_niters,
 		gettimeofday(&end1, NULL);
 		printf("generate input takes %.3f seconds\n", time_diff(start1, end1));
 		start1 = end1;
-		mat->multiply<float, float>(in->get_raw_store(), out);
+		mat->multiply(in->get_raw_store(), out);
 		gettimeofday(&end1, NULL);
 		printf("SpMM takes %.3f seconds\n", time_diff(start1, end1));
 		start1 = end1;
