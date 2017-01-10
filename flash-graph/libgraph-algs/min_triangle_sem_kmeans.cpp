@@ -368,14 +368,16 @@ namespace {
         vertex_id_t nid = 0;
 
         if (g_row_cache && g_row_cache->add_id(thd, my_id)) {
-            while(count_it.has_next()) {
+            std::vector<double> row;
+            while (count_it.has_next()) {
                 double e = count_it.next();
-                g_row_cache->add(thd, e, ((nid+1) == NUM_COLS));
+                row.push_back(e);
                 diff = e - mean[nid++];
                 dist += diff*diff;
             }
+            g_row_cache->add(thd, my_id, row);
         } else {
-            while(count_it.has_next()) {
+            while (count_it.has_next()) {
                 double e = count_it.next();
                 diff = e - mean[nid++];
                 dist += diff*diff;
@@ -727,7 +729,8 @@ namespace {
             if (g_io_iter > 0 && (g_io_iter % g_cache_update_iter == 0)) {
                 BOOST_LOG_TRIVIAL(info) << "Clearing the cache ...";
                 g_row_cache = partition_cache<double>::create(g_nthread,
-                        NUM_COLS, g_row_cache_size/(g_nthread*2), g_row_cache_size);
+                        NUM_COLS, g_row_cache_size/(g_nthread*2),
+                        g_row_cache_size);
                 // log cache
                 if (g_io_iter == g_cache_update_iter)
                     g_cache_update_iter += (g_io_iter + g_cache_update_iter);
