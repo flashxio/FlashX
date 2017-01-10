@@ -567,6 +567,7 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 
 	// Here is to reuse the code for matrix multiplication with BLAS.
 	bool use_blas = left_op == NULL;
+	size_t IPT_block_size = get_block_size();
 	if (use_blas) {
 		assert(get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>());
@@ -575,50 +576,86 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 		right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 	}
 
+	// If we use BLAS for matrix multiplication or this matrix is stored, we
+	// should use a larger block size to have BLAS optimize matrix multiplication
+	// or increase the ratio of computation to I/O.
+	if (use_blas || !is_in_mem())
+		IPT_block_size = matrix_conf.get_max_multiply_block_size();
+
+	// If the right matrix has more columns than the block size, the inner product
+	// result will have more columns than the block size. We need to convert
+	// the output of inner product into a block matrix with the current block size.
+	// A column-major matrix helps the conversion.
+	if (mem_m2->get_num_cols() > get_block_size())
+		out_layout = matrix_layout_t::L_COL;
+
 	// This contains the blocks for the final output.
-	std::vector<detail::matrix_store::const_ptr> res_blocks(
-			div_ceil<size_t>(mem_m2->get_num_cols(), get_block_size()));
+	std::vector<detail::matrix_store::const_ptr> res_blocks;
 	for (size_t m2_col = 0; m2_col < mem_m2->get_num_cols();
-			m2_col += get_block_size()) {
+			m2_col += IPT_block_size) {
 		// We multiply with individual matrices and output a vector of
 		// temporary matrices. Later on, we need to sum the temporary matrices.
-		std::vector<dense_matrix::const_ptr> tmp_mats(store->get_num_mats());
+		std::vector<dense_matrix::const_ptr> tmp_mats;
 		for (size_t m2_row = 0; m2_row < mem_m2->get_num_rows();
-				m2_row += get_block_size()) {
-			size_t i = m2_row / get_block_size();
-			dense_matrix::ptr left = dense_matrix::create(store->get_mat(i));
+				m2_row += IPT_block_size) {
+			size_t first_block = m2_row / get_block_size();
+			size_t local_num_blocks = std::min(IPT_block_size / get_block_size(),
+					store->get_num_mats() - first_block);
+			std::vector<detail::matrix_store::const_ptr> tmps(local_num_blocks);
+			for (size_t i = 0; i < tmps.size(); i++) {
+				tmps[i] = store->get_mat(i + first_block);
+				assert(tmps[i]);
+			}
+			dense_matrix::ptr left = dense_matrix::create(
+					detail::combined_matrix_store::create(tmps, store_layout()));
 			// Get the submatrix in the right matrix
-			size_t part_num_rows = std::min(get_block_size(),
+			size_t part_num_rows = std::min(IPT_block_size,
 					m2->get_num_rows() - m2_row);
-			size_t part_num_cols = std::min(get_block_size(),
+			size_t part_num_cols = std::min(IPT_block_size,
 					m2->get_num_cols() - m2_col);
 			detail::mem_matrix_store::const_ptr part = get_sub_mat(mem_m2,
 					m2_row, m2_col, part_num_rows, part_num_cols);
 			dense_matrix::ptr right = dense_matrix::create(part);
 
 			// Compute the temporary matrix.
-			// TODO maybe we can perform multiply with multiple block matrices
-			// together in the cost of more memory consumption.
+			dense_matrix::ptr tmp;
 			if (use_blas)
-				tmp_mats[i] = left->multiply(*right, out_layout);
+				tmp = left->multiply(*right, out_layout);
 			else
-				tmp_mats[i] = left->inner_prod(*right, left_op, right_op, out_layout);
+				tmp = left->inner_prod(*right, left_op, right_op, out_layout);
+			tmp_mats.push_back(tmp);
 			// We really don't need to cache the portion in this intermediate
 			// matrix and the EM matrix beneath it in the hierarchy.
-			const_cast<detail::matrix_store &>(tmp_mats[i]->get_data()).set_cache_portion(false);
+			const_cast<detail::matrix_store &>(tmp->get_data()).set_cache_portion(false);
 		}
 
 		// We then sum all of the temp matrices.
-		detail::portion_mapply_op::const_ptr op(new gsum_op(right_op,
-					tmp_mats[0]->get_num_rows(), tmp_mats[0]->get_num_cols()));
-		// We will materialize the mapply in a hierarchical way,
-		// so the intermediate matrices should be read from SSDs in serial.
-		size_t i = m2_col / get_block_size();
-		dense_matrix::ptr res = mapply_portion(tmp_mats, op,
-				tmp_mats[0]->store_layout(), false);
+		dense_matrix::const_ptr res;
+		if (tmp_mats.size() == 1)
+			res = tmp_mats[0];
+		else {
+			detail::portion_mapply_op::const_ptr op(new gsum_op(right_op,
+						tmp_mats[0]->get_num_rows(), tmp_mats[0]->get_num_cols()));
+			// We will materialize the mapply in a hierarchical way,
+			// so the intermediate matrices should be read from SSDs in serial.
+			res = mapply_portion(tmp_mats, op, tmp_mats[0]->store_layout(),
+					false);
+		}
 		res->materialize_self();
-		res_blocks[i] = res->get_raw_store();
+
+		// Convert the output into a block matrix with the current block size.
+		// The output matrix shoul be in column major order.
+		assert(res->store_layout() == matrix_layout_t::L_COL);
+		detail::matrix_store::const_ptr res_store = res->get_raw_store();
+		size_t num_blocks = div_ceil<size_t>(res_store->get_num_cols(),
+				get_block_size());
+		for (size_t j = 0; j < num_blocks; j++) {
+			size_t end = std::min(res_store->get_num_cols(),
+					(j + 1) * get_block_size());
+			res_blocks.push_back(res_store->get_cols(j * get_block_size(), end));
+		}
 	}
+	assert(res_blocks.size() == div_ceil<size_t>(mem_m2->get_num_cols(), get_block_size()));
 
 	// TODO we need to restore the original caching policy in the EM matrix.
 
