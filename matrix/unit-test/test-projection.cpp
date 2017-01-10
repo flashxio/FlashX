@@ -5,17 +5,8 @@
 using namespace fm;
 using namespace fm::detail;
 
-int main(int argc, char *argv[])
+void test_whole()
 {
-	if (argc < 2) {
-		fprintf(stderr, "test conf_file\n");
-		exit(1);
-	}
-
-	std::string conf_file = argv[1];
-	config_map::ptr configs = config_map::create(conf_file);
-	init_flash_matrix(configs);
-
 	sparse_project_matrix_store::ptr proj_store
 		= sparse_project_matrix_store::create_sparse_rand(1000000, 100,
 				matrix_layout_t::L_ROW, get_scalar_type<double>(), 0.001);
@@ -87,6 +78,37 @@ int main(int argc, char *argv[])
 	scalar_variable::ptr diff_sum = diff->abs()->sum();
 	assert(diff_sum->get_type() == get_scalar_type<double>());
 	printf("diff: %f\n", scalar_variable::get_val<double>(*diff_sum));
+}
+
+void test_ltranspose()
+{
+	matrix_store::const_ptr proj_store
+		= sparse_project_matrix_store::create_sparse_rand(1000000, 100,
+				matrix_layout_t::L_ROW, get_scalar_type<double>(), 0.001);
+	auto part = proj_store->get_portion(1);
+	auto t = std::dynamic_pointer_cast<const local_matrix_store>(part->transpose());
+
+	size_t num_bytes = t->get_num_rows() * t->get_num_cols() * t->get_entry_size();
+	const char *arr = part->get_raw_arr();
+	const char *tarr = t->get_raw_arr();
+	assert(arr);
+	assert(tarr);
+	assert(memcmp(arr, tarr, num_bytes) == 0);
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
+	}
+
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+
+	test_whole();
+	test_ltranspose();
 
 	destroy_flash_matrix();
 }
