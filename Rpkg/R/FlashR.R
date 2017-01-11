@@ -1319,6 +1319,14 @@ fm.set.test.na <- function(val)
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	stopifnot(class(o1) == "fm" || class(o2) == "fm")
+	# If one of the input matrices is a single-col matrix,
+	# we will repeat the matrix to match the other matrix.
+	if (ncol(o1) != ncol(o2)) {
+		if (ncol(o1) == 1)
+			o1 <- fm.matrix(o1, nrow(o1), ncol(o2))
+		else if (ncol(o2) == 1)
+			o2 <- fm.matrix(o2, nrow(o2), ncol(o1))
+	}
 	stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- .new.fm(ret)
