@@ -1776,7 +1776,7 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) {
 
 #' FlashR Summaries
 #'
-#' \code{fm.summary} produces summaries of a FlashR vector or matrix.
+#' \code{summary} produces summaries of a FlashR object.
 #'
 #' It computes the min, max, sum, mean, L1, L2, number of non-zero values if
 #' the argument is a vector, or these statistics for each column if the argument
@@ -1792,11 +1792,15 @@ setMethod("tcrossprod", "fm", function(x, y=NULL) {
 #' \item{normL2}{The L2 norm}
 #' \item{numNonzeros}{The number of non-zero values}
 #' }
+#' @name summary
 #'
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
-#' fm.summary(mat)
-fm.summary <- function(x)
+#' summary(mat)
+NULL
+
+#' @rdname summary
+.summary <- function(x)
 {
 	orig.test.na <- .env.int$fm.test.na
 	fm.set.test.na(FALSE)
@@ -1818,7 +1822,7 @@ fm.summary <- function(x)
 		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
 	}
 	else {
-		print("fm.summary only works on a FlashR object")
+		print("summary only works on a FlashR object")
 		return(NULL)
 	}
 	res <- fm.materialize.list(lazy.res)
@@ -1829,6 +1833,11 @@ fm.summary <- function(x)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
+
+#' @rdname summary
+setMethod("summary", "fm", function(object, ...) .summary(object))
+#' @rdname summary
+setMethod("summary", "fmV", function(object, ...) .summary(object))
 
 #' Eigensolver
 #'
