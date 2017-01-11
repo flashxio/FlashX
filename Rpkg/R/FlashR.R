@@ -1764,10 +1764,7 @@ fm.get.cols <- function(fm, idxs)
 					 PACKAGE="FlashR")
 	else
 		ret <- .Call("R_FM_get_submat", fm, as.integer(2), idxs, PACKAGE="FlashR")
-	if (!is.null(ret))
-		.new.fm(ret)
-	else
-		NULL
+	.new.fm(ret)
 }
 
 #' @rdname fm.get.eles
@@ -1780,10 +1777,7 @@ fm.get.rows <- function(fm, idxs)
 					 PACKAGE="FlashR")
 	else
 		ret <- .Call("R_FM_get_submat", fm, as.integer(1), idxs, PACKAGE="FlashR")
-	if (!is.null(ret))
-		.new.fm(ret)
-	else
-		NULL
+	.new.fm(ret)
 }
 
 #' @rdname fm.get.eles
@@ -1791,12 +1785,21 @@ fm.get.eles.vec <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fmV")
-	ret <- .Call("R_FM_get_vec_eles", fm, as.numeric(idxs), PACKAGE="FlashR")
-	if (!is.null(ret))
-		new("fmV", pointer=ret$pointer, name=ret$name, len=ret$len, type=ret$type,
-			ele_type=ret$ele_type)
-	else
-		NULL
+	if (is.atomic(idxs)) {
+		ret <- .Call("R_FM_get_vec_eles", fm, as.numeric(idxs), PACKAGE="FlashR")
+		.new.fmV(ret)
+	}
+	else {
+		# convert the vector to a col matrix and get rows from it.
+		ret <- .Call("R_FM_get_submat", fm.as.matrix(fm), as.integer(1),
+					 idxs, PACKAGE="FlashR")
+		if (!is.null(ret))
+			new("fmV", pointer=ret$pointer, name=ret$name,
+				len=(ret$nrow * ret$ncol), type=ret$type,
+				ele_type=ret$ele_type)
+		else
+			NULL
+	}
 }
 
 #' Materialize virtual FlashR objects.
