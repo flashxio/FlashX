@@ -1706,6 +1706,8 @@ fm.sgroupby <- function(obj, FUN)
 #' @rdname fm.groupby
 fm.groupby <- function(obj, margin, factor, FUN)
 {
+	if (class(obj) == "fmV")
+		obj <- fm.as.matrix(obj)
 	stopifnot(class(obj) == "fm")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
