@@ -307,6 +307,14 @@ matrix_store::const_ptr matrix_store::get_cols(
 		return rows->transpose();
 }
 
+bool matrix_store::share_data(const matrix_store &store) const
+{
+	// By default, we can use data id to determine if two matrices have
+	// the same data.
+	return get_data_id() == store.get_data_id()
+		&& get_data_id() != INVALID_MAT_ID;
+}
+
 }
 
 }

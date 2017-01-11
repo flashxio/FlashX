@@ -2048,56 +2048,17 @@ void materialize_tall(
 {
 	size_t orig_num_rows = ins[0]->get_num_rows();
 	// We need all tall matrices have the same number of rows.
-	bool resized = false;
-	for (size_t i = 1; i < ins.size(); i++) {
+	for (size_t i = 1; i < ins.size(); i++)
 		assert(ins[i]->get_num_rows() == orig_num_rows);
-		// If the matrix has been resized.
-		if (!ins[i]->is_whole())
-			resized = true;
-	}
 
-	// Get the length in the long dimension.
-	size_t max_num_cols = ins[0]->get_num_cols();
-	size_t max_idx = 0;
-	for (size_t i = 1; i < ins.size(); i++) {
-		if (max_num_cols < ins[i]->get_num_cols()) {
-			max_idx = i;
-			max_num_cols = ins[i]->get_num_cols();
-		}
-	}
-	size_t part_len = get_part_dim_len(*ins[max_idx], part_dim_t::PART_DIM1);
-
-	// We have to make sure none of the input matrices has been resized.
-	if (orig_num_rows > part_len && !resized) {
-		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
-		for (size_t i = 0; i < ins.size(); i++)
-			orig_areas[i] = ins[i]->get_exposed_area();
-		bool success = true;
-		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
-			size_t llen = std::min(orig_num_rows - row_idx, part_len);
-			for (size_t i = 0; i < ins.size() && success; i++)
-				success = const_cast<local_matrix_store &>(*ins[i]).resize(
-						orig_areas[i].local_start_row + row_idx,
-						orig_areas[i].local_start_col, llen,
-						ins[i]->get_num_cols());
-			if (!success) {
-				assert(row_idx == 0);
-				break;
-			}
-			for (size_t i = 0; i < ins.size(); i++)
-				ins[i]->materialize_self();
-		}
-		for (size_t i = 0; i < ins.size(); i++)
-			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
-		if (!success) {
-			for (size_t i = 0; i < ins.size(); i++)
-				ins[i]->materialize_self();
-		}
-	}
-	else {
-		for (size_t i = 0; i < ins.size(); i++)
-			ins[i]->materialize_self();
-	}
+	// Most of the matrices materialized here are sink matrices.
+	// When materializing these matrices, the corresponding computation
+	// will futher break the matrices to increase CPU cache utilization.
+	// For the best performance, we should let the computation to choose
+	// the partition size. For example, matrix multiplication should
+	// use a larger partition size to get performance from BLAS.
+	for (size_t i = 0; i < ins.size(); i++)
+		ins[i]->materialize_self();
 }
 
 void materialize_wide(
@@ -2105,56 +2066,12 @@ void materialize_wide(
 {
 	size_t orig_num_cols = ins[0]->get_num_cols();
 	// We need all wide matrices have the same number of cols.
-	bool resized = false;
-	for (size_t i = 1; i < ins.size(); i++) {
+	for (size_t i = 1; i < ins.size(); i++)
 		assert(ins[i]->get_num_cols() == orig_num_cols);
-		// If the matrix has been resized.
-		if (!ins[i]->is_whole())
-			resized = true;
-	}
 
-	// Get the length in the long dimension.
-	size_t max_num_rows = ins[0]->get_num_rows();
-	size_t max_idx = 0;
-	for (size_t i = 1; i < ins.size(); i++) {
-		if (max_num_rows < ins[i]->get_num_rows()) {
-			max_idx = i;
-			max_num_rows = ins[i]->get_num_rows();
-		}
-	}
-	size_t part_len = get_part_dim_len(*ins[max_idx], part_dim_t::PART_DIM2);
-
-	// We have to make sure none of the input matrices has been resized.
-	if (orig_num_cols > part_len && !resized) {
-		std::vector<local_matrix_store::exposed_area> orig_areas(ins.size());
-		for (size_t i = 0; i < ins.size(); i++)
-			orig_areas[i] = ins[i]->get_exposed_area();
-		bool success = true;
-		for (size_t col_idx = 0; col_idx < orig_num_cols; col_idx += part_len) {
-			size_t llen = std::min(orig_num_cols - col_idx, part_len);
-			for (size_t i = 0; i < ins.size() && success; i++)
-				success = const_cast<local_matrix_store &>(*ins[i]).resize(
-						orig_areas[i].local_start_row,
-						orig_areas[i].local_start_col + col_idx,
-						ins[i]->get_num_rows(), llen);
-			if (!success) {
-				assert(col_idx == 0);
-				break;
-			}
-			for (size_t i = 0; i < ins.size(); i++)
-				ins[i]->materialize_self();
-		}
-		for (size_t i = 0; i < ins.size(); i++)
-			const_cast<local_matrix_store &>(*ins[i]).restore_size(orig_areas[i]);
-		if (!success) {
-			for (size_t i = 0; i < ins.size(); i++)
-				ins[i]->materialize_self();
-		}
-	}
-	else {
-		for (size_t i = 0; i < ins.size(); i++)
-			ins[i]->materialize_self();
-	}
+	// For the reason as above.
+	for (size_t i = 0; i < ins.size(); i++)
+		ins[i]->materialize_self();
 }
 
 size_t get_part_dim_len(const local_matrix_store &mat, part_dim_t dim)

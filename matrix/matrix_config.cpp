@@ -50,6 +50,7 @@ void matrix_config::print_help()
 	printf("\tstream_io_size: the I/O size used for streaming\n");
 	printf("\tkeep_mem_buf: indicate whether to keep memory buffer for I/O in dense matrix operation\n");
 	printf("\tblock_size: the block size in a dense matrix\n");
+	printf("\tmax_multiply_block_size: the block size for matrix multiplication\n");
 }
 
 void matrix_config::print()
@@ -71,6 +72,7 @@ void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tstream_io_size: " << stream_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\tkeep_mem_buf: " << keep_mem_buf;
 	BOOST_LOG_TRIVIAL(info) << "\tblock_size: " << block_size;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_multiply_block_size: " << max_multiply_block_size;
 }
 
 void matrix_config::init(config_map::ptr map)
@@ -154,6 +156,11 @@ void matrix_config::init(config_map::ptr map)
 		long tmp = 0;
 		map->read_option_long("block_size", tmp);
 		block_size = tmp;
+	}
+	if (map->has_option("max_multiply_block_size")) {
+		long tmp = 0;
+		map->read_option_long("max_multiply_block_size", tmp);
+		max_multiply_block_size = tmp;
 	}
 }
 }

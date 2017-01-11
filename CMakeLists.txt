@@ -18,7 +18,7 @@ else()
 	message(FATAL_ERROR "We require GCC")
 endif()
 
-find_package(Boost COMPONENTS system filesystem	REQUIRED)
+find_package(Boost REQUIRED)
 find_package(Threads REQUIRED)
 find_package(LibRt REQUIRED)
 
@@ -29,7 +29,7 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/config.h"
 )
 
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -g -fPIC" )
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -fPIC" )
 
 find_package(OpenMP)
 if (OPENMP_FOUND)

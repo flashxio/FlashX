@@ -43,6 +43,8 @@ class vec_store;
 
 typedef std::pair<bool, std::shared_ptr<const local_matrix_store> > async_cres_t;
 
+const size_t INVALID_MAT_ID = std::numeric_limits<size_t>::max();
+
 class matrix_store
 {
 	size_t nrow;
@@ -133,6 +135,19 @@ public:
 	virtual bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
+
+	/*
+	 * Data Id is used to identify the data in a matrix.
+	 * When a matrix is transposed or move to a different storage memory or
+	 * converted into a different data layout, it should have the same data
+	 * Id.
+	 */
+	virtual size_t get_data_id() const = 0;
+
+	/*
+	 * Test if this matrix shares the same data as the other matrix.
+	 */
+	virtual bool share_data(const matrix_store &store) const;
 
 	/*
 	 * This method gets underlying materialized matrix IDs and the number of

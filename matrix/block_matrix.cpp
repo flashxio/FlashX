@@ -709,22 +709,42 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 	get_wider_matrices(store, left_mats,
 			std::min(get_num_rows(), m.get_num_cols()));
 
+	// If this is crossprod with itself, the two matrices need to share
+	// the same matrix data and their store layout is different.
+	bool is_crossprod = store->share_data(*m.get_raw_store())
+		&& store->store_layout() != m.get_raw_store()->store_layout();
 	assert(get_type() == m.get_type());
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
-	std::vector<detail::matrix_store::const_ptr> blocks(
-			left_mats.size() * right_mats.size());
+	std::vector<size_t> nrow_in_blocks(left_mats.size());
+	for (size_t i = 0; i < nrow_in_blocks.size(); i++)
+		nrow_in_blocks[i] = left_mats[i]->get_num_rows();
+	std::vector<size_t> ncol_in_blocks(right_mats.size());
+	for (size_t i = 0; i < ncol_in_blocks.size(); i++)
+		ncol_in_blocks[i] = right_mats[i]->get_num_cols();
+	detail::block_sink_store::ptr block_sinks
+		= detail::block_sink_store::create(nrow_in_blocks, ncol_in_blocks,
+				// If this is a self-crossprod, the result matrix is symmetric.
+				is_in_mem() && m.is_in_mem(), get_type(), is_crossprod);
+	assert(block_sinks);
 	// Each time we take one matrix in the right group and perform inner product
 	// with all matrices in the left group.
 	for (size_t i = 0; i < right_mats.size(); i++) {
 		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
 		for (size_t j = 0; j < left_mats.size(); j++) {
-			dense_matrix::ptr left = dense_matrix::create(left_mats[j]);
-			dense_matrix::ptr res = left->multiply(*right, out_layout);
-			assert(res);
-			blocks[j * right_mats.size() + i] = res->get_raw_store();
+			detail::matrix_store::const_ptr res_store;
+			if (is_crossprod)
+				res_store = block_sinks->get_store(i, j);
+			dense_matrix::ptr left;
+			if (res_store == NULL) {
+				left = dense_matrix::create(left_mats[j]);
+				dense_matrix::ptr res = left->multiply(*right, out_layout);
+				assert(res);
+				res_store = res->get_raw_store();
+				block_sinks->set_store(j, i, res_store);
+			}
 			// This is only necessary for EM matrices.
-			if (!left->is_in_mem()) {
+			if (left && !left->is_in_mem()) {
 				detail::matrix_store &tmp
 					= const_cast<detail::matrix_store &>(left->get_data());
 				tmp.set_cache_portion(false);
@@ -736,8 +756,7 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 			tmp.set_cache_portion(true);
 		}
 	}
-	return dense_matrix::create(detail::block_sink_store::create(blocks,
-				left_mats.size(), right_mats.size()));
+	return dense_matrix::create(block_sinks);
 }
 
 /*

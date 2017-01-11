@@ -73,6 +73,9 @@ public:
 	}
 
 	bool is_materialized() const;
+	virtual size_t get_data_id() const {
+		return data_id;
+	}
 
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range);
 	virtual void set_cache_portion(bool cache_portion);

@@ -19,6 +19,9 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#ifdef USE_OPENBLAS
+#include <openblas/cblas.h>
+#endif
 
 #include "sparse_matrix.h"
 #include "matrix_io.h"
@@ -729,6 +732,9 @@ static std::atomic<long> init_count;
 
 void init_flash_matrix(config_map::ptr configs)
 {
+#ifdef USE_OPENBLAS
+	openblas_set_num_threads(1);
+#endif
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {
 		// We should initialize SAFS first.
