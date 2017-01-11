@@ -5,7 +5,7 @@
 \alias{nlevels}
 \title{The Number of Levels of a Factor}
 \usage{
-\S4method{nlevels}{fmFactorV}(x)
+\S4method{nlevels}{fmVFactor}(x)
 }
 \arguments{
 \item{x}{a FlashR factor}

@@ -3,6 +3,7 @@
 \name{fm.info}
 \alias{fm.in.mem}
 \alias{fm.info}
+\alias{fm.is.object}
 \alias{fm.is.sink}
 \alias{fm.is.sparse}
 \alias{fm.is.sym}
@@ -18,6 +19,8 @@ fm.is.sparse(fm)
 fm.is.sink(fm)
 
 fm.in.mem(fm)
+
+fm.is.object(fm)
 }
 \arguments{
 \item{fm}{The FlashR object}
@@ -38,6 +41,8 @@ These functions provide the basic information of a FlashR object.
 \code{fm.is.sink} indicates whether a FlashR object is a sink matrix.
 
 \code{fm.in.mem} indicates whether a FlashR object is stored in memory.
+
+\code{fm.is.object} indicates whether this is a FlashR object.
 }
 \author{
 Da Zheng <dzheng5@jhu.edu>

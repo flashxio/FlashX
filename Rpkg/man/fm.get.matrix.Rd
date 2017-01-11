@@ -6,6 +6,7 @@
 \alias{fm.load.dense.matrix}
 \alias{fm.load.dense.matrix.bin}
 \alias{fm.load.sparse.matrix}
+\alias{fm.load.sparse.matrix.bin}
 \title{Load a matrix to FlashR.}
 \usage{
 fm.get.dense.matrix(name)
@@ -16,7 +17,10 @@ fm.load.dense.matrix(src.file, in.mem, ele.type = "D", delim = ",",
 fm.load.dense.matrix.bin(src.file, in.mem, nrow, ncol, byrow, ele.type,
   name = "")
 
-fm.load.sparse.matrix(spm, spm.idx, t.spm = NULL, t.spm.idx = NULL,
+fm.load.sparse.matrix(file, in.mem = TRUE, is.sym = FALSE, ele.type = "B",
+  delim = ",", name = "")
+
+fm.load.sparse.matrix.bin(spm, spm.idx, t.spm = NULL, t.spm.idx = NULL,
   in.mem = TRUE)
 }
 \arguments{
@@ -28,7 +32,9 @@ that stores data to be loaded to FlashR.}
 
 \item{in.mem}{Determine the loaded matrix is stored in memory or on SAFS.}
 
-\item{ele.type}{The element type in a matrix.}
+\item{ele.type}{A string that represents the element type in a matrix.
+"B" means binary, "I" means integer, "L" means long integer,
+"F" means single-precision floating point, "D" means double-precision floating point.}
 
 \item{delim}{The delimiter of separating elements in the text format.}
 

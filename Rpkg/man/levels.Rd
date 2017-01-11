@@ -5,7 +5,7 @@
 \alias{levels}
 \title{Levels Attributes}
 \usage{
-\S4method{levels}{fmFactorV}(x)
+\S4method{levels}{fmVFactor}(x)
 }
 \arguments{
 \item{x}{a FlashR factor.}
