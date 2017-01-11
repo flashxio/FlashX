@@ -1506,7 +1506,7 @@ setMethod("print", signature(x = "fm"), function(x)
 setMethod("print", signature(x = "fmV"), function(x)
 	cat("FlashR vector ", x@name, ": length: ", length(x), "\n", sep=""))
 #' @rdname print
-setMethod("print", signature(x = "fmFactorV"), function(x)
+setMethod("print", signature(x = "fmVFactor"), function(x)
 	cat("FlashR factor vector ", x@name, ": length: ", length(x),
 		", max level: ", x@num.levels, "\n", sep=""))
 #' @rdname print

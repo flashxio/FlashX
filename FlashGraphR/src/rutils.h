@@ -64,7 +64,7 @@ static inline bool is_vector(const Rcpp::S4 &vec)
 
 static inline bool is_factor_vector(const Rcpp::S4 &vec)
 {
-	return vec.is("fmFactorV");
+	return vec.is("fmVFactor");
 }
 
 void R_gc();
