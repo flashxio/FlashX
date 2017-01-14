@@ -1640,13 +1640,16 @@ setMethod("is.numeric", "fmV", function(x)
 #' Operators acting on FlashR vectors and matrices to extract parts of
 #' the objects.
 #'
-#' FlashR only supports extracting data from an object. It doesn't support
-#' replace data in an object.
+#' FlashR supports extracting data from an object as well as replacing data
+#' of a matrix. To assign data in a matrix, it only supports setting
+#' the entire rows or columns.
 #'
 #' @param x object from which to extract elements.
 #' @param i,j indices specifying elements to extract. Indices are integer
 #'        or numeric vectors.
 #' @param drop for matrices. If \code{TRUE}, the result is coerced to a vector.
+#' @param value a FlashR vector or matrix that contains new data for the rows
+#"        or columns.
 #' @name Extract
 #'
 #' @examples
@@ -1654,6 +1657,7 @@ setMethod("is.numeric", "fmV", function(x)
 #' mat[1:5,]
 #' mat[,1:5]
 #' mat[1:5,1:5]
+#' mat[,1] <- fm.runif(nrow(mat))
 NULL
 
 #' @rdname Extract
@@ -1688,6 +1692,12 @@ setMethod("[", signature(x="fm"), function(x, i, j, drop=TRUE) {
 		  })
 #' @rdname Extract
 setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
+#' @rdname Extract
+setMethod("[<-", signature(x="fm", j="missing"),
+		  function(x, i, j, value) fm.set.rows(x, i, value))
+#' @rdname Extract
+setMethod("[<-", signature(x="fm", i="missing"),
+		  function(x, i, j, value) fm.set.cols(x, j, value))
 
 #' Return the First or Last part of an Object
 #'

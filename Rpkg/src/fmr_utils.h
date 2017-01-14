@@ -45,8 +45,12 @@ public:
 		this->o = o;
 	}
 
-	typename ObjectType::ptr get_object() {
+	typename ObjectType::ptr get_object() const {
 		return o;
+	}
+
+	void set_object(typename ObjectType::ptr obj) {
+		this->o = obj;
 	}
 };
 
@@ -57,6 +61,14 @@ typename MatrixType::ptr get_matrix(const Rcpp::S4 &matrix)
 	object_ref<MatrixType> *ref
 		= (object_ref<MatrixType> *) R_ExternalPtrAddr(matrix.slot("pointer"));
 	return ref->get_object();
+}
+template<class MatrixType>
+void set_matrix(const Rcpp::S4 &matrix, typename MatrixType::ptr mat)
+{
+	// TODO I should test if the pointer slot does exist.
+	object_ref<MatrixType> *ref
+		= (object_ref<MatrixType> *) R_ExternalPtrAddr(matrix.slot("pointer"));
+	ref->set_object(mat);
 }
 
 std::shared_ptr<fm::col_vec> get_vector(const Rcpp::S4 &vec);

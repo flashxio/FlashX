@@ -1799,6 +1799,26 @@ fm.get.rows <- function(fm, idxs)
 	.new.fm(ret)
 }
 
+fm.set.rows <- function(fm, idxs, rows)
+{
+	stopifnot(!is.null(fm) && class(fm) == "fm")
+	stopifnot(is.atomic(idxs))
+	stopifnot(!is.null(rows) && fm.is.object(rows))
+	ret <- .Call("R_FM_set_submat", fm, as.integer(1), as.numeric(idxs), rows,
+				 PACKAGE="FlashR")
+	.new.fm(ret)
+}
+
+fm.set.cols <- function(fm, idxs, cols)
+{
+	stopifnot(!is.null(fm) && class(fm) == "fm")
+	stopifnot(is.atomic(idxs))
+	stopifnot(!is.null(cols) && fm.is.object(cols))
+	ret <- .Call("R_FM_set_submat", fm, as.integer(2), as.numeric(idxs), cols,
+				 PACKAGE="FlashR")
+	.new.fm(ret)
+}
+
 #' @rdname fm.get.eles
 fm.get.eles.vec <- function(fm, idxs)
 {
