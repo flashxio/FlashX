@@ -1765,7 +1765,6 @@ RcppExport SEXP R_FM_set_submat(SEXP pmat, SEXP pmargin, SEXP pidxs, SEXP pdata)
 	if (new_mat == NULL)
 		return R_NilValue;
 	else {
-		printf("res: %s\n", new_mat->get_raw_store()->get_name().c_str());
 		set_matrix<dense_matrix>(pmat, new_mat);
 		return create_FMR_matrix(new_mat, "");
 	}
