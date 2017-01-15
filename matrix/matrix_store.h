@@ -215,6 +215,11 @@ public:
 		return std::shared_ptr<const vec_store>();
 	}
 
+	/*
+	 * Get rows/columns within [start, end).
+	 */
+	virtual matrix_store::const_ptr get_cols(off_t start, off_t end) const;
+	virtual matrix_store::const_ptr get_rows(off_t start, off_t end) const;
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(

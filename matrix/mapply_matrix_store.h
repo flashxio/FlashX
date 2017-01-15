@@ -63,10 +63,22 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 public:
 	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
+	// All input matrices should have the same shape, i.e., either all are
+	// tall matrices or wide matrices. The output matrix should also have
+	// the same shape as the input matrices.
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op,
 			matrix_layout_t layout, size_t data_id = mat_counter++);
+
+	bool is_wide() const {
+		// We handle matrices with different shapes differently
+		// We rely on this method to tell if a matrix is wide or tall.
+		// This method doesn't work well on a square matrix. Instead of
+		// judging the shape of the result matrix, we can judge
+		// one of the input matrices.
+		return in_mats.front()->is_wide();
+	}
 
 	const std::vector<matrix_store::const_ptr> get_input_mats() const {
 		return in_mats;
