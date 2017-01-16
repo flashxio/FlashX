@@ -517,10 +517,21 @@ class row_parser: public line_parser
 	const std::string delim;
 	const size_t num_cols;
 	std::vector<ele_parser::const_ptr> parsers;
+
+	static std::string interpret_delim(const std::string &delim) {
+		std::string new_delim = delim;
+		if (delim == "\\t")
+			new_delim = "\t";
+		else if (delim == "\\n")
+			new_delim = "\n";
+		else if (delim == "\\r")
+			new_delim = "\r";
+		return new_delim;
+	}
 public:
 	row_parser(const std::string &_delim,
 			const std::vector<ele_parser::const_ptr> &_parsers): delim(
-				_delim), num_cols(_parsers.size()) {
+				interpret_delim(_delim)), num_cols(_parsers.size()) {
 		this->parsers = _parsers;
 	}
 
