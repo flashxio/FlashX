@@ -43,9 +43,6 @@ matrix: libgraph
 test-algs: libgraph libgraph-algs matrix
 	$(MAKE) -C test-algs
 
-LOL: libgraph matrix
-	$(MAKE) -C LOL
-
 test-matrix: libgraph matrix
 	$(MAKE) -C test-matrix
 
@@ -64,7 +61,6 @@ clean:
 	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
-	$(MAKE) clean -C LOL
 	$(MAKE) clean -C utils
 	$(MAKE) clean -C test-matrix
 
