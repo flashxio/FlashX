@@ -798,7 +798,15 @@ static void expose_portion(sub_data_frame &sub_df, off_t loc, size_t length)
 
 void portion_groupby_complete::run_complete()
 {
-	auto sorted_col = df[sorted_col_idx];
+	// The local vector from EM vector might have been resized before.
+	// so we should get a new local vector whose local offset is 0.
+	sub_data_frame sub_df = df;
+	for (size_t i = 0; i < sub_df.size(); i++) {
+		if (sub_df[i]->get_local_start() > 0)
+			sub_df[i] = sub_df[i]->get_portion(0, sub_df[i]->get_length());
+	}
+
+	auto sorted_col = sub_df[sorted_col_idx];
 	detail::mem_vv_store::ptr ret = detail::mem_vv_store::create(
 			op.get_output_type());
 	agg_operate::const_ptr find_next
@@ -815,10 +823,10 @@ void portion_groupby_complete::run_complete()
 		size_t rel_end;
 		find_next->runAgg(curr_length, curr_ptr, &rel_end);
 		// This expose a portion of the data frame.
-		expose_portion(df, loc, rel_end);
+		expose_portion(sub_df, loc, rel_end);
 		// The first argument is the key and the second one is the value
 		// (a data frame)
-		op.run(curr_ptr, df, *row_buf);
+		op.run(curr_ptr, sub_df, *row_buf);
 		if (row_buf->get_length() > 0)
 			ret->append(*row_buf);
 		loc += rel_end;
