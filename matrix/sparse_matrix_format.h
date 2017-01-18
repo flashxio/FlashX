@@ -514,8 +514,10 @@ public:
 			SpM_2d_index::ptr index);
 	static ptr load(const std::string &mat_file,
 			SpM_2d_index::ptr index);
+	// In this version, vv doesn't contain header.
 	static ptr create(const matrix_header &header, const vector_vector &vv,
 			SpM_2d_index::ptr index);
+	static ptr create(const vector_vector &vv, SpM_2d_index::ptr index);
 
 	static void verify(SpM_2d_index::ptr index, const std::string &mat_file);
 

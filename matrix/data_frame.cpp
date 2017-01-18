@@ -640,7 +640,7 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv,
 			size_t num_eles = std::min(fill_size, chunk_size);
 			// We store data in the local vectors.
 			local_vec_store::ptr buf(new local_buf_vec_store(
-						portion_global_start, chunk_size, ele_type, -1, true));
+						portion_global_start, chunk_size, ele_type, -1, false));
 			portion_global_start += chunk_size;
 			buf->resize(num_eles);
 			global_chunks.emplace_back(new filled_chunk(buf));

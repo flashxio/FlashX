@@ -31,12 +31,9 @@ class sparse_matrix;
 typedef uint32_t ele_idx_t;
 const ele_idx_t INVALID_IDX_VAL = std::numeric_limits<ele_idx_t>::max();
 
-std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr> create_2d_matrix(
-		data_frame::const_ptr df, const block_2d_size &block_size, size_t num_rows,
-		size_t num_cols, const fm::scalar_type *entry_type);
-
 std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
-		const block_2d_size &block_size, const fm::scalar_type *entry_type, bool is_sym);
+		const block_2d_size &block_size, const fm::scalar_type *entry_type,
+		bool is_sym, const std::string &name = "");
 
 }
 

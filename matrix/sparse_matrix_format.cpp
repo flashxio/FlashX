@@ -305,6 +305,34 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 	return ptr(new SpM_2d_storage(data, index, mat_file));
 }
 
+SpM_2d_storage::ptr SpM_2d_storage::create(const vector_vector &vv,
+		SpM_2d_index::ptr index)
+{
+	if (!vv.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector of vectors has to be in memory";
+		return SpM_2d_storage::ptr();
+	}
+	vector::ptr vec = vv.cat();
+	if (vec->get_type().get_type() != get_type<char>()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector of vectors contains a wrong type of data";
+		return SpM_2d_storage::ptr();
+	}
+
+	size_t size = vec->get_length();
+	// The sparse matrix multiplication accesses data in pages. We have to
+	// make sure the array that stores the sparse matrix is aligned to
+	// page size.
+	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::create(
+			ROUNDUP(size, PAGE_SIZE), mapper);
+	data->copy_from(
+			dynamic_cast<const detail::mem_vec_store &>(vec->get_data()).get_raw_arr(),
+			vec->get_length(), 0);
+	return ptr(new SpM_2d_storage(data, index, "anonymous"));
+}
+
 SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 		const vector_vector &vv, SpM_2d_index::ptr index)
 {
