@@ -498,6 +498,8 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
 	std::vector<std::string> files(1, file);
 	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers);
+	if (df == NULL)
+		return R_NilValue;
 
 	sparse_matrix::ptr spm = create_2d_matrix(df,
 			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym, mat_name);
