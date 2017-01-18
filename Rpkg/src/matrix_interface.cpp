@@ -494,7 +494,7 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers);
 
 	sparse_matrix::ptr spm = create_2d_matrix(df,
-			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym);
+			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym, mat_name);
 	return create_FMR_matrix(spm, mat_name);
 }
 
