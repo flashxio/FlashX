@@ -150,7 +150,8 @@ int main(int argc, char *argv[])
 		 */
 		printf("start to read and parse edge list\n");
 		gettimeofday(&start, NULL);
-		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim, edge_attr_type);
+		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim,
+				edge_attr_type, directed);
 		assert(df);
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds to parse the edge lists\n",

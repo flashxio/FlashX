@@ -178,56 +178,26 @@ edge_list::ptr edge_list::create(data_frame::ptr df, bool directed)
 	}
 	assert(seq_vec->get_length() == rep_vec->get_length());
 
-	if (directed) {
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
-
-		// I artificially add an invalid in-edge for each vertex.
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(1), seq_vec);
-		new_df->add_vec(df->get_vec_name(0), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
+	// I artificially add an invalid out-edge for each vertex, so it's
+	// guaranteed that each vertex exists in the adjacency lists.
+	data_frame::ptr new_df = data_frame::create();
+	new_df->add_vec(df->get_vec_name(0), seq_vec);
+	new_df->add_vec(df->get_vec_name(1), rep_vec);
+	if (df->get_num_vecs() > 2) {
+		assert(attr_extra);
+		new_df->add_vec(df->get_vec_name(2), attr_extra);
 	}
-	else {
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
+	df->append(new_df);
 
-		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
-		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
-		detail::vec_store::ptr vec2;
-		if (df->get_num_vecs() > 2)
-			vec2 = df->get_vec(2)->deep_copy();
-		vec0->append(df->get_vec_ref(1));
-		vec1->append(df->get_vec_ref(0));
-		if (df->get_num_vecs() > 2)
-			vec2->append(df->get_vec_ref(2));
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), vec0);
-		new_df->add_vec(df->get_vec_name(1), vec1);
-		if (df->get_num_vecs() > 2)
-			new_df->add_vec(df->get_vec_name(2), vec2);
-		df = new_df;
+	// I artificially add an invalid in-edge for each vertex.
+	new_df = data_frame::create();
+	new_df->add_vec(df->get_vec_name(1), seq_vec);
+	new_df->add_vec(df->get_vec_name(0), rep_vec);
+	if (df->get_num_vecs() > 2) {
+		assert(attr_extra);
+		new_df->add_vec(df->get_vec_name(2), attr_extra);
 	}
+	df->append(new_df);
 	return edge_list::ptr(new edge_list(df, directed));
 }
 

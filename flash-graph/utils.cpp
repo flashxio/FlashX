@@ -504,7 +504,8 @@ mem_serial_graph::ptr mem_serial_graph::create(bool directed,
 }
 
 fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
-		bool in_mem, const std::string &delim, const std::string &edge_attr_type)
+		bool in_mem, const std::string &delim, const std::string &edge_attr_type,
+		bool directed)
 {
 	std::vector<fm::ele_parser::const_ptr> ele_parsers(2);
 	ele_parsers[0] = fm::ele_parser::const_ptr(new fm::int_parser<fg::vertex_id_t>());
@@ -521,7 +522,11 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
 		return fm::data_frame::ptr();
 	}
-	return fm::read_data_frame(files, in_mem, delim, ele_parsers);
+
+	fm::dup_policy policy = fm::dup_policy::NONE;
+	if (!directed)
+		policy = fm::dup_policy::REVERSE;
+	return fm::read_data_frame(files, in_mem, delim, ele_parsers, policy);
 }
 
 }
