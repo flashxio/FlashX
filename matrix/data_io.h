@@ -111,12 +111,20 @@ public:
 	}
 };
 
+enum dup_policy
+{
+	NONE,
+	COPY,
+	REVERSE,
+};
+
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
 
 std::shared_ptr<data_frame> read_data_frame(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &parsers);
+		const std::vector<ele_parser::const_ptr> &parsers,
+		dup_policy dup = dup_policy::NONE);
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols = std::numeric_limits<size_t>::max());
