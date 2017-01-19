@@ -141,7 +141,7 @@ bool safs_file::resize(size_t new_size)
 
 	// Save the new file size to the header of the SAFS file.
 	std::string header_file = get_header_file();
-	printf("header file: %s\n", header_file.c_str());
+	BOOST_LOG_TRIVIAL(info) << "header file: " << header_file;
 	if (!file_exist(header_file))
 		return false;
 	FILE *f = fopen(header_file.c_str(), "r+");
