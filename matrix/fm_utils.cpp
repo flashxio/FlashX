@@ -400,6 +400,11 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			if (curr_bid == block_id)
 				neighs.push_back(id);
 			else {
+				if (neighs.size() > block_size.get_num_cols()) {
+					BOOST_LOG_TRIVIAL(error)
+						<< "ERROR! There are more neighbors than the block size";
+					return;
+				}
 				add_nz(blocks[curr_bid], *v, neighs, block_size, attr_size,
 						buf.get());
 				curr_bid = block_id;
@@ -408,6 +413,11 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			}
 		}
 
+		if (neighs.size() > block_size.get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "ERROR! There are more neighbors than the block size";
+			return;
+		}
 		add_nz(blocks[curr_bid], *v, neighs, block_size, attr_size, buf.get());
 	}
 
