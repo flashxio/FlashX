@@ -25,8 +25,9 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.set.conf <- function(conf.file)
 {
-	ret <- .Call("R_FG_set_conf", conf.file, PACKAGE="FlashGraphR")
-	stopifnot(ret);
+	.Call("R_FG_destroy", PACKAGE="FlashGraphR")
+	fm.set.conf(conf.file)
+	ret <- .Call("R_FG_init", conf.file, PACKAGE="FlashGraphR")
 }
 
 fg.set.log.level <- function(level)

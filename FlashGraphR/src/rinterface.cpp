@@ -176,6 +176,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 /**
  * Destroy FlashGraphR
  */
+#if 0
 RcppExport SEXP R_FG_destroy()
 {
 	int num_refs = 0;
@@ -193,15 +194,16 @@ RcppExport SEXP R_FG_destroy()
 	if (num_refs == 0)
 		graphs.clear();
 	graph_engine::destroy_flash_graph();
+	fm::destroy_flash_matrix();
 	safs::destroy_io_system();
 	return R_NilValue;
 }
+#endif
 
-RcppExport SEXP R_FG_set_conf(SEXP pconf)
+RcppExport SEXP R_FG_destroy()
 {
 	graph_engine::destroy_flash_graph();
-	safs::destroy_io_system();
-	return R_FG_init(pconf);
+	return R_NilValue;
 }
 
 /*
