@@ -619,12 +619,9 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 {
 	// We need to discover the number of columns ourselves.
 	if (num_cols == std::numeric_limits<size_t>::max()) {
-		FILE *f = fopen(files.front().c_str(), "r");
-		if (f == NULL) {
-			BOOST_LOG_TRIVIAL(error) << boost::format("cannot open %1%: %2%")
-				% files.front() % strerror(errno);
+		file_io::ptr io = file_io::create(files.front());
+		if (io == NULL)
 			return dense_matrix::ptr();
-		}
 
 		// Read at max 1M
 		safs::native_file in_file(files.front());
@@ -635,14 +632,12 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 			buf_size = in_file.get_size();
 			read_all = true;
 		}
-		std::unique_ptr<char[]> buf(new char[buf_size]);
-		int ret = fread(buf.get(), buf_size, 1, f);
-		if (ret != 1) {
-			BOOST_LOG_TRIVIAL(error) << boost::format("cannot read %1%: %2%")
-				% files.front() % strerror(errno);
-			fclose(f);
+
+		size_t read_bytes = 0;
+		std::unique_ptr<char[]> buf = io->read_lines(buf_size, read_bytes);
+		if (buf == NULL || read_bytes == 0)
 			return dense_matrix::ptr();
-		}
+		buf[read_bytes - 1] = 0;
 
 		// Find the first line.
 		char *res = strchr(buf.get(), '\n');
@@ -650,7 +645,6 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		if (res == NULL && !read_all) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "read 1M data, can't find the end of the line";
-			fclose(f);
 			return dense_matrix::ptr();
 		}
 		*res = 0;
@@ -660,7 +654,6 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		std::vector<std::string> strs;
 		boost::split(strs, line, boost::is_any_of(delim));
 		num_cols = strs.size();
-		fclose(f);
 	}
 
 	std::shared_ptr<line_parser> parser;
