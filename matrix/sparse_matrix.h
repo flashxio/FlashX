@@ -690,6 +690,7 @@ bool spmm_creator<DenseType, SparseType>::set_data(
 
 void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();
+std::string get_supported_features();
 
 }
 
