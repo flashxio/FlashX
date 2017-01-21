@@ -517,11 +517,25 @@ class row_parser: public line_parser
 	const std::string delim;
 	const size_t num_cols;
 	std::vector<ele_parser::const_ptr> parsers;
+	dup_policy dup;
+
+	static std::string interpret_delim(const std::string &delim) {
+		std::string new_delim = delim;
+		if (delim == "\\t")
+			new_delim = "\t";
+		else if (delim == "\\n")
+			new_delim = "\n";
+		else if (delim == "\\r")
+			new_delim = "\r";
+		return new_delim;
+	}
 public:
 	row_parser(const std::string &_delim,
-			const std::vector<ele_parser::const_ptr> &_parsers): delim(
-				_delim), num_cols(_parsers.size()) {
+			const std::vector<ele_parser::const_ptr> &_parsers,
+			dup_policy dup): delim(interpret_delim(_delim)), num_cols(
+				_parsers.size()) {
 		this->parsers = _parsers;
+		this->dup = dup;
 	}
 
 	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
@@ -575,15 +589,27 @@ size_t row_parser::parse(const std::vector<std::string> &lines,
 		cols[j]->resize(num_rows);
 		df.get_vec(j)->append(*cols[j]);
 	}
+	if (dup == dup_policy::COPY) {
+		for (size_t j = 0; j < num_cols; j++) {
+			cols[j]->resize(num_rows);
+			df.get_vec(j)->append(*cols[j]);
+		}
+	}
+	else if (dup == dup_policy::REVERSE) {
+		for (size_t j = 0; j < num_cols; j++) {
+			cols[j]->resize(num_rows);
+			df.get_vec(num_cols - 1 - j)->append(*cols[j]);
+		}
+	}
 	return num_rows;
 }
 
 data_frame::ptr read_data_frame(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &ele_parsers)
+		const std::vector<ele_parser::const_ptr> &ele_parsers, dup_policy dup)
 {
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers));
+			new row_parser(delim, ele_parsers, dup));
 	return read_lines(files, *parser, in_mem);
 }
 
@@ -659,7 +685,8 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
 		return dense_matrix::ptr();
 	}
-	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers));
+	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers,
+				dup_policy::NONE));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }
@@ -698,7 +725,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		}
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers));
+			new row_parser(delim, ele_parsers, dup_policy::NONE));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }

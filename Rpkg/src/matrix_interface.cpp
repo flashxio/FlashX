@@ -479,6 +479,12 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::string mat_name = CHAR(STRING_ELT(pname, 0));
 	const scalar_type *type_p = get_scalar_type(ele_type);
 
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
 	std::vector<ele_parser::const_ptr> parsers;
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
@@ -491,10 +497,15 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	else if (ele_type == "D")
 		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
 	std::vector<std::string> files(1, file);
-	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers);
+	dup_policy policy = dup_policy::NONE;
+	if (is_sym)
+		policy = dup_policy::REVERSE;
+	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers, policy);
+	if (df == NULL)
+		return R_NilValue;
 
 	sparse_matrix::ptr spm = create_2d_matrix(df,
-			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym);
+			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym, mat_name);
 	return create_FMR_matrix(spm, mat_name);
 }
 

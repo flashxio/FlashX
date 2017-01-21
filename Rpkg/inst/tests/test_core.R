@@ -27,6 +27,70 @@ test_that("load a dense matrix from a text file", {
 		  # TODO I also need to test when the input text file has missing values.
 })
 
+test_that("load a sparse matrix from a text file", {
+		  download.file("http://snap.stanford.edu/data/wiki-Vote.txt.gz", "wiki-Vote.txt.gz")
+		  system("gunzip wiki-Vote.txt.gz")
+		  mat <- fm.load.sparse.matrix("wiki-Vote.txt", in.mem=TRUE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 8298)
+		  expect_equal(sum(res), 103689)
+
+		  mat <- fm.load.sparse.matrix("wiki-Vote.txt", in.mem=FALSE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 8298)
+		  expect_equal(sum(res), 103689)
+		  file.remove("wiki-Vote.txt")
+
+		  download.file("http://snap.stanford.edu/data/facebook_combined.txt.gz", "facebook.txt.gz")
+		  system("gunzip facebook.txt.gz")
+		  mat <- fm.load.sparse.matrix("facebook.txt", in.mem=TRUE, is.sym=TRUE, delim=" ")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4039)
+		  expect_equal(sum(res), 176468)
+
+		  mat <- fm.load.sparse.matrix("facebook.txt", in.mem=FALSE, is.sym=TRUE, delim=" ")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4039)
+		  expect_equal(sum(res), 176468)
+		  file.remove("facebook.txt")
+
+		  download.file("http://snap.stanford.edu/data/soc-LiveJournal1.txt.gz",
+						"soc-LiveJournal1.txt.gz")
+		  system("gunzip soc-LiveJournal1.txt.gz")
+		  mat <- fm.load.sparse.matrix("soc-LiveJournal1.txt", in.mem=TRUE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4847571)
+		  expect_equal(sum(res), 68475391)
+
+		  mat <- fm.load.sparse.matrix("soc-LiveJournal1.txt", in.mem=FALSE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4847571)
+		  expect_equal(sum(res), 68475391)
+		  file.remove("soc-LiveJournal1.txt")
+
+		  download.file("http://snap.stanford.edu/data/bigdata/communities/com-lj.ungraph.txt.gz",
+						"com-lj.ungraph.txt.gz")
+		  system("gunzip com-lj.ungraph.txt.gz")
+		  mat <- fm.load.sparse.matrix("com-lj.ungraph.txt", in.mem=TRUE, is.sym=TRUE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(sum(res != 0), 3997962)
+		  expect_equal(sum(res), 34681189 * 2)
+
+		  mat <- fm.load.sparse.matrix("com-lj.ungraph.txt", in.mem=FALSE, is.sym=TRUE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(sum(res != 0), 3997962)
+		  expect_equal(sum(res), 34681189 * 2)
+		  file.remove("facebook.txt")
+})
+
 for (type in type.set) {
 test_that(paste("create a vector/matrix with repeat values of", type), {
 		  if (type == "double") {

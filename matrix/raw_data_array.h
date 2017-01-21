@@ -87,8 +87,10 @@ class local_raw_array: public raw_array
 {
 	// This points to the beginning of the allocated memory.
 	std::shared_ptr<char> data;
+	bool cached;
 public:
 	local_raw_array() {
+		this->cached = false;
 	}
 
 	/*

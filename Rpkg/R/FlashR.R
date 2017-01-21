@@ -2019,7 +2019,7 @@ fm.rbind.list <- function(objs)
 		return(objs[[1]])
 	}
 	for (fm in objs) {
-		if (fm.is.object(fm)) {
+		if (!fm.is.object(fm)) {
 			print("fm.rbind only works on FlashR matrix")
 			return(NULL)
 		}
