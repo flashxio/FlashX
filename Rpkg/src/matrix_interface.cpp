@@ -2826,6 +2826,8 @@ RcppExport SEXP R_FM_rand_sparse_proj(SEXP pnrow, SEXP pncol, SEXP pdensity)
 RcppExport SEXP R_FM_print_features()
 {
 	std::string features = safs::get_supported_features();
-	printf("%s\n", features.c_str());
+	printf("SAFS: %s\n", features.c_str());
+	features = fm::get_supported_features();
+	printf("FM: %s\n", features.c_str());
 	return R_NilValue;
 }
