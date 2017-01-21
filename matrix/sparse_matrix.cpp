@@ -768,4 +768,15 @@ void destroy_flash_matrix()
 	}
 }
 
+std::string get_supported_features()
+{
+	std::string ret;
+#ifdef USE_GZIP
+	ret += "+GZ ";
+#else
+	ret += "-GZ ";
+#endif
+	return ret;
+}
+
 }
