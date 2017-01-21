@@ -468,6 +468,58 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 }
 
+static inline ele_parser::const_ptr get_parser(const std::string ele_type)
+{
+	if (ele_type == "I")
+		return ele_parser::const_ptr(new int_parser<int>());
+	else if (ele_type == "L")
+		return ele_parser::const_ptr(new int_parser<long>());
+	else if (ele_type == "X")
+		return ele_parser::const_ptr(new int_parser<long>(16));
+	else if (ele_type == "F")
+		return ele_parser::const_ptr(new float_parser<float>());
+	else if (ele_type == "D")
+		return ele_parser::const_ptr(new float_parser<double>());
+	else
+		return ele_parser::const_ptr();
+}
+
+RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
+		SEXP pdelim)
+{
+	Rcpp::StringVector rcpp_mats(pname);
+	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
+	bool in_mem = LOGICAL(pin_mem)[0];
+	Rcpp::List ele_types(pele_types);
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
+	std::vector<ele_parser::const_ptr> parsers;
+	for (int i = 0; i < ele_types.size(); i++) {
+		ele_parser::const_ptr parser = get_parser(ele_types[i]);
+		if (parser == NULL) {
+			fprintf(stderr, "cannot get a right parser\n");
+			return R_NilValue;
+		}
+		parsers.push_back(parser);
+	}
+	data_frame::ptr df = read_data_frame(mat_files, in_mem, delim, parsers);
+	if (df == NULL)
+		return R_NilValue;
+
+	Rcpp::List ret;
+	for (size_t i = 0; i < df->get_num_vecs(); i++) {
+		std::string i_str = itoa(i);
+		ret[i_str] = create_FMR_vector(df->get_vec(i), "");
+	}
+	return ret;
+}
+
 RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 		SEXP pele_type, SEXP pdelim, SEXP pname)
 {
@@ -488,14 +540,9 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::vector<ele_parser::const_ptr> parsers;
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
-	if (ele_type == "I")
-		parsers.push_back(ele_parser::const_ptr(new int_parser<int>()));
-	else if (ele_type == "L")
-		parsers.push_back(ele_parser::const_ptr(new int_parser<long>()));
-	else if (ele_type == "F")
-		parsers.push_back(ele_parser::const_ptr(new int_parser<float>()));
-	else if (ele_type == "D")
-		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
+	ele_parser::const_ptr attr_parser = get_parser(ele_type);
+	if (attr_parser != NULL)
+		parsers.push_back(attr_parser);
 	std::vector<std::string> files(1, file);
 	dup_policy policy = dup_policy::NONE;
 	if (is_sym)

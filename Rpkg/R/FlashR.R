@@ -158,6 +158,8 @@ fm.print.features <- function()
 #' The matrix in the file is in the FlashR format.
 #' \code{fm.get.dense.matrix} returns a named dense matrix that has already
 #' been loaded to FlashR.
+#' \code{fm.load.list.vecs} reads a list of vectors from a text file. In this
+#' function, users can specify the element type for each vector.
 #'
 #' If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
 #' vector/matrix will be kept on disks persistently. That is, even if a user
@@ -175,6 +177,7 @@ fm.print.features <- function()
 #' @param ele.type A string that represents the element type in a matrix.
 #'        "B" means binary, "I" means integer, "L" means long integer,
 #'        "F" means single-precision floating point, "D" means double-precision floating point.
+#' @param ele.types A list of strings to indicate the element type of each vectors.
 #' @param delim The delimiter of separating elements in the text format.
 #' @param nrow the number of rows in the binary dense matrix.
 #' @param ncol the number of columns in the binary dense matrix.
@@ -226,6 +229,20 @@ fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.ty
 			   as.logical(byrow), as.character(ele.type), as.character(name),
 			   PACKAGE="FlashR")
 	.new.fm(m)
+}
+
+#' @rdname fm.get.matrix
+fm.load.list.vecs <- function(src.file, in.mem, ele.types=list("D"), delim=",")
+{
+	stopifnot(!is.null(src.file))
+	if (is.character(src.file))
+		src.file <- c(src.file)
+	ret <- .Call("R_FM_load_list_vecs", as.character(src.file), as.logical(in.mem),
+			   as.list(ele.types), as.character(delim), PACKAGE="FlashR")
+	if (is.null(ret))
+		NULL
+	else
+		lapply(ret, .new.fmV)
 }
 
 #' @rdname fm.get.matrix
