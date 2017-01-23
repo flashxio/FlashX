@@ -579,8 +579,9 @@ async_cres_t groupby_compute_store::get_portion_async(
 			num_rows, num_cols, compute);
 	local_matrix_store::const_ptr label_part;
 	assert(label_store->get_num_cols() == 1);
-	assert(label_store->is_in_mem());
 	// `label_store' is a col_vec.
+	// TODO I need to be careful. The label vector can be stored on disks.
+	// I'm accessing them synchronously.
 	if (margin == matrix_margin::MAR_ROW)
 		label_part = label_store->get_portion(start_row, 0, num_rows, 1);
 	else
