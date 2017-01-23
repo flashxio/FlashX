@@ -34,7 +34,7 @@ gmm.covs <- function (x, wts)
 		wx <- wts[,i] * x / s[i]
 		# fm.colSums(wt * x, TRUE)
 		centers[[i]] <- fm.rowSums(t(wx), TRUE)
-		xs.cp[[i]] <- fm.crossprod(wx, x, lazy=TRUE)
+		xs.cp[[i]] <- crossprod(wx, x)
 	}
 	centers <- fm.materialize.list(centers)
 	xs.cp <- fm.materialize.list(xs.cp)

@@ -44,12 +44,12 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 		mean.mat <- fm.cbind.list(mean.list)
 
 		svd <- fm.svd(m - mean.mat, nv=nv, nu=nv)
-		fm.cbind(diff, svd$u)
+		cbind(diff, svd$u)
 	}
 	else if (type == "rand_dense")
-		fm.cbind(diff, fm.rnorm.matrix(length(diff), nv))
+		cbind(diff, fm.rnorm.matrix(length(diff), nv))
 	else if (type == "rand_sparse")
-		fm.cbind(diff, fm.rsparse.proj(length(diff), nv, 1/sqrt(length(diff))))
+		cbind(diff, fm.rsparse.proj(length(diff), nv, 1/sqrt(length(diff))))
 	else {
 		print("wrong type")
 		NULL
@@ -87,7 +87,7 @@ QOQ <- function(m, labels, k)
 	svd0 <- fm.svd(m0, nv=nv0, nu=nv0)
 	svd1 <- fm.svd(m1, nv=nv1, nu=nv1)
 	vals <- c(svd0$d, svd1$d)
-	vecs <- fm.cbind(diff, svd0$u, svd1$u)
+	vecs <- cbind(diff, svd0$u, svd1$u)
 	sort.res <- sort(vals, decreasing=TRUE, index.return=TRUE)
 	print(sort.res$x)
 	print(sort.res$ix)
