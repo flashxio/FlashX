@@ -177,7 +177,8 @@ fm.print.features <- function()
 #' @param ele.type A string that represents the element type in a matrix.
 #'        "B" means binary, "I" means integer, "L" means long integer,
 #'        "F" means single-precision floating point, "D" means double-precision floating point.
-#' @param ele.types A list of strings to indicate the element type of each vectors.
+#' @param ele.types A vector of strings to indicate the element type of each vectors.
+#'        The length of the vector determines the number of columns.
 #' @param delim The delimiter of separating elements in the text format.
 #' @param nrow the number of rows in the binary dense matrix.
 #' @param ncol the number of columns in the binary dense matrix.
@@ -232,13 +233,13 @@ fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.ty
 }
 
 #' @rdname fm.get.matrix
-fm.load.list.vecs <- function(src.file, in.mem, ele.types=list("D"), delim=",")
+fm.load.list.vecs <- function(src.file, in.mem, ele.types=c("D"), delim=",")
 {
 	stopifnot(!is.null(src.file))
 	if (is.character(src.file))
 		src.file <- c(src.file)
 	ret <- .Call("R_FM_load_list_vecs", as.character(src.file), as.logical(in.mem),
-			   as.list(ele.types), as.character(delim), PACKAGE="FlashR")
+			   as.character(ele.types), as.character(delim), PACKAGE="FlashR")
 	if (is.null(ret))
 		NULL
 	else

@@ -490,7 +490,8 @@ RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
 	Rcpp::StringVector rcpp_mats(pname);
 	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
 	bool in_mem = LOGICAL(pin_mem)[0];
-	Rcpp::List ele_types(pele_types);
+	Rcpp::StringVector rcpp_types(pele_types);
+	std::vector<std::string> ele_types(rcpp_types.begin(), rcpp_types.end());
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
 
 	if (!in_mem && !safs::is_safs_init()) {
@@ -500,7 +501,7 @@ RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
 	}
 
 	std::vector<ele_parser::const_ptr> parsers;
-	for (int i = 0; i < ele_types.size(); i++) {
+	for (size_t i = 0; i < ele_types.size(); i++) {
 		ele_parser::const_ptr parser = get_parser(ele_types[i]);
 		if (parser == NULL) {
 			fprintf(stderr, "cannot get a right parser\n");
