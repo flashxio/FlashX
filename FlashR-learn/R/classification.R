@@ -45,3 +45,33 @@ logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uni
 				   num.iters=500, out.path=FALSE, method=method, hessian_size=hessian_size)
 	gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
 }
+
+hinge.grad <- function(X, y, w)
+{
+	# y is {0, 1}. But y in the hinge loss requires y to be {-1, 1}.
+	y <- 2 * y - 1
+
+	xw <- X %*% t(w)
+	zero <- fm.matrix(0, nrow(X), ncol(X))
+	test <- fm.matrix(y * xw < 1.0, nrow(X), ncol(X))
+	print(dim(test))
+	print(dim(-y * X))
+	print(dim(zero))
+	fm.conv.FM2R(colSums(ifelse(test, -y * X, zero)) / length(y))
+}
+
+hinge.loss <- function(X, y, w)
+{
+	# y is {0, 1}. But y in the hinge loss requires y to be {-1, 1}.
+	y <- 2 * y - 1
+
+	xw <- X %*% t(w)
+	sum(ifelse(y * xw < 1.0, 1 - y * xw, 0)) / length(y)
+}
+
+SVM <- function(X, y)
+{
+	params <- list(c=0.5, ro=0.2, linesearch=FALSE,
+				   num.iters=500, out.path=FALSE, method="GD")
+	gradient.descent(X, y, hinge.grad, NULL, cost=hinge.loss, params)
+}
