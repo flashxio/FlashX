@@ -129,8 +129,9 @@ SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name
 {
 	detail::matrix_store::const_ptr mat = vec->conv2mat(vec->get_length(),
 			1, false);
-	return create_FMR_vector(dense_matrix::create(
-				detail::mem_matrix_store::cast(mat)), name);
+	if (mat == NULL)
+		return R_NilValue;
+	return create_FMR_vector(dense_matrix::create(mat), name);
 }
 
 SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
