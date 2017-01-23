@@ -3122,4 +3122,12 @@ dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
 	return tmp->transpose();
 }
 
+dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
+		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access)
+{
+	// TODO I need to optimize this for block matrices.
+	return detail::mapply_portion(mats, op, out_layout, par_access);
+}
+
 }

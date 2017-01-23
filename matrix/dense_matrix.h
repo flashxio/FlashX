@@ -481,6 +481,10 @@ inline dense_matrix t(const dense_matrix &m)
 	return *ret;
 }
 
+dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
+		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
+
 }
 
 #endif
