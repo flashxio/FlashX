@@ -184,7 +184,7 @@ setMethod("sd", "fmV", .sd.int)
 	wx <- wt * x
 #	wx.cs <- fm.colSums(wx, TRUE)
 	wx.cs <- fm.rowSums(t(wx), TRUE)
-	x.cp <- fm.crossprod(wx, x, lazy=TRUE)
+	x.cp <- crossprod(wx, x)
 	if (fm.is.sink(center)) {
 		ret <- fm.materialize(center, all.finite, wx.cs, x.cp)
 		center <- fm.conv.FM2R(ret[[1]])
