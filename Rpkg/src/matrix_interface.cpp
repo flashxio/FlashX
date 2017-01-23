@@ -2432,17 +2432,13 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 	dense_matrix::ptr yes = get_matrix<dense_matrix>(pyes);
 	if (test->get_num_rows() != yes->get_num_rows()
 			|| test->get_num_cols() != yes->get_num_cols()) {
-		fprintf(stderr, "the size of test and yes has to be the same\n");
+		fprintf(stderr, "test, yes and no don't have the same size\n");
 		return R_NilValue;
 	}
 
 	scalar_variable::ptr no = conv_R2scalar(pno);
 	if (no == NULL)
 		return R_NilValue;
-
-	bool is_bool = false;
-	if (R_is_logical(pno))
-		is_bool = true;
 
 	if (test->get_type() != get_scalar_type<int>()) {
 		fprintf(stderr, "test must be boolean\n");
@@ -2458,25 +2454,14 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 
 	// We need to cast type so that the type of yes and no matches.
 	bulk_operate::const_ptr op;
-	if (test->get_type() == get_scalar_type<bool>()) {
-		if (yes->get_type() == get_scalar_type<int>())
-			op = ifelse_no_op<bool, int>::create(no);
-		else if (yes->get_type() == get_scalar_type<double>())
-			op = ifelse_no_op<bool, double>::create(no);
-		else {
-			fprintf(stderr, "unsupported type in ifelse2\n");
-			return R_NilValue;
-		}
-	}
+	test = test->cast_ele_type(get_scalar_type<int>());
+	if (yes->get_type() == get_scalar_type<int>())
+		op = ifelse_no_op<int, int>::create(no);
+	else if (yes->get_type() == get_scalar_type<double>())
+		op = ifelse_no_op<int, double>::create(no);
 	else {
-		if (yes->get_type() == get_scalar_type<int>())
-			op = ifelse_no_op<int, int>::create(no);
-		else if (yes->get_type() == get_scalar_type<double>())
-			op = ifelse_no_op<int, double>::create(no);
-		else {
-			fprintf(stderr, "unsupported type in ifelse2\n");
-			return R_NilValue;
-		}
+		fprintf(stderr, "unsupported type in ifelse2\n");
+		return R_NilValue;
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*yes, op);
@@ -2488,7 +2473,11 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 	else
 		ret_obj = create_FMR_matrix(ret, "");
 
-	if (is_bool)
+	Rcpp::S4 yes_obj(pyes);
+	// If both inputs are boolean, we should assign the same type
+	// the output matrix.
+	if (R_is_logical(pno)
+			&& yes_obj.slot("ele_type") == "logical")
 		ret_obj["ele_type"] = Rcpp::String("logical");
 	return ret_obj;
 }
@@ -2514,10 +2503,6 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 	if (yes == NULL)
 		return R_NilValue;
 
-	bool is_bool = false;
-	if (R_is_logical(pyes))
-		is_bool = true;
-
 	if (test->get_type() != get_scalar_type<int>()) {
 		fprintf(stderr, "test must be boolean\n");
 		return R_NilValue;
@@ -2532,25 +2517,14 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 
 	// We need to cast type so that the type of yes and no matches.
 	bulk_operate::const_ptr op;
-	if (test->get_type() == get_scalar_type<bool>()) {
-		if (no->get_type() == get_scalar_type<int>())
-			op = ifelse_yes_op<bool, int>::create(yes);
-		else if (no->get_type() == get_scalar_type<double>())
-			op = ifelse_yes_op<bool, double>::create(yes);
-		else {
-			fprintf(stderr, "unsupported type in ifelse2\n");
-			return R_NilValue;
-		}
-	}
+	test = test->cast_ele_type(get_scalar_type<int>());
+	if (no->get_type() == get_scalar_type<int>())
+		op = ifelse_yes_op<int, int>::create(yes);
+	else if (no->get_type() == get_scalar_type<double>())
+		op = ifelse_yes_op<int, double>::create(yes);
 	else {
-		if (no->get_type() == get_scalar_type<int>())
-			op = ifelse_yes_op<int, int>::create(yes);
-		else if (no->get_type() == get_scalar_type<double>())
-			op = ifelse_yes_op<int, double>::create(yes);
-		else {
-			fprintf(stderr, "unsupported type in ifelse2\n");
-			return R_NilValue;
-		}
+		fprintf(stderr, "unsupported type in ifelse2\n");
+		return R_NilValue;
 	}
 
 	dense_matrix::ptr ret = test->mapply2(*no, op);
@@ -2562,10 +2536,188 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 	else
 		ret_obj = create_FMR_matrix(ret, "");
 
-	if (is_bool)
+	Rcpp::S4 no_obj(pno);
+	// If both inputs are boolean, we should assign the same type
+	// the output matrix.
+	if (R_is_logical(pyes)
+			&& no_obj.slot("ele_type") == "logical")
 		ret_obj["ele_type"] = Rcpp::String("logical");
 	return ret_obj;
 }
+
+template<class BoolType, class T>
+class ifelse_portion_op: public detail::portion_mapply_op
+{
+public:
+	ifelse_portion_op(size_t out_num_rows, size_t out_num_cols,
+			const scalar_type &_type): detail::portion_mapply_op(out_num_rows,
+				out_num_cols, _type) {
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr(new ifelse_portion_op(
+					get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 3);
+		return std::string("ifelse(") + mats[0]->get_name() + ","
+			+ mats[1]->get_name() + "," + mats[2]->get_name() + ")";
+	}
+};
+
+template<class BoolType, class T>
+void ifelse_portion_op<BoolType, T>::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 3);
+	assert(ins[0]->get_type() == get_scalar_type<BoolType>());
+	assert(ins[1]->get_type() == get_scalar_type<T>());
+	assert(ins[2]->get_type() == get_scalar_type<T>());
+	assert(out.get_type() == get_scalar_type<T>());
+	assert(ins[0]->store_layout() == ins[1]->store_layout());
+	assert(ins[0]->store_layout() == ins[2]->store_layout());
+	assert(ins[0]->store_layout() == out.store_layout());
+
+	if (ins[0]->get_raw_arr() && ins[1]->get_raw_arr()
+			&& ins[2]->get_raw_arr() && out.get_raw_arr()) {
+		const BoolType *test = reinterpret_cast<const BoolType *>(
+				ins[0]->get_raw_arr());
+		const T *yes = reinterpret_cast<const T *>(ins[1]->get_raw_arr());
+		const T *no = reinterpret_cast<const T *>(ins[2]->get_raw_arr());
+		T *res = reinterpret_cast<T *>(out.get_raw_arr());
+		size_t len = out.get_num_rows() * out.get_num_cols();
+		for (size_t i = 0; i < len; i++) {
+			if (test[i])
+				res[i] = yes[i];
+			else
+				res[i] = no[i];
+		}
+	}
+	else if (ins[0]->store_layout() == matrix_layout_t::L_ROW) {
+		detail::local_row_matrix_store::const_ptr row_in0
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[0]);
+		detail::local_row_matrix_store::const_ptr row_in1
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[1]);
+		detail::local_row_matrix_store::const_ptr row_in2
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[2]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		for (size_t i = 0; i < ins[0]->get_num_rows(); i++) {
+			const BoolType *test = reinterpret_cast<const BoolType *>(
+					row_in0->get_row(i));
+			const T *yes = reinterpret_cast<const T *>(row_in1->get_row(i));
+			const T *no = reinterpret_cast<const T *>(row_in2->get_row(i));
+			T *res = reinterpret_cast<T *>(row_out.get_row(i));
+			assert(test && yes && no && res);
+			for (size_t j = 0; j < row_in0->get_num_cols(); j++) {
+				if (test[j])
+					res[j] = yes[j];
+				else
+					res[j] = no[j];
+			}
+		}
+	}
+	else {
+		detail::local_col_matrix_store::const_ptr col_in0
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[0]);
+		detail::local_col_matrix_store::const_ptr col_in1
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[1]);
+		detail::local_col_matrix_store::const_ptr col_in2
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[2]);
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		for (size_t i = 0; i < ins[0]->get_num_cols(); i++) {
+			const BoolType *test = reinterpret_cast<const BoolType *>(
+					col_in0->get_col(i));
+			const T *yes = reinterpret_cast<const T *>(col_in1->get_col(i));
+			const T *no = reinterpret_cast<const T *>(col_in2->get_col(i));
+			T *res = reinterpret_cast<T *>(col_out.get_col(i));
+			assert(test && yes && no && res);
+			for (size_t j = 0; j < col_in0->get_num_rows(); j++) {
+				if (test[j])
+					res[j] = yes[j];
+				else
+					res[j] = no[j];
+			}
+		}
+	}
+}
+
+RcppExport SEXP R_FM_ifelse(SEXP ptest, SEXP pyes, SEXP pno)
+{
+	if (is_sparse(ptest) || is_sparse(pno) || is_sparse(pyes)) {
+		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr test = get_matrix<dense_matrix>(ptest);
+	dense_matrix::ptr yes = get_matrix<dense_matrix>(pyes);
+	dense_matrix::ptr no = get_matrix<dense_matrix>(pno);
+	if (test->get_num_rows() != no->get_num_rows()
+			|| test->get_num_cols() != no->get_num_cols()
+			|| test->get_num_rows() != yes->get_num_rows()
+			|| test->get_num_cols() != yes->get_num_cols()) {
+		fprintf(stderr, "the size of test, yes and no has to be the same\n");
+		return R_NilValue;
+	}
+
+	// TODO we should cast type if they are different.
+	if (yes->get_type() != no->get_type()) {
+		fprintf(stderr,
+				"ifelse2 doesn't support yes and no of different types\n");
+		return R_NilValue;
+	}
+
+	test = test->cast_ele_type(get_scalar_type<int>());
+	detail::portion_mapply_op::const_ptr op;
+	if (no->get_type() == get_scalar_type<int>())
+		op = detail::portion_mapply_op::const_ptr(new ifelse_portion_op<int, int>(
+					test->get_num_rows(), test->get_num_cols(), yes->get_type()));
+	else if (no->get_type() == get_scalar_type<double>())
+		op = detail::portion_mapply_op::const_ptr(new ifelse_portion_op<int, double>(
+					test->get_num_rows(), test->get_num_cols(), yes->get_type()));
+	else {
+		fprintf(stderr, "unsupported type in ifelse2\n");
+		return R_NilValue;
+	}
+
+	std::vector<dense_matrix::const_ptr> mats(3);
+	mats[0] = test;
+	mats[1] = yes;
+	mats[2] = no;
+	dense_matrix::ptr ret = mapply_ele(mats, op, test->store_layout());
+
+	Rcpp::List ret_obj;
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(ptest))
+		ret_obj = create_FMR_vector(ret, "");
+	else
+		ret_obj = create_FMR_matrix(ret, "");
+
+
+	Rcpp::S4 yes_obj(pyes);
+	Rcpp::S4 no_obj(pno);
+	// If both input matrices are boolean, we should assign the same type
+	// the output matrix.
+	if (yes_obj.slot("ele_type") == "logical"
+			&& no_obj.slot("ele_type") == "logical")
+		ret_obj["ele_type"] = Rcpp::String("logical");
+	return ret_obj;
+}
+
 
 class double_isna_op: public bulk_uoperate
 {

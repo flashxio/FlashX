@@ -2153,6 +2153,18 @@ setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
 			  .new.fmV(ret)
 		  })
+#' @rdname ifelse
+setMethod("ifelse", signature(test = "fm", yes = "fm", no = "fm"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse", test, yes, no, PACKAGE="FlashR")
+			  .new.fm(ret)
+		  })
+#' @rdname ifelse
+setMethod("ifelse", signature(test = "fmV", yes = "fmV", no = "fmV"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse", test, yes, no, PACKAGE="FlashR")
+			  .new.fmV(ret)
+		  })
 
 # This returns NA of the right type.
 .get.na <- function(type) {
