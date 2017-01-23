@@ -571,24 +571,65 @@ local_matrix_store::const_ptr groupby_compute_store::get_portion(size_t id) cons
 			portion_op);
 }
 
+namespace
+{
+
+class collect_portion_compute: public portion_compute
+{
+	size_t num_EM_parts;
+	size_t num_reads;
+	portion_compute::ptr orig_compute;
+public:
+	typedef std::shared_ptr<collect_portion_compute> ptr;
+
+	collect_portion_compute(portion_compute::ptr orig_compute) {
+		this->num_EM_parts = 0;
+		this->num_reads = 0;
+		this->orig_compute = orig_compute;
+	}
+
+	void set_EM_count(size_t num_EM_parts) {
+		this->num_EM_parts = num_EM_parts;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		num_reads++;
+		if (num_reads == num_EM_parts) {
+			orig_compute->run(NULL, 0);
+			// This only runs once.
+			// Let's remove all user's portion compute to indicate that it has
+			// been invoked.
+			orig_compute = NULL;
+		}
+	}
+};
+
+}
+
 async_cres_t groupby_compute_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, std::shared_ptr<portion_compute> compute) const
 {
+	collect_portion_compute *_compute = new collect_portion_compute(compute);
+	portion_compute::ptr collect_compute(_compute);
+
 	async_cres_t ret = data->get_portion_async(start_row, start_col,
-			num_rows, num_cols, compute);
+			num_rows, num_cols, collect_compute);
 	local_matrix_store::const_ptr label_part;
 	assert(label_store->get_num_cols() == 1);
+	async_cres_t label_ret;
 	// `label_store' is a col_vec.
-	// TODO I need to be careful. The label vector can be stored on disks.
-	// I'm accessing them synchronously.
 	if (margin == matrix_margin::MAR_ROW)
-		label_part = label_store->get_portion(start_row, 0, num_rows, 1);
+		label_ret = label_store->get_portion_async(start_row, 0, num_rows, 1,
+				collect_compute);
 	else
-		label_part = label_store->get_portion(start_col, 0, num_cols, 1);
-	ret.second = create_lmaterialize_matrix(ret.second, label_part,
-			get_type(), portion_op);
-	return ret;
+		label_ret = label_store->get_portion_async(start_col, 0, num_cols, 1,
+				collect_compute);
+	// It's two if both are unavailable.
+	_compute->set_EM_count(!ret.first + !label_ret.first);
+	return async_cres_t(ret.first && label_ret.first,
+			create_lmaterialize_matrix(ret.second, label_ret.second,
+			get_type(), portion_op));
 }
 
 std::vector<safs::io_interface::ptr> groupby_compute_store::create_ios() const
