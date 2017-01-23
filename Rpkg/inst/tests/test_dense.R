@@ -1045,6 +1045,8 @@ test_that("test ifelse", {
 		  res <- ifelse(test, 0, v1)
 		  rres <- ifelse(fm.conv.FM2R(test), 0, fm.conv.FM2R(v1))
 		  expect_equal(rres, fm.conv.FM2R(res))
+		  res <- ifelse(test, fm.rep.int(0, length(v1)), v1)
+		  expect_equal(rres, fm.conv.FM2R(res))
 
 		  res <- ifelse(test, v1, 0)
 		  rres <- ifelse(fm.conv.FM2R(test), fm.conv.FM2R(v1), 0)
@@ -1054,6 +1056,8 @@ test_that("test ifelse", {
 		  test <- m1 > 0.5
 		  res <- ifelse(test, 0, m1)
 		  rres <- ifelse(fm.conv.FM2R(test), 0, fm.conv.FM2R(m1))
+		  expect_equal(rres, fm.conv.FM2R(res))
+		  res <- ifelse(test, fm.matrix(0, nrow(m1), ncol(m1)), m1)
 		  expect_equal(rres, fm.conv.FM2R(res))
 
 		  res <- ifelse(test, m1, 0)
