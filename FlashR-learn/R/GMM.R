@@ -109,7 +109,7 @@ fm.GMM <- function(X, k, maxiters, verbose=FALSE)
 
 	# Random init
 	# TODO alternatively, we can use KMeans to initialize it.
-	rand.k <- as.integer(runif(k, 1, m))
+	rand.k <- floor(runif(k, 1, m))
 	mus <- fm.conv.FM2R(t(X[rand.k,]))
 	init.covar <- cov(X)
 	covars <- list()
