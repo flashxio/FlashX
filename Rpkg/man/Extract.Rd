@@ -7,6 +7,8 @@
 \alias{[,fm,ANY,missing,ANY-method}
 \alias{[,fm,missing,ANY,ANY-method}
 \alias{[,fmV,ANY,ANY,ANY-method}
+\alias{[<-,fm,ANY,missing,ANY-method}
+\alias{[<-,fm,missing,ANY,ANY-method}
 \title{Extract Parts of an object}
 \usage{
 \S4method{[}{fm,ANY,missing,ANY}(x, i, j, drop = TRUE)
@@ -16,6 +18,10 @@
 \S4method{[}{fm,ANY,ANY,ANY}(x, i, j, drop = TRUE)
 
 \S4method{[}{fmV,ANY,ANY,ANY}(x, i)
+
+\S4method{[}{fm,ANY,missing,ANY}(x, i, j) <- value
+
+\S4method{[}{fm,missing,ANY,ANY}(x, i, j) <- value
 }
 \arguments{
 \item{x}{object from which to extract elements.}
@@ -24,14 +30,17 @@
 or numeric vectors.}
 
 \item{drop}{for matrices. If \code{TRUE}, the result is coerced to a vector.}
+
+\item{value}{a FlashR vector or matrix that contains new data for the rows}
 }
 \description{
 Operators acting on FlashR vectors and matrices to extract parts of
 the objects.
 }
 \details{
-FlashR only supports extracting data from an object. It doesn't support
-replace data in an object.
+FlashR supports extracting data from an object as well as replacing data
+of a matrix. To assign data in a matrix, it only supports setting
+the entire rows or columns.
 }
 \examples{
 mat <- fm.runif.matrix(100, 10)
