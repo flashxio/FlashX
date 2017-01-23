@@ -1856,6 +1856,35 @@ void test_setdata(int num_nodes)
 	}
 }
 
+void _test_vec_groupby();
+void _test_groupby(dense_matrix::ptr mat);
+
+void test_groupby()
+{
+	dense_matrix::ptr mat;
+	_test_vec_groupby();
+
+	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW,
+			-1, get_scalar_type<int>());
+	mat->materialize_self();
+	assert(!mat->is_virtual());
+	_test_groupby(mat);
+
+	mat = mat->abs();
+	assert(mat->is_virtual());
+	_test_groupby(mat);
+
+	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
+			-1, get_scalar_type<int>());
+	mat->materialize_self();
+	assert(!mat->is_virtual());
+	_test_groupby(mat);
+
+	mat = mat->abs();
+	assert(mat->is_virtual());
+	_test_groupby(mat);
+}
+
 void _test_EM_matrix()
 {
 	if (!safs::is_safs_init())
@@ -1864,6 +1893,7 @@ void _test_EM_matrix()
 	printf("test EM matrix\n");
 	in_mem = false;
 
+	test_groupby();
 	test_agg(-1, matrix_layout_t::L_ROW);
 	test_agg(-1, matrix_layout_t::L_COL);
 	test_setdata(-1);
@@ -1909,6 +1939,7 @@ void _test_mem_matrix(int num_nodes)
 	printf("test mem matrix\n");
 	in_mem = true;
 
+	test_groupby();
 	test_agg(-1, matrix_layout_t::L_COL);
 	test_agg(num_nodes, matrix_layout_t::L_COL);
 	test_agg(-1, matrix_layout_t::L_ROW);
@@ -2069,18 +2100,19 @@ void _test_groupby(dense_matrix::ptr mat)
 			mat->get_num_cols());
 	factor f(10);
 	factor_col_vector::ptr rand_factors = factor_col_vector::create(f,
-			mat->get_num_rows(), -1, true, rand_set(f));
+			mat->get_num_rows(), -1, mat->is_in_mem(), rand_set(f));
 	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
 			mat->get_type().get_basic_ops().get_add());
 	dense_matrix::ptr group_sum = mat->groupby_row(rand_factors, add);
 	group_sum->materialize_self();
 
 	dense_matrix::ptr tmp = dense_matrix::create(mat->get_raw_store());
-	tmp->materialize_self();
+	tmp = tmp->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr mem_mat
 		= detail::mem_matrix_store::cast(tmp->get_raw_store());
+	dense_matrix::ptr tmp_factors = rand_factors->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr mem_factors
-		= detail::mem_matrix_store::cast(rand_factors->get_raw_store());
+		= detail::mem_matrix_store::cast(tmp_factors->get_raw_store());
 	std::vector<std::vector<int> > agg_res(f.get_num_levels());
 	for (size_t i = 0; i < f.get_num_levels(); i++)
 		agg_res[i].resize(mat->get_num_cols());
@@ -2094,6 +2126,7 @@ void _test_groupby(dense_matrix::ptr mat)
 	}
 
 	printf("check groupby\n");
+	group_sum = group_sum->conv_store(true, -1);
 	detail::mem_matrix_store::const_ptr mem_res
 		= detail::mem_matrix_store::cast(group_sum->get_raw_store());
 	assert(group_sum->get_num_rows() == agg_res.size());
@@ -2112,32 +2145,6 @@ void _test_groupby(dense_matrix::ptr mat)
 	dense_matrix::ptr diff = group_sum_t->minus(*group_sum1);
 	scalar_variable::ptr sum = diff->sum();
 	assert(scalar_variable::get_val<int>(*sum) == 0);
-}
-
-void test_groupby()
-{
-	dense_matrix::ptr mat;
-	_test_vec_groupby();
-
-	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW,
-			-1, get_scalar_type<int>());
-	mat->materialize_self();
-	assert(!mat->is_virtual());
-	_test_groupby(mat);
-
-	mat = mat->abs();
-	assert(mat->is_virtual());
-	_test_groupby(mat);
-
-	mat = create_matrix(long_dim, 10, matrix_layout_t::L_ROW,
-			-1, get_scalar_type<int>());
-	mat->materialize_self();
-	assert(!mat->is_virtual());
-	_test_groupby(mat);
-
-	mat = mat->abs();
-	assert(mat->is_virtual());
-	_test_groupby(mat);
 }
 
 dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
@@ -3122,7 +3129,6 @@ int main(int argc, char *argv[])
 	test_materialize_all(num_nodes);
 	test_materialize(num_nodes);
 	test_get_rowcols(num_nodes);
-	test_groupby();
 	test_block_mv();
 	test_conv_store();
 	test_mapply_mixed(num_nodes);
