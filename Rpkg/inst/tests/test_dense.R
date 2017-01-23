@@ -1258,3 +1258,21 @@ test_that("test crossprod", {
 		  expect_equal(typeof(fm.res), typeof(res))
 		  expect_equal(fm.conv.FM2R(fm.res), res)
 })
+
+for (type in type.set) {
+test_that("which.max", {
+		  fm.mat <- get.mat(type, nrow=100, ncol=10)
+		  agg.which.max <- fm.create.agg.op(fm.bo.which.max, NULL, "which.max")
+		  res1 <- fm.conv.FM2R(fm.agg.mat(fm.mat, 1, agg.which.max))
+		  res2 <- apply(fm.conv.FM2R(fm.mat), 1, function(x) which.max(x))
+		  expect_equal(res1, res2)
+})
+
+test_that("which.min", {
+		  fm.mat <- get.mat(type, nrow=100, ncol=10)
+		  agg.which.min <- fm.create.agg.op(fm.bo.which.min, NULL, "which.min")
+		  res1 <- fm.conv.FM2R(fm.agg.mat(fm.mat, 1, agg.which.min))
+		  res2 <- apply(fm.conv.FM2R(fm.mat), 1, function(x) which.min(x))
+		  expect_equal(res1, res2)
+})
+}
