@@ -13,10 +13,9 @@ endif
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/matrix -lFMatrix
-PKG_LIBS += -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs
-PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lz -lhwloc
-PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
+# TODO how do we make aio and numa optional?
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -lhwloc -laio -lnuma
 ifdef ENABLE_TRILINOS
 	PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
 	PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
@@ -32,5 +31,9 @@ ifdef ENABLE_TRILINOS
 endif
 ifdef FG_EIGEN
 PKG_CXXFLAGS += -DUSE_EIGEN
+endif
+ifdef ENABLE_PROFILER
+PKG_LIBS += -lprofiler
+PKG_CXXFLAGS += -DUSE_PROFILER
 endif
 PKG_CPPFLAGS = $(CXXFLAGS)

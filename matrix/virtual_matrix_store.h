@@ -70,7 +70,8 @@ public:
 		this->mater_level = materialize_level::MATER_CPU;
 	}
 
-	void set_materialize_level(materialize_level level) {
+	virtual void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf) {
 		this->mater_level = level;
 	}
 
@@ -84,7 +85,10 @@ public:
 
 	/*
 	 * When we materialize the matrix, we can specify where the materialized
-	 * matrix is stored.
+	 * matrix is stored. However, the input arguments only provide guidance
+	 * for the place where the materialized data should be stored. If
+	 * the data of the matrix has been materialized, we don't need to move
+	 * the data to the specified store.
 	 */
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 			int num_nodes) const = 0;
@@ -106,12 +110,6 @@ public:
 			size_t num_cols) {
 		assert(0);
 		return std::shared_ptr<local_matrix_store>();
-	}
-	virtual async_res_t get_portion_async(
-			size_t start_row, size_t start_col, size_t num_rows,
-			size_t num_cols, std::shared_ptr<portion_compute> compute) {
-		assert(0);
-		return async_res_t();
 	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,

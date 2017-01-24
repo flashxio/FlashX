@@ -22,6 +22,7 @@
 #include "data_frame.h"
 #include "mem_matrix_store.h"
 #include "sparse_matrix.h"
+#include "factor.h"
 
 #include "fmr_utils.h"
 #include "rutils.h"
@@ -50,9 +51,22 @@ static void fm_clean_DM(SEXP p)
 
 SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create an empty matrix\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("sparse");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>())
+		ret["ele_type"] = Rcpp::String("logical");
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<sparse_matrix> *ref = new object_ref<sparse_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -76,9 +90,24 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 
 SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create an empty matrix\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("dense");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>()) {
+		m = m->cast_ele_type(get_scalar_type<int>());
+		ret["ele_type"] = Rcpp::String("logical");
+	}
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -106,9 +135,32 @@ SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name
 
 SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
+	if (m == NULL) {
+		fprintf(stderr, "can't create a vector from an empty matrix\n");
+		return R_NilValue;
+	}
+
+	if (m->get_num_cols() > 1)
+		m = m->transpose();
+	if (m->get_num_cols() > 1) {
+		fprintf(stderr,
+				"can't create a vector with a matrix with more than one col\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("vector");
+	if (m->is_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (m->is_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else if (m->is_type<bool>()) {
+		m = m->cast_ele_type(get_scalar_type<int>());
+		ret["ele_type"] = Rcpp::String("logical");
+	}
+	else
+		ret["ele_type"] = Rcpp::String("unknown");
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -116,64 +168,35 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	ret["pointer"] = pointer;
 
 	Rcpp::NumericVector len(1);
-	if (m->get_num_cols() == 1)
-		len[0] = m->get_num_rows();
-	else
-		len[0] = m->get_num_cols();
+	len[0] = m->get_num_rows();
 	ret["len"] = len;
 
 	return ret;
 }
 
-SEXP create_FMR_factor_vector(dense_matrix::ptr m, int num_levels,
-		const std::string &name)
-{
-	Rcpp::List ret = create_FMR_vector(m, name);
-	Rcpp::NumericVector levels(1);
-	levels[0] = num_levels;
-	ret["levels"] = num_levels;
-	return ret;
-}
-
-vector::ptr get_vector(const Rcpp::S4 &vec)
-{
-	if (!is_vector(vec)) {
-		fprintf(stderr, "The S4 object isn't a vector\n");
-		return vector::ptr();
-	}
-	object_ref<dense_matrix> *ref
-		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec.slot("pointer"));
-	dense_matrix::ptr mat = ref->get_object();
-	// This should be a column matrix.
-	assert(mat->store_layout == matrix_layout_t::L_COL
-			&& mat->get_num_cols() == 1);
-	detail::vec_store::const_ptr store = mat->get_data().get_col_vec(0);
-	if (store == NULL) {
-		fprintf(stderr, "can't convert a matrix to a vector");
-		return vector::ptr();
-	}
-	return vector::create(store);
-}
-
-factor_vector::ptr get_factor_vector(const Rcpp::S4 &vec)
+factor_col_vector::ptr get_factor_vector(const Rcpp::S4 &vec)
 {
 	if (!is_factor_vector(vec)) {
 		fprintf(stderr, "The S4 object isn't a factor vector\n");
-		return factor_vector::ptr();
+		return factor_col_vector::ptr();
 	}
 	object_ref<dense_matrix> *ref
 		= (object_ref<dense_matrix> *) R_ExternalPtrAddr(vec.slot("pointer"));
 	dense_matrix::ptr mat = ref->get_object();
 	// This should be a column matrix.
-	assert(mat->store_layout == matrix_layout_t::L_COL
-			&& mat->get_num_cols() == 1);
-	detail::vec_store::const_ptr store = mat->get_data().get_col_vec(0);
-	if (store == NULL) {
-		fprintf(stderr, "can't convert a matrix to a vector");
-		return factor_vector::ptr();
-	}
+	assert(mat->get_num_cols() == 1);
 	size_t num_levels = vec.slot("num.levels");
-	return factor_vector::create(factor(num_levels), store);
+	return factor_col_vector::create(factor(num_levels), mat);
+}
+
+col_vec::ptr get_vector(const Rcpp::S4 &vec)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(vec);
+	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
+		fprintf(stderr, "The input object is a matrix");
+		return col_vec::ptr();
+	}
+	return col_vec::create(mat);
 }
 
 SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)

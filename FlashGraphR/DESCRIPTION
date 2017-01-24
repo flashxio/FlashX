@@ -1,0 +1,21 @@
+Package: FlashGraphR
+Version: 0.1-0
+Date: 2017-01-05
+Title: Massive Graph Analysis
+Author: See AUTHORS file.
+Maintainer: Da Zheng <dzheng5@jhu.edu>
+Description: FlashGraphR implements a set of parallel graph analysis algorithms
+	for massive graph. It uses solid-state drives to scale to massive graphs
+	in a single machine and achieves speed comparable to the state-of-the-art
+	in-memory graph analysis.
+LinkingTo: Rcpp
+Depends:
+    R (>= 3.0),
+	igraph,
+	methods,
+    Rcpp,
+	FlashR
+License: Apache License 2.0
+URL: https://github.com/flashxio/FlashX
+SystemRequirements: 
+BugReports: https://github.com/flashxio/FlashX/issues

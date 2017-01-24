@@ -17,7 +17,10 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
 #include <numa.h>
+#endif
+#include <string.h>
 #include <sys/mman.h>
 
 #include "slab_allocator.h"
@@ -46,7 +49,6 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	this->init = init;
 	this->pinned = pinned;
 	assert((unsigned) obj_size >= sizeof(linked_obj));
-	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	// we only need to initialize them when we want to buffer objects locally.
 	if (local_buf_size > 0) {
 		BOOST_VERIFY(pthread_key_create(&local_buf_key, NULL) == 0);
@@ -105,10 +107,10 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 
 	while (true) {
 		if (thread_safe)
-			pthread_spin_lock(&lock);
+			lock.lock();
 		linked_obj *o = list.pop(nobjs - num);
 		if (thread_safe)
-			pthread_spin_unlock(&lock);
+			lock.unlock();
 		while (o != NULL) {
 			objs[num++] = (char *) o;
 			o = o->get_next();
@@ -119,19 +121,23 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 		// This piece of code shouldn't be executed very frequently,
 		// otherwise, the performance can be pretty bad.
 		if (thread_safe)
-			pthread_spin_lock(&lock);
+			lock.lock();
 		if (curr_size.get() < max_size) {
 			// We should increase the current size in advance, so other threads
 			// can see what this thread is doing here.
 			curr_size.inc(increase_size);
 			tot_slab_size.inc(increase_size);
 			if (thread_safe)
-				pthread_spin_unlock(&lock);
+				lock.unlock();
 			char *objs;
+#ifdef USE_NUMA
 			if (node_id == -1)
 				objs = (char *) numa_alloc_local(increase_size);
 			else
 				objs = (char *) numa_alloc_onnode(increase_size, node_id);
+#else
+			objs = (char *) malloc_aligned(increase_size, PAGE_SIZE);
+#endif
 			assert(objs);
 #ifdef USE_IOAT
 			if (pinned) {
@@ -152,15 +158,15 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				tmp_list.add(header);
 			}
 			if (thread_safe)
-				pthread_spin_lock(&lock);
+				lock.lock();
 			alloc_bufs.push_back(objs);
 			list.add_list(&tmp_list);
 			if (thread_safe)
-				pthread_spin_unlock(&lock);
+				lock.unlock();
 		}
 		else {
 			if (thread_safe)
-				pthread_spin_unlock(&lock);
+				lock.unlock();
 			// If we can't allocate all objects, then free all objects that
 			// have been allocated, and return 0.
 			free(objs, num);
@@ -184,7 +190,11 @@ slab_allocator::~slab_allocator()
 			munlock(alloc_bufs[i], increase_size);
 		}
 #endif
+#ifdef USE_NUMA
 		numa_free(alloc_bufs[i], increase_size);
+#else
+		free(alloc_bufs[i]);
+#endif
 	}
 #ifdef ENABLE_MEM_TRACE
 	printf("%s allocate %ld bytes\n", name.c_str(), alloc_bufs.size() * increase_size);
@@ -192,7 +202,6 @@ slab_allocator::~slab_allocator()
 	if (local_buf_size > 0) {
 		pthread_key_delete(local_buf_key);
 	}
-	pthread_spin_destroy(&lock);
 
 	// Destroy all the per-thread queues.
 	fifo_queue<char *> *queues[128];
@@ -215,10 +224,10 @@ void slab_allocator::free(char **objs, int nobjs) {
 		tmp_list.add(o);
 	}
 	if (thread_safe)
-		pthread_spin_lock(&lock);
+		lock.lock();
 	list.add_list(&tmp_list);
 	if (thread_safe)
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 #endif
 }
 

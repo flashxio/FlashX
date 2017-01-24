@@ -211,12 +211,34 @@ void test_sort_mult()
 
 void test_append()
 {
-	printf("test append\n");
+	printf("test append in-mem vectors\n");
 	std::vector<vec_store::const_ptr> vecs(5);
-	for (size_t i = 0; i < vecs.size(); i++)
-		vecs[i] = smp_vec_store::create(1000, get_scalar_type<int>());
+	for (size_t i = 0; i < vecs.size(); i++) {
+		vec_store::ptr tmp = smp_vec_store::create(100000, get_scalar_type<int>());
+		tmp->set_data(set_seq_operate<int>());
+		vecs[i] = tmp;
+	}
 	EM_vec_store::ptr em_vec = EM_vec_store::create(0, get_scalar_type<int>());
 	em_vec->append(vecs.begin(), vecs.end());
+
+	vector::ptr vec1 = vector::create(em_vec);
+	dense_matrix::ptr mat1 = vec1->conv2mat(vec1->get_length(), 1, false);
+	scalar_variable::ptr sum1 = mat1->sum();
+	printf("%d\n", scalar_variable::get_val<int>(*sum1));
+
+	vec_store::ptr tmp_vec = em_vec->deep_copy();
+	vector::ptr vec2 = vector::create(tmp_vec);
+	dense_matrix::ptr mat2 = vec2->conv2mat(vec2->get_length(), 1, false);
+	scalar_variable::ptr sum2 = mat2->sum();
+	assert(scalar_variable::get_val<int>(*sum2)
+			== scalar_variable::get_val<int>(*sum1));
+
+	tmp_vec->append(*em_vec);
+	vector::ptr vec3 = vector::create(tmp_vec);
+	dense_matrix::ptr mat3 = vec3->conv2mat(vec3->get_length(), 1, false);
+	scalar_variable::ptr sum3 = mat3->sum();
+	assert(scalar_variable::get_val<int>(*sum3)
+			== 2 * scalar_variable::get_val<int>(*sum1));
 }
 
 void test_set_persistent()

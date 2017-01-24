@@ -29,13 +29,14 @@ struct edge_equal
 void print_cols(detail::mem_matrix_store::ptr store)
 {
 	dense_matrix::ptr mat = dense_matrix::create(store);
-	if (mat->store_layout() == matrix_layout_t::L_ROW)
-		mat = mat->conv2(matrix_layout_t::L_COL);
-	mat->materialize_self();
-	for (size_t i = 0; i < mat->get_num_cols(); i++) {
-		vector::ptr col = mat->get_col(i);
-		printf("%ld: %f\n", i, col->sum<float>());
-	}
+	mat = mat->cast_ele_type(get_scalar_type<double>());
+	dense_matrix::ptr sum = mat->col_sum();
+	sum->materialize_self();
+	detail::mem_matrix_store::const_ptr mem_sum
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum->get_raw_store());
+	for (size_t i = 0; i < mem_sum->get_num_cols(); i++)
+		printf("%ld: %f\n", i, mem_sum->get<double>(0, i));
 }
 
 edge_list::ptr create_rand_el(bool with_attr)
@@ -87,16 +88,22 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 			in_mat->set<float>(i, j, val++);
 	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
-	detail::mem_matrix_store::ptr out
+	detail::mem_matrix_store::ptr out1
 		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<float>());
-	spm->multiply<float, float>(in_mat, out);
-	print_cols(out);
+	spm->multiply(in_mat, out1);
+	print_cols(out1);
 
-	out = detail::NUMA_col_tall_matrix_store::create(num_rows, 10, num_nodes,
+	detail::mem_matrix_store::ptr out2
+		= detail::NUMA_col_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<float>());
-	spm->multiply<float, float>(in_mat, out);
-	print_cols(out);
+	spm->multiply(in_mat, out2);
+	print_cols(out2);
+
+	dense_matrix::ptr m1 = dense_matrix::create(out1);
+	dense_matrix::ptr m2 = dense_matrix::create(out2);
+	scalar_variable::ptr diff = m1->minus(*m2)->abs()->sum();
+	printf("diff: %f\n", scalar_variable::get_val<float>(*diff));
 }
 
 void test_multiply_block(edge_list::ptr el)
@@ -148,7 +155,7 @@ void test_spmm_fg(fg::FG_graph::ptr fg)
 		= detail::mem_row_matrix_store::create(num_rows, 10,
 				get_scalar_type<float>());
 	out->reset_data();
-	spm->multiply<float, float>(in_mat, out);
+	spm->multiply(in_mat, out);
 	print_cols(out);
 }
 

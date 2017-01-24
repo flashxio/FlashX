@@ -457,6 +457,9 @@ public:
 	virtual const scalar_type &get_type() const {
 		return vec.get_type();
 	}
+	virtual set_operate::const_ptr transpose() const {
+		return set_operate::const_ptr();
+	}
 };
 
 void vec2mat_set_operate::set(void *arr, size_t num_eles,
@@ -503,16 +506,14 @@ matrix_store::ptr NUMA_vec_store::conv2mat(size_t nrow, size_t ncol, bool byrow)
 
 	matrix_store::ptr mat;
 	if (nrow == 1 && byrow) {
-		std::vector<NUMA_vec_store::ptr> cols(1);
-		cols[0] = NUMA_vec_store::ptr(new NUMA_vec_store(*this));
 		NUMA_col_tall_matrix_store::ptr tmp
-			= NUMA_col_tall_matrix_store::create(cols);
+			= NUMA_col_tall_matrix_store::create(data, ncol, 1, mapper,
+					get_type());
 		mat = NUMA_row_wide_matrix_store::create_transpose(*tmp);
 	}
 	else if (ncol == 1 && !byrow) {
-		std::vector<NUMA_vec_store::ptr> cols(1);
-		cols[0] = NUMA_vec_store::ptr(new NUMA_vec_store(*this));
-		mat = NUMA_col_tall_matrix_store::create(cols);
+		mat = NUMA_col_tall_matrix_store::create(data, nrow, 1, mapper,
+				get_type());
 	}
 	else if (ncol == 1 && byrow)
 		mat = NUMA_row_tall_matrix_store::create(data, nrow, ncol, mapper,

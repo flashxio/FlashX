@@ -32,7 +32,8 @@ namespace detail
 
 one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout,
-		int num_nodes): virtual_matrix_store(nrow, ncol, true, val->get_type())
+		int num_nodes): virtual_matrix_store(nrow, ncol, true,
+			val->get_type()), mat_id(mat_counter++)
 {
 	if (num_nodes > 0)
 		this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
@@ -52,17 +53,17 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 				get_num_rows());
 		buf_size = get_num_cols() * part_num_rows * get_entry_size();
 	}
-	const set_operate &set = get_type().get_set_const(*val);
+	set_operate::const_ptr set = get_type().get_set_const(*val);
 	if (num_nodes < 0) {
 		this->portion_bufs.resize(1);
 		this->portion_bufs[0] = simple_raw_array(buf_size, -1);
-		set.set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
+		set->set(portion_bufs[0].get_raw(), buf_size / get_entry_size(), 0, 0);
 	}
 	else {
 		this->portion_bufs.resize(num_nodes);
 		for (int i = 0; i < num_nodes; i++) {
 			this->portion_bufs[i] = simple_raw_array(buf_size, i);
-			set.set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
+			set->set(portion_bufs[i].get_raw(), buf_size / get_entry_size(), 0, 0);
 		}
 	}
 }
@@ -70,19 +71,14 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	return matrix_store::ptr(new one_val_matrix_store(*this));
-}
+	matrix_store::ptr ret = matrix_store::create(get_num_rows(),
+			get_num_cols(), store_layout(), get_type(), num_nodes, in_mem);
+	if (ret == NULL)
+		return matrix_store::const_ptr();
 
-vec_store::const_ptr one_val_matrix_store::get_col_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	return vec_store::const_ptr();
-}
-
-vec_store::const_ptr one_val_matrix_store::get_row_vec(off_t idx) const
-{
-	// TODO we'll implement this when we have one-value vector.
-	return vec_store::const_ptr();
+	auto set = get_type().get_set_const(*val);
+	ret->set_data(*set);
+	return ret;
 }
 
 matrix_store::const_ptr one_val_matrix_store::get_cols(

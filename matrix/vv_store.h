@@ -35,7 +35,17 @@ class vv_store: public vec_store
 	std::vector<off_t> vec_offs;
 	vec_store::ptr store;
 
+protected:
 	std::vector<off_t> get_rel_offs(off_t loc, size_t size) const;
+	std::vector<off_t>::const_iterator get_off_it(off_t loc) const {
+		return vec_offs.begin() + loc;
+	}
+
+	size_t get_num_eles(off_t start, size_t len) const {
+		off_t start_ele = get_vec_off(start) / get_type().get_size();
+		off_t end_ele = get_vec_off(start + len) / get_type().get_size();
+		return end_ele - start_ele;
+	}
 public:
 	typedef std::shared_ptr<vv_store> ptr;
 	typedef std::shared_ptr<const vv_store> const_ptr;
@@ -50,6 +60,7 @@ public:
 	}
 
 	static ptr create(const scalar_type &type, bool in_mem);
+	static ptr create(const std::vector<off_t> &offs, vec_store::ptr store);
 
 	vv_store(const scalar_type &type, bool in_mem);
 	vv_store(const std::vector<off_t> &offs, vec_store::ptr store);
@@ -91,6 +102,19 @@ public:
 			size_t len) const;
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
 			size_t size);
+
+	virtual bool reserve(size_t num_eles) {
+		return store->reserve(num_eles);
+	}
+
+	virtual size_t get_reserved_size() const {
+		return store->get_reserved_size();
+	}
+
+	virtual void clear() {
+		vec_offs.clear();
+		store->clear();
+	}
 
 	/*
 	 * The following methods aren't supported in the vv_store.

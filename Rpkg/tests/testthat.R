@@ -1,4 +1,4 @@
 library(testthat)
 library(FlashR)
 
-test_check("FlashR")
+test_package("FlashR")

@@ -46,7 +46,6 @@ class RAID_config
 	int RAID_mapping_option;
 	int RAID_block_size;
 
-	std::string conf_file;
 	std::vector<part_file_info> root_paths;
 public:
 	typedef std::shared_ptr<RAID_config> ptr;
@@ -57,11 +56,12 @@ public:
 	/**
 	 * Create a file mapper for the RAID directories.
 	 */
-	file_mapper *create_file_mapper() const;
+	std::shared_ptr<file_mapper> create_file_mapper() const;
 	/**
 	 * Create a file mapper for a file in the RAID.
 	 */
-	file_mapper *create_file_mapper(const std::string &file_name) const;
+	std::shared_ptr<file_mapper> create_file_mapper(
+			const std::string &file_name) const;
 
 	/**
 	 * This returns the nodes where the RAID attaches to.

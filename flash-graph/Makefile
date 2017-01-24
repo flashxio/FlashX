@@ -17,11 +17,9 @@
 
 include ../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -I../libsafs $(OMP_FLAG)
-LDFLAGS += $(OMP_FLAG)
+CXXFLAGS += -I../libsafs -I../matrix
 
-all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix
+all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix utils
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -45,11 +43,11 @@ matrix: libgraph
 test-algs: libgraph libgraph-algs matrix
 	$(MAKE) -C test-algs
 
-LOL: libgraph matrix
-	$(MAKE) -C LOL
-
 test-matrix: libgraph matrix
 	$(MAKE) -C test-matrix
+
+utils: libgraph
+	$(MAKE) -C utils
 
 clean:
 	rm -f *.d
@@ -63,7 +61,7 @@ clean:
 	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
-	$(MAKE) clean -C LOL
+	$(MAKE) clean -C utils
 	$(MAKE) clean -C test-matrix
 
 -include $(DEPS) 

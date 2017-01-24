@@ -20,26 +20,13 @@
 #include <unordered_map>
 
 #include "matrix_ops.h"
+#include "mem_worker_thread.h"
+#include "local_vec_store.h"
 
 using namespace fm;
 
 namespace fmr
 {
-
-/*
- * R has only two data types in matrix multiplication: integer and numeric.
- * So we only need to predefine a small number of basic operations with
- * different types.
- */
-
-static basic_ops_impl<int, int, int> R_basic_ops_II;
-static basic_ops_impl<double, int, double> R_basic_ops_DI;
-static basic_ops_impl<int, double, double> R_basic_ops_ID;
-static basic_ops_impl<double, double, double> R_basic_ops_DD;
-
-static basic_uops_impl<int, int> R_basic_uops_I;
-static basic_uops_impl<double, double> R_basic_uops_D;
-static basic_uops_impl<bool, bool> R_basic_uops_B;
 
 class generic_bulk_operate
 {
@@ -47,17 +34,12 @@ class generic_bulk_operate
 	// a bulk_operate for a different type.
 	std::unordered_map<int, bulk_operate::const_ptr> ops;
 public:
-	static int get_key(prim_type type1, prim_type type2) {
-		// Two bytes should be enough to represent all types.
-		return (type1 & 0xFFFF) + (((int) type2) << 16);
-	}
-
 	generic_bulk_operate(const std::string &name) {
 		this->name = name;
 	}
 
-	bulk_operate::const_ptr get_op(prim_type type1, prim_type type2) const {
-		int key = get_key(type1, type2);
+	bulk_operate::const_ptr get_op(prim_type type) const {
+		int key = type;
 		auto it = ops.find(key);
 		if (it == ops.end())
 			return bulk_operate::const_ptr();
@@ -66,8 +48,7 @@ public:
 	}
 
 	void add_op(bulk_operate::const_ptr op) {
-		int key = get_key(op->get_left_type().get_type(),
-				op->get_right_type().get_type());
+		int key = op->get_left_type().get_type();
 		ops.insert(std::pair<int, bulk_operate::const_ptr>(key, op));
 	}
 
@@ -133,7 +114,7 @@ void register_udf(const std::vector<bulk_uoperate::const_ptr> &ops,
 }
 
 static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
-		prim_type type1, prim_type type2)
+		prim_type type)
 {
 	if (noperands != 2) {
 		fprintf(stderr, "This isn't a binary operator\n");
@@ -146,15 +127,13 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 
 	bulk_operate::const_ptr op;
 	if (bo_idx < basic_ops::op_idx::NUM_OPS) {
-		basic_ops *ops = NULL;
-		if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_DOUBLE)
-			ops = &R_basic_ops_DD;
-		else if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_INTEGER)
-			ops = &R_basic_ops_DI;
-		else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_DOUBLE)
-			ops = &R_basic_ops_ID;
-		else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_INTEGER)
-			ops = &R_basic_ops_II;
+		const basic_ops *ops = NULL;
+		if (type == prim_type::P_DOUBLE)
+			ops = &get_scalar_type<double>().get_basic_ops();
+		else if (type == prim_type::P_INTEGER)
+			ops = &get_scalar_type<int>().get_basic_ops();
+		else if (type == prim_type::P_BOOL)
+			ops = &get_scalar_type<bool>().get_basic_ops();
 		else {
 			fprintf(stderr, "wrong type\n");
 			return bulk_operate::const_ptr();
@@ -167,7 +146,7 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 	}
 	else if ((size_t) (bo_idx - basic_ops::op_idx::NUM_OPS) < bulk_ops.size()) {
 		size_t off = bo_idx - basic_ops::op_idx::NUM_OPS;
-		op = bulk_ops[off].get_op(type1, type2);
+		op = bulk_ops[off].get_op(type);
 		if (op == NULL) {
 			fprintf(stderr,
 					"can't find the specified operation with the right type\n");
@@ -184,11 +163,11 @@ static bulk_operate::const_ptr _get_op(basic_ops::op_idx bo_idx, int noperands,
 /*
  * Get a binary operator.
  */
-bulk_operate::const_ptr get_op(SEXP pfun, prim_type type1, prim_type type2)
+bulk_operate::const_ptr get_op(SEXP pfun, prim_type type)
 {
 	Rcpp::S4 fun_obj(pfun);
 	Rcpp::IntegerVector info = fun_obj.slot("info");
-	return _get_op((basic_ops::op_idx) info[0], info[1], type1, type2);
+	return _get_op((basic_ops::op_idx) info[0], info[1], type);
 }
 
 /*
@@ -199,13 +178,12 @@ agg_operate::const_ptr get_agg_op(SEXP pfun, const scalar_type &mat_type)
 	Rcpp::S4 sym_op(pfun);
 	Rcpp::IntegerVector agg_info = sym_op.slot("agg");
 	bulk_operate::const_ptr agg_op = _get_op((basic_ops::op_idx) agg_info[0],
-			agg_info[1], mat_type.get_type(), mat_type.get_type());
+			agg_info[1], mat_type.get_type());
 	Rcpp::IntegerVector combine_info = sym_op.slot("combine");
 	bulk_operate::const_ptr combine_op;
 	if (combine_info[0] >= 0)
 		combine_op = _get_op((basic_ops::op_idx) combine_info[0],
-				combine_info[1], agg_op->get_output_type().get_type(),
-				agg_op->get_output_type().get_type());
+				combine_info[1], agg_op->get_output_type().get_type());
 	return agg_operate::create(agg_op, combine_op);
 }
 
@@ -225,13 +203,11 @@ bulk_uoperate::const_ptr get_uop(SEXP pfun, prim_type type)
 
 	bulk_uoperate::const_ptr op;
 	if (bo_idx < basic_uops::op_idx::NUM_OPS) {
-		basic_uops *ops = NULL;
+		const basic_uops *ops = NULL;
 		if (type == prim_type::P_DOUBLE)
-			ops = &R_basic_uops_D;
+			ops = &get_scalar_type<double>().get_basic_uops();
 		else if (type == prim_type::P_INTEGER)
-			ops = &R_basic_uops_I;
-		else if (type == prim_type::P_BOOL)
-			ops = &R_basic_uops_B;
+			ops = &get_scalar_type<int>().get_basic_uops();
 		else {
 			fprintf(stderr, "wrong type\n");
 			return NULL;
@@ -304,6 +280,10 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::EQ;
 	else if (name == "==")
 		return basic_ops::op_idx::EQ;
+	else if (name == "neq")
+		return basic_ops::op_idx::NEQ;
+	else if (name == "!=")
+		return basic_ops::op_idx::NEQ;
 	else if (name == "gt")
 		return basic_ops::op_idx::GT;
 	else if (name == ">")
@@ -320,6 +300,10 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::LE;
 	else if (name == "<=")
 		return basic_ops::op_idx::LE;
+	else if (name == "|")
+		return basic_ops::op_idx::OR;
+	else if (name == "&")
+		return basic_ops::op_idx::AND;
 	else
 		return _get_op_id(name);
 }
@@ -367,13 +351,9 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
-		if (orig == NULL)
-			t_out[0] = num_eles;
-		else
-			t_out[0] = (*(const int *) orig) + num_eles;
+		t_out[0] = num_eles;
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -384,6 +364,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
+	}
+	virtual std::string get_name() const {
+		return "count";
 	}
 };
 
@@ -404,8 +387,7 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
 		const T *t_in = (const T *) in;
 		if (num_eles == 0)
@@ -430,6 +412,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
 	}
+	virtual std::string get_name() const {
+		return "which_max";
+	}
 };
 
 template<class T>
@@ -449,8 +434,7 @@ public:
 		throw unsupported_exception();
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		int *t_out = (int *) output;
 		const T *t_in = (const T *) in;
 		if (num_eles == 0)
@@ -474,6 +458,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<int>();
+	}
+	virtual std::string get_name() const {
+		return "which_min";
 	}
 };
 
@@ -506,8 +493,7 @@ public:
 			out[i] = (v - arr2[i]) * (v - arr2[i]);
 	}
 
-	virtual void runAgg(size_t num_eles, const void *in, const void *orig,
-			void *output) const {
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		throw unsupported_exception();
 	}
 
@@ -519,6 +505,9 @@ public:
 	}
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<T>();
+	}
+	virtual std::string get_name() const {
+		return "euclidean";
 	}
 };
 
@@ -559,6 +548,120 @@ void init_udf_ext()
 	uops.push_back(bulk_uoperate::conv2ptr(
 				get_scalar_type<int>().get_type_cast(get_scalar_type<double>())));
 	register_udf(uops, "as.numeric");
+}
+
+typedef std::vector<arr_apply_operate::const_ptr> app_op_vec;
+
+static std::unordered_map<std::string, app_op_vec> apply_ops;
+
+template<class T>
+class rank_apply_operate: public arr_apply_operate
+{
+	typedef std::pair<T, int> indexed_entry;
+	std::vector<std::vector<indexed_entry> > bufs;
+	struct {
+		bool operator()(const indexed_entry &e1, const indexed_entry &e2) const {
+			return e1.first < e2.first;
+		}
+	} entry_less;
+public:
+	rank_apply_operate() {
+		bufs.resize(detail::mem_thread_pool::get_global_num_threads());
+	}
+
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const {
+		assert(out.get_length() == in.get_length());
+		const T *in_arr = reinterpret_cast<const T *>(in.get_raw_arr());
+		int *out_arr = reinterpret_cast<int *>(out.get_raw_arr());
+		int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+		std::vector<std::pair<T, int> > &buf
+			= const_cast<rank_apply_operate *>(this)->bufs[thread_id];
+		buf.resize(in.get_length());
+		for (size_t i = 0; i < in.get_length(); i++) {
+			buf[i].first = in_arr[i];
+			buf[i].second = i;
+		}
+		std::sort(buf.begin(), buf.end(), entry_less);
+		for (size_t i = 0; i < out.get_length(); i++)
+			out_arr[i] = buf[i].second;
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return num_input;
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<int>();
+	}
+};
+
+template<class T>
+class sort_apply_operate: public arr_apply_operate
+{
+public:
+	virtual void run(const local_vec_store &in,
+			local_vec_store &out) const {
+		assert(out.get_length() == in.get_length());
+		memcpy(out.get_raw_arr(), in.get_raw_arr(),
+				in.get_entry_size() * in.get_length());
+		T *out_arr = reinterpret_cast<T *>(out.get_raw_arr());
+		std::sort(out_arr, out_arr + out.get_length());
+	}
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return num_input;
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T>();
+	}
+};
+
+bool register_apply_op(const std::string &name, const app_op_vec &ops)
+{
+	auto ret = apply_ops.insert(std::pair<std::string, app_op_vec>(name, ops));
+	return ret.second;
+}
+
+void init_apply_ops()
+{
+	app_op_vec ops;
+
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<bool>()));
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<int>()));
+	ops.push_back(arr_apply_operate::const_ptr(new rank_apply_operate<double>()));
+	register_apply_op("rank", ops);
+
+	ops.clear();
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<bool>()));
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<int>()));
+	ops.push_back(arr_apply_operate::const_ptr(new sort_apply_operate<double>()));
+	register_apply_op("sort", ops);
+}
+
+arr_apply_operate::const_ptr get_apply_op(SEXP pfun,
+		const fm::scalar_type &type)
+{
+	Rcpp::S4 sym_op(pfun);
+	std::string name = sym_op.slot("name");
+
+	auto it = apply_ops.find(name);
+	if (it == apply_ops.end()) {
+		fprintf(stderr, "apply function %s doesn't exist\n", name.c_str());
+		return arr_apply_operate::const_ptr();
+	}
+
+	const app_op_vec &vec = it->second;
+	for (size_t i = 0; i < vec.size(); i++)
+		if (vec[i]->get_input_type() == type)
+			return vec[i];
+	fprintf(stderr, "can't find the right type for %s\n", name.c_str());
+	return arr_apply_operate::const_ptr();
 }
 
 }

@@ -39,15 +39,6 @@ enum matrix_type
 	SPARSE,
 };
 
-enum matrix_layout_t
-{
-	L_COL,
-	L_ROW,
-	L_ROW_2D,
-	// It indicates that the layout isn't defined.
-	L_NONE,
-};
-
 static const size_t block_max_num_rows = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
 static const size_t block_max_num_cols = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
 

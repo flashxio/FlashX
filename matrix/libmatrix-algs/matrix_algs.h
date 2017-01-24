@@ -41,6 +41,9 @@ namespace alg
   */
 dense_matrix::ptr PageRank(sparse_matrix::ptr mat, size_t max_niters,
 		float damping_factor, size_t num_in_mem);
+
+std::pair<dense_matrix::ptr, dense_matrix::ptr> NMF(sparse_matrix::ptr mat,
+		size_t k, size_t max_niters, size_t num_in_mem);
 }
 
 }

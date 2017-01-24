@@ -54,12 +54,16 @@ class EM_vec_store: public vec_store, public EM_object
 		}
 	};
 
+	size_t file_size;
 	file_holder::ptr holder;
 	io_set::ptr ios;
 
 	EM_vec_store(size_t length, const scalar_type &type);
-	EM_vec_store(safs::file_io_factory::shared_ptr factory);
+	EM_vec_store(file_holder::ptr holder, io_set::ptr ios, size_t len,
+			const scalar_type &type);
 	EM_vec_store(const EM_vec_store &store);
+	virtual void write_portion_async(local_vec_store::const_ptr portion,
+			portion_compute::ptr compute, off_t off = -1);
 public:
 	typedef std::shared_ptr<EM_vec_store> ptr;
 	typedef std::shared_ptr<const EM_vec_store> const_ptr;
@@ -72,8 +76,9 @@ public:
 	}
 
 	// This creates a byte array.
-	static ptr create(safs::file_io_factory::shared_ptr factory) {
-		return ptr(new EM_vec_store(factory));
+	static ptr create(file_holder::ptr holder, io_set::ptr ios, size_t len,
+			const scalar_type &type) {
+		return ptr(new EM_vec_store(holder, ios, len, type));
 	}
 
 	~EM_vec_store();
@@ -86,7 +91,24 @@ public:
 	bool set_persistent(const std::string &name);
 
 	virtual bool resize(size_t length);
+	virtual bool reserve(size_t num_eles);
+	virtual size_t get_reserved_size() const;
 
+	/*
+	 * This method allows users to append data asynchronously.
+	 * Because the data is written to disks asynchronously, there are
+	 * restrictions on the vector and the input data.
+	 * * the last page of the vector has been filled with data.
+	 * * the input vectors need to be stored in aligned memory and their
+	 * sizes need to be aligned with the page size.
+	 */
+	virtual bool append_async(
+			std::vector<vec_store::const_ptr>::const_iterator vec_it,
+			std::vector<vec_store::const_ptr>::const_iterator vec_end);
+	/*
+	 * The two methods below are the general functions of appending data to
+	 * the end of the vector.
+	 */
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end);
 	virtual bool append(const vec_store &vec);

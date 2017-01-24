@@ -95,12 +95,10 @@ public:
 
 /*
  * The I/O generator that access a matrix on disks by rows.
- * An I/O generator are assigned a number of row blocks that it can accesses.
- * Each thread has an I/O generator and gets I/O requests from its own I/O
- * generator. When load balancing kicks in, a thread will try to steal I/O requests
- * from other threads' I/O generators.
+ * It dynamically assigns a row block to a thread each time and thus balances
+ * the load automatically.
  */
-class row_io_generator: public matrix_io_generator
+class dyn_row_iogen: public matrix_io_generator
 {
 	std::vector<large_row_io> ios;
 	// The current offset in the row_block vector.
@@ -110,7 +108,7 @@ class row_io_generator: public matrix_io_generator
 
 	pthread_spinlock_t lock;
 public:
-	row_io_generator(const std::vector<row_block> &_blocks, size_t tot_num_rows,
+	dyn_row_iogen(const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
 
 	/*
@@ -118,12 +116,8 @@ public:
 	 * to get I/O requests.
 	 */
 	virtual matrix_io get_next_io() {
-		// TODO it should return a smaller I/O to improve load balancing at
-		// the end of SpMM.
 		matrix_io ret;
 		pthread_spin_lock(&lock);
-		// It's possible that all IOs have been stolen.
-		// We have to check it.
 		if ((size_t) curr_io_off < ios.size()) {
 			assert(ios[curr_io_off].has_data());
 			ret = ios[curr_io_off++].get_io(tot_num_cols, file_id);
@@ -140,7 +134,7 @@ public:
 	}
 };
 
-row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
+dyn_row_iogen::dyn_row_iogen(const std::vector<row_block> &blocks,
 		size_t tot_num_rows, size_t tot_num_cols, int file_id,
 		const row_block_mapper &mapper)
 {
@@ -245,7 +239,7 @@ matrix_io_generator::ptr matrix_io_generator::create(
 		const std::vector<row_block> &_blocks, size_t tot_num_rows,
 		size_t tot_num_cols, int file_id, const row_block_mapper &mapper)
 {
-	return matrix_io_generator::ptr(new row_io_generator(_blocks,
+	return matrix_io_generator::ptr(new dyn_row_iogen(_blocks,
 				tot_num_rows, tot_num_cols, file_id, mapper));
 }
 

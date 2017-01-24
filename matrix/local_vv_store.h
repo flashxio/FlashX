@@ -28,7 +28,10 @@ namespace fm
 
 class local_vv_store: public local_vec_store
 {
-	std::vector<off_t> offs;
+	// The pointer to the offsets in the global vv store.
+	std::vector<off_t>::const_iterator off_start;
+	std::vector<off_t>::const_iterator off_end;
+
 	local_vec_store::ptr vec;
 
 	const char *get_orig_const_data() const {
@@ -39,7 +42,22 @@ class local_vv_store: public local_vec_store
 		return vec->get_raw_arr();
 	}
 
-	std::vector<off_t> get_rel_offs(off_t start, size_t len) const;
+	std::vector<off_t>::const_iterator get_off_it(off_t loc) const {
+		return off_start + loc;
+	}
+	size_t get_num_eles(off_t start, size_t len) const {
+		off_t start_ele = get_vec_off(start) / get_type().get_size();
+		off_t end_ele = get_vec_off(start + len) / get_type().get_size();
+		return end_ele - start_ele;
+	}
+	// In the number of bytes.
+	off_t get_vec_off(off_t idx) const {
+		return *(off_start + idx) - *off_start;
+	}
+	size_t get_tot_num_offs() const {
+		return off_end - off_start;
+	}
+
 public:
 	typedef std::shared_ptr<local_vv_store> ptr;
 	typedef std::shared_ptr<const local_vv_store> const_ptr;
@@ -54,25 +72,18 @@ public:
 		return std::static_pointer_cast<const local_vv_store>(vec);
 	}
 
-	local_vv_store(off_t global_start, const std::vector<off_t> &offs,
-			local_vec_store::ptr vec): local_vec_store(
-				static_cast<const local_vec_store &>(*vec).get_raw_arr(),
-				vec->get_raw_arr(), global_start, offs.size() - 1, 0,
-				vec->get_type(), -1) {
-		assert(!detail::vv_store::is_vector_vector(*vec));
-		this->offs = offs;
-		this->vec = vec;
-	}
+	local_vv_store(off_t global_start, std::vector<off_t>::const_iterator start,
+			std::vector<off_t>::const_iterator end, local_vec_store::ptr vec);
 
 	bool is_whole() const {
-		return offs.front() == 0
-			&& offs.size() - 1 == local_vec_store::get_length();
+		return get_local_start() == 0
+			&& get_tot_num_offs() - 1 == local_vec_store::get_length();
 	}
 
 	virtual bool expose_sub_vec(off_t start, size_t length) {
-		assert(start + length < offs.size());
-		char *new_data = this->get_orig_data() + offs[start];
-		const char *const_new_data = this->get_orig_const_data() + offs[start];
+		assert(start + length < get_tot_num_offs());
+		char *new_data = this->get_orig_data() + get_vec_off(start);
+		const char *const_new_data = this->get_orig_const_data() + get_vec_off(start);
 		local_vec_store::set_data(const_new_data, new_data);
 		return local_vec_store::expose_sub_vec(start, length);
 	}
@@ -83,14 +94,13 @@ public:
 	}
 
 	virtual const char *get_sub_arr(off_t start, off_t end) const {
-		start += get_local_start();
-		assert((size_t) start < offs.size() && (size_t) end < offs.size());
-		return this->get_orig_const_data() + offs[start];
+		assert((size_t) start < get_num_vecs() && (size_t) end < get_num_vecs());
+		return this->get_orig_const_data()
+			+ get_vec_off(start + get_local_start());
 	}
 	virtual char *get_sub_arr(off_t start, off_t end) {
-		start += get_local_start();
-		assert((size_t) start < offs.size() && (size_t) end < offs.size());
-		return this->get_orig_data() + offs[start];
+		assert((size_t) start < get_num_vecs() && (size_t) end < get_num_vecs());
+		return this->get_orig_data() + get_vec_off(start + get_local_start());
 	}
 
 	virtual void reset_data() {
@@ -100,7 +110,7 @@ public:
 
 	size_t get_num_bytes(off_t idx) const {
 		idx += get_local_start();
-		return offs[idx + 1] - offs[idx];
+		return get_vec_off(idx + 1) - get_vec_off(idx);
 	}
 
 	using local_vec_store::get_length;
@@ -115,13 +125,13 @@ public:
 	size_t get_num_bytes() const {
 		off_t start = get_local_start();
 		off_t end = start + local_vec_store::get_length();
-		return offs[end] - offs[start];
+		return get_vec_off(end) - get_vec_off(start);
 	}
 
 	using local_vec_store::get_raw_arr;
 	const char*get_raw_arr(off_t idx) const {
 		idx += get_local_start();
-		return this->get_orig_const_data() + offs[idx];
+		return this->get_orig_const_data() + get_vec_off(idx);
 	}
 
 	virtual bool resize(size_t new_length) {
@@ -157,6 +167,7 @@ public:
 	virtual bool is_sorted() const {
 		return false;
 	}
+	using local_vec_store::conv2mat;
 	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
 			size_t nrow, size_t ncol, bool byrow) const {
 		assert(0);

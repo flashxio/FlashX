@@ -6,7 +6,7 @@
 
 #include <vector>
 #include <algorithm>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #define SCALE_FACTOR 100
 
@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 	workload_t *workloads = new workload_t[num_accesses];
 	read(fd, (void *) workloads, file_size);
 
-	std::tr1::unordered_map<off_t, int> page_map;
+	std::unordered_map<off_t, int> page_map;
 	int num_page_reads = 0;
 	int num_page_writes = 0;
 	int num_reads = 0;
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 		off_t last_page = ROUNDUP_PAGE(workloads[i].off + workloads[i].size);
 		int num_pages = (last_page - page_off) / safs::PAGE_SIZE;
 		for (; page_off < last_page; page_off += safs::PAGE_SIZE) {
-			std::tr1::unordered_map<off_t, int>::iterator it = page_map.find(page_off);
+			std::unordered_map<off_t, int>::iterator it = page_map.find(page_off);
 			if (it == page_map.end()) {
 				page_map.insert(std::pair<off_t, int>(page_off, 1));
 			}
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 
 	if (histogram) {
 		std::map<int, int> count_nums;
-		for (std::tr1::unordered_map<off_t, int>::iterator it = page_map.begin();
+		for (std::unordered_map<off_t, int>::iterator it = page_map.begin();
 				it != page_map.end(); it++) {
 			int num_accesses = it->second;
 			std::map<int, int>::iterator it1 = count_nums.find(num_accesses);

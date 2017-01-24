@@ -17,9 +17,8 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) -lz $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+CXXFLAGS += -I../../libsafs -I.. -I. -I../../matrix
 
 all: test_algs
 

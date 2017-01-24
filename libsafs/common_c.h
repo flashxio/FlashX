@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <numa.h>
 #include <assert.h>
 #include <execinfo.h>
 #include <unistd.h>
@@ -35,6 +34,16 @@
 
 #define ROUND(off, base) (((long) off) & (~((long) (base) - 1)))
 #define ROUNDUP(off, base) (((long) off + (base) - 1) & (~((long) (base) - 1)))
+
+static inline void print_addr_sym(void *str)
+{
+#ifdef __APPLE__
+#else
+	char syscom[256];
+	sprintf(syscom,"addr2line %p -e %s", str, program_invocation_name);
+	int ret __attribute__((unused)) = system(syscom);
+#endif
+}
 
 #define PRINT_BACKTRACE()							\
 	do {											\
@@ -47,10 +56,8 @@
 			exit(EXIT_FAILURE);						\
 		}											\
 		for (int i = 0; i < nptrs; i++)	{			\
-			char syscom[256];						\
 			printf("[bt] #%d %s\n", i, strings[i]);	\
-			sprintf(syscom,"addr2line %p -e %s", buf[i], program_invocation_name);\
-			int ret __attribute__((unused)) = system(syscom);	\
+			print_addr_sym(buf[i]);			\
 		}											\
 		free(strings);								\
 	} while (0)
@@ -129,6 +136,7 @@ static inline int universal_hash(off_t v, int modulo)
  * These two functions should be used to allocate/free large chunks of memory.
  */
 void set_use_huge_page(bool v);
+void *malloc_aligned(size_t size, size_t alignment);
 void *malloc_large(size_t size);
 void free_large(void *addr, size_t size);
 

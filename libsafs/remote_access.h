@@ -48,7 +48,7 @@ class remote_io: public io_interface
 	std::vector<request_sender *> low_prio_senders;
 	std::vector<std::shared_ptr<disk_io_thread> > io_threads;
 	callback::ptr cb;
-	file_mapper *block_mapper;
+	std::shared_ptr<file_mapper> block_mapper;
 	thread_safe_FIFO_queue<io_request> complete_queue;
 	slab_allocator &msg_allocator;
 
@@ -58,8 +58,9 @@ public:
 	typedef std::shared_ptr<remote_io> ptr;
 
 	remote_io(const std::vector<std::shared_ptr<disk_io_thread> > &remotes,
-			slab_allocator &msg_allocator, file_mapper *mapper, thread *t,
-			const safs_header &header, int max_reqs = MAX_DISK_CACHED_REQS);
+			slab_allocator &msg_allocator, std::shared_ptr<file_mapper> mapper,
+			thread *t, const safs_header &header,
+			int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_io();
 

@@ -353,7 +353,7 @@ void test_gemm_simple(bool in_mem, size_t dim1, size_t dim2)
 	gettimeofday(&start, NULL);
 
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
-	dense_matrix::ptr res = mat1->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	dense_matrix::ptr res = mat1->multiply(*mat2, matrix_layout_t::L_NONE);
 	res->materialize_self();
 	detail::matrix_stats.print_diff(orig_stats);
 
@@ -372,7 +372,7 @@ void test_MvTransMv_simple(bool in_mem, size_t dim1, size_t dim2)
 	gettimeofday(&start, NULL);
 
 	detail::matrix_stats_t orig_stats = detail::matrix_stats;
-	mat1->transpose()->multiply(*mat2, matrix_layout_t::L_NONE, true);
+	mat1->transpose()->multiply(*mat2, matrix_layout_t::L_NONE);
 	detail::matrix_stats.print_diff(orig_stats);
 
 	gettimeofday(&end, NULL);
@@ -412,9 +412,9 @@ void test_gemm_simul(size_t block_size, size_t num_blocks)
 		dense_matrix::ptr small_mat = dense_matrix::create_randu<double>(
 				0, 1, block_size, block_size, matrix_layout_t::L_COL);
 
-		mat = mat->scale_cols(vec);
-		mat = mat->multiply(*small_mat, matrix_layout_t::L_NONE, true);
-		mat = mat->scale_cols(vec);
+		mat = mat->scale_cols(col_vec::create(vec));
+		mat = mat->multiply(*small_mat, matrix_layout_t::L_NONE);
+		mat = mat->scale_cols(col_vec::create(vec));
 		mv1->set_block(0, mat);
 	}
 

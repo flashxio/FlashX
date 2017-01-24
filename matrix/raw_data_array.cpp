@@ -17,7 +17,9 @@
  * limitations under the License.
  */
 
+#ifdef USE_NUMA
 #include <numa.h>
+#endif
 #include <malloc.h>
 
 #include <boost/format.hpp>
@@ -30,6 +32,7 @@
 #include "matrix_config.h"
 #include "bulk_operate.h"
 #include "local_mem_buffer.h"
+#include "matrix_exception.h"
 
 namespace fm
 {
@@ -55,7 +58,11 @@ public:
 	}
 
 	void operator()(char *addr) {
+#ifdef USE_NUMA
 		numa_free(addr, size);
+#else
+		free(addr);
+#endif
 	}
 };
 
@@ -74,7 +81,12 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 
 	std::shared_ptr<char> ret;
 	if (node_id >= 0) {
+#ifdef USE_NUMA
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+#else
+		void *addr = malloc_aligned(num_bytes, PAGE_SIZE);
+#endif
+		assert(((long) addr) % 512 == 0);
 		ret = std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
 	}
 	else {
@@ -82,9 +94,13 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 		// overhead.
 		if (is_local)
 			ret = local_mem_buffer::alloc(num_bytes);
-		if (ret == NULL)
-			ret = std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
-					aligned_deleter());
+		if (ret == NULL) {
+			void *addr = NULL;
+			int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
+			assert(ret_val == 0);
+			assert(((long) ret.get()) % 512 == 0);
+			ret = std::shared_ptr<char>((char *) addr, aligned_deleter());
+		}
 	}
 	assert(ret);
 	return ret;
@@ -96,6 +112,7 @@ local_raw_array::local_raw_array(size_t num_bytes,
 		bool cached): raw_array(num_bytes, -1)
 {
 	data = memalloc_node(-1, cached, num_bytes);
+	this->cached = cached;
 }
 
 void local_raw_array::expand(size_t min)
@@ -105,7 +122,7 @@ void local_raw_array::expand(size_t min)
 	std::shared_ptr<char> new_data;
 	// TODO should we allocate memory in the local buffer when we expand
 	// memory.
-	new_data = memalloc_node(-1, true, new_num_bytes);
+	new_data = memalloc_node(-1, cached, new_num_bytes);
 	memcpy(new_data.get(), data.get(), get_num_bytes());
 	resize(new_num_bytes);
 	data = new_data;
@@ -119,7 +136,7 @@ simple_raw_array::simple_raw_array(size_t num_bytes,
 
 void simple_raw_array::reset_data()
 {
-	assert(0);
+	memset(data.get(), 0, get_num_bytes());
 }
 
 simple_raw_array simple_raw_array::deep_copy() const
@@ -226,23 +243,61 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 	}
 	else if (node_id < 0) {
 		smp_reserved_bytes += num_bytes;
-		return std::shared_ptr<char>(
-				(char *) memalign(PAGE_SIZE, num_bytes), smp_reserved_deleter());
+		void *addr = NULL;
+		int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
+		assert(ret_val == 0);
+		std::shared_ptr<char> ret((char *) addr, smp_reserved_deleter());
+		assert(((long) ret.get()) % 512 == 0);
+		return ret;
 	}
 
 	assert((size_t) node_id < reserved_chunks.size());
 	if (!reserved_chunks[node_id].empty()) {
 		auto ret = reserved_chunks[node_id].back();
 		reserved_chunks[node_id].pop_back();
+		assert(ret);
+		assert(((long) ret) % 512 == 0);
 		return std::shared_ptr<char>(ret, NUMA_reserved_deleter(node_id));
 	}
 	else {
 		reserved_bytes += num_bytes;
+#ifdef USE_NUMA
 		void *addr = numa_alloc_onnode(num_bytes, node_id);
+#else
+		void *addr = malloc_aligned(num_bytes, PAGE_SIZE);
+#endif
+		assert(addr);
+		assert(((long) addr) % 512 == 0);
 		return std::shared_ptr<char>((char *) addr, NUMA_reserved_deleter(node_id));
 	}
 }
 
+}
+
+size_t get_reserved_bytes()
+{
+	return reserved_bytes + smp_reserved_bytes;
+}
+
+size_t get_reserved_bytes_inuse()
+{
+	size_t nbytes = get_reserved_bytes();
+	size_t num_unused_chunks = smp_reserved_chunks.size();
+	for (size_t i = 0; i < reserved_chunks.size(); i++)
+		num_unused_chunks += reserved_chunks[i].size();
+	assert(nbytes >= num_unused_chunks * ARR_CHUNK_SIZE);
+	return nbytes - num_unused_chunks * ARR_CHUNK_SIZE;
+}
+
+void print_reserve_status()
+{
+	printf("reserve %ld bytes for NUMA and %ld for SMP\n", reserved_bytes.load(),
+			smp_reserved_bytes.load());
+	for (size_t i = 0; i < reserved_chunks.size(); i++)
+		printf("%ld bytes for NUMA node %ld are unused\n",
+				reserved_chunks[i].size() * ARR_CHUNK_SIZE, i);
+	printf("%ld bytes for SMP are unused\n",
+			smp_reserved_chunks.size() * ARR_CHUNK_SIZE);
 }
 
 void destroy_memchunk_reserve()
@@ -254,7 +309,11 @@ void destroy_memchunk_reserve()
 		free(smp_reserved_chunks[i]);
 	for (size_t i = 0; i < reserved_chunks.size(); i++)
 		for (size_t j = 0; j < reserved_chunks[i].size(); j++)
+#ifdef USE_NUMA
 			numa_free(reserved_chunks[i][j], ARR_CHUNK_SIZE);
+#else
+			free(reserved_chunks[i][j]);
+#endif
 	reserved_bytes = 0;
 	smp_reserved_bytes = 0;
 }
@@ -269,8 +328,12 @@ void init_memchunk_reserve(int num_nodes)
 chunked_raw_array::chunked_raw_array(size_t num_bytes, size_t block_size,
 		int node_id): raw_array(num_bytes, node_id)
 {
+	if (block_size > ARR_CHUNK_SIZE)
+		throw alloc_error((boost::format(
+						"The block size (%1%) is larger than max (%2%)")
+					% block_size % ARR_CHUNK_SIZE).str());
+
 	this->contig_block_size = block_size;
-	assert(block_size <= ARR_CHUNK_SIZE);
 	// Total number of blocks to store data. We need to round it up.
 	size_t num_blocks = ceil(((double) num_bytes) / block_size);
 	// The number of blocks in a memory chunk. We need to round it down.

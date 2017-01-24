@@ -84,7 +84,8 @@ void vv_gr_label_operate::run(const void *key, const sub_data_frame &val,
 }
 
 vector_vector::ptr vector_vector::groupby(const factor_vector &labels,
-			const gr_apply_operate<local_vv_store> &op) const
+			const gr_apply_operate<local_vv_store> &op,
+			detail::vec_store::ptr store) const
 {
 	struct vv_deleter {
 		void operator()(detail::vec_store *vv) { }
@@ -106,7 +107,7 @@ vector_vector::ptr vector_vector::groupby(const factor_vector &labels,
 	if (!ret)
 		return vector_vector::ptr();
 	vv_gr_label_operate vv_op(labels.get_type(), op);
-	return df->groupby("factor", vv_op);
+	return df->groupby("factor", vv_op, store);
 }
 
 vector_vector::ptr vector_vector::apply(const arr_apply_operate &op) const
@@ -114,6 +115,7 @@ vector_vector::ptr vector_vector::apply(const arr_apply_operate &op) const
 	int num_parts = std::min((size_t) get_num_omp_threads(), get_num_vecs());
 	std::vector<detail::vv_store::ptr> vv_stores(num_parts);
 	size_t part_num_vecs = ceil(((double) get_num_vecs()) / num_parts);
+	// TODO I need to make it work for external memory.
 #pragma omp parallel for
 	for (int i = 0; i < num_parts; i++) {
 		// TODO Here I divide the vector_vector evenly in terms of the number

@@ -89,7 +89,6 @@ std::vector<coo_nz_t> sparse_block_2d::get_non_zeros(
 
 void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 {
-	assert(num_coo_vals == 0);
 	memcpy(get_rpart_end(), &part, part_size);
 	size_t num_entries = part.get_num_entries(part_size);
 	if (num_entries > 0) {
@@ -119,12 +118,8 @@ void sparse_block_2d::add_coo(const std::vector<coo_nz_t> &nz,
 
 void sparse_block_2d::finalize(const char *data, size_t num_bytes)
 {
-	// If there are row parts but we haven't added the empty row to indicate
-	// the end of the row part region.
-	if (num_coo_vals == 0) {
-		sparse_row_part end(std::numeric_limits<uint16_t>::max());
-		append(end, sparse_row_part::get_size(0));
-	}
+	sparse_row_part end(std::numeric_limits<uint16_t>::max());
+	append(end, sparse_row_part::get_size(0));
 
 	if (data)
 		memcpy(get_nz_data(), data, num_bytes);
@@ -308,6 +303,34 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 	matrix_header *header = (matrix_header *) header_data.first;
 	header->verify();
 	return ptr(new SpM_2d_storage(data, index, mat_file));
+}
+
+SpM_2d_storage::ptr SpM_2d_storage::create(const vector_vector &vv,
+		SpM_2d_index::ptr index)
+{
+	if (!vv.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector of vectors has to be in memory";
+		return SpM_2d_storage::ptr();
+	}
+	vector::ptr vec = vv.cat();
+	if (vec->get_type().get_type() != get_type<char>()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The vector of vectors contains a wrong type of data";
+		return SpM_2d_storage::ptr();
+	}
+
+	size_t size = vec->get_length();
+	// The sparse matrix multiplication accesses data in pages. We have to
+	// make sure the array that stores the sparse matrix is aligned to
+	// page size.
+	NUMA_mapper mapper(safs::params.get_num_nodes(), MAT_CHUNK_SIZE_LOG);
+	safs::NUMA_buffer::ptr data = safs::NUMA_buffer::create(
+			ROUNDUP(size, PAGE_SIZE), mapper);
+	data->copy_from(
+			dynamic_cast<const detail::mem_vec_store &>(vec->get_data()).get_raw_arr(),
+			vec->get_length(), 0);
+	return ptr(new SpM_2d_storage(data, index, "anonymous"));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,

@@ -48,9 +48,10 @@ EM_object::file_holder::ptr EM_object::file_holder::create_temp(
 	safs::safs_file f(safs::get_sys_RAID_conf(), tmp_name);
 	bool ret = f.create_file(num_bytes, safs::params.get_RAID_block_size(),
 			safs::params.get_RAID_mapping_option(), group);
-	assert(ret);
-	file_holder::ptr holder(new file_holder(tmp_name, false));
-	return holder;
+	if (!ret)
+		return file_holder::ptr();
+	else
+		return file_holder::ptr(new file_holder(tmp_name, false));
 }
 
 EM_object::file_holder::ptr EM_object::file_holder::create(
@@ -67,8 +68,10 @@ EM_object::file_holder::~file_holder()
 {
 	if (!persistent) {
 		safs::safs_file f(safs::get_sys_RAID_conf(), file_name);
-		assert(f.exist());
-		f.delete_file();
+		if (f.exist())
+			f.delete_file();
+		else
+			BOOST_LOG_TRIVIAL(error) << file_name << " doesn't exist any more";
 	}
 }
 
@@ -185,6 +188,31 @@ int portion_callback::invoke(safs::io_request *reqs[], int num)
 		}
 	}
 	return 0;
+}
+
+bool EM_portion_dispatcher::issue_task()
+{
+	pthread_spin_lock(&lock);
+	off_t global_start = portion_idx * portion_size;
+	if ((size_t) global_start >= tot_len) {
+		pthread_spin_unlock(&lock);
+		return false;
+	}
+
+	// If we have many portions remaining, we can issue a task with multiple
+	// portions. However, if there remains only a small number of portions,
+	// we should return one portion at a time to achieve better load balancing.
+	size_t num_remain = div_ceil(tot_len - portion_size * portion_idx,
+			portion_size);
+	if (num_remain < balance_thres)
+		num_portions_task = 1;
+
+	size_t length = std::min(portion_size * num_portions_task,
+			tot_len - global_start);
+	portion_idx += div_ceil(length, portion_size);
+	pthread_spin_unlock(&lock);
+	create_task(global_start, length);
+	return true;
 }
 
 }

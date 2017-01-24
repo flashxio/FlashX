@@ -33,12 +33,14 @@
 #include "safs_exception.h"
 #include "comm_exception.h"
 
-#include "graph.h"
 //#include "edge_type.h"
 #include "vertex.h"
 #include "in_mem_storage.h"
 #include "utils.h"
 #include "vertex_index_constructor.h"
+
+#include "data_io.h"
+#include "data_frame.h"
 
 using namespace safs;
 
@@ -499,6 +501,32 @@ mem_serial_graph::ptr mem_serial_graph::create(bool directed,
 		return mem_serial_graph::ptr(new mem_directed_graph(edge_data_size));
 	else
 		return mem_serial_graph::ptr(new mem_undirected_graph(edge_data_size));
+}
+
+fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
+		bool in_mem, const std::string &delim, const std::string &edge_attr_type,
+		bool directed)
+{
+	std::vector<fm::ele_parser::const_ptr> ele_parsers(2);
+	ele_parsers[0] = fm::ele_parser::const_ptr(new fm::int_parser<fg::vertex_id_t>());
+	ele_parsers[1] = fm::ele_parser::const_ptr(new fm::int_parser<fg::vertex_id_t>());
+	if (edge_attr_type == "I")
+		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<int>()));
+	else if (edge_attr_type == "L")
+		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<long>()));
+	else if (edge_attr_type == "F")
+		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<float>()));
+	else if (edge_attr_type == "D")
+		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<double>()));
+	else if (!edge_attr_type.empty() && edge_attr_type != "B") {
+		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
+		return fm::data_frame::ptr();
+	}
+
+	fm::dup_policy policy = fm::dup_policy::NONE;
+	if (!directed)
+		policy = fm::dup_policy::REVERSE;
+	return fm::read_data_frame(files, in_mem, delim, ele_parsers, policy);
 }
 
 }

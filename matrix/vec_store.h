@@ -89,17 +89,41 @@ public:
 		return entry_size;
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
+	virtual size_t get_num_bytes() const {
+		return get_length() * get_type().get_size();
+	}
+
 	virtual bool resize(size_t new_length) {
 		this->length = new_length;
 		return true;
 	}
 
+	virtual void clear() {
+		vec_store::resize(0);
+	}
+
 	// Copy #eles to the data array and return #eles copied.
 	virtual size_t copy_to(char *data, size_t num_eles) const;
 
+	/*
+	 * This is almost the same as `resize' except that it doesn't change
+	 * the length of the vector.
+	 */
+	virtual bool reserve(size_t num_eles) = 0;
+
+	virtual size_t get_reserved_size() const = 0;
+
+	/*
+	 * These two functions need to be thread-safe.
+	 */
 	virtual bool append(std::vector<vec_store::const_ptr>::const_iterator vec_it,
 			std::vector<vec_store::const_ptr>::const_iterator vec_end) = 0;
 	virtual bool append(const vec_store &vec) = 0;
+
 	virtual vec_store::ptr deep_copy() const = 0;
 	virtual vec_store::ptr shallow_copy() = 0;
 	virtual vec_store::const_ptr shallow_copy() const = 0;

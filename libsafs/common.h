@@ -125,4 +125,12 @@ int get_omp_thread_num();
 
 std::string gen_rand_name(size_t len);
 
+template<class T>
+T div_ceil(T v1, T v2)
+{
+	assert(v1 > 0);
+	assert(v2 > 0);
+	return 1 + ((v1 - 1) / v2); // if v1 != 0
+}
+
 #endif

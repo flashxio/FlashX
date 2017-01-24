@@ -44,7 +44,9 @@ public:
 				matrix_layout_t::L_COL, x->get_type(),
 				x->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(x->get_raw_store(), res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				x->get_num_cols());
+		mat->multiply(x->get_raw_store(), res, create);
 		return dense_matrix::create(res);
 	}
 
@@ -75,6 +77,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return get_scalar_type<double>();
 	}
+	virtual std::string get_name() const {
+		return "apply1_2";
+	}
 };
 
 /*
@@ -83,7 +88,7 @@ public:
 class NA_eigen_Operator: public spm_function
 {
 	sparse_matrix::ptr mat;
-	vector::ptr deg_vec1_2;
+	col_vec::ptr deg_vec1_2;
 public:
 	NA_eigen_Operator(sparse_matrix::ptr mat) {
 		this->mat = mat;
@@ -96,11 +101,12 @@ public:
 				mat->get_num_rows(), 1, matrix_layout_t::L_COL,
 				get_scalar_type<double>(), matrix_conf.get_num_nodes(), true);
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(vec->get_raw_store(), deg);
+		auto create = detail::spmm_creator<double, float>::create(*mat, 1);
+		mat->multiply(vec->get_raw_store(), deg, create);
 		vec = dense_matrix::create(deg);
 		// Get D^-1/2.
 		vec = vec->sapply(bulk_uoperate::const_ptr(new apply1_2()));
-		deg_vec1_2 = vec->get_col(0);
+		deg_vec1_2 = col_vec::create(vec);
 	}
 
 	virtual dense_matrix::ptr run(dense_matrix::ptr &x) const {
@@ -113,7 +119,9 @@ public:
 				matrix_layout_t::L_COL, tmp->get_type(),
 				tmp->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(tmp->get_raw_store(), res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				tmp->get_num_cols());
+		mat->multiply(tmp->get_raw_store(), res, create);
 		dense_matrix::ptr tmp2 = dense_matrix::create(res);
 		return tmp2->scale_rows(deg_vec1_2);
 	}
@@ -144,14 +152,18 @@ public:
 				matrix_layout_t::L_ROW, x->get_type(),
 				x->get_data().get_num_nodes());
 		assert(mat->get_entry_size() == 0 || mat->is_type<float>());
-		mat->multiply<double, float>(x->get_raw_store(), tmp);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				x->get_num_cols());
+		mat->multiply(x->get_raw_store(), tmp, create);
 		x = NULL;
 
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				t_mat->get_num_rows(), tmp->get_num_cols(),
 				matrix_layout_t::L_COL, tmp->get_type(), tmp->get_num_nodes());
 		assert(t_mat->get_entry_size() == 0 || t_mat->is_type<float>());
-		t_mat->multiply<double, float>(tmp, res);
+		auto create = detail::spmm_creator<double, float>::create(*mat,
+				tmp->get_num_cols());
+		t_mat->multiply(tmp, res, create);
 		return dense_matrix::create(res);
 	}
 
@@ -175,6 +187,7 @@ void print_usage()
 	fprintf(stderr, "-o file: output eigenvectors\n");
 	fprintf(stderr, "-T type: eigen, SVD, NA_eigen (normalized adjacency)\n");
 	fprintf(stderr, "-c num: The number of cached matrices\n");
+	fprintf(stderr, "-m: keep sparse matrix in memory\n");
 }
 
 int main (int argc, char *argv[])
@@ -188,8 +201,9 @@ int main (int argc, char *argv[])
 	std::string solver;
 	double tol = -1;
 	bool in_mem = true;
+	bool spm_in_mem = false;
 	size_t num_cached = 1;
-	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:")) != -1) {
+	while ((opt = getopt(argc, argv, "b:n:s:t:eo:T:c:m")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'b':
@@ -222,6 +236,9 @@ int main (int argc, char *argv[])
 			case 'c':
 				num_cached = atoi(optarg);
 				num_opts++;
+				break;
+			case 'm':
+				spm_in_mem = true;
 				break;
 			default:
 				print_usage();
@@ -289,18 +306,32 @@ int main (int argc, char *argv[])
 	// Load matrix.
 	sparse_matrix::ptr mat;
 	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
-	if (type == "SVD" && mat_f.exist())
-		mat = sparse_matrix::create(
-				index, safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS),
-				t_index, safs::create_io_factory(t_matrix_file,
-					safs::REMOTE_ACCESS));
+	if (type == "SVD" && mat_f.exist()) {
+		if (spm_in_mem) {
+			mat = sparse_matrix::create(
+					index, SpM_2d_storage::safs_load(matrix_file, index),
+					t_index, SpM_2d_storage::safs_load(t_matrix_file, t_index));
+		}
+		else {
+			safs::file_io_factory::shared_ptr factory
+				= safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS);
+			safs::file_io_factory::shared_ptr t_factory
+				= safs::create_io_factory(t_matrix_file, safs::REMOTE_ACCESS);
+			mat = sparse_matrix::create(index, factory, t_index, t_factory);
+		}
+	}
 	else if (type == "SVD")
 		mat = sparse_matrix::create(
 				index, SpM_2d_storage::load(matrix_file, index),
 				t_index, SpM_2d_storage::load(t_matrix_file, t_index));
-	else if (mat_f.exist())
-		mat = sparse_matrix::create(index,
-				safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS));
+	else if (mat_f.exist()) {
+		if (spm_in_mem)
+			mat = sparse_matrix::create(index,
+					SpM_2d_storage::safs_load(matrix_file, index));
+		else
+			mat = sparse_matrix::create(index,
+					safs::create_io_factory(matrix_file, safs::REMOTE_ACCESS));
+	}
 	else
 		mat = sparse_matrix::create(index,
 				SpM_2d_storage::load(matrix_file, index));

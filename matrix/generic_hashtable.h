@@ -24,6 +24,7 @@
 
 #include "data_frame.h"
 #include "mem_vec_store.h"
+#include "bulk_operate_ext.h"
 
 namespace fm
 {
@@ -80,8 +81,12 @@ public:
 			auto ret = table.insert(std::pair<KeyType, ValType>(keys[i],
 						vals[i]));
 			// TODO this is going to be slow.
-			if (!ret.second)
-				op.runCombine(1, &vals[i], &ret.first->second, &ret.first->second);
+			if (!ret.second) {
+				ValType tmp_vals[2];
+				tmp_vals[0] = ret.first->second;
+				tmp_vals[1] = vals[i];
+				op.runCombine(2, tmp_vals, &ret.first->second);
+			}
 		}
 	}
 
@@ -93,9 +98,12 @@ public:
 		for (auto it = gtable1.table.begin(); it != gtable1.table.end(); it++) {
 			auto ret = table.insert(std::pair<KeyType, ValType>(it->first,
 						it->second));
-			if (!ret.second)
-				op.runCombine(1, &it->second, &ret.first->second,
-						&ret.first->second);
+			if (!ret.second) {
+				ValType tmp_vals[2];
+				tmp_vals[0] = ret.first->second;
+				tmp_vals[1] = it->second;
+				op.runCombine(2, tmp_vals, &ret.first->second);
+			}
 		}
 	}
 

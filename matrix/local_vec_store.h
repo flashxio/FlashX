@@ -183,6 +183,14 @@ public:
 		assert(0);
 		return detail::vec_store::ptr();
 	}
+	virtual bool reserve(size_t num_eles) {
+		assert(0);
+		return false;
+	}
+	virtual size_t get_reserved_size() const {
+		assert(0);
+		return 0;
+	}
 };
 
 class local_ref_vec_store: public local_vec_store
@@ -255,6 +263,9 @@ public:
 				global_start, length, type, node_id),
 			arr(length * type.get_size(), cached) {
 		set_data(arr.get_raw(), arr.get_raw());
+	}
+	virtual size_t get_reserved_size() const {
+		return arr.get_num_bytes() / get_type().get_size();
 	}
 
 	virtual bool resize(size_t new_length);

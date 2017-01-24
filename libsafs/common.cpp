@@ -29,6 +29,9 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#ifdef USE_NUMA
+#include <numa.h>
+#endif
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
@@ -60,6 +63,13 @@ void set_use_huge_page(bool v)
 	use_huge_page = v;
 }
 
+void *malloc_aligned(size_t size, size_t alignment)
+{
+	void *addr = NULL;
+	int ret = posix_memalign(&addr, alignment, size);
+	return ret == 0 ? addr : NULL;
+}
+
 void *malloc_large(size_t size)
 {
 #define PROTECTION (PROT_READ | PROT_WRITE)
@@ -81,7 +91,11 @@ void *malloc_large(size_t size)
 		return addr;
 	}
 	else {
+#ifdef USE_NUMA
 		return numa_alloc_local(size);
+#else
+		return malloc_aligned(size, 4096);
+#endif
 	}
 }
 
@@ -92,7 +106,11 @@ void free_large(void *addr, size_t size)
 		munmap(addr, size);
 	}
 	else {
+#ifdef USE_NUMA
 		numa_free(addr, size);
+#else
+		free(addr);
+#endif
 	}
 }
 

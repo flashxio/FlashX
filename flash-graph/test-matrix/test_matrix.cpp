@@ -23,7 +23,6 @@
 #endif
 
 #include "FGlib.h"
-#include "matrix/FG_sparse_matrix.h"
 #include "matrix/kmeans.h"
 #include "ts_graph.h"
 
@@ -206,14 +205,9 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[]) {
 
 	} else if (matrix_type == "adj") {
 		std::vector<eigen_pair_t> eigen_pairs;
-		FG_adj_matrix::ptr matrix = FG_adj_matrix::create(graph);
-		nrow = matrix->get_num_rows();
+		nrow = graph->get_graph_header().get_num_vertices();
 
-#if 0
-		compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
-#else
 		dummy_eigs(nev, nrow, eigen_pairs);
-#endif
 		// Convert the eigen_pairs to a flattened matrix
 		p_eig_matrix = new double[nrow*nev];
 		pairs_to_p_mat(p_eig_matrix, eigen_pairs);

@@ -35,7 +35,6 @@ add_library(FMatrix STATIC
 	mem_vec_store.cpp
 	one_val_matrix_store.cpp
 	rand_gen.cpp
-	fm_utils.cpp
 	matrix_store.cpp
 	mem_vv_store.cpp
 	local_vv_store.cpp
@@ -46,10 +45,25 @@ add_library(FMatrix STATIC
 	EM_object.cpp
 	local_mem_buffer.cpp
 	bulk_operate.cpp
+	factor.cpp
+	col_vec.cpp
+	combined_matrix_store.cpp
+	cached_matrix_store.cpp
 	matrix_config.cpp
+	agg_matrix_store.cpp
+	matrix_stats.cpp
+	block_matrix.cpp
+	IPW_matrix_store.cpp
+	sink_matrix.cpp
+	project_matrix_store.cpp
+	EM_vv_store.cpp
+	groupby_matrix_store.cpp
+	materialize.cpp
+	sub_matrix_store.cpp
+	set_data_matrix_store.cpp
+	fm_utils.cpp
 )
 
 if(ENABLE_TRILINOS)
 	subdirs(eigensolver)
 endif()
-subdirs(utils)

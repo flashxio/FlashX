@@ -21,7 +21,9 @@
  */
 
 #include <pthread.h>
-#include <numa.h>
+#ifdef __APPLE__
+#include <libkern/OSAtomic.h>
+#endif
 
 template<class T>
 class atomic_number
@@ -84,43 +86,60 @@ public:
 	}
 };
 
-template<class T>
-class atomic_array
+class spin_lock
 {
-	volatile T *arr;
-	int size;
+private:    //private copy-ctor and assignment operator ensure the lock never gets copied, which might cause issues.
+#if 0
+	// We can't just simply disable these two. The code won't be compiled.
+	// Will it cause problems if we allow them?
+	spin_lock operator=(const spin_lock & asdf);
+	spin_lock(const spin_lock & asdf);
+#endif
+#ifdef __APPLE__
+	OSSpinLock m_lock;
 public:
-	atomic_array(int size) {
-		this->size = size;
-		arr = (T *) numa_alloc_local(sizeof(T) * size);
-		memset((void *) arr, 0, sizeof(T) * size);
+	spin_lock()
+		: m_lock(0)
+	{}
+	void lock() {
+		OSSpinLockLock(&m_lock);
+	}
+	bool try_lock() {
+		return OSSpinLockTry(&m_lock);
+	}
+	void unlock() {
+		OSSpinLockUnlock(&m_lock);
+	}
+#else
+	pthread_spinlock_t m_lock;
+public:
+	spin_lock() {
+		pthread_spin_init(&m_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	~atomic_array() {
-		numa_free((void *) arr, sizeof(T) * size);
+	void lock() {
+		pthread_spin_lock(&m_lock);
 	}
-
-	T get(int idx) const {
-		return arr[idx];
+	bool try_lock() {
+		int ret = pthread_spin_trylock(&m_lock);
+		return ret != 16;   //EBUSY == 16, lock is already taken
 	}
-
-	bool CAS(int idx, T expected, T value) {
-		return __sync_bool_compare_and_swap(&arr[idx], expected, value);
+	void unlock() {
+		pthread_spin_unlock(&m_lock);
 	}
+	~spin_lock() {
+		pthread_spin_destroy(&m_lock);
+	}
+#endif
 };
 
 class seq_lock
 {
 	volatile unsigned long count;
-	pthread_spinlock_t lock;
+	spin_lock lock;
 public:
 	seq_lock() {
 		count = 0;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	~seq_lock() {
-		pthread_spin_destroy(&lock);
 	}
 
 	void read_lock(unsigned long &count) const {
@@ -138,13 +157,13 @@ public:
 	}
 
 	void write_lock() {
-		pthread_spin_lock(&lock);
+		lock.lock();
 		__sync_fetch_and_add(&count, 1);
 	}
 
 	void write_unlock() {
 		__sync_fetch_and_add(&count, 1);
-		pthread_spin_unlock(&lock);
+		lock.unlock();
 	}
 };
 
@@ -179,23 +198,6 @@ public:
 
 	int get_num_tot_flags() const {
 		return sizeof(T) * 8;
-	}
-};
-
-class spin_lock
-{
-	pthread_spinlock_t _lock;
-public:
-	spin_lock() {
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	void lock() {
-		pthread_spin_lock(&_lock);
-	}
-
-	void unlock() {
-		pthread_spin_unlock(&_lock);
 	}
 };
 

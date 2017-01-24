@@ -20,6 +20,7 @@
  * limitations under the License.
  */
 
+#include <string.h>
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <limits.h>

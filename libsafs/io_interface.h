@@ -512,6 +512,7 @@ class cache_config;
 class RAID_config;
 
 io_select::ptr create_io_select(const std::vector<io_interface::ptr> &ios);
+size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios);
 
 /**
  * This function creates an I/O factory of the specified I/O method.
@@ -575,6 +576,11 @@ void print_io_summary();
  * \param weight The new weight of the file.
  */
 void set_file_weight(const std::string &file_name, int weight);
+
+/**
+ * This gets the string that indicates the features compiled into SAFS.
+ */
+std::string get_supported_features();
 
 }
 

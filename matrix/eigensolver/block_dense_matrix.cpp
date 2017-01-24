@@ -83,11 +83,6 @@ public:
 			std::shared_ptr<detail::portion_compute> compute) const {
 		throw unsupported_exception();
 	}
-	virtual detail::async_res_t get_portion_async(size_t start_row,
-			size_t start_col, size_t num_rows, size_t num_cols,
-			std::shared_ptr<detail::portion_compute> compute) {
-		throw unsupported_exception();
-	}
 	virtual std::shared_ptr<const detail::local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const {
@@ -720,11 +715,13 @@ public:
 		if (ins.size() == 1)
 			out.copy_from(*ins[0]);
 		else {
+			detail::part_dim_t dim = get_out_num_rows() > get_out_num_cols()
+				? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
 			mapply2(*ins[0], *ins[1],
-					out.get_type().get_basic_ops().get_add(), out);
+					out.get_type().get_basic_ops().get_add(), dim, out);
 			for (size_t i = 2; i < ins.size(); i++)
 				mapply2(*ins[i], out,
-						out.get_type().get_basic_ops().get_add(), out);
+						out.get_type().get_basic_ops().get_add(), dim, out);
 		}
 	}
 
@@ -826,10 +823,7 @@ void gemm_op<T>::run(
 	detail::matrix_stats.inc_multiplies(
 			ins[0]->get_num_rows() * Bstore->get_num_rows() * Bstore->get_num_cols());
 	assert(A_num_blocks + C_num_blocks == ins.size());
-
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	T *res_mat;
 	res_mat = (T *) out.get_raw_arr();
@@ -1008,9 +1002,7 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		return block_multi_vector::ptr();
 	}
 
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	assert(A.get_num_rows() == this->get_num_rows());
 
 	double d_alpha
@@ -1281,9 +1273,7 @@ void multiply_wide_op<T>::run(
 			ins[0]->get_num_rows() * out.get_num_rows() * out.get_num_cols());
 
 	assert(ins.size() >= 2);
-	detail::pool_task_thread *thread = dynamic_cast<detail::pool_task_thread *>(
-			thread::get_curr_thread());
-	int thread_id = thread->get_pool_thread_id();
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
 	const T *Amat = NULL;
 	size_t num_Arows;
@@ -1365,9 +1355,7 @@ dense_matrix::ptr MvTransMv_wide(
 		const std::vector<detail::matrix_store::const_ptr> &blocks1,
 		detail::matrix_store::const_ptr in2, const size_t MAX_MUL_BLOCKS)
 {
-	detail::mem_thread_pool::ptr threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	size_t num_threads = threads->get_num_threads();
+	size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 	std::vector<detail::matrix_store::const_ptr> tmp_res;
 	std::vector<detail::portion_mapply_op::const_ptr> mul_ops;
 	for (size_t i = 0; i < blocks1.size(); i += MAX_MUL_BLOCKS) {
@@ -1427,7 +1415,8 @@ dense_matrix::ptr MvTransMv_wide(
 			// It's possible that the local matrix store doesn't exist
 			// because the input matrix is very small.
 			if (local_ms[j])
-				detail::mapply2(*local_res, *local_ms[j], add, *local_res);
+				detail::mapply2(*local_res, *local_ms[j], add,
+						detail::part_dim_t::PART_NONE, *local_res);
 		}
 		start_row += local_res->get_num_rows();
 	}
@@ -1469,7 +1458,8 @@ dense_matrix::ptr block_multi_vector::MvTransMv(
 						this->get_num_cols()));
 		detail::matrix_stats_t orig_stats = detail::matrix_stats;
 		dense_matrix::ptr ret = in1->transpose()->multiply(*in2,
-				matrix_layout_t::L_NONE, true);
+				matrix_layout_t::L_NONE);
+		ret->materialize_self();
 		detail::matrix_stats.print_diff(orig_stats);
 		return ret;
 	}
@@ -1529,8 +1519,9 @@ std::vector<double> block_multi_vector::MvDot(const block_multi_vector &mv) cons
 		dense_matrix::ptr mat1 = get_block(i);
 		dense_matrix::ptr mat2 = mv.get_block(i);
 		dense_matrix::ptr res = mat1->multiply_ele(*mat2);
-		vector::ptr sum = res->col_sum();
-		std::vector<double> tmp = sum->conv2std<double>();
+		dense_matrix::ptr sum = res->col_sum();
+		col_vec::ptr sum_vec = col_vec::create(sum);
+		std::vector<double> tmp = sum_vec->conv2std<double>();
 		ret.insert(ret.end(), tmp.begin(), tmp.end());
 	}
 	return ret;

@@ -69,6 +69,9 @@ public:
 
 	void dump(const std::string &file) const;
 
+	const safs::NUMA_buffer &get_data() const {
+		return *graph_data;
+	}
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };
 

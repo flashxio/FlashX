@@ -21,9 +21,9 @@
  */
 
 #include "virtual_matrix_store.h"
-#include "dense_matrix.h"
 #include "mem_matrix_store.h"
 #include "EM_object.h"
+#include "materialize.h"
 
 namespace fm
 {
@@ -32,6 +32,7 @@ namespace detail
 {
 
 class portion_mapply_op;
+class materialized_mapply_tall_store;
 
 /*
  * This class represents the result matrix of mapply operations.
@@ -47,45 +48,47 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 	const size_t data_id;
 
 	/*
-	 * This indicates whether or not we cache a portion in each worker thread.
-	 * By default, this is enabled.
-	 */
-	bool cache_portion;
-
-	/*
 	 * This indicates whether the input matrices are accessed in parallel
 	 * when the matrix is materialized.
 	 */
 	bool par_access;
 
+	int num_nodes;
+
 	matrix_layout_t layout;
 	const std::vector<matrix_store::const_ptr> in_mats;
 	portion_mapply_op::const_ptr op;
-	// The materialized result matrix.
-	matrix_store::const_ptr res;
+
+	std::shared_ptr<materialized_mapply_tall_store> res;
 public:
 	typedef std::shared_ptr<const mapply_matrix_store> const_ptr;
 
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op,
-			matrix_layout_t layout, size_t nrow, size_t ncol,
-			size_t data_id = mat_counter++);
+			matrix_layout_t layout, size_t data_id = mat_counter++);
 
+	const std::vector<matrix_store::const_ptr> get_input_mats() const {
+		return in_mats;
+	}
+
+	bool is_materialized() const;
+
+	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range);
 	virtual void set_cache_portion(bool cache_portion);
 
 	void set_par_access(bool par_access) {
 		this->par_access = par_access;
 	}
 
+	virtual void set_materialize_level(materialize_level level,
+			detail::matrix_store::ptr materialize_buf);
+
 	virtual void materialize_self() const;
 
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 		int num_nodes) const;
 
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
-	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
 	using virtual_matrix_store::get_portion;
@@ -95,12 +98,13 @@ public:
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t id) const;
 	virtual int get_portion_node_id(size_t id) const;
+	using virtual_matrix_store::get_portion_async;
 	virtual async_cres_t get_portion_async(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols, std::shared_ptr<portion_compute> compute) const;
 	virtual std::pair<size_t, size_t> get_portion_size() const;
 	virtual int get_num_nodes() const {
-		return in_mats.front()->get_num_nodes();
+		return num_nodes;
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

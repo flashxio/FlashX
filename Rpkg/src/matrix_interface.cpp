@@ -16,13 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifdef USE_PROFILER
+#include <gperftools/profiler.h>
+#endif
 #include <unordered_map>
 #include <Rcpp.h>
+#include <Rmath.h>
+#include <fmr_isna.h>
 
 #include "log.h"
 #include "safs_file.h"
+#include "io_interface.h"
 
-#include "FGlib.h"
 #include "data_frame.h"
 #include "sparse_matrix.h"
 #include "bulk_operate.h"
@@ -31,20 +36,81 @@
 #ifdef ENABLE_TRILINOS
 #include "eigensolver/eigensolver.h"
 #endif
+#include "factor.h"
+#include "EM_dense_matrix.h"
+#include "EM_vector.h"
+#include "combined_matrix_store.h"
+#include "block_matrix.h"
+#include "col_vec.h"
+#include "project_matrix_store.h"
+#include "fm_utils.h"
 
 #include "rutils.h"
 #include "fmr_utils.h"
 #include "matrix_ops.h"
+#include "data_io.h"
 
 using namespace fm;
 
-fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
-
-template<class EntryType>
-dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
-		matrix_layout_t layout, EntryType initv)
+static inline bool is_supported_type(const scalar_type &type)
 {
-	return dense_matrix::create_const(initv, nrow, ncol, layout);
+	return type == get_scalar_type<int>()
+		|| type == get_scalar_type<double>();
+}
+
+static matrix_layout_t determine_layout(size_t nrow, size_t ncol)
+{
+	return nrow > ncol ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+}
+
+static inline const scalar_type &get_common_type(const scalar_type &left,
+		const scalar_type &right)
+{
+	if (left == right)
+		return left;
+	else if (left == get_scalar_type<int>() && right == get_scalar_type<double>())
+		return right;
+	else if (right == get_scalar_type<int>() && left == get_scalar_type<double>())
+		return left;
+	else {
+		fprintf(stderr, "left type: %d, right type: %d\n", left.get_type(),
+				right.get_type());
+		return get_scalar_type<double>();
+	}
+}
+
+static inline prim_type get_prim_type(SEXP obj)
+{
+	if (R_is_integer(obj))
+		return prim_type::P_INTEGER;
+	else if (R_is_real(obj))
+		return prim_type::P_DOUBLE;
+	// boolean values in R are stored as integers.
+	else if (R_is_logical(obj))
+		return prim_type::P_INTEGER;
+	else
+		return prim_type::NUM_TYPES;
+}
+
+static inline scalar_variable::ptr get_scalar(SEXP po)
+{
+	if (R_is_real(po)) {
+		return scalar_variable::ptr(
+				new scalar_variable_impl<double>(REAL(po)[0]));
+	}
+	else if (R_is_integer(po)) {
+		return scalar_variable::ptr(
+				new scalar_variable_impl<int>(INTEGER(po)[0]));
+	}
+	else if (R_is_logical(po)) {
+		// boolean values in R are stored as integers.
+		return scalar_variable::ptr(
+				new scalar_variable_impl<int>(LOGICAL(po)[0]));
+	}
+	else {
+		fprintf(stderr, "The R variable has unsupported type\n");
+		return scalar_variable::ptr();
+	}
 }
 
 RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
@@ -56,97 +122,394 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	if (num_nodes == 1)
 		num_nodes = -1;
 	vector::ptr vec;
-	if (R_is_real(pinitv))
-		vec = create_rep_vector<double>(len, REAL(pinitv)[0], num_nodes, true);
-	else if (R_is_integer(pinitv))
-		vec = create_rep_vector<int>(len, INTEGER(pinitv)[0], num_nodes, true);
+	if (R_is_real(pinitv)) {
+		dense_matrix::ptr vec = dense_matrix::create_const<double>(
+				REAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		return create_FMR_vector(vec, "");
+	}
+	else if (R_is_integer(pinitv)) {
+		dense_matrix::ptr vec = dense_matrix::create_const<int>(
+				INTEGER(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		return create_FMR_vector(vec, "");
+	}
+	else if (R_is_logical(pinitv)) {
+		dense_matrix::ptr vec = dense_matrix::create_const<int>(
+				LOGICAL(pinitv)[0], len, 1, matrix_layout_t::L_COL);
+		if (vec) {
+			Rcpp::List ret = create_FMR_vector(vec, "");
+			ret["ele_type"] = Rcpp::String("logical");
+			return ret;
+		}
+		else
+			return R_NilValue;
+	}
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
-		return Rcpp::List();
+		return R_NilValue;
 	}
-
-	return create_FMR_vector(vec->get_raw_store(), "");
 }
 
-template<class T>
-class rand_set_operate: public type_set_vec_operate<T>
+RcppExport SEXP R_FM_create_randmat(SEXP ptype, SEXP pnrow, SEXP pncol,
+		SEXP pin_mem, SEXP pname, SEXP pparams)
 {
-	const T min;
-	const T max;
-
-	T gen_rand() const {
-		// We need to rescale and shift the random number accordingly.
-		return unif_rand() * (max - min) + min;
-	}
-public:
-	rand_set_operate(T _min, T _max): min(_min), max(_max) {
-	}
-
-	virtual void set(T *arr, size_t num_eles, off_t start_idx) const {
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = gen_rand();
-		}
-	}
-};
-
-RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
-{
-	size_t n;
-	double min, max;
-	bool ret1, ret2, ret3;
-	ret1 = R_get_number<size_t>(pn, n);
-	ret2 = R_get_number<double>(pmin, min);
-	ret3 = R_get_number<double>(pmax, max);
-	if (!ret1 || !ret2 || !ret3) {
+	std::string type = CHAR(STRING_ELT(ptype, 0));
+	std::string name = CHAR(STRING_ELT(pname, 0));
+	size_t nrow;
+	size_t ncol;
+	bool ret1 = R_get_number<size_t>(pnrow, nrow);
+	bool ret2 = R_get_number<size_t>(pncol, ncol);
+	if (!ret1 || !ret2) {
 		fprintf(stderr, "the arguments aren't of the supported type\n");
 		return R_NilValue;
 	}
+	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr, "can't create ext-mem matrix when SAFS is disabled\n");
+		return R_NilValue;
+	}
 
-	// TODO let's just use in-memory dense matrix first.
-	GetRNGstate();
 	int num_nodes = matrix_conf.get_num_nodes();
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	vector::ptr v = vector::create(n, get_scalar_type<double>(), num_nodes,
-			true, rand_set_operate<double>(min, max));
-	PutRNGstate();
-	return create_FMR_vector(v->get_raw_store(), "");
+
+	matrix_layout_t layout = determine_layout(nrow, ncol);
+	dense_matrix::ptr mat;
+	if (type == "uniform") {
+		Rcpp::List params(pparams);
+		double min, max;
+		bool ret2 = R_get_number<double>(params["min"], min);
+		bool ret3 = R_get_number<double>(params["max"], max);
+		if (!ret2 || !ret3)
+			fprintf(stderr, "min/max aren't of the supported type\n");
+		else
+			mat = dense_matrix::create_randu<double>(min, max, nrow, ncol,
+					layout, num_nodes, in_mem);
+	}
+	else if (type == "norm") {
+		Rcpp::List params(pparams);
+		double mu, sigma;
+		bool ret2 = R_get_number<double>(params["mu"], mu);
+		bool ret3 = R_get_number<double>(params["sigma"], sigma);
+		if (!ret2 || !ret3)
+			fprintf(stderr, "mu/sigma aren't of the supported type\n");
+		else
+			mat = dense_matrix::create_randn<double>(mu, sigma, nrow, ncol,
+					layout, num_nodes, in_mem);
+	}
+	else
+		fprintf(stderr, "unsupported type\n");
+
+	if (mat) {
+		detail::EM_object::const_ptr em_mat
+			= std::dynamic_pointer_cast<const detail::EM_object>(
+					mat->get_raw_store());
+		if (em_mat && !name.empty()) {
+			bool ret = em_mat->set_persistent(name);
+			if (!ret)
+				fprintf(stderr, "Can't set matrix %s persistent\n", name.c_str());
+		}
+		return create_FMR_matrix(mat, "");
+	}
+	else
+		return R_NilValue;
 }
 
 RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 {
-	// This function always generates a sequence of real numbers.
-	double from, to, by;
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
+
 	bool ret1, ret2, ret3;
-	ret1 = R_get_number<double>(pfrom, from);
-	ret2 = R_get_number<double>(pto, to);
-	ret3 = R_get_number<double>(pby, by);
-	if (!ret1 || !ret2 || !ret3) {
-		fprintf(stderr, "the arguments aren't of the supported type\n");
-		return R_NilValue;
+	bool any_double = R_is_real(pfrom) || R_is_real(pto) || R_is_real(pby);
+	// If any of the arguments is floating-point, we output a floating-point
+	// matrix.
+	if (any_double) {
+		double from, to, by;
+		ret1 = R_get_number<double>(pfrom, from);
+		ret2 = R_get_number<double>(pto, to);
+		ret3 = R_get_number<double>(pby, by);
+		if (!ret1 || !ret2 || !ret3) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+		vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes,
+				true);
+		return create_FMR_vector(vec->get_raw_store(), "");
 	}
+	else {
+		int from, to, by;
+		ret1 = R_get_number<int>(pfrom, from);
+		ret2 = R_get_number<int>(pto, to);
+		ret3 = R_get_number<int>(pby, by);
+		if (!ret1 || !ret2 || !ret3) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+		vector::ptr vec = create_seq_vector<int>(from, to, by, num_nodes,
+				true);
+		return create_FMR_vector(vec->get_raw_store(), "");
+	}
+
+}
+
+RcppExport SEXP R_FM_create_seq_matrix(SEXP pfrom, SEXP pto, SEXP pnrow,
+		SEXP pncol, SEXP pbyrow)
+{
+	size_t nrow, ncol;
+	bool byrow = false;
+	bool ret1, ret2, ret3, ret4, ret5;
 
 	int num_nodes = matrix_conf.get_num_nodes();
 	// When there is only one NUMA node, it's better to use SMP vector.
 	if (num_nodes == 1)
 		num_nodes = -1;
-	vector::ptr vec = create_seq_vector<double>(from, to, by, num_nodes, true);
-	return create_FMR_vector(vec->get_raw_store(), "");
+
+	ret3 = R_get_number<size_t>(pnrow, nrow);
+	ret4 = R_get_number<size_t>(pncol, ncol);
+	ret5 = R_get_number<bool>(pbyrow, byrow);
+
+	// If from or to is floating-point, we output a floating-point
+	// matrix.
+	bool any_double = R_is_real(pfrom) || R_is_real(pto);
+	if (any_double) {
+		double from, to;
+		ret1 = R_get_number<double>(pfrom, from);
+		ret2 = R_get_number<double>(pto, to);
+		if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+
+		double by = (to - from) / (nrow * ncol - 1);
+		dense_matrix::ptr mat = dense_matrix::create_seq<double>(from, by,
+				nrow, ncol, determine_layout(nrow, ncol), byrow, num_nodes);
+		return create_FMR_matrix(mat, "");
+	}
+	else {
+		int from, to;
+		ret1 = R_get_number<int>(pfrom, from);
+		ret2 = R_get_number<int>(pto, to);
+		if (!ret1 || !ret2 || !ret3 || !ret4 || !ret5) {
+			fprintf(stderr, "the arguments aren't of the supported type\n");
+			return R_NilValue;
+		}
+
+		int by = (to - from) / (nrow * ncol - 1);
+		dense_matrix::ptr mat = dense_matrix::create_seq<int>(from, by,
+				nrow, ncol, determine_layout(nrow, ncol), byrow, num_nodes);
+		return create_FMR_matrix(mat, "");
+	}
 }
 
-RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
+RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 {
-	Rcpp::List graph = Rcpp::List(pgraph);
-	Rcpp::LogicalVector res(1);
-	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
-	// TODO does this work if this isn't a binary matrix?
-	sparse_matrix::ptr m = sparse_matrix::create(fg, NULL);
-	std::string name = graph["name"];
-	return create_FMR_matrix(m, name);
+	std::string mat_file = CHAR(STRING_ELT(pname, 0));
+	if (!safs::exist_safs_file(mat_file)) {
+		fprintf(stderr, "The dense matrix doesn't exist\n");
+		return R_NilValue;
+	}
+	detail::EM_matrix_store::ptr store = detail::EM_matrix_store::create(
+			mat_file);
+	if (store == NULL)
+		return R_NilValue;
+	// TODO how do we determine the matrix element type?
+	return create_FMR_matrix(dense_matrix::create(store), "");
 }
 
-RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
+RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
+		SEXP pele_type, SEXP pdelim, SEXP pncol, SEXP pmat_name)
+{
+	Rcpp::StringVector rcpp_mats(pname);
+	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
+	bool in_mem = LOGICAL(pin_mem)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string mat_name = CHAR(STRING_ELT(pmat_name, 0));
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat;
+	if (TYPEOF(pncol) == INTSXP) {
+		int ncol = INTEGER(pncol)[0];
+		// R uses 4-bytes integers.
+		// When it's the maximal integer value, we need to convert it to
+		// the maximal value of 8-byte integer to indicate automatic discovery
+		// of the number of columns.
+		if (ncol == std::numeric_limits<int>::max())
+			ncol = std::numeric_limits<size_t>::max();
+		mat = read_matrix(mat_files, in_mem, ele_type, delim, ncol);
+	}
+	else {
+		std::string cols = CHAR(STRING_ELT(pncol, 0));
+		mat = read_matrix(mat_files, in_mem, ele_type, delim, cols);
+	}
+	if (mat == NULL)
+		return R_NilValue;
+
+	// If a user provides the name for the matrix and the matrix is stored
+	// on disks, let's make it persistent on disks.
+	if (!mat_name.empty() && !mat->is_in_mem()) {
+		const detail::EM_object *obj
+			= dynamic_cast<const detail::EM_object *>(mat->get_raw_store().get());
+		if (obj)
+			obj->set_persistent(mat_name);
+	}
+
+	return create_FMR_matrix(mat, mat_name);
+}
+
+static const scalar_type *get_scalar_type(const std::string &type_name)
+{
+	if (type_name == "B")
+		return &get_scalar_type<bool>();
+	else if (type_name == "I")
+		return &get_scalar_type<int>();
+	else if (type_name == "L")
+		return &get_scalar_type<long>();
+	else if (type_name == "F")
+		return &get_scalar_type<float>();
+	else if (type_name == "D")
+		return &get_scalar_type<double>();
+	return NULL;
+}
+
+RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
+		SEXP pnrow, SEXP pncol, SEXP pbyrow, SEXP pele_type, SEXP pmat_name)
+{
+	std::string file_name = CHAR(STRING_ELT(pname, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
+	size_t nrow = REAL(pnrow)[0];
+	size_t ncol = REAL(pncol)[0];
+	bool byrow = LOGICAL(pbyrow)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string mat_name = CHAR(STRING_ELT(pmat_name, 0));
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
+	matrix_layout_t layout
+		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	const scalar_type *type_p = get_scalar_type(ele_type);
+	if (type_p == NULL) {
+		fprintf(stderr, "wrong element type\n");
+		return R_NilValue;
+	}
+	const scalar_type &type = *type_p;
+
+	safs::native_file ext_f(file_name);
+	if (!ext_f.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", file_name.c_str());
+		return R_NilValue;
+	}
+	if (ext_f.get_size() < (ssize_t) (nrow * ncol * type.get_size())) {
+		fprintf(stderr, "%s doesn't contain enough data for the matrix\n",
+				file_name.c_str());
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat;
+	// Load the matrix to SAFS.
+	if (!in_mem) {
+		// If a user provides a matrix name, we need to make the matrix
+		// persistent on SAFS.
+		bool temp = true;
+		if (!mat_name.empty())
+			temp = false;
+
+		detail::EM_matrix_store::ptr store = detail::EM_matrix_store::load(
+				file_name, nrow, ncol, layout, type);
+		if (store == NULL) {
+			fprintf(stderr, "can't load %s to SAFS\n", file_name.c_str());
+			return R_NilValue;
+		}
+
+		if (!temp) {
+			const detail::EM_object *obj
+				= dynamic_cast<const detail::EM_object *>(store.get());
+			if (obj)
+				obj->set_persistent(mat_name);
+		}
+		mat = dense_matrix::create(store);
+	}
+	else {
+		detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+				nrow, ncol, layout, type, -1);
+		FILE *f = fopen(file_name.c_str(), "r");
+		if (f == NULL) {
+			fprintf(stderr, "can't open %s: %s\n", file_name.c_str(),
+					strerror(errno));
+			return R_NilValue;
+		}
+		size_t ret = fread(store->get_raw_arr(), nrow * ncol * type.get_size(),
+				1, f);
+		if (ret != 1) {
+			fprintf(stderr, "can't read %s: %s\n", file_name.c_str(),
+					strerror(errno));
+			return R_NilValue;
+		}
+		mat = dense_matrix::create(store);
+	}
+	if (mat) {
+		if (mat->get_type() == get_scalar_type<float>())
+			mat = mat->cast_ele_type(get_scalar_type<double>());
+		return create_FMR_matrix(mat, mat_name);
+	}
+	else
+		return R_NilValue;
+}
+
+RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
+		SEXP pele_type, SEXP pdelim, SEXP pname)
+{
+	std::string file = CHAR(STRING_ELT(pfile, 0));
+	bool in_mem = LOGICAL(pin_mem)[0];
+	bool is_sym = LOGICAL(pis_sym)[0];
+	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string mat_name = CHAR(STRING_ELT(pname, 0));
+	const scalar_type *type_p = get_scalar_type(ele_type);
+
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"SAFS isn't init, can't store a matrix on SAFS\n");
+		return R_NilValue;
+	}
+
+	std::vector<ele_parser::const_ptr> parsers;
+	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
+	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
+	if (ele_type == "I")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<int>()));
+	else if (ele_type == "L")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<long>()));
+	else if (ele_type == "F")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<float>()));
+	else if (ele_type == "D")
+		parsers.push_back(ele_parser::const_ptr(new int_parser<double>()));
+	std::vector<std::string> files(1, file);
+	dup_policy policy = dup_policy::NONE;
+	if (is_sym)
+		policy = dup_policy::REVERSE;
+	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers, policy);
+	if (df == NULL)
+		return R_NilValue;
+
+	sparse_matrix::ptr spm = create_2d_matrix(df,
+			block_2d_size(16 * 1024, 16 * 1024), type_p, is_sym, mat_name);
+	return create_FMR_matrix(spm, mat_name);
+}
+
+RcppExport SEXP R_FM_load_spm_bin_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
@@ -186,7 +549,7 @@ RcppExport SEXP R_FM_load_matrix_sym(SEXP pmat_file, SEXP pindex_file, SEXP pin_
 	return create_FMR_matrix(mat, "mat_file");
 }
 
-RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
+RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 		SEXP ptmat_file, SEXP ptindex_file, SEXP pin_mem)
 {
 	std::string mat_file = CHAR(STRING_ELT(pmat_file, 0));
@@ -254,38 +617,19 @@ RcppExport SEXP R_FM_load_matrix_asym(SEXP pmat_file, SEXP pindex_file,
 	return create_FMR_matrix(mat, "mat_file");
 }
 
-static SEXP SpMV(sparse_matrix::ptr matrix, vector::ptr vec)
-{
-	detail::mem_vec_store::const_ptr in_vec
-		= detail::mem_vec_store::cast(vec->get_raw_store());
-	detail::vec_store::ptr out_vec = detail::mem_vec_store::create(
-			matrix->get_num_rows(), in_vec->get_num_nodes(),
-			in_vec->get_type());
-	// TODO it only supports a binary matrix right now.
-	assert(matrix->get_entry_size() == 0);
-	if (vec->is_type<double>()) {
-		matrix->multiply<double, bool>(in_vec, out_vec);
-		return create_FMR_vector(out_vec, "");
-	}
-	else if (vec->is_type<int>()) {
-		matrix->multiply<int, bool>(in_vec, out_vec);
-		return create_FMR_vector(out_vec, "");
-	}
-	else {
-		fprintf(stderr, "the input vector has an unsupported type in SpMV\n");
-		return R_NilValue;
-	}
-
-}
-
-static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
+static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
+		dense_matrix::ptr right_mat)
 {
 	if (right_mat->store_layout() != matrix_layout_t::L_ROW) {
 		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
 	}
 	// The input matrix in the right operand might be a virtual matrix originally.
 	// When we convert its data layout, it's definitely a virtual matrix.
-	right_mat->materialize_self();
+	bool ret = right_mat->materialize_self();
+	if (!ret) {
+		fprintf(stderr, "can't materialize the right matrix\n");
+		return dense_matrix::ptr();
+	}
 
 	// TODO it only supports a binary matrix right now.
 	assert(matrix->get_entry_size() == 0);
@@ -296,8 +640,8 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<double, bool>(in_mat, out_mat);
-		return create_FMR_matrix(dense_matrix::create(out_mat), "");
+		matrix->multiply(in_mat, out_mat);
+		return dense_matrix::create(out_mat);
 	}
 	else if (right_mat->is_type<int>()) {
 		detail::mem_matrix_store::const_ptr in_mat
@@ -306,53 +650,69 @@ static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 				matrix->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
 				in_mat->get_num_nodes());
-		matrix->multiply<int, bool>(in_mat, out_mat);
-		return create_FMR_matrix(dense_matrix::create(out_mat), "");
+		matrix->multiply(in_mat, out_mat);
+		return dense_matrix::create(out_mat);
 	}
 	else {
 		fprintf(stderr, "the right matrix has an unsupported type in SpMM\n");
-		return R_NilValue;
+		return dense_matrix::ptr();
 	}
 }
 
 RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 {
 	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
-	if (is_vector(pmat)) {
-		vector::ptr vec = get_vector(pmat);
-		if (!vec->is_in_mem()) {
-			fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
-			return R_NilValue;
-		}
-		return SpMV(matrix, vec);
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "the right matrix can't be sparse\n");
+		return R_NilValue;
 	}
-	else {
-		dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
-		if (!right_mat->is_in_mem()) {
-			fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
-			return R_NilValue;
-		}
-		// We need to make sure the dense matrix is materialized before SpMM.
-		right_mat->materialize_self();
-		return SpMM(matrix, right_mat);
+
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "multiply doesn't support the type\n");
+		return R_NilValue;
 	}
+	if (!right_mat->is_in_mem()) {
+		fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr ret = SpMM(matrix, right_mat);
+	if (ret == NULL)
+		return R_NilValue;
+
+	if (is_vector(pmat))
+		return create_FMR_vector(ret, "");
+	else
+		return create_FMR_matrix(ret, "");
 }
 
 RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 {
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(matrix->get_type())
+			|| !is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
 	if (matrix->is_type<int>() && right_mat->is_type<double>())
 		matrix = matrix->cast_ele_type(get_scalar_type<double>());
 	if (matrix->is_type<double>() && right_mat->is_type<int>())
 		right_mat = right_mat->cast_ele_type(get_scalar_type<double>());
-	dense_matrix::ptr res = matrix->multiply(*right_mat,
-			matrix->store_layout(), true);
+	dense_matrix::ptr res = matrix->multiply(*right_mat);
 	if (res == NULL)
 		return R_NilValue;
 
-	if (!res->is_type<double>())
+	if (!res->is_type<double>()) {
+		// TODO this is really unnecessary. But we can't run sapply on an IPW
+		// matrix.
+		bool ret = res->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the result matrix\n");
+			return R_NilValue;
+		}
 		res = res->cast_ele_type(get_scalar_type<double>());
+	}
 
 	bool is_vec = is_vector(pmat);
 	if (res && is_vec) {
@@ -370,15 +730,25 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 {
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(matrix->get_type())
+			|| !is_supported_type(right_mat->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(matrix->get_type(),
+			right_mat->get_type());
+	if (common_type != matrix->get_type())
+		matrix = matrix->cast_ele_type(common_type);
+	if (common_type != right_mat->get_type())
+		right_mat = right_mat->cast_ele_type(common_type);
+
 	bulk_operate::const_ptr op1 = fmr::get_op(pfun1,
-			matrix->get_type().get_type(),
-			right_mat->get_type().get_type());
+			matrix->get_type().get_type());
 	if (op1 == NULL) {
 		fprintf(stderr, "can't find a right form for the left operator\n");
 		return R_NilValue;
 	}
 	bulk_operate::const_ptr op2 = fmr::get_op(pfun2,
-			op1->get_output_type().get_type(),
 			op1->get_output_type().get_type());
 	if (op2 == NULL) {
 		fprintf(stderr, "can't find a right form for the right operator\n");
@@ -400,67 +770,135 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 		return R_NilValue;
 }
 
-RcppExport SEXP R_FM_conv_matrix(SEXP pvec, SEXP pnrow, SEXP pncol, SEXP pbyrow)
+RcppExport SEXP R_FM_create_rep_matrix(SEXP pvec, SEXP pnrow, SEXP pncol,
+		SEXP pbyrow)
 {
-	Rcpp::S4 vec_obj(pvec);
-	if (!is_vector(vec_obj)) {
-		fprintf(stderr, "The input object isn't a vector\n");
-		return R_NilValue;
-	}
-
 	size_t nrow = REAL(pnrow)[0];
 	size_t ncol = REAL(pncol)[0];
 	bool byrow = LOGICAL(pbyrow)[0];
-	vector::ptr vec = get_vector(vec_obj);
-	if (vec == NULL) {
-		fprintf(stderr, "Can't get the vector\n");
-		return R_NilValue;
-	}
-	dense_matrix::ptr mat = vec->conv2mat(nrow, ncol, byrow);
-	if (mat == NULL) {
-		fprintf(stderr, "can't convert a vector to a matrix\n");
-		return R_NilValue;
-	}
-	return create_FMR_matrix(mat, "");
-}
 
-template<class T, class RType>
-void copy_FM2Rmatrix(const dense_matrix &mat, RType *r_vec)
-{
-	dense_matrix::ptr mem_mat;
-	if (!mat.is_in_mem())
-		mem_mat = mat.conv_store(true, -1);
+	bool is_logical = false;
+	dense_matrix::ptr ret;
+	if (R_is_real(pvec))
+		ret = dense_matrix::create_const<double>(REAL(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
+	else if (R_is_integer(pvec))
+		ret = dense_matrix::create_const<int>(INTEGER(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
+	else if (R_is_logical(pvec)) {
+		ret = dense_matrix::create_const<bool>(LOGICAL(pvec)[0], nrow, ncol,
+				determine_layout(nrow, ncol));
+		is_logical = true;
+	}
 	else {
-		mem_mat = mat.clone();
-		mem_mat->materialize_self();
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+		if (mat == NULL) {
+			fprintf(stderr, "we only accept FlashR vectors or R vectors\n");
+			return R_NilValue;
+		}
+		if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
+			fprintf(stderr, "we only accept vectors\n");
+			return R_NilValue;
+		}
+		col_vec::ptr vec = col_vec::create(mat);
+		vec->move_store(true, -1);
+		ret = dense_matrix::create_repeat(vec, nrow, ncol,
+				determine_layout(nrow, ncol), byrow, matrix_conf.get_num_nodes());
+		Rcpp::S4 matrix_obj(pvec);
+		if (matrix_obj.slot("ele_type") == "logical")
+			is_logical = true;;
 	}
-	const detail::mem_matrix_store &mem_store
-		= dynamic_cast<const detail::mem_matrix_store &>(mem_mat->get_data());
-	// TODO this is going to be slow. But I don't care about performance
-	// for now.
-	size_t nrow = mat.get_num_rows();
-	size_t ncol = mat.get_num_cols();
-	for (size_t i = 0; i < nrow; i++)
-		for (size_t j = 0; j < ncol; j++)
-			r_vec[i + j * nrow] = mem_store.get<T>(i, j);
+
+	if (ret == NULL)
+		return R_NilValue;
+	else {
+		Rcpp::List rret = create_FMR_matrix(ret, "");
+		if (is_logical)
+			rret["ele_type"] = Rcpp::String("logical");
+		return rret;
+	}
 }
 
 template<class T, class RType>
-void copy_FM2R_mem(dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
+class FM2R_portion_op: public detail::portion_mapply_op
 {
-	if (is_vec) {
-		vector::ptr mem_vec = mem_mat->get_col(0);
-		if (sizeof(T) == sizeof(RType))
-			mem_vec->get_data().copy_to((char *) ret, mem_vec->get_length());
-		else {
-			std::unique_ptr<T[]> tmp(new T[mem_vec->get_length()]);
-			mem_vec->get_data().copy_to((char *) tmp.get(), mem_vec->get_length());
-			for (size_t i = 0; i < mem_vec->get_length(); i++)
-				ret[i] = tmp[i];
+	RType *r_vec;
+	size_t global_nrow;
+public:
+	FM2R_portion_op(RType *r_vec, size_t global_nrow): detail::portion_mapply_op(
+			0, 0, get_scalar_type<int>()) {
+		this->r_vec = r_vec;
+		this->global_nrow = global_nrow;
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		fprintf(stderr, "FM2R portion operator doesn't support transpose\n");
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const {
+		size_t nrow = ins[0]->get_num_rows();
+		size_t ncol = ins[0]->get_num_cols();
+		const detail::local_col_matrix_store &col_in
+			= dynamic_cast<const detail::local_col_matrix_store &>(*ins[0]);
+		for (size_t j = 0; j < ncol; j++) {
+			const RType *src_col = reinterpret_cast<const RType *>(
+					col_in.get_col(j));
+			for (size_t i = 0; i < nrow; i++) {
+				off_t global_row = i + ins[0]->get_global_start_row();
+				off_t global_col = j + ins[0]->get_global_start_col();
+				r_vec[global_row + global_col * global_nrow] = src_col[i];
+			}
 		}
 	}
-	else
-		copy_FM2Rmatrix<T>(*mem_mat, ret);
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "FM2R_portion_op";
+	}
+
+	virtual bool is_agg() const {
+		return false;
+	}
+};
+
+template<class T, class RType>
+bool copy_FM2Rmatrix(dense_matrix::ptr mat, RType *r_vec)
+{
+	size_t chunk_size = detail::mem_matrix_store::CHUNK_SIZE;
+	// If the matrix is in memory and is small, we can copy it directly.
+	if (mat->is_in_mem() && mat->get_num_rows() < chunk_size
+			&& mat->get_num_cols() < chunk_size) {
+		bool ret = mat->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the matrix\n");
+			return R_NilValue;
+		}
+		if (mat->store_layout() == matrix_layout_t::L_ROW)
+			mat = mat->conv2(matrix_layout_t::L_COL);
+
+		detail::local_col_matrix_store::const_ptr col_lstore
+			= std::dynamic_pointer_cast<const detail::local_col_matrix_store>(
+					mat->get_raw_store()->get_portion(0));
+		size_t nrow = mat->get_num_rows();
+		size_t ncol = mat->get_num_cols();
+		for (size_t j = 0; j < ncol; j++) {
+			const RType *src_col = reinterpret_cast<const RType *>(
+					col_lstore->get_col(j));
+			for (size_t i = 0; i < nrow; i++)
+				r_vec[i + j * nrow] = src_col[i];
+		}
+	}
+	else {
+		// R stores data in col-major order
+		mat = mat->conv2(matrix_layout_t::L_COL);
+		std::vector<detail::matrix_store::const_ptr> mats(1, mat->get_raw_store());
+		detail::portion_mapply_op::const_ptr op(
+				new FM2R_portion_op<T, RType>(r_vec, mat->get_num_rows()));
+		detail::__mapply_portion(mats, op, matrix_layout_t::L_ROW);
+	}
+	return true;
 }
 
 RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
@@ -473,26 +911,14 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
-	assert(mat);
-	if (!mat->is_in_mem()) {
-		fprintf(stderr, "We only support in-memory matrix right now\n");
-		ret[0] = false;
-		return ret;
+	if (mat == NULL) {
+		fprintf(stderr, "cannot get a dense matrix.\n");
+		return R_NilValue;
 	}
-
-	bool is_vec = is_vector(pobj);
-	if (mat->is_type<double>()) {
-		copy_FM2R_mem<double, double>(mat, is_vec, REAL(pRmat));
-		ret[0] = true;
-	}
-	else if (mat->is_type<int>()) {
-		copy_FM2R_mem<int, int>(mat, is_vec, INTEGER(pRmat));
-		ret[0] = true;
-	}
-	else if (mat->is_type<bool>()) {
-		copy_FM2R_mem<bool, int>(mat, is_vec, LOGICAL(pRmat));
-		ret[0] = true;
-	}
+	if (mat->is_type<double>())
+		ret[0] = copy_FM2Rmatrix<double,double>(mat, REAL(pRmat));
+	else if (mat->is_type<int>())
+		ret[0] = copy_FM2Rmatrix<int, int>(mat, INTEGER(pRmat));
 	else {
 		fprintf(stderr, "the dense matrix doesn't have a right type\n");
 		ret[0] = false;
@@ -500,53 +926,6 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 
 	return ret;
 }
-
-#if 0
-template<class T, int SEXPType>
-SEXP conv_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec)
-{
-	if (is_vec) {
-		typename type_mem_vector<T>::ptr mem_vec = type_mem_vector<T>::create(mem_mat);
-		Rcpp::Vector<SEXPType> ret(mem_vec->get_length());
-		copy_FM2Rvector<T, Rcpp::Vector<SEXPType> >(*mem_vec, ret);
-		return ret;
-	}
-	else {
-		Rcpp::Matrix<SEXPType> ret(mem_mat->get_num_rows(),
-				mem_mat->get_num_cols());
-		copy_FM2Rmatrix<T, Rcpp::Matrix<SEXPType>>(
-				*type_mem_dense_matrix<T>::create(mem_mat), ret);
-		return ret;
-	}
-}
-
-RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
-{
-	if (is_sparse(pobj)) {
-		fprintf(stderr, "We can't convert a sparse matrix to an R object\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
-	if (!mat->is_in_mem()) {
-		fprintf(stderr, "We only support in-memory matrix right now\n");
-		return R_NilValue;
-	}
-
-	mem_dense_matrix::ptr mem_mat = mem_dense_matrix::cast(mat);
-	bool is_vec = is_vector(pobj);
-	if (mem_mat->is_type<double>())
-		return conv_FM2R_mem<double, REALSXP>(mem_mat, is_vec);
-	else if (mem_mat->is_type<int>())
-		return conv_FM2R_mem<int, INTSXP>(mem_mat, is_vec);
-	else if (mem_mat->is_type<bool>())
-		return conv_FM2R_mem<bool, LGLSXP>(mem_mat, is_vec);
-	else {
-		fprintf(stderr, "the dense matrix doesn't have a right type\n");
-		return R_NilValue;
-	}
-}
-#endif
 
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
@@ -577,6 +956,23 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 				vec.size() * fm_vec->get_entry_size());
 		return create_FMR_vector(fm_vec, "");
 	}
+	else if (R_is_logical(pobj)) {
+		Rcpp::LogicalVector vec(pobj);
+		// We need to store an R boolean vector as an integer vector because
+		// there are three potential values for an R boolean variable.
+		std::unique_ptr<int[]> tmp(new int[vec.size()]);
+		for (int i = 0; i < vec.size(); i++)
+			tmp[i] = vec[i];
+
+		detail::mem_vec_store::ptr fm_vec = detail::mem_vec_store::create(
+				vec.size(), num_nodes, get_scalar_type<int>());
+		fm_vec->copy_from((char *) tmp.get(),
+				vec.size() * fm_vec->get_entry_size());
+		Rcpp::List ret = create_FMR_vector(fm_vec, "");
+		// we need to indicate this is a boolean vector.
+		ret["ele_type"] = Rcpp::String("logical");
+		return ret;
+	}
 	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
@@ -589,7 +985,9 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 	bool byrow = LOGICAL(pbyrow)[0];
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
-	int num_nodes = matrix_conf.get_num_nodes();
+	// I think we can assume the matrix converted from an R matrix is small.
+	// So it's enough to store it as a SMP matrix.
+	int num_nodes = -1;
 	if (R_is_real(pobj)) {
 		Rcpp::NumericMatrix mat(pobj);
 		size_t nrow = mat.nrow();
@@ -614,6 +1012,23 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 				fm_mat->set<int>(i, j, mat(i, j));
 		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
 	}
+	else if (R_is_logical(pobj)) {
+		Rcpp::LogicalMatrix mat(pobj);
+		size_t nrow = mat.nrow();
+		size_t ncol = mat.ncol();
+		// We need to store an R boolean matrix as an integer matrix because
+		// there are three potential values for an R boolean variable.
+		detail::mem_matrix_store::ptr fm_mat
+			= detail::mem_matrix_store::create(nrow, ncol, layout,
+					get_scalar_type<int>(), num_nodes);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				fm_mat->set<int>(i, j, mat(i, j));
+		Rcpp::List ret = create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		// we need to indicate this is a boolean matrix.
+		ret["ele_type"] = Rcpp::String("logical");
+		return ret;
+	}
 	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
@@ -624,15 +1039,18 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 RcppExport SEXP R_FM_transpose(SEXP pmat)
 {
 	Rcpp::S4 matrix_obj(pmat);
+	Rcpp::List ret;
 	if (is_sparse(matrix_obj)) {
 		sparse_matrix::ptr m = get_matrix<sparse_matrix>(matrix_obj);
-		return create_FMR_matrix(m->transpose(), "");
+		ret = create_FMR_matrix(m->transpose(), "");
 	}
 	else {
 		dense_matrix::ptr m = get_matrix<dense_matrix>(matrix_obj);
 		dense_matrix::ptr tm = m->transpose();
-		return create_FMR_matrix(tm, "");
+		ret = create_FMR_matrix(tm, "");
 	}
+	ret["ele_type"] = matrix_obj.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_get_basic_op(SEXP pname)
@@ -677,16 +1095,6 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	return ret;
 }
 
-static prim_type get_prim_type(SEXP obj)
-{
-	if (R_is_integer(obj))
-		return prim_type::P_INTEGER;
-	else if (R_is_real(obj))
-		return prim_type::P_DOUBLE;
-	else
-		return prim_type::NUM_TYPES;
-}
-
 RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 {
 	Rcpp::S4 obj1(po1);
@@ -701,8 +1109,19 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
-			m2->get_type().get_type());
+	if (!is_supported_type(m1->get_type())
+			|| !is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(m1->get_type(),
+			m2->get_type());
+	if (common_type != m1->get_type())
+		m1 = m1->cast_ele_type(common_type);
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -743,6 +1162,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return op->get_output_type();
 	}
+	virtual std::string get_name() const {
+		return "mapply_AE";
+	}
 };
 
 RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
@@ -755,28 +1177,37 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m1->get_type())) {
+		fprintf(stderr, "The input matrix have unsupported type\n");
+		return R_NilValue;
+	}
 
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type(),
-			get_prim_type(po2));
+	// Get the scalar.
+	scalar_variable::ptr o2 = get_scalar(po2);
+	if (o2 == NULL)
+		return R_NilValue;
+
+	const scalar_type &common_type = get_common_type(m1->get_type(),
+			o2->get_type());
+	if (common_type != m1->get_type())
+		m1 = m1->cast_ele_type(common_type);
+	if (common_type != o2->get_type())
+		o2 = o2->cast_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	dense_matrix::ptr out;
-	if (R_is_real(po2)) {
-		double res;
-		R_get_number<double>(po2, res);
+	if (m1->get_type() == get_scalar_type<double>()) {
+		double val = scalar_variable::get_val<double>(*o2);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<double>(op, res)));
+					new AE_operator<double>(op, val)));
 	}
-	else if (R_is_integer(po2)) {
-		int res;
-		R_get_number<int>(po2, res);
+	else if (m1->get_type() == get_scalar_type<int>()) {
+		int val = scalar_variable::get_val<int>(*o2);
 		out = m1->sapply(std::shared_ptr<bulk_uoperate>(
-					new AE_operator<int>(op, res)));
-	}
-	else {
-		fprintf(stderr, "wrong type of the right input\n");
-		return R_NilValue;
+					new AE_operator<int>(op, val)));
 	}
 
 	if (out == NULL)
@@ -815,6 +1246,9 @@ public:
 	virtual const scalar_type &get_output_type() const {
 		return op->get_output_type();
 	}
+	virtual std::string get_name() const {
+		return "mapply_EA";
+	}
 };
 
 RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
@@ -827,28 +1261,36 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 
 	bool is_vec = is_vector(obj2);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
+	if (!is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrix have unsupported type\n");
+		return R_NilValue;
+	}
 
-	bulk_operate::const_ptr op = fmr::get_op(pfun, get_prim_type(po1),
-			m2->get_type().get_type());
+	scalar_variable::ptr o1 = get_scalar(po1);;
+	if (o1 == NULL)
+		return R_NilValue;
+
+	const scalar_type &common_type = get_common_type(m2->get_type(),
+			o1->get_type());
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+	if (common_type != o1->get_type())
+		o1 = o1->cast_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	dense_matrix::ptr out;
-	if (R_is_real(po1)) {
-		double res;
-		R_get_number<double>(po1, res);
+	if (m2->get_type() == get_scalar_type<double>()) {
+		double val = scalar_variable::get_val<double>(*o1);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<double>(op, res)));
+					new EA_operator<double>(op, val)));
 	}
-	else if (R_is_integer(po1)) {
-		int res;
-		R_get_number<int>(po1, res);
+	else if (m2->get_type() == get_scalar_type<int>()) {
+		int val = scalar_variable::get_val<int>(*o1);
 		out = m2->sapply(std::shared_ptr<bulk_uoperate>(
-					new EA_operator<int>(op, res)));
-	}
-	else {
-		fprintf(stderr, "wrong type of the left input\n");
-		return R_NilValue;
+					new EA_operator<int>(op, val)));
 	}
 
 	if (out == NULL)
@@ -865,18 +1307,37 @@ RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
 		fprintf(stderr, "mapply2_MV doesn't support sparse matrix\n");
 		return R_NilValue;
 	}
+	if (!is_vector(po2)) {
+		fprintf(stderr, "the second argument must be a vector\n");
+		return R_NilValue;
+	}
 	dense_matrix::ptr m = get_matrix<dense_matrix>(po1);
-	vector::ptr v = get_vector(po2);
+	dense_matrix::ptr v = get_matrix<dense_matrix>(po2);
+	if (!is_supported_type(m->get_type())
+			|| !is_supported_type(v->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	if (v->get_num_cols() > 1) {
+		fprintf(stderr, "The second argument should be a vector\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(v->get_type(),
+			m->get_type());
+	if (common_type != m->get_type())
+		m = m->cast_ele_type(common_type);
+	if (common_type != v->get_type())
+		v = v->cast_ele_type(common_type);
+
 	int margin = INTEGER(pmargin)[0];
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type(),
-			v->get_type().get_type());
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 	dense_matrix::ptr res;
 	if (margin == matrix_margin::MAR_ROW)
-		res = m->mapply_rows(v, op);
+		res = m->mapply_rows(col_vec::create(v), op);
 	else if (margin == matrix_margin::MAR_COL)
-		res = m->mapply_cols(v, op);
+		res = m->mapply_cols(col_vec::create(v), op);
 	else {
 		fprintf(stderr, "a wrong margin\n");
 		return R_NilValue;
@@ -899,12 +1360,51 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 	// We only need to test on one vector.
 	bool is_vec = is_vector(obj);
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 
 	bulk_uoperate::const_ptr op = fmr::get_uop(pfun, m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
 	dense_matrix::ptr out = m->sapply(op);
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
+
+RcppExport SEXP R_FM_apply(SEXP pfun, SEXP pmargin, SEXP pobj)
+{
+	Rcpp::S4 obj(pobj);
+	if (is_sparse(obj)) {
+		fprintf(stderr, "apply doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	// We only need to test on one vector.
+	bool is_vec = is_vector(obj);
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+
+	fm::arr_apply_operate::const_ptr op = fmr::get_apply_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr out = m->apply((fm::matrix_margin) margin, op);
 	if (out == NULL)
 		return R_NilValue;
 	else if (is_vec)
@@ -922,7 +1422,6 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 		fprintf(stderr, "can't aggregate on the matrix\n");
 		return R_NilValue;
 	}
-	assert(res->get_type() == get_scalar_type<T>());
 	if (res != NULL) {
 		ret[0] = *(const T *) res->get_raw();
 		return ret;
@@ -942,20 +1441,45 @@ RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (m->is_type<bool>())
-		m = m->cast_ele_type(get_scalar_type<int>());
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
 
-	if (m->is_type<double>())
+	if (op->get_output_type() == get_scalar_type<double>())
 		return matrix_agg<double, Rcpp::NumericVector>(*m, op);
-	else if (m->is_type<int>())
+	else if (op->get_output_type() == get_scalar_type<int>())
 		return matrix_agg<int, Rcpp::IntegerVector>(*m, op);
+	else if (op->get_output_type() == get_scalar_type<bool>())
+		return matrix_agg<bool, Rcpp::LogicalVector>(*m, op);
 	else {
 		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
 		return R_NilValue;
 	}
+}
+
+RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr res = m->aggregate(matrix_margin::BOTH, op);
+	return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
@@ -967,8 +1491,10 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 	}
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (m->is_type<bool>())
-		m = m->cast_ele_type(get_scalar_type<int>());
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
 	if (op == NULL)
 		return R_NilValue;
@@ -978,13 +1504,50 @@ RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
 		fprintf(stderr, "unknown margin\n");
 		return R_NilValue;
 	}
-	vector::ptr res = m->aggregate((matrix_margin) margin, op);
+	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+	// If we aggregate on the long dimension.
+	if ((m->is_wide() && margin == matrix_margin::MAR_ROW)
+			|| (!m->is_wide() && margin == matrix_margin::MAR_COL)) {
+		bool ret = res->materialize_self();
+		if (!ret) {
+			fprintf(stderr, "can't materialize the result matrix\n");
+			return R_NilValue;
+		}
+	}
+
 	if (res == NULL) {
 		fprintf(stderr, "can't aggregate on the matrix\n");
 		return R_NilValue;
 	}
 	else
-		return create_FMR_vector(res->get_raw_store(), "");
+		return create_FMR_vector(res, "");
+}
+
+RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
+{
+	Rcpp::S4 obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg_mat doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	if (!is_supported_type(m->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
+	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "unknown margin\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
+	return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
@@ -993,7 +1556,11 @@ RcppExport SEXP R_FM_sgroupby(SEXP pvec, SEXP pfun)
 		fprintf(stderr, "Doesn't support sgroupby on a matrix\n");
 		return R_NilValue;
 	}
-	vector::ptr vec = get_vector(pvec);
+	col_vec::ptr vec = get_vector(pvec);
+	if (!is_supported_type(vec->get_type())) {
+		fprintf(stderr, "The input vector has unsupported type\n");
+		return R_NilValue;
+	}
 	agg_operate::const_ptr op = fmr::get_agg_op(pfun, vec->get_type());
 	data_frame::ptr groupby_res = vec->groupby(op, true);
 	return create_FMR_data_frame(groupby_res, "");
@@ -1010,6 +1577,10 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 		return R_NilValue;
 	}
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (!is_supported_type(mat->get_type())) {
+		fprintf(stderr, "The input matrix has unsupported type\n");
+		return R_NilValue;
+	}
 
 	int margin = INTEGER(pmargin)[0];
 	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
@@ -1017,7 +1588,7 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 		return R_NilValue;
 	}
 
-	factor_vector::ptr factor = get_factor_vector(pfactor);
+	factor_col_vector::ptr factor = get_factor_vector(pfactor);
 	if (factor == NULL) {
 		fprintf(stderr, "groupby needs a factor vector\n");
 		return R_NilValue;
@@ -1025,13 +1596,13 @@ RcppExport SEXP R_FM_groupby(SEXP pmat, SEXP pmargin, SEXP pfactor, SEXP pfun)
 	if (margin == matrix_margin::MAR_ROW
 			&& factor->get_length() != mat->get_num_cols()) {
 		fprintf(stderr,
-				"the factor vector needs to have the length as #columns");
+				"the factor vector needs to have the length as #columns\n");
 		return R_NilValue;
 	}
 	else if (margin == matrix_margin::MAR_COL
 			&& factor->get_length() != mat->get_num_rows()) {
 		fprintf(stderr,
-				"the factor vector needs to have the length as #rows");
+				"the factor vector needs to have the length as #rows\n");
 		return R_NilValue;
 	}
 
@@ -1065,28 +1636,17 @@ RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
 	return ret;
 }
 
-RcppExport SEXP R_FM_typeof(SEXP pmat)
+RcppExport SEXP R_FM_is_inmem(SEXP pmat)
 {
-	Rcpp::StringVector ret(1);
+	Rcpp::LogicalVector ret(1);
 	if (is_sparse(pmat)) {
-		fprintf(stderr, "Don't support sparse matrix\n");
-		return R_NilValue;
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		// TODO let's assume it's always on SSDs first.
+		ret[0] = false;
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		switch(mat->get_type().get_type()) {
-			case prim_type::P_BOOL:
-				ret[0] = Rcpp::String("logical");
-				break;
-			case prim_type::P_INTEGER:
-				ret[0] = Rcpp::String("integer");
-				break;
-			case prim_type::P_DOUBLE:
-				ret[0] = Rcpp::String("double");
-				break;
-			default:
-				ret[0] = Rcpp::String("unknown");
-		}
+		ret[0] = mat->is_in_mem();
 	}
 	return ret;
 }
@@ -1139,41 +1699,109 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		return R_NilValue;
 	}
 
-	Rcpp::IntegerVector r_idxs(pidxs);
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr sub_m;
+
+	if (R_is_real(pidxs)) {
+		Rcpp::NumericVector r_idxs(pidxs);
+		std::vector<off_t> c_idxs(r_idxs.size());
+		for (size_t i = 0; i < c_idxs.size(); i++)
+			// R is 1-based indexing, and C/C++ is 0-based.
+			c_idxs[i] = r_idxs[i] - 1;
+
+		sub_m = margin == matrix_margin::MAR_COL
+			? mat->get_cols(c_idxs) : mat->get_rows(c_idxs);
+	}
+	else {
+		dense_matrix::ptr idxs = get_matrix<dense_matrix>(pidxs);
+		if (idxs->get_num_rows() > 1 && idxs->get_num_cols() > 1) {
+			fprintf(stderr, "the index vector is a matrix\n");
+			return R_NilValue;
+		}
+		col_vec::ptr idx_vec = col_vec::create(idxs);
+		sub_m = margin == matrix_margin::MAR_COL
+			? mat->get_cols(idx_vec) : mat->get_rows(idx_vec);
+	}
+
+	if (sub_m == NULL) {
+		fprintf(stderr, "can't get a submatrix from the matrix\n");
+		return R_NilValue;
+	}
+	else {
+		Rcpp::List ret = create_FMR_matrix(sub_m, "");
+		Rcpp::S4 rcpp_mat(pmat);
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
+}
+
+RcppExport SEXP R_FM_set_submat(SEXP pmat, SEXP pmargin, SEXP pidxs, SEXP pdata)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't get a submatrix from a sparse matrix\n");
+		return R_NilValue;
+	}
+	int margin = INTEGER(pmargin)[0];
+	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
+		fprintf(stderr, "the margin has invalid value\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr data = get_matrix<dense_matrix>(pdata);;
+
+	Rcpp::NumericVector r_idxs(pidxs);
+	std::vector<off_t> c_idxs(r_idxs.size());
+	for (size_t i = 0; i < c_idxs.size(); i++)
+		// R is 1-based indexing, and C/C++ is 0-based.
+		c_idxs[i] = r_idxs[i] - 1;
+	if (margin == matrix_margin::MAR_COL
+			&& (c_idxs.size() != data->get_num_cols()
+				|| data->get_num_rows() != mat->get_num_rows())) {
+		fprintf(stderr, "The new data doesn't have the right dimensions\n");
+		return R_NilValue;
+	}
+	if (margin == matrix_margin::MAR_ROW
+			&& (c_idxs.size() != data->get_num_rows()
+				|| data->get_num_cols() != mat->get_num_cols())) {
+		fprintf(stderr, "The new data doesn't have the right dimensions\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr new_mat;
+	if (margin == matrix_margin::MAR_COL)
+		new_mat = mat->set_cols(c_idxs, data);
+	else
+		new_mat = mat->set_rows(c_idxs, data);
+
+	if (new_mat == NULL)
+		return R_NilValue;
+	else {
+		printf("res: %s\n", new_mat->get_raw_store()->get_name().c_str());
+		set_matrix<dense_matrix>(pmat, new_mat);
+		return create_FMR_matrix(new_mat, "");
+	}
+}
+
+RcppExport SEXP R_FM_get_vec_eles(SEXP pvec, SEXP pidxs)
+{
+	Rcpp::NumericVector r_idxs(pidxs);
 	std::vector<off_t> c_idxs(r_idxs.size());
 	for (size_t i = 0; i < c_idxs.size(); i++)
 		// R is 1-based indexing, and C/C++ is 0-based.
 		c_idxs[i] = r_idxs[i] - 1;
 
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	dense_matrix::ptr sub_m;
-	if (margin == matrix_margin::MAR_COL)
-		sub_m = mat->get_cols(c_idxs);
-	else
-		sub_m = mat->get_rows(c_idxs);
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+	dense_matrix::ptr sub_m = mat->get_rows(c_idxs);
 	if (sub_m == NULL) {
-		fprintf(stderr, "can't get a submatrix from the matrix\n");
+		fprintf(stderr, "can't get elements from the vector\n");
 		return R_NilValue;
 	}
-	else
-		return create_FMR_matrix(sub_m, "");
-}
-
-RcppExport SEXP R_FM_get_rows(SEXP pmat, SEXP pidxs)
-{
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "We don't support get rows from a sparse matrix yet\n");
-		return R_NilValue;
+	else {
+		Rcpp::List ret = create_FMR_vector(sub_m, "");
+		Rcpp::S4 rcpp_vec(pvec);
+		ret["ele_type"] = rcpp_vec.slot("ele_type");
+		return ret;
 	}
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	Rcpp::IntegerVector tmp(pidxs);
-	std::vector<off_t> idxs(tmp.begin(), tmp.end());
-	dense_matrix::ptr res = mat->get_rows(idxs);
-	if (res == NULL) {
-		fprintf(stderr, "can't get rows from the matrix\n");
-		return R_NilValue;
-	}
-	return create_FMR_matrix(res, "");
 }
 
 RcppExport SEXP R_FM_as_vector(SEXP pmat)
@@ -1183,41 +1811,20 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 		return R_NilValue;
 	}
 
+	Rcpp::S4 rcpp_mat(pmat);
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->get_num_cols() == 1)
-		return create_FMR_vector(mat, "");
-	else if (mat->get_num_rows() == 1)
-		return create_FMR_vector(mat->transpose(), "");
+	if (mat->get_num_cols() == 1) {
+		Rcpp::List ret = create_FMR_vector(mat, "");
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
+	else if (mat->get_num_rows() == 1) {
+		Rcpp::List ret = create_FMR_vector(mat->transpose(), "");
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		return ret;
+	}
 	else
 		return R_NilValue;
-}
-
-RcppExport SEXP R_FM_as_factor_vector(SEXP pmat, SEXP plevels)
-{
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "can't a sparse matrix to a vector\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1) {
-		fprintf(stderr, "can't convert a matrix to a factor vector\n");
-		return R_NilValue;
-	}
-	// TODO now I assume the elements in a factor vector are integers.
-	if (!mat->is_type<int>()) {
-		fprintf(stderr,
-				"can't convert a non-integer vector to a factor vector\n");
-		return R_NilValue;
-	}
-	Rcpp::IntegerVector num_levels(plevels);
-	int num_levels1 = num_levels[0];
-	if (num_levels1 <= 0) {
-		scalar_variable::ptr tmp = mat->max();
-		num_levels1 = *(int *) tmp->get_raw();
-	}
-	assert(num_levels1 > 0);
-	return create_FMR_factor_vector(mat, num_levels1, "");
 }
 
 RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
@@ -1228,6 +1835,12 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	// The input matrix might be a block matrix.
+	mat = dense_matrix::create(mat->get_raw_store());
+	// To write data to a Linux file, we need to make sure data is stored
+	// in SMP matrix.
+	mat = mat->conv_store(true, -1);
+
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
 	Rcpp::LogicalVector ret(1);
 	ret[0] = dynamic_cast<const detail::mem_matrix_store &>(
@@ -1246,6 +1859,8 @@ RcppExport SEXP R_FM_read_obj(SEXP pfile)
 		dense_matrix::ptr mat = dense_matrix::create(store);
 		if (num_nodes > 1)
 			mat = mat->conv_store(true, num_nodes);
+		// TODO we are going to lose type info.
+		// A boolean object will become integer object.
 		return create_FMR_matrix(mat, "");
 	}
 }
@@ -1380,66 +1995,134 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 	which_str[0] = Rcpp::String(opts.which);
 	options["which"] = which_str;
 
+	Rcpp::IntegerVector iter_vec(1);
+	iter_vec[0] = res.status.num_iters;
+	options["iter"] = iter_vec;
+
+	Rcpp::IntegerVector numop_vec(1);
+	numop_vec[0] = res.status.num_ops;
+	options["numop"] = numop_vec;
+
 	Rcpp::List ret;
 	Rcpp::NumericVector vals(res.vals.begin(), res.vals.end());
-	ret["vals"] = vals;
-	ret["vecs"] = create_FMR_matrix(res.vecs, "evecs");
+	ret["values"] = vals;
+	ret["vectors"] = create_FMR_matrix(res.vecs, "evecs");
 	ret["options"] = options;
 	return ret;
 }
 #endif
 
-RcppExport SEXP R_FM_scale(SEXP pmat, SEXP pvec, SEXP pbyrow)
+RcppExport SEXP R_FM_set_materialize_level(SEXP pmat, SEXP pcached, SEXP pin_mem)
 {
-	bool byrow = LOGICAL(pbyrow)[0];
+	Rcpp::LogicalVector res(1);
 	if (is_sparse(pmat)) {
-		fprintf(stderr, "Doesn't support scale rows/cols of a sparse matrix\n");
-		return R_NilValue;
+		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
+		res[0] = false;
+		return res;
 	}
-	if (!is_vector(pvec)) {
-		fprintf(stderr, "The second argument should be a vector\n");
+
+	bool cached = LOGICAL(pcached)[0];
+	materialize_level level
+		= cached ? materialize_level::MATER_FULL : materialize_level::MATER_CPU;
+
+	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"can't materialize a matrix on SAFS when SAFS isn't init\n");
 		return R_NilValue;
 	}
 
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	vector::ptr vec = get_vector(pvec);
-	if (vec == NULL) {
-		return R_NilValue;
-	}
-	dense_matrix::ptr res;
-	if (byrow) {
-		if (mat->get_num_rows() != vec->get_length()) {
-			fprintf(stderr,
-					"The length of the vector doesn't match the rows of the matrix\n");
-			return R_NilValue;
-		}
-		res = mat->scale_rows(vec);
-	}
+	if (in_mem == mat->is_in_mem())
+		mat->set_materialize_level(level);
 	else {
-		if (mat->get_num_cols() != vec->get_length()) {
-			fprintf(stderr,
-					"The length of the vector doesn't match the columns of the matrix\n");
-			return R_NilValue;
-		}
-		res = mat->scale_cols(vec);
+		// The store buffer has to be a tall matrix.
+		size_t nrow = std::max(mat->get_num_rows(), mat->get_num_cols());
+		size_t ncol = std::min(mat->get_num_rows(), mat->get_num_cols());
+		detail::matrix_store::ptr store = detail::matrix_store::create(
+				nrow, ncol, mat->store_layout(), mat->get_type(),
+				matrix_conf.get_num_nodes(), in_mem);
+		mat->set_materialize_level((materialize_level) level, store);
 	}
-	return create_FMR_matrix(res, "scale");
+	res[0] = true;
+	return res;
+}
+
+static SEXP materialize_sparse(const SEXP &pmat)
+{
+	// don't do anything for a sparse matrix.
+	sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+	Rcpp::S4 rcpp_mat(pmat);
+	Rcpp::String name = rcpp_mat.slot("name");
+	Rcpp::List ret = create_FMR_matrix(mat, name);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
 }
 
 RcppExport SEXP R_FM_materialize(SEXP pmat)
 {
-	if (is_sparse(pmat)) {
-		fprintf(stderr, "Doesn't support materializing a sparse matrix\n");
-		return R_NilValue;
-	}
-	if (is_vector(pmat)) {
-		fprintf(stderr, "Doesn't support materializing a vector yet\n");
-		return R_NilValue;
-	}
+	if (is_sparse(pmat))
+		return materialize_sparse(pmat);
+
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	// I think it's OK to materialize on the original matrix.
-	mat->materialize_self();
-	return create_FMR_matrix(mat, "");
+	bool mater_ret = mat->materialize_self();
+	if (!mater_ret) {
+		fprintf(stderr, "can't materialize the matrix\n");
+		return R_NilValue;
+	}
+
+	Rcpp::List ret;
+	Rcpp::S4 rcpp_mat(pmat);
+	Rcpp::String name = rcpp_mat.slot("name");
+	if (is_vector(pmat))
+		ret = create_FMR_vector(mat, name);
+	else
+		ret = create_FMR_matrix(mat, name);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
+	return ret;
+}
+
+RcppExport SEXP R_FM_materialize_list(SEXP plist)
+{
+	Rcpp::List ret_list;
+	Rcpp::List in_list(plist);
+	std::vector<int> dense_mat_idxs;
+	std::vector<dense_matrix::ptr> dense_mats;
+	for (int i = 0; i < in_list.size(); i++) {
+		SEXP pmat = in_list[i];
+		if (is_sparse(pmat))
+			ret_list.push_back(materialize_sparse(pmat));
+		else {
+			// We collect the dense matrices for materialization.
+			dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+			dense_mats.push_back(mat);
+			dense_mat_idxs.push_back(i);
+			// We should have NULL to hold a place in the return list.
+			ret_list.push_back(R_NilValue);
+		}
+	}
+	bool ret = materialize(dense_mats);
+	if (!ret)
+		return R_NilValue;
+
+	// We need to add the materialized matrix to the return list.
+	for (size_t i = 0; i < dense_mats.size(); i++) {
+		int orig_idx = dense_mat_idxs[i];
+		dense_matrix::ptr mat = dense_mats[i];
+		SEXP pmat = in_list[orig_idx];
+
+		Rcpp::S4 rcpp_mat(pmat);
+		Rcpp::String name = rcpp_mat.slot("name");
+		Rcpp::List ret;
+		if (is_vector(pmat))
+			ret = create_FMR_vector(mat, name);
+		else
+			ret = create_FMR_matrix(mat, name);
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+		ret_list[orig_idx] = ret;
+	}
+	return ret_list;
 }
 
 RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
@@ -1451,26 +2134,14 @@ RcppExport SEXP R_FM_conv_layout(SEXP pmat, SEXP pbyrow)
 		return R_NilValue;
 	}
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	dense_matrix::ptr ret;
+	dense_matrix::ptr ret_mat;
 	if (byrow)
-		ret = mat->conv2(matrix_layout_t::L_ROW);
+		ret_mat = mat->conv2(matrix_layout_t::L_ROW);
 	else
-		ret = mat->conv2(matrix_layout_t::L_COL);
-	return create_FMR_matrix(ret, "");
-}
-
-RcppExport SEXP R_FM_get_layout(SEXP pmat)
-{
-	Rcpp::StringVector ret(1);
-	if (is_sparse(pmat))
-		ret[0] = Rcpp::String("row-oriented");
-	else {
-		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		if (mat->store_layout() == matrix_layout_t::L_ROW)
-			ret[0] = Rcpp::String("row-oriented");
-		else
-			ret[0] = Rcpp::String("col-oriented");
-	}
+		ret_mat = mat->conv2(matrix_layout_t::L_COL);
+	Rcpp::List ret = create_FMR_matrix(ret_mat, "");
+	Rcpp::S4 rcpp_mat(pmat);
+	ret["ele_type"] = rcpp_mat.slot("ele_type");
 	return ret;
 }
 
@@ -1486,9 +2157,558 @@ RcppExport SEXP R_FM_is_sym(SEXP pmat)
 	return res;
 }
 
-void init_flashmatrixr()
+RcppExport SEXP R_FM_is_sink(SEXP pmat)
 {
+	Rcpp::LogicalVector res(1);
+	if (is_sparse(pmat))
+		res[0] = false;
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		res[0] = mat->get_raw_store()->is_sink();
+	}
+	return res;
+}
+
+const scalar_type *get_castup_type(const std::vector<dense_matrix::ptr> &mats)
+{
+	size_t i = 1;
+	for (; i < mats.size(); i++)
+		if (mats[i]->get_type() != mats[0]->get_type())
+			break;
+	// All matrices have the same type.
+	if (i == mats.size())
+		return NULL;
+
+	// There are only two types in a dense matrix: int or double.
+	for (size_t i = 0; i < mats.size(); i++) {
+		assert(mats[i]->get_type() == get_scalar_type<double>()
+				|| mats[i]->get_type() == get_scalar_type<int>());
+		if (mats[i]->get_type() == get_scalar_type<double>())
+			return &get_scalar_type<double>();
+	}
+	return &get_scalar_type<int>();
+}
+
+SEXP fm_bind(SEXP pmats, bool byrow)
+{
+	Rcpp::List rcpp_mats(pmats);
+	std::vector<dense_matrix::ptr> mats(rcpp_mats.size());
+	for (int i = 0; i < rcpp_mats.size(); i++) {
+		if (is_sparse(rcpp_mats[i])) {
+			fprintf(stderr, "can't bind sparse matrix\n");
+			return R_NilValue;
+		}
+		mats[i] = get_matrix<dense_matrix>(rcpp_mats[i]);
+	}
+
+	const scalar_type *type = get_castup_type(mats);
+	// If some of the matrices have different types, we should cast them
+	// first.
+	if (type) {
+		for (size_t i = 0; i < mats.size(); i++)
+			if (mats[i]->get_type() != *type)
+				mats[i] = mats[i]->cast_ele_type(*type);
+	}
+	dense_matrix::ptr combined;
+	if (byrow)
+		combined = dense_matrix::rbind(mats);
+	else
+		combined = dense_matrix::cbind(mats);
+	if (combined == NULL)
+		return R_NilValue;
+
+	Rcpp::List ret = create_FMR_matrix(combined, "");
+	Rcpp::S4 rcpp_mat(rcpp_mats[0]);
+	if (type == NULL)
+		ret["ele_type"] = rcpp_mat.slot("ele_type");
+	else if (*type == get_scalar_type<int>())
+		ret["ele_type"] = Rcpp::String("integer");
+	else if (*type == get_scalar_type<double>())
+		ret["ele_type"] = Rcpp::String("double");
+	else {
+		fprintf(stderr, "unknown type in matrix bind\n");
+		return R_NilValue;
+	}
+	return ret;
+}
+
+RcppExport SEXP R_FM_rbind(SEXP pmats)
+{
+	return fm_bind(pmats, true);
+}
+
+RcppExport SEXP R_FM_cbind(SEXP pmats)
+{
+	return fm_bind(pmats, false);
+}
+
+template<class BoolType, class T>
+class ifelse2_op: public bulk_operate
+{
+public:
+	/*
+	 * This performs operations on the left input array and the right element,
+	 * and stores the result on the output array.
+	 */
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception("ifelse2_op doesn't support runAE");
+	}
+	/*
+	 * This performs operations on the left element array and the right array,
+	 * and stores the result on the output array.
+	 */
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception("ifelse2_op doesn't support runEA");
+	}
+
+	/*
+	 * This performs aggregation on the input array, combines the agg result
+	 * with the original agg result and stores the result on output.
+	 */
+	virtual void runAgg(size_t num_eles, const void *left_arr, void *output) const {
+		throw unsupported_exception("ifelse2_op doesn't support runAgg");
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<BoolType>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<T>();
+	}
+
+	virtual std::string get_name() const {
+		return std::string("ifelse2_op");
+	}
+};
+
+template<class BoolType, class T>
+class ifelse_no_op: public ifelse2_op<BoolType, T>
+{
+	T no;
+
+	ifelse_no_op(T no) {
+		this->no = no;
+	}
+public:
+	static bulk_operate::const_ptr create(scalar_variable::ptr no) {
+		T val = scalar_variable::get_val<T>(*no);
+		return bulk_operate::const_ptr(new ifelse_no_op<BoolType, T>(val));
+	}
+
+	/*
+	 * This performs element-wise operation on two input arrays, and stores
+	 * the result on the output array.
+	 */
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const BoolType *test = reinterpret_cast<const BoolType *>(left_arr);
+		const T *yes = reinterpret_cast<const T *>(right_arr);
+		T *output = reinterpret_cast<T *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++) {
+			if (test[i])
+				output[i] = yes[i];
+			else
+				output[i] = no;
+		}
+	}
+};
+
+template<class BoolType, class T>
+class ifelse_yes_op: public ifelse2_op<BoolType, T>
+{
+	T yes;
+
+	ifelse_yes_op(T yes) {
+		this->yes = yes;
+	}
+public:
+	static bulk_operate::const_ptr create(scalar_variable::ptr yes) {
+		T val = scalar_variable::get_val<T>(*yes);
+		return bulk_operate::const_ptr(new ifelse_yes_op<BoolType, T>(val));
+	}
+
+	/*
+	 * This performs element-wise operation on two input arrays, and stores
+	 * the result on the output array.
+	 */
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const BoolType *test = reinterpret_cast<const BoolType *>(left_arr);
+		const T *no = reinterpret_cast<const T *>(right_arr);
+		T *output = reinterpret_cast<T *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++) {
+			if (test[i])
+				output[i] = yes;
+			else
+				output[i] = no[i];
+		}
+	}
+};
+
+static scalar_variable::ptr conv_R2scalar(SEXP pobj)
+{
+	if (R_is_logical(pobj)) {
+		int val = LOGICAL(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	}
+	else if (R_is_integer(pobj)) {
+		int val = INTEGER(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<int>(val));
+	}
+	else if (R_is_real(pobj)) {
+		double val = REAL(pobj)[0];
+		return scalar_variable::ptr(new scalar_variable_impl<double>(val));
+	}
+	else {
+		fprintf(stderr,
+				"ifelse2 only works with boolean, integer or float currently\n");
+		return NULL;
+	}
+}
+
+/*
+ * This version of ifelse only requires test and yes to be FlashMatrix matrices.
+ */
+RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
+{
+	if (is_sparse(ptest) || is_sparse(pyes)) {
+		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr test = get_matrix<dense_matrix>(ptest);
+	dense_matrix::ptr yes = get_matrix<dense_matrix>(pyes);
+	if (test->get_num_rows() != yes->get_num_rows()
+			|| test->get_num_cols() != yes->get_num_cols()) {
+		fprintf(stderr, "the size of test and yes has to be the same\n");
+		return R_NilValue;
+	}
+
+	scalar_variable::ptr no = conv_R2scalar(pno);
+	if (no == NULL)
+		return R_NilValue;
+
+	bool is_bool = false;
+	if (R_is_logical(pno))
+		is_bool = true;
+
+	if (test->get_type() != get_scalar_type<int>()) {
+		fprintf(stderr, "test must be boolean\n");
+		return R_NilValue;
+	}
+
+	// TODO we should cast type if they are different.
+	if (yes->get_type() != no->get_type()) {
+		fprintf(stderr,
+				"ifelse2 doesn't support yes and no of different types\n");
+		return R_NilValue;
+	}
+
+	// We need to cast type so that the type of yes and no matches.
+	bulk_operate::const_ptr op;
+	if (test->get_type() == get_scalar_type<bool>()) {
+		if (yes->get_type() == get_scalar_type<int>())
+			op = ifelse_no_op<bool, int>::create(no);
+		else if (yes->get_type() == get_scalar_type<double>())
+			op = ifelse_no_op<bool, double>::create(no);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
+	else {
+		if (yes->get_type() == get_scalar_type<int>())
+			op = ifelse_no_op<int, int>::create(no);
+		else if (yes->get_type() == get_scalar_type<double>())
+			op = ifelse_no_op<int, double>::create(no);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
+
+	dense_matrix::ptr ret = test->mapply2(*yes, op);
+	Rcpp::List ret_obj;
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(ptest))
+		ret_obj = create_FMR_vector(ret, "");
+	else
+		ret_obj = create_FMR_matrix(ret, "");
+
+	if (is_bool)
+		ret_obj["ele_type"] = Rcpp::String("logical");
+	return ret_obj;
+}
+
+/*
+ * This version of ifelse only requires test and no to be FlashMatrix matrices.
+ */
+RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
+{
+	if (is_sparse(ptest) || is_sparse(pno)) {
+		fprintf(stderr, "ifelse doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr test = get_matrix<dense_matrix>(ptest);
+	dense_matrix::ptr no = get_matrix<dense_matrix>(pno);
+	if (test->get_num_rows() != no->get_num_rows()
+			|| test->get_num_cols() != no->get_num_cols()) {
+		fprintf(stderr, "the size of test and no has to be the same\n");
+		return R_NilValue;
+	}
+
+	scalar_variable::ptr yes = conv_R2scalar(pyes);
+	if (yes == NULL)
+		return R_NilValue;
+
+	bool is_bool = false;
+	if (R_is_logical(pyes))
+		is_bool = true;
+
+	if (test->get_type() != get_scalar_type<int>()) {
+		fprintf(stderr, "test must be boolean\n");
+		return R_NilValue;
+	}
+
+	// TODO we should cast type if they are different.
+	if (yes->get_type() != no->get_type()) {
+		fprintf(stderr,
+				"ifelse2 doesn't support yes and no of different types\n");
+		return R_NilValue;
+	}
+
+	// We need to cast type so that the type of yes and no matches.
+	bulk_operate::const_ptr op;
+	if (test->get_type() == get_scalar_type<bool>()) {
+		if (no->get_type() == get_scalar_type<int>())
+			op = ifelse_yes_op<bool, int>::create(yes);
+		else if (no->get_type() == get_scalar_type<double>())
+			op = ifelse_yes_op<bool, double>::create(yes);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
+	else {
+		if (no->get_type() == get_scalar_type<int>())
+			op = ifelse_yes_op<int, int>::create(yes);
+		else if (no->get_type() == get_scalar_type<double>())
+			op = ifelse_yes_op<int, double>::create(yes);
+		else {
+			fprintf(stderr, "unsupported type in ifelse2\n");
+			return R_NilValue;
+		}
+	}
+
+	dense_matrix::ptr ret = test->mapply2(*no, op);
+	Rcpp::List ret_obj;
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(ptest))
+		ret_obj = create_FMR_vector(ret, "");
+	else
+		ret_obj = create_FMR_matrix(ret, "");
+
+	if (is_bool)
+		ret_obj["ele_type"] = Rcpp::String("logical");
+	return ret_obj;
+}
+
+class double_isna_op: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		const double *in = reinterpret_cast<const double *>(in_arr);
+		bool *out = reinterpret_cast<bool *>(out_arr);
+		// is.na in R returns true for both NA and NaN.
+		// we should do the same thing.
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = ISNAN(in[i]);
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<bool>();
+	}
+	virtual std::string get_name() const {
+		return "isna";
+	}
+};
+
+// This is true only for NA.
+class double_isna_only_op: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		bool *out = reinterpret_cast<bool *>(out_arr);
+#ifdef RCPP_HAS_LONG_LONG_TYPES
+		const rcpp_ulong_long_type *in
+			= reinterpret_cast<const rcpp_ulong_long_type *>(in_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = FM_IsNA(in + i);
+#else
+		const double *in = reinterpret_cast<const double *>(in_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = R_IsNA(in[i]);
+#endif
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<bool>();
+	}
+	virtual std::string get_name() const {
+		return "isna_only";
+	}
+};
+
+RcppExport SEXP R_FM_isna(SEXP px, SEXP ponly)
+{
+	if (is_sparse(px)) {
+		fprintf(stderr, "isna doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr x = get_matrix<dense_matrix>(px);
+	if (x->get_type() != get_scalar_type<double>()) {
+		fprintf(stderr, "isna only works on float-point matrices\n");
+		return R_NilValue;
+	}
+
+	bool na_only = LOGICAL(ponly)[0];
+	dense_matrix::ptr ret;
+	if (na_only)
+		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_only_op()));
+	else
+		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_op()));
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(px))
+		return create_FMR_vector(ret, "");
+	else
+		return create_FMR_matrix(ret, "");
+}
+
+class double_isnan_op: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		const double *in = reinterpret_cast<const double *>(in_arr);
+		bool *out = reinterpret_cast<bool *>(out_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			out[i] = R_IsNaN(in[i]);
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<double>();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<bool>();
+	}
+	virtual std::string get_name() const {
+		return "isnan";
+	}
+};
+
+RcppExport SEXP R_FM_isnan(SEXP px)
+{
+	if (is_sparse(px)) {
+		fprintf(stderr, "isnan doesn't support sparse matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr x = get_matrix<dense_matrix>(px);
+	if (x->get_type() != get_scalar_type<double>()) {
+		fprintf(stderr, "isnan only works on float-point matrices\n");
+		return R_NilValue;
+	}
+	dense_matrix::ptr ret
+		= x->sapply(bulk_uoperate::const_ptr(new double_isnan_op()));
+	if (ret == NULL)
+		return R_NilValue;
+	else if (is_vector(px))
+		return create_FMR_vector(ret, "");
+	else
+		return create_FMR_matrix(ret, "");
+}
+
+RcppExport SEXP R_FM_init(SEXP pconf)
+{
+	set_log_level(c_log_level::warning);
+	std::string conf_file;
+	if (!R_is_null(pconf) && R_is_string(pconf))
+		conf_file = CHAR(STRING_ELT(pconf, 0));
+
+	config_map::ptr configs;
+	if (!conf_file.empty() && safs::file_exist(conf_file)) {
+		configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
+	}
+	else if (!conf_file.empty()) {
+		fprintf(stderr, "conf file %s doesn't exist.\n", conf_file.c_str());
+		configs = config_map::create();
+	}
+	// If there isn't a conf file, we just use the default settings.
+	else
+		configs = config_map::create();
+
+	bool safs_success;
+	bool standalone = true;
+	try {
+		safs::init_io_system(configs);
+		standalone = false;
+		safs_success = true;
+	} catch (safs::init_error &e) {
+		if (!conf_file.empty())
+			fprintf(stderr, "init SAFS: %s\n", e.what());
+		safs_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		safs_success = false;
+	}
+
+	bool fm_success;
+	try {
+		fm::init_flash_matrix(configs);
+		fm_success = true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		fm_success = false;
+	}
+
+	Rcpp::LogicalVector res(1);
+	res[0] = safs_success && fm_success;
+	if (standalone)
+		printf("Run FlashR in standalone mode\n");
+	else if (safs::is_safs_init())
+		printf("Run FlashR\n");
+	else {
+		fprintf(stderr, "Can't enable the SAFS mode of FlashR\n");
+		res[0] = false;
+	}
 	fmr::init_udf_ext();
+	fmr::init_apply_ops();
+	return res;
+}
+
+RcppExport SEXP R_FM_set_conf(SEXP pconf)
+{
+	fm::destroy_flash_matrix();
+	safs::destroy_io_system();
+	return R_FM_init(pconf);
 }
 
 RcppExport SEXP R_FM_print_conf()
@@ -1500,5 +2720,112 @@ RcppExport SEXP R_FM_print_conf()
 RcppExport SEXP R_SAFS_print_conf()
 {
 	safs::params.print();
+	return R_NilValue;
+}
+
+RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
+{
+	if (is_sparse(pmat)) {
+		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
+		printf("sparse matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
+				mat->get_num_cols());
+	}
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		printf("dense matrix with %ld rows and %ld cols in %s-major order\n",
+				mat->get_num_rows(), mat->get_num_cols(),
+				mat->store_layout() == matrix_layout_t::L_COL ? "col" : "row");
+		block_matrix::ptr block_mat = std::dynamic_pointer_cast<block_matrix>(mat);
+		if (block_mat)
+			printf("the matrix has %ld blocks of size %ld\n",
+					block_mat->get_num_blocks(), block_mat->get_block_size());
+		if (!mat->is_in_mem())
+			printf("dense matrix is stored on disks\n");
+		else if (mat->get_data().get_num_nodes() > 0)
+			printf("dense matrix is stored on %d NUMA nodes\n",
+					mat->get_data().get_num_nodes());
+		else
+			printf("dense matrix is stored on SMP\n");
+		std::string name = mat->get_data().get_name();
+		printf("matrix store: %s\n", name.c_str());
+	}
+	return R_NilValue;
+}
+
+RcppExport SEXP R_FM_conv_store(SEXP pmat, SEXP pin_mem, SEXP pname)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "we can't convert the store of a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	bool in_mem = LOGICAL(pin_mem)[0];
+	if (!in_mem && !safs::is_safs_init()) {
+		fprintf(stderr,
+				"can't convert it to ext-mem matrix when SAFS is disabled\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	std::string name = CHAR(STRING_ELT(pname, 0));
+	mat = mat->conv_store(in_mem, matrix_conf.get_num_nodes());
+	bool ret = mat->materialize_self();
+	if (!ret) {
+		fprintf(stderr, "can't materialize the matrix\n");
+		return R_NilValue;
+	}
+	if (!name.empty() && !in_mem) {
+		detail::EM_matrix_store::const_ptr store
+			= detail::EM_matrix_store::cast(mat->get_raw_store());
+		bool ret = store->set_persistent(name);
+		if (!ret)
+			return R_NilValue;
+	}
+	if (is_vector(pmat))
+		return create_FMR_vector(mat, name);
+	else
+		return create_FMR_matrix(mat, name);
+}
+
+#ifdef USE_PROFILER
+RcppExport SEXP R_start_profiler(SEXP pfile)
+{
+	std::string file = CHAR(STRING_ELT(pfile, 0));
+	ProfilerStart(file.c_str());
+	return R_NilValue;
+}
+
+RcppExport SEXP R_stop_profiler()
+{
+	ProfilerStop();
+	return R_NilValue;
+}
+#endif
+
+RcppExport SEXP R_FM_rand_sparse_proj(SEXP pnrow, SEXP pncol, SEXP pdensity)
+{
+	size_t nrow;
+	size_t ncol;
+	double density;
+	bool ret1 = R_get_number<size_t>(pnrow, nrow);
+	bool ret2 = R_get_number<size_t>(pncol, ncol);
+	bool ret3 = R_get_number<double>(pdensity, density);
+	if (!ret1 || !ret2 || !ret3) {
+		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+
+	detail::sparse_project_matrix_store::ptr store;
+	matrix_layout_t layout
+		= nrow > ncol ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
+	store = detail::sparse_project_matrix_store::create_sparse_rand(nrow,
+			ncol, layout, get_scalar_type<double>(), density);
+	return create_FMR_matrix(dense_matrix::create(store), "");
+}
+
+RcppExport SEXP R_FM_print_features()
+{
+	std::string features = safs::get_supported_features();
+	printf("%s\n", features.c_str());
 	return R_NilValue;
 }

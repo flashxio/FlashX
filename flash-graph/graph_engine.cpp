@@ -32,6 +32,7 @@
 #include "vertex_index_reader.h"
 #include "in_mem_storage.h"
 #include "FGlib.h"
+#include "sparse_matrix.h"
 
 using namespace safs;
 
@@ -927,6 +928,8 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 			BOOST_LOG_TRIVIAL(warning)
 				<< "FlashGraph: fail to initialize SAFS";
 		}
+
+		fm::init_flash_matrix(configs);
 		graph_conf.init(configs);
 		graph_conf.print();
 	}
@@ -936,8 +939,11 @@ void graph_engine::destroy_flash_graph()
 {
 	long count = init_count.fetch_sub(1);
 	assert(count > 0);
-	if (count == 1)
+
+	if (count == 1) {
+		fm::destroy_flash_matrix();
 		destroy_io_system();
+	}
 }
 
 int graph_engine::get_file_id() const

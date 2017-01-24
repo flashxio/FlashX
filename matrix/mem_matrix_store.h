@@ -42,6 +42,9 @@ class mem_matrix_store: public matrix_store
 	const size_t mat_id;
 protected:
 	bool write_header(FILE *f) const;
+	size_t get_mat_id() const {
+		return mat_id;
+	}
 public:
 	typedef std::shared_ptr<mem_matrix_store> ptr;
 	typedef std::shared_ptr<const mem_matrix_store> const_ptr;
@@ -60,17 +63,14 @@ public:
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		// TODO for now, we assume that an in-mem matrix doesn't have
-		// underlying matrix.
-		return std::unordered_map<size_t, size_t>();
+		std::unordered_map<size_t, size_t> ret;
+		// TODO right now we only indicate the matrix. We set the number of
+		// bytes to 0
+		// We should also use data_id instead of mat_id.
+		ret.insert(std::pair<size_t, size_t>(mat_id, 0));
+		return ret;
 	}
-	virtual std::string get_name() const {
-		return (boost::format("mem_mat-%1%(%2%,%3%)") % mat_id % get_num_rows()
-			% get_num_cols()).str();
-	}
-
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
+	virtual std::string get_name() const;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
@@ -89,6 +89,9 @@ public:
 	virtual const char *get_raw_arr() const {
 		return NULL;
 	}
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
 
 	virtual async_cres_t get_portion_async(size_t start_row, size_t start_col,
 			size_t num_rows, size_t num_cols,
@@ -96,18 +99,9 @@ public:
 		return async_cres_t(true,
 				get_portion(start_row, start_col, num_rows, num_cols));
 	}
-	virtual async_res_t get_portion_async(size_t start_row, size_t start_col,
-			size_t num_rows, size_t num_cols,
-			std::shared_ptr<portion_compute> compute) {
-		return async_res_t(true,
-				get_portion(start_row, start_col, num_rows, num_cols));
-	}
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
-			off_t start_row, off_t start_col) {
-		// TODO
-		assert(0);
-	}
+			off_t start_row, off_t start_col);
 
 	virtual bool write2file(const std::string &file_name) const = 0;
 
@@ -169,10 +163,15 @@ public:
 	static const_ptr cast(matrix_store::const_ptr store);
 	static ptr cast(matrix_store::ptr store);
 
+	virtual std::shared_ptr<const vec_store> conv2vec() const;
+
 	const simple_raw_array &get_data() const {
 		return data;
 	}
 	virtual const char *get_raw_arr() const {
+		return data.get_raw();
+	}
+	virtual char *get_raw_arr() {
 		return data.get_raw();
 	}
 
@@ -204,9 +203,6 @@ public:
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
@@ -249,10 +245,15 @@ public:
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
 
+	virtual std::shared_ptr<const vec_store> conv2vec() const;
+
 	const simple_raw_array &get_data() const {
 		return data;
 	}
 	virtual const char *get_raw_arr() const {
+		return data.get_raw();
+	}
+	virtual char *get_raw_arr() {
 		return data.get_raw();
 	}
 
@@ -284,8 +285,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -338,6 +337,14 @@ public:
 		return mem_col_matrix_store::get_col(orig_col_idxs->at(col));
 	}
 
+	// Its data is likely not in contiguous memory.
+	virtual const char *get_raw_arr() const {
+		return NULL;
+	}
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -348,9 +355,6 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
-
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
 };
 
 /*
@@ -397,6 +401,14 @@ public:
 		return mem_row_matrix_store::get_row(orig_row_idxs->at(row));
 	}
 
+	// Its data is likely not in contiguous memory.
+	virtual const char *get_raw_arr() const {
+		return NULL;
+	}
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
 			size_t num_cols) const;
@@ -407,8 +419,31 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
-	virtual std::shared_ptr<const vec_store> get_col_vec(off_t idx) const;
-	virtual std::shared_ptr<const vec_store> get_row_vec(off_t idx) const;
+};
+
+class mem_matrix_stream: public matrix_stream
+{
+	mem_matrix_store::ptr store;
+
+	mem_matrix_stream(mem_matrix_store::ptr store) {
+		this->store = store;
+	}
+public:
+	static ptr create(mem_matrix_store::ptr store) {
+		return ptr(new mem_matrix_stream(store));
+	}
+
+	virtual void write_async(std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col) {
+		store->write_portion_async(portion, start_row, start_col);
+	}
+	virtual bool is_complete() const {
+		// We write data to in-mem matrix directly, so it's always complete.
+		return true;
+	}
+	virtual const matrix_store &get_mat() const {
+		return *store;
+	}
 };
 
 }

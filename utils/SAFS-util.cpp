@@ -118,9 +118,9 @@ class verify_callback: public callback
 	char *orig_buf;
 	data_source *source;
 	size_t verified_bytes;
-	const file_mapper *fmapper;
+	file_mapper::const_ptr fmapper;
 public:
-	verify_callback(data_source *source, const file_mapper *fmapper) {
+	verify_callback(data_source *source, file_mapper::const_ptr fmapper) {
 		this->source = source;
 		this->fmapper = fmapper;
 		orig_buf = (char *) malloc(BUF_SIZE);
@@ -223,44 +223,9 @@ void comm_load_file2fs(int argc, char *argv[])
 	}
 	printf("RAID block size is %ld pages\n", block_size);
 
-	data_source *source = new file_data_source(ext_file);
-
 	safs_file file(get_sys_RAID_conf(), int_file_name);
-	// If the file in SAFS doesn't exist, create a new one.
-	if (!file.exist()) {
-		safs_file file(get_sys_RAID_conf(), int_file_name);
-		file.create_file(source->get_size(), block_size);
-		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
-				file.get_size());
-	}
-
-	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
-			REMOTE_ACCESS);
-	assert(factory);
-	assert((size_t) factory->get_file_size() >= source->get_size());
-	printf("source size: %ld\n", source->get_size());
-
-	thread *curr_thread = thread::get_curr_thread();
-	assert(curr_thread);
-	io_interface::ptr io = create_io(factory, curr_thread);
-
-	char *buf = (char *) valloc(BUF_SIZE);
-	off_t off = 0;
-
-	while (off < (off_t) source->get_size()) {
-		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
-		size_t ret = source->get_data(off, size, buf);
-		assert(ret == size);
-		ssize_t write_bytes = ROUNDUP(ret, 512);
-		data_loc_t loc(io->get_file_id(), off);
-		io_request req(buf, loc, write_bytes, WRITE);
-		io->access(&req, 1);
-		io->wait4complete(1);
-		off += write_bytes;
-	}
-	printf("write all data\n");
-	
-	io->cleanup();
+	bool ret = file.load_data(ext_file);
+	assert(ret);
 }
 
 void comm_load_part_file2fs(int argc, char *argv[])
@@ -280,7 +245,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	const RAID_config &conf = get_sys_RAID_conf();
-	file_mapper *fmapper = conf.create_file_mapper();
+	file_mapper::ptr fmapper = conf.create_file_mapper();
 	std::string part_path = fmapper->get_file_name(part_id) + "/"
 		+ int_file_name;
 

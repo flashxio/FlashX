@@ -30,12 +30,20 @@
 #include <sys/param.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#ifdef USE_LIBAIO
 #include <libaio.h>
+#endif
 
 #include "slab_allocator.h"
 
 #define A_READ 0
 #define A_WRITE 1
+
+#ifndef USE_LIBAIO
+typedef long io_context_t;
+struct iocb {
+};
+#endif
 
 namespace safs
 {
@@ -71,6 +79,7 @@ class aio_ctx_impl: public aio_ctx
 
 public:
 	aio_ctx_impl(int node_id, int max_aio): aio_ctx(node_id, max_aio) {
+#ifdef USE_LIBAIO
 		this->max_aio = max_aio;
 		busy_aio = 0;
 		memset(&ctx, 0, sizeof(ctx));
@@ -80,6 +89,9 @@ public:
 			fprintf(stderr, "io_queue_init fails: %s\n", strerror(-ret));
 			exit (1);
 		}
+#else
+		fprintf(stderr, "libaio isn't used. Cannot use async I/O\n");
+#endif
 	}
 
 	virtual void submit_io_request(struct iocb* ioq[], int num);

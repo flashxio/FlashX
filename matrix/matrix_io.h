@@ -26,7 +26,6 @@
 
 #include "io_request.h"
 
-#include "vertex.h"
 #include "sparse_matrix_format.h"
 
 namespace fm

@@ -69,6 +69,10 @@ public:
 		return ptr(new mem_vv_store(offs, vec));
 	}
 
+	static ptr create(const std::vector<off_t> &offs, mem_vec_store::ptr store) {
+		return ptr(new mem_vv_store(offs, store));
+	}
+
 	virtual void set_data(const set_vv_operate &op);
 
 	char *get_raw_arr() {

@@ -136,15 +136,20 @@ mem_thread_pool::ptr mem_thread_pool::get_global_mem_threads()
 
 size_t mem_thread_pool::get_global_num_threads()
 {
-	return get_global_mem_threads()->get_num_threads();
+	// We also count the main thread.
+	return get_global_mem_threads()->get_num_threads() + 1;
 }
 
 int mem_thread_pool::get_curr_thread_id()
 {
+	// It return 0 for the main thread. The worker thread Id starts with 1.
 	detail::pool_task_thread *curr
 		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
-	assert(curr);
-	return curr->get_pool_thread_id();
+	if (curr)
+		return curr->get_pool_thread_id() + 1;
+	// If this isn't a pool thread, it must be the main thread.
+	else
+		return 0;
 }
 
 void mem_thread_pool::init_global_mem_threads(int num_nodes,
@@ -157,31 +162,6 @@ void mem_thread_pool::init_global_mem_threads(int num_nodes,
 void mem_thread_pool::destroy()
 {
 	global_threads = NULL;
-}
-
-static size_t wait4ios(safs::io_select::ptr select, size_t max_pending_ios)
-{
-	size_t num_pending;
-	do {
-		num_pending = select->num_pending_ios();
-
-		// Figure out how many I/O requests we have to wait for in
-		// this iteration.
-		int num_to_process;
-		if (num_pending > max_pending_ios)
-			num_to_process = num_pending - max_pending_ios;
-		else
-			num_to_process = 0;
-		select->wait4complete(num_to_process);
-
-		// Test if all I/O instances have pending I/O requests left.
-		// When a portion of a matrix is ready in memory and being processed,
-		// it may result in writing data to another matrix. Therefore, we
-		// need to process all completed I/O requests (portions with data
-		// in memory) first and then count the number of new pending I/Os.
-		num_pending = select->num_pending_ios();
-	} while (num_pending > max_pending_ios);
-	return num_pending;
 }
 
 void io_worker_task::run()
@@ -197,9 +177,9 @@ void io_worker_task::run()
 
 	// The task runs until there are no tasks left in the queue.
 	while (dispatch->issue_task())
-		wait4ios(select, max_pending_ios);
+		safs::wait4ios(select, max_pending_ios);
 	// Test if all I/O instances have processed all requests.
-	size_t num_pending = wait4ios(select, 0);
+	size_t num_pending = safs::wait4ios(select, 0);
 	assert(num_pending == 0);
 
 	pthread_spin_lock(&lock);
@@ -211,6 +191,32 @@ void io_worker_task::run()
 				ios[i]->get_callback());
 		assert(!cb.has_callback());
 	}
+}
+
+global_counter::global_counter()
+{
+	counts.resize(mem_thread_pool::get_global_num_threads());
+	reset();
+}
+
+void global_counter::inc(size_t val)
+{
+	int id = mem_thread_pool::get_curr_thread_id();
+	counts[id].count += val;
+}
+
+void global_counter::reset()
+{
+	for (size_t i = 0; i < counts.size(); i++)
+		counts[i].count = 0;
+}
+
+size_t global_counter::get() const
+{
+	size_t tot = 0;
+	for (size_t i = 0; i < counts.size(); i++)
+		tot += counts[i].count;
+	return tot;
 }
 
 }

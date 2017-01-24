@@ -24,7 +24,7 @@
 
 #include "FGlib.h"
 #include "ts_graph.h"
-#include "matrix/FG_sparse_matrix.h"
+#include "sparse_matrix.h"
 #include "libgraph-algs/sem_kmeans.h"
 
 using namespace fg;
@@ -637,31 +637,6 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 			start_vertex, num_vertices, edge);
 }
 
-void run_spmv(FG_graph::ptr graph, int argc, char* argv[])
-{
-	int opt;
-	FG_adj_matrix::ptr m = FG_adj_matrix::create(graph);
-	while ((opt = getopt(argc, argv, "t")) != -1) {
-		switch (opt) {
-			case 't':
-				m = m->transpose();
-				break;
-			default:
-				print_usage();
-				abort();
-		}
-	}
-
-	FG_vector<double>::ptr in = FG_vector<double>::create(m->get_num_cols());
-	in->init(1);
-	FG_vector<double>::ptr out = FG_vector<double>::create(m->get_num_rows());
-	m->multiply<double>(*in, *out);
-	printf("the graph has %ld vertices and %ld edges\n",
-			graph->get_graph_header().get_num_vertices(),
-			graph->get_graph_header().get_num_edges());
-	printf("SpMV returns %lf\n", out->sum());
-}
-
 void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 {
 	int opt;
@@ -718,6 +693,54 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
     compute_sem_kmeans(graph, k, init, max_iters, tolerance);
 }
 
+void run_spmm(FG_graph::ptr fg, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+	std::string entry_type;
+	int num_cols = 1;
+
+	while ((opt = getopt(argc, argv, "e:c:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'e':
+				entry_type = optarg;
+				num_opts++;
+				break;
+			case 'c':
+				num_cols = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	fm::sparse_matrix::ptr mat;
+	if (entry_type.empty())
+		mat = create_sparse_matrix(fg, NULL);
+	else if (entry_type == "I")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<int>());
+	else if (entry_type == "L")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<long>());
+	else if (entry_type == "F")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<float>());
+	else if (entry_type == "D")
+		mat = create_sparse_matrix(fg, &fm::get_scalar_type<double>());
+	else {
+		fprintf(stderr, "unknown entry type\n");
+		return;
+	}
+	int num_nodes = safs::params.get_num_nodes();
+	fm::dense_matrix::ptr in = fm::dense_matrix::create_randu<double>(0, 1,
+			mat->get_num_cols(), num_cols, fm::matrix_layout_t::L_ROW, num_nodes);
+	fm::detail::matrix_store::ptr out = fm::detail::mem_matrix_store::create(
+			mat->get_num_rows(), num_cols, fm::matrix_layout_t::L_ROW,
+			fm::get_scalar_type<double>(), num_nodes);
+	mat->multiply(in->get_raw_store(), out);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -734,7 +757,6 @@ std::string supported_algs[] = {
 	"betweenness",
 	"overlap",
 	"bfs",
-	"spmv",
 	"louvain",
     "sem_kmeans"
 };
@@ -793,9 +815,6 @@ void print_usage()
 	fprintf(stderr, "bfs\n");
 	fprintf(stderr, "-e edge type: the type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "-s vertex id: the vertex where the BFS starts\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "spmv\n");
-	fprintf(stderr, "-t: transpose the sparse matrix.\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
@@ -894,13 +913,13 @@ int main(int argc, char *argv[])
 	else if (alg == "bfs") {
 		run_bfs(graph, argc, argv);
 	}
-	else if (alg == "spmv") {
-		run_spmv(graph, argc, argv);
-	}
 	else if (alg == "louvain") {
 		run_louvain(graph, argc, argv);
 	} else if (alg == "sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv);
+	}
+	else if (alg == "spmm") {
+		run_spmm(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());

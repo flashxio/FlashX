@@ -82,7 +82,9 @@ class safs_file
 	std::string header_file;
 	std::string name;
 
+	std::vector<std::string> get_data_files() const;
 	std::string get_header_file() const;
+	size_t get_size_per_disk(size_t file_size) const;
 public:
 	static std::vector<std::string> erase_header_file(
 			const std::vector<std::string> &files);
@@ -104,12 +106,18 @@ public:
 
 	bool exist() const;
 	ssize_t get_size() const;
+	bool resize(size_t new_size);
 	bool create_file(size_t file_size,
 			int block_size = params.get_RAID_block_size(),
 			int mapping_option = params.get_RAID_mapping_option(),
 			std::shared_ptr<safs_file_group> group = NULL);
 	bool delete_file();
 	bool rename(const std::string &new_name);
+	/*
+	 * Load data from a file in the Linux filesystem.
+	 */
+	bool load_data(const std::string &ext_file,
+			size_t block_size = params.get_RAID_block_size());
 };
 
 class safs_file_group

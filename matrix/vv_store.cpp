@@ -32,6 +32,25 @@ namespace fm
 namespace detail
 {
 
+vv_store::ptr vv_store::create(const std::vector<off_t> &offs,
+		vec_store::ptr store)
+{
+	assert(!offs.empty());
+	assert(offs.back() / store->get_type().get_size() == store->get_length());
+	if (store->is_in_mem()) {
+		mem_vec_store::ptr mem_vec
+			= std::dynamic_pointer_cast<mem_vec_store>(store);
+		assert(mem_vec);
+		return mem_vv_store::create(offs, mem_vec);
+	}
+	else {
+		EM_vec_store::ptr em_vec
+			= std::dynamic_pointer_cast<EM_vec_store>(store);
+		assert(em_vec);
+		return EM_vv_store::create(offs, em_vec);
+	}
+}
+
 vv_store::ptr vv_store::create(const scalar_type &type, bool in_mem)
 {
 	if (in_mem)
@@ -180,16 +199,15 @@ local_vec_store::const_ptr vv_store::get_portion(off_t start, size_t len) const
 		return local_vec_store::const_ptr();
 	}
 
-	std::vector<off_t> offs = get_rel_offs(start, len);
-	size_t num_eles = offs.back() / get_type().get_size();
 	off_t start_ele = get_vec_off(start) / get_type().get_size();
 	local_vec_store::const_ptr const_data = get_data().get_portion(
-			start_ele, num_eles);
+			start_ele, get_num_eles(start, len));
 	// TODO this isn't a best solution.
 	local_vec_store::ptr data = std::static_pointer_cast<local_vec_store>(
 			const_cast<local_vec_store &>(*const_data).shallow_copy());
 
-	return local_vv_store::ptr(new local_vv_store(start, offs, data));
+	return local_vv_store::ptr(new local_vv_store(start, get_off_it(start),
+				get_off_it(start + len + 1), data));
 }
 
 local_vec_store::ptr vv_store::get_portion(off_t start, size_t len)
@@ -200,12 +218,12 @@ local_vec_store::ptr vv_store::get_portion(off_t start, size_t len)
 		return local_vec_store::ptr();
 	}
 
-	std::vector<off_t> offs = get_rel_offs(start, len);
-	size_t num_eles = offs.back() / get_type().get_size();
 	off_t start_ele = get_vec_off(start) / get_type().get_size();
-	local_vec_store::ptr data = get_data().get_portion(start_ele, num_eles);
+	local_vec_store::ptr data = get_data().get_portion(start_ele,
+			get_num_eles(start, len));
 
-	return local_vv_store::ptr(new local_vv_store(start, offs, data));
+	return local_vv_store::ptr(new local_vv_store(start, get_off_it(start),
+				get_off_it(start + len + 1), data));
 }
 
 }

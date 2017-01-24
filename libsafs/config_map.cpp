@@ -19,6 +19,8 @@
  * limitations under the License.
  */
 
+#include <string.h>
+
 #include <algorithm>
 #include <iostream>
 #include <sstream>

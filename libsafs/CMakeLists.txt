@@ -10,13 +10,11 @@ add_library(safs STATIC
 	io_interface.cpp
 	native_file.cpp
 	remote_access.cpp
-	timer.cpp
 	cache_config.cpp
 	disk_read_thread.cpp
 	io_request.cpp
 	parameters.cpp
 	safs_file.cpp
-	virt_aio_ctx.cpp
 	cache.cpp
 	file_mapper.cpp
 	memory_manager.cpp

@@ -2,6 +2,8 @@ cmake_minimum_required (VERSION 2.6)
 
 project (FlashGraph)
 
+include(CheckCCompilerFlag)
+
 # The version number.
 set (FlashGraph_VERSION_MAJOR 0)
 set (FlashGraph_VERSION_MINOR 3)
@@ -18,8 +20,6 @@ endif()
 
 find_package(Boost COMPONENTS system filesystem	REQUIRED)
 find_package(Threads REQUIRED)
-find_package(LibNuma REQUIRED)
-find_package(LibAio REQUIRED)
 find_package(LibRt REQUIRED)
 
 # configure a header file to pass some of the CMake settings
@@ -43,10 +43,30 @@ if (hwloc_FOUND)
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HWLOC")
 endif()
 
+find_package(LibNuma)
+if (LIBNUMA_FOUND)
+	message(STATUS "Find libnuma.")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_NUMA")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NUMA")
+endif()
+
+find_package(LibAio)
+if (LIBAIO_FOUND)
+	message(STATUS "Find libaio.")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_LIBAIO")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_LIBAIO")
+endif()
+
+check_c_compiler_flag("-mavx" HAVE_FLAG_M_AVX)
+if(HAVE_FLAG_M_AVX)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mavx")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
+endif()
+
 #set(CMAKE_BUILD_TYPE Release)
 
 # add the binary tree to the search path for include files
 # so that we will find TutorialConfig.h
-include_directories("${PROJECT_BINARY_DIR}"  libsafs flash-graph)
+include_directories("${PROJECT_BINARY_DIR}"  libsafs flash-graph matrix)
 
 subdirs(libsafs utils flash-graph matrix)

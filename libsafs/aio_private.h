@@ -21,7 +21,7 @@
  */
 
 #include <deque>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "wpaio.h"
 #include "io_interface.h"
@@ -31,8 +31,6 @@
 
 namespace safs
 {
-
-void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 struct thread_callback_s;
 
@@ -86,7 +84,7 @@ class async_io: public io_interface
 		}
 	};
 	// file id <-> buffered io
-	std::tr1::unordered_map<int, io_ref> open_files;
+	std::unordered_map<int, io_ref> open_files;
 	io_ref default_io;
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);

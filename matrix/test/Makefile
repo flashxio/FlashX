@@ -17,13 +17,12 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-CXXFLAGS += -I../../libsafs -I../../flash-graph -I.. -I../eigensolver -I../libmatrix-algs $(OMP_FLAG)
-LDFLAGS := $(OMP_FLAG) ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lz -lnuma -laio -lcblas #-lprofiler
+CXXFLAGS += -I../../libsafs -I.. -I../eigensolver -I../libmatrix-algs
+LDFLAGS := ../libmatrix-algs/libFMatrix-algs.a -L.. -lFMatrix -L../../libsafs -lsafs $(LDFLAGS)
+LDFLAGS += -lz -lcblas #-lprofiler
 
 all: test-2d_multiply test-dense_matrix test-block_mv test-mem_vector	\
-	test-sort test-eigen test-dgemm rand_mat_gen test-algs
+	test-sort test-dgemm test-algs
 
 trilinos: test-anasazi_eigen test-tpetra_multiply test-tpetra_MV_multiply
 
@@ -32,7 +31,7 @@ mkl: test-mkl_multiply test-mkl_dgemm
 rand_mat_gen: rand_mat_gen.o ../libFMatrix.a
 	$(CXX) -o rand_mat_gen rand_mat_gen.o $(LDFLAGS)
 
-test-algs: test-algs.o ../libFMatrix.a
+test-algs: test-algs.o ../libFMatrix.a ../libmatrix-algs/libFMatrix-algs.a
 	$(CXX) -o test-algs test-algs.o $(LDFLAGS)
 
 test-2d_multiply: test-2d_multiply.o ../libFMatrix.a
@@ -136,5 +135,12 @@ clean:
 	rm -f test-mkl_multiply
 	rm -f test-eigen
 	rm -f BlockDavidsonTpetra
+	rm -f rand_mat_gen
+	rm -f test-algs
+	rm -f test-anasazi_eigen
+	rm -f test-block_mv
+	rm -f test-dgemm
+	rm -f test-tpetra_MV_multiply
+	rm -f test-mkl_dgemm
 
 -include $(DEPS) 

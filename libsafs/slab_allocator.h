@@ -143,7 +143,7 @@ private:
 
 	std::vector<char *> alloc_bufs;
 
-	pthread_spinlock_t lock;
+	spin_lock lock;
 	// The buffers pre-allocated to serve allocation requests
 	// from the local threads.
 	pthread_key_t local_buf_key;

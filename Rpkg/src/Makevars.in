@@ -1,0 +1,13 @@
+PKG_CFLAGS=-DUSING_R -I. -Ilibsafs -Imatrix \
+    @CPPFLAGS@ @CFLAGS@ -DNDEBUG -DBOOST_LOG_DYN_LINK @HWLOC_DEF@ @AIO_DEF@ @NUMA_DEF@ -fopenmp \
+    -DPACKAGE_VERSION=\"@PACKAGE_VERSION@\"
+PKG_CXXFLAGS= -DUSING_R -I. -Ilibsafs -Imatrix \
+    @CPPFLAGS@ @CFLAGS@ -DNDEBUG -DBOOST_LOG_DYN_LINK @HWLOC_DEF@ @AIO_DEF@ @NUMA_DEF@ -fopenmp \
+    -DPACKAGE_VERSION=\"@PACKAGE_VERSION@\" -std=c++0x
+PKG_LIBS=$(LAPACK_LIBS) $(BLAS_LIBS) @PTHREAD_LIB@ @AIO_LIB@ @HWLOC_LIB@ @NUMA_LIB@
+
+all: $(SHLIB)
+
+OBJECTS=matrix_ops.o rutils.o fmr_utils.o matrix_interface.o libsafs/parameters.o libsafs/mem_tracker.o libsafs/thread.o libsafs/aio_private.o libsafs/associative_cache.o libsafs/cache.o libsafs/cache_config.o libsafs/comp_io_scheduler.o libsafs/debugger.o libsafs/direct_comp_access.o libsafs/direct_private.o libsafs/disk_read_thread.o libsafs/file_mapper.o libsafs/global_cached_private.o libsafs/io_request.o libsafs/memory_manager.o libsafs/messaging.o libsafs/native_file.o libsafs/part_global_cached_private.o libsafs/read_private.o libsafs/remote_access.o libsafs/shadow_cell.o libsafs/wpaio.o libsafs/NUMA_mapper.o libsafs/common.o libsafs/config_map.o libsafs/log.o libsafs/io_interface.o libsafs/in_mem_io.o libsafs/RAID_config.o libsafs/slab_allocator.o libsafs/safs_file.o matrix/agg_matrix_store.o matrix/block_matrix.o matrix/bulk_operate.o matrix/cached_matrix_store.o matrix/col_vec.o matrix/combined_matrix_store.o matrix/data_frame.o matrix/data_io.o matrix/dense_matrix.o matrix/EM_dense_matrix.o matrix/EM_object.o matrix/EM_vector.o matrix/EM_vv_store.o matrix/factor.o matrix/generic_type.o matrix/groupby_matrix_store.o matrix/hilbert_curve.o matrix/IPW_matrix_store.o matrix/local_matrix_store.o matrix/local_mem_buffer.o matrix/local_vec_store.o matrix/local_vv_store.o matrix/mapply_matrix_store.o matrix/materialize.o matrix/matrix_config.o matrix/matrix_header.o matrix/matrix_io.o matrix/matrix_stats.o matrix/matrix_store.o matrix/mem_matrix_store.o matrix/mem_vec_store.o matrix/mem_vv_store.o matrix/mem_worker_thread.o matrix/NUMA_dense_matrix.o matrix/NUMA_vector.o matrix/one_val_matrix_store.o matrix/project_matrix_store.o matrix/rand_gen.o matrix/raw_data_array.o matrix/sink_matrix.o matrix/sparse_matrix.o matrix/sparse_matrix_format.o matrix/vec_store.o matrix/vector.o matrix/vector_vector.o matrix/vv_store.o matrix/sub_matrix_store.o matrix/set_data_matrix_store.o matrix/fm_utils.o
+
+

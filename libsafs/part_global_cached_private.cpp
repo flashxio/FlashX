@@ -137,9 +137,9 @@ public:
 
 	~part_io_process_table();
 
-	std::tr1::unordered_map<int, group_request_sender *> create_req_senders(
+	std::unordered_map<int, group_request_sender *> create_req_senders(
 			int node_id) const;
-	void destroy_req_senders(const std::tr1::unordered_map<int,
+	void destroy_req_senders(const std::unordered_map<int,
 			group_request_sender *> &) const;
 
 	const cache_config *get_cache_config() const {
@@ -817,10 +817,10 @@ part_io_process_table::~part_io_process_table()
 	}
 }
 
-std::tr1::unordered_map<int, group_request_sender *>
+std::unordered_map<int, group_request_sender *>
 part_io_process_table::create_req_senders(int node_id) const
 {
-	std::tr1::unordered_map<int, group_request_sender *> req_senders;
+	std::unordered_map<int, group_request_sender *> req_senders;
 	// Initialize the request senders.
 	for (std::map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
@@ -834,9 +834,9 @@ part_io_process_table::create_req_senders(int node_id) const
 }
 
 void part_io_process_table::destroy_req_senders(
-		const std::tr1::unordered_map<int, group_request_sender *> &req_senders) const
+		const std::unordered_map<int, group_request_sender *> &req_senders) const
 {
-	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+	for (std::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		group_request_sender::destroy(it->second);
 	}
@@ -1048,7 +1048,7 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 void part_global_cached_io::cleanup()
 {
 	// First make sure all requests have been flushed for processing.
-	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+	for (std::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		group_request_sender *sender = it->second;
 		// Send a flush request to force request process threads to flush all requests.
@@ -1127,7 +1127,7 @@ int part_global_cached_io::wait4complete(int num_to_complete)
 
 void part_global_cached_io::flush_requests()
 {
-	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+	for (std::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		it->second->flush();
 		int ret = it->second->get_num_remaining();
@@ -1141,7 +1141,7 @@ void part_global_cached_io::print_state()
 	printf("part global cached io %d has %d pending reqs, %ld remote pending reqs, %d local pending reqs %d replies in the queue\n",
 			get_io_id(), num_pending_ios(), sent_requests - processed_replies.get(),
 			underlying->num_pending_ios(), reply_queue->get_num_objs());
-	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+	for (std::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		group_request_sender *sender = it->second;
 		printf("\treq sender has %d buffered reqs\n", sender->get_num_remaining());

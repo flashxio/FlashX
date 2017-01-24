@@ -184,8 +184,12 @@ void type_sorter<T>::merge(
 	for (size_t i = 0; i < arrs.size(); i++)
 		arrs[i] = std::pair<T *, T *>((T *) raw_arrs[i].first,
 				(T *) raw_arrs[i].second);
+#if defined(_OPENMP)
 	__gnu_parallel::multiway_merge(arrs.begin(), arrs.end(), (T *) output,
 			out_num, entry_less);
+#else
+	assert(0);
+#endif
 }
 
 /*
@@ -239,8 +243,13 @@ void type_sorter<T>::merge_with_index(
 	// Move data from `arrs' to `buf' in parallel.
 #pragma omp parallel
 	{
+#if defined(_OPENMP)
 		size_t avg_part_len = ceil(((double) out_num) / omp_get_num_threads());
 		size_t thread_id = omp_get_thread_num();
+#else
+		size_t avg_part_len = out_num;
+		size_t thread_id = 0;
+#endif
 		size_t start = thread_id * avg_part_len;
 		if (out_num > start) {
 			size_t part_len = std::min(out_num - start, avg_part_len);
@@ -298,6 +307,7 @@ void type_sorter<T>::merge_with_index(
 	}
 	assert(off == out_num);
 
+#if defined(_OPENMP)
 	struct {
 		bool operator()(const indexed_entry &e1, const indexed_entry &e2) const {
 			return e1.val < e2.val;
@@ -312,6 +322,9 @@ void type_sorter<T>::merge_with_index(
 		merge_index[i].first = merge_res[i].arr_idx;
 		merge_index[i].second = merge_res[i].off_in_arr;
 	}
+#else
+	assert(0);
+#endif
 }
 
 }
