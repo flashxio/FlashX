@@ -33,12 +33,6 @@ LIBS=$LIBS_SAVE
 AC_CHECK_HEADER([sys/times.h], 
       [AC_DEFINE([HAVE_TIMES_H], [1], [Define to 1 if you have the sys/times.h header])])
 
-AC_CHECK_HEADER([boost/static_assert.hpp], [], [AC_MSG_ERROR("can't find boost assert")])
-AC_CHECK_HEADER([boost/foreach.hpp], [], [AC_MSG_ERROR("can't find boost foreach")])
-AC_CHECK_HEADER([boost/format.hpp], [], [AC_MSG_ERROR("can't find boost format")])
-AC_CHECK_HEADER([boost/lexical_cast.hpp], [], [AC_MSG_ERROR("can't find boost string")])
-AC_CHECK_HEADER([boost/algorithm/string.hpp], [], [AC_MSG_ERROR("can't find boost string")])
-
 AC_CHECK_HEADER([hwloc.h], [AC_SUBST(HWLOC_DEF, -DUSE_HWLOC)])
 AC_CHECK_LIB([hwloc], [hwloc_topology_load], [AC_SUBST(HWLOC_LIB, -lhwloc)])
 
