@@ -246,6 +246,7 @@ agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 		assert(0);
 	portion_op = std::shared_ptr<matrix_long_agg_op>(new matrix_long_agg_op(
 				partial_res, margin, op));
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::const_ptr agg_matrix_store::get_agg_res() const

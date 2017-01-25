@@ -240,6 +240,7 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				f.get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
@@ -269,6 +270,7 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				labels->get_factor().get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::ptr groupby_matrix_store::get_agg_res() const

@@ -441,6 +441,7 @@ block_sink_store::block_sink_store(const std::vector<size_t> &nrow_in_blocks,
 	this->nrow_in_blocks = nrow_in_blocks;
 	this->ncol_in_blocks = ncol_in_blocks;
 	this->is_sym = is_sym;
+	this->underlying = get_underlying_mats();
 }
 
 block_sink_store::block_sink_store(
@@ -474,6 +475,7 @@ block_sink_store::block_sink_store(
 					&& stores[get_idx(j, i)]->get_num_cols() == num_cols);
 	}
 	assert(num_block_rows * num_block_cols == stores.size());
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::const_ptr block_sink_store::transpose() const
@@ -524,6 +526,8 @@ std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 {
 	if (has_materialized())
 		return std::unordered_map<size_t, size_t>();
+	if (!this->underlying.empty())
+		return this->underlying;
 
 	std::unordered_map<size_t, size_t> underlying;
 	for (size_t i = 0; i < stores.size(); i++) {

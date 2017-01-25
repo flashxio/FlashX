@@ -915,6 +915,7 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		portion_op = std::shared_ptr<portion_mapply_op>(new inner_prod_wide_op(
 					left_op, right_op, info, nthreads));
 	}
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::ptr IPW_matrix_store::get_combine_res() const
@@ -963,6 +964,8 @@ std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
 {
 	if (has_materialized())
 		return std::unordered_map<size_t, size_t>();
+	if (!this->underlying.empty())
+		return this->underlying;
 
 	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
 	if (right_mat) {

@@ -44,6 +44,12 @@ class agg_matrix_store: public sink_store
 {
 	std::shared_ptr<portion_mapply_op> portion_op;
 	matrix_store::const_ptr data;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
 
 	matrix_store::const_ptr get_agg_res() const;
 	agg_matrix_store(matrix_store::const_ptr data, matrix_margin margin,
@@ -85,9 +91,12 @@ public:
 		mats[0] = data;
 		return portion_op->to_string(mats);
 	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		if (has_materialized())
 			return std::unordered_map<size_t, size_t>();
+		else if (!underlying.empty())
+			return underlying;
 		else
 			return data->get_underlying_mats();
 	}

@@ -43,6 +43,12 @@ class groupby_matrix_store: public sink_store
 	matrix_store::const_ptr label_store;
 	matrix_margin margin;
 	factor f;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
 
 	matrix_store::ptr get_agg_res() const;
 
@@ -88,6 +94,8 @@ public:
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		if (has_materialized())
 			return std::unordered_map<size_t, size_t>();
+		else if (!underlying.empty())
+			return underlying;
 		else
 			return data->get_underlying_mats();
 	}

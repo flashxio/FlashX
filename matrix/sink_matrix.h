@@ -179,6 +179,12 @@ class block_sink_store: public sink_store
 	// If is_sym is true, we only need to store almost half of the sink
 	// matrices.
 	bool is_sym;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
 
 	size_t get_idx(size_t i, size_t j) const {
 		return i * get_num_block_cols() + j;
