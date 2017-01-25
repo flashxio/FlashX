@@ -325,6 +325,56 @@ async_cres_t block_group::get_portion_async(size_t start_row, size_t start_col,
 
 }
 
+std::unordered_set<sink_store::const_ptr> sink_store::sinks;
+
+void sink_store::register_sink_matrices(sink_store::const_ptr store)
+{
+	if (!store->has_materialized())
+		sinks.insert(store);
+}
+
+static inline bool share_io(const std::unordered_map<size_t, size_t> &underlying1,
+		const std::vector<size_t> &underlying2)
+{
+	for (size_t i = 0; i < underlying2.size(); i++) {
+		auto it = underlying1.find(underlying2[i]);
+		if (it == underlying1.end())
+			return false;
+	}
+	return true;
+}
+
+void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
+{
+	// Get the underlying matrices from the virtual matrix.
+	auto underlying = store->get_underlying_mats();
+	std::vector<size_t> underlying_ids;
+	for (auto it = underlying.begin(); it != underlying.end(); it++)
+		underlying_ids.push_back(it->first);
+
+	std::vector<sink_store::const_ptr> share_io_sinks;
+	for (auto it = sinks.begin(); it != sinks.end(); it++) {
+		sink_store::const_ptr sink = *it;
+		if (share_io(sink->get_underlying_mats(), underlying_ids))
+			share_io_sinks.push_back(sink);
+	}
+	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
+		sinks.erase(*it);
+
+	if (share_io_sinks.empty())
+		store->materialize_self();
+	else {
+		std::vector<dense_matrix::ptr> mats(share_io_sinks.size() + 1);
+		for (size_t i = 0; i < share_io_sinks.size(); i++)
+			mats[i] = dense_matrix::create(share_io_sinks[i]);
+		mats[share_io_sinks.size()] = dense_matrix::create(store);
+		fm::materialize(mats, true);
+	}
+
+	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
+		assert((*it)->has_materialized());
+}
+
 static size_t get_num_rows(const std::vector<sink_store::const_ptr> &stores,
 		size_t num_block_rows, size_t num_block_cols)
 {
@@ -477,6 +527,12 @@ std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 
 	std::unordered_map<size_t, size_t> underlying;
 	for (size_t i = 0; i < stores.size(); i++) {
+		// Some of the stores might be empty. For example, crossprod with
+		// itself only needs to store half of the crossprod result on
+		// individual matrices.
+		if (stores[i] == NULL)
+			continue;
+
 		auto tmp = stores[i]->get_underlying_mats();
 		underlying.insert(tmp.begin(), tmp.end());
 	}

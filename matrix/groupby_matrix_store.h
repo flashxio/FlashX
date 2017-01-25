@@ -49,12 +49,20 @@ class groupby_matrix_store: public sink_store
 	groupby_matrix_store(matrix_store::const_ptr data,
 			matrix_store::const_ptr label_store, const factor &f,
 			matrix_margin margin, agg_operate::const_ptr op);
-public:
-	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 
 	groupby_matrix_store(matrix_store::const_ptr data,
 			std::shared_ptr<const factor_col_vector> labels,
 			matrix_margin margin, agg_operate::const_ptr op);
+public:
+	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
+
+	static ptr create(matrix_store::const_ptr data,
+			std::shared_ptr<const factor_col_vector> labels,
+			matrix_margin margin, agg_operate::const_ptr op) {
+		ptr ret(new groupby_matrix_store(data, labels, margin, op));
+		sink_store::register_sink_matrices(ret);
+		return ret;
+	}
 
 	virtual bool has_materialized() const;
 

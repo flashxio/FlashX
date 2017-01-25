@@ -46,11 +46,17 @@ class agg_matrix_store: public sink_store
 	matrix_store::const_ptr data;
 
 	matrix_store::const_ptr get_agg_res() const;
+	agg_matrix_store(matrix_store::const_ptr data, matrix_margin margin,
+			agg_operate::const_ptr op);
 public:
 	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 
-	agg_matrix_store(matrix_store::const_ptr data, matrix_margin margin,
-			agg_operate::const_ptr op);
+	static ptr create(matrix_store::const_ptr data, matrix_margin margin,
+			agg_operate::const_ptr op) {
+		ptr ret(new agg_matrix_store(data, margin, op));
+		sink_store::register_sink_matrices(ret);
+		return ret;
+	}
 
 	virtual bool has_materialized() const;
 

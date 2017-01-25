@@ -20,6 +20,8 @@
 #ifndef __FM_SINK_MATRIX_H__
 #define __FM_SINK_MATRIX_H__
 
+#include <unordered_set>
+
 #include "virtual_matrix_store.h"
 
 namespace fm
@@ -30,6 +32,8 @@ namespace detail
 
 class sink_store: public virtual_matrix_store
 {
+	static std::unordered_set<std::shared_ptr<const sink_store> > sinks;
+
 	matrix_store::const_ptr res;
 
 	// When we access the materialized result, we should also save it.
@@ -43,6 +47,20 @@ class sink_store: public virtual_matrix_store
 public:
 	typedef std::shared_ptr<sink_store> ptr;
 	typedef std::shared_ptr<const sink_store> const_ptr;
+
+	// Register a sink matrix.
+	static void register_sink_matrices(sink_store::const_ptr);
+	// Get the number of matrices that haven't been materialized.
+	static size_t get_unmaterialized() {
+		return sinks.size();
+	}
+	static void clear_sink_matrices() {
+		sinks.clear();
+	}
+	// Materialize a virtual matrix with some of the sink matrices.
+	// When the sink matrices are materialized, we keep them from the sink
+	// matrix set.
+	static void materialize_matrices(virtual_matrix_store::const_ptr);
 
 	sink_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &type): virtual_matrix_store(nrow, ncol,

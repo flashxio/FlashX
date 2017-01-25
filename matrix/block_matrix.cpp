@@ -825,9 +825,8 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 			tmp = tmp->conv2(matrix_layout_t::L_COL);
 			left = tmp->get_raw_store();
 		}
-		tmps.push_back(dense_matrix::create(detail::matrix_store::ptr(
-						new detail::IPW_matrix_store(left, right, NULL, NULL,
-							out_layout))));
+		tmps.push_back(dense_matrix::create(detail::IPW_matrix_store::create(
+						left, right, NULL, NULL, out_layout)));
 		// TODO It might be better if we can perform computation on more
 		// matrices together. However, computation on more matrices requires
 		// more memory allocation.

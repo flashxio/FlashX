@@ -47,10 +47,17 @@ class IPW_matrix_store: public sink_store
 	matrix_layout_t layout;
 
 	matrix_store::ptr get_combine_res() const;
-public:
 	IPW_matrix_store(matrix_store::const_ptr left, matrix_store::const_ptr right,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
-			matrix_layout_t layout = matrix_layout_t::L_NONE);
+			matrix_layout_t layout);
+public:
+	static ptr create(matrix_store::const_ptr left, matrix_store::const_ptr right,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t layout = matrix_layout_t::L_NONE) {
+		ptr ret(new IPW_matrix_store(left, right, left_op, right_op, layout));
+		sink_store::register_sink_matrices(ret);
+		return ret;
+	}
 
 	virtual bool has_materialized() const;
 

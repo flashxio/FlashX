@@ -29,6 +29,7 @@
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
 #include "EM_dense_matrix.h"
+#include "sink_matrix.h"
 
 namespace fm
 {
@@ -758,6 +759,7 @@ void init_flash_matrix(config_map::ptr configs)
 
 void destroy_flash_matrix()
 {
+	detail::sink_store::clear_sink_matrices();
 	long count = init_count.fetch_sub(1);
 	assert(count > 0);
 	if (count == 1) {

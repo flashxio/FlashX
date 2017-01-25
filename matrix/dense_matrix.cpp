@@ -414,8 +414,8 @@ dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 
 	assert(m1.get_type() == m2.get_type());
 
-	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
-				m1.get_raw_store(), m2.get_raw_store(), NULL, NULL, out_layout));
+	detail::matrix_store::ptr res = detail::IPW_matrix_store::create(
+				m1.get_raw_store(), m2.get_raw_store(), NULL, NULL, out_layout);
 	return dense_matrix::create(res);
 }
 
@@ -461,9 +461,8 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 				out_layout = matrix_layout_t::L_COL;
 			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
 			// TODO we assume the left matrix is a wide matrix.
-			return dense_matrix::create(detail::matrix_store::ptr(
-						new detail::IPW_matrix_store(tmp->get_raw_store(),
-							store, NULL, NULL, out_layout)));
+			return dense_matrix::create(detail::IPW_matrix_store::create(
+						tmp->get_raw_store(), store, NULL, NULL, out_layout));
 		}
 		else
 			return multiply_sparse_combined(mat, out_layout);
@@ -551,8 +550,9 @@ bool dense_matrix::materialize_self() const
 
 	detail::matrix_store::const_ptr tmp;
 	try {
-		tmp = detail::virtual_matrix_store::cast(store)->materialize(
-				store->is_in_mem(), store->get_num_nodes());
+		auto vstore = detail::virtual_matrix_store::cast(store);
+		detail::sink_store::materialize_matrices(vstore);
+		tmp = vstore->materialize(store->is_in_mem(), store->get_num_nodes());
 	} catch (std::exception &e) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("fail to materialize: %1%") % e.what();
@@ -1973,8 +1973,8 @@ dense_matrix::ptr dense_matrix::inner_prod_wide(
 		right_mat = m.get_raw_store();
 	assert(right_mat);
 
-	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
-				left_mat, right_mat, left_op, right_op, out_layout));
+	detail::matrix_store::ptr res = detail::IPW_matrix_store::create(
+				left_mat, right_mat, left_op, right_op, out_layout);
 	return dense_matrix::create(res);
 }
 
@@ -2070,8 +2070,7 @@ static detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
 	 */
-	return detail::matrix_store::ptr(new detail::agg_matrix_store(store,
-				margin, op));
+	return detail::agg_matrix_store::create(store, margin, op);
 }
 
 dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
@@ -2727,9 +2726,8 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
 			mat = tmp->get_raw_store();
 		}
-		return dense_matrix::create(detail::matrix_store::ptr(
-					new detail::groupby_matrix_store(mat, labels,
-						matrix_margin::MAR_ROW, op)));
+		return dense_matrix::create(detail::groupby_matrix_store::create(mat,
+					labels, matrix_margin::MAR_ROW, op));
 	}
 }
 
