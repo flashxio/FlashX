@@ -961,6 +961,9 @@ matrix_store::const_ptr IPW_matrix_store::materialize(bool in_mem,
 
 std::unordered_map<size_t, size_t> IPW_matrix_store::get_underlying_mats() const
 {
+	if (has_materialized())
+		return std::unordered_map<size_t, size_t>();
+
 	std::unordered_map<size_t, size_t> final_res = left_mat->get_underlying_mats();
 	if (right_mat) {
 		std::unordered_map<size_t, size_t> right

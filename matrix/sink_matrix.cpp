@@ -472,12 +472,22 @@ std::string block_sink_store::get_name() const
 
 std::unordered_map<size_t, size_t> block_sink_store::get_underlying_mats() const
 {
-	assert(0);
-	return std::unordered_map<size_t, size_t>();
+	if (has_materialized())
+		return std::unordered_map<size_t, size_t>();
+
+	std::unordered_map<size_t, size_t> underlying;
+	for (size_t i = 0; i < stores.size(); i++) {
+		auto tmp = stores[i]->get_underlying_mats();
+		underlying.insert(tmp.begin(), tmp.end());
+	}
+	return underlying;
 }
 
 bool block_sink_store::has_materialized() const
 {
+	if (result)
+		return true;
+
 	for (size_t i = 0; i < stores.size(); i++) {
 		if (stores[i] && !stores[i]->has_materialized())
 			return false;

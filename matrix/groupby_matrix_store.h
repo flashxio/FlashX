@@ -78,7 +78,10 @@ public:
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		return data->get_underlying_mats();
+		if (has_materialized())
+			return std::unordered_map<size_t, size_t>();
+		else
+			return data->get_underlying_mats();
 	}
 
 	virtual std::string get_name() const {
