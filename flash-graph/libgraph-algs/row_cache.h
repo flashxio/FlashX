@@ -174,7 +174,7 @@ namespace {
               *     cost of copying actual data.
               */
             void build_index() {
-#ifdef KM_TEST
+#if 0
                 BOOST_LOG_TRIVIAL(info) << "Printing data matrix";
                 print_data_mat();
                 BOOST_LOG_TRIVIAL(info) << "Building hash index";
@@ -185,7 +185,7 @@ namespace {
                         data_map[it->first] = &(it->second[0]);
                     }
                 }
-#ifdef KM_TEST
+#if 0
                 print();
                 verify();
 #endif

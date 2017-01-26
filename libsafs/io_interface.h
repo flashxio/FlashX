@@ -498,6 +498,10 @@ public:
 	virtual void print_statistics() const {
 	}
 
+    virtual size_t get_tot_bytes() {
+        return 0;
+    }
+
 	/**
 	 * This method gets the size of the file accessed by the I/O factory.
 	 * \return the file size.

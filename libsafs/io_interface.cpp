@@ -471,6 +471,10 @@ public:
 			<< boost::format("There are %1% pages accessed, %2% cache hits, %3% of them are in the fast process")
 			% tot_pg_accesses.load() % tot_hits.load() % tot_fast_process.load();
 	}
+
+	size_t get_tot_bytes() {
+        return (size_t)tot_bytes;
+	}
 };
 
 class direct_comp_io_factory: public file_io_factory
