@@ -338,10 +338,10 @@ static inline bool share_io(const std::unordered_map<size_t, size_t> &underlying
 {
 	for (size_t i = 0; i < underlying2.size(); i++) {
 		auto it = underlying1.find(underlying2[i]);
-		if (it == underlying1.end())
-			return false;
+		if (it != underlying1.end())
+			return true;
 	}
-	return true;
+	return false;
 }
 
 void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
