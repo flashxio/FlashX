@@ -510,7 +510,7 @@ public:
      * \brief Synchronization barrier that waits for the graph algorithm to
 	 *        complete.
      */
-	void wait4complete();
+	size_t wait4complete();
 
 #if 0
 	/**
@@ -647,6 +647,9 @@ public:
 		return ext_mem_undirected_vertex::vsize2num_edges(vertex_size,
 				header.get_edge_data_size());
 	}
+
+    void print_stats();
+    size_t get_tot_bytes();
 };
 
 }

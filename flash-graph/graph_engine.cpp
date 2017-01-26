@@ -803,7 +803,7 @@ bool graph_engine::progress_next_level()
 	return is_complete;
 }
 
-void graph_engine::wait4complete()
+size_t graph_engine::wait4complete()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++) {
 		worker_threads[i]->join();
@@ -815,6 +815,7 @@ void graph_engine::wait4complete()
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("The graph engine takes %1% seconds to complete")
 		% time_diff(start_time, curr);
+    return get_tot_bytes();
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
@@ -953,6 +954,15 @@ void graph_engine::destroy_flash_graph()
 int graph_engine::get_file_id() const
 {
 	return graph_factory->get_file_id();
+}
+
+void graph_engine::print_stats() {
+    printf("\nEcho statistics:\n");
+    graph_factory->print_statistics();
+}
+
+size_t graph_engine::get_tot_bytes() {
+    return graph_factory->get_tot_bytes();
 }
 
 }
