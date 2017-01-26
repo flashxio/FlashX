@@ -490,7 +490,8 @@ matrix_store::const_ptr block_sink_store::transpose() const
 		return matrix_store::const_ptr(new_store);
 	}
 	else {
-		std::vector<sink_store::const_ptr> new_stores(stores.size());
+		block_sink_store::ptr new_sink = block_sink_store::create(ncol_in_blocks,
+				nrow_in_blocks, is_in_mem(), get_type(), is_sym);
 		for (size_t j = 0; j < get_num_block_cols(); j++)
 			for (size_t i = 0; i < get_num_block_rows(); i++) {
 				auto store = stores[get_idx(i, j)];
@@ -501,10 +502,9 @@ matrix_store::const_ptr block_sink_store::transpose() const
 				sink_store::const_ptr sink
 					= std::dynamic_pointer_cast<const sink_store>(t);
 				assert(sink);
-				new_stores[get_idx(j, i)] = sink;
+				new_sink->stores[new_sink->get_idx(j, i)] = sink;
 			}
-		return matrix_store::const_ptr(new block_sink_store(new_stores,
-					get_num_block_cols(), get_num_block_rows(), is_sym));
+		return new_sink;
 	}
 }
 
