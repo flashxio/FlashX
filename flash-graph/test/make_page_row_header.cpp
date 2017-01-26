@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include "fake_index.h"
+#include "knors_index.h"
 
 using namespace fg;
 

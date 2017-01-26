@@ -26,10 +26,7 @@
 #include "in_mem_storage.h"
 #include "vertex_index.h"
 #include "safs_file.h"
-
-#if GRAPH_AS_MATRIX
-#include "fake_index.h"
-#endif
+#include "knors_index.h"
 
 using namespace safs;
 
@@ -80,35 +77,8 @@ FG_graph::FG_graph(const std::string &graph_file,
 		graph_data = in_mem_graph::load_graph(graph_file);
 	}
 
-#if GRAPH_AS_MATRIX
         index_data = get_index_data();
 		header = index_data->get_graph_header();
-#else
-
-	if (graph_conf.use_in_mem_index() && exist_in_safs) {
-		index_data = vertex_index::safs_load(index_file);
-		header = index_data->get_graph_header();
-	}
-	else if (!exist_in_safs) {
-		// If we can't initialize SAFS, we assume the index file is
-		// in the local filesystem.
-		index_data = vertex_index::load(index_file);
-		header = index_data->get_graph_header();
-	}
-	else {
-		file_io_factory::shared_ptr index_factory = create_io_factory(
-				index_file, REMOTE_ACCESS);
-		io_interface::ptr io = create_io(index_factory, thread::get_curr_thread());
-		char *buf = NULL;
-		int ret = posix_memalign((void **) &buf, 512, sizeof(header));
-		assert(ret == 0);
-		data_loc_t loc(io->get_file_id(), 0);
-		io_request req(buf, loc, sizeof(header), READ);
-		io->access(&req, 1);
-		io->wait4complete(1);
-		memcpy(&header, buf, sizeof(header));
-	}
-#endif
 }
 
 FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
@@ -147,13 +117,8 @@ vertex_index::ptr FG_graph::get_index_data() const
     if (index_data) {
         return index_data;
     } else {
-#if GRAPH_AS_MATRIX
-        BOOST_LOG_TRIVIAL(info) << "Creating in-memory faked index!\n";
+        BOOST_LOG_TRIVIAL(info) << "Creating in-memory dummy index!\n";
         return make_index(GRAPH_MAT_ROWS, GRAPH_MAT_COLS);
-#else
-        BOOST_LOG_TRIVIAL(info) << "Looking for fake index on disk!\n";
-        return vertex_index::safs_load(index_file);
-#endif
     }
 }
 

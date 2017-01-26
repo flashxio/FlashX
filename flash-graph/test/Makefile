@@ -20,7 +20,7 @@ include ../../Makefile.common
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
 CXXFLAGS += -I../../libsafs -I.. -I.
 
-TESTFILES = test_load_balancer test_comm test_fake_index make_page_row_header\
+TESTFILES = test_load_balancer test_comm test_knors_index make_page_row_header\
 			test_sem_kmeans test_clusters test_partition_cache\
 			test_kmeans_thread test_thd_safe_bool_vector test_kmeans_task_thread\
 			test_task_queue
@@ -33,8 +33,8 @@ test_load_balancer: test_load_balancer.o ../libgraph.a
 test_comm: test_comm.o ../libgraph.a
 	$(CXX) -o test_comm test_comm.o $(LDFLAGS)
 
-test_fake_index: test_fake_index.o
-	$(CXX) -o test_fake_index test_fake_index.o $(LDFLAGS)
+test_knors_index: test_knors_index.o
+	$(CXX) -o test_knors_index test_knors_index.o $(LDFLAGS)
 
 make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
