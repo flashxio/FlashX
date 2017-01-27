@@ -218,6 +218,9 @@ public:
 	virtual std::string get_name() const;
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 
+	const std::vector<sink_store::const_ptr> &get_stores() const {
+		return stores;
+	}
 	matrix_store::const_ptr get_store(size_t i, size_t j) const;
 	void set_store(size_t i, size_t j, matrix_store::const_ptr store);
 

@@ -338,7 +338,7 @@ static inline bool share_io(const std::unordered_map<size_t, size_t> &underlying
 {
 	for (size_t i = 0; i < underlying2.size(); i++) {
 		auto it = underlying1.find(underlying2[i]);
-		if (it != underlying1.end())
+		if (INVALID_MAT_ID != underlying2[i] && it != underlying1.end())
 			return true;
 	}
 	return false;
@@ -352,27 +352,54 @@ void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
 	for (auto it = underlying.begin(); it != underlying.end(); it++)
 		underlying_ids.push_back(it->first);
 
-	std::vector<sink_store::const_ptr> share_io_sinks;
+	// All sink matrices in `sinks' are individual sink matrices, instead of
+	// block sink matrices.
+	std::unordered_map<size_t, sink_store::const_ptr> share_io_sinks;
 	for (auto it = sinks.begin(); it != sinks.end(); it++) {
 		sink_store::const_ptr sink = *it;
 		if (share_io(sink->get_underlying_mats(), underlying_ids))
-			share_io_sinks.push_back(sink);
+			share_io_sinks.insert(std::pair<size_t, sink_store::const_ptr>(
+						sink->get_data_id(), sink));
 	}
 	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
-		sinks.erase(*it);
+		sinks.erase(it->second);
 
 	if (share_io_sinks.empty())
 		store->materialize_self();
 	else {
-		std::vector<dense_matrix::ptr> mats(share_io_sinks.size() + 1);
-		for (size_t i = 0; i < share_io_sinks.size(); i++)
-			mats[i] = dense_matrix::create(share_io_sinks[i]);
-		mats[share_io_sinks.size()] = dense_matrix::create(store);
+		std::vector<dense_matrix::ptr> mats;
+		for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++) {
+			if (!store->share_data(*it->second) && !it->second->has_materialized())
+				mats.push_back(dense_matrix::create(it->second));
+		}
+
+		// The input matrix might be a block sink matrix.
+		// If it is, we need to search among the individual blocks in
+		// the block sink matrix and avoid materializing an individual
+		// sink matrix multiple times.
+		block_sink_store::const_ptr block_sink
+			= std::dynamic_pointer_cast<const block_sink_store>(store);
+		if (block_sink == NULL)
+			mats.push_back(dense_matrix::create(store));
+		else {
+			const std::vector<sink_store::const_ptr> &blocks
+				= block_sink->get_stores();
+			for (size_t i = 0; i < blocks.size(); i++) {
+				if (blocks[i] == NULL)
+					continue;
+				// We only need to materialize the individual matrices
+				// that don't exist in `share_io_sinks'.
+				auto it = share_io_sinks.find(blocks[i]->get_data_id());
+				if (it == share_io_sinks.end())
+					mats.push_back(dense_matrix::create(blocks[i]));
+			}
+		}
+
 		fm::materialize(mats, true);
 	}
 
 	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
-		assert((*it)->has_materialized());
+		assert(it->second->has_materialized());
 }
 
 static size_t get_num_rows(const std::vector<sink_store::const_ptr> &stores,
@@ -411,6 +438,9 @@ block_sink_store::ptr block_sink_store::create(
 	if (num_stores != num_block_rows * num_block_cols)
 		return block_sink_store::ptr();
 
+	// We don't need to register a block sink matrix to be materialized
+	// whenever possible because all individual sink matrices have been
+	// registered for materialization.
 	return block_sink_store::ptr(new block_sink_store(sink_stores,
 				num_block_rows, num_block_cols, false));
 }
@@ -428,6 +458,9 @@ block_sink_store::ptr block_sink_store::create(
 	if (is_sym && sum(nrow_in_blocks) != sum(ncol_in_blocks))
 		return block_sink_store::ptr();
 
+	// We don't need to register a block sink matrix to be materialized
+	// whenever possible because all individual sink matrices have been
+	// registered for materialization.
 	return block_sink_store::ptr(new block_sink_store(nrow_in_blocks,
 				ncol_in_blocks, in_mem, type, is_sym));
 }
@@ -584,7 +617,8 @@ void block_sink_store::materialize_self() const
 	for (size_t i = 0; i < stores.size(); i++) {
 		if (stores[i]) {
 			dense_matrix::ptr mat = dense_matrix::create(stores[i]);
-			mat_vec.push_back(mat);
+			if (!stores[i]->has_materialized())
+				mat_vec.push_back(mat);
 			mat_map[i] = mat;
 		}
 	}
