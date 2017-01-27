@@ -34,11 +34,14 @@ namespace fg
 {
 
 FG_graph::FG_graph(const std::string &graph_file,
-		const std::string &index_file, config_map::ptr configs)
+		const std::string &index_file, config_map::ptr configs,
+        const vsize_t nsamples, const vsize_t dim)
 {
 	this->graph_file = graph_file;
 	this->index_file = index_file;
 	this->configs = configs;
+    this->nsamples = nsamples;
+    this->dim = dim;
 
 	try {
 		if (configs)
@@ -117,8 +120,9 @@ vertex_index::ptr FG_graph::get_index_data() const
     if (index_data) {
         return index_data;
     } else {
-        BOOST_LOG_TRIVIAL(info) << "Creating in-memory dummy index!\n";
-        return make_index(GRAPH_MAT_ROWS, GRAPH_MAT_COLS);
+        assert(this->nsamples);
+        assert(this->dim);
+        return make_index(this->nsamples, this->dim);
     }
 }
 

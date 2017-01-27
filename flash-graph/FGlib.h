@@ -47,9 +47,12 @@ class FG_graph
 	std::shared_ptr<in_mem_graph> graph_data;
 	std::shared_ptr<vertex_index> index_data;
 	config_map::ptr configs;
+    vsize_t nsamples;
+    vsize_t dim;
 
 	FG_graph(const std::string &graph_file,
-			const std::string &index_file, config_map::ptr configs);
+			const std::string &index_file, config_map::ptr configs,
+            const vsize_t nsamples=0, const vsize_t dim=0);
 	FG_graph(std::shared_ptr<in_mem_graph> graph_data,
 			std::shared_ptr<vertex_index> index_data,
 			const std::string &graph_name, config_map::ptr configs);
@@ -60,18 +63,23 @@ public:
 		graph_engine::destroy_flash_graph();
 	}
 
+    //void set_nsamples(const vsize_t nsamples) { this->nsamples = nsamples; }
+    //void set_dim(const vsize_t dim) { this->dim = dim; }
+    const vsize_t get_nsamples() const { return this->nsamples; }
+    const vsize_t get_dim() const { return this->dim; }
+
 	/**
 	 * \brief  Method to instantiate a graph object.
 	 *         This method is used in lieu of explicitly calling a ctor.
 	 *    
 	 * \param graph_file Path to the graph file in SAFS or in Linux filesystem.
-	 * \param index_file Path to the graph index file in SAFS or
-	 *        in Linux filesystem.
+	 * \param index_file Path to the graph index file in SAFS or *        in Linux filesystem.
 	 * \param configs Configuration in configuration file.
 	 */
 	static ptr create(const std::string &graph_file,
-			const std::string &index_file, config_map::ptr configs) {
-		return ptr(new FG_graph(graph_file, index_file, configs));
+			const std::string &index_file, config_map::ptr configs,
+            const vsize_t nsamples=0, const vsize_t dim=0) {
+		return ptr(new FG_graph(graph_file, index_file, configs, nsamples, dim));
 	}
 
 	/**
