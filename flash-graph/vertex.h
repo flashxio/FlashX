@@ -35,10 +35,6 @@
 #include "FG_basic_types.h"
 #include "graph_file_header.h"
 
-#define GRAPH_AS_MATRIX 1
-#define GRAPH_MAT_ROWS 128 // 65608366 // FIXME: DM hardcoded
-#define GRAPH_MAT_COLS 57 // 8 // FIXME: DM hardcoded
-
 namespace fg
 {
 
@@ -1192,12 +1188,12 @@ class page_row: public page_vertex
 	const safs::page_byte_array &array;
 
 public:
-	page_row(const safs::page_byte_array &arr): page_vertex(
-			false), array(arr) {
+	page_row(const safs::page_byte_array &arr, const vsize_t num_edges):
+        page_vertex(false), array(arr) {
 
-    num_edges = GRAPH_MAT_COLS;  // FIXME: DM Faked
-    const off_t end = num_edges*sizeof(double); // FIXME: DM Faked
-#ifdef VERBOSE
+    this->num_edges = num_edges;
+    const off_t end = num_edges*sizeof(double);
+#if 0
     safs::page_byte_array::seq_const_iterator<double> it =
       array.get_seq_iterator<double>(0, end);
     std::cout << "[";
@@ -1208,8 +1204,12 @@ public:
 #endif
 
     vertex_size = end;
-    id = (arr.get_offset() - graph_header::HEADER_SIZE)/end; // FIXME: Faked
+    id = (arr.get_offset() - graph_header::HEADER_SIZE)/end;
 	}
+
+    void set_num_edges(const vsize_t num_edges) {
+        this->num_edges = num_edges;
+    }
 
 	size_t get_size() const {
 		return vertex_size;
