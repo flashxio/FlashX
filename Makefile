@@ -22,7 +22,6 @@ all: build_lib utils
 build_lib:
 	$(MAKE) -C libsafs
 	$(MAKE) -C flash-graph
-	$(MAKE) -C matrix
 
 utils: build_lib
 	$(MAKE) -C utils
@@ -36,6 +35,5 @@ clean:
 	make --ignore-errors -C libsafs clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C flash-graph clean
-	make --ignore-errors -C matrix clean
 
--include $(DEPS) 
+-include $(DEPS)

@@ -21,9 +21,7 @@ LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
 CXXFLAGS += -I../../libsafs -I.. -I.
 
 TESTFILES = test_load_balancer test_comm test_knors_index make_page_row_header\
-			test_sem_kmeans test_clusters test_partition_cache\
-			test_kmeans_thread test_thd_safe_bool_vector test_kmeans_task_thread\
-			test_task_queue
+			test_sem_kmeans test_partition_cache
 
 all: $(TESTFILES)
 
@@ -36,34 +34,15 @@ test_comm: test_comm.o ../libgraph.a
 test_knors_index: test_knors_index.o
 	$(CXX) -o test_knors_index test_knors_index.o $(LDFLAGS)
 
+test_partition_cache: test_partition_cache.o
+	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
+
 make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
 test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
 	$(CXX) -o test_sem_kmeans test_sem_kmeans.o ../libgraph-algs/clusters.o\
 		../libgraph-algs/dist_matrix.o $(LDFLAGS)
-
-test_clusters: test_clusters.o
-	$(CXX) -o test_clusters test_clusters.o ../libgraph-algs/clusters.o $(LDFLAGS)
-
-test_partition_cache: test_partition_cache.o
-	$(CXX) -o test_partition_cache test_partition_cache.o $(LDFLAGS)
-
-test_kmeans_thread: test_kmeans_thread.o
-	$(CXX) -o test_kmeans_thread test_kmeans_thread.o\
-		../matrix/kmeans_thread.o ../libgraph-algs/clusters.o $(LDFLAGS)
-
-test_thd_safe_bool_vector: test_thd_safe_bool_vector.o
-	$(CXX) -o test_thd_safe_bool_vector test_thd_safe_bool_vector.o $(LDFLAGS)
-
-test_kmeans_task_thread: test_kmeans_task_thread.o
-	$(CXX) -o test_kmeans_task_thread test_kmeans_task_thread.o \
-		../matrix/kmeans_task_coordinator.o ../matrix/base_kmeans_coordinator.o\
-		../libgraph-algs/clusters.o ../matrix/kmeans_task_thread.o \
-		../libgraph-algs/dist_matrix.o $(LDFLAGS)
-
-test_task_queue: test_task_queue.o
-	$(CXX) -o test_task_queue test_task_queue.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

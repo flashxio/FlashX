@@ -17,13 +17,10 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+LDFLAGS := -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
 CXXFLAGS += -I../../libsafs -I.. -I.
 
-all: test_algs knors
-
-test_algs: test_algs.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
-	$(CXX) -o test_algs test_algs.o $(LDFLAGS)
+all: knors
 
 knors: knors.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
 	$(CXX) -o knors knors.o $(LDFLAGS)
@@ -32,7 +29,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f test_algs
 	rm -f knors
 
 -include $(DEPS) 

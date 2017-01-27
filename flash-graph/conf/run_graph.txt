@@ -1,10 +1,17 @@
 RAID_mapping=RAID0
 io_depth=64
-cache_size=4G
+cache_size=3G
 num_nodes=4
-root_conf=conf/data_files.txt
+root_conf=/mnt/nfs/disa/FlashX/flash-graph/conf/data_files.txt
+RAID_block_size=16777216
+#RAID_block_size=4M
 
-threads=32
+threads=64
 print_io_stat=
 prof_file=graph.prof
+
 merge_reqs=
+max_processing_vertices=12000
+enable_elevator=
+busy_wait=
+num_io_threads=2

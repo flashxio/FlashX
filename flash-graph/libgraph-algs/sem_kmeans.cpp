@@ -434,8 +434,9 @@ namespace {
                     fg->get_graph_header());
             mat = fg->create_engine(index);
 
-            NUM_ROWS = mat->get_max_vertex_id() + 1;
+            NUM_ROWS = num_rows;
             NUM_COLS = num_cols;
+
             // Iteration barrier configured to require nthreads to exit
             unsigned nthreads = atoi(fg->get_configs()->get_option("threads").c_str());
             iter_barrier = barrier::create(nthreads);
