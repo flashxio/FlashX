@@ -265,11 +265,11 @@ setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) {
 })
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
-		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
+		  function(x, y) fm.as.matrix(fm.multiply(x, fm.conv.R2FM(y))))
 #' @rdname matmult
 setMethod("%*%", signature(x = "ANY", y = "fm"), function(x, y) {
 		  if (is.vector(x))
-			  fm.multiply(t(y), fm.conv.R2FM(x))
+			  t(fm.multiply(t(y), fm.conv.R2FM(x)))
 		  else
 			  t(fm.multiply(t(y), t(fm.conv.R2FM(x))))
 		  })
