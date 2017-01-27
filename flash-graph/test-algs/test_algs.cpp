@@ -25,7 +25,6 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 #include "matrix/FG_sparse_matrix.h"
-#include "libgraph-algs/sem_kmeans.h"
 
 using namespace fg;
 
@@ -39,8 +38,6 @@ void int_handler(int sig_num)
 #endif
 	exit(0);
 }
-
-enum kmeans_t { REG, TRI, MIN_TRI };
 
 void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
@@ -685,89 +682,6 @@ void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 	compute_louvain(graph, levels);
 }
 
-void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[], kmeans_t type)
-{
-	int opt;
-	int num_opts = 0;
-    unsigned k = 0;
-    unsigned max_iters = std::numeric_limits<unsigned>::max();
-    std::string init = "kmeanspp";
-    double tolerance = -1;
-    unsigned num_col = 0;
-    std::vector<double>* centers = NULL;
-    std::string init_centers_fn = "";
-    double cache_size_gb = 0;
-    unsigned rc_update_start_interval = 5;
-
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:C:r:I:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'k':
-				k = atol(optarg);
-				num_opts++;
-				break;
-			case 'i':
-                max_iters = atol(optarg);
-				break;
-			case 't':
-                init = optarg;
-				break;
-            case 'l':
-                tolerance = atof(optarg);
-                num_opts++;
-                break;
-            case 'c':
-                num_col = atol(optarg);
-                num_opts++;
-                break;
-            case 'C':
-                init_centers_fn = optarg;
-                num_opts++;
-                break;
-            case 'r':
-                cache_size_gb = atof(optarg);
-                num_opts++;
-                break;
-            case 'I':
-                rc_update_start_interval = atoi(optarg);
-                num_opts++;
-                break;
-			default:
-				print_usage();
-				abort();
-		}
-	}
-
-    if (!init_centers_fn.empty()) {
-        BOOST_LOG_TRIVIAL(info) << "\nReading centers from disk at loc '" << init_centers_fn
-            << "' ...";
-        BOOST_VERIFY(centers = new std::vector<double>(k*num_col));
-        bin_reader<double> br(init_centers_fn, k, num_col);
-        br.read(centers);
-    }
-
-    switch(type) {
-        case REG:
-            compute_sem_kmeans(graph, k, init, max_iters,
-                    tolerance, 0, num_col, centers);
-            break;
-        case TRI:
-            compute_triangle_sem_kmeans(graph, k, init,
-                    max_iters, tolerance, 0, num_col, centers);
-            break;
-        case MIN_TRI:
-            compute_min_triangle_sem_kmeans(graph, k, init,
-                    max_iters, tolerance, 0, num_col, centers,
-                    cache_size_gb, rc_update_start_interval);
-            break;
-        default:
-            print_usage();
-            abort();
-    }
-
-    if (centers) { delete centers; }
-}
-
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -786,9 +700,6 @@ std::string supported_algs[] = {
 	"bfs",
 	"spmv",
 	"louvain",
-    "sem_kmeans",
-    "sem_tri_kmeans",
-    "min_tri_sem_kmeans"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -851,16 +762,6 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "sem_kmeans | sem_tri_kmeans | min_tri_sem_kmeans\n");
-	fprintf(stderr, "-k: the number of clusters to use\n");
-	fprintf(stderr, "-i: max number of iterations\n");
-	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]\n");
-	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
-	fprintf(stderr, "-c: number of columns in your on disk matrix\n");
-	fprintf(stderr, "-C: path to a binary containing initial centers\n");
-	fprintf(stderr, "-r: size of the row cache in gb\n");
-	fprintf(stderr, "-I: row cache update interval\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
@@ -947,15 +848,6 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "louvain") {
 		run_louvain(graph, argc, argv);
-	}
-    else if (alg == "sem_kmeans") {
-		run_sem_kmeans(graph, argc, argv, REG);
-	}
-    else if (alg == "tri_sem_kmeans") {
-		run_sem_kmeans(graph, argc, argv, TRI);
-	}
-    else if (alg == "min_tri_sem_kmeans") {
-		run_sem_kmeans(graph, argc, argv, MIN_TRI);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
