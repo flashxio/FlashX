@@ -226,8 +226,7 @@ test.MV1 <- function(fm.mat, fm.vec, mat, vec)
 {
 	res <- mat %*% vec
 	fm.res <- fm.mat %*% fm.vec
-	expect_equal(res[, 1], fm.conv.FM2R(fm.res))
-	expect_true(fm.is.vector(fm.res))
+	expect_equal(res, fm.conv.FM2R(fm.res))
 	expect_equal(length(fm.res), dim(fm.mat)[1])
 	expect_equal(typeof(fm.res), typeof(res))
 }
@@ -236,8 +235,7 @@ test.MV2 <- function(fm.vec, fm.mat, vec, mat)
 {
 	res <- vec %*% mat
 	fm.res <- fm.vec %*% fm.mat
-	expect_equal(res[1 ,], fm.conv.FM2R(fm.res))
-	expect_true(fm.is.vector(fm.res))
+	expect_equal(res, fm.conv.FM2R(fm.res))
 	expect_equal(length(fm.res), dim(fm.mat)[2])
 	expect_equal(typeof(fm.res), typeof(res))
 }
