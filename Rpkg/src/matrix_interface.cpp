@@ -2474,10 +2474,10 @@ RcppExport SEXP R_FM_ifelse_no(SEXP ptest, SEXP pyes, SEXP pno)
 		ret_obj = create_FMR_matrix(ret, "");
 
 	Rcpp::S4 yes_obj(pyes);
+	std::string yes_type = yes_obj.slot("ele_type");
 	// If both inputs are boolean, we should assign the same type
 	// the output matrix.
-	if (R_is_logical(pno)
-			&& yes_obj.slot("ele_type") == "logical")
+	if (R_is_logical(pno) && yes_type == "logical")
 		ret_obj["ele_type"] = Rcpp::String("logical");
 	return ret_obj;
 }
@@ -2537,10 +2537,10 @@ RcppExport SEXP R_FM_ifelse_yes(SEXP ptest, SEXP pyes, SEXP pno)
 		ret_obj = create_FMR_matrix(ret, "");
 
 	Rcpp::S4 no_obj(pno);
+	std::string no_type = no_obj.slot("ele_type");
 	// If both inputs are boolean, we should assign the same type
 	// the output matrix.
-	if (R_is_logical(pyes)
-			&& no_obj.slot("ele_type") == "logical")
+	if (R_is_logical(pyes) && no_type == "logical")
 		ret_obj["ele_type"] = Rcpp::String("logical");
 	return ret_obj;
 }
