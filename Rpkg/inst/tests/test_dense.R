@@ -870,12 +870,12 @@ for (type in type.set) {
 					  vec1 <- fm.conv.FM2R(fm.vec1)
 					  vec2 <- fm.conv.FM2R(fm.vec2)
 
-					  fm.res <- agg.op(fm.vec1, na.rm=na.rm)
+					  fm.res <- as.vector(agg.op(fm.vec1, na.rm=na.rm))
 					  res <- agg.op(vec1, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res))
 
-					  fm.res <- agg.op(fm.vec1, fm.vec2, na.rm=na.rm)
+					  fm.res <- as.vector(agg.op(fm.vec1, fm.vec2, na.rm=na.rm))
 					  res <- agg.op(vec1, vec2, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -890,28 +890,28 @@ for (type in type.set) {
 				  vec1 <- fm.conv.FM2R(fm.vec1)
 				  vec2 <- fm.conv.FM2R(fm.vec2)
 
-				  fm.res <- range(fm.vec1, na.rm=na.rm)
+				  fm.res <- as.vector(range(fm.vec1, na.rm=na.rm))
 				  res <- range(vec1, na.rm=na.rm)
 				  expect_equal(res, fm.res)
 				  expect_equal(typeof(fm.res), typeof(res))
 
-				  fm.res <- range(fm.vec1, fm.vec2, na.rm=na.rm)
+				  fm.res <- as.vector(range(fm.vec1, fm.vec2, na.rm=na.rm))
 				  res <- range(vec1, vec2, na.rm=na.rm)
 				  expect_equal(res, fm.res)
 				  expect_equal(typeof(fm.res), typeof(res)) }})
-		test_that(paste("test mean", type, spec1, spec2, na.rm), {
-				  fm.vec1 <- get.vec(type, spec.val=spec1, percent=0.5)
-				  fm.vec2 <- get.vec(type, spec.val=spec2, percent=0.5)
-				  if (!is.null(fm.vec1) && !is.null(fm.vec2)) {
-					  expect_equal(typeof(fm.vec1), type)
-					  expect_equal(typeof(fm.vec2), type)
-					  vec1 <- fm.conv.FM2R(fm.vec1)
-					  vec2 <- fm.conv.FM2R(fm.vec2)
+	test_that(paste("test mean", type, spec1, spec2, na.rm), {
+			  fm.vec1 <- get.vec(type, spec.val=spec1, percent=0.5)
+			  fm.vec2 <- get.vec(type, spec.val=spec2, percent=0.5)
+			  if (!is.null(fm.vec1) && !is.null(fm.vec2)) {
+				  expect_equal(typeof(fm.vec1), type)
+				  expect_equal(typeof(fm.vec2), type)
+				  vec1 <- fm.conv.FM2R(fm.vec1)
+				  vec2 <- fm.conv.FM2R(fm.vec2)
 
-					  fm.res <- mean(fm.vec1, na.rm=na.rm)
-					  res <- mean(vec1, na.rm=na.rm)
-					  expect_equal(res, fm.res)
-					  expect_equal(typeof(fm.res), typeof(res)) }})
+				  fm.res <- as.vector(mean(fm.vec1, na.rm=na.rm))
+				  res <- mean(vec1, na.rm=na.rm)
+				  expect_equal(res, fm.res)
+				  expect_equal(typeof(fm.res), typeof(res)) }})
 
 }
 }
@@ -935,12 +935,12 @@ for (i in 1:length(agg.ops1)) {
 					  mat1 <- fm.conv.FM2R(fm.mat1)
 					  mat2 <- fm.conv.FM2R(fm.mat2)
 
-					  fm.res <- agg.op(fm.mat1, na.rm=na.rm)
+					  fm.res <- as.vector(agg.op(fm.mat1, na.rm=na.rm))
 					  res <- agg.op(mat1, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res))
 
-					  fm.res <- agg.op(fm.mat1, fm.mat2, na.rm=na.rm)
+					  fm.res <- as.vector(agg.op(fm.mat1, fm.mat2, na.rm=na.rm))
 					  res <- agg.op(mat1, mat2, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -1067,14 +1067,14 @@ test_that("test ifelse", {
 
 approx.equal <- function(x1, x2)
 {
-	abs(x1 - x2) < 1e-16
+	as.vector(abs(x1 - x2) < 1e-16)
 }
 
 test.with.na <- function(data, fun)
 {
 	fm.data <- fm.conv.R2FM(data)
-	res1 <- fun(fm.data)
-	res2 <- fun(fm.data, na.rm=TRUE)
+	res1 <- as.vector(fun(fm.data))
+	res2 <- as.vector(fun(fm.data, na.rm=TRUE))
 	expect_true(is.na(res1))
 	expect_true(!is.na(res2)
 				&& approx.equal(res2, fun(data, na.rm=TRUE)))

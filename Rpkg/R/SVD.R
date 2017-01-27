@@ -96,7 +96,6 @@ fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 		fm.set.cached(x, TRUE)
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)
-#		x <- fm.materialize(x)
 	}
 	if (comp.right) {
 		right <- NULL

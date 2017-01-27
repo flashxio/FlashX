@@ -97,7 +97,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))
-			num.moves <- sum(as.numeric(old.parts != parts))
+			num.moves <- as.vector(sum(as.numeric(old.parts != parts)))
 		iter <- iter + 1
 		if (debug) {
 			iter.end <- Sys.time()

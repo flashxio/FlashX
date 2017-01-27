@@ -1480,35 +1480,6 @@ ReturnType matrix_agg(const dense_matrix &mat, agg_operate::const_ptr op)
 	}
 }
 
-RcppExport SEXP R_FM_agg(SEXP pobj, SEXP pfun)
-{
-	Rcpp::S4 obj1(pobj);
-	if (is_sparse(obj1)) {
-		fprintf(stderr, "agg doesn't support sparse matrix\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (!is_supported_type(m->get_type())) {
-		fprintf(stderr, "The input matrix has unsupported type\n");
-		return R_NilValue;
-	}
-	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
-	if (op == NULL)
-		return R_NilValue;
-
-	if (op->get_output_type() == get_scalar_type<double>())
-		return matrix_agg<double, Rcpp::NumericVector>(*m, op);
-	else if (op->get_output_type() == get_scalar_type<int>())
-		return matrix_agg<int, Rcpp::IntegerVector>(*m, op);
-	else if (op->get_output_type() == get_scalar_type<bool>())
-		return matrix_agg<bool, Rcpp::LogicalVector>(*m, op);
-	else {
-		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
-		return R_NilValue;
-	}
-}
-
 RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
 {
 	Rcpp::S4 obj1(pobj);
@@ -1528,47 +1499,6 @@ RcppExport SEXP R_FM_agg_lazy(SEXP pobj, SEXP pfun)
 
 	dense_matrix::ptr res = m->aggregate(matrix_margin::BOTH, op);
 	return create_FMR_vector(res, "");
-}
-
-RcppExport SEXP R_FM_agg_mat(SEXP pobj, SEXP pmargin, SEXP pfun)
-{
-	Rcpp::S4 obj1(pobj);
-	if (is_sparse(obj1)) {
-		fprintf(stderr, "agg_mat doesn't support sparse matrix\n");
-		return R_NilValue;
-	}
-
-	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
-	if (!is_supported_type(m->get_type())) {
-		fprintf(stderr, "The input matrix has unsupported type\n");
-		return R_NilValue;
-	}
-	agg_operate::const_ptr op = fmr::get_agg_op(pfun, m->get_type());
-	if (op == NULL)
-		return R_NilValue;
-
-	int margin = INTEGER(pmargin)[0];
-	if (margin != matrix_margin::MAR_ROW && margin != matrix_margin::MAR_COL) {
-		fprintf(stderr, "unknown margin\n");
-		return R_NilValue;
-	}
-	dense_matrix::ptr res = m->aggregate((matrix_margin) margin, op);
-	// If we aggregate on the long dimension.
-	if ((m->is_wide() && margin == matrix_margin::MAR_ROW)
-			|| (!m->is_wide() && margin == matrix_margin::MAR_COL)) {
-		bool ret = res->materialize_self();
-		if (!ret) {
-			fprintf(stderr, "can't materialize the result matrix\n");
-			return R_NilValue;
-		}
-	}
-
-	if (res == NULL) {
-		fprintf(stderr, "can't aggregate on the matrix\n");
-		return R_NilValue;
-	}
-	else
-		return create_FMR_vector(res, "");
 }
 
 RcppExport SEXP R_FM_agg_mat_lazy(SEXP pobj, SEXP pmargin, SEXP pfun)
