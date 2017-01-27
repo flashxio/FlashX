@@ -120,9 +120,9 @@ int main(int argc, char *argv[])
 			printf("skip %s\n", orig);
 			continue;
 		}
-		if (min_size > workload.size)
+		if (min_size > (size_t)workload.size)
 			min_size = workload.size;
-		if (max_size < workload.size)
+		if (max_size < (size_t)workload.size)
 			max_size = workload.size;
 		workload.read = flag_str[0] == 'r' || flag_str[0] == 'R';
 		off_t begin_page_off = ROUND_PAGE(workload.off);

@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 	/* the numbers of accesses of each page */
 	int num_accesses = (int) (file_size / sizeof(workload_t));
 	workload_t *workloads = new workload_t[num_accesses];
-	read(fd, (void *) workloads, file_size);
+	assert(read(fd, (void *) workloads, file_size));
 
 	std::unordered_map<off_t, int> page_map;
 	int num_page_reads = 0;
