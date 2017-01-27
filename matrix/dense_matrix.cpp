@@ -2426,9 +2426,20 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 			&& !store->is_virtual())
 		return store;
 
-	if (store->is_virtual())
-		return detail::virtual_matrix_store::cast(store)->materialize(in_mem,
-				num_nodes);
+	if (store->is_virtual()) {
+		auto ret = detail::virtual_matrix_store::cast(store)->materialize(
+				in_mem, num_nodes);
+		// Some virtual matrices may not materialize data in the storage
+		// we want, we need to convert the storage of the materialized matrix
+		// explicitly.
+		if (ret->is_in_mem() != in_mem || ret->get_num_nodes() != num_nodes) {
+			dense_matrix::ptr tmp = dense_matrix::create(ret);
+			tmp = tmp->conv_store(in_mem, num_nodes);
+			return tmp->get_raw_store();
+		}
+		else
+			return ret;
+	}
 	else {
 		std::vector<detail::matrix_store::const_ptr> in_mats(1);
 		in_mats[0] = store;
