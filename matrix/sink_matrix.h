@@ -69,11 +69,6 @@ public:
 	virtual size_t get_data_id() const {
 		return INVALID_MAT_ID;
 	}
-	virtual bool share_data(const matrix_store &store) const {
-		// TODO maybe I should check this for each type of sink matrices
-		// as well.
-		return false;
-	}
 
 	// The class has been materialized.
 	virtual bool has_materialized() const = 0;
@@ -206,11 +201,6 @@ public:
 			const scalar_type &type, bool is_sym);
 	virtual size_t get_data_id() const {
 		return INVALID_MAT_ID;
-	}
-	virtual bool share_data(const matrix_store &store) const {
-		// TODO maybe I should check this for each type of sink matrices
-		// as well.
-		return false;
 	}
 
 	virtual bool has_materialized() const;

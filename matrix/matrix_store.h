@@ -64,12 +64,11 @@ class matrix_store
 	 * By default, this is enabled.
 	 */
 	bool cache_portion;
-protected:
-	static std::atomic<size_t> mat_counter;
 public:
 	typedef std::shared_ptr<matrix_store> ptr;
 	typedef std::shared_ptr<const matrix_store> const_ptr;
 
+	static std::atomic<size_t> mat_counter;
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes, bool in_mem,
 			safs::safs_file_group::ptr group = NULL);

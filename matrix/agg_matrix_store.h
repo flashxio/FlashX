@@ -75,6 +75,7 @@ public:
 		else
 			return matrix_store::const_ptr();
 	}
+	virtual size_t get_data_id() const;
 
 	virtual matrix_store::const_ptr materialize(bool in_mem,
 		int num_nodes) const;

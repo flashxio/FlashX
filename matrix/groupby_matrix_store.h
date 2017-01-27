@@ -69,6 +69,7 @@ public:
 		sink_store::register_sink_matrices(ret);
 		return ret;
 	}
+	virtual size_t get_data_id() const;
 
 	virtual bool has_materialized() const;
 

@@ -42,10 +42,14 @@ struct matrix_info
 
 class combine_op: public detail::portion_mapply_op
 {
+	const size_t data_id;
 public:
 	combine_op(size_t num_rows, size_t num_cols,
 			const scalar_type &type): detail::portion_mapply_op(
-				num_rows, num_cols, type) {
+				num_rows, num_cols, type), data_id(matrix_store::mat_counter++) {
+	}
+	size_t get_data_id() const {
+		return data_id;
 	}
 	virtual bool has_materialized() const = 0;
 	virtual detail::mem_matrix_store::ptr get_combined_result() const = 0;
@@ -934,6 +938,11 @@ matrix_store::ptr IPW_matrix_store::get_combine_res() const
 		tmp->write_portion_async(lres, 0, 0);
 		return tmp;
 	}
+}
+
+size_t IPW_matrix_store::get_data_id() const
+{
+	return std::static_pointer_cast<combine_op>(portion_op)->get_data_id();
 }
 
 bool IPW_matrix_store::has_materialized() const

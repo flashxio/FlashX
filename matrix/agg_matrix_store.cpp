@@ -133,14 +133,19 @@ class matrix_long_agg_op: public portion_mapply_op
 	// Each row stores the local aggregation results on a thread.
 	partial_matrix::ptr partial_res;
 	std::vector<local_matrix_store::ptr> local_bufs;
+	const size_t data_id;
 public:
 	matrix_long_agg_op(partial_matrix::ptr partial_res,
 			matrix_margin margin, agg_operate::const_ptr &op): portion_mapply_op(
-				0, 0, partial_res->get_type()) {
+				0, 0, partial_res->get_type()), data_id(matrix_store::mat_counter++) {
 		this->partial_res = partial_res;
 		this->margin = margin;
 		this->op = op;
 		local_bufs.resize(partial_res->get_num_rows());
+	}
+
+	size_t get_data_id() const {
+		return data_id;
 	}
 
 	partial_matrix::const_ptr get_partial_res() const {
@@ -329,6 +334,11 @@ void agg_matrix_store::materialize_self() const
 		ins[0] = data;
 		__mapply_portion(ins, portion_op, matrix_layout_t::L_ROW);
 	}
+}
+
+size_t agg_matrix_store::get_data_id() const
+{
+	return std::static_pointer_cast<matrix_long_agg_op>(portion_op)->get_data_id();
 }
 
 matrix_store::const_ptr agg_matrix_store::materialize(bool in_mem,
