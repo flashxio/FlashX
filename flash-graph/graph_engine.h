@@ -364,6 +364,7 @@ class graph_engine
 	// The time when the current iteration starts.
 	struct timeval start_time, iter_start;
 
+    vsize_t dim, nsamples; // Used for matrices
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
 	graph_engine(FG_graph &graph, graph_index::ptr index);
@@ -446,7 +447,8 @@ public:
      * \return The number of vertices in the graph.
      */
 	size_t get_num_vertices() const {
-		return vertices->get_num_vertices();
+        assert(this->get_nsamples());
+        return this->get_nsamples();
 	}
     
     /**
@@ -560,7 +562,9 @@ public:
 
 	vsize_t get_num_edges(vertex_id_t id,
 			edge_type type = edge_type::BOTH_EDGES) const {
-		return vindex->get_num_edges(id, type);
+		//return vindex->get_num_edges(id, type);
+        assert(get_dim());
+        return this->get_dim();
 	}
 
 	/**
@@ -650,6 +654,9 @@ public:
 
     void print_stats();
     size_t get_tot_bytes();
+
+    const vsize_t get_dim() const { return dim; }
+    const vsize_t get_nsamples() const { return nsamples; }
 };
 
 }

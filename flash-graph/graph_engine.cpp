@@ -592,6 +592,8 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 {
 	struct timeval init_start, init_end;
 	gettimeofday(&init_start, NULL);
+    this->nsamples = graph.get_nsamples();
+    this->dim = graph.get_dim();
 
 	try {
 		init_flash_graph(graph.get_configs());
