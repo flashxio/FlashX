@@ -553,12 +553,15 @@ local_matrix_store::const_ptr groupby_compute_store::get_portion(
 	local_matrix_store::const_ptr data_part = data->get_portion(start_row,
 			start_col, num_rows, num_cols);
 	local_matrix_store::const_ptr label_part;
-	assert(label_store->get_num_cols() == 1);
 	// `label_store' is a col_vec.
-	if (margin == matrix_margin::MAR_ROW)
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(label_store->get_num_cols() == 1);
 		label_part = label_store->get_portion(start_row, 0, num_rows, 1);
-	else
-		label_part = label_store->get_portion(start_col, 0, num_cols, 1);
+	}
+	else {
+		assert(label_store->get_num_rows() == 1);
+		label_part = label_store->get_portion(0, start_col, 1, num_cols);
+	}
 	return create_lmaterialize_matrix(data_part, label_part, get_type(),
 			portion_op);
 }
@@ -616,15 +619,18 @@ async_cres_t groupby_compute_store::get_portion_async(
 	async_cres_t ret = data->get_portion_async(start_row, start_col,
 			num_rows, num_cols, collect_compute);
 	local_matrix_store::const_ptr label_part;
-	assert(label_store->get_num_cols() == 1);
 	async_cres_t label_ret;
 	// `label_store' is a col_vec.
-	if (margin == matrix_margin::MAR_ROW)
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(label_store->get_num_cols() == 1);
 		label_ret = label_store->get_portion_async(start_row, 0, num_rows, 1,
 				collect_compute);
-	else
-		label_ret = label_store->get_portion_async(start_col, 0, num_cols, 1,
+	}
+	else {
+		assert(label_store->get_num_rows() == 1);
+		label_ret = label_store->get_portion_async(0, start_col, 1, num_cols,
 				collect_compute);
+	}
 	// It's two if both are unavailable.
 	_compute->set_EM_count(!ret.first + !label_ret.first);
 	return async_cres_t(ret.first && label_ret.first,
