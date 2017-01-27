@@ -699,10 +699,8 @@ fm.conv.FM2R <- function(obj)
 		print("doesn't support convert a sparse matrix to R object")
 		NULL
 	}
-	else {
-		print("It has to be a FlashR object")
-		NULL
-	}
+	else
+		obj
 }
 
 #' @rdname matrix
