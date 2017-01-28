@@ -22,7 +22,7 @@
 #include <iostream>
 #include <boost/assert.hpp>
 #include "libgraph-algs/row_cache.h"
-#include "matrix/kmeans.h"
+//#include "matrix/kmeans.h"
 
 unsigned nrow, ncol, cache_size, nthread, numel_sync;
 
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
             unsigned thd_id = omp_get_thread_num();
             double* lookup = cache->get(rid, thd_id);
             if (lookup) {
-                BOOST_VERIFY(eq_all<double>(&data[rid*ncol], lookup, ncol));
+                BOOST_VERIFY(kpmbase::eq_all<double>(&data[rid*ncol], lookup, ncol));
             }
         }
 

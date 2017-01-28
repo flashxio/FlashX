@@ -29,7 +29,11 @@
 #include <boost/assert.hpp>
 #include <pthread.h>
 #include "log.h"
-#include "sem_kmeans_util.h"
+
+#include "../../../../libcommon/util.hpp"
+#include "../../../../libcommon/io.hpp"
+
+namespace kpmbase = kpmeans::base;
 
 namespace {
     template <typename T>
@@ -109,7 +113,7 @@ namespace {
 
                     for (; it != pt_data[thd].end(); ++it) {
                         printf("row: %u ==> ", it->first);
-                        print_vector<T>(it->second);
+                        kpmbase::print_vector<T>(it->second);
                     }
                 }
             }

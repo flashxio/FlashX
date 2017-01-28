@@ -23,29 +23,29 @@
 #endif
 
 #include "sem_kmeans.h"
-#include "clusters.h"
+#include "../../../../libcommon/clusters.hpp"
 
 using namespace fg;
 
 namespace {
 
 #if KM_TEST
-    static prune_stats::ptr g_prune_stats;
+    static kpmbase::prune_stats::ptr g_prune_stats;
 #endif
     static size_t g_io_reqs = 0;
 
     static bool g_prune_init = false;
-    static prune::dist_matrix::ptr g_cluster_dist;
-    static prune_clusters::ptr g_clusters; // cluster means/centers
+    static kpmprune::dist_matrix::ptr g_cluster_dist;
+    static kpmbase::prune_clusters::ptr g_clusters; // cluster means/centers
 
     static unsigned NUM_ROWS;
     static unsigned g_num_changed = 0;
     static struct timeval start, end;
-    static init_type_t g_init; // May have to use
+    static kpmbase::init_type_t g_init; // May have to use
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kms_stage_t g_stage; // What phase of the algo we're in
+    static kpmbase::kms_stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
 
     class kmeans_vertex: public base_kmeans_vertex
@@ -65,10 +65,10 @@ namespace {
 
         void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
-                case INIT:
+                case kpmbase::kms_stage_t::INIT:
                     run_init(prog, vertex, g_init);
                     break;
-                case ESTEP:
+                case kpmbase::kms_stage_t::ESTEP:
                     run_distance(prog, vertex);
                     break;
                 default:
@@ -80,16 +80,17 @@ namespace {
         void set_dist(const double dist) { this->dist = dist; }
 
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
-        void run_init(vertex_program& prog, const page_vertex &vertex, init_type_t init);
+        void run_init(vertex_program& prog,
+                const page_vertex &vertex, kpmbase::init_type_t init);
         void run_distance(vertex_program& prog, const page_vertex& vertex);
     };
 
     class kmeans_vertex_program:
-        public base_kmeans_vertex_program<kmeans_vertex, clusters>
+        public base_kmeans_vertex_program<kmeans_vertex, kpmbase::clusters>
     {
         unsigned num_reqs;
 #if KM_TEST
-        prune_stats::ptr pt_ps;
+        kpmbase::prune_stats::ptr pt_ps;
 #endif
 
         public:
@@ -98,7 +99,7 @@ namespace {
         kmeans_vertex_program() {
             this->num_reqs = 0;
 #if KM_TEST
-            pt_ps = prune_stats::create(NUM_ROWS, K);
+            pt_ps = kpmbase::prune_stats::create(NUM_ROWS, K);
 #endif
         }
 
@@ -116,7 +117,7 @@ namespace {
         }
 
 #if KM_TEST
-        prune_stats::ptr get_ps() { return pt_ps; }
+        kpmbase::prune_stats::ptr get_ps() { return pt_ps; }
 #endif
         void num_requests_pp() {
             num_reqs++;
@@ -176,7 +177,7 @@ namespace {
                     return;
                 }
             }
-        } else if (g_stage != INIT) {
+        } else if (g_stage != kpmbase::kms_stage_t::INIT) {
             recalculated = false;
             if (!g_prune_init) {
                 for (unsigned cl = 0; cl < K; cl++) {
@@ -218,9 +219,9 @@ namespace {
     }
 
     void kmeans_vertex::run_init(vertex_program& prog,
-            const page_vertex &vertex, init_type_t init) {
+            const page_vertex &vertex, kpmbase::init_type_t init) {
         switch (g_init) {
-            case RANDOM:
+            case kpmbase::init_type_t::RANDOM:
                 {
                     unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
@@ -234,7 +235,7 @@ namespace {
                     vprog.add_member(get_cluster_id(), count_it);
                 }
                 break;
-            case FORGY:
+            case kpmbase::init_type_t::FORGY:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
 #if KM_TEST
@@ -245,7 +246,7 @@ namespace {
                     g_clusters->set_mean(count_it, g_init_hash[my_id]);
                 }
                 break;
-            case PLUSPLUS:
+            case kpmbase::init_type_t::PLUSPLUS:
                 {
                     data_seq_iter count_it = ((const page_row&)vertex).
                         get_data_seq_it<double>();
@@ -377,7 +378,7 @@ namespace {
                     g_clusters->unfinalize(cl);
 #if VERBOSE
                     std::cout << "Unfinalized g_clusters[thd] ==> ";
-                    print_vector<double>(g_clusters[cl]->get_mean());
+                    kpmbase::print_vector<double>(g_clusters[cl]->get_mean());
 #endif
                 }
             }
@@ -392,7 +393,7 @@ namespace {
             for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
                 kmeans_vertex_program::ptr kms_prog =
                     kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-                clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
+                kpmbase::clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
                 g_num_changed += kms_prog->get_pt_changed();
 
                 g_io_reqs += kms_prog->get_num_reqs();
@@ -410,8 +411,10 @@ namespace {
                 g_clusters->finalize(cl);
                 num_members_v[cl] = g_clusters->get_num_members(cl);
 
-                g_clusters->set_prev_dist(eucl_dist(&(g_clusters->get_means()[cl*NUM_COLS]),
-                            &(g_clusters->get_prev_means()[cl*NUM_COLS]), NUM_COLS), cl);
+                g_clusters->set_prev_dist(kpmbase::eucl_dist(
+                            &(g_clusters->get_means()[cl*NUM_COLS]),
+                            &(g_clusters->get_prev_means()[cl*NUM_COLS]),
+                            NUM_COLS), cl);
 #if VERBOSE
                 BOOST_LOG_TRIVIAL(info) << "Distance to prev mean for c:"
                     << cl << " is " << g_clusters->get_prev_dist(cl);
@@ -515,12 +518,12 @@ namespace {
             BOOST_LOG_TRIVIAL(info) << "Matrix has rows = " << NUM_ROWS << ", cols = " <<
                 NUM_COLS;
 #if KM_TEST
-            g_prune_stats = prune_stats::create(NUM_ROWS, K);
+            g_prune_stats = kpmbase::prune_stats::create(NUM_ROWS, K);
 #endif
             gettimeofday(&start , NULL);
 
             /*** Begin VarInit of data structures ***/
-            g_clusters = prune_clusters::create(K, NUM_COLS);
+            g_clusters = kpmbase::prune_clusters::create(K, NUM_COLS);
             if (centers)
                 g_clusters->set_mean(*centers);
 
@@ -529,15 +532,15 @@ namespace {
 
             BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
             // Distance to everyone other than yourself
-            g_cluster_dist = prune::dist_matrix::create(K);
+            g_cluster_dist = kpmprune::dist_matrix::create(K);
             /*** End VarInit ***/
 
             if (!centers) {
-                g_stage = INIT;
+                g_stage = kpmbase::kms_stage_t::INIT;
 
                 if (init == "random") {
                     BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
-                    g_init = RANDOM;
+                    g_init = kpmbase::init_type_t::RANDOM;
 
                     mat->start_all(vertex_initializer::ptr(),
                             vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
@@ -548,7 +551,7 @@ namespace {
                 }
                 if (init == "forgy") {
                     BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
-                    g_init = FORGY;
+                    g_init = kpmbase::init_type_t::FORGY;
 
                     // Select K in range NUM_ROWS
                     std::vector<vertex_id_t> init_ids; // Used to start engine
@@ -562,7 +565,7 @@ namespace {
                     g_io_reqs++;
                 } else if (init == "kmeanspp") {
                     BOOST_LOG_TRIVIAL(info) << "Init is '"<< init <<"'";
-                    g_init = PLUSPLUS;
+                    g_init = kpmbase::init_type_t::PLUSPLUS;
 
                     // Init g_kmspp_distance to max distance
                     g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
@@ -604,7 +607,7 @@ namespace {
 
             if (init == "forgy" || init == "kmeanspp" || centers) {
                 g_prune_init = true; // set
-                g_stage = ESTEP;
+                g_stage = kpmbase::kms_stage_t::ESTEP;
                 BOOST_LOG_TRIVIAL(info) << "Init: Computing cluster distance matrix ...";
                 g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 #if KM_TEST
@@ -630,13 +633,13 @@ namespace {
                 g_cluster_dist->print();
 
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
-                print_vector<unsigned>(num_members_v);
+                kpmbase::print_vector<unsigned>(num_members_v);
 #endif
                 g_prune_init = false; // reset
                 g_num_changed = 0; // reset
             }
 
-            g_stage = ESTEP;
+            g_stage = kpmbase::kms_stage_t::ESTEP;
             BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
 
             bool converged = false;
@@ -671,7 +674,7 @@ namespace {
 #endif
 
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                print_vector<unsigned>(num_members_v);
+                kpmbase::print_vector<unsigned>(num_members_v);
 
                 BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                     << g_num_changed << " **\n";
@@ -712,7 +715,7 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            print_vector<unsigned>(num_members_v);
+            kpmbase::print_vector<unsigned>(num_members_v);
 
             return sem_kmeans_ret::create(get_membership(mat),
                     g_clusters->get_means(), num_members_v, g_iter,

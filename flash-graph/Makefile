@@ -34,8 +34,8 @@ tools: libgraph
 unit-test: libgraph
 	$(MAKE) -C unit-test
 
-test: libgraph libgraph-algs
-	$(MAKE) -C test
+#test: libgraph libgraph-algs
+	#$(MAKE) -C test
 
 matrix: libgraph
 	$(MAKE) -C matrix
@@ -56,4 +56,4 @@ clean:
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
 
--include $(DEPS) 
+-include $(DEPS)

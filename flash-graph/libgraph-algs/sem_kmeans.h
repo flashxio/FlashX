@@ -35,17 +35,19 @@
 #include "FGlib.h"
 #include "save_result.h"
 
-#include "sem_kmeans_util.h"
-#include "prune_stats.h"
-#include "dist_matrix.h"
-#include "kmeans_types.h"
+#include "../../../../libcommon/util.hpp"
+#include "../../../../libcommon/io.hpp"
+#include "../../../../libcommon/prune_stats.hpp"
+#include "../../../../libcommon/dist_matrix.hpp"
+#include "../../../../libcommon/kmeans_types.hpp"
 
-#define PAGE_ROW
-#define KM_TEST 0
+#define KM_TEST 1
 #define VERBOSE 0
 
 using namespace fg;
-using namespace km;
+
+namespace kpmbase = kpmeans::base;
+namespace kpmprune = kpmeans::prune;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;
@@ -166,6 +168,7 @@ namespace {
         }
     };
 
+#if 0
     // Begin helpers
     void print_sample(vertex_id_t my_id, data_seq_iter& count_it) {
         std::vector<std::string> v;
@@ -175,7 +178,9 @@ namespace {
             assert(sprintf(buffer, "%e", e));
             v.push_back(std::string(buffer));
         }
-        printf("V%u's vector: \n", my_id); print_vector<std::string>(v);
+
+        printf("V%u's vector: \n", my_id);
+        kpmbase::print_vector<std::string>(v);
     }
 
     std::string s (const double d) {
@@ -185,6 +190,7 @@ namespace {
             return std::to_string(d);
     }
     // End helpers //
+#endif
 }
 
 namespace fg

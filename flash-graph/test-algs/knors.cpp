@@ -24,6 +24,7 @@
 
 #include "FGlib.h"
 #include "ts_graph.h"
+#include "../libsafs/log.h"
 #include "matrix/FG_sparse_matrix.h"
 #include "libgraph-algs/sem_kmeans.h"
 
@@ -97,7 +98,7 @@ void run_sem_kmeans(FG_graph::ptr graph, const unsigned k,
         BOOST_LOG_TRIVIAL(info) << "\nReading centers from disk at loc '" << init_centers_fn
             << "' ...";
         BOOST_VERIFY(centers = new std::vector<double>(k*graph->get_dim()));
-        bin_reader<double> br(init_centers_fn, k, graph->get_dim());
+        kpmbase::bin_io<double> br(init_centers_fn, k, graph->get_dim());
         br.read(centers);
     }
 
