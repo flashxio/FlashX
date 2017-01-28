@@ -356,14 +356,24 @@ void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
 	// All sink matrices in `sinks' are individual sink matrices, instead of
 	// block sink matrices.
 	std::unordered_map<size_t, sink_store::const_ptr> share_io_sinks;
+	std::vector<sink_store::const_ptr> to_remove;
 	for (auto it = sinks.begin(); it != sinks.end(); it++) {
 		sink_store::const_ptr sink = it->second;
-		if (share_io(sink->get_underlying_mats(), underlying_ids))
+		// We should remove the matrices that have been materialized.
+		bool materialized = sink->has_materialized();
+		if (materialized)
+			to_remove.push_back(sink);
+		// We only select the matrices that haven't been materialized.
+		if (!materialized && share_io(sink->get_underlying_mats(),
+					underlying_ids)) {
 			share_io_sinks.insert(std::pair<size_t, sink_store::const_ptr>(
 						sink->get_data_id(), sink));
+			to_remove.push_back(sink);
+		}
 	}
-	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
-		sinks.erase(it->second);
+	for (auto it = to_remove.begin(); it != to_remove.end(); it++)
+		sinks.erase((*it)->get_data_id());
+	to_remove.clear();
 
 	if (share_io_sinks.empty())
 		store->materialize_self();
