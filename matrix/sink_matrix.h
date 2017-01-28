@@ -32,7 +32,7 @@ namespace detail
 
 class sink_store: public virtual_matrix_store
 {
-	static std::unordered_set<std::shared_ptr<const sink_store> > sinks;
+	static std::unordered_map<size_t, std::shared_ptr<const sink_store> > sinks;
 
 	matrix_store::const_ptr res;
 

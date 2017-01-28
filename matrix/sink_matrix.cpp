@@ -325,12 +325,13 @@ async_cres_t block_group::get_portion_async(size_t start_row, size_t start_col,
 
 }
 
-std::unordered_set<sink_store::const_ptr> sink_store::sinks;
+std::unordered_map<size_t, sink_store::const_ptr> sink_store::sinks;
 
 void sink_store::register_sink_matrices(sink_store::const_ptr store)
 {
 	if (!store->has_materialized())
-		sinks.insert(store);
+		sinks.insert(std::pair<size_t, sink_store::const_ptr>(
+					store->get_data_id(), store));
 }
 
 static inline bool share_io(const std::unordered_map<size_t, size_t> &underlying1,
@@ -356,7 +357,7 @@ void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
 	// block sink matrices.
 	std::unordered_map<size_t, sink_store::const_ptr> share_io_sinks;
 	for (auto it = sinks.begin(); it != sinks.end(); it++) {
-		sink_store::const_ptr sink = *it;
+		sink_store::const_ptr sink = it->second;
 		if (share_io(sink->get_underlying_mats(), underlying_ids))
 			share_io_sinks.insert(std::pair<size_t, sink_store::const_ptr>(
 						sink->get_data_id(), sink));
