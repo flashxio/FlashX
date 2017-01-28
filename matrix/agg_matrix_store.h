@@ -34,7 +34,7 @@ namespace fm
 namespace detail
 {
 
-class portion_mapply_op;
+class matrix_long_agg_op;
 
 /*
  * This matrix store is to enable lazy evaluation on the aggregation on
@@ -42,7 +42,7 @@ class portion_mapply_op;
  */
 class agg_matrix_store: public sink_store
 {
-	std::shared_ptr<portion_mapply_op> portion_op;
+	std::shared_ptr<const matrix_long_agg_op> agg_op;
 	matrix_store::const_ptr data;
 	// We often need to check the underlying matrices of a sink matrix
 	// when materializing a virtual matrix.
@@ -54,6 +54,8 @@ class agg_matrix_store: public sink_store
 	matrix_store::const_ptr get_agg_res() const;
 	agg_matrix_store(matrix_store::const_ptr data, matrix_margin margin,
 			agg_operate::const_ptr op);
+	agg_matrix_store(matrix_store::const_ptr data,
+			std::shared_ptr<const matrix_long_agg_op> portion_op);
 public:
 	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 
@@ -87,11 +89,7 @@ public:
 		return data->store_layout();
 	}
 
-	virtual std::string get_name() const {
-		std::vector<matrix_store::const_ptr> mats(1);
-		mats[0] = data;
-		return portion_op->to_string(mats);
-	}
+	virtual std::string get_name() const;
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		if (has_materialized())

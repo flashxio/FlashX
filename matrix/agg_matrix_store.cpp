@@ -135,6 +135,8 @@ class matrix_long_agg_op: public portion_mapply_op
 	std::vector<local_matrix_store::ptr> local_bufs;
 	const size_t data_id;
 public:
+	typedef std::shared_ptr<const matrix_long_agg_op> const_ptr;
+
 	matrix_long_agg_op(partial_matrix::ptr partial_res,
 			matrix_margin margin, agg_operate::const_ptr &op): portion_mapply_op(
 				0, 0, partial_res->get_type()), data_id(matrix_store::mat_counter++) {
@@ -163,8 +165,16 @@ public:
 	virtual void run(const std::vector<local_matrix_store::const_ptr> &ins) const;
 
 	virtual portion_mapply_op::const_ptr transpose() const {
-		assert(0);
-		return portion_mapply_op::const_ptr();
+		matrix_long_agg_op *op = new matrix_long_agg_op(*this);
+		op->local_bufs.clear();
+		op->local_bufs.resize(partial_res->get_num_rows());
+		if (get_margin() == matrix_margin::MAR_ROW)
+			op->margin = matrix_margin::MAR_COL;
+		else if (get_margin() == matrix_margin::MAR_COL)
+			op->margin = matrix_margin::MAR_ROW;
+		else
+			op->margin = get_margin();
+		return portion_mapply_op::const_ptr(op);
 	}
 
 	virtual std::string to_string(
@@ -249,16 +259,24 @@ agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
 	else
 		// This shouldn't happen.
 		assert(0);
-	portion_op = std::shared_ptr<matrix_long_agg_op>(new matrix_long_agg_op(
+	agg_op = matrix_long_agg_op::const_ptr(new matrix_long_agg_op(
 				partial_res, margin, op));
+	this->underlying = get_underlying_mats();
+}
+
+agg_matrix_store::agg_matrix_store(matrix_store::const_ptr data,
+		matrix_long_agg_op::const_ptr portion_op): sink_store(
+			get_num_rows_agg(*data, portion_op->get_margin()),
+			get_num_cols_agg(*data, portion_op->get_margin()),
+			data->is_in_mem(), portion_op->get_agg_op()->get_output_type())
+{
+	this->data = data;
+	this->agg_op = portion_op;
 	this->underlying = get_underlying_mats();
 }
 
 matrix_store::const_ptr agg_matrix_store::get_agg_res() const
 {
-	std::shared_ptr<matrix_long_agg_op> agg_op
-		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
-
 	partial_matrix::const_ptr partial_res = agg_op->get_partial_res();
 	// The last step is to aggregate the partial results from all portions.
 	// It runs in serial. I hope it's not a bottleneck.
@@ -321,8 +339,6 @@ matrix_store::const_ptr agg_matrix_store::get_agg_res() const
 
 bool agg_matrix_store::has_materialized() const
 {
-	std::shared_ptr<matrix_long_agg_op> agg_op
-		= std::static_pointer_cast<matrix_long_agg_op>(portion_op);
 	return agg_op->get_partial_res()->has_materialized();
 }
 
@@ -332,13 +348,13 @@ void agg_matrix_store::materialize_self() const
 		// This computes the partial aggregation result.
 		std::vector<detail::matrix_store::const_ptr> ins(1);
 		ins[0] = data;
-		__mapply_portion(ins, portion_op, matrix_layout_t::L_ROW);
+		__mapply_portion(ins, agg_op, matrix_layout_t::L_ROW);
 	}
 }
 
 size_t agg_matrix_store::get_data_id() const
 {
-	return std::static_pointer_cast<matrix_long_agg_op>(portion_op)->get_data_id();
+	return agg_op->get_data_id();
 }
 
 matrix_store::const_ptr agg_matrix_store::materialize(bool in_mem,
@@ -487,28 +503,19 @@ matrix_store::const_ptr agg_matrix_store::transpose() const
 		return res->transpose();
 	}
 	matrix_store::const_ptr tdata = data->transpose();
-	std::shared_ptr<const matrix_long_agg_op> agg_portion_op
-		= std::dynamic_pointer_cast<const matrix_long_agg_op>(
-				portion_op);
-	assert(agg_portion_op);
-	matrix_margin tmargin;
-	if (agg_portion_op->get_margin() == matrix_margin::MAR_ROW)
-		tmargin = matrix_margin::MAR_COL;
-	else if (agg_portion_op->get_margin() == matrix_margin::MAR_COL)
-		tmargin = matrix_margin::MAR_ROW;
-	else
-		tmargin = agg_portion_op->get_margin();
-	return matrix_store::const_ptr(new agg_matrix_store(tdata,
-				tmargin, agg_portion_op->get_agg_op()));
+	portion_mapply_op::const_ptr top = agg_op->transpose();
+	matrix_long_agg_op::const_ptr tagg_op
+		= std::dynamic_pointer_cast<const matrix_long_agg_op>(top);
+	return matrix_store::const_ptr(new agg_matrix_store(tdata, tagg_op));
 }
 
 class agg_compute_store: public sink_compute_store, public EM_object
 {
-	std::shared_ptr<portion_mapply_op> portion_op;
+	portion_mapply_op::const_ptr portion_op;
 	matrix_store::const_ptr data;
 public:
 	agg_compute_store(matrix_store::const_ptr data,
-			std::shared_ptr<portion_mapply_op> portion_op): sink_compute_store(
+			portion_mapply_op::const_ptr portion_op): sink_compute_store(
 				data->get_num_rows(), data->get_num_cols(), data->is_in_mem(),
 				portion_op->get_output_type()) {
 		this->data = data;
@@ -607,7 +614,14 @@ std::vector<virtual_matrix_store::const_ptr> agg_matrix_store::get_compute_matri
 	else
 		return std::vector<virtual_matrix_store::const_ptr>(1,
 				virtual_matrix_store::const_ptr(new agg_compute_store(data,
-						portion_op)));
+						agg_op)));
+}
+
+std::string agg_matrix_store::get_name() const
+{
+	std::vector<matrix_store::const_ptr> mats(1);
+	mats[0] = data;
+	return agg_op->to_string(mats);
 }
 
 }
