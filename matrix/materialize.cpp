@@ -1377,7 +1377,8 @@ void vmat_levels::materialize(bool par_access)
 
 }
 
-bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
+bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access,
+		bool mater_self)
 {
 	if (mats.empty())
 		return true;
@@ -1404,8 +1405,10 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access)
 
 		// Now all virtual matrices contain the materialized results.
 		bool ret = true;
-		for (size_t i = 0; i < mats.size(); i++)
-			ret = ret && mats[i]->materialize_self();
+		if (mater_self) {
+			for (size_t i = 0; i < mats.size(); i++)
+				ret = ret && mats[i]->materialize_self();
+		}
 		return ret;
 	} catch (std::exception &e) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(

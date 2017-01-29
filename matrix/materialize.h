@@ -143,7 +143,7 @@ bool __mapply_portion(
 }
 
 bool materialize(std::vector<std::shared_ptr<dense_matrix> > &mats,
-		bool par_access = true);
+		bool par_access = true, bool mater_self=true);
 
 }
 

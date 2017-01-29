@@ -406,7 +406,7 @@ void sink_store::materialize_matrices(virtual_matrix_store::const_ptr store)
 			}
 		}
 
-		fm::materialize(mats, true);
+		fm::materialize(mats, true, false);
 	}
 
 	for (auto it = share_io_sinks.begin(); it != share_io_sinks.end(); it++)
