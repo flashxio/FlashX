@@ -9,6 +9,7 @@ Description: FlashRLearn provides efficient implementations of machine learning
 LinkingTo: Rcpp
 Depends:
     R (>= 3.0),
+	pcg,
 	FlashR
 License: Apache License 2.0
 URL: https://github.com/icoming/FlashGraph
