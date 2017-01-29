@@ -1130,8 +1130,13 @@ class underlying_mat_set
 		// TODO If this is a set of mixed IM and EM matrices, we might want to
 		// consider only EM matrices.
 		auto under_map = mat->get_underlying_mats();
-		for (auto it = under_map.begin(); it != under_map.end(); it++)
-			this->under_mats.push_back(it->first);
+		for (auto it = under_map.begin(); it != under_map.end(); it++) {
+			// Some of the virtual matrices (e.g., one_val_matrix_store and
+			// set_data_matrix_store) don't store data physically. We should
+			// ignore these matrices.
+			if (it->second > 0)
+				this->under_mats.push_back(it->first);
+		}
 		this->under_mat_set.insert(under_mats.begin(), under_mats.end());
 		vmats.push_back(mat);
 	}
@@ -1221,7 +1226,7 @@ class vmat_level
 	bool merge(const underlying_mat_set &set);
 	// The level of materialization.
 	// It is equal to the number of underlying matrices of a virtual
-	// matrix - 1.
+	// matrix.
 	size_t level_id;
 public:
 	typedef std::shared_ptr<vmat_level> ptr;
@@ -1239,13 +1244,13 @@ public:
 	}
 
 	size_t get_num_underlying() const {
-		return level_id + 1;
+		return level_id;
 	}
 
 	// Add the matrix to this level. It automatically merges the new matrix
 	// to an existing one if possible.
 	void add(underlying_mat_set::ptr set) {
-		assert(set->get_num_underlying() == level_id + 1);
+		assert(set->get_num_underlying() == level_id);
 		auto ret = map.insert(
 				std::pair<mat_id_set, underlying_mat_set::ptr>(
 					set->get_underlying(), set));
@@ -1326,8 +1331,7 @@ public:
 	typedef std::shared_ptr<vmat_levels> ptr;
 
 	void add(underlying_mat_set::ptr set) {
-		assert(set->get_num_underlying() > 0);
-		size_t level_id = set->get_num_underlying() - 1;
+		size_t level_id = set->get_num_underlying();
 		// If there isn't a level to store the new matrix, we expend the vector.
 		expand(level_id + 1);
 		assert(underlying_levels.size() > level_id);
