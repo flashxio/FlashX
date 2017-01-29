@@ -1137,6 +1137,7 @@ class underlying_mat_set
 			if (it->second > 0)
 				this->under_mats.push_back(it->first);
 		}
+		std::sort(under_mats.begin(), under_mats.end());
 		this->under_mat_set.insert(under_mats.begin(), under_mats.end());
 		vmats.push_back(mat);
 	}
