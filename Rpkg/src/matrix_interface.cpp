@@ -916,8 +916,9 @@ bool copy_FM2Rmatrix(dense_matrix::ptr mat, RType *r_vec)
 {
 	size_t chunk_size = detail::mem_matrix_store::CHUNK_SIZE;
 	// If the matrix is in memory and is small, we can copy it directly.
-	if (mat->is_in_mem() && mat->get_num_rows() < chunk_size
-			&& mat->get_num_cols() < chunk_size) {
+	if ((mat->is_in_mem() && mat->get_num_rows() < chunk_size
+			&& mat->get_num_cols() < chunk_size)
+			|| mat->get_raw_store()->is_sink()) {
 		bool ret = mat->materialize_self();
 		if (!ret) {
 			fprintf(stderr, "can't materialize the matrix\n");
