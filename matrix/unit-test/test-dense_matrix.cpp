@@ -679,6 +679,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 {
 	printf("Test aggregation on tall %s-major matrix\n",
 			layout == matrix_layout_t::L_COL ? "column" : "row");
+	// Aggregate on the entire matrix and output a single value.
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			layout, num_nodes, get_scalar_type<size_t>());
 	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
@@ -693,6 +694,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
+	// Aggregate on rows of a matrix and output a column
 	dense_matrix::ptr sum_col = m1->aggregate(matrix_margin::MAR_ROW,
 			agg_operate::create(op));
 	if (sum_col->is_in_mem())
@@ -719,7 +721,30 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 		else if (matrix_val == matrix_val_t::DEFAULT)
 			assert(tmp->get<size_t>(i, 0) == m1->get_num_cols());
 	}
+
+	// Aggregate on cols of a matrix.
+	dense_matrix::ptr sum_row = m1->aggregate(matrix_margin::MAR_COL,
+			agg_operate::create(op));
+	sum_col = sum_row->transpose();
+	sum_row->materialize_self();
+	sum_col->materialize_self();
+	detail::mem_matrix_store::const_ptr tmp1
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum_row->get_raw_store());
+	detail::mem_matrix_store::const_ptr tmp2
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum_col->get_raw_store());
+	assert(tmp1);
+	assert(tmp2);
+	assert(tmp1->get_raw_arr());
+	assert(tmp2->get_raw_arr());
+	num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+	assert(memcmp(tmp1->get_raw_arr(), tmp2->get_raw_arr(),
+				num_eles * tmp1->get_entry_size()) == 0);
+	dense_matrix::ptr tmp_mat = dense_matrix::create(tmp1);
+	res = tmp_mat->aggregate(op);
 	sum = *(size_t *) res->get_raw();
+	num_eles = m1->get_num_rows() * m1->get_num_cols();
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else if (matrix_val_t::SEQ)
