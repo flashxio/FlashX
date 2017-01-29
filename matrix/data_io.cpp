@@ -23,7 +23,6 @@
 
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include "log.h"

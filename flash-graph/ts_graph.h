@@ -20,8 +20,6 @@
  * limitations under the License.
  */
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-
 #include "vertex.h"
 
 namespace fg
