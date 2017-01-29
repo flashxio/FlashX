@@ -163,7 +163,10 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 
 std::string mem_matrix_store::get_name() const
 {
-	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+	size_t id = get_data_id();
+	if (id == INVALID_MAT_ID)
+		id = mat_id;
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % id % get_num_rows()
 			% get_num_cols()
 			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
 }
