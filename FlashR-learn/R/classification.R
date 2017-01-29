@@ -17,8 +17,8 @@
 
 logistic.grad <- function(X, y, w)
 {
-	gradient <- (1 / length(y)) * (t(X) %*% (1/(1 + exp(-X %*% t(w))) - y))
-	return(t(fm.conv.FM2R(gradient)))
+	gradient <- (t(X) %*% (1/(1 + exp(-X %*% t(w))) - y))
+	return(t(gradient))
 }
 
 logistic.hessian <- function(X, y, w)
@@ -29,9 +29,8 @@ logistic.hessian <- function(X, y, w)
 
 logistic.cost <- function(X, y, w)
 {
-	m <- length(y)
 	xw <- X %*% t(w)
-	(1/m)*sum(y*(-xw) + log(1 + exp(xw)))
+	sum(y*(-xw) + log(1 + exp(xw)))
 }
 
 logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uniform"),
@@ -54,10 +53,7 @@ hinge.grad <- function(X, y, w)
 	xw <- X %*% t(w)
 	zero <- fm.matrix(0, nrow(X), ncol(X))
 	test <- fm.matrix(y * xw < 1.0, nrow(X), ncol(X))
-	print(dim(test))
-	print(dim(-y * X))
-	print(dim(zero))
-	fm.conv.FM2R(colSums(ifelse(test, -y * X, zero)) / length(y))
+	t(colSums(ifelse(test, -y * X, zero)))
 }
 
 hinge.loss <- function(X, y, w)
@@ -66,7 +62,7 @@ hinge.loss <- function(X, y, w)
 	y <- 2 * y - 1
 
 	xw <- X %*% t(w)
-	sum(ifelse(y * xw < 1.0, 1 - y * xw, 0)) / length(y)
+	sum(ifelse(y * xw < 1.0, 1 - y * xw, 0))
 }
 
 SVM <- function(X, y)
