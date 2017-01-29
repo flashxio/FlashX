@@ -611,6 +611,14 @@ std::vector<virtual_matrix_store::const_ptr> agg_matrix_store::get_compute_matri
 	// anything.
 	if (has_materialized())
 		return std::vector<virtual_matrix_store::const_ptr>();
+	else if (data->is_wide()) {
+		portion_mapply_op::const_ptr top = agg_op->transpose();
+		matrix_long_agg_op::const_ptr tagg_op
+			= std::dynamic_pointer_cast<const matrix_long_agg_op>(top);
+		return std::vector<virtual_matrix_store::const_ptr>(1,
+				virtual_matrix_store::const_ptr(new agg_compute_store(
+						data->transpose(), tagg_op)));
+	}
 	else
 		return std::vector<virtual_matrix_store::const_ptr>(1,
 				virtual_matrix_store::const_ptr(new agg_compute_store(data,
