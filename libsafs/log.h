@@ -80,6 +80,7 @@ extern simple_log_stream log_warning;
 extern simple_log_stream log_error;
 extern simple_log_stream log_fatal;
 
+#ifndef BOOST_LOG_TRIVIAL
 #define BOOST_LOG_TRIVIAL(x)		\
 	log_##x
 
@@ -88,6 +89,7 @@ static inline void set_log_level(enum c_log_level level)
 	simple_log_stream::set_global_log_level(level);
 }
 
+#endif
 #endif
 
 #endif

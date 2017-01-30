@@ -22,16 +22,16 @@
 using namespace fg;
 
 namespace {
-    static graph_header make_graph_header(const size_t num_vert, const size_t num_cols, 
+    static graph_header make_graph_header(const size_t num_vert, const size_t num_cols,
             std::string outfn="") {
         std::cout << "Creating header " << std::endl;
         const short edge_data_size = 8;
 
         graph_header header(UNDIRECTED, num_vert, (num_vert*num_cols), edge_data_size);
-        
+
         if (!outfn.empty()) {
             std::cout << "Opening file" << std::endl;
-            
+
             FILE *f = fopen(outfn.c_str(), "w");
             assert(f);
 
@@ -43,6 +43,8 @@ namespace {
 
     vertex_index::ptr make_index(const size_t num_vert,
             const size_t num_cols, const std::string outfn="") {
+        (void) make_index; // Supress compiler not used
+
         graph_header header = make_graph_header(num_vert, num_cols);
 
         off_t header_offset = sizeof(header);
@@ -59,7 +61,7 @@ namespace {
                 it != vertices.end(); ++it) {
             std::cout << " " << it->get_off();
         }
-        std::cout << "]\n"; 
+        std::cout << "]\n";
         // End Test print
 #endif
         if (!outfn.empty()) {
