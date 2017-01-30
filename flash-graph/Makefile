@@ -34,8 +34,8 @@ tools: libgraph
 unit-test: libgraph
 	$(MAKE) -C unit-test
 
-#test: libgraph libgraph-algs
-	#$(MAKE) -C test
+test: libgraph libgraph-algs
+	$(MAKE) -C test
 
 matrix: libgraph
 	$(MAKE) -C matrix

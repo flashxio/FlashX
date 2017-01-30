@@ -17,8 +17,9 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I.
+LDFLAGS := -L../../../../libcommon -lcommon -L.. -lgraph \
+	-L../../libsafs -lsafs -lrt -lz -lboost_log $(LDFLAGS)
+CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
 
 TESTFILES = test_load_balancer test_comm test_knors_index make_page_row_header\
 			test_sem_kmeans test_partition_cache
@@ -41,8 +42,7 @@ make_page_row_header: make_page_row_header.o
 	$(CXX) -o make_page_row_header make_page_row_header.o $(LDFLAGS)
 
 test_sem_kmeans: test_sem_kmeans.o ../libgraph.a
-	$(CXX) -o test_sem_kmeans test_sem_kmeans.o ../libgraph-algs/clusters.o\
-		../libgraph-algs/dist_matrix.o $(LDFLAGS)
+	$(CXX) -o test_sem_kmeans test_sem_kmeans.o $(LDFLAGS)
 
 clean:
 	rm -f *.d

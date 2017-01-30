@@ -17,12 +17,13 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I.
+LDFLAGS := -L../../../../libcommon -lcommon -L.. -lgraph \
+	-L../../libsafs -lsafs -lrt -lboost_log $(LDFLAGS)
+CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
 
 all: libgraph-algs
 
-libgraph-algs: $(OBJS) ../../libsafs/libsafs.a
+libgraph-algs: $(OBJS) ../../libsafs/libsafs.a ../../../../libcommon/libcommon.a
 	rm -f libgraph-algs.a
 	ar -cvq libgraph-algs.a $(OBJS)
 
@@ -33,4 +34,4 @@ clean:
 	rm -f libgraph-algs.a
 	rm -f libgraph-algs.so.*
 
--include $(DEPS) 
+-include $(DEPS)

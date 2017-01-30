@@ -17,13 +17,15 @@
 
 include Makefile.common
 
-all: build_lib utils
+all: build_safs build_fg utils
 
-build_lib:
+build_safs:
 	$(MAKE) -C libsafs
+
+build_fg: build_safs
 	$(MAKE) -C flash-graph
 
-utils: build_lib
+utils: build_safs build_fg
 	$(MAKE) -C utils
 
 clean:

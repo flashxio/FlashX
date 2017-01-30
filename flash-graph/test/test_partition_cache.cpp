@@ -22,7 +22,6 @@
 #include <iostream>
 #include <boost/assert.hpp>
 #include "libgraph-algs/row_cache.h"
-//#include "matrix/kmeans.h"
 
 unsigned nrow, ncol, cache_size, nthread, numel_sync;
 

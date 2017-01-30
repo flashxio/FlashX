@@ -17,18 +17,19 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I.
+LDFLAGS := -L../libgraph-algs -lgraph-algs -L.. -lgraph \
+	-L../../libsafs -lsafs -lrt -lz -lboost_log -L../../../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
 
 all: knors
 
 knors: knors.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
-	$(CXX) -o knors knors.o $(LDFLAGS)
+	$(CXX) -o ../../../../exec/knors knors.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f knors
+	rm -f ../../../../exec/knors
 
--include $(DEPS) 
+-include $(DEPS)

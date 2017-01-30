@@ -17,10 +17,10 @@
  * limitations under the License.
  */
 
-#include "libgraph-algs/sem_kmeans.h"
 #include "../../../../libcommon/util.hpp"
 #include "../../../../libcommon/dist_matrix.hpp"
 #include "../../../../libcommon/clusters.hpp"
+#include "../../../../libcommon/io.hpp"
 
 namespace kpmbase = kpmeans::base;
 namespace kpmprune = kpmeans::prune;
