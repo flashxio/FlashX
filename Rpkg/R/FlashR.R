@@ -89,6 +89,8 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 		NULL
 }
 
+new_fm <- .new.fm
+
 .new.fmV <- function(fm)
 {
 	if (!is.null(fm))
