@@ -2860,6 +2860,11 @@ RcppExport SEXP R_FM_print_mat_info(SEXP pmat)
 		sparse_matrix::ptr mat = get_matrix<sparse_matrix>(pmat);
 		printf("sparse matrix of %ld rows and %ld cols\n", mat->get_num_rows(),
 				mat->get_num_cols());
+		printf("sparse matrix element type: %s\n",
+				mat->get_type().get_name().c_str());
+		block_2d_size bsize = mat->get_block_size();
+		printf("sparse matrix block size: %ld, %ld\n", bsize.get_num_rows(),
+				bsize.get_num_cols());
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
