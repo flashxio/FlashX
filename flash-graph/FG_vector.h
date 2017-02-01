@@ -25,7 +25,6 @@
 #include <fstream>
 
 #include "graph_engine.h"
-#include "stat.h"
 
 namespace fg
 {
@@ -164,22 +163,6 @@ class FG_vector
 		assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			set.insert(v);
-		}
-	}
-
-	/** 
-	 * \brief  Count the number of unique items in the vector using a
-	 *         count map.
-	 * \param map An *empty* `count_map` object that is used to count
-	 *         the number of unique elements in the vector.
-	 *
-	 */
-	void count_unique(count_map<T> &map) const {
-		// TODO we need a parallel implementation.
-
-		assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
-		BOOST_FOREACH(T v, eles) {
-			map.add(v);
 		}
 	}
 
@@ -524,16 +507,6 @@ class FG_vector
 	 */
 	T &get(vertex_id_t id) {
 		return eles[id];
-	}
-
-	log_histogram log_hist(int power) const {
-		T max_v = max();
-		int num_buckets = ceil(log(max_v) / log(power));
-		log_histogram hist(std::max(num_buckets, 1));
-		for (size_t i = 0; i < get_size(); i++) {
-			hist.add_value(eles[i]);
-		}
-		return hist;
 	}
 };
 
