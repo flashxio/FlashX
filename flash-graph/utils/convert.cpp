@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-//#include <boost/assert.hpp>
-
 #include "convert.hpp"
 #include "../../../../libcommon/io.hpp"
 #include "knors_index.h"
@@ -53,7 +51,7 @@ void format_converter::write(const std::string outfile,
                 kpmbase::text_reader<double> rdr(infile);
                 rdr.set_ncol(this->get_ncol());
                 if (outlayout == BIN_RM) {
-                    std::cout << "Reading text writing binary" << std::endl;
+                    std::cout << "Reading text, writing binary" << std::endl;
 
                     of.open(outfile, std::ios::out | std::ios::binary);
                     while (rdr.readline(row)) {
@@ -61,18 +59,38 @@ void format_converter::write(const std::string outfile,
                                 row.size()*sizeof(double));
                     }
                 } else if (outlayout == SEM) {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
+                    std::cout << "Reading text, writing SEM" << std::endl;
+
+                    of.open(outfile, std::ios::binary | std::ios::out);
+                    graph_header header =
+                        make_graph_header(get_nrow(), get_ncol());
+                    of.write(reinterpret_cast<char*>(&header), sizeof(header));
+
+                    while (rdr.readline(row)) {
+                        of.write(reinterpret_cast<char*>(&row[0]),
+                                row.size()*sizeof(double));
+                    }
                 } else {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
+                    BOOST_ASSERT_MSG(false, "Unknown output format\n");
                 }
             }
             break;
+        case SEM:
         case BIN_RM:
             {
                 kpmbase::bin_rm_reader<double> rdr(infile);
                 rdr.set_ncol(this->get_ncol());
+
+                if (inlayout == SEM) {
+                    std::cout << "Reading SEM, ";
+                    printf("Seeking %d bytes\n", fg::graph_header::HEADER_SIZE);
+                    rdr.seek(fg::graph_header::HEADER_SIZE);
+                } else {
+                    std::cout << "Reading binary, ";
+                }
+
                 if (outlayout == TEXT) {
-                    std::cout << "Reading binary writing text" << std::endl;
+                    std::cout << "writing text" << std::endl;
 
                     of.open(outfile, std::ios::out);
                     while (rdr.readline(row)) {
@@ -80,24 +98,27 @@ void format_converter::write(const std::string outfile,
                             of << row[col] << " ";
                         of << "\n";
                     }
-                } else if (outlayout == SEM) {
-                    //outfile.open(outfile, std::ios::binary | std::ios::out);
-                    //graph_header header = make_graph_header(nrow, ncol);
-                    //outfile.write(reinterpret_cast<char*>(&header), sizeof(header));
-                    //append_bin<double>(nrow, ncol, outfile);
+                } else if (outlayout == SEM || outlayout == BIN_RM) {
+
+                    if (outlayout == SEM) {
+                        std::cout << "writing SEM" << std::endl;
+
+                        of.open(outfile, std::ios::binary | std::ios::out);
+                        graph_header header =
+                            make_graph_header(get_nrow(), get_ncol());
+                        of.write(reinterpret_cast<char*>(&header),
+                                sizeof(header));
+                    } else {
+                        std::cout << "writing binary" << std::endl;
+                    }
+
+                    while (rdr.readline(row)) {
+                        kpmbase::print_vector<double>(row);
+                        of.write(reinterpret_cast<char*>(&row[0]),
+                                row.size()*sizeof(double));
+                    }
                 } else {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
-                }
-            }
-            break;
-        case SEM:
-            {
-                if (outlayout == BIN_RM) {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
-                } else if (outlayout == SEM) {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
-                } else {
-                    BOOST_ASSERT_MSG(false, "Not implemented yet!\n");
+                    BOOST_ASSERT_MSG(false, "Unknown output format\n");
                 }
             }
             break;

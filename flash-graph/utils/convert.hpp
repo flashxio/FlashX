@@ -20,7 +20,6 @@
 #ifndef __KPM_UTILS_CONVERT_HPP__
 #define __KPM_UTILS_CONVERT_HPP__
 
-//#include <boost/log/trivial.hpp>
 #include <fstream>
 #include <string>
 #include "types.hpp"
