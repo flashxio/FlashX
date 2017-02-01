@@ -247,6 +247,8 @@ public:
 		return *types[(int) type];
 	}
 
+	virtual std::string get_name() const = 0;
+
 	/*
 	 * The operators that work on this type.
 	 */

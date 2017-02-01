@@ -43,6 +43,9 @@ template<class T>
 class scalar_type_impl: public scalar_type
 {
 public:
+	virtual std::string get_name() const {
+		return get_type_str<T>();
+	}
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
 			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const {
