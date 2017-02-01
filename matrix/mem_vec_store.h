@@ -69,12 +69,24 @@ public:
 	virtual const char *get_raw_arr() const = 0;
 	virtual const char *get_sub_arr(off_t start, off_t end) const = 0;
 	virtual char *get_sub_arr(off_t start, off_t end) = 0;
+	virtual char *get(off_t idx) = 0;
+	virtual const char *get(off_t idx) const = 0;
 
 	virtual std::shared_ptr<local_vec_store> get_portion(off_t loc,
 			size_t size) = 0;
 	virtual std::shared_ptr<const local_vec_store> get_portion(off_t loc,
 			size_t size) const = 0;
 	virtual bool copy_from(const char *buf, size_t num_bytes);
+
+	template<class T>
+	T get(off_t idx) const {
+		return *(const T *) get(idx);
+	}
+
+	template<class T>
+	void set(off_t idx, T val) {
+		*(T *) get(idx) = val;
+	}
 };
 
 class smp_vec_store: public mem_vec_store
