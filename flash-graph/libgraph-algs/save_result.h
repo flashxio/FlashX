@@ -20,17 +20,17 @@
  * limitations under the License.
  */
 
-#include "FG_vector.h"
 #include "graph_engine.h"
+#include "mem_vec_store.h"
 
 namespace {
 
 template<class T, class VertexType>
 class save_query: public fg::vertex_query
 {
-	typename fg::FG_vector<T>::ptr vec;
+	fm::detail::mem_vec_store::ptr vec;
 public:
-	save_query(typename fg::FG_vector<T>::ptr vec) {
+	save_query(fm::detail::mem_vec_store::ptr vec) {
 		this->vec = vec;
 	}
 

@@ -20,7 +20,6 @@
 #include <gperftools/profiler.h>
 #endif
 
-#include "FG_vector.h"
 #include "FGlib.h"
 
 #include "scan_graph.h"
@@ -348,13 +347,13 @@ void local_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex 
 namespace fg
 {
 
-FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
+fm::vector::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm current works on a directed graph";
-		return FG_vector<size_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
@@ -387,10 +386,12 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 		<< boost::format("It takes %1% seconds to compute all local scan")
 		% time_diff(start, end);
 
-	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<size_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, local_scan_vertex>(vec)));
-	return vec;
+				new save_query<size_t, local_scan_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }

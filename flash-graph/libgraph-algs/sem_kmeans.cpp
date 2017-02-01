@@ -347,10 +347,12 @@ namespace {
         this->dist = best;
     }
 
-    static FG_vector<unsigned>::ptr get_membership(graph_engine::ptr mat) {
-        FG_vector<unsigned>::ptr vec = FG_vector<unsigned>::create(mat);
-        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(vec)));
-        return vec;
+    static fm::vector::ptr get_membership(graph_engine::ptr mat) {
+		fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+				mat->get_num_vertices(), safs::params.get_num_nodes(),
+				fm::get_scalar_type<unsigned>());
+        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(res_store)));
+        return fm::vector::create(res_store);
     }
 
     static void clear_clusters() {
@@ -458,7 +460,6 @@ namespace fg
 
         gettimeofday(&start , NULL);
         /*** Begin VarInit of data structures ***/
-        FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
         for (size_t cl = 0; cl < k; cl++)
             g_clusters.push_back(cluster::create(NUM_COLS));
 
@@ -529,7 +530,7 @@ namespace fg
         BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
         print_clusters(g_clusters);
         BOOST_LOG_TRIVIAL(info) << "Printing cluster assignments:";
-        get_membership(mat)->print(NUM_COLS);
+//        get_membership(mat)->print(NUM_COLS);
 #endif
 
         g_stage = ESTEP;
@@ -558,7 +559,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(info) << "Printing cluster means:";
             print_clusters(g_clusters);
             BOOST_LOG_TRIVIAL(info) << "Getting cluster membership ...";
-            get_membership(mat)->print(NUM_COLS);
+//            get_membership(mat)->print(NUM_COLS);
             BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: " << g_num_changed << " **\n";
 #endif
 
@@ -593,7 +594,7 @@ namespace fg
 
         std::vector<std::vector<double>> means;
         get_means(means);
-        cluster_assignments = get_membership(mat);
+		fm::vector::ptr cluster_assignments = get_membership(mat);
 
         return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
     }

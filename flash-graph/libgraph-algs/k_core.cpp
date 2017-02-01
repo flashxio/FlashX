@@ -285,8 +285,7 @@ class activate_k_filter: public vertex_filter {
 namespace fg
 {
 
-FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
-		size_t k, size_t kmax)
+fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
 {
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(
 			fg->get_graph_header());
@@ -359,13 +358,12 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("K-core took %1% sec to complete") % time_diff(start, end);
 
-	FG_vector<size_t>::ptr ret = FG_vector<size_t>::create(
-			graph->get_num_vertices());
-
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<size_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, kcore_vertex>(ret)));
-
-	return ret;
+				new save_query<size_t, kcore_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }
