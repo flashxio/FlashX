@@ -30,7 +30,7 @@
 namespace fm
 {
 
-typedef int factor_value_t;
+typedef uint32_t factor_value_t;
 
 class factor
 {
