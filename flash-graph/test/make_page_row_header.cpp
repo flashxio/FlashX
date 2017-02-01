@@ -30,12 +30,7 @@ int main(int argc, char* argv[]) {
 
     size_t nrow = atol(argv[2]);
     size_t ncol = atol(argv[3]);
-    printf("Creating header for %lu X %lu..\n", nrow, ncol);
+    printf("Creating & writing header for %lu X %lu..\n", nrow, ncol);
     graph_header header = make_graph_header(nrow, ncol, argv[1]);
-    FILE *f = fopen(argv[1], "wb");
-    fwrite(&header, sizeof(header), 1, f);
-    fclose(f);
-    printf("Writing header!\n");
-
     return EXIT_SUCCESS;
 }
