@@ -65,5 +65,7 @@ add_library(FMatrix STATIC
 )
 
 if(ENABLE_TRILINOS)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_TRILINOS")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_TRILINOS")
 	subdirs(eigensolver)
 endif()
