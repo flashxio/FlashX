@@ -119,6 +119,10 @@ fg.get.params <- function(name)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 						  directed=TRUE, in.mem=TRUE, delim=",", attr.type="")
 {
+	# The graph name will becomes the file name in SAFS. It should contain
+	# some special characters.
+	graph.name <- gsub("/", "_", graph.name)
+	graph.name <- gsub(" ", "_", graph.name)
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
 			  as.logical(directed), as.logical(in.mem), as.character(delim),
@@ -142,6 +146,11 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 												  "-e", ecount(graph), sep = ""))
 {
+	# The graph name will becomes the file name in SAFS. It should contain
+	# some special characters.
+	graph.name <- gsub("/", "_", graph.name)
+	graph.name <- gsub(" ", "_", graph.name)
+
 	stopifnot(is.igraph(graph))
 	df <- get.data.frame(graph)
 	# iGraph is 1-based but FlashGraph is 0-based, so we need to subtract

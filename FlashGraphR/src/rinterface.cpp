@@ -549,7 +549,7 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 	df->add_vec("source", from_store);
 	df->add_vec("dest", to_store);
 	edge_list::ptr el = edge_list::create(df, directed);
-	FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	FG_graph::ptr fg = create_fg_graph(graph_name, el);
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
@@ -591,7 +591,7 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 	if (df == NULL)
 		return R_NilValue;
 	edge_list::ptr el = edge_list::create(df, directed);
-	FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	FG_graph::ptr fg = create_fg_graph(graph_name, el);
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
