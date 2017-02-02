@@ -634,8 +634,10 @@ public:
 		}
 		if (entry_type && *entry_type != get_scalar_type<bool>()
 				&& *entry_type != in->get_type()) {
+			BOOST_LOG_TRIVIAL(error) << "matrix element type doesn't match";
 			BOOST_LOG_TRIVIAL(error)
-				<< "the input matrix and the sparse matrix need to have the same type";
+				<< boost::format("input dense matrix: %1%, sparse matrix: %2%")
+				% in->get_type().get_name() % entry_type->get_name();
 			return false;
 		}
 		auto create = get_multiply_creator(in->get_type(), in->get_num_cols());
