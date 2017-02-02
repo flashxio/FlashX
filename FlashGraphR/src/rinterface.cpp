@@ -42,14 +42,6 @@
 using namespace safs;
 using namespace fg;
 
-#if 0
-FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
-		time_t interval, int num_intervals);
-FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id);
-FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
-		time_t start_time, time_t time_interval);
-#endif
-
 /*
  * A global configuration of FlashGraph.
  */
@@ -640,40 +632,43 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 
 ///////////////////////////// graph algorithms ///////////////////////////
 
+SEXP create_FMR_vector(fm::dense_matrix::ptr m, const std::string &name);
+
+fm::dense_matrix::ptr get_vertex_ids(fm::vector::ptr vec)
+{
+	fm::dense_matrix::ptr mat = vec->conv2mat(vec->get_length(), 1, false);
+	// If there are two many vertices, we need to store their id with double.
+	if (vec->get_length() >= (size_t) std::numeric_limits<int>::max())
+		mat = mat->cast_ele_type(fm::get_scalar_type<double>());
+	return mat;
+}
+
+template<class T>
+fm::dense_matrix::ptr cast_type(fm::vector::ptr vec)
+{
+	fm::dense_matrix::ptr mat = vec->conv2mat(vec->get_length(), 1, false);
+	return mat->cast_ele_type(fm::get_scalar_type<T>());
+}
+
 RcppExport SEXP R_FG_compute_cc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_cc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_cc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_wcc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_wcc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_scc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_scc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
-}
-
-RcppExport SEXP R_FG_compute_transitivity(SEXP graph)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<float>::ptr fg_vec = compute_transitivity(fg);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_scc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
@@ -693,10 +688,8 @@ RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 		return R_NilValue;
 	}
 
-	FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, type);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = get_degree(fg, type);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
@@ -706,19 +699,15 @@ RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 	int num_iters = REAL(piters)[0];
 	float damping_factor = REAL(pdamping)[0];
 
-	FG_vector<float>::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_undirected_triangles(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<size_t>::ptr fg_vec = compute_undirected_triangles(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_undirected_triangles(fg);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
@@ -732,33 +721,28 @@ RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 	else
 		type = directed_triangle_type::ALL;
 
-	FG_vector<size_t>::ptr fg_vec = compute_directed_triangles_fast(fg, type);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_directed_triangles_fast(fg, type);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP porder)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	int order = INTEGER(porder)[0];
-	Rcpp::IntegerVector res(fg->get_graph_header().get_num_vertices());
 	if (order == 0) {
-		FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, edge_type::BOTH_EDGES);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = get_degree(fg, edge_type::BOTH_EDGES);
+		return create_FMR_vector(get_vertex_ids(fg_vec), "");
 	}
 	else if (order == 1) {
-		FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = compute_local_scan(fg);
+		return create_FMR_vector(cast_type<double>(fg_vec), "");
 	}
 	else if (order == 2) {
-		FG_vector<size_t>::ptr fg_vec = compute_local_scan2(fg);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = compute_local_scan2(fg);
+		return create_FMR_vector(cast_type<double>(fg_vec), "");
 	}
 	else
 		return R_NilValue;
-
-	return res;
 }
 
 RcppExport SEXP R_FG_compute_topK_scan(SEXP graph, SEXP order, SEXP K)
@@ -783,10 +767,8 @@ RcppExport SEXP R_FG_compute_kcore(SEXP graph, SEXP _k, SEXP _kmax)
 	int k = REAL(_k)[0];
 	int kmax = REAL(_kmax)[0];
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<size_t>::ptr fg_vec = compute_kcore(fg, k, kmax);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_kcore(fg, k, kmax);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
@@ -847,22 +829,6 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 	Rcpp::IntegerVector ret(1);
 	ret[0] = diameter;
 	return ret;
-}
-
-template<class MatrixType>
-FG_vector<double>::ptr multiply_v(FG_graph::ptr fg, bool transpose,
-		FG_vector<double>::ptr in_vec)
-{
-	size_t length = in_vec->get_size();
-	typename MatrixType::ptr matrix = MatrixType::create(fg);
-	if (transpose)
-		matrix = matrix->transpose();
-	assert(matrix->get_num_rows() == length);
-	assert(matrix->get_num_cols() == length);
-
-	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
-	matrix->multiply(*in_vec, *out_vec);
-	return out_vec;
 }
 
 RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pmax_threads, SEXP pinit)
@@ -946,9 +912,8 @@ RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit,
     Rcpp::List ret;
     sem_kmeans_ret::ptr fg_ret = compute_sem_kmeans(fg, k, init, max_iters, tolerance);
 
-	Rcpp::IntegerVector res0(fg_ret->get_cluster_assignments()->get_size());
-	fg_ret->get_cluster_assignments()->copy_to(res0.begin(), fg_ret->get_cluster_assignments()->get_size());
-    ret["cluster"] = res0;
+	fm::vector::ptr clusters = fg_ret->get_cluster_assignments();
+    ret["cluster"] = create_FMR_vector(get_vertex_ids(clusters), "");
     ret["iter"] = fg_ret->get_iters();
 
     Rcpp::IntegerVector res1(fg_ret->get_size().begin(), fg_ret->get_size().end());
@@ -972,10 +937,8 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
-	FG_vector<float>::ptr fg_vec = compute_betweenness_centrality(fg, vids);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_betweenness_centrality(fg, vids);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, const std::string &name);

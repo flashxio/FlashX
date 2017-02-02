@@ -100,6 +100,8 @@ new_fm <- .new.fm
 		NULL
 }
 
+new_fmV <- .new.fmV
+
 #' Reconfigure FlashR
 #'
 #' \code{fm.set.conf} reconfigures FlashR with the settings in
