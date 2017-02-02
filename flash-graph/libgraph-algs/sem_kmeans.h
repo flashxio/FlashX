@@ -267,18 +267,22 @@ namespace fg
      * \param num_cols The # of columns in the dataset
      * \param centers To skip any initialization use this to pass initialized centers
      */
-    sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const unsigned k, const std::string init,
-            const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
-            const unsigned num_cols=0, std::vector<double>* centers=NULL);
+    void compute_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+            const std::string init, const unsigned max_iters,
+            const double tolerance, kpmbase::kmeans_t ret,
+            const unsigned num_rows=0, const unsigned num_cols=0,
+            std::vector<double>* centers=NULL);
 
     /**
      * \brief Compute Semi-External Memory Triangle Inequality pruned kmeans
      * see: `compute_sem_kmeans` for description of parameter list
      * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
      */
-    sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k, const std::string init,
-            const unsigned max_iters, const double tolerance, const unsigned num_rows=0,
-            const unsigned num_cols=0, std::vector<double>* centers=NULL);
+    void compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+            const std::string init, const unsigned max_iters,
+            const double tolerance, kpmbase::kmeans_t ret,
+            const unsigned num_rows=0, const unsigned num_cols=0,
+            std::vector<double>* centers=NULL);
 
     /**
      * \brief Minimized version of Semi-External Memory Triangle Inequality pruned kmeans
@@ -286,8 +290,9 @@ namespace fg
      * *SEE: http://users.cecs.anu.edu.au/~daa/courses/GSAC6017/kmeansicml03.pdf
      * \param cache_size_gb the size of row cache in gb
      */
-    sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+    void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
+            kpmbase::kmeans_t ret,
             const unsigned num_rows, const unsigned num_cols,
             std::vector<double>* centers=NULL, const double cache_size_gb=0,
             const unsigned rc_update_start_interval=5);

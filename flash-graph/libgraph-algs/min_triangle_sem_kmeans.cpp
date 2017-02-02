@@ -25,7 +25,6 @@
 
 #include "sem_kmeans.h"
 #include "row_cache.h"
-#include "matrix/kmeans.h"
 #include "../../../../libcommon/clusters.hpp"
 
 using namespace fg;
@@ -68,15 +67,15 @@ namespace {
     static barrier::ptr iter_barrier;
     static graph_engine::ptr mat;
     static unsigned g_max_iters;
-    static std::vector<unsigned> g_num_members_v;
+    static std::vector<size_t> g_num_members_v;
     static double g_tolerance;
     static bool g_converged = false;
 
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat);
-    static void update_clusters(graph_engine::ptr mat,
-            std::vector<unsigned>& g_num_members_v);
     static void manage_cache();
 
+    void update_clusters(graph_engine::ptr mat,
+            std::vector<size_t>& num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         bool recalculated;
@@ -194,7 +193,7 @@ namespace {
 #endif
 
                     BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                    kpmbase::print_vector<unsigned>(g_num_members_v);
+                    kpmbase::print_vector(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                         << g_num_changed << " **\n";
@@ -757,8 +756,8 @@ namespace {
         }
     }
 
-    static void update_clusters(graph_engine::ptr mat,
-            std::vector<unsigned>& num_members_v) {
+    void update_clusters(graph_engine::ptr mat,
+            std::vector<size_t>& num_members_v) {
         clear_clusters();
         std::vector<vertex_program::ptr> kms_clust_progs;
         mat->get_vertex_programs(kms_clust_progs);
@@ -898,8 +897,9 @@ namespace {
 
 namespace fg
 {
-    sem_kmeans_ret::ptr compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+    void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
+            kpmbase::kmeans_t ret,
             const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers,
             const double cache_size_gb, const unsigned rc_update_start_interval) {
 #ifdef PROFILER
@@ -1106,10 +1106,11 @@ namespace fg
         }
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-        kpmbase::print_vector<unsigned>(g_num_members_v);
+        kpmbase::print_vector(g_num_members_v);
 
-        return sem_kmeans_ret::create(get_membership(mat),
-                g_clusters->get_means(), g_num_members_v, g_iter,
-                NUM_ROWS, NUM_COLS);
+        const unsigned* membership_ptr = get_membership(mat)->get_data();
+        ret = kpmbase::kmeans_t(NUM_ROWS, NUM_COLS, g_iter, K,
+                membership_ptr, &g_num_members_v[0],
+                g_clusters->get_means());
     }
 }

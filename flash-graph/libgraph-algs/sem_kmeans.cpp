@@ -47,14 +47,13 @@ namespace {
     static barrier::ptr iter_barrier;
     static graph_engine::ptr mat;
     static unsigned g_max_iters;
-    static std::vector<unsigned> g_num_members_v;
+    static std::vector<size_t> g_num_members_v;
     static double g_tolerance;
     static bool g_converged = false;
 
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat);
-    static void update_clusters(graph_engine::ptr mat,
-            std::vector<unsigned>& g_num_members_v);
-
+    void update_clusters(graph_engine::ptr mat,
+            std::vector<size_t>& g_num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         public:
@@ -131,7 +130,7 @@ namespace {
                     update_clusters(mat, g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                    kpmbase::print_vector<unsigned>(g_num_members_v);
+                    kpmbase::print_vector(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                         << g_num_changed << " **\n";
@@ -325,8 +324,8 @@ namespace {
             return vec;
         }
 
-        static void update_clusters(graph_engine::ptr mat,
-                std::vector<unsigned>& g_num_members_v) {
+        void update_clusters(graph_engine::ptr mat,
+                std::vector<size_t>& g_num_members_v) {
             g_clusters->clear();
 
             std::vector<vertex_program::ptr> kms_clust_progs;
@@ -412,9 +411,11 @@ namespace {
 
     namespace fg
     {
-        sem_kmeans_ret::ptr compute_sem_kmeans(FG_graph::ptr fg, const unsigned k,
-                const std::string init, const unsigned max_iters, const double tolerance,
-                const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers) {
+        void compute_sem_kmeans(FG_graph::ptr fg,
+                const unsigned k, const std::string init,
+                const unsigned max_iters, const double tolerance,
+                kpmbase::kmeans_t ret, const unsigned num_rows,
+                const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
             ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
 #endif
@@ -522,7 +523,7 @@ namespace {
                 g_clusters->print_means();
 
             g_stage = kpmbase::kms_stage_t::ESTEP;
-            BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
+            BOOST_LOG_TRIVIAL(info) << "knors No Pruning starting ...";
             std::string str_iters = g_max_iters == std::numeric_limits<unsigned>::max() ?
                 "until convergence ...":
                 std::to_string(g_max_iters) + " iterations ...";
@@ -553,10 +554,11 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            kpmbase::print_vector<unsigned>(g_num_members_v);
+            kpmbase::print_vector(g_num_members_v);
 
-            return sem_kmeans_ret::create(get_membership(mat),
-                    g_clusters->get_means(), g_num_members_v, g_iter,
-                    NUM_ROWS, NUM_COLS);
+            const unsigned* membership_ptr = get_membership(mat)->get_data();
+            ret = kpmbase::kmeans_t(NUM_ROWS, NUM_COLS, g_iter, K,
+                    membership_ptr, &g_num_members_v[0],
+                    g_clusters->get_means());
         }
     }

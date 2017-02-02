@@ -48,6 +48,8 @@ namespace {
     static kpmbase::kms_stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
 
+    void update_clusters(graph_engine::ptr mat,
+            std::vector<size_t>& num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         std::vector<double> lwr_bnd;
@@ -384,8 +386,8 @@ namespace {
             }
         }
 
-        static void update_clusters(graph_engine::ptr mat,
-                std::vector<unsigned>& num_members_v) {
+        void update_clusters(graph_engine::ptr mat,
+                std::vector<size_t>& num_members_v) {
             clear_clusters();
             std::vector<vertex_program::ptr> kms_clust_progs;
             mat->get_vertex_programs(kms_clust_progs);
@@ -481,9 +483,11 @@ namespace {
 
     namespace fg
     {
-        sem_kmeans_ret::ptr compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
-                const std::string init, const unsigned max_iters, const double tolerance,
-                const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers) {
+        void compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
+                const std::string init, const unsigned max_iters,
+                const double tolerance, kpmbase::kmeans_t ret,
+                const unsigned num_rows, const unsigned num_cols,
+                std::vector<double>* centers) {
 #ifdef PROFILER
             ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
 #endif
@@ -528,7 +532,7 @@ namespace {
                 g_clusters->set_mean(*centers);
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-            std::vector<unsigned> num_members_v(K);
+            std::vector<size_t> num_members_v(K);
 
             BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
             // Distance to everyone other than yourself
@@ -633,7 +637,7 @@ namespace {
                 g_cluster_dist->print();
 
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
-                kpmbase::print_vector<unsigned>(num_members_v);
+                kpmbase::print_vector(num_members_v);
 #endif
                 g_prune_init = false; // reset
                 g_num_changed = 0; // reset
@@ -674,7 +678,7 @@ namespace {
 #endif
 
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                kpmbase::print_vector<unsigned>(num_members_v);
+                kpmbase::print_vector(num_members_v);
 
                 BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                     << g_num_changed << " **\n";
@@ -715,10 +719,11 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            kpmbase::print_vector<unsigned>(num_members_v);
+            kpmbase::print_vector<size_t>(num_members_v);
 
-            return sem_kmeans_ret::create(get_membership(mat),
-                    g_clusters->get_means(), num_members_v, g_iter,
-                    NUM_ROWS, NUM_COLS);
+            const unsigned* membership_ptr = get_membership(mat)->get_data();
+            ret = kpmbase::kmeans_t(NUM_ROWS, NUM_COLS, g_iter, K,
+                    membership_ptr, &num_members_v[0],
+                    g_clusters->get_means());
         }
     }
