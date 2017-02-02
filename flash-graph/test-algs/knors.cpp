@@ -102,22 +102,29 @@ void run_sem_kmeans(FG_graph::ptr graph, const unsigned k,
         br.read(centers);
     }
 
+    kpmbase::kmeans_t ret;
+
     if (no_prune) {
-        compute_sem_kmeans(graph, k, init, max_iters,
-                tolerance, graph->get_nsamples(), graph->get_dim(), centers);
+         compute_sem_kmeans(graph, k, init, max_iters, tolerance,
+                ret, graph->get_nsamples(), graph->get_dim(), centers);
     } else  {
 #if 0 // No Full Elkans algorithm
         compute_triangle_sem_kmeans(graph, k, init,
-                max_iters, tolerance, graph->get_nsamples(), graph->get_dim(), centers);
+                max_iters, tolerance, ret,
+                graph->get_nsamples(), graph->get_dim(), centers);
 #else
         compute_min_triangle_sem_kmeans(graph, k, init,
-                max_iters, tolerance, graph->get_nsamples(),
+                max_iters, tolerance, ret, graph->get_nsamples(),
                 graph->get_dim(), centers,
                 cache_size_gb, rc_update_start_interval);
 #endif
     }
 
-    if (!outdir.empty()) { printf("\n\nTODO: write out data\n"); }
+    if (!outdir.empty()) {
+        printf("\nWriting output to '%s'\n", outdir.c_str());
+        ret.write(outdir);
+    }
+
     if (centers) { delete centers; }
 }
 
