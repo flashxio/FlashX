@@ -576,6 +576,13 @@ public:
 	virtual detail::task_creator::ptr get_multiply_creator(
 			const scalar_type &type, size_t num_in_cols) const = 0;
 
+	const scalar_type &get_type() const {
+		if (entry_type == NULL)
+			return get_scalar_type<bool>();
+		else
+			return *entry_type;
+	}
+
 	/*
 	 * The size of a non-zero entry.
 	 */
