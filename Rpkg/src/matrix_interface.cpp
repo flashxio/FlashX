@@ -1849,6 +1849,8 @@ T get_scalar(SEXP val)
 {
 	if (R_is_integer(val))
 		return INTEGER(val)[0];
+	else if (R_is_logical(val))
+		return LOGICAL(val)[0];
 	else
 		return REAL(val)[0];
 }
@@ -1928,6 +1930,8 @@ RcppExport SEXP R_FM_eigen(SEXP pfunc, SEXP pextra, SEXP psym, SEXP poptions,
 		opts.block_size = get_scalar<int>(options["block_size"]);
 	if (options.containsElementNamed("which"))
 		opts.which = CHAR(STRING_ELT(options["which"], 0));
+	if (options.containsElementNamed("in.mem"))
+		opts.in_mem = get_scalar<bool>(options["in.mem"]);
 
 	if (!options.containsElementNamed("n")) {
 		fprintf(stderr,
