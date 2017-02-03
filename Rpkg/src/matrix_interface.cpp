@@ -2971,3 +2971,15 @@ RcppExport SEXP R_FM_print_features()
 	printf("FM: %s\n", features.c_str());
 	return R_NilValue;
 }
+
+RcppExport SEXP R_FM_create_factor(SEXP pmat, SEXP pnum_levels)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	int num_levels = INTEGER(pnum_levels)[0];
+	factor_col_vector::ptr fvec;
+	if (num_levels < 0)
+		fvec = factor_col_vector::create(mat);
+	else
+		fvec = factor_col_vector::create(factor(num_levels), mat);
+	return create_FMR_vector(fvec, "");
+}
