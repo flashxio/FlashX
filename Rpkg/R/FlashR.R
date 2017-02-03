@@ -273,6 +273,23 @@ fm.load.sparse.matrix.bin <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, 
 	.new.fm(m)
 }
 
+#' Export a dense matrix
+#'
+#' This function exports a dense matrix into a text file in the local filesystem.
+#'
+#' @param mat a FlashR matrix.
+#' @param a string for the file name in the local filesystem.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(1000000, 10)
+#' fm.export.dense.matrix(mat, "./test_mat.txt")
+fm.export.dense.matrix <- function(mat, file)
+{
+	stopifnot(fm.is.object(mat))
+	.Call("R_FM_write_obj", mat, as.character(file), TRUE, PACKAGE="FlashR")
+}
+
 #' Create a FlashR vector with replicated elements.
 #'
 #' @param x A constant initial value
@@ -1923,7 +1940,7 @@ fm.write.obj <- function(fm, file)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(fm.is.object(fm))
-	.Call("R_FM_write_obj", fm, file, PACKAGE="FlashR")
+	.Call("R_FM_write_obj", fm, as.character(file), FALSE, PACKAGE="FlashR")
 }
 
 #' Read a FlashR object (vector/matrix) from a file.

@@ -1806,7 +1806,7 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 		return R_NilValue;
 }
 
-RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
+RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile, SEXP ptext)
 {
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "Doesn't support write a sparse matrix to a file\n");
@@ -1817,13 +1817,15 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
 	// The input matrix might be a block matrix.
 	mat = dense_matrix::create(mat->get_raw_store());
 	// To write data to a Linux file, we need to make sure data is stored
-	// in SMP matrix.
-	mat = mat->conv_store(true, -1);
+	// in memory.
+	if (!mat->is_in_mem() || mat->is_virtual())
+		mat = mat->conv_store(true, -1);
 
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
+	bool text = LOGICAL(ptext)[0];
 	Rcpp::LogicalVector ret(1);
 	ret[0] = dynamic_cast<const detail::mem_matrix_store &>(
-			mat->get_data()).write2file(file_name);
+			mat->get_data()).write2file(file_name, text);
 	return ret;
 }
 
