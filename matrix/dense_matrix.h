@@ -224,6 +224,13 @@ public:
 	virtual dense_matrix::ptr get_rows(std::shared_ptr<col_vec> idxs) const;
 
 	/*
+	 * This gets rows/cols in a range.
+	 * This helps us to optimize the operations.
+	 */
+	virtual dense_matrix::ptr get_cols(size_t start, size_t end) const;
+	virtual dense_matrix::ptr get_rows(size_t start, size_t end) const;
+
+	/*
 	 * This method creates a new matrix whose columns specified by `idxs' are
 	 * replaced by `cols'. This works only for a tall matrix. It returns NULL
 	 * on a wide matrix.

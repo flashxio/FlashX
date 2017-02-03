@@ -1488,6 +1488,34 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 		return dense_matrix::ptr();
 }
 
+dense_matrix::ptr dense_matrix::get_cols(size_t start, size_t end) const
+{
+	if (end >= get_num_cols() || start >= get_num_cols() || start >= end) {
+		BOOST_LOG_TRIVIAL(error) << "column index is out of the range";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<off_t> col_idxs(end - start);
+	for (size_t i = 0; i < col_idxs.size(); i++)
+		col_idxs[i] = start + i;
+	// TODO we need optimize this.
+	return get_cols(col_idxs);
+}
+
+dense_matrix::ptr dense_matrix::get_rows(size_t start, size_t end) const
+{
+	if (end > get_num_rows() || start >= get_num_rows() || start >= end) {
+		BOOST_LOG_TRIVIAL(error) << "row index is out of the range";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<off_t> row_idxs(end - start);
+	for (size_t i = 0; i < row_idxs.size(); i++)
+		row_idxs[i] = start + i;
+	// TODO we need optimize this.
+	return get_rows(row_idxs);
+}
+
 namespace
 {
 
