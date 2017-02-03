@@ -4,6 +4,7 @@
 #include "mem_worker_thread.h"
 #include "local_matrix_store.h"
 #include "sparse_matrix.h"
+#include "data_io.h"
 
 using namespace fm;
 using namespace fm::detail;
@@ -193,7 +194,7 @@ void test_transpose()
 	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
 }
 
-void test_write2file1(NUMA_matrix_store::ptr mat)
+void test_write2file1(mem_matrix_store::ptr mat)
 {
 	char *tmp_file_name = tempnam(".", "tmp.mat");
 	if (mat->store_layout() == matrix_layout_t::L_ROW)
@@ -218,16 +219,70 @@ void test_write2file1(NUMA_matrix_store::ptr mat)
 	unlink(tmp_file_name);
 }
 
+void test_write2text_file(mem_matrix_store::ptr mat)
+{
+	char *tmp_file_name = tempnam(".", "tmp_mat.txt");
+	if (mat->store_layout() == matrix_layout_t::L_ROW)
+		mat->set_data(set_row_operate(mat->get_num_cols()));
+	else
+		mat->set_data(set_col_operate(mat->get_num_cols()));
+	bool ret = mat->write2file(tmp_file_name, true);
+	assert(ret);
+
+	printf("read %s\n", tmp_file_name);
+	dense_matrix::ptr read_mat = read_matrix(
+			std::vector<std::string>(1, tmp_file_name),
+			true, "L", " ", mat->get_num_cols());
+	assert(read_mat);
+	read_mat = read_mat->conv2(matrix_layout_t::L_ROW);
+	read_mat->materialize_self();
+	printf("read mat: %ld, %ld\n", read_mat->get_num_rows(),
+			read_mat->get_num_cols());
+	assert(read_mat->get_num_rows() == mat->get_num_rows());
+	assert(read_mat->get_num_cols() == mat->get_num_cols());
+	assert(read_mat->get_type() == mat->get_type());
+	assert(read_mat->store_layout() == mat->store_layout());
+	mem_matrix_store::const_ptr read_store
+		= std::dynamic_pointer_cast<const mem_matrix_store>(
+				read_mat->get_raw_store());
+#pragma omp parallel for
+	for (size_t i = 0; i < mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < mat->get_num_cols(); j++) {
+			if (mat->get<long>(i, j) != read_store->get<long>(i, j))
+				printf("%ld,%ld: %ld, %ld\n", i, j, mat->get<long>(i, j),
+						read_store->get<long>(i, j));
+			assert(mat->get<long>(i, j) == read_store->get<long>(i, j));
+		}
+	}
+
+	unlink(tmp_file_name);
+}
+
 void test_write2file()
 {
-	NUMA_matrix_store::ptr mat;
+	mem_matrix_store::ptr mat;
+
+	printf("write a tall row matrix to text\n");
+	mat = mem_matrix_store::create(1000000, 10,
+			matrix_layout_t::L_COL, get_scalar_type<long>(), num_nodes);
+	test_write2text_file(mat);
+
 	printf("write a tall row matrix\n");
-	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
-			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	mat = mem_matrix_store::create(10000000, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
 	test_write2file1(mat);
 	printf("write a tall column matrix\n");
-	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
-			matrix_layout_t::L_COL, get_scalar_type<long>());
+	mat = mem_matrix_store::create(10000000, 10,
+			matrix_layout_t::L_COL, get_scalar_type<long>(), num_nodes);
+	test_write2file1(mat);
+
+	printf("write a wide row matrix\n");
+	mat = mem_matrix_store::create(10, 10000000,
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
+	test_write2file1(mat);
+	printf("write a wide column matrix\n");
+	mat = mem_matrix_store::create(10, 10000000,
+			matrix_layout_t::L_COL, get_scalar_type<long>(), num_nodes);
 	test_write2file1(mat);
 }
 

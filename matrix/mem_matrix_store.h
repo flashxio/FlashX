@@ -62,6 +62,9 @@ public:
 
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
+	virtual bool write2file(const std::string &file_name,
+			bool text = false) const;
+
 	/*
 	 * This function symmetrizes a matrix.
 	 * It only works for a SMP square matrix.
@@ -109,8 +112,6 @@ public:
 	virtual void write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
-
-	virtual bool write2file(const std::string &file_name) const = 0;
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		if (is_wide())
@@ -216,7 +217,6 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
-	virtual bool write2file(const std::string &file_name) const;
 };
 
 /*
@@ -300,7 +300,6 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
 	}
-	virtual bool write2file(const std::string &file_name) const;
 };
 
 /*

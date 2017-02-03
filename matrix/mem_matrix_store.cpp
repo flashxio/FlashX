@@ -28,6 +28,7 @@
 #include "mem_worker_thread.h"
 #include "matrix_stats.h"
 #include "mem_vec_store.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -498,61 +499,6 @@ matrix_store::const_ptr mem_sub_row_matrix_store::get_rows(
 	return mem_sub_row_matrix_store::create(*this, direct_idxs);
 }
 
-bool mem_col_matrix_store::write2file(const std::string &file_name) const
-{
-	FILE *f = fopen(file_name.c_str(), "w");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
-		return false;
-	}
-	if (!write_header(f))
-		return false;
-
-	size_t ncol = get_num_cols();
-	size_t col_size = get_num_rows() * get_entry_size();
-	for (size_t i = 0; i < ncol; i++) {
-		const char *col = get_col(i);
-		size_t ret = fwrite(col, col_size, 1, f);
-		if (ret == 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("can't write to %1%: %2%")
-				% file_name % strerror(errno);
-			return false;
-		}
-	}
-	fclose(f);
-	return true;
-}
-
-bool mem_row_matrix_store::write2file(const std::string &file_name) const
-{
-	FILE *f = fopen(file_name.c_str(), "w");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
-		return false;
-	}
-	if (!write_header(f))
-		return false;
-
-	size_t nrow = get_num_rows();
-	size_t row_size = get_num_cols() * get_entry_size();
-	for (size_t i = 0; i < nrow; i++) {
-		const char *row = get_row(i);
-		size_t ret = fwrite(row, row_size, 1, f);
-		if (ret == 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("can't write to %1%: %2%")
-				% file_name % strerror(errno);
-			fclose(f);
-			return false;
-		}
-	}
-	fclose(f);
-	return true;
-}
-
 bool mem_matrix_store::write_header(FILE *f) const
 {
 	matrix_header header(DENSE, get_entry_size(), get_num_rows(),
@@ -565,6 +511,129 @@ bool mem_matrix_store::write_header(FILE *f) const
 		return false;
 	}
 	return true;
+}
+
+namespace
+{
+
+struct empty_deleter {
+	void operator()(const matrix_store *addr) {
+	}
+};
+
+}
+
+static bool write_tall_portions(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores)
+{
+	size_t entry_size = stores[0]->get_type().get_size();
+	if (stores[0]->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			local_row_matrix_store::const_ptr row_store
+				= std::dynamic_pointer_cast<const local_row_matrix_store>(
+						stores[i]);
+			for (size_t j = 0; j < row_store->get_num_rows(); j++) {
+				size_t ret = fwrite(row_store->get_row(j),
+						row_store->get_num_cols() * entry_size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error) << boost::format("can't write: %2%")
+						% strerror(errno);
+					return false;
+				}
+			}
+		}
+	}
+	else {
+		std::vector<local_col_matrix_store::const_ptr> col_stores(stores.size());
+		for (size_t i = 0; i < stores.size(); i++)
+			col_stores[i] = std::dynamic_pointer_cast<const local_col_matrix_store>(
+						stores[i]);
+		size_t num_cols = stores[0]->get_num_cols();
+		for (size_t j = 0; j < num_cols; j++) {
+			for (size_t i = 0; i < col_stores.size(); i++) {
+				size_t ret = fwrite(col_stores[i]->get_col(j),
+						col_stores[i]->get_num_rows() * entry_size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error) << boost::format("can't write: %2%")
+						% strerror(errno);
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+static bool write_wide_portions(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores)
+{
+	std::vector<local_matrix_store::const_ptr> tstores(stores.size());
+	for (size_t i = 0; i < tstores.size(); i++) {
+		auto tstore = stores[i]->transpose();
+		assert(tstore);
+		tstores[i] = std::dynamic_pointer_cast<const local_matrix_store>(tstore);
+	}
+	return write_tall_portions(f, tstores);
+}
+
+static bool write_portions_text(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores)
+{
+	const scalar_type &type = stores[0]->get_type();
+	for (size_t i = 0; i < stores.size(); i++) {
+		auto row_store
+			= std::dynamic_pointer_cast<const local_row_matrix_store>(stores[i]);
+		assert(row_store);
+		for (size_t j = 0; j < row_store->get_num_rows(); j++)
+			fprintf(f, "%s\n", type.conv2str(row_store->get_row(j),
+						row_store->get_num_cols(), " ").c_str());
+	}
+	return true;
+}
+
+bool mem_matrix_store::write2file(const std::string &file_name, bool text) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	bool ret;
+	if (!text) {
+		if (!write_header(f)) {
+			fclose(f);
+			return false;
+		}
+
+		std::vector<local_matrix_store::const_ptr> lstores(get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++)
+			lstores[i] = get_portion(i);
+		if (is_wide())
+			ret = write_wide_portions(f, lstores);
+		else
+			ret = write_tall_portions(f, lstores);
+	}
+	else {
+		if (is_wide()) {
+			fclose(f);
+			BOOST_LOG_TRIVIAL(error) << "can't write a wide matrix";
+			return false;
+		}
+
+		dense_matrix::ptr mat = dense_matrix::create(
+				detail::matrix_store::const_ptr(this, empty_deleter()));
+		mat = mat->conv2(matrix_layout_t::L_ROW);
+		matrix_store::const_ptr row_store = mat->get_raw_store();
+		std::vector<local_matrix_store::const_ptr> lstores(get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++) {
+			lstores[i] = row_store->get_portion(i);
+			assert(lstores[i]->store_layout() == matrix_layout_t::L_ROW);
+		}
+		ret = write_portions_text(f, lstores);
+	}
+	fclose(f);
+	return ret;
 }
 
 mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)

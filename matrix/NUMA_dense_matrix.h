@@ -78,11 +78,6 @@ public:
 					get_num_rows() * get_num_cols()));
 		return ret;
 	}
-
-	virtual bool write2file(const std::string &file_name) const {
-		assert(0);
-		return false;
-	}
 };
 
 class NUMA_col_wide_matrix_store;
@@ -165,7 +160,6 @@ public:
 	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
-	virtual bool write2file(const std::string &file_name) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -243,7 +237,6 @@ public:
 	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
-	virtual bool write2file(const std::string &file_name) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
