@@ -854,11 +854,15 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 
 //////////////////////////// Cast the element types ///////////////////////////
 
-dense_matrix::ptr dense_matrix::cast_ele_type(const scalar_type &type) const
+dense_matrix::ptr dense_matrix::cast_ele_type(const scalar_type &type,
+		bool forced) const
 {
-	if (!require_cast(get_type(), type))
-		// TODO the returned matrix may not have the specified type.
-		return dense_matrix::create(get_raw_store());
+	// If they have the same type, we just return the matrix itself
+	// regardless of `forced'.
+	if (get_type() == type)
+		return clone();
+	if (!require_cast(get_type(), type) && !forced)
+		return clone();
 	else
 		return sapply(bulk_uoperate::conv2ptr(get_type().get_type_cast(type)));
 }

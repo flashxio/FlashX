@@ -321,7 +321,8 @@ public:
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;
 
-	dense_matrix::ptr cast_ele_type(const scalar_type &type) const;
+	dense_matrix::ptr cast_ele_type(const scalar_type &type,
+			bool forced = false) const;
 
 	dense_matrix::ptr scale_cols(std::shared_ptr<const col_vec> vals) const;
 	dense_matrix::ptr scale_rows(std::shared_ptr<const col_vec> vals) const;
