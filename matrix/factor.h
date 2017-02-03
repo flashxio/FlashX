@@ -44,14 +44,6 @@ public:
 		return num_levels;
 	}
 
-	factor_value_t get_max() const {
-		return num_levels - 1;
-	}
-
-	factor_value_t get_min() const {
-		return 0;
-	}
-
 	bool is_valid_level(factor_value_t v) const {
 		return v >= 0 && (size_t) v < num_levels;
 	}
@@ -118,6 +110,7 @@ public:
 	typedef std::shared_ptr<const factor_col_vector> const_ptr;
 
 	static ptr create(const factor &f, dense_matrix::ptr mat);
+	static ptr create(dense_matrix::ptr mat);
 
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_operate &op) {

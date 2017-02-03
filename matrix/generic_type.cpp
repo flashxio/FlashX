@@ -46,6 +46,9 @@ public:
 	virtual std::string get_name() const {
 		return get_type_str<T>();
 	}
+	virtual bool is_floating_point() const {
+		return std::is_floating_point<T>::value;
+	}
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
 			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const {

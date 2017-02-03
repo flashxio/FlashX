@@ -3227,6 +3227,15 @@ void test_share_data()
 	_test_share_data(mat1, mat2);
 }
 
+void test_factor()
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(1, 1000,
+			long_dim, 1, matrix_layout_t::L_COL);
+	factor_col_vector::ptr fvec = factor_col_vector::create(mat);
+	assert(fvec);
+	assert(fvec->get_num_levels() <= 1000);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -3239,6 +3248,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_factor();
 	test_share_data();
 	test_repeat_rowcols();
 	test_repeat();

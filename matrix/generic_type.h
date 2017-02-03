@@ -248,6 +248,7 @@ public:
 	}
 
 	virtual std::string get_name() const = 0;
+	virtual bool is_floating_point() const = 0;
 
 	/*
 	 * The operators that work on this type.
