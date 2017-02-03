@@ -44,6 +44,7 @@ NULL
 fm.svd <- function(x, nu=min(n, p), nv=min(n, p), tol=1e-8)
 {
 	stopifnot(class(x) == "fm")
+	x <- as.double(x)
 	n <- dim(x)[1]
 	p <- dim(x)[2]
 	tx <- t(x)
@@ -152,6 +153,7 @@ setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LI
 
 setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
 												  scale.=FALSE, tol=NULL) {
+	x <- as.double(x)
 	scale.x <- scale(x, center, scale.)
 	res <- fm.svd(scale.x, nu=0, tol=.Machine$double.eps)
 	if (!is.null(tol)) {
@@ -164,5 +166,5 @@ setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
 		x <- scale.x %*% rotation
 	else
 		x <- NULL
-	list(sdev=res$d / sqrt(nrow(x)), rotation=rotation, x=x)
+	list(sdev=res$d / sqrt(nrow(scale.x) - 1), rotation=rotation, x=x)
 })
