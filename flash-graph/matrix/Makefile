@@ -18,9 +18,9 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L../../../../libcommon -lcommon -L.. -lgraph \
+LDFLAGS := -L../../../../libkcommon -lkcommon -L.. -lgraph \
 	-L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I. $(OMP_FLAG)
+CXXFLAGS += -I../../../../libkcommon -I../../libsafs -I.. -I. $(OMP_FLAG)
 
 all: libmatrix
 

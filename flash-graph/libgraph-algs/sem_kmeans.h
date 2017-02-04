@@ -35,11 +35,11 @@
 #include "FGlib.h"
 #include "save_result.h"
 
-#include "../../../../libcommon/util.hpp"
-#include "../../../../libcommon/io.hpp"
-#include "../../../../libcommon/prune_stats.hpp"
-#include "../../../../libcommon/dist_matrix.hpp"
-#include "../../../../libcommon/kmeans_types.hpp"
+#include "../../../../libkcommon/util.hpp"
+#include "../../../../libkcommon/io.hpp"
+#include "../../../../libkcommon/prune_stats.hpp"
+#include "../../../../libkcommon/dist_matrix.hpp"
+#include "../../../../libkcommon/kmeans_types.hpp"
 
 #define KM_TEST 1
 #define VERBOSE 0

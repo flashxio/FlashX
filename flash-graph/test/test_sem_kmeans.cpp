@@ -17,10 +17,10 @@
  * limitations under the License.
  */
 
-#include "../../../../libcommon/util.hpp"
-#include "../../../../libcommon/dist_matrix.hpp"
-#include "../../../../libcommon/clusters.hpp"
-#include "../../../../libcommon/io.hpp"
+#include "../../../../libkcommon/util.hpp"
+#include "../../../../libkcommon/dist_matrix.hpp"
+#include "../../../../libkcommon/clusters.hpp"
+#include "../../../../libkcommon/io.hpp"
 
 namespace kpmbase = kpmeans::base;
 namespace kpmprune = kpmeans::prune;

@@ -17,9 +17,9 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L../../../../libcommon -lcommon -L.. -lgraph \
+LDFLAGS := -L../../../../libkcommon -lcommon -L.. -lgraph \
 	-L../../libsafs -lsafs -lrt -lz -lboost_log $(LDFLAGS)
-CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
+CXXFLAGS += -I../../../../libkcommon -I../../libsafs -I.. -I.
 
 TESTFILES = test_load_balancer test_comm test_knors_index make_page_row_header\
 			test_sem_kmeans test_partition_cache

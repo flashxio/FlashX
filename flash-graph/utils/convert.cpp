@@ -18,7 +18,7 @@
  */
 
 #include "convert.hpp"
-#include "../../../../libcommon/io.hpp"
+#include "../../../../libkcommon/io.hpp"
 #include "knors_index.h"
 
 namespace kpmbase = kpmeans::base;
@@ -113,7 +113,6 @@ void format_converter::write(const std::string outfile,
                     }
 
                     while (rdr.readline(row)) {
-                        kpmbase::print_vector<double>(row);
                         of.write(reinterpret_cast<char*>(&row[0]),
                                 row.size()*sizeof(double));
                     }

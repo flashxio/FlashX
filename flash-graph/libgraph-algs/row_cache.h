@@ -30,8 +30,8 @@
 #include <pthread.h>
 #include "log.h"
 
-#include "../../../../libcommon/util.hpp"
-#include "../../../../libcommon/io.hpp"
+#include "../../../../libkcommon/util.hpp"
+#include "../../../../libkcommon/io.hpp"
 
 namespace kpmbase = kpmeans::base;
 

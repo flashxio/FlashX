@@ -18,7 +18,7 @@
 include ../../Makefile.common
 
 LDFLAGS := $(LDFLAGS)
-CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
+CXXFLAGS += -I../../../../libkcommon -I../../libsafs -I.. -I.
 
 FILES = convert_matrix create_matrix
 

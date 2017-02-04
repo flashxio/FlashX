@@ -24,7 +24,7 @@
 #include <numeric>
 
 #include "sem_kmeans.h"
-#include "../../../../libcommon/clusters.hpp"
+#include "../../../../libkcommon/clusters.hpp"
 
 using namespace fg;
 

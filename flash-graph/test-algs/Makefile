@@ -18,8 +18,9 @@
 include ../../Makefile.common
 
 LDFLAGS := -L../libgraph-algs -lgraph-algs -L.. -lgraph \
-	-L../../libsafs -lsafs -L../../../../libcommon -lcommon -lrt -lz -lboost_log $(LDFLAGS)
-CXXFLAGS += -I../../../../libcommon -I../../libsafs -I.. -I.
+	-L../../libsafs -lsafs -L../../../../libkcommon -lkcommon \
+	-lrt -lz -lboost_log $(LDFLAGS)
+CXXFLAGS += -I../../../../libkcommon -I../../libsafs -I.. -I.
 
 all: knors
 
