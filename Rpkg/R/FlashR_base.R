@@ -1974,16 +1974,19 @@ fm.cal.residul <- function(mul, values, vectors)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
-		  if (is.logical(center) && center) {
-			  center <- colMeans(x)
-			  x <- fm.mapply.row(x, center, fm.bo.sub)
-		  }
-		  else if (!is.logical(center)) {
+		  if (!is.logical(center)) {
 			  if (length(center) != ncol(x)) {
 				  print("The length of center should be equal to #columns of x")
 				  return(NULL)
 			  }
 			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+		  if (!is.logical(scale)) {
+			  if (length(scale) != ncol(x)) {
+				  print("The length of scale should be equal to #columns of x")
+				  return(NULL)
+			  }
+			  x <- fm.mapply.row(x, scale, fm.bo.div)
 		  }
 
 		  # If scale is true and center is also true, scale by their standard
@@ -1994,6 +1997,8 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 			  n <- nrow(x)
 			  avg <- sum.x / n
 			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  center <- sum.x / n
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
 			  x <- fm.mapply.row(x, sd, fm.bo.div)
 		  }
 		  # If scale is true and center is false, scale by their root mean
@@ -2003,13 +2008,12 @@ setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
 			  x <- fm.mapply.row(x, scal, fm.bo.div)
 		  }
-		  else if (!is.logical(scale)) {
-			  if (length(scale) != ncol(x)) {
-				  print("The length of scale should be equal to #columns of x")
-				  return(NULL)
-			  }
-			  x <- fm.mapply.row(x, scale, fm.bo.div)
+		  # If scale is false and center is true.
+		  else if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
 		  }
+
 		  x
 })
 
