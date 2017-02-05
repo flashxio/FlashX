@@ -577,7 +577,8 @@ static bool write_wide_portions(FILE *f,
 }
 
 static bool write_portions_text(FILE *f,
-		const std::vector<local_matrix_store::const_ptr> &stores)
+		const std::vector<local_matrix_store::const_ptr> &stores,
+		const std::string &sep)
 {
 	const scalar_type &type = stores[0]->get_type();
 	for (size_t i = 0; i < stores.size(); i++) {
@@ -586,12 +587,13 @@ static bool write_portions_text(FILE *f,
 		assert(row_store);
 		for (size_t j = 0; j < row_store->get_num_rows(); j++)
 			fprintf(f, "%s\n", type.conv2str(row_store->get_row(j),
-						row_store->get_num_cols(), " ").c_str());
+						row_store->get_num_cols(), sep).c_str());
 	}
 	return true;
 }
 
-bool mem_matrix_store::write2file(const std::string &file_name, bool text) const
+bool mem_matrix_store::write2file(const std::string &file_name, bool text,
+		std::string sep) const
 {
 	FILE *f = fopen(file_name.c_str(), "w");
 	if (f == NULL) {
@@ -630,7 +632,7 @@ bool mem_matrix_store::write2file(const std::string &file_name, bool text) const
 			lstores[i] = row_store->get_portion(i);
 			assert(lstores[i]->store_layout() == matrix_layout_t::L_ROW);
 		}
-		ret = write_portions_text(f, lstores);
+		ret = write_portions_text(f, lstores, sep);
 	}
 	fclose(f);
 	return ret;

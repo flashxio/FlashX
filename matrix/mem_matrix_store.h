@@ -63,7 +63,7 @@ public:
 	mem_matrix_store(size_t nrow, size_t ncol, const scalar_type &type);
 
 	virtual bool write2file(const std::string &file_name,
-			bool text = false) const;
+			bool text = false, std::string sep = " ") const;
 
 	/*
 	 * This function symmetrizes a matrix.
