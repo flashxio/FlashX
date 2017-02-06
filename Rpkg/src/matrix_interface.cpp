@@ -1806,7 +1806,7 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 		return R_NilValue;
 }
 
-RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile, SEXP ptext)
+RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile, SEXP ptext, SEXP psep)
 {
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "Doesn't support write a sparse matrix to a file\n");
@@ -1821,11 +1821,12 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile, SEXP ptext)
 	if (!mat->is_in_mem() || mat->is_virtual())
 		mat = mat->conv_store(true, -1);
 
+	std::string sep = CHAR(STRING_ELT(psep, 0));
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
 	bool text = LOGICAL(ptext)[0];
 	Rcpp::LogicalVector ret(1);
 	ret[0] = dynamic_cast<const detail::mem_matrix_store &>(
-			mat->get_data()).write2file(file_name, text);
+			mat->get_data()).write2file(file_name, text, sep);
 	return ret;
 }
 
