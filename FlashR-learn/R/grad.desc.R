@@ -19,7 +19,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 {
 	# Add x_0 = 1 as the first column
 	m <- if(is.vector(X)) length(X) else nrow(X)
-	if(is.vector(X) || (!all(X[,1] == 1))) X <- cbind(fm.rep.int(1, m), X)
+	if(is.vector(X) || (!all(X[,1] == 1))) X <- cbind(fm.as.matrix(fm.rep.int(1, m)), X)
 
 	num.features <- ncol(X)
 
@@ -95,7 +95,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 
 		eta <- eta.est
 		if (params$linesearch) {
-			delta = params$c * t(z) %*% g
+			delta = params$c * z %*% t(g)
 			while (TRUE) {
 				costs <- list()
 				costs[[1]] <- cost(X, y, theta + eta * z)
