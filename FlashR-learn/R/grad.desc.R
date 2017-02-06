@@ -79,18 +79,18 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 			h.min <- min(abs(H[H != 0]))
 			if (h.min > 1)
 				H <- H / h.min
-			g <- g / length(y)
+			g <- as.matrix(g / length(y))
 			z <- pcg(H, as.vector(-g), maxiter=1000, tol=1e-06)
-			z <- t(z)
+			z <- as.matrix(t(z))
 			params$linesearch <- FALSE
 		}
 		else {
 			params$linesearch <- TRUE
-			g <- g / length(y)
+			g <- as.matrix(g / length(y))
 			z <- -g
 		}
 		l <- as.vector(l)/length(y)
-		cat(i,  ": L2(g) =", as.vector(L2(g)), ", cost:", l, "\n")
+		cat(i,  ": L2(g) =", L2(g), ", cost:", l, "\n")
 
 		eta <- 1
 		if (params$linesearch) {
@@ -103,7 +103,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 		if (eta == 1)
 			params$linesearch <- FALSE
 
-		theta <- theta + as.matrix(z) * eta
+		theta <- theta + z * eta
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
 	}
