@@ -34,6 +34,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 	if (method == "RNS")
 		rnorms <- rowSums(X * X)
 
+	eta.est <- 1
 	# Look at the values over each iteration
 	theta.path <- theta
 	for (i in 1:params$num.iters) {
@@ -76,13 +77,13 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 				H <- t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub * n), FUN="*") / s
 			}
 			H <- as.matrix(H)
-			h.min <- min(abs(H[H != 0]))
-			if (h.min > 1)
-				H <- H / h.min
+			h.max <- max(abs(H[H != 0]))
+			if (h.max > 1)
+				H <- H / h.max
 			g <- as.matrix(g / length(y))
 			z <- pcg(H, as.vector(-g), maxiter=1000, tol=1e-06)
 			z <- as.matrix(t(z))
-			params$linesearch <- FALSE
+			params$linesearch <- TRUE
 		}
 		else {
 			params$linesearch <- TRUE
@@ -92,14 +93,14 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 		l <- as.vector(l)/length(y)
 		cat(i,  ": L2(g) =", L2(g), ", cost:", l, "\n")
 
-		eta <- 1
+		eta <- eta.est
 		if (params$linesearch) {
-			eta <- 0.01
 			delta = params$c * t(z) %*% g
 			while (as.vector(cost(X, y, theta + eta * z) / length(y) >= l + delta * eta))
 				eta <- eta * params$ro
 			print(eta)
 		}
+		eta.est <- eta * 10
 		if (eta == 1)
 			params$linesearch <- FALSE
 
