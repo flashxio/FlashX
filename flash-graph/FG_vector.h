@@ -443,25 +443,6 @@ class FG_vector
 	}
 
 	/**
-	 * \brief Normalize vector using an Lx form.
-	 * **parallel**
-	 */
-	void normalize(int type) {
-		T norm;
-		switch(type) {
-			case 2:
-				norm = norm2();
-				break;
-			case 1:
-				norm = norm1();
-				break;
-			default:
-				ABORT_MSG("normalize on wrong type");
-		}
-		div_by_in_place(norm);
-	}
-
-	/**
 	 * \brief Apply a function to every element in an FG_vector.
 	 *
 	 * \param func A user-defined function.

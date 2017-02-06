@@ -232,7 +232,7 @@ public:
 				run_stage2(prog);
 				break;
 			default:
-				ABORT_MSG("wrong overlap stage");
+				throw std::invalid_argument("wrong overlap stage");
 		}
 	}
 

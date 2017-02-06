@@ -303,7 +303,7 @@ void ts_degree_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		degree_vprog.set_degree(vertex.get_id(), ts_end_it - ts_it);
 	}
 	else {
-		ABORT_MSG("undirected graph isn't supported");
+		throw unsupported_exception("undirected graph in TS graph");
 	}
 }
 
@@ -409,7 +409,7 @@ void time_range_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		}
 	}
 	else {
-		ABORT_MSG("undirected graph isn't supported");
+		throw unsupported_exception("undirected graph in TS graph");
 	}
 }
 

@@ -745,7 +745,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges(id) + get_num_out_edges(id);
 			default:
-				ABORT_MSG("wrong edge type");
+				return 0;
 		}
 	}
 

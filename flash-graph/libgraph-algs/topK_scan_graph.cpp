@@ -506,7 +506,7 @@ void part_topK_scan_vertex::run_on_message(vertex_program &prog,
 			}
 			break;
 		default:
-			ABORT_MSG("wrong message type");
+			throw std::invalid_argument("wrong message type");
 	}
 	lock.unlock();
 }

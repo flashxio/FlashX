@@ -106,10 +106,10 @@ public:
 		return edge_data_size;
 	}
 	virtual void serialize_edges(vertex_id_t ids[], edge_type type) const {
-		ABORT_MSG("serialize_edges isn't implemented");
+		throw unsupported_exception("serialize_edges");
 	}
 	virtual void serialize_edge_data(char *data, edge_type type) const {
-		ABORT_MSG("serialize_edge_data isn't implemented");
+		throw unsupported_exception("serialize_edge_data");
 	}
 	virtual size_t get_serialize_size(edge_type type) const {
 		switch(type) {
@@ -120,7 +120,7 @@ public:
 			case BOTH_EDGES:
 				return in_size + out_size;
 			default:
-				ABORT_MSG("wrong edge type");
+				return 0;
 		}
 	}
 	virtual size_t get_num_edges(edge_type type) const {
@@ -132,17 +132,17 @@ public:
 			case BOTH_EDGES:
 				return num_in_edges + num_out_edges;
 			default:
-				ABORT_MSG("wrong edge type");
+				return 0;
 		}
 	}
 
 	in_mem_vertex::ptr create_remapped_vertex(
 			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
-		ABORT_MSG("create_remapped_vertex isn't implemented");
+		throw unsupported_exception("create_remapped_vertex");
 	}
 
 	void remap(const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
-		ABORT_MSG("remapped isn't implemented");
+		throw unsupported_exception("remapped");
 	}
 };
 
@@ -173,10 +173,10 @@ public:
 		return edge_data_size;
 	}
 	virtual void serialize_edges(vertex_id_t ids[], edge_type type) const {
-		ABORT_MSG("serialize_edges isn't implemented");
+		throw unsupported_exception("serialize_edges");
 	}
 	virtual void serialize_edge_data(char *data, edge_type type) const {
-		ABORT_MSG("serialize_edge_data isn't implemented");
+		throw unsupported_exception("serialize_edge_data");
 	}
 	virtual size_t get_serialize_size(edge_type type) const {
 		return size;
@@ -187,11 +187,11 @@ public:
 
 	in_mem_vertex::ptr create_remapped_vertex(
 			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
-		ABORT_MSG("create_remapped_vertex isn't implemented");
+		throw unsupported_exception("create_remapped_vertex");
 	}
 
 	void remap(const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
-		ABORT_MSG("remapped isn't implemented");
+		throw unsupported_exception("remapped");
 	}
 };
 

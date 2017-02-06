@@ -407,7 +407,7 @@ public:
 				run_stage_wcc(prog);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -448,7 +448,7 @@ public:
 				run_stage_wcc(prog, vertex);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -484,7 +484,7 @@ public:
 				run_on_message_stage_wcc(prog, msg);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -647,7 +647,7 @@ void scc_vertex::run_on_message_stage_trim1(vertex_program &prog,
 			state.trim1.num_out_edges--;
 			break;
 		default:
-			ABORT_MSG("wrong message type");
+			throw std::invalid_argument("wrong message type");
 	}
 }
 

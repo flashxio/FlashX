@@ -713,7 +713,7 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 			run_both_vertices(start_vid, it);
 			break;
 		default:
-			ABORT_MSG("wrong edge type");
+			BOOST_LOG_TRIVIAL(error) << "wrong edge type";
 	}
 
 	return true;
