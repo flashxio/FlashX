@@ -34,14 +34,14 @@ logistic.cost <- function(X, y, w)
 }
 
 logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uniform"),
-								hessian_size=0.1)
+								hessian_size=0.1, max.iters=500)
 {
 	if (method == "GD")
 		get.hessian <- NULL
 	else
 		get.hessian <- logistic.hessian
 	params <- list(c=0.5, ro=0.2, linesearch=is.null(get.hessian),
-				   num.iters=500, out.path=FALSE, method=method, hessian_size=hessian_size)
+				   num.iters=max.iters, out.path=FALSE, method=method, hessian_size=hessian_size)
 	gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
 }
 
@@ -65,9 +65,9 @@ hinge.loss <- function(X, y, w)
 	sum(ifelse(y * xw < 1.0, 1 - y * xw, 0))
 }
 
-SVM <- function(X, y)
+SVM <- function(X, y, max.iters=500)
 {
 	params <- list(c=0.5, ro=0.2, linesearch=FALSE,
-				   num.iters=500, out.path=FALSE, method="GD")
+				   num.iters=max.iters, out.path=FALSE, method="GD")
 	gradient.descent(X, y, hinge.grad, NULL, cost=hinge.loss, params)
 }
