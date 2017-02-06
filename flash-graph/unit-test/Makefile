@@ -17,7 +17,7 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lz $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(LDFLAGS)
 CXXFLAGS = -I.. -I../../libsafs -g -std=c++0x
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -46,4 +46,4 @@ clean:
 	rm -f *~
 	rm -f $(UNITTEST)
 
--include $(DEPS) 
+-include $(DEPS)

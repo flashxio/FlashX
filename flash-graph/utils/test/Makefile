@@ -18,7 +18,7 @@
 include ../../../Makefile.common
 
 LDFLAGS := -L../../../../libkcommon -lcommon -L.. -lgraph \
-	-L../../libsafs -lsafs -lrt -lz -lboost_log $(LDFLAGS)
+	-L../../libsafs -lsafs -lrt -lboost_log $(LDFLAGS)
 CXXFLAGS += -I../../../../libkcommon -I../../libsafs -I.. -I.
 
 all: read_rrow_data

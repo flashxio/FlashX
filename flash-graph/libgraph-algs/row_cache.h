@@ -220,6 +220,7 @@ namespace {
                 }
             }
 
+#if 0
             bool none_nan(const T* row, const unsigned len, const unsigned id) {
                 bool nonenan = true;
                 for (unsigned i = 0; i < len; i++) {
@@ -239,6 +240,7 @@ namespace {
                             "[Error] in cache row ID");
                 }
             }
+#endif
     };
 }
 #endif
