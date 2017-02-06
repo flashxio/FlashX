@@ -683,7 +683,11 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
-		TEST(ids[i] <= this->get_max_vertex_id());
+		if (ids[i] > this->get_max_vertex_id()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"invalid vertex Id: %1%") % ids[i];
+			return;
+		}
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
