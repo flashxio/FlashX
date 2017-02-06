@@ -134,7 +134,7 @@ std::unique_ptr<char[]> gz_file_io::read_lines(
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
 				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
-				exit(1);
+				return std::unique_ptr<char[]>();
 			}
 		}
 
