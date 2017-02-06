@@ -436,7 +436,7 @@ namespace fg
 			BOOST_LOG_TRIVIAL(fatal)
 				<< "'k' must be between 2 and the number of rows in the matrix" <<
 				"k = " << K;
-			exit(-1);
+			return 0;
 		}
 
 		gettimeofday(&start , NULL);
@@ -458,7 +458,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param dist_type must be one of: 'eucl', 'cos'.It is '"
                 << dist_type << "'";
-            exit(-1);
+			return 0;
         }
 #endif
 
@@ -481,7 +481,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
                 << init << "'";
-            exit(-1);
+			return 0;
         }
 
 		BOOST_LOG_TRIVIAL(info) << "Matrix K-means starting ...";

@@ -18,6 +18,7 @@
  */
 
 #include <algorithm>
+#include <system_error>
 
 #include "io_interface.h"
 #include "comp_io_scheduler.h"
@@ -744,10 +745,8 @@ bool graph_engine::progress_first_level()
 	// the completion signal.
 	int rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	return is_complete;
 }
 
@@ -760,10 +759,8 @@ bool graph_engine::progress_next_level()
 	// If the queue of the next level is empty, the program can terminate.
 	int rc = pthread_barrier_wait(&barrier1);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	int num_activates = curr->enter_next_level();
 	tot_num_activates.inc(num_activates);
@@ -790,10 +787,8 @@ bool graph_engine::progress_next_level()
 	// the completion signal.
 	rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	return is_complete;
 }
 

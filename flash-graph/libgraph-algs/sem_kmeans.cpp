@@ -409,7 +409,7 @@ namespace {
                 return row;
             }
         }
-        exit(EXIT_FAILURE);
+		return -1;
     }
 
     // Return all the cluster means only
@@ -446,7 +446,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(fatal)
                 << "'k' must be between 2 and the number of rows in the matrix" <<
                 "k = " << K;
-            exit(EXIT_FAILURE);
+			return sem_kmeans_ret::ptr();
         }
 
         // Check Initialization
@@ -455,7 +455,7 @@ namespace fg
             BOOST_LOG_TRIVIAL(fatal)
                 << "[ERROR]: param init must be one of: 'random', 'forgy', 'kmeanspp'.It is '"
                 << init << "'";
-            exit(EXIT_FAILURE);
+			return sem_kmeans_ret::ptr();
         }
 
         gettimeofday(&start , NULL);

@@ -268,7 +268,7 @@ fm::vector::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		BOOST_LOG_TRIVIAL(fatal)
 			<< "Damping factor must be between 0 and 1 inclusive";
-		exit(-1);
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(

@@ -294,7 +294,7 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
 	if (k > graph->get_max_vertex_id()) {
 		BOOST_LOG_TRIVIAL(fatal)
 			<< "'k' must be between 2 and the number of nodes in the graph";
-		exit(-1);
+		return fm::vector::ptr();
 	}
 
 	struct timeval start, end;
