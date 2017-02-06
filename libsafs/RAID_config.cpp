@@ -105,7 +105,7 @@ file_mapper::ptr RAID_config::create_file_mapper(const std::string &file_name) c
 						block_size));
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
-			exit(1);
+			return file_mapper::ptr();
 	}
 }
 
@@ -123,7 +123,7 @@ file_mapper::ptr RAID_config::create_file_mapper() const
 						RAID_block_size));
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
-			exit(1);
+			return file_mapper::ptr();
 	}
 }
 

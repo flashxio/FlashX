@@ -196,13 +196,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			if (num_io_threads == 0)
 				num_io_threads = it->second.size();
 			// Create disk accessing threads.
-			if (it->second.size() % num_io_threads != 0) {
-				fprintf(stderr, "There are %ld disks on Node %d, but %ld I/O threads\n",
-						it->second.size(), it->first, num_io_threads);
-				fprintf(stderr,
-						"The number of disks should be divisible by #I/O threads\n");
-				exit(-1);
-			}
+			assert(it->second.size() % num_io_threads == 0);
 
 			std::vector<disk_io_thread::ptr> ts(num_io_threads);
 			tot_num_threads += num_io_threads;
@@ -353,8 +347,7 @@ public:
 	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
-		ABORT_MSG("get_file_id isn't implemented");
-		return -1;
+		throw unsupported_exception("get_file_id");
 	}
 };
 
@@ -379,8 +372,7 @@ public:
 	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
-		ABORT_MSG("get_file_id isn't implemented");
-		return -1;
+		throw unsupported_exception("get_file_id");
 	}
 };
 
@@ -548,7 +540,7 @@ io_interface::ptr posix_io_factory::create_io(thread *t)
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
-			abort();
+			return io_interface::ptr();
 	}
 	num_ios++;
 	return io_interface::ptr(io);

@@ -50,18 +50,19 @@ struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)
 {
 #ifdef USE_LIBAIO
+	if (io_type != A_READ && io_type != A_WRITE) {
+		fprintf(stderr, "unknown operation");
+		return NULL;
+	}
+
 	struct iocb* a_req = iocb_allocator.alloc_obj();
 	if (io_type == A_READ) {
 		io_prep_preadv(a_req, fd, iov, count, offset);
 		io_set_callback(a_req, (io_callback_t) cb);
 	}
-	else if (io_type == A_WRITE) {
+	else {
 		io_prep_pwritev(a_req, fd, iov, count, offset);
 		io_set_callback(a_req, (io_callback_t) cb);
-	}
-	else {
-		perror("unknown operation");
-		exit(1);
 	}
 	return a_req;
 #else
@@ -73,6 +74,11 @@ struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb)
 {
 #ifdef USE_LIBAIO
+	if (io_type != A_READ && io_type != A_WRITE) {
+		fprintf(stderr, "unknown operation");
+		return NULL;
+	}
+
 	struct iocb* a_req = iocb_allocator.alloc_obj();
   if (io_type == A_READ)
   {
@@ -81,16 +87,8 @@ struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
   }
   else
   {
-    if (io_type == A_WRITE)
-    {
-      io_prep_pwrite(a_req, fd, buffer, iosize, offset);
-      io_set_callback(a_req, (io_callback_t) cb);
-    }
-    else
-    {
-      perror("unknown operation");
-      exit(1);
-    }
+	io_prep_pwrite(a_req, fd, buffer, iosize, offset);
+	io_set_callback(a_req, (io_callback_t) cb);
   }
   return a_req;
 #else
@@ -108,10 +106,7 @@ int aio_ctx_impl::io_wait(struct timespec* to, int num)
 	  ret = n = io_getevents(ctx, num, max_aio, events, to);
   } while (ret == -EINTR);
   if (ret < 0)
-  {
-    fprintf(stderr, "io_wait: %s\n", strerror(-ret));
-    //exit(1);
-  }
+	  throw std::system_error(std::make_error_code((std::errc) ret), "io_wait");
 
   struct iocb *iocbs[n];
   long res[n];
@@ -145,10 +140,7 @@ void aio_ctx_impl::submit_io_request(struct iocb* ioq[], int num)
   int rc;
   rc = io_submit(ctx, num, ioq);
   if (rc < 0)
-  {
-    fprintf(stderr, "io_submit: %s", strerror(-rc));
-    exit(1);
-  }
+	throw std::system_error(std::make_error_code((std::errc) rc), "io_submit");
   busy_aio += num;
 #endif
 } 

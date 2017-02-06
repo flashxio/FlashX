@@ -182,9 +182,8 @@ class global_cached_io: public io_interface
 			num_to_underlying.inc(1);
 			num_underlying_pages.inc(req.get_num_bufs());
 			underlying->access(&req, 1, &status);
-			if (status == IO_FAIL) {
-				abort();
-			}
+			if (status == IO_FAIL)
+				throw io_exception("fail to issue an I/O request");
 		}
 	}
 

@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <system_error>
+
 #include "read_private.h"
 #include "file_mapper.h"
 
@@ -37,13 +39,12 @@ buffered_io::buffered_io(const logical_file_partition &partition_, thread *t,
 			snprintf(err_msg, sizeof(err_msg),
 					"open %s", partition.get_file_name(i).c_str());
 			perror(err_msg);
-			exit (1);
+			throw std::system_error(std::make_error_code((std::errc) errno),
+					"open");
 		}
 		ret = posix_fadvise(fds[i], 0, 0, POSIX_FADV_RANDOM);
-		if (ret < 0) {
+		if (ret < 0)
 			perror("posix_fadvise");
-			exit(1);
-		}
 	}
 }
 

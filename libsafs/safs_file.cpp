@@ -415,10 +415,8 @@ public:
 		long new_off = lseek(fd, off, SEEK_SET);
 		BOOST_VERIFY(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
-		if (ret < 0) {
+		if (ret < 0)
 			perror("complete_read");
-			exit(-1);
-		}
 		return ret;
 	}
 
