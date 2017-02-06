@@ -907,7 +907,7 @@ fg::FG_graph::ptr fetch_subgraph(fg::FG_graph::ptr graph,
 	const fg::graph_header &old_header = graph->get_graph_header();
 	factor f(old_header.get_num_vertices());
 	factor_vector::ptr labels = factor_vector::create(f,
-			old_header.get_num_vertices(), -1, graph->is_in_mem(),
+			old_header.get_num_vertices(), -1, true,
 			set_subgraph_label_operate());
 
 	detail::vec_store::ptr graph_data = detail::vec_store::create(

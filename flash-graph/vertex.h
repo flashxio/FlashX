@@ -1008,7 +1008,7 @@ public:
 						(char *) edges, sizeof(vertex_id_t) * num_edges);
 				break;
 			default:
-				abort();
+				return 0;
 		}
 		return num_edges;
 	}
@@ -1263,7 +1263,7 @@ public:
 				memcpy(ids, out_edges.data(), out_edges.size() * sizeof(ids[0]));
 				break;
 			default:
-				abort();
+				BOOST_LOG_TRIVIAL(error) << "can't serialize other edge types";
 		}
 	}
 
@@ -1279,7 +1279,7 @@ public:
 						out_data.size() * sizeof(edge_data_type));
 				break;
 			default:
-				abort();
+				BOOST_LOG_TRIVIAL(error) << "can't serialize other edge types";
 		}
 	}
 

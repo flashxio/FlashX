@@ -117,12 +117,10 @@ public:
 
 	void dump(const std::string &file) const {
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
+		if (f == NULL)
 			perror("fopen");
-			abort();
-		}
-		BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
-
+		else
+			BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
 		fclose(f);
 	}
 };
