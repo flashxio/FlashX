@@ -143,9 +143,9 @@ public:
 			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
 				struct block_identifier bid;
 				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
-				ABORT_MSG(boost::format(
-							"bytes at %1% (in partition %2%) doesn't match")
-						% (rqs[0]->get_offset() + i) % bid.idx);
+				BOOST_LOG_TRIVIAL(error) << boost::format(
+						"bytes at %1% (in partition %2%) doesn't match")
+					% (rqs[0]->get_offset() + i) % bid.idx;
 			}
 		}
 		return 0;
