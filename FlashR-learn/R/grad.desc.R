@@ -96,8 +96,14 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 		eta <- eta.est
 		if (params$linesearch) {
 			delta = params$c * t(z) %*% g
-			while (as.vector(cost(X, y, theta + eta * z) / length(y) >= l + delta * eta))
-				eta <- eta * params$ro
+			while (TRUE) {
+				costs <- list()
+				costs[[1]] <- cost(X, y, theta + eta * z)
+				costs[[2]] <- cost(X, y, theta + eta * params$ro * z)
+				costs <- lapply(fm.materialize.list(costs), function(o) as.vector(o))
+				if (as.vector(costs[[1]]) / length(y) >= l + delta * eta) eta <- eta * params$ro else break
+				if (as.vector(costs[[2]]) / length(y) >= l + delta * eta) eta <- eta * params$ro else break
+			}
 			print(eta)
 		}
 		eta.est <- eta * 10
