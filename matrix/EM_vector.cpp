@@ -365,7 +365,6 @@ bool EM_vec_store::append_async(
 	}
 	bool ret = reserve(get_length() + tot_size);
 	if (!ret) {
-		assert(0);
 		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
 		return false;
 	}
@@ -404,7 +403,6 @@ bool EM_vec_store::append(
 	}
 	bool ret = reserve(get_length() + tot_size);
 	if (!ret) {
-		assert(0);
 		BOOST_LOG_TRIVIAL(error) << "can't reserve space for new appends";
 		return false;
 	}
