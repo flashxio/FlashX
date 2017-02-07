@@ -1100,7 +1100,7 @@ namespace fg
 
         if (g_converged) {
             BOOST_LOG_TRIVIAL(info) <<
-                "K-means converged in " << g_iter << " iterations";
+                "K-means converged in " << ++g_iter << " iterations";
         } else {
             BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
                 << g_max_iters << " iterations";
