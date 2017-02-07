@@ -414,7 +414,7 @@ namespace {
         void compute_sem_kmeans(FG_graph::ptr fg,
                 const unsigned k, const std::string init,
                 const unsigned max_iters, const double tolerance,
-                kpmbase::kmeans_t ret, const unsigned num_rows,
+                kpmbase::kmeans_t& ret, const unsigned num_rows,
                 const unsigned num_cols, std::vector<double>* centers) {
 #ifdef PROFILER
             ProfilerStart("libgraph-algs/min_tri_sem_kmeans.perf");
@@ -515,8 +515,7 @@ namespace {
                     g_kmspp_stage = ADDMEAN;
                     mat->start(&g_kmspp_next_cluster, 1,
                             vertex_initializer::ptr(),
-                            vertex_program_creater::ptr(
-                                new kmeanspp_vertex_program_creater()));
+                            vertex_program_creater::ptr( new kmeanspp_vertex_program_creater()));
                     mat->wait4complete();
                 }
             } else
@@ -547,7 +546,7 @@ namespace {
 
             if (g_converged) {
                 BOOST_LOG_TRIVIAL(info) <<
-                    "K-means converged in " << g_iter << " iterations";
+                    "K-means converged in " << ++g_iter << " iterations";
             } else {
                 BOOST_LOG_TRIVIAL(warning) << "[Warning]: K-means failed to converge in "
                     << g_max_iters << " iterations";
@@ -556,9 +555,11 @@ namespace {
 
             kpmbase::print_vector(g_num_members_v);
 
-            const unsigned* membership_ptr = get_membership(mat)->get_data();
-            ret = kpmbase::kmeans_t(NUM_ROWS, NUM_COLS, g_iter, K,
-                    membership_ptr, &g_num_members_v[0],
+            std::vector<unsigned> mv(NUM_ROWS);
+            get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);
+
+            ret.set_params(NUM_ROWS, NUM_COLS, g_iter, K);
+            ret.set_computed(&mv[0], &g_num_members_v[0],
                     g_clusters->get_means());
         }
     }

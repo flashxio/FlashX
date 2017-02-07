@@ -899,7 +899,7 @@ namespace fg
 {
     void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
-            kpmbase::kmeans_t ret,
+            kpmbase::kmeans_t& ret,
             const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers,
             const double cache_size_gb, const unsigned rc_update_start_interval) {
 #ifdef PROFILER
@@ -1108,9 +1108,11 @@ namespace fg
 
         kpmbase::print_vector(g_num_members_v);
 
-        const unsigned* membership_ptr = get_membership(mat)->get_data();
-        ret = kpmbase::kmeans_t(NUM_ROWS, NUM_COLS, g_iter, K,
-                membership_ptr, &g_num_members_v[0],
+        std::vector<unsigned> mv(NUM_ROWS);
+        get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);
+
+        ret.set_params(NUM_ROWS, NUM_COLS, g_iter, K);
+        ret.set_computed(&mv[0], &g_num_members_v[0],
                 g_clusters->get_means());
     }
 }

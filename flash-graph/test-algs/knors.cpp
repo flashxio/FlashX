@@ -146,12 +146,13 @@ void print_usage() {
 
 int main(int argc, char *argv[])
 {
-	argv++;
-	argc--;
 	if (argc < 6) {
 		print_usage();
 		exit(EXIT_FAILURE);
 	}
+
+	argv++;
+	argc--;
 
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
