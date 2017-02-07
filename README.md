@@ -56,7 +56,7 @@ is implemented as a regular R package.
 The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 shows all of the features in FlashR.
 
-Documentation
+[Documentation](https://flashxio.github.io/FlashX-doc/)
 ========
 
 [FlashX Quick start guide](https://flashxio.github.io/FlashX-doc/FlashX-Quick-Start-Guide.html)
