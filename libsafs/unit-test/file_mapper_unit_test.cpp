@@ -17,6 +17,18 @@ struct extended_block_identifier
 
 typedef std::vector<struct extended_block_identifier> id_vec;
 
+void test_get_file_sizes(const file_mapper &mapper, size_t block_size)
+{
+	for (size_t file_size = 0; file_size < 32 * 1024; file_size++) {
+		std::vector<size_t> sizes = mapper.get_size_per_disk(file_size);
+		for (size_t off = 1; off < file_size; off += block_size) {
+			block_identifier bid;
+			mapper.map(off, bid);
+			assert((size_t) bid.off < sizes[bid.idx]);
+		}
+	}
+}
+
 int main()
 {
 	int num_files = 18;
@@ -25,10 +37,11 @@ int main()
 
 	srandom(time(NULL));
 
+	printf("RAID0 mapper\n");
 	RAID0_mapper mapper0("", files, BLOCK_SIZE);
+	test_get_file_sizes(mapper0, BLOCK_SIZE);
 	std::unique_ptr<id_vec[]> locs0
 		= std::unique_ptr<id_vec[]>(new id_vec[num_files]);
-	printf("RAID0 mapper\n");
 	for (int i = 0; i < 10000; i++) {
 		off_t off = i * BLOCK_SIZE;
 		block_identifier bid;
@@ -52,10 +65,11 @@ int main()
 		}
 	}
 
+	printf("RAID5 mapper\n");
 	RAID5_mapper mapper5("", files, BLOCK_SIZE);
+	test_get_file_sizes(mapper5, BLOCK_SIZE);
 	std::unique_ptr<id_vec[]> locs5
 		= std::unique_ptr<id_vec[]>(new id_vec[num_files]);
-	printf("RAID5 mapper\n");
 	for (int i = 0; i < 32; i++) {
 		off_t off = i * BLOCK_SIZE;
 		block_identifier bid;
@@ -79,4 +93,8 @@ int main()
 			prev = locs5[i][j];
 		}
 	}
+
+	printf("hash mapper\n");
+	hash_mapper mapperh("", files, BLOCK_SIZE);
+	test_get_file_sizes(mapperh, BLOCK_SIZE);
 }

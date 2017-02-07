@@ -79,6 +79,14 @@ public:
 	int get_num_disks() const {
 		return root_paths.size();
 	}
+
+	int get_mapping_option() const {
+		return RAID_mapping_option;
+	}
+
+	int get_block_size() const {
+		return RAID_block_size;
+	}
 };
 
 }
