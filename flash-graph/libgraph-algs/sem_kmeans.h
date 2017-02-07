@@ -41,7 +41,7 @@
 #include "../../../../libkcommon/dist_matrix.hpp"
 #include "../../../../libkcommon/kmeans_types.hpp"
 
-#define KM_TEST 1
+#define KM_TEST 0
 #define VERBOSE 0
 
 using namespace fg;

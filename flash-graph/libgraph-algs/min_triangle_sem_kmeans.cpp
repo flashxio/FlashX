@@ -167,21 +167,17 @@ namespace {
 
                     BOOST_LOG_TRIVIAL(info) << "Updating cluster means ...";
                     update_clusters(mat, g_num_members_v);
-
-                    BOOST_LOG_TRIVIAL(info) << "Main: Computing cluster distance matrix ...";
                     g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 
 #if VERBOSE
                     BOOST_LOG_TRIVIAL(info) << "Before: Cluster distance matrix ...";
                     g_cluster_dist->print();
 #endif
-
 #if KM_TEST
                     g_gb_obt_iter.push_back(mat->wait4complete());
                     g_cache_hits_iter.push_back(g_row_cache->get_cache_hits());
                     acntr->complete();
 #endif
-
                     if (g_row_cache)
                         manage_cache();
 
@@ -192,7 +188,6 @@ namespace {
                     g_clusters->print_means();
 #endif
 
-                    BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
                     kpmbase::print_vector(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
@@ -735,7 +730,9 @@ namespace {
     // logarithmically increasing update interval
     static void manage_cache() {
         // clear the cache
+#if KM_TEST
         printf("\ng_io_iter = %u\n", g_io_iter);
+#endif
         if (g_row_cache) {
             if (g_io_iter > 0 && (g_io_iter % g_cache_update_iter == 0)) {
                 BOOST_LOG_TRIVIAL(info) << "Clearing the cache ...";
@@ -1043,10 +1040,11 @@ namespace fg
 
 #if KM_TEST
         g_gb_obt_iter.push_back(mat->get_tot_bytes());
-        g_cache_hits_iter.push_back(g_row_cache->get_cache_hits());
+        if (g_row_cache)
+            g_cache_hits_iter.push_back(g_row_cache->get_cache_hits());
 #endif
 
-        BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
+        BOOST_LOG_TRIVIAL(info) << "knors starting ...";
 
         std::string str_iters = g_max_iters == std::numeric_limits<unsigned>::max() ?
             "until convergence ...":
@@ -1068,6 +1066,7 @@ namespace fg
         gettimeofday(&end, NULL);
         BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
             time_diff(start, end) << " sec\n";
+
 #if KM_TEST
         g_prune_stats->get_stats();
         BOOST_LOG_TRIVIAL(info) << "\nGBytes requested per iteration: ";
@@ -1092,10 +1091,12 @@ namespace fg
         ProfilerStop();
 #endif
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
+#if KM_TEST
         printf("Total # of IO requests: %lu\nTotal bytes requested: %lu\n",
                 g_io_reqs, (g_io_reqs*(sizeof(double))*NUM_COLS));
         printf("# of Row Cache hits = %lu\n\n",
                 g_row_cache->get_cache_hits());
+#endif
 
         if (g_converged) {
             BOOST_LOG_TRIVIAL(info) <<
