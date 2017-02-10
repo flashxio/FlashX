@@ -639,9 +639,8 @@ SEXP create_FMR_vector(fm::dense_matrix::ptr m, const std::string &name);
 fm::dense_matrix::ptr get_vertex_ids(fm::vector::ptr vec)
 {
 	fm::dense_matrix::ptr mat = vec->conv2mat(vec->get_length(), 1, false);
-	// If there are two many vertices, we need to store their id with double.
-	if (vec->get_length() >= (size_t) std::numeric_limits<int>::max())
-		mat = mat->cast_ele_type(fm::get_scalar_type<double>());
+	// unsigned int isn't supported by FlashR. let's cast them to double.
+	mat = mat->cast_ele_type(fm::get_scalar_type<double>());
 	return mat;
 }
 
