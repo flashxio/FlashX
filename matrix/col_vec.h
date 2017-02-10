@@ -111,7 +111,8 @@ public:
 	 * one column, which contains the aggregation result for each unique value.
 	 */
 	std::shared_ptr<data_frame> groupby(
-			std::shared_ptr<const agg_operate> op, bool with_val) const;
+			std::shared_ptr<const agg_operate> op, bool with_val,
+			bool sorted=true) const;
 };
 
 }

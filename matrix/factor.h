@@ -98,6 +98,8 @@ public:
 class factor_col_vector: public col_vec
 {
 	factor f;
+	detail::vec_store::const_ptr uniq_vals;
+	detail::vec_store::const_ptr cnts;
 
 	factor_col_vector(const factor &_f,
 			detail::matrix_store::const_ptr store): col_vec(store), f(_f) {
@@ -123,6 +125,14 @@ public:
 
 	size_t get_num_levels() const {
 		return f.get_num_levels();
+	}
+
+	detail::vec_store::const_ptr get_uniq_vals() const {
+		return uniq_vals;
+	}
+
+	detail::vec_store::const_ptr get_counts() const {
+		return cnts;
 	}
 };
 

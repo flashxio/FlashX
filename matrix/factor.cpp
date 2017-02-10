@@ -132,9 +132,10 @@ factor_col_vector::ptr factor_col_vector::create(dense_matrix::ptr mat)
 
 	// Create the map from the input matrix.
 	col_vec::ptr cvec = col_vec::create(mat);
-	bulk_operate::const_ptr add = bulk_operate::conv2ptr(
-			cvec->get_type().get_basic_ops().get_add());
-	data_frame::ptr df = cvec->groupby(agg_operate::create(add), true);
+	auto count = cvec->get_type().get_agg_ops().get_count();
+	// We collect all of the unique values in the vector,
+	// but we don't need these values to be sorted in a particular order.
+	data_frame::ptr df = cvec->groupby(count, true, false);
 	factor_map::ptr map;
 	if (df->get_vec(0)->get_type().is_floating_point())
 		map = factor_map_impl<double>::create(df->get_vec(0));
@@ -148,7 +149,10 @@ factor_col_vector::ptr factor_col_vector::create(dense_matrix::ptr mat)
 				mat->get_num_rows(), mat->get_num_cols()));
 	detail::matrix_store::const_ptr store = detail::matrix_store::const_ptr(
 			new detail::mapply_matrix_store(in_mats, op, matrix_layout_t::L_COL));
-	return ptr(new factor_col_vector(factor(map->get_num_levels()), store));
+	auto ret = new factor_col_vector(factor(map->get_num_levels()), store);
+	ret->uniq_vals = df->get_vec(0);
+	ret->cnts = df->get_vec(1);
+	return ptr(ret);
 }
 
 factor_col_vector::ptr factor_col_vector::create(const factor &f,
