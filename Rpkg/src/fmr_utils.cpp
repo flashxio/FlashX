@@ -205,6 +205,23 @@ SEXP create_FMR_vector(fm::factor_col_vector::ptr v, const std::string &name)
 	nlevels[0] = v->get_num_levels();
 	ret["num.levels"] = nlevels;
 
+	auto vals = v->get_uniq_vals();
+	if (vals == NULL)
+		ret["vals"] = R_NilValue;
+	else
+		ret["vals"] = create_FMR_vector(vals, "");
+	auto cnts = v->get_counts();
+	if (cnts == NULL)
+		ret["cnts"] = R_NilValue;
+	else {
+		// TODO we might want to use double floating-point to count
+		// more elements.
+		auto cnt_vec = vector::create(cnts);
+		auto cnt_mat = cnt_vec->conv2mat(cnt_vec->get_length(), 1, false);
+		cnt_mat = cnt_mat->cast_ele_type(get_scalar_type<int>());
+		ret["cnts"] = create_FMR_vector(cnt_mat, "");
+	}
+
 	return ret;
 }
 

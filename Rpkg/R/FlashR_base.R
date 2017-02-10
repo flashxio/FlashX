@@ -1520,8 +1520,12 @@ setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
 #' @rdname fm.table
 fm.table <- function(x)
 {
-	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
-	ret <- fm.sgroupby(x, count)
+	if (class(x) == "fmVFactor" && !is.null(x@vals) && !is.null(x@cnts))
+		ret <- list(val=x@vals, agg=x@cnts)
+	else {
+		count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
+		ret <- fm.sgroupby(x, count)
+	}
 	if (!is.null(ret))
 		new("fm.table", val=ret$val, Freq=ret$agg)
 	else

@@ -52,7 +52,8 @@ setClass("fmV", representation(pointer = "externalptr", name = "character",
 #'            used for a vector.
 #' @slot ele_type a string indicating the element type in the vector.
 #' @slot num.levels an integer indicating the number of levels.
-setClass("fmVFactor", representation(num.levels = "integer"), contains = "fmV")
+setClass("fmVFactor", representation(num.levels = "integer", vals="fmV",
+									 cnts="fmV"), contains = "fmV")
 
 #' An S4 class to represent a binary operator used in generalized matrix
 #' operations.
@@ -845,7 +846,8 @@ fm.as.factor <- function(fm, num.levels = -1)
 		ret <- .Call("R_FM_create_factor", fm, as.integer(num.levels),
 					 PACKAGE="FlashR")
 		new("fmVFactor", num.levels=ret$num.levels, pointer=ret$pointer,
-			name=ret$name, len=ret$len, type=ret$type, ele_type=ret$ele_type)
+			name=ret$name, len=ret$len, type=ret$type, ele_type=ret$ele_type,
+			vals=.new.fmV(ret$vals), cnts=.new.fmV(ret$cnts))
 	}
 	else
 		stop("The input argument isn't a vector")
@@ -2320,8 +2322,7 @@ setMethod("nlevels", signature(x = "fmVFactor"), function(x) x@num.levels)
 #' @examples
 #' vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
 #' levels(vec)
-setMethod("levels", signature(x = "fmVFactor"), function(x)
-		  fm.seq.int(1, x@num.levels, 1))
+setMethod("levels", signature(x = "fmVFactor"), function(x) x@vals)
 
 #' Print the information of a FlashR object
 #'
