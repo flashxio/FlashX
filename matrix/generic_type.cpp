@@ -166,14 +166,36 @@ scalar_variable::ptr scalar_variable::cast_type(const scalar_type &type) const
 }
 
 template<class T>
+std::string conv2str(T val)
+{
+	return std::to_string(val);
+}
+
+template<>
+std::string conv2str<float>(float val)
+{
+	char str[20];
+	snprintf(str, 20, "%g", val);
+	return str;
+}
+
+template<>
+std::string conv2str<double>(double val)
+{
+	char str[20];
+	snprintf(str, 20, "%g", val);
+	return str;
+}
+
+template<class T>
 std::string scalar_type_impl<T>::conv2str(const char *arr, size_t num_eles,
 		const std::string &sep) const
 {
 	const T *tarr = reinterpret_cast<const T *>(arr);
 	assert(num_eles > 0);
-	std::string ret = std::to_string(tarr[0]);
+	std::string ret = fm::conv2str<T>(tarr[0]);
 	for (size_t i = 1; i < num_eles; i++)
-		ret += sep + std::to_string(tarr[i]);
+		ret += sep + fm::conv2str<T>(tarr[i]);
 	return ret;
 }
 
