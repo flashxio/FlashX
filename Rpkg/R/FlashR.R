@@ -1945,7 +1945,7 @@ fm.write.obj <- function(fm, file)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(fm.is.object(fm))
-	.Call("R_FM_write_obj", fm, as.character(file), FALSE, PACKAGE="FlashR")
+	.Call("R_FM_write_obj", fm, as.character(file), FALSE, "", PACKAGE="FlashR")
 }
 
 #' Read a FlashR object (vector/matrix) from a file.
