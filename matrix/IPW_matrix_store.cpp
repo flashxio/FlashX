@@ -52,7 +52,7 @@ public:
 		return data_id;
 	}
 	virtual bool has_materialized() const = 0;
-	virtual detail::mem_matrix_store::ptr get_combined_result() const = 0;
+	virtual detail::mem_matrix_store::const_ptr get_combined_result() const = 0;
 };
 
 class inner_prod_wide_op: public combine_op
@@ -81,7 +81,7 @@ public:
 		return materialized;
 	}
 
-	virtual detail::mem_matrix_store::ptr get_combined_result() const;
+	virtual detail::mem_matrix_store::const_ptr get_combined_result() const;
 
 	virtual void run(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
@@ -100,7 +100,7 @@ public:
 	}
 };
 
-detail::mem_matrix_store::ptr inner_prod_wide_op::get_combined_result() const
+detail::mem_matrix_store::const_ptr inner_prod_wide_op::get_combined_result() const
 {
 	// The first non-empty local matrix.
 	detail::local_matrix_store::ptr lmat;
@@ -310,6 +310,68 @@ matmul_accumulator::ptr matmul_accumulator::create(size_t num_rows,
 					num_rows, num_cols, layout));
 }
 
+class part_mul_res
+{
+	std::vector<matmul_accumulator::ptr> res_bufs;
+	size_t num_rows;
+	size_t num_cols;
+	matrix_layout_t layout;
+	const scalar_type &type;
+public:
+	typedef std::shared_ptr<part_mul_res> ptr;
+
+	part_mul_res(int num_threads, size_t num_rows, size_t num_cols,
+			matrix_layout_t layout, const scalar_type &_type): type(_type) {
+		res_bufs.resize(num_threads);
+		this->num_rows = num_rows;
+		this->num_cols = num_cols;
+		this->layout = layout;
+	}
+
+	void acc_part_res(int thread, const local_matrix_store &part) {
+		if (res_bufs[thread] == NULL)
+			res_bufs[thread] = matmul_accumulator::create(num_rows, num_cols,
+					layout, type);
+		if (layout == part.store_layout()) {
+			assert(num_rows == part.get_num_rows());
+			assert(num_cols == part.get_num_cols());
+			res_bufs[thread]->add_matrix(part);
+		}
+		else {
+			assert(num_rows == part.get_num_cols());
+			assert(num_cols == part.get_num_rows());
+			local_matrix_store::const_ptr tpart
+				= std::static_pointer_cast<const local_matrix_store>(
+						part.transpose());
+			res_bufs[thread]->add_matrix(*tpart);
+		}
+	}
+
+	bool has_materialized() const {
+		bool materialized = false;
+		for (size_t i = 0; i < res_bufs.size(); i++)
+			if (res_bufs[i])
+				materialized = true;
+		return materialized;
+	}
+
+	detail::mem_matrix_store::ptr get_combined_result() const {
+		std::vector<matmul_accumulator::ptr> non_empty;
+		for (size_t i = 0; i < res_bufs.size(); i++) {
+			if (res_bufs[i])
+				non_empty.push_back(res_bufs[i]);
+		}
+		assert(non_empty.size() > 0);
+		return non_empty[0]->combine(non_empty);
+	}
+};
+
+static inline matrix_layout_t opposite_layout(matrix_layout_t layout)
+{
+	return layout == matrix_layout_t::L_ROW
+		? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+}
+
 class multiply_wide_op: public combine_op
 {
 	std::vector<detail::local_matrix_store::ptr> Abufs;
@@ -319,7 +381,7 @@ class multiply_wide_op: public combine_op
 	// multiplication.
 	std::vector<size_t> num_tmp_accs;
 	std::vector<detail::local_matrix_store::ptr> tmp_bufs;
-	std::vector<matmul_accumulator::ptr> res_bufs;
+	part_mul_res::ptr part_res;
 	bool is_sparse;
 	// The output matrix will be symmetric.
 	bool is_sym;
@@ -333,7 +395,6 @@ public:
 			bool is_sparse, bool is_sym): combine_op(0, 0, type) {
 		Abufs.resize(num_threads);
 		Bbufs.resize(num_threads);
-		res_bufs.resize(num_threads);
 		tmp_bufs.resize(num_threads);
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
@@ -342,17 +403,15 @@ public:
 		this->is_sparse = is_sparse;
 		this->num_tmp_accs.resize(num_threads);
 		this->is_sym = is_sym;
+		this->part_res = part_mul_res::ptr(new part_mul_res(num_threads,
+					out_num_rows, out_num_cols, Blayout, type));
 	}
 
 	virtual bool has_materialized() const {
-		bool materialized = false;
-		for (size_t i = 0; i < res_bufs.size(); i++)
-			if (res_bufs[i])
-				materialized = true;
-		return materialized;
+		return part_res->has_materialized();
 	}
 
-	virtual detail::mem_matrix_store::ptr get_combined_result() const;
+	virtual detail::mem_matrix_store::const_ptr get_combined_result() const;
 
 	void run_part_dense(
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
@@ -363,8 +422,18 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		assert(0);
-		return detail::portion_mapply_op::const_ptr();
+		multiply_wide_op *ret = new multiply_wide_op(*this);
+		for (size_t i = 0; i < ret->Abufs.size(); i++) {
+			ret->Abufs[i] = NULL;
+			ret->Bbufs[i] = NULL;
+			ret->num_tmp_accs[i] = 0;
+			ret->tmp_bufs[i] = NULL;
+		}
+		ret->out_num_rows = out_num_cols;
+		ret->out_num_cols = out_num_rows;
+		ret->Alayout = opposite_layout(Blayout);
+		ret->Blayout = opposite_layout(Alayout);
+		return std::shared_ptr<portion_mapply_op>(ret);
 	}
 
 	virtual std::string to_string(
@@ -375,27 +444,29 @@ public:
 	}
 };
 
-detail::mem_matrix_store::ptr multiply_wide_op::get_combined_result() const
+detail::mem_matrix_store::const_ptr multiply_wide_op::get_combined_result() const
 {
 	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
-	std::vector<matmul_accumulator::ptr> non_empty;
-	for (size_t i = 0; i < res_bufs.size(); i++) {
-		if (res_bufs[i]) {
-			if (num_tmp_accs[i] > 0) {
-				res_bufs[i]->add_matrix(*tmp_bufs[i]);
-				tmp_bufs[i]->reset_data();
-				mutable_this->num_tmp_accs[i] = 0;
-			}
-			non_empty.push_back(res_bufs[i]);
+	for (size_t i = 0; i < num_tmp_accs.size(); i++) {
+		// We should accumulate the results in the tmp buffer.
+		if (num_tmp_accs[i] > 0) {
+			part_res->acc_part_res(i, *tmp_bufs[i]);
+			tmp_bufs[i]->reset_data();
+			mutable_this->num_tmp_accs[i] = 0;
 		}
 	}
-	assert(non_empty.size() > 0);
-	detail::mem_matrix_store::ptr ret = non_empty[0]->combine(non_empty);
+	detail::mem_matrix_store::ptr ret = part_res->get_combined_result();
 	if (is_sym)
 		// For self-crossprod, we store data in the upper triangle,
 		// we need to copy the data to the lower triangle.
 		ret->symmetrize(true);
-	return ret;
+	// The combined result should have the same layout as B.
+	// If not, the partial result was created for the transpose of the matrix.
+	if (ret->store_layout() != Blayout)
+		return std::static_pointer_cast<const detail::mem_matrix_store>(
+				ret->transpose());
+	else
+		return ret;
 }
 
 template<class T>
@@ -571,12 +642,10 @@ void multiply_wide_op::run_part_sparse(
 	const detail::lsparse_row_matrix_store &Bstore
 		= static_cast<const detail::lsparse_row_matrix_store &>(*ins[1]);
 
-	if (res_bufs[thread_id] == NULL) {
+	if (tmp_bufs[thread_id] == NULL) {
 		mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(
 				new local_buf_col_matrix_store(0, 0,
 					out_num_rows, out_num_cols, get_output_type(), -1));
-		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
-				out_num_rows, out_num_cols, Blayout, get_output_type());
 		tmp_bufs[thread_id]->reset_data();
 	}
 	assert(tmp_bufs[thread_id]->store_layout() == Blayout);
@@ -604,7 +673,7 @@ void multiply_wide_op::run_part_sparse(
 			ins[0]->get_num_rows(), ins[0]->get_num_cols());
 	mutable_this->num_tmp_accs[thread_id]++;
 	if (num_tmp_accs[thread_id] > thres) {
-		res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
+		part_res->acc_part_res(thread_id, *tmp_bufs[thread_id]);
 		tmp_bufs[thread_id]->reset_data();
 		mutable_this->num_tmp_accs[thread_id] = 0;
 	}
@@ -753,7 +822,7 @@ void multiply_wide_op::run_part_dense(
 		}
 	}
 
-	if (res_bufs[thread_id] == NULL) {
+	if (tmp_bufs[thread_id] == NULL) {
 		if (Blayout == matrix_layout_t::L_COL)
 			mutable_this->tmp_bufs[thread_id] = detail::local_matrix_store::ptr(
 					new fm::detail::local_buf_col_matrix_store(0, 0,
@@ -763,8 +832,6 @@ void multiply_wide_op::run_part_dense(
 					new fm::detail::local_buf_row_matrix_store(0, 0,
 						out_num_rows, out_num_cols, get_output_type(), -1));
 		tmp_bufs[thread_id]->reset_data();
-		mutable_this->res_bufs[thread_id] = matmul_accumulator::create(
-				out_num_rows, out_num_cols, Blayout, get_output_type());
 	}
 	assert(tmp_bufs[thread_id]->store_layout() == Alayout);
 	void *tmp_mat = tmp_bufs[thread_id]->get_raw_arr();
@@ -823,7 +890,7 @@ void multiply_wide_op::run_part_dense(
 				wide_syrk_row<float>(Asize, t_Amat, t_tmp_mat);
 		}
 	}
-	res_bufs[thread_id]->add_matrix(*tmp_bufs[thread_id]);
+	part_res->acc_part_res(thread_id, *tmp_bufs[thread_id]);
 }
 
 }
@@ -922,10 +989,26 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 	this->underlying = get_underlying_mats();
 }
 
-matrix_store::ptr IPW_matrix_store::get_combine_res() const
+IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
+		matrix_store::const_ptr right, bulk_operate::const_ptr left_op,
+		bulk_operate::const_ptr right_op, matrix_layout_t layout,
+		std::shared_ptr<const portion_mapply_op> portion_op): sink_store(
+			left->get_num_rows(), right->get_num_cols(),
+			left->is_in_mem() && right->is_in_mem(), left->get_type())
+{
+	this->left_mat = left;
+	this->right_mat = right;
+	this->left_op = left_op;
+	this->right_op = right_op;
+	this->portion_op = portion_op;
+	this->layout = layout;
+	this->underlying = get_underlying_mats();
+}
+
+matrix_store::const_ptr IPW_matrix_store::get_combine_res() const
 {
 	// Aggregate the results from omp threads.
-	detail::matrix_store::ptr res = std::static_pointer_cast<const combine_op>(
+	detail::matrix_store::const_ptr res = std::static_pointer_cast<const combine_op>(
 				portion_op)->get_combined_result();
 	if (this->layout == res->store_layout())
 		return res;
@@ -942,12 +1025,12 @@ matrix_store::ptr IPW_matrix_store::get_combine_res() const
 
 size_t IPW_matrix_store::get_data_id() const
 {
-	return std::static_pointer_cast<combine_op>(portion_op)->get_data_id();
+	return std::static_pointer_cast<const combine_op>(portion_op)->get_data_id();
 }
 
 bool IPW_matrix_store::has_materialized() const
 {
-	return std::static_pointer_cast<combine_op>(portion_op)->has_materialized();
+	return std::static_pointer_cast<const combine_op>(portion_op)->has_materialized();
 }
 
 void IPW_matrix_store::materialize_self() const
@@ -1219,7 +1302,7 @@ matrix_store::const_ptr IPW_matrix_store::transpose() const
 		else
 			tlayout = matrix_layout_t::L_ROW;
 		return matrix_store::const_ptr(new IPW_matrix_store(tleft, tright,
-					left_op, right_op, tlayout));
+					left_op, right_op, tlayout, portion_op->transpose()));
 	}
 	else
 		return matrix_store::const_ptr(new IPW_matrix_store(*this));
@@ -1242,13 +1325,13 @@ class IPW_compute_store: public sink_compute_store, public EM_object
 	matrix_store::const_ptr right_mat;
 	bulk_operate::const_ptr left_op;
 	bulk_operate::const_ptr right_op;
-	std::shared_ptr<portion_mapply_op> portion_op;
+	portion_mapply_op::const_ptr portion_op;
 	matrix_layout_t layout;
 public:
 	IPW_compute_store(matrix_store::const_ptr left_mat,
 			matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
 			bulk_operate::const_ptr right_op,
-			std::shared_ptr<portion_mapply_op> portion_op, matrix_layout_t layout);
+			portion_mapply_op::const_ptr portion_op, matrix_layout_t layout);
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
@@ -1319,7 +1402,7 @@ static inline bool is_in_mem(matrix_store::const_ptr left_mat,
 IPW_compute_store::IPW_compute_store(matrix_store::const_ptr left_mat,
 		matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
 		bulk_operate::const_ptr right_op,
-		std::shared_ptr<portion_mapply_op> portion_op,
+		portion_mapply_op::const_ptr portion_op,
 		matrix_layout_t layout): sink_compute_store(left_mat->get_num_rows(),
 			left_mat->get_num_cols(), fm::detail::is_in_mem(left_mat, right_mat),
 			left_mat->get_type())

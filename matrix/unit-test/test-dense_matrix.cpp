@@ -446,6 +446,7 @@ void test_multiply(int num_nodes)
 	correct = blas_multiply(*m2->transpose(), *m1->transpose());
 	verify_result(*res, *correct, approx_equal_func<T>());
 	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
+	block_size = 0;
 
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
@@ -3236,6 +3237,23 @@ void test_factor()
 	assert(fvec->get_num_levels() <= 1000);
 }
 
+void test_cross_prod()
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(1, 1000,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(1, 1000,
+			9, long_dim, matrix_layout_t::L_COL);
+	dense_matrix::ptr res = mat2->multiply(*mat1);
+	dense_matrix::ptr tres = res->transpose();
+	assert(res->get_raw_store()->get_data_id()
+			== tres->get_raw_store()->get_data_id());
+	printf("materialize tres\n");
+	tres->materialize_self();
+	printf("materialize res\n");
+	res->materialize_self();
+	printf("complete crossprod\n");
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -3248,6 +3266,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_cross_prod();
 	test_factor();
 	test_share_data();
 	test_repeat_rowcols();
