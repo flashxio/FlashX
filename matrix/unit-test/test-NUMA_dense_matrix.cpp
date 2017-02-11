@@ -204,7 +204,8 @@ void test_write2file1(mem_matrix_store::ptr mat)
 	bool ret = mat->write2file(tmp_file_name);
 	assert(ret);
 
-	mem_matrix_store::ptr read_mat = mem_matrix_store::load(tmp_file_name);
+	mem_matrix_store::const_ptr read_mat = mem_matrix_store::load(tmp_file_name,
+			mat->get_num_nodes());
 	assert(read_mat);
 	assert(read_mat->get_num_rows() == mat->get_num_rows());
 	assert(read_mat->get_num_cols() == mat->get_num_cols());

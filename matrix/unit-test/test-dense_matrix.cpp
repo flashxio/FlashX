@@ -1100,7 +1100,8 @@ void test_write2file1(detail::mem_matrix_store::const_ptr mat)
 	bool ret = mat->write2file(tmp_file_name);
 	assert(ret);
 
-	detail::mem_matrix_store::ptr read_mat = detail::mem_matrix_store::load(tmp_file_name);
+	detail::mem_matrix_store::const_ptr read_mat = detail::mem_matrix_store::load(
+			tmp_file_name, mat->get_num_nodes());
 	assert(read_mat);
 	assert(read_mat->get_num_rows() == mat->get_num_rows());
 	assert(read_mat->get_num_cols() == mat->get_num_cols());

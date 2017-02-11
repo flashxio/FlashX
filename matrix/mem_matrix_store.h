@@ -53,7 +53,7 @@ public:
 	 */
 	static const size_t CHUNK_SIZE;
 
-	static ptr load(const std::string &file_name);
+	static const_ptr load(const std::string &file_name, int num_nodes);
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
 

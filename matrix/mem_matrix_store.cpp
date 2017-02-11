@@ -638,7 +638,8 @@ bool mem_matrix_store::write2file(const std::string &file_name, bool text,
 	return ret;
 }
 
-mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
+mem_matrix_store::const_ptr mem_matrix_store::load(const std::string &file_name,
+		int num_nodes)
 {
 	matrix_header header;
 
@@ -667,25 +668,57 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 	size_t nrow = header.get_num_rows();
 	size_t ncol = header.get_num_cols();
 	const scalar_type &type = header.get_data_type();
-	size_t mat_size = nrow * ncol * type.get_size();
-	detail::simple_raw_array data(mat_size, -1);
-	ret = fread(data.get_raw(), mat_size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't read %1% bytes from the file") % mat_size;
-		return mem_matrix_store::ptr();
-	}
-
 	mem_matrix_store::ptr m;
-	if (header.get_layout() == matrix_layout_t::L_ROW)
-		m = mem_row_matrix_store::create(data, nrow, ncol, type);
-	else if (header.get_layout() == matrix_layout_t::L_COL)
-		m = mem_col_matrix_store::create(data, nrow, ncol, type);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
-
+	// In these two cases, we can read portion by portion.
+	if ((ncol > nrow && header.get_layout() == matrix_layout_t::L_COL)
+			|| (nrow > ncol && header.get_layout() == matrix_layout_t::L_ROW)) {
+		m = mem_matrix_store::create(nrow, ncol, header.get_layout(), type,
+				num_nodes);
+		for (size_t i = 0; i < m->get_num_portions(); i++) {
+			local_matrix_store::ptr portion = m->get_portion(i);
+			size_t psize = portion->get_num_rows() * portion->get_num_cols();
+			psize *= portion->get_entry_size();
+			ret = fread(portion->get_raw_arr(), psize, 1, f);
+			if (ret == 0) {
+				BOOST_LOG_TRIVIAL(error)
+					<< boost::format("can't read %1% bytes from the file") % psize;
+				fclose(f);
+				return mem_matrix_store::ptr();
+			}
+		}
+	}
+	else {
+		// Here the matrix can be tall col matrix or wide row matrix.
+		// In these two cases, the data in the entire cols or rows are stored
+		// contiguously. so we can assume the data in the file is a tall col
+		// matrix and transpose the matrix if the data in the file is a wide
+		// row matrix.
+		m = mem_matrix_store::create(std::max(nrow, ncol), std::min(nrow, ncol),
+				matrix_layout_t::L_COL, type, num_nodes);
+		std::vector<local_matrix_store::ptr> lstores(m->get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++)
+			lstores[i] = m->get_portion(i);
+		for (size_t i = 0; i < m->get_num_cols(); i++) {
+			for (size_t j = 0; j < lstores.size(); j++) {
+				local_col_matrix_store::ptr lstore
+					= std::static_pointer_cast<local_col_matrix_store>(lstores[j]);
+				size_t size = lstore->get_num_rows() * lstore->get_entry_size();
+				ret = fread(lstore->get_col(i), size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error)
+						<< boost::format("can't read %1% bytes from the file") % size;
+					fclose(f);
+					return mem_matrix_store::ptr();
+				}
+			}
+		}
+	}
 	fclose(f);
-	return m;
+
+	if (m->store_layout() != header.get_layout())
+		return std::static_pointer_cast<const mem_matrix_store>(m->transpose());
+	else
+		return m;
 }
 
 mem_matrix_store::ptr mem_matrix_store::cast(matrix_store::ptr store)

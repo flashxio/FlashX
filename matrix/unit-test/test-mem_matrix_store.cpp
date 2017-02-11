@@ -183,15 +183,15 @@ void test_io()
 {
 	printf("test read/write matrix to a file\n");
 	std::string out_file;
-	mem_matrix_store::ptr read_mat;
+	mem_matrix_store::const_ptr read_mat;
 	mem_matrix_store::ptr orig_mat;
 
 	orig_mat = mem_row_matrix_store::create(
-				1000, 10, get_scalar_type<int>());
+				999999, 10, get_scalar_type<int>());
 	orig_mat->set_data(set_row_operate(orig_mat->get_num_cols()));
 	out_file = tmpnam(NULL);
 	orig_mat->write2file(out_file);
-	read_mat = mem_matrix_store::load(out_file);
+	read_mat = mem_matrix_store::load(out_file, -1);
 	assert(read_mat);
 	assert(read_mat->store_layout() == matrix_layout_t::L_ROW);
 	for (size_t i = 0; i < orig_mat->get_num_rows(); i++) {
@@ -201,11 +201,39 @@ void test_io()
 	unlink(out_file.c_str());
 
 	orig_mat = mem_col_matrix_store::create(
-				1000, 10, get_scalar_type<int>());
+				999999, 10, get_scalar_type<int>());
 	orig_mat->set_data(set_col_operate(orig_mat->get_num_cols()));
 	out_file = tmpnam(NULL);
 	orig_mat->write2file(out_file);
-	read_mat = mem_matrix_store::load(out_file);
+	read_mat = mem_matrix_store::load(out_file, -1);
+	assert(read_mat);
+	assert(read_mat->store_layout() == matrix_layout_t::L_COL);
+	for (size_t i = 0; i < orig_mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < orig_mat->get_num_cols(); j++)
+			assert(orig_mat->get<int>(i, j) == read_mat->get<int>(i, j));
+	}
+	unlink(out_file.c_str());
+
+	orig_mat = mem_row_matrix_store::create(
+				10, 999999, get_scalar_type<int>());
+	orig_mat->set_data(set_row_operate(orig_mat->get_num_cols()));
+	out_file = tmpnam(NULL);
+	orig_mat->write2file(out_file);
+	read_mat = mem_matrix_store::load(out_file, -1);
+	assert(read_mat);
+	assert(read_mat->store_layout() == matrix_layout_t::L_ROW);
+	for (size_t i = 0; i < orig_mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < orig_mat->get_num_cols(); j++)
+			assert(orig_mat->get<int>(i, j) == read_mat->get<int>(i, j));
+	}
+	unlink(out_file.c_str());
+
+	orig_mat = mem_col_matrix_store::create(
+				10, 999999, get_scalar_type<int>());
+	orig_mat->set_data(set_col_operate(orig_mat->get_num_cols()));
+	out_file = tmpnam(NULL);
+	orig_mat->write2file(out_file);
+	read_mat = mem_matrix_store::load(out_file, -1);
 	assert(read_mat);
 	assert(read_mat->store_layout() == matrix_layout_t::L_COL);
 	for (size_t i = 0; i < orig_mat->get_num_rows(); i++) {
