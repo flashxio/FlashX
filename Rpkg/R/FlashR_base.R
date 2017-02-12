@@ -1520,7 +1520,8 @@ setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
 #' @rdname fm.table
 fm.table <- function(x)
 {
-	if (class(x) == "fmVFactor" && !is.null(x@vals) && !is.null(x@cnts))
+	valid.vec <- function(x) x@len > 0
+	if (class(x) == "fmVFactor" && valid.vec(x@vals) && valid.vec(x@cnts))
 		ret <- list(val=x@vals, agg=x@cnts)
 	else {
 		count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")

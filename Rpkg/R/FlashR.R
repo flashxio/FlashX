@@ -843,11 +843,17 @@ fm.as.factor <- function(fm, num.levels = -1)
 	if (class(fm) == "fmVFactor")
 		fm
 	else if (class(fm) == "fmV") {
+		# If users can determine the number of levels, the vector has to be
+		# integer.
+		if (num.levels > 0)
+			stopifnot(typeof(fm) == "integer")
 		ret <- .Call("R_FM_create_factor", fm, as.integer(num.levels),
 					 PACKAGE="FlashR")
+		vals <- if (is.null(ret$vals)) new("fmV", len=0) else .new.fmV(ret$vals)
+		cnts <- if (is.null(ret$cnts)) new("fmV", len=0) else .new.fmV(ret$cnts)
 		new("fmVFactor", num.levels=ret$num.levels, pointer=ret$pointer,
 			name=ret$name, len=ret$len, type=ret$type, ele_type=ret$ele_type,
-			vals=.new.fmV(ret$vals), cnts=.new.fmV(ret$cnts))
+			vals=vals, cnts=cnts)
 	}
 	else
 		stop("The input argument isn't a vector")
