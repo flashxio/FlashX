@@ -1833,18 +1833,12 @@ RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile, SEXP ptext, SEXP psep)
 RcppExport SEXP R_FM_read_obj(SEXP pfile)
 {
 	std::string file_name = CHAR(STRING_ELT(pfile, 0));
-	detail::matrix_store::ptr store = detail::mem_matrix_store::load(file_name);
+	detail::matrix_store::const_ptr store = detail::mem_matrix_store::load(
+			file_name, matrix_conf.get_num_nodes());
 	if (store == NULL)
 		return R_NilValue;
-	else {
-		int num_nodes = matrix_conf.get_num_nodes();
-		dense_matrix::ptr mat = dense_matrix::create(store);
-		if (num_nodes > 1)
-			mat = mat->conv_store(true, num_nodes);
-		// TODO we are going to lose type info.
-		// A boolean object will become integer object.
-		return create_FMR_matrix(mat, "");
-	}
+	else
+		return create_FMR_matrix(dense_matrix::create(store), "");
 }
 
 template<class T>
