@@ -30,6 +30,7 @@
 #include "materialize.h"
 #include "mem_matrix_store.h"
 #include "set_data_matrix_store.h"
+#include "factor.h"
 
 namespace fm
 {
@@ -1184,6 +1185,23 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
 		return dense_matrix::create(ret);
 	}
+}
+
+dense_matrix::ptr block_matrix::groupby_row(factor_col_vector::const_ptr labels,
+		agg_operate::const_ptr agg) const
+{
+	if (is_wide())
+		return dense_matrix::groupby_row(labels, agg);
+
+	std::vector<detail::matrix_store::const_ptr> sink_blocks(
+			store->get_num_mats());
+	for (size_t i = 0; i < sink_blocks.size(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+		dense_matrix::ptr res = mat->groupby_row(labels, agg);
+		sink_blocks[i] = res->get_raw_store();
+	}
+	return dense_matrix::create(detail::block_sink_store::create(sink_blocks,
+				1, sink_blocks.size()));
 }
 
 }
