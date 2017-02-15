@@ -61,6 +61,9 @@ public:
 	virtual bool share_data(const matrix_store &store) const;
 
 	virtual std::string get_name() const;
+	virtual bool is_wide() const {
+		return mats[0]->is_wide();
+	}
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
