@@ -668,43 +668,12 @@ RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
 		dense_matrix::ptr right_mat)
 {
-	if (right_mat->store_layout() != matrix_layout_t::L_ROW) {
-		right_mat = right_mat->conv2(matrix_layout_t::L_ROW);
-	}
-	// The input matrix in the right operand might be a virtual matrix originally.
-	// When we convert its data layout, it's definitely a virtual matrix.
-	bool ret = right_mat->materialize_self();
-	if (!ret) {
-		fprintf(stderr, "can't materialize the right matrix\n");
-		return dense_matrix::ptr();
-	}
-
-	// TODO it only supports a binary matrix right now.
-	assert(matrix->get_entry_size() == 0);
-	if (right_mat->is_type<double>()) {
-		detail::mem_matrix_store::const_ptr in_mat
-			= detail::mem_matrix_store::cast(right_mat->get_raw_store());
-		detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
-				matrix->get_num_rows(), right_mat->get_num_cols(),
-				matrix_layout_t::L_ROW, right_mat->get_type(),
-				in_mat->get_num_nodes());
-		matrix->multiply(in_mat, out_mat);
-		return dense_matrix::create(out_mat);
-	}
-	else if (right_mat->is_type<int>()) {
-		detail::mem_matrix_store::const_ptr in_mat
-			= detail::mem_matrix_store::cast(right_mat->get_raw_store());
-		detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
-				matrix->get_num_rows(), right_mat->get_num_cols(),
-				matrix_layout_t::L_ROW, right_mat->get_type(),
-				in_mat->get_num_nodes());
-		matrix->multiply(in_mat, out_mat);
-		return dense_matrix::create(out_mat);
-	}
-	else {
-		fprintf(stderr, "the right matrix has an unsupported type in SpMM\n");
-		return dense_matrix::ptr();
-	}
+	detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
+			matrix->get_num_rows(), right_mat->get_num_cols(),
+			matrix_layout_t::L_ROW, right_mat->get_type(),
+			right_mat->get_raw_store()->get_num_nodes());
+	matrix->multiply(right_mat->get_raw_store(), out_mat);
+	return dense_matrix::create(out_mat);
 }
 
 RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
