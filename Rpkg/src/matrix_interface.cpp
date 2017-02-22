@@ -365,21 +365,6 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 	return create_FMR_matrix(mat, mat_name);
 }
 
-static const scalar_type *get_scalar_type(const std::string &type_name)
-{
-	if (type_name == "B")
-		return &get_scalar_type<bool>();
-	else if (type_name == "I")
-		return &get_scalar_type<int>();
-	else if (type_name == "L")
-		return &get_scalar_type<long>();
-	else if (type_name == "F")
-		return &get_scalar_type<float>();
-	else if (type_name == "D")
-		return &get_scalar_type<double>();
-	return NULL;
-}
-
 RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		SEXP pnrow, SEXP pncol, SEXP pbyrow, SEXP pele_type, SEXP pmat_name)
 {
@@ -399,12 +384,11 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
-	const scalar_type *type_p = get_scalar_type(ele_type);
-	if (type_p == NULL) {
+	if (!valid_ele_type(ele_type)) {
 		fprintf(stderr, "wrong element type\n");
 		return R_NilValue;
 	}
-	const scalar_type &type = *type_p;
+	const scalar_type &type = get_ele_type(ele_type);
 
 	safs::native_file ext_f(file_name);
 	if (!ext_f.exist()) {
@@ -468,22 +452,6 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 }
 
-static inline ele_parser::const_ptr get_parser(const std::string ele_type)
-{
-	if (ele_type == "I")
-		return ele_parser::const_ptr(new int_parser<int>());
-	else if (ele_type == "L")
-		return ele_parser::const_ptr(new int_parser<long>());
-	else if (ele_type == "X")
-		return ele_parser::const_ptr(new int_parser<long>(16));
-	else if (ele_type == "F")
-		return ele_parser::const_ptr(new float_parser<float>());
-	else if (ele_type == "D")
-		return ele_parser::const_ptr(new float_parser<double>());
-	else
-		return ele_parser::const_ptr();
-}
-
 RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
 		SEXP pdelim)
 {
@@ -502,7 +470,7 @@ RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
 
 	std::vector<ele_parser::const_ptr> parsers;
 	for (size_t i = 0; i < ele_types.size(); i++) {
-		ele_parser::const_ptr parser = get_parser(ele_types[i]);
+		ele_parser::const_ptr parser = get_ele_parser(ele_types[i]);
 		if (parser == NULL) {
 			fprintf(stderr, "cannot get a right parser\n");
 			return R_NilValue;
@@ -530,7 +498,7 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
 	std::string mat_name = CHAR(STRING_ELT(pname, 0));
-	const scalar_type *type_p = get_scalar_type(ele_type);
+	const scalar_type *type_p = &get_ele_type(ele_type);
 
 	if (!in_mem && !safs::is_safs_init()) {
 		fprintf(stderr,
@@ -541,7 +509,7 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::vector<ele_parser::const_ptr> parsers;
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
 	parsers.push_back(ele_parser::const_ptr(new int_parser<ele_idx_t>()));
-	ele_parser::const_ptr attr_parser = get_parser(ele_type);
+	ele_parser::const_ptr attr_parser = get_ele_parser(ele_type);
 	if (attr_parser != NULL)
 		parsers.push_back(attr_parser);
 	std::vector<std::string> files(1, file);
