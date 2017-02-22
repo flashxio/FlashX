@@ -960,3 +960,23 @@ RcppExport SEXP R_FG_get_matrix_fg(SEXP pgraph)
 	std::string name = graph["name"];
 	return create_FMR_matrix(m, name);
 }
+
+RcppExport SEXP R_FG_print_graph(SEXP pgraph, SEXP pfile, SEXP pdelim,
+		SEXP ptype)
+{
+	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	std::string file_name = CHAR(STRING_ELT(pfile, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string type = CHAR(STRING_ELT(ptype, 0));
+	Rcpp::LogicalVector res(1);
+
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		perror("fopen");
+		res[0] = false;
+		return res;
+	}
+	print_graph_el(fg, delim, type, f);
+	res[0] = true;
+	return res;
+}

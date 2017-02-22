@@ -662,3 +662,17 @@ fg.get.sparse.matrix <- function(fg)
 	m <- .Call("R_FG_get_matrix_fg", fg, PACKAGE="FlashGraphR")
 	new_fm(m)
 }
+
+#' Print a graph into a file as an edge list.
+#'
+#' Print a graph in the FlashGraph format into a file as an edge list.
+#'
+#' @param fg the FlashGraph object
+#' @param file a string of the output file name.
+fg.print.graph <- function(fg, file, delim="\t", type="")
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+	.Call("R_FG_print_graph", fg, as.character(file), as.character(delim),
+		  as.character(type), PACKAGE="FlashGraphR")
+}
