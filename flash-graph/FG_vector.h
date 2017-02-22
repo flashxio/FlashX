@@ -25,7 +25,6 @@
 #include <fstream>
 
 #include "graph_engine.h"
-#include "stat.h"
 
 namespace fg
 {
@@ -167,22 +166,6 @@ class FG_vector
 		}
 	}
 
-	/** 
-	 * \brief  Count the number of unique items in the vector using a
-	 *         count map.
-	 * \param map An *empty* `count_map` object that is used to count
-	 *         the number of unique elements in the vector.
-	 *
-	 */
-	void count_unique(count_map<T> &map) const {
-		// TODO we need a parallel implementation.
-
-		assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
-		BOOST_FOREACH(T v, eles) {
-			map.add(v);
-		}
-	}
-
 	/**
 	 * \brief Get the number of elements contained in the vector.
 	 *
@@ -317,27 +300,6 @@ class FG_vector
 			}
 		}
 		return std::pair<T, off_t>(ret, idx);
-	}
-
-	void max_val_locs(size_t num, std::vector<std::pair<T, off_t> > &pairs) const {
-		typedef std::pair<T, off_t> val_loc_t;
-		struct comp_val {
-			bool operator()(const val_loc_t &v1, const val_loc_t &v2) {
-				return v1.first > v2.first;
-			}
-		};
-		std::priority_queue<val_loc_t, std::vector<val_loc_t>, comp_val> queue;
-		for (size_t i = 0; i < get_size(); i++) {
-			T val = get(i);
-			queue.push(val_loc_t(val, i));
-			if (queue.size() > num)
-				queue.pop();
-		}
-		while (!queue.empty()) {
-			val_loc_t pair = queue.top();
-			queue.pop();
-			pairs.push_back(pair);
-		}
 	}
 
 	/**
@@ -481,25 +443,6 @@ class FG_vector
 	}
 
 	/**
-	 * \brief Normalize vector using an Lx form.
-	 * **parallel**
-	 */
-	void normalize(int type) {
-		T norm;
-		switch(type) {
-			case 2:
-				norm = norm2();
-				break;
-			case 1:
-				norm = norm1();
-				break;
-			default:
-				ABORT_MSG("normalize on wrong type");
-		}
-		div_by_in_place(norm);
-	}
-
-	/**
 	 * \brief Apply a function to every element in an FG_vector.
 	 *
 	 * \param func A user-defined function.
@@ -545,16 +488,6 @@ class FG_vector
 	 */
 	T &get(vertex_id_t id) {
 		return eles[id];
-	}
-
-	log_histogram log_hist(int power) const {
-		T max_v = max();
-		int num_buckets = ceil(log(max_v) / log(power));
-		log_histogram hist(std::max(num_buckets, 1));
-		for (size_t i = 0; i < get_size(); i++) {
-			hist.add_value(eles[i]);
-		}
-		return hist;
 	}
 };
 

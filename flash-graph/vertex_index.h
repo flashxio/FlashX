@@ -117,12 +117,10 @@ public:
 
 	void dump(const std::string &file) const {
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
+		if (f == NULL)
 			perror("fopen");
-			abort();
-		}
-		BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
-
+		else
+			BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
 		fclose(f);
 	}
 };
@@ -171,13 +169,13 @@ public:
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
 		if (f == NULL)
-			ABORT_MSG(boost::format("fail to open %1%: %2%")
-					% file % strerror(errno));
-
-		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
-		BOOST_VERIFY(fwrite(vertices.data(),
-					vertices.size() * sizeof(vertices[0]), 1, f));
-
+			BOOST_LOG_TRIVIAL(error) << boost::format("fail to open %1%: %2%")
+				% file % strerror(errno);
+		else {
+			BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+			BOOST_VERIFY(fwrite(vertices.data(),
+						vertices.size() * sizeof(vertices[0]), 1, f));
+		}
 		fclose(f);
 	}
 
@@ -347,13 +345,13 @@ public:
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
 		if (f == NULL)
-			ABORT_MSG(boost::format("fail to open %1%: %2%")
-					% file % strerror(errno));
-
-		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
-		BOOST_VERIFY(fwrite(vertices.data(),
-					vertices.size() * sizeof(vertices[0]), 1, f));
-
+			BOOST_LOG_TRIVIAL(error) << boost::format("fail to open %1%: %2%")
+				% file % strerror(errno);
+		else {
+			BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+			BOOST_VERIFY(fwrite(vertices.data(),
+						vertices.size() * sizeof(vertices[0]), 1, f));
+		}
 		fclose(f);
 	}
 
@@ -795,7 +793,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges(id) + get_num_out_edges(id);
 			default:
-				ABORT_MSG("wrong edge type");
+				return 0;
 		}
 	}
 
@@ -828,7 +826,7 @@ static inline int get_index_entry_size(graph_type type)
 		case graph_type::DIRECTED:
 			return sizeof(directed_vertex_entry);
 		default:
-			ABORT_MSG("wrong graph type");
+			throw std::invalid_argument("wrong graph type");
 	}
 }
 

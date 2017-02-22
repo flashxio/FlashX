@@ -94,7 +94,7 @@ public:
 	  */
 	void run_on_vertex_header(vertex_program &prog,
 			const vertex_header &header) {
-		ABORT_MSG("run_on_vertex_header isn't implemented");
+		throw unsupported_exception("run_on_vertex_header");
 	}
 
 	/**
@@ -103,7 +103,7 @@ public:
 	 * \param msg The message sent to the vertex.
 	 */
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		ABORT_MSG("run_on_message isn't implemented");
+		throw unsupported_exception("run_on_message");
 	}
 };
 
@@ -135,7 +135,7 @@ public:
 	void broadcast_vpart(const vertex_message &msg);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		ABORT_MSG("run_on_message isn't implemented");
+		throw unsupported_exception("run_on_message");
 	}
 };
 
@@ -150,19 +150,19 @@ public:
 	}
 
 	void run(vertex_program &) {
-		ABORT_MSG("run isn't implemented");
+		throw unsupported_exception("run");
 	}
 
 	void run(vertex_program &, const page_vertex &vertex) {
-		ABORT_MSG("run isn't implemented");
+		throw unsupported_exception("run");
 	}
 
 	void run_on_message(vertex_program &, const vertex_message &msg) {
-		ABORT_MSG("run_on_message isn't implemented");
+		throw unsupported_exception("run_on_message");
 	}
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		ABORT_MSG("run_on_vertex_header isn't implemented");
+		throw unsupported_exception("run_on_vertex_header");
 	}
 };
 
@@ -227,7 +227,7 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		ABORT_MSG("run_on_message isn't implemented");
+		throw unsupported_exception("run_on_message");
 	}
 };
 

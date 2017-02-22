@@ -43,6 +43,8 @@ class vec_store;
 
 typedef std::pair<bool, std::shared_ptr<const local_matrix_store> > async_cres_t;
 
+const size_t INVALID_MAT_ID = std::numeric_limits<size_t>::max();
+
 class matrix_store
 {
 	size_t nrow;
@@ -62,12 +64,11 @@ class matrix_store
 	 * By default, this is enabled.
 	 */
 	bool cache_portion;
-protected:
-	static std::atomic<size_t> mat_counter;
 public:
 	typedef std::shared_ptr<matrix_store> ptr;
 	typedef std::shared_ptr<const matrix_store> const_ptr;
 
+	static std::atomic<size_t> mat_counter;
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, int num_nodes, bool in_mem,
 			safs::safs_file_group::ptr group = NULL);
@@ -135,6 +136,19 @@ public:
 	}
 
 	/*
+	 * Data Id is used to identify the data in a matrix.
+	 * When a matrix is transposed or move to a different storage memory or
+	 * converted into a different data layout, it should have the same data
+	 * Id.
+	 */
+	virtual size_t get_data_id() const = 0;
+
+	/*
+	 * Test if this matrix shares the same data as the other matrix.
+	 */
+	virtual bool share_data(const matrix_store &store) const;
+
+	/*
 	 * This method gets underlying materialized matrix IDs and the number of
 	 * elements in each of these materialized matrices.
 	 */
@@ -200,6 +214,11 @@ public:
 		return std::shared_ptr<const vec_store>();
 	}
 
+	/*
+	 * Get rows/columns within [start, end).
+	 */
+	virtual matrix_store::const_ptr get_cols(off_t start, off_t end) const;
+	virtual matrix_store::const_ptr get_rows(off_t start, off_t end) const;
 	virtual matrix_store::const_ptr get_cols(
 			const std::vector<off_t> &idxs) const;
 	virtual matrix_store::const_ptr get_rows(

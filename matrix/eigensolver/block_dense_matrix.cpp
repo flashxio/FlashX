@@ -53,6 +53,9 @@ public:
 	uninit_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
 	}
+	virtual size_t get_data_id() const {
+		return fm::detail::INVALID_MAT_ID;
+	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		throw unsupported_exception();

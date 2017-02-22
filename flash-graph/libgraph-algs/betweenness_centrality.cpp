@@ -31,7 +31,6 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
-#include "FG_vector.h"
 #include "save_result.h"
 
 using namespace fg;
@@ -393,13 +392,14 @@ class activate_by_dist_filter: public vertex_filter {
 
 namespace fg 
 {
-FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std::vector<vertex_id_t>& ids)
+fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
+		const std::vector<vertex_id_t>& ids)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm currently works on a directed graph";
-		return FG_vector<float>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(
@@ -465,10 +465,11 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std
 	}
 
 	gettimeofday(&end, NULL);
-	FG_vector<float>::ptr ret = FG_vector<float>::create(
-			graph->get_num_vertices());
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<float>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<float, betweenness_vertex>(ret)));
+				new save_query<float, betweenness_vertex>(res_store)));
 
 #if 0
 	BOOST_LOG_TRIVIAL(info) << "Printing betweenness vector:";
@@ -483,6 +484,6 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std
 	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
 		% time_diff(start, end);
 
-	return ret;
+	return fm::vector::create(res_store);
 }
 }

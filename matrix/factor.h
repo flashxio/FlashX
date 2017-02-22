@@ -30,7 +30,7 @@
 namespace fm
 {
 
-typedef int factor_value_t;
+typedef uint32_t factor_value_t;
 
 class factor
 {
@@ -42,14 +42,6 @@ public:
 
 	size_t get_num_levels() const {
 		return num_levels;
-	}
-
-	factor_value_t get_max() const {
-		return num_levels - 1;
-	}
-
-	factor_value_t get_min() const {
-		return 0;
 	}
 
 	bool is_valid_level(factor_value_t v) const {
@@ -106,6 +98,8 @@ public:
 class factor_col_vector: public col_vec
 {
 	factor f;
+	detail::vec_store::const_ptr uniq_vals;
+	detail::vec_store::const_ptr cnts;
 
 	factor_col_vector(const factor &_f,
 			detail::matrix_store::const_ptr store): col_vec(store), f(_f) {
@@ -118,6 +112,7 @@ public:
 	typedef std::shared_ptr<const factor_col_vector> const_ptr;
 
 	static ptr create(const factor &f, dense_matrix::ptr mat);
+	static ptr create(dense_matrix::ptr mat);
 
 	static ptr create(const factor &f, size_t length, int num_nodes,
 			bool in_mem, const set_operate &op) {
@@ -130,6 +125,14 @@ public:
 
 	size_t get_num_levels() const {
 		return f.get_num_levels();
+	}
+
+	detail::vec_store::const_ptr get_uniq_vals() const {
+		return uniq_vals;
+	}
+
+	detail::vec_store::const_ptr get_counts() const {
+		return cnts;
 	}
 };
 

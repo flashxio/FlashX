@@ -28,7 +28,6 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
-#include "FG_vector.h"
 #include "ts_graph.h"
 
 using namespace fg;
@@ -336,7 +335,7 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 namespace fg
 {
 
-FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals)
 {
 	timestamp = start_time;
@@ -369,9 +368,11 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	BOOST_LOG_TRIVIAL(info)
 			<< boost::format("It takes %1% seconds") % time_diff(start, end);
 
-	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));
-	return vec;
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<float>());
+	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }

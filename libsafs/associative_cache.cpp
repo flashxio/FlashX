@@ -1010,7 +1010,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 		fprintf(stderr,
 				"out of memory: max npages: %d, init npages: %d\n",
 				max_npages, npages);
-		exit(1);
+		throw e;
 	}
 
 	cells_table.push_back(cells);
@@ -1102,8 +1102,7 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		ABORT_MSG("get_file_id isn't implemented");
-		return -1;
+		throw unsupported_exception("get_file_id");
 	}
 
 	virtual void notify_completion(io_request *reqs[], int num);
@@ -1114,11 +1113,11 @@ public:
 		get_per_thread_io()->flush_requests();
 	}
 	virtual int wait4complete(int num) {
-		throw unsupported_exception();
+		throw unsupported_exception("wait4complete");
 	}
 
 	virtual void cleanup() {
-		throw unsupported_exception();
+		throw unsupported_exception("cleanup");
 	}
 };
 
@@ -1414,7 +1413,7 @@ hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
 			}
 		}
 		// we shouldn't reach here if the cell exists in the table.
-		abort();
+		return NULL;
 	}
 }
 
@@ -1436,7 +1435,7 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 			}
 		}
 		// We shouldn't reach here.
-		abort();
+		return NULL;
 	}
 }
 

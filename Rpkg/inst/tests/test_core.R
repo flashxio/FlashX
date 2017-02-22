@@ -304,7 +304,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	names <- tmp$names
 	print.depth(depth, length(mats), "mats from the lower level")
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
+		res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 1, "+")))
 		res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
 	}
 
@@ -313,7 +313,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
-			res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
+			res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 1, "+")))
 			res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
 		}
 	}
@@ -322,7 +322,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 2, "+")))
+		res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 2, "+")))
 		res.names <- c(res.names, paste("colSums(", names[[i]], ")", sep=""))
 	}
 
@@ -331,7 +331,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
-			mat <- fm.agg.mat.lazy(mats[[i]], 2, "+")
+			mat <- fm.agg.mat(mats[[i]], 2, "+")
 			res <- c(res, fm.as.vector(mat))
 			res.names <- c(res.names, paste("colSums(", names[[i]], ")", sep=""))
 		}
@@ -814,26 +814,24 @@ test_that("inner product", {
 
 test_that("aggregation", {
 		  mat <- fm.runif.matrix(10000000, 10)
+		  rmat <- as.matrix(mat)
 		  sum <- fm.agg(mat, "+")
-		  sum.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(fm.conv.FM2R(sum.lazy), sum)
+		  rsum <- sum(mat)
+		  expect_equal(fm.conv.FM2R(sum), rsum)
 
 		  mat <- t(mat)
 		  sum1 <- fm.agg(mat, "+")
-		  sum1.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(sum, sum1)
-		  expect_equal(fm.conv.FM2R(sum1.lazy), sum1)
+		  expect_equal(fm.conv.FM2R(sum1), rsum)
 
 		  mat <- fm.runif.matrix(100000, 1000)
+		  rmat <- as.matrix(mat)
 		  sum <- fm.agg(mat, "+")
-		  sum.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(fm.conv.FM2R(sum.lazy), sum)
+		  rsum <- sum(mat)
+		  expect_equal(fm.conv.FM2R(sum), rsum)
 
 		  mat <- t(mat)
 		  sum1 <- fm.agg(mat, "+")
-		  sum1.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(sum, sum1)
-		  expect_equal(fm.conv.FM2R(sum1.lazy), sum1)
+		  expect_equal(fm.conv.FM2R(sum1), rsum)
 })
 
 test_that("read/write a dense matrix", {

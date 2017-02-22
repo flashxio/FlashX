@@ -65,19 +65,18 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
-	size_t get_data_id() const {
+	virtual size_t get_data_id() const {
 		return data_id;
 	}
+	virtual bool share_data(const matrix_store &store) const {
+		return matrix_store::share_data(store);
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
 		ret.insert(std::pair<size_t, size_t>(data_id,
 					get_num_rows() * get_num_cols()));
 		return ret;
-	}
-
-	virtual bool write2file(const std::string &file_name) const {
-		assert(0);
-		return false;
 	}
 };
 
@@ -161,7 +160,6 @@ public:
 	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
-	virtual bool write2file(const std::string &file_name) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -239,7 +237,6 @@ public:
 	virtual int get_portion_node_id(size_t id) const;
 
 	virtual matrix_store::const_ptr transpose() const;
-	virtual bool write2file(const std::string &file_name) const;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;

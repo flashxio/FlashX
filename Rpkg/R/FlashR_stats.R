@@ -28,26 +28,22 @@
 		x2 <- ifelse(in.is.na, zero, x2)
 		test.na <- FALSE
 	}
-	sum.x <- fm.agg.lazy(x, fm.bo.add)
-	sum.x2 <- fm.agg.lazy(x2, fm.bo.add)
+	sum.x <- sum(x)
+	sum.x2 <- sum(x2)
 
 	if (test.na) {
-		x.is.na <- fm.agg.lazy(.is.na.only(x), fm.bo.or)
-		res <- fm.materialize(sum.x, sum.x2, x.is.na)
-		if (.fmV2scalar(res[[3]]))
+		x.is.na <- any(.is.na.only(x))
+		if (.fmV2scalar(x.is.na))
 			return(.get.na(typeof(x)))
-		sums <- res[1:2]
 	}
 	else {
 		# If we remove NA, we should calculate the number of
 		# NAs in the vector.
-		sum.na <- fm.agg.lazy(in.is.na, fm.bo.add)
-		res <- fm.materialize(sum.x, sum.x2, sum.na)
-		n <- n - .fmV2scalar(res[[3]])
-		sums <- res[1:2]
+		sum.na <- sum(in.is.na)
+		n <- n - .fmV2scalar(sum.na)
 	}
-	sum.x <- .fmV2scalar(sums[[1]])
-	sum.x2 <- .fmV2scalar(sums[[2]])
+	sum.x <- .fmV2scalar(sum.x)
+	sum.x2 <- .fmV2scalar(sum.x2)
 	avg <- sum.x / n
 	sqrt((sum.x2 - n * avg * avg) / (n - 1))
 }
@@ -85,23 +81,21 @@ setMethod("sd", "fmV", .sd.int)
 		# colSum on the original matrix. The reason is that fm.materialize
 		# only works on a set of matrices the same the long dimension and
 		# dimension size. TODO I need to change that.
-		x.sum <- fm.rowSums(t(x), TRUE)
+		x.sum <- rowSums(t(x))
 		x.prod <- fm.multiply(t(x), x)
-		ret <- fm.materialize(x.sum, x.prod)
-		x.mu <- ret[[1]] / n
+		x.mu <- x.sum / n
 		x.mu <- fm.conv.FM2R(x.mu)
-		ret <- (fm.conv.FM2R(ret[[2]]) - n * x.mu %*% t(x.mu)) / (n - 1)
+		ret <- (fm.conv.FM2R(x.prod) - n * x.mu %*% t(x.mu)) / (n - 1)
 	}
 	else {
-		x.sum <- fm.rowSums(t(x), TRUE)
-		y.sum <- fm.rowSums(t(y), TRUE)
+		x.sum <- rowSums(t(x))
+		y.sum <- rowSums(t(y))
 		xy.prod <- fm.multiply(t(x), y)
-		ret <- fm.materialize(x.sum, y.sum, xy.prod)
-		x.mu <- ret[[1]] / n
-		y.mu <- ret[[2]] / n
+		x.mu <- x.sum / n
+		y.mu <- y.sum / n
 		x.mu <- fm.conv.FM2R(x.mu)
 		y.mu <- fm.conv.FM2R(y.mu)
-		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(y.mu)) / (n - 1)
+		ret <- (fm.conv.FM2R(xy.prod) - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
 	fm.set.test.na(orig.test.na)
 	ret
@@ -116,32 +110,30 @@ setMethod("sd", "fmV", .sd.int)
 		stopifnot(nrow(x) == nrow(y))
 	n <- nrow(x)
 	if (is.null(y)) {
-		x.sum <- fm.rowSums(t(x), TRUE)
-		x2.sum <- fm.rowSums(t(x * x), TRUE)
+		x.sum <- rowSums(t(x))
+		x2.sum <- rowSums(t(x * x))
 		x.prod <- fm.multiply(t(x), x)
-		ret <- fm.materialize(x.sum, x2.sum, x.prod)
-		x.mu <- ret[[1]] / n
-		x.sd <- sqrt((ret[[2]] - n * x.mu * x.mu) / (n - 1))
+		x.mu <- x.sum / n
+		x.sd <- sqrt((x2.sum - n * x.mu * x.mu) / (n - 1))
 		x.mu <- fm.conv.FM2R(x.mu)
 		x.sd <- fm.conv.FM2R(x.sd)
-		ret <- (fm.conv.FM2R(ret[[3]]) - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
+		ret <- (fm.conv.FM2R(x.prod) - n * x.mu %*% t(x.mu)) / (n - 1) / (x.sd %*% t(x.sd))
 	}
 	else {
-		x.sum <- fm.rowSums(t(x), TRUE)
-		y.sum <- fm.rowSums(t(y), TRUE)
-		x2.sum <- fm.rowSums(t(x * x), TRUE)
-		y2.sum <- fm.rowSums(t(y * y), TRUE)
+		x.sum <- rowSums(t(x))
+		y.sum <- rowSums(t(y))
+		x2.sum <- rowSums(t(x * x))
+		y2.sum <- rowSums(t(y * y))
 		xy.prod <- fm.multiply(t(x), y)
-		ret <- fm.materialize(x.sum, y.sum, x2.sum, y2.sum, xy.prod)
-		x.mu <- ret[[1]] / n
-		x.sd <- sqrt((ret[[3]] - n * x.mu * x.mu) / (n - 1))
+		x.mu <- x.sum / n
+		x.sd <- sqrt((x2.sum - n * x.mu * x.mu) / (n - 1))
 		x.mu <- fm.conv.FM2R(x.mu)
 		x.sd <- fm.conv.FM2R(x.sd)
-		y.mu <- ret[[2]] / n
-		y.sd <- sqrt((ret[[4]] - n * y.mu * y.mu) / (n - 1))
+		y.mu <- y.sum / n
+		y.sd <- sqrt((y2.sum - n * y.mu * y.mu) / (n - 1))
 		y.mu <- fm.conv.FM2R(y.mu)
 		y.sd <- fm.conv.FM2R(y.sd)
-		ret <- (fm.conv.FM2R(ret[[5]]) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
+		ret <- (fm.conv.FM2R(xy.prod) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
 	fm.set.test.na(orig.test.na)
 	ret
@@ -161,11 +153,8 @@ setMethod("sd", "fmV", .sd.int)
 		if (length(wt) != n)
 			stop("length of 'wt' must equal the number of rows in 'x'")
 		any.neg <- fm.any(wt < 0, TRUE)
-		s <- fm.sum(wt, TRUE)
-		ret <- fm.materialize(any.neg, s)
-		any.neg <- fm.conv.FM2R(ret[[1]])
-		s <- fm.conv.FM2R(ret[[2]])
-		if (any.neg || s == 0)
+		s <- sum(wt)
+		if (any.neg[1] || s[1] == 0)
 			stop("weights must be non-negative and not all zero")
 		wt <- wt/s
 	}
@@ -173,8 +162,7 @@ setMethod("sd", "fmV", .sd.int)
 	all.finite <- fm.all(is.finite(t(x)), TRUE)
 	if (is.logical(center)) {
 		center <- if (center)
-#			fm.colSums(wt * x, TRUE)
-			fm.rowSums(t(wt * x), TRUE)
+			rowSums(t(wt * x))
 		else 0
 	}
 	else {
@@ -182,21 +170,18 @@ setMethod("sd", "fmV", .sd.int)
 			stop("length of 'center' must equal the number of columns in 'x'")
 	}
 	wx <- wt * x
-#	wx.cs <- fm.colSums(wx, TRUE)
-	wx.cs <- fm.rowSums(t(wx), TRUE)
-	x.cp <- fm.crossprod(wx, x, lazy=TRUE)
+	wx.cs <- rowSums(t(wx))
+	x.cp <- crossprod(wx, x)
 	if (fm.is.sink(center)) {
-		ret <- fm.materialize(center, all.finite, wx.cs, x.cp)
-		center <- fm.conv.FM2R(ret[[1]])
-		all.finite <- fm.conv.FM2R(ret[[2]])
-		wx.cs <- fm.conv.FM2R(ret[[3]])
-		x.cp <- ret[[4]]
+		center <- fm.conv.FM2R(center)
+		all.finite <- fm.conv.FM2R(all.finite)
+		wx.cs <- fm.conv.FM2R(wx.cs)
+		x.cp <- x.cp
 	}
 	else {
-		ret <- fm.materialize(all.finite, wx.cs, x.cp)
-		all.finite <- fm.conv.FM2R(ret[[1]])
-		wx.cs <- fm.conv.FM2R(ret[[2]])
-		x.cp <- ret[[3]]
+		all.finite <- fm.conv.FM2R(all.finite)
+		wx.cs <- fm.conv.FM2R(wx.cs)
+		x.cp <- x.cp
 	}
 	if (!all.finite)
 		stop("'x' must contain finite values only")

@@ -157,6 +157,8 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	else if (m->is_type<double>())
 		ret["ele_type"] = Rcpp::String("double");
 	else if (m->is_type<bool>()) {
+		// TODO this will trigger matrix materialization if the input matrix
+		// is a sink matrix.
 		m = m->cast_ele_type(get_scalar_type<int>());
 		ret["ele_type"] = Rcpp::String("logical");
 	}
@@ -171,6 +173,54 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	Rcpp::NumericVector len(1);
 	len[0] = m->get_num_rows();
 	ret["len"] = len;
+
+	return ret;
+}
+
+SEXP create_FMR_vector(fm::factor_col_vector::ptr v, const std::string &name)
+{
+	if (v == NULL) {
+		fprintf(stderr, "can't create a factor vector\n");
+		return R_NilValue;
+	}
+
+	Rcpp::List ret;
+	ret["name"] = Rcpp::String(name);
+	ret["type"] = Rcpp::String("vector");
+	ret["ele_type"] = Rcpp::String("integer");
+
+	// The element type of a factor vector is factor_value_t in FlashMatrix.
+	// FlashR can only handle int or double, so let's cast it into int.
+	dense_matrix::ptr mat = v->cast_ele_type(get_scalar_type<int>(), true);
+	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(mat);
+	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
+	R_RegisterCFinalizerEx(pointer, fm_clean_DM, TRUE);
+	ret["pointer"] = pointer;
+
+	Rcpp::NumericVector len(1);
+	len[0] = v->get_length();
+	ret["len"] = len;
+
+	Rcpp::IntegerVector nlevels(1);
+	nlevels[0] = v->get_num_levels();
+	ret["num.levels"] = nlevels;
+
+	auto vals = v->get_uniq_vals();
+	if (vals == NULL)
+		ret["vals"] = R_NilValue;
+	else
+		ret["vals"] = create_FMR_vector(vals, "");
+	auto cnts = v->get_counts();
+	if (cnts == NULL)
+		ret["cnts"] = R_NilValue;
+	else {
+		// TODO we might want to use double floating-point to count
+		// more elements.
+		auto cnt_vec = vector::create(cnts);
+		auto cnt_mat = cnt_vec->conv2mat(cnt_vec->get_length(), 1, false);
+		cnt_mat = cnt_mat->cast_ele_type(get_scalar_type<int>());
+		ret["cnts"] = create_FMR_vector(cnt_mat, "");
+	}
 
 	return ret;
 }

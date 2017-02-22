@@ -224,6 +224,13 @@ public:
 	virtual dense_matrix::ptr get_rows(std::shared_ptr<col_vec> idxs) const;
 
 	/*
+	 * This gets rows/cols in a range.
+	 * This helps us to optimize the operations.
+	 */
+	virtual dense_matrix::ptr get_cols(size_t start, size_t end) const;
+	virtual dense_matrix::ptr get_rows(size_t start, size_t end) const;
+
+	/*
 	 * This method creates a new matrix whose columns specified by `idxs' are
 	 * replaced by `cols'. This works only for a tall matrix. It returns NULL
 	 * on a wide matrix.
@@ -321,7 +328,8 @@ public:
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;
 
-	dense_matrix::ptr cast_ele_type(const scalar_type &type) const;
+	dense_matrix::ptr cast_ele_type(const scalar_type &type,
+			bool forced = false) const;
 
 	dense_matrix::ptr scale_cols(std::shared_ptr<const col_vec> vals) const;
 	dense_matrix::ptr scale_rows(std::shared_ptr<const col_vec> vals) const;
@@ -480,6 +488,10 @@ inline dense_matrix t(const dense_matrix &m)
 	assert(ret);
 	return *ret;
 }
+
+dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
+		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access = true);
 
 }
 

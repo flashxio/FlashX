@@ -38,6 +38,9 @@ namespace detail
 class combined_matrix_store: public mapply_matrix_store
 {
 	std::vector<matrix_store::const_ptr> mats;
+
+	combined_matrix_store(const std::vector<matrix_store::const_ptr> &mats,
+			matrix_layout_t layout, size_t data_id);
 protected:
 	combined_matrix_store(const std::vector<matrix_store::const_ptr> &mats,
 			matrix_layout_t layout);
@@ -55,8 +58,12 @@ public:
 
 	static ptr create(const std::vector<matrix_store::const_ptr> &mats,
 			matrix_layout_t layout);
+	virtual bool share_data(const matrix_store &store) const;
 
 	virtual std::string get_name() const;
+	virtual bool is_wide() const {
+		return mats[0]->is_wide();
+	}
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;

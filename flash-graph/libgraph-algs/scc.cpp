@@ -27,7 +27,6 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
-#include "FG_vector.h"
 #include "FGlib.h"
 
 using namespace fg;
@@ -408,7 +407,7 @@ public:
 				run_stage_wcc(prog);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -449,7 +448,7 @@ public:
 				run_stage_wcc(prog, vertex);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -485,7 +484,7 @@ public:
 				run_on_message_stage_wcc(prog, msg);
 				break;
 			default:
-				ABORT_MSG("wrong SCC stage");
+				throw std::invalid_argument("wrong SCC stage");
 		}
 	}
 
@@ -648,7 +647,7 @@ void scc_vertex::run_on_message_stage_trim1(vertex_program &prog,
 			state.trim1.num_out_edges--;
 			break;
 		default:
-			ABORT_MSG("wrong message type");
+			throw std::invalid_argument("wrong message type");
 	}
 }
 
@@ -1112,13 +1111,13 @@ public:
 namespace fg
 {
 
-FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
+fm::vector::ptr compute_scc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1280,10 +1279,12 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vertex_id_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, scc_vertex>(vec)));
-	return vec;
+				new save_query<vertex_id_t, scc_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }

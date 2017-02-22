@@ -28,6 +28,7 @@
 #include "mem_worker_thread.h"
 #include "matrix_stats.h"
 #include "mem_vec_store.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -36,6 +37,87 @@ namespace detail
 {
 
 const size_t mem_matrix_store::CHUNK_SIZE = 16 * 1024;
+
+bool mem_matrix_store::symmetrize(bool upper2lower)
+{
+	if (get_num_rows() != get_num_cols())
+		return false;
+
+	const scatter_gather &sg = get_type().get_sg();
+	if (upper2lower && store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			non_contig[i] = get_row(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			char *row = get_row(i) + i * get_entry_size();
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (upper2lower) {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			non_contig[i] = get_col(i);
+			if (non_contig[i] == NULL)
+				return false;
+		}
+
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			char *col = get_col(i) + i * get_entry_size();
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j + 1] + get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else if (store_layout() == matrix_layout_t::L_ROW) {
+		std::vector<char *> non_contig(get_num_rows());
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			if (get_row(i) == NULL)
+				return false;
+			non_contig[i] = get_row(i) + (get_num_cols() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_rows() - 1; i > 0; i--) {
+			char *row = get_row(i);
+			sg.scatter(row, non_contig);
+
+			std::vector<char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	else {
+		std::vector<const char *> non_contig(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			if (get_col(i) == NULL)
+				return false;
+			non_contig[i] = get_col(i) + (get_num_rows() - 1) * get_entry_size();
+		}
+
+		for (size_t i = get_num_cols() - 1; i > 0; i--) {
+			char *col = get_col(i);
+			sg.gather(non_contig, col);
+
+			std::vector<const char *> tmp(non_contig.size() - 1);
+			for (size_t j = 0; j < tmp.size(); j++)
+				tmp[j] = non_contig[j] - get_entry_size();
+			non_contig = tmp;
+		}
+	}
+	return true;
+}
 
 mem_matrix_store::mem_matrix_store(size_t nrow, size_t ncol,
 		const scalar_type &type): matrix_store(nrow, ncol, true,
@@ -82,9 +164,54 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 
 std::string mem_matrix_store::get_name() const
 {
-	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % mat_id % get_num_rows()
+	size_t id = get_data_id();
+	if (id == INVALID_MAT_ID)
+		id = mat_id;
+	return (boost::format("mem_mat-%1%(%2%,%3%,%4%)") % id % get_num_rows()
 			% get_num_cols()
 			% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str();
+}
+
+bool mem_matrix_store::share_data(const matrix_store &store) const
+{
+	const mem_matrix_store *mem_store
+		= dynamic_cast<const mem_matrix_store *>(&store);
+	size_t store_len = store.get_num_rows() * store.get_num_cols();
+	size_t this_len = get_num_rows() * get_num_cols();
+	// If the two matrices store data in the same memory and have
+	// the same number of elements.
+	if (get_raw_arr() && mem_store)
+		return mem_store->get_raw_arr() == get_raw_arr()
+			&& store_len == this_len;
+
+	matrix_store::const_ptr tstore;
+	// If the other matrix might be a transpose of this matrix.
+	if (store.get_num_rows() == get_num_cols()
+			&& store.get_num_cols() == get_num_rows()
+			&& store.store_layout() != store_layout()) {
+		tstore = store.transpose();
+		mem_store = dynamic_cast<const mem_matrix_store *>(tstore.get());
+	}
+	if (!mem_store)
+		return false;
+
+	if (mem_store->get_num_rows() != get_num_rows()
+			|| mem_store->get_num_cols() != get_num_cols()
+			|| mem_store->store_layout() != store_layout())
+		return false;
+
+	if (mem_store->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < get_num_rows(); i++)
+			if (get_row(i) != mem_store->get_row(i))
+				return false;
+		return true;
+	}
+	else {
+		for (size_t i = 0; i < get_num_cols(); i++)
+			if (get_col(i) != mem_store->get_col(i))
+				return false;
+		return true;
+	}
 }
 
 local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
@@ -372,61 +499,6 @@ matrix_store::const_ptr mem_sub_row_matrix_store::get_rows(
 	return mem_sub_row_matrix_store::create(*this, direct_idxs);
 }
 
-bool mem_col_matrix_store::write2file(const std::string &file_name) const
-{
-	FILE *f = fopen(file_name.c_str(), "w");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
-		return false;
-	}
-	if (!write_header(f))
-		return false;
-
-	size_t ncol = get_num_cols();
-	size_t col_size = get_num_rows() * get_entry_size();
-	for (size_t i = 0; i < ncol; i++) {
-		const char *col = get_col(i);
-		size_t ret = fwrite(col, col_size, 1, f);
-		if (ret == 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("can't write to %1%: %2%")
-				% file_name % strerror(errno);
-			return false;
-		}
-	}
-	fclose(f);
-	return true;
-}
-
-bool mem_row_matrix_store::write2file(const std::string &file_name) const
-{
-	FILE *f = fopen(file_name.c_str(), "w");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
-		return false;
-	}
-	if (!write_header(f))
-		return false;
-
-	size_t nrow = get_num_rows();
-	size_t row_size = get_num_cols() * get_entry_size();
-	for (size_t i = 0; i < nrow; i++) {
-		const char *row = get_row(i);
-		size_t ret = fwrite(row, row_size, 1, f);
-		if (ret == 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("can't write to %1%: %2%")
-				% file_name % strerror(errno);
-			fclose(f);
-			return false;
-		}
-	}
-	fclose(f);
-	return true;
-}
-
 bool mem_matrix_store::write_header(FILE *f) const
 {
 	matrix_header header(DENSE, get_entry_size(), get_num_rows(),
@@ -441,7 +513,133 @@ bool mem_matrix_store::write_header(FILE *f) const
 	return true;
 }
 
-mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
+namespace
+{
+
+struct empty_deleter {
+	void operator()(const matrix_store *addr) {
+	}
+};
+
+}
+
+static bool write_tall_portions(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores)
+{
+	size_t entry_size = stores[0]->get_type().get_size();
+	if (stores[0]->store_layout() == matrix_layout_t::L_ROW) {
+		for (size_t i = 0; i < stores.size(); i++) {
+			local_row_matrix_store::const_ptr row_store
+				= std::dynamic_pointer_cast<const local_row_matrix_store>(
+						stores[i]);
+			for (size_t j = 0; j < row_store->get_num_rows(); j++) {
+				size_t ret = fwrite(row_store->get_row(j),
+						row_store->get_num_cols() * entry_size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error) << boost::format("can't write: %2%")
+						% strerror(errno);
+					return false;
+				}
+			}
+		}
+	}
+	else {
+		std::vector<local_col_matrix_store::const_ptr> col_stores(stores.size());
+		for (size_t i = 0; i < stores.size(); i++)
+			col_stores[i] = std::dynamic_pointer_cast<const local_col_matrix_store>(
+						stores[i]);
+		size_t num_cols = stores[0]->get_num_cols();
+		for (size_t j = 0; j < num_cols; j++) {
+			for (size_t i = 0; i < col_stores.size(); i++) {
+				size_t ret = fwrite(col_stores[i]->get_col(j),
+						col_stores[i]->get_num_rows() * entry_size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error) << boost::format("can't write: %2%")
+						% strerror(errno);
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+static bool write_wide_portions(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores)
+{
+	std::vector<local_matrix_store::const_ptr> tstores(stores.size());
+	for (size_t i = 0; i < tstores.size(); i++) {
+		auto tstore = stores[i]->transpose();
+		assert(tstore);
+		tstores[i] = std::dynamic_pointer_cast<const local_matrix_store>(tstore);
+	}
+	return write_tall_portions(f, tstores);
+}
+
+static bool write_portions_text(FILE *f,
+		const std::vector<local_matrix_store::const_ptr> &stores,
+		const std::string &sep)
+{
+	const scalar_type &type = stores[0]->get_type();
+	for (size_t i = 0; i < stores.size(); i++) {
+		auto row_store
+			= std::dynamic_pointer_cast<const local_row_matrix_store>(stores[i]);
+		assert(row_store);
+		for (size_t j = 0; j < row_store->get_num_rows(); j++)
+			fprintf(f, "%s\n", type.conv2str(row_store->get_row(j),
+						row_store->get_num_cols(), sep).c_str());
+	}
+	return true;
+}
+
+bool mem_matrix_store::write2file(const std::string &file_name, bool text,
+		std::string sep) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	bool ret;
+	if (!text) {
+		if (!write_header(f)) {
+			fclose(f);
+			return false;
+		}
+
+		std::vector<local_matrix_store::const_ptr> lstores(get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++)
+			lstores[i] = get_portion(i);
+		if (is_wide())
+			ret = write_wide_portions(f, lstores);
+		else
+			ret = write_tall_portions(f, lstores);
+	}
+	else {
+		if (is_wide()) {
+			fclose(f);
+			BOOST_LOG_TRIVIAL(error) << "can't write a wide matrix";
+			return false;
+		}
+
+		dense_matrix::ptr mat = dense_matrix::create(
+				detail::matrix_store::const_ptr(this, empty_deleter()));
+		mat = mat->conv2(matrix_layout_t::L_ROW);
+		matrix_store::const_ptr row_store = mat->get_raw_store();
+		std::vector<local_matrix_store::const_ptr> lstores(get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++) {
+			lstores[i] = row_store->get_portion(i);
+			assert(lstores[i]->store_layout() == matrix_layout_t::L_ROW);
+		}
+		ret = write_portions_text(f, lstores, sep);
+	}
+	fclose(f);
+	return ret;
+}
+
+mem_matrix_store::const_ptr mem_matrix_store::load(const std::string &file_name,
+		int num_nodes)
 {
 	matrix_header header;
 
@@ -470,25 +668,57 @@ mem_matrix_store::ptr mem_matrix_store::load(const std::string &file_name)
 	size_t nrow = header.get_num_rows();
 	size_t ncol = header.get_num_cols();
 	const scalar_type &type = header.get_data_type();
-	size_t mat_size = nrow * ncol * type.get_size();
-	detail::simple_raw_array data(mat_size, -1);
-	ret = fread(data.get_raw(), mat_size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't read %1% bytes from the file") % mat_size;
-		return mem_matrix_store::ptr();
-	}
-
 	mem_matrix_store::ptr m;
-	if (header.get_layout() == matrix_layout_t::L_ROW)
-		m = mem_row_matrix_store::create(data, nrow, ncol, type);
-	else if (header.get_layout() == matrix_layout_t::L_COL)
-		m = mem_col_matrix_store::create(data, nrow, ncol, type);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
-
+	// In these two cases, we can read portion by portion.
+	if ((ncol > nrow && header.get_layout() == matrix_layout_t::L_COL)
+			|| (nrow > ncol && header.get_layout() == matrix_layout_t::L_ROW)) {
+		m = mem_matrix_store::create(nrow, ncol, header.get_layout(), type,
+				num_nodes);
+		for (size_t i = 0; i < m->get_num_portions(); i++) {
+			local_matrix_store::ptr portion = m->get_portion(i);
+			size_t psize = portion->get_num_rows() * portion->get_num_cols();
+			psize *= portion->get_entry_size();
+			ret = fread(portion->get_raw_arr(), psize, 1, f);
+			if (ret == 0) {
+				BOOST_LOG_TRIVIAL(error)
+					<< boost::format("can't read %1% bytes from the file") % psize;
+				fclose(f);
+				return mem_matrix_store::ptr();
+			}
+		}
+	}
+	else {
+		// Here the matrix can be tall col matrix or wide row matrix.
+		// In these two cases, the data in the entire cols or rows are stored
+		// contiguously. so we can assume the data in the file is a tall col
+		// matrix and transpose the matrix if the data in the file is a wide
+		// row matrix.
+		m = mem_matrix_store::create(std::max(nrow, ncol), std::min(nrow, ncol),
+				matrix_layout_t::L_COL, type, num_nodes);
+		std::vector<local_matrix_store::ptr> lstores(m->get_num_portions());
+		for (size_t i = 0; i < lstores.size(); i++)
+			lstores[i] = m->get_portion(i);
+		for (size_t i = 0; i < m->get_num_cols(); i++) {
+			for (size_t j = 0; j < lstores.size(); j++) {
+				local_col_matrix_store::ptr lstore
+					= std::static_pointer_cast<local_col_matrix_store>(lstores[j]);
+				size_t size = lstore->get_num_rows() * lstore->get_entry_size();
+				ret = fread(lstore->get_col(i), size, 1, f);
+				if (ret == 0) {
+					BOOST_LOG_TRIVIAL(error)
+						<< boost::format("can't read %1% bytes from the file") % size;
+					fclose(f);
+					return mem_matrix_store::ptr();
+				}
+			}
+		}
+	}
 	fclose(f);
-	return m;
+
+	if (m->store_layout() != header.get_layout())
+		return std::static_pointer_cast<const mem_matrix_store>(m->transpose());
+	else
+		return m;
 }
 
 mem_matrix_store::ptr mem_matrix_store::cast(matrix_store::ptr store)
@@ -605,6 +835,30 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 	}
 
 	return std::dynamic_pointer_cast<mem_row_matrix_store>(store);
+}
+
+size_t mem_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_col_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
+}
+
+size_t mem_sub_row_matrix_store::get_data_id() const
+{
+	// TODO
+	return INVALID_MAT_ID;
 }
 
 }

@@ -62,7 +62,7 @@ page_cache::ptr cache_config::__create_cache_on_node(int node_id,
 			break;
 		default:
 			fprintf(stderr, "wrong cache type\n");
-			exit(1);
+			return page_cache::ptr();
 	}
 	return cache;
 }

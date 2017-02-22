@@ -119,6 +119,10 @@ fg.get.params <- function(name)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 						  directed=TRUE, in.mem=TRUE, delim=",", attr.type="")
 {
+	# The graph name will becomes the file name in SAFS. It should contain
+	# some special characters.
+	graph.name <- gsub("/", "_", graph.name)
+	graph.name <- gsub(" ", "_", graph.name)
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
 			  as.logical(directed), as.logical(in.mem), as.character(delim),
@@ -142,6 +146,11 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 												  "-e", ecount(graph), sep = ""))
 {
+	# The graph name will becomes the file name in SAFS. It should contain
+	# some special characters.
+	graph.name <- gsub("/", "_", graph.name)
+	graph.name <- gsub(" ", "_", graph.name)
+
 	stopifnot(is.igraph(graph))
 	df <- get.data.frame(graph)
 	# iGraph is 1-based but FlashGraph is 0-based, so we need to subtract
@@ -269,13 +278,14 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (!graph$directed)
-		.Call("R_FG_compute_cc", graph, PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_cc", graph, PACKAGE="FlashGraphR")
 	else if (mode == "weak")
-		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraphR")
 	else if (mode == "strong")
-		.Call("R_FG_compute_scc", graph, PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_scc", graph, PACKAGE="FlashGraphR")
 	else
 		stop("a wrong mode")
+	new_fmV(ret)
 }
 
 #' Get the largest connected component in a graph
@@ -303,14 +313,6 @@ fg.get.lcc <- function(graph, mode=c("weak", "strong"))
 	fg.fetch.subgraph(graph, vertices=lccV - 1, compress=TRUE)
 }
 
-#fg.transitivity <- function(graph)
-#{
-#	stopifnot(!is.null(graph))
-#	stopifnot(class(graph) == "fg")
-#	stopifnot(graph$directed)
-#	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraphR")
-#}
-
 #' Degree of the vertices in a graph
 #'
 #' Get the degree of vertices in a graph.
@@ -326,7 +328,8 @@ fg.degree <- function(graph, mode=c("both", "in", "out"))
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_get_degree", graph, mode, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_get_degree", graph, mode, PACKAGE="FlashGraphR")
+	new_fmV(ret)
 }
 
 #' PageRank
@@ -361,8 +364,9 @@ fg.page.rank <- function(graph, no.iters=1000, damping=0.85)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_pagerank", graph, no.iters, damping,
-		  PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_compute_pagerank", graph, no.iters, damping,
+				 PACKAGE="FlashGraphR")
+	new_fmV(ret)
 }
 
 #' Triangle counting
@@ -387,12 +391,14 @@ fg.triangles <- function(graph, type="cycle")
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
-		.Call("R_FG_compute_directed_triangles", graph, type,
-			  PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_directed_triangles", graph, type,
+					 PACKAGE="FlashGraphR")
 	}
 	else {
-		.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_undirected_triangles", graph,
+					 PACKAGE="FlashGraphR")
 	}
+	new_fmV(ret)
 }
 
 #' Locality statistic
@@ -424,7 +430,8 @@ fg.topK.scan <- function(graph, order=1, K=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
+	new_fmV(ret)
 }
 
 #' @rdname fg.local.scan
@@ -433,8 +440,9 @@ fg.local.scan <- function(graph, order=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
-		.Call("R_FG_compute_local_scan", graph, as.integer(order),
-			  PACKAGE="FlashGraphR")
+		ret <- .Call("R_FG_compute_local_scan", graph, as.integer(order),
+					 PACKAGE="FlashGraphR")
+		new_fmV(ret)
 	}
 	else if (order == 0) {
 		fg.degree(graph)
@@ -509,7 +517,9 @@ fg.kcore <- function(graph, k.start=2, k.end=10)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_compute_kcore", graph, k.start, k.end,
+				 PACKAGE="FlashGraphR")
+	new_fmV(ret)
 }
 
 fg.overlap <- function(graph, vids)
@@ -614,7 +624,8 @@ fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
-    .Call("R_FG_compute_betweenness", fg, vids, PACKAGE="FlashGraphR")
+    ret <- .Call("R_FG_compute_betweenness", fg, vids, PACKAGE="FlashGraphR")
+	new_fmV(ret)
 }
 
 .onLoad <- function(libname, pkgname)
@@ -649,5 +660,19 @@ fg.get.sparse.matrix <- function(fg)
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
 	m <- .Call("R_FG_get_matrix_fg", fg, PACKAGE="FlashGraphR")
-	.new.fm(m)
+	new_fm(m)
+}
+
+#' Print a graph into a file as an edge list.
+#'
+#' Print a graph in the FlashGraph format into a file as an edge list.
+#'
+#' @param fg the FlashGraph object
+#' @param file a string of the output file name.
+fg.print.graph <- function(fg, file, delim="\t", type="")
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+	.Call("R_FG_print_graph", fg, as.character(file), as.character(delim),
+		  as.character(type), PACKAGE="FlashGraphR")
 }

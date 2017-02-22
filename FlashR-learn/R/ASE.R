@@ -63,7 +63,7 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 	multiply <- function(x, extra) fm %*% x
 	multiply.right <- function(m) t(fm) %*% m
 	multiply.left.diag <- function(v, m) fm.mapply.col(m, v, fm.bo.mul)
-	get.degree <- function(fm) fm %*% fm.rep.int(1, ncol(fm))
+	get.degree <- function(fm) drop(fm %*% fm.rep.int(1, ncol(fm)))
 
 	directed = !fm.is.sym(fm)
 	if (which == "L" || which == "nL") {
@@ -83,13 +83,20 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 		cd <- get.degree(fm) * c
 		if (directed) {
 			multiply <- function(x, extra) {
+				x <- fm.as.matrix(x)
 				t <- t(fm) %*% x + multiply.left.diag(cd, x)
 				fm %*% t + multiply.left.diag(cd, t)
 			}
-			multiply.right <- function(m) t(fm) %*% m + multiply.left.diag(cd, m)
+			multiply.right <- function(m) {
+				m <- fm.as.matrix(m)
+				t(fm) %*% m + multiply.left.diag(cd, m)
+			}
 		}
 		else
-			multiply <- function(x, extra) fm %*% x + multiply.left.diag(cd, x)
+			multiply <- function(x, extra) {
+				x <- fm.as.matrix(x)
+				fm %*% x + multiply.left.diag(cd, x)
+			}
 	}
 	else if (which == "L") {
 		d <- get.degree(fm)
@@ -103,6 +110,7 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 		# We compute the largest eigenvalues and then convert them to
 		# the smallest eigenvalues. It's easier to compute the largest eigenvalues.
 		multiply <- function(x, extra) {
+			x <- fm.as.matrix(x)
 			multiply.left.diag(d, fm %*% multiply.left.diag(d, x))
 		}
 		comp.oppo <- TRUE
@@ -112,9 +120,8 @@ fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
 		stopifnot(FALSE)
 	}
 
-	ret <- fm.eigen(multiply, sym=TRUE,
-					options=list(n=nrow(fm), which="LM",
-								 nev=nev, block_size=1, num_blocks=ncv, tol=tol))
+	ret <- fm.eigen(multiply, k=nev, n=nrow(fm), which="LM", sym=TRUE,
+					options=list(block_size=1, num_blocks=ncv, tol=tol))
 	rescale <- function(x) {
 		scal <- sqrt(colSums(x * x))
 		x <- fm.mapply.row(x, scal, fm.bo.div)

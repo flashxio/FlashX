@@ -19,7 +19,7 @@ include ../Makefile.common
 
 CXXFLAGS += -I../libsafs -I../matrix
 
-all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix utils
+all: libgraph unit-test tools matrix libgraph-algs test-algs utils
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -46,7 +46,7 @@ test-algs: libgraph libgraph-algs matrix
 test-matrix: libgraph matrix
 	$(MAKE) -C test-matrix
 
-utils: libgraph
+utils: libgraph libgraph-algs
 	$(MAKE) -C utils
 
 clean:

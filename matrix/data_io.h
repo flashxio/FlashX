@@ -118,6 +118,10 @@ enum dup_policy
 	REVERSE,
 };
 
+ele_parser::const_ptr get_ele_parser(const std::string &type);
+const scalar_type &get_ele_type(const std::string &type);
+bool valid_ele_type(const std::string &type);
+
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
 

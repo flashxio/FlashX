@@ -24,6 +24,8 @@
 #endif
 #include <pthread.h>
 
+#include <system_error>
+
 #include "thread.h"
 #include "common.h"
 
@@ -217,10 +219,9 @@ void thread::start()
 {
 	assert(id == 0);
 	int ret = pthread_create(&id, NULL, thread_run, (void *) this);
-	if (ret) {
-		perror("pthread_create");
-		::exit(1);
-	}
+	if (ret)
+		throw std::system_error(std::make_error_code((std::errc) ret),
+				"can't create thread");
 }
 
 static pthread_once_t once_control = PTHREAD_ONCE_INIT;

@@ -19,7 +19,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 {
 	# Add x_0 = 1 as the first column
 	m <- if(is.vector(X)) length(X) else nrow(X)
-	if(is.vector(X) || (!all(X[,1] == 1))) X <- fm.cbind(fm.rep.int(1, m), X)
+	if(is.vector(X) || (!all(X[,1] == 1))) X <- cbind(fm.as.matrix(fm.rep.int(1, m)), X)
 
 	num.features <- ncol(X)
 
@@ -34,16 +34,19 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 	if (method == "RNS")
 		rnorms <- rowSums(X * X)
 
+	eta.est <- 1
 	# Look at the values over each iteration
 	theta.path <- theta
 	for (i in 1:params$num.iters) {
+		print(paste("iter:", i))
 		g <- get.grad(X, y, theta)
+		l <- cost(X, y, theta)
 		if (!is.null(get.hessian) && i > 5) {
 			n <- nrow(X)
 			s <- params$hessian_size * n
 			if (method == "Newton") {
 				D2 <- get.hessian(X, y, theta)
-				H <- fm.conv.FM2R(t(X) %*% sweep(X, 1, fm.as.vector(D2), FUN="*"))
+				H <- t(X) %*% sweep(X, 1, fm.as.vector(D2), FUN="*")
 			}
 			else if (method == "LS") {
 			}
@@ -64,44 +67,52 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 				D2.sub <- D2[idx]
 				# TODO
 				D2.sub <- fm.materialize(D2.sub)
-				H <- fm.conv.FM2R(t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub / p.sub), FUN="*"))
+				H <- t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub / p.sub), FUN="*")
 			}
 			else if (method == "Uniform") {
 				# TODO we need to fix this.
 				idx <- which(fm.conv.FM2R(fm.runif(n) < s/n))
 				X.sub <- X[idx, ]
 				D2.sub <- get.hessian(X.sub, y[idx], theta)
-				H <- fm.conv.FM2R(t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub * n),
-													 FUN="*") / s)
+				H <- t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub * n), FUN="*") / s
 			}
-			h.min <- min(abs(H[H != 0]))
-			if (h.min > 1)
-				H <- H / h.min
+			H <- as.matrix(H)
+			h.max <- max(abs(H[H != 0]))
+			if (h.max > 1)
+				H <- H / h.max
+			g <- as.matrix(g / length(y))
 			z <- pcg(H, as.vector(-g), maxiter=1000, tol=1e-06)
-			z <- t(z)
-			params$linesearch <- FALSE
+			z <- as.matrix(t(z))
+			params$linesearch <- TRUE
 		}
 		else {
 			params$linesearch <- TRUE
+			g <- as.matrix(g / length(y))
 			z <- -g
 		}
+		l <- as.vector(l)/length(y)
+		cat(i,  ": L2(g) =", L2(g), ", cost:", l, "\n")
 
-		eta <- 1
+		eta <- eta.est
 		if (params$linesearch) {
-			eta <- 0.01
-			l <- cost(X, y, theta)
-			delta = params$c * t(z) %*% g
-			while (cost(X, y, theta + eta * z) >= l + delta * eta)
-				eta <- eta * params$ro
+			delta = params$c * z %*% t(g)
+			while (TRUE) {
+				costs <- list()
+				costs[[1]] <- cost(X, y, theta + eta * z)
+				costs[[2]] <- cost(X, y, theta + eta * params$ro * z)
+				costs <- lapply(fm.materialize.list(costs), function(o) as.vector(o))
+				if (as.vector(costs[[1]]) / length(y) >= l + delta * eta) eta <- eta * params$ro else break
+				if (as.vector(costs[[2]]) / length(y) >= l + delta * eta) eta <- eta * params$ro else break
+			}
 			print(eta)
 		}
+		eta.est <- eta * 10
 		if (eta == 1)
 			params$linesearch <- FALSE
 
 		theta <- theta + z * eta
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
-		cat(i,  ": L2(g) =", L2(g), ", cost:", cost(X, y, theta), "\n")
 	}
 
 	if(params$out.path) return(theta.path) else return(theta.path[nrow(theta.path),])

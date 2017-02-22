@@ -95,7 +95,7 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		ABORT_MSG("get_next_request isn't supported");
+		throw unsupported_exception("get_next_request");
 	}
 };
 

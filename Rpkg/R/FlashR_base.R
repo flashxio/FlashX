@@ -708,8 +708,11 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	}
 	res <- .agg.na(x, fm.bo.min, test.na)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- min(res, .agg.na(arg, fm.bo.min, test.na))
+			res <- c(res, .agg.na(arg, fm.bo.min, test.na))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- min(unlist(res))
 	}
 	res
 }
@@ -725,10 +728,14 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	}
 	res <- .agg.na(x, fm.bo.max, test.na)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- max(res, .agg.na(arg, fm.bo.max, test.na))
+			res <- c(res, .agg.na(arg, fm.bo.max, test.na))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- max(unlist(res))
 	}
-	res
+	else
+		res
 }
 
 .pmin.int <- function(..., na.rm = FALSE)
@@ -1023,26 +1030,24 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 		x.min <- ifelse(is.na(x), .get.min.val(typeof(x)), x)
 		x.max <- ifelse(is.na(x), .get.max.val(typeof(x)), x)
 		test.na <- FALSE
-		tmp1 <- fm.agg.lazy(x.max, fm.bo.min)
-		tmp2 <- fm.agg.lazy(x.min, fm.bo.max)
+		tmp1 <- fm.agg(x.max, fm.bo.min)
+		tmp2 <- fm.agg(x.min, fm.bo.max)
 	}
 	else {
-		tmp1 <- fm.agg.lazy(x, fm.bo.min)
-		tmp2 <- fm.agg.lazy(x, fm.bo.max)
+		tmp1 <- fm.agg(x, fm.bo.min)
+		tmp2 <- fm.agg(x, fm.bo.max)
 	}
 	if (test.na) {
-		x.is.na <- fm.agg.lazy(.is.na.only(x), fm.bo.or)
-		res <- fm.materialize(tmp1, tmp2, x.is.na)
-		if (.fmV2scalar(res[[3]])) {
+		x.is.na <- fm.agg(.is.na.only(x), fm.bo.or)
+		if (.fmV2scalar(x.is.na)) {
 			na <- .get.na(typeof(x))
 			c(na, na)
 		}
 		else
-			c(.fmV2scalar(res[[1]]), .fmV2scalar(res[[2]]))
+			c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
 	}
 	else {
-		res <- fm.materialize(tmp1, tmp2)
-		c(.fmV2scalar(res[[1]]), .fmV2scalar(res[[2]]))
+		c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
 	}
 }
 
@@ -1064,13 +1069,12 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 .agg.na <- function(fm, op, test.na)
 {
 	if (test.na && .env.int$fm.test.na) {
-		any.na <- fm.agg.lazy(.is.na.only(fm), fm.bo.or)
-		agg.res <- fm.agg.lazy(fm, op)
-		res <- fm.materialize(any.na, agg.res)
-		if (.fmV2scalar(res[[1]]))
-			.get.na(typeof(res[[2]]))
+		any.na <- fm.agg(.is.na.only(fm), fm.bo.or)
+		agg.res <- fm.agg(fm, op)
+		if (.fmV2scalar(any.na))
+			.get.na(typeof(agg.res))
 		else
-			.fmV2scalar(res[[2]])
+			agg.res
 	}
 	else
 		fm.agg(fm, op)
@@ -1095,10 +1099,11 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 #' fm.any(mat)
 fm.any <- function(x, lazy=FALSE)
 {
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.or)
+	ret <- fm.agg(x, fm.bo.or)
+	if (!lazy)
+		.fmV2scalar(ret)
 	else
-		fm.agg(x, fm.bo.or)
+		ret
 }
 
 .any.int <- function(x, ..., na.rm)
@@ -1120,16 +1125,15 @@ fm.any <- function(x, lazy=FALSE)
 		others <- .replace.na.list(others, FALSE)
 		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.or, test.na)
-	if (is.na(res))
-		return(res)
+	res <- fm.conv.FM2R(.agg.na(x, fm.bo.or, test.na))
 	if (length(others) >= 1) {
+		if (!is.na(res) && res)
+			return(TRUE)
 		for (arg in others) {
-			res <- res | .agg.na(arg, fm.bo.or, test.na)
-			if (is.na(res))
-				return(res)
-			if (res)
+			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.or, test.na))
+			if (!is.na(tmp) && tmp)
 				return(TRUE)
+			res <- res | tmp
 		}
 	}
 	res
@@ -1159,10 +1163,11 @@ setMethod("any", "fmV", .any.int)
 #' fm.all(mat)
 fm.all <- function(x, lazy=FALSE)
 {
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.and)
+	ret <- fm.agg(x, fm.bo.and)
+	if (!lazy)
+		.fmV2scalar(ret)
 	else
-		fm.agg(x, fm.bo.and)
+		ret
 }
 
 .all.int <- function(x, ..., na.rm)
@@ -1184,16 +1189,15 @@ fm.all <- function(x, lazy=FALSE)
 		others <- .replace.na.list(others, TRUE)
 		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.and, test.na)
-	if (is.na(res))
-		return(res)
+	res <- fm.conv.FM2R(.agg.na(x, fm.bo.and, test.na))
 	if (length(others) >= 1) {
+		if (!is.na(res) && !res)
+			return(FALSE)
 		for (arg in others) {
-			res <- res & .agg.na(arg, fm.bo.and, test.na)
-			if (is.na(res))
-				return(res)
-			if (!res)
+			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.and, test.na))
+			if (!is.na(tmp) && !tmp)
 				return(FALSE)
+			res <- res & tmp
 		}
 	}
 	res
@@ -1207,8 +1211,6 @@ setMethod("all", "fmV", .all.int)
 #' Sum of Vector Elements
 #'
 #' \code{sum} returns the sum of all the values in its arguments.
-#' \code{fm.sum} returns the sum of all the values in the input object. It can
-#' evaluate the summation lazily.
 #'
 #' @param x a FlashR vector or matrix.
 #' @param ... zero or more vectors or matrices.
@@ -1220,14 +1222,7 @@ setMethod("all", "fmV", .all.int)
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
 #' sum(mat)
-#' fm.sum(mat)
-fm.sum <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.add)
-	else
-		fm.agg(x, fm.bo.add)
-}
+NULL
 
 .sum.int <- function(x, ..., na.rm)
 {
@@ -1243,8 +1238,11 @@ fm.sum <- function(x, lazy=FALSE)
 	}
 	res <- .agg.na(x, fm.bo.add, test.na)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- res + .agg.na(arg, fm.bo.add, test.na)
+			res <- c(res, .agg.na(arg, fm.bo.add, test.na))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- sum(unlist(res))
 	}
 	res
 }
@@ -1444,28 +1442,11 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #'
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
-#' mat <- fm.rowSums(mat)
-#' mat <- fm.colSums(mat)
 #' mat <- rowSums(mat)
 #' mat <- colSums(mat)
 #' mat <- rowMeans(mat)
 #' mat <- colMeans(mat)
-fm.rowSums <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.mat.lazy(x, 1, fm.bo.add)
-	else
-		fm.agg.mat(x, 1, fm.bo.add)
-}
-
-#' @rdname colSums
-fm.colSums <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.mat.lazy(x, 2, fm.bo.add)
-	else
-		fm.agg.mat(x, 2, fm.bo.add)
-}
+NULL
 
 #' @rdname colSums
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY"),
@@ -1539,8 +1520,13 @@ setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
 #' @rdname fm.table
 fm.table <- function(x)
 {
-	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
-	ret <- fm.sgroupby(x, count)
+	valid.vec <- function(x) x@len > 0
+	if (class(x) == "fmVFactor" && valid.vec(x@vals) && valid.vec(x@cnts))
+		ret <- list(val=x@vals, agg=x@cnts)
+	else {
+		count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
+		ret <- fm.sgroupby(x, count)
+	}
 	if (!is.null(ret))
 		new("fm.table", val=ret$val, Freq=ret$agg)
 	else
@@ -1814,28 +1800,14 @@ NULL
 {
 	orig.test.na <- .env.int$fm.test.na
 	fm.set.test.na(FALSE)
-	lazy.res <- list()
-	if (fm.is.matrix(x)) {
-		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
-		lazy.res[[2]] <- fm.agg.mat.lazy(x, 2, fm.bo.max)
-		lazy.res[[3]] <- fm.agg.mat.lazy(x, 2, fm.bo.add)
-		lazy.res[[4]] <- fm.agg.mat.lazy(abs(x), 2, fm.bo.add)
-		lazy.res[[5]] <- fm.agg.mat.lazy(x * x, 2, fm.bo.add)
-		lazy.res[[6]] <- fm.agg.mat.lazy(x != 0, 2, fm.bo.add)
-	}
-	else if (fm.is.vector(x)) {
-		lazy.res[[1]] <- fm.agg.lazy(x, fm.bo.min)
-		lazy.res[[2]] <- fm.agg.lazy(x, fm.bo.max)
-		lazy.res[[3]] <- fm.agg.lazy(x, fm.bo.add)
-		lazy.res[[4]] <- fm.agg.lazy(abs(x), fm.bo.add)
-		lazy.res[[5]] <- fm.agg.lazy(x * x, fm.bo.add)
-		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
-	}
-	else {
-		print("summary only works on a FlashR object")
-		return(NULL)
-	}
-	res <- fm.materialize.list(lazy.res)
+	x <- fm.as.matrix(x)
+	res <- list()
+	res[[1]] <- fm.agg.mat(x, 2, fm.bo.min)
+	res[[2]] <- fm.agg.mat(x, 2, fm.bo.max)
+	res[[3]] <- fm.agg.mat(x, 2, fm.bo.add)
+	res[[4]] <- fm.agg.mat(abs(x), 2, fm.bo.add)
+	res[[5]] <- fm.agg.mat(x * x, 2, fm.bo.add)
+	res[[6]] <- fm.agg.mat(x != 0, 2, fm.bo.add)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
@@ -2007,45 +1979,46 @@ fm.cal.residul <- function(mul, values, vectors)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
-		  if (is.logical(center) && center) {
-			  center <- colMeans(x)
-			  x <- fm.mapply.row(x, center, fm.bo.sub)
-		  }
-		  else if (!is.logical(center)) {
+		  if (!is.logical(center)) {
 			  if (length(center) != ncol(x)) {
 				  print("The length of center should be equal to #columns of x")
 				  return(NULL)
 			  }
 			  x <- fm.mapply.row(x, center, fm.bo.sub)
 		  }
-
-		  # If scale is true and center is also true, scale by their standard
-		  # deviation.
-		  if (is.logical(scale) && scale && is.logical(center) && center) {
-			  sum.x <- fm.colSums(x, TRUE)
-			  sum.x2 <- fm.colSums(x * x, TRUE)
-			  res <- fm.materialize(sum.x, sum.x2)
-			  sum.x <- res[[1]]
-			  sum.x2 <- res[[2]]
-			  n <- nrow(x)
-			  avg <- sum.x / n
-			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
-			  x <- fm.mapply.row(x, sd, fm.bo.div)
-		  }
-		  # If scale is true and center is false, scale by their root mean
-		  # square.
-		  else if (is.logical(scale) && scale) {
-			  sum.x2 <- fm.colSums(x * x)
-			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
-			  x <- fm.mapply.row(x, scal, fm.bo.div)
-		  }
-		  else if (!is.logical(scale)) {
+		  if (!is.logical(scale)) {
 			  if (length(scale) != ncol(x)) {
 				  print("The length of scale should be equal to #columns of x")
 				  return(NULL)
 			  }
 			  x <- fm.mapply.row(x, scale, fm.bo.div)
 		  }
+
+		  # If scale is true and center is also true, scale by their standard
+		  # deviation.
+		  if (is.logical(scale) && scale && is.logical(center) && center) {
+			  sum.x <- colSums(x)
+			  sum.x2 <- colSums(x * x)
+			  n <- nrow(x)
+			  avg <- sum.x / n
+			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  center <- sum.x / n
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+			  x <- fm.mapply.row(x, sd, fm.bo.div)
+		  }
+		  # If scale is true and center is false, scale by their root mean
+		  # square.
+		  else if (is.logical(scale) && scale) {
+			  sum.x2 <- colSums(x * x)
+			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
+			  x <- fm.mapply.row(x, scal, fm.bo.div)
+		  }
+		  # If scale is false and center is true.
+		  else if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+
 		  x
 })
 

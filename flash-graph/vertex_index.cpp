@@ -470,8 +470,18 @@ void in_mem_cdirected_vertex_index::verify_against(
 	while (it.has_next()) {
 		ext_mem_vertex_info in_info = index.get_vertex_info_in(id);
 		ext_mem_vertex_info out_info = index.get_vertex_info_out(id);
-		TEST(in_info.get_off() == it.get_curr_off());
-		TEST(out_info.get_off() == it.get_curr_out_off());
+		if (in_info.get_off() != it.get_curr_off()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"in off: %1% != curr off: %2%") % in_info.get_off()
+				% it.get_curr_off();
+			return;
+		}
+		if (out_info.get_off() == it.get_curr_out_off()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"out off: %1% != curr off: %2%") % out_info.get_off()
+				% it.get_curr_out_off();
+			return;
+		}
 		id++;
 		it.move_next();
 	}
@@ -745,7 +755,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges(id) + get_num_out_edges(id);
 			default:
-				ABORT_MSG("wrong edge type");
+				return 0;
 		}
 	}
 

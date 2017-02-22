@@ -30,6 +30,7 @@
 #include "EM_vv_store.h"
 #include "EM_vector.h"
 #include "fg_utils.h"
+#include "data_io.h"
 
 using namespace fm;
 
@@ -768,8 +769,8 @@ static vector_vector::ptr conv_fg2vv(fg::FG_graph::ptr graph, bool is_out_edge)
 	else
 		init_in_offs(vindex, offs);
 
-	auto graph_data = graph->get_graph_data();
-	if (graph_data) {
+	if (graph->is_in_mem()) {
+		auto graph_data = graph->get_graph_data();
 		size_t len = graph_data->get_data().get_length();
 		detail::smp_vec_store::ptr mem_vec = detail::smp_vec_store::create(
 				len, get_scalar_type<char>());
@@ -907,7 +908,7 @@ fg::FG_graph::ptr fetch_subgraph(fg::FG_graph::ptr graph,
 	const fg::graph_header &old_header = graph->get_graph_header();
 	factor f(old_header.get_num_vertices());
 	factor_vector::ptr labels = factor_vector::create(f,
-			old_header.get_num_vertices(), -1, graph->is_in_mem(),
+			old_header.get_num_vertices(), -1, true,
 			set_subgraph_label_operate());
 
 	detail::vec_store::ptr graph_data = detail::vec_store::create(
@@ -1407,6 +1408,56 @@ void export_2d_matrix(vector_vector::ptr adjs, size_t num_cols,
 		mindex->dump(mat_idx_file);
 	else
 		mindex->safs_dump(mat_idx_file);
+}
+
+static void print_vertex(const ext_mem_undirected_vertex &v, bool directed,
+		const std::string &delim, const scalar_type *edge_data_type, FILE *f)
+{
+	for (size_t i = 0; i < v.get_num_edges(); i++) {
+		// For undirected vertices, we only need to print the first half.
+		if (!directed && v.get_neighbor(i) > v.get_id())
+			break;
+		std::string str = std::to_string(v.get_id()) + delim
+			+ std::to_string(v.get_neighbor(i));
+		if (v.has_edge_data() && edge_data_type)
+			str = str + edge_data_type->conv2str(v.get_raw_edge_data(i), 1, "");
+		fprintf(f, "%s\n", str.c_str());
+	}
+}
+
+// We are going to print the graph in a file. We can assume the graph is
+// small enough to be stored in memory.
+void print_graph_el(FG_graph::ptr fg, const std::string &delim,
+		const std::string &edge_data_type, FILE *f)
+{
+	if (!edge_data_type.empty() && !valid_ele_type(edge_data_type)) {
+		BOOST_LOG_TRIVIAL(error) << "unknown edge data type";
+		return;
+	}
+	const scalar_type *type = NULL;
+	if (!edge_data_type.empty())
+		type = &get_ele_type(edge_data_type);
+
+	// If the graph isn't stored in memory, we need to load it to memory first.
+	if (!fg->is_in_mem())
+		fg = FG_graph::create(fg->get_graph_data(), fg->get_index_data(),
+				"tmp", fg->get_configs());
+
+	vector_vector::ptr vv = conv_fg2vv(fg, true);
+	detail::mem_vv_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::mem_vv_store>(
+				vv->get_raw_store());
+	if (store == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't load the graph to memory";
+		return;
+	}
+	bool directed = fg->is_directed();
+	for (size_t i = 0; i < vv->get_num_vecs(); i++) {
+		const ext_mem_undirected_vertex *v
+			= reinterpret_cast<const ext_mem_undirected_vertex *>(
+					store->get_raw_arr(i));
+		print_vertex(*v, directed, delim, type, f);
+	}
 }
 
 }

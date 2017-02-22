@@ -18,6 +18,7 @@
  */
 
 #include <algorithm>
+#include <system_error>
 
 #include "io_interface.h"
 #include "comp_io_scheduler.h"
@@ -682,7 +683,11 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
-		TEST(ids[i] <= this->get_max_vertex_id());
+		if (ids[i] > this->get_max_vertex_id()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"invalid vertex Id: %1%") % ids[i];
+			return;
+		}
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
@@ -744,10 +749,8 @@ bool graph_engine::progress_first_level()
 	// the completion signal.
 	int rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	return is_complete;
 }
 
@@ -760,10 +763,8 @@ bool graph_engine::progress_next_level()
 	// If the queue of the next level is empty, the program can terminate.
 	int rc = pthread_barrier_wait(&barrier1);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	int num_activates = curr->enter_next_level();
 	tot_num_activates.inc(num_activates);
@@ -790,10 +791,8 @@ bool graph_engine::progress_next_level()
 	// the completion signal.
 	rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-	{
-		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
-		exit(-1);
-	}
+		throw std::system_error(std::make_error_code((std::errc) rc),
+				"Could not wait on barrier");
 	return is_complete;
 }
 

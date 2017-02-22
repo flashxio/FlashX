@@ -26,6 +26,7 @@
 #include "safs_file.h"
 #include "RAID_config.h"
 #include "io_interface.h"
+#include "file_mapper.h"
 
 namespace safs
 {
@@ -41,6 +42,8 @@ static std::vector<int> shuffle_disks(int num_disks)
 
 safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 {
+	sys_mapping_option = conf.get_mapping_option();
+	sys_block_size = conf.get_block_size();
 	native_dirs = conf.get_disks();
 	for (unsigned i = 0; i < native_dirs.size(); i++)
 		native_dirs[i] = part_file_info(
@@ -130,10 +133,10 @@ bool safs_file::resize(size_t new_size)
 	assert(orig_size >= 0);
 	if ((size_t) orig_size < new_size) {
 		std::vector<std::string> data_files = get_data_files();
-		size_t size_per_disk = get_size_per_disk(new_size);
+		std::vector<size_t> sizes_per_disk = get_size_per_disk(new_size);
 		for (size_t i = 0; i < data_files.size(); i++) {
 			native_file f(data_files[i]);
-			bool ret = f.resize(size_per_disk);
+			bool ret = f.resize(sizes_per_disk[i]);
 			if (!ret)
 				return false;
 		}
@@ -199,19 +202,23 @@ bool safs_file::rename(const std::string &new_name)
 	return true;
 }
 
-size_t safs_file::get_size_per_disk(size_t file_size) const
+std::vector<size_t> safs_file::get_size_per_disk(size_t file_size) const
 {
-	size_t size_per_disk = file_size / native_dirs.size();
-	if (file_size % native_dirs.size() > 0)
-		size_per_disk++;
-	return ROUNDUP(size_per_disk, 512);
+	auto header = get_header();
+	if (!header.is_valid())
+		header = safs_header(sys_block_size, sys_mapping_option, false, file_size);
+	file_mapper::ptr map = file_mapper::create(header, native_dirs, name);
+	assert(map);
+	std::vector<size_t> ret = map->get_size_per_disk(div_ceil<size_t>(file_size,
+				PAGE_SIZE));
+	for (size_t i = 0; i < ret.size(); i++)
+		ret[i] = ret[i] * PAGE_SIZE;
+	return ret;
 }
 
 bool safs_file::create_file(size_t file_size, int block_size,
 		int mapping_option, safs_file_group::ptr group)
 {
-	size_t size_per_disk = get_size_per_disk(file_size);
-
 	// We use the random index to reorder the native directories.
 	// So different files map their data chunks to disks in different order.
 	// The benefit is that when we access data in the same location but from
@@ -224,6 +231,7 @@ bool safs_file::create_file(size_t file_size, int block_size,
 		dir_idxs = group->add_file(*this);
 
 	safs_header header(block_size, mapping_option, true, file_size);
+	std::vector<size_t> sizes_per_disk = get_size_per_disk(file_size);
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[dir_idxs[i]].get_file_name());
 		bool ret = dir.create_dir(true);
@@ -248,7 +256,7 @@ bool safs_file::create_file(size_t file_size, int block_size,
 			assert(ret == 0);
 		}
 		native_file f(dir.get_name() + "/" + itoa(i));
-		ret = f.create_file(size_per_disk);
+		ret = f.create_file(sizes_per_disk[i]);
 		if (!ret)
 			return false;
 	}
@@ -415,10 +423,8 @@ public:
 		long new_off = lseek(fd, off, SEEK_SET);
 		BOOST_VERIFY(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
-		if (ret < 0) {
+		if (ret < 0)
 			perror("complete_read");
-			exit(-1);
-		}
 		return ret;
 	}
 

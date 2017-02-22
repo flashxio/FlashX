@@ -123,6 +123,14 @@ vertex_index::ptr FG_graph::get_index_data() const
 		return vertex_index::safs_load(index_file);
 }
 
+in_mem_graph::ptr FG_graph::get_graph_data() const
+{
+	if (graph_data)
+		return graph_data;
+	else
+		return in_mem_graph::load_safs_graph(graph_file);
+}
+
 /********************** Get the degree of vertices ****************************/
 
 namespace {
@@ -145,9 +153,10 @@ public:
 class degree_vertex_program: public vertex_program_impl<degree_vertex>
 {
 	edge_type type;
-	FG_vector<vsize_t>::ptr degree_vec;
+	fm::detail::mem_vec_store::ptr degree_vec;
 public:
-	degree_vertex_program(FG_vector<vsize_t>::ptr degree_vec, edge_type type) {
+	degree_vertex_program(fm::detail::mem_vec_store::ptr degree_vec,
+			edge_type type) {
 		this->degree_vec = degree_vec;
 		this->type = type;
 	}
@@ -163,12 +172,11 @@ public:
 
 class degree_vertex_program_creater: public vertex_program_creater
 {
-	FG_vector<vertex_id_t>::ptr degree_vec;
+	fm::detail::mem_vec_store::ptr degree_vec;
 	edge_type type;
 public:
 	degree_vertex_program_creater(
-			FG_vector<vertex_id_t>::ptr degree_vec,
-			edge_type type) {
+			fm::detail::mem_vec_store::ptr degree_vec, edge_type type) {
 		this->degree_vec = degree_vec;
 		this->type = type;
 	}
@@ -189,20 +197,22 @@ void degree_vertex::run(vertex_program &prog)
 
 }
 
-FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
+fm::vector::ptr get_degree(FG_graph::ptr fg, edge_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<degree_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
+	fm::detail::mem_vec_store::ptr degree_vec = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vsize_t>());
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new degree_vertex_program_creater(degree_vec, type)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	return degree_vec;
+	return fm::vector::create(degree_vec);
 }
 
 /*************** Get the degree of vertices in a timestamp ********************/
@@ -231,10 +241,10 @@ class ts_degree_vertex_program: public vertex_program_impl<ts_degree_vertex>
 	time_t start_time;
 	time_t time_interval;
 	edge_type type;
-	FG_vector<vsize_t>::ptr degree_vec;
+	fm::detail::mem_vec_store::ptr degree_vec;
 public:
-	ts_degree_vertex_program(FG_vector<vsize_t>::ptr degree_vec, edge_type type,
-			time_t start_time, time_t time_interval) {
+	ts_degree_vertex_program(fm::detail::mem_vec_store::ptr degree_vec,
+			edge_type type, time_t start_time, time_t time_interval) {
 		this->degree_vec = degree_vec;
 		this->type = type;
 		this->start_time = start_time;
@@ -262,11 +272,11 @@ class ts_degree_vertex_program_creater: public vertex_program_creater
 {
 	time_t start_time;
 	time_t time_interval;
-	FG_vector<vertex_id_t>::ptr degree_vec;
+	fm::detail::mem_vec_store::ptr degree_vec;
 	edge_type type;
 public:
 	ts_degree_vertex_program_creater(
-			FG_vector<vertex_id_t>::ptr degree_vec, edge_type type,
+			fm::detail::mem_vec_store::ptr degree_vec, edge_type type,
 			time_t start_time, time_t time_interval) {
 		this->degree_vec = degree_vec;
 		this->type = type;
@@ -301,13 +311,13 @@ void ts_degree_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		degree_vprog.set_degree(vertex.get_id(), ts_end_it - ts_it);
 	}
 	else {
-		ABORT_MSG("undirected graph isn't supported");
+		throw unsupported_exception("undirected graph in TS graph");
 	}
 }
 
 }
 
-FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+fm::vector::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval)
 {
 	graph_index::ptr index = NUMA_graph_index<ts_degree_vertex>::create(
@@ -315,12 +325,14 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 
-	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
+	fm::detail::mem_vec_store::ptr degree_vec = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vsize_t>());
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new ts_degree_vertex_program_creater(degree_vec, type,
 					start_time, time_interval)));
 	graph->wait4complete();
-	return degree_vec;
+	return fm::vector::create(degree_vec);
 }
 
 /************** Get the time range of the time-series graph *******************/
@@ -405,7 +417,7 @@ void time_range_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		}
 	}
 	else {
-		ABORT_MSG("undirected graph isn't supported");
+		throw unsupported_exception("undirected graph in TS graph");
 	}
 }
 

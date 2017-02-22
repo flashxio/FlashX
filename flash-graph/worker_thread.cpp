@@ -392,7 +392,6 @@ worker_thread::worker_thread(graph_engine *graph,
 #endif
 		default:
 			fprintf(stderr, "wrong graph type");
-			abort();
 	}
 }
 

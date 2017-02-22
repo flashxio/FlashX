@@ -44,10 +44,11 @@ class groupby_op: public detail::portion_mapply_op
 	size_t num_levels;
 	matrix_margin margin;
 	agg_operate::const_ptr op;
+	const size_t data_id;
 public:
 	groupby_op(agg_operate::const_ptr op, size_t num_levels,
 			matrix_margin margin): detail::portion_mapply_op(0, 0,
-				op->get_output_type()) {
+				op->get_output_type()), data_id(matrix_store::mat_counter++) {
 		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 		part_results.resize(num_threads);
 		part_agg.resize(num_threads);
@@ -55,6 +56,9 @@ public:
 		this->num_levels = num_levels;
 		this->margin = margin;
 		this->op = op;
+	}
+	size_t get_data_id() const {
+		return data_id;
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -240,6 +244,7 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				f.get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
@@ -269,11 +274,17 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				labels->get_factor().get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::ptr groupby_matrix_store::get_agg_res() const
 {
 	return std::static_pointer_cast<groupby_op>(portion_op)->get_agg();
+}
+
+size_t groupby_matrix_store::get_data_id() const
+{
+	return std::static_pointer_cast<groupby_op>(portion_op)->get_data_id();
 }
 
 bool groupby_matrix_store::has_materialized() const

@@ -26,8 +26,7 @@ void test_transpose()
 	std::vector<matrix_store::const_ptr> sinks;
 
 	// Agg matrix.
-	sink = sink_store::const_ptr(new agg_matrix_store(data,
-				matrix_margin::MAR_COL, agg_op));
+	sink = agg_matrix_store::create(data, matrix_margin::MAR_COL, agg_op);
 	printf("agg sink: %ld, %ld\n", sink->get_num_rows(), sink->get_num_cols());
 	assert(sink->get_num_rows() == 1);
 	assert(sink->get_num_cols() == data->get_num_cols());
@@ -50,8 +49,7 @@ void test_transpose()
 	assert(t->get_num_cols() == 1);
 
 	// IPW matrix.
-	sink = sink_store::const_ptr(new IPW_matrix_store(data->transpose(), data2,
-				multiply, add));
+	sink = IPW_matrix_store::create(data->transpose(), data2, multiply, add);
 	printf("IPW sink: %ld, %ld\n", sink->get_num_rows(), sink->get_num_cols());
 	assert(sink->get_num_rows() == data->get_num_cols());
 	assert(sink->get_num_cols() == data2->get_num_cols());
@@ -67,8 +65,8 @@ void test_transpose()
 	for (size_t i = 0; i < num_block_rows; i++) {
 		for (size_t j = 0; j < num_block_cols; j++) {
 			matrix_store::const_ptr right = j == num_block_cols - 1 ? data3 : data2;
-			sinks[num_block_cols * i + j] = sink_store::const_ptr(
-					new IPW_matrix_store(data->transpose(), right, multiply, add));
+			sinks[num_block_cols * i + j] = IPW_matrix_store::create(
+					data->transpose(), right, multiply, add);
 		}
 	}
 	sink = block_sink_store::create(sinks, num_block_rows, num_block_cols);
@@ -86,8 +84,8 @@ void test_transpose()
 	factor_col_vector::const_ptr labels = factor_col_vector::create(factor(10),
 			dense_matrix::create_randu<int>(0, 10, data->get_num_rows(), 1,
 				matrix_layout_t::L_COL));
-	sink = sink_store::const_ptr(new groupby_matrix_store(data,
-				labels, matrix_margin::MAR_ROW, agg_op));
+	sink = groupby_matrix_store::create(data, labels, matrix_margin::MAR_ROW,
+			agg_op);
 	printf("groupby sink: %ld, %ld\n", sink->get_num_rows(), sink->get_num_cols());
 	assert(sink->get_num_rows() == 10);
 	assert(sink->get_num_cols() == data->get_num_cols());

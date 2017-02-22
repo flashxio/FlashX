@@ -52,7 +52,8 @@ setClass("fmV", representation(pointer = "externalptr", name = "character",
 #'            used for a vector.
 #' @slot ele_type a string indicating the element type in the vector.
 #' @slot num.levels an integer indicating the number of levels.
-setClass("fmVFactor", representation(num.levels = "integer"), contains = "fmV")
+setClass("fmVFactor", representation(num.levels = "integer", vals="fmV",
+									 cnts="fmV"), contains = "fmV")
 
 #' An S4 class to represent a binary operator used in generalized matrix
 #' operations.
@@ -89,6 +90,8 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 		NULL
 }
 
+new_fm <- .new.fm
+
 .new.fmV <- function(fm)
 {
 	if (!is.null(fm))
@@ -97,6 +100,8 @@ setClass("fm.apply.op", representation(info = "integer", name = "character"))
 	else
 		NULL
 }
+
+new_fmV <- .new.fmV
 
 #' Reconfigure FlashR
 #'
@@ -158,6 +163,8 @@ fm.print.features <- function()
 #' The matrix in the file is in the FlashR format.
 #' \code{fm.get.dense.matrix} returns a named dense matrix that has already
 #' been loaded to FlashR.
+#' \code{fm.load.list.vecs} reads a list of vectors from a text file. In this
+#' function, users can specify the element type for each vector.
 #'
 #' If a user provides \code{name} and \code{in.mem} is \code{TRUE}, the created
 #' vector/matrix will be kept on disks persistently. That is, even if a user
@@ -175,6 +182,8 @@ fm.print.features <- function()
 #' @param ele.type A string that represents the element type in a matrix.
 #'        "B" means binary, "I" means integer, "L" means long integer,
 #'        "F" means single-precision floating point, "D" means double-precision floating point.
+#' @param ele.types A vector of strings to indicate the element type of each vectors.
+#'        The length of the vector determines the number of columns.
 #' @param delim The delimiter of separating elements in the text format.
 #' @param nrow the number of rows in the binary dense matrix.
 #' @param ncol the number of columns in the binary dense matrix.
@@ -229,6 +238,20 @@ fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.ty
 }
 
 #' @rdname fm.get.matrix
+fm.load.list.vecs <- function(src.file, in.mem, ele.types=c("D"), delim=",")
+{
+	stopifnot(!is.null(src.file))
+	if (is.character(src.file))
+		src.file <- c(src.file)
+	ret <- .Call("R_FM_load_list_vecs", as.character(src.file), as.logical(in.mem),
+			   as.character(ele.types), as.character(delim), PACKAGE="FlashR")
+	if (is.null(ret))
+		NULL
+	else
+		lapply(ret, .new.fmV)
+}
+
+#' @rdname fm.get.matrix
 fm.load.sparse.matrix <- function(file, in.mem=TRUE, is.sym=FALSE, ele.type="B",
 								  delim=",", name="")
 {
@@ -249,6 +272,26 @@ fm.load.sparse.matrix.bin <- function(spm, spm.idx, t.spm=NULL, t.spm.idx=NULL, 
 				   as.character(t.spm), as.character(t.spm.idx), as.logical(in.mem),
 			  PACKAGE="FlashR")
 	.new.fm(m)
+}
+
+#' Export a dense matrix
+#'
+#' This function exports a dense matrix into a text file in the local filesystem.
+#'
+#' @param mat a FlashR matrix.
+#' @param file a string for the file name in the local filesystem.
+#' @param sep the field separator string. Values within each row are
+#'        separated by this string.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+#'
+#' @examples
+#' mat <- fm.runif.matrix(1000000, 10)
+#' fm.export.dense.matrix(mat, "./test_mat.txt")
+fm.export.dense.matrix <- function(mat, file, sep = ",")
+{
+	stopifnot(fm.is.object(mat))
+	.Call("R_FM_write_obj", mat, as.character(file), TRUE,
+		  as.character(sep), PACKAGE="FlashR")
 }
 
 #' Create a FlashR vector with replicated elements.
@@ -800,15 +843,17 @@ fm.as.factor <- function(fm, num.levels = -1)
 	if (class(fm) == "fmVFactor")
 		fm
 	else if (class(fm) == "fmV") {
-		if (typeof(fm) != "integer")
-			fm <- as.integer(fm)
-		if (num.levels < 0) {
-			r <- range(fm)
-			num.levels <- r[2] - r[1] + 1
-			fm <- fm - r[1]
-		}
-		new("fmVFactor", num.levels=as.integer(num.levels), pointer=fm@pointer,
-			name=fm@name, len=fm@len, type=fm@type, ele_type=fm@ele_type)
+		# If users can determine the number of levels, the vector has to be
+		# integer.
+		if (num.levels > 0)
+			stopifnot(typeof(fm) == "integer")
+		ret <- .Call("R_FM_create_factor", fm, as.integer(num.levels),
+					 PACKAGE="FlashR")
+		vals <- if (is.null(ret$vals)) new("fmV", len=0) else .new.fmV(ret$vals)
+		cnts <- if (is.null(ret$cnts)) new("fmV", len=0) else .new.fmV(ret$cnts)
+		new("fmVFactor", num.levels=ret$num.levels, pointer=ret$pointer,
+			name=ret$name, len=ret$len, type=ret$type, ele_type=ret$ele_type,
+			vals=vals, cnts=cnts)
 	}
 	else
 		stop("The input argument isn't a vector")
@@ -1178,15 +1223,9 @@ fm.create.agg.op <- function(agg, combine, name)
 #'
 #' \code{fm.agg} aggregates over the entire object.
 #'
-#' \code{fm.agg.lazy} aggregates over the entire object, but it performs
-#' aggregation lazily.
-#'
 #' \code{fm.agg.mat} aggregates on the rows or columns of a matrix. It performs
 #' aggregation on the shorter dimension lazily, but on the longer dimension
 #' immediately.
-#'
-#' \code{fm.agg.mat.lazy} aggregates on the rows or columns of a matrix and
-#' performs aggregation lazily regardless the dimension.
 #'
 #' @param fm a FlashR object
 #' @param op the reference or the name of a predefined basic operator or
@@ -1194,8 +1233,7 @@ fm.create.agg.op <- function(agg, combine, name)
 #'           \code{fm.create.agg.op}.
 #' @param margin the subscript which the function will be applied over.
 #' @return \code{fm.agg} returns a scalar, \code{fm.agg.mat} returns
-#'         a FlashR vector, \code{fm.agg.lazy} and \code{fm.agg.mat.lazy}
-#'         return a FlashR sink matrix.
+#'         a FlashR vector.
 #' @name fm.agg
 #'
 #' @examples
@@ -1205,20 +1243,10 @@ fm.create.agg.op <- function(agg, combine, name)
 #' sum <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
 #' res <- fm.agg(mat, sum)
 #' res <- fm.agg.mat(mat, 1, sum)
-fm.agg <- function(fm, op)
-{
-	stopifnot(!is.null(fm) && !is.null(op))
-	stopifnot(fm.is.object(fm))
-	if (class(op) == "character")
-		op <- fm.get.basic.op(op)
-	if (class(op) == "fm.bo")
-		op <- fm.create.agg.op(op, op, op@name)
-	stopifnot(class(op) == "fm.agg.op")
-	.Call("R_FM_agg", fm, op, PACKAGE="FlashR")
-}
+NULL
 
 #' @name fm.agg
-fm.agg.lazy <- function(fm, op)
+fm.agg <- function(fm, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(fm.is.object(fm))
@@ -1233,20 +1261,6 @@ fm.agg.lazy <- function(fm, op)
 
 #' @name fm.agg
 fm.agg.mat <- function(fm, margin, op)
-{
-	stopifnot(!is.null(fm) && !is.null(op))
-	stopifnot(class(fm) == "fm")
-	if (class(op) == "character")
-		op <- fm.get.basic.op(op)
-	if (class(op) == "fm.bo")
-		op <- fm.create.agg.op(op, op, op@name)
-	stopifnot(class(op) == "fm.agg.op")
-	ret <- .Call("R_FM_agg_mat", fm, as.integer(margin), op, PACKAGE="FlashR")
-	.new.fmV(ret)
-}
-
-#' @name fm.agg
-fm.agg.mat.lazy <- function(fm, margin, op)
 {
 	stopifnot(!is.null(fm) && !is.null(op))
 	stopifnot(class(fm) == "fm")
@@ -1347,7 +1361,7 @@ fm.set.test.na <- function(val)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(class(o1) == "fmV" || class(o2) == "fmV")
+	stopifnot(fm.is.vector(o1) || fm.is.vector(o2))
 	if (length(o1) == length(o2))
 		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	else if (length(o1) == 1)
@@ -1448,7 +1462,7 @@ fm.set.test.na <- function(val)
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(class(o1) == "fmV")
+	stopifnot(fm.is.vector(o1))
 	stopifnot(is.vector(o2))
 	if (length(o2) > 1) {
 		stopifnot(length(o2) == length(o1))
@@ -1601,7 +1615,7 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 
 .sapply.fmV <- function(o, FUN, set.na=TRUE)
 {
-	stopifnot(class(o) == "fmV")
+	stopifnot(fm.is.vector(o))
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.uop(FUN)
 	stopifnot(class(FUN) == "fm.bo")
@@ -1937,7 +1951,7 @@ fm.write.obj <- function(fm, file)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(fm.is.object(fm))
-	.Call("R_FM_write_obj", fm, file, PACKAGE="FlashR")
+	.Call("R_FM_write_obj", fm, as.character(file), FALSE, "", PACKAGE="FlashR")
 }
 
 #' Read a FlashR object (vector/matrix) from a file.
@@ -2133,6 +2147,18 @@ setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
 			  .new.fmV(ret)
 		  })
+#' @rdname ifelse
+setMethod("ifelse", signature(test = "fm", yes = "fm", no = "fm"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse", test, yes, no, PACKAGE="FlashR")
+			  .new.fm(ret)
+		  })
+#' @rdname ifelse
+setMethod("ifelse", signature(test = "fmV", yes = "fmV", no = "fmV"),
+		  function(test, yes, no) {
+			  ret <- .Call("R_FM_ifelse", test, yes, no, PACKAGE="FlashR")
+			  .new.fmV(ret)
+		  })
 
 # This returns NA of the right type.
 .get.na <- function(type) {
@@ -2302,8 +2328,7 @@ setMethod("nlevels", signature(x = "fmVFactor"), function(x) x@num.levels)
 #' @examples
 #' vec <- fm.as.factor(as.integer(fm.runif(100, min=0, max=100)))
 #' levels(vec)
-setMethod("levels", signature(x = "fmVFactor"), function(x)
-		  fm.seq.int(1, x@num.levels, 1))
+setMethod("levels", signature(x = "fmVFactor"), function(x) x@vals)
 
 #' Print the information of a FlashR object
 #'

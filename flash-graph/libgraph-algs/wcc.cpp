@@ -25,7 +25,6 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
-#include "FG_vector.h"
 #include "FGlib.h"
 #include "ts_graph.h"
 
@@ -403,13 +402,13 @@ void ts_wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 namespace fg
 {
 
-FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
+fm::vector::ptr compute_cc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on an undirected graph";
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	struct timeval start, end;
@@ -424,7 +423,7 @@ FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
 #endif
 	if (graph->is_directed()) {
 		fprintf(stderr, "cc has to run on an undirected graph\n");
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph->start_all(vertex_initializer::ptr(),
@@ -440,19 +439,21 @@ FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vertex_id_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, cc_vertex>(vec)));
-	return vec;
+				new save_query<vertex_id_t, cc_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
-FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
+fm::vector::ptr compute_wcc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
@@ -465,7 +466,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 #endif
 	if (!graph->is_directed()) {
 		fprintf(stderr, "wcc has to run on a directed graph\n");
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	struct timeval start, end;
@@ -483,19 +484,21 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vertex_id_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, wcc_vertex>(vec)));
-	return vec;
+				new save_query<vertex_id_t, wcc_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
-FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
+fm::vector::ptr compute_sync_wcc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<sync_wcc_vertex>::create(
@@ -508,7 +511,7 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 #endif
 	if (!graph->is_directed()) {
 		fprintf(stderr, "wcc has to run on a directed graph\n");
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	struct timeval start, end;
@@ -526,20 +529,22 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vertex_id_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, sync_wcc_vertex>(vec)));
-	return vec;
+				new save_query<vertex_id_t, sync_wcc_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
-FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+fm::vector::ptr compute_ts_wcc(FG_graph::ptr fg,
 		time_t start_time, time_t time_interval)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
@@ -553,7 +558,7 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 #endif
 	if (!graph->is_directed()) {
 		fprintf(stderr, "wcc has to run on a directed graph\n");
-		return FG_vector<vertex_id_t>::ptr();
+		return fm::vector::ptr();
 	}
 
 	struct timeval start, end;
@@ -571,10 +576,12 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 		ProfilerStop();
 #endif
 
-	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<vertex_id_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, wcc_vertex>(vec)));
-	return vec;
+				new save_query<vertex_id_t, wcc_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }

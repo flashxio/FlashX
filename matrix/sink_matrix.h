@@ -20,6 +20,8 @@
 #ifndef __FM_SINK_MATRIX_H__
 #define __FM_SINK_MATRIX_H__
 
+#include <unordered_set>
+
 #include "virtual_matrix_store.h"
 
 namespace fm
@@ -30,6 +32,8 @@ namespace detail
 
 class sink_store: public virtual_matrix_store
 {
+	static std::unordered_map<size_t, std::shared_ptr<const sink_store> > sinks;
+
 	matrix_store::const_ptr res;
 
 	// When we access the materialized result, we should also save it.
@@ -44,9 +48,26 @@ public:
 	typedef std::shared_ptr<sink_store> ptr;
 	typedef std::shared_ptr<const sink_store> const_ptr;
 
+	// Register a sink matrix.
+	static void register_sink_matrices(sink_store::const_ptr);
+	// Get the number of matrices that haven't been materialized.
+	static size_t get_unmaterialized() {
+		return sinks.size();
+	}
+	static void clear_sink_matrices() {
+		sinks.clear();
+	}
+	// Materialize a virtual matrix with some of the sink matrices.
+	// When the sink matrices are materialized, we keep them from the sink
+	// matrix set.
+	static void materialize_matrices(virtual_matrix_store::const_ptr);
+
 	sink_store(size_t nrow, size_t ncol, bool in_mem,
 			const scalar_type &type): virtual_matrix_store(nrow, ncol,
 				in_mem, type) {
+	}
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
 	}
 
 	// The class has been materialized.
@@ -118,6 +139,13 @@ public:
 		return false;
 	}
 
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+	virtual bool share_data(const matrix_store &store) const {
+		return false;
+	}
+
 	virtual void materialize_self() const {
 	}
 
@@ -141,20 +169,39 @@ class block_sink_store: public sink_store
 {
 	matrix_store::const_ptr result;
 	std::vector<sink_store::const_ptr> stores;
-	size_t num_block_rows;
-	size_t num_block_cols;
+	std::vector<size_t> nrow_in_blocks;
+	std::vector<size_t> ncol_in_blocks;
+	// If is_sym is true, we only need to store almost half of the sink
+	// matrices.
+	bool is_sym;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
+
+	size_t get_idx(size_t i, size_t j) const {
+		return i * get_num_block_cols() + j;
+	}
 
 	block_sink_store(const std::vector<sink_store::const_ptr> &stores,
-			size_t num_block_rows, size_t num_block_cols);
-	const sink_store &get_mat(size_t i, size_t j) const {
-		return *stores[i * num_block_cols + j];
-	}
+			size_t num_block_rows, size_t num_block_cols, bool is_sym);
+	block_sink_store(const std::vector<size_t> &nrow_in_blocks,
+			const std::vector<size_t> &ncol_in_blocks, bool in_mem,
+			const scalar_type &type, bool is_sym);
 public:
 	typedef std::shared_ptr<block_sink_store> ptr;
 	typedef std::shared_ptr<const block_sink_store> const_ptr;
 
 	static ptr create(const std::vector<matrix_store::const_ptr> &stores,
 			size_t num_block_rows, size_t num_block_cols);
+	static ptr create(const std::vector<size_t> &nrow_in_blocks,
+			const std::vector<size_t> &ncol_in_blocks, bool in_mem,
+			const scalar_type &type, bool is_sym);
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
 
 	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;
@@ -170,6 +217,19 @@ public:
 
 	virtual std::string get_name() const;
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
+
+	const std::vector<sink_store::const_ptr> &get_stores() const {
+		return stores;
+	}
+	matrix_store::const_ptr get_store(size_t i, size_t j) const;
+	void set_store(size_t i, size_t j, matrix_store::const_ptr store);
+
+	size_t get_num_block_rows() const {
+		return nrow_in_blocks.size();
+	}
+	size_t get_num_block_cols() const {
+		return ncol_in_blocks.size();
+	}
 };
 
 }

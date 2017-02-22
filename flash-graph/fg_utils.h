@@ -137,6 +137,12 @@ fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
 		edge_list::ptr el);
 
 /*
+ * This prints a graph into an edge list format.
+ */
+void print_graph_el(fg::FG_graph::ptr, const std::string &delim,
+		const std::string &edge_attr_type, FILE *f);
+
+/*
  * Fetch the subgraph that contains the specified vertices from the graph.
  * If `compact' is false, the constructed subgraph contains the same number
  * of vertices as the original graph but the unspecified vertices contains

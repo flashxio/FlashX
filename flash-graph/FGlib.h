@@ -24,6 +24,8 @@
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
+#include "vector.h"
+
 namespace safs
 {
 	class file_io_factory;
@@ -111,10 +113,7 @@ public:
 		return graph_data != NULL;
 	}
 
-	std::shared_ptr<in_mem_graph> get_graph_data() const {
-		return graph_data;
-	}
-
+	std::shared_ptr<in_mem_graph> get_graph_data() const;
 	std::shared_ptr<vertex_index> get_index_data() const;
 
 	graph_engine::ptr create_engine(graph_index::ptr index);
@@ -123,8 +122,20 @@ public:
 	 * \brief Get the header of the graph that contains basic information of the graph.
 	 * \return The graph header.
 	 */
-	const graph_header &get_graph_header() {
+	const graph_header &get_graph_header() const {
 		return header;
+	}
+
+	bool is_directed() const {
+		return get_graph_header().is_directed_graph();
+	}
+
+	size_t get_num_vertices() const {
+		return get_graph_header().get_num_vertices();
+	}
+
+	size_t get_num_edges() const {
+		return get_graph_header().get_num_edges();
 	}
 };
 
@@ -153,7 +164,7 @@ enum directed_triangle_type
 	ALL,
 };
 
-FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg);
+fm::vector::ptr compute_cc(FG_graph::ptr fg);
 
 /**
   * \brief Compute all weakly connectected components of a graph.
@@ -162,7 +173,7 @@ FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg);
   * \return A vector with a component ID for each vertex in the graph.
   *
 */
-FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
+fm::vector::ptr compute_wcc(FG_graph::ptr fg);
 
 /**
   * \brief Compute all weakly connectected components of a graph synchronously.
@@ -172,7 +183,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
   * \param fg The FlashGraph graph object for which you want to compute.
   * \return A vector with a component ID for each vertex in the graph.
  */
-FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg);
+fm::vector::ptr compute_sync_wcc(FG_graph::ptr fg);
 
 /**
  * \brief Compute all weakly connectected components of a time-series graph
@@ -184,7 +195,7 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg);
  * \return A vector with a component ID for each vertex in the graph.
  *
  */
-FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+fm::vector::ptr compute_ts_wcc(FG_graph::ptr fg,
 		time_t start_time, time_t time_interval);
 
 /**
@@ -194,7 +205,7 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
   * \return A vector with a component ID for each vertex in the graph.
   *
 */
-FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg);
+fm::vector::ptr compute_scc(FG_graph::ptr fg);
 
 /**
   * \brief Compute the directed triangle count for each each vertex.
@@ -206,9 +217,9 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg);
   *         each vertex in the graph.
   *
 */
-FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
+fm::vector::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type);
-FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
+fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type);
 /**
   * \brief Compute undirected triangle count for each vertex.
@@ -218,7 +229,7 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
   *         each vertex in the graph.
   *
 */
-FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
+fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg);
 
 /**
   * \brief Compute the per-vertex local Scan Statistic 
@@ -227,8 +238,8 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
   *          local scan value.
   *
 */
-FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
-FG_vector<size_t>::ptr compute_local_scan2(FG_graph::ptr fg);
+fm::vector::ptr compute_local_scan(FG_graph::ptr);
+fm::vector::ptr compute_local_scan2(FG_graph::ptr fg);
 
 /**
   * \brief Obtain the top K vertices with the largest local Scan 
@@ -263,7 +274,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed);
   *         PageRank value.
   *
 */
-FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor);
 
 /**
@@ -279,10 +290,10 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
   *         PageRank value.
   *
 */
-FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
+fm::vector::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
 		float damping_factor);
 
-FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
 
 /**
@@ -297,8 +308,7 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
  * \return An `FG_vector` containing the core of each vertex between `k`
  *         and `kmax`. All other vertices are assigned to core 0.
  */
-FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
-		                size_t k, size_t kmax=0);
+fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0);
 
 /**
  * \brief Get the degree of all vertices in the graph.
@@ -306,7 +316,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
  * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
  * \return A vector with an entry for each vertex degree.
  */
-FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
+fm::vector::ptr get_degree(FG_graph::ptr fg, edge_type type);
 
 /**
   * \brief Compute the transitivity/clustering coefficient of a graph.
@@ -315,7 +325,7 @@ FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
   * \return A vector with an entry for each vertex in the graph's
   *         transitivity value.
 */
-FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
+fm::vector::ptr compute_transitivity(FG_graph::ptr fg);
 
 /**
   * \brief Compute the betweeenness centrality of a graph.
@@ -325,7 +335,7 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
   * \return A vector with an entry for each vertex in the graph's
   *         betweennesss centrality value.
 */
-FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg,
+fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
 		const std::vector<vertex_id_t>& vids);
 
 /**
@@ -337,7 +347,7 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg,
  * \param time_interval length of the time interval.
  * \return A vector with an entry for each vertex degree.
  */
-FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+fm::vector::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
 
 /**
@@ -356,13 +366,6 @@ std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg);
  */
 void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 		std::vector<std::vector<double> > &overlap_matrix);
-
-/**
- * \brief Compute transitivity of all vertices in the graph.
- * \param fg The FlashGraph graph object for which you want to compute.
- * \return A vector with an transitivity value for each vertex.
- */
-FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
 
 /**
  * \brief Compute louvain clustering for a graph.

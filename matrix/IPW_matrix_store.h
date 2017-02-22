@@ -43,14 +43,33 @@ class IPW_matrix_store: public sink_store
 	matrix_store::const_ptr right_mat;
 	bulk_operate::const_ptr left_op;
 	bulk_operate::const_ptr right_op;
-	std::shared_ptr<portion_mapply_op> portion_op;
+	std::shared_ptr<const portion_mapply_op> portion_op;
 	matrix_layout_t layout;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
 
-	matrix_store::ptr get_combine_res() const;
-public:
+	matrix_store::const_ptr get_combine_res() const;
 	IPW_matrix_store(matrix_store::const_ptr left, matrix_store::const_ptr right,
 			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
-			matrix_layout_t layout = matrix_layout_t::L_NONE);
+			matrix_layout_t layout);
+	// This constructor is used to construct the transpose of the matrix.
+	IPW_matrix_store(matrix_store::const_ptr left, matrix_store::const_ptr right,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t layout,
+			std::shared_ptr<const portion_mapply_op> portion_op);
+public:
+	static ptr create(matrix_store::const_ptr left, matrix_store::const_ptr right,
+			bulk_operate::const_ptr left_op, bulk_operate::const_ptr right_op,
+			matrix_layout_t layout = matrix_layout_t::L_NONE) {
+		ptr ret(new IPW_matrix_store(left, right, left_op, right_op, layout));
+		sink_store::register_sink_matrices(ret);
+		return ret;
+	}
+	virtual size_t get_data_id() const;
 
 	virtual bool has_materialized() const;
 

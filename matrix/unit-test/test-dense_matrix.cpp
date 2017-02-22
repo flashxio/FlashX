@@ -136,7 +136,7 @@ float get_precision<float>()
 template<>
 double get_precision<double>()
 {
-	return 1e-14;
+	return 1e-13;
 }
 
 template<class T>
@@ -422,6 +422,32 @@ void test_multiply(int num_nodes)
 {
 	dense_matrix::ptr m1, m2, correct, res;
 
+	printf("Test multiplication on wide block matrix X tall block matrix\n");
+	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
+	block_size = 3;
+	matrix_conf.set_max_multiply_block_size(6);
+	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
+			get_scalar_type<T>());
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test self cross prod\n");
+	m2 = m1->transpose();
+	correct = blas_multiply(*m1, *m2);
+	res = m1->multiply(*m2);
+	verify_result(*res, *correct, approx_equal_func<T>());
+
+	printf("Test transpose of self cross prod\n");
+	res = m1->multiply(*m2);
+	res = res->transpose();
+	correct = blas_multiply(*m2->transpose(), *m1->transpose());
+	verify_result(*res, *correct, approx_equal_func<T>());
+	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
+	block_size = 0;
+
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 3;
@@ -582,21 +608,6 @@ void test_multiply(int num_nodes)
 	res->materialize_self();
 	correct = blas_multiply(*m1, *m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
-
-	printf("Test multiplication on wide block matrix X tall block matrix\n");
-	size_t orig_block_size = block_size;
-	size_t orig_multiply_block_size = matrix_conf.get_max_multiply_block_size();
-	block_size = 3;
-	matrix_conf.set_max_multiply_block_size(6);
-	m1 = create_matrix(20, long_dim, matrix_layout_t::L_COL, num_nodes,
-			get_scalar_type<T>());
-	m2 = create_matrix(long_dim, 10, matrix_layout_t::L_COL, num_nodes,
-			get_scalar_type<T>());
-	correct = blas_multiply(*m1, *m2);
-	res = m1->multiply(*m2);
-	verify_result(*res, *correct, approx_equal_func<T>());
-	block_size = orig_block_size;
-	matrix_conf.set_max_multiply_block_size(orig_multiply_block_size);
 }
 
 void test_multiply_matrix(int num_nodes)
@@ -669,6 +680,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 {
 	printf("Test aggregation on tall %s-major matrix\n",
 			layout == matrix_layout_t::L_COL ? "column" : "row");
+	// Aggregate on the entire matrix and output a single value.
 	dense_matrix::ptr m1 = create_matrix(long_dim, 10,
 			layout, num_nodes, get_scalar_type<size_t>());
 	bulk_operate::const_ptr op = bulk_operate::conv2ptr(
@@ -683,6 +695,7 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
 
+	// Aggregate on rows of a matrix and output a column
 	dense_matrix::ptr sum_col = m1->aggregate(matrix_margin::MAR_ROW,
 			agg_operate::create(op));
 	if (sum_col->is_in_mem())
@@ -709,7 +722,30 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 		else if (matrix_val == matrix_val_t::DEFAULT)
 			assert(tmp->get<size_t>(i, 0) == m1->get_num_cols());
 	}
+
+	// Aggregate on cols of a matrix.
+	dense_matrix::ptr sum_row = m1->aggregate(matrix_margin::MAR_COL,
+			agg_operate::create(op));
+	sum_col = sum_row->transpose();
+	sum_row->materialize_self();
+	sum_col->materialize_self();
+	detail::mem_matrix_store::const_ptr tmp1
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum_row->get_raw_store());
+	detail::mem_matrix_store::const_ptr tmp2
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				sum_col->get_raw_store());
+	assert(tmp1);
+	assert(tmp2);
+	assert(tmp1->get_raw_arr());
+	assert(tmp2->get_raw_arr());
+	num_eles = tmp1->get_num_rows() * tmp1->get_num_cols();
+	assert(memcmp(tmp1->get_raw_arr(), tmp2->get_raw_arr(),
+				num_eles * tmp1->get_entry_size()) == 0);
+	dense_matrix::ptr tmp_mat = dense_matrix::create(tmp1);
+	res = tmp_mat->aggregate(op);
 	sum = *(size_t *) res->get_raw();
+	num_eles = m1->get_num_rows() * m1->get_num_cols();
 	if (matrix_val == matrix_val_t::DEFAULT)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else if (matrix_val_t::SEQ)
@@ -1064,7 +1100,8 @@ void test_write2file1(detail::mem_matrix_store::const_ptr mat)
 	bool ret = mat->write2file(tmp_file_name);
 	assert(ret);
 
-	detail::mem_matrix_store::ptr read_mat = detail::mem_matrix_store::load(tmp_file_name);
+	detail::mem_matrix_store::const_ptr read_mat = detail::mem_matrix_store::load(
+			tmp_file_name, mat->get_num_nodes());
 	assert(read_mat);
 	assert(read_mat->get_num_rows() == mat->get_num_rows());
 	assert(read_mat->get_num_cols() == mat->get_num_cols());
@@ -3110,6 +3147,114 @@ void test_repeat()
 	_test_repeat_byrow(mat);
 }
 
+void _test_share_data(dense_matrix::ptr mat1, dense_matrix::ptr mat2)
+{
+	std::vector<off_t> idxs(3);
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % 10;
+
+	assert(mat1->get_raw_store()->share_data(*mat1->get_raw_store()));
+	assert(!mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	mat2 = mat1->transpose();
+	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	mat2 = mat1->get_cols(idxs);
+	assert(!mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+	assert(!mat2->get_raw_store()->share_data(*mat1->get_raw_store()));
+	dense_matrix::ptr mat3 = mat2->transpose();
+	assert(mat3->get_raw_store()->share_data(*mat2->get_raw_store()));
+	assert(mat2->get_raw_store()->share_data(*mat3->get_raw_store()));
+}
+
+void test_share_data()
+{
+	dense_matrix::ptr mat1, mat2;
+
+	// Test EM matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, false);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, false);
+	printf("test share data in EM matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test SMP matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	printf("test share data in SMP matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test NUMA matrix.
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 10,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	printf("test share data in NUMA matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test mapply matrix.
+	mat1 = mat1->conv2(matrix_layout_t::L_COL);
+	mat2 = mat2->conv2(matrix_layout_t::L_COL);
+	assert(mat1->get_raw_store()->is_virtual());
+	assert(mat2->get_raw_store()->is_virtual());
+	printf("test share data in mapply matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test set_data matrix.
+	mat1 = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, true, -1, true);
+	mat2 = dense_matrix::create_seq<size_t>(0, 1, long_dim, 10,
+			matrix_layout_t::L_ROW, true, -1, true);
+	printf("test share data in set_data matrix\n");
+	_test_share_data(mat1, mat2);
+
+	// Test one-val matrix.
+	mat1 = dense_matrix::create_const<size_t>(0, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	mat2 = dense_matrix::create_const<size_t>(1, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	printf("test share data in one-val matrix\n");
+	_test_share_data(mat1, mat2);
+	mat2 = dense_matrix::create_const<size_t>(0, long_dim, 10,
+			matrix_layout_t::L_ROW, -1, true);
+	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
+
+	// Test block matrix
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
+	printf("test share data in block matrix\n");
+	_test_share_data(mat1, mat2);
+}
+
+void test_factor()
+{
+	dense_matrix::ptr mat = dense_matrix::create_randu<int>(1, 1000,
+			long_dim, 1, matrix_layout_t::L_COL);
+	factor_col_vector::ptr fvec = factor_col_vector::create(mat);
+	assert(fvec);
+	assert(fvec->get_num_levels() <= 1000);
+}
+
+void test_cross_prod()
+{
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(1, 1000,
+			long_dim, 10, matrix_layout_t::L_COL);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(1, 1000,
+			9, long_dim, matrix_layout_t::L_COL);
+	dense_matrix::ptr res = mat2->multiply(*mat1);
+	dense_matrix::ptr tres = res->transpose();
+	assert(res->get_raw_store()->get_data_id()
+			== tres->get_raw_store()->get_data_id());
+	printf("materialize tres\n");
+	tres->materialize_self();
+	printf("materialize res\n");
+	res->materialize_self();
+	printf("complete crossprod\n");
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -3122,6 +3267,9 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_cross_prod();
+	test_factor();
+	test_share_data();
 	test_repeat_rowcols();
 	test_repeat();
 	test_seq_matrix();

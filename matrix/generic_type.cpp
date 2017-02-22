@@ -43,6 +43,14 @@ template<class T>
 class scalar_type_impl: public scalar_type
 {
 public:
+	virtual std::string get_name() const {
+		return get_type_str<T>();
+	}
+	virtual bool is_floating_point() const {
+		return std::is_floating_point<T>::value;
+	}
+	virtual std::string conv2str(const char *arr, size_t num_eles,
+			const std::string &sep) const;
 	virtual std::shared_ptr<generic_hashtable> create_hashtable(
 			const scalar_type &val_type) const;
 	virtual const basic_uops &get_basic_uops() const {
@@ -154,6 +162,40 @@ scalar_variable::ptr scalar_variable::cast_type(const scalar_type &type) const
 	const bulk_uoperate &cast_op = vtype.get_type_cast(type);
 	scalar_variable::ptr ret = vtype.create_scalar();
 	cast_op.runA(1, get_raw(), ret->get_raw());
+	return ret;
+}
+
+template<class T>
+std::string conv2str(T val)
+{
+	return std::to_string(val);
+}
+
+template<>
+std::string conv2str<float>(float val)
+{
+	char str[20];
+	snprintf(str, 20, "%g", val);
+	return str;
+}
+
+template<>
+std::string conv2str<double>(double val)
+{
+	char str[20];
+	snprintf(str, 20, "%g", val);
+	return str;
+}
+
+template<class T>
+std::string scalar_type_impl<T>::conv2str(const char *arr, size_t num_eles,
+		const std::string &sep) const
+{
+	const T *tarr = reinterpret_cast<const T *>(arr);
+	assert(num_eles > 0);
+	std::string ret = fm::conv2str<T>(tarr[0]);
+	for (size_t i = 1; i < num_eles; i++)
+		ret += sep + fm::conv2str<T>(tarr[i]);
 	return ret;
 }
 

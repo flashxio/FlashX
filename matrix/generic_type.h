@@ -247,6 +247,11 @@ public:
 		return *types[(int) type];
 	}
 
+	virtual std::string get_name() const = 0;
+	virtual bool is_floating_point() const = 0;
+	virtual std::string conv2str(const char *arr, size_t num_eles,
+			const std::string &sep) const = 0;
+
 	/*
 	 * The operators that work on this type.
 	 */

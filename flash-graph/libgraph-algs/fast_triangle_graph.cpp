@@ -448,7 +448,7 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 namespace fg
 {
 
-FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
+fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex,
@@ -475,10 +475,12 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		<< boost::format("It takes %1% seconds to count all triangles")
 		% time_diff(start, end);
 
-	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
+	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
+			fg->get_num_vertices(), safs::params.get_num_nodes(),
+			fm::get_scalar_type<size_t>());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, directed_triangle_vertex>(vec)));
-	return vec;
+				new save_query<size_t, directed_triangle_vertex>(res_store)));
+	return fm::vector::create(res_store);
 }
 
 }

@@ -127,6 +127,9 @@ public:
 					get_num_rows(), get_num_cols(), orig_num_rows, orig_num_cols,
 					store_layout(), get_type(), data_id));
 	}
+	virtual size_t get_data_id() const {
+		return data_id;
+	}
 
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
 		this->num_prefetches = num;
