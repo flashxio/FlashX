@@ -126,6 +126,10 @@ public:
 		return header;
 	}
 
+	bool is_directed() const {
+		return get_graph_header().is_directed_graph();
+	}
+
 	size_t get_num_vertices() const {
 		return get_graph_header().get_num_vertices();
 	}
