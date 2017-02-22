@@ -123,6 +123,14 @@ vertex_index::ptr FG_graph::get_index_data() const
 		return vertex_index::safs_load(index_file);
 }
 
+in_mem_graph::ptr FG_graph::get_graph_data() const
+{
+	if (graph_data)
+		return graph_data;
+	else
+		return in_mem_graph::load_safs_graph(graph_file);
+}
+
 /********************** Get the degree of vertices ****************************/
 
 namespace {

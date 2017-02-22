@@ -768,8 +768,8 @@ static vector_vector::ptr conv_fg2vv(fg::FG_graph::ptr graph, bool is_out_edge)
 	else
 		init_in_offs(vindex, offs);
 
-	auto graph_data = graph->get_graph_data();
-	if (graph_data) {
+	if (graph->is_in_mem()) {
+		auto graph_data = graph->get_graph_data();
 		size_t len = graph_data->get_data().get_length();
 		detail::smp_vec_store::ptr mem_vec = detail::smp_vec_store::create(
 				len, get_scalar_type<char>());

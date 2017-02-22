@@ -113,10 +113,7 @@ public:
 		return graph_data != NULL;
 	}
 
-	std::shared_ptr<in_mem_graph> get_graph_data() const {
-		return graph_data;
-	}
-
+	std::shared_ptr<in_mem_graph> get_graph_data() const;
 	std::shared_ptr<vertex_index> get_index_data() const;
 
 	graph_engine::ptr create_engine(graph_index::ptr index);

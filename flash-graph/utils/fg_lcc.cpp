@@ -75,10 +75,8 @@ int main(int argc, char *argv[])
 		printf("lcc has %ld vertices and %ld edges\n", header.get_num_vertices(),
 				header.get_num_edges());
 		auto graph_data = lcc->get_graph_data();
-		if (graph_data) {
-			graph_data->dump(new_graph_name + ".adj");
-			lcc->get_index_data()->dump(new_graph_name + ".index");
-		}
+		graph_data->dump(new_graph_name + ".adj");
+		lcc->get_index_data()->dump(new_graph_name + ".index");
 	}
 
 	destroy_flash_matrix();
