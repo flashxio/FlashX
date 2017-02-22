@@ -510,14 +510,9 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 	std::vector<fm::ele_parser::const_ptr> ele_parsers(2);
 	ele_parsers[0] = fm::ele_parser::const_ptr(new fm::int_parser<fg::vertex_id_t>());
 	ele_parsers[1] = fm::ele_parser::const_ptr(new fm::int_parser<fg::vertex_id_t>());
-	if (edge_attr_type == "I")
-		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<int>()));
-	else if (edge_attr_type == "L")
-		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<long>()));
-	else if (edge_attr_type == "F")
-		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<float>()));
-	else if (edge_attr_type == "D")
-		ele_parsers.push_back(fm::ele_parser::const_ptr(new fm::int_parser<double>()));
+	auto parser = fm::get_ele_parser(edge_attr_type);
+	if (parser != NULL)
+		ele_parsers.push_back(parser);
 	else if (!edge_attr_type.empty() && edge_attr_type != "B") {
 		BOOST_LOG_TRIVIAL(error) << "unsupported edge attribute type";
 		return fm::data_frame::ptr();
