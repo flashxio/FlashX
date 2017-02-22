@@ -658,25 +658,10 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 
 	std::shared_ptr<line_parser> parser;
 	std::vector<ele_parser::const_ptr> ele_parsers(num_cols);
-	if (ele_type == "I") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
-	}
-	else if (ele_type == "L") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
-	}
-	else if (ele_type == "F") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
-	}
-	else if (ele_type == "D") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
-	}
-	else {
-		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
-		return dense_matrix::ptr();
+	for (size_t i = 0; i < num_cols; i++) {
+		ele_parsers[i] = get_ele_parser(ele_type);
+		if (ele_parsers[i] == NULL)
+			return dense_matrix::ptr();
 	}
 	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers,
 				dup_policy::NONE));
@@ -693,22 +678,9 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 	std::vector<ele_parser::const_ptr> ele_parsers(strs.size());
 	assert(strs.size());
 	for (size_t i = 0; i < ele_parsers.size(); i++) {
-		if (strs[i] == "I")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
-		else if (strs[i] == "L")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
-		else if (strs[i] == "F")
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
-		else if (strs[i] == "D")
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
-		else if (strs[i] == "H")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>(16));
-		else if (strs[i] == "LH")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>(16));
-		else {
-			BOOST_LOG_TRIVIAL(error) << "unknown element parser";
+		ele_parsers[i] = get_ele_parser(strs[i]);
+		if (ele_parsers[i] == NULL)
 			return dense_matrix::ptr();
-		}
 	}
 
 	for (size_t i = 1; i < ele_parsers.size(); i++)
@@ -721,6 +693,55 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 			new row_parser(delim, ele_parsers, dup_policy::NONE));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
+}
+
+ele_parser::const_ptr get_ele_parser(const std::string &type)
+{
+	if (type == "B")
+		return ele_parser::const_ptr();
+	else if (type == "I")
+		return ele_parser::const_ptr(new int_parser<int>());
+	else if (type == "L")
+		return ele_parser::const_ptr(new int_parser<long>());
+	else if (type == "F")
+		return ele_parser::const_ptr(new float_parser<float>());
+	else if (type == "D")
+		return ele_parser::const_ptr(new float_parser<double>());
+	else if (type == "H")
+		return ele_parser::const_ptr(new int_parser<int>(16));
+	else if (type == "LH")
+		return ele_parser::const_ptr(new int_parser<long>(16));
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unknown element parser";
+		return ele_parser::const_ptr();
+	}
+}
+
+const scalar_type &get_ele_type(const std::string &type_name)
+{
+	if (type_name == "B")
+		return get_scalar_type<bool>();
+	else if (type_name == "I")
+		return get_scalar_type<int>();
+	else if (type_name == "L")
+		return get_scalar_type<long>();
+	else if (type_name == "F")
+		return get_scalar_type<float>();
+	else if (type_name == "D")
+		return get_scalar_type<double>();
+	else if (type_name == "H")
+		return get_scalar_type<int>();
+	else if (type_name == "LH")
+		return get_scalar_type<long>();
+	else
+		throw std::invalid_argument("unknown element type");
+}
+
+bool valid_ele_type(const std::string &type_name)
+{
+	return type_name == "B" || type_name == "I" || type_name == "L"
+		|| type_name == "F" || type_name == "D" || type_name == "H"
+		|| type_name == "LH";
 }
 
 }
