@@ -3,8 +3,8 @@ dist: trusty
 notifications:
   email: false
 before_install:
-- apt-get update
-- apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+- sudo apt-get update
+- sudo apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
 compiler:
 - g++
 script:
