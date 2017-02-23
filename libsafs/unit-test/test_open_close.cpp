@@ -21,13 +21,13 @@ public:
 	}
 };
 
-int main()
+int main(int argc, char *argv[])
 {
 	const int NUM_FILES = 1000;
 	const int NUM_THREADS = 10;
 
 	const char *opts[1];
-	std::string opt = "root_conf=conf/TEST_ROOTS.txt";
+	std::string opt = std::string("root_conf=") + argv[1];
 	opts[0] = opt.c_str();
 	config_map::ptr configs = config_map::create();
 	configs->add_options(opts, 1);
