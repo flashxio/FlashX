@@ -909,6 +909,7 @@ RcppExport SEXP R_FG_print_graph(SEXP pgraph, SEXP pfile, SEXP pdelim,
 		return res;
 	}
 	print_graph_el(fg, delim, type, f);
+	fclose(f);
 	res[0] = true;
 	return res;
 }
