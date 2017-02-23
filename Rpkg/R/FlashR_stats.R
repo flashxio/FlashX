@@ -17,6 +17,7 @@
 
 .sd.int <- function(x, na.rm)
 {
+	x <- as.double(x)
 	n <- length(x)
 	x2 <- x * x
 	test.na <- TRUE
@@ -73,8 +74,11 @@ setMethod("sd", "fmV", .sd.int)
 {
 	orig.test.na <- .env.int$fm.test.na
 	fm.set.test.na(FALSE)
-	if (!is.null(y))
+	x <- as.double(x)
+	if (!is.null(y)) {
 		stopifnot(nrow(x) == nrow(y))
+		y <- as.double(y)
+	}
 	n <- nrow(x)
 	if (is.null(y)) {
 		# we need to transpose x and compute rowSum instead of computing
@@ -106,8 +110,11 @@ setMethod("sd", "fmV", .sd.int)
 {
 	orig.test.na <- .env.int$fm.test.na
 	fm.set.test.na(FALSE)
-	if (!is.null(y))
+	x <- as.double(x)
+	if (!is.null(y)) {
 		stopifnot(nrow(x) == nrow(y))
+		y <- as.double(y)
+	}
 	n <- nrow(x)
 	if (is.null(y)) {
 		x.sum <- rowSums(t(x))
@@ -148,6 +155,7 @@ setMethod("sd", "fmV", .sd.int)
 		x <- as.matrix(x)
 	else if (!is.matrix(x))
 		stop("'x' must be a matrix or a data frame")
+	x <- as.double(x)
 	n <- nrow(x)
 	if (with.wt <- !missing(wt)) {
 		if (length(wt) != n)

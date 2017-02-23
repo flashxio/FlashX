@@ -1301,7 +1301,7 @@ setMethod("range", "fmV", .range.int)
 	# TODO I need to lazily calculate it.
 	if (na.rm)
 		n <- n - sum(is.na(x))
-	sum(x, na.rm=na.rm) / n
+	sum(as.double(x), na.rm=na.rm) / n
 }
 
 #' Arithmetic Mean
@@ -1462,12 +1462,12 @@ setMethod("colSums", signature(x = "fm", na.rm = "ANY"),
 #' @rdname colSums
 setMethod("rowMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  rowSums(x, na.rm) / dim(x)[2]
+			  rowSums(as.double(x), na.rm) / dim(x)[2]
 		  })
 #' @rdname colSums
 setMethod("colMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  colSums(x, na.rm) / dim(x)[1]
+			  colSums(as.double(x), na.rm) / dim(x)[1]
 		  })
 
 #' Print FlashR objects.
@@ -1977,6 +1977,10 @@ fm.cal.residul <- function(mul, values, vectors)
 #' mat <- fm.runif.matrix(100, 10)
 #' mat <- scale(mat)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
+		  # The output of this function is floating-point values.
+		  # It's better to convert the element type in advance to avoid
+		  # any overflow.
+		  x <- as.double(x)
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
 		  if (!is.logical(center)) {

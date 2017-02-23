@@ -153,7 +153,6 @@ setMethod("svd", signature(x = "fm"), function(x, nu=min(n, p), nv=min(n, p), LI
 
 setMethod("prcomp", signature(x = "fm"), function(x, retx=TRUE, center=TRUE,
 												  scale.=FALSE, tol=NULL) {
-	x <- as.double(x)
 	scale.x <- scale(x, center, scale.)
 	res <- fm.svd(scale.x, nu=0, tol=.Machine$double.eps)
 	if (!is.null(tol)) {
