@@ -56,18 +56,16 @@ is implemented as a regular R package.
 The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 shows all of the features in FlashR.
 
-Documentation
+[Documentation](https://flashxio.github.io/FlashX-doc/)
 ========
 
-[FlashX Quick start guide](https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide)
+[FlashX Quick start guide](https://flashxio.github.io/FlashX-doc/FlashX-Quick-Start-Guide.html)
 
-[FlashGraph programming tutorial](https://github.com/icoming/FlashX/wiki/FlashGraph-programming-tutorial).
+[FlashGraph programming tutorial](https://flashxio.github.io/FlashX-doc/FlashGraph-user-guide.html).
 
-[FlashR programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
+[FlashR programming tutorial](https://flashxio.github.io/FlashX-doc/FlashR-user-guide.html)
 
-[FlashX performance and scalability](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability)
-
-[SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
+[FlashX performance and scalability](https://flashxio.github.io/FlashX-doc/FlashX-perf.html)
 
 Publications
 ========
