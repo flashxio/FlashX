@@ -720,7 +720,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 
 ele_parser::const_ptr get_ele_parser(const std::string &type)
 {
-	if (type == "B")
+	if (type == "B" || type.empty())
 		return ele_parser::const_ptr();
 	else if (type == "I")
 		return ele_parser::const_ptr(new int_parser<int>());
@@ -735,7 +735,7 @@ ele_parser::const_ptr get_ele_parser(const std::string &type)
 	else if (type == "LH")
 		return ele_parser::const_ptr(new int_parser<long>(16));
 	else {
-		BOOST_LOG_TRIVIAL(error) << "unknown element parser";
+		BOOST_LOG_TRIVIAL(error) << "unknown element parser: " << type;
 		return ele_parser::const_ptr();
 	}
 }
