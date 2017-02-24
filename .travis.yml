@@ -9,3 +9,6 @@ compiler:
 - g++
 script:
 - make clean; make
+- cd libsafs/unit-test && make test && cd ../..
+- cd flash-graph/unit-test && make test && cd ../..
+- cd matrix/unit-test && make test && cd ../..
