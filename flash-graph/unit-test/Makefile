@@ -40,6 +40,12 @@ test-partitioner: test-partitioner.o ../libgraph.a
 test-vertex_index: test-vertex_index.o ../libgraph.a
 	$(CXX) -o test-vertex_index test-vertex_index.o $(LDFLAGS)
 
+test:
+	./test-bitmap
+	./test-partitioner
+	./test-sparse_matrix
+	./test-vertex_index
+
 clean:
 	rm -f *.o
 	rm -f *.d

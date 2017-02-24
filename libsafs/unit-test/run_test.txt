@@ -20,7 +20,7 @@ cache_size=512M
 # num_nodes=1
 
 # change FG_TOP to the path of the top directory of FlashGraph.
-root_conf=safs_data
+root_conf=data_files.txt
 
 # whether or not to use Linux huge pages
 # huge_page=

@@ -30,7 +30,6 @@
 fm.PageRank <- function(A, d = 0.15, max.niters = 30, epsilon = 1e-2,
 					 verbose = FALSE)
 {
-	orig.test.na <- .env.int$fm.test.na
 	fm.set.test.na(FALSE)
 	N <- dim(A)[1]
 	epsilon <- epsilon / N
@@ -39,21 +38,22 @@ fm.PageRank <- function(A, d = 0.15, max.niters = 30, epsilon = 1e-2,
 	out.deg <- A %*% one
 	one <- NULL
 	pr1 <- fm.rep.int(1/N, N)
-	L1 <- N
+	converge <- 0
 
 	niters <- 0
 	A <- t(A)
-	while (L1 >= epsilon && niters < max.niters) {
+	while (converge < N && niters < max.niters) {
+		start <- Sys.time()
 		pr2 <- d/N+(1-d)*(A %*% (pr1/out.deg))
 		gc()
-		pr2 <- fm.materialize(pr2)
-		diff <- abs(pr1-pr2)
-		L1 <- sum(diff)
+		converge <- as.vector(sum(as.double(abs(pr1-pr2) < epsilon)))
 		if (verbose)
-			cat("iter", niters, ", L1:", L1 * N, "\n")
+			cat("iter", niters, ", #converge:", converge, "\n")
 		pr1 <- pr2
 		niters <- niters + 1
+		end <- Sys.time()
+		print(end - start)
 	}
-	fm.set.test.na(orig.test.na)
+#	fm.set.test.na(orig.test.na)
 	pr2
 }

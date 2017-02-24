@@ -657,10 +657,10 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		}
 
 		size_t read_bytes = 0;
-		std::unique_ptr<char[]> buf = io->read_lines(buf_size, read_bytes);
+		std::shared_ptr<char> buf = io->read_lines(buf_size, read_bytes);
 		if (buf == NULL || read_bytes == 0)
 			return dense_matrix::ptr();
-		buf[read_bytes - 1] = 0;
+		buf.get()[read_bytes - 1] = 0;
 
 		// Find the first line.
 		char *res = strchr(buf.get(), '\n');

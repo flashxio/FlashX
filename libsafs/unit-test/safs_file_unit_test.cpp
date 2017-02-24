@@ -3,9 +3,9 @@
 
 using namespace safs;
 
-int main()
+int main(int argc, char *argv[])
 {
-	RAID_config::ptr raid = RAID_config::create("conf/TEST_ROOTS.txt", 0, 16);
+	RAID_config::ptr raid = RAID_config::create(argv[1], 0, 16);
 	safs_file f(*raid, "test1");
 
 	printf("Check the existence of %s\n", f.get_name().c_str());
