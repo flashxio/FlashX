@@ -185,6 +185,7 @@ fm.print.features <- function()
 #' @param ele.types A vector of strings to indicate the element type of each vectors.
 #'        The length of the vector determines the number of columns.
 #' @param delim The delimiter of separating elements in the text format.
+#'		  By default, FlashR tries to detect the delimiter automatically.
 #' @param nrow the number of rows in the binary dense matrix.
 #' @param ncol the number of columns in the binary dense matrix.
 #' @param byrow a logical value indicating if the data in the binary matrix
@@ -212,7 +213,7 @@ fm.get.dense.matrix <- function(name)
 }
 
 #' @rdname fm.get.matrix
-fm.load.dense.matrix <- function(src.file, in.mem, ele.type="D", delim=",",
+fm.load.dense.matrix <- function(src.file, in.mem, ele.type="D", delim="auto",
 								 ncol=.Machine$integer.max, name="")
 {
 	stopifnot(!is.null(src.file))
@@ -238,7 +239,7 @@ fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.ty
 }
 
 #' @rdname fm.get.matrix
-fm.load.list.vecs <- function(src.file, in.mem, ele.types=c("D"), delim=",")
+fm.load.list.vecs <- function(src.file, in.mem, ele.types=c("D"), delim="auto")
 {
 	stopifnot(!is.null(src.file))
 	if (is.character(src.file))
@@ -253,7 +254,7 @@ fm.load.list.vecs <- function(src.file, in.mem, ele.types=c("D"), delim=",")
 
 #' @rdname fm.get.matrix
 fm.load.sparse.matrix <- function(file, in.mem=TRUE, is.sym=FALSE, ele.type="B",
-								  delim=",", name="")
+								  delim="auto", name="")
 {
 	m <- .Call("R_FM_load_spm", as.character(file), as.logical(in.mem),
 			   as.logical(is.sym), as.character(ele.type), as.character(delim),
