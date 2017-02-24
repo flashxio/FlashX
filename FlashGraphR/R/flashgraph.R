@@ -107,7 +107,9 @@ fg.get.params <- function(name)
 #' @param directed   Indicate whether the input graph is directed. This is
 #'                   only used if the input graph use the edge list format.
 #' @param in.mem     Indicate whether to load a graph to SAFS.
-#' @param delim The delimiter of separating elements in the text format.
+#' @param delim		 The delimiter of separating elements in the text format.
+#'					 When delim is "auto", FlashGraph will try to detect
+#'					 the delimiter automatically.
 #' @return a FlashGraph object.
 #' @name fg.load.graph
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -117,7 +119,7 @@ fg.get.params <- function(name)
 #' ig <- read.graph("edge_list.txt")
 #' fg <- fg.load.igraph(ig)
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
-						  directed=TRUE, in.mem=TRUE, delim=",", attr.type="")
+						  directed=TRUE, in.mem=TRUE, delim="auto", attr.type="")
 {
 	# The graph name will becomes the file name in SAFS. It should contain
 	# some special characters.
