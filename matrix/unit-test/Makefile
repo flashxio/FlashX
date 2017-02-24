@@ -98,6 +98,31 @@ test-projection: test-projection.o ../libFMatrix.a
 test-sink_matrix: test-sink_matrix.o ../libFMatrix.a
 	$(CXX) -o test-sink_matrix test-sink_matrix.o $(LDFLAGS)
 
+test:
+	./test-bulk_operate
+	./test-hashtable
+	./test_io_gen
+	./test-local_matrix_store
+	./test-rand_gen
+	./test-sorter
+	./test-mem_matrix_store
+	./test-mem_vector
+	./test-mem_vector_vector
+	./test-rounderror
+	mkdir -p safs_data
+	./test-block_matrix run_test.txt
+	./test-data_frame run_test.txt
+	./test-EM_matrix run_test.txt
+	./test-dense_matrix run_test.txt
+	./test-EM_vector run_test.txt
+	./test-EM_vector_vector run_test.txt
+	./test-NUMA_dense_matrix run_test.txt
+	./test-NUMA_vector run_test.txt
+	./test-projection run_test.txt
+	./test-sink_matrix run_test.txt
+	./test-special_matrix_store run_test.txt
+	rm -R safs_data
+
 clean:
 	rm -f *.d
 	rm -f *.o
