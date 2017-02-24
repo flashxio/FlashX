@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	std::string edge_attr_type;
-	std::string delim = ",";
+	std::string delim = "auto";
 	while ((opt = getopt(argc, argv, "uUes:g:t:d:")) != -1) {
 		num_opts++;
 		switch (opt) {
