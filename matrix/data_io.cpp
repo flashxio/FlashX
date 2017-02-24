@@ -85,7 +85,6 @@ public:
 	static ptr create(const std::string file);
 
 	~text_file_io() {
-		assert(curr_off == file_size);
 		close(fd);
 	}
 
@@ -627,12 +626,86 @@ size_t row_parser::parse(const std::vector<std::string> &lines,
 	return num_rows;
 }
 
+static std::shared_ptr<char> read_first_chunk(const std::string &file)
+{
+	file_io::ptr io = file_io::create(file);
+	if (io == NULL)
+		return std::shared_ptr<char>();
+
+	// Read at max 1M
+	safs::native_file in_file(file);
+	long buf_size = 1024 * 1024;
+	// If the input file is small, we read the entire file.
+	if (buf_size > in_file.get_size())
+		buf_size = in_file.get_size();
+
+	size_t read_bytes = 0;
+	std::shared_ptr<char> buf = io->read_lines(buf_size, read_bytes);
+	if (buf == NULL || read_bytes == 0)
+		return std::shared_ptr<char>();
+	buf.get()[read_bytes - 1] = 0;
+	return buf;
+}
+
+static std::string detect_delim(std::shared_ptr<char> buf)
+{
+	char *res = strchr(buf.get(), '\t');
+	if (res)
+		return "\t";
+
+	res = strchr(buf.get(), ' ');
+	if (res)
+		return " ";
+
+	res = strchr(buf.get(), ',');
+	if (res)
+		return ",";
+
+	BOOST_LOG_TRIVIAL(error) << "Cannot detect a known delimiter";
+	return "";
+}
+
+static size_t detect_ncols(std::shared_ptr<char> buf, const std::string &delim)
+{
+	// Find the first line.
+	char *res = strchr(buf.get(), '\n');
+	// If the buffer doesn't have '\n'
+	if (res == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "read 1M data, can't find the end of the line";
+		return std::numeric_limits<size_t>::max();
+	}
+	*res = 0;
+
+	// Split a string
+	std::string line = buf.get();
+	std::vector<std::string> strs;
+	boost::split(strs, line, boost::is_any_of(delim));
+	return strs.size();
+}
+
+static std::string detect_delim(const std::string &file)
+{
+	auto buf = read_first_chunk(file);
+	if (buf == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't read data to detect a delimiter";
+		return "";
+	}
+	return detect_delim(buf);
+}
+
 data_frame::ptr read_data_frame(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim,
 		const std::vector<ele_parser::const_ptr> &ele_parsers, dup_policy dup)
 {
+	std::string act_delim = delim;
+	if (delim == "auto")
+		act_delim = detect_delim(files.front());
+	if (act_delim.empty())
+		return data_frame::ptr();
+
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers, dup));
+			new row_parser(act_delim, ele_parsers, dup));
 	return read_lines(files, *parser, in_mem);
 }
 
@@ -640,43 +713,25 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols)
 {
+	std::string act_delim = delim;
 	// We need to discover the number of columns ourselves.
-	if (num_cols == std::numeric_limits<size_t>::max()) {
-		file_io::ptr io = file_io::create(files.front());
-		if (io == NULL)
-			return dense_matrix::ptr();
-
-		// Read at max 1M
-		safs::native_file in_file(files.front());
-		long buf_size = 1024 * 1024;
-		// If the input file is small, we read the entire file.
-		bool read_all = false;
-		if (buf_size > in_file.get_size()) {
-			buf_size = in_file.get_size();
-			read_all = true;
-		}
-
-		size_t read_bytes = 0;
-		std::shared_ptr<char> buf = io->read_lines(buf_size, read_bytes);
-		if (buf == NULL || read_bytes == 0)
-			return dense_matrix::ptr();
-		buf.get()[read_bytes - 1] = 0;
-
-		// Find the first line.
-		char *res = strchr(buf.get(), '\n');
-		// If the buffer doesn't have '\n' and we didn't read the entire file
-		if (res == NULL && !read_all) {
+	if (num_cols == std::numeric_limits<size_t>::max() || delim == "auto") {
+		auto buf = read_first_chunk(files.front());
+		if (buf == NULL) {
 			BOOST_LOG_TRIVIAL(error)
-				<< "read 1M data, can't find the end of the line";
+				<< "can't read data to detect #cols or delimiter";
 			return dense_matrix::ptr();
 		}
-		*res = 0;
 
-		// Split a string
-		std::string line = buf.get();
-		std::vector<std::string> strs;
-		boost::split(strs, line, boost::is_any_of(delim));
-		num_cols = strs.size();
+		if (delim == "auto")
+			act_delim = detect_delim(buf);
+		if (act_delim.empty())
+			return dense_matrix::ptr();
+
+		if (num_cols == std::numeric_limits<size_t>::max())
+			num_cols = detect_ncols(buf, act_delim);
+		if (num_cols == std::numeric_limits<size_t>::max())
+			return dense_matrix::ptr();
 	}
 
 	std::shared_ptr<line_parser> parser;
@@ -686,7 +741,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		if (ele_parsers[i] == NULL)
 			return dense_matrix::ptr();
 	}
-	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers,
+	parser = std::shared_ptr<line_parser>(new row_parser(act_delim, ele_parsers,
 				dup_policy::NONE));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
@@ -696,6 +751,12 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		const std::string &col_indicator)
 {
+	std::string act_delim = delim;
+	if (delim == "auto")
+		act_delim = detect_delim(files.front());
+	if (act_delim.empty())
+		return dense_matrix::ptr();
+
 	std::vector<std::string> strs;
 	boost::split(strs, col_indicator, boost::is_any_of(" "));
 	std::vector<ele_parser::const_ptr> ele_parsers(strs.size());
@@ -713,7 +774,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		}
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers, dup_policy::NONE));
+			new row_parser(act_delim, ele_parsers, dup_policy::NONE));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }
