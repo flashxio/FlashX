@@ -518,10 +518,14 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		return fm::data_frame::ptr();
 	}
 
-	fm::dup_policy policy = fm::dup_policy::NONE;
-	if (!directed)
-		policy = fm::dup_policy::REVERSE;
-	return fm::read_data_frame(files, in_mem, delim, ele_parsers, policy);
+	std::vector<off_t> dup_idxs;
+	if (!directed) {
+		for (size_t i = 0; i < ele_parsers.size(); i++)
+			dup_idxs.push_back(i);
+		dup_idxs[0] = 1;
+		dup_idxs[1] = 0;
+	}
+	return fm::read_data_frame(files, in_mem, delim, ele_parsers, dup_idxs);
 }
 
 }
