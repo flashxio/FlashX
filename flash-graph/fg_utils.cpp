@@ -1420,7 +1420,8 @@ static void print_vertex(const ext_mem_undirected_vertex &v, bool directed,
 		std::string str = std::to_string(v.get_id()) + delim
 			+ std::to_string(v.get_neighbor(i));
 		if (v.has_edge_data() && edge_data_type)
-			str = str + edge_data_type->conv2str(v.get_raw_edge_data(i), 1, "");
+			str = str + delim + edge_data_type->conv2str(
+					v.get_raw_edge_data(i), 1, "");
 		fprintf(f, "%s\n", str.c_str());
 	}
 }

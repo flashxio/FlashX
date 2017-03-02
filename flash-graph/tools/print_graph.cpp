@@ -48,5 +48,5 @@ int main(int argc, char *argv[])
 
 	FG_graph::ptr graph = FG_graph::create(adj_file_name, index_file_name,
 			config_map::ptr());
-	print_graph_el(graph, "\t", "", stdout);
+	print_graph_el(graph, "\t", type, stdout);
 }
