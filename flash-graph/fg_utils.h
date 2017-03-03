@@ -94,6 +94,9 @@ public:
 	size_t get_num_vecs() const {
 		return df->get_num_vecs();
 	}
+	size_t get_num_edges() const {
+		return df->get_num_entries();
+	}
 	bool is_in_mem() const {
 		return df->get_vec(0)->is_in_mem();
 	}
