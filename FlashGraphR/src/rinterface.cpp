@@ -534,16 +534,31 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 	Rcpp::IntegerVector to = edge_lists["to"];
 	std::vector<vertex_id_t> from_vec(from.begin(), from.end());
 	std::vector<vertex_id_t> to_vec(to.begin(), to.end());
-	fm::detail::mem_vec_store::ptr from_store
-		= fm::detail::mem_vec_store::create(from.size(), -1,
+	fm::detail::mem_vec_store::ptr from_store;
+	fm::detail::mem_vec_store::ptr to_store;
+	if (directed) {
+		from_store = fm::detail::mem_vec_store::create(from.size(),
+				-1, fm::get_scalar_type<vertex_id_t>());
+		to_store = fm::detail::mem_vec_store::create(to.size(), -1,
 				fm::get_scalar_type<vertex_id_t>());
-	fm::detail::mem_vec_store::ptr to_store
-		= fm::detail::mem_vec_store::create(to.size(), -1,
+		from_store->copy_from((const char *) from_vec.data(),
+				from_vec.size() * sizeof(vertex_id_t));
+		to_store->copy_from((const char *) to_vec.data(),
+				to_vec.size() * sizeof(vertex_id_t));
+	}
+	else {
+		from_store = fm::detail::mem_vec_store::create(from.size() * 2,
+				-1, fm::get_scalar_type<vertex_id_t>());
+		to_store = fm::detail::mem_vec_store::create(to.size() * 2, -1,
 				fm::get_scalar_type<vertex_id_t>());
-	from_store->copy_from((const char *) from_vec.data(),
-			from_vec.size() * sizeof(vertex_id_t));
-	to_store->copy_from((const char *) to_vec.data(),
-			to_vec.size() * sizeof(vertex_id_t));
+		size_t num_bytes = from_vec.size() * sizeof(vertex_id_t);
+		memcpy(from_store->get_raw_arr(), from_vec.data(), num_bytes);
+		memcpy(from_store->get_raw_arr() + num_bytes, to_vec.data(),
+				num_bytes);
+		memcpy(to_store->get_raw_arr(), to_vec.data(), num_bytes);
+		memcpy(to_store->get_raw_arr() + num_bytes, from_vec.data(),
+				num_bytes);
+	}
 
 	fm::data_frame::ptr df = fm::data_frame::create();
 	df->add_vec("source", from_store);
