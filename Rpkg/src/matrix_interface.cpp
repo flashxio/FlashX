@@ -513,10 +513,15 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	if (attr_parser != NULL)
 		parsers.push_back(attr_parser);
 	std::vector<std::string> files(1, file);
-	dup_policy policy = dup_policy::NONE;
-	if (is_sym)
-		policy = dup_policy::REVERSE;
-	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers, policy);
+	std::vector<off_t> dup_idxs;
+	if (is_sym) {
+		for (size_t i = 0; i < num_cols; i++)
+			dup_idxs.push_back(i);
+		dup_idxs[0] = 1;
+		dup_idxs[1] = 0;
+	}
+	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers,
+			dup_idxs);
 	if (df == NULL)
 		return R_NilValue;
 
