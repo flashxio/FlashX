@@ -432,8 +432,7 @@ fg.topK.scan <- function(graph, order=1, K=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	ret <- .Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
-	new_fmV(ret)
+	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
 }
 
 #' @rdname fg.local.scan
