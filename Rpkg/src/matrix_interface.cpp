@@ -515,7 +515,7 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 	std::vector<std::string> files(1, file);
 	std::vector<off_t> dup_idxs;
 	if (is_sym) {
-		for (size_t i = 0; i < num_cols; i++)
+		for (size_t i = 0; i < parsers.size(); i++)
 			dup_idxs.push_back(i);
 		dup_idxs[0] = 1;
 		dup_idxs[1] = 0;
