@@ -1833,10 +1833,10 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #' constant with exactly two characters. Possible values for symmetric input
 #' matrices:
 #' \itemize{
-#' \item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
-#' \item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
-#' \item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
-#' \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
+#' \item{"LR"}{Compute \code{k} largest (real part) eigenvalues.}
+#' \item{"SR"}{Compute \code{k} smallest (real part) eigenvalues.}
+#' \item{"LM"}{Compute \code{k} largest (in magnitude) eigenvalues.}
+#' \item{"SM"}{Compute \code{k} smallest (in magnitude) eigenvalues.}
 #' }
 #'
 #' @param mul The function to perform the matrix-vector multiplication.
@@ -1880,13 +1880,18 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #" mul <- function(x, extra) mat %*% x
 #' res <- fm.eigen(mul, 10, nrow(mat))
 #' fm.cal.residul(mul, res$values, res$vectors)
-fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
-					 env = parent.frame())
+fm.eigen <- function(mul, k, n, which=c("LM", "SM", "LR", "SR"),
+					 sym=TRUE, options=NULL, env = parent.frame())
 {
 	if (!sym) {
 		print("fm.eigen only supports symmetric matrices")
 		return(NULL)
 	}
+	if (k > n) {
+		print("k should be smaller than n")
+		return(NULL)
+	}
+	which <- match.arg(which)
 	# We only want to solve a very large eigenvalue problem with Anasazi.
 	if (is.loaded("R_FM_eigen") && n > 1000000) {
 		if (is.null(options))
