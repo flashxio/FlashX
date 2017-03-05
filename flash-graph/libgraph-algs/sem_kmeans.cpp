@@ -45,7 +45,6 @@ namespace {
     static unsigned g_iter;
     static std::vector<vertex_id_t> all_vertices;
     static barrier::ptr iter_barrier;
-    static graph_engine::ptr mat;
     static unsigned g_max_iters;
     static std::vector<size_t> g_num_members_v;
     static double g_tolerance;
@@ -99,10 +98,17 @@ namespace {
     };
 
     class kmeans_vertex_program:
-        public base_kmeans_vertex_program<kmeans_vertex, kpmbase::clusters>
-    {
+        public base_kmeans_vertex_program<kmeans_vertex, kpmbase::clusters> {
+
+        private:
+            graph_engine::ptr mat;
+
         public:
         typedef std::shared_ptr<kmeans_vertex_program> ptr;
+
+        kmeans_vertex_program(graph_engine::ptr mat) {
+            this->mat = mat;
+        }
 
         static ptr cast2(vertex_program::ptr prog) {
             return std::static_pointer_cast<kmeans_vertex_program, vertex_program>(prog);
@@ -150,22 +156,30 @@ namespace {
 
     class kmeans_vertex_program_creater: public vertex_program_creater
     {
+        graph_engine::ptr mat;
+
         public:
-            vertex_program::ptr create() const {
-                return vertex_program::ptr(new kmeans_vertex_program());
-            }
+        kmeans_vertex_program_creater (graph_engine::ptr mat) {
+            this->mat = mat;
+        }
+
+        vertex_program::ptr create() const {
+            return vertex_program::ptr(new kmeans_vertex_program(mat));
+        }
     };
 
     /* Used in kmeans++ initialization */
     class kmeanspp_vertex_program : public vertex_program_impl<kmeans_vertex>
     {
         double pt_cuml_sum;
+        graph_engine::ptr mat;
 
         public:
         typedef std::shared_ptr<kmeanspp_vertex_program> ptr;
 
-        kmeanspp_vertex_program() {
+        kmeanspp_vertex_program(graph_engine::ptr mat) {
             pt_cuml_sum = 0.0;
+            this->mat = mat;
         }
 
         static ptr cast2(vertex_program::ptr prog) {
@@ -209,10 +223,16 @@ namespace {
 
     class kmeanspp_vertex_program_creater: public vertex_program_creater
     {
+        graph_engine::ptr mat;
+
         public:
-            vertex_program::ptr create() const {
-                return vertex_program::ptr(new kmeanspp_vertex_program());
-            }
+        kmeanspp_vertex_program_creater (graph_engine::ptr mat) {
+            this->mat = mat;
+        }
+
+        vertex_program::ptr create() const {
+            return vertex_program::ptr(new kmeanspp_vertex_program(mat));
+        }
     };
 
     double kmeans_vertex::dist_comp(const page_vertex &vertex, const double* mean) {
@@ -237,8 +257,9 @@ namespace {
         switch (g_init) {
             case kpmbase::init_type_t::RANDOM:
                 {
-                    unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
+                    //unsigned new_cluster_id = vprog.next_random();
+                    unsigned new_cluster_id = random() % K;
 #if VERBOSE
                     printf("Random init: v%u assigned to cluster: c%x\n",
                             prog.get_vertex_id(*this), new_cluster_id);
@@ -434,7 +455,7 @@ namespace {
 
             graph_index::ptr index = NUMA_graph_index<kmeans_vertex>::create(
                     fg->get_graph_header());
-            mat = fg->create_engine(index);
+            graph_engine::ptr mat = fg->create_engine(index);
 
             NUM_ROWS = num_rows;
             NUM_COLS = num_cols;
@@ -475,7 +496,8 @@ namespace {
                     g_init = kpmbase::init_type_t::RANDOM;
 
                     mat->start_all(vertex_initializer::ptr(),
-                            vertex_program_creater::ptr(new kmeans_vertex_program_creater()));
+                            vertex_program_creater::ptr(
+                                new kmeans_vertex_program_creater(mat)));
                     mat->wait4complete();
                     g_io_reqs += NUM_ROWS;
 
@@ -515,7 +537,8 @@ namespace {
                     g_kmspp_stage = ADDMEAN;
                     mat->start(&g_kmspp_next_cluster, 1,
                             vertex_initializer::ptr(),
-                            vertex_program_creater::ptr( new kmeanspp_vertex_program_creater()));
+                            vertex_program_creater::ptr(
+                                new kmeanspp_vertex_program_creater(mat)));
                     mat->wait4complete();
                 }
             } else
@@ -530,7 +553,7 @@ namespace {
             g_iter = 0;
 
             mat->start_all(vertex_initializer::ptr(),vertex_program_creater::ptr(
-                        new kmeans_vertex_program_creater()));
+                        new kmeans_vertex_program_creater(mat)));
             mat->wait4complete();
 
             gettimeofday(&end, NULL);

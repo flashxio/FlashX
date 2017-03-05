@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <map>
 #include <atomic>
+#include <random>
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
@@ -128,6 +129,11 @@ namespace {
     {
         unsigned pt_changed;
         typename ClusterType::ptr pt_clusters;
+        //std::default_random_engine generator;
+        //std::uniform_int_distribution<unsigned> distribution;
+
+        protected:
+        graph_engine::ptr mat;
 
         public:
         typedef std::shared_ptr<base_kmeans_vertex_program<T, ClusterType> > ptr;
@@ -137,7 +143,13 @@ namespace {
             this->pt_changed = 0;
 
             pt_clusters = ClusterType::create(K, NUM_COLS);
+            //std::uniform_int_distribution<unsigned>::param_type p(0, K-1);
+            //distribution.param(p);
         }
+
+        //unsigned next_random() {
+            //return distribution(generator);
+        //}
 
         static ptr cast2(vertex_program::ptr prog) {
             return std::static_pointer_cast<base_kmeans_vertex_program<T, ClusterType>,

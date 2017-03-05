@@ -225,8 +225,9 @@ namespace {
         switch (g_init) {
             case kpmbase::init_type_t::RANDOM:
                 {
-                    unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
+                    //unsigned new_cluster_id = vprog.next_random();
+                    unsigned new_cluster_id = random() % K;
 #if VERBOSE
                     printf("Random init: v%u assigned to cluster: c%x\n",
                             prog.get_vertex_id(*this), new_cluster_id);

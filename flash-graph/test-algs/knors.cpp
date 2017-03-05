@@ -170,6 +170,13 @@ int main(int argc, char *argv[])
 		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
-	FG_graph::ptr graph = FG_graph::create(graph_file, "_", configs, nsamples, dim);
-    run_sem_kmeans(graph, k, argc, argv);
+    graph_engine::init_flash_graph(configs);
+
+    {
+        FG_graph::ptr graph =
+            FG_graph::create(graph_file, "_", configs, nsamples, dim);
+        run_sem_kmeans(graph, k, argc, argv);
+    }
+
+    graph_engine::destroy_flash_graph();
 }
