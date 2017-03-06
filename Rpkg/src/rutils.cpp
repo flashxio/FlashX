@@ -61,3 +61,18 @@ SEXP R_create_s4fm(SEXP fm)
 	SEXP create_fm = PROTECT(lang2(install("new_fm"), fm));
 	return PROTECT(eval(create_fm, R_GlobalEnv));
 }
+
+size_t get_nrows(SEXP o)
+{
+	return nrows(o);
+}
+
+size_t get_ncols(SEXP o)
+{
+	return ncols(o);
+}
+
+size_t get_length(SEXP o)
+{
+	return length(o);
+}

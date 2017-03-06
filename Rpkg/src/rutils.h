@@ -30,6 +30,10 @@ bool R_is_logical(SEXP v);
 bool R_is_null(SEXP v);
 bool R_is_string(SEXP v);
 
+size_t get_nrows(SEXP o);
+size_t get_ncols(SEXP o);
+size_t get_length(SEXP o);
+
 template<class T>
 bool R_get_number(SEXP v, T &ret) {
 	if (R_is_real(v)) {

@@ -918,48 +918,67 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 	return ret;
 }
 
+template<class T>
+T *get_Rdata(SEXP pobj)
+{
+	fprintf(stderr, "Wrong type for getting R object data");
+	return NULL;
+}
+
+template<>
+int *get_Rdata<int>(SEXP pobj)
+{
+	return INTEGER(pobj);
+}
+
+template<>
+double *get_Rdata<double>(SEXP pobj)
+{
+	return REAL(pobj);
+}
+
+template<class T>
+dense_matrix::ptr RVec2FM(SEXP pobj)
+{
+	size_t len = get_length(pobj);
+	T *data = get_Rdata<T>(pobj);
+	// FlashR stores vectors in matrices.
+	// We can assume we only convert small R vectors. so we should store data
+	// in a SMP matrix.
+	detail::mem_matrix_store::ptr fm = detail::mem_matrix_store::create(
+			len, 1, matrix_layout_t::L_COL, get_scalar_type<T>(), -1);
+	memcpy(fm->get_raw_arr(), data, len * sizeof(data[0]));
+	return dense_matrix::create(fm);
+}
+
+template<class T>
+dense_matrix::ptr RMat2FM(SEXP pobj, matrix_layout_t layout)
+{
+	T *data = get_Rdata<T>(pobj);
+	size_t nrow = get_nrows(pobj);
+	size_t ncol = get_ncols(pobj);
+	size_t len = nrow * ncol;
+	// We can assume we only convert small R matrices, so we should store data
+	// in a SMP matrix.
+	detail::mem_matrix_store::ptr fm = detail::mem_matrix_store::create(
+			nrow, ncol, layout, get_scalar_type<T>(), -1);
+	memcpy(fm->get_raw_arr(), data, len * sizeof(data[0]));
+	return dense_matrix::create(fm);
+}
+
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
-	int num_nodes = -1;
 	if (R_is_real(pobj)) {
-		Rcpp::NumericVector vec(pobj);
-		// TODO Is there a way of avoiding the extra memory copy?
-		std::unique_ptr<double[]> tmp(new double[vec.size()]);
-		for (int i = 0; i < vec.size(); i++)
-			tmp[i] = vec[i];
-
-		detail::mem_vec_store::ptr fm_vec = detail::mem_vec_store::create(
-				vec.size(), num_nodes, get_scalar_type<double>());
-		fm_vec->copy_from((char *) tmp.get(),
-				vec.size() * fm_vec->get_entry_size());
-		return create_FMR_vector(fm_vec, "");
+		auto fm = RVec2FM<double>(pobj);
+		return create_FMR_vector(fm, "");
 	}
 	else if (R_is_integer(pobj)) {
-		Rcpp::IntegerVector vec(pobj);
-		// TODO Is there a way of avoiding the extra memory copy?
-		std::unique_ptr<int[]> tmp(new int[vec.size()]);
-		for (int i = 0; i < vec.size(); i++)
-			tmp[i] = vec[i];
-
-		detail::mem_vec_store::ptr fm_vec = detail::mem_vec_store::create(
-				vec.size(), num_nodes, get_scalar_type<int>());
-		fm_vec->copy_from((char *) tmp.get(),
-				vec.size() * fm_vec->get_entry_size());
-		return create_FMR_vector(fm_vec, "");
+		auto fm = RVec2FM<int>(pobj);
+		return create_FMR_vector(fm, "");
 	}
 	else if (R_is_logical(pobj)) {
-		Rcpp::LogicalVector vec(pobj);
-		// We need to store an R boolean vector as an integer vector because
-		// there are three potential values for an R boolean variable.
-		std::unique_ptr<int[]> tmp(new int[vec.size()]);
-		for (int i = 0; i < vec.size(); i++)
-			tmp[i] = vec[i];
-
-		detail::mem_vec_store::ptr fm_vec = detail::mem_vec_store::create(
-				vec.size(), num_nodes, get_scalar_type<int>());
-		fm_vec->copy_from((char *) tmp.get(),
-				vec.size() * fm_vec->get_entry_size());
-		Rcpp::List ret = create_FMR_vector(fm_vec, "");
+		auto fm = RVec2FM<int>(pobj);
+		Rcpp::List ret = create_FMR_vector(fm, "");
 		// we need to indicate this is a boolean vector.
 		ret["ele_type"] = Rcpp::String("logical");
 		return ret;
@@ -976,46 +995,17 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 	bool byrow = LOGICAL(pbyrow)[0];
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
-	// I think we can assume the matrix converted from an R matrix is small.
-	// So it's enough to store it as a SMP matrix.
-	int num_nodes = -1;
 	if (R_is_real(pobj)) {
-		Rcpp::NumericMatrix mat(pobj);
-		size_t nrow = mat.nrow();
-		size_t ncol = mat.ncol();
-		detail::mem_matrix_store::ptr fm_mat
-			= detail::mem_matrix_store::create(nrow, ncol, layout,
-					get_scalar_type<double>(), num_nodes);
-		for (size_t i = 0; i < nrow; i++)
-			for (size_t j = 0; j < ncol; j++)
-				fm_mat->set<double>(i, j, mat(i, j));
-		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		auto fm = RMat2FM<double>(pobj, layout);
+		return create_FMR_matrix(fm, "");
 	}
 	else if (R_is_integer(pobj)) {
-		Rcpp::IntegerMatrix mat(pobj);
-		size_t nrow = mat.nrow();
-		size_t ncol = mat.ncol();
-		detail::mem_matrix_store::ptr fm_mat
-			= detail::mem_matrix_store::create(nrow, ncol, layout,
-					get_scalar_type<int>(), num_nodes);
-		for (size_t i = 0; i < nrow; i++)
-			for (size_t j = 0; j < ncol; j++)
-				fm_mat->set<int>(i, j, mat(i, j));
-		return create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		auto fm = RMat2FM<int>(pobj, layout);
+		return create_FMR_matrix(fm, "");
 	}
 	else if (R_is_logical(pobj)) {
-		Rcpp::LogicalMatrix mat(pobj);
-		size_t nrow = mat.nrow();
-		size_t ncol = mat.ncol();
-		// We need to store an R boolean matrix as an integer matrix because
-		// there are three potential values for an R boolean variable.
-		detail::mem_matrix_store::ptr fm_mat
-			= detail::mem_matrix_store::create(nrow, ncol, layout,
-					get_scalar_type<int>(), num_nodes);
-		for (size_t i = 0; i < nrow; i++)
-			for (size_t j = 0; j < ncol; j++)
-				fm_mat->set<int>(i, j, mat(i, j));
-		Rcpp::List ret = create_FMR_matrix(dense_matrix::create(fm_mat), "");
+		auto fm = RMat2FM<int>(pobj, layout);
+		Rcpp::List ret = create_FMR_matrix(fm, "");
 		// we need to indicate this is a boolean matrix.
 		ret["ele_type"] = Rcpp::String("logical");
 		return ret;
