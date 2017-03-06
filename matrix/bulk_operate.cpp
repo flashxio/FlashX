@@ -409,6 +409,71 @@ struct multiply<double, double, double>
 };
 
 template<class LeftType, class RightType, class ResType>
+struct mod
+{
+	static std::string get_name() {
+		return "%";
+	}
+	static ResType get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return 0;
+	}
+	ResType operator()(const LeftType &e1, const RightType &e2) const {
+		return e1 % e2;
+	}
+};
+
+template<>
+struct mod<float, float, float>
+{
+	static std::string get_name() {
+		return "%";
+	}
+	static float get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return 0;
+	}
+	float operator()(const float &e1, const float &e2) const {
+		return std::fmod(e1, e2);
+	}
+};
+
+template<>
+struct mod<double, double, double>
+{
+	static std::string get_name() {
+		return "%";
+	}
+	static double get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return 0;
+	}
+	double operator()(const double &e1, const double &e2) const {
+		return std::fmod(e1, e2);
+	}
+};
+
+template<>
+struct mod<long double, long double, long double>
+{
+	static std::string get_name() {
+		return "%";
+	}
+	static long double get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return 0;
+	}
+	long double operator()(const long double &e1,
+			const long double &e2) const {
+		return std::fmod(e1, e2);
+	}
+};
+
+template<class LeftType, class RightType, class ResType>
 struct min
 {
 	static std::string get_name() {
@@ -557,6 +622,20 @@ class basic_ops_impl: public basic_ops
 			return e1 / e2;
 		}
 	};
+	struct idiv {
+		divide div;
+		static std::string get_name() {
+			return "%/%";
+		}
+		static ResType get_agg_init() {
+			// This operation isn't used in aggregation, so we
+			// don't care this agg init.
+			return 0;
+		}
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
+			return floor(div(e1, e2));
+		}
+	};
 
 	struct pow {
 		static std::string get_name() {
@@ -686,6 +765,9 @@ class basic_ops_impl: public basic_ops
 		LeftType, RightType, ResType> mul_op;
 	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
 	bulk_operate_impl<divide_float, float, float, float> div_float_op;
+	bulk_operate_impl<mod<LeftType, RightType, ResType>,
+		LeftType, RightType, ResType> mod_op;
+	bulk_operate_impl<idiv, LeftType, RightType, ResType> idiv_op;
 	bulk_operate_impl<min<LeftType, RightType, ResType>,
 		LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max<LeftType, RightType, ResType>,
@@ -724,6 +806,8 @@ public:
 		ops[LE] = &le_op;
 		ops[OR] = &or_op;
 		ops[AND] = &and_op;
+		ops[MOD] = &mod_op;
+		ops[IDIV] = &idiv_op;
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {
