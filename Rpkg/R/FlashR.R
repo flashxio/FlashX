@@ -1065,6 +1065,10 @@ fm.bo.le <- NULL
 fm.bo.or <- NULL
 #' @name fm.basic.op
 fm.bo.and <- NULL
+#' @name fm.basic.op
+fm.bo.mod <- NULL
+#' @name fm.basic.op
+fm.bo.idiv <- NULL
 
 #' @name fm.basic.op
 fm.bo.count <- NULL
@@ -1111,6 +1115,10 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.bo.mul))
 	fm.bo.div <<- fm.get.basic.op("div")
 	stopifnot(!is.null(fm.bo.div))
+	fm.bo.mod <<- fm.get.basic.op("mod")
+	stopifnot(!is.null(fm.bo.mod))
+	fm.bo.idiv <<- fm.get.basic.op("%/%")
+	stopifnot(!is.null(fm.bo.idiv))
 	fm.bo.min <<- fm.get.basic.op("min")
 	stopifnot(!is.null(fm.bo.min))
 	fm.bo.max <<- fm.get.basic.op("max")

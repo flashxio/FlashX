@@ -270,6 +270,12 @@ op_id_t get_op_id(const std::string &name)
 		return basic_ops::op_idx::DIV;
 	else if (name == "/")
 		return basic_ops::op_idx::DIV;
+	else if (name == "mod")
+		return basic_ops::op_idx::MOD;
+	else if (name == "%%")
+		return basic_ops::op_idx::MOD;
+	else if (name == "%/%")
+		return basic_ops::op_idx::IDIV;
 	else if (name == "min")
 		return basic_ops::op_idx::MIN;
 	else if (name == "max")

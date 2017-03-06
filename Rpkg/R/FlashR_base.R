@@ -86,6 +86,30 @@ setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 			  .mapply2.fm(e1, e2, fm.bo.div)
 		  })
 
+#' @rdname Arithmetic
+setMethod("%%", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e1, e2, fm.bo.mod))
+#' @rdname Arithmetic
+setMethod("%%", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(e1, e2, fm.bo.mod))
+#' @rdname Arithmetic
+setMethod("%%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.mod)
+		  })
+
+#' @rdname Arithmetic
+setMethod("%/%", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e1, e2, fm.bo.idiv))
+#' @rdname Arithmetic
+setMethod("%/%", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(e1, e2, fm.bo.idiv))
+#' @rdname Arithmetic
+setMethod("%/%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.idiv)
+		  })
+
 .replace.pow.special <- function(res, e1, e2)
 {
 	res <- ifelse(e1 == 1, 1, res)
