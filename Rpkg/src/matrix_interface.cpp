@@ -920,7 +920,7 @@ RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
 
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
-	int num_nodes = matrix_conf.get_num_nodes();
+	int num_nodes = -1;
 	if (R_is_real(pobj)) {
 		Rcpp::NumericVector vec(pobj);
 		// TODO Is there a way of avoiding the extra memory copy?
@@ -1086,45 +1086,6 @@ RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
 	return ret;
 }
 
-RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
-{
-	Rcpp::S4 obj1(po1);
-	Rcpp::S4 obj2(po2);
-	if (is_sparse(obj1) || is_sparse(obj2)) {
-		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
-		return R_NilValue;
-	}
-
-
-	// We only need to test on one vector.
-	bool is_vec = is_vector(obj1);
-	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
-	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
-	if (!is_supported_type(m1->get_type())
-			|| !is_supported_type(m2->get_type())) {
-		fprintf(stderr, "The input matrices have unsupported type\n");
-		return R_NilValue;
-	}
-	const scalar_type &common_type = get_common_type(m1->get_type(),
-			m2->get_type());
-	if (common_type != m1->get_type())
-		m1 = m1->cast_ele_type(common_type);
-	if (common_type != m2->get_type())
-		m2 = m2->cast_ele_type(common_type);
-
-	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
-	if (op == NULL)
-		return R_NilValue;
-
-	dense_matrix::ptr out = m1->mapply2(*m2, op);
-	if (out == NULL)
-		return R_NilValue;
-	else if (is_vec)
-		return create_FMR_vector(out, "");
-	else
-		return create_FMR_matrix(out, "");
-}
-
 /*
  * A wrapper class that perform array-element operation.
  * This class converts this binary operation into a unary operation.
@@ -1135,6 +1096,11 @@ class AE_operator: public bulk_uoperate
 	bulk_operate::const_ptr op;
 	T v;
 public:
+	static const_ptr create(bulk_operate::const_ptr op,
+			detail::mem_matrix_store::const_ptr v) {
+		return const_ptr(new AE_operator<T>(op,
+					*reinterpret_cast<const T *>(v->get_raw_arr())));
+	}
 	AE_operator(bulk_operate::const_ptr op, T v) {
 		this->op = op;
 		this->v = v;
@@ -1157,6 +1123,132 @@ public:
 		return "mapply_AE";
 	}
 };
+
+/*
+ * A wrapper class that perform element-array operation.
+ * This class converts this binary operation into a unary operation.
+ */
+template<class T>
+class EA_operator: public bulk_uoperate
+{
+	bulk_operate::const_ptr op;
+	T v;
+public:
+	static const_ptr create(bulk_operate::const_ptr op,
+			detail::mem_matrix_store::const_ptr v) {
+		return const_ptr(new EA_operator<T>(op,
+					*reinterpret_cast<const T *>(v->get_raw_arr())));
+	}
+	EA_operator(bulk_operate::const_ptr op, T v) {
+		this->op = op;
+		this->v = v;
+		assert(sizeof(v) == op->left_entry_size());
+	}
+
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		op->runEA(num_eles, &v, in_arr, out_arr);
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		return op->get_right_type();
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		return op->get_output_type();
+	}
+	virtual std::string get_name() const {
+		return "mapply_EA";
+	}
+};
+
+RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
+{
+	Rcpp::S4 obj1(po1);
+	Rcpp::S4 obj2(po2);
+	if (is_sparse(obj1) || is_sparse(obj2)) {
+		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+
+	// We output a vector only if the two input objects are vectors.
+	bool is_vec = is_vector(obj1) && is_vector(obj2);
+	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
+	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
+	if (!is_supported_type(m1->get_type())
+			|| !is_supported_type(m2->get_type())) {
+		fprintf(stderr, "The input matrices have unsupported type\n");
+		return R_NilValue;
+	}
+	const scalar_type &common_type = get_common_type(m1->get_type(),
+			m2->get_type());
+	if (common_type != m1->get_type())
+		m1 = m1->cast_ele_type(common_type);
+	if (common_type != m2->get_type())
+		m2 = m2->cast_ele_type(common_type);
+
+	bulk_operate::const_ptr op = fmr::get_op(pfun, m1->get_type().get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr out;
+	// If the input matrices have the same size.
+	if (m1->get_num_rows() == m2->get_num_rows()
+			&& m1->get_num_cols() == m2->get_num_cols())
+		out = m1->mapply2(*m2, op);
+	// If the left matrix is actually a scalar.
+	else if (m1->get_num_rows() * m1->get_num_cols() == 1) {
+		if (m1->is_in_mem())
+			m1->materialize_self();
+		else
+			m1 = m1->conv_store(true, -1);
+		auto var = std::static_pointer_cast<const detail::mem_matrix_store>(
+				m1->get_raw_store());
+		if (m1->get_type() == get_scalar_type<int>())
+			out = m2->sapply(EA_operator<int>::create(op, var));
+		else if (m1->get_type() == get_scalar_type<double>())
+			out = m2->sapply(EA_operator<double>::create(op, var));
+	}
+	// If the right matrix is actually a scalar
+	else if (m2->get_num_rows() * m2->get_num_cols() == 1) {
+		if (m2->is_in_mem())
+			m2->materialize_self();
+		else
+			m2 = m2->conv_store(true, -1);
+		auto var = std::static_pointer_cast<const detail::mem_matrix_store>(
+				m2->get_raw_store());
+		if (m1->get_type() == get_scalar_type<int>())
+			out = m1->sapply(AE_operator<int>::create(op, var));
+		else if (m1->get_type() == get_scalar_type<double>())
+			out = m1->sapply(AE_operator<double>::create(op, var));
+	}
+	// If the left matrix is actually a vector.
+	else if (m1->get_num_rows() == m2->get_num_rows()
+			&& m1->get_num_cols() == 1) {
+		m1 = dense_matrix::create_repeat(col_vec::create(m1),
+				m2->get_num_rows(), m2->get_num_cols(),
+				matrix_layout_t::L_COL, false,
+				m1->get_raw_store()->get_num_nodes());
+		out = m1->mapply2(*m2, op);
+	}
+	// If the right matrix is actually a vector.
+	else if (m1->get_num_rows() == m2->get_num_rows()
+			&& m2->get_num_cols() == 1) {
+		out = m1->mapply_cols(col_vec::create(m2), op);
+	}
+	else {
+		fprintf(stderr, "The shape of the input matrices doesn't match");
+		return R_NilValue;
+	}
+
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
 
 RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 {
@@ -1208,39 +1300,6 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 	else
 		return create_FMR_matrix(out, "");
 }
-
-/*
- * A wrapper class that perform element-array operation.
- * This class converts this binary operation into a unary operation.
- */
-template<class T>
-class EA_operator: public bulk_uoperate
-{
-	bulk_operate::const_ptr op;
-	T v;
-public:
-	EA_operator(bulk_operate::const_ptr op, T v) {
-		this->op = op;
-		this->v = v;
-		assert(sizeof(v) == op->left_entry_size());
-	}
-
-	virtual void runA(size_t num_eles, const void *in_arr,
-			void *out_arr) const {
-		op->runEA(num_eles, &v, in_arr, out_arr);
-	}
-
-	virtual const scalar_type &get_input_type() const {
-		return op->get_right_type();
-	}
-
-	virtual const scalar_type &get_output_type() const {
-		return op->get_output_type();
-	}
-	virtual std::string get_name() const {
-		return "mapply_EA";
-	}
-};
 
 RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 {

@@ -1341,15 +1341,6 @@ fm.set.test.na <- function(val)
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	stopifnot(class(o1) == "fm" || class(o2) == "fm")
-	# If one of the input matrices is a single-col matrix,
-	# we will repeat the matrix to match the other matrix.
-	if (ncol(o1) != ncol(o2)) {
-		if (ncol(o1) == 1)
-			o1 <- fm.matrix(o1, nrow(o1), ncol(o2))
-		else if (ncol(o2) == 1)
-			o2 <- fm.matrix(o2, nrow(o2), ncol(o1))
-	}
-	stopifnot(dim(o1)[2] == dim(o2)[2] && dim(o1)[1] == dim(o2)[1])
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- .new.fm(ret)
 	if (set.na)
@@ -1363,99 +1354,11 @@ fm.set.test.na <- function(val)
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	stopifnot(fm.is.vector(o1) || fm.is.vector(o2))
-	if (length(o1) == length(o2))
-		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-	else if (length(o1) == 1)
-		return(.mapply2.ANY.fmV(as.vector(o1), o2, FUN, set.na))
-	else if (length(o2) == 1)
-		return(.mapply2.fmV.ANY(o1, as.vector(o2), FUN, set.na))
-
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	ret <- .new.fmV(ret)
 	if (set.na)
 		ret <- .set.na(o1, o2, ret)
 	ret
-}
-
-.mapply2.fm.m <- function(o1, o2, FUN, set.na=TRUE)
-{
-	if (class(FUN) == "character")
-		FUN <- fm.get.basic.op(FUN)
-	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(class(o1) == "fm")
-	stopifnot(nrow(o1) == nrow(o2))
-	stopifnot(ncol(o1) == ncol(o2))
-	o2 <- fm.conv.R2FM(o2)
-	if (is.null(o2))
-		return(NULL)
-	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (set.na)
-		ret <- .set.na(o1, o2, ret)
-	ret
-}
-
-.mapply2.m.fm <- function(o1, o2, FUN, set.na=TRUE)
-{
-	if (class(FUN) == "character")
-		FUN <- fm.get.basic.op(FUN)
-	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(class(o2) == "fm")
-	stopifnot(nrow(o1) == nrow(o2))
-	stopifnot(ncol(o1) == ncol(o2))
-	o1 <- fm.conv.R2FM(o1)
-	if (is.null(o1))
-		return(NULL)
-	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (set.na)
-		ret <- .set.na(o1, o2, ret)
-	ret
-}
-
-.mapply2.fm.ANY <- function(o1, o2, FUN, set.na=TRUE)
-{
-	if (class(FUN) == "character")
-		FUN <- fm.get.basic.op(FUN)
-	stopifnot(class(FUN) == "fm.bo")
-	stopifnot(class(o1) == "fm")
-	stopifnot(is.vector(o2))
-	if (length(o2) > 1) {
-		o2 <- fm.conv.R2FM(o2)
-		if (is.null(o2))
-			return(NULL)
-		fm.mapply.col(o1, o2, FUN, set.na)
-	}
-	else {
-		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
-		ret <- .new.fm(ret)
-		if (set.na)
-			ret <- .set.na1(o1, ret)
-		ret
-	}
-}
-
-.mapply2.ANY.fm <- function(o1, o2, FUN, set.na=TRUE)
-{
-	if (class(FUN) == "character")
-		FUN <- fm.get.basic.op(FUN)
-	stopifnot(class(o2) == "fm")
-	stopifnot(class(FUN) == "fm.bo")
-	if (is.vector(o1) && length(o1) > 1) {
-		print("don't support this operation yet.")
-		NULL
-	}
-	else if (is.vector(o1)) {
-		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashR")
-		ret <- .new.fm(ret)
-		if (set.na)
-			ret <- .set.na1(o2, ret)
-		ret
-	}
-	else {
-		stopifnot(is.matrix(o1))
-		o1 <- fm.conv.R2FM(o1)
-		.mapply2.fm.fm(o1, o2)
-	}
 }
 
 .mapply2.fmV.ANY <- function(o1, o2, FUN, set.na=TRUE)
@@ -1585,17 +1488,25 @@ setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fmV"), fm.mapply.col)
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fm"),
 		  function(o1, o2, FUN, set.na) {
-			  print("This isn't supported currently.")
-			  NULL
+			  o1 <- fm.matrix(o1, nrow(o2), ncol(o2))
+			  .mapply2.fm(o1, o2)
 		  })
 #' @rdname fm.mapply2
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "matrix"), .mapply2.fm.m)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "matrix"),
+		  function(o1, o2, FUN, set.na)
+			  .mapply2.fm(o1, fm.as.matrix(o2), FUN, set.na))
 #' @rdname fm.mapply2
-setMethod("fm.mapply2", signature(o1 = "matrix", o2 = "fm"), .mapply2.m.fm)
+setMethod("fm.mapply2", signature(o1 = "matrix", o2 = "fm"),
+		  function(o1, o2, FUN, set.na)
+			  .mapply2.fm(fm.as.matrix(o1), o2, FUN, set.na))
 #' @rdname fm.mapply2
-setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY"), .mapply2.fm.ANY)
+setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY"),
+		  function(o1, o2, FUN, set.na)
+			  .mapply2.fm(o1, fm.as.matrix(o2), FUN, set.na))
 #' @rdname fm.mapply2
-setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm"), .mapply2.ANY.fm)
+setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm"),
+		  function(o1, o2, FUN, set.na)
+			  .mapply2.fm(fm.as.matrix(o1), o2, FUN, set.na))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY"), .mapply2.fmV.ANY)
 #' @rdname fm.mapply2

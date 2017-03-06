@@ -56,30 +56,6 @@ setMethod("+", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Arithmetic
 setMethod("+", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.add))
 
 #' @rdname Arithmetic
 setMethod("-", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -88,29 +64,8 @@ setMethod("-", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("-", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.sub))
 #' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
 setMethod("-", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  -fm.mapply.col(e2, e1, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  -.mapply2.fm.ANY(e2, e1, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.sub))
 
 #' @rdname Arithmetic
 setMethod("*", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -118,30 +73,6 @@ setMethod("*", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Arithmetic
 setMethod("*", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.mul))
 
 #' @rdname Arithmetic
 setMethod("/", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -150,35 +81,10 @@ setMethod("/", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("/", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.div))
 #' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  .mapply2.ANY.fm(1, fm.mapply.col(e2, e1, fm.bo.div), fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "ANY", e2 = "fm"), function(e1, e2) {
-		  if (length(e1) == 1)
-			  .mapply2.ANY.fm(e1, e2, fm.bo.div)
-		  else {
-			  e1 <- fm.conv.R2FM(e1)
-			  e1 / e2
-		  }
+setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.div)
 		  })
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.div))
 
 .replace.pow.special <- function(res, e1, e2)
 {
@@ -200,39 +106,9 @@ setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2) {
 		  .replace.pow.special(res, e1, e2)
 		  })
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "fmV"), function(e1, e2) {
-		  res <- fm.mapply.col(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-#setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-#		  fm.mapply.col(as.numeric(e2), as.numeric(e1), fm.bo.pow))
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "matrix"), function(e1, e2) {
-		  res <- .mapply2.fm.m(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "matrix", e2 = "fm"), function(e1, e2) {
-		  res <- .mapply2.m.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-#setMethod("^", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-#		  .mapply2.fm.ANY(as.numeric(e2), as.numeric(e1), fm.bo.pow))
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2) {
-		  res <- .mapply2.ANY.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "ANY"), function(e1, e2) {
-		  res <- .mapply2.fm.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2) {
-		  res <- .mapply2.fmV.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+		  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
 		  .replace.pow.special(res, e1, e2)
 		  })
 
@@ -304,30 +180,6 @@ setMethod("==", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Comparison
 setMethod("==", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.eq))
 
 #' @rdname Comparison
 setMethod("!=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -335,30 +187,6 @@ setMethod("!=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Comparison
 setMethod("!=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.neq))
 
 #' @rdname Comparison
 setMethod(">", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -367,29 +195,8 @@ setMethod(">", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod(">", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.gt))
 #' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.gt))
-#' @rdname Comparison
 setMethod(">", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.lt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.lt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.gt))
 
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -398,29 +205,8 @@ setMethod(">=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod(">=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.ge))
 #' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.ge))
-#' @rdname Comparison
 setMethod(">=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.le))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.le))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.ge))
 
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -429,29 +215,8 @@ setMethod("<=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("<=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.le))
 #' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.le))
-#' @rdname Comparison
 setMethod("<=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.ge))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.ge))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.le))
 
 #' @rdname Comparison
 setMethod("<", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -460,29 +225,8 @@ setMethod("<", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("<", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.lt))
 #' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.lt))
-#' @rdname Comparison
 setMethod("<", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.gt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.gt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.lt))
 
 #' Logical Operators
 #'
@@ -515,30 +259,6 @@ setMethod("|", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Logic
 setMethod("|", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.or))
 
 #' @rdname Logic
 setMethod("&", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -546,30 +266,6 @@ setMethod("&", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Logic
 setMethod("&", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.and))
 
 #' @rdname Logic
 `!.fm` <- function(e1)
@@ -641,30 +337,6 @@ setMethod("pmax2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.max))
-#' @rdname Extremes
-setMethod("pmax2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.max))
 
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -672,30 +344,31 @@ setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.min))
-#' @rdname Extremes
-setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.min))
+
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  callGeneric(e1, fm.conv.R2FM(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  callGeneric(fm.conv.R2FM(e1), e2))
 
 .min.int <- function(x, ..., na.rm) {
 	others <- list(...)
