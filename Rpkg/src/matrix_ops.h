@@ -25,6 +25,7 @@
 
 #include "bulk_operate.h"
 #include "bulk_operate_ext.h"
+#include "rutils.h"
 
 namespace fmr
 {
@@ -47,14 +48,25 @@ void register_udf(const std::vector<fm::bulk_uoperate::const_ptr> &ops,
 void init_udf_ext();
 
 /*
+ * We get an operator based on the operation and the element type of the input
+ * operands. These operations will output an operator for the input type and
+ * the output type. The reason that we need to give an output type is that
+ * R stores both logical values and integers in C integers and FlashMatrix
+ * `operate' isn't sufficient to carry the type information.
+ *
  * Get a binary operator.
  * Even though a binary operator takes two inputs, FlashR always first casts
  * the type of one input to match the other. So we assume that all binary
  * operators take inputs of the same type.
  */
-fm::bulk_operate::const_ptr get_op(SEXP pfun, fm::prim_type type);
+std::pair<fm::bulk_operate::const_ptr, R_type> get_op(SEXP pfun, R_type type);
 /* Get a unary operator. */
-fm::bulk_uoperate::const_ptr get_uop(SEXP pfun, fm::prim_type type);
+std::pair<fm::bulk_uoperate::const_ptr, R_type> get_uop(SEXP pfun, R_type type);
+/* This construct an aggregation operator from binary operators. */
+std::pair<fm::agg_operate::const_ptr, R_type> get_agg_op(SEXP pfun,
+		R_type type);
+std::pair<fm::arr_apply_operate::const_ptr, R_type> get_apply_op(SEXP pfun,
+		R_type type);
 
 typedef int op_id_t;
 
@@ -63,12 +75,7 @@ op_id_t get_op_id(const std::string &name);
 /* Get the unary operator Id given a name. */
 op_id_t get_uop_id(const std::string &name);
 
-/* This construct an aggregation operator from binary operators. */
-fm::agg_operate::const_ptr get_agg_op(SEXP pfun, const fm::scalar_type &mat_type);
-
 void init_apply_ops();
-fm::arr_apply_operate::const_ptr get_apply_op(SEXP pfun,
-		const fm::scalar_type &mat_type);
 
 }
 
