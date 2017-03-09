@@ -57,13 +57,30 @@ bool R_is_na<int, false>(int val)
 template<>
 bool R_is_na<double, true>(double val)
 {
-	return val == NA_REAL;
+	// We can't check `val' against `NA_REAL'. Instead, we should use `ISNA'.
+	//
+	// The reason is explained below:
+	// Basically, a double represents a rounded real number in the following
+	// notation (see also the wikipedia article):
+	//
+	// \textrm{sign}\times 2^{e} \times 1.F .
+	//
+	// The sign is represented by 1 bit, the exponent e by 11 bits and
+	// the mantissa F by 52 bits, so we have 64 bits in total. The special value
+	// NaN (and also \pmInf) is coded using values of e that are not used to
+	// represent numbers. NaN is represented by e=0x7ff (hexadecimal) and F\not=0.
+	// The important thing is that it does not matter what the value of F is
+	// when representing NaN. This leaves developers with lots of room in
+	// the mantissa to give different meanings to NaN. In R the developers
+	// chose F=1954 in the mantissa to represent NA. A C-level function called
+	// R_IsNA detects the 1954 in NaN values.
+	return ISNA(val);
 }
 
 template<>
 bool R_is_na<double, false>(double val)
 {
-	return val == NA_REAL;
+	return ISNA(val);
 }
 
 template<class T, bool is_logical>
