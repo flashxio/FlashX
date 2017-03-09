@@ -347,6 +347,30 @@ setMethod("pmax2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  pmax2(e1, fm.conv.R2FM(e2)))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  pmax2(fm.conv.R2FM(e1), e2))
 
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -354,6 +378,30 @@ setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  pmin2(e1, fm.conv.R2FM(e2)))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  pmin2(fm.conv.R2FM(e1), e2))
 
 #' @rdname Arithmetic
 setMethod("Ops", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
