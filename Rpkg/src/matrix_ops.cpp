@@ -352,7 +352,38 @@ struct pow {
 		return get_Rtype<Type, false>();
 	}
 	Type operator()(const Type &e1, const Type &e2) const {
-		return std::pow(e1, e2);
+		// If e1 is 1, whatever e2 is, the output is 1.
+		// If e2 is 0, whatever e1 is, the output is 1.
+		if (e1 == 1 || e2 == 0)
+			return 1;
+		else
+			return std::pow(e1, e2);
+	}
+};
+
+template<>
+struct pow<double, false> {
+	static std::string get_name() {
+		return "pow";
+	}
+	static double get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return 0;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<double, false>();
+	}
+	double operator()(const double &e1, const double &e2) const {
+		if (e1 == 1 || e2 == 0)
+			return 1;
+		// If e1 is -Inf and e2 isn't an integer, C++ returns Inf,
+		// but R wants NaN.
+		else if (e1 == -std::numeric_limits<double>::infinity()
+				&& floor(e2) != e2)
+			return NAN;
+		else
+			return std::pow(e1, e2);
 	}
 };
 
@@ -461,6 +492,132 @@ struct le {
 	}
 	int operator()(const Type &e1, const Type &e2) const {
 		return e1 <= e2;
+	}
+};
+
+template<>
+struct eq<double, false> {
+	static std::string get_name() {
+		return "==";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 == e2;
+	}
+};
+
+template<>
+struct neq<double, false> {
+	static std::string get_name() {
+		return "!=";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 != e2;
+	}
+};
+
+template<>
+struct gt<double, false> {
+	static std::string get_name() {
+		return ">";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 > e2;
+	}
+};
+
+template<>
+struct ge<double, false> {
+	static std::string get_name() {
+		return ">=";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 >= e2;
+	}
+};
+
+template<>
+struct lt<double, false> {
+	static std::string get_name() {
+		return "<";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 < e2;
+	}
+};
+
+template<>
+struct le<double, false> {
+	static std::string get_name() {
+		return "<=";
+	}
+	static int get_agg_init() {
+		// This operation isn't used in aggregation, so we
+		// don't care this agg init.
+		return false;
+	}
+	static R_type get_output_type() {
+		return get_Rtype<int, true>();
+	}
+	int operator()(const double &e1, const double &e2) const {
+		if (std::isnan(e1) || std::isnan(e2))
+			return R_get_na<int, true>();
+		else
+			return e1 <= e2;
 	}
 };
 
@@ -1052,64 +1209,84 @@ class basic_Rops_NA_impl: public basic_Rops
 
 	struct pow_na: public pow<Type, is_logical> {
 		Type operator()(const Type &e1, const Type &e2) const {
-			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<Type, false>() : std::pow(e1, e2);
+			if (e1 == 1 || e2 == 0)
+				return 1;
+			else if (R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2))
+				return R_get_na<Type, false>();
+			else
+				return pow<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct eq_na: public eq<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 == e2;
+				? R_get_na<int, true>() : eq<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct neq_na: public neq<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 != e2;
+				? R_get_na<int, true>() : neq<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct gt_na: public gt<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 > e2;
+				? R_get_na<int, true>() : gt<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct ge_na: public ge<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 >= e2;
+				? R_get_na<int, true>() : ge<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct lt_na: public lt<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 < e2;
+				? R_get_na<int, true>() : lt<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct le_na: public le<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
 			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 <= e2;
+				? R_get_na<int, true>() : le<Type, is_logical>::operator()(e1, e2);
 		}
 	};
 
 	struct logic_or_na: public logic_or<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
-			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 || e2;
+			bool is_na1 = R_is_na<Type, is_logical>(e1);
+			bool is_na2 = R_is_na<Type, is_logical>(e2);
+			if (is_na1 && is_na2)
+				return R_get_na<int, true>();
+			else if ((is_na1 && e2) || (is_na2 && e1))
+				return true;
+			else if (is_na1 || is_na2)
+				return R_get_na<int, true>();
+			else
+				return e1 || e2;
 		}
 	};
 
 	struct logic_and_na: public logic_and<Type, is_logical> {
 		int operator()(const Type &e1, const Type &e2) const {
-			return R_is_na<Type, is_logical>(e1) || R_is_na<Type, is_logical>(e2)
-				? R_get_na<int, true>() : e1 && e2;
+			bool is_na1 = R_is_na<Type, is_logical>(e1);
+			bool is_na2 = R_is_na<Type, is_logical>(e2);
+			if (is_na1 && is_na2)
+				return R_get_na<int, true>();
+			else if ((is_na1 && !e2) || (is_na2 && !e1))
+				return false;
+			else if (is_na1 || is_na2)
+				return R_get_na<int, true>();
+			else
+				return e1 && e2;
 		}
 	};
 
@@ -1722,6 +1899,66 @@ public:
 	}
 };
 
+template<class InT, class OutT, bool in_logical, bool out_logical>
+class cast_ele
+{
+public:
+	OutT operator()(InT v) const {
+		if (R_is_na<InT, in_logical>(v))
+			return R_get_na<OutT, out_logical>();
+		else
+			return v;
+	}
+};
+
+template<>
+class cast_ele<double, int, false, false>
+{
+public:
+	int operator()(double v) const {
+		if (R_is_na<double, false>(v) || std::isnan(v))
+			return R_get_na<int, false>();
+		else
+			return v != 0;
+	}
+};
+
+template<>
+class cast_ele<double, int, false, true>
+{
+public:
+	int operator()(double v) const {
+		if (R_is_na<double, false>(v) || std::isnan(v))
+			return R_get_na<int, true>();
+		else
+			return v != 0;
+	}
+};
+
+template<class InT, class OutT, bool in_logical, bool out_logical>
+class ele_type_cast: public bulk_uoperate
+{
+	cast_ele<InT, OutT, in_logical, out_logical> cast;
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		OutT *t_out = reinterpret_cast<OutT *>(out_arr);
+		const InT *t_in = reinterpret_cast<const InT *>(in_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			t_out[i] = cast(t_in[i]);
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<InT>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<OutT>();
+	}
+	virtual std::string get_name() const {
+		return std::string("cast(") + get_scalar_type<InT>().get_name() + ", "
+			+ get_scalar_type<OutT>().get_name() + ")";
+	}
+};
+
 void init_udf_ext()
 {
 	bops[(int) R_type::R_LOGICAL]
@@ -1788,21 +2025,20 @@ void init_udf_ext()
 	register_udf(ops, "euclidean");
 
 	std::vector<bulk_uoperate::const_ptr> uops(R_type::R_NTYPES);
-	// TODO we need to cast NA correctly.
-	uops[R_type::R_LOGICAL] = bulk_uoperate::conv2ptr(
-				get_scalar_type<int>().get_type_cast(get_scalar_type<int>()));
-	uops[R_type::R_INT] = bulk_uoperate::conv2ptr(
-				get_scalar_type<int>().get_type_cast(get_scalar_type<int>()));
-	uops[R_type::R_REAL] = bulk_uoperate::conv2ptr(
-				get_scalar_type<double>().get_type_cast(get_scalar_type<int>()));
+	uops[R_type::R_LOGICAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, int, true, false>());
+	uops[R_type::R_INT] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, int, false, false>());
+	uops[R_type::R_REAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<double, int, false, false>());
 	register_udf(uops, "as.int");
 
-	uops[R_type::R_LOGICAL] = bulk_uoperate::conv2ptr(
-				get_scalar_type<int>().get_type_cast(get_scalar_type<double>()));
-	uops[R_type::R_INT] = bulk_uoperate::conv2ptr(
-				get_scalar_type<int>().get_type_cast(get_scalar_type<double>()));
-	uops[R_type::R_REAL] = bulk_uoperate::conv2ptr(
-				get_scalar_type<double>().get_type_cast(get_scalar_type<double>()));
+	uops[R_type::R_LOGICAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, double, true, false>());
+	uops[R_type::R_INT] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, double, false, false>());
+	uops[R_type::R_REAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<double, double, false, false>());
 	register_udf(uops, "as.numeric");
 }
 
