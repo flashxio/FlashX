@@ -2058,6 +2058,14 @@ void init_udf_ext()
 	uops[R_type::R_REAL] = bulk_uoperate::const_ptr(
 			new ele_type_cast<double, double, false, false>());
 	register_udf(uops, "as.numeric");
+
+	uops[R_type::R_LOGICAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, int, true, true>());
+	uops[R_type::R_INT] = bulk_uoperate::const_ptr(
+			new ele_type_cast<int, int, false, true>());
+	uops[R_type::R_REAL] = bulk_uoperate::const_ptr(
+			new ele_type_cast<double, int, false, true>());
+	register_udf(uops, "as.logical");
 }
 
 typedef std::vector<arr_apply_operate::const_ptr> app_op_vec;

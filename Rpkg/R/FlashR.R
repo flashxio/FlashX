@@ -1100,6 +1100,8 @@ fm.buo.log10 <- NULL
 #' @name fm.basic.op
 fm.buo.round <- NULL
 #' @name fm.basic.op
+fm.buo.as.logical <- NULL
+#' @name fm.basic.op
 fm.buo.as.int <- NULL
 #' @name fm.basic.op
 fm.buo.as.numeric <- NULL
@@ -1171,6 +1173,8 @@ fm.init.basic.op <- function()
 	stopifnot(!is.null(fm.buo.log10))
 	fm.buo.round <<- fm.get.basic.uop("round")
 	stopifnot(!is.null(fm.buo.round))
+	fm.buo.as.logical <<- fm.get.basic.uop("as.logical")
+	stopifnot(!is.null(fm.buo.as.logical))
 	fm.buo.as.int <<- fm.get.basic.uop("as.int")
 	stopifnot(!is.null(fm.buo.as.int))
 	fm.buo.as.numeric <<- fm.get.basic.uop("as.numeric")

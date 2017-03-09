@@ -265,17 +265,17 @@ NULL
 
 #' @rdname Logic
 setMethod("|", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.or))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.or))
 #' @rdname Logic
 setMethod("|", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.or))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.or))
 
 #' @rdname Logic
 setMethod("&", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.and))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.and))
 #' @rdname Logic
 setMethod("&", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.and))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.and))
 
 #' @rdname Logic
 `!.fm` <- function(e1)
@@ -1222,6 +1222,39 @@ setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
 setMethod("as.data.frame", signature(x = "fm.table"),
 		  function(x, row.names = NULL, optional = FALSE, ...)
 			  list(val=x@val, Freq=x@Freq))
+
+#' Logical Vectors
+#'
+#' \code{as.logical} coerces objects of type \code{"logical"}.
+#' \code{is.logical} is a more general test of an object being
+#' interpretable as logicals.
+#'
+#' @param x a FlashR object to be coerced or tested.
+#' @return \code{as.logical} returns a logical FlashR object,
+#' \code{is.logical} returns a logical value.
+#' @name logical
+NULL
+
+#' @rdname logical
+setMethod("as.logical", "fm", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
+#' @rdname logical
+setMethod("as.logical", "fmV", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
 
 #' Integer Vectors
 #'
