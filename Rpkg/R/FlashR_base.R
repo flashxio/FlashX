@@ -280,13 +280,13 @@ setMethod("&", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 #' @rdname Logic
 `!.fm` <- function(e1)
 {
-	.sapply.fm(e1, fm.buo.not)
+	.sapply.fm(as.logical(e1), fm.buo.not)
 }
 
 #' @rdname Logic
 `!.fmV` <- function(e1)
 {
-	.sapply.fmV(e1, fm.buo.not)
+	.sapply.fmV(as.logical(e1), fm.buo.not)
 }
 
 #' Maxima and Minima
