@@ -23,6 +23,7 @@
 #include "mem_worker_thread.h"
 #include "local_vec_store.h"
 #include "bulk_operate_impl.h"
+#include "dense_matrix.h"
 
 using namespace fm;
 
@@ -2186,6 +2187,37 @@ std::pair<arr_apply_operate::const_ptr, R_type> get_apply_op(SEXP pfun, R_type t
 		auto op = vec[(int) type];
 		return std::pair<arr_apply_operate::const_ptr, R_type>(op,
 				trans_FM2R(op->get_output_type()));
+	}
+}
+
+dense_matrix::ptr cast_Rtype(dense_matrix::ptr mat, R_type in_type,
+		R_type out_type)
+{
+	if (in_type == out_type)
+		return mat;
+	else if (out_type == R_type::R_INT) {
+		int op_idx = _get_uop_id("as.int");
+		size_t off = op_idx - basic_uops::op_idx::NUM_OPS;
+		if (off >= bulk_uops.size()) {
+			fprintf(stderr, "Can't cast to int\n");
+			return dense_matrix::ptr();
+		}
+		auto op = bulk_uops[off].get_op(in_type);
+		return mat->sapply(op);
+	}
+	else if (out_type == R_type::R_REAL) {
+		int op_idx = _get_uop_id("as.numeric");
+		size_t off = op_idx - basic_uops::op_idx::NUM_OPS;
+		if (off >= bulk_uops.size()) {
+			fprintf(stderr, "Can't cast to floating-points\n");
+			return dense_matrix::ptr();
+		}
+		auto op = bulk_uops[off].get_op(in_type);
+		return mat->sapply(op);
+	}
+	else {
+		fprintf(stderr, "can't cast to other types.\n");
+		return dense_matrix::ptr();
 	}
 }
 

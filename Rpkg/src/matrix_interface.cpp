@@ -711,9 +711,10 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 		return R_NilValue;
 	}
 	if (matrix->is_type<int>() && right_mat->is_type<double>())
-		matrix = matrix->cast_ele_type(get_scalar_type<double>());
+		matrix = fmr::cast_Rtype(matrix, FM_get_Rtype(pmatrix), R_type::R_REAL);
 	if (matrix->is_type<double>() && right_mat->is_type<int>())
-		right_mat = right_mat->cast_ele_type(get_scalar_type<double>());
+		right_mat = fmr::cast_Rtype(right_mat, FM_get_Rtype(pmat),
+				R_type::R_REAL);
 	dense_matrix::ptr res = matrix->multiply(*right_mat);
 	if (res == NULL)
 		return R_NilValue;
@@ -753,14 +754,13 @@ RcppExport SEXP R_FM_inner_prod_dense(SEXP pmatrix, SEXP pmat,
 				right_mat->get_type().get_name().c_str());
 		return R_NilValue;
 	}
-	const scalar_type &common_type = get_common_type(matrix->get_type(),
-			right_mat->get_type());
-	if (common_type != matrix->get_type())
-		matrix = matrix->cast_ele_type(common_type);
-	if (common_type != right_mat->get_type())
-		right_mat = right_mat->cast_ele_type(common_type);
-	R_type common_Rtype = get_common_Rtype(FM_get_Rtype(pmatrix),
-			FM_get_Rtype(pmat));
+	R_type left_type = FM_get_Rtype(pmatrix);
+	R_type right_type = FM_get_Rtype(pmat);
+	R_type common_Rtype = get_common_Rtype(left_type, right_type);
+	if (common_Rtype != left_type)
+		matrix = fmr::cast_Rtype(matrix, left_type, common_Rtype);
+	if (common_Rtype != right_type)
+		right_mat = fmr::cast_Rtype(right_mat, right_type, common_Rtype);
 
 	auto op1_res = fmr::get_op(pfun1, common_Rtype);
 	bulk_operate::const_ptr op1 = op1_res.first;
@@ -1203,14 +1203,13 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 				m2->get_type().get_name().c_str());
 		return R_NilValue;
 	}
-	const scalar_type &common_type = get_common_type(m1->get_type(),
-			m2->get_type());
-	if (common_type != m1->get_type())
-		m1 = m1->cast_ele_type(common_type);
-	if (common_type != m2->get_type())
-		m2 = m2->cast_ele_type(common_type);
-	R_type common_Rtype = get_common_Rtype(FM_get_Rtype(obj1),
-			FM_get_Rtype(obj2));
+	R_type left_type = FM_get_Rtype(obj1);
+	R_type right_type = FM_get_Rtype(obj2);
+	R_type common_Rtype = get_common_Rtype(left_type, right_type);
+	if (common_Rtype != left_type)
+		m1 = fmr::cast_Rtype(m1, left_type, common_Rtype);
+	if (common_Rtype != right_type)
+		m2 = fmr::cast_Rtype(m2, right_type, common_Rtype);
 
 	auto op_res = fmr::get_op(pfun, common_Rtype);
 	bulk_operate::const_ptr op = op_res.first;
@@ -1405,14 +1404,13 @@ RcppExport SEXP R_FM_mapply2_MV(SEXP po1, SEXP po2, SEXP pmargin, SEXP pfun)
 		fprintf(stderr, "The second argument should be a vector\n");
 		return R_NilValue;
 	}
-	const scalar_type &common_type = get_common_type(v->get_type(),
-			m->get_type());
-	if (common_type != m->get_type())
-		m = m->cast_ele_type(common_type);
-	if (common_type != v->get_type())
-		v = v->cast_ele_type(common_type);
-	R_type common_Rtype = get_common_Rtype(FM_get_Rtype(po1),
-			FM_get_Rtype(po2));
+	R_type left_type = FM_get_Rtype(po1);
+	R_type right_type = FM_get_Rtype(po2);
+	R_type common_Rtype = get_common_Rtype(left_type, right_type);
+	if (common_Rtype != left_type)
+		m = fmr::cast_Rtype(m, left_type, common_Rtype);
+	if (common_Rtype != right_type)
+		v = fmr::cast_Rtype(v, right_type, common_Rtype);
 
 	int margin = INTEGER(pmargin)[0];
 	auto op_res = fmr::get_op(pfun, common_Rtype);

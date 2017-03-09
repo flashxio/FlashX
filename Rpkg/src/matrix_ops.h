@@ -27,6 +27,11 @@
 #include "bulk_operate_ext.h"
 #include "rutils.h"
 
+namespace fm
+{
+class dense_matrix;
+}
+
 namespace fmr
 {
 
@@ -67,6 +72,14 @@ std::pair<fm::agg_operate::const_ptr, R_type> get_agg_op(SEXP pfun,
 		R_type type);
 std::pair<fm::arr_apply_operate::const_ptr, R_type> get_apply_op(SEXP pfun,
 		R_type type);
+
+/*
+ * This casts the elements of a dense matrix from `in_type' to `out_type'.
+ * The main reason that we need this is that we need to handle NA correctly
+ * when casting element types in R.
+ */
+std::shared_ptr<fm::dense_matrix> cast_Rtype(std::shared_ptr<fm::dense_matrix> mat,
+		R_type in_type, R_type out_type);
 
 typedef int op_id_t;
 
