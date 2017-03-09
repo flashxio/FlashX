@@ -422,6 +422,7 @@ public:
 	}
 
 	double norm2() const;
+	void print() const;
 };
 
 template<class T>
