@@ -2640,7 +2640,7 @@ public:
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const {
 		const double *in = reinterpret_cast<const double *>(in_arr);
-		bool *out = reinterpret_cast<bool *>(out_arr);
+		int *out = reinterpret_cast<int *>(out_arr);
 		// is.na in R returns true for both NA and NaN.
 		// we should do the same thing.
 		for (size_t i = 0; i < num_eles; i++)
