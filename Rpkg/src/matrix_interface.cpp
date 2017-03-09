@@ -989,7 +989,7 @@ dense_matrix::ptr RVec2FM(SEXP pobj)
 }
 
 template<class T>
-dense_matrix::ptr RMat2FM(SEXP pobj, matrix_layout_t layout)
+dense_matrix::ptr RMat2FM(SEXP pobj)
 {
 	T *data = get_Rdata<T>(pobj);
 	size_t nrow = get_nrows(pobj);
@@ -998,7 +998,7 @@ dense_matrix::ptr RMat2FM(SEXP pobj, matrix_layout_t layout)
 	// We can assume we only convert small R matrices, so we should store data
 	// in a SMP matrix.
 	detail::mem_matrix_store::ptr fm = detail::mem_matrix_store::create(
-			nrow, ncol, layout, get_scalar_type<T>(), -1);
+			nrow, ncol, matrix_layout_t::L_COL, get_scalar_type<T>(), -1);
 	memcpy(fm->get_raw_arr(), data, len * sizeof(data[0]));
 	return dense_matrix::create(fm);
 }
@@ -1024,21 +1024,18 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 	}
 }
 
-RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
+RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj)
 {
-	bool byrow = LOGICAL(pbyrow)[0];
-	matrix_layout_t layout
-		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
 	if (R_is_real(pobj)) {
-		auto fm = RMat2FM<double>(pobj, layout);
+		auto fm = RMat2FM<double>(pobj);
 		return create_FMR_matrix(fm, R_type::R_REAL, "");
 	}
 	else if (R_is_integer(pobj)) {
-		auto fm = RMat2FM<int>(pobj, layout);
+		auto fm = RMat2FM<int>(pobj);
 		return create_FMR_matrix(fm, R_type::R_INT, "");
 	}
 	else if (R_is_logical(pobj)) {
-		auto fm = RMat2FM<int>(pobj, layout);
+		auto fm = RMat2FM<int>(pobj);
 		return create_FMR_matrix(fm, R_type::R_LOGICAL, "");
 	}
 	// TODO handle more types.

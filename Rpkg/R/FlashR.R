@@ -643,11 +643,7 @@ fm.conv.layout <- function(fm, byrow=FALSE)
 
 #' Convert a regular R object to a FlashR object.
 #'
-#' If the R object is a matrix, \code{byrow} determines how data in the generated
-#' FlashR object is organized in memory.
-#'
 #' @param obj a regular R object
-#' @param byrow a logical value to determine the data layout of a FlashR matrix.
 #' @return a FlashR object. If the input R object has 0 element,
 #'         \code{fm.conv.R2FM} returns \code{NULL}.
 #' @name fm.conv.R2FM
@@ -656,7 +652,7 @@ fm.conv.layout <- function(fm, byrow=FALSE)
 #' @examples
 #' vec <- fm.conv.R2FM(runif(100))
 #' mat <- fm.conv.R2FM(matrix(runif(100), 100, 2))
-fm.conv.R2FM <- function(obj, byrow=FALSE)
+fm.conv.R2FM <- function(obj)
 {
 	stopifnot(!is.null(obj))
 	# This function only deals with vectors and matrices of primitive types.
@@ -670,7 +666,7 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 		.new.fmV(vec)
 	}
 	else if(is.matrix(obj)) {
-		m <- .Call("R_FM_conv_RMat2FM", obj, as.logical(byrow), PACKAGE="FlashR")
+		m <- .Call("R_FM_conv_RMat2FM", obj, PACKAGE="FlashR")
 		.new.fm(m)
 	}
 	else

@@ -285,63 +285,29 @@ test_that("column-wise matrix times a vector", {
 		  mat <- matrix(1:2000, 20, 100)
 		  vec <- 1:ncol(mat)
 
-		  fm.mat <- fm.conv.R2FM(mat, byrow = FALSE)
+		  fm.mat <- fm.conv.R2FM(mat)
 		  fm.vec <- fm.conv.R2FM(vec)
 		  expect_equal(fm.matrix.layout(fm.mat), "col")
 		  test.MV1(fm.mat, fm.vec, mat, vec)
 })
 
-test_that("Row-wise matrix times a vector", {
-		  mat <- matrix(1:2000, 20, 100)
-		  vec <- 1:ncol(mat)
-
-		  fm.mat <- fm.conv.R2FM(mat, byrow = TRUE)
-		  fm.vec <- fm.conv.R2FM(vec)
-		  expect_equal(fm.matrix.layout(fm.mat), "row")
-		  test.MV1(fm.mat, fm.vec, mat, vec)
-})
-
-test.MM.tmp <- function(left.byrow, right.byrow, left.mat, right.mat)
+test.MM.tmp <- function(left.mat, right.mat)
 {
-	if (left.byrow)
-		left.layout = "row"
-	else
-		left.layout = "col"
-	if (right.byrow)
-		right.layout = "row"
-	else
-		right.layout = "col"
-	fm.left <- fm.conv.R2FM(left.mat, byrow = left.byrow)
-	expect_equal(fm.matrix.layout(fm.left), left.layout)
-	fm.right <- fm.conv.R2FM(right.mat, byrow = right.byrow)
-	expect_equal(fm.matrix.layout(fm.right), right.layout)
+	fm.left <- fm.conv.R2FM(left.mat)
+	fm.right <- fm.conv.R2FM(right.mat)
 	test.MM1(fm.left, fm.right, left.mat, right.mat)
 }
 
 test_that("matrix multiply: wide vs. tall", {
 		  left.mat <- matrix(runif(2000), 20, 100)
 		  right.mat <- matrix(runif(2000), 100, 20)
-		  # left col-wise, right col-wise
-		  test.MM.tmp(FALSE, FALSE, left.mat, right.mat)
-		  # left col-wise, right row-wise
-		  test.MM.tmp(FALSE, TRUE, left.mat, right.mat)
-		  # left row-wise, right col-wise
-		  test.MM.tmp(TRUE, FALSE, left.mat, right.mat)
-		  # left row-wise, right row-wise
-		  test.MM.tmp(TRUE, TRUE, left.mat, right.mat)
+		  test.MM.tmp(left.mat, right.mat)
 })
 
 test_that("matrix multiply: tall vs. small", {
 		  left.mat <- matrix(runif(2000), 100, 20)
 		  right.mat <- matrix(runif(2000), 20, 10)
-		  # left col-wise, right col-wise
-		  test.MM.tmp(FALSE, FALSE, left.mat, right.mat)
-		  # left col-wise, right row-wise
-		  test.MM.tmp(FALSE, TRUE, left.mat, right.mat)
-		  # left row-wise, right col-wise
-		  test.MM.tmp(TRUE, FALSE, left.mat, right.mat)
-		  # left row-wise, right row-wise
-		  test.MM.tmp(TRUE, TRUE, left.mat, right.mat)
+		  test.MM.tmp(left.mat, right.mat)
 })
 
 # TODO we need to test `^`
