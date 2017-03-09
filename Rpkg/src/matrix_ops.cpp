@@ -1937,7 +1937,7 @@ public:
 		if (R_is_na<double, false>(v) || std::isnan(v))
 			return R_get_na<int, false>();
 		else
-			return v != 0;
+			return v;
 	}
 };
 
