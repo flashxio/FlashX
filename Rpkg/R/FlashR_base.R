@@ -110,30 +110,16 @@ setMethod("%/%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 			  .mapply2.fm(e1, e2, fm.bo.idiv)
 		  })
 
-.replace.pow.special <- function(res, e1, e2)
-{
-	res <- ifelse(e1 == 1, 1, res)
-	if (typeof(e1) == "double" && typeof(e2) == "double")
-		ifelse(e1 == -Inf & floor(e2) != e2, NaN, res)
-	else
-		res
-}
-
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2) {
-		  res <- .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
+setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2) {
-		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
+setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
 setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 		  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
-		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
+		  .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
 		  })
 
 #' Matrix multiplication
