@@ -672,13 +672,13 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 	if (n > 1) {
 		for (arg in data[2:n]) {
 			if (class(res) == class(arg))
-				res <- fm.mapply2(res, arg, FUN, test.na)
+				res <- fm.mapply2(res, arg, FUN)
 			else if (class(res) == "fm" && class(arg) == "fmV")
-				res <- fm.mapply.col(res, arg, FUN, test.na)
+				res <- fm.mapply.col(res, arg, FUN)
 			# We assume that FUN is commutative.
 			# This function is used for pmin/pmax, so it's fine.
 			else if (class(res) == "fmV" && class(arg) == "fm")
-				res <- fm.mapply.col(arg, res, FUN, test.na)
+				res <- fm.mapply.col(arg, res, FUN)
 			else
 				stop("unknown arguments")
 		}
@@ -1108,9 +1108,9 @@ setMethod("log2", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.
 #' @rdname log
 setMethod("log2", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.log2))
 #' @rdname log
-setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
-setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
@@ -1256,25 +1256,15 @@ NULL
 setMethod("as.integer", "fm", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying matrix uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fm", pointer=x@pointer, name=x@name, nrow=x@nrow, ncol=x@ncol,
-				  type=x@type, ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 #' @rdname integer
 setMethod("as.integer", "fmV", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying vector uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fmV", pointer=x@pointer, name=x@name, len=x@len, type=x@type,
-				  ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 
 #' Numeric Vectors
@@ -1297,14 +1287,14 @@ setMethod("as.numeric", "fm", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("as.numeric", "fmV", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("is.numeric", "fm", function(x)
@@ -1634,7 +1624,7 @@ fm.eigen <- function(mul, k, n, which=c("LM", "SM", "LR", "SR"),
 #' @rdname fm.eigen
 fm.cal.residul <- function(mul, values, vectors)
 {
-	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*")
 	l2 <- sqrt(colSums(tmp * tmp))
 	fm.conv.FM2R(l2) / values
 }

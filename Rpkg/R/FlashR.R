@@ -1291,85 +1291,27 @@ fm.set.test.na <- function(val)
 	.env.int$fm.test.na <- val
 }
 
-# If one of the inputs has an NA in an element, the corresponding location
-# in `res' is set to NA.
-.set.na <- function(in1, in2, res)
-{
-	# This is a special function that helps to test and set NA on
-	# the computation results, so it shouldn't call any functions that
-	# try to test and set NA on the result.
-	if (is.null(res))
-		return(NULL)
-	else if (!.env.int$fm.test.na)
-		return(res)
-	else if (.typeof.int(res) == "logical")
-		# is.na always return TRUE or FALSE, we don't need to test and set NA
-		# on the result. If we do, we'll get infinite recursive calls.
-		ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
-						  FALSE), NA, res)
-	else if (.typeof.int(res) == "integer")
-		ifelse(fm.mapply2(is.na(in1), is.na(in2), fm.bo.or,
-						  FALSE), as.integer(NA), res)
-	else if (.typeof.int(res) == "double")
-		ifelse(fm.mapply2(.is.na.only(in1), .is.na.only(in2),
-						  fm.bo.or, FALSE), as.double(NA), res)
-	else
-		# In this case, we don't do anything with the result.
-		res
-}
-
-# If the input has an NA in an element, the corresponding location in `res'
-# is set to NA.
-.set.na1 <- function(input, res)
-{
-	# This is a special function that helps to test and set NA on
-	# the computation results, so it shouldn't call any functions that
-	# try to test and set NA on the result.
-	if (is.null(res))
-		return(NULL)
-	else if (!.env.int$fm.test.na)
-		return(res)
-	else if (.typeof.int(res) == "logical")
-		# is.na always return TRUE or FALSE, we don't need to test and set NA
-		# on the result. If we do, we'll get infinite recursive calls.
-		ifelse(is.na(input), NA, res)
-	else if (.typeof.int(res) == "integer")
-		ifelse(is.na(input), as.integer(NA), res)
-	else if (.typeof.int(res) == "double") {
-		ifelse(.is.na.only(input), as.double(NA), res)
-	}
-	else
-		# In this case, we don't do anything with the result.
-		res
-}
-
-.mapply2.fm <- function(o1, o2, FUN, set.na=TRUE)
+.mapply2.fm <- function(o1, o2, FUN)
 {
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	stopifnot(class(o1) == "fm" || class(o2) == "fm")
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (set.na)
-		ret <- .set.na(o1, o2, ret)
-	ret
+	.new.fm(ret)
 }
 
-.mapply2.fmV <- function(o1, o2, FUN, set.na=TRUE)
+.mapply2.fmV <- function(o1, o2, FUN)
 {
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	stopifnot(fm.is.vector(o1) || fm.is.vector(o2))
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
-	ret <- .new.fmV(ret)
-	if (set.na)
-		ret <- .set.na(o1, o2, ret)
-	ret
+	.new.fmV(ret)
 }
 
-.mapply2.fmV.ANY <- function(o1, o2, FUN, set.na=TRUE)
+.mapply2.fmV.ANY <- function(o1, o2, FUN)
 {
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
@@ -1385,13 +1327,10 @@ fm.set.test.na <- function(val)
 	}
 	else
 		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashR")
-	ret <- .new.fmV(ret)
-	if (set.na)
-		ret <- .set.na1(o1, ret)
-	ret
+	.new.fmV(ret)
 }
 
-.mapply2.ANY.fmV <- function(o1, o2, FUN, set.na=TRUE)
+.mapply2.ANY.fmV <- function(o1, o2, FUN)
 {
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.op(FUN)
@@ -1407,10 +1346,7 @@ fm.set.test.na <- function(val)
 			return(NULL)
 		ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashR")
 	}
-	ret <- .new.fmV(ret)
-	if (set.na)
-		ret <- .set.na1(o2, ret)
-	ret
+	.new.fmV(ret)
 }
 
 #' Apply a Function to two FlashR vectors/matrices.
@@ -1431,9 +1367,6 @@ fm.set.test.na <- function(val)
 #' @param o1,o2 a FlashR vector/matrix.
 #' @param FUN the reference or the name of one of the predefined basic binary
 #' operators.
-#' @param set.na a logical value indicating whether to set the value in
-#'               the output matrix to NA if the value in the corresponding
-#'               location of the input matrix is NA.
 #' @return a FlashR vector/matrix.
 #' @name fm.mapply2
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -1447,7 +1380,7 @@ fm.set.test.na <- function(val)
 NULL
 
 #' @rdname fm.mapply2
-fm.mapply.row <- function(o1, o2, FUN, set.na=TRUE)
+fm.mapply.row <- function(o1, o2, FUN)
 {
 	if (!fm.is.object(o2))
 		o2 <- fm.conv.R2FM(o2)
@@ -1456,18 +1389,15 @@ fm.mapply.row <- function(o1, o2, FUN, set.na=TRUE)
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	if (length(o2) == 1)
-		return(fm.mapply2(o1, as.vector(o2), FUN, set.na))
+		return(fm.mapply2(o1, as.vector(o2), FUN))
 
 	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(1), FUN,
 				 PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (set.na)
-		ret <- .set.na1(o1, ret)
-	ret
+	.new.fm(ret)
 }
 
 #' @rdname fm.mapply2
-fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
+fm.mapply.col <- function(o1, o2, FUN)
 {
 	if (!fm.is.object(o2))
 		o2 <- fm.conv.R2FM(o2)
@@ -1476,17 +1406,14 @@ fm.mapply.col <- function(o1, o2, FUN, set.na=TRUE)
 		FUN <- fm.get.basic.op(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	if (length(o2) == 1)
-		return(fm.mapply2(o1, as.vector(o2), FUN, set.na))
+		return(fm.mapply2(o1, as.vector(o2), FUN))
 
 	ret <- .Call("R_FM_mapply2_MV", o1, o2, as.integer(2), FUN,
 				 PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (set.na)
-		ret <- .set.na1(o1, ret)
-	ret
+	.new.fm(ret)
 }
 
-setGeneric("fm.mapply2", function(o1, o2, FUN, set.na=TRUE) standardGeneric("fm.mapply2"))
+setGeneric("fm.mapply2", function(o1, o2, FUN) standardGeneric("fm.mapply2"))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fm"), .mapply2.fm)
 #' @rdname fm.mapply2
@@ -1495,55 +1422,49 @@ setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fmV"), .mapply2.fmV)
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "fmV"), fm.mapply.col)
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "fm"),
-		  function(o1, o2, FUN, set.na) {
+		  function(o1, o2, FUN) {
 			  o1 <- fm.matrix(o1, nrow(o2), ncol(o2))
 			  .mapply2.fm(o1, o2)
 		  })
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "matrix"),
-		  function(o1, o2, FUN, set.na)
-			  .mapply2.fm(o1, fm.as.matrix(o2), FUN, set.na))
+		  function(o1, o2, FUN)
+			  .mapply2.fm(o1, fm.as.matrix(o2), FUN))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "matrix", o2 = "fm"),
-		  function(o1, o2, FUN, set.na)
-			  .mapply2.fm(fm.as.matrix(o1), o2, FUN, set.na))
+		  function(o1, o2, FUN)
+			  .mapply2.fm(fm.as.matrix(o1), o2, FUN))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fm", o2 = "ANY"),
-		  function(o1, o2, FUN, set.na)
-			  .mapply2.fm(o1, fm.as.matrix(o2), FUN, set.na))
+		  function(o1, o2, FUN)
+			  .mapply2.fm(o1, fm.as.matrix(o2), FUN))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fm"),
-		  function(o1, o2, FUN, set.na)
-			  .mapply2.fm(fm.as.matrix(o1), o2, FUN, set.na))
+		  function(o1, o2, FUN)
+			  .mapply2.fm(fm.as.matrix(o1), o2, FUN))
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "fmV", o2 = "ANY"), .mapply2.fmV.ANY)
 #' @rdname fm.mapply2
 setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 
-.sapply.fm <- function(o, FUN, set.na=TRUE)
+.sapply.fm <- function(o, FUN)
 {
 	stopifnot(class(o) == "fm")
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.uop(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
-	ret <- .new.fm(ret)
-	if (as.logical(set.na))
-		ret <- .set.na1(o, ret)
-	ret
+	.new.fm(ret)
 }
 
-.sapply.fmV <- function(o, FUN, set.na=TRUE)
+.sapply.fmV <- function(o, FUN)
 {
 	stopifnot(fm.is.vector(o))
 	if (class(FUN) == "character")
 		FUN <- fm.get.basic.uop(FUN)
 	stopifnot(class(FUN) == "fm.bo")
 	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashR")
-	ret <- .new.fmV(ret)
-	if (as.logical(set.na))
-		ret <- .set.na1(o, ret)
-	ret
+	.new.fmV(ret)
 }
 
 #' Apply a Function to a FlashR vector/matrix.
@@ -1554,10 +1475,6 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 #'
 #' @param o a FlashR vector/matrix.
 #' @param FUN the reference or the name of a predefined uniary operator.
-#' @param set.na a logical value indicating whether to set the value in
-#'               the output vector or matrix to NA if the value in
-#'               the corresponding location of the input vector or matrix
-#'               is NA.
 #' @return a FlashR vector/matrix.
 #' @name fm.sapply
 #' @author Da Zheng <dzheng5@@jhu.edu>
@@ -1565,7 +1482,7 @@ setMethod("fm.mapply2", signature(o1 = "ANY", o2 = "fmV"), .mapply2.ANY.fmV)
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
 #' res <- fm.sapply(mat, "abs")
-setGeneric("fm.sapply", function(o, FUN, set.na=TRUE)  standardGeneric("fm.sapply"))
+setGeneric("fm.sapply", function(o, FUN)  standardGeneric("fm.sapply"))
 
 #' @rdname fm.sapply
 setMethod("fm.sapply", signature(o = "fm"), .sapply.fm)
