@@ -194,7 +194,8 @@ struct max
 		return "max";
 	}
 	static Type get_agg_init() {
-		return std::numeric_limits<Type>::min();
+		// min() for integers is used for NA in R.
+		return std::numeric_limits<Type>::min() + 1;
 	}
 	static R_type get_output_type() {
 		return get_Rtype<Type, false>();
