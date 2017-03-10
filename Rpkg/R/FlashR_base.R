@@ -470,12 +470,17 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.max.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.min, FALSE)
+		.mapply.list(args, fm.bo.min)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.min, TRUE)
+		.mapply.list(args, fm.bo.min)
 }
 
 .pmax.int <- function(..., na.rm = FALSE)
@@ -483,12 +488,17 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.min.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.max, FALSE)
+		.mapply.list(args, fm.bo.max)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.max, TRUE)
+		.mapply.list(args, fm.bo.max)
 }
 
 #' @rdname Extremes
@@ -695,7 +705,7 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 #' @rdname transpose
 setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
-.mapply.list <- function(data, FUN, test.na)
+.mapply.list <- function(data, FUN)
 {
 	n <- length(data)
 	res <- data[[1]]
