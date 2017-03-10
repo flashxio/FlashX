@@ -2087,40 +2087,29 @@ setMethod("is.nan", signature(x = "fmV"), function(x) {
 #' @rdname is.finite
 setMethod("is.infinite", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double")
-			  fm.mapply2(x, Inf, fm.bo.eq, FALSE)
+			  fm.mapply2(x, Inf, fm.bo.eq)
 		  else
 			  fm.matrix(FALSE, nrow(x), ncol(x))
 		  })
 #' @rdname is.finite
 setMethod("is.infinite", signature(x = "fmV"), function(x) {
 		  if (typeof(x) == "double")
-			  fm.mapply2(x, Inf, fm.bo.eq, FALSE)
+			  fm.mapply2(x, Inf, fm.bo.eq)
 		  else
 			  fm.rep.int(FALSE, length(x))
 		  })
 
-.test.na.finite <- function(input, res)
-{
-	if (is.null(res))
-		return(NULL)
-	else {
-		# The result must be float points.
-		ifelse(fm.mapply2(is.na(input), is.nan(input), fm.bo.or,
-						  FALSE), FALSE, res)
-	}
-}
-
 #' @rdname is.finite
 setMethod("is.finite", signature(x = "fm"), function(x) {
 		  if (typeof(x) == "double")
-			  .test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
+			  ifelse(is.na(x), FALSE, fm.mapply2(x, Inf, fm.bo.neq))
 		  else
 			  fm.matrix(TRUE, nrow(x), ncol(x))
 		  })
 #' @rdname is.finite
 setMethod("is.finite", signature(x = "fmV"), function(x) {
 		  if (typeof(x) == "double")
-			  .test.na.finite(x, fm.mapply2(x, Inf, fm.bo.neq, FALSE))
+			  ifelse(is.na(x), FALSE, fm.mapply2(x, Inf, fm.bo.neq))
 		  else
 			  fm.rep.int(TRUE, length(x))
 		  })
