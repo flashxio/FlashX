@@ -809,17 +809,17 @@ fm.any <- function(x, lazy=FALSE)
 .any.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, FALSE)
 		others <- .replace.na.list(others, FALSE)
 	}
@@ -871,17 +871,17 @@ fm.all <- function(x, lazy=FALSE)
 .all.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, TRUE)
 		others <- .replace.na.list(others, TRUE)
 	}
