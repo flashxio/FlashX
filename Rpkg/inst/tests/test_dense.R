@@ -317,7 +317,6 @@ bin.op.strs <- list("+", "-", "*", "/", "==", "!=", ">", ">=", "<", "<=", "|", "
 				"pmin", "pmax")
 
 # Test element-wise vector vector operation.
-# ERROR: ^ and | don't pass the test.
 for (left.spec in spec.vals) {
 for (right.spec in spec.vals) {
 for (i in 1:length(bin.ops)) {
@@ -419,7 +418,6 @@ for (i in 1:length(bin.ops1)) {
 }
 
 # test element-wise scalar vector operations.
-# ERROR: ^ doesn't pass the test here.
 for (i in 1:length(bin.ops1)) {
 	bin.op <- bin.ops1[[i]]
 	name <- bin.op.strs1[[i]]
@@ -470,7 +468,6 @@ for (i in 1:length(bin.ops1)) {
 }
 
 # test element-wise vector matrix operations.
-# ERROR: ^ doesn't pass the test here.
 for (i in 1:length(bin.ops1)) {
 	bin.op <- bin.ops1[[i]]
 	name <- bin.op.strs1[[i]]
@@ -523,7 +520,6 @@ for (i in 1:length(bin.ops1)) {
 }
 
 # test element-wise Rvector matrix operations.
-# ERROR: ^ doesn't pass the test here.
 for (i in 1:length(bin.ops1)) {
 	bin.op <- bin.ops1[[i]]
 	name <- bin.op.strs1[[i]]
@@ -599,6 +595,7 @@ test_that("test transpose", {
 		  expect_equal(as.vector(fm.t.mat), as.vector(vec))
 })
 
+# ERROR: boolean indexing fails.
 for (type in type.set) {
 name <- paste("Get columns from a matrix", type)
 test_that(name, {
@@ -813,7 +810,6 @@ test_that(name, {
 })
 }
 
-# ERROR: all
 agg.ops1 <- list(sum, min, max, any, all)
 agg.op.strs1 <- list("sum", "min", "max", "any", "all")
 for (na.rm in c(TRUE, FALSE)) {
@@ -834,12 +830,12 @@ for (type in type.set) {
 					  vec1 <- fm.conv.FM2R(fm.vec1)
 					  vec2 <- fm.conv.FM2R(fm.vec2)
 
-					  fm.res <- as.vector(agg.op(fm.vec1, na.rm=na.rm))
+					  fm.res <- fm.conv.FM2R(agg.op(fm.vec1, na.rm=na.rm))
 					  res <- agg.op(vec1, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res))
 
-					  fm.res <- as.vector(agg.op(fm.vec1, fm.vec2, na.rm=na.rm))
+					  fm.res <- fm.conv.FM2R(agg.op(fm.vec1, fm.vec2, na.rm=na.rm))
 					  res <- agg.op(vec1, vec2, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -854,12 +850,12 @@ for (type in type.set) {
 				  vec1 <- fm.conv.FM2R(fm.vec1)
 				  vec2 <- fm.conv.FM2R(fm.vec2)
 
-				  fm.res <- as.vector(range(fm.vec1, na.rm=na.rm))
+				  fm.res <- fm.conv.FM2R(range(fm.vec1, na.rm=na.rm))
 				  res <- range(vec1, na.rm=na.rm)
 				  expect_equal(res, fm.res)
 				  expect_equal(typeof(fm.res), typeof(res))
 
-				  fm.res <- as.vector(range(fm.vec1, fm.vec2, na.rm=na.rm))
+				  fm.res <- fm.conv.FM2R(range(fm.vec1, fm.vec2, na.rm=na.rm))
 				  res <- range(vec1, vec2, na.rm=na.rm)
 				  expect_equal(res, fm.res)
 				  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -872,7 +868,7 @@ for (type in type.set) {
 				  vec1 <- fm.conv.FM2R(fm.vec1)
 				  vec2 <- fm.conv.FM2R(fm.vec2)
 
-				  fm.res <- as.vector(mean(fm.vec1, na.rm=na.rm))
+				  fm.res <- fm.conv.FM2R(mean(fm.vec1, na.rm=na.rm))
 				  res <- mean(vec1, na.rm=na.rm)
 				  expect_equal(res, fm.res)
 				  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -899,12 +895,12 @@ for (i in 1:length(agg.ops1)) {
 					  mat1 <- fm.conv.FM2R(fm.mat1)
 					  mat2 <- fm.conv.FM2R(fm.mat2)
 
-					  fm.res <- as.vector(agg.op(fm.mat1, na.rm=na.rm))
+					  fm.res <- fm.conv.FM2R(agg.op(fm.mat1, na.rm=na.rm))
 					  res <- agg.op(mat1, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res))
 
-					  fm.res <- as.vector(agg.op(fm.mat1, fm.mat2, na.rm=na.rm))
+					  fm.res <- fm.conv.FM2R(agg.op(fm.mat1, fm.mat2, na.rm=na.rm))
 					  res <- agg.op(mat1, mat2, na.rm=na.rm)
 					  expect_equal(res, fm.res)
 					  expect_equal(typeof(fm.res), typeof(res)) }})
@@ -912,8 +908,6 @@ for (i in 1:length(agg.ops1)) {
 }
 }
 
-# ERROR: pmax/pmin: if all the parallel elements are NA,
-# return NA even for na.rm=TRUE
 for (type in type.set) {
 for (na.rm in c(TRUE, FALSE)) {
 for (spec in spec.vals) {
@@ -968,36 +962,43 @@ test_that(paste("pmax/pmin on matrices", type, spec, na.rm), {
 }
 }
 
-# ERROR: can't handle NA
 for (type in type.set) {
 for (na.rm in c(TRUE, FALSE)) {
 for (spec in spec.vals) {
 test_that(paste("rowSums", type, spec, na.rm), {
 		  fm.mat <- get.mat(type, spec.val=spec, percent=0.5)
-		  res1 <- fm.conv.FM2R(rowSums(fm.mat, na.rm))
-		  res2 <- rowSums(fm.conv.FM2R(fm.mat), na.rm)
-		  expect_equal(res1, res2)
+		  if (!is.null(fm.mat)) {
+			  res1 <- fm.conv.FM2R(rowSums(fm.mat, na.rm))
+			  res2 <- rowSums(fm.conv.FM2R(fm.mat), na.rm)
+			  expect_equal(res1, res2)
+		  }
 })
 
 test_that(paste("colSums", type, spec, na.rm), {
 		  fm.mat <- get.mat(type, spec.val=spec, percent=0.5)
-		  res1 <- fm.conv.FM2R(colSums(fm.mat, na.rm))
-		  res2 <- colSums(fm.conv.FM2R(fm.mat), na.rm)
-		  expect_equal(res1, res2)
+		  if (!is.null(fm.mat)) {
+			  res1 <- fm.conv.FM2R(colSums(fm.mat, na.rm))
+			  res2 <- colSums(fm.conv.FM2R(fm.mat), na.rm)
+			  expect_equal(res1, res2)
+		  }
 })
 
 test_that(paste("rowMeans", type, spec, na.rm), {
 		  fm.mat <- get.mat(type, spec.val=spec, percent=0.5)
-		  res1 <- fm.conv.FM2R(rowMeans(fm.mat, na.rm))
-		  res2 <- rowMeans(fm.conv.FM2R(fm.mat), na.rm)
-		  expect_equal(res1, res2)
+		  if (!is.null(fm.mat)) {
+			  res1 <- fm.conv.FM2R(rowMeans(fm.mat, na.rm))
+			  res2 <- rowMeans(fm.conv.FM2R(fm.mat), na.rm)
+			  expect_equal(res1, res2)
+		  }
 })
 
 test_that(paste("colMeans", type, spec, na.rm), {
 		  fm.mat <- get.mat(type, spec.val=spec, percent=0.5)
-		  res1 <- fm.conv.FM2R(colMeans(fm.mat, na.rm))
-		  res2 <- colMeans(fm.conv.FM2R(fm.mat), na.rm)
-		  expect_equal(res1, res2)
+		  if (!is.null(fm.mat)) {
+			  res1 <- fm.conv.FM2R(colMeans(fm.mat, na.rm))
+			  res2 <- colMeans(fm.conv.FM2R(fm.mat), na.rm)
+			  expect_equal(res1, res2)
+		  }
 })
 }
 }
@@ -1031,15 +1032,18 @@ test_that("test ifelse", {
 
 approx.equal <- function(x1, x2)
 {
-	as.vector(abs(x1 - x2) < 1e-16)
+	fm.conv.FM2R(abs(x1 - x2) < 1e-16)
 }
 
 test.with.na <- function(data, fun)
 {
 	fm.data <- fm.conv.R2FM(data)
-	res1 <- as.vector(fun(fm.data))
-	res2 <- as.vector(fun(fm.data, na.rm=TRUE))
-	expect_true(is.na(res1))
+	res1 <- fm.conv.FM2R(fun(fm.data))
+	res2 <- fm.conv.FM2R(fun(fm.data, na.rm=TRUE))
+	if (is.na(res1))
+		expect_true(is.na(fun(data)))
+	else
+		expect_true(fun(data) == res1)
 	expect_true(!is.na(res2)
 				&& approx.equal(res2, fun(data, na.rm=TRUE)))
 }
@@ -1139,8 +1143,8 @@ test_that("test table", {
 		  vec <- fm.conv.FM2R(fm.vec)
 		  fm.res <- fm.table(fm.vec)
 		  res <- as.data.frame(table(vec))
-		  expect_equal(as.integer(res$vec), fm.conv.FM2R(fm.res$val + 1))
-		  expect_equal(res$Freq, fm.conv.FM2R(fm.res$Freq))
+		  expect_equal(as.integer(res$vec), fm.conv.FM2R(fm.res@val + 1))
+		  expect_equal(res$Freq, fm.conv.FM2R(fm.res@Freq))
 })
 
 cast.type <- function(fm.obj, obj, type)
@@ -1192,11 +1196,11 @@ test_that("test sweep", {
 		  rv1 <- fm.conv.FM2R(v1)
 		  rv2 <- fm.conv.FM2R(v2)
 		  res <- sweep(m, 1, v2)
-		  rres <- sweep(fm.conv.FM2R(m), 1, v2)
+		  rres <- sweep(fm.conv.FM2R(m), 1, rv2)
 		  expect_equal(fm.conv.FM2R(res), rres)
 
 		  res <- sweep(m, 2, v1)
-		  rres <- sweep(fm.conv.FM2R(m), 2, v1)
+		  rres <- sweep(fm.conv.FM2R(m), 2, rv1)
 		  expect_equal(fm.conv.FM2R(res), rres)
 })
 
