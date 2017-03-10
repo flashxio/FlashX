@@ -2633,22 +2633,58 @@ RcppExport SEXP R_FM_ifelse(SEXP ptest, SEXP pyes, SEXP pno)
 		return create_FMR_matrix(ret, FM_get_Rtype(pyes), "");
 }
 
+/*
+ * This template is a little different from the ones in matrix_ops.cpp.
+ * We want to return true for both NA and NaN.
+ */
 
-class double_isna_op: public bulk_uoperate
+template<class T, bool is_logical>
+bool R_is_na(T val)
+{
+	fprintf(stderr, "unknown type for NA\n");
+	return false;
+}
+
+template<>
+bool R_is_na<int, true>(int val)
+{
+	return val == NA_LOGICAL;
+}
+
+template<>
+bool R_is_na<int, false>(int val)
+{
+	return val == NA_INTEGER;
+}
+
+template<>
+bool R_is_na<double, true>(double val)
+{
+	return ISNAN(val);
+}
+
+template<>
+bool R_is_na<double, false>(double val)
+{
+	return ISNAN(val);
+}
+
+template<class T, int is_logical>
+class isna_op: public bulk_uoperate
 {
 public:
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const {
-		const double *in = reinterpret_cast<const double *>(in_arr);
+		const T *in = reinterpret_cast<const T *>(in_arr);
 		int *out = reinterpret_cast<int *>(out_arr);
 		// is.na in R returns true for both NA and NaN.
 		// we should do the same thing.
 		for (size_t i = 0; i < num_eles; i++)
-			out[i] = ISNAN(in[i]);
+			out[i] = R_is_na<T, is_logical>(in[i]);
 	}
 
 	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<double>();
+		return get_scalar_type<T>();
 	}
 
 	virtual const scalar_type &get_output_type() const {
@@ -2697,17 +2733,18 @@ RcppExport SEXP R_FM_isna(SEXP px, SEXP ponly)
 		return R_NilValue;
 	}
 	dense_matrix::ptr x = get_matrix<dense_matrix>(px);
-	if (x->get_type() != get_scalar_type<double>()) {
-		fprintf(stderr, "isna only works on float-point matrices\n");
-		return R_NilValue;
-	}
+	R_type type = FM_get_Rtype(px);
 
 	bool na_only = LOGICAL(ponly)[0];
 	dense_matrix::ptr ret;
-	if (na_only)
+	if (type == R_type::R_REAL && na_only)
 		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_only_op()));
-	else
-		ret = x->sapply(bulk_uoperate::const_ptr(new double_isna_op()));
+	else if (type == R_type::R_REAL)
+		ret = x->sapply(bulk_uoperate::const_ptr(new isna_op<double, false>()));
+	else if (type == R_type::R_INT)
+		ret = x->sapply(bulk_uoperate::const_ptr(new isna_op<int, false>()));
+	else if (type == R_type::R_LOGICAL)
+		ret = x->sapply(bulk_uoperate::const_ptr(new isna_op<int, true>()));
 	if (ret == NULL)
 		return R_NilValue;
 	else if (is_vector(px))

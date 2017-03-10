@@ -2039,23 +2039,13 @@ NULL
 
 #' @rdname NA
 setMethod("is.na", signature(x = "fm"), function(x) {
-		  if (typeof(x) == "double") {
 			  ret <- .Call("R_FM_isna", x, FALSE, PACKAGE="FlashR")
 			  .new.fm(ret)
-		  }
-		  else
-			  # The result has to be TRUE or FALSE.
-			  fm.mapply2(x, .get.na(typeof(x)), fm.bo.eq, FALSE)
 		  })
 #' @rdname NA
 setMethod("is.na", signature(x = "fmV"), function(x) {
-		  if (typeof(x) == "double") {
 			  ret <- .Call("R_FM_isna", x, FALSE, PACKAGE="FlashR")
 			  .new.fmV(ret)
-		  }
-		  else
-			  # The result has to be TRUE or FALSE.
-			  fm.mapply2(x, .get.na(typeof(x)), fm.bo.eq, FALSE)
 		  })
 
 #' Finite, Infinite and NaN Numbers
