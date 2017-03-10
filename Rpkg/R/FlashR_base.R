@@ -430,18 +430,16 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 .min.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		max.val <- .get.max.val(typeof(x))
 		x <- .replace.na(x, max.val)
 		others <- .replace.na.list(others, max.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.min, test.na)
+	res <- fm.agg(x, fm.bo.min)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.min, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.min))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- min(unlist(res))
 	}
@@ -450,18 +448,16 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 .max.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		min.val <- .get.min.val(typeof(x))
 		x <- .replace.na(x, min.val)
 		others <- .replace.na.list(others, min.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.max, test.na)
+	res <- fm.agg(x, fm.bo.max)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.max, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.max))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- max(unlist(res))
 	}
@@ -754,13 +750,11 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
 .range1 <- function(x, na.rm)
 {
-	test.na <- TRUE
 	if (typeof(x) == "logical")
 		x <- as.integer(x)
 	if (na.rm) {
 		x.min <- ifelse(is.na(x), .get.min.val(typeof(x)), x)
 		x.max <- ifelse(is.na(x), .get.max.val(typeof(x)), x)
-		test.na <- FALSE
 		tmp1 <- fm.agg(x.max, fm.bo.min)
 		tmp2 <- fm.agg(x.min, fm.bo.max)
 	}
@@ -768,18 +762,7 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 		tmp1 <- fm.agg(x, fm.bo.min)
 		tmp2 <- fm.agg(x, fm.bo.max)
 	}
-	if (test.na) {
-		x.is.na <- fm.agg(.is.na.only(x), fm.bo.or)
-		if (.fmV2scalar(x.is.na)) {
-			na <- .get.na(typeof(x))
-			c(na, na)
-		}
-		else
-			c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
-	}
-	else {
-		c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
-	}
+	c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
 }
 
 # We replace both NA and NaN
@@ -795,20 +778,6 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 	for (i in 1:length(objs))
 		objs[[i]] <- ifelse(is.na(objs[[i]]), val, objs[[i]])
 	objs
-}
-
-.agg.na <- function(fm, op, test.na)
-{
-	if (test.na && .env.int$fm.test.na) {
-		any.na <- fm.agg(.is.na.only(fm), fm.bo.or)
-		agg.res <- fm.agg(fm, op)
-		if (.fmV2scalar(any.na))
-			.get.na(typeof(agg.res))
-		else
-			agg.res
-	}
-	else
-		fm.agg(fm, op)
 }
 
 #' Are some Values True?
@@ -840,7 +809,6 @@ fm.any <- function(x, lazy=FALSE)
 .any.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		# If the inputs aren't logical, we should cast them
 		# to logical values.
@@ -854,14 +822,13 @@ fm.any <- function(x, lazy=FALSE)
 		}
 		x <- .replace.na(x, FALSE)
 		others <- .replace.na.list(others, FALSE)
-		test.na <- FALSE
 	}
-	res <- fm.conv.FM2R(.agg.na(x, fm.bo.or, test.na))
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.or))
 	if (length(others) >= 1) {
 		if (!is.na(res) && res)
 			return(TRUE)
 		for (arg in others) {
-			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.or, test.na))
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.or))
 			if (!is.na(tmp) && tmp)
 				return(TRUE)
 			res <- res | tmp
@@ -904,7 +871,6 @@ fm.all <- function(x, lazy=FALSE)
 .all.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		# If the inputs aren't logical, we should cast them
 		# to logical values.
@@ -918,14 +884,13 @@ fm.all <- function(x, lazy=FALSE)
 		}
 		x <- .replace.na(x, TRUE)
 		others <- .replace.na.list(others, TRUE)
-		test.na <- FALSE
 	}
-	res <- fm.conv.FM2R(.agg.na(x, fm.bo.and, test.na))
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.and))
 	if (length(others) >= 1) {
 		if (!is.na(res) && !res)
 			return(FALSE)
 		for (arg in others) {
-			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.and, test.na))
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.and))
 			if (!is.na(tmp) && !tmp)
 				return(FALSE)
 			res <- res & tmp
@@ -960,18 +925,16 @@ NULL
 	# TODO we need to handle na.rm for all of the functions here
 	# properly.
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		zero <- .get.zero(typeof(x))
 		x <- .replace.na(x, zero)
 		others <- .replace.na.list(others, zero)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.add, test.na)
+	res <- fm.agg(x, fm.bo.add)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.add, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.add))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- sum(unlist(res))
 	}
