@@ -1900,7 +1900,7 @@ public:
 		// dense matrices and use a lot of memory.
 		R_gc();
 		SEXP s4_mat = R_create_s4fm(create_FMR_matrix(x,
-					trans_FM2R(x.get_type()), "x"));
+					trans_FM2R(x->get_type()), "x"));
 		SEXP pret;
 		bool success;
 		try {
