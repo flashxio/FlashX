@@ -1128,7 +1128,6 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #' Form row and column sums and means for numeric arrays.
 #'
 #' @param x a FlashR matrix.
-#' @param lazy logical. indicates whether to evaluate the expression lazily.
 #' @param na.rm logical. Should missing values (including NaN) be omitted
 #' from the calculations?
 #' @return a FlashR vector.
@@ -1145,23 +1144,40 @@ NULL
 #' @rdname colSums
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  # TODO I need to handle na.rm here as well.
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 1, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("colSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 2, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("rowMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  rowSums(as.double(x), na.rm) / dim(x)[2]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- rowSums(x, na.rm)
+				  nums <- rowSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  rowSums(x, na.rm) / dim(x)[2]
 		  })
 #' @rdname colSums
 setMethod("colMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  colSums(as.double(x), na.rm) / dim(x)[1]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- colSums(x, na.rm)
+				  nums <- colSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  colSums(x, na.rm) / dim(x)[1]
 		  })
 
 #' Print FlashR objects.
