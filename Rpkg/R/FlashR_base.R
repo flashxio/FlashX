@@ -119,7 +119,7 @@ setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 #' @rdname Arithmetic
 setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 		  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
-		  .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
 		  })
 
 #' Matrix multiplication
