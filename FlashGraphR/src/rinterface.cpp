@@ -649,7 +649,29 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 
 ///////////////////////////// graph algorithms ///////////////////////////
 
-SEXP create_FMR_vector(fm::dense_matrix::ptr m, const std::string &name);
+enum R_type
+{
+	R_LOGICAL,
+	R_INT,
+	R_REAL,
+	R_NTYPES,
+};
+
+SEXP create_FMR_vector(fm::dense_matrix::ptr m, R_type type, const std::string &name);
+
+SEXP create_FMR_vector(fm::dense_matrix::ptr m, const std::string &name)
+{
+	R_type type;
+	if (m->get_type() == fm::get_scalar_type<double>())
+		type = R_type::R_REAL;
+	else if (m->get_type() == fm::get_scalar_type<int>())
+		type = R_type::R_INT;
+	else {
+		fprintf(stderr, "unknown type\n");
+		return R_NilValue;
+	}
+	return create_FMR_vector(m, type, name);
+}
 
 fm::dense_matrix::ptr get_vertex_ids(fm::vector::ptr vec)
 {
@@ -889,7 +911,7 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
-SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, const std::string &name);
+SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, R_type type, const std::string &name);
 
 namespace fg
 {
@@ -905,7 +927,8 @@ RcppExport SEXP R_FG_get_matrix_fg(SEXP pgraph)
 	// TODO does this work if this isn't a binary matrix?
 	fm::sparse_matrix::ptr m = fg::create_sparse_matrix(fg, NULL);
 	std::string name = graph["name"];
-	return create_FMR_matrix(m, name);
+	// TODO change it later for non-binary matrix.
+	return create_FMR_matrix(m, R_type::R_LOGICAL, name);
 }
 
 RcppExport SEXP R_FG_print_graph(SEXP pgraph, SEXP pfile, SEXP pdelim,
