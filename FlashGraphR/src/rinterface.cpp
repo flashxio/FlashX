@@ -425,7 +425,7 @@ static SEXP create_FGR_obj(graph_ref *ref)
 	ret["ecount"] = ecount;
 
 	Rcpp::LogicalVector in_mem(1);
-	in_mem[0] = graph->get_graph_data() != NULL;
+	in_mem[0] = graph->is_in_mem();
 	ret["in.mem"] = in_mem;
 	return ret;
 }
@@ -449,7 +449,7 @@ static SEXP create_FGR_obj(FG_graph::ptr graph, const std::string &graph_name)
 	ret["ecount"] = ecount;
 
 	Rcpp::LogicalVector in_mem(1);
-	in_mem[0] = graph->get_graph_data() != NULL;
+	in_mem[0] = graph->is_in_mem();
 	ret["in.mem"] = in_mem;
 	return ret;
 }
