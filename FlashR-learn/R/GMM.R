@@ -22,18 +22,16 @@ gmm.covs <- function (x, wts)
 	if (nrow(wts) != n)
 		stop("length of 'wt' must equal the number of rows in 'x'")
 
-	s <- fm.colSums(wts, TRUE)
-	s2 <- fm.colSums(wts * wts, TRUE)
-	ret <- fm.materialize(s, s2)
-	s <- fm.conv.FM2R(ret[[1]])
-	s2 <- fm.conv.FM2R(ret[[2]])
+	s <- colSums(wts)
+	s2 <- colSums(wts * wts)
+	s <- fm.conv.FM2R(s)
+	s2 <- fm.conv.FM2R(s2)
 
 	centers <- list()
 	xs.cp <- list()
 	for (i in 1:k) {
-		wx <- wts[,i] * x / s[i]
-		# fm.colSums(wt * x, TRUE)
-		centers[[i]] <- fm.rowSums(t(wx), TRUE)
+		wx <- wts[,i] / s[i] * x
+		centers[[i]] <- rowSums(t(wx))
 		xs.cp[[i]] <- crossprod(wx, x)
 	}
 	centers <- fm.materialize.list(centers)
@@ -62,14 +60,14 @@ comp.prob <- function(X, mus, covars, phi)
 
 	max.log.likely <- fm.agg.mat(log.likely, 1, fm.bo.max)
 	rel.likely <- exp(log.likely - max.log.likely) %*% phi
-	sum1 <- fm.sum(log(rel.likely), TRUE)
-	sum2 <- fm.sum(max.log.likely, TRUE)
+	sum1 <- sum(log(rel.likely))
+	sum2 <- sum(max.log.likely)
 
 	P <- sweep(exp(log.likely - max.log.likely), 2, phi, "*") / rel.likely
 	ret <- fm.materialize(P, sum1, sum2)
-	log.like <- fm.conv.FM2R(ret[[2]]) + fm.conv.FM2R(ret[[3]])
+	log.like <- fm.conv.FM2R(sum1) + fm.conv.FM2R(sum2)
 
-	list(P=ret[[1]], log.like=log.like)
+	list(P=P, log.like=log.like)
 }
 
 #' Gaussian Mixture Model
