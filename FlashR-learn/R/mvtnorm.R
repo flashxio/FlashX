@@ -19,8 +19,6 @@
 
 fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 {
-	orig.test.na <- .env.int$fm.test.na
-	.set.test.na(FALSE)
 	if (fm.is.matrix(covar))
 		covar <- fm.conv.FM2R(covar)
 	covar.inv <- solve(covar)
@@ -35,6 +33,5 @@ fm.dmvnorm <- function(X, mu, covar, log=FALSE)
 		ret <- logret
 	else
 		ret <- exp(logret)
-	.set.test.na(orig.test.na)
 	ret
 }

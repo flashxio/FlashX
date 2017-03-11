@@ -94,9 +94,6 @@ comp.prob <- function(X, mus, covars, phi)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.GMM <- function(X, k, maxiters, verbose=FALSE)
 {
-	orig.test.na <- fm.env$fm.test.na
-	fm.set.test.na(FALSE)
-
 	m <- dim(X)[1]
 
 	X <- fm.conv.layout(X, FALSE)
@@ -154,6 +151,5 @@ fm.GMM <- function(X, k, maxiters, verbose=FALSE)
 				"seconds\n")
 	}
 	clust.ids <- fm.materialize(fm.agg.mat(P, 1, fm.bo.which.max))
-	fm.set.test.na(orig.test.na)
 	list(P=P, clust.ids=clust.ids, niters=iter, phi=phi, mus=mus, covars=covars)
 }
