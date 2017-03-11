@@ -3001,3 +3001,14 @@ RcppExport SEXP R_FM_create_factor(SEXP pmat, SEXP pnum_levels)
 		fvec = factor_col_vector::create(factor(num_levels), mat);
 	return create_FMR_vector(fvec, FM_get_Rtype(pmat), "");
 }
+
+namespace fmr
+{
+void set_use_na_op(bool val);
+}
+
+RcppExport SEXP R_FM_set_test_NA(SEXP pval)
+{
+	fmr::set_use_na_op(LOGICAL(pval)[0]);
+	return R_NilValue;
+}

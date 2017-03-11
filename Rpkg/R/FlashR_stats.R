@@ -72,8 +72,6 @@ setMethod("sd", "fmV", .sd.int)
 .cov.int <- function(x, y=NULL, use="everything",
 				   method=c("pearson", "kendall", "spearman"))
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
 	x <- as.double(x)
 	if (!is.null(y)) {
 		stopifnot(nrow(x) == nrow(y))
@@ -101,15 +99,12 @@ setMethod("sd", "fmV", .sd.int)
 		y.mu <- fm.conv.FM2R(y.mu)
 		ret <- (fm.conv.FM2R(xy.prod) - n * x.mu %*% t(y.mu)) / (n - 1)
 	}
-	fm.set.test.na(orig.test.na)
 	ret
 }
 
 .cor.int <- function(x, y=NULL, use="everything",
 				   method=c("pearson", "kendall", "spearman"))
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
 	x <- as.double(x)
 	if (!is.null(y)) {
 		stopifnot(nrow(x) == nrow(y))
@@ -142,15 +137,12 @@ setMethod("sd", "fmV", .sd.int)
 		y.sd <- fm.conv.FM2R(y.sd)
 		ret <- (fm.conv.FM2R(xy.prod) - n * x.mu %*% t(y.mu)) / (n - 1) / (x.sd %*% t(y.sd))
 	}
-	fm.set.test.na(orig.test.na)
 	ret
 }
 
 .cov.wt.int <- function (x, wt = rep(1/nrow(x), nrow(x)), cor = FALSE, center = TRUE,
 					       method = c("unbiased", "ML"))
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
 	if (is.data.frame(x))
 		x <- fm.as.matrix(x)
 	else if (!fm.is.matrix(x))
@@ -205,7 +197,6 @@ setMethod("sd", "fmV", .sd.int)
 		R[] <- Is * cov * rep(Is, each = nrow(cov))
 		y$cor <- R
 	}
-	fm.set.test.na(orig.test.na)
 	y
 }
 

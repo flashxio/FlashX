@@ -1458,6 +1458,11 @@ void register_udf(const std::vector<bulk_uoperate::const_ptr> &ops,
 
 static bool use_na_op = true;
 
+void set_use_na_op(bool val)
+{
+	use_na_op = val;
+}
+
 std::vector<basic_Rops::ptr> bops((int) R_type::R_NTYPES);
 std::vector<basic_Rops::ptr> bops_na((int) R_type::R_NTYPES);
 std::vector<basic_Ruops::ptr> buops((int) R_type::R_NTYPES);

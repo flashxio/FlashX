@@ -1283,12 +1283,9 @@ fm.agg.mat <- function(fm, margin, op)
 	.new.fmV(ret)
 }
 
-.env.int <- new.env()
-.env.int$fm.test.na <- TRUE
-
 fm.set.test.na <- function(val)
 {
-	.env.int$fm.test.na <- val
+	.Call("R_FM_set_test_NA", as.logical(val), PACKAGE="FlashR")
 }
 
 .mapply2.fm <- function(o1, o2, FUN)
