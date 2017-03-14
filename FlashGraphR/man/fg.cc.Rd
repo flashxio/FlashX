@@ -33,13 +33,12 @@ of Strongly Connected Components (SCC) in Small-World Graphs, Proceedings
 of the International Conference on High Performance Computing, Networking,
 Storage and Analysis, 2013
 }
-\author{
-Da Zheng <dzheng5@jhu.edu>
-}
 \references{
 Sungpack Hong, Nicole C. Rodia, Kunle Olukotun, On Fast Parallel Detection
 of Strongly Connected Components (SCC) in Small-World Graphs, Proceedings
 of the International Conference on High Performance Computing, Networking,
 Storage and Analysis, 2013
 }
-
+\author{
+Da Zheng <dzheng5@jhu.edu>
+}

@@ -22,4 +22,3 @@ false, otherwise.
 \description{
 This function exports a graph image in FlashGraphR to the local filesystem.
 }
-
