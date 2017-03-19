@@ -341,6 +341,67 @@ bool matrix_store::share_data(const matrix_store &store) const
 		&& get_data_id() != INVALID_MAT_ID;
 }
 
+void matrix_append::write_async(local_matrix_store::const_ptr portion,
+		off_t seq_id)
+{
+	if (seq_id <= last_append) {
+		BOOST_LOG_TRIVIAL(error) << "Append a repeated portion";
+		return;
+	}
+
+	std::vector<local_matrix_store::const_ptr> data;
+	lock.lock();
+	// Add the new portion to the queue. If the queue is too small,
+	// we should resize the queue first.
+	off_t loc = seq_id - last_append - 1;
+	assert(loc >= 0);
+	if ((size_t) loc >= q.size())
+		q.resize(q.size() * 2);
+	q[loc] = portion;
+
+	off_t start_loc = -1;
+	if (q.front())
+		start_loc = written_eles;
+	// Get the portions from the queue.
+	while (q.front()) {
+		auto mat = q.front();
+		data.push_back(mat);
+		q.pop_front();
+		q.push_back(local_matrix_store::const_ptr());
+		last_append++;
+		written_eles += mat->get_num_rows() * mat->get_num_cols();
+	}
+	lock.unlock();
+
+	for (size_t i = 0; i < data.size(); i++) {
+		assert(start_loc >= 0);
+		// TODO this works if the result matrix is stored in memory.
+		if (res->is_wide()) {
+			off_t start_row = 0;
+			off_t start_col = start_loc / res->get_num_rows();
+			res->write_portion_async(data[i], start_row, start_col);
+		}
+		else {
+			off_t start_row = start_loc / res->get_num_cols();
+			off_t start_col = 0;
+			res->write_portion_async(data[i], start_row, start_col);
+		}
+		start_loc += data[i]->get_num_rows() * data[i]->get_num_cols();
+	}
+}
+
+matrix_append::~matrix_append()
+{
+	for (size_t i = 0; i < q.size(); i++)
+		assert(q[i] == NULL);
+}
+
+void matrix_append::flush()
+{
+	for (size_t i = 0; i < q.size(); i++)
+		assert(q[i] == NULL);
+}
+
 }
 
 }

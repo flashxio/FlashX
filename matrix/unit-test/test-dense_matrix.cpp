@@ -2206,8 +2206,51 @@ dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
 	return res;
 }
 
+dense_matrix::ptr _test_get_rows_bool(dense_matrix::ptr mat)
+{
+	printf("get rows in bool idx\n");
+	dense_matrix::ptr res;
+	col_vec::ptr bool_idx;
+	while (res == NULL) {
+		bool_idx = col_vec::create_randu<bool>(mat->get_num_rows());
+		res = mat->get_rows(bool_idx);
+	}
+	assert(res->get_num_cols() == mat->get_num_cols());
+
+	std::vector<bool> bools = bool_idx->conv2std<bool>();
+	size_t num_trues = 0;
+	for (size_t i = 0; i < bools.size(); i++)
+		if (bools[i])
+			num_trues++;
+	printf("want %ld rows and get %ld rows\n", num_trues, res->get_num_rows());
+	assert(res->get_num_rows() == num_trues);
+
+	// Make sure it's row-oriented.
+	mat = mat->conv2(matrix_layout_t::L_ROW);
+	mat = mat->conv_store(true, -1);
+	mat->materialize_self();
+	res = res->conv2(matrix_layout_t::L_ROW);
+	res = res->conv_store(true, -1);
+
+	detail::mem_matrix_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				res->get_raw_store());
+	size_t res_i = 0;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		if (bools[i]) {
+			assert(memcmp(res_store->get_row(res_i), store->get_row(i),
+					store->get_num_cols() * store->get_entry_size()) == 0);
+			res_i++;
+		}
+	return res;
+}
+
 dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 {
+	_test_get_rows_bool(mat);
 	return _test_get_rows(mat, std::max(mat->get_num_rows() / 5, 2UL));
 }
 
@@ -2235,8 +2278,50 @@ dense_matrix::ptr _test_get_cols(dense_matrix::ptr mat, size_t get_ncol)
 	return res;
 }
 
+dense_matrix::ptr _test_get_cols_bool(dense_matrix::ptr mat)
+{
+	printf("get cols in bool idx, mat: %ld,%ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
+	dense_matrix::ptr res;
+	col_vec::ptr bool_idx;
+	while (res == NULL) {
+		bool_idx = col_vec::create_randu<bool>(mat->get_num_cols());
+		res = mat->get_cols(bool_idx);
+	}
+	assert(res->get_num_rows() == mat->get_num_rows());
+
+	std::vector<bool> bools = bool_idx->conv2std<bool>();
+	size_t num_trues = 0;
+	for (size_t i = 0; i < bools.size(); i++)
+		if (bools[i])
+			num_trues++;
+	assert(res->get_num_cols() == num_trues);
+
+	mat = mat->conv2(matrix_layout_t::L_COL);
+	mat = mat->conv_store(true, -1);
+	mat->materialize_self();
+	res = res->conv2(matrix_layout_t::L_COL);
+	res = res->conv_store(true, -1);
+
+	detail::mem_matrix_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				res->get_raw_store());
+	size_t res_i = 0;
+	for (size_t i = 0; i < store->get_num_cols(); i++)
+		if (bools[i]) {
+			assert(memcmp(res_store->get_col(res_i), store->get_col(i),
+					store->get_num_rows() * store->get_entry_size()) == 0);
+			res_i++;
+		}
+	return res;
+}
+
 dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
 {
+	_test_get_cols_bool(mat);
 	return _test_get_cols(mat, std::max(mat->get_num_cols() / 5, 2UL));
 }
 
