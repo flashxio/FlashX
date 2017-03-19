@@ -414,8 +414,8 @@ dense_matrix::ptr blas_multiply_wide(const dense_matrix &m1,
 
 	assert(m1.get_type() == m2.get_type());
 
-	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
-				m1.get_raw_store(), m2.get_raw_store(), NULL, NULL, out_layout));
+	detail::matrix_store::ptr res = detail::IPW_matrix_store::create(
+				m1.get_raw_store(), m2.get_raw_store(), NULL, NULL, out_layout);
 	return dense_matrix::create(res);
 }
 
@@ -461,9 +461,8 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 				out_layout = matrix_layout_t::L_COL;
 			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
 			// TODO we assume the left matrix is a wide matrix.
-			return dense_matrix::create(detail::matrix_store::ptr(
-						new detail::IPW_matrix_store(tmp->get_raw_store(),
-							store, NULL, NULL, out_layout)));
+			return dense_matrix::create(detail::IPW_matrix_store::create(
+						tmp->get_raw_store(), store, NULL, NULL, out_layout));
 		}
 		else
 			return multiply_sparse_combined(mat, out_layout);
@@ -551,8 +550,9 @@ bool dense_matrix::materialize_self() const
 
 	detail::matrix_store::const_ptr tmp;
 	try {
-		tmp = detail::virtual_matrix_store::cast(store)->materialize(
-				store->is_in_mem(), store->get_num_nodes());
+		auto vstore = detail::virtual_matrix_store::cast(store);
+		detail::sink_store::materialize_matrices(vstore);
+		tmp = vstore->materialize(store->is_in_mem(), store->get_num_nodes());
 	} catch (std::exception &e) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("fail to materialize: %1%") % e.what();
@@ -854,11 +854,15 @@ dense_matrix::ptr dense_matrix::mapply_rows(col_vec::const_ptr vals,
 
 //////////////////////////// Cast the element types ///////////////////////////
 
-dense_matrix::ptr dense_matrix::cast_ele_type(const scalar_type &type) const
+dense_matrix::ptr dense_matrix::cast_ele_type(const scalar_type &type,
+		bool forced) const
 {
-	if (!require_cast(get_type(), type))
-		// TODO the returned matrix may not have the specified type.
-		return dense_matrix::create(get_raw_store());
+	// If they have the same type, we just return the matrix itself
+	// regardless of `forced'.
+	if (get_type() == type)
+		return clone();
+	if (!require_cast(get_type(), type) && !forced)
+		return clone();
 	else
 		return sapply(bulk_uoperate::conv2ptr(get_type().get_type_cast(type)));
 }
@@ -1484,6 +1488,34 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 		return dense_matrix::ptr();
 }
 
+dense_matrix::ptr dense_matrix::get_cols(size_t start, size_t end) const
+{
+	if (end >= get_num_cols() || start >= get_num_cols() || start >= end) {
+		BOOST_LOG_TRIVIAL(error) << "column index is out of the range";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<off_t> col_idxs(end - start);
+	for (size_t i = 0; i < col_idxs.size(); i++)
+		col_idxs[i] = start + i;
+	// TODO we need optimize this.
+	return get_cols(col_idxs);
+}
+
+dense_matrix::ptr dense_matrix::get_rows(size_t start, size_t end) const
+{
+	if (end > get_num_rows() || start >= get_num_rows() || start >= end) {
+		BOOST_LOG_TRIVIAL(error) << "row index is out of the range";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<off_t> row_idxs(end - start);
+	for (size_t i = 0; i < row_idxs.size(); i++)
+		row_idxs[i] = start + i;
+	// TODO we need optimize this.
+	return get_rows(row_idxs);
+}
+
 namespace
 {
 
@@ -1973,8 +2005,8 @@ dense_matrix::ptr dense_matrix::inner_prod_wide(
 		right_mat = m.get_raw_store();
 	assert(right_mat);
 
-	detail::matrix_store::ptr res(new detail::IPW_matrix_store(
-				left_mat, right_mat, left_op, right_op, out_layout));
+	detail::matrix_store::ptr res = detail::IPW_matrix_store::create(
+				left_mat, right_mat, left_op, right_op, out_layout);
 	return dense_matrix::create(res);
 }
 
@@ -2070,8 +2102,7 @@ static detail::matrix_store::ptr aggregate(detail::matrix_store::const_ptr store
 	/*
 	 * If we aggregate on the entire matrix or on the longer dimension.
 	 */
-	return detail::matrix_store::ptr(new detail::agg_matrix_store(store,
-				margin, op));
+	return detail::agg_matrix_store::create(store, margin, op);
 }
 
 dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
@@ -2427,9 +2458,20 @@ detail::matrix_store::const_ptr dense_matrix::_conv_store(bool in_mem,
 			&& !store->is_virtual())
 		return store;
 
-	if (store->is_virtual())
-		return detail::virtual_matrix_store::cast(store)->materialize(in_mem,
-				num_nodes);
+	if (store->is_virtual()) {
+		auto ret = detail::virtual_matrix_store::cast(store)->materialize(
+				in_mem, num_nodes);
+		// Some virtual matrices may not materialize data in the storage
+		// we want, we need to convert the storage of the materialized matrix
+		// explicitly.
+		if (ret->is_in_mem() != in_mem || ret->get_num_nodes() != num_nodes) {
+			dense_matrix::ptr tmp = dense_matrix::create(ret);
+			tmp = tmp->conv_store(in_mem, num_nodes);
+			return tmp->get_raw_store();
+		}
+		else
+			return ret;
+	}
 	else {
 		std::vector<detail::matrix_store::const_ptr> in_mats(1);
 		in_mats[0] = store;
@@ -2727,9 +2769,8 @@ dense_matrix::ptr dense_matrix::groupby_row(factor_col_vector::const_ptr labels,
 			dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
 			mat = tmp->get_raw_store();
 		}
-		return dense_matrix::create(detail::matrix_store::ptr(
-					new detail::groupby_matrix_store(mat, labels,
-						matrix_margin::MAR_ROW, op)));
+		return dense_matrix::create(detail::groupby_matrix_store::create(mat,
+					labels, matrix_margin::MAR_ROW, op));
 	}
 }
 
@@ -3120,6 +3161,30 @@ dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
 	if (tmp == NULL)
 		return dense_matrix::ptr();
 	return tmp->transpose();
+}
+
+dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
+		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
+		bool par_access)
+{
+	// TODO I need to optimize this for block matrices.
+	return detail::mapply_portion(mats, op, out_layout, par_access);
+}
+
+void dense_matrix::print() const
+{
+	dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+	tmp = tmp->conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr mem_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				tmp->get_raw_store());
+	assert(mem_store);
+
+	for (size_t i = 0; i < get_num_rows(); i++) {
+		std::string str = get_type().conv2str(mem_store->get_row(i),
+				get_num_cols(), ", ");
+		printf("%s\n", str.c_str());
+	}
 }
 
 }

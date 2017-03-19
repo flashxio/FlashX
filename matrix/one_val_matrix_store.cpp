@@ -68,6 +68,24 @@ one_val_matrix_store::one_val_matrix_store(scalar_variable::ptr val,
 	}
 }
 
+bool one_val_matrix_store::share_data(const matrix_store &store) const
+{
+	if ((store.get_num_rows() == get_num_rows()
+				&& store.get_num_cols() == get_num_cols())
+			|| (store.get_num_rows() == get_num_cols()
+				&& store.get_num_cols() == get_num_rows())) {
+		const one_val_matrix_store *mat1
+			= dynamic_cast<const one_val_matrix_store *>(&store);
+		if (mat1)
+			return memcmp(mat1->val->get_raw(), val->get_raw(),
+					mat1->val->get_size()) == 0;
+		else
+			return false;
+	}
+	else
+		return false;
+}
+
 matrix_store::const_ptr one_val_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {

@@ -94,6 +94,9 @@ public:
 	size_t get_num_vecs() const {
 		return df->get_num_vecs();
 	}
+	size_t get_num_edges() const {
+		return df->get_num_entries();
+	}
 	bool is_in_mem() const {
 		return df->get_vec(0)->is_in_mem();
 	}
@@ -135,6 +138,12 @@ std::pair<fm::vector_vector::ptr, size_t> create_1d_matrix(edge_list::ptr el);
  */
 fg::FG_graph::ptr create_fg_graph(const std::string &graph_name,
 		edge_list::ptr el);
+
+/*
+ * This prints a graph into an edge list format.
+ */
+void print_graph_el(fg::FG_graph::ptr, const std::string &delim,
+		const std::string &edge_attr_type, FILE *f);
 
 /*
  * Fetch the subgraph that contains the specified vertices from the graph.

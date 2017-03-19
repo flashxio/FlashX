@@ -158,7 +158,7 @@ matrix_store::const_ptr set_data_matrix_store::transpose() const
 		== matrix_layout_t::L_ROW ? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
 	return matrix_store::const_ptr(new set_data_matrix_store(col_op->transpose(),
 				row_op->transpose(), get_num_cols(), get_num_rows(), new_layout,
-				get_num_nodes()));
+				get_num_nodes(), data_id));
 }
 
 }

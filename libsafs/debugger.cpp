@@ -21,6 +21,7 @@
 #include <stdio.h>
 
 #include <boost/foreach.hpp>
+#include <system_error>
 
 #include "debugger.h"
 
@@ -51,10 +52,9 @@ static void set_enable_debug_signal()
 	sa.sa_flags = SA_SIGINFO;
 	sa.sa_sigaction = enable_debug_handler;
 	sigemptyset(&sa.sa_mask);
-	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(1);
-	}
+	if (sigaction(SIGUSR1, &sa, NULL) == -1)
+		throw std::system_error(std::make_error_code((std::errc) errno),
+				"sigaction error");
 }
 
 debugger::debugger()

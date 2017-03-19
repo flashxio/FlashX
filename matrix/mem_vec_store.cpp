@@ -241,7 +241,6 @@ bool smp_vec_store::expose_sub_vec(off_t start, size_t length)
 {
 	size_t tot_len = data.get_num_bytes() / get_type().get_size();
 	if (start + length > tot_len) {
-		exit(1);
 		BOOST_LOG_TRIVIAL(error) << "expose_sub_vec: out of range";
 		return false;
 	}

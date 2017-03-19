@@ -31,9 +31,6 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
-
 	n <- dim(data)[1]
 	m <- dim(data)[2]
 	agg.sum <- fm.create.agg.op(fm.bo.add, fm.bo.add, "sum")
@@ -97,7 +94,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 
 		new.centers <- cal.centers(data, fm.as.factor(parts, num.centers))
 		if (!is.null(old.parts))
-			num.moves <- sum(as.numeric(old.parts != parts))
+			num.moves <- as.vector(sum(as.numeric(old.parts != parts)))
 		iter <- iter + 1
 		if (debug) {
 			iter.end <- Sys.time()
@@ -111,6 +108,5 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and",
 		as.numeric(end.time) - as.numeric(start.time), "seconds\n")
-	fm.set.test.na(orig.test.na)
 	parts
 }

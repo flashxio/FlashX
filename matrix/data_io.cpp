@@ -23,7 +23,6 @@
 
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include "log.h"
@@ -52,7 +51,7 @@ public:
 	virtual ~file_io() {
 	}
 
-	virtual std::unique_ptr<char[]> read_lines(size_t wanted_bytes,
+	virtual std::shared_ptr<char> read_lines(size_t wanted_bytes,
 			size_t &read_bytes) = 0;
 
 	virtual bool eof() const = 0;
@@ -60,11 +59,25 @@ public:
 
 class text_file_io: public file_io
 {
-	FILE *f;
+	struct del_off_ptr {
+		void *orig_addr;
+
+		del_off_ptr(void *addr) {
+			this->orig_addr = addr;
+		}
+
+		void operator()(char *buf) {
+			free(orig_addr);
+		}
+	};
+
+	int fd;
+	off_t curr_off;
 	ssize_t file_size;
 
-	text_file_io(FILE *f, const std::string file) {
-		this->f = f;
+	text_file_io(int fd, const std::string file) {
+		this->curr_off = 0;
+		this->fd = fd;
 		safs::native_file local_f(file);
 		file_size = local_f.get_size();
 	}
@@ -72,15 +85,13 @@ public:
 	static ptr create(const std::string file);
 
 	~text_file_io() {
-		if (f)
-			fclose(f);
+		close(fd);
 	}
 
-	std::unique_ptr<char[]> read_lines(size_t wanted_bytes,
+	std::shared_ptr<char> read_lines(size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
-		off_t curr_off = ftell(f);
 		return file_size - curr_off == 0;
 	}
 };
@@ -88,6 +99,12 @@ public:
 #ifdef USE_GZIP
 class gz_file_io: public file_io
 {
+	struct del_arr {
+		void operator()(char *buf) {
+			delete [] buf;
+		}
+	};
+
 	std::vector<char> prev_buf;
 	size_t prev_buf_bytes;
 
@@ -105,7 +122,7 @@ public:
 		gzclose(f);
 	}
 
-	std::unique_ptr<char[]> read_lines(const size_t wanted_bytes,
+	std::shared_ptr<char> read_lines(const size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
@@ -113,14 +130,14 @@ public:
 	}
 };
 
-std::unique_ptr<char[]> gz_file_io::read_lines(
+std::shared_ptr<char> gz_file_io::read_lines(
 		const size_t wanted_bytes1, size_t &read_bytes)
 {
 	read_bytes = 0;
 	size_t wanted_bytes = wanted_bytes1;
 	size_t buf_size = wanted_bytes + PAGE_SIZE;
 	char *buf = new char[buf_size];
-	std::unique_ptr<char[]> ret_buf(buf);
+	std::shared_ptr<char> ret_buf(buf, del_arr());
 	if (prev_buf_bytes > 0) {
 		memcpy(buf, prev_buf.data(), prev_buf_bytes);
 		buf += prev_buf_bytes;
@@ -134,7 +151,7 @@ std::unique_ptr<char[]> gz_file_io::read_lines(
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
 				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
-				exit(1);
+				return std::unique_ptr<char[]>();
 			}
 		}
 
@@ -159,7 +176,7 @@ std::unique_ptr<char[]> gz_file_io::read_lines(
 	}
 	// The line buffer must end with '\0'.
 	assert(read_bytes < buf_size);
-	ret_buf[read_bytes] = 0;
+	ret_buf.get()[read_bytes] = 0;
 	return ret_buf;
 }
 
@@ -191,68 +208,73 @@ file_io::ptr file_io::create(const std::string &file_name)
 
 file_io::ptr text_file_io::create(const std::string file)
 {
-	FILE *f = fopen(file.c_str(), "r");
-	if (f == NULL) {
+	int fd = open(file.c_str(), O_RDONLY | O_DIRECT);
+	if (fd < 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("fail to open %1%: %2%") % file % strerror(errno);
 		return ptr();
 	}
-	return ptr(new text_file_io(f, file));
+	return ptr(new text_file_io(fd, file));
 }
 
-std::unique_ptr<char[]> text_file_io::read_lines(
+void read_complete(int fd, char *buf, size_t buf_size, size_t expected_size)
+{
+	assert(buf_size >= expected_size);
+	while (expected_size > 0) {
+		ssize_t ret = read(fd, buf, buf_size);
+		assert(ret >= 0);
+		buf += ret;
+		buf_size -= ret;
+		expected_size -= ret;
+	}
+}
+
+std::shared_ptr<char> text_file_io::read_lines(
 		size_t wanted_bytes, size_t &read_bytes)
 {
-	off_t curr_off = ftell(f);
-	off_t off = curr_off + wanted_bytes;
-	// After we just to the new location, we need to further read another
-	// page to search for the end of a line. If there isn't enough data,
-	// we can just read all remaining data.
-	if (off + PAGE_SIZE < file_size) {
-		int ret = fseek(f, off, SEEK_SET);
-		if (ret < 0) {
-			perror("fseek");
-			return NULL;
-		}
+	off_t align_start = ROUND_PAGE(curr_off);
+	off_t align_end = ROUNDUP_PAGE(curr_off + wanted_bytes);
+	off_t local_off = curr_off - align_start;
+	off_t seek_ret = lseek(fd, align_start, SEEK_SET);
+	assert(seek_ret >= 0);
 
-		char buf[PAGE_SIZE];
-		ret = fread(buf, sizeof(buf), 1, f);
-		if (ret != 1) {
-			perror("fread");
-			return NULL;
-		}
-		unsigned i;
-		for (i = 0; i < sizeof(buf); i++)
-			if (buf[i] == '\n')
-				break;
-		// A line shouldn't be longer than a page.
-		assert(i != sizeof(buf));
+	size_t buf_size = align_end - align_start;
+	void *addr = NULL;
+	int alloc_ret = posix_memalign(&addr, PAGE_SIZE, buf_size);
+	assert(alloc_ret == 0);
 
-		// We read a little more than asked to make sure that we read
-		// the entire line.
-		read_bytes = wanted_bytes + i + 1;
+	assert(file_size > align_start);
+	size_t expected_size = std::min(buf_size, (size_t) (file_size - align_start));
+	read_complete(fd, (char *) addr, buf_size, expected_size);
 
-		// Go back to the original offset in the file.
-		ret = fseek(f, curr_off, SEEK_SET);
-		assert(ret == 0);
-	}
-	else {
-		read_bytes = file_size - curr_off;
-	}
+	char *line_buf = ((char *) addr) + local_off;
+	if (local_off > 0)
+		assert(*(line_buf - 1) == '\n');
 
-	// The line buffer must end with '\0'.
-	char *line_buf = new char[read_bytes + 1];
-	BOOST_VERIFY(fread(line_buf, read_bytes, 1, f) == 1);
-	line_buf[read_bytes] = 0;
+	// Find the end of the last line in the buffer.
+	char *line_end;
+	// If the line ends at the end of the buffer, we need to move one more line
+	// further.
+	if (expected_size == buf_size)
+		line_end = ((char *) addr) + expected_size - 2;
+	else
+		line_end = ((char *) addr) + expected_size - 1;
+	while (*line_end != '\n')
+		line_end--;
+	line_end++;
+	*line_end = 0;
 
-	return std::unique_ptr<char[]>(line_buf);
+	read_bytes = line_end - line_buf;
+	curr_off += read_bytes;
+	assert(curr_off <= file_size);
+	return std::shared_ptr<char>(line_buf, del_off_ptr(addr));
 }
 
 /*
  * Parse the lines in the character buffer.
  * `size' doesn't include '\0'.
  */
-static size_t parse_lines(std::unique_ptr<char[]> line_buf, size_t size,
+static size_t parse_lines(std::shared_ptr<char> line_buf, size_t size,
 		const line_parser &parser, data_frame &df)
 {
 	char *line_end;
@@ -370,21 +392,21 @@ static data_frame::ptr create_data_frame(const line_parser &parser, bool in_mem)
 
 class parse_task: public thread_task
 {
-	std::unique_ptr<char[]> lines;
+	std::shared_ptr<char> lines;
 	size_t size;
 	const line_parser &parser;
 	data_frame_set &dfs;
 public:
-	parse_task(std::unique_ptr<char[]> _lines, size_t size,
+	parse_task(std::shared_ptr<char> _lines, size_t size,
 			const line_parser &_parser, data_frame_set &_dfs): parser(
 				_parser), dfs(_dfs) {
-		this->lines = std::move(_lines);
+		this->lines = _lines;
 		this->size = size;
 	}
 
 	void run() {
 		data_frame::ptr df = create_data_frame(parser);
-		parse_lines(std::move(lines), size, parser, *df);
+		parse_lines(lines, size, parser, *df);
 		dfs.add(df);
 	}
 };
@@ -407,10 +429,10 @@ void file_parse_task::run()
 {
 	while (!io->eof()) {
 		size_t size = 0;
-		std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+		std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 		assert(size > 0);
 		data_frame::ptr df = create_data_frame(parser);
-		parse_lines(std::move(lines), size, parser, *df);
+		parse_lines(lines, size, parser, *df);
 		dfs.add(df);
 	}
 }
@@ -434,10 +456,10 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
 		for (size_t i = 0; i < num_tasks && !io->eof(); i++) {
 			size_t size = 0;
-			std::unique_ptr<char[]> lines = io->read_lines(LINE_BLOCK_SIZE, size);
+			std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 
 			mem_threads->process_task(-1,
-					new parse_task(std::move(lines), size, parser, dfs));
+					new parse_task(lines, size, parser, dfs));
 		}
 		if (dfs.get_num_dfs() > 0) {
 			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
@@ -517,11 +539,27 @@ class row_parser: public line_parser
 	const std::string delim;
 	const size_t num_cols;
 	std::vector<ele_parser::const_ptr> parsers;
+	// If this vector contains elements, it contains how columns are duplicated.
+	std::vector<off_t> dup_col_idxs;
+
+	static std::string interpret_delim(const std::string &delim) {
+		std::string new_delim = delim;
+		if (delim == "\\t")
+			new_delim = "\t";
+		else if (delim == "\\n")
+			new_delim = "\n";
+		else if (delim == "\\r")
+			new_delim = "\r";
+		return new_delim;
+	}
 public:
 	row_parser(const std::string &_delim,
-			const std::vector<ele_parser::const_ptr> &_parsers): delim(
-				_delim), num_cols(_parsers.size()) {
+			const std::vector<ele_parser::const_ptr> &_parsers,
+			const std::vector<off_t> &dup_col_idxs): delim(
+				interpret_delim(_delim)), num_cols(_parsers.size()) {
 		this->parsers = _parsers;
+		this->dup_col_idxs = dup_col_idxs;
+		assert(dup_col_idxs.empty() || dup_col_idxs.size() == num_cols);
 	}
 
 	size_t parse(const std::vector<std::string> &lines, data_frame &df) const;
@@ -575,15 +613,93 @@ size_t row_parser::parse(const std::vector<std::string> &lines,
 		cols[j]->resize(num_rows);
 		df.get_vec(j)->append(*cols[j]);
 	}
+	if (!dup_col_idxs.empty())
+		for (size_t j = 0; j < num_cols; j++)
+			df.get_vec(dup_col_idxs[j])->append(*cols[j]);
 	return num_rows;
+}
+
+static std::shared_ptr<char> read_first_chunk(const std::string &file)
+{
+	file_io::ptr io = file_io::create(file);
+	if (io == NULL)
+		return std::shared_ptr<char>();
+
+	// Read at max 1M
+	safs::native_file in_file(file);
+	long buf_size = 1024 * 1024;
+	// If the input file is small, we read the entire file.
+	if (buf_size > in_file.get_size())
+		buf_size = in_file.get_size();
+
+	size_t read_bytes = 0;
+	std::shared_ptr<char> buf = io->read_lines(buf_size, read_bytes);
+	if (buf == NULL || read_bytes == 0)
+		return std::shared_ptr<char>();
+	buf.get()[read_bytes - 1] = 0;
+	return buf;
+}
+
+static std::string detect_delim(std::shared_ptr<char> buf)
+{
+	char *res = strchr(buf.get(), '\t');
+	if (res)
+		return "\t";
+
+	res = strchr(buf.get(), ' ');
+	if (res)
+		return " ";
+
+	res = strchr(buf.get(), ',');
+	if (res)
+		return ",";
+
+	BOOST_LOG_TRIVIAL(error) << "Cannot detect a known delimiter";
+	return "";
+}
+
+static size_t detect_ncols(std::shared_ptr<char> buf, const std::string &delim)
+{
+	// Find the first line.
+	char *res = strchr(buf.get(), '\n');
+	// If the buffer doesn't have '\n'
+	if (res == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "read 1M data, can't find the end of the line";
+		return std::numeric_limits<size_t>::max();
+	}
+	*res = 0;
+
+	// Split a string
+	std::string line = buf.get();
+	std::vector<std::string> strs;
+	boost::split(strs, line, boost::is_any_of(delim));
+	return strs.size();
+}
+
+static std::string detect_delim(const std::string &file)
+{
+	auto buf = read_first_chunk(file);
+	if (buf == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't read data to detect a delimiter";
+		return "";
+	}
+	return detect_delim(buf);
 }
 
 data_frame::ptr read_data_frame(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &ele_parsers)
+		const std::vector<ele_parser::const_ptr> &ele_parsers,
+		const std::vector<off_t> &dup_col_idxs)
 {
+	std::string act_delim = delim;
+	if (delim == "auto")
+		act_delim = detect_delim(files.front());
+	if (act_delim.empty())
+		return data_frame::ptr();
+
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers));
+			new row_parser(act_delim, ele_parsers, dup_col_idxs));
 	return read_lines(files, *parser, in_mem);
 }
 
@@ -591,75 +707,36 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols)
 {
+	std::string act_delim = delim;
 	// We need to discover the number of columns ourselves.
-	if (num_cols == std::numeric_limits<size_t>::max()) {
-		FILE *f = fopen(files.front().c_str(), "r");
-		if (f == NULL) {
-			BOOST_LOG_TRIVIAL(error) << boost::format("cannot open %1%: %2%")
-				% files.front() % strerror(errno);
-			return dense_matrix::ptr();
-		}
-
-		// Read at max 1M
-		safs::native_file in_file(files.front());
-		long buf_size = 1024 * 1024;
-		// If the input file is small, we read the entire file.
-		bool read_all = false;
-		if (buf_size > in_file.get_size()) {
-			buf_size = in_file.get_size();
-			read_all = true;
-		}
-		std::unique_ptr<char[]> buf(new char[buf_size]);
-		int ret = fread(buf.get(), buf_size, 1, f);
-		if (ret != 1) {
-			BOOST_LOG_TRIVIAL(error) << boost::format("cannot read %1%: %2%")
-				% files.front() % strerror(errno);
-			fclose(f);
-			return dense_matrix::ptr();
-		}
-
-		// Find the first line.
-		char *res = strchr(buf.get(), '\n');
-		// If the buffer doesn't have '\n' and we didn't read the entire file
-		if (res == NULL && !read_all) {
+	if (num_cols == std::numeric_limits<size_t>::max() || delim == "auto") {
+		auto buf = read_first_chunk(files.front());
+		if (buf == NULL) {
 			BOOST_LOG_TRIVIAL(error)
-				<< "read 1M data, can't find the end of the line";
-			fclose(f);
+				<< "can't read data to detect #cols or delimiter";
 			return dense_matrix::ptr();
 		}
-		*res = 0;
 
-		// Split a string
-		std::string line = buf.get();
-		std::vector<std::string> strs;
-		boost::split(strs, line, boost::is_any_of(delim));
-		num_cols = strs.size();
-		fclose(f);
+		if (delim == "auto")
+			act_delim = detect_delim(buf);
+		if (act_delim.empty())
+			return dense_matrix::ptr();
+
+		if (num_cols == std::numeric_limits<size_t>::max())
+			num_cols = detect_ncols(buf, act_delim);
+		if (num_cols == std::numeric_limits<size_t>::max())
+			return dense_matrix::ptr();
 	}
 
 	std::shared_ptr<line_parser> parser;
 	std::vector<ele_parser::const_ptr> ele_parsers(num_cols);
-	if (ele_type == "I") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
+	for (size_t i = 0; i < num_cols; i++) {
+		ele_parsers[i] = get_ele_parser(ele_type);
+		if (ele_parsers[i] == NULL)
+			return dense_matrix::ptr();
 	}
-	else if (ele_type == "L") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
-	}
-	else if (ele_type == "F") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
-	}
-	else if (ele_type == "D") {
-		for (size_t i = 0; i < num_cols; i++)
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
-	}
-	else {
-		BOOST_LOG_TRIVIAL(error) << "unsupported matrix element type";
-		return dense_matrix::ptr();
-	}
-	parser = std::shared_ptr<line_parser>(new row_parser(delim, ele_parsers));
+	parser = std::shared_ptr<line_parser>(new row_parser(act_delim,
+				ele_parsers, std::vector<off_t>()));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
 }
@@ -668,27 +745,20 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		const std::string &col_indicator)
 {
+	std::string act_delim = delim;
+	if (delim == "auto")
+		act_delim = detect_delim(files.front());
+	if (act_delim.empty())
+		return dense_matrix::ptr();
+
 	std::vector<std::string> strs;
 	boost::split(strs, col_indicator, boost::is_any_of(" "));
 	std::vector<ele_parser::const_ptr> ele_parsers(strs.size());
 	assert(strs.size());
 	for (size_t i = 0; i < ele_parsers.size(); i++) {
-		if (strs[i] == "I")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>());
-		else if (strs[i] == "L")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>());
-		else if (strs[i] == "F")
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<float>());
-		else if (strs[i] == "D")
-			ele_parsers[i] = ele_parser::const_ptr(new float_parser<double>());
-		else if (strs[i] == "H")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<int>(16));
-		else if (strs[i] == "LH")
-			ele_parsers[i] = ele_parser::const_ptr(new int_parser<long>(16));
-		else {
-			BOOST_LOG_TRIVIAL(error) << "unknown element parser";
+		ele_parsers[i] = get_ele_parser(strs[i]);
+		if (ele_parsers[i] == NULL)
 			return dense_matrix::ptr();
-		}
 	}
 
 	for (size_t i = 1; i < ele_parsers.size(); i++)
@@ -698,9 +768,58 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		}
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
-			new row_parser(delim, ele_parsers));
+			new row_parser(act_delim, ele_parsers, std::vector<off_t>()));
 	data_frame::ptr df = read_lines(files, *parser, in_mem);
 	return dense_matrix::create(df);
+}
+
+ele_parser::const_ptr get_ele_parser(const std::string &type)
+{
+	if (type == "B" || type.empty())
+		return ele_parser::const_ptr();
+	else if (type == "I")
+		return ele_parser::const_ptr(new int_parser<int>());
+	else if (type == "L")
+		return ele_parser::const_ptr(new int_parser<long>());
+	else if (type == "F")
+		return ele_parser::const_ptr(new float_parser<float>());
+	else if (type == "D")
+		return ele_parser::const_ptr(new float_parser<double>());
+	else if (type == "H")
+		return ele_parser::const_ptr(new int_parser<int>(16));
+	else if (type == "LH")
+		return ele_parser::const_ptr(new int_parser<long>(16));
+	else {
+		BOOST_LOG_TRIVIAL(error) << "unknown element parser: " << type;
+		return ele_parser::const_ptr();
+	}
+}
+
+const scalar_type &get_ele_type(const std::string &type_name)
+{
+	if (type_name == "B")
+		return get_scalar_type<bool>();
+	else if (type_name == "I")
+		return get_scalar_type<int>();
+	else if (type_name == "L")
+		return get_scalar_type<long>();
+	else if (type_name == "F")
+		return get_scalar_type<float>();
+	else if (type_name == "D")
+		return get_scalar_type<double>();
+	else if (type_name == "H")
+		return get_scalar_type<int>();
+	else if (type_name == "LH")
+		return get_scalar_type<long>();
+	else
+		throw std::invalid_argument("unknown element type");
+}
+
+bool valid_ele_type(const std::string &type_name)
+{
+	return type_name == "B" || type_name == "I" || type_name == "L"
+		|| type_name == "F" || type_name == "D" || type_name == "H"
+		|| type_name == "LH";
 }
 
 }

@@ -18,11 +18,11 @@
 include ../../Makefile.common
 
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I.
+CXXFLAGS += -I../../libsafs -I.. -I. -I../../matrix
 
 all: libgraph-algs
 
-libgraph-algs: $(OBJS) ../../libsafs/libsafs.a
+libgraph-algs: $(OBJS) ../../libsafs/libsafs.a ../../matrix/libFMatrix.a
 	rm -f libgraph-algs.a
 	ar -cvq libgraph-algs.a $(OBJS)
 

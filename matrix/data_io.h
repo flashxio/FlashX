@@ -111,12 +111,17 @@ public:
 	}
 };
 
+ele_parser::const_ptr get_ele_parser(const std::string &type);
+const scalar_type &get_ele_type(const std::string &type);
+bool valid_ele_type(const std::string &type);
+
 std::shared_ptr<data_frame> read_lines(const std::vector<std::string> &files,
 		const line_parser &parser, bool in_mem);
 
 std::shared_ptr<data_frame> read_data_frame(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim,
-		const std::vector<ele_parser::const_ptr> &parsers);
+		const std::vector<ele_parser::const_ptr> &parsers,
+		const std::vector<off_t> &dup_col_idxs = std::vector<off_t>());
 std::shared_ptr<dense_matrix> read_matrix(const std::vector<std::string> &files,
 		bool in_mem, const std::string &ele_type, const std::string &delim,
 		size_t num_cols = std::numeric_limits<size_t>::max());

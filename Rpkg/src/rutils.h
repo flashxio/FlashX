@@ -30,6 +30,39 @@ bool R_is_logical(SEXP v);
 bool R_is_null(SEXP v);
 bool R_is_string(SEXP v);
 
+enum R_type
+{
+	R_LOGICAL,
+	R_INT,
+	R_REAL,
+	R_NTYPES,
+};
+
+static inline R_type get_common_Rtype(R_type left, R_type right)
+{
+	// For the order we list the R types, we should cast types
+	// to the one with a larger value.
+	return (R_type) std::max((int) left, (int) right);
+}
+
+static inline R_type R_get_type(SEXP v)
+{
+	if (R_is_real(v))
+		return R_type::R_REAL;
+	else if (R_is_integer(v))
+		return R_type::R_INT;
+	else if (R_is_logical(v))
+		return R_type::R_LOGICAL;
+	else {
+		fprintf(stderr, "The R object has unknown type\n");
+		return R_type::R_NTYPES;
+	}
+}
+
+size_t get_nrows(SEXP o);
+size_t get_ncols(SEXP o);
+size_t get_length(SEXP o);
+
 template<class T>
 bool R_get_number(SEXP v, T &ret) {
 	if (R_is_real(v)) {

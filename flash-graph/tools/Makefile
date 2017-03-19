@@ -18,9 +18,9 @@
 include ../../Makefile.common
 
 LDFLAGS := -L.. -lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs -lrt $(LDFLAGS) -lz
-CXXFLAGS += -I../../libsafs -I.. -I.
+CXXFLAGS += -I../../libsafs -I.. -I. -I../../matrix
 
-all: rmat-gen graph-stat print_graph
+all: rmat-gen print_graph
 
 print_ts_graph: print_ts_graph.o ../libgraph.a
 	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)

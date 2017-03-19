@@ -576,6 +576,13 @@ public:
 	virtual detail::task_creator::ptr get_multiply_creator(
 			const scalar_type &type, size_t num_in_cols) const = 0;
 
+	const scalar_type &get_type() const {
+		if (entry_type == NULL)
+			return get_scalar_type<bool>();
+		else
+			return *entry_type;
+	}
+
 	/*
 	 * The size of a non-zero entry.
 	 */
@@ -627,8 +634,10 @@ public:
 		}
 		if (entry_type && *entry_type != get_scalar_type<bool>()
 				&& *entry_type != in->get_type()) {
+			BOOST_LOG_TRIVIAL(error) << "matrix element type doesn't match";
 			BOOST_LOG_TRIVIAL(error)
-				<< "the input matrix and the sparse matrix need to have the same type";
+				<< boost::format("input dense matrix: %1%, sparse matrix: %2%")
+				% in->get_type().get_name() % entry_type->get_name();
 			return false;
 		}
 		auto create = get_multiply_creator(in->get_type(), in->get_num_cols());
@@ -690,6 +699,7 @@ bool spmm_creator<DenseType, SparseType>::set_data(
 
 void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();
+std::string get_supported_features();
 
 }
 

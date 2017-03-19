@@ -71,6 +71,10 @@ public:
 	typedef std::shared_ptr<file_mapper> ptr;
 	typedef std::shared_ptr<const file_mapper> const_ptr;
 
+	static ptr create(const safs_header &header,
+			const std::vector<part_file_info> &files,
+			const std::string &file_name);
+
 	file_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->file_name = name;
@@ -124,6 +128,10 @@ public:
 	 */
 	virtual void map(off_t, struct block_identifier &) const = 0;
 	virtual int map2file(off_t) const = 0;
+
+	// Given the SAFS file size, this calculates physical file sizes in
+	// each disk. `size' is given in the number of pages.
+	virtual std::vector<size_t> get_size_per_disk(size_t size) const;
 
 	virtual file_mapper *clone() = 0;
 };
@@ -220,6 +228,8 @@ public:
 		off_t p_idx = (CONST_A * block_idx) % CONST_P;
 		return p_idx % get_num_files();
 	}
+
+	virtual std::vector<size_t> get_size_per_disk(size_t size) const;
 
 	virtual file_mapper *clone() {
 		return new hash_mapper(get_name(), get_files(), STRIPE_BLOCK_SIZE);

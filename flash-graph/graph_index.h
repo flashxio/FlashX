@@ -464,7 +464,8 @@ public:
 			if (id != INVALID_VERTEX_ID)
 				return id;
 		}
-		ABORT_MSG("can't find vertex ID");
+		BOOST_LOG_TRIVIAL(error) << "can't find vertex ID";
+		return INVALID_VERTEX_ID;
 	}
 
 	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const {

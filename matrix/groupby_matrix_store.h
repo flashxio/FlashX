@@ -43,18 +43,33 @@ class groupby_matrix_store: public sink_store
 	matrix_store::const_ptr label_store;
 	matrix_margin margin;
 	factor f;
+	// We often need to check the underlying matrices of a sink matrix
+	// when materializing a virtual matrix.
+	// This caches the underlying matrices that are used to compute
+	// this sink matrix. We rarely materialize any non-sink matrices,
+	// so the underlying matrices usually remain the same.
+	std::unordered_map<size_t, size_t> underlying;
 
 	matrix_store::ptr get_agg_res() const;
 
 	groupby_matrix_store(matrix_store::const_ptr data,
 			matrix_store::const_ptr label_store, const factor &f,
 			matrix_margin margin, agg_operate::const_ptr op);
-public:
-	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
 
 	groupby_matrix_store(matrix_store::const_ptr data,
 			std::shared_ptr<const factor_col_vector> labels,
 			matrix_margin margin, agg_operate::const_ptr op);
+public:
+	typedef std::shared_ptr<const agg_matrix_store> const_ptr;
+
+	static ptr create(matrix_store::const_ptr data,
+			std::shared_ptr<const factor_col_vector> labels,
+			matrix_margin margin, agg_operate::const_ptr op) {
+		ptr ret(new groupby_matrix_store(data, labels, margin, op));
+		sink_store::register_sink_matrices(ret);
+		return ret;
+	}
+	virtual size_t get_data_id() const;
 
 	virtual bool has_materialized() const;
 
@@ -78,7 +93,12 @@ public:
 	}
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
-		return data->get_underlying_mats();
+		if (has_materialized())
+			return std::unordered_map<size_t, size_t>();
+		else if (!underlying.empty())
+			return underlying;
+		else
+			return data->get_underlying_mats();
 	}
 
 	virtual std::string get_name() const {

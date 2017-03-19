@@ -44,10 +44,11 @@ class groupby_op: public detail::portion_mapply_op
 	size_t num_levels;
 	matrix_margin margin;
 	agg_operate::const_ptr op;
+	const size_t data_id;
 public:
 	groupby_op(agg_operate::const_ptr op, size_t num_levels,
 			matrix_margin margin): detail::portion_mapply_op(0, 0,
-				op->get_output_type()) {
+				op->get_output_type()), data_id(matrix_store::mat_counter++) {
 		size_t num_threads = detail::mem_thread_pool::get_global_num_threads();
 		part_results.resize(num_threads);
 		part_agg.resize(num_threads);
@@ -55,6 +56,9 @@ public:
 		this->num_levels = num_levels;
 		this->margin = margin;
 		this->op = op;
+	}
+	size_t get_data_id() const {
+		return data_id;
 	}
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
@@ -240,6 +244,7 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				f.get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
@@ -269,11 +274,17 @@ groupby_matrix_store::groupby_matrix_store(matrix_store::const_ptr data,
 	portion_op = std::shared_ptr<groupby_op>(new groupby_op(op,
 				labels->get_factor().get_num_levels(), margin));
 	agg_op = op;
+	this->underlying = get_underlying_mats();
 }
 
 matrix_store::ptr groupby_matrix_store::get_agg_res() const
 {
 	return std::static_pointer_cast<groupby_op>(portion_op)->get_agg();
+}
+
+size_t groupby_matrix_store::get_data_id() const
+{
+	return std::static_pointer_cast<groupby_op>(portion_op)->get_data_id();
 }
 
 bool groupby_matrix_store::has_materialized() const
@@ -553,12 +564,15 @@ local_matrix_store::const_ptr groupby_compute_store::get_portion(
 	local_matrix_store::const_ptr data_part = data->get_portion(start_row,
 			start_col, num_rows, num_cols);
 	local_matrix_store::const_ptr label_part;
-	assert(label_store->get_num_cols() == 1);
 	// `label_store' is a col_vec.
-	if (margin == matrix_margin::MAR_ROW)
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(label_store->get_num_cols() == 1);
 		label_part = label_store->get_portion(start_row, 0, num_rows, 1);
-	else
-		label_part = label_store->get_portion(start_col, 0, num_cols, 1);
+	}
+	else {
+		assert(label_store->get_num_rows() == 1);
+		label_part = label_store->get_portion(0, start_col, 1, num_cols);
+	}
 	return create_lmaterialize_matrix(data_part, label_part, get_type(),
 			portion_op);
 }
@@ -571,23 +585,68 @@ local_matrix_store::const_ptr groupby_compute_store::get_portion(size_t id) cons
 			portion_op);
 }
 
+namespace
+{
+
+class collect_portion_compute: public portion_compute
+{
+	size_t num_EM_parts;
+	size_t num_reads;
+	portion_compute::ptr orig_compute;
+public:
+	typedef std::shared_ptr<collect_portion_compute> ptr;
+
+	collect_portion_compute(portion_compute::ptr orig_compute) {
+		this->num_EM_parts = 0;
+		this->num_reads = 0;
+		this->orig_compute = orig_compute;
+	}
+
+	void set_EM_count(size_t num_EM_parts) {
+		this->num_EM_parts = num_EM_parts;
+	}
+
+	virtual void run(char *buf, size_t size) {
+		num_reads++;
+		if (num_reads == num_EM_parts) {
+			orig_compute->run(NULL, 0);
+			// This only runs once.
+			// Let's remove all user's portion compute to indicate that it has
+			// been invoked.
+			orig_compute = NULL;
+		}
+	}
+};
+
+}
+
 async_cres_t groupby_compute_store::get_portion_async(
 		size_t start_row, size_t start_col, size_t num_rows,
 		size_t num_cols, std::shared_ptr<portion_compute> compute) const
 {
+	collect_portion_compute *_compute = new collect_portion_compute(compute);
+	portion_compute::ptr collect_compute(_compute);
+
 	async_cres_t ret = data->get_portion_async(start_row, start_col,
-			num_rows, num_cols, compute);
+			num_rows, num_cols, collect_compute);
 	local_matrix_store::const_ptr label_part;
-	assert(label_store->get_num_cols() == 1);
-	assert(label_store->is_in_mem());
+	async_cres_t label_ret;
 	// `label_store' is a col_vec.
-	if (margin == matrix_margin::MAR_ROW)
-		label_part = label_store->get_portion(start_row, 0, num_rows, 1);
-	else
-		label_part = label_store->get_portion(start_col, 0, num_cols, 1);
-	ret.second = create_lmaterialize_matrix(ret.second, label_part,
-			get_type(), portion_op);
-	return ret;
+	if (margin == matrix_margin::MAR_ROW) {
+		assert(label_store->get_num_cols() == 1);
+		label_ret = label_store->get_portion_async(start_row, 0, num_rows, 1,
+				collect_compute);
+	}
+	else {
+		assert(label_store->get_num_rows() == 1);
+		label_ret = label_store->get_portion_async(0, start_col, 1, num_cols,
+				collect_compute);
+	}
+	// It's two if both are unavailable.
+	_compute->set_EM_count(!ret.first + !label_ret.first);
+	return async_cres_t(ret.first && label_ret.first,
+			create_lmaterialize_matrix(ret.second, label_ret.second,
+			get_type(), portion_op));
 }
 
 std::vector<safs::io_interface::ptr> groupby_compute_store::create_ios() const

@@ -23,6 +23,8 @@
 #include <Rcpp.h>
 #include <memory>
 
+#include "rutils.h"
+
 namespace fm
 {
 	class col_vec;
@@ -74,10 +76,17 @@ void set_matrix(const Rcpp::S4 &matrix, typename MatrixType::ptr mat)
 std::shared_ptr<fm::col_vec> get_vector(const Rcpp::S4 &vec);
 std::shared_ptr<fm::factor_col_vector> get_factor_vector(const Rcpp::S4 &vec);
 
-SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec, const std::string &name);
-SEXP create_FMR_vector(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
-SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m, const std::string &name);
-SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m, const std::string &name);
-SEXP create_FMR_data_frame(std::shared_ptr<fm::data_frame> df, const std::string &name);
+SEXP create_FMR_vector(std::shared_ptr<const fm::detail::vec_store> vec,
+		R_type type, const std::string &name);
+SEXP create_FMR_vector(std::shared_ptr<fm::dense_matrix> m,
+		R_type type, const std::string &name);
+SEXP create_FMR_vector(std::shared_ptr<fm::factor_col_vector> v,
+		R_type type, const std::string &name);
+SEXP create_FMR_matrix(std::shared_ptr<fm::dense_matrix> m,
+		R_type type, const std::string &name);
+SEXP create_FMR_matrix(std::shared_ptr<fm::sparse_matrix> m,
+		R_type type, const std::string &name);
+SEXP create_FMR_data_frame(std::shared_ptr<fm::data_frame> df,
+		const std::vector<R_type> &type, const std::string &name);
 
 #endif

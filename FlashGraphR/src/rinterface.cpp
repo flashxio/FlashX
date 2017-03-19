@@ -42,14 +42,6 @@
 using namespace safs;
 using namespace fg;
 
-#if 0
-FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
-		time_t interval, int num_intervals);
-FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id);
-FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
-		time_t start_time, time_t time_interval);
-#endif
-
 /*
  * A global configuration of FlashGraph.
  */
@@ -176,6 +168,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 /**
  * Destroy FlashGraphR
  */
+#if 0
 RcppExport SEXP R_FG_destroy()
 {
 	int num_refs = 0;
@@ -193,15 +186,16 @@ RcppExport SEXP R_FG_destroy()
 	if (num_refs == 0)
 		graphs.clear();
 	graph_engine::destroy_flash_graph();
+	fm::destroy_flash_matrix();
 	safs::destroy_io_system();
 	return R_NilValue;
 }
+#endif
 
-RcppExport SEXP R_FG_set_conf(SEXP pconf)
+RcppExport SEXP R_FG_destroy()
 {
 	graph_engine::destroy_flash_graph();
-	safs::destroy_io_system();
-	return R_FG_init(pconf);
+	return R_NilValue;
 }
 
 /*
@@ -431,7 +425,7 @@ static SEXP create_FGR_obj(graph_ref *ref)
 	ret["ecount"] = ecount;
 
 	Rcpp::LogicalVector in_mem(1);
-	in_mem[0] = graph->get_graph_data() != NULL;
+	in_mem[0] = graph->is_in_mem();
 	ret["in.mem"] = in_mem;
 	return ret;
 }
@@ -455,7 +449,7 @@ static SEXP create_FGR_obj(FG_graph::ptr graph, const std::string &graph_name)
 	ret["ecount"] = ecount;
 
 	Rcpp::LogicalVector in_mem(1);
-	in_mem[0] = graph->get_graph_data() != NULL;
+	in_mem[0] = graph->is_in_mem();
 	ret["in.mem"] = in_mem;
 	return ret;
 }
@@ -540,22 +534,37 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 	Rcpp::IntegerVector to = edge_lists["to"];
 	std::vector<vertex_id_t> from_vec(from.begin(), from.end());
 	std::vector<vertex_id_t> to_vec(to.begin(), to.end());
-	fm::detail::mem_vec_store::ptr from_store
-		= fm::detail::mem_vec_store::create(from.size(), -1,
+	fm::detail::mem_vec_store::ptr from_store;
+	fm::detail::mem_vec_store::ptr to_store;
+	if (directed) {
+		from_store = fm::detail::mem_vec_store::create(from.size(),
+				-1, fm::get_scalar_type<vertex_id_t>());
+		to_store = fm::detail::mem_vec_store::create(to.size(), -1,
 				fm::get_scalar_type<vertex_id_t>());
-	fm::detail::mem_vec_store::ptr to_store
-		= fm::detail::mem_vec_store::create(to.size(), -1,
+		from_store->copy_from((const char *) from_vec.data(),
+				from_vec.size() * sizeof(vertex_id_t));
+		to_store->copy_from((const char *) to_vec.data(),
+				to_vec.size() * sizeof(vertex_id_t));
+	}
+	else {
+		from_store = fm::detail::mem_vec_store::create(from.size() * 2,
+				-1, fm::get_scalar_type<vertex_id_t>());
+		to_store = fm::detail::mem_vec_store::create(to.size() * 2, -1,
 				fm::get_scalar_type<vertex_id_t>());
-	from_store->copy_from((const char *) from_vec.data(),
-			from_vec.size() * sizeof(vertex_id_t));
-	to_store->copy_from((const char *) to_vec.data(),
-			to_vec.size() * sizeof(vertex_id_t));
+		size_t num_bytes = from_vec.size() * sizeof(vertex_id_t);
+		memcpy(from_store->get_raw_arr(), from_vec.data(), num_bytes);
+		memcpy(from_store->get_raw_arr() + num_bytes, to_vec.data(),
+				num_bytes);
+		memcpy(to_store->get_raw_arr(), to_vec.data(), num_bytes);
+		memcpy(to_store->get_raw_arr() + num_bytes, from_vec.data(),
+				num_bytes);
+	}
 
 	fm::data_frame::ptr df = fm::data_frame::create();
 	df->add_vec("source", from_store);
 	df->add_vec("dest", to_store);
 	edge_list::ptr el = edge_list::create(df, directed);
-	FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	FG_graph::ptr fg = create_fg_graph(graph_name, el);
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
@@ -593,11 +602,13 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 	edge_list_files[0] = graph_file;
 	// TODO give more options when loading an edge list.
 	fm::data_frame::ptr df = utils::read_edge_list(edge_list_files, in_mem,
-			delim, attr_type);
+			delim, attr_type, directed);
 	if (df == NULL)
 		return R_NilValue;
 	edge_list::ptr el = edge_list::create(df, directed);
-	FG_graph::ptr fg = create_fg_graph("graph_name", el);
+	FG_graph::ptr fg = create_fg_graph(graph_name, el);
+	if (fg == NULL)
+		return R_NilValue;
 
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
@@ -638,40 +649,64 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 
 ///////////////////////////// graph algorithms ///////////////////////////
 
+enum R_type
+{
+	R_LOGICAL,
+	R_INT,
+	R_REAL,
+	R_NTYPES,
+};
+
+SEXP create_FMR_vector(fm::dense_matrix::ptr m, R_type type, const std::string &name);
+
+SEXP create_FMR_vector(fm::dense_matrix::ptr m, const std::string &name)
+{
+	R_type type;
+	if (m->get_type() == fm::get_scalar_type<double>())
+		type = R_type::R_REAL;
+	else if (m->get_type() == fm::get_scalar_type<int>())
+		type = R_type::R_INT;
+	else {
+		fprintf(stderr, "unknown type\n");
+		return R_NilValue;
+	}
+	return create_FMR_vector(m, type, name);
+}
+
+fm::dense_matrix::ptr get_vertex_ids(fm::vector::ptr vec)
+{
+	fm::dense_matrix::ptr mat = vec->conv2mat(vec->get_length(), 1, false);
+	// unsigned int isn't supported by FlashR. let's cast them to double.
+	mat = mat->cast_ele_type(fm::get_scalar_type<double>());
+	return mat;
+}
+
+template<class T>
+fm::dense_matrix::ptr cast_type(fm::vector::ptr vec)
+{
+	fm::dense_matrix::ptr mat = vec->conv2mat(vec->get_length(), 1, false);
+	return mat->cast_ele_type(fm::get_scalar_type<T>());
+}
+
 RcppExport SEXP R_FG_compute_cc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_cc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_cc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_wcc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_wcc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_scc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<vertex_id_t>::ptr fg_vec = compute_scc(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
-}
-
-RcppExport SEXP R_FG_compute_transitivity(SEXP graph)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<float>::ptr fg_vec = compute_transitivity(fg);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_scc(fg);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
@@ -691,10 +726,8 @@ RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 		return R_NilValue;
 	}
 
-	FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, type);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = get_degree(fg, type);
+	return create_FMR_vector(get_vertex_ids(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
@@ -704,19 +737,15 @@ RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 	int num_iters = REAL(piters)[0];
 	float damping_factor = REAL(pdamping)[0];
 
-	FG_vector<float>::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_undirected_triangles(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<size_t>::ptr fg_vec = compute_undirected_triangles(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_undirected_triangles(fg);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
@@ -730,33 +759,28 @@ RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 	else
 		type = directed_triangle_type::ALL;
 
-	FG_vector<size_t>::ptr fg_vec = compute_directed_triangles_fast(fg, type);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_directed_triangles_fast(fg, type);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP porder)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	int order = INTEGER(porder)[0];
-	Rcpp::IntegerVector res(fg->get_graph_header().get_num_vertices());
 	if (order == 0) {
-		FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, edge_type::BOTH_EDGES);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = get_degree(fg, edge_type::BOTH_EDGES);
+		return create_FMR_vector(get_vertex_ids(fg_vec), "");
 	}
 	else if (order == 1) {
-		FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = compute_local_scan(fg);
+		return create_FMR_vector(cast_type<double>(fg_vec), "");
 	}
 	else if (order == 2) {
-		FG_vector<size_t>::ptr fg_vec = compute_local_scan2(fg);
-		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+		fm::vector::ptr fg_vec = compute_local_scan2(fg);
+		return create_FMR_vector(cast_type<double>(fg_vec), "");
 	}
 	else
 		return R_NilValue;
-
-	return res;
 }
 
 RcppExport SEXP R_FG_compute_topK_scan(SEXP graph, SEXP order, SEXP K)
@@ -781,10 +805,8 @@ RcppExport SEXP R_FG_compute_kcore(SEXP graph, SEXP _k, SEXP _kmax)
 	int k = REAL(_k)[0];
 	int kmax = REAL(_kmax)[0];
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<size_t>::ptr fg_vec = compute_kcore(fg, k, kmax);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_kcore(fg, k, kmax);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
 RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
@@ -847,90 +869,6 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 	return ret;
 }
 
-template<class MatrixType>
-FG_vector<double>::ptr multiply_v(FG_graph::ptr fg, bool transpose,
-		FG_vector<double>::ptr in_vec)
-{
-	size_t length = in_vec->get_size();
-	typename MatrixType::ptr matrix = MatrixType::create(fg);
-	if (transpose)
-		matrix = matrix->transpose();
-	assert(matrix->get_num_rows() == length);
-	assert(matrix->get_num_cols() == length);
-
-	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
-	matrix->multiply(*in_vec, *out_vec);
-	return out_vec;
-}
-
-RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pmax_threads, SEXP pinit)
-{
-	Rcpp::NumericMatrix rcpp_mat = Rcpp::NumericMatrix(pmat);
-	vsize_t k = INTEGER(pk)[0];
-	vsize_t max_iters = INTEGER(pmax_iters)[0];
-	std::string init = CHAR(STRING_ELT(pinit,0));
-	int max_threads = INTEGER(pmax_threads)[0];
-		
-	if (!R_is_real(pmat)) {
-		fprintf(stderr, "The input matrix for kmeans has to be float points\n");
-		return R_NilValue;
-	}
-	if (max_threads < 1) {
-		fprintf(stderr, "# threads must be >= 1");
-	}	
-
-	double *r_mat = REAL(pmat);
-
-	const size_t NUM_ROWS = rcpp_mat.nrow();
-	const size_t NUM_COLS = rcpp_mat.ncol();
-	double* p_fg_mat = new double[NUM_ROWS * NUM_COLS];
-
-    srand(1234);
-
-#pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
-	for (vsize_t row = 0; row < NUM_ROWS; row++) {
-		for (vsize_t col = 0; col < NUM_COLS; col++) {
-			p_fg_mat[row*NUM_COLS + col] = r_mat[row + col * NUM_ROWS];
-		}
-	}
-
-	double* p_clusters = new double [k*NUM_COLS];
-	vsize_t* p_clust_asgns = new vsize_t [NUM_ROWS];
-	vsize_t* p_clust_asgn_cnt = new vsize_t [k];
-
-	Rcpp::List ret;
-
-	ret["iter"] = compute_kmeans(p_fg_mat, p_clusters, p_clust_asgns,
-			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, max_threads, init);
-	delete [] p_fg_mat;
-
-	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);
-#pragma omp parallel for firstprivate(p_clusters) shared(centers)
-	for (vsize_t row = 0; row < k; row++) {
-		for (vsize_t col = 0; col < NUM_COLS; col++) {
-			centers(row, col) =  p_clusters[row*NUM_COLS + col];
-		}
-	}
-	delete [] p_clusters;
-	ret["centers"] = centers;
-
-	Rcpp::IntegerVector clusts(NUM_ROWS);
-	for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
-		clusts[vid] = p_clust_asgns[vid]+1;
-	}
-	delete [] p_clust_asgns;
-	ret["cluster"] = clusts;
-
-	Rcpp::IntegerVector size(k);
-	for (vsize_t i = 0; i < k; i++) {
-		size[i] = p_clust_asgn_cnt[i];
-	}
-	delete [] p_clust_asgn_cnt;
-	ret["size"] = size;
-
-	return ret;
-}
-
 RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit,
         SEXP pmax_iters, SEXP ptolerance)
 {
@@ -944,9 +882,8 @@ RcppExport SEXP R_FG_sem_kmeans(SEXP graph, SEXP pk, SEXP pinit,
     Rcpp::List ret;
     sem_kmeans_ret::ptr fg_ret = compute_sem_kmeans(fg, k, init, max_iters, tolerance);
 
-	Rcpp::IntegerVector res0(fg_ret->get_cluster_assignments()->get_size());
-	fg_ret->get_cluster_assignments()->copy_to(res0.begin(), fg_ret->get_cluster_assignments()->get_size());
-    ret["cluster"] = res0;
+	fm::vector::ptr clusters = fg_ret->get_cluster_assignments();
+    ret["cluster"] = create_FMR_vector(get_vertex_ids(clusters), "");
     ret["iter"] = fg_ret->get_iters();
 
     Rcpp::IntegerVector res1(fg_ret->get_size().begin(), fg_ret->get_size().end());
@@ -970,13 +907,11 @@ RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
 	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
-	FG_vector<float>::ptr fg_vec = compute_betweenness_centrality(fg, vids);
-	Rcpp::NumericVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
-	return res;
+	fm::vector::ptr fg_vec = compute_betweenness_centrality(fg, vids);
+	return create_FMR_vector(cast_type<double>(fg_vec), "");
 }
 
-SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, const std::string &name);
+SEXP create_FMR_matrix(fm::sparse_matrix::ptr m, R_type type, const std::string &name);
 
 namespace fg
 {
@@ -992,5 +927,27 @@ RcppExport SEXP R_FG_get_matrix_fg(SEXP pgraph)
 	// TODO does this work if this isn't a binary matrix?
 	fm::sparse_matrix::ptr m = fg::create_sparse_matrix(fg, NULL);
 	std::string name = graph["name"];
-	return create_FMR_matrix(m, name);
+	// TODO change it later for non-binary matrix.
+	return create_FMR_matrix(m, R_type::R_LOGICAL, name);
+}
+
+RcppExport SEXP R_FG_print_graph(SEXP pgraph, SEXP pfile, SEXP pdelim,
+		SEXP ptype)
+{
+	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	std::string file_name = CHAR(STRING_ELT(pfile, 0));
+	std::string delim = CHAR(STRING_ELT(pdelim, 0));
+	std::string type = CHAR(STRING_ELT(ptype, 0));
+	Rcpp::LogicalVector res(1);
+
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		perror("fopen");
+		res[0] = false;
+		return res;
+	}
+	print_graph_el(fg, delim, type, f);
+	fclose(f);
+	res[0] = true;
+	return res;
 }

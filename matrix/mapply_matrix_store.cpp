@@ -924,6 +924,8 @@ mapply_matrix_store::mapply_matrix_store(
 	assert(layout == matrix_layout_t::L_ROW || layout == matrix_layout_t::L_COL);
 	this->op = op;
 	this->num_nodes = is_in_mem() ? fm::detail::get_num_nodes(in_mats) : -1;
+	for (size_t i = 1; i < in_mats.size(); i++)
+		assert(in_mats[0]->is_wide() == in_mats[i]->is_wide());
 }
 
 bool mapply_matrix_store::is_materialized() const

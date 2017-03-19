@@ -381,11 +381,11 @@ public:
 	}
 
 	void lock() {
-		ABORT_MSG("lock isn't implemented");
+		throw unsupported_exception("lock");
 	}
 
 	void unlock() {
-		ABORT_MSG("unlock isn't implemented");
+		throw unsupported_exception("unlock");
 	}
 
 	page_byte_array *clone() {

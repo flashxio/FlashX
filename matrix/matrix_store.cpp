@@ -307,6 +307,40 @@ matrix_store::const_ptr matrix_store::get_cols(
 		return rows->transpose();
 }
 
+matrix_store::const_ptr matrix_store::get_cols(off_t start, off_t end) const
+{
+	if (start < 0 || end < 0 || end - start < 0) {
+		BOOST_LOG_TRIVIAL(error) << "invalid range for selecting columns";
+		return matrix_store::const_ptr();
+	}
+
+	std::vector<off_t> idxs(end - start);
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = start + i;
+	return get_cols(idxs);
+}
+
+matrix_store::const_ptr matrix_store::get_rows(off_t start, off_t end) const
+{
+	if (start < 0 || end < 0 || end - start < 0) {
+		BOOST_LOG_TRIVIAL(error) << "invalid range for selecting rows";
+		return matrix_store::const_ptr();
+	}
+
+	std::vector<off_t> idxs(end - start);
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = start + i;
+	return get_rows(idxs);
+}
+
+bool matrix_store::share_data(const matrix_store &store) const
+{
+	// By default, we can use data id to determine if two matrices have
+	// the same data.
+	return get_data_id() == store.get_data_id()
+		&& get_data_id() != INVALID_MAT_ID;
+}
+
 }
 
 }

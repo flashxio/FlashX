@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	std::string edge_attr_type;
-	std::string delim = ",";
+	std::string delim = "auto";
 	while ((opt = getopt(argc, argv, "uUes:g:t:d:")) != -1) {
 		num_opts++;
 		switch (opt) {
@@ -150,7 +150,8 @@ int main(int argc, char *argv[])
 		 */
 		printf("start to read and parse edge list\n");
 		gettimeofday(&start, NULL);
-		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim, edge_attr_type);
+		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim,
+				edge_attr_type, directed);
 		assert(df);
 		gettimeofday(&end, NULL);
 		printf("It takes %.3f seconds to parse the edge lists\n",

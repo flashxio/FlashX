@@ -56,30 +56,6 @@ setMethod("+", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Arithmetic
 setMethod("+", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.add))
-#' @rdname Arithmetic
-setMethod("+", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.add))
 
 #' @rdname Arithmetic
 setMethod("-", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -88,29 +64,8 @@ setMethod("-", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("-", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.sub))
 #' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
 setMethod("-", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  -fm.mapply.col(e2, e1, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  -.mapply2.fm.ANY(e2, e1, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.sub))
-#' @rdname Arithmetic
-setMethod("-", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.sub))
 
 #' @rdname Arithmetic
 setMethod("*", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -118,30 +73,6 @@ setMethod("*", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Arithmetic
 setMethod("*", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.mul))
-#' @rdname Arithmetic
-setMethod("*", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.mul))
 
 #' @rdname Arithmetic
 setMethod("/", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -150,90 +81,45 @@ setMethod("/", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("/", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.div))
 #' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  .mapply2.ANY.fm(1, fm.mapply.col(e2, e1, fm.bo.div), fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "ANY", e2 = "fm"), function(e1, e2) {
-		  if (length(e1) == 1)
-			  .mapply2.ANY.fm(e1, e2, fm.bo.div)
-		  else {
-			  e1 <- fm.conv.R2FM(e1)
-			  e1 / e2
-		  }
+setMethod("/", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.div)
 		  })
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.div))
-#' @rdname Arithmetic
-setMethod("/", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.div))
-
-.replace.pow.special <- function(res, e1, e2)
-{
-	res <- ifelse(e1 == 1, 1, res)
-	if (typeof(e1) == "double" && typeof(e2) == "double")
-		ifelse(e1 == -Inf & floor(e2) != e2, NaN, res)
-	else
-		res
-}
 
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2) {
-		  res <- .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
+setMethod("%%", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e1, e2, fm.bo.mod))
+#' @rdname Arithmetic
+setMethod("%%", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(e1, e2, fm.bo.mod))
+#' @rdname Arithmetic
+setMethod("%%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.mod)
 		  })
+
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2) {
-		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
+setMethod("%/%", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e1, e2, fm.bo.idiv))
+#' @rdname Arithmetic
+setMethod("%/%", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(e1, e2, fm.bo.idiv))
+#' @rdname Arithmetic
+setMethod("%/%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+			  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+			  .mapply2.fm(e1, e2, fm.bo.idiv)
 		  })
+
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "fmV"), function(e1, e2) {
-		  res <- fm.mapply.col(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
+setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
-#setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-#		  fm.mapply.col(as.numeric(e2), as.numeric(e1), fm.bo.pow))
+setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "matrix"), function(e1, e2) {
-		  res <- .mapply2.fm.m(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "matrix", e2 = "fm"), function(e1, e2) {
-		  res <- .mapply2.m.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-#setMethod("^", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-#		  .mapply2.fm.ANY(as.numeric(e2), as.numeric(e1), fm.bo.pow))
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2) {
-		  res <- .mapply2.ANY.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "ANY"), function(e1, e2) {
-		  res <- .mapply2.fm.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
-#' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2) {
-		  res <- .mapply2.fmV.ANY(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
+setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
+		  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
 		  })
 
 #' Matrix multiplication
@@ -265,11 +151,11 @@ setMethod("%*%", signature(x = "fmV", y = "fm"), function(x, y) {
 })
 #' @rdname matmult
 setMethod("%*%", signature(x = "fm", y = "ANY"),
-		  function(x, y) fm.multiply(x, fm.conv.R2FM(y)))
+		  function(x, y) fm.as.matrix(fm.multiply(x, fm.conv.R2FM(y))))
 #' @rdname matmult
 setMethod("%*%", signature(x = "ANY", y = "fm"), function(x, y) {
 		  if (is.vector(x))
-			  fm.multiply(t(y), fm.conv.R2FM(x))
+			  t(fm.multiply(t(y), fm.conv.R2FM(x)))
 		  else
 			  t(fm.multiply(t(y), t(fm.conv.R2FM(x))))
 		  })
@@ -304,30 +190,6 @@ setMethod("==", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Comparison
 setMethod("==", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.eq))
-#' @rdname Comparison
-setMethod("==", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.eq))
 
 #' @rdname Comparison
 setMethod("!=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -335,30 +197,6 @@ setMethod("!=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Comparison
 setMethod("!=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.neq))
-#' @rdname Comparison
-setMethod("!=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.neq))
 
 #' @rdname Comparison
 setMethod(">", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -367,29 +205,8 @@ setMethod(">", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod(">", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.gt))
 #' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.gt))
-#' @rdname Comparison
 setMethod(">", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.lt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.lt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.gt))
-#' @rdname Comparison
-setMethod(">", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.gt))
 
 #' @rdname Comparison
 setMethod(">=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -398,29 +215,8 @@ setMethod(">=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod(">=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.ge))
 #' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.ge))
-#' @rdname Comparison
 setMethod(">=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.le))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.le))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.ge))
-#' @rdname Comparison
-setMethod(">=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.ge))
 
 #' @rdname Comparison
 setMethod("<=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -429,29 +225,8 @@ setMethod("<=", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("<=", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.le))
 #' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.le))
-#' @rdname Comparison
 setMethod("<=", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.ge))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.ge))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.le))
-#' @rdname Comparison
-setMethod("<=", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.le))
 
 #' @rdname Comparison
 setMethod("<", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -460,29 +235,8 @@ setMethod("<", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 setMethod("<", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.lt))
 #' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.lt))
-#' @rdname Comparison
 setMethod("<", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.gt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.gt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.lt))
-#' @rdname Comparison
-setMethod("<", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.lt))
 
 #' Logical Operators
 #'
@@ -511,76 +265,28 @@ NULL
 
 #' @rdname Logic
 setMethod("|", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.or))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.or))
 #' @rdname Logic
 setMethod("|", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.or))
-#' @rdname Logic
-setMethod("|", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.or))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.or))
 
 #' @rdname Logic
 setMethod("&", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.and))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.and))
 #' @rdname Logic
 setMethod("&", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
-		  fm.mapply.col(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
-		  fm.mapply.col(e2, e1, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.and))
-#' @rdname Logic
-setMethod("&", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.and))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.and))
 
 #' @rdname Logic
 `!.fm` <- function(e1)
 {
-	.sapply.fm(e1, fm.buo.not)
+	.sapply.fm(as.logical(e1), fm.buo.not)
 }
 
 #' @rdname Logic
 `!.fmV` <- function(e1)
 {
-	.sapply.fmV(e1, fm.buo.not)
+	.sapply.fmV(as.logical(e1), fm.buo.not)
 }
 
 #' Maxima and Minima
@@ -649,22 +355,22 @@ setMethod("pmax2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.max))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.max))
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.max))
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.max))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.max))
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.max))
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.max))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.max))
+		  pmax2(e1, fm.conv.R2FM(e2)))
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.max))
+		  pmax2(fm.conv.R2FM(e1), e2))
 
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -680,55 +386,83 @@ setMethod("pmin2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
 		  fm.mapply.col(e2, e1, fm.bo.min))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
-		  .mapply2.fm.m(e1, e2, fm.bo.min))
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
-		  .mapply2.m.fm(e1, e2, fm.bo.min))
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.min))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fm.ANY(e1, e2, fm.bo.min))
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm.ANY(e2, e1, fm.bo.min))
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.min))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
-		  .mapply2.fmV.ANY(e1, e2, fm.bo.min))
+		  pmin2(e1, fm.conv.R2FM(e2)))
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
-		  .mapply2.ANY.fmV(e1, e2, fm.bo.min))
+		  pmin2(fm.conv.R2FM(e1), e2))
+
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  callGeneric(e1, fm.as.matrix(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  callGeneric(fm.as.matrix(e1), e2))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  callGeneric(e1, fm.conv.R2FM(e2)))
+#' @rdname Arithmetic
+setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  callGeneric(fm.conv.R2FM(e1), e2))
 
 .min.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		max.val <- .get.max.val(typeof(x))
 		x <- .replace.na(x, max.val)
 		others <- .replace.na.list(others, max.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.min, test.na)
+	res <- fm.agg(x, fm.bo.min)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- min(res, .agg.na(arg, fm.bo.min, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.min))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- min(unlist(res))
 	}
 	res
 }
 
 .max.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		min.val <- .get.min.val(typeof(x))
 		x <- .replace.na(x, min.val)
 		others <- .replace.na.list(others, min.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.max, test.na)
+	res <- fm.agg(x, fm.bo.max)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- max(res, .agg.na(arg, fm.bo.max, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.max))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- max(unlist(res))
 	}
-	res
+	else
+		res
 }
 
 .pmin.int <- function(..., na.rm = FALSE)
@@ -736,12 +470,17 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.max.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.min, FALSE)
+		.mapply.list(args, fm.bo.min)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.min, TRUE)
+		.mapply.list(args, fm.bo.min)
 }
 
 .pmax.int <- function(..., na.rm = FALSE)
@@ -749,12 +488,17 @@ setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.min.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.max, FALSE)
+		.mapply.list(args, fm.bo.max)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.max, TRUE)
+		.mapply.list(args, fm.bo.max)
 }
 
 #' @rdname Extremes
@@ -961,20 +705,20 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 #' @rdname transpose
 setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
-.mapply.list <- function(data, FUN, test.na)
+.mapply.list <- function(data, FUN)
 {
 	n <- length(data)
 	res <- data[[1]]
 	if (n > 1) {
 		for (arg in data[2:n]) {
 			if (class(res) == class(arg))
-				res <- fm.mapply2(res, arg, FUN, test.na)
+				res <- fm.mapply2(res, arg, FUN)
 			else if (class(res) == "fm" && class(arg) == "fmV")
-				res <- fm.mapply.col(res, arg, FUN, test.na)
+				res <- fm.mapply.col(res, arg, FUN)
 			# We assume that FUN is commutative.
 			# This function is used for pmin/pmax, so it's fine.
 			else if (class(res) == "fmV" && class(arg) == "fm")
-				res <- fm.mapply.col(arg, res, FUN, test.na)
+				res <- fm.mapply.col(arg, res, FUN)
 			else
 				stop("unknown arguments")
 		}
@@ -1016,34 +760,19 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
 .range1 <- function(x, na.rm)
 {
-	test.na <- TRUE
 	if (typeof(x) == "logical")
 		x <- as.integer(x)
 	if (na.rm) {
 		x.min <- ifelse(is.na(x), .get.min.val(typeof(x)), x)
 		x.max <- ifelse(is.na(x), .get.max.val(typeof(x)), x)
-		test.na <- FALSE
-		tmp1 <- fm.agg.lazy(x.max, fm.bo.min)
-		tmp2 <- fm.agg.lazy(x.min, fm.bo.max)
+		tmp1 <- fm.agg(x.max, fm.bo.min)
+		tmp2 <- fm.agg(x.min, fm.bo.max)
 	}
 	else {
-		tmp1 <- fm.agg.lazy(x, fm.bo.min)
-		tmp2 <- fm.agg.lazy(x, fm.bo.max)
+		tmp1 <- fm.agg(x, fm.bo.min)
+		tmp2 <- fm.agg(x, fm.bo.max)
 	}
-	if (test.na) {
-		x.is.na <- fm.agg.lazy(.is.na.only(x), fm.bo.or)
-		res <- fm.materialize(tmp1, tmp2, x.is.na)
-		if (.fmV2scalar(res[[3]])) {
-			na <- .get.na(typeof(x))
-			c(na, na)
-		}
-		else
-			c(.fmV2scalar(res[[1]]), .fmV2scalar(res[[2]]))
-	}
-	else {
-		res <- fm.materialize(tmp1, tmp2)
-		c(.fmV2scalar(res[[1]]), .fmV2scalar(res[[2]]))
-	}
+	c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
 }
 
 # We replace both NA and NaN
@@ -1059,21 +788,6 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 	for (i in 1:length(objs))
 		objs[[i]] <- ifelse(is.na(objs[[i]]), val, objs[[i]])
 	objs
-}
-
-.agg.na <- function(fm, op, test.na)
-{
-	if (test.na && .env.int$fm.test.na) {
-		any.na <- fm.agg.lazy(.is.na.only(fm), fm.bo.or)
-		agg.res <- fm.agg.lazy(fm, op)
-		res <- fm.materialize(any.na, agg.res)
-		if (.fmV2scalar(res[[1]]))
-			.get.na(typeof(res[[2]]))
-		else
-			.fmV2scalar(res[[2]])
-	}
-	else
-		fm.agg(fm, op)
 }
 
 #' Are some Values True?
@@ -1095,41 +809,39 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 #' fm.any(mat)
 fm.any <- function(x, lazy=FALSE)
 {
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.or)
+	ret <- fm.agg(x, fm.bo.or)
+	if (!lazy)
+		.fmV2scalar(ret)
 	else
-		fm.agg(x, fm.bo.or)
+		ret
 }
 
 .any.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, FALSE)
 		others <- .replace.na.list(others, FALSE)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.or, test.na)
-	if (is.na(res))
-		return(res)
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.or))
 	if (length(others) >= 1) {
+		if (!is.na(res) && res)
+			return(TRUE)
 		for (arg in others) {
-			res <- res | .agg.na(arg, fm.bo.or, test.na)
-			if (is.na(res))
-				return(res)
-			if (res)
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.or))
+			if (!is.na(tmp) && tmp)
 				return(TRUE)
+			res <- res | tmp
 		}
 	}
 	res
@@ -1159,41 +871,39 @@ setMethod("any", "fmV", .any.int)
 #' fm.all(mat)
 fm.all <- function(x, lazy=FALSE)
 {
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.and)
+	ret <- fm.agg(x, fm.bo.and)
+	if (!lazy)
+		.fmV2scalar(ret)
 	else
-		fm.agg(x, fm.bo.and)
+		ret
 }
 
 .all.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, TRUE)
 		others <- .replace.na.list(others, TRUE)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.and, test.na)
-	if (is.na(res))
-		return(res)
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.and))
 	if (length(others) >= 1) {
+		if (!is.na(res) && !res)
+			return(FALSE)
 		for (arg in others) {
-			res <- res & .agg.na(arg, fm.bo.and, test.na)
-			if (is.na(res))
-				return(res)
-			if (!res)
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.and))
+			if (!is.na(tmp) && !tmp)
 				return(FALSE)
+			res <- res & tmp
 		}
 	}
 	res
@@ -1207,8 +917,6 @@ setMethod("all", "fmV", .all.int)
 #' Sum of Vector Elements
 #'
 #' \code{sum} returns the sum of all the values in its arguments.
-#' \code{fm.sum} returns the sum of all the values in the input object. It can
-#' evaluate the summation lazily.
 #'
 #' @param x a FlashR vector or matrix.
 #' @param ... zero or more vectors or matrices.
@@ -1220,31 +928,25 @@ setMethod("all", "fmV", .all.int)
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
 #' sum(mat)
-#' fm.sum(mat)
-fm.sum <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.lazy(x, fm.bo.add)
-	else
-		fm.agg(x, fm.bo.add)
-}
+NULL
 
 .sum.int <- function(x, ..., na.rm)
 {
 	# TODO we need to handle na.rm for all of the functions here
 	# properly.
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		zero <- .get.zero(typeof(x))
 		x <- .replace.na(x, zero)
 		others <- .replace.na.list(others, zero)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.add, test.na)
+	res <- fm.agg(x, fm.bo.add)
 	if (length(others) >= 1) {
+		res <- list(res)
 		for (arg in others)
-			res <- res + .agg.na(arg, fm.bo.add, test.na)
+			res <- c(res, fm.agg(arg, fm.bo.add))
+		res <- lapply(res, function(o) fm.conv.FM2R(o))
+		res <- sum(unlist(res))
 	}
 	res
 }
@@ -1303,7 +1005,7 @@ setMethod("range", "fmV", .range.int)
 	# TODO I need to lazily calculate it.
 	if (na.rm)
 		n <- n - sum(is.na(x))
-	sum(x, na.rm=na.rm) / n
+	sum(as.double(x), na.rm=na.rm) / n
 }
 
 #' Arithmetic Mean
@@ -1413,9 +1115,9 @@ setMethod("log2", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.
 #' @rdname log
 setMethod("log2", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.log2))
 #' @rdname log
-setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
-setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
@@ -1436,7 +1138,6 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #' Form row and column sums and means for numeric arrays.
 #'
 #' @param x a FlashR matrix.
-#' @param lazy logical. indicates whether to evaluate the expression lazily.
 #' @param na.rm logical. Should missing values (including NaN) be omitted
 #' from the calculations?
 #' @return a FlashR vector.
@@ -1444,49 +1145,49 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #'
 #' @examples
 #' mat <- fm.runif.matrix(100, 10)
-#' mat <- fm.rowSums(mat)
-#' mat <- fm.colSums(mat)
 #' mat <- rowSums(mat)
 #' mat <- colSums(mat)
 #' mat <- rowMeans(mat)
 #' mat <- colMeans(mat)
-fm.rowSums <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.mat.lazy(x, 1, fm.bo.add)
-	else
-		fm.agg.mat(x, 1, fm.bo.add)
-}
-
-#' @rdname colSums
-fm.colSums <- function(x, lazy=FALSE)
-{
-	if (lazy)
-		fm.agg.mat.lazy(x, 2, fm.bo.add)
-	else
-		fm.agg.mat(x, 2, fm.bo.add)
-}
+NULL
 
 #' @rdname colSums
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  # TODO I need to handle na.rm here as well.
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 1, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("colSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 2, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("rowMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  rowSums(x, na.rm) / dim(x)[2]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- rowSums(x, na.rm)
+				  nums <- rowSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  rowSums(x, na.rm) / dim(x)[2]
 		  })
 #' @rdname colSums
 setMethod("colMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  colSums(x, na.rm) / dim(x)[1]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- colSums(x, na.rm)
+				  nums <- colSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  colSums(x, na.rm) / dim(x)[1]
 		  })
 
 #' Print FlashR objects.
@@ -1539,8 +1240,13 @@ setClass("fm.table", representation(val = "fmV", Freq = "fmV"))
 #' @rdname fm.table
 fm.table <- function(x)
 {
-	count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
-	ret <- fm.sgroupby(x, count)
+	valid.vec <- function(x) x@len > 0
+	if (class(x) == "fmVFactor" && valid.vec(x@vals) && valid.vec(x@cnts))
+		ret <- list(val=x@vals, agg=x@cnts)
+	else {
+		count <- fm.create.agg.op(fm.bo.count, fm.bo.add, "count")
+		ret <- fm.sgroupby(x, count)
+	}
 	if (!is.null(ret))
 		new("fm.table", val=ret$val, Freq=ret$agg)
 	else
@@ -1553,6 +1259,39 @@ setMethod("as.vector", signature(x = "fm.table"), function(x) x@Freq)
 setMethod("as.data.frame", signature(x = "fm.table"),
 		  function(x, row.names = NULL, optional = FALSE, ...)
 			  list(val=x@val, Freq=x@Freq))
+
+#' Logical Vectors
+#'
+#' \code{as.logical} coerces objects of type \code{"logical"}.
+#' \code{is.logical} is a more general test of an object being
+#' interpretable as logicals.
+#'
+#' @param x a FlashR object to be coerced or tested.
+#' @return \code{as.logical} returns a logical FlashR object,
+#' \code{is.logical} returns a logical value.
+#' @name logical
+NULL
+
+#' @rdname logical
+setMethod("as.logical", "fm", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
+#' @rdname logical
+setMethod("as.logical", "fmV", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
 
 #' Integer Vectors
 #'
@@ -1573,25 +1312,15 @@ NULL
 setMethod("as.integer", "fm", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying matrix uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fm", pointer=x@pointer, name=x@name, nrow=x@nrow, ncol=x@ncol,
-				  type=x@type, ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 #' @rdname integer
 setMethod("as.integer", "fmV", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying vector uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fmV", pointer=x@pointer, name=x@name, len=x@len, type=x@type,
-				  ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 
 #' Numeric Vectors
@@ -1614,14 +1343,14 @@ setMethod("as.numeric", "fm", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("as.numeric", "fmV", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("is.numeric", "fm", function(x)
@@ -1812,34 +1541,17 @@ NULL
 #' @rdname summary
 .summary <- function(x)
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
-	lazy.res <- list()
-	if (fm.is.matrix(x)) {
-		lazy.res[[1]] <- fm.agg.mat.lazy(x, 2, fm.bo.min)
-		lazy.res[[2]] <- fm.agg.mat.lazy(x, 2, fm.bo.max)
-		lazy.res[[3]] <- fm.agg.mat.lazy(x, 2, fm.bo.add)
-		lazy.res[[4]] <- fm.agg.mat.lazy(abs(x), 2, fm.bo.add)
-		lazy.res[[5]] <- fm.agg.mat.lazy(x * x, 2, fm.bo.add)
-		lazy.res[[6]] <- fm.agg.mat.lazy(x != 0, 2, fm.bo.add)
-	}
-	else if (fm.is.vector(x)) {
-		lazy.res[[1]] <- fm.agg.lazy(x, fm.bo.min)
-		lazy.res[[2]] <- fm.agg.lazy(x, fm.bo.max)
-		lazy.res[[3]] <- fm.agg.lazy(x, fm.bo.add)
-		lazy.res[[4]] <- fm.agg.lazy(abs(x), fm.bo.add)
-		lazy.res[[5]] <- fm.agg.lazy(x * x, fm.bo.add)
-		lazy.res[[6]] <- fm.agg.lazy(x != 0, fm.bo.add)
-	}
-	else {
-		print("summary only works on a FlashR object")
-		return(NULL)
-	}
-	res <- fm.materialize.list(lazy.res)
+	x <- fm.as.matrix(x)
+	res <- list()
+	res[[1]] <- fm.agg.mat(x, 2, fm.bo.min)
+	res[[2]] <- fm.agg.mat(x, 2, fm.bo.max)
+	res[[3]] <- fm.agg.mat(x, 2, fm.bo.add)
+	res[[4]] <- fm.agg.mat(abs(x), 2, fm.bo.add)
+	res[[5]] <- fm.agg.mat(x * x, 2, fm.bo.add)
+	res[[6]] <- fm.agg.mat(x != 0, 2, fm.bo.add)
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
@@ -1861,10 +1573,10 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #' constant with exactly two characters. Possible values for symmetric input
 #' matrices:
 #' \itemize{
-#' \item{"LA"}{Compute \code{nev} largest (algebraic) eigenvalues.}
-#' \item{"SA"}{Compute \code{nev} smallest (algebraic) eigenvalues.}
-#' \item{"LM"}{Compute \code{nev} largest (in magnitude) eigenvalues.}
-#' \item{"SM"}{Compute \code{nev} smallest (in magnitude) eigenvalues.}
+#' \item{"LR"}{Compute \code{k} largest (real part) eigenvalues.}
+#' \item{"SR"}{Compute \code{k} smallest (real part) eigenvalues.}
+#' \item{"LM"}{Compute \code{k} largest (in magnitude) eigenvalues.}
+#' \item{"SM"}{Compute \code{k} smallest (in magnitude) eigenvalues.}
 #' }
 #'
 #' @param mul The function to perform the matrix-vector multiplication.
@@ -1908,13 +1620,18 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #" mul <- function(x, extra) mat %*% x
 #' res <- fm.eigen(mul, 10, nrow(mat))
 #' fm.cal.residul(mul, res$values, res$vectors)
-fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
-					 env = parent.frame())
+fm.eigen <- function(mul, k, n, which=c("LM", "SM", "LR", "SR"),
+					 sym=TRUE, options=NULL, env = parent.frame())
 {
 	if (!sym) {
 		print("fm.eigen only supports symmetric matrices")
 		return(NULL)
 	}
+	if (k > n) {
+		print("k should be smaller than n")
+		return(NULL)
+	}
+	which <- match.arg(which)
 	# We only want to solve a very large eigenvalue problem with Anasazi.
 	if (is.loaded("R_FM_eigen") && n > 1000000) {
 		if (is.null(options))
@@ -1960,7 +1677,7 @@ fm.eigen <- function(mul, k, n, which="LM", sym=TRUE, options=NULL,
 #' @rdname fm.eigen
 fm.cal.residul <- function(mul, values, vectors)
 {
-	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*")
 	l2 <- sqrt(colSums(tmp * tmp))
 	fm.conv.FM2R(l2) / values
 }
@@ -2005,47 +1722,52 @@ fm.cal.residul <- function(mul, values, vectors)
 #' mat <- fm.runif.matrix(100, 10)
 #' mat <- scale(mat)
 setMethod("scale", "fm", function(x, center=TRUE, scale=TRUE) {
+		  # The output of this function is floating-point values.
+		  # It's better to convert the element type in advance to avoid
+		  # any overflow.
+		  x <- as.double(x)
 		  # TODO it needs to handle NA.
 		  # If the center is true, center columns by their means.
-		  if (is.logical(center) && center) {
-			  center <- colMeans(x)
-			  x <- fm.mapply.row(x, center, fm.bo.sub)
-		  }
-		  else if (!is.logical(center)) {
+		  if (!is.logical(center)) {
 			  if (length(center) != ncol(x)) {
 				  print("The length of center should be equal to #columns of x")
 				  return(NULL)
 			  }
 			  x <- fm.mapply.row(x, center, fm.bo.sub)
 		  }
-
-		  # If scale is true and center is also true, scale by their standard
-		  # deviation.
-		  if (is.logical(scale) && scale && is.logical(center) && center) {
-			  sum.x <- fm.colSums(x, TRUE)
-			  sum.x2 <- fm.colSums(x * x, TRUE)
-			  res <- fm.materialize(sum.x, sum.x2)
-			  sum.x <- res[[1]]
-			  sum.x2 <- res[[2]]
-			  n <- nrow(x)
-			  avg <- sum.x / n
-			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
-			  x <- fm.mapply.row(x, sd, fm.bo.div)
-		  }
-		  # If scale is true and center is false, scale by their root mean
-		  # square.
-		  else if (is.logical(scale) && scale) {
-			  sum.x2 <- fm.colSums(x * x)
-			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
-			  x <- fm.mapply.row(x, scal, fm.bo.div)
-		  }
-		  else if (!is.logical(scale)) {
+		  if (!is.logical(scale)) {
 			  if (length(scale) != ncol(x)) {
 				  print("The length of scale should be equal to #columns of x")
 				  return(NULL)
 			  }
 			  x <- fm.mapply.row(x, scale, fm.bo.div)
 		  }
+
+		  # If scale is true and center is also true, scale by their standard
+		  # deviation.
+		  if (is.logical(scale) && scale && is.logical(center) && center) {
+			  sum.x <- colSums(x)
+			  sum.x2 <- colSums(x * x)
+			  n <- nrow(x)
+			  avg <- sum.x / n
+			  sd <- sqrt((sum.x2 - n * avg * avg) / (n - 1))
+			  center <- sum.x / n
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+			  x <- fm.mapply.row(x, sd, fm.bo.div)
+		  }
+		  # If scale is true and center is false, scale by their root mean
+		  # square.
+		  else if (is.logical(scale) && scale) {
+			  sum.x2 <- colSums(x * x)
+			  scal <- sqrt(sum.x2 / (nrow(x) - 1))
+			  x <- fm.mapply.row(x, scal, fm.bo.div)
+		  }
+		  # If scale is false and center is true.
+		  else if (is.logical(center) && center) {
+			  center <- colMeans(x)
+			  x <- fm.mapply.row(x, center, fm.bo.sub)
+		  }
+
 		  x
 })
 

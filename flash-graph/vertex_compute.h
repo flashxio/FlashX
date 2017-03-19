@@ -309,7 +309,7 @@ public:
 	}
 
 	virtual safs::request_range get_next_request() {
-		ABORT_MSG("get_next_request isn't supported");
+		throw unsupported_exception("get_next_request");
 	}
 
 	virtual void run(safs::page_byte_array &arr) = 0;
@@ -463,7 +463,7 @@ public:
 	}
 
 	virtual safs::request_range get_next_request() {
-		ABORT_MSG("get_next_request isn't supported");
+		throw unsupported_exception("get_next_request");
 	}
 
 	virtual void run(safs::page_byte_array &arr) = 0;

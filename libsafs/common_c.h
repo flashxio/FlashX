@@ -53,11 +53,11 @@ static inline void print_addr_sym(void *str)
 		strings = backtrace_symbols(buf, nptrs);	\
 		if (strings == NULL) {						\
 			perror("backtrace_symbols");			\
-			exit(EXIT_FAILURE);						\
+			nptrs = 0;								\
 		}											\
 		for (int i = 0; i < nptrs; i++)	{			\
 			printf("[bt] #%d %s\n", i, strings[i]);	\
-			print_addr_sym(buf[i]);			\
+			print_addr_sym(buf[i]);					\
 		}											\
 		free(strings);								\
 	} while (0)

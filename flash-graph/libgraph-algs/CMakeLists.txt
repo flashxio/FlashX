@@ -4,7 +4,6 @@ add_library(graph-algs STATIC
 	diameter_graph.cpp
 	directed_triangle_graph.cpp
 	fast_triangle_graph.cpp
-	graph_transitivity.cpp
 	k_core.cpp
 	local_scan_graph.cpp
 	local_scan2_graph.cpp
@@ -18,6 +17,5 @@ add_library(graph-algs STATIC
 	wcc.cpp
 	bfs_graph.cpp
 	betweenness_centrality.cpp
-	louvain.cpp
     sem_kmeans.cpp
 )

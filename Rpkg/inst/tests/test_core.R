@@ -27,6 +27,70 @@ test_that("load a dense matrix from a text file", {
 		  # TODO I also need to test when the input text file has missing values.
 })
 
+test_that("load a sparse matrix from a text file", {
+		  download.file("http://snap.stanford.edu/data/wiki-Vote.txt.gz", "wiki-Vote.txt.gz")
+		  system("gunzip wiki-Vote.txt.gz")
+		  mat <- fm.load.sparse.matrix("wiki-Vote.txt", in.mem=TRUE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 8298)
+		  expect_equal(sum(res), 103689)
+
+		  mat <- fm.load.sparse.matrix("wiki-Vote.txt", in.mem=FALSE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 8298)
+		  expect_equal(sum(res), 103689)
+		  file.remove("wiki-Vote.txt")
+
+		  download.file("http://snap.stanford.edu/data/facebook_combined.txt.gz", "facebook.txt.gz")
+		  system("gunzip facebook.txt.gz")
+		  mat <- fm.load.sparse.matrix("facebook.txt", in.mem=TRUE, is.sym=TRUE, delim=" ")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4039)
+		  expect_equal(sum(res), 176468)
+
+		  mat <- fm.load.sparse.matrix("facebook.txt", in.mem=FALSE, is.sym=TRUE, delim=" ")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4039)
+		  expect_equal(sum(res), 176468)
+		  file.remove("facebook.txt")
+
+		  download.file("http://snap.stanford.edu/data/soc-LiveJournal1.txt.gz",
+						"soc-LiveJournal1.txt.gz")
+		  system("gunzip soc-LiveJournal1.txt.gz")
+		  mat <- fm.load.sparse.matrix("soc-LiveJournal1.txt", in.mem=TRUE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4847571)
+		  expect_equal(sum(res), 68475391)
+
+		  mat <- fm.load.sparse.matrix("soc-LiveJournal1.txt", in.mem=FALSE, is.sym=FALSE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(length(res), 4847571)
+		  expect_equal(sum(res), 68475391)
+		  file.remove("soc-LiveJournal1.txt")
+
+		  download.file("http://snap.stanford.edu/data/bigdata/communities/com-lj.ungraph.txt.gz",
+						"com-lj.ungraph.txt.gz")
+		  system("gunzip com-lj.ungraph.txt.gz")
+		  mat <- fm.load.sparse.matrix("com-lj.ungraph.txt", in.mem=TRUE, is.sym=TRUE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(sum(res != 0), 3997962)
+		  expect_equal(sum(res), 34681189 * 2)
+
+		  mat <- fm.load.sparse.matrix("com-lj.ungraph.txt", in.mem=FALSE, is.sym=TRUE, delim="\t")
+		  one <- fm.rep.int(1, nrow(mat))
+		  res <- mat %*% one
+		  expect_equal(sum(res != 0), 3997962)
+		  expect_equal(sum(res), 34681189 * 2)
+		  file.remove("facebook.txt")
+})
+
 for (type in type.set) {
 test_that(paste("create a vector/matrix with repeat values of", type), {
 		  if (type == "double") {
@@ -240,7 +304,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	names <- tmp$names
 	print.depth(depth, length(mats), "mats from the lower level")
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
+		res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 1, "+")))
 		res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
 	}
 
@@ -249,7 +313,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
-			res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 1, "+")))
+			res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 1, "+")))
 			res.names <- c(res.names, paste("rowSums(", names[[i]], ")", sep=""))
 		}
 	}
@@ -258,7 +322,7 @@ get.agg.vecs <- function(length, depth, lazy)
 	mats <- tmp$mats
 	names <- tmp$names
 	for (i in 1:length(mats)) {
-		res <- c(res, fm.as.vector(fm.agg.mat.lazy(mats[[i]], 2, "+")))
+		res <- c(res, fm.as.vector(fm.agg.mat(mats[[i]], 2, "+")))
 		res.names <- c(res.names, paste("colSums(", names[[i]], ")", sep=""))
 	}
 
@@ -267,7 +331,7 @@ get.agg.vecs <- function(length, depth, lazy)
 		mats <- tmp$mats
 		names <- tmp$names
 		for (i in 1:length(mats)) {
-			mat <- fm.agg.mat.lazy(mats[[i]], 2, "+")
+			mat <- fm.agg.mat(mats[[i]], 2, "+")
 			res <- c(res, fm.as.vector(mat))
 			res.names <- c(res.names, paste("colSums(", names[[i]], ")", sep=""))
 		}
@@ -750,26 +814,24 @@ test_that("inner product", {
 
 test_that("aggregation", {
 		  mat <- fm.runif.matrix(10000000, 10)
+		  rmat <- as.matrix(mat)
 		  sum <- fm.agg(mat, "+")
-		  sum.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(fm.conv.FM2R(sum.lazy), sum)
+		  rsum <- sum(mat)
+		  expect_equal(fm.conv.FM2R(sum), rsum)
 
 		  mat <- t(mat)
 		  sum1 <- fm.agg(mat, "+")
-		  sum1.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(sum, sum1)
-		  expect_equal(fm.conv.FM2R(sum1.lazy), sum1)
+		  expect_equal(fm.conv.FM2R(sum1), rsum)
 
 		  mat <- fm.runif.matrix(100000, 1000)
+		  rmat <- as.matrix(mat)
 		  sum <- fm.agg(mat, "+")
-		  sum.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(fm.conv.FM2R(sum.lazy), sum)
+		  rsum <- sum(mat)
+		  expect_equal(fm.conv.FM2R(sum), rsum)
 
 		  mat <- t(mat)
 		  sum1 <- fm.agg(mat, "+")
-		  sum1.lazy <- fm.agg.lazy(mat, "+")
-		  expect_equal(sum, sum1)
-		  expect_equal(fm.conv.FM2R(sum1.lazy), sum1)
+		  expect_equal(fm.conv.FM2R(sum1), rsum)
 })
 
 test_that("read/write a dense matrix", {

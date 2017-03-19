@@ -45,6 +45,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <system_error>
 
 #include "global_cached_private.h"
 #include "slab_allocator.h"
@@ -119,7 +120,7 @@ public:
 			*(io_request *) this = req;
 		}
 		else
-			ABORT_MSG("wrong request type");
+			throw std::invalid_argument("wrong request type");
 
 		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
@@ -258,12 +259,12 @@ public:
 
 	void lock() {
 		// TODO
-		ABORT_MSG("lock isn't implemented");
+		throw unsupported_exception("lock");
 	}
 
 	void unlock() {
 		// TODO
-		ABORT_MSG("unlock isn't implemented");
+		throw unsupported_exception("unlock");
 	}
 
 	page_byte_array *clone() {
@@ -320,12 +321,12 @@ public:
 
 	virtual void lock() {
 		// TODO
-		ABORT_MSG("lock isn't implemented");
+		throw unsupported_exception("lock");
 	}
 
 	virtual void unlock() {
 		// TODO
-		ABORT_MSG("unlock isn't implemented");
+		throw unsupported_exception("unlock");
 	}
 
 	virtual off_t get_offset() const {
@@ -1247,9 +1248,8 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	num_to_underlying.inc(1);
 	num_underlying_pages.inc(req.get_num_bufs());
 	underlying->access(&req, 1, &status);
-	if (status == IO_FAIL) {
-		abort();
-	}
+	if (status == IO_FAIL)
+		throw io_exception("Can't write dirty page");
 }
 
 thread_safe_page *complete_cached_req(const io_request &req, thread_safe_page *p,
@@ -1360,9 +1360,7 @@ void global_cached_io::process_user_req(
 		 * it's a cache hit.
 		 */
 		if (old_id.get_offset() == -1) {
-#ifdef STATISTICS
 			cache_hits++;
-#endif
 			if (p->data_ready())
 				num_pages_ready++;
 			// Let's optimize for cached single-page requests by stealing
@@ -1638,7 +1636,7 @@ io_status global_cached_io::access(char *buf, off_t offset,
 int global_cached_io::preload(off_t start, long size) {
 	if (size > cache_size) {
 		fprintf(stderr, "we can't preload data larger than the cache size\n");
-		exit(1);
+		return -1;
 	}
 
 	assert(ROUND_PAGE(start) == start);
@@ -1810,9 +1808,8 @@ static inline void access(io_interface &underlying, io_request &req)
 {
 	io_status status;
 	underlying.access(&req, 1, &status);
-	if (status == IO_FAIL) {
-		abort();
-	}
+	if (status == IO_FAIL)
+		throw io_exception("Fail to issue an I/O request");
 }
 
 void global_cached_io::flush_requests()

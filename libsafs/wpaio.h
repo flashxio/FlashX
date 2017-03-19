@@ -33,6 +33,7 @@
 #ifdef USE_LIBAIO
 #include <libaio.h>
 #endif
+#include <system_error>
 
 #include "slab_allocator.h"
 
@@ -85,10 +86,9 @@ public:
 		memset(&ctx, 0, sizeof(ctx));
 
 		int ret = io_queue_init(max_aio, &ctx);
-		if (ret < 0) {
-			fprintf(stderr, "io_queue_init fails: %s\n", strerror(-ret));
-			exit (1);
-		}
+		if (ret < 0)
+			throw std::system_error(std::make_error_code((std::errc) ret),
+					"io_queue_init");
 #else
 		fprintf(stderr, "libaio isn't used. Cannot use async I/O\n");
 #endif

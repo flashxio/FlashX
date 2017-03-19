@@ -30,6 +30,7 @@
 #include "materialize.h"
 #include "mem_matrix_store.h"
 #include "set_data_matrix_store.h"
+#include "factor.h"
 
 namespace fm
 {
@@ -567,6 +568,7 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 
 	// Here is to reuse the code for matrix multiplication with BLAS.
 	bool use_blas = left_op == NULL;
+	size_t IPT_block_size = get_block_size();
 	if (use_blas) {
 		assert(get_type() == get_scalar_type<double>()
 				|| get_type() == get_scalar_type<float>());
@@ -575,50 +577,86 @@ dense_matrix::ptr block_matrix::inner_prod_tall(const dense_matrix &m,
 		right_op = bulk_operate::conv2ptr(get_type().get_basic_ops().get_add());
 	}
 
+	// If we use BLAS for matrix multiplication or this matrix is stored, we
+	// should use a larger block size to have BLAS optimize matrix multiplication
+	// or increase the ratio of computation to I/O.
+	if (use_blas || !is_in_mem())
+		IPT_block_size = matrix_conf.get_max_multiply_block_size();
+
+	// If the right matrix has more columns than the block size, the inner product
+	// result will have more columns than the block size. We need to convert
+	// the output of inner product into a block matrix with the current block size.
+	// A column-major matrix helps the conversion.
+	if (mem_m2->get_num_cols() > get_block_size())
+		out_layout = matrix_layout_t::L_COL;
+
 	// This contains the blocks for the final output.
-	std::vector<detail::matrix_store::const_ptr> res_blocks(
-			div_ceil<size_t>(mem_m2->get_num_cols(), get_block_size()));
+	std::vector<detail::matrix_store::const_ptr> res_blocks;
 	for (size_t m2_col = 0; m2_col < mem_m2->get_num_cols();
-			m2_col += get_block_size()) {
+			m2_col += IPT_block_size) {
 		// We multiply with individual matrices and output a vector of
 		// temporary matrices. Later on, we need to sum the temporary matrices.
-		std::vector<dense_matrix::const_ptr> tmp_mats(store->get_num_mats());
+		std::vector<dense_matrix::const_ptr> tmp_mats;
 		for (size_t m2_row = 0; m2_row < mem_m2->get_num_rows();
-				m2_row += get_block_size()) {
-			size_t i = m2_row / get_block_size();
-			dense_matrix::ptr left = dense_matrix::create(store->get_mat(i));
+				m2_row += IPT_block_size) {
+			size_t first_block = m2_row / get_block_size();
+			size_t local_num_blocks = std::min(IPT_block_size / get_block_size(),
+					store->get_num_mats() - first_block);
+			std::vector<detail::matrix_store::const_ptr> tmps(local_num_blocks);
+			for (size_t i = 0; i < tmps.size(); i++) {
+				tmps[i] = store->get_mat(i + first_block);
+				assert(tmps[i]);
+			}
+			dense_matrix::ptr left = dense_matrix::create(
+					detail::combined_matrix_store::create(tmps, store_layout()));
 			// Get the submatrix in the right matrix
-			size_t part_num_rows = std::min(get_block_size(),
+			size_t part_num_rows = std::min(IPT_block_size,
 					m2->get_num_rows() - m2_row);
-			size_t part_num_cols = std::min(get_block_size(),
+			size_t part_num_cols = std::min(IPT_block_size,
 					m2->get_num_cols() - m2_col);
 			detail::mem_matrix_store::const_ptr part = get_sub_mat(mem_m2,
 					m2_row, m2_col, part_num_rows, part_num_cols);
 			dense_matrix::ptr right = dense_matrix::create(part);
 
 			// Compute the temporary matrix.
-			// TODO maybe we can perform multiply with multiple block matrices
-			// together in the cost of more memory consumption.
+			dense_matrix::ptr tmp;
 			if (use_blas)
-				tmp_mats[i] = left->multiply(*right, out_layout);
+				tmp = left->multiply(*right, out_layout);
 			else
-				tmp_mats[i] = left->inner_prod(*right, left_op, right_op, out_layout);
+				tmp = left->inner_prod(*right, left_op, right_op, out_layout);
+			tmp_mats.push_back(tmp);
 			// We really don't need to cache the portion in this intermediate
 			// matrix and the EM matrix beneath it in the hierarchy.
-			const_cast<detail::matrix_store &>(tmp_mats[i]->get_data()).set_cache_portion(false);
+			const_cast<detail::matrix_store &>(tmp->get_data()).set_cache_portion(false);
 		}
 
 		// We then sum all of the temp matrices.
-		detail::portion_mapply_op::const_ptr op(new gsum_op(right_op,
-					tmp_mats[0]->get_num_rows(), tmp_mats[0]->get_num_cols()));
-		// We will materialize the mapply in a hierarchical way,
-		// so the intermediate matrices should be read from SSDs in serial.
-		size_t i = m2_col / get_block_size();
-		dense_matrix::ptr res = mapply_portion(tmp_mats, op,
-				tmp_mats[0]->store_layout(), false);
+		dense_matrix::const_ptr res;
+		if (tmp_mats.size() == 1)
+			res = tmp_mats[0];
+		else {
+			detail::portion_mapply_op::const_ptr op(new gsum_op(right_op,
+						tmp_mats[0]->get_num_rows(), tmp_mats[0]->get_num_cols()));
+			// We will materialize the mapply in a hierarchical way,
+			// so the intermediate matrices should be read from SSDs in serial.
+			res = mapply_portion(tmp_mats, op, tmp_mats[0]->store_layout(),
+					false);
+		}
 		res->materialize_self();
-		res_blocks[i] = res->get_raw_store();
+
+		// Convert the output into a block matrix with the current block size.
+		// The output matrix shoul be in column major order.
+		assert(res->store_layout() == matrix_layout_t::L_COL);
+		detail::matrix_store::const_ptr res_store = res->get_raw_store();
+		size_t num_blocks = div_ceil<size_t>(res_store->get_num_cols(),
+				get_block_size());
+		for (size_t j = 0; j < num_blocks; j++) {
+			size_t end = std::min(res_store->get_num_cols(),
+					(j + 1) * get_block_size());
+			res_blocks.push_back(res_store->get_cols(j * get_block_size(), end));
+		}
 	}
+	assert(res_blocks.size() == div_ceil<size_t>(mem_m2->get_num_cols(), get_block_size()));
 
 	// TODO we need to restore the original caching policy in the EM matrix.
 
@@ -709,22 +747,42 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 	get_wider_matrices(store, left_mats,
 			std::min(get_num_rows(), m.get_num_cols()));
 
+	// If this is crossprod with itself, the two matrices need to share
+	// the same matrix data and their store layout is different.
+	bool is_crossprod = store->share_data(*m.get_raw_store())
+		&& store->store_layout() != m.get_raw_store()->store_layout();
 	assert(get_type() == m.get_type());
 	assert(get_type() == get_scalar_type<double>()
 			|| get_type() == get_scalar_type<float>());
-	std::vector<detail::matrix_store::const_ptr> blocks(
-			left_mats.size() * right_mats.size());
+	std::vector<size_t> nrow_in_blocks(left_mats.size());
+	for (size_t i = 0; i < nrow_in_blocks.size(); i++)
+		nrow_in_blocks[i] = left_mats[i]->get_num_rows();
+	std::vector<size_t> ncol_in_blocks(right_mats.size());
+	for (size_t i = 0; i < ncol_in_blocks.size(); i++)
+		ncol_in_blocks[i] = right_mats[i]->get_num_cols();
+	detail::block_sink_store::ptr block_sinks
+		= detail::block_sink_store::create(nrow_in_blocks, ncol_in_blocks,
+				// If this is a self-crossprod, the result matrix is symmetric.
+				is_in_mem() && m.is_in_mem(), get_type(), is_crossprod);
+	assert(block_sinks);
 	// Each time we take one matrix in the right group and perform inner product
 	// with all matrices in the left group.
 	for (size_t i = 0; i < right_mats.size(); i++) {
 		dense_matrix::ptr right = dense_matrix::create(right_mats[i]);
 		for (size_t j = 0; j < left_mats.size(); j++) {
-			dense_matrix::ptr left = dense_matrix::create(left_mats[j]);
-			dense_matrix::ptr res = left->multiply(*right, out_layout);
-			assert(res);
-			blocks[j * right_mats.size() + i] = res->get_raw_store();
+			detail::matrix_store::const_ptr res_store;
+			if (is_crossprod)
+				res_store = block_sinks->get_store(i, j);
+			dense_matrix::ptr left;
+			if (res_store == NULL) {
+				left = dense_matrix::create(left_mats[j]);
+				dense_matrix::ptr res = left->multiply(*right, out_layout);
+				assert(res);
+				res_store = res->get_raw_store();
+				block_sinks->set_store(j, i, res_store);
+			}
 			// This is only necessary for EM matrices.
-			if (!left->is_in_mem()) {
+			if (left && !left->is_in_mem()) {
 				detail::matrix_store &tmp
 					= const_cast<detail::matrix_store &>(left->get_data());
 				tmp.set_cache_portion(false);
@@ -736,8 +794,7 @@ dense_matrix::ptr block_matrix::multiply_wide(const dense_matrix &m,
 			tmp.set_cache_portion(true);
 		}
 	}
-	return dense_matrix::create(detail::block_sink_store::create(blocks,
-				left_mats.size(), right_mats.size()));
+	return dense_matrix::create(block_sinks);
 }
 
 /*
@@ -769,9 +826,8 @@ dense_matrix::ptr block_matrix::multiply_sparse_wide(const dense_matrix &m,
 			tmp = tmp->conv2(matrix_layout_t::L_COL);
 			left = tmp->get_raw_store();
 		}
-		tmps.push_back(dense_matrix::create(detail::matrix_store::ptr(
-						new detail::IPW_matrix_store(left, right, NULL, NULL,
-							out_layout))));
+		tmps.push_back(dense_matrix::create(detail::IPW_matrix_store::create(
+						left, right, NULL, NULL, out_layout)));
 		// TODO It might be better if we can perform computation on more
 		// matrices together. However, computation on more matrices requires
 		// more memory allocation.
@@ -1129,6 +1185,23 @@ dense_matrix::ptr block_matrix::aggregate(matrix_margin margin,
 			ret = detail::block_sink_store::create(sinks, 1, sinks.size());
 		return dense_matrix::create(ret);
 	}
+}
+
+dense_matrix::ptr block_matrix::groupby_row(factor_col_vector::const_ptr labels,
+		agg_operate::const_ptr agg) const
+{
+	if (is_wide())
+		return dense_matrix::groupby_row(labels, agg);
+
+	std::vector<detail::matrix_store::const_ptr> sink_blocks(
+			store->get_num_mats());
+	for (size_t i = 0; i < sink_blocks.size(); i++) {
+		dense_matrix::ptr mat = dense_matrix::create(store->get_mat(i));
+		dense_matrix::ptr res = mat->groupby_row(labels, agg);
+		sink_blocks[i] = res->get_raw_store();
+	}
+	return dense_matrix::create(detail::block_sink_store::create(sink_blocks,
+				1, sink_blocks.size()));
 }
 
 }

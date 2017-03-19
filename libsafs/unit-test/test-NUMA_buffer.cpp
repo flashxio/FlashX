@@ -20,7 +20,7 @@ NUMA_buffer::ptr create_buf(size_t length, const NUMA_mapper &mapper)
 		off += data.second;
 		length -= data.second;
 	}
-	assert((size_t) off == buf->get_length());
+	assert((size_t) ROUNDUP(off, PAGE_SIZE) == buf->get_length());
 	return buf;
 }
 
@@ -47,8 +47,8 @@ void test_in_mem(size_t length, const NUMA_mapper &mapper)
 
 	// Test with random locations.
 	for (size_t i = 0; i < 1000; i++) {
-		off_t off = random() % buf->get_length();
-		size_t size = random() % (buf->get_length() - off);
+		off_t off = random() % length;
+		size_t size = random() % (length - off);
 		auto data = buf->get_data(off, size);
 		assert(data.first);
 		// There are two cases when getting part of data in the array.
@@ -56,8 +56,8 @@ void test_in_mem(size_t length, const NUMA_mapper &mapper)
 		assert(data.second == size
 				// The requested data reaches the end of a range.
 				|| (off + data.second) % mapper.get_range_size() == 0);
-		for (size_t i = 0; i < data.second; i++)
-			assert(raw_ptr[off + i] == data.first[i]);
+		for (size_t j = 0; j < data.second; j++)
+			assert(raw_ptr[off + j] == data.first[j]);
 	}
 }
 

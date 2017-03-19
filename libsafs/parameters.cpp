@@ -103,10 +103,8 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	it = configs.find("cache_type");
 	if(it != configs.end()) {
 		cache_type = cache_map.map(it->second);
-		if (cache_type < 0) {
-			fprintf(stderr, "can't find the right cache type\n");
-			exit(1);
-		}
+		if (cache_type < 0)
+			throw std::invalid_argument("can't find the right cache type");
 	}
 
 	it = configs.find("cache_size");
@@ -117,10 +115,8 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	it = configs.find("RAID_mapping");
 	if (it != configs.end()) {
 		RAID_mapping_option = RAID_option_map.map(it->second);
-		if (RAID_mapping_option < 0) {
-			fprintf(stderr, "can't find the right mapping option\n");
-			exit(1);
-		}
+		if (RAID_mapping_option < 0)
+			throw std::invalid_argument("can't find the right mapping option");
 	}
 
 	it = configs.find("virt_aio");

@@ -180,6 +180,8 @@ public:
 		LE,
 		OR,
 		AND,
+		MOD,
+		IDIV,
 		NUM_OPS,
 	};
 

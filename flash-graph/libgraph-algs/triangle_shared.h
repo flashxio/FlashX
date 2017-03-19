@@ -22,7 +22,6 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "graphlab/cuckoo_set_pow2.hpp"
-#include "FG_vector.h"
 #include "FGlib.h"
 
 /*

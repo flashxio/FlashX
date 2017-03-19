@@ -340,7 +340,7 @@ void merged_directed_vertex_compute::run(page_byte_array &arr)
 		run_on_array(arr);
 	}
 	else
-		ABORT_MSG("wrong type");
+		throw std::invalid_argument("wrong edge type");
 }
 
 void sparse_vertex_compute::start_run(compute_vertex_pointer v)
@@ -478,7 +478,7 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 		run_on_array(arr);
 	}
 	else
-		ABORT_MSG("wrong type");
+		throw std::invalid_argument("wrong edge type");
 }
 
 }

@@ -67,6 +67,18 @@ test-io: test-io.o $(LIBFILE)
 test-NUMA_buffer: test-NUMA_buffer.o $(LIBFILE)
 	$(CXX) -o test-NUMA_buffer test-NUMA_buffer.o $(LDFLAGS)
 
+test:
+	./slab_allocator_test
+	./file_mapper_unit_test
+	./test_mem_tracker
+	./native_file_unit_test
+	./test-NUMA_buffer
+	mkdir -p /tmp/safs_data
+	./safs_file_unit_test data_files.txt
+	./test_open_close data_files.txt
+	./test-io run_test.txt
+	rm -R /tmp/safs_data
+
 clean:
 	rm -f *.o
 	rm -f *.d

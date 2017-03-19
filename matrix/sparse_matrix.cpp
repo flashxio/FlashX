@@ -19,6 +19,9 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#ifdef USE_OPENBLAS
+#include <openblas/cblas.h>
+#endif
 
 #include "sparse_matrix.h"
 #include "matrix_io.h"
@@ -26,6 +29,7 @@
 #include "hilbert_curve.h"
 #include "mem_worker_thread.h"
 #include "EM_dense_matrix.h"
+#include "sink_matrix.h"
 
 namespace fm
 {
@@ -729,6 +733,9 @@ static std::atomic<long> init_count;
 
 void init_flash_matrix(config_map::ptr configs)
 {
+#ifdef USE_OPENBLAS
+	openblas_set_num_threads(1);
+#endif
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {
 		// We should initialize SAFS first.
@@ -752,6 +759,7 @@ void init_flash_matrix(config_map::ptr configs)
 
 void destroy_flash_matrix()
 {
+	detail::sink_store::clear_sink_matrices();
 	long count = init_count.fetch_sub(1);
 	assert(count > 0);
 	if (count == 1) {
@@ -760,6 +768,17 @@ void destroy_flash_matrix()
 		detail::mem_thread_pool::destroy();
 		safs::destroy_io_system();
 	}
+}
+
+std::string get_supported_features()
+{
+	std::string ret;
+#ifdef USE_GZIP
+	ret += "+GZ ";
+#else
+	ret += "-GZ ";
+#endif
+	return ret;
 }
 
 }

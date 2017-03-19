@@ -111,14 +111,16 @@ public:
  */
 class SpM_apply_operate: public gr_apply_operate<sub_data_frame>
 {
+	matrix_header mheader;
 	block_2d_size block_size;
 	size_t num_cols;
 	size_t attr_size;
 public:
-	SpM_apply_operate(block_2d_size block_size, size_t num_cols, size_t attr_size) {
-		this->block_size = block_size;
-		this->num_cols = num_cols;
-		this->attr_size = attr_size;
+	SpM_apply_operate(const matrix_header &header) {
+		this->mheader = header;
+		this->block_size = header.get_2d_block_size();
+		this->num_cols = header.get_num_cols();
+		this->attr_size = header.get_entry_size();
 	}
 
 	size_t get_attr_size() const {
@@ -156,8 +158,7 @@ public:
 class binary_apply_operate: public SpM_apply_operate
 {
 public:
-	binary_apply_operate(block_2d_size block_size,
-			size_t num_cols): SpM_apply_operate(block_size, num_cols, 0) {
+	binary_apply_operate(const matrix_header &header): SpM_apply_operate(header) {
 	}
 	virtual void run_row(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
@@ -183,8 +184,8 @@ class attr_apply_operate: public SpM_apply_operate
 		}
 	};
 public:
-	attr_apply_operate(block_2d_size block_size,
-			size_t num_cols): SpM_apply_operate(block_size, num_cols, sizeof(T)) {
+	attr_apply_operate(const matrix_header &header): SpM_apply_operate(header) {
+		assert(sizeof(T) == header.get_entry_size());
 	}
 	virtual void run_row(const void *key, const sub_data_frame &val,
 			local_vec_store &out) const;
@@ -338,15 +339,28 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 	// If the block row doesn't have any non-zero entries, let's insert an
 	// empty block row, so the matrix index can work correctly.
 	if (tot_num_bytes == 0) {
-		tot_num_bytes = sizeof(sparse_block_2d);
-		out.resize(tot_num_bytes);
+		if (block_row_id == 0) {
+			out.resize(sizeof(sparse_block_2d) + sizeof(matrix_header));
+			memcpy(out.get_raw_arr(), &mheader, sizeof(mheader));
+		}
+		else
+			out.resize(sizeof(sparse_block_2d));
 		sparse_block_2d *block = new (out.get_raw_arr()) sparse_block_2d(
 					block_row_id, 0);
 		assert(block->is_empty());
 		return;
 	}
 
-	out.resize(tot_num_bytes);
+	char *arr_start;
+	if (block_row_id == 0) {
+		out.resize(tot_num_bytes + sizeof(matrix_header));
+		arr_start = out.get_raw_arr() + sizeof(matrix_header);
+		memcpy(out.get_raw_arr(), &mheader, sizeof(mheader));
+	}
+	else {
+		out.resize(tot_num_bytes);
+		arr_start = out.get_raw_arr();
+	}
 
 	// Get the location where we can fill data to.
 	std::vector<block_pointers> blocks(num_blocks);
@@ -357,7 +371,7 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			continue;
 
 		sparse_block_2d *block
-			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
+			= new (arr_start + curr_size) sparse_block_2d(
 					block_row_id, i, block_infos[i].nnz, block_infos[i].nrow,
 					block_infos[i].num_coos);
 		curr_size += block->get_size(attr_size);
@@ -386,6 +400,11 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			if (curr_bid == block_id)
 				neighs.push_back(id);
 			else {
+				if (neighs.size() > block_size.get_num_cols()) {
+					BOOST_LOG_TRIVIAL(error)
+						<< "ERROR! There are more neighbors than the block size";
+					return;
+				}
 				add_nz(blocks[curr_bid], *v, neighs, block_size, attr_size,
 						buf.get());
 				curr_bid = block_id;
@@ -394,6 +413,11 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			}
 		}
 
+		if (neighs.size() > block_size.get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "ERROR! There are more neighbors than the block size";
+			return;
+		}
 		add_nz(blocks[curr_bid], *v, neighs, block_size, attr_size, buf.get());
 	}
 
@@ -590,14 +614,14 @@ struct empty_deleter {
 
 }
 
-std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr> create_2d_matrix(
+std::pair<fm::SpM_2d_index::ptr, vector_vector::ptr> create_2d_matrix(
 		data_frame::const_ptr df, const block_2d_size &block_size, size_t num_rows,
 		size_t num_cols, const fm::scalar_type *entry_type)
 {
 	if (df->get_num_vecs() == 1) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The data frame needs to have at least two columns";
-		return std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr>();
+		return std::pair<fm::SpM_2d_index::ptr, vector_vector::ptr>();
 	}
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -638,11 +662,18 @@ std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr> create_2d_matrix(
 					empty_deleter()));
 	}
 
+	prim_type type = prim_type::P_BOOL;
+	if (attr_size)
+		type = groupby_df->get_vec("attr")->get_type().get_type();
+	matrix_header mheader(matrix_type::SPARSE, attr_size, num_rows,
+			num_cols, matrix_layout_t::L_ROW_2D, type, block_size);
+	mheader.verify();
+
 	gettimeofday(&start, NULL);
 	vector_vector::ptr res;
 	if (attr_size == 0) {
-		std::unique_ptr<SpM_apply_operate> op(new binary_apply_operate(
-					block_size, num_cols));
+		std::unique_ptr<SpM_apply_operate> op(
+				new binary_apply_operate(mheader));
 		res = groupby_df->groupby("key", *op);
 	}
 	// Instead of giving the real data type, we give a type that indicates
@@ -650,46 +681,51 @@ std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr> create_2d_matrix(
 	// here. Only the data size matters.
 	else if (attr_size == 4) {
 		std::unique_ptr<attr_apply_operate<unit4> > op(
-				new attr_apply_operate<unit4>(block_size, num_cols));
+				new attr_apply_operate<unit4>(mheader));
 		res = groupby_df->groupby("key", *op);
 	}
 	else if (attr_size == 8) {
 		std::unique_ptr<attr_apply_operate<unit8> > op(
-				new attr_apply_operate<unit8>(block_size, num_cols));
+				new attr_apply_operate<unit8>(mheader));
 		res = groupby_df->groupby("key", *op);
 	}
 	else {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The edge attribute has an unsupported type";
-		return std::pair<fm::SpM_2d_index::ptr, fm::SpM_2d_storage::ptr>();
+		return std::pair<fm::SpM_2d_index::ptr, vector_vector::ptr>();
 	}
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to groupby the edge list.\n",
 			time_diff(start, end));
 
-	prim_type type = prim_type::P_BOOL;
-	if (attr_size)
-		type = groupby_df->get_vec("attr")->get_type().get_type();
-	matrix_header mheader(matrix_type::SPARSE, attr_size, num_rows,
-			num_cols, matrix_layout_t::L_ROW_2D, type, block_size);
-
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
-	off_t off = sizeof(mheader);
+	off_t off = 0;
 	for (size_t i = 0; i < res->get_num_vecs(); i++) {
 		offsets[i] = off;
 		off += res->get_length(i);
 	}
+	// The first block row actually contains the matrix header.
+	// We need to skip the matrix header.
+	offsets[0] = sizeof(mheader);
 	offsets[res->get_num_vecs()] = off;
 	SpM_2d_index::ptr idx = SpM_2d_index::create(mheader, offsets);
 
-	mheader.verify();
-	return std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr>(
-			idx, SpM_2d_storage::create(mheader, *res, idx));
+	return std::pair<SpM_2d_index::ptr, vector_vector::ptr>(idx, res);
+}
+
+static inline bool set_persistent(detail::vec_store::const_ptr vec,
+		const std::string name)
+{
+	detail::EM_vec_store::const_ptr em_vec
+		= std::dynamic_pointer_cast<const detail::EM_vec_store>(vec);
+	detail::EM_vec_store &em_vec1 = const_cast<detail::EM_vec_store &>(*em_vec);
+	return em_vec1.set_persistent(name);
 }
 
 std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
-		const block_2d_size &block_size, const fm::scalar_type *entry_type, bool is_sym)
+		const block_2d_size &block_size, const fm::scalar_type *entry_type,
+		bool is_sym, const std::string &name)
 {
 	ele_idx_t max_vid;
 	{
@@ -724,56 +760,30 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 	}
 	assert(seq_vec->get_length() == rep_vec->get_length());
 
-	if (is_sym) {
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
-
-		detail::vec_store::ptr vec0 = df->get_vec(0)->deep_copy();
-		detail::vec_store::ptr vec1 = df->get_vec(1)->deep_copy();
-		detail::vec_store::ptr vec2;
-		if (df->get_num_vecs() > 2)
-			vec2 = df->get_vec(2)->deep_copy();
-		vec0->append(df->get_vec_ref(1));
-		vec1->append(df->get_vec_ref(0));
-		if (df->get_num_vecs() > 2)
-			vec2->append(df->get_vec_ref(2));
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), vec0);
-		new_df->add_vec(df->get_vec_name(1), vec1);
-		if (df->get_num_vecs() > 2)
-			new_df->add_vec(df->get_vec_name(2), vec2);
-		df = new_df;
+	// I artificially add an invalid out-edge for each vertex, so it's
+	// guaranteed that each vertex exists in the adjacency lists.
+	data_frame::ptr new_df = data_frame::create();
+	new_df->add_vec(df->get_vec_name(0), seq_vec);
+	new_df->add_vec(df->get_vec_name(1), rep_vec);
+	if (df->get_num_vecs() > 2) {
+		assert(attr_extra);
+		new_df->add_vec(df->get_vec_name(2), attr_extra);
 	}
-	else {
-		// I artificially add an invalid out-edge for each vertex, so it's
-		// guaranteed that each vertex exists in the adjacency lists.
-		data_frame::ptr new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(0), seq_vec);
-		new_df->add_vec(df->get_vec_name(1), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
+	df->append(new_df);
 
-		// I artificially add an invalid in-edge for each vertex.
-		new_df = data_frame::create();
-		new_df->add_vec(df->get_vec_name(1), seq_vec);
-		new_df->add_vec(df->get_vec_name(0), rep_vec);
-		if (df->get_num_vecs() > 2) {
-			assert(attr_extra);
-			new_df->add_vec(df->get_vec_name(2), attr_extra);
-		}
-		df->append(new_df);
+	// I artificially add an invalid in-edge for each vertex.
+	new_df = data_frame::create();
+	new_df->add_vec(df->get_vec_name(1), seq_vec);
+	new_df->add_vec(df->get_vec_name(0), rep_vec);
+	if (df->get_num_vecs() > 2) {
+		assert(attr_extra);
+		new_df->add_vec(df->get_vec_name(2), attr_extra);
 	}
+	df->append(new_df);
+
+	std::string spm_name = name;
+	if (spm_name == "")
+		spm_name = std::string("spm") + gen_rand_name(10) + ".mat";
 
 	auto out_mat = create_2d_matrix(df, block_size, max_vid + 1, max_vid + 1,
 			entry_type);
@@ -785,11 +795,49 @@ std::shared_ptr<sparse_matrix> create_2d_matrix(data_frame::ptr df,
 			reversed_df->add_vec(df->get_vec_name(i), df->get_vec(i));
 		auto in_mat = create_2d_matrix(reversed_df, block_size, max_vid + 1, max_vid + 1,
 				entry_type);
-		return sparse_matrix::create(out_mat.first, out_mat.second, in_mat.first,
-				in_mat.second);
+
+		if (out_mat.second->get_raw_store()->is_in_mem()) {
+			assert(in_mat.second->get_raw_store()->is_in_mem());
+			SpM_2d_storage::ptr out_store = SpM_2d_storage::create(
+					*out_mat.second, out_mat.first);
+			SpM_2d_storage::ptr in_store = SpM_2d_storage::create(
+					*in_mat.second, in_mat.first);
+			return sparse_matrix::create(out_mat.first, out_store,
+					in_mat.first, in_store);
+		}
+		else {
+			vector::ptr out_vec = out_mat.second->cat();
+			vector::ptr in_vec = in_mat.second->cat();
+			std::string out_spm_name = std::string("out_") + spm_name;
+			std::string in_spm_name = std::string("in_") + spm_name;
+			bool ret1 = set_persistent(out_vec->get_raw_store(), out_spm_name);
+			bool ret2 = set_persistent(in_vec->get_raw_store(), in_spm_name);
+			if (!ret1 || !ret2)
+				return sparse_matrix::ptr();
+			safs::file_io_factory::shared_ptr out_factory = safs::create_io_factory(
+					out_spm_name, safs::REMOTE_ACCESS);
+			safs::file_io_factory::shared_ptr in_factory = safs::create_io_factory(
+					in_spm_name, safs::REMOTE_ACCESS);
+			return sparse_matrix::create(out_mat.first, out_factory,
+					in_mat.first, in_factory);
+		}
 	}
-	else
-		return sparse_matrix::create(out_mat.first, out_mat.second);
+	else {
+		if (out_mat.second->get_raw_store()->is_in_mem()) {
+			SpM_2d_storage::ptr store = SpM_2d_storage::create(
+					*out_mat.second, out_mat.first);
+			return sparse_matrix::create(out_mat.first, store);
+		}
+		else {
+			vector::ptr vec = out_mat.second->cat();
+			bool ret = set_persistent(vec->get_raw_store(), spm_name);
+			if (!ret)
+				return sparse_matrix::ptr();
+			safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+					spm_name, safs::REMOTE_ACCESS);
+			return sparse_matrix::create(out_mat.first, factory);
+		}
+	}
 }
 
 }

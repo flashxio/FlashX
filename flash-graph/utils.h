@@ -167,7 +167,8 @@ public:
 };
 
 std::shared_ptr<fm::data_frame> read_edge_list(const std::vector<std::string> &files,
-		bool in_mem, const std::string &delim, const std::string &edge_attr_type);
+		bool in_mem, const std::string &delim, const std::string &edge_attr_type,
+		bool directed);
 
 }
 

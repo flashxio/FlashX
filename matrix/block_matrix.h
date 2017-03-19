@@ -120,10 +120,10 @@ public:
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 
-#if 0
 	virtual dense_matrix::ptr groupby_row(std::shared_ptr<const factor_col_vector> labels,
 			agg_operate::const_ptr) const;
 
+#if 0
 	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(matrix_layout_t layout) const;
 	virtual bool drop_cache();

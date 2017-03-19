@@ -184,7 +184,8 @@ generic_hashtable::ptr agg_vec_portion_op::get_agg() const
 
 }
 
-data_frame::ptr col_vec::groupby(agg_operate::const_ptr op, bool with_val) const
+data_frame::ptr col_vec::groupby(agg_operate::const_ptr op, bool with_val,
+		bool sorted) const
 {
 	std::vector<detail::matrix_store::const_ptr> stores(1);
 	stores[0] = get_raw_store();
@@ -195,18 +196,25 @@ data_frame::ptr col_vec::groupby(agg_operate::const_ptr op, bool with_val) const
 
 	// The key-value pairs got from the hashtable aren't in any order.
 	// We need to sort them before returning them.
-	data_frame::ptr df = agg_res->conv2df();
-	vector::ptr keys = vector::create(df->get_vec(0));
-	data_frame::ptr sorted_keys = keys->sort_with_index();
-	detail::smp_vec_store::const_ptr idx_store
-		= std::dynamic_pointer_cast<const detail::smp_vec_store>(
-				sorted_keys->get_vec("idx"));
-	detail::smp_vec_store::const_ptr agg_store
-		= std::dynamic_pointer_cast<const detail::smp_vec_store>(df->get_vec(1));
 	data_frame::ptr ret = data_frame::create();
-	if (with_val)
-		ret->add_vec("val", sorted_keys->get_vec("val"));
-	ret->add_vec("agg", agg_store->get(*idx_store));
+	data_frame::ptr df = agg_res->conv2df();
+	if (sorted) {
+		vector::ptr keys = vector::create(df->get_vec(0));
+		data_frame::ptr sorted_keys = keys->sort_with_index();
+		detail::smp_vec_store::const_ptr idx_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(
+					sorted_keys->get_vec("idx"));
+		detail::smp_vec_store::const_ptr agg_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(df->get_vec(1));
+		if (with_val)
+			ret->add_vec("val", sorted_keys->get_vec("val"));
+		ret->add_vec("agg", agg_store->get(*idx_store));
+	}
+	else {
+		if (with_val)
+			ret->add_vec("val", df->get_vec(0));
+		ret->add_vec("agg", df->get_vec(1));
+	}
 	return ret;
 }
 

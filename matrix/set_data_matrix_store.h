@@ -40,6 +40,7 @@ namespace detail
 class set_data_matrix_store: public virtual_matrix_store
 {
 	const size_t mat_id;
+	const size_t data_id;
 	set_operate::const_ptr row_op;
 	set_operate::const_ptr col_op;
 	matrix_layout_t layout;
@@ -48,8 +49,22 @@ class set_data_matrix_store: public virtual_matrix_store
 
 	set_data_matrix_store(set_operate::const_ptr row_op,
 			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
-			matrix_layout_t layout, int num_nodes): virtual_matrix_store(
-				nrow, ncol, true, row_op->get_type()), mat_id(mat_counter++) {
+			matrix_layout_t layout, int num_nodes): virtual_matrix_store(nrow,
+				ncol, true, row_op->get_type()), mat_id(mat_counter++),
+			data_id(mat_id) {
+		this->row_op = row_op;
+		this->col_op = col_op;
+		this->layout = layout;
+		this->num_nodes = num_nodes;
+		if (num_nodes > 0)
+			this->mapper = std::shared_ptr<NUMA_mapper>(new NUMA_mapper(num_nodes,
+						NUMA_range_size_log));
+	}
+	set_data_matrix_store(set_operate::const_ptr row_op,
+			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
+			matrix_layout_t layout, int num_nodes,
+			size_t _data_id): virtual_matrix_store(nrow, ncol, true,
+				row_op->get_type()), mat_id(mat_counter++), data_id(_data_id) {
 		this->row_op = row_op;
 		this->col_op = col_op;
 		this->layout = layout;
@@ -68,6 +83,9 @@ public:
 		}
 		return ptr(new set_data_matrix_store(row_op, col_op, nrow, ncol,
 					layout, num_nodes));
+	}
+	virtual size_t get_data_id() const {
+		return data_id;
 	}
 
 	virtual std::string get_name() const {

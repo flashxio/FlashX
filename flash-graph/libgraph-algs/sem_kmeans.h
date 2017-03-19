@@ -152,12 +152,12 @@ namespace fg
     class sem_kmeans_ret
     {
         private:
-            FG_vector<unsigned>::ptr cluster_assignments;
+			fm::vector::ptr cluster_assignments;
             std::vector<std::vector<double>> centers;
             std::vector<unsigned> size;
             unsigned iters;
 
-            sem_kmeans_ret(const FG_vector<unsigned>::ptr cluster_assignments,
+            sem_kmeans_ret(fm::vector::ptr cluster_assignments,
                     const std::vector<std::vector<double>> centers,
                     const std::vector<unsigned>& size, const unsigned iters) {
                 this->cluster_assignments = cluster_assignments;
@@ -169,13 +169,13 @@ namespace fg
         public:
             typedef typename std::shared_ptr<sem_kmeans_ret> ptr;
 
-            static ptr create(const FG_vector<unsigned>::ptr cluster_assignments,
+            static ptr create(fm::vector::ptr cluster_assignments,
                     const std::vector<std::vector<double>> centers,
                     const std::vector<unsigned>& size, const unsigned iters) {
                 return ptr(new sem_kmeans_ret(cluster_assignments, centers, size, iters));
             }
 
-            const FG_vector<unsigned>::ptr get_cluster_assignments() const {
+            fm::vector::ptr get_cluster_assignments() const {
                 return this->cluster_assignments;
             }
 
