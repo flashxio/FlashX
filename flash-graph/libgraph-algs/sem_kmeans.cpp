@@ -286,16 +286,17 @@ namespace {
                     data_seq_iter count_it = ((const page_row&)vertex).
                         get_data_seq_it<double>();
 
+                    vertex_id_t my_id = prog.get_vertex_id(*this);
                     if (g_kmspp_stage == ADDMEAN) {
 #if KM_TEST
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
 #endif
+                        set_cluster_id(g_kmspp_cluster_idx);
+                        g_kmspp_distance[my_id] = 0;
                         g_clusters->add_member(count_it, g_kmspp_cluster_idx);
                         // Activate all
                         prog.activate_vertices(&all_vertices[0], NUM_ROWS);
                     } else if (g_kmspp_stage == DIST) {
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
                         double _dist = dist_comp(vertex,
                                 &(g_clusters->get_means()[g_kmspp_cluster_idx*NUM_COLS]));
 
@@ -483,7 +484,6 @@ namespace {
             if (centers)
                 g_clusters->set_mean(*centers); // (*centers) // &(*(centers)[0])
 
-            FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
             g_num_members_v.assign(K, 0);
 
             /*** End VarInit ***/
@@ -530,8 +530,10 @@ namespace {
                     g_kmspp_cluster_idx = 0;
                     g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
 
+#if KM_TEST
                     BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster
                         << " as first cluster";
+#endif
                     g_kmspp_distance[g_kmspp_next_cluster] = 0;
 
                     g_kmspp_stage = ADDMEAN;
@@ -552,9 +554,12 @@ namespace {
             BOOST_LOG_TRIVIAL(info) << "Computing " << str_iters;
             g_iter = 0;
 
-            mat->start_all(vertex_initializer::ptr(),vertex_program_creater::ptr(
-                        new kmeans_vertex_program_creater(mat)));
-            mat->wait4complete();
+            if (max_iters > 0) {
+                mat->start_all(vertex_initializer::ptr(),
+                        vertex_program_creater::ptr(
+                            new kmeans_vertex_program_creater(mat)));
+                mat->wait4complete();
+            }
 
             gettimeofday(&end, NULL);
             BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<

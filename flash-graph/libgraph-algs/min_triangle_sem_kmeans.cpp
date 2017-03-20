@@ -429,17 +429,19 @@ namespace {
                 break;
             case kpmbase::init_type_t::PLUSPLUS:
                 {
+                    vertex_id_t my_id = prog.get_vertex_id(*this);
                     if (g_kmspp_stage == ADDMEAN) {
 #if KM_TEST
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
 #endif
+                        set_cluster_id(g_kmspp_cluster_idx);
+                        g_kmspp_distance[my_id] = 0;
                         g_clusters->add_member(row, g_kmspp_cluster_idx);
+                        set_dist(0);
                         // Activate all
                         prog.activate_vertices(&all_vertices[0], NUM_ROWS);
 
                     } else if (g_kmspp_stage == DIST) {
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
 
                         if (get_cluster_id() != INVALID_CLUST_ID &&
                                 g_kmspp_distance[my_id] <=
@@ -513,21 +515,23 @@ namespace {
                 break;
             case kpmbase::init_type_t::PLUSPLUS:
                 {
+                    vertex_id_t my_id = prog.get_vertex_id(*this);
                     data_seq_iter count_it = ((const page_row&)vertex).
                         get_data_seq_it<double>();
 
                     if (g_kmspp_stage == ADDMEAN) {
 #if KM_TEST
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
                         printf("kms++ v%u making itself c%u\n", my_id, g_kmspp_cluster_idx);
 #endif
+                        set_cluster_id(g_kmspp_cluster_idx);
+                        g_kmspp_distance[my_id] = 0;
                         g_clusters->add_member(count_it, g_kmspp_cluster_idx);
+                        set_dist(0);
 
                         // Activate all
                         prog.activate_vertices(&all_vertices[0], NUM_ROWS);
 
                     } else if (g_kmspp_stage == DIST) {
-                        vertex_id_t my_id = prog.get_vertex_id(*this);
                         unsigned thd = -1;
 
                         if (g_row_cache)
@@ -992,7 +996,6 @@ namespace fg
         if (centers)
             g_clusters->set_mean(*centers);
 
-        FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
         g_num_members_v.assign(K, 0);
 
         BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
@@ -1045,8 +1048,10 @@ namespace fg
                 g_kmspp_cluster_idx = 0;
                 g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
 
+#if KM_TEST
                 BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster
                     << " as first cluster";
+#endif
                 g_kmspp_distance[g_kmspp_next_cluster] = 0;
 
                 g_kmspp_stage = ADDMEAN;
@@ -1079,10 +1084,12 @@ namespace fg
             g_prune_init = true; // set
 
         g_stage = kpmbase::kms_stage_t::ESTEP;
-        mat->start_all(vertex_initializer::ptr(),
-                vertex_program_creater::ptr(
-                new kmeans_vertex_program_creater(mat)));
-        mat->wait4complete();
+        if (max_iters > 0) {
+            mat->start_all(vertex_initializer::ptr(),
+                    vertex_program_creater::ptr(
+                        new kmeans_vertex_program_creater(mat)));
+            mat->wait4complete();
+        }
 
         gettimeofday(&end, NULL);
         BOOST_LOG_TRIVIAL(info) << "\n\nAlgorithmic time taken = " <<
