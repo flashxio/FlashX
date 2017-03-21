@@ -1738,6 +1738,8 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 			fprintf(stderr, "the index vector is a matrix\n");
 			return R_NilValue;
 		}
+		if (FM_get_Rtype(pidxs) == R_type::R_LOGICAL)
+			idxs = idxs->cast_ele_type(get_scalar_type<bool>());
 		col_vec::ptr idx_vec = col_vec::create(idxs);
 		sub_m = margin == matrix_margin::MAR_COL
 			? mat->get_cols(idx_vec) : mat->get_rows(idx_vec);

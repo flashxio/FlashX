@@ -1392,10 +1392,16 @@ NULL
 #' @rdname Extract
 setMethod("[", signature(x="fm", j="missing"),
 		  function(x, i, j, drop=TRUE) {
-			  ret <- fm.get.rows(x, i)
-			  if (drop && length(i) == 1)
-				  ret <- fm.as.vector(ret)
-			  ret
+			  if (is.matrix(i) || fm.is.matrix(i)) {
+				  print("doesn't support boolean index matrix")
+				  NULL
+			  }
+			  else {
+				  ret <- fm.get.rows(x, i)
+				  if (drop && length(i) == 1)
+					  ret <- fm.as.vector(ret)
+				  ret
+			  }
 		  })
 #' @rdname Extract
 setMethod("[", signature(x="fm", i="missing"),
