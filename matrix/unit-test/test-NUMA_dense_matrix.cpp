@@ -287,6 +287,50 @@ void test_write2file()
 	test_write2file1(mat);
 }
 
+void test_resize(mem_matrix_store::ptr mat1)
+{
+	mat1->set_data(set_col_operate(mat1->get_num_cols()));
+	mem_matrix_store::ptr mat2 = mem_matrix_store::create(mat1->get_num_rows(),
+			mat1->get_num_cols(), mat1->store_layout(), mat1->get_type(),
+			mat1->get_num_nodes());
+	mat2->set_data(set_col_operate(mat1->get_num_cols()));
+	if (!mat1->is_wide()) {
+		size_t new_num_rows = random() % mat2->get_num_rows();
+		bool ret = mat2->resize(new_num_rows, mat2->get_num_cols());
+		assert(ret);
+		assert(mat2->get_num_rows() == new_num_rows);
+	}
+	else {
+		size_t new_num_cols = random() % mat2->get_num_cols();
+		bool ret = mat2->resize(mat2->get_num_rows(), new_num_cols);
+		assert(ret);
+		assert(mat2->get_num_cols() == new_num_cols);
+	}
+	for (size_t i = 0; i < mat2->get_num_rows(); i++)
+		for (size_t j = 0; j < mat2->get_num_cols(); j++)
+			assert(mat1->get<long>(i, j) == mat2->get<long>(i, j));
+}
+
+void test_resize()
+{
+	printf("test resize\n");
+	mem_matrix_store::ptr mat1 = mem_matrix_store::create(100000, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(100000, 10, matrix_layout_t::L_COL,
+			get_scalar_type<long>(), num_nodes);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(10, 100000, matrix_layout_t::L_ROW,
+			get_scalar_type<long>(), num_nodes);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(10, 100000, matrix_layout_t::L_COL,
+			get_scalar_type<long>(), num_nodes);
+	test_resize(mat1);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -297,8 +341,10 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
+	num_nodes = safs::params.get_num_nodes();
 
 	test_write2file();
+	test_resize();
 	test_portion();
 	test_init();
 	test_transpose();

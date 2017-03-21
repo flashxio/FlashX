@@ -165,6 +165,8 @@ public:
 		return matrix_layout_t::L_ROW;
 	}
 
+	virtual bool resize(size_t num_rows, size_t num_cols);
+
 	friend class NUMA_col_wide_matrix_store;
 };
 
@@ -242,6 +244,8 @@ public:
 		return matrix_layout_t::L_COL;
 	}
 
+	virtual bool resize(size_t num_rows, size_t num_cols);
+
 	friend class NUMA_row_wide_matrix_store;
 };
 
@@ -308,6 +312,13 @@ public:
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
+
+	virtual bool resize(size_t num_rows, size_t num_cols) {
+		bool ret = store.resize(num_cols, num_rows);
+		if (!ret)
+			return false;
+		return matrix_store::resize(num_rows, num_cols);
+	}
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -386,6 +397,13 @@ public:
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
+	}
+
+	virtual bool resize(size_t num_rows, size_t num_cols) {
+		bool ret = store.resize(num_cols, num_rows);
+		if (!ret)
+			return false;
+		return matrix_store::resize(num_rows, num_cols);
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

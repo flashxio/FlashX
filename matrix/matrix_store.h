@@ -91,9 +91,10 @@ public:
 	virtual ~matrix_store() {
 	}
 
-	void resize(size_t num_rows, size_t num_cols) {
+	virtual bool resize(size_t num_rows, size_t num_cols) {
 		this->nrow = num_rows;
 		this->ncol = num_cols;
+		return true;
 	}
 
 	size_t get_num_rows() const {

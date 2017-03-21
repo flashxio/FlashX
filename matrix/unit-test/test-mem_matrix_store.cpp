@@ -415,8 +415,41 @@ void test_multiply(matrix_layout_t layout)
 	}
 }
 
+void test_resize(mem_matrix_store::ptr mat1)
+{
+	mat1->set_data(set_col_operate(mat1->get_num_cols()));
+	mem_matrix_store::ptr mat2 = mem_matrix_store::create(mat1->get_num_rows(),
+			mat1->get_num_cols(), mat1->store_layout(), mat1->get_type(), -1);
+	mat2->set_data(set_col_operate(mat1->get_num_cols()));
+	mat2->resize(random() % mat2->get_num_rows(), mat2->get_num_cols());
+	for (size_t i = 0; i < mat2->get_num_rows(); i++)
+		for (size_t j = 0; j < mat2->get_num_cols(); j++)
+			assert(mat1->get<int>(i, j) == mat2->get<int>(i, j));
+}
+
+void test_resize()
+{
+	printf("test resize\n");
+	mem_matrix_store::ptr mat1 = mem_matrix_store::create(100000, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), -1);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(100000, 10, matrix_layout_t::L_COL,
+			get_scalar_type<int>(), -1);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(10, 100000, matrix_layout_t::L_ROW,
+			get_scalar_type<int>(), -1);
+	test_resize(mat1);
+
+	mat1 = mem_matrix_store::create(10, 100000, matrix_layout_t::L_COL,
+			get_scalar_type<int>(), -1);
+	test_resize(mat1);
+}
+
 int main()
 {
+	test_resize();
 	test_multiply(matrix_layout_t::L_COL);
 	test_multiply(matrix_layout_t::L_ROW);
 	test_symmetrize();
