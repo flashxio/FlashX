@@ -276,40 +276,15 @@ eigen_res compute_eigen(spm_function *func, bool sym,
 	if (evecs.is_null() || evecs->get_data() == NULL)
 		return eigen_res();
 
-	// Compute residuals.
-	std::vector<double> normR (sol.numVecs);
-	if (sol.numVecs > 0) {
-		Teuchos::SerialDenseMatrix<int,double> T (sol.numVecs, sol.numVecs);
-		MV tempAevec (A->get_num_rows(), sol.numVecs, evecs->get_block_size(),
-				numBlocks * blockSize, opts.in_mem, opts.solver);
-		T.putScalar (0.0);
-		for (int i=0; i<sol.numVecs; ++i) {
-			T(i,i) = evals[i].realpart;
-		}
-		block_multi_vector::sparse_matrix_multiply(*A, *evecs->get_data(),
-				*tempAevec.get_data(), evecs->get_data()->is_in_mem());
-		MVT::MvTimesMatAddMv (-1.0, *evecs, T, 1.0, tempAevec);
-		MVT::MvNorm (tempAevec, normR);
-	}
-
 	// Print the results on MPI process 0.
 	BOOST_LOG_TRIVIAL(info) << "Solver manager returned "
 		<< (returnCode == Anasazi::Converged ? "converged." : "unconverged.");
-	BOOST_LOG_TRIVIAL(info)
-		<< "------------------------------------------------------";
-	BOOST_LOG_TRIVIAL(info)
-		<< std::setw(16) << "Eigenvalue"
-		<< std::setw(18) << "Direct Residual"
-		<< "------------------------------------------------------";
 
 	struct eigen_res res;
 	res.vecs = evecs->get_data()->conv2matrix();
 	res.vals.resize(sol.numVecs);
-	for (int i=0; i<sol.numVecs; ++i) {
+	for (int i=0; i<sol.numVecs; ++i)
 		res.vals[i] = evals[i].realpart;
-		BOOST_LOG_TRIVIAL(info) << std::setw(16) << evals[i].realpart
-			<< std::setw(18) << normR[i] / evals[i].realpart;
-	}
 	res.status.num_iters = num_iters;
 	res.status.num_ops = num_ops;
 	BOOST_LOG_TRIVIAL(info) << "---------------------------------------------";
