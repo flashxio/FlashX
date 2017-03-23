@@ -128,6 +128,11 @@ public:
 	simple_raw_array() {
 	}
 
+	simple_raw_array(std::shared_ptr<char> data,
+			size_t num_bytes, int node_id): raw_array(num_bytes, node_id) {
+		this->data = data;
+	}
+
 	simple_raw_array(size_t num_bytes, int node_id);
 
 	char *get_raw() {

@@ -25,6 +25,11 @@
 #include "generic_type.h"
 #include "bulk_operate.h"
 
+namespace safs
+{
+class file_io_factory;
+};
+
 namespace fm
 {
 
@@ -49,6 +54,12 @@ public:
 
 	static ptr create(size_t length, const scalar_type &_type, int num_nodes,
 			bool in_mem);
+	/*
+	 * This creates a vector from an existing file or in-memory buffer.
+	 * The I/O factory may point to a memory buffer or a file.
+	 */
+	static ptr create(std::shared_ptr<safs::file_io_factory> factory,
+			const scalar_type &type);
 
 	vec_store(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
 		this->length = length;
