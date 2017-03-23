@@ -4,6 +4,9 @@
 #include "sparse_matrix.h"
 #include "generic_type.h"
 #include "matrix_header.h"
+#include "col_vec.h"
+#include "EM_vector.h"
+#include "EM_vv_store.h"
 
 namespace fg
 {
@@ -229,6 +232,91 @@ public:
 	}
 };
 
+namespace
+{
+
+class get_diag_apply: public fm::arr_apply_operate
+{
+	const fm::scalar_type &entry_type;
+	size_t block_size;
+public:
+	get_diag_apply(const fm::scalar_type &_type,
+			size_t block_size): entry_type(_type) {
+		this->block_size = block_size;
+	}
+
+	virtual void run(const fm::local_vec_store &in,
+			fm::local_vec_store &out) const;
+	virtual size_t get_num_out_eles(size_t num_input) const {
+		return block_size;
+	}
+
+	virtual const fm::scalar_type &get_input_type() const {
+		return fm::get_scalar_type<char>();
+	}
+	virtual const fm::scalar_type &get_output_type() const {
+		return entry_type;
+	}
+};
+
+void get_diag_apply::run(const fm::local_vec_store &in,
+		fm::local_vec_store &out) const
+{
+	out.resize(block_size);
+	out.reset_data();
+	auto v = reinterpret_cast<const fg::ext_mem_undirected_vertex *>(
+			in.get_raw_arr());
+	auto first_vid = v->get_id();
+	size_t off = 0;
+	size_t num_vertices = 0;
+	for (size_t i = 0; i < block_size; i++) {
+		num_vertices++;
+		auto vid = v->get_id();
+		for (size_t j = 0; j < v->get_num_edges(); j++) {
+			if (v->get_neighbor(j) == vid && v->get_edge_data_size() == 0) {
+				assert(out.get_type() == fm::get_scalar_type<bool>());
+				out.set<bool>(vid - first_vid, true);
+				break;
+			}
+			else if (v->get_neighbor(j) == vid) {
+				assert(entry_type.get_size() == v->get_edge_data_size());
+				memcpy(out.get(vid - first_vid), v->get_raw_edge_data(j),
+						entry_type.get_size());
+				break;
+			}
+			// We don't need to search any more.
+			else if (v->get_neighbor(j) > vid)
+				break;
+		}
+		off += v->get_size();
+		// If we have explored all vertices in the row block, we can
+		// jump out now.
+		if (off >= in.get_length())
+			break;
+		v = reinterpret_cast<const fg::ext_mem_undirected_vertex *>(
+				in.get_raw_arr() + off);
+	}
+	out.resize(num_vertices);
+}
+
+}
+
+static fm::col_vec::ptr get_diag(const std::vector<fm::row_block> &blocks,
+		safs::file_io_factory::shared_ptr factory,
+		const fm::scalar_type &entry_type, size_t block_size)
+{
+	fm::detail::vec_store::ptr vec = fm::detail::vec_store::create(factory,
+			fm::get_scalar_type<char>());
+	std::vector<off_t> offs(blocks.size());
+	for (size_t i = 0; i < blocks.size(); i++)
+		offs[i] = blocks[i].get_offset();
+	fm::vector_vector::ptr vv = fm::vector_vector::create(
+			fm::detail::vv_store::create(offs, vec));
+	fm::vector_vector::ptr ret = vv->apply(get_diag_apply(entry_type,
+				block_size));
+	return fm::col_vec::create(ret->cat());
+}
+
 /*
  * Sparse square symmetric matrix. It is partitioned in rows.
  */
@@ -298,6 +386,10 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "unsupported type";
 			return fm::detail::task_creator::ptr();
 		}
+	}
+	virtual fm::col_vec::ptr get_diag() const {
+		return fg::detail::get_diag(blocks, factory, get_type(),
+				fm::matrix_conf.get_row_block_size());
 	}
 };
 
@@ -422,6 +514,10 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "unsupported type";
 			return fm::detail::task_creator::ptr();
 		}
+	}
+	virtual fm::col_vec::ptr get_diag() const {
+		return fg::detail::get_diag(*in_blocks, factory, get_type(),
+				fm::matrix_conf.get_row_block_size());
 	}
 };
 

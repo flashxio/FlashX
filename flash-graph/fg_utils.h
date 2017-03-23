@@ -112,6 +112,19 @@ public:
 	}
 	size_t get_attr_size() const;
 
+	fm::detail::vec_store::const_ptr get_source() const {
+		return df->get_vec(0);
+	}
+	fm::detail::vec_store::const_ptr get_dest() const {
+		return df->get_vec(1);
+	}
+	fm::detail::vec_store::const_ptr get_attr() const {
+		if (df->get_num_vecs() > 2)
+			return df->get_vec(2);
+		else
+			return fm::detail::vec_store::const_ptr();
+	}
+
 	edge_list::ptr sort_source() const;
 	fm::vector_vector::ptr groupby_source(
 			const fm::gr_apply_operate<fm::sub_data_frame> &op) const;
