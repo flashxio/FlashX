@@ -30,6 +30,7 @@
 #include "mem_worker_thread.h"
 #include "EM_dense_matrix.h"
 #include "sink_matrix.h"
+#include "col_vec.h"
 
 namespace fm
 {
@@ -569,6 +570,7 @@ public:
 			return detail::task_creator::ptr();
 		}
 	}
+	virtual col_vec::ptr get_diag() const;
 };
 
 class block_sparse_asym_matrix: public sparse_matrix
@@ -653,7 +655,18 @@ public:
 			return detail::task_creator::ptr();
 		}
 	}
+	virtual col_vec::ptr get_diag() const;
 };
+
+col_vec::ptr block_sparse_matrix::get_diag() const
+{
+	return col_vec::ptr();
+}
+
+col_vec::ptr block_sparse_asym_matrix::get_diag() const
+{
+	return col_vec::ptr();
+}
 
 }
 
