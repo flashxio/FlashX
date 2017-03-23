@@ -179,6 +179,10 @@ public:
 		return file_id;
 	}
 
+	virtual ssize_t get_file_size() const {
+		return data->get_length();
+	}
+
 	virtual io_interface::ptr create_io(thread *t) {
 		return io_interface::ptr(new in_mem_io(data, file_id, t));
 	}
