@@ -366,11 +366,11 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		// of the number of columns.
 		if (ncol == std::numeric_limits<int>::max())
 			ncol = std::numeric_limits<size_t>::max();
-		mat = read_matrix(mat_files, in_mem, ele_type, delim, ncol);
+		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, ncol);
 	}
 	else {
 		std::string cols = CHAR(STRING_ELT(pncol, 0));
-		mat = read_matrix(mat_files, in_mem, ele_type, delim, cols);
+		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, cols);
 	}
 	if (mat == NULL)
 		return R_NilValue;
@@ -499,7 +499,7 @@ RcppExport SEXP R_FM_load_list_vecs(SEXP pname, SEXP pin_mem, SEXP pele_types,
 		}
 		parsers.push_back(parser);
 	}
-	data_frame::ptr df = read_data_frame(mat_files, in_mem, delim, parsers);
+	data_frame::ptr df = read_data_frame(mat_files, in_mem, true, delim, parsers);
 	if (df == NULL)
 		return R_NilValue;
 
@@ -543,7 +543,9 @@ RcppExport SEXP R_FM_load_spm(SEXP pfile, SEXP pin_mem, SEXP pis_sym,
 		dup_idxs[0] = 1;
 		dup_idxs[1] = 0;
 	}
-	data_frame::ptr df = read_data_frame(files, in_mem, delim, parsers,
+	// We are going to construct a sparse matrix from the edge list and
+	// we will sort the edges any way, so we can read data out of order.
+	data_frame::ptr df = read_data_frame(files, in_mem, false, delim, parsers,
 			dup_idxs);
 	if (df == NULL)
 		return R_NilValue;
