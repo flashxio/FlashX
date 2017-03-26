@@ -233,7 +233,7 @@ void test_write2text_file(mem_matrix_store::ptr mat)
 	printf("read %s\n", tmp_file_name);
 	dense_matrix::ptr read_mat = read_matrix(
 			std::vector<std::string>(1, tmp_file_name),
-			true, "L", " ", mat->get_num_cols());
+			true, true, "L", " ", mat->get_num_cols());
 	assert(read_mat);
 	read_mat = read_mat->conv2(matrix_layout_t::L_ROW);
 	read_mat->materialize_self();
