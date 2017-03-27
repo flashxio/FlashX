@@ -21,7 +21,7 @@
 
 using namespace fm;
 
-size_t long_dim = 9999999;
+size_t long_dim = 999999;
 
 /*
  * This is a naive implementation of matrix multiplication.
