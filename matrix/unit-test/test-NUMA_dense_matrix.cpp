@@ -265,7 +265,7 @@ void test_write2file()
 
 	printf("write a tall row matrix to text\n");
 	mat = mem_matrix_store::create(1000000, 10,
-			matrix_layout_t::L_COL, get_scalar_type<long>(), num_nodes);
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
 	test_write2text_file(mat);
 
 	printf("write a tall row matrix\n");
