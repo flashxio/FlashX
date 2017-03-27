@@ -619,32 +619,36 @@ void test_multiply_matrix(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide row matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide column matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on tall row matrix X small row matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
