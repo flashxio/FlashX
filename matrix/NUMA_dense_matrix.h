@@ -78,6 +78,9 @@ public:
 					get_num_rows() * get_num_cols()));
 		return ret;
 	}
+	virtual void write_portion_async(
+			std::shared_ptr<const local_matrix_store> portion,
+			off_t start_row, off_t start_col);
 };
 
 class NUMA_col_wide_matrix_store;

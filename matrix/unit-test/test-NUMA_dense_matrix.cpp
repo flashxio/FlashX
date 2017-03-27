@@ -331,6 +331,81 @@ void test_resize()
 	test_resize(mat1);
 }
 
+void test_tall_write(mem_matrix_store::ptr store)
+{
+	size_t portion_size = store->get_portion_size().first * 2;
+	for (size_t start_row = 0; start_row < store->get_num_rows(); ) {
+		size_t num_rows = (random() % portion_size) + 100;
+		num_rows = std::min(num_rows, store->get_num_rows() - start_row);
+		local_matrix_store::ptr lstore;
+		if (store->store_layout() == matrix_layout_t::L_ROW) {
+			lstore = local_matrix_store::ptr(new local_buf_row_matrix_store(
+						start_row, 0, num_rows, store->get_num_cols(),
+						store->get_type(), -1, false));
+			lstore->set_data(set_row_operate(store->get_num_cols()));
+		}
+		else {
+			lstore = local_matrix_store::ptr(new local_buf_col_matrix_store(
+						start_row, 0, num_rows, store->get_num_cols(),
+						store->get_type(), -1, false));
+			lstore->set_data(set_col_operate(store->get_num_cols()));
+		}
+		store->write_portion_async(lstore, lstore->get_global_start_row(),
+				lstore->get_global_start_col());
+		start_row += num_rows;
+	}
+
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++) {
+			assert(store->get<long>(i, j) == i * store->get_num_cols() + j);
+		}
+}
+
+void test_wide_write(mem_matrix_store::ptr store)
+{
+	size_t portion_size = store->get_portion_size().second * 2;
+	for (size_t start_col = 0; start_col < store->get_num_cols(); ) {
+		size_t num_cols = (random() % portion_size) + 100;
+		num_cols = std::min(num_cols, store->get_num_cols() - start_col);
+		local_matrix_store::ptr lstore;
+		if (store->store_layout() == matrix_layout_t::L_ROW) {
+			lstore = local_matrix_store::ptr(new local_buf_row_matrix_store(
+						0, start_col, store->get_num_rows(), num_cols,
+						store->get_type(), -1, false));
+			lstore->set_data(set_row_operate(store->get_num_cols()));
+		}
+		else {
+			lstore = local_matrix_store::ptr(new local_buf_col_matrix_store(
+						0, start_col, store->get_num_rows(), num_cols,
+						store->get_type(), -1, false));
+			lstore->set_data(set_col_operate(store->get_num_cols()));
+		}
+		store->write_portion_async(lstore, lstore->get_global_start_row(),
+				lstore->get_global_start_col());
+		start_col += num_cols;
+	}
+
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		for (size_t j = 0; j < store->get_num_cols(); j++) {
+			if (store->get<long>(i, j) != i * store->get_num_cols() + j)
+				printf("%ld,%ld: %ld,%ld\n", i, j, store->get<long>(i, j),
+						i * store->get_num_cols() + j);
+			assert(store->get<long>(i, j) == i * store->get_num_cols() + j);
+		}
+}
+
+void test_write_portion()
+{
+	printf("test write portion\n");
+	mem_matrix_store::ptr mat1 = mem_matrix_store::create(100000, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
+	test_tall_write(mat1);
+
+	mat1 = mem_matrix_store::create(10, 100000,
+			matrix_layout_t::L_ROW, get_scalar_type<long>(), num_nodes);
+	test_wide_write(mat1);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -343,6 +418,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	num_nodes = safs::params.get_num_nodes();
 
+	test_write_portion();
 	test_write2file();
 	test_resize();
 	test_portion();

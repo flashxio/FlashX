@@ -78,6 +78,75 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 	}
 }
 
+void NUMA_matrix_store::write_portion_async(local_matrix_store::const_ptr portion,
+			off_t start_row, off_t start_col)
+{
+	if (is_wide()) {
+		assert(start_row == 0);
+		assert(portion->get_num_rows() == get_num_rows());
+		size_t portion_size = get_portion_size().second;
+		// If the data is written to a contiguous portion in the matrix.
+		if (start_col / portion_size
+				== (start_col + portion->get_num_cols() - 1) / portion_size) {
+			local_matrix_store::ptr lstore = get_portion(start_row,
+					start_col, portion->get_num_rows(), portion->get_num_cols());
+			assert(lstore);
+			lstore->copy_from(*portion);
+		}
+		else {
+			// The data is written to at least two portions.
+			size_t start_col1 = start_col;
+			size_t num_cols1 = ROUNDUP(start_col + 1, portion_size) - start_col;
+			assert(num_cols1 <= portion_size);
+			size_t lstart_col1 = 0;
+			size_t end_col = start_col + portion->get_num_cols();
+			do {
+				local_matrix_store::ptr lstore = get_portion(start_row,
+						start_col1, portion->get_num_rows(), num_cols1);
+				auto lportion = portion->get_portion(0, lstart_col1,
+						portion->get_num_rows(), num_cols1);
+				assert(lstore && lportion);
+				lstore->copy_from(*lportion);
+				start_col1 += num_cols1;
+				lstart_col1 += num_cols1;
+				num_cols1 = std::min(portion_size, end_col - start_col1);
+			} while (start_col1 < end_col);
+		}
+	}
+	else {
+		assert(start_col == 0);
+		assert(portion->get_num_cols() == get_num_cols());
+		size_t portion_size = get_portion_size().first;
+		// If the data is written to a contiguous portion in the matrix.
+		if (start_row / portion_size
+				== (start_row + portion->get_num_rows() - 1) / portion_size) {
+			local_matrix_store::ptr lstore = get_portion(start_row, start_col,
+					portion->get_num_rows(), portion->get_num_cols());
+			assert(lstore);
+			lstore->copy_from(*portion);
+		}
+		else {
+			// The data is written to at least two portions.
+			size_t start_row1 = start_row;
+			size_t num_rows1 = ROUNDUP(start_row + 1, portion_size) - start_row;
+			assert(num_rows1 <= portion_size);
+			size_t lstart_row1 = 0;
+			size_t end_row = start_row + portion->get_num_rows();
+			do {
+				local_matrix_store::ptr lstore = get_portion(start_row1,
+						start_col, num_rows1, portion->get_num_cols());
+				auto lportion = portion->get_portion(lstart_row1, 0,
+						num_rows1, portion->get_num_cols());
+				assert(lstore && lportion);
+				lstore->copy_from(*lportion);
+				start_row1 += num_rows1;
+				lstart_row1 += num_rows1;
+				num_rows1 = std::min(portion_size, end_row - start_row1);
+			} while (start_row1 < end_row);
+		}
+	}
+}
+
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(
 		const NUMA_row_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(),
