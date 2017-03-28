@@ -10,7 +10,7 @@ compiler:
 - g++
 script:
 - mkdir -p build && cd build && cmake .. && make && cd ..
-- ./install_FlashR.sh
+- sudo ./install_FlashR.sh
 - Rscript release-test/install_Rpkgs.R
 - Rscript release-test/test_FlashR.R
 - make clean; make
