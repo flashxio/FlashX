@@ -438,6 +438,11 @@ dense_matrix::ptr dense_matrix::multiply_sparse_combined(
 	return dense_matrix::cbind(res_mats);
 }
 
+static inline bool is_floating_point(const scalar_type &type)
+{
+	return type == get_scalar_type<float>() || type == get_scalar_type<double>();
+}
+
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
@@ -451,7 +456,8 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 	// matrix multiplication.
 	// TODO right now this optimization is only useful for a wide matrix
 	// times a tall matrix.
-	if (mat.get_data().is_sparse() && this->is_wide() && !mat.is_wide()) {
+	if (is_floating_point(get_type()) && is_floating_point(mat.get_type())
+			&& mat.get_data().is_sparse() && this->is_wide() && !mat.is_wide()) {
 		detail::sparse_project_matrix_store::const_ptr store
 			= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
 					mat.get_raw_store());
@@ -467,8 +473,7 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		else
 			return multiply_sparse_combined(mat, out_layout);
 	}
-	else if ((get_type() == get_scalar_type<double>()
-				|| get_type() == get_scalar_type<float>())) {
+	else if (is_floating_point(get_type())) {
 		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
 		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
