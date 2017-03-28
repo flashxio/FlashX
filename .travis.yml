@@ -5,9 +5,14 @@ notifications:
 before_install:
 - sudo apt-get update
 - sudo apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+- sudo apt-get install -y r-base-core
 compiler:
 - g++
 script:
+- mkdir -p build && cd build && cmake .. && make && cd ..
+- ./install_FlashR.sh
+- Rscript release-test/install_Rpkgs.R
+- Rscript release-test/test_FlashR.R
 - make clean; make
 - cd libsafs/unit-test && make test && cd ../..
 - cd flash-graph/unit-test && make test
