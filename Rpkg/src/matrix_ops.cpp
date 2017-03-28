@@ -358,7 +358,7 @@ public:
 	}
 
 	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
-		int *t_out = (int *) output;
+		double *t_out = (double *) output;
 		t_out[0] = num_eles;
 	}
 
@@ -369,7 +369,8 @@ public:
 		return get_scalar_type<T>();
 	}
 	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<int>();
+		// We need to use floating-points. "int" may overflow for large vectors.
+		return get_scalar_type<double>();
 	}
 	virtual std::string get_name() const {
 		return "count";
