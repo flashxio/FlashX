@@ -1748,3 +1748,43 @@ setMethod("drop", "fm", function(x) {
 		  else
 			  fm.as.vector(x)
 })
+
+fm.hist <- function(x, breaks=c("even", "exp"), exp.base=2, plot=TRUE,
+					plot.file="", log="", xlab=NULL, ylab=NULL)
+{
+	breaks <- match.arg(breaks)
+	if (breaks == "exp") {
+		x <- ifelse(x > 0, floor(log(x, exp.base)), 0)
+		r <- range(x)
+		vals <- seq(r[1], r[2], 1)
+	}
+	else {
+		r <- range(x)
+		size <- (r[2] - r[1]) / 100
+		x <- floor(x / size)
+	}
+	tbl <- fm.table(x)
+
+	if (breaks == "exp") {
+		vals <- fm.conv.FM2R(tbl@val)
+		breaks <- exp.base^vals
+		x.names <- paste(as.character(exp.base), "^",as.character(vals), sep="")
+	}
+	else {
+		breaks <- fm.conv.FM2R(tbl@val) * size
+		x.names <- as.character(breaks)
+	}
+
+	if (plot && plot.file != "") {
+		pdf(plot.file)
+		barplot(fm.conv.FM2R(tbl@Freq), space=0, names.arg=x.names, log=log,
+				xlab=xlab, ylab=ylab)
+		dev.off()
+	}
+	else if (plot) {
+		barplot(fm.conv.FM2R(tbl@Freq), space=0, names.arg=x.names, log=log,
+				xlab=xlab, ylab=ylab)
+	}
+	else
+		list(breaks=breaks, counts=fm.conv.FM2R(tbl@Freq))
+}
