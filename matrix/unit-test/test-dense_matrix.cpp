@@ -1690,7 +1690,6 @@ extern size_t num_cached_mats;
 void test_sub_matrix()
 {
 	printf("test sub tall col-matrix\n");
-	size_t long_dim = 16 * 1024 * 1024;
 	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
 			long_dim, 10, matrix_layout_t::L_COL, -1, false);
 	mat = mat->cast_ele_type(get_scalar_type<double>());
@@ -3261,9 +3260,9 @@ void test_share_data()
 	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
 
 	// Test block matrix
-	mat1 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 100,
 			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
-	mat2 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 100,
 			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
 	printf("test share data in block matrix\n");
 	_test_share_data(mat1, mat2);
