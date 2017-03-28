@@ -454,6 +454,12 @@ public:
 		ret->out_num_cols = out_num_rows;
 		ret->Alayout = opposite_layout(Blayout);
 		ret->Blayout = opposite_layout(Alayout);
+		// TODO currently, we only optimize the multiplication of a dense
+		// matrix with a sparse matrix. If we transpose the operation,
+		// it becomes the multiplication of a sparse matrix and a dense
+		// matrix and our optimization wont' work any more. So we disable
+		// the optimization here after transpose.
+		ret->is_sparse = false;
 		return std::shared_ptr<portion_mapply_op>(ret);
 	}
 
