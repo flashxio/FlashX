@@ -420,7 +420,16 @@ public:
 	}
 
 	virtual bool has_materialized() const {
-		return part_res->has_materialized();
+		bool ret = part_res->has_materialized();
+		// If this is a sparse matrix, we should check num_tmp_accs
+		// because some results may be buffered in tmp_bufs and haven't
+		// been accumulated to num_tmp_accs yet.
+		if (!ret && is_sparse) {
+			for (size_t i = 0; i < num_tmp_accs.size(); i++)
+				if (num_tmp_accs[i] > 0)
+					return true;
+		}
+		return ret;
 	}
 
 	virtual detail::mem_matrix_store::const_ptr get_combined_result() const;
