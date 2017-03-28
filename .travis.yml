@@ -10,8 +10,8 @@ compiler:
 - g++
 script:
 - mkdir -p build && cd build && cmake .. && make && cd ..
+- sudo Rscript release-test/install_Rpkgs.R
 - sudo ./install_FlashR.sh
-- Rscript release-test/install_Rpkgs.R
 - Rscript release-test/test_FlashR.R
 - make clean; make
 - cd libsafs/unit-test && make test && cd ../..
