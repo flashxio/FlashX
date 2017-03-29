@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <vector>
+
 #include "dense_matrix.h"
 #include "local_matrix_store.h"
 
@@ -83,8 +85,12 @@ public:
 			assert(col_portion);
 			size_t num_port_eles
 				= portion->get_num_rows() * portion->get_num_cols();
-			memcpy(ret.data() + num_eles,
-					col_portion->get_col(0), num_port_eles * sizeof(T));
+			const T *col = reinterpret_cast<const T*>(col_portion->get_col(0));
+			// We have to explicitly copy data elements by elements instead of
+			// using memcpy because std::vector<bool> can't return a raw array
+			// pointer.
+			for (size_t j = 0; j < num_port_eles; j++)
+				ret[j + num_eles] = col[j];
 			num_eles += num_port_eles;
 		}
 		assert(num_eles == ret.size());

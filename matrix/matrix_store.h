@@ -91,9 +91,10 @@ public:
 	virtual ~matrix_store() {
 	}
 
-	void resize(size_t num_rows, size_t num_cols) {
+	virtual bool resize(size_t num_rows, size_t num_cols) {
 		this->nrow = num_rows;
 		this->ncol = num_cols;
+		return true;
 	}
 
 	size_t get_num_rows() const {
@@ -249,6 +250,11 @@ public:
 	}
 };
 
+/*
+ * This matrix stream is designed to deal with the case that we know exactly
+ * where data should be written but the data may come from multiple threads
+ * in a non-sequential order.
+ */
 class matrix_stream
 {
 public:
@@ -260,6 +266,50 @@ public:
 			off_t start_row, off_t start_col) = 0;
 	virtual bool is_complete() const = 0;
 	virtual const matrix_store &get_mat() const = 0;
+};
+
+/*
+ * This class is designed for the case that we don't know where exactly data
+ * should be written to, but we know relative location of each write.
+ * Each write is identified by sequence numbers.
+ */
+class matrix_append
+{
+	matrix_store::ptr res;
+
+	spin_lock lock;
+	// A queue that contains portions appended out of order. The location
+	// of a portion in the queue is determined by the difference between
+	// its sequence id and `last_append'.
+	std::deque<std::shared_ptr<const local_matrix_store>> q;
+	// The sequence number of the last append.
+	off_t last_append;
+	// The total number of elements written to the result matrix.
+	std::atomic<size_t> written_eles;
+
+	matrix_append(matrix_store::ptr store) {
+		this->res = store;
+		q.resize(1000);
+		last_append = -1;
+		written_eles = 0;
+	}
+public:
+	typedef std::shared_ptr<matrix_append> ptr;
+
+	~matrix_append();
+
+	static ptr create(matrix_store::ptr store) {
+		return ptr(new matrix_append(store));
+	}
+
+	void write_async(std::shared_ptr<const local_matrix_store> portion,
+			off_t seq_id);
+
+	void flush();
+
+	size_t get_written_eles() const {
+		return written_eles;
+	}
 };
 
 }

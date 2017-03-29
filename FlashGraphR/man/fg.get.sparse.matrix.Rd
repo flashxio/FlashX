@@ -17,4 +17,3 @@ a matrix represented by a FlashGraph object.
 fg <- fg.load.graph("graph.adj", "graph.index")
 fm <- fg.get.sparse.matrix(fg)
 }
-

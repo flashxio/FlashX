@@ -25,7 +25,6 @@
 #include "factor.h"
 
 #include "fmr_utils.h"
-#include "rutils.h"
 
 using namespace fm;
 
@@ -49,7 +48,19 @@ static void fm_clean_DM(SEXP p)
 	delete ref;
 }
 
-SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
+static inline Rcpp::String trans_RType2Str(R_type type)
+{
+	if (type == R_type::R_INT)
+		return Rcpp::String("integer");
+	else if (type == R_type::R_REAL)
+		return Rcpp::String("double");
+	else if (type == R_type::R_LOGICAL)
+		return Rcpp::String("logical");
+	else
+		return Rcpp::String("unknown");
+}
+
+SEXP create_FMR_matrix(sparse_matrix::ptr m, R_type type, const std::string &name)
 {
 	if (m == NULL) {
 		fprintf(stderr, "can't create an empty matrix\n");
@@ -59,14 +70,7 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("sparse");
-	if (m->is_type<int>())
-		ret["ele_type"] = Rcpp::String("integer");
-	else if (m->is_type<double>())
-		ret["ele_type"] = Rcpp::String("double");
-	else if (m->is_type<bool>())
-		ret["ele_type"] = Rcpp::String("logical");
-	else
-		ret["ele_type"] = Rcpp::String("unknown");
+	ret["ele_type"] = trans_RType2Str(type);
 
 	object_ref<sparse_matrix> *ref = new object_ref<sparse_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -88,7 +92,7 @@ SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
-SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
+SEXP create_FMR_matrix(dense_matrix::ptr m, R_type type, const std::string &name)
 {
 	if (m == NULL) {
 		fprintf(stderr, "can't create an empty matrix\n");
@@ -98,16 +102,7 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("dense");
-	if (m->is_type<int>())
-		ret["ele_type"] = Rcpp::String("integer");
-	else if (m->is_type<double>())
-		ret["ele_type"] = Rcpp::String("double");
-	else if (m->is_type<bool>()) {
-		m = m->cast_ele_type(get_scalar_type<int>());
-		ret["ele_type"] = Rcpp::String("logical");
-	}
-	else
-		ret["ele_type"] = Rcpp::String("unknown");
+	ret["ele_type"] = trans_RType2Str(type);
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -125,16 +120,17 @@ SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
-SEXP create_FMR_vector(detail::vec_store::const_ptr vec, const std::string &name)
+SEXP create_FMR_vector(detail::vec_store::const_ptr vec, R_type type,
+		const std::string &name)
 {
 	detail::matrix_store::const_ptr mat = vec->conv2mat(vec->get_length(),
 			1, false);
 	if (mat == NULL)
 		return R_NilValue;
-	return create_FMR_vector(dense_matrix::create(mat), name);
+	return create_FMR_vector(dense_matrix::create(mat), type, name);
 }
 
-SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
+SEXP create_FMR_vector(dense_matrix::ptr m, R_type type, const std::string &name)
 {
 	if (m == NULL) {
 		fprintf(stderr, "can't create a vector from an empty matrix\n");
@@ -152,18 +148,7 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
 	ret["type"] = Rcpp::String("vector");
-	if (m->is_type<int>())
-		ret["ele_type"] = Rcpp::String("integer");
-	else if (m->is_type<double>())
-		ret["ele_type"] = Rcpp::String("double");
-	else if (m->is_type<bool>()) {
-		// TODO this will trigger matrix materialization if the input matrix
-		// is a sink matrix.
-		m = m->cast_ele_type(get_scalar_type<int>());
-		ret["ele_type"] = Rcpp::String("logical");
-	}
-	else
-		ret["ele_type"] = Rcpp::String("unknown");
+	ret["ele_type"] = trans_RType2Str(type);
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -177,7 +162,8 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
-SEXP create_FMR_vector(fm::factor_col_vector::ptr v, const std::string &name)
+SEXP create_FMR_vector(fm::factor_col_vector::ptr v, R_type type,
+		const std::string &name)
 {
 	if (v == NULL) {
 		fprintf(stderr, "can't create a factor vector\n");
@@ -209,7 +195,7 @@ SEXP create_FMR_vector(fm::factor_col_vector::ptr v, const std::string &name)
 	if (vals == NULL)
 		ret["vals"] = R_NilValue;
 	else
-		ret["vals"] = create_FMR_vector(vals, "");
+		ret["vals"] = create_FMR_vector(vals, type, "");
 	auto cnts = v->get_counts();
 	if (cnts == NULL)
 		ret["cnts"] = R_NilValue;
@@ -219,7 +205,7 @@ SEXP create_FMR_vector(fm::factor_col_vector::ptr v, const std::string &name)
 		auto cnt_vec = vector::create(cnts);
 		auto cnt_mat = cnt_vec->conv2mat(cnt_vec->get_length(), 1, false);
 		cnt_mat = cnt_mat->cast_ele_type(get_scalar_type<int>());
-		ret["cnts"] = create_FMR_vector(cnt_mat, "");
+		ret["cnts"] = create_FMR_vector(cnt_mat, R_type::R_INT, "");
 	}
 
 	return ret;
@@ -250,12 +236,20 @@ col_vec::ptr get_vector(const Rcpp::S4 &vec)
 	return col_vec::create(mat);
 }
 
-SEXP create_FMR_data_frame(data_frame::ptr df, const std::string &name)
+SEXP create_FMR_data_frame(data_frame::ptr df,
+		const std::vector<R_type> &col_types, const std::string &name)
 {
+	if (col_types.size() != df->get_num_vecs()) {
+		fprintf(stderr,
+				"# col types doesn't match with # cols in the data frame\n");
+		return R_NilValue;
+	}
+
 	Rcpp::List ret;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
 		std::string vec_name = df->get_vec_name(i);
-		ret[vec_name] = create_FMR_vector(df->get_vec(i), vec_name);
+		ret[vec_name] = create_FMR_vector(df->get_vec(i), col_types[i],
+				vec_name);
 	}
 	return ret;
 }

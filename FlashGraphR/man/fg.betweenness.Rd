@@ -28,4 +28,3 @@ res <- fg.betweenness(fg, c(1,10))
 \author{
 Disa Mhembere <disa@jhu.edu>
 }
-

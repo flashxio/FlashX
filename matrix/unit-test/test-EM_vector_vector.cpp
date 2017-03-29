@@ -46,10 +46,13 @@ public:
 
 class part_apply_operate: public gr_apply_operate<local_vv_store>
 {
+	const scalar_type &val_type;
 public:
+	part_apply_operate(const scalar_type &type): val_type(type) {
+	}
 	virtual void run(const void *key, const local_vv_store &val,
 			local_vec_store &vec) const {
-		assert(val.get_type() == get_scalar_type<factor_value_t>());
+		assert(val.get_type() == val_type);
 		assert(vec.get_type() == get_scalar_type<size_t>());
 		vec.resize(1);
 		size_t num = 0;
@@ -95,7 +98,8 @@ void test_groupby()
 			false, set_label_operate(f, vv->get_num_vecs()));
 	assert(!labels->is_in_mem());
 	labels->sort();
-	vector_vector::ptr gr_res = vv->groupby(*labels, part_apply_operate());
+	vector_vector::ptr gr_res = vv->groupby(*labels, part_apply_operate(
+				vv->get_type()));
 	printf("There are %ld vectors\n", gr_res->get_num_vecs());
 
 	std::map<factor_value_t, size_t> label_map;

@@ -110,30 +110,16 @@ setMethod("%/%", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 			  .mapply2.fm(e1, e2, fm.bo.idiv)
 		  })
 
-.replace.pow.special <- function(res, e1, e2)
-{
-	res <- ifelse(e1 == 1, 1, res)
-	if (typeof(e1) == "double" && typeof(e2) == "double")
-		ifelse(e1 == -Inf & floor(e2) != e2, NaN, res)
-	else
-		res
-}
-
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2) {
-		  res <- .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
+setMethod("^", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
-setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2) {
-		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
-		  })
+setMethod("^", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
+		  .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow))
 #' @rdname Arithmetic
 setMethod("^", signature(e1 = "fmV", e2 = "fm"), function(e1, e2) {
 		  e1 <- fm.matrix(e1, nrow(e2), ncol(e2))
-		  res <- .mapply2.fmV(as.numeric(e1), as.numeric(e2), fm.bo.pow)
-		  .replace.pow.special(res, e1, e2)
+		  .mapply2.fm(as.numeric(e1), as.numeric(e2), fm.bo.pow)
 		  })
 
 #' Matrix multiplication
@@ -279,28 +265,28 @@ NULL
 
 #' @rdname Logic
 setMethod("|", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.or))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.or))
 #' @rdname Logic
 setMethod("|", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.or))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.or))
 
 #' @rdname Logic
 setMethod("&", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
-		  .mapply2.fm(e1, e2, fm.bo.and))
+		  .mapply2.fm(as.logical(e1), as.logical(e2), fm.bo.and))
 #' @rdname Logic
 setMethod("&", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
-		  .mapply2.fmV(e1, e2, fm.bo.and))
+		  .mapply2.fmV(as.logical(e1), as.logical(e2), fm.bo.and))
 
 #' @rdname Logic
 `!.fm` <- function(e1)
 {
-	.sapply.fm(e1, fm.buo.not)
+	.sapply.fm(as.logical(e1), fm.buo.not)
 }
 
 #' @rdname Logic
 `!.fmV` <- function(e1)
 {
-	.sapply.fmV(e1, fm.buo.not)
+	.sapply.fmV(as.logical(e1), fm.buo.not)
 }
 
 #' Maxima and Minima
@@ -361,6 +347,30 @@ setMethod("pmax2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmax2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.max))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  pmax2(e1, fm.conv.R2FM(e2)))
+#' @rdname Extremes
+setMethod("pmax2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  pmax2(fm.conv.R2FM(e1), e2))
 
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
@@ -368,6 +378,30 @@ setMethod("pmin2", signature(e1 = "fm", e2 = "fm"), function(e1, e2)
 #' @rdname Extremes
 setMethod("pmin2", signature(e1 = "fmV", e2 = "fmV"), function(e1, e2)
 		  .mapply2.fmV(e1, e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
+		  fm.mapply.col(e1, e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fmV", e2 = "fm"), function(e1, e2)
+		  fm.mapply.col(e2, e1, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "matrix"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "matrix", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(fm.as.matrix(e1), e2, fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fm", e2 = "ANY"), function(e1, e2)
+		  .mapply2.fm(e1, fm.as.matrix(e2), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "ANY", e2 = "fm"), function(e1, e2)
+		  .mapply2.fm(e2, fm.as.matrix(e1), fm.bo.min))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "fmV", e2 = "ANY"), function(e1, e2)
+		  pmin2(e1, fm.conv.R2FM(e2)))
+#' @rdname Extremes
+setMethod("pmin2", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
+		  pmin2(fm.conv.R2FM(e1), e2))
 
 #' @rdname Arithmetic
 setMethod("Ops", signature(e1 = "fm", e2 = "fmV"), function(e1, e2)
@@ -396,18 +430,16 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 .min.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		max.val <- .get.max.val(typeof(x))
 		x <- .replace.na(x, max.val)
 		others <- .replace.na.list(others, max.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.min, test.na)
+	res <- fm.agg(x, fm.bo.min)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.min, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.min))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- min(unlist(res))
 	}
@@ -416,18 +448,16 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 
 .max.int <- function(x, ..., na.rm) {
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		min.val <- .get.min.val(typeof(x))
 		x <- .replace.na(x, min.val)
 		others <- .replace.na.list(others, min.val)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.max, test.na)
+	res <- fm.agg(x, fm.bo.max)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.max, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.max))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- max(unlist(res))
 	}
@@ -440,12 +470,17 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.max.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.min, FALSE)
+		.mapply.list(args, fm.bo.min)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.min, TRUE)
+		.mapply.list(args, fm.bo.min)
 }
 
 .pmax.int <- function(..., na.rm = FALSE)
@@ -453,12 +488,17 @@ setMethod("Ops", signature(e1 = "ANY", e2 = "fmV"), function(e1, e2)
 	args <- list(...)
 	if (length(args) == 0)
 		stop("no arguments")
+	else if (length(args) == 1)
+		return(args[[1]])
+
 	if (na.rm) {
 		args <- .replace.na.list(args, .get.min.val(typeof(args[[1]])))
-		.mapply.list(args, fm.bo.max, FALSE)
+		.mapply.list(args, fm.bo.max)
+		# TODO there is a bug for the case that all elements in a location
+		# is NA.
 	}
 	else
-		.mapply.list(args, fm.bo.max, TRUE)
+		.mapply.list(args, fm.bo.max)
 }
 
 #' @rdname Extremes
@@ -665,20 +705,20 @@ setMethod("t", signature(x = "fm"), function(x) fm.t(x))
 #' @rdname transpose
 setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
-.mapply.list <- function(data, FUN, test.na)
+.mapply.list <- function(data, FUN)
 {
 	n <- length(data)
 	res <- data[[1]]
 	if (n > 1) {
 		for (arg in data[2:n]) {
 			if (class(res) == class(arg))
-				res <- fm.mapply2(res, arg, FUN, test.na)
+				res <- fm.mapply2(res, arg, FUN)
 			else if (class(res) == "fm" && class(arg) == "fmV")
-				res <- fm.mapply.col(res, arg, FUN, test.na)
+				res <- fm.mapply.col(res, arg, FUN)
 			# We assume that FUN is commutative.
 			# This function is used for pmin/pmax, so it's fine.
 			else if (class(res) == "fmV" && class(arg) == "fm")
-				res <- fm.mapply.col(arg, res, FUN, test.na)
+				res <- fm.mapply.col(arg, res, FUN)
 			else
 				stop("unknown arguments")
 		}
@@ -720,13 +760,11 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 
 .range1 <- function(x, na.rm)
 {
-	test.na <- TRUE
 	if (typeof(x) == "logical")
 		x <- as.integer(x)
 	if (na.rm) {
 		x.min <- ifelse(is.na(x), .get.min.val(typeof(x)), x)
 		x.max <- ifelse(is.na(x), .get.max.val(typeof(x)), x)
-		test.na <- FALSE
 		tmp1 <- fm.agg(x.max, fm.bo.min)
 		tmp2 <- fm.agg(x.min, fm.bo.max)
 	}
@@ -734,18 +772,7 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 		tmp1 <- fm.agg(x, fm.bo.min)
 		tmp2 <- fm.agg(x, fm.bo.max)
 	}
-	if (test.na) {
-		x.is.na <- fm.agg(.is.na.only(x), fm.bo.or)
-		if (.fmV2scalar(x.is.na)) {
-			na <- .get.na(typeof(x))
-			c(na, na)
-		}
-		else
-			c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
-	}
-	else {
-		c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
-	}
+	c(.fmV2scalar(tmp1), .fmV2scalar(tmp2))
 }
 
 # We replace both NA and NaN
@@ -761,20 +788,6 @@ setMethod("t", signature(x = "fmV"), function(x) fm.t(fm.as.matrix(x)))
 	for (i in 1:length(objs))
 		objs[[i]] <- ifelse(is.na(objs[[i]]), val, objs[[i]])
 	objs
-}
-
-.agg.na <- function(fm, op, test.na)
-{
-	if (test.na && .env.int$fm.test.na) {
-		any.na <- fm.agg(.is.na.only(fm), fm.bo.or)
-		agg.res <- fm.agg(fm, op)
-		if (.fmV2scalar(any.na))
-			.get.na(typeof(agg.res))
-		else
-			agg.res
-	}
-	else
-		fm.agg(fm, op)
 }
 
 #' Are some Values True?
@@ -806,28 +819,26 @@ fm.any <- function(x, lazy=FALSE)
 .any.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, FALSE)
 		others <- .replace.na.list(others, FALSE)
-		test.na <- FALSE
 	}
-	res <- fm.conv.FM2R(.agg.na(x, fm.bo.or, test.na))
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.or))
 	if (length(others) >= 1) {
 		if (!is.na(res) && res)
 			return(TRUE)
 		for (arg in others) {
-			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.or, test.na))
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.or))
 			if (!is.na(tmp) && tmp)
 				return(TRUE)
 			res <- res | tmp
@@ -870,28 +881,26 @@ fm.all <- function(x, lazy=FALSE)
 .all.int <- function(x, ..., na.rm)
 {
 	others <- list(...)
-	test.na <- TRUE
-	if (na.rm) {
-		# If the inputs aren't logical, we should cast them
-		# to logical values.
-		if (typeof(x) != "logical")
-			x <- x != 0
-		if (length(others) > 0) {
-			for (i in 1:length(others)) {
-				if (typeof(others[[i]]) != "logical")
-					others[[i]] <- others[[i]] != 0
-			}
+	# If the inputs aren't logical, we should cast them
+	# to logical values.
+	if (typeof(x) != "logical")
+		x <- as.logical(x)
+	if (length(others) > 0) {
+		for (i in 1:length(others)) {
+			if (typeof(others[[i]]) != "logical")
+				others[[i]] <- as.logical(others[[i]])
 		}
+	}
+	if (na.rm) {
 		x <- .replace.na(x, TRUE)
 		others <- .replace.na.list(others, TRUE)
-		test.na <- FALSE
 	}
-	res <- fm.conv.FM2R(.agg.na(x, fm.bo.and, test.na))
+	res <- fm.conv.FM2R(fm.agg(x, fm.bo.and))
 	if (length(others) >= 1) {
 		if (!is.na(res) && !res)
 			return(FALSE)
 		for (arg in others) {
-			tmp <- fm.conv.FM2R(.agg.na(arg, fm.bo.and, test.na))
+			tmp <- fm.conv.FM2R(fm.agg(arg, fm.bo.and))
 			if (!is.na(tmp) && !tmp)
 				return(FALSE)
 			res <- res & tmp
@@ -926,18 +935,16 @@ NULL
 	# TODO we need to handle na.rm for all of the functions here
 	# properly.
 	others <- list(...)
-	test.na <- TRUE
 	if (na.rm) {
 		zero <- .get.zero(typeof(x))
 		x <- .replace.na(x, zero)
 		others <- .replace.na.list(others, zero)
-		test.na <- FALSE
 	}
-	res <- .agg.na(x, fm.bo.add, test.na)
+	res <- fm.agg(x, fm.bo.add)
 	if (length(others) >= 1) {
 		res <- list(res)
 		for (arg in others)
-			res <- c(res, .agg.na(arg, fm.bo.add, test.na))
+			res <- c(res, fm.agg(arg, fm.bo.add))
 		res <- lapply(res, function(o) fm.conv.FM2R(o))
 		res <- sum(unlist(res))
 	}
@@ -1108,9 +1115,9 @@ setMethod("log2", signature(x = "fm"), function(x) .sapply.fm(as.numeric(x), fm.
 #' @rdname log
 setMethod("log2", signature(x = "fmV"), function(x) .sapply.fmV(as.numeric(x), fm.buo.log2))
 #' @rdname log
-setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fm"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
-setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow, TRUE))
+setMethod("exp", signature(x = "fmV"), function(x) fm.mapply2(exp(1), as.numeric(x), fm.bo.pow))
 #' @rdname log
 setMethod("log", "fm", function(x, base=exp(1)) {
 		  if (base == exp(1))
@@ -1131,7 +1138,6 @@ setMethod("log", "fmV", function(x, base=exp(1)) {
 #' Form row and column sums and means for numeric arrays.
 #'
 #' @param x a FlashR matrix.
-#' @param lazy logical. indicates whether to evaluate the expression lazily.
 #' @param na.rm logical. Should missing values (including NaN) be omitted
 #' from the calculations?
 #' @return a FlashR vector.
@@ -1148,23 +1154,40 @@ NULL
 #' @rdname colSums
 setMethod("rowSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  # TODO I need to handle na.rm here as well.
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 1, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("colSums", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
+			  if (na.rm)
+				  x <- .replace.na(x, .get.zero(typeof(x)))
 			  fm.agg.mat(x, 2, fm.bo.add)
 		  })
 #' @rdname colSums
 setMethod("rowMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  rowSums(as.double(x), na.rm) / dim(x)[2]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- rowSums(x, na.rm)
+				  nums <- rowSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  rowSums(x, na.rm) / dim(x)[2]
 		  })
 #' @rdname colSums
 setMethod("colMeans", signature(x = "fm", na.rm = "ANY"),
 		  function(x, na.rm) {
-			  colSums(as.double(x), na.rm) / dim(x)[1]
+			  x <- as.double(x)
+			  if (na.rm) {
+				  sums <- colSums(x, na.rm)
+				  nums <- colSums(!is.na(x), FALSE)
+				  sums / nums
+			  }
+			  else
+				  colSums(x, na.rm) / dim(x)[1]
 		  })
 
 #' Print FlashR objects.
@@ -1237,6 +1260,39 @@ setMethod("as.data.frame", signature(x = "fm.table"),
 		  function(x, row.names = NULL, optional = FALSE, ...)
 			  list(val=x@val, Freq=x@Freq))
 
+#' Logical Vectors
+#'
+#' \code{as.logical} coerces objects of type \code{"logical"}.
+#' \code{is.logical} is a more general test of an object being
+#' interpretable as logicals.
+#'
+#' @param x a FlashR object to be coerced or tested.
+#' @return \code{as.logical} returns a logical FlashR object,
+#' \code{is.logical} returns a logical value.
+#' @name logical
+NULL
+
+#' @rdname logical
+setMethod("as.logical", "fm", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
+#' @rdname logical
+setMethod("as.logical", "fmV", function(x) {
+		  if (.typeof.int(x) == "logical")
+			  x
+		  # Even though the underlying matrix uses the same C type to store
+		  # logical values and integers, we still need to cast it to cast
+		  # NA properly.
+		  else
+			  fm.sapply(x, fm.buo.as.logical)
+	})
+
 #' Integer Vectors
 #'
 #' \code{as.integer} coerces objects of type \code{"integer"}.
@@ -1256,25 +1312,15 @@ NULL
 setMethod("as.integer", "fm", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying matrix uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fm", pointer=x@pointer, name=x@name, nrow=x@nrow, ncol=x@ncol,
-				  type=x@type, ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 #' @rdname integer
 setMethod("as.integer", "fmV", function(x) {
 		  if (.typeof.int(x) == "integer")
 			  x
-		  # The underlying vector uses the same C type to store logical values
-		  # and integers.
-		  else if (.typeof.int(x) == "logical")
-			  new("fmV", pointer=x@pointer, name=x@name, len=x@len, type=x@type,
-				  ele_type="integer")
 		  else
-			  fm.sapply(x, fm.buo.as.int, TRUE)
+			  fm.sapply(x, fm.buo.as.int)
 	})
 
 #' Numeric Vectors
@@ -1297,14 +1343,14 @@ setMethod("as.numeric", "fm", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("as.numeric", "fmV", function(x) {
 		  if (.typeof.int(x) == "double")
 			  x
 		  else
-			  fm.sapply(x, fm.buo.as.numeric, TRUE)
+			  fm.sapply(x, fm.buo.as.numeric)
 	})
 #' @rdname numeric
 setMethod("is.numeric", "fm", function(x)
@@ -1346,10 +1392,16 @@ NULL
 #' @rdname Extract
 setMethod("[", signature(x="fm", j="missing"),
 		  function(x, i, j, drop=TRUE) {
-			  ret <- fm.get.rows(x, i)
-			  if (drop && length(i) == 1)
-				  ret <- fm.as.vector(ret)
-			  ret
+			  if (is.matrix(i) || fm.is.matrix(i)) {
+				  print("doesn't support boolean index matrix")
+				  NULL
+			  }
+			  else {
+				  ret <- fm.get.rows(x, i)
+				  if (drop && length(i) == 1)
+					  ret <- fm.as.vector(ret)
+				  ret
+			  }
 		  })
 #' @rdname Extract
 setMethod("[", signature(x="fm", i="missing"),
@@ -1495,8 +1547,6 @@ NULL
 #' @rdname summary
 .summary <- function(x)
 {
-	orig.test.na <- .env.int$fm.test.na
-	fm.set.test.na(FALSE)
 	x <- fm.as.matrix(x)
 	res <- list()
 	res[[1]] <- fm.agg.mat(x, 2, fm.bo.min)
@@ -1508,7 +1558,6 @@ NULL
 	res <- lapply(res, function(o) fm.conv.FM2R(o))
 	mean <- res[[3]]/nrow(x)
 	var <- (res[[5]]/nrow(x) - mean^2) * nrow(x) / (nrow(x) - 1)
-	fm.set.test.na(orig.test.na)
 	list(min=res[[1]], max=res[[2]], mean=mean, normL1=res[[4]],
 		 normL2=sqrt(res[[5]]), numNonzeros=res[[6]], var=var)
 }
@@ -1634,7 +1683,7 @@ fm.eigen <- function(mul, k, n, which=c("LM", "SM", "LR", "SR"),
 #' @rdname fm.eigen
 fm.cal.residul <- function(mul, values, vectors)
 {
-	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*", FALSE)
+	tmp <- mul(vectors, NULL) - fm.mapply.row(vectors, values, "*")
 	l2 <- sqrt(colSums(tmp * tmp))
 	fm.conv.FM2R(l2) / values
 }

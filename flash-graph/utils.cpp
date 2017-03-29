@@ -525,7 +525,8 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		dup_idxs[0] = 1;
 		dup_idxs[1] = 0;
 	}
-	return fm::read_data_frame(files, in_mem, delim, ele_parsers, dup_idxs);
+	return fm::read_data_frame(files, in_mem, false, delim, ele_parsers,
+			dup_idxs);
 }
 
 }

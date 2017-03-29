@@ -27,4 +27,3 @@ when all connected vertices with degree < k are recursively deleted.
 \author{
 Disa Mhembere <disa@jhu.edu>
 }
-

@@ -33,6 +33,12 @@ namespace detail
 namespace
 {
 
+static inline matrix_layout_t opposite_layout(matrix_layout_t layout)
+{
+	return layout == matrix_layout_t::L_ROW
+		? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
+}
+
 struct matrix_info
 {
 	size_t num_rows;
@@ -60,17 +66,26 @@ class inner_prod_wide_op: public combine_op
 	bulk_operate::const_ptr left_op;
 	bulk_operate::const_ptr right_op;
 	matrix_info out_mat_info;
+	matrix_layout_t left_layout;
+	matrix_layout_t right_layout;
 	std::vector<detail::local_matrix_store::ptr> local_ms;
 	std::vector<detail::local_matrix_store::ptr> local_tmps;
 public:
 	inner_prod_wide_op(bulk_operate::const_ptr left_op,
 			bulk_operate::const_ptr right_op, const matrix_info &out_mat_info,
+			matrix_layout_t left_layout, matrix_layout_t right_layout,
 			size_t num_threads): combine_op(0, 0, right_op->get_output_type()) {
 		this->left_op = left_op;
 		this->right_op = right_op;
 		local_ms.resize(num_threads);
 		local_tmps.resize(num_threads);
 		this->out_mat_info = out_mat_info;
+		this->left_layout = left_layout;
+		this->right_layout = right_layout;
+		if (left_layout == matrix_layout_t::L_COL)
+			this->out_mat_info.layout = matrix_layout_t::L_COL;
+		else
+			this->out_mat_info.layout = matrix_layout_t::L_ROW;
 	}
 
 	virtual bool has_materialized() const {
@@ -87,10 +102,13 @@ public:
 			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
-		// We don't need to implement this because we materialize
-		// the output matrix immediately.
-		assert(0);
-		return detail::portion_mapply_op::const_ptr();
+		matrix_info info;
+		info.num_rows = out_mat_info.num_cols;
+		info.num_cols = out_mat_info.num_rows;
+		return detail::portion_mapply_op::const_ptr(
+				new inner_prod_wide_op(left_op, right_op, info,
+					opposite_layout(right_layout), opposite_layout(left_layout),
+					local_ms.size()));
 	}
 	virtual std::string to_string(
 			const std::vector<detail::matrix_store::const_ptr> &mats) const {
@@ -366,12 +384,6 @@ public:
 	}
 };
 
-static inline matrix_layout_t opposite_layout(matrix_layout_t layout)
-{
-	return layout == matrix_layout_t::L_ROW
-		? matrix_layout_t::L_COL : matrix_layout_t::L_ROW;
-}
-
 class multiply_wide_op: public combine_op
 {
 	std::vector<detail::local_matrix_store::ptr> Abufs;
@@ -408,7 +420,16 @@ public:
 	}
 
 	virtual bool has_materialized() const {
-		return part_res->has_materialized();
+		bool ret = part_res->has_materialized();
+		// If this is a sparse matrix, we should check num_tmp_accs
+		// because some results may be buffered in tmp_bufs and haven't
+		// been accumulated to num_tmp_accs yet.
+		if (!ret && is_sparse) {
+			for (size_t i = 0; i < num_tmp_accs.size(); i++)
+				if (num_tmp_accs[i] > 0)
+					return true;
+		}
+		return ret;
 	}
 
 	virtual detail::mem_matrix_store::const_ptr get_combined_result() const;
@@ -433,6 +454,12 @@ public:
 		ret->out_num_cols = out_num_rows;
 		ret->Alayout = opposite_layout(Blayout);
 		ret->Blayout = opposite_layout(Alayout);
+		// TODO currently, we only optimize the multiplication of a dense
+		// matrix with a sparse matrix. If we transpose the operation,
+		// it becomes the multiplication of a sparse matrix and a dense
+		// matrix and our optimization wont' work any more. So we disable
+		// the optimization here after transpose.
+		ret->is_sparse = false;
 		return std::shared_ptr<portion_mapply_op>(ret);
 	}
 
@@ -979,12 +1006,9 @@ IPW_matrix_store::IPW_matrix_store(matrix_store::const_ptr left,
 		matrix_info info;
 		info.num_rows = left->get_num_rows();
 		info.num_cols = right->get_num_cols();
-		if (left->store_layout() == matrix_layout_t::L_COL)
-			info.layout = matrix_layout_t::L_COL;
-		else
-			info.layout = matrix_layout_t::L_ROW;
 		portion_op = std::shared_ptr<portion_mapply_op>(new inner_prod_wide_op(
-					left_op, right_op, info, nthreads));
+					left_op, right_op, info, left->store_layout(),
+					right->store_layout(), nthreads));
 	}
 	this->underlying = get_underlying_mats();
 }

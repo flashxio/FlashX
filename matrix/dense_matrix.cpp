@@ -438,6 +438,11 @@ dense_matrix::ptr dense_matrix::multiply_sparse_combined(
 	return dense_matrix::cbind(res_mats);
 }
 
+static inline bool is_floating_point(const scalar_type &type)
+{
+	return type == get_scalar_type<float>() || type == get_scalar_type<double>();
+}
+
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
@@ -451,7 +456,8 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 	// matrix multiplication.
 	// TODO right now this optimization is only useful for a wide matrix
 	// times a tall matrix.
-	if (mat.get_data().is_sparse() && this->is_wide() && !mat.is_wide()) {
+	if (is_floating_point(get_type()) && is_floating_point(mat.get_type())
+			&& mat.get_data().is_sparse() && this->is_wide() && !mat.is_wide()) {
 		detail::sparse_project_matrix_store::const_ptr store
 			= std::dynamic_pointer_cast<const detail::sparse_project_matrix_store>(
 					mat.get_raw_store());
@@ -467,8 +473,7 @@ dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		else
 			return multiply_sparse_combined(mat, out_layout);
 	}
-	else if ((get_type() == get_scalar_type<double>()
-				|| get_type() == get_scalar_type<float>())) {
+	else if (is_floating_point(get_type())) {
 		assert(get_type() == mat.get_type());
 		size_t long_dim1 = std::max(get_num_rows(), get_num_cols());
 		size_t long_dim2 = std::max(mat.get_num_rows(), mat.get_num_cols());
@@ -1674,6 +1679,103 @@ detail::portion_mapply_op::const_ptr repeat_cols_op::transpose() const
 				get_out_num_cols()));
 }
 
+/*
+ * This portion operation is designed to get rows from a tall matrix.
+ * We can assume the matrix is stored in row major order.
+ */
+class get_row_portion_op: public detail::portion_mapply_op
+{
+	detail::matrix_store::ptr res;
+	detail::matrix_append::ptr append;
+	// this determines the size of a portion read from the input matrix
+	// each time. We need this to determine the relative location of
+	// the selected rows in the output matrix.
+	size_t portion_size;
+public:
+	typedef std::shared_ptr<const get_row_portion_op> const_ptr;
+
+	get_row_portion_op(detail::matrix_store::ptr res,
+			size_t portion_size): portion_mapply_op(res->get_num_rows(),
+				res->get_num_cols(), res->get_type()) {
+		this->res = res;
+		this->append = detail::matrix_append::create(res);
+		this->portion_size = portion_size;
+	}
+
+	detail::matrix_store::const_ptr get_result() const {
+		append->flush();
+		if (res->is_wide())
+			res->resize(res->get_num_rows(),
+					append->get_written_eles() / res->get_num_rows());
+		else
+			res->resize(append->get_written_eles() / res->get_num_cols(),
+					res->get_num_cols());
+		return res;
+	}
+
+	// We don't need this method.
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return std::string("get_row_bool(") + mats[0]->get_name() + ")";
+	}
+
+	/*
+	 * Give a hint if this operation is aggregation, so we can optimize
+	 * the backend accordingly. When this is an aggregation operation,
+	 * the second `run' method has to be implemented.
+	 */
+	virtual bool is_agg() const {
+		return false;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		return true;
+	}
+};
+
+void get_row_portion_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
+	// The first input matrix is the matrix where we get rows from.
+	// The second input matrix is a boolean vector that indicates which
+	// rows should be selected.
+	assert(ins.size() == 2);
+	assert(ins[1]->get_num_cols() == 1);
+	assert(ins[1]->get_type() == get_scalar_type<bool>());
+	assert(ins[0]->store_layout() == matrix_layout_t::L_ROW);
+	assert(ins[1]->store_layout() == matrix_layout_t::L_COL);
+	detail::local_row_matrix_store::const_ptr data_store
+		= std::static_pointer_cast<const detail::local_row_matrix_store>(ins[0]);
+	detail::local_col_matrix_store::const_ptr idx_store
+		= std::static_pointer_cast<const detail::local_col_matrix_store>(ins[1]);
+	const bool *bool_idxs
+		= reinterpret_cast<const bool *>(idx_store->get_col(0));
+	std::vector<const char *> selected_rows;
+	for (size_t i = 0; i < idx_store->get_num_rows(); i++)
+		if (bool_idxs[i])
+			selected_rows.push_back(data_store->get_row(i));
+	// We don't want the data in the local matrix to be cached because
+	// the size of this matrix is irregular.
+	detail::local_row_matrix_store::ptr out(new detail::local_buf_row_matrix_store(
+				0, 0, selected_rows.size(), data_store->get_num_cols(),
+				data_store->get_type(), -1, false));
+	for (size_t i = 0; i < selected_rows.size(); i++)
+		memcpy(out->get_row(i), selected_rows[i],
+				out->get_num_cols() * out->get_type().get_size());
+	assert(data_store->get_global_start_row() % portion_size == 0);
+	append->write_async(out,
+			// Here we generate contiguous sequence numbers.
+			data_store->get_global_start_row() / portion_size);
+}
+
 }
 
 dense_matrix::ptr dense_matrix::get_cols(col_vec::ptr idxs) const
@@ -1713,12 +1815,54 @@ static std::vector<detail::mem_row_matrix_store::const_ptr> split_mat_vertial(
 	return blocks;
 }
 
+dense_matrix::ptr dense_matrix::get_rows_bool(col_vec::ptr idxs) const
+{
+	if (get_num_rows() != idxs->get_length()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "get rows: #rows doesn't match length of boolean vector";
+		return dense_matrix::ptr();
+	}
+
+	// If the matrix is wide, we can explicitly pick the rows.
+	// But we need to figure out first which rows we need to pick.
+	if (is_wide()) {
+		std::vector<bool> bool_idxs = idxs->conv2std<bool>();
+		std::vector<off_t> offs;
+		for (size_t i = 0; i < bool_idxs.size(); i++)
+			if (bool_idxs[i])
+				offs.push_back(i);
+		return get_rows(offs);
+	}
+
+	std::vector<detail::matrix_store::const_ptr> in_mats(2);
+	dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
+	in_mats[0] = tmp->get_raw_store();
+	tmp = idxs->conv2(matrix_layout_t::L_COL);
+	in_mats[1] = tmp->get_raw_store();
+	std::vector<detail::matrix_store::ptr> out_mats;
+
+	// TODO let's assume the filter results are always in memory.
+	detail::matrix_store::ptr res = detail::matrix_store::create(
+			get_num_rows(), get_num_cols(), matrix_layout_t::L_ROW,
+			get_type(), store->get_num_nodes(), true);
+	get_row_portion_op::const_ptr op(new get_row_portion_op(res,
+				store->get_portion_size().first));
+	bool ret = __mapply_portion(in_mats, op, out_mats);
+	if (!ret)
+		return dense_matrix::ptr();
+	else
+		return dense_matrix::create(op->get_result());
+}
+
 dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
 {
 	if (idxs->get_length() == 0) {
 		BOOST_LOG_TRIVIAL(error) << "cannot get 0 rows";
 		return dense_matrix::ptr();
 	}
+
+	if (idxs->get_type() == get_scalar_type<bool>())
+		return get_rows_bool(idxs);
 
 	// In this case, we just read the rows from the current matrix physically
 	// and outputs a materialized matrix.

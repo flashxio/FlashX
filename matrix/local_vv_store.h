@@ -94,12 +94,12 @@ public:
 	}
 
 	virtual const char *get_sub_arr(off_t start, off_t end) const {
-		assert((size_t) start < get_num_vecs() && (size_t) end < get_num_vecs());
+		assert((size_t) start < get_num_vecs() && (size_t) end <= get_num_vecs());
 		return this->get_orig_const_data()
 			+ get_vec_off(start + get_local_start());
 	}
 	virtual char *get_sub_arr(off_t start, off_t end) {
-		assert((size_t) start < get_num_vecs() && (size_t) end < get_num_vecs());
+		assert((size_t) start < get_num_vecs() && (size_t) end <= get_num_vecs());
 		return this->get_orig_data() + get_vec_off(start + get_local_start());
 	}
 

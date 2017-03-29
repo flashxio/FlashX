@@ -21,7 +21,7 @@
 
 using namespace fm;
 
-size_t long_dim = 9999999;
+size_t long_dim = 99999;
 
 /*
  * This is a naive implementation of matrix multiplication.
@@ -619,32 +619,36 @@ void test_multiply_matrix(int num_nodes)
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide row matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_ROW, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide column matrix X tall column matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_COL, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on wide column matrix X tall row matrix\n");
 	m1 = create_matrix(10, long_dim, matrix_layout_t::L_COL, num_nodes);
 	m2 = create_matrix(long_dim, 9, matrix_layout_t::L_ROW, num_nodes);
 	correct = naive_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
-	res->materialize_self();
 	verify_result(*res, *correct, equal_func<int>());
+	res = m1->multiply(*m2);
+	verify_result(*res->transpose(), *correct->transpose(), equal_func<int>());
 
 	printf("Test multiplication on tall row matrix X small row matrix\n");
 	m1 = create_matrix(long_dim, 10, matrix_layout_t::L_ROW, num_nodes);
@@ -1686,7 +1690,6 @@ extern size_t num_cached_mats;
 void test_sub_matrix()
 {
 	printf("test sub tall col-matrix\n");
-	size_t long_dim = 16 * 1024 * 1024;
 	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
 			long_dim, 10, matrix_layout_t::L_COL, -1, false);
 	mat = mat->cast_ele_type(get_scalar_type<double>());
@@ -1827,54 +1830,6 @@ void test_copy(int num_nodes, bool in_mem)
 	assert(*(const int *) max_var->get_raw() == 0);
 }
 
-void test_EM_persistent()
-{
-	std::string mat_name = "test.mat";
-	printf("test creating a matrix from an existing matrix file\n");
-	{
-		// Remove the test matrix file.
-		detail::EM_matrix_store::ptr store
-			= detail::EM_matrix_store::create(mat_name);
-		if (store)
-			store->unset_persistent();
-	}
-	{
-		// Create the test matrix file.
-		dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000,
-				long_dim, 10, matrix_layout_t::L_COL, -1, false);
-		detail::EM_matrix_store::const_ptr store1
-			= detail::EM_matrix_store::cast(mat->get_raw_store());
-		bool ret = store1->set_persistent(mat_name);
-		assert(ret);
-		dense_matrix::ptr mat2 = dense_matrix::create(
-				detail::EM_matrix_store::create(mat_name));
-		assert(mat2);
-		dense_matrix::ptr diff = mat->minus(*mat2);
-		scalar_variable::ptr max_var = diff->abs()->max();
-		assert(*(const int *) max_var->get_raw() == 0);
-	}
-	{
-		// Access an existing matrix file.
-		dense_matrix::ptr mat = dense_matrix::create(
-				detail::EM_matrix_store::create(mat_name));
-		assert(mat);
-		dense_matrix::ptr test = mat->lt_scalar<int>(1001);
-		scalar_variable::ptr sum = test->sum();
-		assert(*(const size_t *) sum->get_raw()
-				== mat->get_num_rows() * mat->get_num_cols());
-		detail::EM_matrix_store::const_ptr store
-			= detail::EM_matrix_store::cast(mat->get_raw_store());
-		// Delete the matrix file.
-		store->unset_persistent();
-	}
-	{
-		// Test if the matrix file still exists.
-		detail::EM_matrix_store::ptr store
-			= detail::EM_matrix_store::create(mat_name);
-		assert(store == NULL);
-	}
-}
-
 void test_setdata(int num_nodes)
 {
 	dense_matrix::ptr mat = create_seq_matrix(long_dim, 10,
@@ -1934,7 +1889,6 @@ void _test_EM_matrix()
 	test_agg(-1, matrix_layout_t::L_ROW);
 	test_agg(-1, matrix_layout_t::L_COL);
 	test_setdata(-1);
-	test_EM_persistent();
 	test_sub_matrix();
 	test_mapply_chain(-1, get_scalar_type<double>());
 	test_mapply_chain(-1, get_scalar_type<int>());
@@ -2206,8 +2160,51 @@ dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
 	return res;
 }
 
+dense_matrix::ptr _test_get_rows_bool(dense_matrix::ptr mat)
+{
+	printf("get rows in bool idx\n");
+	dense_matrix::ptr res;
+	col_vec::ptr bool_idx;
+	while (res == NULL) {
+		bool_idx = col_vec::create_randu<bool>(mat->get_num_rows());
+		res = mat->get_rows(bool_idx);
+	}
+	assert(res->get_num_cols() == mat->get_num_cols());
+
+	std::vector<bool> bools = bool_idx->conv2std<bool>();
+	size_t num_trues = 0;
+	for (size_t i = 0; i < bools.size(); i++)
+		if (bools[i])
+			num_trues++;
+	printf("want %ld rows and get %ld rows\n", num_trues, res->get_num_rows());
+	assert(res->get_num_rows() == num_trues);
+
+	// Make sure it's row-oriented.
+	mat = mat->conv2(matrix_layout_t::L_ROW);
+	mat = mat->conv_store(true, -1);
+	mat->materialize_self();
+	res = res->conv2(matrix_layout_t::L_ROW);
+	res = res->conv_store(true, -1);
+
+	detail::mem_matrix_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				res->get_raw_store());
+	size_t res_i = 0;
+	for (size_t i = 0; i < store->get_num_rows(); i++)
+		if (bools[i]) {
+			assert(memcmp(res_store->get_row(res_i), store->get_row(i),
+					store->get_num_cols() * store->get_entry_size()) == 0);
+			res_i++;
+		}
+	return res;
+}
+
 dense_matrix::ptr test_get_rows(dense_matrix::ptr mat)
 {
+	_test_get_rows_bool(mat);
 	return _test_get_rows(mat, std::max(mat->get_num_rows() / 5, 2UL));
 }
 
@@ -2235,8 +2232,50 @@ dense_matrix::ptr _test_get_cols(dense_matrix::ptr mat, size_t get_ncol)
 	return res;
 }
 
+dense_matrix::ptr _test_get_cols_bool(dense_matrix::ptr mat)
+{
+	printf("get cols in bool idx, mat: %ld,%ld\n", mat->get_num_rows(),
+			mat->get_num_cols());
+	dense_matrix::ptr res;
+	col_vec::ptr bool_idx;
+	while (res == NULL) {
+		bool_idx = col_vec::create_randu<bool>(mat->get_num_cols());
+		res = mat->get_cols(bool_idx);
+	}
+	assert(res->get_num_rows() == mat->get_num_rows());
+
+	std::vector<bool> bools = bool_idx->conv2std<bool>();
+	size_t num_trues = 0;
+	for (size_t i = 0; i < bools.size(); i++)
+		if (bools[i])
+			num_trues++;
+	assert(res->get_num_cols() == num_trues);
+
+	mat = mat->conv2(matrix_layout_t::L_COL);
+	mat = mat->conv_store(true, -1);
+	mat->materialize_self();
+	res = res->conv2(matrix_layout_t::L_COL);
+	res = res->conv_store(true, -1);
+
+	detail::mem_matrix_store::const_ptr store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr res_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				res->get_raw_store());
+	size_t res_i = 0;
+	for (size_t i = 0; i < store->get_num_cols(); i++)
+		if (bools[i]) {
+			assert(memcmp(res_store->get_col(res_i), store->get_col(i),
+					store->get_num_rows() * store->get_entry_size()) == 0);
+			res_i++;
+		}
+	return res;
+}
+
 dense_matrix::ptr test_get_cols(dense_matrix::ptr mat)
 {
+	_test_get_cols_bool(mat);
 	return _test_get_cols(mat, std::max(mat->get_num_cols() / 5, 2UL));
 }
 
@@ -3221,9 +3260,9 @@ void test_share_data()
 	assert(mat1->get_raw_store()->share_data(*mat2->get_raw_store()));
 
 	// Test block matrix
-	mat1 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+	mat1 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 100,
 			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
-	mat2 = dense_matrix::create_randu<size_t>(0, 1000, 1000000, 1000,
+	mat2 = dense_matrix::create_randu<size_t>(0, 1000, long_dim, 100,
 			matrix_layout_t::L_ROW, matrix_conf.get_num_nodes(), true);
 	printf("test share data in block matrix\n");
 	_test_share_data(mat1, mat2);

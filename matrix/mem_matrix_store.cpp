@@ -861,6 +861,56 @@ size_t mem_sub_row_matrix_store::get_data_id() const
 	return INVALID_MAT_ID;
 }
 
+bool mem_row_matrix_store::resize(size_t num_rows, size_t num_cols)
+{
+	if (num_rows > get_num_rows() || num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't resize a matrix to a larger one";
+		return false;
+	}
+	if (num_rows == get_num_rows() && num_cols == get_num_cols())
+		return true;
+
+	// If we only need to reduce the number of rows, we can simply adjust
+	// the number of rows and columns.
+	if (num_rows < get_num_rows() && num_cols == get_num_cols())
+		return matrix_store::resize(num_rows, num_cols);
+
+	// Otherwise, we need to copy the data before adjusting the number of
+	// rows and columns.
+	mem_row_matrix_store::ptr tmp = mem_row_matrix_store::create(num_rows,
+			num_cols, get_type());
+	for (size_t i = 0; i < num_rows; i++)
+		memcpy(tmp->get_row(i), get_row(i), num_cols * get_entry_size());
+	data = tmp->data;
+	return matrix_store::resize(num_rows, num_cols);
+}
+
+bool mem_col_matrix_store::resize(size_t num_rows, size_t num_cols)
+{
+	if (num_rows > get_num_rows() || num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't resize a matrix to a larger one";
+		return false;
+	}
+	if (num_rows == get_num_rows() && num_cols == get_num_cols())
+		return true;
+
+	// If we only need to reduce the number of cols, we can simply adjust
+	// the number of rows and columns.
+	if (num_cols < get_num_cols() && num_rows == get_num_rows())
+		return matrix_store::resize(num_rows, num_cols);
+
+	// Otherwise, we need to copy the data before adjusting the number of
+	// rows and columns.
+	mem_col_matrix_store::ptr tmp = mem_col_matrix_store::create(num_rows,
+			num_cols, get_type());
+	for (size_t i = 0; i < num_cols; i++)
+		memcpy(tmp->get_col(i), get_col(i), num_rows * get_entry_size());
+	data = tmp->data;
+	return matrix_store::resize(num_rows, num_cols);
+}
+
 }
 
 }

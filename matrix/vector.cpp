@@ -180,7 +180,8 @@ bool vector::equals(const vector &vec) const
 				v2.get_portion_size());
 		for (size_t idx = 0; idx < v1.get_length(); idx += portion_size) {
 			size_t llen = std::min(v1.get_length() - idx, portion_size);
-			if (memcmp(v1.get_sub_arr(idx, llen), v2.get_sub_arr(idx, llen),
+			if (memcmp(v1.get_sub_arr(idx, idx + llen),
+						v2.get_sub_arr(idx, idx + llen),
 						llen * get_entry_size()) != 0)
 				return false;
 		}
