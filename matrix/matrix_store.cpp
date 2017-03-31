@@ -341,6 +341,16 @@ bool matrix_store::share_data(const matrix_store &store) const
 		&& get_data_id() != INVALID_MAT_ID;
 }
 
+matrix_append::matrix_append(matrix_store::ptr store)
+{
+	this->res = store;
+	q.resize(1000);
+	last_append = -1;
+	written_eles = 0;
+	empty_portion = local_matrix_store::const_ptr(new local_buf_row_matrix_store(
+				0, 0, 0, 0, store->get_type(), -1, false));
+}
+
 void matrix_append::write_async(local_matrix_store::const_ptr portion,
 		off_t seq_id)
 {
@@ -349,6 +359,8 @@ void matrix_append::write_async(local_matrix_store::const_ptr portion,
 		return;
 	}
 
+	if (portion == NULL)
+		portion = empty_portion;
 	std::vector<local_matrix_store::const_ptr> data;
 	lock.lock();
 	// Add the new portion to the queue. If the queue is too small,
@@ -365,7 +377,9 @@ void matrix_append::write_async(local_matrix_store::const_ptr portion,
 	// Get the portions from the queue.
 	while (q.front()) {
 		auto mat = q.front();
-		data.push_back(mat);
+		// If the portion isn't empty.
+		if (mat->get_num_rows() > 0 && mat->get_num_cols() > 0)
+			data.push_back(mat);
 		q.pop_front();
 		q.push_back(local_matrix_store::const_ptr());
 		last_append++;

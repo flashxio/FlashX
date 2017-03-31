@@ -277,6 +277,10 @@ class matrix_append
 {
 	matrix_store::ptr res;
 
+	// This is used to fill the slot in the queue that doesn't have the data
+	// from a portion.
+	std::shared_ptr<const local_matrix_store> empty_portion;
+
 	spin_lock lock;
 	// A queue that contains portions appended out of order. The location
 	// of a portion in the queue is determined by the difference between
@@ -287,12 +291,7 @@ class matrix_append
 	// The total number of elements written to the result matrix.
 	std::atomic<size_t> written_eles;
 
-	matrix_append(matrix_store::ptr store) {
-		this->res = store;
-		q.resize(1000);
-		last_append = -1;
-		written_eles = 0;
-	}
+	matrix_append(matrix_store::ptr store);
 public:
 	typedef std::shared_ptr<matrix_append> ptr;
 

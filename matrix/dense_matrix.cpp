@@ -1762,18 +1762,27 @@ void get_row_portion_op::run(
 	for (size_t i = 0; i < idx_store->get_num_rows(); i++)
 		if (bool_idxs[i])
 			selected_rows.push_back(data_store->get_row(i));
-	// We don't want the data in the local matrix to be cached because
-	// the size of this matrix is irregular.
-	detail::local_row_matrix_store::ptr out(new detail::local_buf_row_matrix_store(
-				0, 0, selected_rows.size(), data_store->get_num_cols(),
-				data_store->get_type(), -1, false));
-	for (size_t i = 0; i < selected_rows.size(); i++)
-		memcpy(out->get_row(i), selected_rows[i],
-				out->get_num_cols() * out->get_type().get_size());
-	assert(data_store->get_global_start_row() % portion_size == 0);
-	append->write_async(out,
-			// Here we generate contiguous sequence numbers.
-			data_store->get_global_start_row() / portion_size);
+	if (selected_rows.empty())
+		// If there isn't data we need to write, we still need to inform
+		// matrix append of data from this portion. Otherwise, data from portions
+		// behind it won't be appended.
+		append->write_async(NULL,
+				// Here we generate contiguous sequence numbers.
+				data_store->get_global_start_row() / portion_size);
+	else {
+		// We don't want the data in the local matrix to be cached because
+		// the size of this matrix is irregular.
+		detail::local_row_matrix_store::ptr out(new detail::local_buf_row_matrix_store(
+					0, 0, selected_rows.size(), data_store->get_num_cols(),
+					data_store->get_type(), -1, false));
+		for (size_t i = 0; i < selected_rows.size(); i++)
+			memcpy(out->get_row(i), selected_rows[i],
+					out->get_num_cols() * out->get_type().get_size());
+		assert(data_store->get_global_start_row() % portion_size == 0);
+		append->write_async(out,
+				// Here we generate contiguous sequence numbers.
+				data_store->get_global_start_row() / portion_size);
+	}
 }
 
 }
