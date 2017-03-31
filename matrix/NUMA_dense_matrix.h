@@ -311,7 +311,11 @@ public:
 
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
-		return store.get_cols(idxs)->transpose();
+		auto cols = store.get_cols(idxs);
+		if (cols == NULL)
+			return matrix_store::const_ptr();
+		else
+			return cols->transpose();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
@@ -383,7 +387,11 @@ public:
 
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const {
-		return store.get_cols(idxs)->transpose();
+		auto cols = store.get_cols(idxs);
+		if (cols == NULL)
+			return matrix_store::const_ptr();
+		else
+			return cols->transpose();
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(

@@ -217,16 +217,9 @@ matrix_store::const_ptr NUMA_row_tall_matrix_store::get_rows(
 matrix_store::const_ptr NUMA_row_tall_matrix_store::get_cols(
 		const std::vector<off_t> &idxs) const
 {
-	NUMA_row_tall_matrix_store::ptr ret = NUMA_row_tall_matrix_store::create(
-			get_num_rows(), idxs.size(), get_num_nodes(), get_type());
-	std::vector<const char *> src_data(idxs.size());
-	for (size_t i = 0; i < get_num_rows(); i++) {
-		const char *src_row = get_row(i);
-		for (size_t j = 0; j < src_data.size(); j++)
-			src_data[j] = src_row + idxs[j] * get_entry_size();
-		get_type().get_sg().gather(src_data, ret->get_row(i));
-	}
-	return ret;
+	// It's expensive to get some cols from a row-major tall matrix physically.
+	// Let's have dense_matrix to deal with it.
+	return matrix_store::const_ptr();
 }
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
