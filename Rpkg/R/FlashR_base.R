@@ -1798,6 +1798,34 @@ setMethod("drop", "fm", function(x) {
 			  fm.as.vector(x)
 })
 
+#' Which indices are TRUE?
+#'
+#' Give the \code{TRUE} indices of a logical object, allowing for array
+#' indices.
+#'
+#' @param x a \code{logical} vector or array. \code{NA}s are allowed and omitted
+#'        (treated as if \code{FALSE}).
+#' @param arr.ind logical; should *arr*ay *ind*ices be returned when \code{x} is
+#'        an array. This argument is ignored currently.
+#' @param useNames logical indicating if the value of \code{arrayInd()} should
+#'        have (non-null) dimnames at all. This argument is ignored currently.
+#' @return a FlashR vector
+#' @name which
+#'
+#' @examples
+#' vec <- fm.runif(1000000)
+#' idx <- which(vec < 0.5)
+NULL
+
+#' @rdname which
+setMethod("which", "fm", function(x, arr.ind=FALSE, useNames=TRUE) {
+		  fm.seq.int(1, length(x), 1)[as.logical(x)]
+})
+#' @rdname which
+setMethod("which", "fmV", function(x, arr.ind=FALSE, useNames=TRUE) {
+		  fm.seq.int(1, length(x), 1)[as.logical(x)]
+})
+
 fm.hist <- function(x, breaks=c("even", "exp"), exp.base=2, plot=TRUE,
 					plot.file="", log="", xlab=NULL, ylab=NULL)
 {
