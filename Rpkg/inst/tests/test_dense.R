@@ -623,24 +623,6 @@ test_that(name, {
 		  sub.mat <- mat[,fm.conv.FM2R(fm.index)]
 		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
 		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.rep.int(FALSE, ncol(fm.mat))
-		  fm.sub.mat <- fm.mat[,fm.index]
-		  sub.mat <- mat[,fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.runif(ncol(fm.mat) + 1) > 0.5
-		  fm.sub.mat <- fm.mat[,fm.index]
-		  sub.mat <- mat[,fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.runif(ncol(fm.mat) - 1) > 0.5
-		  fm.sub.mat <- fm.mat[,fm.index]
-		  sub.mat <- mat[,fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
 })
 
 name <- paste("Get rows from a matrix", type)
@@ -665,24 +647,6 @@ test_that(name, {
 		  fm.mat <- get.mat(type, 20, 100)
 		  mat <- fm.conv.FM2R(fm.mat)
 		  fm.index <- fm.runif(nrow(fm.mat)) > 0.5
-		  fm.sub.mat <- fm.mat[fm.index,]
-		  sub.mat <- mat[fm.conv.FM2R(fm.index),]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.rep.int(FALSE, nrow(fm.mat))
-		  fm.sub.mat <- fm.mat[fm.index,]
-		  sub.mat <- mat[fm.conv.FM2R(fm.index),]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.runif(nrow(fm.mat) + 1) > 0.5
-		  fm.sub.mat <- fm.mat[fm.index,]
-		  sub.mat <- mat[fm.conv.FM2R(fm.index),]
-		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
-		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
-
-		  fm.index <- fm.runif(nrow(fm.mat) - 1) > 0.5
 		  fm.sub.mat <- fm.mat[fm.index,]
 		  sub.mat <- mat[fm.conv.FM2R(fm.index),]
 		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
@@ -721,24 +685,6 @@ test_that(name, {
 		  fm.vec <- get.vec(type, 2000)
 		  vec <- fm.conv.FM2R(fm.vec)
 		  fm.index <- fm.runif(length(fm.vec)) > 0.5
-		  fm.sub.vec <- fm.vec[fm.index]
-		  sub.vec <- vec[fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.vec), typeof(sub.vec))
-		  expect_equal(sub.vec, fm.conv.FM2R(fm.sub.vec))
-
-		  fm.index <- fm.rep.int(FALSE, length(fm.vec))
-		  fm.sub.vec <- fm.vec[fm.index]
-		  sub.vec <- vec[fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.vec), typeof(sub.vec))
-		  expect_equal(sub.vec, fm.conv.FM2R(fm.sub.vec))
-
-		  fm.index <- fm.runif(length(fm.vec) + 1) > 0.5
-		  fm.sub.vec <- fm.vec[fm.index]
-		  sub.vec <- vec[fm.conv.FM2R(fm.index)]
-		  expect_equal(typeof(fm.sub.vec), typeof(sub.vec))
-		  expect_equal(sub.vec, fm.conv.FM2R(fm.sub.vec))
-
-		  fm.index <- fm.runif(length(fm.vec) - 1) > 0.5
 		  fm.sub.vec <- fm.vec[fm.index]
 		  sub.vec <- vec[fm.conv.FM2R(fm.index)]
 		  expect_equal(typeof(fm.sub.vec), typeof(sub.vec))
