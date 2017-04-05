@@ -1569,11 +1569,18 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 
 #' Eigensolver
 #'
-#' \code{fm.eigen} computes eigenvalues/vectors of a square matrix.
+#' \code{fm.eigen} and \code{fm.eigen.block} computes eigenvalues/vectors
+#' of a square matrix.
 #' \code{fm.cal.residul} computes the residual of the eigenvalues.
 #'
 #' \code{fm.eigen} uses Anasazi package of Trilinos, if Anasazi is compiled
 #' into FlashR, or eigs to compute eigenvalues.
+#'
+#' \code{fm.eigen.block} computes eigenvalues incrementally, one block of
+#' eigenvalues at a time. It makes sure when computing a block of eigenvalues,
+#' all vectors in the subspace are stored in memory to minimize data written
+#' to disks. However, it may take many more iterations to compute the specified
+#' number of eigenvalues.
 #'
 #' The \code{which} specify which eigenvalues/vectors to compute, character
 #' constant with exactly two characters. Possible values for symmetric input
@@ -1587,12 +1594,11 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #'
 #' @param mul The function to perform the matrix-vector multiplication.
 #' @param k Integer. The number of eigenvalues to compute.
+#' @param n Numeric. The number of rows of the matrix.
 #' @param which String. Selection criteria.
 #' @param sym Logical scalar, whether the input matrix is symmetric.
 #' @param options List. Additional options to the eigensolver.
 #' @param env The environment in which \code{mul} will bevaluated.
-#' @param values The eigenvalues
-#' @param vectors The eigenvectors
 #'
 #' The \code{options} argument specifies what kind of computation to perform.
 #' It is a list with the following members, which correspond directly to
@@ -1611,6 +1617,8 @@ setMethod("summary", "fmV", function(object, ...) .summary(object))
 #'				of the vectors that operate together.
 #'
 #' num_blocks Numeric scalar. The number of blocks to compute eigenpairs.
+#' in.mem Logical scalar. This indicates whether to keep the eigenvectors
+#'              and the vectors in the subspace in memory or on disks.
 #'
 #'
 #' @return \code{fm.eigen} returns a named list with the following members:
@@ -1678,6 +1686,58 @@ fm.eigen <- function(mul, k, n, which=c("LM", "SM", "LR", "SR"),
 			eigs.ret <- eigs(eigs.fun, k=k, which=which, n=n, opts=eigs.opts)
 		list(values=eigs.ret$values, vectors=fm.as.matrix(eigs.ret$vectors))
 	}
+}
+
+#' @rdname fm.eigen
+fm.eigen.block <- function(mul, k, n, block.size,
+						   which=c("LM", "SM", "LR", "SR"), sym=TRUE,
+						   options=NULL, verbose=FALSE,
+						   env = parent.frame())
+{
+	runs <- ceiling(k / block.size)
+	nev <- min(k, block.size)
+	res <- fm.eigen(mul, nev, n, which=which, sym=sym, options=options)
+	eval <- res$values
+	in.mem <- TRUE
+	if ("in.mem" %in% names(options)) {
+		in.mem <- options$in.mem
+		options$in.mem <- TRUE
+	}
+	evec <- fm.conv.store(res$vectors, in.mem=in.mem)
+	if (verbose) {
+		print(paste("eigenvalues (", 1, "-", nev, "):"))
+		print(eval)
+		print("precision:")
+		print(fm.cal.residul(mul, eval, evec))
+	}
+	if (runs > 1) {
+		for (i in 1:(runs - 1)) {
+			evec1 <- fm.mapply.row(evec, eval, "*")
+			mul1 <- function(x, extra) {
+				ret <- mul(x, extra)
+				gc()
+				ret <- ret - evec1 %*% (t(evec) %*% x)
+				ret <- fm.conv.store(ret, in.mem=TRUE)
+				gc()
+				ret
+			}
+
+			nev <- min(block.size, k - block.size * i)
+			res <- fm.eigen(mul1, nev, n, which=which, sym=sym,
+							options=options)
+			eval <- c(eval, res$values)
+			evec <- cbind(evec, fm.conv.store(res$vectors, in.mem=in.mem))
+			if (verbose) {
+				from <- block.size * i
+				to <- from + nev
+				print(paste("eigenvalues (", from, "-", to, "):"))
+				print(res$values)
+				print("precision:")
+				print(fm.cal.residul(mul, res$values, res$vectors))
+			}
+		}
+	}
+	list(values=eval, vectors=fm.as.matrix(evec))
 }
 
 #' @rdname fm.eigen
