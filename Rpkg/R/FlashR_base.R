@@ -965,7 +965,7 @@ setMethod("sum", "fmV", .sum.int)
 			tmp <- .range1(arg, na.rm)
 			# If there is NA in the data, there is no point of
 			# continuing.
-			if (is.na(tmp))
+			if (any(is.na(tmp)))
 				return(tmp)
 			res[1] <- min(res[1], tmp[1])
 			res[2] <- max(res[2], tmp[2])
