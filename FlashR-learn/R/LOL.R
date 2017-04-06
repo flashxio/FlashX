@@ -25,9 +25,9 @@ LOL <- function(m, labels, k, type=c("svd", "rand_dense", "rand_sparse")) {
 	num.features <- dim(m)[1]
 	nv <- k - (num.labels - 1)
 	gr.sum <- fm.groupby(m, 1, fm.as.factor(labels, 2), fm.bo.add)
-	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div, FALSE)
+	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div)
 	diff <- fm.get.cols(gr.mean, 1) - fm.get.cols(gr.mean, 2)
-	diff.l2 <- sqrt(sum(diff * diff))
+	diff.l2 <- sqrt(as.vector(sum(diff * diff)))
 	stopifnot(diff.l2 != 0)
 	diff <- diff / diff.l2
 	if (nv == 0)
@@ -72,9 +72,9 @@ QOQ <- function(m, labels, k)
 	nv1 <- min(nv, counts$Freq[2])
 
 	gr.sum <- fm.groupby(m, 1, fm.as.factor(labels, 2), fm.bo.add)
-	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div, FALSE)
+	gr.mean <- fm.mapply.row(gr.sum, counts$Freq, fm.bo.div)
 	diff <- fm.get.cols(gr.mean, 1) - fm.get.cols(gr.mean, 2)
-	diff.l2 <- sqrt(sum(diff * diff))
+	diff.l2 <- sqrt(as.vector(sum(diff * diff)))
 	stopifnot(diff.l2 != 0)
 	diff <- diff / diff.l2
 	if (nv == 0)
