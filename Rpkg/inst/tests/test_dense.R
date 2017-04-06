@@ -872,6 +872,7 @@ for (i in 1:length(agg.ops1)) {
 for (type in type.set) {
 for (na.rm in c(TRUE, FALSE)) {
 for (spec in spec.vals) {
+if (!is.null(spec) && spec == "NA") next
 test_that(paste("pmax on vectors", type, spec, na.rm), {
 		  fm.vec1 <- get.vec(type, spec.val=spec, percent=0.5)
 		  fm.vec2 <- get.vec(type, spec.val=spec, percent=0.5)
