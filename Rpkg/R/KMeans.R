@@ -23,13 +23,15 @@
 #' @param centers either the number of clusters, say k, or a set of
 #'		  initial (distinct) cluster centers. If a number, a random set
 #'		  of (distinct) rows in `x' is chosen as the initial centers.
-#' @param max.iters the maximal number of iterations.
+#' @param algorithm character. Currently, we only support "Lloyd".
+#' @param iter.max the maximal number of iterations.
 #' @param debug This indicates whether to print debug info.
 #' @param use.blas a logical value indicating whether to use BLAS to
 #'                 compute Euclidean distance.
 #' @return a vector that contains cluster Ids for each data point.
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
+fm.kmeans <- function(data, centers, iter.max=10, algorithm=c("Lloyd"),
+					  debug=FALSE, use.blas=FALSE)
 {
 	n <- dim(data)[1]
 	m <- dim(data)[2]
@@ -72,7 +74,7 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	num.moves <- nrow(data)
 	if (use.blas)
 		rsData2 <- rowSums(data * data)
-	while (num.moves > 0 && iter < max.iters) {
+	while (num.moves > 0 && iter < iter.max) {
 		if (debug)
 			iter.start <- Sys.time()
 		centers <- new.centers
@@ -108,5 +110,23 @@ fm.kmeans <- function(data, centers, max.iters=10, debug=FALSE, use.blas=FALSE)
 	end.time <- Sys.time()
 	cat("KMeans takes", iter , "iterations and",
 		as.numeric(end.time) - as.numeric(start.time), "seconds\n")
-	parts
+
+	# This is what we really need, but we can't write the computation
+	# in the following form yet.
+	#ss <- function(x) sum(scale(x, scale = FALSE)^2)
+	#withinss <- sapply(split(as.data.frame(x), cluster), ss)
+	cluster <- fm.as.factor(parts, num.centers)
+	cnts <- fm.table(cluster)
+	x2.gsum <- fm.groupby(data * data, 2, cluster, "+")
+	x.gsum <- fm.groupby(data, 2, cluster, "+")
+	withinss <- as.vector(rowSums(x2.gsum - (x.gsum^2)/cnts@Freq))
+
+	ss <- function(x) sum(scale(x, scale = FALSE)^2)
+	betweenss <- as.vector(ss(new.centers[parts + 1,]))
+	tot.withinss <- sum(withinss)
+	totss <- tot.withinss + betweenss
+
+	structure(list(cluster=parts+1, centers=new.centers, totss=totss, withinss=withinss,
+		 tot.withinss=tot.withinss, betweenss=betweenss,
+		 size=as.vector(cnts@Freq), iter=iter), class = "kmeans")
 }

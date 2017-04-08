@@ -1210,3 +1210,18 @@ test_that("which.min", {
 		  expect_equal(res1, res2)
 })
 }
+
+test_that("kmeans", {
+			  data <- matrix(round(runif(10000), digits=8), 1000, 10)
+			  cluster <- floor(runif(1000, min=1, max=9))
+			  centers <- data[floor(runif(8, min=1, max=1000)),]
+			  res <- kmeans(data, centers, iter.max=10, algorithm="Lloyd")
+			  dimnames(res$centers) <- NULL
+			  fm.res <- fm.kmeans(fm.as.matrix(data), centers, iter.max=10)
+			  expect_equal(res$cluster, as.vector(fm.res$cluster))
+			  expect_equal(res$centers, as.matrix(fm.res$centers))
+			  expect_equal(res$totss, fm.res$totss)
+			  expect_equal(res$withinss, fm.res$withinss)
+			  expect_equal(res$tot.withinss, fm.res$tot.withinss)
+			  expect_equal(res$betweenss, fm.res$betweenss)
+})
