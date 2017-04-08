@@ -130,3 +130,21 @@ fm.kmeans <- function(data, centers, iter.max=10, algorithm=c("Lloyd"),
 		 tot.withinss=tot.withinss, betweenss=betweenss,
 		 size=as.vector(cnts@Freq), iter=iter), class = "kmeans")
 }
+
+BIC.kmeans <- function(object, ...)
+{
+	m <- ncol(object$centers)
+	n <- length(object$cluster)
+	k <- nrow(object$centers)
+	D <- object$tot.withinss
+	-2 * D + log(n)*m*k
+}
+
+AIC.kmeans <- function(object, ..., k=2)
+{
+	m <- ncol(object$centers)
+	n <- length(object$cluster)
+	k <- nrow(object$centers)
+	D <- object$tot.withinss
+	-2 * D + 2*m*k
+}
