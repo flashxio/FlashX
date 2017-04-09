@@ -1742,6 +1742,11 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		}
 		if (FM_get_Rtype(pidxs) == R_type::R_LOGICAL)
 			idxs = idxs->cast_ele_type(get_scalar_type<bool>());
+		// R is 1-based indexing, and C/C++ is 0-based.
+		else if (idxs->get_type() == get_scalar_type<int>())
+			idxs = idxs->minus_scalar<int>(1);
+		else if (idxs->get_type() == get_scalar_type<double>())
+			idxs = idxs->minus_scalar<double>(1);
 		col_vec::ptr idx_vec = col_vec::create(idxs);
 		sub_m = margin == matrix_margin::MAR_COL
 			? mat->get_cols(idx_vec) : mat->get_rows(idx_vec);
