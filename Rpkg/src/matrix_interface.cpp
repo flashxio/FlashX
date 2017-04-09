@@ -3021,3 +3021,26 @@ RcppExport SEXP R_FM_set_test_NA(SEXP pval)
 	fmr::set_use_na_op(LOGICAL(pval)[0]);
 	return R_NilValue;
 }
+
+RcppExport SEXP R_FM_sort(SEXP pvec, SEXP pdecrease, SEXP pret_idx)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+	vector::ptr vec = mat->conv2vec();
+	bool ret_idx = LOGICAL(pret_idx)[0];
+	bool decrease = LOGICAL(pdecrease)[0];
+	if (ret_idx) {
+		auto sorted = vec->sort_with_index();
+		Rcpp::List ret;
+		ret["x"] = create_FMR_vector(sorted->get_vec("val"), FM_get_Rtype(pvec), "");
+		col_vec::ptr ix = col_vec::create(vector::create(sorted->get_vec("idx")));
+		ret["ix"] = create_FMR_vector(
+				ix->cast_ele_type(get_scalar_type<double>()),
+				R_type::R_REAL, "");
+		return ret;
+	}
+	else {
+		auto sorted = vec->sort(decrease);
+		return create_FMR_vector(sorted->get_raw_store(),
+				FM_get_Rtype(pvec), "");
+	}
+}

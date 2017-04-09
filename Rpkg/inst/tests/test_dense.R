@@ -1223,6 +1223,22 @@ test_that("which.min", {
 })
 }
 
+test_that("sort", {
+			  vec <- fm.runif(1000)
+			  rvec <- as.vector(vec)
+			  ret <- sort(vec)
+			  rret <- sort(rvec)
+			  expect_equal(as.vector(ret), rret)
+
+			  ret <- sort.list(vec)
+			  rret <- sort.list(rvec)
+			  expect_equal(as.vector(ret), rret)
+
+			  ret <- rank(vec)
+			  rret <- rank(rvec)
+			  expect_equal(as.vector(ret), rret)
+})
+
 test_that("kmeans", {
 			  data <- matrix(round(runif(10000), digits=8), 1000, 10)
 			  cluster <- floor(runif(1000, min=1, max=9))

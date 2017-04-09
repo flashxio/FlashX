@@ -2164,6 +2164,41 @@ fm.print.mat.info <- function(fm)
 	ret <- .Call("R_FM_print_mat_info", fm, PACKAGE="FlashR")
 }
 
+setMethod("sort", "fmV", function(x, decreasing = FALSE,
+								  index.return=FALSE, ...) {
+	ret <- .Call("R_FM_sort", x, as.logical(decreasing),
+				 as.logical(index.return))
+	if (index.return)
+		list(x=.new.fmV(ret[["x"]]), ix=.new.fmV(ret[["ix"]]) + 1)
+	else
+		.new.fmV(ret)
+})
+
+#setMethod("order", "fmV", function(..., na.list=TRUE, decreasing=FALSE,
+#								   method=c("shell", "radix")) {
+#	args <- list(...)
+#	# TODO we'll need to handle a list of vectors later.
+#	ret <- sort(args[[1]], decreasing=decreasing,
+#				index.return=TRUE)
+#	ret$ix
+#})
+
+setMethod("sort.list", "fmV", function(x, partial=NULL, na.last=TRUE,
+									   decreasing=FALSE,
+									   method=c("shell", "quick", "radix")) {
+	ret <- sort(x, decreasing=decreasing,
+				index.return=TRUE)
+	ret$ix
+})
+
+setMethod("rank", "fmV", function(x, na.last=TRUE,
+								  ties.method=c("average", "first", "last",
+												"random", "max", "min")) {
+	sorted <- sort(x, decreasing=FALSE, index.return=TRUE)
+	ret <- sort(sorted$ix, decreasing=FALSE, index.return=TRUE)
+	ret$ix
+})
+
 #' Google profiler
 #'
 #' This uses the Google profiler to profile the execution of the code.
