@@ -635,6 +635,18 @@ test_that(name, {
 		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
 		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
 
+		  idx <- floor(runif(1000, min=1, max=100))
+		  fm.idx <- fm.conv.FM2R(idx)
+		  fm.sub.mat <- fm.mat[fm.idx,]
+		  sub.mat <- mat[fm.idx,]
+		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
+		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
+
+		  fm.sub.mat <- t(fm.mat[fm.idx,])
+		  sub.mat <- t(mat[fm.idx,])
+		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
+		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
+
 		  fm.mat <- t(fm.mat)
 		  mat <- t(mat)
 		  fm.sub.mat <- fm.mat[3:12,]
