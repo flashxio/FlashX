@@ -1,14 +1,12 @@
 #include <unordered_set>
 
-#include "in_mem_storage.h"
-
 #include "fm_utils.h"
 #include "sparse_matrix.h"
 #include "data_frame.h"
 
 using namespace fm;
 
-typedef std::pair<fg::vertex_id_t, fg::vertex_id_t> edge_t;
+typedef std::pair<uint32_t, uint32_t> edge_t;
 
 int num_nodes = 1;
 
@@ -39,7 +37,7 @@ void print_cols(detail::mem_matrix_store::ptr store)
 		printf("%ld: %f\n", i, mem_sum->get<double>(0, i));
 }
 
-edge_list::ptr create_rand_el(bool with_attr)
+data_frame::ptr create_rand_el(bool with_attr)
 {
 	int num_rows = 1024 * 16;
 	int num_cols = 1024 * 16;
@@ -52,15 +50,15 @@ edge_list::ptr create_rand_el(bool with_attr)
 	}
 	printf("There are %ld edges\n", edges.size());
 	detail::smp_vec_store::ptr sources = detail::smp_vec_store::create(
-			edges.size(), get_scalar_type<fg::vertex_id_t>());
+			edges.size(), get_scalar_type<uint32_t>());
 	detail::smp_vec_store::ptr dests = detail::smp_vec_store::create(
-			edges.size(), get_scalar_type<fg::vertex_id_t>());
+			edges.size(), get_scalar_type<uint32_t>());
 	detail::smp_vec_store::ptr vals = detail::smp_vec_store::create(
 			edges.size(), get_scalar_type<float>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
-		sources->set<fg::vertex_id_t>(idx, e.first);
-		dests->set<fg::vertex_id_t>(idx, e.second);
+		sources->set<uint32_t>(idx, e.first);
+		dests->set<uint32_t>(idx, e.second);
 		vals->set<float>(idx, idx);
 		idx++;
 	}
@@ -70,15 +68,14 @@ edge_list::ptr create_rand_el(bool with_attr)
 	df->add_vec("dest", dests);
 	if (with_attr)
 		df->add_vec("attr", vals);
-	return edge_list::create(df, true);
+	return df;
 }
 
-void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
-		const std::vector<size_t> &degrees)
+void test_spmm_block(sparse_matrix::ptr spm)
 {
 	printf("test SpMM on 2D-partitioned matrix\n");
-	size_t num_cols = idx->get_header().get_num_cols();
-	size_t num_rows = idx->get_header().get_num_rows();
+	size_t num_cols = spm->get_num_cols();
+	size_t num_rows = spm->get_num_rows();
 	detail::mem_matrix_store::ptr in_mat
 		= detail::NUMA_row_tall_matrix_store::create(num_cols, 10, num_nodes,
 				get_scalar_type<float>());
@@ -86,7 +83,6 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	for (size_t i = 0; i < in_mat->get_num_rows(); i++)
 		for (size_t j = 0; j < in_mat->get_num_cols(); j++)
 			in_mat->set<float>(i, j, val++);
-	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
 	detail::mem_matrix_store::ptr out1
 		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
@@ -106,74 +102,37 @@ void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	printf("diff: %f\n", scalar_variable::get_val<float>(*diff));
 }
 
-void test_multiply_block(edge_list::ptr el)
+void test_multiply_block(data_frame::ptr el)
 {
 	printf("Multiply on 2D-partitioned matrix\n");
 	const block_2d_size block_size(1024, 1024);
 
-	auto oned_mat = create_1d_matrix(el);
-	vector_vector::ptr adj = oned_mat.first;
-	size_t entry_size = el->get_attr_size();
 	const scalar_type *entry_type = NULL;
-	if (el->has_attr())
-		entry_type = &el->get_attr_type();
-	std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> mat
-		= create_2d_matrix(adj, oned_mat.second, block_size, entry_type);
-	assert(mat.first);
-	assert(mat.second);
-	mat.second->verify();
-	std::vector<size_t> degrees(adj->get_num_vecs());
-	for (size_t i = 0; i < adj->get_num_vecs(); i++)
-		degrees[i] = fg::ext_mem_undirected_vertex::vsize2num_edges(
-				adj->get_length(i), entry_size);
+	if (el->get_num_vecs() >= 3)
+		entry_type = &el->get_vec(2)->get_type();
+	sparse_matrix::ptr spm = create_2d_matrix(el, block_size,
+			entry_type, false);
 
-	test_spmm_block(mat.first, mat.second, degrees);
+	test_spmm_block(spm);
 }
 
-void test_spmm_fg(fg::FG_graph::ptr fg)
+int main(int argc, char *argv[])
 {
-	printf("test SpMM on FlashGraph matrix\n");
-	sparse_matrix::ptr spm;
-	if (fg->get_graph_header().has_edge_data()) {
-		assert(fg->get_graph_header().get_edge_data_size() == sizeof(float));
-		spm = sparse_matrix::create(fg, &get_scalar_type<float>());
+	if (argc < 2) {
+		fprintf(stderr, "test conf_file\n");
+		exit(1);
 	}
-	else
-		spm = sparse_matrix::create(fg, NULL);
 
-	size_t num_cols = spm->get_num_cols();
-	size_t num_rows = spm->get_num_rows();
-	detail::mem_matrix_store::ptr in_mat
-		= detail::mem_row_matrix_store::create(num_cols, 10,
-				get_scalar_type<float>());
-	int val = 0;
-	for (size_t i = 0; i < in_mat->get_num_rows(); i++)
-		for (size_t j = 0; j < in_mat->get_num_cols(); j++)
-			in_mat->set<float>(i, j, val++);
+	std::string conf_file = argv[1];
+	config_map::ptr configs = config_map::create(conf_file);
+	init_flash_matrix(configs);
+	int num_nodes = matrix_conf.get_num_nodes();
 
-	detail::mem_matrix_store::ptr out
-		= detail::mem_row_matrix_store::create(num_rows, 10,
-				get_scalar_type<float>());
-	out->reset_data();
-	spm->multiply(in_mat, out);
-	print_cols(out);
-}
-
-void test_multiply_fg(edge_list::ptr el)
-{
-	printf("Multiply on FlashGraph matrix\n");
-	fg::FG_graph::ptr fg = create_fg_graph("test", el);
-	test_spmm_fg(fg);
-}
-
-int main()
-{
-	init_flash_matrix(NULL);
-	edge_list::ptr el = create_rand_el(false);
-	test_multiply_fg(el);
+	data_frame::ptr el = create_rand_el(false);
 	test_multiply_block(el);
 
 	el = create_rand_el(true);
-	test_multiply_fg(el);
 	test_multiply_block(el);
+
+	destroy_flash_matrix();
 }
