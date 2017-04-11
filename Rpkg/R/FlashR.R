@@ -862,6 +862,11 @@ fm.as.factor <- function(fm, num.levels = -1)
 #'
 #' @param fm A FlashR matrix
 #' @param mat A FlashR dense matrix.
+#' @param mem.size numeric. This is only useful for sparse matrix multiplication.
+#'        We perform sparse matrix multiplication in semi-external memory,
+#'        in which we keep the input dense matrix in memory and the sparse
+#'        matrix on disks. If the input dense matrix is large, we need to
+#'        know the memory size to split the dense matrix.
 #' @return a FlashR vector if the second argument is a vector;
 #' a FlashR matrix if the second argument is a matrix.
 #' @name fm.multiply
@@ -871,7 +876,7 @@ fm.as.factor <- function(fm, num.levels = -1)
 #' mat1 <- fm.runif.matrix(1000, 100)
 #' mat2 <- fm.runif.matrix(100, 10)
 #' mat <- fm.multiply(mat1, mat2)
-fm.multiply <- function(fm, mat)
+fm.multiply <- function(fm, mat, mem.size=double.xmax)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
@@ -884,9 +889,9 @@ fm.multiply <- function(fm, mat)
 	}
 
 	if (fm.is.sparse(fm))
-		o <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashR")
+		o <- .Call("R_FM_multiply_sparse", fm, mat, mem.size, PACKAGE="FlashR")
 	else
-		o <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashR")
+		o <- .Call("R_FM_multiply_dense", fm, mat, mem.size, PACKAGE="FlashR")
 	if (class(mat) == "fmV")
 		.new.fmV(o)
 	else

@@ -663,20 +663,10 @@ RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 	return create_FMR_matrix(mat, trans_FM2R(mat->get_type()), "mat_file");
 }
 
-static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
-		dense_matrix::ptr right_mat)
+RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat, SEXP pmem_size)
 {
-	detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
-			matrix->get_num_rows(), right_mat->get_num_cols(),
-			matrix_layout_t::L_ROW, right_mat->get_type(),
-			right_mat->get_raw_store()->get_num_nodes());
-	matrix->multiply(right_mat->get_raw_store(), out_mat);
-	return dense_matrix::create(out_mat);
-}
-
-RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
-{
-	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
+	size_t mem_size = REAL(pmem_size)[0];
+	sparse_matrix::ptr spm = get_matrix<sparse_matrix>(pmatrix);
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "the right matrix can't be sparse\n");
 		return R_NilValue;
@@ -687,11 +677,7 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 		fprintf(stderr, "multiply doesn't support the type\n");
 		return R_NilValue;
 	}
-	if (!right_mat->is_in_mem()) {
-		fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
-		return R_NilValue;
-	}
-	dense_matrix::ptr ret = SpMM(matrix, right_mat);
+	dense_matrix::ptr ret = spm->multiply(right_mat, mem_size);
 	if (ret == NULL)
 		return R_NilValue;
 
