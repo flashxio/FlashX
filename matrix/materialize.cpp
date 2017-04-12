@@ -103,15 +103,19 @@ void mapply_task::run()
 	int node_id = thread::get_curr_thread()->get_node_id();
 	for (size_t j = 0; j < mats.size(); j++) {
 		local_stores[j] = mats[j]->get_portion(portion_idx);
+#ifdef MATRIX_DEBUG
 		if (local_stores[j] && local_stores[j]->get_node_id() >= 0
 				&& !one_portion)
 			assert(node_id == local_stores[j]->get_node_id());
+#endif
 	}
 	for (size_t j = 0; j < out_mats.size(); j++) {
 		local_out_stores[j] = out_mats[j]->get_portion(portion_idx);
+#ifdef MATRIX_DEBUG
 		if (local_out_stores[j] && local_out_stores[j]->get_node_id() >= 0
 				&& !one_portion)
 			assert(node_id == local_out_stores[j]->get_node_id());
+#endif
 	}
 
 	if (local_out_stores.empty())
