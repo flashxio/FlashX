@@ -876,7 +876,7 @@ fm.as.factor <- function(fm, num.levels = -1)
 #' mat1 <- fm.runif.matrix(1000, 100)
 #' mat2 <- fm.runif.matrix(100, 10)
 #' mat <- fm.multiply(mat1, mat2)
-fm.multiply <- function(fm, mat, mem.size=double.xmax)
+fm.multiply <- function(fm, mat, mem.size=.Machine$double.xmax)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
