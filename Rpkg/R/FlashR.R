@@ -891,7 +891,7 @@ fm.multiply <- function(fm, mat, mem.size=.Machine$double.xmax)
 	if (fm.is.sparse(fm))
 		o <- .Call("R_FM_multiply_sparse", fm, mat, mem.size, PACKAGE="FlashR")
 	else
-		o <- .Call("R_FM_multiply_dense", fm, mat, mem.size, PACKAGE="FlashR")
+		o <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashR")
 	if (class(mat) == "fmV")
 		.new.fmV(o)
 	else

@@ -665,7 +665,10 @@ RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 
 RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat, SEXP pmem_size)
 {
-	size_t mem_size = REAL(pmem_size)[0];
+	// We are going to convert the value to size_t, so we have to limit its
+	// max value.
+	size_t mem_size = std::min(REAL(pmem_size)[0],
+			(double) std::numeric_limits<size_t>::max());
 	sparse_matrix::ptr spm = get_matrix<sparse_matrix>(pmatrix);
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "the right matrix can't be sparse\n");
