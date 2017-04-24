@@ -1709,8 +1709,6 @@ fm.eigen.block <- function(mul, k, n, block.size,
 	if (verbose) {
 		print(paste("eigenvalues (", 1, "-", nev, "):"))
 		print(eval)
-		print("precision:")
-		print(fm.cal.residul(mul, eval, evec))
 	}
 	if (runs > 1) {
 		for (i in 1:(runs - 1)) {
@@ -1734,8 +1732,6 @@ fm.eigen.block <- function(mul, k, n, block.size,
 				to <- from + nev
 				print(paste("eigenvalues (", from, "-", to, "):"))
 				print(res$values)
-				print("precision:")
-				print(fm.cal.residul(mul, res$values, res$vectors))
 			}
 		}
 	}
