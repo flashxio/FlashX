@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include "in_mem_io.h"
+
 #include "vec_store.h"
 #include "mem_vec_store.h"
 #include "NUMA_vector.h"
@@ -38,6 +40,31 @@ vec_store::ptr vec_store::create(size_t length, const scalar_type &type,
 		return NUMA_vec_store::create(length, num_nodes, type);
 	else
 		return EM_vec_store::create(length, type);
+}
+
+vec_store::ptr vec_store::create(safs::file_io_factory::shared_ptr factory,
+		const scalar_type &type)
+{
+	size_t len = factory->get_file_size();
+	if (len % type.get_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The file has a wrong length for the vector";
+		return vec_store::ptr();
+	}
+	safs::in_mem_io_factory::ptr im_factory
+		= std::dynamic_pointer_cast<safs::in_mem_io_factory>(factory);
+	if (im_factory) {
+		auto data = im_factory->get_data();
+		if (data.get_num_nodes() > 1) {
+			BOOST_LOG_TRIVIAL(error)
+				<<"we don't support to create a vector from multi-node buffer";
+			return vec_store::ptr();
+		}
+		simple_raw_array arr(data.get_buf(0), data.get_length(), -1);
+		return smp_vec_store::create(arr, type);
+	}
+	else
+		return EM_vec_store::create(factory, type);
 }
 
 size_t vec_store::copy_to(char *data, size_t num_eles) const

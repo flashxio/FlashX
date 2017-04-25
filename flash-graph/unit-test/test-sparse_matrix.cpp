@@ -5,6 +5,7 @@
 #include "fg_utils.h"
 #include "sparse_matrix.h"
 #include "data_frame.h"
+#include "col_vec.h"
 
 using namespace fm;
 
@@ -39,7 +40,7 @@ void print_cols(detail::mem_matrix_store::ptr store)
 		printf("%ld: %f\n", i, mem_sum->get<double>(0, i));
 }
 
-fg::edge_list::ptr create_rand_el(bool with_attr)
+fg::edge_list::ptr create_rand_el(bool with_attr, bool directed)
 {
 	int num_rows = 1024 * 16;
 	int num_cols = 1024 * 16;
@@ -51,17 +52,30 @@ fg::edge_list::ptr create_rand_el(bool with_attr)
 		edges.insert(e);
 	}
 	printf("There are %ld edges\n", edges.size());
+	// For an undirected graph, we need to store an edge twice.
+	size_t num_edges = directed ? edges.size() : edges.size() * 2;
 	detail::smp_vec_store::ptr sources = detail::smp_vec_store::create(
-			edges.size(), get_scalar_type<fg::vertex_id_t>());
+			num_edges, get_scalar_type<fg::vertex_id_t>());
 	detail::smp_vec_store::ptr dests = detail::smp_vec_store::create(
-			edges.size(), get_scalar_type<fg::vertex_id_t>());
+			num_edges, get_scalar_type<fg::vertex_id_t>());
 	detail::smp_vec_store::ptr vals = detail::smp_vec_store::create(
-			edges.size(), get_scalar_type<float>());
+			num_edges, get_scalar_type<float>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
-		sources->set<fg::vertex_id_t>(idx, e.first);
-		dests->set<fg::vertex_id_t>(idx, e.second);
-		vals->set<float>(idx, idx);
+		if (directed) {
+			sources->set<fg::vertex_id_t>(idx, e.first);
+			dests->set<fg::vertex_id_t>(idx, e.second);
+			vals->set<float>(idx, idx);
+		}
+		else {
+			sources->set<fg::vertex_id_t>(idx * 2, e.first);
+			dests->set<fg::vertex_id_t>(idx * 2, e.second);
+			vals->set<float>(idx * 2, idx);
+
+			sources->set<fg::vertex_id_t>(idx * 2 + 1, e.second);
+			dests->set<fg::vertex_id_t>(idx * 2 + 1, e.first);
+			vals->set<float>(idx * 2 + 1, idx);
+		}
 		idx++;
 	}
 
@@ -70,7 +84,7 @@ fg::edge_list::ptr create_rand_el(bool with_attr)
 	df->add_vec("dest", dests);
 	if (with_attr)
 		df->add_vec("attr", vals);
-	return fg::edge_list::create(df, true);
+	return fg::edge_list::create(df, directed);
 }
 
 void test_spmm_block(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
@@ -166,14 +180,86 @@ void test_multiply_fg(fg::edge_list::ptr el)
 	test_spmm_fg(fg);
 }
 
+fm::col_vec::ptr get_diag_direct(fg::edge_list::ptr el, size_t num_vertices)
+{
+	auto src = std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
+			el->get_source());
+	auto dst = std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
+			el->get_dest());
+	fm::detail::mem_vec_store::const_ptr attr;
+	if (el->has_attr())
+		attr = std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
+				el->get_attr());
+	fm::detail::mem_matrix_store::ptr res = fm::detail::mem_matrix_store::create(
+			num_vertices, 1, fm::matrix_layout_t::L_COL,
+			attr ? attr->get_type() : fm::get_scalar_type<bool>(), -1);
+	res->reset_data();
+	for (size_t i = 0; i < src->get_length(); i++) {
+		fg::vertex_id_t id = src->get<fg::vertex_id_t>(i);
+		if (id == fg::INVALID_VERTEX_ID)
+			continue;
+
+		assert(id < res->get_num_rows());
+		if (id == dst->get<fg::vertex_id_t>(i)) {
+			if (attr)
+				memcpy(res->get(id, 0), attr->get(i), attr->get_type().get_size());
+			else
+				res->set<bool>(id, 0, 1);
+		}
+	}
+	return fm::col_vec::create(res);
+}
+
+void test_diag(fg::edge_list::ptr el)
+{
+	fg::FG_graph::ptr fg = fg::create_fg_graph("test", el);
+	fm::sparse_matrix::ptr spm;
+	if (el->has_attr())
+		spm = create_sparse_matrix(fg, &el->get_attr_type());
+	else
+		spm = create_sparse_matrix(fg, NULL);
+	fm::dense_matrix::ptr vec = spm->get_diag();
+	assert(vec->get_type() == spm->get_type());
+	assert(vec->get_num_rows() == spm->get_num_rows());
+	fm::dense_matrix::ptr true_diag = get_diag_direct(el, spm->get_num_rows());
+	if (vec->get_type() == fm::get_scalar_type<bool>())
+		vec = vec->cast_ele_type(fm::get_scalar_type<int>());
+	if (true_diag->get_type() == fm::get_scalar_type<bool>())
+		true_diag = true_diag->cast_ele_type(fm::get_scalar_type<int>());
+	auto comp_sum = vec->minus(*true_diag)->abs()->sum();
+	if (comp_sum->get_type() == fm::get_scalar_type<float>())
+		assert(fm::scalar_variable::get_val<float>(*comp_sum) == 0);
+	else
+		assert(fm::scalar_variable::get_val<int>(*comp_sum) == 0);
+}
+
+void test_diag()
+{
+	fg::set_remove_self_edge(false);
+	printf("test on a directed graph without attributes\n");
+	fg::edge_list::ptr el = create_rand_el(false, true);
+	test_diag(el);
+	printf("test on an undirected graph without attributes\n");
+	el = create_rand_el(false, false);
+	test_diag(el);
+	printf("test on a directed graph with attributes\n");
+	el = create_rand_el(true, true);
+	test_diag(el);
+	printf("test on an undirected graph with attributes\n");
+	el = create_rand_el(true, false);
+	test_diag(el);
+	fg::set_remove_self_edge(true);
+}
+
 int main()
 {
 	init_flash_matrix(NULL);
-	fg::edge_list::ptr el = create_rand_el(false);
+	test_diag();
+	fg::edge_list::ptr el = create_rand_el(false, true);
 	test_multiply_fg(el);
 	test_multiply_block(el);
 
-	el = create_rand_el(true);
+	el = create_rand_el(true, true);
 	test_multiply_fg(el);
 	test_multiply_block(el);
 }

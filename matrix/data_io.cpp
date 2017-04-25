@@ -302,8 +302,10 @@ namespace
 
 class data_frame_set
 {
+	std::atomic<size_t> tot_num_dfs;
 	std::atomic<size_t> num_dfs;
-	std::vector<data_frame::ptr> dfs;
+	// The key should be a sequence number to order the data frames.
+	std::map<off_t, data_frame::ptr> dfs;
 	pthread_mutex_t lock;
 	pthread_cond_t fetch_cond;
 	pthread_cond_t add_cond;
@@ -316,6 +318,7 @@ public:
 		pthread_mutex_init(&lock, NULL);
 		pthread_cond_init(&fetch_cond, NULL);
 		pthread_cond_init(&add_cond, NULL);
+		tot_num_dfs = 0;
 		num_dfs = 0;
 		wait_for_fetch = false;
 		wait_for_add = false;
@@ -326,51 +329,92 @@ public:
 		pthread_cond_destroy(&add_cond);
 	}
 
-	void add(data_frame::ptr df) {
-		pthread_mutex_lock(&lock);
-		while (dfs.size() >= max_queue_size) {
-			// If the consumer thread is wait for adding new data frames, we
-			// should wake them up before going to sleep. There is only
-			// one thread waiting for fetching data frames, so we only need
-			// to signal one thread.
-			if (wait_for_fetch)
-				pthread_cond_signal(&fetch_cond);
-			wait_for_add = true;
-			pthread_cond_wait(&add_cond, &lock);
-			wait_for_add = false;
-		}
-		dfs.push_back(df);
-		num_dfs++;
-		pthread_mutex_unlock(&lock);
-		pthread_cond_signal(&fetch_cond);
-	}
+	void add(off_t seq_id, data_frame::ptr df);
 
-	std::vector<data_frame::ptr> fetch_data_frames() {
-		std::vector<data_frame::ptr> ret;
-		pthread_mutex_lock(&lock);
-		while (dfs.empty()) {
-			// If some threads are wait for adding new data frames, we should
-			// wake them up before going to sleep. Potentially, there are
-			// multiple threads waiting at the same time, we should wake
-			// all of them up.
-			if (wait_for_add)
-				pthread_cond_broadcast(&add_cond);
-			wait_for_fetch = true;
-			pthread_cond_wait(&fetch_cond, &lock);
-			wait_for_fetch = false;
-		}
-		ret = dfs;
-		dfs.clear();
-		num_dfs = 0;
-		pthread_mutex_unlock(&lock);
-		pthread_cond_broadcast(&add_cond);
-		return ret;
-	}
+	/*
+	 * If a user wants to fetch the data frame sequentially, we only fetch
+	 * the ones with the expected sequence numbers.
+	 */
+	std::vector<data_frame::ptr> fetch_data_frames(bool sequential,
+			off_t seq_start);
 
 	size_t get_num_dfs() const {
 		return num_dfs;
 	}
 };
+
+void data_frame_set::add(off_t seq_id, data_frame::ptr df)
+{
+	pthread_mutex_lock(&lock);
+	while (dfs.size() >= max_queue_size) {
+		// If the consumer thread is wait for adding new data frames, we
+		// should wake them up before going to sleep. There is only
+		// one thread waiting for fetching data frames, so we only need
+		// to signal one thread.
+		if (wait_for_fetch)
+			pthread_cond_signal(&fetch_cond);
+		wait_for_add = true;
+		pthread_cond_wait(&add_cond, &lock);
+		wait_for_add = false;
+	}
+	if (seq_id < 0)
+		seq_id = tot_num_dfs;
+	dfs.insert(std::pair<off_t, data_frame::ptr>(seq_id, df));
+	tot_num_dfs++;
+	num_dfs++;
+	pthread_mutex_unlock(&lock);
+	pthread_cond_signal(&fetch_cond);
+}
+
+std::vector<data_frame::ptr> data_frame_set::fetch_data_frames(bool sequential,
+		off_t seq_start)
+{
+	std::vector<data_frame::ptr> ret;
+	pthread_mutex_lock(&lock);
+	while (dfs.empty()) {
+		// If some threads are wait for adding new data frames, we should
+		// wake them up before going to sleep. Potentially, there are
+		// multiple threads waiting at the same time, we should wake
+		// all of them up.
+		if (wait_for_add)
+			pthread_cond_broadcast(&add_cond);
+		wait_for_fetch = true;
+		pthread_cond_wait(&fetch_cond, &lock);
+		wait_for_fetch = false;
+	}
+	// If we want to fetch the data frames sequentially according
+	// to the sequence number.
+	if (sequential) {
+		auto it = dfs.begin();
+		// We first need to make sure the first sequence number in
+		// the map is the one we expect. If not, we have to wait.
+		while (it->first != seq_start) {
+			if (wait_for_add)
+				pthread_cond_broadcast(&add_cond);
+			wait_for_fetch = true;
+			pthread_cond_wait(&fetch_cond, &lock);
+			wait_for_fetch = false;
+			it = dfs.begin();
+		}
+
+		off_t expect_seq = seq_start;
+		for (; it != dfs.end(); it++)
+			if (it->first == expect_seq) {
+				expect_seq++;
+				ret.push_back(it->second);
+			}
+		dfs.erase(dfs.begin(), it);
+	}
+	else {
+		for (auto it = dfs.begin(); it != dfs.end(); it++)
+			ret.push_back(it->second);
+		dfs.clear();
+	}
+	num_dfs = dfs.size();
+	pthread_mutex_unlock(&lock);
+	pthread_cond_broadcast(&add_cond);
+	return ret;
+}
 
 static data_frame::ptr create_data_frame(const line_parser &parser)
 {
@@ -396,18 +440,22 @@ class parse_task: public thread_task
 	size_t size;
 	const line_parser &parser;
 	data_frame_set &dfs;
+	off_t task_id;
 public:
 	parse_task(std::shared_ptr<char> _lines, size_t size,
-			const line_parser &_parser, data_frame_set &_dfs): parser(
-				_parser), dfs(_dfs) {
+			const line_parser &_parser, data_frame_set &_dfs,
+			off_t task_id): parser(_parser), dfs(_dfs) {
 		this->lines = _lines;
 		this->size = size;
+		this->task_id = task_id;
 	}
 
 	void run() {
 		data_frame::ptr df = create_data_frame(parser);
 		parse_lines(lines, size, parser, *df);
-		dfs.add(df);
+		// Each task processes a chunk of data, so we can use task Id as
+		// the sequence number for the data frame.
+		dfs.add(task_id, df);
 	}
 };
 
@@ -433,14 +481,17 @@ void file_parse_task::run()
 		assert(size > 0);
 		data_frame::ptr df = create_data_frame(parser);
 		parse_lines(lines, size, parser, *df);
-		dfs.add(df);
+		// In this case, we process multiple files simultaneously.
+		// It's hard to determine the order of the data frames, so we just
+		// ignore the orders.
+		dfs.add(-1, df);
 	}
 }
 
 }
 
 data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
-		bool in_mem)
+		bool in_mem, bool sequential)
 {
 	data_frame::ptr df = create_data_frame(parser, in_mem);
 	file_io::ptr io = file_io::create(file);
@@ -452,6 +503,8 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
 	data_frame_set dfs(MAX_PENDING);
 
+	off_t task_id = 0;
+	off_t seq_num = 0;
 	while (!io->eof()) {
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
 		for (size_t i = 0; i < num_tasks && !io->eof(); i++) {
@@ -459,16 +512,19 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 			std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 
 			mem_threads->process_task(-1,
-					new parse_task(lines, size, parser, dfs));
+					new parse_task(lines, size, parser, dfs, task_id++));
 		}
 		if (dfs.get_num_dfs() > 0) {
-			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(
+					sequential, seq_num);
+			seq_num += tmp_dfs.size();
 			if (!tmp_dfs.empty())
 				df->append(tmp_dfs.begin(), tmp_dfs.end());
 		}
 	}
 	mem_threads->wait4complete();
-	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(sequential,
+			seq_num);
 	if (!tmp_dfs.empty())
 		df->append(tmp_dfs.begin(), tmp_dfs.end());
 
@@ -476,10 +532,10 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 }
 
 data_frame::ptr read_lines(const std::vector<std::string> &files,
-		const line_parser &parser, bool in_mem)
+		const line_parser &parser, bool in_mem, bool sequential)
 {
 	if (files.size() == 1)
-		return read_lines(files[0], parser, in_mem);
+		return read_lines(files[0], parser, in_mem, sequential);
 
 	data_frame::ptr df = create_data_frame(parser, in_mem);
 	detail::mem_thread_pool::ptr mem_threads
@@ -507,7 +563,10 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 		// If there are pending tasks in the thread pool, it's guaranteed
 		// that we can fetch data frames from the queue.
 		if (mem_threads->get_num_pending() > 0) {
-			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+			// If we process multiple files simultaneously, we don't need
+			// to fetch the data frames sequentially.
+			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(
+					false, -1);
 			if (!tmp_dfs.empty())
 				df->append(tmp_dfs.begin(), tmp_dfs.end());
 		}
@@ -515,7 +574,7 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	// TODO It might be expensive to calculate the number of pending
 	// tasks every time.
 	while (mem_threads->get_num_pending() > 0) {
-		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(false, -1);
 		if (!tmp_dfs.empty())
 			df->append(tmp_dfs.begin(), tmp_dfs.end());
 	}
@@ -523,7 +582,7 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	// At this point, all threads have stoped working. If there are
 	// data frames in the queue, they are the very last ones.
 	if (dfs.get_num_dfs() > 0) {
-		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames();
+		std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(false, -1);
 		if (!tmp_dfs.empty())
 			df->append(tmp_dfs.begin(), tmp_dfs.end());
 	}
@@ -688,7 +747,7 @@ static std::string detect_delim(const std::string &file)
 }
 
 data_frame::ptr read_data_frame(const std::vector<std::string> &files,
-		bool in_mem, const std::string &delim,
+		bool in_mem, bool sequential, const std::string &delim,
 		const std::vector<ele_parser::const_ptr> &ele_parsers,
 		const std::vector<off_t> &dup_col_idxs)
 {
@@ -700,12 +759,12 @@ data_frame::ptr read_data_frame(const std::vector<std::string> &files,
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
 			new row_parser(act_delim, ele_parsers, dup_col_idxs));
-	return read_lines(files, *parser, in_mem);
+	return read_lines(files, *parser, in_mem, sequential);
 }
 
 dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
-		bool in_mem, const std::string &ele_type, const std::string &delim,
-		size_t num_cols)
+		bool in_mem, bool sequential, const std::string &ele_type,
+		const std::string &delim, size_t num_cols)
 {
 	std::string act_delim = delim;
 	// We need to discover the number of columns ourselves.
@@ -737,13 +796,13 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 	}
 	parser = std::shared_ptr<line_parser>(new row_parser(act_delim,
 				ele_parsers, std::vector<off_t>()));
-	data_frame::ptr df = read_lines(files, *parser, in_mem);
+	data_frame::ptr df = read_lines(files, *parser, in_mem, sequential);
 	return dense_matrix::create(df);
 }
 
 dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
-		bool in_mem, const std::string &ele_type, const std::string &delim,
-		const std::string &col_indicator)
+		bool in_mem, bool sequential, const std::string &ele_type,
+		const std::string &delim, const std::string &col_indicator)
 {
 	std::string act_delim = delim;
 	if (delim == "auto")
@@ -769,7 +828,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
 			new row_parser(act_delim, ele_parsers, std::vector<off_t>()));
-	data_frame::ptr df = read_lines(files, *parser, in_mem);
+	data_frame::ptr df = read_lines(files, *parser, in_mem, sequential);
 	return dense_matrix::create(df);
 }
 

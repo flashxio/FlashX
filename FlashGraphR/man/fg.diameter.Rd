@@ -28,12 +28,11 @@ Cl茅mence Magnienand Matthieu Latapy and Michel Habib: Fast computation of
 empirically tight bounds for the diameter of massive graphs, Journal of
 Experimental Algorithmics (JEA), 2009
 }
-\author{
-Da Zheng <dzheng5@jhu.edu>
-}
 \references{
 Cl茅mence Magnienand Matthieu Latapy and Michel Habib: Fast computation of
 empirically tight bounds for the diameter of massive graphs, Journal of
 Experimental Algorithmics (JEA), 2009
 }
-
+\author{
+Da Zheng <dzheng5@jhu.edu>
+}

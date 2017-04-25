@@ -18,4 +18,3 @@ This function lists all graphs that have been loaded to FlashGraphR.
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }
-

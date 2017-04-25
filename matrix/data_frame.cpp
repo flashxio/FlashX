@@ -714,6 +714,8 @@ class portion_groupby_complete;
 class local_groupby_task: public thread_task
 {
 	groupby_task_queue::ptr q;
+	// If the data frame is stored in EM, sorted_col is a local vector.
+	// We have this field to avoid reading the data from disks again.
 	detail::mem_vec_store::const_ptr sorted_col;
 	size_t sorted_col_idx;
 	data_frame::const_ptr df;

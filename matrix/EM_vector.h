@@ -81,6 +81,9 @@ public:
 		return ptr(new EM_vec_store(holder, ios, len, type));
 	}
 
+	static ptr create(safs::file_io_factory::shared_ptr factory,
+			const scalar_type &type);
+
 	~EM_vec_store();
 
 	/*

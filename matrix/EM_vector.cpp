@@ -191,6 +191,20 @@ void seq_writer::append(local_vec_store::const_ptr data)
 	}
 }
 
+EM_vec_store::ptr EM_vec_store::create(safs::file_io_factory::shared_ptr factory,
+		const scalar_type &type)
+{
+	size_t len = factory->get_file_size();
+	if (len % type.get_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The file has a wrong length for the vector";
+		return EM_vec_store::ptr();
+	}
+	io_set::ptr ios(new io_set(factory));
+	file_holder::ptr holder = file_holder::create(factory->get_name());
+	return create(holder, ios, len / type.get_size(), type);
+}
+
 EM_vec_store::ptr EM_vec_store::cast(vec_store::ptr vec)
 {
 	if (vec->is_in_mem()) {

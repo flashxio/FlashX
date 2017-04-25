@@ -18,4 +18,3 @@ This function indicates whether a graph has been loaded to FlashGraphR.
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }
-

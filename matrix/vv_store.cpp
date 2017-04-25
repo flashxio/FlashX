@@ -36,7 +36,6 @@ vv_store::ptr vv_store::create(const std::vector<off_t> &offs,
 		vec_store::ptr store)
 {
 	assert(!offs.empty());
-	assert(offs.back() / store->get_type().get_size() == store->get_length());
 	if (store->is_in_mem()) {
 		mem_vec_store::ptr mem_vec
 			= std::dynamic_pointer_cast<mem_vec_store>(store);

@@ -1624,6 +1624,8 @@ fm.get.cols <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
+	if (typeof(idxs) == "logical")
+		idxs <- fm.as.vector(idxs)
 	if (is.atomic(idxs))
 		ret <- .Call("R_FM_get_submat", fm, as.integer(2), as.numeric(idxs),
 					 PACKAGE="FlashR")
@@ -1637,6 +1639,8 @@ fm.get.rows <- function(fm, idxs)
 {
 	stopifnot(!is.null(fm) && !is.null(idxs))
 	stopifnot(class(fm) == "fm")
+	if (typeof(idxs) == "logical")
+		idxs <- fm.as.vector(idxs)
 	if (is.atomic(idxs))
 		ret <- .Call("R_FM_get_submat", fm, as.integer(1), as.numeric(idxs),
 					 PACKAGE="FlashR")

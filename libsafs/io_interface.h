@@ -502,7 +502,7 @@ public:
 	 * This method gets the size of the file accessed by the I/O factory.
 	 * \return the file size.
 	 */
-	ssize_t get_file_size() const;
+	virtual ssize_t get_file_size() const;
 
 	friend io_interface::ptr create_io(file_io_factory::shared_ptr factory, thread *t);
 	friend class io_interface;

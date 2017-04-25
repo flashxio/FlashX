@@ -461,10 +461,10 @@ class local_buf_col_matrix_store: public local_col_matrix_store
 public:
 	local_buf_col_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
-			int node_id): local_col_matrix_store(global_start_row, global_start_col,
-				nrow, ncol, type, node_id) {
+			int node_id, bool cached = true): local_col_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = local_raw_array(nrow * ncol * type.get_size());
+			data = local_raw_array(nrow * ncol * type.get_size(), cached);
 			set_orig_data(data);
 		}
 	}
@@ -525,10 +525,10 @@ class local_buf_row_matrix_store: public local_row_matrix_store
 public:
 	local_buf_row_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
-			int node_id): local_row_matrix_store(global_start_row, global_start_col,
-				nrow, ncol, type, node_id) {
+			int node_id, bool cached = true): local_row_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0) {
-			data = local_raw_array(nrow * ncol * type.get_size());
+			data = local_raw_array(nrow * ncol * type.get_size(), cached);
 			set_orig_data(data);
 		}
 	}

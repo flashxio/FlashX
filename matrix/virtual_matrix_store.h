@@ -121,6 +121,10 @@ public:
 		assert(0);
 		return false;
 	}
+
+	virtual bool resize(size_t num_rows, size_t num_cols) {
+		throw unsupported_exception("virtual matrix doesn't support resize");
+	}
 };
 
 }

@@ -195,12 +195,22 @@ public:
 
 class local_ref_vec_store: public local_vec_store
 {
+	// This keeps the pointer to the original memory buffer to
+	// avoid the memory buffer from being deallocated.
+	detail::local_raw_array orig_arr;
 	char *orig_data;
 public:
 	local_ref_vec_store(char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				data, global_start, length, type, node_id) {
 		this->orig_data = data;
+	}
+	local_ref_vec_store(const detail::local_raw_array &arr,
+			char *data, off_t global_start, size_t length,
+			const scalar_type &type, int node_id): local_vec_store(data,
+				data, global_start, length, type, node_id) {
+		this->orig_data = data;
+		this->orig_arr = arr;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -223,12 +233,22 @@ public:
 
 class local_cref_vec_store: public local_vec_store
 {
+	// This keeps the pointer to the original memory buffer to
+	// avoid the memory buffer from being deallocated.
+	detail::local_raw_array orig_arr;
 	const char *orig_data;
 public:
 	local_cref_vec_store(const char *data, off_t global_start, size_t length,
 			const scalar_type &type, int node_id): local_vec_store(data,
 				NULL, global_start, length, type, node_id) {
 		this->orig_data = data;
+	}
+	local_cref_vec_store(const detail::local_raw_array &arr,
+			const char *data, off_t global_start, size_t length,
+			const scalar_type &type, int node_id): local_vec_store(data,
+				NULL, global_start, length, type, node_id) {
+		this->orig_data = data;
+		this->orig_arr = arr;
 	}
 	virtual bool resize(size_t new_length);
 
@@ -285,6 +305,10 @@ public:
 		set_data(arr.get_raw(), arr.get_raw());
 		local_vec_store::reset_expose();
 	}
+
+	virtual local_vec_store::ptr get_portion(off_t loc, size_t size);
+	virtual local_vec_store::const_ptr get_portion(off_t loc,
+			size_t size) const;
 };
 
 }

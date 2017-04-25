@@ -3,6 +3,7 @@
 \name{fg.local.scan}
 \alias{fg.local.scan}
 \alias{fg.topK.scan}
+\alias{fg.local.scan}
 \title{Locality statistic}
 \usage{
 fg.topK.scan(graph, order = 1, K = 1)
@@ -32,11 +33,10 @@ statistics in a graph and computes their locality statistic.
 Locality statistic is defined as the number of edges in the neighborhood
 of a vertex.
 }
-\author{
-Da Zheng <dzheng5@jhu.edu>
-}
 \references{
 C.E. Priebe, J.M. Conroy, D.J. Marchette, and Y. Park, Scan Statistics on
 Enron Graphs," Computational and Mathematical Organization Theory, 2005.
 }
-
+\author{
+Da Zheng <dzheng5@jhu.edu>
+}

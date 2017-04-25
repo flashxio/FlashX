@@ -36,6 +36,8 @@
 namespace fm
 {
 
+class col_vec;
+
 namespace detail
 {
 
@@ -575,6 +577,12 @@ public:
 
 	virtual detail::task_creator::ptr get_multiply_creator(
 			const scalar_type &type, size_t num_in_cols) const = 0;
+
+	/*
+	 * This gets a diagonal of a square sparse matrix.
+	 * If the sparse matrix is rectangular, it returns NULL.
+	 */
+	virtual std::shared_ptr<col_vec> get_diag() const = 0;
 
 	const scalar_type &get_type() const {
 		if (entry_type == NULL)

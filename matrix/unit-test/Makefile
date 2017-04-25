@@ -108,7 +108,6 @@ test:
 	./test-mem_matrix_store
 	./test-mem_vector
 	./test-mem_vector_vector
-	./test-rounderror
 	mkdir -p safs_data
 	./test-block_matrix run_test.txt
 	./test-data_frame run_test.txt
@@ -120,8 +119,9 @@ test:
 	./test-NUMA_vector run_test.txt
 	./test-projection run_test.txt
 	./test-sink_matrix run_test.txt
-	./test-special_matrix_store run_test.txt
 	rm -R safs_data
+#	./test-special_matrix_store run_test.txt
+#	./test-rounderror
 
 clean:
 	rm -f *.d

@@ -22,4 +22,3 @@ Get the degree of vertices in a graph.
 \author{
 Da Zheng <dzheng5@jhu.edu>
 }
-

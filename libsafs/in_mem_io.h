@@ -70,6 +70,17 @@ public:
 		return ptr(new NUMA_buffer(length, mapper));
 	}
 
+	std::shared_ptr<char> get_buf(int node_id) {
+		if ((size_t) node_id >= bufs.size())
+			return std::shared_ptr<char>();
+		else
+			return bufs[node_id];
+	}
+
+	size_t get_num_nodes() const {
+		return mapper.get_num_nodes();
+	}
+
 	size_t get_length() const {
 		return length;
 	}
@@ -156,6 +167,8 @@ class in_mem_io_factory: public file_io_factory
 	NUMA_buffer::ptr data;
 	int file_id;
 public:
+	typedef std::shared_ptr<in_mem_io_factory> ptr;
+
 	in_mem_io_factory(NUMA_buffer::ptr data, int file_id,
 			const std::string file_name): file_io_factory(file_name) {
 		this->data = data;
@@ -166,11 +179,23 @@ public:
 		return file_id;
 	}
 
+	virtual ssize_t get_file_size() const {
+		return data->get_length();
+	}
+
 	virtual io_interface::ptr create_io(thread *t) {
 		return io_interface::ptr(new in_mem_io(data, file_id, t));
 	}
 
 	virtual void destroy_io(io_interface &) {
+	}
+
+	const NUMA_buffer &get_data() const {
+		return *data;
+	}
+
+	NUMA_buffer &get_data() {
+		return *data;
 	}
 };
 
