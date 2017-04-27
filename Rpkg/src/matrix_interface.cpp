@@ -663,20 +663,13 @@ RcppExport SEXP R_FM_load_spm_bin_asym(SEXP pmat_file, SEXP pindex_file,
 	return create_FMR_matrix(mat, trans_FM2R(mat->get_type()), "mat_file");
 }
 
-static dense_matrix::ptr SpMM(sparse_matrix::ptr matrix,
-		dense_matrix::ptr right_mat)
+RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat, SEXP pmem_size)
 {
-	detail::matrix_store::ptr out_mat = detail::mem_matrix_store::create(
-			matrix->get_num_rows(), right_mat->get_num_cols(),
-			matrix_layout_t::L_ROW, right_mat->get_type(),
-			right_mat->get_raw_store()->get_num_nodes());
-	matrix->multiply(right_mat->get_raw_store(), out_mat);
-	return dense_matrix::create(out_mat);
-}
-
-RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
-{
-	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
+	// We are going to convert the value to size_t, so we have to limit its
+	// max value.
+	size_t mem_size = std::min(REAL(pmem_size)[0],
+			(double) std::numeric_limits<size_t>::max());
+	sparse_matrix::ptr spm = get_matrix<sparse_matrix>(pmatrix);
 	if (is_sparse(pmat)) {
 		fprintf(stderr, "the right matrix can't be sparse\n");
 		return R_NilValue;
@@ -687,11 +680,7 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 		fprintf(stderr, "multiply doesn't support the type\n");
 		return R_NilValue;
 	}
-	if (!right_mat->is_in_mem()) {
-		fprintf(stderr, "we now only supports in-mem matrix for SpMM\n");
-		return R_NilValue;
-	}
-	dense_matrix::ptr ret = SpMM(matrix, right_mat);
+	dense_matrix::ptr ret = spm->multiply(right_mat, mem_size);
 	if (ret == NULL)
 		return R_NilValue;
 
@@ -1742,6 +1731,11 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		}
 		if (FM_get_Rtype(pidxs) == R_type::R_LOGICAL)
 			idxs = idxs->cast_ele_type(get_scalar_type<bool>());
+		// R is 1-based indexing, and C/C++ is 0-based.
+		else if (idxs->get_type() == get_scalar_type<int>())
+			idxs = idxs->minus_scalar<int>(1);
+		else if (idxs->get_type() == get_scalar_type<double>())
+			idxs = idxs->minus_scalar<double>(1);
 		col_vec::ptr idx_vec = col_vec::create(idxs);
 		sub_m = margin == matrix_margin::MAR_COL
 			? mat->get_cols(idx_vec) : mat->get_rows(idx_vec);
@@ -3015,4 +3009,27 @@ RcppExport SEXP R_FM_set_test_NA(SEXP pval)
 {
 	fmr::set_use_na_op(LOGICAL(pval)[0]);
 	return R_NilValue;
+}
+
+RcppExport SEXP R_FM_sort(SEXP pvec, SEXP pdecrease, SEXP pret_idx)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pvec);
+	vector::ptr vec = mat->conv2vec();
+	bool ret_idx = LOGICAL(pret_idx)[0];
+	bool decrease = LOGICAL(pdecrease)[0];
+	if (ret_idx) {
+		auto sorted = vec->sort_with_index();
+		Rcpp::List ret;
+		ret["x"] = create_FMR_vector(sorted->get_vec("val"), FM_get_Rtype(pvec), "");
+		col_vec::ptr ix = col_vec::create(vector::create(sorted->get_vec("idx")));
+		ret["ix"] = create_FMR_vector(
+				ix->cast_ele_type(get_scalar_type<double>()),
+				R_type::R_REAL, "");
+		return ret;
+	}
+	else {
+		auto sorted = vec->sort(decrease);
+		return create_FMR_vector(sorted->get_raw_store(),
+				FM_get_Rtype(pvec), "");
+	}
 }

@@ -19,7 +19,9 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so
 
 RUN apt-get update
 RUN apt-get install -y git cmake g++
-RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libaio-dev libatlas-base-dev zlib1g-dev
+RUN apt-get install -y numactl
+RUN if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then apt-get install -y libnuma-dev libhwloc-dev; fi
 #wget is for trilinos
 RUN apt-get install wget
 
@@ -49,6 +51,14 @@ RUN ./install_FlashGraphR.sh
 
 ####R finished####
 
+RUN apt-get install -y python3-pip
+RUN apt-get install -y libcurl4-openssl-dev libssl-dev
+RUN pip3 install --upgrade pip
+RUN pip3 install jupyter
+RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos = 'http://cran.rstudio.com/')"
+RUN R -e "devtools::install_github('IRkernel/IRkernel')"
+RUN R -e "IRkernel::installspec()"
+RUN R -e "IRkernel::installspec(user = FALSE)"
 
 ###FLASHX CONF END ###
 

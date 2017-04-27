@@ -27,7 +27,7 @@ all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
 	test-special_matrix_store test-EM_vector_vector test-rounderror \
 	test-hashtable test-bulk_operate test-block_matrix test-projection \
-	test-sink_matrix
+	test-sink_matrix test-sparse_matrix
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -119,6 +119,7 @@ test:
 	./test-NUMA_vector run_test.txt
 	./test-projection run_test.txt
 	./test-sink_matrix run_test.txt
+	./test-sparse_matrix run_test.txt
 	rm -R safs_data
 #	./test-special_matrix_store run_test.txt
 #	./test-rounderror

@@ -399,7 +399,9 @@ struct pow<double, false> {
 		// If e1 is -Inf and e2 isn't an integer, C++ returns Inf,
 		// but R wants NaN.
 		else if (e1 == -std::numeric_limits<double>::infinity()
-				&& floor(e2) != e2)
+				&& (floor(e2) != e2
+					|| e2 == -std::numeric_limits<double>::infinity()
+					|| e2 == std::numeric_limits<double>::infinity()))
 			return NAN;
 		else
 			return std::pow(e1, e2);
