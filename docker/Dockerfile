@@ -4,8 +4,6 @@
 FROM ubuntu:16.04
 MAINTAINER Alexander Niculescu <al3xander.niculescu@gmail.com>, Da Zheng <zhengda1936@gmail.com>
 
-RUN cat /etc/resolv.conf
-
 RUN apt-get update && apt-get install -y openssh-server
 RUN mkdir /var/run/sshd
 RUN echo 'root:screencast' | chpasswd
@@ -48,6 +46,7 @@ RUN R -e "install.packages('igraph', repos = 'http://cran.rstudio.com/')"
 WORKDIR /FlashX
 RUN ./install_FlashR.sh
 RUN ./install_FlashGraphR.sh
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 #check to see if it's there ^^^?
 
@@ -61,7 +60,6 @@ RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ'
 RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
 RUN R -e "IRkernel::installspec(user = FALSE)"
-
 
 ###FLASHX CONF END ###
 

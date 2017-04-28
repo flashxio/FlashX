@@ -1,16 +1,9 @@
 FlashX is a collection of big data analytics tools that perform data analytics
-in the form of graphs and matrices. They utilize solid-state drives (SSDs) to
-scale to large datasets in a single machine. It has five main components:
-SAFS, FlashGraph, FlashMatrix, FlashEigen and FlashR.
-
-SAFS
-========
-
-SAFS a user-space filesystem designed for large SSD arrays. It is capable of
-achieving the maximal I/O throughput from SSD arrays (millions of I/O per
-second for random I/O and tens of gigabytes per second for sequential I/O).
-The I/O performance is further magnified by the light-weight page cache if
-the workload can generate cache hits.
+in the form of graphs and matrices. As such, FlashX covers a large range of
+data analysis tasks. They utilize solid-state drives (SSDs) to
+scale data analysis to large datasets in a single machine, while achieving
+lightning speed (SSD-based solutions run almost as fast as in-memory solutions).
+It has three main components: FlashGraph, FlashMatrix and FlashR.
 
 FlashGraph
 ===========
@@ -24,7 +17,7 @@ comparable to state-of-art in-memory graph analysis frameworks and
 significantly outperforms state-of-art distributed graph analysis frameworks
 while being able to scale to graphs with billions of vertices and hundreds
 of billions of edges. Please see
-[the performance result](https://github.com/zheng-da/FlashX/wiki/FlashX-performance-and-scalability).
+[the performance result](https://flashxio.github.io/FlashX-doc/FlashX-perf.html#flashgraph-vs-giraph-graphx-and-powergraph).
 
 FlashMatrix
 ===========
@@ -35,24 +28,14 @@ varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
 
-FlashEigen
-==========
-FlashEigen is an eigensolver that extends the
-[Anasazi](https://trilinos.org/packages/anasazi/) eigensolvers with FlashMatrix.
-It computes eigenvalues of billion-node graphs efficiently and pricisely
-in a single machine. As such, FlashEigen enables users to perform spectral
-analysis on very large graphs in a single machine.
-
 FlashR
 ===========
 
-FlashR extends the existing R programming framework to process datasets at
-a scale of terabytes. FlashR integrates the matrices and generalized operators
-of FlashMatrix with R so that R users can implement many data mining and
-machine learning algorithms completely in R with performance comparable
-to optimized C implementations. FlashR reimplements many existing R functions
-for matrices to provide users a familiar R programming environment. FlashR
-is implemented as a regular R package.
+FlashR enhances the R framework to analyze data at the lightning speed and
+at a scale of terabytes. It provides parallelized versions of the matrix functions
+in the R framework (mainly the ones in the base package). As such, R users
+can execute existing R code in FlashR with almost no modification and get
+performance comparable to optimized C implementations.
 The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
 shows all of the features in FlashR.
 
