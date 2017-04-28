@@ -46,6 +46,7 @@ RUN R -e "install.packages('igraph', repos = 'http://cran.rstudio.com/')"
 WORKDIR /FlashX
 RUN ./install_FlashR.sh
 RUN ./install_FlashGraphR.sh
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 #check to see if it's there ^^^?
 
