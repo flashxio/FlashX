@@ -10,16 +10,23 @@ endif
 ifndef FG_LIB
 	FG_LIB = $(FG_DIR)/build
 endif
+
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/matrix -lFMatrix
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs
 # TODO how do we make aio and numa optional?
-PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -lhwloc -laio -lnuma
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -lrt -lz -laio
+
 ifdef ENABLE_TRILINOS
 	PKG_LIBS += -L$(FG_LIB)/matrix/eigensolver -leigen
 	PKG_LIBS += -lteuchoscomm -lteuchosnumerics -lteuchosparameterlist -lteuchoscore -lanasazi
 endif
+
+ifdef ENABLE_NUMA
+	PKG_LIBS += -lhwloc -lnuma
+endif
+
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
