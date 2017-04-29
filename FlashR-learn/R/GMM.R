@@ -40,8 +40,8 @@ esti.cov.diag <- function(X, resp, nk, means, reg.covar)
 	avg.X2 <- t(resp) %*% (X * X) / nk
 	avg.means2 <- means^2
 	avg.Xmeans <- means * (t(resp) %*% X) / nk
-	ret <- sweep(as.matrix(avg.X2 - 2*avg.Xmeans + avg.means2), 2, reg.covar, "+")
-	ret
+	covars <- as.matrix(avg.X2 - 2*avg.Xmeans + avg.means2)
+	ifelse(covars < reg.covar, reg.covar, covars)
 }
 
 esti.cov.spherical <- function(X, resp, nk, means, reg.covar)
@@ -52,7 +52,6 @@ esti.cov.spherical <- function(X, resp, nk, means, reg.covar)
 # This estimate the parameters of Mixture of Gaussian
 esti.gaussian.params <- function(X, resp, reg.covar, cov.type)
 {
-	print(any(is.nan(resp)))
 	n <- nrow(X)
 	nk <- colSums(resp)
 	# a k x d matrix. Each row is the mean of a component.
@@ -148,7 +147,6 @@ fm.estep <- function(X, params, cov.type)
 	weighted.logprob <- est.weighted.logprob(X, params$means,
 											 params$covs, cov.type,
 											 params$weights)
-	print(paste("weighted:", any(is.nan(weighted.logprob))))
 	logprob.norm <- logsumexp(weighted.logprob)
 	log.resp <- weighted.logprob - logprob.norm
 	fm.materialize(log.resp, logprob.norm)
