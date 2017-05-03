@@ -39,6 +39,7 @@ endif()
 
 find_package(hwloc)
 if (hwloc_FOUND)
+	message(STATUS "Find libhwloc.")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_HWLOC")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HWLOC")
 endif()
