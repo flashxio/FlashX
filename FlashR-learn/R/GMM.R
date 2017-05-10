@@ -15,141 +15,226 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-gmm.covs <- function (x, wts)
+esti.cov.full <- function(X, resp, nk, means, reg.covar)
 {
-	k <- ncol(wts)
-	n <- nrow(x)
-	if (nrow(wts) != n)
-		stop("length of 'wt' must equal the number of rows in 'x'")
-
-	s <- colSums(wts)
-	s2 <- colSums(wts * wts)
-	s <- fm.conv.FM2R(s)
-	s2 <- fm.conv.FM2R(s2)
-
-	centers <- list()
-	xs.cp <- list()
+	k <- nrow(means)
+	d <- ncol(means)
+	covs <- list()
 	for (i in 1:k) {
-		wx <- wts[,i] / s[i] * x
-		centers[[i]] <- rowSums(t(wx))
-		xs.cp[[i]] <- crossprod(wx, x)
+		diff <- sweep(X, 2, means[i,], "-")
+		covs[[i]] <- t(resp[,i] * diff) %*% diff / nk[i]
 	}
-	centers <- fm.materialize.list(centers)
-	xs.cp <- fm.materialize.list(xs.cp)
-
-	for (i in 1:k) {
-		center <- fm.conv.FM2R(centers[[i]])
-		x.cp <- fm.conv.FM2R(xs.cp[[i]])
-		x.cp <- x.cp - center %*% t(center)
-		# x.cp/(1 - sum(wt^2))
-		xs.cp[[i]] <- x.cp/(1 - s2[i]/s[i]/s[i])
-	}
-	xs.cp
+	lapply(covs, function(x) as.matrix(x) + diag(rep(reg.covar, d)))
 }
 
-comp.prob <- function(X, mus, covars, phi)
+# In this case, we assume all Gaussian distribution has the same covariance matrix.
+esti.cov.tied <- function(X, resp, nk, means, reg.covar)
 {
-	k <- length(covars)
-
-	log.likely.list <- list()
-	for (i in 1:k)
-		log.likely.list[[i]] <- fm.dmvnorm(X, mus[,i], covars[[i]], TRUE)
-	log.likely <- fm.cbind.list(log.likely.list)
-	# I need to materialize a matrix here first to speed up. Why?
-	log.likely <- fm.materialize(log.likely)
-
-	max.log.likely <- fm.agg.mat(log.likely, 1, fm.bo.max)
-	rel.likely <- exp(log.likely - max.log.likely) %*% phi
-	sum1 <- sum(log(rel.likely))
-	sum2 <- sum(max.log.likely)
-
-	P <- sweep(exp(log.likely - max.log.likely), 2, phi, "*") / rel.likely
-	ret <- fm.materialize(P, sum1, sum2)
-	log.like <- fm.conv.FM2R(sum1) + fm.conv.FM2R(sum2)
-
-	list(P=P, log.like=log.like)
+	avg.X2 <- t(X) %*% X
+	avg.means2 <- t(means * nk) %*% means
+	as.matrix((avg.X2 - avg.means2) / sum(nk)) + diag(rep(reg.covar, d))
 }
 
-#' Gaussian Mixture Model
-#'
-#' This clusters data points with an assumption that data is sampled from
-#' mixtures of Gaussian distribution. It fits Gaussian mixture model with
-#' EM algorithm.
-#'
-#' @param X a n x p data matrix, where each row is a data point.
-#' @param k the number of clusters
-#' @param maxiters the maximal number of iterations.
-#' @param verbose indicate whether to print extra information.
-#' @return This function returns a list of components:
-#'   \item{P}{A n x k matrix, where each row stores the probability that
-#'         a corresponding data point belongs to each cluster.}
-#'   \item{clust.ids}{A vector of n elements, where each element indicates
-#'         the cluster where a corresponding data point most likely belongs to.}
-#'   \item{niters}{a scalar that indicates the number of iterations}
-#'   \item{phi}{A vector of k elements, indicating the weight of Gaussian
-#'         distributions.}
-#'   \item{mus}{A k x p matrix, where each row is the mean of a Gaussian
-#'         distribution.}
-#'   \item{covars}{A list of k covariance matrices.}
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.GMM <- function(X, k, maxiters, verbose=FALSE)
+esti.cov.diag <- function(X, resp, nk, means, reg.covar)
 {
-	m <- dim(X)[1]
+	avg.X2 <- t(resp) %*% (X * X) / nk
+	avg.means2 <- means^2
+	avg.Xmeans <- means * (t(resp) %*% X) / nk
+	covars <- as.matrix(avg.X2 - 2*avg.Xmeans + avg.means2)
+	ifelse(covars < reg.covar, reg.covar, covars)
+}
 
-	X <- fm.conv.layout(X, FALSE)
-	X <- fm.materialize(X)
+esti.cov.spherical <- function(X, resp, nk, means, reg.covar)
+{
+	rowMeans(esti.cov.diag(X, resp, nk, means, reg.covar))
+}
 
-	if (!all(is.finite(X)))
-		stop("'x' must contain finite values only")
+# This estimate the parameters of Mixture of Gaussian
+esti.gaussian.params <- function(X, resp, reg.covar, cov.type)
+{
+	n <- nrow(X)
+	nk <- colSums(resp)
+	# a k x d matrix. Each row is the mean of a component.
+	means <- t(resp) %*% X / nk
+	# a list of covariance matrices for all components.
+	covs <- if (cov.type == "full") esti.cov.full(X, resp, nk, means, reg.covar)
+		else if (cov.type == "tied") esti.cov.tied(X, resp, nk, means, reg.covar)
+		else if (cov.type == "diag") esti.cov.diag(X, resp, nk, means, reg.covar)
+		else if (cov.type == "spherical") esti.cov.spherical(X, resp, nk, means, reg.covar)
+		else NULL
+	list(weights=as.vector(nk)/n, means=as.matrix(means), covs=covs)
+}
 
-	# Random init
-	# TODO alternatively, we can use KMeans to initialize it.
-	rand.k <- floor(runif(k, 1, m))
-	mus <- fm.conv.FM2R(t(X[rand.k,]))
-	init.covar <- cov(X)
-	covars <- list()
-	for (i in 1:k)
-		covars[[i]] <- init.covar
-	phi <- rep.int(1/m, k)
+init.params <- function(X, k, reg.covar, method, cov.type)
+{
+	N <- nrow(X)
+	if (method == "kmeans") {
+		res <- kmeans(X, k)
+		resp <- fm.as.sparse.matrix(fm.as.factor(res$cluster))
+	}
+	else if (method == "random") {
+		resp <- fm.runif.matrix(N, k, in.mem=fm.in.mem(X))
+		# each row needs to sum up to 1.
+		resp <- resp / rowSums(resp)
+	}
+	else
+		stop("unknown init method")
 
-	for (iter in 1:maxiters) {
-		if (verbose)
-			cat("iter", iter, "\n")
-		# E-step
-		P <- NULL
-		ret <- NULL
-		gc()
-		start.t <- Sys.time()
-		ret <- comp.prob(X, mus, covars, phi)
-		P <- ret$P
-		new.like <- ret$log.like
-		if (iter > 1) {
-			if (verbose) {
-				cat("new log likelihood:", new.like, ", old log likelihood:",
-					old.like, "\n")
-			}
-			if (new.like - old.like < 0.01)
-				break
+	# Estimate weights, means and covariances
+	params <- esti.gaussian.params(X, resp, reg.covar, cov.type)
+	list(weights=params$weights, means=params$means, covs=params$covs)
+}
+
+est.logprob <- function(X, means, covars, cov.type)
+{
+	n <- nrow(X)
+	d <- ncol(X)
+	k <- nrow(means)
+
+	comp.logprob.vec <- function(X, mu, covar.vec) {
+		X1 <- sweep(X, 2, mu, "-")
+		X2 <- sweep(X1, 2, covar.vec, "/")
+		rowSums(X2 * X1)
+	}
+
+	if (cov.type == "full") {
+		logprob <- list()
+		for (i in 1:k)
+			logprob[[i]] <- fm.dmvnorm(X, means[i,], covars[[i]], log=TRUE)
+		return(do.call(cbind, logprob))
+	}
+	else if (cov.type == "tied") {
+		logprob <- list()
+		for (i in 1:k)
+			logprob[[i]] <- fm.dmvnorm(X, means[i,], covars, log=TRUE)
+		return(do.call(cbind, logprob))
+	}
+	else if (cov.type == "diag") {
+		logprob <- list()
+		for (i in 1:k) {
+			logprob[[i]] <- comp.logprob.vec(X, means[i,], covars[i,])
+			logprob[[i]] <- -sum(log(covars[i,]))/2 - 0.5 * (d * log(2 * pi) + logprob[[i]])
 		}
-		old.like <- new.like
-		end.t <- Sys.time()
-		if (verbose)
-			cat("E-step takes", as.integer(end.t) - as.integer(start.t),
-				"seconds\n")
-
-		# M-step
-		start.t <- Sys.time()
-		phi <- fm.conv.FM2R(colSums(P)/m)
-		if (verbose)
-			print(phi)
-		mus <- sweep(fm.conv.FM2R(t(X) %*% P), 2, phi * m, "/")
-
-		covars <- gmm.covs(X, P)
-		end.t <- Sys.time()
-		if (verbose)
-			cat("M-step takes", as.integer(end.t) - as.integer(start.t),
-				"seconds\n")
+		return(do.call(cbind, logprob))
 	}
-	clust.ids <- fm.materialize(fm.agg.mat(P, 1, fm.bo.which.max))
-	list(P=P, clust.ids=clust.ids, niters=iter, phi=phi, mus=mus, covars=covars)
+	else if (cov.type == "spherical") {
+		logprob <- list()
+		for (i in 1:k) {
+			logprob[[i]] <- comp.logprob.vec(X, means[i,], rep(covars[i], d))
+			logprob[[i]] <- -log(covars[i])*d/2 - 0.5 * (d * log(2 * pi) + logprob[[i]])
+		}
+		return(do.call(cbind, logprob))
+	}
+}
+
+est.weighted.logprob <- function(X, means, covars, cov.type, weights)
+{
+	sweep(est.logprob(X, means, covars, cov.type), 2, log(weights), "+")
+}
+
+logsumexp <- function(X)
+{
+	max.X <- fm.agg.mat(X, 1, fm.bo.max)
+	log(rowSums(exp(X - max.X))) + max.X
+}
+
+# Estimate the log likelihood
+# @return norm
+# @return resp is a n x k matrix. It indicates the probability
+#        that a data point belongs to a cluster.
+fm.estep <- function(X, params, cov.type)
+{
+	weighted.logprob <- est.weighted.logprob(X, params$means,
+											 params$covs, cov.type,
+											 params$weights)
+	logprob.norm <- logsumexp(weighted.logprob)
+	log.resp <- weighted.logprob - logprob.norm
+	fm.materialize(log.resp, logprob.norm)
+	list(norm=as.vector(mean(logprob.norm)), resp=log.resp)
+}
+
+# This estimate the parameters.
+fm.mstep <- function(X, log.resp, reg.covar, cov.type)
+{
+	params <- esti.gaussian.params(X, exp(log.resp), reg.covar, cov.type)
+	list(weights=params$weights, means=params$means, covs=params$covs)
+}
+
+compute.lower.bound <- function(log.resp, log.norm)
+{
+	log.norm
+}
+
+# Fit a mixture of Gaussian distribution on the data.
+#
+# @param X is a n x d matrix. It's the input data.
+# @param k the number of components.
+# @param reg.covar is a real value. It's added to the diagonal of
+#        the covariance matrix to make it non-singular.
+# @param cov.type is the type of covariance matrix. It can be
+#        one of {"full", "tied", "diag", "spherical"}.
+#        \itemize{
+#        \item{"full"}{each component has its own general covariance matrix.}
+#        \item{"tied"}{all components share the same general covariance matrix.}
+#        \item{"diag"}{each component has its own diagonal covariance matrix.}
+#        \item{"spherical"}{each component has its own single variance.}
+#        }
+# @return 
+#        \itemize{
+#        \item{loglik}{a n x k matrix, whose \code{[i, k]}th entry is
+#                the conditional probability of the ith observation
+#                belonging to the kth component of the mixture.}
+#        \item{iter}{the number of iterations}
+#        \item{parameters}{parameters of the mixture of Gaussian distribution.
+#             \itemize{
+#             \item{weights}{a vector of k elements. Each element is
+#              the weight of the Gaussian distribution in the mixture.}
+#             \item{means}{a k x d matrix. Each row is the mean of a Gaussian distribution.}
+#             \item{covs}{a list of matrices, a matrix or a vector, depending on \code{cov.type}}}
+#        }
+GMM.fit <- function(X, k, max.iter=100, tol=1e-3, reg.covar=1e-6,
+					method=c("random", "kmeans"),
+					cov.type=c("full", "tied", "diag", "spherical"))
+{
+	method <- match.arg(method)
+	cov.type <- match.arg(cov.type)
+	params <- init.params(X, k, reg.covar, method, cov.type)
+	for (i in 1:max.iter) {
+		eret <- fm.estep(X, params, cov.type)
+		params <- fm.mstep(X, eret$resp, reg.covar, cov.type)
+		lb <- compute.lower.bound(eret$resp, eret$norm)
+		print(lb)
+		if (i > 5 && abs(lb - prev.lb) < tol)
+			break
+		prev.lb <- lb
+		gc()
+	}
+	structure(list(loglik=eret$resp, score=eret$norm, iter=i,
+				   cov.type=cov.type, parameters=params), class="GMM")
+}
+
+get.nparameters <- function(object)
+{
+	cov.params <- 0
+	if (object$cov.type == "full")
+		cov.params <- length(object$parameters$covs[[1]]) * length(object$parameters$covs)
+	else
+		cov.params <- length(object$parameters$covs)
+	cov.params + length(object$parameters$means) + length(object$parameters$weights) - 1
+}
+
+BIC.GMM <- function(object, ...)
+{
+	n <- nrow(object$loglik)
+	k <- nrow(object$parameters$centers)
+	d <- ncol(object$parameters$centers)
+	-2 * object$score * n + log(n)*get.nparameters(object)
+}
+
+AIC.GMM <- function(object, ..., k=2)
+{
+	n <- nrow(object$loglik)
+	k <- nrow(object$parameters$centers)
+	d <- ncol(object$parameters$centers)
+	-2 * object$score * n + 2*get.nparameters(object)
 }

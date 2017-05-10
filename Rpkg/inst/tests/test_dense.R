@@ -635,6 +635,18 @@ test_that(name, {
 		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
 		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
 
+		  idx <- floor(runif(1000, min=1, max=100))
+		  fm.idx <- fm.conv.FM2R(idx)
+		  fm.sub.mat <- fm.mat[fm.idx,]
+		  sub.mat <- mat[fm.idx,]
+		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
+		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
+
+		  fm.sub.mat <- t(fm.mat[fm.idx,])
+		  sub.mat <- t(mat[fm.idx,])
+		  expect_equal(typeof(fm.sub.mat), typeof(sub.mat))
+		  expect_equal(sub.mat, fm.conv.FM2R(fm.sub.mat))
+
 		  fm.mat <- t(fm.mat)
 		  mat <- t(mat)
 		  fm.sub.mat <- fm.mat[3:12,]
@@ -1210,3 +1222,34 @@ test_that("which.min", {
 		  expect_equal(res1, res2)
 })
 }
+
+test_that("sort", {
+			  vec <- fm.runif(1000)
+			  rvec <- as.vector(vec)
+			  ret <- sort(vec)
+			  rret <- sort(rvec)
+			  expect_equal(as.vector(ret), rret)
+
+			  ret <- sort.list(vec)
+			  rret <- sort.list(rvec)
+			  expect_equal(as.vector(ret), rret)
+
+			  ret <- rank(vec)
+			  rret <- rank(rvec)
+			  expect_equal(as.vector(ret), rret)
+})
+
+test_that("kmeans", {
+			  data <- matrix(round(runif(10000), digits=8), 1000, 10)
+			  cluster <- floor(runif(1000, min=1, max=9))
+			  centers <- data[floor(runif(8, min=1, max=1000)),]
+			  res <- kmeans(data, centers, algorithm="Lloyd")
+			  dimnames(res$centers) <- NULL
+			  fm.res <- fm.kmeans(fm.as.matrix(data), centers, iter.max=res$iter-1)
+			  expect_equal(res$cluster, as.vector(fm.res$cluster))
+			  expect_equal(res$centers, as.matrix(fm.res$centers))
+			  expect_equal(res$totss, fm.res$totss)
+			  expect_equal(res$withinss, fm.res$withinss)
+			  expect_equal(res$tot.withinss, fm.res$tot.withinss)
+			  expect_equal(res$betweenss, fm.res$betweenss)
+})

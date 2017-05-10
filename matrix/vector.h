@@ -101,8 +101,8 @@ public:
 
 	bool equals(const vector &vec) const;
 
-	vector::ptr sort() const;
-	std::shared_ptr<data_frame> sort_with_index() const;
+	vector::ptr sort(bool decreasing=false) const;
+	std::shared_ptr<data_frame> sort_with_index(bool decreasing=false) const;
 	std::shared_ptr<dense_matrix> conv2mat(size_t nrow, size_t ncol,
 			bool byrow) const;
 

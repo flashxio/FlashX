@@ -17,6 +17,9 @@ set_affinity_node ()
 		cpu_num=$(($start_cpu + $i * $num_nodes))
 		irq_num=$irq
 		i=$(($i + 1))
+		if [ $cpu_num -ge $num_cpus ] ; then
+			break
+		fi
 		echo $cpu_num > /proc/irq/$irq_num/smp_affinity_list
 		echo "set $irq_num to $cpu_num"
 		cat /proc/irq/$irq_num/smp_affinity_list

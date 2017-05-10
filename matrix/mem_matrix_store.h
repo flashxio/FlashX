@@ -357,10 +357,16 @@ public:
 
 	// Its data is likely not in contiguous memory.
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (get_num_cols() == 1)
+			return get_col(0);
+		else
+			return NULL;
 	}
 	virtual char *get_raw_arr() {
-		return NULL;
+		if (get_num_cols() == 1)
+			return get_col(0);
+		else
+			return NULL;
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
@@ -427,10 +433,16 @@ public:
 
 	// Its data is likely not in contiguous memory.
 	virtual const char *get_raw_arr() const {
-		return NULL;
+		if (get_num_rows() == 1)
+			return get_row(0);
+		else
+			return NULL;
 	}
 	virtual char *get_raw_arr() {
-		return NULL;
+		if (get_num_rows() == 1)
+			return get_row(0);
+		else
+			return NULL;
 	}
 
 	virtual std::shared_ptr<const local_matrix_store> get_portion(

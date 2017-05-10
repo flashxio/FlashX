@@ -279,7 +279,7 @@ scalar_variable::ptr vector::dot_prod(const vector &vec) const
 	return res;
 }
 
-vector::ptr vector::sort() const
+vector::ptr vector::sort(bool decreasing) const
 {
 	// TODO it's unnecessary to copy first and sort.
 	detail::vec_store::ptr vec = get_data().deep_copy();
@@ -287,7 +287,7 @@ vector::ptr vector::sort() const
 	return vector::create(vec);
 }
 
-data_frame::ptr vector::sort_with_index() const
+data_frame::ptr vector::sort_with_index(bool decreasing) const
 {
 	detail::vec_store::ptr vec = get_data().deep_copy();
 	detail::vec_store::ptr idx = vec->sort_with_index();

@@ -1,5 +1,9 @@
 #!/bin/sh
 
+if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then
+	export ENABLE_NUMA=1
+fi
+
 mkdir -p build
 cd build
 cmake ..;

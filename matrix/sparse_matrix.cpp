@@ -31,6 +31,7 @@
 #include "EM_dense_matrix.h"
 #include "sink_matrix.h"
 #include "col_vec.h"
+#include "combined_matrix_store.h"
 
 namespace fm
 {
@@ -740,6 +741,85 @@ std::vector<safs::io_interface::ptr> sparse_matrix::create_ios() const
 	assert(ios);
 	ret[0] = ios->create_io();
 	return ret;
+}
+
+bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
+		detail::matrix_store::ptr out) const
+{
+	if (in->get_type() != out->get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "input and output matrices need to have the same type";
+		return false;
+	}
+	if (entry_type && *entry_type != get_scalar_type<bool>()
+			&& *entry_type != in->get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "matrix element type doesn't match";
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("input dense matrix: %1%, sparse matrix: %2%")
+			% in->get_type().get_name() % entry_type->get_name();
+		return false;
+	}
+	auto create = get_multiply_creator(in->get_type(), in->get_num_cols());
+	if (create == NULL)
+		return false;
+	return multiply(in, out, create);
+}
+
+dense_matrix::ptr sparse_matrix::multiply(dense_matrix::ptr right_mat,
+		size_t mem_size) const
+{
+	bool out_in_mem = right_mat->is_in_mem();
+	size_t in_size = right_mat->get_num_rows() * right_mat->get_num_cols()
+		* right_mat->get_entry_size();
+	// If the right matrix is in memory or the memory is large enough to keep
+	// the entire input dense matrix.
+	if (right_mat->is_in_mem() || mem_size >= in_size) {
+		// If the input matrix isn't stored in memory.
+		if (!right_mat->is_in_mem() && mem_size >= in_size)
+			right_mat = right_mat->conv_store(true, matrix_conf.get_num_nodes());
+
+		detail::matrix_store::ptr out_mat = detail::matrix_store::create(
+				this->get_num_rows(), right_mat->get_num_cols(),
+				matrix_layout_t::L_ROW, right_mat->get_type(),
+				right_mat->get_raw_store()->get_num_nodes(), out_in_mem);
+		this->multiply(right_mat->get_raw_store(), out_mat);
+		return dense_matrix::create(out_mat);
+	}
+	// In this case, the input matrix isn't stored in memory and the memory
+	// size isn't big enough to store the entire input matrix.
+	else {
+		size_t block_size = mem_size / right_mat->get_num_rows()
+			/ right_mat->get_entry_size();
+		if (block_size == 0) {
+			fprintf(stderr, "The memory is too small for the SpMM\n");
+			return dense_matrix::ptr();
+		}
+
+		// We should convert the matrix to col-major to help get some columns
+		// at a time. If the original layout is col-major, it doesn't do anything.
+		right_mat = right_mat->conv2(matrix_layout_t::L_COL);
+		right_mat->materialize_self();
+
+		std::vector<detail::matrix_store::const_ptr> out_blocks;
+		for (size_t i = 0; i * block_size < right_mat->get_num_cols(); i++) {
+			// We read some columns at a time and convert the sub matrix to row major.
+			off_t end = std::min((i + 1) * block_size, right_mat->get_num_cols());
+			detail::matrix_store::const_ptr sub
+				= right_mat->get_raw_store()->get_cols(i * block_size, end);
+			dense_matrix::ptr sub_mat = dense_matrix::create(sub);
+			sub_mat = sub_mat->conv2(matrix_layout_t::L_ROW);
+			sub_mat = sub_mat->conv_store(true, matrix_conf.get_num_nodes());
+
+			detail::matrix_store::ptr out_sub = detail::matrix_store::create(
+					this->get_num_rows(), sub->get_num_cols(),
+					matrix_layout_t::L_ROW, right_mat->get_type(),
+					right_mat->get_raw_store()->get_num_nodes(), out_in_mem);
+			this->multiply(sub_mat->get_raw_store(), out_sub);
+			out_blocks.push_back(out_sub);
+		}
+		return dense_matrix::create(detail::combined_matrix_store::create(
+					out_blocks, out_blocks.front()->store_layout()));
+	}
 }
 
 static std::atomic<long> init_count;

@@ -634,25 +634,14 @@ public:
 	 * It requires users to initialize the output matrix.
 	 */
 	bool multiply(detail::matrix_store::const_ptr in,
-			detail::matrix_store::ptr out) const {
-		if (in->get_type() != out->get_type()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "input and output matrices need to have the same type";
-			return false;
-		}
-		if (entry_type && *entry_type != get_scalar_type<bool>()
-				&& *entry_type != in->get_type()) {
-			BOOST_LOG_TRIVIAL(error) << "matrix element type doesn't match";
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("input dense matrix: %1%, sparse matrix: %2%")
-				% in->get_type().get_name() % entry_type->get_name();
-			return false;
-		}
-		auto create = get_multiply_creator(in->get_type(), in->get_num_cols());
-		if (create == NULL)
-			return false;
-		return multiply(in, out, create);
-	}
+			detail::matrix_store::ptr out) const;
+
+	/*
+	 * This version of SpMM determines the storage of the output matrix
+	 * automatically based on the input dense matrix and memory size.
+	 */
+	dense_matrix::ptr multiply(dense_matrix::ptr right_mat,
+			size_t mem_size = std::numeric_limits<size_t>::max()) const;
 
 	bool multiply(detail::vec_store::const_ptr in,
 			detail::vec_store::ptr out) const {

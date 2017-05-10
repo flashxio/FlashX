@@ -862,6 +862,11 @@ fm.as.factor <- function(fm, num.levels = -1)
 #'
 #' @param fm A FlashR matrix
 #' @param mat A FlashR dense matrix.
+#' @param mem.size numeric. This is only useful for sparse matrix multiplication.
+#'        We perform sparse matrix multiplication in semi-external memory,
+#'        in which we keep the input dense matrix in memory and the sparse
+#'        matrix on disks. If the input dense matrix is large, we need to
+#'        know the memory size to split the dense matrix.
 #' @return a FlashR vector if the second argument is a vector;
 #' a FlashR matrix if the second argument is a matrix.
 #' @name fm.multiply
@@ -871,7 +876,7 @@ fm.as.factor <- function(fm, num.levels = -1)
 #' mat1 <- fm.runif.matrix(1000, 100)
 #' mat2 <- fm.runif.matrix(100, 10)
 #' mat <- fm.multiply(mat1, mat2)
-fm.multiply <- function(fm, mat)
+fm.multiply <- function(fm, mat, mem.size=.Machine$double.xmax)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
@@ -884,7 +889,7 @@ fm.multiply <- function(fm, mat)
 	}
 
 	if (fm.is.sparse(fm))
-		o <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashR")
+		o <- .Call("R_FM_multiply_sparse", fm, mat, mem.size, PACKAGE="FlashR")
 	else
 		o <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashR")
 	if (class(mat) == "fmV")
@@ -2163,6 +2168,41 @@ fm.print.mat.info <- function(fm)
 	stopifnot(fm.is.object(fm))
 	ret <- .Call("R_FM_print_mat_info", fm, PACKAGE="FlashR")
 }
+
+setMethod("sort", "fmV", function(x, decreasing = FALSE,
+								  index.return=FALSE, ...) {
+	ret <- .Call("R_FM_sort", x, as.logical(decreasing),
+				 as.logical(index.return))
+	if (index.return)
+		list(x=.new.fmV(ret[["x"]]), ix=.new.fmV(ret[["ix"]]) + 1)
+	else
+		.new.fmV(ret)
+})
+
+#setMethod("order", "fmV", function(..., na.list=TRUE, decreasing=FALSE,
+#								   method=c("shell", "radix")) {
+#	args <- list(...)
+#	# TODO we'll need to handle a list of vectors later.
+#	ret <- sort(args[[1]], decreasing=decreasing,
+#				index.return=TRUE)
+#	ret$ix
+#})
+
+setMethod("sort.list", "fmV", function(x, partial=NULL, na.last=TRUE,
+									   decreasing=FALSE,
+									   method=c("shell", "quick", "radix")) {
+	ret <- sort(x, decreasing=decreasing,
+				index.return=TRUE)
+	ret$ix
+})
+
+setMethod("rank", "fmV", function(x, na.last=TRUE,
+								  ties.method=c("average", "first", "last",
+												"random", "max", "min")) {
+	sorted <- sort(x, decreasing=FALSE, index.return=TRUE)
+	ret <- sort(sorted$ix, decreasing=FALSE, index.return=TRUE)
+	ret$ix
+})
 
 #' Google profiler
 #'

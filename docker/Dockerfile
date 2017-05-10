@@ -4,8 +4,6 @@
 FROM ubuntu:16.04
 MAINTAINER Alexander Niculescu <al3xander.niculescu@gmail.com>, Da Zheng <zhengda1936@gmail.com>
 
-RUN cat /etc/resolv.conf
-
 RUN apt-get update && apt-get install -y openssh-server
 RUN mkdir /var/run/sshd
 RUN echo 'root:screencast' | chpasswd
@@ -21,7 +19,9 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so
 
 RUN apt-get update
 RUN apt-get install -y git cmake g++
-RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
+RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libaio-dev libatlas-base-dev zlib1g-dev
+RUN apt-get install -y numactl
+RUN if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then apt-get install -y libnuma-dev libhwloc-dev; fi
 #wget is for trilinos
 RUN apt-get install wget
 
@@ -46,6 +46,7 @@ RUN R -e "install.packages('igraph', repos = 'http://cran.rstudio.com/')"
 WORKDIR /FlashX
 RUN ./install_FlashR.sh
 RUN ./install_FlashGraphR.sh
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 #check to see if it's there ^^^?
 
@@ -59,7 +60,6 @@ RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ'
 RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
 RUN R -e "IRkernel::installspec(user = FALSE)"
-
 
 ###FLASHX CONF END ###
 

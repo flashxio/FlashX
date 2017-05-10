@@ -1696,19 +1696,19 @@ fm.eigen.block <- function(mul, k, n, block.size,
 {
 	runs <- ceiling(k / block.size)
 	nev <- min(k, block.size)
-	res <- fm.eigen(mul, nev, n, which=which, sym=sym, options=options)
-	eval <- res$values
+
 	in.mem <- TRUE
 	if ("in.mem" %in% names(options)) {
 		in.mem <- options$in.mem
 		options$in.mem <- TRUE
 	}
+
+	res <- fm.eigen(mul, nev, n, which=which, sym=sym, options=options)
+	eval <- res$values
 	evec <- fm.conv.store(res$vectors, in.mem=in.mem)
 	if (verbose) {
 		print(paste("eigenvalues (", 1, "-", nev, "):"))
 		print(eval)
-		print("precision:")
-		print(fm.cal.residul(mul, eval, evec))
 	}
 	if (runs > 1) {
 		for (i in 1:(runs - 1)) {
@@ -1732,8 +1732,6 @@ fm.eigen.block <- function(mul, k, n, block.size,
 				to <- from + nev
 				print(paste("eigenvalues (", from, "-", to, "):"))
 				print(res$values)
-				print("precision:")
-				print(fm.cal.residul(mul, res$values, res$vectors))
 			}
 		}
 	}
