@@ -41,23 +41,156 @@ namespace fm
 
 static const int LINE_BLOCK_SIZE = 16 * 1024 * 1024;
 
-class file_io
+namespace
 {
-public:
-	typedef std::shared_ptr<file_io> ptr;
 
-	static ptr create(const std::string &file_name);
-
-	virtual ~file_io() {
+struct del_arr {
+	void operator()(char *buf) {
+		delete [] buf;
 	}
-
-	virtual std::shared_ptr<char> read_lines(size_t wanted_bytes,
-			size_t &read_bytes) = 0;
-
-	virtual bool eof() const = 0;
 };
 
-class text_file_io: public file_io
+}
+
+std::shared_ptr<char> file_io::alloc_io_buf(size_t num_bytes)
+{
+	return std::shared_ptr<char>(new char[num_bytes], del_arr());
+}
+
+static size_t get_last_newline(std::shared_ptr<char> data, size_t size)
+{
+	off_t off = size - 1;
+	const char *buf = data.get();
+	for (; buf[off] != '\n' && off > 0; off--);
+	if (off == 0 && buf[0] != '\n')
+		return size;
+	else
+		return off + 1;
+};
+
+std::shared_ptr<char> text_io::read_lines(size_t wanted_bytes,
+		size_t &read_bytes)
+{
+	if (data_buf && wanted_bytes <= data_size) {
+		std::shared_ptr<char> new_data = file_io::alloc_io_buf(wanted_bytes + 1);
+		memcpy(new_data.get(), data_ptr, wanted_bytes);
+		read_bytes = get_last_newline(new_data, wanted_bytes);
+		new_data.get()[read_bytes] = 0;
+		// Update the data buffer.
+		data_ptr += read_bytes;
+		data_size -= read_bytes;
+		if (data_size == 0) {
+			data_ptr = NULL;
+			data_buf = NULL;
+		}
+		return new_data;
+	}
+	else if (data_buf && wanted_bytes > data_size) {
+		// Read the remaining data.
+		size_t new_read_size = 0;
+		std::shared_ptr<char> remain = io->read_bytes(wanted_bytes - data_size,
+				new_read_size);
+
+		// Copy data to be returned.
+		size_t tot_data_size = new_read_size + data_size;
+		std::shared_ptr<char> new_data = file_io::alloc_io_buf(tot_data_size + 1);
+		memcpy(new_data.get(), data_ptr, data_size);
+		if (remain && new_read_size > 0)
+			memcpy(new_data.get() + data_size, remain.get(), new_read_size);
+		read_bytes = get_last_newline(new_data, tot_data_size);
+
+		// Update the data buffer.
+		if (tot_data_size - read_bytes > 0) {
+			data_size = tot_data_size - read_bytes;
+			data_buf = file_io::alloc_io_buf(data_size);
+			memcpy(data_buf.get(), new_data.get() + read_bytes, data_size);
+			data_ptr = data_buf.get();
+		}
+		else {
+			data_size = 0;
+			data_ptr = NULL;
+			data_buf = NULL;
+		}
+
+		// We should change the data after we save the remaining data.
+		new_data.get()[read_bytes] = 0;
+
+		return new_data;
+	}
+	else {
+		size_t tot_data_size = 0;
+		auto new_data = io->read_bytes(wanted_bytes, tot_data_size);
+		read_bytes = get_last_newline(new_data, tot_data_size);
+
+		// Update the data buffer.
+		if (tot_data_size - read_bytes > 0) {
+			data_size = tot_data_size - read_bytes;
+			data_buf = file_io::alloc_io_buf(data_size);
+			memcpy(data_buf.get(), new_data.get() + read_bytes, data_size);
+			data_ptr = data_buf.get();
+		}
+
+		// We should change the data after we save the remaining data.
+		new_data.get()[read_bytes] = 0;
+		return new_data;
+	}
+}
+
+std::shared_ptr<char> text_io::peek(size_t wanted_bytes,
+		size_t &read_bytes)
+{
+	if (data_buf && wanted_bytes <= data_size) {
+		std::shared_ptr<char> new_data = file_io::alloc_io_buf(wanted_bytes + 1);
+		memcpy(new_data.get(), data_ptr, wanted_bytes);
+		read_bytes = get_last_newline(new_data, wanted_bytes);
+		new_data.get()[read_bytes] = 0;
+		return new_data;
+	}
+	else if (data_buf && wanted_bytes > data_size) {
+		// Read the remaining data.
+		size_t new_read_size = 0;
+		std::shared_ptr<char> remain = io->read_bytes(wanted_bytes - data_size,
+				new_read_size);
+
+		// Copy data to be returned.
+		size_t tot_data_size = new_read_size + data_size;
+		std::shared_ptr<char> new_data = file_io::alloc_io_buf(tot_data_size + 1);
+		memcpy(new_data.get(), data_ptr, data_size);
+		if (remain && new_read_size > 0)
+			memcpy(new_data.get() + data_size, remain.get(), new_read_size);
+
+		// Update the data buffer.
+		if (new_read_size > 0) {
+			data_buf = file_io::alloc_io_buf(tot_data_size);
+			memcpy(data_buf.get(), new_data.get(), tot_data_size);
+			data_size = tot_data_size;
+			data_ptr = data_buf.get();
+		}
+
+		read_bytes = get_last_newline(new_data, tot_data_size);
+		new_data.get()[read_bytes] = 0;
+
+		return new_data;
+	}
+	else {
+		size_t tot_read_bytes = 0;
+		data_buf = io->read_bytes(wanted_bytes, tot_read_bytes);
+		if (tot_read_bytes == 0) {
+			read_bytes = 0;
+			return std::shared_ptr<char>();
+		}
+		read_bytes = get_last_newline(data_buf, tot_read_bytes);
+		std::shared_ptr<char> new_data = file_io::alloc_io_buf(read_bytes + 1);
+		memcpy(new_data.get(), data_buf.get(), read_bytes);
+		new_data.get()[read_bytes] = 0;
+		// Update the data buffer.
+		data_size = tot_read_bytes;
+		data_ptr = data_buf.get();
+		return new_data;
+	}
+}
+
+class local_file_io: public file_io
 {
 	struct del_off_ptr {
 		void *orig_addr;
@@ -75,7 +208,7 @@ class text_file_io: public file_io
 	off_t curr_off;
 	ssize_t file_size;
 
-	text_file_io(int fd, const std::string file) {
+	local_file_io(int fd, const std::string file) {
 		this->curr_off = 0;
 		this->fd = fd;
 		safs::native_file local_f(file);
@@ -84,11 +217,11 @@ class text_file_io: public file_io
 public:
 	static ptr create(const std::string file);
 
-	~text_file_io() {
+	~local_file_io() {
 		close(fd);
 	}
 
-	std::shared_ptr<char> read_lines(size_t wanted_bytes,
+	std::shared_ptr<char> read_bytes(size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
@@ -99,21 +232,10 @@ public:
 #ifdef USE_GZIP
 class gz_file_io: public file_io
 {
-	struct del_arr {
-		void operator()(char *buf) {
-			delete [] buf;
-		}
-	};
-
-	std::vector<char> prev_buf;
-	size_t prev_buf_bytes;
-
 	gzFile f;
 
 	gz_file_io(gzFile f) {
 		this->f = f;
-		prev_buf_bytes = 0;
-		prev_buf.resize(PAGE_SIZE);
 	}
 public:
 	static ptr create(const std::string &file);
@@ -122,61 +244,30 @@ public:
 		gzclose(f);
 	}
 
-	std::shared_ptr<char> read_lines(const size_t wanted_bytes,
+	std::shared_ptr<char> read_bytes(const size_t wanted_bytes,
 			size_t &read_bytes);
 
 	bool eof() const {
-		return gzeof(f) && prev_buf_bytes == 0;
+		return gzeof(f);
 	}
 };
 
-std::shared_ptr<char> gz_file_io::read_lines(
-		const size_t wanted_bytes1, size_t &read_bytes)
+std::shared_ptr<char> gz_file_io::read_bytes(
+		const size_t wanted_bytes, size_t &read_bytes)
 {
 	read_bytes = 0;
-	size_t wanted_bytes = wanted_bytes1;
-	size_t buf_size = wanted_bytes + PAGE_SIZE;
-	char *buf = new char[buf_size];
-	std::shared_ptr<char> ret_buf(buf, del_arr());
-	if (prev_buf_bytes > 0) {
-		memcpy(buf, prev_buf.data(), prev_buf_bytes);
-		buf += prev_buf_bytes;
-		read_bytes += prev_buf_bytes;
-		wanted_bytes -= prev_buf_bytes;
-		prev_buf_bytes = 0;
-	}
-
+	std::shared_ptr<char> ret_buf(new char[wanted_bytes], del_arr());
 	if (!gzeof(f)) {
-		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
+		int ret = gzread(f, ret_buf.get(), wanted_bytes);
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
 				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
 				return std::unique_ptr<char[]>();
 			}
 		}
-
-		if ((size_t) ret > wanted_bytes) {
-			int i = 0;
-			int over_read = ret - wanted_bytes;
-			for (; i < over_read; i++) {
-				if (buf[wanted_bytes + i] == '\n') {
-					i++;
-					break;
-				}
-			}
-			read_bytes += wanted_bytes + i;
-			buf += wanted_bytes + i;
-
-			prev_buf_bytes = over_read - i;
-			assert(prev_buf_bytes <= (size_t) PAGE_SIZE);
-			memcpy(prev_buf.data(), buf, prev_buf_bytes);
-		}
-		else
-			read_bytes += ret;
+		read_bytes += ret;
 	}
-	// The line buffer must end with '\0'.
-	assert(read_bytes < buf_size);
-	ret_buf.get()[read_bytes] = 0;
+	assert(read_bytes <= wanted_bytes);
 	return ret_buf;
 }
 
@@ -194,19 +285,24 @@ file_io::ptr gz_file_io::create(const std::string &file)
 
 #endif
 
-file_io::ptr file_io::create(const std::string &file_name)
+text_io::ptr text_io::create(const std::string &file_name)
 {
+	file_io::ptr io;
 #ifdef USE_GZIP
 	size_t loc = file_name.rfind(".gz");
 	// If the file name ends up with ".gz", we consider it as a gzip file.
 	if (loc != std::string::npos && loc + 3 == file_name.length())
-		return gz_file_io::create(file_name);
+		io = gz_file_io::create(file_name);
 	else
 #endif
-		return text_file_io::create(file_name);
+		io = local_file_io::create(file_name);
+	if (io == NULL)
+		return text_io::ptr();
+	else
+		return text_io::ptr(new text_io(io));
 }
 
-file_io::ptr text_file_io::create(const std::string file)
+file_io::ptr local_file_io::create(const std::string file)
 {
 	int fd = open(file.c_str(), O_RDONLY | O_DIRECT);
 	if (fd < 0) {
@@ -214,7 +310,7 @@ file_io::ptr text_file_io::create(const std::string file)
 			<< boost::format("fail to open %1%: %2%") % file % strerror(errno);
 		return ptr();
 	}
-	return ptr(new text_file_io(fd, file));
+	return ptr(new local_file_io(fd, file));
 }
 
 void read_complete(int fd, char *buf, size_t buf_size, size_t expected_size)
@@ -229,7 +325,7 @@ void read_complete(int fd, char *buf, size_t buf_size, size_t expected_size)
 	}
 }
 
-std::shared_ptr<char> text_file_io::read_lines(
+std::shared_ptr<char> local_file_io::read_bytes(
 		size_t wanted_bytes, size_t &read_bytes)
 {
 	off_t align_start = ROUND_PAGE(curr_off);
@@ -247,27 +343,11 @@ std::shared_ptr<char> text_file_io::read_lines(
 	size_t expected_size = std::min(buf_size, (size_t) (file_size - align_start));
 	read_complete(fd, (char *) addr, buf_size, expected_size);
 
-	char *line_buf = ((char *) addr) + local_off;
-	if (local_off > 0)
-		assert(*(line_buf - 1) == '\n');
-
-	// Find the end of the last line in the buffer.
-	char *line_end;
-	// If the line ends at the end of the buffer, we need to move one more line
-	// further.
-	if (expected_size == buf_size)
-		line_end = ((char *) addr) + expected_size - 2;
-	else
-		line_end = ((char *) addr) + expected_size - 1;
-	while (*line_end != '\n')
-		line_end--;
-	line_end++;
-	*line_end = 0;
-
-	read_bytes = line_end - line_buf;
+	char *buf = ((char *) addr) + local_off;
+	read_bytes = expected_size - local_off;
 	curr_off += read_bytes;
 	assert(curr_off <= file_size);
-	return std::shared_ptr<char>(line_buf, del_off_ptr(addr));
+	return std::shared_ptr<char>(buf, del_off_ptr(addr));
 }
 
 /*
@@ -461,11 +541,11 @@ public:
 
 class file_parse_task: public thread_task
 {
-	file_io::ptr io;
+	text_io::ptr io;
 	const line_parser &parser;
 	data_frame_set &dfs;
 public:
-	file_parse_task(file_io::ptr io, const line_parser &_parser,
+	file_parse_task(text_io::ptr io, const line_parser &_parser,
 			data_frame_set &_dfs): parser(_parser), dfs(_dfs) {
 		this->io = io;
 	}
@@ -478,7 +558,9 @@ void file_parse_task::run()
 	while (!io->eof()) {
 		size_t size = 0;
 		std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
-		assert(size > 0);
+		if (size == 0)
+			continue;
+
 		data_frame::ptr df = create_data_frame(parser);
 		parse_lines(lines, size, parser, *df);
 		// In this case, we process multiple files simultaneously.
@@ -490,14 +572,10 @@ void file_parse_task::run()
 
 }
 
-data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
+data_frame::ptr read_lines(text_io::ptr io, const line_parser &parser,
 		bool in_mem, bool sequential)
 {
 	data_frame::ptr df = create_data_frame(parser, in_mem);
-	file_io::ptr io = file_io::create(file);
-	if (io == NULL)
-		return data_frame::ptr();
-
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	const size_t MAX_PENDING = mem_threads->get_num_threads() * 3;
@@ -511,8 +589,9 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 			size_t size = 0;
 			std::shared_ptr<char> lines = io->read_lines(LINE_BLOCK_SIZE, size);
 
-			mem_threads->process_task(-1,
-					new parse_task(lines, size, parser, dfs, task_id++));
+			if (size > 0)
+				mem_threads->process_task(-1,
+						new parse_task(lines, size, parser, dfs, task_id++));
 		}
 		if (dfs.get_num_dfs() > 0) {
 			std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(
@@ -525,17 +604,18 @@ data_frame::ptr read_lines(const std::string &file, const line_parser &parser,
 	mem_threads->wait4complete();
 	std::vector<data_frame::ptr> tmp_dfs = dfs.fetch_data_frames(sequential,
 			seq_num);
+	seq_num += tmp_dfs.size();
 	if (!tmp_dfs.empty())
 		df->append(tmp_dfs.begin(), tmp_dfs.end());
 
 	return df;
 }
 
-data_frame::ptr read_lines(const std::vector<std::string> &files,
+data_frame::ptr read_lines(const std::vector<text_io::ptr> &file_ios,
 		const line_parser &parser, bool in_mem, bool sequential)
 {
-	if (files.size() == 1)
-		return read_lines(files[0], parser, in_mem, sequential);
+	if (file_ios.size() == 1)
+		return read_lines(file_ios[0], parser, in_mem, sequential);
 
 	data_frame::ptr df = create_data_frame(parser, in_mem);
 	detail::mem_thread_pool::ptr mem_threads
@@ -550,12 +630,12 @@ data_frame::ptr read_lines(const std::vector<std::string> &files,
 	 * TODO it may not work so well if there are a small number of large
 	 * input files.
 	 */
-	auto file_it = files.begin();
-	while (file_it != files.end()) {
+	auto io_it = file_ios.begin();
+	while (io_it != file_ios.end()) {
 		size_t num_tasks = MAX_PENDING - mem_threads->get_num_pending();
-		for (size_t i = 0; i < num_tasks && file_it != files.end(); i++) {
-			file_io::ptr io = file_io::create(*file_it);
-			file_it++;
+		for (size_t i = 0; i < num_tasks && io_it != file_ios.end(); i++) {
+			text_io::ptr io = *io_it;
+			io_it++;
 			mem_threads->process_task(-1,
 					new file_parse_task(io, parser, dfs));
 		}
@@ -678,21 +758,12 @@ size_t row_parser::parse(const std::vector<std::string> &lines,
 	return num_rows;
 }
 
-static std::shared_ptr<char> read_first_chunk(const std::string &file)
+static std::shared_ptr<char> read_first_chunk(text_io::ptr io)
 {
-	file_io::ptr io = file_io::create(file);
-	if (io == NULL)
-		return std::shared_ptr<char>();
-
 	// Read at max 1M
-	safs::native_file in_file(file);
 	long buf_size = 1024 * 1024;
-	// If the input file is small, we read the entire file.
-	if (buf_size > in_file.get_size())
-		buf_size = in_file.get_size();
-
 	size_t read_bytes = 0;
-	std::shared_ptr<char> buf = io->read_lines(buf_size, read_bytes);
+	std::shared_ptr<char> buf = io->peek(buf_size, read_bytes);
 	if (buf == NULL || read_bytes == 0)
 		return std::shared_ptr<char>();
 	buf.get()[read_bytes - 1] = 0;
@@ -736,9 +807,9 @@ static size_t detect_ncols(std::shared_ptr<char> buf, const std::string &delim)
 	return strs.size();
 }
 
-static std::string detect_delim(const std::string &file)
+static std::string detect_delim(text_io::ptr io)
 {
-	auto buf = read_first_chunk(file);
+	auto buf = read_first_chunk(io);
 	if (buf == NULL) {
 		BOOST_LOG_TRIVIAL(error) << "can't read data to detect a delimiter";
 		return "";
@@ -746,46 +817,79 @@ static std::string detect_delim(const std::string &file)
 	return detect_delim(buf);
 }
 
+static size_t detect_ncols(text_io::ptr io, const std::string &delim)
+{
+	auto buf = read_first_chunk(io);
+	if (buf == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't read data to detect #cols";
+		return std::numeric_limits<size_t>::max();
+	}
+	return detect_ncols(buf, delim);
+}
+
+static std::vector<text_io::ptr> files2ios(const std::vector<std::string> &files)
+{
+	std::vector<text_io::ptr> file_ios(files.size());
+	for (size_t i = 0; i < file_ios.size(); i++)
+		file_ios[i] = text_io::create(files[i]);
+	return file_ios;
+}
+
 data_frame::ptr read_data_frame(const std::vector<std::string> &files,
+		bool in_mem, bool sequential, const std::string &delim,
+		const std::vector<ele_parser::const_ptr> &ele_parsers,
+		const std::vector<off_t> &dup_col_idxs)
+{
+	auto file_ios = files2ios(files);
+	if (file_ios.size() != files.size())
+		return data_frame::ptr();
+	return read_data_frame(file_ios, in_mem, sequential, delim, ele_parsers,
+			dup_col_idxs);
+}
+
+data_frame::ptr read_data_frame(const std::vector<text_io::ptr> &file_ios,
 		bool in_mem, bool sequential, const std::string &delim,
 		const std::vector<ele_parser::const_ptr> &ele_parsers,
 		const std::vector<off_t> &dup_col_idxs)
 {
 	std::string act_delim = delim;
 	if (delim == "auto")
-		act_delim = detect_delim(files.front());
+		act_delim = detect_delim(file_ios.front());
 	if (act_delim.empty())
 		return data_frame::ptr();
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
 			new row_parser(act_delim, ele_parsers, dup_col_idxs));
-	return read_lines(files, *parser, in_mem, sequential);
+	return read_lines(file_ios, *parser, in_mem, sequential);
 }
 
 dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, bool sequential, const std::string &ele_type,
 		const std::string &delim, size_t num_cols)
 {
+	auto file_ios = files2ios(files);
+	if (file_ios.size() != files.size())
+		return dense_matrix::ptr();
+	return read_matrix(file_ios, in_mem, sequential, ele_type, delim,
+			num_cols);
+}
+
+dense_matrix::ptr read_matrix(const std::vector<text_io::ptr> &file_ios,
+		bool in_mem, bool sequential, const std::string &ele_type,
+		const std::string &delim, size_t num_cols)
+{
+	// Detect the delimiter
 	std::string act_delim = delim;
-	// We need to discover the number of columns ourselves.
-	if (num_cols == std::numeric_limits<size_t>::max() || delim == "auto") {
-		auto buf = read_first_chunk(files.front());
-		if (buf == NULL) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "can't read data to detect #cols or delimiter";
-			return dense_matrix::ptr();
-		}
+	if (delim == "auto")
+		act_delim = detect_delim(file_ios.front());
+	if (act_delim.empty())
+		return dense_matrix::ptr();
 
-		if (delim == "auto")
-			act_delim = detect_delim(buf);
-		if (act_delim.empty())
-			return dense_matrix::ptr();
-
-		if (num_cols == std::numeric_limits<size_t>::max())
-			num_cols = detect_ncols(buf, act_delim);
-		if (num_cols == std::numeric_limits<size_t>::max())
-			return dense_matrix::ptr();
-	}
+	// Detect the number of columns.
+	if (num_cols == std::numeric_limits<size_t>::max())
+		num_cols = detect_ncols(file_ios.front(), act_delim);
+	if (num_cols == std::numeric_limits<size_t>::max())
+		return dense_matrix::ptr();
 
 	std::shared_ptr<line_parser> parser;
 	std::vector<ele_parser::const_ptr> ele_parsers(num_cols);
@@ -796,7 +900,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 	}
 	parser = std::shared_ptr<line_parser>(new row_parser(act_delim,
 				ele_parsers, std::vector<off_t>()));
-	data_frame::ptr df = read_lines(files, *parser, in_mem, sequential);
+	data_frame::ptr df = read_lines(file_ios, *parser, in_mem, sequential);
 	return dense_matrix::create(df);
 }
 
@@ -804,9 +908,20 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 		bool in_mem, bool sequential, const std::string &ele_type,
 		const std::string &delim, const std::string &col_indicator)
 {
+	auto file_ios = files2ios(files);
+	if (file_ios.size() != files.size())
+		return dense_matrix::ptr();
+	return read_matrix(file_ios, in_mem, sequential, ele_type, delim,
+			col_indicator);
+}
+
+dense_matrix::ptr read_matrix(const std::vector<text_io::ptr> &file_ios,
+		bool in_mem, bool sequential, const std::string &ele_type,
+		const std::string &delim, const std::string &col_indicator)
+{
 	std::string act_delim = delim;
 	if (delim == "auto")
-		act_delim = detect_delim(files.front());
+		act_delim = detect_delim(file_ios.front());
 	if (act_delim.empty())
 		return dense_matrix::ptr();
 
@@ -828,7 +943,7 @@ dense_matrix::ptr read_matrix(const std::vector<std::string> &files,
 
 	std::shared_ptr<line_parser> parser = std::shared_ptr<line_parser>(
 			new row_parser(act_delim, ele_parsers, std::vector<off_t>()));
-	data_frame::ptr df = read_lines(files, *parser, in_mem, sequential);
+	data_frame::ptr df = read_lines(file_ios, *parser, in_mem, sequential);
 	return dense_matrix::create(df);
 }
 
