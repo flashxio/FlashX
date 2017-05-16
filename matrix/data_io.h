@@ -57,6 +57,8 @@ public:
 	virtual std::shared_ptr<char> read_bytes(size_t wanted_bytes,
 			size_t &read_bytes) = 0;
 	virtual bool eof() const = 0;
+
+	virtual std::string get_name() const = 0;
 };
 
 /*

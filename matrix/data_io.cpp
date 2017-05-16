@@ -207,12 +207,14 @@ class local_file_io: public file_io
 	int fd;
 	off_t curr_off;
 	ssize_t file_size;
+	std::string name;
 
 	local_file_io(int fd, const std::string file) {
 		this->curr_off = 0;
 		this->fd = fd;
 		safs::native_file local_f(file);
 		file_size = local_f.get_size();
+		this->name = file;
 	}
 public:
 	static ptr create(const std::string file);
@@ -227,15 +229,22 @@ public:
 	bool eof() const {
 		return file_size - curr_off == 0;
 	}
+
+	std::string get_name() const {
+		return name;
+	}
 };
 
 #ifdef USE_GZIP
+
 class gz_file_io: public file_io
 {
 	gzFile f;
+	std::string name;
 
-	gz_file_io(gzFile f) {
+	gz_file_io(gzFile f, std::string name) {
 		this->f = f;
+		this->name = name;
 	}
 public:
 	static ptr create(const std::string &file);
@@ -249,6 +258,10 @@ public:
 
 	bool eof() const {
 		return gzeof(f);
+	}
+
+	std::string get_name() const {
+		return name;
 	}
 };
 
@@ -280,7 +293,7 @@ file_io::ptr gz_file_io::create(const std::string &file)
 			% file % strerror(errno);
 		return ptr();
 	}
-	return ptr(new gz_file_io(f));
+	return ptr(new gz_file_io(f, file));
 }
 
 #endif
