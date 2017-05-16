@@ -298,6 +298,16 @@ file_io::ptr gz_file_io::create(const std::string &file)
 
 #endif
 
+file_io::ptr file_io::create_local(const std::string name)
+{
+	return local_file_io::create(name);
+}
+
+file_io::ptr file_io::create_gz(const std::string name)
+{
+	return gz_file_io::create(name);
+}
+
 text_io::ptr text_io::create(const std::string &file_name)
 {
 	file_io::ptr io;

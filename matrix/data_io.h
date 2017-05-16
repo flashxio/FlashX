@@ -54,6 +54,9 @@ public:
 
 	typedef std::shared_ptr<file_io> ptr;
 
+	static ptr create_local(const std::string name);
+	static ptr create_gz(const std::string name);
+
 	virtual std::shared_ptr<char> read_bytes(size_t wanted_bytes,
 			size_t &read_bytes) = 0;
 	virtual bool eof() const = 0;
