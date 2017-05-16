@@ -172,8 +172,9 @@ fm.print.features <- function()
 #' access to the dense matrix with \code{fm.get.dense.matrix} the next time
 #' when he/she opens FlashR.
 #'
-#' @param src.file a string that indicates the file in the Linux filesystem
-#'        that stores data to be loaded to FlashR.
+#' @param src a string or a connection or a list of strings or connections that
+#'        indicates the data source. If \code{src} is a string or a list of strings,
+#'        it indicates the files in the Linux filesystem.
 #' @param spm The file that stores the sparse matrix.
 #' @param spm.idx The file that stores the index of the sparse matrix.
 #' @param t.spm The file that stores the transpose of the sparse matrix.
@@ -199,6 +200,8 @@ fm.print.features <- function()
 #' @examples
 #' mat <- fm.get.dense.matrix("mat123")	# get a dense matrix named "mat123", stored in SAFS.
 #' mat <- fm.load.dense.matrix("./mat123.cvs", TRUE) # load a dense matrix from a local file "mat123.cvs" to memory.
+#' mat <- fm.load.dense.matrix(gzfile("./mat123.gz"), TRUE) # load a dense matrix from a zipped file "mat123.gz" to memory.
+#' mat <- fm.load.dense.matrix(url("http://file/loc/test.cvs", TRUE)) # load a dense matrix from "http://file/loc/test.cvs" to memory.
 #" mat <- fm.load.dense.matrix.bin("./mat123.bin", TRUE, 10000, 1000, TRUE, "D") # Load a binary dense matrix from a local file "mat123.bin" to memory. The loaded dense matrix has 10000 rows and 1000 columns and its element type is double floating-points.
 #' mat <- fm.load.sparse.matrix("./spm123.mat", "./spm123.mat_idx") # load a symmetric sparse matrix in FlashMatrix format (whose data is stored in "spm123.mat" and the index is stored in "spm123.mat_idx") to memory.
 NULL
@@ -212,18 +215,47 @@ fm.get.dense.matrix <- function(name)
 	.new.fm(m)
 }
 
+.is.conn <- function(src)
+{
+	if (is.list(src))
+		return(all(sapply(src, .is.conn)))
+	else if (length(class(src)) >= 2 && class(src)[2] == "connection")
+		return(TRUE)
+	else
+		return(FALSE)
+}
+
+.open.conn <- function(src)
+{
+	open1 <- function(x) {
+		if (!isOpen(x, rw="read"))
+			open(x)
+	}
+
+	if (is.list(src))
+		lapply(src, open1)
+	else
+		open1(src)
+}
+
 #' @rdname fm.get.matrix
-fm.load.dense.matrix <- function(src.file, in.mem, ele.type="D", delim="auto",
+fm.load.dense.matrix <- function(src, in.mem, ele.type="D", delim="auto",
 								 ncol=.Machine$integer.max, name="")
 {
-	stopifnot(!is.null(src.file))
+	stopifnot(!is.null(src))
 	if (is.double(ncol))
 		ncol = as.integer(ncol)
-	if (is.character(src.file))
-		src.file <- c(src.file)
-	m <- .Call("R_FM_load_dense_matrix", as.character(src.file), as.logical(in.mem),
+	stopifnot(is.character(src) || .is.conn(src))
+	if (.is.conn(src)) {
+		.open.conn(src)
+		# The C code can only deal with list.
+		if (!is.list(src))
+			src <- list(src)
+	}
+
+	m <- .Call("R_FM_load_dense_matrix", src, as.logical(in.mem),
 			   as.character(ele.type), as.character(delim),
-			   ncol=ncol, as.character(name), PACKAGE="FlashR")
+			   ncol=as.integer(ncol), as.character(name), PACKAGE="FlashR")
 	.new.fm(m)
 }
 

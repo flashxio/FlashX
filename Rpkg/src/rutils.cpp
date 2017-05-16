@@ -49,6 +49,16 @@ bool R_is_string(SEXP v)
 	return isString(v);
 }
 
+bool R_is_list(SEXP v)
+{
+	return isList(v);
+}
+
+bool R_is_vector(SEXP v)
+{
+	return isVector(v);
+}
+
 void R_gc()
 {
 	SEXP call = PROTECT(lang1(install("gc")));

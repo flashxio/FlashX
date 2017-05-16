@@ -49,6 +49,7 @@
 #include "fmr_utils.h"
 #include "matrix_ops.h"
 #include "data_io.h"
+#include "Rconn.h"
 
 using namespace fm;
 
@@ -341,11 +342,56 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 			trans_FM2R(store->get_type()), "");
 }
 
-RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
+class Rconnect_io: public file_io
+{
+	Rconnection conn;
+	bool is_end;
+public:
+	Rconnect_io(Rconnection conn) {
+		this->conn = conn;
+		is_end = false;
+	}
+	virtual std::shared_ptr<char> read_bytes(size_t wanted_bytes,
+			size_t &read_bytes) {
+		std::shared_ptr<char> buf = alloc_io_buf(wanted_bytes);
+		read_bytes = R_ReadConnection(conn, buf.get(), wanted_bytes);
+		if (read_bytes == 0)
+			is_end = true;
+		return buf;
+	}
+	virtual bool eof() const {
+		return is_end;
+	}
+};
+
+static std::vector<text_io::ptr> get_ios(SEXP psrc)
+{
+	std::vector<text_io::ptr> ios;
+	if (R_is_string(psrc)) {
+		Rcpp::StringVector rcpp_mats(psrc);
+		std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
+		for (auto it = mat_files.begin(); it != mat_files.end(); it++) {
+			auto io = text_io::create(*it);
+			if (io)
+				ios.push_back(io);
+		}
+	}
+	else {
+		Rcpp::List src_list(psrc);
+		for (int i = 0; i < src_list.size(); i++) {
+			Rconnection conn = R_GetConnection(src_list[i]);
+			if (conn == NULL)
+				fprintf(stderr, "cannot get connection\n");
+			else
+				ios.push_back(text_io::create(file_io::ptr(new Rconnect_io(conn))));
+		}
+	}
+	return ios;
+}
+
+RcppExport SEXP R_FM_load_dense_matrix(SEXP psrc, SEXP pin_mem,
 		SEXP pele_type, SEXP pdelim, SEXP pncol, SEXP pmat_name)
 {
-	Rcpp::StringVector rcpp_mats(pname);
-	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
 	bool in_mem = LOGICAL(pin_mem)[0];
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
@@ -357,6 +403,10 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 	}
 
+	std::vector<text_io::ptr> ios = get_ios(psrc);
+	if (ios.empty())
+		return R_NilValue;
+
 	dense_matrix::ptr mat;
 	if (TYPEOF(pncol) == INTSXP) {
 		int ncol = INTEGER(pncol)[0];
@@ -366,11 +416,11 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		// of the number of columns.
 		if (ncol == std::numeric_limits<int>::max())
 			ncol = std::numeric_limits<size_t>::max();
-		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, ncol);
+		mat = read_matrix(ios, in_mem, true, ele_type, delim, ncol);
 	}
 	else {
 		std::string cols = CHAR(STRING_ELT(pncol, 0));
-		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, cols);
+		mat = read_matrix(ios, in_mem, true, ele_type, delim, cols);
 	}
 	if (mat == NULL)
 		return R_NilValue;
