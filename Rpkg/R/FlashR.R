@@ -260,13 +260,20 @@ fm.load.dense.matrix <- function(src, in.mem, ele.type="D", delim="auto",
 }
 
 #' @rdname fm.get.matrix
-fm.load.dense.matrix.bin <- function(src.file, in.mem, nrow, ncol, byrow, ele.type,
+fm.load.dense.matrix.bin <- function(src, in.mem, nrow, ncol, byrow, ele.type,
 									 name="")
 {
-	m <- .Call("R_FM_load_dense_matrix_bin", as.character(src.file),
-			   as.logical(in.mem), as.double(nrow), as.double(ncol),
-			   as.logical(byrow), as.character(ele.type), as.character(name),
-			   PACKAGE="FlashR")
+	stopifnot(is.character(src) || .is.conn(src))
+	if (.is.conn(src)) {
+		.open.conn(src)
+		# The C code can only deal with list.
+		if (!is.list(src))
+			src <- list(src)
+	}
+
+	m <- .Call("R_FM_load_dense_matrix_bin", src, as.logical(in.mem),
+			   as.double(nrow), as.double(ncol), as.logical(byrow),
+			   as.character(ele.type), as.character(name), PACKAGE="FlashR")
 	.new.fm(m)
 }
 
