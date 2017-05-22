@@ -701,7 +701,7 @@ mem_matrix_store::const_ptr mem_matrix_store::load_raw(file_io::ptr io,
 			auto data = io->read_bytes(psize, read_bytes);
 			if (read_bytes != psize) {
 				BOOST_LOG_TRIVIAL(error)
-					<< boost::format("try to read %1% bytes and get %ld bytes")
+					<< boost::format("try to read %1% bytes and get %2% bytes")
 					% psize % read_bytes;
 				return mem_matrix_store::ptr();
 			}
@@ -727,7 +727,7 @@ mem_matrix_store::const_ptr mem_matrix_store::load_raw(file_io::ptr io,
 				auto data = io->read_bytes(size, read_bytes);
 				if (size != read_bytes) {
 					BOOST_LOG_TRIVIAL(error)
-						<< boost::format("try to read %1% bytes and get %ld bytes")
+						<< boost::format("try to read %1% bytes and get %2% bytes")
 						% size % read_bytes;
 					return mem_matrix_store::ptr();
 				}
