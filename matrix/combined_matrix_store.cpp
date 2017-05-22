@@ -60,41 +60,54 @@ combined_matrix_store::ptr combined_matrix_store::create(
 		BOOST_LOG_TRIVIAL(error) << "can't combine 0 matrices";
 		return combined_matrix_store::ptr();
 	}
-	const scalar_type &type = mats.front()->get_type();
-	bool is_wide = mats.front()->is_wide();
-	for (size_t i = 1; i < mats.size(); i++) {
-		if (mats[i]->get_type() != type) {
+
+	std::vector<matrix_store::const_ptr> tmp_mats;
+	for (size_t i = 0; i < mats.size(); i++) {
+		auto tmp = std::dynamic_pointer_cast<const combined_matrix_store>(mats[i]);
+		if (tmp == NULL)
+			tmp_mats.push_back(mats[i]);
+		else {
+			// We always flatten a combined matrix, so we don't need to check
+			// the matrix stores inside a combined matrix.
+			for (size_t j = 0; j < tmp->mats.size(); j++)
+				tmp_mats.push_back(tmp->mats[j]);
+		}
+	}
+	const scalar_type &type = tmp_mats.front()->get_type();
+	bool is_wide = tmp_mats.front()->is_wide();
+	for (size_t i = 1; i < tmp_mats.size(); i++) {
+		if (tmp_mats[i]->get_type() != type) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "can't combine matrices of different element types";
 			return combined_matrix_store::ptr();
 		}
-		if (mats[i]->is_wide() != is_wide) {
+		if (tmp_mats[i]->is_wide() != is_wide) {
 			BOOST_LOG_TRIVIAL(error)
 				<< "can't combine matrices of different row/col length";
 			return combined_matrix_store::ptr();
 		}
 	}
 	if (is_wide) {
-		size_t num_cols = mats.front()->get_num_cols();
-		for (size_t i = 1; i < mats.size(); i++) {
-			if (mats[i]->get_num_cols() != num_cols) {
+		size_t num_cols = tmp_mats.front()->get_num_cols();
+		for (size_t i = 1; i < tmp_mats.size(); i++) {
+			if (tmp_mats[i]->get_num_cols() != num_cols) {
 				BOOST_LOG_TRIVIAL(error)
 					<< "can't combine matrices with different row lengths";
 				return combined_matrix_store::ptr();
 			}
 		}
-		return ptr(new combined_matrix_store(mats, layout));
+		return ptr(new combined_matrix_store(tmp_mats, layout));
 	}
 	else {
-		size_t num_rows = mats.front()->get_num_rows();
-		for (size_t i = 1; i < mats.size(); i++) {
-			if (mats[i]->get_num_rows() != num_rows) {
+		size_t num_rows = tmp_mats.front()->get_num_rows();
+		for (size_t i = 1; i < tmp_mats.size(); i++) {
+			if (tmp_mats[i]->get_num_rows() != num_rows) {
 				BOOST_LOG_TRIVIAL(error)
 					<< "can't combine matrices with different col lengths";
 				return combined_matrix_store::ptr();
 			}
 		}
-		return ptr(new combined_matrix_store(mats, layout));
+		return ptr(new combined_matrix_store(tmp_mats, layout));
 	}
 }
 
