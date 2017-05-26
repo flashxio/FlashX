@@ -14,8 +14,18 @@ import array
 
 np.import_array()
 
-ctypedef int bulk_op_idx_t
-ctypedef int bulk_uop_idx_t
+cdef enum bulk_op_idx_t:
+    OP_ADD, OP_SUB, OP_MUL, OP_DIV
+    OP_MIN, OP_MAX,
+    OP_POW,
+    OP_EQ, OP_NEQ, OP_GT, OP_GE, OP_LT, OP_LE,
+    OP_OR, OP_AND,
+    OP_MOD, OP_IDIV
+
+cdef enum bulk_uop_idx_t:
+    UOP_NEG, UOP_SQRT, UOP_ABS, UOP_NOT, UOP_SQ,
+    UOP_CEIL, UOP_FLOOR, UOP_ROUND,
+    UOP_LOG, UOP_LOG2, UOP_LOG10
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass matrix_wrapper:
@@ -68,6 +78,88 @@ cdef class PyMatrix:
         shape[0] = <np.npy_intp> self.mat.get_num_rows()
         shape[1] = <np.npy_intp> self.mat.get_num_cols()
         return np.PyArray_SimpleNewFromData(2, shape, self.mat.get_type_py(), src)
+
+    # Special Methods Table
+    # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
+
+    def __richcmp__(PyMatrix x, PyMatrix y, int op):
+        cdef PyMatrix ret = PyMatrix()
+        # Rich comparisons:
+        # http://cython.readthedocs.io/en/latest/src/userguide/special_methods.html#rich-comparisons
+        # <   0
+        # ==  2
+        # >   4
+        # <=  1
+        # !=  3
+        # >=  5
+        if (op == 0):
+            ret.mat = x.mat.mapply2(y.mat, OP_LT)
+        elif (op == 2):
+            ret.mat = x.mat.mapply2(y.mat, OP_EQ)
+        elif (op == 4):
+            ret.mat = x.mat.mapply2(y.mat, OP_GT)
+        elif (op == 1):
+            ret.mat = x.mat.mapply2(y.mat, OP_LE)
+        elif (op == 3):
+            ret.mat = x.mat.mapply2(y.mat, OP_NEQ)
+        elif (op == 5):
+            ret.mat = x.mat.mapply2(y.mat, OP_GE)
+        else:
+            print("invalid argument")
+        return ret
+
+    def __add__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_ADD)
+        return ret
+
+    def __sub__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_SUB)
+        return ret
+
+    def __mul__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_MUL)
+        return ret
+
+    def __div__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_DIV)
+        return ret
+
+    def __floordiv__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_IDIV)
+        return ret
+
+    def __mod__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_MOD)
+        return ret
+
+    def __and__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_AND)
+        return ret
+
+    def __or__(PyMatrix x, PyMatrix y):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = x.mat.mapply2(y.mat, OP_OR)
+        return ret
+
+    def __neg__(self):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.sapply(UOP_NEG)
+        return ret
+
+    def __abs__(self):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.sapply(UOP_ABS)
+        return ret
+
+    def __len__(self):
+        return self.mat.get_num_rows() * self.mat.get_num_cols()
 
     @staticmethod
     def create_seq(long start, long stride, unsigned long nrow, unsigned long ncol,
