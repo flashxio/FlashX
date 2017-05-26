@@ -3,6 +3,7 @@ import numpy as np
 # about the numpy module (this is stored in a file numpy.pxd which is
 # currently part of the Cython distribution).
 cimport numpy as np
+from libc.stdlib cimport free, malloc
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp cimport bool
@@ -11,16 +12,22 @@ from libc.string cimport memcpy
 from cpython cimport array
 import array
 
+np.import_array()
+
 ctypedef int bulk_op_idx_t
 ctypedef int bulk_uop_idx_t
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass matrix_wrapper:
+        matrix_wrapper()
+        matrix_wrapper(size_t nrow, size_t ncol, string t, string layout)
         void init_seq[T](T start, T stride, size_t nrow, size_t ncol,
                 string layout, bool byrow, int num_nodes, bool in_mem)
         size_t get_num_rows() const
         size_t get_num_cols() const
         size_t get_entry_size() const
+        string get_type_str() const
+        np.NPY_TYPES get_type_py() const
         bool is_in_mem() const
         bool is_virtual() const
         bool materialize_self() const
@@ -49,8 +56,18 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
 
 cdef class PyMatrix:
     cdef matrix_wrapper mat      # hold a C++ instance which we're wrapping
-#    def __cinit__(self, int x0, int y0, int x1, int y1):
-#        self.c_rect = Rectangle(x0, y0, x1, y1)
+    def __cinit__(self):
+        self.mat = matrix_wrapper()
+
+    def __array__(self):
+        cdef char *src = self.mat.get_raw_arr()
+        if (src == NULL):
+            return None
+
+        cdef np.npy_intp shape[2]
+        shape[0] = <np.npy_intp> self.mat.get_num_rows()
+        shape[1] = <np.npy_intp> self.mat.get_num_cols()
+        return np.PyArray_SimpleNewFromData(2, shape, self.mat.get_type_py(), src)
 
     @staticmethod
     def create_seq(long start, long stride, unsigned long nrow, unsigned long ncol,
@@ -75,45 +92,32 @@ cdef class PyMatrix:
     def materialize_self(self):
         return self.mat.materialize_self()
 
-    def get_cols(self, np.ndarray[long, ndim=1, mode="c"] idxs):
+    def get_cols(self, array.array idxs):
         cdef vector[long] cidxs
-        cdef long *p = &idxs[0]
-        cidxs.assign(p, p + idxs.shape[0])
-        cdef matrix_wrapper mat = self.mat.get_cols(cidxs)
+        cdef long *p = idxs.data.as_longs
+        cidxs.assign(p, p + len(idxs))
+
         cdef PyMatrix ret = PyMatrix()
-        ret.mat = mat
+        ret.mat = self.mat.get_cols(cidxs)
         return ret
 
-    def conv2np(self):
-        cdef np.ndarray[long, ndim=2, mode="c"] data = np.empty(
-                [self.mat.get_num_rows(), self.mat.get_num_cols()],
-                dtype=long)
-        cdef long *dst = &data[0,0]
-        cdef const char *src = self.mat.get_raw_arr()
-        cdef long num_eles = self.mat.get_num_rows() * self.mat.get_num_cols()
-        if (src == NULL):
-            return 
-        else:
-            memcpy(dst, src, num_eles * self.mat.get_entry_size())
-            return data
+    def transpose(self):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.transpose()
+        return ret
 
-#		matrix_wrapper get_rows(const std::vector<off_t> &idxs) const
-#		matrix_wrapper get_cols(matrix_wrapper idxs) const
-#		matrix_wrapper get_rows(matrix_wrapper idxs) const
-#		matrix_wrapper get_cols(size_t start, size_t end) const
-#		matrix_wrapper get_rows(size_t start, size_t end) const
-#		matrix_wrapper set_cols(const std::vector<off_t> &idxs, matrix_wrapper cols)
-#		matrix_wrapper set_rows(const std::vector<off_t> &idxs, matrix_wrapper rows)
-#		matrix_wrapper transpose() const
-#		matrix_wrapper conv_store(bool in_mem, int num_nodes) const
-#		matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
-#				bulk_op_idx_t right_op) const
-#		matrix_wrapper multiply(matrix_wrapper m) const
-#		matrix_wrapper agg_row(bulk_op_idx_t op) const
-#		matrix_wrapper agg_col(bulk_op_idx_t op) const
-#		matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
-#		matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
-#		matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const
-#		matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
-#		matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
-#		matrix_wrapper sapply(bulk_uop_idx_t op) const
+    def conv_store(self, bool in_mem, int num_nodes):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.conv_store(in_mem, num_nodes)
+        return ret
+
+#        matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
+#                bulk_op_idx_t right_op) const
+#        matrix_wrapper agg_row(bulk_op_idx_t op) const
+#        matrix_wrapper agg_col(bulk_op_idx_t op) const
+#        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
+#        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
+#        matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const
+#        matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
+#        matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
+#        matrix_wrapper sapply(bulk_uop_idx_t op) const

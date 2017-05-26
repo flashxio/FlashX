@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <numpy/ndarraytypes.h>
+
 #include "dense_matrix.h"
 #include "col_vec.h"
 #include "factor.h"
@@ -31,7 +33,7 @@ namespace flashpy
 typedef int bulk_op_idx_t;
 typedef int bulk_uop_idx_t;
 
-fm::bulk_operate::const_ptr get_op(const fm::scalar_type &type,
+static inline fm::bulk_operate::const_ptr get_op(const fm::scalar_type &type,
 		bulk_op_idx_t idx)
 {
 	if (idx >= fm::basic_ops::op_idx::NUM_OPS)
@@ -40,7 +42,7 @@ fm::bulk_operate::const_ptr get_op(const fm::scalar_type &type,
 	return fm::bulk_operate::conv2ptr(*op);
 }
 
-fm::bulk_uoperate::const_ptr get_uop(const fm::scalar_type &type,
+static inline fm::bulk_uoperate::const_ptr get_uop(const fm::scalar_type &type,
 		bulk_uop_idx_t idx)
 {
 	if (idx >= fm::basic_uops::op_idx::NUM_OPS)
@@ -49,13 +51,13 @@ fm::bulk_uoperate::const_ptr get_uop(const fm::scalar_type &type,
 	return fm::bulk_uoperate::conv2ptr(*op);
 }
 
-fm::agg_operate::const_ptr get_agg(const fm::scalar_type &type,
+static inline fm::agg_operate::const_ptr get_agg(const fm::scalar_type &type,
 		bulk_op_idx_t idx)
 {
 	return fm::agg_operate::create(get_op(type, idx));
 }
 
-std::shared_ptr<fm::col_vec> get_vec(fm::dense_matrix::ptr mat)
+static inline std::shared_ptr<fm::col_vec> get_vec(fm::dense_matrix::ptr mat)
 {
 	auto ret = std::dynamic_pointer_cast<fm::col_vec>(mat);
 	if (ret == NULL)
@@ -64,7 +66,8 @@ std::shared_ptr<fm::col_vec> get_vec(fm::dense_matrix::ptr mat)
 		return ret;
 }
 
-std::shared_ptr<fm::factor_col_vector> get_factor(fm::dense_matrix::ptr mat)
+static inline std::shared_ptr<fm::factor_col_vector> get_factor(
+		fm::dense_matrix::ptr mat)
 {
 	auto ret = std::dynamic_pointer_cast<fm::factor_col_vector>(mat);
 	if (ret == NULL)
@@ -72,6 +75,8 @@ std::shared_ptr<fm::factor_col_vector> get_factor(fm::dense_matrix::ptr mat)
 	else
 		return ret;
 }
+
+const fm::scalar_type &convT_py2fm(const std::string &t);
 
 /*
  * This is a wrapper for dense_matrix in FlashMatrix.
@@ -82,6 +87,7 @@ std::shared_ptr<fm::factor_col_vector> get_factor(fm::dense_matrix::ptr mat)
 class matrix_wrapper
 {
 	fm::dense_matrix::ptr mat;
+
 	void check_mat() const {
 		if (!is_valid())
 			throw std::invalid_argument("invalid matrix");
@@ -91,18 +97,34 @@ class matrix_wrapper
 		return mat != NULL;
 	}
 
-	const fm::scalar_type &get_type() const {
-		check_mat();
-		return mat->get_type();
+	static fm::matrix_layout_t get_layout(const std::string &layout) {
+		if (layout == "c")
+			return fm::matrix_layout_t::L_COL;
+		else if (layout == "r")
+			return fm::matrix_layout_t::L_ROW;
+		else
+			throw std::invalid_argument("wrong layout");
 	}
 
 public:
 	matrix_wrapper() {
 	}
 
+	matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
+			const std::string layout) {
+		mat = fm::dense_matrix::create(nrow, ncol, get_layout(layout),
+				convT_py2fm(t));
+	}
+
 	matrix_wrapper(fm::dense_matrix::ptr mat) {
 		this->mat = mat;
 	}
+
+	std::string get_type_str() const;
+	/*
+	 * Get a Python type.
+	 */
+	enum NPY_TYPES get_type_py() const;
 
 	template<class T>
 	void init_seq(T start, T stride, size_t nrow, size_t ncol,
@@ -134,6 +156,14 @@ public:
 		auto store = std::dynamic_pointer_cast<const fm::detail::mem_matrix_store>(
 				mat->get_raw_store());
 		return store->get_raw_arr();
+	}
+
+	char *get_raw_arr() {
+		check_mat();
+		mat->move_store(true, -1);
+		auto store = std::dynamic_pointer_cast<const fm::detail::mem_matrix_store>(
+				mat->get_raw_store());
+		return (char *) store->get_raw_arr();
 	}
 
 	bool is_in_mem() const {
