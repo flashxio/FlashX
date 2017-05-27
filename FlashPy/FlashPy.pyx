@@ -75,22 +75,25 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
 
 cdef class PyMatrix:
     cdef matrix_wrapper mat      # hold a C++ instance which we're wrapping
+    cdef readonly int ndim
+    cdef readonly object shape
+
     def __cinit__(self):
         self.mat = matrix_wrapper()
+
+    def __init__(self):
+        self.ndim = 0
+        self.shape = (0, 0)
 
     def __array__(self):
         cdef char *src = self.mat.get_raw_arr()
         if (src == NULL):
             return None
-
         cdef np.npy_intp shape[2]
-        if (self.mat.is_vector()):
-            shape[0] = <np.npy_intp> self.mat.get_num_rows()
-            return np.PyArray_SimpleNewFromData(1, shape, self.mat.get_type_py(), src)
-        else:
-            shape[0] = <np.npy_intp> self.mat.get_num_rows()
-            shape[1] = <np.npy_intp> self.mat.get_num_cols()
-            return np.PyArray_SimpleNewFromData(2, shape, self.mat.get_type_py(), src)
+        shape[0] = self.shape[0]
+        shape[1] = self.shape[1]
+        return np.PyArray_SimpleNewFromData(self.ndim, shape,
+                self.mat.get_type_py(), src)
 
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
@@ -124,55 +127,72 @@ cdef class PyMatrix:
     def __add__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_ADD)
+        ret.init_shape()
         return ret
 
     def __sub__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_SUB)
+        ret.init_shape()
         return ret
 
     def __mul__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_MUL)
+        ret.init_shape()
         return ret
 
     def __div__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_DIV)
+        ret.init_shape()
         return ret
 
     def __floordiv__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_IDIV)
+        ret.init_shape()
         return ret
 
     def __mod__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_MOD)
+        ret.init_shape()
         return ret
 
     def __and__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_AND)
+        ret.init_shape()
         return ret
 
     def __or__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_OR)
+        ret.init_shape()
         return ret
 
     def __neg__(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.sapply(UOP_NEG)
+        ret.init_shape()
         return ret
 
     def __abs__(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.sapply(UOP_ABS)
+        ret.init_shape()
         return ret
 
     def __len__(self):
-        return self.mat.get_num_rows() * self.mat.get_num_cols()
+        return self.mat.get_num_rows()
+
+    def init_shape(self):
+        self.shape = (self.mat.get_num_rows(), self.mat.get_num_cols())
+        if (self.mat.is_vector()):
+            self.ndim = 1
+        else:
+            self.ndim = 2
 
     @staticmethod
     def create_seq(long start, long stride, unsigned long nrow, unsigned long ncol,
@@ -181,12 +201,6 @@ cdef class PyMatrix:
         mat.mat.init_seq[long](start, stride, nrow, ncol, layout, byrow,
                 num_node, in_mem)
         return mat
-
-    def get_num_rows(self):
-        return self.mat.get_num_rows()
-
-    def get_num_cols(self):
-        return self.mat.get_num_cols()
 
     def is_in_mem(self):
         return self.mat.is_in_mem()
@@ -204,18 +218,22 @@ cdef class PyMatrix:
 
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.get_cols(cidxs)
+        ret.init_shape()
         return ret
 
     def transpose(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.transpose()
+        ret.init_shape()
         return ret
 
     def conv_store(self, bool in_mem, int num_nodes):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
+        ret.init_shape()
         return ret
 
+# TODO this function should have the same interface as numpy.array.
 def array(np.ndarray arr, string t):
     cdef PyMatrix ret = PyMatrix()
     # TODO this is a bit too hacky. Is there a better way?
@@ -226,8 +244,8 @@ def array(np.ndarray arr, string t):
         ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], t, "c")
     else:
         return None
+    ret.init_shape()
     return ret
-
 
 #        matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
 #                bulk_op_idx_t right_op) const
