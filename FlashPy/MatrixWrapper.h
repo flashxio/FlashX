@@ -290,12 +290,20 @@ public:
 	matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const {
 		check_mat();
 		m.check_mat();
-		return matrix_wrapper(mat->mapply2(*m.mat, get_op(mat->get_type(), op)));
+		auto res = mat->mapply2(*m.mat, get_op(mat->get_type(), op));
+		if (m.is_vector() && is_vector())
+			return matrix_wrapper(fm::col_vec::create(res));
+		else
+			return matrix_wrapper(res);
 	}
 
 	matrix_wrapper sapply(bulk_uop_idx_t op) const {
 		check_mat();
-		return matrix_wrapper(mat->sapply(get_uop(mat->get_type(), op)));
+		auto res = mat->sapply(get_uop(mat->get_type(), op));
+		if (is_vector())
+			return matrix_wrapper(fm::col_vec::create(res));
+		else
+			return matrix_wrapper(res);
 	}
 };
 
