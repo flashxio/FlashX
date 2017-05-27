@@ -29,6 +29,8 @@ bool R_is_integer(SEXP v);
 bool R_is_logical(SEXP v);
 bool R_is_null(SEXP v);
 bool R_is_string(SEXP v);
+bool R_is_list(SEXP v);
+bool R_is_vector(SEXP v);
 
 enum R_type
 {

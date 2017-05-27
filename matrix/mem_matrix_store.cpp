@@ -641,48 +641,68 @@ bool mem_matrix_store::write2file(const std::string &file_name, bool text,
 mem_matrix_store::const_ptr mem_matrix_store::load(const std::string &file_name,
 		int num_nodes)
 {
-	matrix_header header;
+	file_io::ptr io = file_io::create_local(file_name);
+	if (io == NULL)
+		return mem_matrix_store::ptr();
+	return load(io, num_nodes);
+}
 
-	FILE *f = fopen(file_name.c_str(), "r");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
-			% file_name % strerror(errno);
+mem_matrix_store::const_ptr mem_matrix_store::load(file_io::ptr io, int num_nodes)
+{
+	size_t read_bytes = 0;
+	auto data = io->read_bytes(sizeof(matrix_header), read_bytes);
+	if (read_bytes != sizeof(matrix_header)) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("%1% doesn't contain a header") % io->get_name();
 		return mem_matrix_store::ptr();
 	}
-
-	size_t ret = fread(&header, sizeof(header), 1, f);
-	if (ret == 0) {
-		fclose(f);
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't read header from %1%: %2%")
-			% file_name % strerror(errno);
+	const matrix_header *header
+		= reinterpret_cast<const matrix_header *>(data.get());
+	if (!header->is_matrix_file()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("%1% doesn't contain a valid header") % io->get_name();
 		return mem_matrix_store::ptr();
 	}
-
-	header.verify();
-	if (header.is_sparse()) {
-		fclose(f);
+	if (header->is_sparse()) {
 		BOOST_LOG_TRIVIAL(error) << "The matrix to be loaded is sparse";
 		return mem_matrix_store::ptr();
 	}
 
-	size_t nrow = header.get_num_rows();
-	size_t ncol = header.get_num_cols();
-	const scalar_type &type = header.get_data_type();
+	size_t nrow = header->get_num_rows();
+	size_t ncol = header->get_num_cols();
+	const scalar_type &type = header->get_data_type();
+	return load_raw(io, nrow, ncol, header->get_layout(), type, num_nodes);
+}
+
+mem_matrix_store::const_ptr mem_matrix_store::load_raw(
+		const std::string &file_name, size_t nrow, size_t ncol,
+		matrix_layout_t layout, const scalar_type &type, int num_nodes)
+{
+	file_io::ptr io = file_io::create_local(file_name);
+	if (io == NULL)
+		return mem_matrix_store::ptr();
+	return load_raw(io, nrow, ncol, layout, type, num_nodes);
+}
+
+mem_matrix_store::const_ptr mem_matrix_store::load_raw(file_io::ptr io,
+		size_t nrow, size_t ncol, matrix_layout_t layout,
+		const scalar_type &type, int num_nodes)
+{
 	mem_matrix_store::ptr m;
 	// In these two cases, we can read portion by portion.
-	if ((ncol > nrow && header.get_layout() == matrix_layout_t::L_COL)
-			|| (nrow > ncol && header.get_layout() == matrix_layout_t::L_ROW)) {
-		m = mem_matrix_store::create(nrow, ncol, header.get_layout(), type,
-				num_nodes);
+	if ((ncol > nrow && layout == matrix_layout_t::L_COL)
+			|| (nrow > ncol && layout == matrix_layout_t::L_ROW)) {
+		m = mem_matrix_store::create(nrow, ncol, layout, type, num_nodes);
 		for (size_t i = 0; i < m->get_num_portions(); i++) {
 			local_matrix_store::ptr portion = m->get_portion(i);
 			size_t psize = portion->get_num_rows() * portion->get_num_cols();
 			psize *= portion->get_entry_size();
-			ret = fread(portion->get_raw_arr(), psize, 1, f);
-			if (ret == 0) {
+			size_t read_bytes = 0;
+			auto data = io->read_bytes(psize, read_bytes);
+			if (read_bytes != psize) {
 				BOOST_LOG_TRIVIAL(error)
-					<< boost::format("can't read %1% bytes from the file") % psize;
-				fclose(f);
+					<< boost::format("try to read %1% bytes and get %2% bytes")
+					% psize % read_bytes;
 				return mem_matrix_store::ptr();
 			}
 		}
@@ -703,19 +723,19 @@ mem_matrix_store::const_ptr mem_matrix_store::load(const std::string &file_name,
 				local_col_matrix_store::ptr lstore
 					= std::static_pointer_cast<local_col_matrix_store>(lstores[j]);
 				size_t size = lstore->get_num_rows() * lstore->get_entry_size();
-				ret = fread(lstore->get_col(i), size, 1, f);
-				if (ret == 0) {
+				size_t read_bytes = 0;
+				auto data = io->read_bytes(size, read_bytes);
+				if (size != read_bytes) {
 					BOOST_LOG_TRIVIAL(error)
-						<< boost::format("can't read %1% bytes from the file") % size;
-					fclose(f);
+						<< boost::format("try to read %1% bytes and get %2% bytes")
+						% size % read_bytes;
 					return mem_matrix_store::ptr();
 				}
 			}
 		}
 	}
-	fclose(f);
 
-	if (m->store_layout() != header.get_layout())
+	if (m->store_layout() != layout)
 		return std::static_pointer_cast<const mem_matrix_store>(m->transpose());
 	else
 		return m;

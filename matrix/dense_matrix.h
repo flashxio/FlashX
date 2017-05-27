@@ -430,7 +430,7 @@ public:
 	}
 
 	double norm2() const;
-	void print() const;
+	void print(FILE *f=stdout) const;
 };
 
 template<class T>

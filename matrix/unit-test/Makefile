@@ -27,7 +27,10 @@ all: test_io_gen test-dense_matrix test-EM_vector	test-EM_matrix \
 	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix	\
 	test-special_matrix_store test-EM_vector_vector test-rounderror \
 	test-hashtable test-bulk_operate test-block_matrix test-projection \
-	test-sink_matrix test-sparse_matrix
+	test-sink_matrix test-sparse_matrix test-data_io
+
+test-data_io: test-data_io.o ../libFMatrix.a
+	$(CXX) -o test-data_io test-data_io.o $(LDFLAGS)
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -99,6 +102,7 @@ test-sink_matrix: test-sink_matrix.o ../libFMatrix.a
 	$(CXX) -o test-sink_matrix test-sink_matrix.o $(LDFLAGS)
 
 test:
+	./test-data_io
 	./test-bulk_operate
 	./test-hashtable
 	./test_io_gen
@@ -151,5 +155,6 @@ clean:
 	rm -f test-hashtable
 	rm -f test-projection
 	rm -f test-sink_matrix
+	rm -f test-data_io
 
 -include $(DEPS) 

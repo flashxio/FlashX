@@ -3324,7 +3324,7 @@ dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
 	return detail::mapply_portion(mats, op, out_layout, par_access);
 }
 
-void dense_matrix::print() const
+void dense_matrix::print(FILE *f) const
 {
 	dense_matrix::ptr tmp = conv2(matrix_layout_t::L_ROW);
 	tmp = tmp->conv_store(true, -1);
@@ -3335,8 +3335,8 @@ void dense_matrix::print() const
 
 	for (size_t i = 0; i < get_num_rows(); i++) {
 		std::string str = get_type().conv2str(mem_store->get_row(i),
-				get_num_cols(), ", ");
-		printf("%s\n", str.c_str());
+				get_num_cols(), ",");
+		fprintf(f, "%s\n", str.c_str());
 	}
 }
 

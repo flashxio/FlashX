@@ -46,7 +46,6 @@ RUN R -e "install.packages('igraph', repos = 'http://cran.rstudio.com/')"
 WORKDIR /FlashX
 RUN ./install_FlashR.sh
 RUN ./install_FlashGraphR.sh
-RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 #check to see if it's there ^^^?
 
@@ -61,6 +60,8 @@ RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
 RUN R -e "IRkernel::installspec(user = FALSE)"
 
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
+
 ###FLASHX CONF END ###
 
 
@@ -69,3 +70,6 @@ RUN echo "export VISIBLE=now" >> /etc/profile
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
+
+EXPOSE 8888
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root"]

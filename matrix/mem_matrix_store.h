@@ -26,6 +26,7 @@
 
 #include "matrix_store.h"
 #include "raw_data_array.h"
+#include "data_io.h"
 
 namespace fm
 {
@@ -55,7 +56,21 @@ public:
 	 */
 	static const size_t CHUNK_SIZE;
 
+	/*
+	 * This is to load a dense matrix from a file that contains a matrix header.
+	 */
 	static const_ptr load(const std::string &file_name, int num_nodes);
+	static const_ptr load(file_io::ptr io, int num_nodes);
+
+	/*
+	 * This is to load a dense matrix from a file that doesn't contain
+	 * a matrix header.
+	 */
+	static const_ptr load_raw(const std::string &file_name, size_t nrow, size_t ncol,
+			matrix_layout_t layout, const scalar_type &type, int num_nodes);
+	static const_ptr load_raw(file_io::ptr io, size_t nrow, size_t ncol,
+			matrix_layout_t layout, const scalar_type &type, int num_nodes);
+
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
 

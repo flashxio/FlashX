@@ -49,6 +49,7 @@
 #include "fmr_utils.h"
 #include "matrix_ops.h"
 #include "data_io.h"
+#include "Rconn.h"
 
 using namespace fm;
 
@@ -341,11 +342,84 @@ RcppExport SEXP R_FM_get_dense_matrix(SEXP pname)
 			trans_FM2R(store->get_type()), "");
 }
 
-RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
+class Rconnect_io: public file_io
+{
+	Rconnection conn;
+	bool is_end;
+public:
+	Rconnect_io(Rconnection conn) {
+		this->conn = conn;
+		is_end = false;
+	}
+	virtual std::shared_ptr<char> read_bytes(size_t wanted_bytes,
+			size_t &read_bytes) {
+		std::shared_ptr<char> buf = alloc_io_buf(wanted_bytes);
+		read_bytes = R_ReadConnection(conn, buf.get(), wanted_bytes);
+		if (read_bytes == 0)
+			is_end = true;
+		return buf;
+	}
+	virtual bool eof() const {
+		return is_end;
+	}
+	virtual std::string get_name() const {
+		return R_GetConnName(conn);
+	}
+};
+
+static std::vector<text_io::ptr> get_text_ios(SEXP psrc)
+{
+	std::vector<text_io::ptr> ios;
+	if (R_is_string(psrc)) {
+		Rcpp::StringVector rcpp_mats(psrc);
+		std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
+		for (auto it = mat_files.begin(); it != mat_files.end(); it++) {
+			auto io = text_io::create(*it);
+			if (io)
+				ios.push_back(io);
+		}
+	}
+	else {
+		Rcpp::List src_list(psrc);
+		for (int i = 0; i < src_list.size(); i++) {
+			Rconnection conn = R_GetConnection(src_list[i]);
+			if (conn == NULL)
+				fprintf(stderr, "cannot get connection\n");
+			else
+				ios.push_back(text_io::create(file_io::ptr(new Rconnect_io(conn))));
+		}
+	}
+	return ios;
+}
+
+static std::vector<file_io::ptr> get_ios(SEXP psrc)
+{
+	std::vector<file_io::ptr> ios;
+	if (R_is_string(psrc)) {
+		Rcpp::StringVector rcpp_mats(psrc);
+		std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
+		for (auto it = mat_files.begin(); it != mat_files.end(); it++) {
+			auto io = file_io::create_local(*it);
+			if (io)
+				ios.push_back(io);
+		}
+	}
+	else {
+		Rcpp::List src_list(psrc);
+		for (int i = 0; i < src_list.size(); i++) {
+			Rconnection conn = R_GetConnection(src_list[i]);
+			if (conn == NULL)
+				fprintf(stderr, "cannot get connection\n");
+			else
+				ios.push_back(file_io::ptr(new Rconnect_io(conn)));
+		}
+	}
+	return ios;
+}
+
+RcppExport SEXP R_FM_load_dense_matrix(SEXP psrc, SEXP pin_mem,
 		SEXP pele_type, SEXP pdelim, SEXP pncol, SEXP pmat_name)
 {
-	Rcpp::StringVector rcpp_mats(pname);
-	std::vector<std::string> mat_files(rcpp_mats.begin(), rcpp_mats.end());
 	bool in_mem = LOGICAL(pin_mem)[0];
 	std::string ele_type = CHAR(STRING_ELT(pele_type, 0));
 	std::string delim = CHAR(STRING_ELT(pdelim, 0));
@@ -357,6 +431,10 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 	}
 
+	std::vector<text_io::ptr> ios = get_text_ios(psrc);
+	if (ios.empty())
+		return R_NilValue;
+
 	dense_matrix::ptr mat;
 	if (TYPEOF(pncol) == INTSXP) {
 		int ncol = INTEGER(pncol)[0];
@@ -366,11 +444,11 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 		// of the number of columns.
 		if (ncol == std::numeric_limits<int>::max())
 			ncol = std::numeric_limits<size_t>::max();
-		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, ncol);
+		mat = read_matrix(ios, in_mem, true, ele_type, delim, ncol);
 	}
 	else {
 		std::string cols = CHAR(STRING_ELT(pncol, 0));
-		mat = read_matrix(mat_files, in_mem, true, ele_type, delim, cols);
+		mat = read_matrix(ios, in_mem, true, ele_type, delim, cols);
 	}
 	if (mat == NULL)
 		return R_NilValue;
@@ -387,10 +465,9 @@ RcppExport SEXP R_FM_load_dense_matrix(SEXP pname, SEXP pin_mem,
 	return create_FMR_matrix(mat, trans_FM2R(mat->get_type()), mat_name);
 }
 
-RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
+RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP psrc, SEXP pin_mem,
 		SEXP pnrow, SEXP pncol, SEXP pbyrow, SEXP pele_type, SEXP pmat_name)
 {
-	std::string file_name = CHAR(STRING_ELT(pname, 0));
 	bool in_mem = LOGICAL(pin_mem)[0];
 	size_t nrow = REAL(pnrow)[0];
 	size_t ncol = REAL(pncol)[0];
@@ -404,6 +481,11 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 		return R_NilValue;
 	}
 
+	std::vector<file_io::ptr> ios = get_ios(psrc);
+	if (ios.empty())
+		return R_NilValue;
+	file_io::ptr io = ios[0];
+
 	matrix_layout_t layout
 		= byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL;
 	if (!valid_ele_type(ele_type)) {
@@ -412,30 +494,22 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 	}
 	const scalar_type &type = get_ele_type(ele_type);
 
-	safs::native_file ext_f(file_name);
-	if (!ext_f.exist()) {
-		fprintf(stderr, "%s doesn't exist\n", file_name.c_str());
-		return R_NilValue;
-	}
-	if (ext_f.get_size() < (ssize_t) (nrow * ncol * type.get_size())) {
-		fprintf(stderr, "%s doesn't contain enough data for the matrix\n",
-				file_name.c_str());
-		return R_NilValue;
-	}
-
 	dense_matrix::ptr mat;
 	// Load the matrix to SAFS.
 	if (!in_mem) {
+		fprintf(stderr, "doesn't support to load a matrix to SAFS directly\n");
+		return R_NilValue;
+#if 0
 		// If a user provides a matrix name, we need to make the matrix
 		// persistent on SAFS.
 		bool temp = true;
 		if (!mat_name.empty())
 			temp = false;
 
-		detail::EM_matrix_store::ptr store = detail::EM_matrix_store::load(
-				file_name, nrow, ncol, layout, type);
+		detail::EM_matrix_store::ptr store = detail::EM_matrix_store::load_raw(
+				io, nrow, ncol, layout, type);
 		if (store == NULL) {
-			fprintf(stderr, "can't load %s to SAFS\n", file_name.c_str());
+			fprintf(stderr, "can't load %s to SAFS\n", io->get_name().c_str());
 			return R_NilValue;
 		}
 
@@ -446,21 +520,13 @@ RcppExport SEXP R_FM_load_dense_matrix_bin(SEXP pname, SEXP pin_mem,
 				obj->set_persistent(mat_name);
 		}
 		mat = dense_matrix::create(store);
+#endif
 	}
 	else {
-		detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
-				nrow, ncol, layout, type, -1);
-		FILE *f = fopen(file_name.c_str(), "r");
-		if (f == NULL) {
-			fprintf(stderr, "can't open %s: %s\n", file_name.c_str(),
-					strerror(errno));
-			return R_NilValue;
-		}
-		size_t ret = fread(store->get_raw_arr(), nrow * ncol * type.get_size(),
-				1, f);
-		if (ret != 1) {
-			fprintf(stderr, "can't read %s: %s\n", file_name.c_str(),
-					strerror(errno));
+		detail::mem_matrix_store::const_ptr store
+			= detail::mem_matrix_store::load_raw(io, nrow, ncol, layout, type, -1);
+		if (store == NULL) {
+			fprintf(stderr, "can't load %s to memory\n", io->get_name().c_str());
 			return R_NilValue;
 		}
 		mat = dense_matrix::create(store);
