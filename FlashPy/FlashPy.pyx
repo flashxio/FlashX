@@ -194,14 +194,6 @@ cdef class PyMatrix:
         else:
             self.ndim = 2
 
-    @staticmethod
-    def create_seq(long start, long stride, unsigned long nrow, unsigned long ncol,
-            string layout, bool byrow, int num_node, bool in_mem):
-        cdef PyMatrix mat = PyMatrix()
-        mat.mat.init_seq[long](start, stride, nrow, ncol, layout, byrow,
-                num_node, in_mem)
-        return mat
-
     def is_in_mem(self):
         return self.mat.is_in_mem()
 
