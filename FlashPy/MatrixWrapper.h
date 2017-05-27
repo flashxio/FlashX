@@ -115,6 +115,12 @@ public:
 	matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
 			const std::string &t, const std::string layout);
 
+	matrix_wrapper(size_t length, std::string &t) {
+		auto data = fm::dense_matrix::create(length, 1,
+				fm::matrix_layout_t::L_COL, convT_py2fm(t));
+		mat = fm::col_vec::create(data);
+	}
+
 	matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
 			const std::string layout) {
 		mat = fm::dense_matrix::create(nrow, ncol, get_layout(layout),
@@ -134,12 +140,19 @@ public:
 	enum NPY_TYPES get_type_py() const;
 
 	template<class T>
-	void init_seq(T start, T stride, size_t nrow, size_t ncol,
-			std::string layout, bool byrow, int num_nodes, bool in_mem) {
-		fm::matrix_layout_t layout_val = layout
-			== "c" ? fm::matrix_layout_t::L_COL : fm::matrix_layout_t::L_ROW;
-		mat = fm::dense_matrix::create_seq<T>(start, stride, nrow, ncol,
-				layout_val, byrow, num_nodes, in_mem);
+	void init_seq(T start, T stride, bool byrow) {
+		check_mat();
+		mat = fm::dense_matrix::create_seq<T>(start, stride,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				byrow, mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	}
+
+	template<class T>
+	void init_const(T val) {
+		check_mat();
+		mat = fm::dense_matrix::create_const<T>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
 	}
 
 	size_t get_num_rows() const {

@@ -32,15 +32,20 @@ cdef enum bulk_uop_idx_t:
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass matrix_wrapper:
         matrix_wrapper()
-        # create a vector.
+        # create a vector with data from "data_addr".
         matrix_wrapper(intptr_t data_addr, size_t length,
                 const string &t)
-        # create a matrix.
+        # create a matrix with data from "data_addr".
         matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
                 const string &t, const string layout)
+        # create an empty vector with the specified size
+        matrix_wrapper(size_t length, string t)
+        # create an empty matrix with the specified size
         matrix_wrapper(size_t nrow, size_t ncol, string t, string layout)
-        void init_seq[T](T start, T stride, size_t nrow, size_t ncol,
-                string layout, bool byrow, int num_nodes, bool in_mem)
+
+#        void init_seq[T](T start, T stride, bool byrow)
+#        void init_const[T](T val)
+
         size_t get_num_rows() const
         size_t get_num_cols() const
         size_t get_entry_size() const
@@ -224,20 +229,80 @@ cdef class PyMatrix:
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
         ret.init_shape()
         return ret
-
+"""
 # TODO this function should have the same interface as numpy.array.
-def array(np.ndarray arr, string t):
+def array(np.ndarray arr, string dtype):
     cdef PyMatrix ret = PyMatrix()
     # TODO this is a bit too hacky. Is there a better way?
     cdef intptr_t addr = ctypes.c_void_p(arr.ctypes.data).value
     if (arr.ndim == 1):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], t)
+        ret.mat = matrix_wrapper(addr, arr.shape[0], dtype)
     elif (arr.ndim == 2):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], t, "c")
+        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], dtype, "c")
     else:
-        return None
+        raise ValueError("don't support more than 2 dimensions")
     ret.init_shape()
     return ret
+
+def empty_like(a, dtype=None, order='K', subok=True):
+    cdef PyMatrix ret = PyMatrix()
+    shape = a.shape
+    if (dtype is None):
+        dtype = a.dtype
+
+    # TODO what is the input array isn't contiguous.
+    if (order == 'K' and a.flags.c_contiguous):
+        order = 'C'
+    elif (order == 'K' and a.flags.f_contiguous):
+        order = 'F'
+
+    if (len(shape) == 1):
+        ret.mat = matrix_wrapper(shape[0], dtype)
+    elif (len(shape) == 2):
+        ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
+    else:
+        raise ValueError("don't support more than 2 dimensions")
+    ret.init_shape()
+    return ret
+
+def empty(shape, dtype='f', order='C'):
+    cdef PyMatrix ret = PyMatrix()
+    if (len(shape) == 1):
+        ret.mat = matrix_wrapper(shape[0], dtype)
+    elif (len(shape) == 2):
+        ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
+    else:
+        raise ValueError("don't support more than 2 dimensions")
+    ret.init_shape()
+    return ret
+
+def init_val(PyMatrix data, dtype, val):
+    if (dtype == 'f'):
+        data.mat.init_const[float](val)
+
+def ones(shape, dtype='f', order='C'):
+    cdef PyMatrix ret = PyMatrix()
+    if (len(shape) == 1):
+        ret.mat = matrix_wrapper(1, shape[0], dtype)
+    elif (len(shape) == 2):
+        ret.mat = matrix_wrapper(1, shape[0], shape[1], dtype, order)
+    else:
+        raise ValueError("don't support more than 2 dimensions")
+    init_val(ret, dtype, 1)
+    ret.init_shape()
+    return ret
+
+def zeros(shape, dtype='f', order='C'):
+    cdef PyMatrix ret = PyMatrix()
+    if (len(shape) == 1):
+        ret.mat = matrix_wrapper(0, shape[0], dtype)
+    elif (len(shape) == 2):
+        ret.mat = matrix_wrapper(0, shape[0], shape[1], dtype, order)
+    else:
+        raise ValueError("don't support more than 2 dimensions")
+    ret.init_shape()
+    return ret
+"""
 
 #        matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
 #                bulk_op_idx_t right_op) const
