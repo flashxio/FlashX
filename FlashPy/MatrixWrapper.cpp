@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "mem_matrix_store.h"
+#include "col_vec.h"
 
 #include "MatrixWrapper.h"
 
@@ -82,6 +83,40 @@ const fm::scalar_type &convT_py2fm(const std::string &t)
 		throw std::invalid_argument("invalid type");
 	else
 		return *it->second;
+}
+
+matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t length,
+		const std::string &t)
+{
+	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+			length, 1, matrix_layout_t::L_COL, convT_py2fm(t), -1);
+	memcpy(store->get_raw_arr(), (void *) data_ptr,
+			length * store->get_type().get_size());
+	this->mat = col_vec::create(store);
+}
+
+matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t nrow, size_t ncol,
+		const std::string &t, const std::string layout_str)
+{
+	matrix_layout_t layout;
+	if (layout_str == "c")
+		layout = matrix_layout_t::L_COL;
+	else if (layout_str == "r")
+		layout = matrix_layout_t::L_ROW;
+	else
+		throw std::invalid_argument("invalid type");
+
+	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+			nrow, ncol, layout, convT_py2fm(t), -1);
+	memcpy(store->get_raw_arr(), (void *) data_ptr,
+			nrow * ncol * store->get_type().get_size());
+	this->mat = dense_matrix::create(store);
+}
+
+bool matrix_wrapper::is_vector() const
+{
+	auto vec = std::dynamic_pointer_cast<col_vec>(mat);
+	return vec != NULL;
 }
 
 std::string matrix_wrapper::get_type_str() const

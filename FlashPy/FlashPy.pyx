@@ -1,9 +1,11 @@
 import numpy as np
+import ctypes
 # "cimport" is used to import special compile-time information
 # about the numpy module (this is stored in a file numpy.pxd which is
 # currently part of the Cython distribution).
 cimport numpy as np
 from libc.stdlib cimport free, malloc
+from libc.stdint cimport intptr_t
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp cimport bool
@@ -30,6 +32,12 @@ cdef enum bulk_uop_idx_t:
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass matrix_wrapper:
         matrix_wrapper()
+        # create a vector.
+        matrix_wrapper(intptr_t data_addr, size_t length,
+                const string &t)
+        # create a matrix.
+        matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
+                const string &t, const string layout)
         matrix_wrapper(size_t nrow, size_t ncol, string t, string layout)
         void init_seq[T](T start, T stride, size_t nrow, size_t ncol,
                 string layout, bool byrow, int num_nodes, bool in_mem)
@@ -40,6 +48,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         np.NPY_TYPES get_type_py() const
         bool is_in_mem() const
         bool is_virtual() const
+        bool is_vector() const
         bool materialize_self() const
         matrix_wrapper get_cols(const vector[long] &idxs) const
         matrix_wrapper get_rows(const vector[long] &idxs) const
@@ -75,9 +84,13 @@ cdef class PyMatrix:
             return None
 
         cdef np.npy_intp shape[2]
-        shape[0] = <np.npy_intp> self.mat.get_num_rows()
-        shape[1] = <np.npy_intp> self.mat.get_num_cols()
-        return np.PyArray_SimpleNewFromData(2, shape, self.mat.get_type_py(), src)
+        if (self.mat.is_vector()):
+            shape[0] = <np.npy_intp> self.mat.get_num_rows()
+            return np.PyArray_SimpleNewFromData(1, shape, self.mat.get_type_py(), src)
+        else:
+            shape[0] = <np.npy_intp> self.mat.get_num_rows()
+            shape[1] = <np.npy_intp> self.mat.get_num_cols()
+            return np.PyArray_SimpleNewFromData(2, shape, self.mat.get_type_py(), src)
 
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
@@ -202,6 +215,19 @@ cdef class PyMatrix:
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
         return ret
+
+def array(np.ndarray arr, string t):
+    cdef PyMatrix ret = PyMatrix()
+    # TODO this is a bit too hacky. Is there a better way?
+    cdef intptr_t addr = ctypes.c_void_p(arr.ctypes.data).value
+    if (arr.ndim == 1):
+        ret.mat = matrix_wrapper(addr, arr.shape[0], t)
+    elif (arr.ndim == 2):
+        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], t, "c")
+    else:
+        return None
+    return ret
+
 
 #        matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
 #                bulk_op_idx_t right_op) const

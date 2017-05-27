@@ -110,6 +110,11 @@ public:
 	matrix_wrapper() {
 	}
 
+	matrix_wrapper(intptr_t data_addr, size_t length, const std::string &t);
+
+	matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
+			const std::string &t, const std::string layout);
+
 	matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
 			const std::string layout) {
 		mat = fm::dense_matrix::create(nrow, ncol, get_layout(layout),
@@ -119,6 +124,8 @@ public:
 	matrix_wrapper(fm::dense_matrix::ptr mat) {
 		this->mat = mat;
 	}
+
+	bool is_vector() const;
 
 	std::string get_type_str() const;
 	/*
