@@ -98,9 +98,10 @@ class matrix_wrapper
 	}
 
 	static fm::matrix_layout_t get_layout(const std::string &layout) {
-		if (layout == "c")
+		// The layout used by FORTRAN
+		if (layout == "F")
 			return fm::matrix_layout_t::L_COL;
-		else if (layout == "r")
+		else if (layout == "C")
 			return fm::matrix_layout_t::L_ROW;
 		else
 			throw std::invalid_argument("wrong layout");
@@ -114,6 +115,12 @@ public:
 
 	matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
 			const std::string &t, const std::string layout);
+
+	matrix_wrapper(size_t length, std::string &t) {
+		auto data = fm::dense_matrix::create(length, 1,
+				fm::matrix_layout_t::L_COL, convT_py2fm(t));
+		mat = fm::col_vec::create(data);
+	}
 
 	matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
 			const std::string layout) {
@@ -134,13 +141,15 @@ public:
 	enum NPY_TYPES get_type_py() const;
 
 	template<class T>
-	void init_seq(T start, T stride, size_t nrow, size_t ncol,
-			std::string layout, bool byrow, int num_nodes, bool in_mem) {
-		fm::matrix_layout_t layout_val = layout
-			== "c" ? fm::matrix_layout_t::L_COL : fm::matrix_layout_t::L_ROW;
-		mat = fm::dense_matrix::create_seq<T>(start, stride, nrow, ncol,
-				layout_val, byrow, num_nodes, in_mem);
+	void init_seq(T start, T stride, bool byrow) {
+		check_mat();
+		mat = fm::dense_matrix::create_seq<T>(start, stride,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				byrow, mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
 	}
+
+	void init_const_float(double val);
+	void init_const_int(long val);
 
 	size_t get_num_rows() const {
 		check_mat();

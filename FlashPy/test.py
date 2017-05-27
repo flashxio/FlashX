@@ -7,6 +7,37 @@ def verify(fp_arr, np_arr):
     tmp = np.array(fp_arr, copy=True)
     assert np.all(tmp == np_arr)
 
+def verify_init(dtype):
+    print("verify " + dtype)
+    fp_mat1 = FlashPy.empty([25, 10], dtype=dtype)
+    assert fp_mat1.shape[0] == 25
+    assert fp_mat1.shape[1] == 10
+    assert fp_mat1.dtype == dtype
+
+    fp_mat2 = FlashPy.empty_like(fp_mat1)
+    assert fp_mat1.shape == fp_mat2.shape
+    assert fp_mat1.dtype == fp_mat2.dtype
+
+    fp_mat1 = FlashPy.ones([25, 10], dtype=dtype)
+    assert fp_mat1.shape[0] == 25
+    assert fp_mat1.shape[1] == 10
+    assert fp_mat1.dtype == dtype
+
+    fp_mat1 = FlashPy.zeros([25, 10], dtype=dtype)
+    assert fp_mat1.shape[0] == 25
+    assert fp_mat1.shape[1] == 10
+    assert fp_mat1.dtype == dtype
+
+verify_init("f")
+verify_init("d")
+verify_init("g")
+verify_init("b")
+verify_init("h")
+verify_init("i")
+verify_init("l")
+verify_init("H")
+verify_init("I")
+verify_init("L")
 
 print("test array")
 np_mat1 = np.random.normal(size=[25, 10])

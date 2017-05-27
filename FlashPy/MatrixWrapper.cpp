@@ -29,6 +29,22 @@ using namespace fm;
 namespace flashpy
 {
 
+class invalid_operation: public std::exception
+{
+	std::string msg;
+public:
+	invalid_operation(std::string msg) {
+		this->msg = msg;
+	}
+
+	~invalid_operation() throw() {
+	}
+
+	virtual const char *what() const throw() {
+		return msg.c_str();
+	}
+};
+
 static std::unordered_map<std::string, const fm::scalar_type *> py2fm;
 // The index is prim_type and the value is the type name
 static std::vector<enum NPY_TYPES> fm2py;
@@ -44,8 +60,10 @@ static void init_map()
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("l",
 				&fm::get_scalar_type<long>()));
 
+#if 0
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("B",
 				&fm::get_scalar_type<unsigned char>()));
+#endif
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("H",
 				&fm::get_scalar_type<unsigned short>()));
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("I",
@@ -96,18 +114,10 @@ matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t length,
 }
 
 matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t nrow, size_t ncol,
-		const std::string &t, const std::string layout_str)
+		const std::string &t, const std::string layout)
 {
-	matrix_layout_t layout;
-	if (layout_str == "c")
-		layout = matrix_layout_t::L_COL;
-	else if (layout_str == "r")
-		layout = matrix_layout_t::L_ROW;
-	else
-		throw std::invalid_argument("invalid type");
-
 	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
-			nrow, ncol, layout, convT_py2fm(t), -1);
+			nrow, ncol, get_layout(layout), convT_py2fm(t), -1);
 	memcpy(store->get_raw_arr(), (void *) data_ptr,
 			nrow * ncol * store->get_type().get_size());
 	this->mat = dense_matrix::create(store);
@@ -129,6 +139,60 @@ enum NPY_TYPES matrix_wrapper::get_type_py() const
 	if (fm2py.empty())
 		init_map();
 	return fm2py[mat->get_type().get_type()];
+}
+
+void matrix_wrapper::init_const_float(double val)
+{
+	check_mat();
+	if (mat->get_type() == get_scalar_type<double>())
+		mat = fm::dense_matrix::create_const<double>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<float>())
+		mat = fm::dense_matrix::create_const<float>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<long double>())
+		mat = fm::dense_matrix::create_const<long double>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else
+		throw invalid_operation("can't init as floating point");
+}
+
+void matrix_wrapper::init_const_int(long val)
+{
+	check_mat();
+	if (mat->get_type() == get_scalar_type<char>())
+		mat = fm::dense_matrix::create_const<char>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<short>())
+		mat = fm::dense_matrix::create_const<short>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<int>())
+		mat = fm::dense_matrix::create_const<int>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<long>())
+		mat = fm::dense_matrix::create_const<long>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<unsigned short>())
+		mat = fm::dense_matrix::create_const<unsigned short>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<unsigned int>())
+		mat = fm::dense_matrix::create_const<unsigned int>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else if (mat->get_type() == get_scalar_type<unsigned long>())
+		mat = fm::dense_matrix::create_const<unsigned long>(val,
+				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
+				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+	else
+		throw invalid_operation("can't init as integer");
 }
 
 }
