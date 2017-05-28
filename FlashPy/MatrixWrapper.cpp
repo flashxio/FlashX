@@ -45,9 +45,23 @@ public:
 	}
 };
 
+struct py_type_info
+{
+	enum NPY_TYPES type;
+	std::string name;
+	py_type_info() {
+		type = NPY_BYTE;
+		name = "b";
+	}
+	py_type_info(enum NPY_TYPES type, std::string name) {
+		this->type = type;
+		this->name = name;
+	}
+};
+
 static std::unordered_map<std::string, const fm::scalar_type *> py2fm;
 // The index is prim_type and the value is the type name
-static std::vector<enum NPY_TYPES> fm2py;
+static std::vector<py_type_info> fm2py;
 
 static void init_map()
 {
@@ -79,16 +93,16 @@ static void init_map()
 				&fm::get_scalar_type<long double>()));
 
 	fm2py.resize(fm::prim_type::NUM_TYPES);
-	fm2py[fm::prim_type::P_CHAR] = NPY_BYTE;
-	fm2py[fm::prim_type::P_SHORT] = NPY_SHORT;
-	fm2py[fm::prim_type::P_USHORT] = NPY_USHORT;
-	fm2py[fm::prim_type::P_INTEGER] = NPY_INT;
-	fm2py[fm::prim_type::P_UINT] = NPY_UINT;
-	fm2py[fm::prim_type::P_LONG] = NPY_LONG;
-	fm2py[fm::prim_type::P_ULONG] = NPY_ULONG;
-	fm2py[fm::prim_type::P_FLOAT] = NPY_FLOAT;
-	fm2py[fm::prim_type::P_DOUBLE] = NPY_DOUBLE;
-	fm2py[fm::prim_type::P_LDOUBLE] = NPY_LONGDOUBLE;
+	fm2py[fm::prim_type::P_CHAR] = py_type_info(NPY_BYTE, "b");
+	fm2py[fm::prim_type::P_SHORT] = py_type_info(NPY_SHORT, "h");
+	fm2py[fm::prim_type::P_USHORT] = py_type_info(NPY_USHORT, "H");
+	fm2py[fm::prim_type::P_INTEGER] = py_type_info(NPY_INT, "i");
+	fm2py[fm::prim_type::P_UINT] = py_type_info(NPY_UINT, "I");
+	fm2py[fm::prim_type::P_LONG] = py_type_info(NPY_LONG, "l");
+	fm2py[fm::prim_type::P_ULONG] = py_type_info(NPY_ULONG, "L");
+	fm2py[fm::prim_type::P_FLOAT] = py_type_info(NPY_FLOAT, "f");
+	fm2py[fm::prim_type::P_DOUBLE] = py_type_info(NPY_DOUBLE, "d");
+	fm2py[fm::prim_type::P_LDOUBLE] = py_type_info(NPY_LONGDOUBLE, "g");
 }
 
 const fm::scalar_type &convT_py2fm(const std::string &t)
@@ -131,14 +145,16 @@ bool matrix_wrapper::is_vector() const
 
 std::string matrix_wrapper::get_type_str() const
 {
-	return mat->get_type().get_name();
+	if (fm2py.empty())
+		init_map();
+	return fm2py[mat->get_type().get_type()].name;
 }
 
 enum NPY_TYPES matrix_wrapper::get_type_py() const
 {
 	if (fm2py.empty())
 		init_map();
-	return fm2py[mat->get_type().get_type()];
+	return fm2py[mat->get_type().get_type()].type;
 }
 
 void matrix_wrapper::init_const_float(double val)

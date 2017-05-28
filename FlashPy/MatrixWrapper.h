@@ -166,6 +166,13 @@ public:
 		return mat->get_type().get_size();
 	}
 
+	std::string get_layout() const {
+		if (mat->store_layout() == fm::matrix_layout_t::L_COL)
+			return "F";
+		else
+			return "C";
+	}
+
 	const char *get_raw_arr() const {
 		check_mat();
 		mat->move_store(true, -1);

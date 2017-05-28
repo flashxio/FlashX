@@ -52,6 +52,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         size_t get_entry_size() const
         string get_type_str() const
         np.NPY_TYPES get_type_py() const
+        string get_layout() const
         bool is_in_mem() const
         bool is_virtual() const
         bool is_vector() const
@@ -79,10 +80,31 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
         matrix_wrapper sapply(bulk_uop_idx_t op) const
 
+class flagsobj:
+    def __init__(self):
+        self.c_contiguous = False
+        self.f_contiguous = False
+        self.owndata = True
+        self.writable = False
+        self.aligned = True
+        self.updateifcopy = False
+
+    def set_layout(self, layout):
+        if (layout == "C"):
+            self.c_contiguous = True
+            self.f_contiguous = False
+        elif (layout == "F"):
+            self.c_contiguous = False
+            self.f_contiguous = True
+        else:
+            raise ValueError("Invalid layout")
+
 cdef class PyMatrix:
     cdef matrix_wrapper mat      # hold a C++ instance which we're wrapping
     cdef readonly int ndim
     cdef readonly object shape
+    cdef readonly string dtype
+    cdef readonly object flags
 
     def __cinit__(self):
         self.mat = matrix_wrapper()
@@ -90,6 +112,7 @@ cdef class PyMatrix:
     def __init__(self):
         self.ndim = 0
         self.shape = (0, 0)
+        self.flags = flagsobj()
 
     def __array__(self):
         cdef char *src = self.mat.get_raw_arr()
@@ -133,72 +156,74 @@ cdef class PyMatrix:
     def __add__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_ADD)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __sub__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_SUB)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __mul__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_MUL)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __div__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_DIV)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __floordiv__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_IDIV)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __mod__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_MOD)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __and__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_AND)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __or__(PyMatrix x, PyMatrix y):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = x.mat.mapply2(y.mat, OP_OR)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __neg__(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.sapply(UOP_NEG)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __abs__(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.sapply(UOP_ABS)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def __len__(self):
         return self.mat.get_num_rows()
 
-    def init_shape(self):
+    def init_attr(self):
         self.shape = (self.mat.get_num_rows(), self.mat.get_num_cols())
         if (self.mat.is_vector()):
             self.ndim = 1
         else:
             self.ndim = 2
+        self.dtype = self.mat.get_type_str()
+        self.flags.set_layout(self.mat.get_layout())
 
     def is_in_mem(self):
         return self.mat.is_in_mem()
@@ -216,19 +241,19 @@ cdef class PyMatrix:
 
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.get_cols(cidxs)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def transpose(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.transpose()
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
     def conv_store(self, bool in_mem, int num_nodes):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
-        ret.init_shape()
+        ret.init_attr()
         return ret
 
 # TODO this function should have the same interface as numpy.array.
@@ -242,7 +267,7 @@ def array(np.ndarray arr, string dtype):
         ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], dtype, "C")
     else:
         raise ValueError("don't support more than 2 dimensions")
-    ret.init_shape()
+    ret.init_attr()
     return ret
 
 def empty_like(a, dtype=None, order='K', subok=True):
@@ -263,7 +288,7 @@ def empty_like(a, dtype=None, order='K', subok=True):
         ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
     else:
         raise ValueError("don't support more than 2 dimensions")
-    ret.init_shape()
+    ret.init_attr()
     return ret
 
 def empty(shape, dtype='f', order='C'):
@@ -274,7 +299,7 @@ def empty(shape, dtype='f', order='C'):
         ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
     else:
         raise ValueError("don't support more than 2 dimensions")
-    ret.init_shape()
+    ret.init_attr()
     return ret
 
 def init_val(PyMatrix data, dtype, val):
@@ -286,13 +311,13 @@ def init_val(PyMatrix data, dtype, val):
 def ones(shape, dtype='f', order='C'):
     cdef PyMatrix ret = empty(shape, dtype, order)
     init_val(ret, dtype, 1)
-    ret.init_shape()
+    ret.init_attr()
     return ret
 
 def zeros(shape, dtype='f', order='C'):
     cdef PyMatrix ret = empty(shape, dtype, order)
     init_val(ret, dtype, 0)
-    ret.init_shape()
+    ret.init_attr()
     return ret
 
 #        matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
