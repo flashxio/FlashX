@@ -47,16 +47,21 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         void init_const_float(double val)
         void init_const_int(long val)
 
+        matrix_wrapper as_vector() const
+        matrix_wrapper as_matrix() const
+
         size_t get_num_rows() const
         size_t get_num_cols() const
         size_t get_entry_size() const
         string get_type_str() const
         np.NPY_TYPES get_type_py() const
         string get_layout() const
+        bool is_floating_point() const
         bool is_in_mem() const
         bool is_virtual() const
         bool is_vector() const
         bool materialize_self() const
+        matrix_wrapper cast_ele_type(string dtyp) const
         matrix_wrapper get_cols(const vector[long] &idxs) const
         matrix_wrapper get_rows(const vector[long] &idxs) const
         matrix_wrapper get_cols(matrix_wrapper idxs) const
@@ -121,7 +126,8 @@ cdef class PyMatrix:
             return None
         cdef np.npy_intp shape[2]
         shape[0] = self.shape[0]
-        shape[1] = self.shape[1]
+        if (self.ndim >= 2):
+            shape[1] = self.shape[1]
         return np.PyArray_SimpleNewFromData(self.ndim, shape,
                 self.mat.get_type_py(), src)
 
@@ -188,10 +194,11 @@ cdef class PyMatrix:
         return self.mat.get_num_rows()
 
     def init_attr(self):
-        self.shape = (self.mat.get_num_rows(), self.mat.get_num_cols())
         if (self.mat.is_vector()):
+            self.shape = (self.mat.get_num_rows(),)
             self.ndim = 1
         else:
+            self.shape = (self.mat.get_num_rows(), self.mat.get_num_cols())
             self.ndim = 2
         self.dtype = self.mat.get_type_str()
         self.flags.set_layout(self.mat.get_layout())
@@ -226,6 +233,22 @@ cdef class PyMatrix:
     def conv_store(self, bool in_mem, int num_nodes):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
+        ret.init_attr()
+        return ret
+
+    def cast_ele_type(self, string dtype):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.cast_ele_type(dtype)
+        ret.init_attr()
+        return ret
+
+    def assign(self, PyMatrix mat):
+        self.mat = mat.mat
+        self.init_attr()
+
+    def multiply(self, PyMatrix mat):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.multiply(mat.mat)
         ret.init_attr()
         return ret
 
@@ -345,3 +368,74 @@ def zeros(shape, dtype='f', order='C'):
     init_val(ret, dtype, 0)
     ret.init_attr()
     return ret
+
+def as_vector(PyMatrix a):
+    cdef PyMatrix ret = PyMatrix()
+    ret.mat = a.mat.as_vector()
+    ret.init_attr()
+    return ret
+
+def as_matrix(PyMatrix a):
+    cdef PyMatrix ret = PyMatrix()
+    ret.mat = a.mat.as_matrix()
+    ret.init_attr()
+    return ret
+
+def aggregate(PyMatrix a, op, axis=None, dtype=None, out=None, keepdims=False):
+    cdef PyMatrix ret = PyMatrix()
+    if dtype is not None:
+        a = a.cast_ele_type(dtype)
+    if axis is None:
+        ret = as_vector(a.aggregate(op))
+    elif (axis == 0):
+        ret = as_vector(a.agg_col(op))
+    elif (axis == 1):
+        ret = as_vector(a.agg_row(op))
+    else:
+        raise ValueError("invalid axis")
+    # TODO let's ignore keepdims for now.
+    if out is not None:
+        out.assign(ret)
+    return ret
+
+def sum(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
+    return aggregate(a, OP_ADD, axis, dtype, out, keepdims)
+
+def prod(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
+    return aggregate(a, OP_MUL, axis, dtype, out, keepdims)
+
+def mean(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
+    if (not a.mat.is_floating_point()):
+        a = a.cast_ele_type("d")
+    # TODO I shouldn't cast it to ndarray.
+    s = np.array(sum(a, axis, dtype, out, keepdims), copy=True)
+    if axis is None:
+        return s/a.mat.get_num_rows()/a.mat.get_num_cols()
+    else:
+        return s/a.shape[axis]
+
+def average(PyMatrix a, axis=None, weights=None, returned=False):
+    if weights is not None and axis is None:
+        if (a.shape != weights.shape):
+            raise ValueError("weights need to have the same shape as a")
+        else:
+            a = a * weights
+            wsum = sum(weights)
+    elif weights is not None:
+        if (weights.ndim > 1):
+            raise ValueError("weights need to be a 1D array")
+        elif (axis == 0):
+            a = a.mapply_cols(weights)
+        elif (axis == 1):
+            a = a.mapply_rows(weights)
+        else:
+            raise ValueError("invalid axis")
+        wsum = sum(weights)
+    elif axis is None:
+        wsum = a.mat.get_num_rows() * a.mat.get_num_cols()
+    else:
+        wsum = a.shape[axis]
+    if (returned):
+        return (sum(a, axis)/wsum, wsum)
+    else:
+        return sum(a, axis)/wsum

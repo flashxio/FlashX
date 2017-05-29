@@ -81,3 +81,88 @@ print("test neg")
 fp_res = -fp_mat1
 np_res = -np_mat1
 verify(fp_res, np_res)
+
+def verify_cast(dtype1, dtype2):
+    print("cast " + dtype1 + " to " + dtype2)
+    fp_mat1 = FlashPy.empty([25, 10], dtype=dtype1)
+    assert fp_mat1.dtype == dtype1
+    fp_mat2 = fp_mat1.cast_ele_type(dtype2)
+    assert fp_mat2.dtype == dtype2
+
+verify_cast("f", "d")
+verify_cast("d", "f")
+verify_cast("b", "h")
+verify_cast("i", "l")
+
+print("test sum")
+np_mat1 = np.random.normal(size=[25, 10])
+fp_mat1 = FlashPy.array(np_mat1, "d")
+fp_res = FlashPy.sum(fp_mat1)
+np_res = np.sum(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert abs(tmp - np_res) < 1e-13
+
+fp_res = FlashPy.sum(fp_mat1, axis=0)
+np_res = np.sum(np_mat1, axis=0)
+verify(fp_res, np_res)
+
+fp_res = FlashPy.sum(fp_mat1, axis=0, dtype="d")
+np_res = np.sum(np_mat1, axis=0, dtype="d")
+verify(fp_res, np_res)
+
+fp_res = FlashPy.sum(fp_mat1, axis=1)
+np_res = np.sum(np_mat1, axis=1)
+verify(fp_res, np_res)
+
+print("test mean")
+fp_res = FlashPy.mean(fp_mat1)
+np_res = np.mean(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp[0] == np_res
+
+fp_res = FlashPy.mean(fp_mat1, axis=0)
+np_res = np.mean(np_mat1, axis=0)
+verify(fp_res, np_res)
+
+fp_res = FlashPy.mean(fp_mat1, axis=1)
+np_res = np.mean(np_mat1, axis=1)
+verify(fp_res, np_res)
+
+print("test average")
+fp_res = FlashPy.average(fp_mat1)
+np_res = np.average(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp[0] == np_res
+
+fp_res = FlashPy.average(fp_mat1, axis=0)
+np_res = np.average(np_mat1, axis=0)
+verify(fp_res, np_res)
+
+fp_res = FlashPy.average(fp_mat1, axis=1)
+np_res = np.average(np_mat1, axis=1)
+verify(fp_res, np_res)
+
+np_weights = np.random.normal(scale=100, size=[25, 10])
+fp_weights = FlashPy.array(np_weights, dtype="l")
+np_weights = np.array(fp_weights, copy=True)
+fp_res = FlashPy.average(fp_mat1, weights=fp_mat1)
+np_res = np.average(np_mat1, weights=np_mat1)
+print(np_mat1)
+tmp = np.array(fp_res, copy=True)
+print(tmp)
+print(np_res)
+assert tmp[0] == np_res
+
+np_weights = np.random.normal(scale=100, size=10)
+fp_weights = FlashPy.array(np_weights, dtype="l")
+np_weights = np.array(fp_weights, copy=True)
+fp_res = FlashPy.average(fp_mat1, axis=0, weights=fp_weights)
+np_res = np.average(np_mat1, axis=0, weights=np_weights)
+verify(fp_res, np_res)
+
+np_weights = np.random.normal(scale=100, size=25)
+fp_weights = FlashPy.array(np_weights, dtype="l")
+np_weights = np.array(fp_weights, copy=True)
+fp_res = FlashPy.average(fp_mat1, axis=1, weights=fp_weights)
+np_res = np.average(np_mat1, axis=1, weights=np_weights)
+verify(fp_res, np_res)

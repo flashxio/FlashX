@@ -189,6 +189,10 @@ public:
 		return (char *) store->get_raw_arr();
 	}
 
+	bool is_floating_point() const {
+		return mat->get_type().is_floating_point();
+	}
+
 	bool is_in_mem() const {
 		check_mat();
 		return mat->is_in_mem();
@@ -203,6 +207,11 @@ public:
 		check_mat();
 		return mat->materialize_self();
 	}
+
+	matrix_wrapper as_vector() const;
+	matrix_wrapper as_matrix() const;
+
+	matrix_wrapper cast_ele_type(std::string dtyp) const;
 
 	matrix_wrapper get_cols(const std::vector<off_t> &idxs) const {
 		check_mat();

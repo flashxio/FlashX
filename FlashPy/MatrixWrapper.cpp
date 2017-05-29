@@ -139,6 +139,7 @@ matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t nrow, size_t ncol,
 
 bool matrix_wrapper::is_vector() const
 {
+	// TODO this might be too expensive.
 	auto vec = std::dynamic_pointer_cast<col_vec>(mat);
 	return vec != NULL;
 }
@@ -209,6 +210,29 @@ void matrix_wrapper::init_const_int(long val)
 				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
 	else
 		throw invalid_operation("can't init as integer");
+}
+
+matrix_wrapper matrix_wrapper::cast_ele_type(std::string dtype) const {
+	check_mat();
+	auto res = mat->cast_ele_type(convT_py2fm(dtype));
+	if (is_vector())
+		return matrix_wrapper(fm::col_vec::create(res));
+	else
+		return matrix_wrapper(res);
+}
+
+matrix_wrapper matrix_wrapper::as_vector() const
+{
+	check_mat();
+	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1)
+		throw invalid_operation("can't cast a matrix to a vector.");
+	return matrix_wrapper(fm::col_vec::create(mat));
+}
+
+matrix_wrapper matrix_wrapper::as_matrix() const
+{
+	check_mat();
+	return matrix_wrapper(fm::dense_matrix::create(mat->get_raw_store()));
 }
 
 }
