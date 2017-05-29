@@ -271,6 +271,12 @@ public:
 		return matrix_wrapper(mat->multiply(*m.mat));
 	}
 
+	matrix_wrapper aggregate(bulk_op_idx_t op) const {
+		check_mat();
+		return matrix_wrapper(mat->aggregate(fm::matrix_margin::BOTH,
+					get_agg(mat->get_type(), op)));
+	}
+
 	matrix_wrapper agg_row(bulk_op_idx_t op) const {
 		check_mat();
 		return matrix_wrapper(mat->aggregate(fm::matrix_margin::MAR_ROW,

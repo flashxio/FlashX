@@ -71,3 +71,13 @@ print("test //")
 fp_res = fp_mat1 // fp_mat2
 np_res = np_mat1 // np_mat2
 verify(fp_res, np_res)
+
+print("test abs")
+fp_res = abs(fp_mat1)
+np_res = abs(np_mat1)
+verify(fp_res, np_res)
+
+print("test neg")
+fp_res = -fp_mat1
+np_res = -np_mat1
+verify(fp_res, np_res)
