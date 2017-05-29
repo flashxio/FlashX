@@ -306,18 +306,22 @@ cdef class PyMatrix:
 #        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
 
 # TODO this function should have the same interface as numpy.array.
-def array(np.ndarray arr, string dtype):
+def array(np.ndarray arr, dtype=None):
     cdef PyMatrix ret = PyMatrix()
     # TODO this is a bit too hacky. Is there a better way?
     cdef intptr_t addr = ctypes.c_void_p(arr.ctypes.data).value
     if (arr.ndim == 1):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], dtype)
+        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.dtype.char)
     elif (arr.ndim == 2):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1], dtype, "C")
+        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1],
+                arr.dtype.char, "C")
     else:
         raise ValueError("don't support more than 2 dimensions")
     ret.init_attr()
-    return ret
+    if dtype is None:
+        return ret
+    else:
+        return ret.cast_ele_type(dtype)
 
 def empty_like(a, dtype=None, order='K', subok=True):
     cdef PyMatrix ret = PyMatrix()

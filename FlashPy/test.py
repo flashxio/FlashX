@@ -40,10 +40,12 @@ verify_init("I")
 verify_init("L")
 
 print("test array")
-np_mat1 = np.random.normal(size=[25, 10])
-fp_mat1 = FlashPy.array(np_mat1, "d")
-np_mat2 = np.random.normal(size=[25, 10])
-fp_mat2 = FlashPy.array(np_mat2, "d")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = FlashPy.array(np_mat1)
+np_mat1 = np.array(fp_mat1, copy=True)
+np_mat2 = np.random.normal(scale=100, size=[25, 10])
+fp_mat2 = FlashPy.array(np_mat2)
+np_mat2 = np.array(fp_mat2, copy=True)
 verify(fp_mat1, np_mat1)
 verify(fp_mat2, np_mat2)
 
@@ -58,8 +60,8 @@ np_res = np_mat1 - np_mat2
 verify(fp_res, np_res)
 
 print("test *")
-fp_res = fp_mat1 * fp_mat2
-np_res = np_mat1 * np_mat2
+fp_res = FlashPy.array(np_mat1, "l") * FlashPy.array(np_mat2, "l")
+np_res = np.array(np_mat1, "l") * np.array(np_mat2, "l")
 verify(fp_res, np_res)
 
 print("test /")
@@ -95,8 +97,9 @@ verify_cast("b", "h")
 verify_cast("i", "l")
 
 print("test sum")
-np_mat1 = np.random.normal(size=[25, 10])
-fp_mat1 = FlashPy.array(np_mat1, "d")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = FlashPy.array(np_mat1, dtype="l")
+np_mat1 = np.array(np_mat1, dtype="l")
 fp_res = FlashPy.sum(fp_mat1)
 np_res = np.sum(np_mat1)
 tmp = np.array(fp_res, copy=True)
