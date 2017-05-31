@@ -140,9 +140,6 @@ void *malloc_aligned(size_t size, size_t alignment);
 void *malloc_large(size_t size);
 void free_large(void *addr, size_t size);
 
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
-
 #ifdef __cplusplus
 }
 #endif
