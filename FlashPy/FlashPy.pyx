@@ -120,6 +120,9 @@ cdef class PyMatrix:
     cdef readonly object shape
     cdef readonly string dtype
     cdef readonly object flags
+    cdef readonly long size
+    cdef readonly long itemsize
+    cdef readonly long nbytes
 
     def __cinit__(self):
         self.mat = matrix_wrapper()
@@ -211,6 +214,9 @@ cdef class PyMatrix:
             self.ndim = 2
         self.dtype = self.mat.get_type_str()
         self.flags.set_layout(self.mat.get_layout())
+        self.size = self.mat.get_num_rows() * self.mat.get_num_cols()
+        self.itemsize = self.mat.get_entry_size()
+        self.nbytes = self.size * self.itemsize
 
     # These are specific for FlashMatrix.
 

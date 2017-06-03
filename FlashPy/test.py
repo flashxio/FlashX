@@ -4,6 +4,9 @@ import numpy as np
 def verify(fp_arr, np_arr):
     assert fp_arr.ndim == np_arr.ndim
     assert fp_arr.shape == np_arr.shape
+    assert fp_arr.size == np_arr.size
+    assert fp_arr.itemsize == np_arr.itemsize
+    assert fp_arr.nbytes == np_arr.nbytes
     tmp = np.array(fp_arr, copy=True)
     assert np.all(tmp == np_arr)
 
