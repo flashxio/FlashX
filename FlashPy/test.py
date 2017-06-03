@@ -134,6 +134,22 @@ fp_res = FlashPy.mean(fp_mat1, axis=1)
 np_res = np.mean(np_mat1, axis=1)
 verify(fp_res, np_res)
 
+print("test dot on matrix")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = FlashPy.array(np_mat1, dtype="l")
+np_mat1 = np.array(np_mat1, dtype="l")
+fp_res = FlashPy.dot(fp_mat1, fp_mat1.transpose())
+np_res = np.dot(np_mat1, np_mat1.transpose())
+verify(fp_res, np_res)
+
+print("test dot on vector")
+np_mat1 = np.random.normal(scale=100, size=25)
+fp_mat1 = FlashPy.array(np_mat1, dtype="l")
+np_mat1 = np.array(np_mat1, dtype="l")
+fp_res = FlashPy.dot(fp_mat1, fp_mat1)
+np_res = np.dot(np_mat1, np_mat1)
+assert np.array(fp_res, copy=True) == np_res
+
 print("test average")
 fp_res = FlashPy.average(fp_mat1)
 np_res = np.average(np_mat1)

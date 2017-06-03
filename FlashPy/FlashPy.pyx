@@ -261,8 +261,13 @@ cdef class PyMatrix:
         self.mat = mat.mat
         self.init_attr()
 
-    def multiply(self, PyMatrix mat):
+    def multiply(self, obj):
         cdef PyMatrix ret = PyMatrix()
+        cdef PyMatrix mat
+        if (isinstance(obj, PyMatrix)):
+            mat = <PyMatrix>obj
+        else:
+            mat = array(obj)
         ret.mat = self.mat.multiply(mat.mat)
         ret.init_attr()
         return ret
@@ -504,3 +509,13 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
         return (sum(a, axis)/wsum, wsum)
     else:
         return sum(a, axis)/wsum
+
+def dot(PyMatrix a, b, out=None):
+    cdef PyMatrix res = PyMatrix()
+    if (a.ndim == 1 and b.ndim == 1):
+        res = a.transpose().multiply(b)
+    else:
+        res = a.multiply(b)
+    if (out is not None):
+        out.assign(res)
+    return res
