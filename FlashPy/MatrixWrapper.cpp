@@ -65,6 +65,7 @@ static std::vector<py_type_info> fm2py;
 
 static void init_map()
 {
+	// TODO support boolean and unsigned char.
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("b",
 				&fm::get_scalar_type<char>()));
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("h",
@@ -233,6 +234,44 @@ matrix_wrapper matrix_wrapper::as_matrix() const
 {
 	check_mat();
 	return matrix_wrapper(fm::dense_matrix::create(mat->get_raw_store()));
+}
+
+matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
+{
+	check_mat();
+	m.check_mat();
+	fm::dense_matrix::ptr res;
+	// If the left and right one have the same shape.
+	if (mat->get_num_rows() == m.mat->get_num_rows()
+			&& mat->get_num_cols() == m.mat->get_num_cols())
+		res = mat->mapply2(*m.mat, get_op(mat->get_type(), op));
+	// The left one is a matrix.
+	else if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1
+			// The right one is a vector.
+			&& (m.mat->get_num_rows() > 1 && m.mat->get_num_cols() == 1)
+			&& mat->get_num_cols() == m.mat->get_num_rows())
+		res = mat->mapply_rows(get_vec(m.mat), get_op(mat->get_type(), op));
+	// If the left one is a vector.
+	else if ((mat->get_num_rows() > 1 && mat->get_num_cols() == 1)
+			&& mat->get_num_rows() == m.mat->get_num_cols()
+			// and the right one is a matrix.
+			&& m.mat->get_num_rows() > 1 && m.mat->get_num_cols() > 1) {
+		auto left = fm::col_vec::create(mat);
+		auto left_mat = fm::dense_matrix::create_repeat(left,
+				m.mat->get_num_rows(), m.mat->get_num_cols(),
+				matrix_layout_t::L_ROW, true,
+				m.mat->get_data().get_num_nodes());
+		res = left_mat->mapply2(*m.mat, get_op(mat->get_type(), op));
+	}
+	else {
+		throw std::invalid_argument(
+				"The shape of the two matrices doesn't match");
+	}
+
+	if (m.is_vector() && is_vector())
+		return matrix_wrapper(fm::col_vec::create(res));
+	else
+		return matrix_wrapper(res);
 }
 
 }

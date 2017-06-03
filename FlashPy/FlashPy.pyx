@@ -30,6 +30,14 @@ cdef enum bulk_uop_idx_t:
     UOP_LOG, UOP_LOG2, UOP_LOG10
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
+    cdef cppclass scalar_wrapper:
+        scalar_wrapper()
+        const char *get_raw() const;
+
+cdef extern from "MatrixWrapper.h" namespace "flashpy":
+    cdef scalar_wrapper create_scalar_wrapper[T](T x)
+
+cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass matrix_wrapper:
         matrix_wrapper()
         # create a vector with data from "data_addr".
@@ -85,6 +93,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
         matrix_wrapper sapply(bulk_uop_idx_t op) const
+        matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const
 
 class flagsobj:
     def __init__(self):
@@ -134,7 +143,7 @@ cdef class PyMatrix:
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
 
-    def __richcmp__(PyMatrix x, PyMatrix y, int op):
+    def __richcmp__(PyMatrix x, y, int op):
         cdef PyMatrix ret = PyMatrix()
         # Rich comparisons:
         # http://cython.readthedocs.io/en/latest/src/userguide/special_methods.html#rich-comparisons
@@ -145,34 +154,34 @@ cdef class PyMatrix:
         # !=  3
         # >=  5
         if (op == 0):
-            ret.mat = x.mat.mapply2(y.mat, OP_LT)
+            ret = x.mapply2(y, OP_LT)
         elif (op == 2):
-            ret.mat = x.mat.mapply2(y.mat, OP_EQ)
+            ret = x.mapply2(y, OP_EQ)
         elif (op == 4):
-            ret.mat = x.mat.mapply2(y.mat, OP_GT)
+            ret = x.mapply2(y, OP_GT)
         elif (op == 1):
-            ret.mat = x.mat.mapply2(y.mat, OP_LE)
+            ret = x.mapply2(y, OP_LE)
         elif (op == 3):
-            ret.mat = x.mat.mapply2(y.mat, OP_NEQ)
+            ret = x.mapply2(y, OP_NEQ)
         elif (op == 5):
-            ret.mat = x.mat.mapply2(y.mat, OP_GE)
+            ret = x.mapply2(y, OP_GE)
         else:
             print("invalid argument")
         return ret
 
-    def __add__(PyMatrix x, PyMatrix y):
+    def __add__(PyMatrix x, y):
         return x.mapply2(y, OP_ADD)
 
-    def __sub__(PyMatrix x, PyMatrix y):
+    def __sub__(PyMatrix x, y):
         return x.mapply2(y, OP_SUB)
 
-    def __mul__(PyMatrix x, PyMatrix y):
+    def __mul__(PyMatrix x, y):
         return x.mapply2(y, OP_MUL)
 
-    def __div__(PyMatrix x, PyMatrix y):
+    def __div__(PyMatrix x, y):
         return x.mapply2(y, OP_DIV)
 
-    def __floordiv__(PyMatrix x, PyMatrix y):
+    def __floordiv__(PyMatrix x, y):
         return x.mapply2(y, OP_IDIV)
 
     def __mod__(PyMatrix x, PyMatrix y):
@@ -290,9 +299,29 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
-    def mapply2(self, PyMatrix mat, op):
+    def mapply2(self, obj, op):
         cdef PyMatrix ret = PyMatrix()
-        ret.mat = self.mat.mapply2(mat.mat, op)
+        cdef scalar_wrapper var
+        cdef PyMatrix mat
+        if (isinstance(obj, PyMatrix)):
+            mat = <PyMatrix>obj
+            ret.mat = self.mat.mapply2(mat.mat, op)
+        elif (np.isscalar(obj)):
+            if (isinstance(obj, float)):
+                var = create_scalar_wrapper[double](obj)
+            elif (isinstance(obj, long)):
+                var = create_scalar_wrapper[long](obj)
+            elif (isinstance(obj, int)):
+                var = create_scalar_wrapper[int](obj)
+            # TODO handle boolean.
+            #elif (isinstance(obj, bool)):
+            #    var = create_scalar_wrapper[bool](obj)
+            else:
+                raise ValueError("invalid scalar type")
+            ret.mat = self.mat.apply_scalar(var, op)
+        else:
+            mat = array(obj)
+            ret.mat = self.mat.mapply2(mat.mat, op)
         ret.init_attr()
         return ret
 
@@ -306,17 +335,24 @@ cdef class PyMatrix:
 #        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
 
 # TODO this function should have the same interface as numpy.array.
-def array(np.ndarray arr, dtype=None):
+def array(arr, dtype=None):
+    cdef np.ndarray ndarr
     cdef PyMatrix ret = PyMatrix()
+
+    if (isinstance(arr, np.ndarray)):
+        ndarr = arr
+    else:
+        ndarr = np.array(arr)
     # TODO this is a bit too hacky. Is there a better way?
-    cdef intptr_t addr = ctypes.c_void_p(arr.ctypes.data).value
-    if (arr.ndim == 1):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.dtype.char)
-    elif (arr.ndim == 2):
-        ret.mat = matrix_wrapper(addr, arr.shape[0], arr.shape[1],
-                arr.dtype.char, "C")
+    cdef intptr_t addr = ctypes.c_void_p(ndarr.ctypes.data).value
+    if (ndarr.ndim == 1):
+        ret.mat = matrix_wrapper(addr, ndarr.shape[0], ndarr.dtype.char)
+    elif (ndarr.ndim == 2):
+        ret.mat = matrix_wrapper(addr, ndarr.shape[0], ndarr.shape[1],
+                ndarr.dtype.char, "C")
     else:
         raise ValueError("don't support more than 2 dimensions")
+
     ret.init_attr()
     if dtype is None:
         return ret

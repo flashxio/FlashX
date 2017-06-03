@@ -78,6 +78,33 @@ static inline std::shared_ptr<fm::factor_col_vector> get_factor(
 
 const fm::scalar_type &convT_py2fm(const std::string &t);
 
+class scalar_wrapper
+{
+	fm::scalar_variable::ptr var;
+public:
+	scalar_wrapper() {
+	}
+
+	scalar_wrapper(fm::scalar_variable::ptr var) {
+		this->var = var;
+	}
+
+	const char *get_raw() const {
+		return var->get_raw();
+	}
+
+	fm::scalar_variable::ptr get_var() const {
+		return var;
+	}
+};
+
+template<class T>
+scalar_wrapper create_scalar_wrapper(T val)
+{
+	fm::scalar_variable::ptr var(new fm::scalar_variable_impl<T>(val));
+	return scalar_wrapper(var);
+}
+
 /*
  * This is a wrapper for dense_matrix in FlashMatrix.
  * The reason that we create this class is that we want to minimize the number
@@ -318,19 +345,20 @@ public:
 					get_op(mat->get_type(), op)));
 	}
 
-	matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const {
+	matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const;
+
+	matrix_wrapper sapply(bulk_uop_idx_t op) const {
 		check_mat();
-		m.check_mat();
-		auto res = mat->mapply2(*m.mat, get_op(mat->get_type(), op));
-		if (m.is_vector() && is_vector())
+		auto res = mat->sapply(get_uop(mat->get_type(), op));
+		if (is_vector())
 			return matrix_wrapper(fm::col_vec::create(res));
 		else
 			return matrix_wrapper(res);
 	}
 
-	matrix_wrapper sapply(bulk_uop_idx_t op) const {
+	matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const {
 		check_mat();
-		auto res = mat->sapply(get_uop(mat->get_type(), op));
+		auto res = mat->apply_scalar(var.get_var(), get_op(mat->get_type(), op));
 		if (is_vector())
 			return matrix_wrapper(fm::col_vec::create(res));
 		else
