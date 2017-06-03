@@ -170,9 +170,12 @@ public:
 	template<class T>
 	void init_seq(T start, T stride, bool byrow) {
 		check_mat();
+		bool is_vec = is_vector();
 		mat = fm::dense_matrix::create_seq<T>(start, stride,
 				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
 				byrow, mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
+		if (is_vec)
+			mat = fm::col_vec::create(mat);
 	}
 
 	void init_const_float(double val);

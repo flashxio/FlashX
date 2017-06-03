@@ -382,7 +382,9 @@ def empty_like(a, dtype=None, order='K', subok=True):
 
 def empty(shape, dtype='f', order='C'):
     cdef PyMatrix ret = PyMatrix()
-    if (len(shape) == 1):
+    if (np.isscalar(shape)):
+        ret.mat = matrix_wrapper(shape, dtype)
+    elif (len(shape) == 1):
         ret.mat = matrix_wrapper(shape[0], dtype)
     elif (len(shape) == 2):
         ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
@@ -406,6 +408,23 @@ def ones(shape, dtype='f', order='C'):
 def zeros(shape, dtype='f', order='C'):
     cdef PyMatrix ret = empty(shape, dtype, order)
     init_val(ret, dtype, 0)
+    ret.init_attr()
+    return ret
+
+def arange(start, stop, step=1, dtype=None):
+    cdef size_t l = (stop - start) / step
+    cdef PyMatrix ret
+    if (isinstance(start, float)):
+        ret = empty(l, 'd', order='F')
+        ret.mat.init_seq[float](start, step, 0)
+    elif (isinstance(start, long)):
+        ret = empty(l, 'l', order='F')
+        ret.mat.init_seq[long](start, step, 0)
+    elif (isinstance(start, int)):
+        ret = empty(l, 'i', order='F')
+        ret.mat.init_seq[int](start, step, 0)
+    else:
+        raise ValueError("invalid scalar type")
     ret.init_attr()
     return ret
 
