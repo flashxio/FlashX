@@ -291,6 +291,11 @@ public:
 		return matrix_wrapper(mat->transpose());
 	}
 
+	matrix_wrapper conv_layout(const std::string &layout) const {
+		check_mat();
+		return matrix_wrapper(mat->conv2(get_layout(layout)));
+	}
+
 	matrix_wrapper conv_store(bool in_mem, int num_nodes) const {
 		check_mat();
 		return matrix_wrapper(mat->conv_store(in_mem, num_nodes));

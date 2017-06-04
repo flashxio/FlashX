@@ -81,6 +81,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         const char *get_raw_arr() const
         matrix_wrapper transpose() const
         matrix_wrapper conv_store(bool in_mem, int num_nodes) const
+        matrix_wrapper conv_layout(const string layout) const
         matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
                 bulk_op_idx_t right_op) const
         matrix_wrapper multiply(matrix_wrapper m) const
@@ -133,15 +134,23 @@ cdef class PyMatrix:
         self.flags = flagsobj()
 
     def __array__(self):
-        cdef char *src = self.mat.get_raw_arr()
+        cdef matrix_wrapper mat = self.mat
+        # If this is a matrix, we want it to be "C" contiguous.
+        if (self.mat.get_num_rows() > 1 and self.mat.get_num_cols() > 1):
+            mat = mat.conv_layout("C")
+
+        cdef char *src = mat.get_raw_arr()
         if (src == NULL):
-            return None
+            mat = mat.conv_store(1, -1)
+            src = mat.get_raw_arr()
+
         cdef np.npy_intp shape[2]
         shape[0] = self.shape[0]
         if (self.ndim >= 2):
             shape[1] = self.shape[1]
-        return np.PyArray_SimpleNewFromData(self.ndim, shape,
+        tmp = np.PyArray_SimpleNewFromData(self.ndim, shape,
                 self.mat.get_type_py(), src)
+        return np.array(tmp, copy=True)
 
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
@@ -251,6 +260,12 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
+    def conv_layout(self, string order):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.conv_layout(order)
+        ret.init_attr()
+        return ret
+
     def cast_ele_type(self, string dtype):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.cast_ele_type(dtype)
@@ -345,8 +360,7 @@ cdef class PyMatrix:
 #        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
 #        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
 
-# TODO this function should have the same interface as numpy.array.
-def array(arr, dtype=None):
+def array(arr, dtype=None, copy=True, order='K'):
     cdef np.ndarray ndarr
     cdef PyMatrix ret = PyMatrix()
 
@@ -354,13 +368,19 @@ def array(arr, dtype=None):
         ndarr = arr
     else:
         ndarr = np.array(arr)
+
+    if ((order == 'K' or order == 'C') and arr.flags.c_contiguous):
+        order = 'C'
+    elif ((order == 'K' or order == 'C') and arr.flags.f_contiguous):
+        order = 'F'
+
     # TODO this is a bit too hacky. Is there a better way?
     cdef intptr_t addr = ctypes.c_void_p(ndarr.ctypes.data).value
     if (ndarr.ndim == 1):
         ret.mat = matrix_wrapper(addr, ndarr.shape[0], ndarr.dtype.char)
     elif (ndarr.ndim == 2):
         ret.mat = matrix_wrapper(addr, ndarr.shape[0], ndarr.shape[1],
-                ndarr.dtype.char, "C")
+                ndarr.dtype.char, order)
     else:
         raise ValueError("don't support more than 2 dimensions")
 
