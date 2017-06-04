@@ -227,6 +227,15 @@ cdef class PyMatrix:
         self.itemsize = self.mat.get_entry_size()
         self.nbytes = self.size * self.itemsize
 
+    # These are functions in numpy
+
+    def astype(self, string dtype, order='K', casting='unsafe', subok=True, copy=True):
+        # TODO I need to check casting
+        arr = self.cast_ele_type(dtype)
+        if (order == 'C' or order == 'F'):
+            arr = arr.conv_layout(order)
+        return arr
+
     # These are specific for FlashMatrix.
 
     def is_in_mem(self):
