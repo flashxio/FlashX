@@ -64,21 +64,27 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         string get_type_str() const
         np.NPY_TYPES get_type_py() const
         string get_layout() const
+
         bool is_floating_point() const
         bool is_in_mem() const
         bool is_virtual() const
         bool is_vector() const
+
         bool materialize_self() const
         matrix_wrapper cast_ele_type(string dtyp) const
+
+        matrix_wrapper get_col(long idx) const
+        matrix_wrapper get_row(long idx) const
         matrix_wrapper get_cols(const vector[long] &idxs) const
         matrix_wrapper get_rows(const vector[long] &idxs) const
+        matrix_wrapper get_cols(long start, long stop, long step) const
+        matrix_wrapper get_rows(long start, long stop, long step) const
         matrix_wrapper get_cols(matrix_wrapper idxs) const
         matrix_wrapper get_rows(matrix_wrapper idxs) const
-        matrix_wrapper get_cols(size_t start, size_t end) const
-        matrix_wrapper get_rows(size_t start, size_t end) const
+
         matrix_wrapper set_cols(const vector[long] &idxs, matrix_wrapper cols)
         matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows)
-        const char *get_raw_arr() const
+        bool copy_rows_to(char *arr, size_t len) const
         matrix_wrapper transpose() const
         matrix_wrapper conv_store(bool in_mem, int num_nodes) const
         matrix_wrapper conv_layout(const string layout) const
@@ -134,23 +140,14 @@ cdef class PyMatrix:
         self.flags = flagsobj()
 
     def __array__(self):
-        cdef matrix_wrapper mat = self.mat
-        # If this is a matrix, we want it to be "C" contiguous.
-        if (self.mat.get_num_rows() > 1 and self.mat.get_num_cols() > 1):
-            mat = mat.conv_layout("C")
-
-        cdef char *src = mat.get_raw_arr()
-        if (src == NULL):
-            mat = mat.conv_store(1, -1)
-            src = mat.get_raw_arr()
-
         cdef np.npy_intp shape[2]
         shape[0] = self.shape[0]
         if (self.ndim >= 2):
             shape[1] = self.shape[1]
-        tmp = np.PyArray_SimpleNewFromData(self.ndim, shape,
-                self.mat.get_type_py(), src)
-        return np.array(tmp, copy=True)
+        tmp = np.PyArray_SimpleNew(self.ndim, shape, self.mat.get_type_py())
+        self.mat.copy_rows_to(np.PyArray_BYTES(tmp),
+                self.mat.get_num_rows() * self.mat.get_num_cols() * self.mat.get_entry_size())
+        return tmp
 
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
@@ -178,7 +175,7 @@ cdef class PyMatrix:
         elif (op == 5):
             ret = x.mapply2(y, OP_GE)
         else:
-            print("invalid argument")
+            raise ValueError("invalid argument")
         return ret
 
     def __add__(PyMatrix x, y):
@@ -214,6 +211,21 @@ cdef class PyMatrix:
     def __len__(self):
         return self.mat.get_num_rows()
 
+    def __getitem__(self, key):
+        cdef PyMatrix ret = PyMatrix()
+        if (isinstance(key, tuple)):
+            if (len(key) > 2):
+                raise IndexError("too many indices for array")
+            if (self.shape[0] > self.shape[1]):
+                ret = self.get_cols(key[1])
+                ret = ret.get_rows(key[0])
+            else:
+                ret = self.get_rows(key[0])
+                ret = self.get_cols(key[1])
+        else:
+            ret = self.get_rows(key)
+        return ret
+
     def init_attr(self):
         if (self.mat.is_vector()):
             self.shape = (self.mat.get_num_rows(),)
@@ -247,13 +259,55 @@ cdef class PyMatrix:
     def materialize_self(self):
         return self.mat.materialize_self()
 
-    def get_cols(self, array.array idxs):
-        cdef vector[long] cidxs
-        cdef long *p = idxs.data.as_longs
-        cidxs.assign(p, p + len(idxs))
-
+    def get_rows(self, idxs):
         cdef PyMatrix ret = PyMatrix()
-        ret.mat = self.mat.get_cols(cidxs)
+        cdef vector[long] cidxs
+        cdef array.array idx_arr
+        if (np.isscalar(idxs)):
+            ret.mat = self.mat.get_row(idxs)
+        elif (isinstance(idxs, list)):
+            cidxs = idxs
+            ret.mat = self.mat.get_rows(cidxs)
+        elif (isinstance(idxs, slice)):
+            if (idxs.step is None):
+                ret.mat = self.mat.get_rows(idxs.start, idxs.stop, 1)
+            else:
+                ret.mat = self.mat.get_rows(idxs.start, idxs.stop, idxs.step)
+        elif (isinstance(idxs, array.array)):
+            idx_arr = idxs
+            cidxs.assign(idx_arr.data.as_longs, idx_arr.data.as_longs + len(idxs))
+            ret.mat = self.mat.get_rows(cidxs)
+        elif (idxs is None):
+            if (self.ndim >= 2):
+                raise IndexError("doesn't support high dimensional array")
+            # If this is a vector, we return a one-row matrix.
+            return as_matrix(self).transpose()
+        ret.init_attr()
+        return ret
+
+    def get_cols(self, idxs):
+        cdef PyMatrix ret = PyMatrix()
+        cdef vector[long] cidxs
+        cdef array.array idx_arr
+        if (np.isscalar(idxs)):
+            ret.mat = self.mat.get_col(idxs)
+        elif (isinstance(idxs, list)):
+            cidxs = idxs
+            ret.mat = self.mat.get_cols(cidxs)
+        elif (isinstance(idxs, slice)):
+            if (idxs.step is None):
+                ret.mat = self.mat.get_cols(idxs.start, idxs.stop, 1)
+            else:
+                ret.mat = self.mat.get_cols(idxs.start, idxs.stop, idxs.step)
+        elif (isinstance(idxs, array.array)):
+            idx_arr = idxs
+            cidxs.assign(idx_arr.data.as_longs, idx_arr.data.as_longs + len(idxs))
+            ret.mat = self.mat.get_cols(cidxs)
+        elif (idxs is None):
+            if (self.ndim >= 2):
+                raise IndexError("doesn't support high dimensional array")
+            # If this is a vector, we return a one-col matrix.
+            return as_matrix(self)
         ret.init_attr()
         return ret
 

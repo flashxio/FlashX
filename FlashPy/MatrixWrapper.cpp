@@ -274,4 +274,32 @@ matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
 		return matrix_wrapper(res);
 }
 
+bool matrix_wrapper::copy_rows_to(char *arr, size_t len) const
+{
+	check_mat();
+	dense_matrix::ptr data = mat;
+	if (get_num_rows() > 1 && get_num_cols() > 1)
+		data = mat->conv2(matrix_layout_t::L_ROW);
+	data->move_store(true, -1);
+	auto store = std::dynamic_pointer_cast<const fm::detail::mem_matrix_store>(
+			data->get_raw_store());
+	if (get_num_rows() * get_num_cols() * get_entry_size() > len) {
+		fprintf(stderr, "the array is too small for the matrix\n");
+		return false;
+	}
+
+	const char *src = store->get_raw_arr();
+	if (src)
+		memcpy(arr, src, get_num_rows() * get_num_cols() * get_entry_size());
+	else {
+		auto row_store = std::dynamic_pointer_cast<const fm::detail::mem_row_matrix_store>(
+				data->get_raw_store());
+		assert(store);
+		for (size_t i = 0; i < get_num_rows(); i++)
+			memcpy(arr + i * get_num_cols() * get_entry_size(),
+					row_store->get_row(i), get_num_cols() * get_entry_size());
+	}
+	return true;
+}
+
 }

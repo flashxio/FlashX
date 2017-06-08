@@ -61,6 +61,15 @@ fp_mat1 = FlashPy.array(np_mat1)
 np_mat2 = np.random.normal(scale=100, size=[25, 10])
 fp_mat2 = FlashPy.array(np_mat2)
 
+verify(fp_mat1[1], np_mat1[1])
+verify(fp_mat1[1:3], np_mat1[1:3])
+verify(fp_mat1[1:7:2], np_mat1[1:7:2])
+verify(fp_mat1[1:3, 1:3], np_mat1[1:3, 1:3])
+verify(fp_mat1[1:7:2, 1:7:2], np_mat1[1:7:2, 1:7:2])
+idx = [1, 3, 5]
+verify(fp_mat1[idx], np_mat1[idx])
+verify(fp_mat1[idx, idx], np_mat1[idx, idx])
+
 print("test +")
 fp_res = fp_mat1 + fp_mat2
 np_res = np_mat1 + np_mat2

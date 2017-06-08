@@ -203,21 +203,7 @@ public:
 			return "C";
 	}
 
-	const char *get_raw_arr() const {
-		check_mat();
-		mat->move_store(true, -1);
-		auto store = std::dynamic_pointer_cast<const fm::detail::mem_matrix_store>(
-				mat->get_raw_store());
-		return store->get_raw_arr();
-	}
-
-	char *get_raw_arr() {
-		check_mat();
-		mat->move_store(true, -1);
-		auto store = std::dynamic_pointer_cast<const fm::detail::mem_matrix_store>(
-				mat->get_raw_store());
-		return (char *) store->get_raw_arr();
-	}
+	bool copy_rows_to(char *arr, size_t len) const;
 
 	bool is_floating_point() const {
 		return mat->get_type().is_floating_point();
@@ -243,6 +229,16 @@ public:
 
 	matrix_wrapper cast_ele_type(std::string dtyp) const;
 
+	matrix_wrapper get_col(long idx) const {
+		check_mat();
+		return matrix_wrapper(mat->get_col(idx));
+	}
+
+	matrix_wrapper get_row(long idx) const {
+		check_mat();
+		return matrix_wrapper(mat->get_row(idx));
+	}
+
 	matrix_wrapper get_cols(const std::vector<off_t> &idxs) const {
 		check_mat();
 		return matrix_wrapper(mat->get_cols(idxs));
@@ -265,14 +261,14 @@ public:
 		return matrix_wrapper(mat->get_rows(get_vec(idxs.mat)));
 	}
 
-	matrix_wrapper get_cols(size_t start, size_t end) const {
+	matrix_wrapper get_cols(size_t start, size_t end, long step) const {
 		check_mat();
-		return matrix_wrapper(mat->get_cols(start, end));
+		return matrix_wrapper(mat->get_cols(start, end, step));
 	}
 
-	matrix_wrapper get_rows(size_t start, size_t end) const {
+	matrix_wrapper get_rows(size_t start, size_t end, long step) const {
 		check_mat();
-		return matrix_wrapper(mat->get_rows(start, end));
+		return matrix_wrapper(mat->get_rows(start, end, step));
 	}
 
 	matrix_wrapper set_cols(const std::vector<off_t> &idxs,
