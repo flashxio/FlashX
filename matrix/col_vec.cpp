@@ -25,7 +25,7 @@
 namespace fm
 {
 
-col_vec::ptr col_vec::create(detail::matrix_store::ptr store)
+col_vec::ptr col_vec::create(detail::matrix_store::const_ptr store)
 {
 	if (store->get_num_cols() > 1 && store->get_num_rows() > 1) {
 		BOOST_LOG_TRIVIAL(error)
