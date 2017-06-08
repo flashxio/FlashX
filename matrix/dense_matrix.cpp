@@ -1437,6 +1437,47 @@ detail::portion_mapply_op::const_ptr get_cols_op::transpose() const
 
 }
 
+dense_matrix::ptr dense_matrix::get_col(off_t idx) const
+{
+	if (idx < 0 || (size_t) idx >= get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "the col index is out of bound";
+		return dense_matrix::ptr();
+	}
+
+	dense_matrix::ptr t = transpose();
+	assert(t);
+	return t->get_row(idx);
+}
+
+dense_matrix::ptr dense_matrix::get_row(off_t idx) const
+{
+	if (idx < 0 || (size_t) idx >= get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "the row index is out of bound";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<off_t> idx_vec(1, idx);
+	// Different matrix stores have their own best way of getting rows.
+	// If a matrix store can't get rows in an optimal way, we can fall back
+	// to the default solution.
+	detail::matrix_store::const_ptr ret = get_data().get_rows(idx_vec);
+	if (ret)
+		return col_vec::create(ret);
+	// This is the default solution. We construct a virtual matrix that
+	// represents the required rows. However, the default solution only
+	// works for wide matrices.
+	else if (is_wide()) {
+		std::vector<detail::matrix_store::const_ptr> ins(1, store);
+		get_rows_op::const_ptr op(new get_rows_op(idx_vec, get_num_cols(),
+					get_type()));
+		ret = __mapply_portion_virtual(ins, op, store_layout());
+		assert(ret);
+		return col_vec::create(ret);
+	}
+	else
+		return dense_matrix::ptr();
+}
+
 dense_matrix::ptr dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	if (idxs.empty()) {
@@ -1493,30 +1534,32 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 		return dense_matrix::ptr();
 }
 
-dense_matrix::ptr dense_matrix::get_cols(size_t start, size_t end) const
+dense_matrix::ptr dense_matrix::get_cols(size_t start, size_t end,
+		size_t step) const
 {
 	if (end >= get_num_cols() || start >= get_num_cols() || start >= end) {
 		BOOST_LOG_TRIVIAL(error) << "column index is out of the range";
 		return dense_matrix::ptr();
 	}
 
-	std::vector<off_t> col_idxs(end - start);
+	std::vector<off_t> col_idxs((end - start) / step);
 	for (size_t i = 0; i < col_idxs.size(); i++)
-		col_idxs[i] = start + i;
+		col_idxs[i] = start + i * step;
 	// TODO we need optimize this.
 	return get_cols(col_idxs);
 }
 
-dense_matrix::ptr dense_matrix::get_rows(size_t start, size_t end) const
+dense_matrix::ptr dense_matrix::get_rows(size_t start, size_t end,
+		size_t step) const
 {
 	if (end > get_num_rows() || start >= get_num_rows() || start >= end) {
 		BOOST_LOG_TRIVIAL(error) << "row index is out of the range";
 		return dense_matrix::ptr();
 	}
 
-	std::vector<off_t> row_idxs(end - start);
+	std::vector<off_t> row_idxs((end - start) / step);
 	for (size_t i = 0; i < row_idxs.size(); i++)
-		row_idxs[i] = start + i;
+		row_idxs[i] = start + i * step;
 	// TODO we need optimize this.
 	return get_rows(row_idxs);
 }

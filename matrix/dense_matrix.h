@@ -213,6 +213,13 @@ public:
 	}
 
 	/*
+	 * Get a single row or column from the matrix.
+	 * It returns a col_vec.
+	 */
+	virtual dense_matrix::ptr get_col(off_t idx) const;
+	virtual dense_matrix::ptr get_row(off_t idx) const;
+
+	/*
 	 * In these two versions, we get a small number of rows/cols from a matrix.
 	 */
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
@@ -235,8 +242,10 @@ public:
 	 * This gets rows/cols in a range.
 	 * This helps us to optimize the operations.
 	 */
-	virtual dense_matrix::ptr get_cols(size_t start, size_t end) const;
-	virtual dense_matrix::ptr get_rows(size_t start, size_t end) const;
+	virtual dense_matrix::ptr get_cols(size_t start, size_t end,
+			size_t step = 1) const;
+	virtual dense_matrix::ptr get_rows(size_t start, size_t end,
+			size_t step = 1) const;
 
 	/*
 	 * This method creates a new matrix whose columns specified by `idxs' are

@@ -60,7 +60,7 @@ public:
 	}
 
 	static ptr create(dense_matrix::ptr mat);
-	static ptr create(detail::matrix_store::ptr store);
+	static ptr create(detail::matrix_store::const_ptr store);
 
 	col_vec(): dense_matrix(NULL) {
 	}
