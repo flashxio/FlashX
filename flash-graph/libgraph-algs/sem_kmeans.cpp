@@ -49,6 +49,8 @@ namespace {
     static std::vector<size_t> g_num_members_v;
     static double g_tolerance;
     static bool g_converged = false;
+    static std::default_random_engine generator;
+    static std::uniform_real_distribution<double> ur_distribution(0.0, 1.0);
 
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat);
     void update_clusters(graph_engine::ptr mat,
@@ -258,7 +260,6 @@ namespace {
             case kpmbase::init_type_t::RANDOM:
                 {
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
-                    //unsigned new_cluster_id = vprog.next_random();
                     unsigned new_cluster_id = random() % K;
 #if VERBOSE
                     printf("Random init: v%u assigned to cluster: c%x\n",
@@ -403,7 +404,7 @@ namespace {
                 kmspp_prog->reset();
             }
 
-            cuml_sum = (cuml_sum * ((double)random())) / (RAND_MAX-1.0);
+            cuml_sum = (cuml_sum * ur_distribution(generator))/(RAND_MAX - 1.0);
             BOOST_ASSERT_MSG(cuml_sum != 0, "Cumulative sum == 0!");
 
             g_kmspp_cluster_idx++;
@@ -506,11 +507,13 @@ namespace {
                 if (init == "forgy") {
                     BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
                     g_init = kpmbase::init_type_t::FORGY;
+                    std::uniform_int_distribution<vertex_id_t>
+                            distribution(0, NUM_ROWS-1);
 
                     // Select K in range NUM_ROWS
                     std::vector<vertex_id_t> init_ids; // Used to start engine
                     for (unsigned cl = 0; cl < K; cl++) {
-                        vertex_id_t id = random() % NUM_ROWS;
+                        vertex_id_t id = distribution(generator);
                         g_init_hash[id] = cl; // <vertex_id, cluster_id>
                         init_ids.push_back(id);
                     }
@@ -528,7 +531,10 @@ namespace {
                     g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
 
                     g_kmspp_cluster_idx = 0;
-                    g_kmspp_next_cluster = random() % NUM_ROWS; // 0 - (NUM_ROWS - 1)
+
+                    std::uniform_int_distribution<vertex_id_t>
+                        distribution(0, NUM_ROWS-1);
+                    g_kmspp_next_cluster = distribution(generator); // 0 - (NUM_ROWS - 1)
 
 #if KM_TEST
                     BOOST_LOG_TRIVIAL(info) << "Assigning v:" << g_kmspp_next_cluster
