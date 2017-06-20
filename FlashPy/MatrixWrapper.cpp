@@ -233,7 +233,10 @@ matrix_wrapper matrix_wrapper::as_vector() const
 matrix_wrapper matrix_wrapper::as_matrix() const
 {
 	check_mat();
-	return matrix_wrapper(fm::dense_matrix::create(mat->get_raw_store()));
+	if (is_vector())
+		return matrix_wrapper(fm::dense_matrix::create(mat->get_raw_store()));
+	else
+		return *this;
 }
 
 matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
