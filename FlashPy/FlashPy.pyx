@@ -130,6 +130,7 @@ cdef class PyMatrix:
     cdef readonly long size
     cdef readonly long itemsize
     cdef readonly long nbytes
+    cdef readonly PyMatrix T
 
     def __cinit__(self):
         self.mat = matrix_wrapper()
@@ -226,7 +227,7 @@ cdef class PyMatrix:
             ret = self.get_rows(key)
         return ret
 
-    def init_attr(self):
+    def init_attr(self, T=None):
         if (self.mat.is_vector()):
             self.shape = (self.mat.get_num_rows(),)
             self.ndim = 1
@@ -238,6 +239,12 @@ cdef class PyMatrix:
         self.size = self.mat.get_num_rows() * self.mat.get_num_cols()
         self.itemsize = self.mat.get_entry_size()
         self.nbytes = self.size * self.itemsize
+        if (self.ndim < 2):
+            self.T = self
+        elif (T is None):
+            self.T = self.transpose()
+        else:
+            self.T = T
 
     # These are functions in numpy
 
@@ -312,9 +319,12 @@ cdef class PyMatrix:
         return ret
 
     def transpose(self):
+        if (self.ndim < 2):
+            return self
+
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.transpose()
-        ret.init_attr()
+        ret.init_attr(self)
         return ret
 
     def conv_store(self, bool in_mem, int num_nodes):
@@ -596,7 +606,7 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
 def dot(PyMatrix a, b, out=None):
     cdef PyMatrix res = PyMatrix()
     if (a.ndim == 1 and b.ndim == 1):
-        res = a.transpose().multiply(b)
+        res = as_matrix(a).transpose().multiply(b)
     else:
         res = a.multiply(b)
     if (out is not None):
