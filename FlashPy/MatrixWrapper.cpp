@@ -21,6 +21,7 @@
 
 #include "mem_matrix_store.h"
 #include "col_vec.h"
+#include "sparse_matrix.h"
 
 #include "MatrixWrapper.h"
 
@@ -303,6 +304,23 @@ bool matrix_wrapper::copy_rows_to(char *arr, size_t len) const
 					row_store->get_row(i), get_num_cols() * get_entry_size());
 	}
 	return true;
+}
+
+bool init_flashpy_c(const std::string &conf_file)
+{
+	try {
+		if (conf_file.empty())
+			init_flash_matrix(NULL);
+		else {
+			config_map::ptr configs = config_map::create(conf_file);
+			configs->add_options("writable=1");
+			fm::init_flash_matrix(configs);
+		}
+		return true;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		return false;
+	}
 }
 
 }

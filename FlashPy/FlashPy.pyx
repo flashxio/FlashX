@@ -60,6 +60,9 @@ uop_log2 = UOP_LOG2
 uop_log10 = UOP_LOG10
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
+    cdef bool init_flashpy_c(const string file)
+
+cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass scalar_wrapper:
         scalar_wrapper()
         const char *get_raw() const;
@@ -655,3 +658,6 @@ def sqrt(PyMatrix x):
 
 def absolute(PyMatrix x):
     return x.sapply(UOP_ABS)
+
+def init_flashpy(conf_file=""):
+    return init_flashpy_c(conf_file)

@@ -1,6 +1,8 @@
 import FlashPy
 import numpy as np
 
+FlashPy.init_flashpy()
+
 def verify(fp_arr, np_arr):
     assert fp_arr.ndim == np_arr.ndim
     assert fp_arr.shape == np_arr.shape

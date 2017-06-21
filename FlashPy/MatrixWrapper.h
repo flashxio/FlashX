@@ -370,6 +370,8 @@ public:
 	}
 };
 
+bool init_flashpy_c(const std::string &file);
+
 }
 
 #endif
