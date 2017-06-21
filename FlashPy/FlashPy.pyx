@@ -441,10 +441,12 @@ def array(arr, dtype=None, copy=True, order='K'):
         ndarr = arr
     else:
         ndarr = np.array(arr)
+    if (not ndarr.flags.contiguous):
+        ndarr = np.ascontiguousarray(ndarr)
 
-    if ((order == 'K' or order == 'C') and arr.flags.c_contiguous):
+    if ((order == 'K' or order == 'C') and ndarr.flags.c_contiguous):
         order = 'C'
-    elif ((order == 'K' or order == 'C') and arr.flags.f_contiguous):
+    elif ((order == 'K' or order == 'C') and ndarr.flags.f_contiguous):
         order = 'F'
 
     # TODO this is a bit too hacky. Is there a better way?
@@ -474,6 +476,8 @@ def empty_like(a, dtype=None, order='K', subok=True):
         order = 'C'
     elif (order == 'K' and a.flags.f_contiguous):
         order = 'F'
+    if (order != 'C' and order != 'F'):
+        order = 'C'
 
     if (len(shape) == 1):
         ret.mat = matrix_wrapper(shape[0], dtype)
