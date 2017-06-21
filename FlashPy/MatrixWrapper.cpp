@@ -306,6 +306,13 @@ bool matrix_wrapper::copy_rows_to(char *arr, size_t len) const
 	return true;
 }
 
+void matrix_wrapper::set_cached(bool cached)
+{
+	materialize_level level
+		= cached ? materialize_level::MATER_FULL : materialize_level::MATER_CPU;
+	mat->set_materialize_level(level);
+}
+
 bool init_flashpy_c(const std::string &conf_file)
 {
 	try {

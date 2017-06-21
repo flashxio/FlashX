@@ -88,6 +88,8 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         void init_const_float(double val)
         void init_const_int(long val)
 
+        void set_cached(bool)
+
         matrix_wrapper as_vector() const
         matrix_wrapper as_matrix() const
 
@@ -299,6 +301,9 @@ cdef class PyMatrix:
         return res
 
     # These are specific for FlashMatrix.
+
+    def set_cached(self, cached):
+        self.mat.set_cached(cached)
 
     def is_in_mem(self):
         return self.mat.is_in_mem()

@@ -181,6 +181,8 @@ public:
 	void init_const_float(double val);
 	void init_const_int(long val);
 
+	void set_cached(bool);
+
 	size_t get_num_rows() const {
 		check_mat();
 		return mat->get_num_rows();
