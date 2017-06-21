@@ -24,10 +24,40 @@ cdef enum bulk_op_idx_t:
     OP_OR, OP_AND,
     OP_MOD, OP_IDIV
 
+bop_add = OP_ADD
+bop_sub = OP_SUB
+bop_mul = OP_MUL
+bop_div = OP_DIV
+bop_min = OP_MIN
+bop_max = OP_MAX
+bop_pow = OP_POW
+bop_eq = OP_EQ
+bop_neq = OP_NEQ
+bop_gt = OP_GT
+bop_ge = OP_GE
+bop_lt = OP_LT
+bop_le = OP_LE
+bop_or = OP_OR
+bop_and = OP_AND
+bop_mod = OP_MOD
+bop_idiv = OP_IDIV
+
 cdef enum bulk_uop_idx_t:
     UOP_NEG, UOP_SQRT, UOP_ABS, UOP_NOT, UOP_SQ,
     UOP_CEIL, UOP_FLOOR, UOP_ROUND,
     UOP_LOG, UOP_LOG2, UOP_LOG10
+
+uop_neg = UOP_NEG
+uop_sqrt = UOP_SQRT
+uop_abs = UOP_ABS
+uop_not = UOP_NOT
+uop_sq = UOP_SQ
+uop_ceil = UOP_CEIL
+uop_floor = UOP_FLOOR
+uop_round = UOP_ROUND
+uop_log = UOP_LOG
+uop_log2 = UOP_LOG2
+uop_log10 = UOP_LOG10
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass scalar_wrapper:
