@@ -1,5 +1,6 @@
 import FlashPy
 import numpy as np
+from scipy import linalg
 
 FlashPy.init_flashpy()
 
@@ -10,7 +11,7 @@ def verify(fp_arr, np_arr):
     assert fp_arr.itemsize == np_arr.itemsize
     assert fp_arr.nbytes == np_arr.nbytes
     tmp = np.array(fp_arr, copy=True)
-    assert np.all(tmp == np_arr)
+    assert np.all(np.absolute(tmp - np_arr) < 1e-13)
 
 def verify_init(dtype):
     print("verify " + dtype)
@@ -163,7 +164,7 @@ print("test mean")
 fp_res = FlashPy.mean(fp_mat1)
 np_res = np.mean(np_mat1)
 tmp = np.array(fp_res, copy=True)
-assert tmp[0] == np_res
+assert abs(tmp[0] - np_res) < 1e-15
 
 fp_res = FlashPy.mean(fp_mat1, axis=0)
 np_res = np.mean(np_mat1, axis=0)
@@ -208,6 +209,24 @@ fp_mat1 = FlashPy.arange(1, 100)
 fp_res = np_mat1.astype('d')
 np_res = fp_mat1.astype('d')
 verify(fp_res, np_res)
+
+print("test svd")
+execfile("linalg/svd.py")
+np_mat1 = np.random.normal(scale=100, size=[1000, 10])
+fp_mat1 = FlashPy.array(np_mat1)
+np_u, np_s, np_v = linalg.svd(np_mat1, full_matrices=False)
+fp_u, fp_s, fp_v = svd(fp_mat1)
+verify(fp.absolute(fp_u), np.absolute(np_u))
+verify(fp.absolute(fp_v), np.absolute(np_v))
+assert all(abs(fp_s - np_s) / np_s < 1e-14)
+
+np_mat1 = np.random.normal(scale=100, size=[10, 1000])
+fp_mat1 = FlashPy.array(np_mat1)
+np_u, np_s, np_v = linalg.svd(np_mat1, full_matrices=False)
+fp_u, fp_s, fp_v = svd(fp_mat1)
+verify(fp.absolute(fp_v), np.absolute(np_v))
+verify(fp.absolute(fp_v), np.absolute(np_v))
+assert all(abs(fp_s - np_s) / np_s < 1e-14)
 
 print("test average")
 fp_res = FlashPy.average(fp_mat1)
