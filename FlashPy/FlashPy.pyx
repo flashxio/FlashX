@@ -255,6 +255,16 @@ cdef class PyMatrix:
             arr = arr.conv_layout(order)
         return arr
 
+    def dot(self, b, out=None):
+        cdef PyMatrix res = PyMatrix()
+        if (self.ndim == 1 and b.ndim == 1):
+            res = as_matrix(self).transpose().multiply(b)
+        else:
+            res = self.multiply(b)
+        if (out is not None):
+            out.assign(res)
+        return res
+
     # These are specific for FlashMatrix.
 
     def is_in_mem(self):
@@ -608,11 +618,10 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
         return sum(a, axis)/wsum
 
 def dot(PyMatrix a, b, out=None):
-    cdef PyMatrix res = PyMatrix()
-    if (a.ndim == 1 and b.ndim == 1):
-        res = as_matrix(a).transpose().multiply(b)
-    else:
-        res = a.multiply(b)
-    if (out is not None):
-        out.assign(res)
-    return res
+    return a.dot(b, out)
+
+def sqrt(PyMatrix x):
+    return x.sapply(UOP_SQRT)
+
+def absolute(PyMatrix x):
+    return x.sapply(UOP_ABS)
