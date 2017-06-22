@@ -705,6 +705,7 @@ mem_matrix_store::const_ptr mem_matrix_store::load_raw(file_io::ptr io,
 					% psize % read_bytes;
 				return mem_matrix_store::ptr();
 			}
+			memcpy(portion->get_raw_arr(), data.get(), psize);
 		}
 	}
 	else {
@@ -731,6 +732,7 @@ mem_matrix_store::const_ptr mem_matrix_store::load_raw(file_io::ptr io,
 						% size % read_bytes;
 					return mem_matrix_store::ptr();
 				}
+				memcpy(lstore->get_col(i), data.get(), size);
 			}
 		}
 	}
