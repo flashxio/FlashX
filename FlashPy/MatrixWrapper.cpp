@@ -163,6 +163,7 @@ enum NPY_TYPES matrix_wrapper::get_type_py() const
 void matrix_wrapper::init_const_float(double val)
 {
 	check_mat();
+	bool is_vec = is_vector();
 	if (mat->get_type() == get_scalar_type<double>())
 		mat = fm::dense_matrix::create_const<double>(val,
 				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
@@ -177,11 +178,14 @@ void matrix_wrapper::init_const_float(double val)
 				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
 	else
 		throw invalid_operation("can't init as floating point");
+	if (is_vec)
+		mat = col_vec::create(mat);
 }
 
 void matrix_wrapper::init_const_int(long val)
 {
 	check_mat();
+	bool is_vec = is_vector();
 	if (mat->get_type() == get_scalar_type<char>())
 		mat = fm::dense_matrix::create_const<char>(val,
 				mat->get_num_rows(), mat->get_num_cols(), mat->store_layout(),
@@ -212,6 +216,8 @@ void matrix_wrapper::init_const_int(long val)
 				mat->get_raw_store()->get_num_nodes(), mat->is_in_mem());
 	else
 		throw invalid_operation("can't init as integer");
+	if (is_vec)
+		mat = col_vec::create(mat);
 }
 
 matrix_wrapper matrix_wrapper::cast_ele_type(std::string dtype) const {
