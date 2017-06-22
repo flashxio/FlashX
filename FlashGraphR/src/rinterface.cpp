@@ -36,11 +36,14 @@
 #include "data_frame.h"
 #include "data_io.h"
 #include "sparse_matrix.h"
+#include "col_vec.h"
 
 #include "rutils.h"
 
 using namespace safs;
 using namespace fg;
+
+std::shared_ptr<fm::col_vec> get_vector(const Rcpp::S4 &vec);
 
 /*
  * A global configuration of FlashGraph.
@@ -835,12 +838,14 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname,
 {
 	bool compress = LOGICAL(pcompress)[0];
 	std::string graph_name = CHAR(STRING_ELT(pname, 0));
-	Rcpp::IntegerVector vertices(pvertices);
-	if (vertices.length() == 0) {
+	fm::col_vec::ptr vertices = get_vector(pvertices);
+	if (vertices == NULL) {
 		fprintf(stderr, "There aren't vertices to fetch\n");
 		return R_NilValue;
 	}
-	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
+	vertices = fm::col_vec::create(vertices->cast_ele_type(
+				fm::get_scalar_type<vertex_id_t>()));
+	std::vector<vertex_id_t> vids = vertices->conv2std<vertex_id_t>();
 
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
