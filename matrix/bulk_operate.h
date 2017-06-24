@@ -363,6 +363,13 @@ public:
 			char *arr) const = 0;
 };
 
+class ifelse
+{
+public:
+	virtual void run(const bool *cond, size_t len, const char *arr1,
+			const char *arr2, char *arr3) const = 0;
+};
+
 class conv_layout
 {
 public:

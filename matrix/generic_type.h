@@ -225,6 +225,7 @@ class set_operate;
 class set_vec_operate;
 class generic_hashtable;
 class bulk_uoperate;
+class ifelse;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -264,6 +265,7 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual const ifelse &get_ifelse() const = 0;
 	virtual const conv_layout &get_conv() const = 0;
 	virtual const stl_algs &get_stl_algs() const = 0;
 	virtual std::shared_ptr<const set_operate> get_set_const(

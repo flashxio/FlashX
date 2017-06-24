@@ -82,6 +82,7 @@ public:
 	}
 
 	virtual const scatter_gather &get_sg() const;
+	virtual const ifelse &get_ifelse() const;
 	virtual const conv_layout &get_conv() const;
 	virtual const stl_algs &get_stl_algs() const {
 		static stl_algs_impl<T> algs;
@@ -393,6 +394,24 @@ public:
 };
 
 template<class T>
+class type_ifelse: public ifelse
+{
+public:
+	virtual void run(const bool *cond, size_t len, const char *arr1,
+			const char *arr2, char *arr3) const {
+		const T *A = reinterpret_cast<const T *>(arr1);
+		const T *B = reinterpret_cast<const T *>(arr2);
+		T *C = reinterpret_cast<T *>(arr3);
+		for (size_t i = 0; i < len; i++) {
+			if (cond[i])
+				C[i] = A[i];
+			else
+				C[i] = B[i];
+		}
+	}
+};
+
+template<class T>
 class type_conv_layout: public conv_layout
 {
 public:
@@ -488,6 +507,13 @@ const scatter_gather &scalar_type_impl<T>::get_sg() const
 {
 	static type_scatter_gather<T> sg;
 	return sg;
+}
+
+template<class T>
+const ifelse &scalar_type_impl<T>::get_ifelse() const
+{
+	static type_ifelse<T> ie;
+	return ie;
 }
 
 template<class T>
