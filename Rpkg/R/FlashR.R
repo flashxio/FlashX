@@ -2005,28 +2005,51 @@ setMethod("cbind", "fmV", function(..., deparse.level = 1) {
 #' mat <- ifelse(mat > 0.5, mat, 0)
 NULL
 
+.get.fm.mat <- function(x, dim)
+{
+	# If this is a scalar, construct a matrix.
+	if (is.atomic(x) && length(x) == 1)
+		fm.matrix(x, dim[1], dim[2])
+	else
+		fm.conv.R2FM(x)
+}
+
+.get.fm.vec <- function(x, len)
+{
+	# If this is a scalar, construct a matrix.
+	if (is.atomic(x) && length(x) == 1)
+		fm.matrix(x, len, 1)
+	else
+		fm.conv.R2FM(x)
+}
+
 #' @rdname ifelse
 setMethod("ifelse", signature(test = "fm", yes = "fm", no = "ANY"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_no", test, yes, no, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse", test, yes,
+						   .get.fm.mat(no, dim(yes)), PACKAGE="FlashR")
 			  .new.fm(ret)
 		  })
 #' @rdname ifelse
 setMethod("ifelse", signature(test = "fm", yes = "ANY", no = "fm"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse", test, .get.fm.mat(yes, dim(no)),
+						   no, PACKAGE="FlashR")
 			  .new.fm(ret)
 		  })
 #' @rdname ifelse
 setMethod("ifelse", signature(test = "fmV", yes = "fmV", no = "ANY"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_no", test, yes, no, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse", test, yes,
+						   .get.fm.vec(no, length(yes)), PACKAGE="FlashR")
 			  .new.fmV(ret)
 		  })
 #' @rdname ifelse
 setMethod("ifelse", signature(test = "fmV", yes = "ANY", no = "fmV"),
 		  function(test, yes, no) {
-			  ret <- .Call("R_FM_ifelse_yes", test, yes, no, PACKAGE="FlashR")
+			  ret <- .Call("R_FM_ifelse", test,
+						   .get.fm.vec(yes, length(no)), no,
+						   PACKAGE="FlashR")
 			  .new.fmV(ret)
 		  })
 #' @rdname ifelse
