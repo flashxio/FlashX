@@ -1,6 +1,7 @@
 import numpy as np
 import FlashPy as fp
 from scipy import linalg
+from scipy.sparse.linalg import eigsh
 from scipy.sparse.linalg import LinearOperator
 
 #from ..sparse import issparse
@@ -8,12 +9,7 @@ from scipy.sparse.linalg import LinearOperator
 def issparse(a):
     return False
 
-def svd(a, compute_uv=True, nu=None, nv=None, tol=1e-8):
-    if nu is None:
-        nu = min(a.shape)
-    if nv is None:
-        nv = min(a.shape)
-
+def svds(a, k=6, tol=0):
     if a.ndim != 2:
         raise ValueError("expect a matrix")
     n, p = a.shape
@@ -21,7 +17,6 @@ def svd(a, compute_uv=True, nu=None, nv=None, tol=1e-8):
     if n > p:
         comp_right = True
 
-    nev = max(nu, nv)
     x_prod = None
     if (issparse(a) and comp_right):
         size = p
@@ -42,13 +37,13 @@ def svd(a, compute_uv=True, nu=None, nv=None, tol=1e-8):
         multiply = LinearOperator(matvec=lambda v: x_prod.dot(v),
                 shape=(n, n))
 
-    if (x_prod is not None and (size < 100 or nev >= size / 2)):
+    if (x_prod is not None and (size < 100 or k >= size / 2)):
         x_prod = np.array(x_prod)
         vals, vecs = linalg.eigh(x_prod)
-        vals = vals[::-1][0:nev]
-        vecs = vecs[:,::-1][:,0:nev]
+        vals = vals[::-1][0:k]
+        vecs = vecs[:,::-1][:,0:k]
     else:
-        vals, vecs = linalg.eigsh(multiply, k=nev, tol=tol)
+        vals, vecs = eigsh(multiply, k=k, tol=tol)
 
     def rescale(x):
         x.set_cached(True)
@@ -56,24 +51,10 @@ def svd(a, compute_uv=True, nu=None, nv=None, tol=1e-8):
         return x.mapply_rows(scal, fp.bop_div)
 
     if (comp_right):
-        v = None
-        if (nv > 0):
-            if (nv < nev):
-                v = fp.array(vecs[:,0:nv])
-            else:
-                v = fp.array(vecs)
-        u = None
-        if (nu > 0):
-            u = rescale(a.dot(vecs[:,0:nu]))
+        v = fp.array(vecs)
+        u = rescale(a.dot(vecs))
     else:
-        u = None
-        if (nu > 0):
-            if (nu < nev):
-                u = fp.array(vecs[:,0:nu])
-            else:
-                u = fp.array(vecs)
-        v = None
-        if (nv > 0):
-            v = rescale(a.T.dot(vecs[:,0:nv]))
+        u = fp.array(vecs)
+        v = rescale(a.T.dot(vecs))
     s = np.where(vals > 0, np.sqrt(vals), 0)
     return u, s, v.T

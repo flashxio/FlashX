@@ -1,6 +1,7 @@
 import FlashPy
 import numpy as np
 from scipy import linalg
+import scipy.sparse.linalg as sp_linalg
 
 FlashPy.init_flashpy()
 
@@ -11,7 +12,7 @@ def verify(fp_arr, np_arr):
     assert fp_arr.itemsize == np_arr.itemsize
     assert fp_arr.nbytes == np_arr.nbytes
     tmp = np.array(fp_arr, copy=True)
-    assert np.all(np.absolute(tmp - np_arr) < 1e-13)
+    assert np.all(np.absolute(tmp - np_arr) < 1e-12)
 
 def verify_init(dtype):
     print("verify " + dtype)
@@ -215,7 +216,7 @@ execfile("linalg/svd.py")
 np_mat1 = np.random.normal(scale=100, size=[1000, 10])
 fp_mat1 = FlashPy.array(np_mat1)
 np_u, np_s, np_v = linalg.svd(np_mat1, full_matrices=False)
-fp_u, fp_s, fp_v = svd(fp_mat1)
+fp_u, fp_s, fp_v = svds(fp_mat1, k=min(fp_mat1.shape))
 verify(fp.absolute(fp_u), np.absolute(np_u))
 verify(fp.absolute(fp_v), np.absolute(np_v))
 assert all(abs(fp_s - np_s) / np_s < 1e-14)
@@ -223,8 +224,16 @@ assert all(abs(fp_s - np_s) / np_s < 1e-14)
 np_mat1 = np.random.normal(scale=100, size=[10, 1000])
 fp_mat1 = FlashPy.array(np_mat1)
 np_u, np_s, np_v = linalg.svd(np_mat1, full_matrices=False)
-fp_u, fp_s, fp_v = svd(fp_mat1)
+fp_u, fp_s, fp_v = svds(fp_mat1, k=min(fp_mat1.shape))
 verify(fp.absolute(fp_v), np.absolute(np_v))
+verify(fp.absolute(fp_v), np.absolute(np_v))
+assert all(abs(fp_s - np_s) / np_s < 1e-14)
+
+np_mat1 = np.random.normal(scale=100, size=[1000, 200])
+fp_mat1 = FlashPy.array(np_mat1)
+np_u, np_s, np_v = sp_linalg.svds(np_mat1, k=10)
+fp_u, fp_s, fp_v = svds(fp_mat1, k=10)
+verify(fp.absolute(fp_u), np.absolute(np_u))
 verify(fp.absolute(fp_v), np.absolute(np_v))
 assert all(abs(fp_s - np_s) / np_s < 1e-14)
 
