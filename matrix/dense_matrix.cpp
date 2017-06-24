@@ -3538,4 +3538,135 @@ void dense_matrix::print(FILE *f) const
 	}
 }
 
+namespace
+{
+
+class ifelse_portion_op: public detail::portion_mapply_op
+{
+public:
+	ifelse_portion_op(size_t out_num_rows, size_t out_num_cols,
+			const scalar_type &type): detail::portion_mapply_op(out_num_rows,
+				out_num_cols, type) {
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr(new ifelse_portion_op(
+					get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const;
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 3);
+		return std::string("ifelse(") + mats[0]->get_name() + ","
+			+ mats[1]->get_name() + "," + mats[2]->get_name() + ")";
+	}
+};
+
+void ifelse_portion_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins,
+		detail::local_matrix_store &out) const
+{
+	assert(ins.size() == 3);
+	assert(ins[0]->get_type() == get_scalar_type<bool>());
+	assert(ins[1]->get_type() == ins[2]->get_type());
+	assert(out.get_type() == ins[2]->get_type());
+	assert(ins[0]->store_layout() == ins[1]->store_layout());
+	assert(ins[0]->store_layout() == ins[2]->store_layout());
+	assert(ins[0]->store_layout() == out.store_layout());
+
+	const ifelse &ie = out.get_type().get_ifelse();
+	if (ins[0]->get_raw_arr() && ins[1]->get_raw_arr()
+			&& ins[2]->get_raw_arr() && out.get_raw_arr()) {
+		const bool *test = reinterpret_cast<const bool *>(
+				ins[0]->get_raw_arr());
+		size_t num_eles = ins[0]->get_num_rows() * ins[0]->get_num_cols();
+		ie.run(test, num_eles, ins[1]->get_raw_arr(), ins[2]->get_raw_arr(),
+				out.get_raw_arr());
+	}
+	else if (ins[0]->store_layout() == matrix_layout_t::L_ROW) {
+		detail::local_row_matrix_store::const_ptr row_in0
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[0]);
+		detail::local_row_matrix_store::const_ptr row_in1
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[1]);
+		detail::local_row_matrix_store::const_ptr row_in2
+			= std::static_pointer_cast<const detail::local_row_matrix_store>(
+					ins[2]);
+		detail::local_row_matrix_store &row_out
+			= static_cast<detail::local_row_matrix_store &>(out);
+		for (size_t i = 0; i < ins[0]->get_num_rows(); i++) {
+			const bool *test = reinterpret_cast<const bool *>(
+					row_in0->get_row(i));
+			ie.run(test, ins[0]->get_num_cols(), row_in1->get_row(i),
+					row_in2->get_row(i), row_out.get_row(i));
+		}
+	}
+	else {
+		detail::local_col_matrix_store::const_ptr col_in0
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[0]);
+		detail::local_col_matrix_store::const_ptr col_in1
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[1]);
+		detail::local_col_matrix_store::const_ptr col_in2
+			= std::static_pointer_cast<const detail::local_col_matrix_store>(
+					ins[2]);
+		detail::local_col_matrix_store &col_out
+			= static_cast<detail::local_col_matrix_store &>(out);
+		for (size_t i = 0; i < ins[0]->get_num_cols(); i++) {
+			const bool *test = reinterpret_cast<const bool *>(
+					col_in0->get_col(i));
+			ie.run(test, ins[0]->get_num_rows(), col_in1->get_col(i),
+					col_in2->get_col(i), col_out.get_col(i));
+		}
+	}
+}
+
+}
+
+dense_matrix::ptr dense_matrix::ifelse(const dense_matrix &yes,
+		const dense_matrix &no) const
+{
+	if (yes.get_type() != no.get_type()) {
+		fprintf(stderr,
+				"ifelse doesn't support yes and no of different types\n");
+		return dense_matrix::ptr();
+	}
+	if (get_num_rows() != no.get_num_rows()
+			|| get_num_cols() != no.get_num_cols()
+			|| get_num_rows() != yes.get_num_rows()
+			|| get_num_cols() != yes.get_num_cols()) {
+		fprintf(stderr, "the size of test, yes and no has to be the same\n");
+		return dense_matrix::ptr();
+	}
+
+	dense_matrix::ptr test_mat = cast_ele_type(get_scalar_type<bool>());
+	dense_matrix::ptr yes_mat = yes.clone();
+	dense_matrix::ptr no_mat = no.clone();
+
+	// We need to make sure all matrices have the same layout.
+	if (yes.store_layout() == no.store_layout())
+		test_mat = test_mat->conv2(yes.store_layout());
+	else if (test_mat->store_layout() == yes.store_layout())
+		no_mat = no.conv2(test_mat->store_layout());
+	else
+		yes_mat = yes.conv2(test_mat->store_layout());
+
+	detail::portion_mapply_op::const_ptr op
+		= detail::portion_mapply_op::const_ptr(new ifelse_portion_op(
+					test_mat->get_num_rows(), test_mat->get_num_cols(),
+					yes.get_type()));
+
+	std::vector<dense_matrix::const_ptr> mats(3);
+	mats[0] = test_mat;
+	mats[1] = yes_mat;
+	mats[2] = no_mat;
+	return mapply_ele(mats, op, test_mat->store_layout());
+}
+
 }

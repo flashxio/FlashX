@@ -359,6 +359,9 @@ public:
 	virtual dense_matrix::ptr apply(matrix_margin margin,
 			arr_apply_operate::const_ptr op) const;
 
+	virtual dense_matrix::ptr ifelse(const dense_matrix &yes,
+			const dense_matrix &no) const;
+
 	dense_matrix::ptr apply_scalar(scalar_variable::const_ptr var,
 			bulk_operate::const_ptr) const;
 
