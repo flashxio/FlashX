@@ -370,6 +370,8 @@ public:
 		else
 			return matrix_wrapper(res);
 	}
+
+	matrix_wrapper ifelse(matrix_wrapper x, matrix_wrapper y) const;
 };
 
 bool init_flashpy_c(const std::string &file);

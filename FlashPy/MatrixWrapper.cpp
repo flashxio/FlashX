@@ -336,4 +336,10 @@ bool init_flashpy_c(const std::string &conf_file)
 	}
 }
 
+matrix_wrapper matrix_wrapper::ifelse(matrix_wrapper x, matrix_wrapper y) const
+{
+	check_mat();
+	return matrix_wrapper(mat->ifelse(*x.mat, *y.mat));
+}
+
 }

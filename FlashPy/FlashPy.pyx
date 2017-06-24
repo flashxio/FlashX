@@ -136,6 +136,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
         matrix_wrapper sapply(bulk_uop_idx_t op) const
         matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const
+        matrix_wrapper ifelse(matrix_wrapper x, matrix_wrapper y) const
 
 class flagsobj:
     def __init__(self):
@@ -663,6 +664,12 @@ def sqrt(PyMatrix x):
 
 def absolute(PyMatrix x):
     return x.sapply(UOP_ABS)
+
+def where(PyMatrix condition, PyMatrix x, PyMatrix y):
+    cdef PyMatrix ret = PyMatrix()
+    ret.mat = condition.mat.ifelse(x.mat, y.mat)
+    ret.init_attr()
+    return ret
 
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
