@@ -407,6 +407,10 @@ public:
 };
 
 bool require_cast(const scalar_type &t1, const scalar_type &t2);
+/*
+ * This function returns the type that can contain more values.
+ */
+const scalar_type &get_larger_type(const scalar_type &t1, const scalar_type &t2);
 
 class set_operate;
 
