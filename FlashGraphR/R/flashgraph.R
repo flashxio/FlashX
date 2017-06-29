@@ -553,7 +553,7 @@ fg.fetch.subgraph <- function(graph, vertices,
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	ret <- .Call("R_FG_fetch_subgraph", graph, vertices, name, compress,
+	ret <- .Call("R_FG_fetch_subgraph", graph, fm.as.vector(vertices), name, compress,
 				 PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
