@@ -641,9 +641,9 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
         if (weights.ndim > 1):
             raise ValueError("weights need to be a 1D array")
         elif (axis == 0):
-            a = a.mapply_cols(weights)
+            a = a.mapply_cols(weights, OP_MUL)
         elif (axis == 1):
-            a = a.mapply_rows(weights)
+            a = a.mapply_rows(weights, OP_MUL)
         else:
             raise ValueError("invalid axis")
         wsum = sum(weights)

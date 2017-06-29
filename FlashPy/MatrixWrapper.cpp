@@ -366,6 +366,17 @@ matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
 				right->get_data().get_num_nodes());
 		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
 	}
+	else if (right->get_num_rows() == 1 && right->get_num_cols() == 1) {
+		auto val = right->get(0, 0);
+		res = left->apply_scalar(val, get_op(left->get_type(), op));
+	}
+	else if (left->get_num_rows() == 1 && left->get_num_cols() == 1) {
+		auto val = left->get(0, 0);
+		left = dense_matrix::create_const(val, right->get_num_rows(),
+				right->get_num_cols(), right->store_layout(),
+				right->get_data().get_num_nodes(), right->is_in_mem());
+		res = left->mapply2(*right, get_op(left->get_type(), op));
+	}
 	else {
 		throw std::invalid_argument(
 				"The shape of the two matrices doesn't match");
