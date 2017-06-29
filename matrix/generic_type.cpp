@@ -631,4 +631,12 @@ bool require_cast(const scalar_type &t1, const scalar_type &t2)
 	return true;
 }
 
+const scalar_type &get_larger_type(const scalar_type &t1, const scalar_type &t2)
+{
+	if (t1.get_type() > t2.get_type())
+		return t1;
+	else
+		return t2;
+}
+
 }
