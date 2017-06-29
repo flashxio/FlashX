@@ -1437,6 +1437,25 @@ detail::portion_mapply_op::const_ptr get_cols_op::transpose() const
 
 }
 
+scalar_variable::ptr dense_matrix::get(off_t row_idx, off_t col_idx) const
+{
+	// This is a little dangerous to do. The matrix might be an EM matrix.
+	// Pulling data to memory might fill all memory.
+	// Normally, I assume people only access individual elements in a large
+	// matrix.
+	if (is_virtual() || !is_in_mem())
+		move_store(true, -1);
+
+	auto mem_store = std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+			get_raw_store());
+	if (mem_store == NULL)
+		return scalar_variable::ptr();
+	scalar_variable::ptr tmp = get_type().create_scalar();
+	memcpy(tmp->get_raw(), mem_store->get(row_idx, col_idx),
+			get_type().get_size());
+	return tmp;
+}
+
 dense_matrix::ptr dense_matrix::get_col(off_t idx) const
 {
 	if (idx < 0 || (size_t) idx >= get_num_cols()) {

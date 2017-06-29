@@ -212,6 +212,8 @@ public:
 		store = mat.store;
 	}
 
+	virtual scalar_variable::ptr get(off_t row_idx, off_t col_idx) const;
+
 	/*
 	 * Get a single row or column from the matrix.
 	 * It returns a col_vec.
