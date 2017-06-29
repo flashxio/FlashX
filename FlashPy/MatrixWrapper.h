@@ -89,13 +89,15 @@ public:
 		this->var = var;
 	}
 
+	const fm::scalar_type &get_type() {
+		return var->get_type();
+	}
+
 	const char *get_raw() const {
 		return var->get_raw();
 	}
 
-	fm::scalar_variable::ptr get_var() const {
-		return var;
-	}
+	fm::scalar_variable::ptr get_var(const fm::scalar_type *type = NULL) const;
 };
 
 template<class T>
@@ -300,13 +302,7 @@ public:
 	}
 
 	matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
-			bulk_op_idx_t right_op) const {
-		check_mat();
-		m.check_mat();
-		return matrix_wrapper(mat->inner_prod(*m.mat,
-					get_op(mat->get_type(), left_op),
-					get_op(mat->get_type(), right_op)));
-	}
+			bulk_op_idx_t right_op) const;
 	matrix_wrapper multiply(matrix_wrapper m) const {
 		check_mat();
 		m.check_mat();
@@ -337,20 +333,8 @@ public:
 					get_agg(mat->get_type(), op)));
 	}
 
-	matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const {
-		check_mat();
-		vals.check_mat();
-		return matrix_wrapper(mat->mapply_cols(get_vec(vals.mat),
-					get_op(mat->get_type(), op)));
-	}
-
-	matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const {
-		check_mat();
-		vals.check_mat();
-		return matrix_wrapper(mat->mapply_rows(get_vec(vals.mat),
-					get_op(mat->get_type(), op)));
-	}
-
+	matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const;
+	matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const;
 	matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const;
 
 	matrix_wrapper sapply(bulk_uop_idx_t op) const {
@@ -362,14 +346,7 @@ public:
 			return matrix_wrapper(res);
 	}
 
-	matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const {
-		check_mat();
-		auto res = mat->apply_scalar(var.get_var(), get_op(mat->get_type(), op));
-		if (is_vector())
-			return matrix_wrapper(fm::col_vec::create(res));
-		else
-			return matrix_wrapper(res);
-	}
+	matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const;
 
 	matrix_wrapper ifelse(matrix_wrapper x, matrix_wrapper y) const;
 };

@@ -119,6 +119,14 @@ const fm::scalar_type &convT_py2fm(const std::string &t)
 		return *it->second;
 }
 
+fm::scalar_variable::ptr scalar_wrapper::get_var(const fm::scalar_type *type) const
+{
+	if (type == NULL || *type == var->get_type())
+		return var;
+	else
+		return var->cast_type(*type);
+}
+
 matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t length,
 		const std::string &t)
 {
@@ -246,32 +254,117 @@ matrix_wrapper matrix_wrapper::as_matrix() const
 		return *this;
 }
 
+matrix_wrapper matrix_wrapper::inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
+		bulk_op_idx_t right_op) const
+{
+	check_mat();
+	m.check_mat();
+	if (mat->get_type() == m.mat->get_type())
+		return matrix_wrapper(mat->inner_prod(*m.mat,
+					get_op(mat->get_type(), left_op),
+					get_op(mat->get_type(), right_op)));
+	else {
+		const scalar_type &common_type = get_larger_type(mat->get_type(),
+				m.mat->get_type());
+		dense_matrix::ptr left = mat->cast_ele_type(common_type);
+		dense_matrix::ptr right = m.mat->cast_ele_type(common_type);
+		return matrix_wrapper(left->inner_prod(*right, get_op(common_type, left_op),
+					get_op(common_type, right_op)));
+	}
+}
+
+matrix_wrapper matrix_wrapper::mapply_cols(matrix_wrapper vals,
+		bulk_op_idx_t op) const
+{
+	check_mat();
+	vals.check_mat();
+	if (mat->get_type() == vals.mat->get_type())
+		return matrix_wrapper(mat->mapply_cols(get_vec(vals.mat),
+					get_op(mat->get_type(), op)));
+	else {
+		const scalar_type &common_type = get_larger_type(mat->get_type(),
+				vals.mat->get_type());
+		dense_matrix::ptr left = mat->cast_ele_type(common_type);
+		col_vec::ptr right = col_vec::create(vals.mat->cast_ele_type(common_type));
+		return matrix_wrapper(left->mapply_cols(right, get_op(common_type, op)));
+	}
+}
+
+matrix_wrapper matrix_wrapper::mapply_rows(matrix_wrapper vals,
+		bulk_op_idx_t op) const
+{
+	check_mat();
+	vals.check_mat();
+	if (mat->get_type() == vals.mat->get_type())
+		return matrix_wrapper(mat->mapply_rows(get_vec(vals.mat),
+					get_op(mat->get_type(), op)));
+	else {
+		const scalar_type &common_type = get_larger_type(mat->get_type(),
+				vals.mat->get_type());
+		dense_matrix::ptr left = mat->cast_ele_type(common_type);
+		col_vec::ptr right = col_vec::create(vals.mat->cast_ele_type(common_type));
+		return matrix_wrapper(left->mapply_rows(right, get_op(common_type, op)));
+	}
+}
+
+matrix_wrapper matrix_wrapper::apply_scalar(scalar_wrapper var,
+		bulk_op_idx_t op) const
+{
+	check_mat();
+	dense_matrix::ptr res;
+	if (mat->get_type() == var.get_type())
+		res = mat->apply_scalar(var.get_var(), get_op(mat->get_type(), op));
+	else {
+		const scalar_type &common_type = get_larger_type(mat->get_type(),
+				var.get_type());
+		dense_matrix::ptr left = mat->cast_ele_type(common_type);
+		res = left->apply_scalar(var.get_var(&common_type),
+				get_op(left->get_type(), op));
+	}
+	if (is_vector())
+		return matrix_wrapper(fm::col_vec::create(res));
+	else
+		return matrix_wrapper(res);
+}
+
 matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
 {
 	check_mat();
 	m.check_mat();
 	fm::dense_matrix::ptr res;
+	dense_matrix::ptr left, right;
+	if (mat->get_type() == m.mat->get_type()) {
+		left = mat;
+		right = m.mat;
+	}
+	else {
+		const scalar_type &common_type = get_larger_type(mat->get_type(),
+				m.mat->get_type());
+		left = mat->cast_ele_type(common_type);
+		right = m.mat->cast_ele_type(common_type);
+	}
+
 	// If the left and right one have the same shape.
-	if (mat->get_num_rows() == m.mat->get_num_rows()
-			&& mat->get_num_cols() == m.mat->get_num_cols())
-		res = mat->mapply2(*m.mat, get_op(mat->get_type(), op));
+	if (left->get_num_rows() == right->get_num_rows()
+			&& left->get_num_cols() == right->get_num_cols())
+		res = left->mapply2(*right, get_op(left->get_type(), op));
 	// The left one is a matrix.
-	else if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1
+	else if (left->get_num_rows() > 1 && left->get_num_cols() > 1
 			// The right one is a vector.
-			&& (m.mat->get_num_rows() > 1 && m.mat->get_num_cols() == 1)
-			&& mat->get_num_cols() == m.mat->get_num_rows())
-		res = mat->mapply_rows(get_vec(m.mat), get_op(mat->get_type(), op));
+			&& (right->get_num_rows() > 1 && right->get_num_cols() == 1)
+			&& left->get_num_cols() == right->get_num_rows())
+		res = left->mapply_rows(get_vec(right), get_op(left->get_type(), op));
 	// If the left one is a vector.
-	else if ((mat->get_num_rows() > 1 && mat->get_num_cols() == 1)
-			&& mat->get_num_rows() == m.mat->get_num_cols()
+	else if ((left->get_num_rows() > 1 && left->get_num_cols() == 1)
+			&& left->get_num_rows() == right->get_num_cols()
 			// and the right one is a matrix.
-			&& m.mat->get_num_rows() > 1 && m.mat->get_num_cols() > 1) {
-		auto left = fm::col_vec::create(mat);
-		auto left_mat = fm::dense_matrix::create_repeat(left,
-				m.mat->get_num_rows(), m.mat->get_num_cols(),
+			&& right->get_num_rows() > 1 && right->get_num_cols() > 1) {
+		auto left_vec = fm::col_vec::create(left);
+		auto left_mat = fm::dense_matrix::create_repeat(left_vec,
+				right->get_num_rows(), right->get_num_cols(),
 				matrix_layout_t::L_ROW, true,
-				m.mat->get_data().get_num_nodes());
-		res = left_mat->mapply2(*m.mat, get_op(mat->get_type(), op));
+				right->get_data().get_num_nodes());
+		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
 	}
 	else {
 		throw std::invalid_argument(
