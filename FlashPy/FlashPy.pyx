@@ -307,6 +307,16 @@ cdef class PyMatrix:
     def prod(self, axis=None, dtype=None, out=None, keepdims=False):
         return self.aggregate_(OP_MUL, axis, dtype, out, keepdims)
 
+    def mean(self, axis=None, dtype=None, out=None, keepdims=False):
+        cdef PyMatrix a = self
+        if (not a.mat.is_floating_point()):
+            a = a.cast_ele_type("d")
+        s = a.sum(axis, dtype, out, keepdims)
+        if axis is None:
+            return s/a.mat.get_num_rows()/a.mat.get_num_cols()
+        else:
+            return s/a.shape[axis]
+
     # These are specific for FlashMatrix.
 
     def set_cached(self, cached):
@@ -632,14 +642,7 @@ def prod(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
     return a.prod(axis, dtype, out, keepdims)
 
 def mean(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    if (not a.mat.is_floating_point()):
-        a = a.cast_ele_type("d")
-    # TODO I shouldn't cast it to ndarray.
-    s = np.array(sum(a, axis, dtype, out, keepdims), copy=True)
-    if axis is None:
-        return s/a.mat.get_num_rows()/a.mat.get_num_cols()
-    else:
-        return s/a.shape[axis]
+    return a.mean(axis, dtype, out, keepdims)
 
 def average(PyMatrix a, axis=None, weights=None, returned=False):
     if weights is not None and axis is None:
