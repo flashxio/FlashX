@@ -250,10 +250,10 @@ cdef class PyMatrix:
 
     def __getitem__(self, key):
         cdef PyMatrix ret = PyMatrix()
-        if (isinstance(key, tuple)):
+        if (isinstance(key, tuple) and len(key) >= 2):
             if (len(key) > 2):
                 raise IndexError("too many indices for array")
-            if (self.shape[0] > self.shape[1]):
+            if (self.ndim == 1 or self.shape[0] > self.shape[1]):
                 ret = self.get_cols(key[1])
                 ret = ret.get_rows(key[0])
             else:
@@ -331,7 +331,9 @@ cdef class PyMatrix:
             cidxs = idxs
             ret.mat = self.mat.get_rows(cidxs)
         elif (isinstance(idxs, slice)):
-            if (idxs.step is None):
+            if (idxs.start is None and idxs.stop is None and idxs.step is None):
+                ret.mat = self.mat
+            elif (idxs.step is None):
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, 1)
             else:
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, idxs.step)
@@ -357,7 +359,9 @@ cdef class PyMatrix:
             cidxs = idxs
             ret.mat = self.mat.get_cols(cidxs)
         elif (isinstance(idxs, slice)):
-            if (idxs.step is None):
+            if (idxs.start is None and idxs.stop is None and idxs.step is None):
+                ret.mat = self.mat
+            elif (idxs.step is None):
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, 1)
             else:
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, idxs.step)
