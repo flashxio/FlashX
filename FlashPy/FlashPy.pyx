@@ -333,6 +333,7 @@ cdef class PyMatrix:
 
     def get_rows(self, idxs):
         cdef PyMatrix ret = PyMatrix()
+        cdef long *addr
         cdef vector[long] cidxs
         cdef array.array idx_arr
         if (np.isscalar(idxs)):
@@ -347,20 +348,24 @@ cdef class PyMatrix:
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, 1)
             else:
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, idxs.step)
-        elif (isinstance(idxs, array.array)):
-            idx_arr = idxs
-            cidxs.assign(idx_arr.data.as_longs, idx_arr.data.as_longs + len(idxs))
+        elif (isinstance(idxs, np.ndarray)):
+            idxs = np.array(idxs, dtype='l')
+            addr = <long *>np.PyArray_DATA(idxs)
+            cidxs.assign(addr, addr + len(idxs))
             ret.mat = self.mat.get_rows(cidxs)
         elif (idxs is None):
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
             # If this is a vector, we return a one-row matrix.
             return self.as_matrix().transpose()
+        else:
+            raise ValueError("invalid index")
         ret.init_attr()
         return ret
 
     def get_cols(self, idxs):
         cdef PyMatrix ret = PyMatrix()
+        cdef long *addr
         cdef vector[long] cidxs
         cdef array.array idx_arr
         if (np.isscalar(idxs)):
@@ -375,15 +380,18 @@ cdef class PyMatrix:
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, 1)
             else:
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, idxs.step)
-        elif (isinstance(idxs, array.array)):
-            idx_arr = idxs
-            cidxs.assign(idx_arr.data.as_longs, idx_arr.data.as_longs + len(idxs))
+        elif (isinstance(idxs, np.ndarray)):
+            idxs = np.array(idxs, dtype='l')
+            addr = <long *>np.PyArray_DATA(idxs)
+            cidxs.assign(addr, addr + len(idxs))
             ret.mat = self.mat.get_cols(cidxs)
         elif (idxs is None):
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
             # If this is a vector, we return a one-col matrix.
             return self.as_matrix()
+        else:
+            raise ValueError("invalid index")
         ret.init_attr()
         return ret
 
