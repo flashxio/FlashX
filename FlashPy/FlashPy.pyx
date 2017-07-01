@@ -294,12 +294,18 @@ cdef class PyMatrix:
     def dot(self, b, out=None):
         cdef PyMatrix res = PyMatrix()
         if (self.ndim == 1 and b.ndim == 1):
-            res = as_matrix(self).transpose().multiply(b)
+            res = self.as_matrix().transpose().multiply(b)
         else:
             res = self.multiply(b)
         if (out is not None):
             out.assign(res)
         return res
+
+    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
+        return self.aggregate_(OP_ADD, axis, dtype, out, keepdims)
+
+    def prod(self, axis=None, dtype=None, out=None, keepdims=False):
+        return self.aggregate_(OP_MUL, axis, dtype, out, keepdims)
 
     # These are specific for FlashMatrix.
 
@@ -337,7 +343,7 @@ cdef class PyMatrix:
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
             # If this is a vector, we return a one-row matrix.
-            return as_matrix(self).transpose()
+            return self.as_matrix().transpose()
         ret.init_attr()
         return ret
 
@@ -363,7 +369,7 @@ cdef class PyMatrix:
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
             # If this is a vector, we return a one-col matrix.
-            return as_matrix(self)
+            return self.as_matrix()
         ret.init_attr()
         return ret
 
@@ -407,6 +413,36 @@ cdef class PyMatrix:
             mat = array(obj)
         ret.mat = self.mat.multiply(mat.mat)
         ret.init_attr()
+        return ret
+
+    def as_vector(self):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.as_vector()
+        ret.init_attr()
+        return ret
+
+    def as_matrix(self):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.as_matrix()
+        ret.init_attr()
+        return ret
+
+    def aggregate_(self, op, axis=None, dtype=None, out=None, keepdims=False):
+        cdef PyMatrix ret = PyMatrix()
+        cdef PyMatrix a = self
+        if dtype is not None:
+            a = a.cast_ele_type(dtype)
+        if axis is None:
+            ret = a.aggregate(op).as_vector()
+        elif (axis == 0):
+            ret = a.agg_col(op).as_vector()
+        elif (axis == 1):
+            ret = a.agg_row(op).as_vector()
+        else:
+            raise ValueError("invalid axis")
+        # TODO let's ignore keepdims for now.
+        if out is not None:
+            out.assign(ret)
         return ret
 
     # These are generalized functions.
@@ -585,40 +621,11 @@ def arange(start, stop, step=1, dtype=None):
     ret.init_attr()
     return ret
 
-def as_vector(PyMatrix a):
-    cdef PyMatrix ret = PyMatrix()
-    ret.mat = a.mat.as_vector()
-    ret.init_attr()
-    return ret
-
-def as_matrix(PyMatrix a):
-    cdef PyMatrix ret = PyMatrix()
-    ret.mat = a.mat.as_matrix()
-    ret.init_attr()
-    return ret
-
-def aggregate(PyMatrix a, op, axis=None, dtype=None, out=None, keepdims=False):
-    cdef PyMatrix ret = PyMatrix()
-    if dtype is not None:
-        a = a.cast_ele_type(dtype)
-    if axis is None:
-        ret = as_vector(a.aggregate(op))
-    elif (axis == 0):
-        ret = as_vector(a.agg_col(op))
-    elif (axis == 1):
-        ret = as_vector(a.agg_row(op))
-    else:
-        raise ValueError("invalid axis")
-    # TODO let's ignore keepdims for now.
-    if out is not None:
-        out.assign(ret)
-    return ret
-
 def sum(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    return aggregate(a, OP_ADD, axis, dtype, out, keepdims)
+    return a.sum(axis, dtype, out, keepdims)
 
 def prod(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    return aggregate(a, OP_MUL, axis, dtype, out, keepdims)
+    return a.prod(axis, dtype, out, keepdims)
 
 def mean(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
     if (not a.mat.is_floating_point()):
