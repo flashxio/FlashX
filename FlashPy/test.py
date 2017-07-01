@@ -2,6 +2,7 @@ import FlashPy
 import numpy as np
 from scipy import linalg
 import scipy.sparse.linalg as sp_linalg
+import sparse as fp_sparse
 
 FlashPy.init_flashpy()
 
@@ -83,6 +84,10 @@ np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = FlashPy.array(np_mat1)
 np_mat2 = np.random.normal(scale=100, size=[25, 10])
 fp_mat2 = FlashPy.array(np_mat2)
+np_vec2 = np.random.normal(scale=100, size=25)
+fp_vec2 = FlashPy.array(np_vec2)
+np_vec3 = np.random.normal(scale=100, size=10)
+fp_vec3 = FlashPy.array(np_vec3)
 
 verify(fp_mat1[1], np_mat1[1])
 verify(fp_mat1[1:3], np_mat1[1:3])
@@ -93,9 +98,35 @@ idx = [1, 3, 5]
 verify(fp_mat1[idx], np_mat1[idx])
 verify(fp_mat1[idx, idx], np_mat1[idx, idx])
 
+print("test reshape")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = FlashPy.array(np_mat1)
+fp_mat1.reshape(-1, 1)
+
 print("test +")
 fp_res = fp_mat1 + fp_mat2
 np_res = np_mat1 + np_mat2
+verify(fp_res, np_res)
+fp_res = fp_mat1 + 1
+np_res = np_mat1 + 1
+verify(fp_res, np_res)
+fp_res = fp_mat1 + fp_vec3
+np_res = np_mat1 + np_vec3
+verify(fp_res, np_res)
+fp_res = fp_vec3 + fp_mat1
+np_res = np_vec3 + np_mat1
+verify(fp_res, np_res)
+fp_res = fp_mat1 + fp_vec3[np.newaxis,:]
+np_res = np_mat1 + np_vec3[np.newaxis,:]
+verify(fp_res, np_res)
+fp_res = fp_mat1 + fp_vec2[:,np.newaxis]
+np_res = np_mat1 + np_vec2[:,np.newaxis]
+verify(fp_res, np_res)
+fp_res = fp_vec3[np.newaxis,:] + fp_mat1
+np_res = np_vec3[np.newaxis,:] + np_mat1
+verify(fp_res, np_res)
+fp_res = fp_vec2[:,np.newaxis] + fp_mat1
+np_res = np_vec2[:,np.newaxis] + np_mat1
 verify(fp_res, np_res)
 
 print("test -")

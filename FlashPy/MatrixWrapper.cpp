@@ -348,24 +348,6 @@ matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
 	if (left->get_num_rows() == right->get_num_rows()
 			&& left->get_num_cols() == right->get_num_cols())
 		res = left->mapply2(*right, get_op(left->get_type(), op));
-	// The left one is a matrix.
-	else if (left->get_num_rows() > 1 && left->get_num_cols() > 1
-			// The right one is a vector.
-			&& (right->get_num_rows() > 1 && right->get_num_cols() == 1)
-			&& left->get_num_cols() == right->get_num_rows())
-		res = left->mapply_rows(get_vec(right), get_op(left->get_type(), op));
-	// If the left one is a vector.
-	else if ((left->get_num_rows() > 1 && left->get_num_cols() == 1)
-			&& left->get_num_rows() == right->get_num_cols()
-			// and the right one is a matrix.
-			&& right->get_num_rows() > 1 && right->get_num_cols() > 1) {
-		auto left_vec = fm::col_vec::create(left);
-		auto left_mat = fm::dense_matrix::create_repeat(left_vec,
-				right->get_num_rows(), right->get_num_cols(),
-				matrix_layout_t::L_ROW, true,
-				right->get_data().get_num_nodes());
-		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
-	}
 	else if (right->get_num_rows() == 1 && right->get_num_cols() == 1) {
 		auto val = right->get(0, 0);
 		res = left->apply_scalar(val, get_op(left->get_type(), op));
@@ -376,6 +358,61 @@ matrix_wrapper matrix_wrapper::mapply2(matrix_wrapper m, bulk_op_idx_t op) const
 				right->get_num_cols(), right->store_layout(),
 				right->get_data().get_num_nodes(), right->is_in_mem());
 		res = left->mapply2(*right, get_op(left->get_type(), op));
+	}
+	// The left one is a matrix.
+	else if (left->get_num_rows() > 1 && left->get_num_cols() > 1
+			// The right one is a vector.
+			&& m.is_vector()
+			&& left->get_num_cols() == right->get_num_rows())
+		res = left->mapply_rows(get_vec(right), get_op(left->get_type(), op));
+	// If the left one is a vector.
+	else if (is_vector() && left->get_num_rows() == right->get_num_cols()
+			// and the right one is a matrix.
+			&& right->get_num_rows() > 1 && right->get_num_cols() > 1) {
+		auto left_vec = fm::col_vec::create(left);
+		auto left_mat = fm::dense_matrix::create_repeat(left_vec,
+				right->get_num_rows(), right->get_num_cols(),
+				matrix_layout_t::L_ROW, true,
+				right->get_data().get_num_nodes());
+		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
+	}
+	else if (left->get_num_rows() > 1 && left->get_num_cols() > 1
+			// The right one is a one-col matrix.
+			&& (right->get_num_rows() > 1 && right->get_num_cols() == 1)
+			&& left->get_num_rows() == right->get_num_rows()) {
+		auto right_vec = fm::col_vec::create(right);
+		res = left->mapply_cols(right_vec, get_op(left->get_type(), op));
+	}
+	else if (left->get_num_rows() > 1 && left->get_num_cols() > 1
+			// The right one is a one-row matrix.
+			&& (right->get_num_rows() == 1 && right->get_num_cols() > 1)
+			&& left->get_num_cols() == right->get_num_cols()) {
+		auto right_vec = fm::col_vec::create(right);
+		res = left->mapply_rows(right_vec, get_op(left->get_type(), op));
+	}
+	// If the left one is a one-col matrix.
+	else if ((left->get_num_rows() > 1 && left->get_num_cols() == 1)
+			&& left->get_num_rows() == right->get_num_rows()
+			// and the right one is a matrix.
+			&& right->get_num_rows() > 1 && right->get_num_cols() > 1) {
+		auto left_vec = fm::col_vec::create(left);
+		auto left_mat = fm::dense_matrix::create_repeat(left_vec,
+				right->get_num_rows(), right->get_num_cols(),
+				matrix_layout_t::L_COL, false,
+				right->get_data().get_num_nodes());
+		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
+	}
+	// If the left one is a one-row matrix.
+	else if ((left->get_num_rows() == 1 && left->get_num_cols() > 1)
+			&& left->get_num_cols() == right->get_num_cols()
+			// and the right one is a matrix.
+			&& right->get_num_rows() > 1 && right->get_num_cols() > 1) {
+		auto left_vec = fm::col_vec::create(left);
+		auto left_mat = fm::dense_matrix::create_repeat(left_vec,
+				right->get_num_rows(), right->get_num_cols(),
+				matrix_layout_t::L_ROW, true,
+				right->get_data().get_num_nodes());
+		res = left_mat->mapply2(*right, get_op(left->get_type(), op));
 	}
 	else {
 		throw std::invalid_argument(
