@@ -129,25 +129,47 @@ fp_res = fp_vec2[:,np.newaxis] + fp_mat1
 np_res = np_vec2[:,np.newaxis] + np_mat1
 verify(fp_res, np_res)
 
+fp_mat1 += fp_mat2
+np_mat1 += np_mat2
+verify(fp_mat1, np_mat1)
+
 print("test -")
 fp_res = fp_mat1 - fp_mat2
 np_res = np_mat1 - np_mat2
 verify(fp_res, np_res)
+
+fp_mat1 -= fp_mat2
+np_mat1 -= np_mat2
+verify(fp_mat1, np_mat1)
 
 print("test *")
 fp_res = FlashPy.array(np_mat1, "l") * FlashPy.array(np_mat2, "l")
 np_res = np.array(np_mat1, "l") * np.array(np_mat2, "l")
 verify(fp_res, np_res)
 
+fp_tmp = FlashPy.array(np_mat1, "l")
+np_tmp = np.array(np_mat1, "l")
+fp_tmp *= FlashPy.array(fp_mat2, "l")
+np_tmp *= np.array(np_mat2, "l")
+verify(fp_tmp, np_tmp)
+
 print("test /")
 fp_res = fp_mat1 / fp_mat2
 np_res = np_mat1 / np_mat2
 verify(fp_res, np_res)
 
+fp_mat1 /= fp_mat2
+np_mat1 /= np_mat2
+verify(fp_mat1, np_mat1)
+
 print("test //")
 fp_res = fp_mat1 // fp_mat2
 np_res = np_mat1 // np_mat2
 verify(fp_res, np_res)
+
+fp_mat1 //= fp_mat2
+np_mat1 //= np_mat2
+verify(fp_mat1, np_mat1)
 
 print("test abs")
 fp_res = abs(fp_mat1)
