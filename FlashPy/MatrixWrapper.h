@@ -125,10 +125,6 @@ class matrix_wrapper
 			throw std::invalid_argument("invalid matrix");
 	}
 
-	bool is_valid() const {
-		return mat != NULL;
-	}
-
 	static fm::matrix_layout_t get_layout(const std::string &layout) {
 		// The layout used by FORTRAN
 		if (layout == "F")
@@ -162,6 +158,10 @@ public:
 
 	matrix_wrapper(fm::dense_matrix::ptr mat) {
 		this->mat = mat;
+	}
+
+	bool is_valid() const {
+		return mat != NULL;
 	}
 
 	bool is_vector() const;

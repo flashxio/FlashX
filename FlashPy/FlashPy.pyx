@@ -118,6 +118,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         bool is_in_mem() const
         bool is_virtual() const
         bool is_vector() const
+        bool is_valid() const
 
         bool materialize_self() const
         matrix_wrapper cast_ele_type(string dtyp) const
@@ -321,6 +322,8 @@ cdef class PyMatrix:
         return ret
 
     def init_attr(self, T=None):
+        if (not self.mat.is_valid()):
+            raise ValueError("invalid matrix")
         if (self.mat.is_vector()):
             self.shape = (self.mat.get_num_rows(),)
             self.ndim = 1
@@ -379,6 +382,16 @@ cdef class PyMatrix:
 
     def max(self, axis=None, out=None, keepdims=False):
         return self.aggregate_(AGG_MAX, axis, None, out, keepdims)
+
+    def argmin(self, axis=None, out=None):
+        cdef PyMatrix ret = self.aggregate_(AGG_ARGMIN, axis, None, out, False)
+        # ARGMIN return int32, but we want int64 to match NumPy
+        return ret.cast_ele_type("l")
+
+    def argmax(self, axis=None, out=None):
+        cdef PyMatrix ret = self.aggregate_(AGG_ARGMAX, axis, None, out, False)
+        # ARGMIN return int32, but we want int64 to match NumPy
+        return ret.cast_ele_type("l")
 
     # These are specific for FlashMatrix.
 

@@ -379,6 +379,15 @@ fp_res = fp_mat1.min(axis=0)
 np_res = np_mat1.min(axis=0)
 verify(fp_res, np_res)
 
+print("test argmin/argmax")
+fp_res = fp_mat1.argmin(axis=1)
+np_res = np_mat1.argmin(axis=1)
+verify(fp_res, np_res)
+
+fp_res = fp_mat1.argmax(axis=1)
+np_res = np_mat1.argmax(axis=1)
+verify(fp_res, np_res)
+
 print("test minimum/maximum")
 fp_res = FlashPy.minimum(fp_mat1, fp_mat2)
 np_res = np.minimum(np_mat1, np_mat2)
