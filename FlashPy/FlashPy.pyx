@@ -134,6 +134,8 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
 
         matrix_wrapper set_cols(const vector[long] &idxs, matrix_wrapper cols)
         matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows)
+        matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols)
+        matrix_wrapper set_rows(long start, long stop, long step, matrix_wrapper rows)
         bool copy_rows_to(char *arr, size_t len) const
         matrix_wrapper transpose() const
         matrix_wrapper conv_store(bool in_mem, int num_nodes) const
@@ -151,6 +153,12 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper sapply(bulk_uop_idx_t op) const
         matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const
         matrix_wrapper ifelse(matrix_wrapper x, matrix_wrapper y) const
+
+def is_idx_range_all(idxs):
+    if (isinstance(idxs, slice)):
+        if (idxs.start is None and idxs.stop is None and idxs.step is None):
+            return True
+    return False
 
 class flagsobj:
     def __init__(self):
@@ -321,6 +329,19 @@ cdef class PyMatrix:
             ret = self.get_rows(key)
         return ret
 
+    def __setitem__(self, key, val):
+        if (isinstance(key, tuple) and len(key) >= 2):
+            if (len(key) > 2):
+                raise IndexError("too many indices for array")
+            elif (is_idx_range_all(key[0])):
+                self.set_cols(key[1], val)
+            elif (is_idx_range_all(key[1])):
+                self.set_rows(key[0], val)
+            else:
+                raise IndexError("can't set individual elements")
+        else:
+            self.set_rows(key, val)
+
     def init_attr(self, T=None):
         if (not self.mat.is_valid()):
             raise ValueError("invalid matrix")
@@ -411,14 +432,13 @@ cdef class PyMatrix:
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
-        cdef array.array idx_arr
         if (np.isscalar(idxs)):
             ret.mat = self.mat.get_row(idxs)
         elif (isinstance(idxs, list)):
             cidxs = idxs
             ret.mat = self.mat.get_rows(cidxs)
         elif (isinstance(idxs, slice)):
-            if (idxs.start is None and idxs.stop is None and idxs.step is None):
+            if (is_idx_range_all(idxs)):
                 ret.mat = self.mat
             elif (idxs.step is None):
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, 1)
@@ -443,14 +463,13 @@ cdef class PyMatrix:
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
-        cdef array.array idx_arr
         if (np.isscalar(idxs)):
             ret.mat = self.mat.get_col(idxs)
         elif (isinstance(idxs, list)):
             cidxs = idxs
             ret.mat = self.mat.get_cols(cidxs)
         elif (isinstance(idxs, slice)):
-            if (idxs.start is None and idxs.stop is None and idxs.step is None):
+            if (is_idx_range_all(idxs)):
                 ret.mat = self.mat
             elif (idxs.step is None):
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, 1)
@@ -470,6 +489,74 @@ cdef class PyMatrix:
             raise ValueError("invalid index")
         ret.init_attr()
         return ret
+
+    def set_rows(self, idxs, vals):
+        cdef long *addr
+        cdef vector[long] cidxs
+        if (np.isscalar(idxs)):
+            idxs = [idxs]
+
+        cdef PyMatrix rows
+        if (isinstance(vals, PyMatrix)):
+            rows = vals
+        else:
+            rows = array(vals)
+        if (isinstance(idxs, list)):
+            cidxs = idxs
+            self.mat = self.mat.set_rows(cidxs, rows.mat)
+        elif (isinstance(idxs, slice)):
+            if (is_idx_range_all(idxs)):
+                if (self.ndim == rows.ndim and self.shape == rows.shape
+                        and self.dtype == rows.dtype):
+                    self.assign(rows)
+                else:
+                    raise ValueError("vals doesn't match the shape of this matrix")
+            elif (idxs.step is None):
+                self.mat = self.mat.set_rows(idxs.start, idxs.stop, 1, rows.mat)
+            else:
+                self.mat = self.mat.set_rows(idxs.start, idxs.stop, idxs.step, rows.mat)
+        elif (isinstance(idxs, np.ndarray)):
+            idxs = np.array(idxs, dtype='l')
+            addr = <long *>np.PyArray_DATA(idxs)
+            cidxs.assign(addr, addr + len(idxs))
+            self.mat = self.mat.set_rows(cidxs, rows.mat)
+        else:
+            raise ValueError("invalid index")
+        self.init_attr()
+
+    def set_cols(self, idxs, vals):
+        cdef long *addr
+        cdef vector[long] cidxs
+        if (np.isscalar(idxs)):
+            idxs = [idxs]
+
+        cdef PyMatrix cols
+        if (isinstance(vals, PyMatrix)):
+            cols = vals
+        else:
+            cols = array(vals)
+        if (isinstance(idxs, list)):
+            cidxs = idxs
+            self.mat = self.mat.set_cols(cidxs, cols.mat)
+        elif (isinstance(idxs, slice)):
+            if (is_idx_range_all(idxs)):
+                if (self.ndim == cols.ndim and self.shape == cols.shape
+                        and self.dtype == cols.dtype):
+                    self.assign(cols)
+                else:
+                    raise ValueError("vals doesn't match the shape of this matrix")
+            elif (idxs.step is None):
+                self.mat = self.mat.set_cols(idxs.start, idxs.stop, 1, cols.mat)
+            else:
+                self.mat = self.mat.set_cols(idxs.start, idxs.stop, idxs.step, cols.mat)
+        elif (isinstance(idxs, np.ndarray)):
+            idxs = np.array(idxs, dtype='l')
+            addr = <long *>np.PyArray_DATA(idxs)
+            cidxs.assign(addr, addr + len(idxs))
+            self.mat = self.mat.set_cols(cidxs, cols.mat)
+        else:
+            raise ValueError("invalid index")
+        self.init_attr()
 
     def transpose(self):
         if (self.ndim < 2):

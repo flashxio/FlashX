@@ -80,6 +80,7 @@ verify(fp_mat1, np_mat1)
 np_mat1 = np.array(fp_mat1, copy=True)
 verify(fp_mat1, np_mat1)
 
+print("test indexing (get)")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = FlashPy.array(np_mat1)
 np_mat2 = np.random.normal(scale=100, size=[25, 10])
@@ -97,6 +98,42 @@ verify(fp_mat1[1:7:2, 1:7:2], np_mat1[1:7:2, 1:7:2])
 idx = [1, 3, 5]
 verify(fp_mat1[idx], np_mat1[idx])
 verify(fp_mat1[idx, idx], np_mat1[idx, idx])
+
+print("test indexing (set)")
+np_mat1[:] = np_mat2
+fp_mat1[:] = fp_mat2
+verify(fp_mat1, np_mat1)
+
+print("test1")
+tmp = np.random.normal(scale=100, size=25)
+np_mat1[:,1] = tmp
+fp_mat1[:,1] = FlashPy.array(tmp)
+verify(fp_mat1, np_mat1)
+
+print("test2")
+tmp = np.random.normal(scale=100, size=[25, 4])
+np_mat1[:,1:9:2] = tmp
+fp_mat1[:,1:9:2] = FlashPy.array(tmp)
+verify(fp_mat1, np_mat1)
+
+np_mat1 = np_mat1.T
+fp_mat1 = fp_mat1.T
+
+print("test3")
+tmp = np.array(np.random.normal(scale=100, size=[1, 25]))
+np_mat1[1,:] = tmp
+tmp2 = fp_mat1
+fp_mat1[1,:] = FlashPy.array(tmp)
+verify(fp_mat1, np_mat1)
+
+print("test4")
+tmp = np.random.normal(scale=100, size=[4, 25])
+np_mat1[1:9:2,:] = tmp
+fp_mat1[1:9:2,:] = FlashPy.array(tmp)
+verify(fp_mat1, np_mat1)
+
+np_mat1 = np_mat1.T
+fp_mat1 = fp_mat1.T
 
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = FlashPy.array(np_mat1)

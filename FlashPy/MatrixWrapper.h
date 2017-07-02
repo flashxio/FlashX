@@ -289,6 +289,16 @@ public:
 		return matrix_wrapper(mat->set_rows(idxs, rows.mat));
 	}
 
+	matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols) {
+		check_mat();
+		return matrix_wrapper(mat->set_cols(start, stop, step, cols.mat));
+	}
+
+	matrix_wrapper set_rows(long start, long stop, long step, matrix_wrapper rows) {
+		check_mat();
+		return matrix_wrapper(mat->set_rows(start, stop, step, rows.mat));
+	}
+
 	matrix_wrapper transpose() const {
 		check_mat();
 		return matrix_wrapper(mat->transpose());
