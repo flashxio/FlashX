@@ -773,6 +773,100 @@ public:
 	}
 };
 
+template<class T>
+class argmax_operate: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
+		int *t_out = (int *) output;
+		const T *t_in = (const T *) in;
+		if (num_eles == 0)
+			return;
+		T max = t_in[0];
+		int idx = 0;
+		for (size_t i = 1; i < num_eles; i++) {
+			if (max < t_in[i]) {
+				max = t_in[i];
+				idx = i;
+			}
+		}
+		t_out[0] = idx;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<int>();
+	}
+	virtual std::string get_name() const {
+		return "argmax";
+	}
+};
+
+template<class T>
+class argmin_operate: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		throw unsupported_exception();
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		throw unsupported_exception();
+	}
+
+	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
+		int *t_out = (int *) output;
+		const T *t_in = (const T *) in;
+		if (num_eles == 0)
+			return;
+		T min = t_in[0];
+		int idx = 0;
+		for (size_t i = 1; i < num_eles; i++) {
+			if (min > t_in[i]) {
+				min = t_in[i];
+				idx = i;
+			}
+		}
+		t_out[0] = idx;
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<T>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<int>();
+	}
+	virtual std::string get_name() const {
+		return "argmin";
+	}
+};
+
 template<class InType, class OutType>
 class agg_ops_impl: public agg_ops
 {
@@ -780,15 +874,38 @@ public:
 	agg_ops_impl() {
 		bulk_operate::const_ptr count_agg
 			= bulk_operate::const_ptr(new count_operate<InType>());
-		count = agg_operate::create(count_agg,
+		ops[COUNT] = agg_operate::create(count_agg,
 				bulk_operate::conv2ptr(
 					count_agg->get_output_type().get_basic_ops().get_add()));
-		find_next = agg_operate::create(
+		ops[FIND_NEXT] = agg_operate::create(
 				bulk_operate::const_ptr(new find_next_impl<InType>()),
 				bulk_operate::const_ptr());
-		find_prev = agg_operate::create(
+		ops[FIND_PREV] = agg_operate::create(
 				bulk_operate::const_ptr(new find_prev_impl<InType>()),
 				bulk_operate::const_ptr());
+		ops[ARGMIN] = agg_operate::create(
+				bulk_operate::const_ptr(new argmin_operate<InType>()),
+				bulk_operate::const_ptr());
+		ops[ARGMAX] = agg_operate::create(
+				bulk_operate::const_ptr(new argmax_operate<InType>()),
+				bulk_operate::const_ptr());
+
+		auto min = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::MIN));
+		ops[MIN] = agg_operate::create(min, min);
+		auto max = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::MAX));
+		ops[MAX] = agg_operate::create(max, max);
+		auto add = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::ADD));
+		ops[SUM] = agg_operate::create(add, add);
+		auto mul = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::MUL));
+		ops[PROD] = agg_operate::create(mul, mul);
 	}
 };
 
