@@ -228,6 +228,29 @@ fp_res = FlashPy.mean(fp_mat1, axis=1)
 np_res = np.mean(np_mat1, axis=1)
 verify(fp_res, np_res)
 
+print("test min/max")
+fp_res = fp_mat1.min()
+np_res = np_mat1.min()
+tmp = np.array(fp_res, copy=True)
+assert tmp[0] == np_res
+
+fp_res = fp_mat1.min(axis=1)
+np_res = np_mat1.min(axis=1)
+verify(fp_res, np_res)
+
+fp_res = fp_mat1.min(axis=0)
+np_res = np_mat1.min(axis=0)
+verify(fp_res, np_res)
+
+print("test minimum/maximum")
+fp_res = FlashPy.minimum(fp_mat1, fp_mat2)
+np_res = np.minimum(np_mat1, np_mat2)
+verify(fp_res, np_res)
+
+fp_res = FlashPy.maximum(fp_mat1, fp_mat2)
+np_res = np.maximum(np_mat1, np_mat2)
+verify(fp_res, np_res)
+
 print("test dot on matrix")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = FlashPy.array(np_mat1, dtype="l")

@@ -317,6 +317,12 @@ cdef class PyMatrix:
         else:
             return s/a.shape[axis]
 
+    def min(self, axis=None, out=None, keepdims=False):
+        return self.aggregate_(OP_MIN, axis, None, out, keepdims)
+
+    def max(self, axis=None, out=None, keepdims=False):
+        return self.aggregate_(OP_MAX, axis, None, out, keepdims)
+
     # These are specific for FlashMatrix.
 
     def set_cached(self, cached):
@@ -692,6 +698,30 @@ def where(PyMatrix condition, PyMatrix x, PyMatrix y):
     ret.mat = condition.mat.ifelse(x.mat, y.mat)
     ret.init_attr()
     return ret
+
+def maximum(x1, x2, out=None):
+    cdef PyMatrix res
+    if (isinstance(x1, PyMatrix)):
+        res = x1.mapply2(x2, OP_MAX)
+    elif (isinstance(x2, PyMatrix)):
+        res = x2.mapply2(x1, OP_MAX)
+    else:
+        raise ValueError("unknown input type")
+    if (out is not None):
+        out.assign(res)
+    return res
+
+def minimum(x1, x2, out=None):
+    cdef PyMatrix res
+    if (isinstance(x1, PyMatrix)):
+        res = x1.mapply2(x2, OP_MIN)
+    elif (isinstance(x2, PyMatrix)):
+        res = x2.mapply2(x1, OP_MIN)
+    else:
+        raise ValueError("unknown input type")
+    if (out is not None):
+        out.assign(res)
+    return res
 
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
