@@ -98,20 +98,41 @@ public:
 class agg_ops
 {
 protected:
-	agg_operate::const_ptr count;
-	agg_operate::const_ptr find_next;
-	agg_operate::const_ptr find_prev;
+	std::vector<agg_operate::const_ptr> ops;
 public:
+	enum op_idx {
+		COUNT,
+		FIND_NEXT,
+		FIND_PREV,
+		ARGMIN,
+		ARGMAX,
+		MIN,
+		MAX,
+		SUM,
+		PROD,
+		NUM_OPS,
+	};
+
 	typedef std::shared_ptr<agg_ops> ptr;
 
+	agg_ops() {
+		ops.resize(NUM_OPS);
+	}
+
 	agg_operate::const_ptr get_count() const {
-		return count;
+		return ops[COUNT];
 	}
 	agg_operate::const_ptr get_find_next() const {
-		return find_next;
+		return ops[FIND_NEXT];
 	}
 	agg_operate::const_ptr get_find_prev() const {
-		return find_prev;
+		return ops[FIND_PREV];
+	}
+
+	agg_operate::const_ptr get_op(op_idx idx) const {
+		if (idx >= NUM_OPS)
+			return agg_operate::const_ptr();
+		return ops[(int) idx];
 	}
 };
 
