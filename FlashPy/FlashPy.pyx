@@ -687,8 +687,13 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
 def dot(PyMatrix a, b, out=None):
     return a.dot(b, out)
 
-def sqrt(PyMatrix x):
-    return x.sapply(UOP_SQRT)
+def sqrt(PyMatrix x, out=None):
+    if (out is None):
+        return x.sapply(UOP_SQRT)
+    else:
+        tmp = x.sapply(UOP_SQRT)
+        out.assign(tmp)
+        return tmp
 
 def absolute(PyMatrix x):
     return x.sapply(UOP_ABS)
