@@ -2312,7 +2312,11 @@ dense_matrix::ptr dense_matrix::aggregate(matrix_margin margin,
 	// If the input matrix is a sink matrix, we materialize it first.
 	if (store->is_sink())
 		materialize_self();
-	return dense_matrix::create(fm::aggregate(store, margin, op));
+	auto res = fm::aggregate(store, margin, op);
+	if (res)
+		return dense_matrix::create(res);
+	else
+		return dense_matrix::ptr();
 }
 
 scalar_variable::ptr dense_matrix::aggregate(bulk_operate::const_ptr op) const
