@@ -189,7 +189,7 @@ cdef class PyMatrix:
     # Special Methods Table
     # http://cython.readthedocs.io/en/latest/src/reference/special_methods_table.html
 
-    def __richcmp__(PyMatrix x, y, int op):
+    def __richcmp__(x, y, int op):
         cdef PyMatrix ret = PyMatrix()
         # Rich comparisons:
         # http://cython.readthedocs.io/en/latest/src/userguide/special_methods.html#rich-comparisons
@@ -199,45 +199,89 @@ cdef class PyMatrix:
         # <=  1
         # !=  3
         # >=  5
-        if (op == 0):
-            ret = x.mapply2(y, OP_LT)
-        elif (op == 2):
-            ret = x.mapply2(y, OP_EQ)
-        elif (op == 4):
-            ret = x.mapply2(y, OP_GT)
-        elif (op == 1):
-            ret = x.mapply2(y, OP_LE)
-        elif (op == 3):
-            ret = x.mapply2(y, OP_NEQ)
-        elif (op == 5):
-            ret = x.mapply2(y, OP_GE)
+        if (isinstance(x, PyMatrix)):
+            if (op == 0):
+                ret = x.mapply2(y, OP_LT)
+            elif (op == 2):
+                ret = x.mapply2(y, OP_EQ)
+            elif (op == 4):
+                ret = x.mapply2(y, OP_GT)
+            elif (op == 1):
+                ret = x.mapply2(y, OP_LE)
+            elif (op == 3):
+                ret = x.mapply2(y, OP_NEQ)
+            elif (op == 5):
+                ret = x.mapply2(y, OP_GE)
+            else:
+                raise ValueError("invalid argument")
         else:
-            raise ValueError("invalid argument")
+            if (op == 0):
+                ret = y.mapply2(x, OP_GE)
+            elif (op == 2):
+                ret = y.mapply2(x, OP_EQ)
+            elif (op == 4):
+                ret = y.mapply2(x, OP_LE)
+            elif (op == 1):
+                ret = y.mapply2(x, OP_GT)
+            elif (op == 3):
+                ret = y.mapply2(x, OP_NEQ)
+            elif (op == 5):
+                ret = y.mapply2(x, OP_LT)
+            else:
+                raise ValueError("invalid argument")
         return ret
 
-    def __add__(PyMatrix x, y):
-        return x.mapply2(y, OP_ADD)
+    def __add__(x, y):
+        if (isinstance(x, PyMatrix)):
+            return x.mapply2(y, OP_ADD)
+        else:
+            return y.mapply2(x, OP_ADD)
 
-    def __sub__(PyMatrix x, y):
+    def __sub__(x, y):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
         return x.mapply2(y, OP_SUB)
 
-    def __mul__(PyMatrix x, y):
-        return x.mapply2(y, OP_MUL)
+    def __mul__(x, y):
+        if (isinstance(x, PyMatrix)):
+            return x.mapply2(y, OP_MUL)
+        else:
+            return y.mapply2(x, OP_MUL)
 
-    def __div__(PyMatrix x, y):
+    def __div__(x, y):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
         return x.mapply2(y, OP_DIV)
 
-    def __floordiv__(PyMatrix x, y):
+    def __floordiv__(x, y):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
         return x.mapply2(y, OP_IDIV)
 
-    def __mod__(PyMatrix x, PyMatrix y):
+    def __mod__(x, y):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
         return x.mapply2(y, OP_MOD)
 
-    def __and__(PyMatrix x, PyMatrix y):
-        return x.mapply2(y, OP_AND)
+    def __and__(x, y):
+        if (isinstance(x, PyMatrix)):
+            return x.mapply2(y, OP_AND)
+        else:
+            return y.mapply2(x, OP_AND)
 
-    def __or__(PyMatrix x, PyMatrix y):
-        return x.mapply2(y, OP_OR)
+    def __or__(x, y):
+        if (isinstance(x, PyMatrix)):
+            return x.mapply2(y, OP_OR)
+        else:
+            return y.mapply2(x, OP_OR)
 
     def __neg__(self):
         return self.sapply(UOP_NEG)
@@ -620,6 +664,20 @@ def init_val(PyMatrix data, dtype, val):
     else:
         data.mat.init_const_int(val)
 
+def create_const(x, shape, order='C'):
+    if (isinstance(x, float)):
+        dtype = 'd'
+    elif (isinstance(x, long)):
+        dtype = 'l'
+    elif (isinstance(x, int)):
+        dtype = 'i'
+    else:
+        raise ValueError("a scalar with unknown type")
+    ret = empty(shape, dtype, order)
+    init_val(ret, dtype, x)
+    ret.init_attr()
+    return ret
+
 def ones(shape, dtype='f', order='C'):
     cdef PyMatrix ret = empty(shape, dtype, order)
     init_val(ret, dtype, 1)
@@ -684,8 +742,17 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
     else:
         return sum(a, axis)/wsum
 
-def dot(PyMatrix a, b, out=None):
-    return a.dot(b, out)
+def dot(a, b, out=None):
+    if (isinstance(a, PyMatrix)):
+        return a.dot(b, out)
+    elif (isinstance(b, PyMatrix)):
+        res = b.T.dot(a.T)
+        res = res.T
+        if (out is not None):
+            out.assign(res)
+        return res
+    else:
+        return array(a).dot(b, out)
 
 def sqrt(PyMatrix x, out=None):
     if (out is None):

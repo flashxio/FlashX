@@ -98,17 +98,17 @@ idx = [1, 3, 5]
 verify(fp_mat1[idx], np_mat1[idx])
 verify(fp_mat1[idx, idx], np_mat1[idx, idx])
 
-print("test reshape")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = FlashPy.array(np_mat1)
-fp_mat1.reshape(-1, 1)
-
 print("test +")
 fp_res = fp_mat1 + fp_mat2
 np_res = np_mat1 + np_mat2
 verify(fp_res, np_res)
 fp_res = fp_mat1 + 1
 np_res = np_mat1 + 1
+verify(fp_res, np_res)
+fp_res = 1 + fp_mat1
+np_res = 1 + np_mat1
 verify(fp_res, np_res)
 fp_res = fp_mat1 + fp_vec3
 np_res = np_mat1 + np_vec3
@@ -129,26 +129,46 @@ fp_res = fp_vec2[:,np.newaxis] + fp_mat1
 np_res = np_vec2[:,np.newaxis] + np_mat1
 verify(fp_res, np_res)
 
-fp_mat1 += fp_mat2
-np_mat1 += np_mat2
-verify(fp_mat1, np_mat1)
+fp_tmp = fp_mat1
+np_tmp = np_mat1.copy()
+fp_tmp += fp_mat2
+np_tmp += np_mat2
+verify(fp_tmp, np_tmp)
 
 print("test -")
 fp_res = fp_mat1 - fp_mat2
 np_res = np_mat1 - np_mat2
 verify(fp_res, np_res)
 
-fp_mat1 -= fp_mat2
-np_mat1 -= np_mat2
-verify(fp_mat1, np_mat1)
+fp_res = fp_mat1 - 1
+np_res = np_mat1 - 1
+verify(fp_res, np_res)
+
+fp_res = 1 - fp_mat1
+np_res = 1 - np_mat1
+verify(fp_res, np_res)
+
+fp_tmp = fp_mat1
+np_tmp = np_mat1.copy()
+fp_tmp -= fp_mat2
+np_tmp -= np_mat2
+verify(fp_tmp, np_tmp)
 
 print("test *")
 fp_res = FlashPy.array(np_mat1, "l") * FlashPy.array(np_mat2, "l")
 np_res = np.array(np_mat1, "l") * np.array(np_mat2, "l")
 verify(fp_res, np_res)
 
+fp_res = FlashPy.array(np_mat1, "l") * 2
+np_res = np.array(np_mat1, "l") * 2
+verify(fp_res, np_res)
+
+fp_res = 2 * FlashPy.array(np_mat1, "l")
+np_res = 2 * np.array(np_mat1, "l")
+verify(fp_res, np_res)
+
 fp_tmp = FlashPy.array(np_mat1, "l")
-np_tmp = np.array(np_mat1, "l")
+np_tmp = np.array(np_mat1, "l", copy=True)
 fp_tmp *= FlashPy.array(fp_mat2, "l")
 np_tmp *= np.array(np_mat2, "l")
 verify(fp_tmp, np_tmp)
@@ -158,18 +178,135 @@ fp_res = fp_mat1 / fp_mat2
 np_res = np_mat1 / np_mat2
 verify(fp_res, np_res)
 
-fp_mat1 /= fp_mat2
-np_mat1 /= np_mat2
-verify(fp_mat1, np_mat1)
+fp_res = fp_mat1 / 2
+np_res = np_mat1 / 2
+verify(fp_res, np_res)
+
+fp_res = 2 / fp_mat1
+np_res = 2 / np_mat1
+verify(fp_res, np_res)
+
+fp_tmp = fp_mat1
+np_tmp = np_mat1.copy()
+fp_tmp /= fp_mat2
+np_tmp /= np_mat2
+verify(fp_tmp, np_tmp)
 
 print("test //")
 fp_res = fp_mat1 // fp_mat2
 np_res = np_mat1 // np_mat2
 verify(fp_res, np_res)
 
-fp_mat1 //= fp_mat2
-np_mat1 //= np_mat2
-verify(fp_mat1, np_mat1)
+fp_res = fp_mat1 // 2
+np_res = np_mat1 // 2
+verify(fp_res, np_res)
+
+fp_res = 100 // fp_mat1
+np_res = 100 // np_mat1
+verify(fp_res, np_res)
+
+fp_tmp = fp_mat1
+np_tmp = np_mat1.copy()
+fp_tmp //= fp_mat2
+np_tmp //= np_mat2
+verify(fp_tmp, np_tmp)
+
+#print("test %")
+#fp_res = fp_mat1 % fp_mat2
+#np_res = np_mat1 % np_mat2
+#verify(fp_res, np_res)
+#
+#fp_res = fp_mat1 % 2
+#np_res = np_mat1 % 2
+#verify(fp_res, np_res)
+#
+#fp_res = 100 % fp_mat1
+#np_res = 100 % np_mat1
+#verify(fp_res, np_res)
+#
+#fp_tmp = fp_mat1
+#np_tmp = np_mat1.copy()
+#fp_tmp %= fp_mat2
+#np_tmp %= np_mat2
+#verify(fp_tmp, np_tmp)
+
+print("test >")
+fp_res = fp_mat1 > fp_mat2
+np_res = np_mat1 > np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 > 2
+np_res = np_mat1 > 2
+verify(fp_res, np_res)
+
+fp_res = 100 > fp_mat1
+np_res = 100 > np_mat1
+verify(fp_res, np_res)
+
+print("test <")
+fp_res = fp_mat1 < fp_mat2
+np_res = np_mat1 < np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 < 2
+np_res = np_mat1 < 2
+verify(fp_res, np_res)
+
+fp_res = 100 < fp_mat1
+np_res = 100 < np_mat1
+verify(fp_res, np_res)
+
+print("test >=")
+fp_res = fp_mat1 >= fp_mat2
+np_res = np_mat1 >= np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 >= 2
+np_res = np_mat1 >= 2
+verify(fp_res, np_res)
+
+fp_res = 100 >= fp_mat1
+np_res = 100 >= np_mat1
+verify(fp_res, np_res)
+
+print("test <=")
+fp_res = fp_mat1 <= fp_mat2
+np_res = np_mat1 <= np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 <= 2
+np_res = np_mat1 <= 2
+verify(fp_res, np_res)
+
+fp_res = 100 <= fp_mat1
+np_res = 100 <= np_mat1
+verify(fp_res, np_res)
+
+print("test ==")
+fp_res = fp_mat1 == fp_mat2
+np_res = np_mat1 == np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 == 2
+np_res = np_mat1 == 2
+verify(fp_res, np_res)
+
+fp_res = 100 == fp_mat1
+np_res = 100 == np_mat1
+verify(fp_res, np_res)
+
+print("test ==")
+fp_res = fp_mat1 != fp_mat2
+np_res = np_mat1 != np_mat2
+verify(fp_res, np_res)
+
+fp_res = fp_mat1 != 2
+np_res = np_mat1 != 2
+verify(fp_res, np_res)
+
+fp_res = 100 != fp_mat1
+np_res = 100 != np_mat1
+verify(fp_res, np_res)
 
 print("test abs")
 fp_res = abs(fp_mat1)
@@ -218,7 +355,7 @@ print("test mean")
 fp_res = FlashPy.mean(fp_mat1)
 np_res = np.mean(np_mat1)
 tmp = np.array(fp_res, copy=True)
-assert abs(tmp[0] - np_res) < 1e-15
+assert abs(tmp[0] - np_res) < 1e-14
 
 fp_res = FlashPy.mean(fp_mat1, axis=0)
 np_res = np.mean(np_mat1, axis=0)
@@ -258,6 +395,16 @@ np_mat1 = np.array(np_mat1, dtype="l")
 fp_res = FlashPy.dot(fp_mat1, fp_mat1.transpose())
 np_res = np.dot(np_mat1, np_mat1.transpose())
 verify(fp_res, np_res)
+
+fp_res = FlashPy.dot(fp_mat1, np_mat1.transpose())
+verify(fp_res, np_res)
+
+fp_res = FlashPy.dot(np_mat1, fp_mat1.transpose())
+verify(fp_res, np_res)
+
+fp_res = FlashPy.dot(np_mat1, np_mat1.transpose())
+verify(fp_res, np_res)
+
 
 print("test dot on vector")
 np_mat1 = np.random.normal(scale=100, size=25)
