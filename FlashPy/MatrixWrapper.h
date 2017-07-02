@@ -32,6 +32,7 @@ namespace flashpy
 
 typedef int bulk_op_idx_t;
 typedef int bulk_uop_idx_t;
+typedef int agg_op_idx_t;
 
 static inline fm::bulk_operate::const_ptr get_op(const fm::scalar_type &type,
 		bulk_op_idx_t idx)
@@ -52,9 +53,11 @@ static inline fm::bulk_uoperate::const_ptr get_uop(const fm::scalar_type &type,
 }
 
 static inline fm::agg_operate::const_ptr get_agg(const fm::scalar_type &type,
-		bulk_op_idx_t idx)
+		agg_op_idx_t idx)
 {
-	return fm::agg_operate::create(get_op(type, idx));
+	if (idx >= fm::agg_ops::op_idx::NUM_OPS)
+		throw std::invalid_argument("invalid agg operation");
+	return type.get_agg_ops().get_op((fm::agg_ops::op_idx) idx);
 }
 
 static inline std::shared_ptr<fm::col_vec> get_vec(fm::dense_matrix::ptr mat)
@@ -309,24 +312,24 @@ public:
 		return matrix_wrapper(mat->multiply(*m.mat));
 	}
 
-	matrix_wrapper aggregate(bulk_op_idx_t op) const {
+	matrix_wrapper aggregate(agg_op_idx_t op) const {
 		check_mat();
 		return matrix_wrapper(mat->aggregate(fm::matrix_margin::BOTH,
 					get_agg(mat->get_type(), op)));
 	}
 
-	matrix_wrapper agg_row(bulk_op_idx_t op) const {
+	matrix_wrapper agg_row(agg_op_idx_t op) const {
 		check_mat();
 		return matrix_wrapper(mat->aggregate(fm::matrix_margin::MAR_ROW,
 					get_agg(mat->get_type(), op)));
 	}
-	matrix_wrapper agg_col(bulk_op_idx_t op) const {
+	matrix_wrapper agg_col(agg_op_idx_t op) const {
 		check_mat();
 		return matrix_wrapper(mat->aggregate(fm::matrix_margin::MAR_COL,
 					get_agg(mat->get_type(), op)));
 	}
 
-	matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const {
+	matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const {
 		check_mat();
 		labels.check_mat();
 		return matrix_wrapper(mat->groupby_row(get_factor(labels.mat),

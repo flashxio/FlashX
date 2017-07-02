@@ -59,6 +59,20 @@ uop_log = UOP_LOG
 uop_log2 = UOP_LOG2
 uop_log10 = UOP_LOG10
 
+cdef enum agg_op_idx_t:
+    AGG_COUNT, AGG_FIND_NEXT, AGG_FIND_PREV, AGG_ARGMIN, AGG_ARGMAX,
+    AGG_MIN, AGG_MAX, AGG_SUM, AGG_PROD
+
+agg_count = AGG_COUNT
+agg_find_next = AGG_FIND_NEXT
+agg_find_prev = AGG_FIND_PREV
+agg_argmin = AGG_ARGMIN
+agg_argmax = AGG_ARGMAX
+agg_min = AGG_MIN
+agg_max = AGG_MAX
+agg_sum = AGG_SUM
+agg_prod = AGG_PROD
+
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef bool init_flashpy_c(const string file)
 
@@ -126,11 +140,10 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
                 bulk_op_idx_t right_op) const
         matrix_wrapper multiply(matrix_wrapper m) const
-        matrix_wrapper aggregate(bulk_op_idx_t op)
-        matrix_wrapper agg_row(bulk_op_idx_t op) const
-        matrix_wrapper agg_col(bulk_op_idx_t op) const
-        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
-        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
+        matrix_wrapper aggregate(agg_op_idx_t op)
+        matrix_wrapper agg_row(agg_op_idx_t op) const
+        matrix_wrapper agg_col(agg_op_idx_t op) const
+        matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const
         matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const
         matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
@@ -346,10 +359,10 @@ cdef class PyMatrix:
         return res
 
     def sum(self, axis=None, dtype=None, out=None, keepdims=False):
-        return self.aggregate_(OP_ADD, axis, dtype, out, keepdims)
+        return self.aggregate_(AGG_SUM, axis, dtype, out, keepdims)
 
     def prod(self, axis=None, dtype=None, out=None, keepdims=False):
-        return self.aggregate_(OP_MUL, axis, dtype, out, keepdims)
+        return self.aggregate_(AGG_PROD, axis, dtype, out, keepdims)
 
     def mean(self, axis=None, dtype=None, out=None, keepdims=False):
         cdef PyMatrix a = self
@@ -362,10 +375,10 @@ cdef class PyMatrix:
             return s/a.shape[axis]
 
     def min(self, axis=None, out=None, keepdims=False):
-        return self.aggregate_(OP_MIN, axis, None, out, keepdims)
+        return self.aggregate_(AGG_MIN, axis, None, out, keepdims)
 
     def max(self, axis=None, out=None, keepdims=False):
-        return self.aggregate_(OP_MAX, axis, None, out, keepdims)
+        return self.aggregate_(AGG_MAX, axis, None, out, keepdims)
 
     # These are specific for FlashMatrix.
 
