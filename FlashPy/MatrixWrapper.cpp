@@ -21,6 +21,7 @@
 
 #include "mem_matrix_store.h"
 #include "col_vec.h"
+#include "data_frame.h"
 #include "sparse_matrix.h"
 
 #include "MatrixWrapper.h"
@@ -235,6 +236,17 @@ matrix_wrapper matrix_wrapper::cast_ele_type(std::string dtype) const {
 		return matrix_wrapper(fm::col_vec::create(res));
 	else
 		return matrix_wrapper(res);
+}
+
+matrix_wrapper matrix_wrapper::as_factor(int num_levels) const
+{
+	check_mat();
+	if (mat->get_num_rows() > 1 && mat->get_num_cols() > 1)
+		throw invalid_operation("can't cast a matrix to a vector.");
+	if (num_levels < 0)
+		return matrix_wrapper(fm::factor_col_vector::create(mat));
+	else
+		return matrix_wrapper(fm::factor_col_vector::create(fm::factor(num_levels), mat));
 }
 
 matrix_wrapper matrix_wrapper::as_vector() const
@@ -481,6 +493,42 @@ matrix_wrapper matrix_wrapper::ifelse(matrix_wrapper x, matrix_wrapper y) const
 {
 	check_mat();
 	return matrix_wrapper(mat->ifelse(*x.mat, *y.mat));
+}
+
+static inline std::shared_ptr<fm::factor_col_vector> get_factor(
+		fm::dense_matrix::ptr mat)
+{
+	auto ret = std::dynamic_pointer_cast<fm::factor_col_vector>(mat);
+	if (ret == NULL)
+		throw std::invalid_argument("invalid matrix, want a factor col vector");
+	else
+		return ret;
+}
+
+matrix_wrapper matrix_wrapper::groupby_row(matrix_wrapper labels,
+		agg_op_idx_t op) const
+{
+	check_mat();
+	labels.check_mat();
+	return matrix_wrapper(mat->groupby_row(get_factor(labels.mat),
+				get_agg(mat->get_type(), op)));
+}
+
+std::pair<matrix_wrapper, matrix_wrapper> matrix_wrapper::groupby(
+		agg_op_idx_t op, bool with_val) const
+{
+	check_mat();
+	col_vec::ptr vec = col_vec::create(mat);
+	auto ret = vec->groupby(get_agg(mat->get_type(), op), with_val);
+	if (with_val) {
+		matrix_wrapper agg(col_vec::create(vector::create(ret->get_vec("agg"))));
+		matrix_wrapper val(col_vec::create(vector::create(ret->get_vec("val"))));
+		return std::pair<matrix_wrapper, matrix_wrapper>(agg, val);
+	}
+	else {
+		matrix_wrapper agg(col_vec::create(vector::create(ret->get_vec("agg"))));
+		return std::pair<matrix_wrapper, matrix_wrapper>(agg, matrix_wrapper());
+	}
 }
 
 }

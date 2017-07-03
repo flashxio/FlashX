@@ -63,20 +63,10 @@ static inline fm::agg_operate::const_ptr get_agg(const fm::scalar_type &type,
 static inline std::shared_ptr<fm::col_vec> get_vec(fm::dense_matrix::ptr mat)
 {
 	auto ret = std::dynamic_pointer_cast<fm::col_vec>(mat);
-	if (ret == NULL)
-		throw std::invalid_argument("invalid matrix, wants a col vector");
-	else
+	if (ret)
 		return ret;
-}
-
-static inline std::shared_ptr<fm::factor_col_vector> get_factor(
-		fm::dense_matrix::ptr mat)
-{
-	auto ret = std::dynamic_pointer_cast<fm::factor_col_vector>(mat);
-	if (ret == NULL)
-		throw std::invalid_argument("invalid matrix, want a factor col vector");
-	else
-		return ret;
+	ret = fm::col_vec::create(mat);
+	return ret;
 }
 
 const fm::scalar_type &convT_py2fm(const std::string &t);
@@ -231,6 +221,7 @@ public:
 		return mat->materialize_self();
 	}
 
+	matrix_wrapper as_factor(int num_levels) const;
 	matrix_wrapper as_vector() const;
 	matrix_wrapper as_matrix() const;
 
@@ -339,12 +330,10 @@ public:
 					get_agg(mat->get_type(), op)));
 	}
 
-	matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const {
-		check_mat();
-		labels.check_mat();
-		return matrix_wrapper(mat->groupby_row(get_factor(labels.mat),
-					get_agg(mat->get_type(), op)));
-	}
+	matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const;
+	// TODO we should return data_frame later.
+	std::pair<matrix_wrapper, matrix_wrapper> groupby(agg_op_idx_t op,
+			bool with_val) const;
 
 	matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const;
 	matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const;

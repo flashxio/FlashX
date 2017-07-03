@@ -8,6 +8,7 @@ from libc.stdlib cimport free, malloc
 from libc.stdint cimport intptr_t
 from libcpp.vector cimport vector
 from libcpp.string cimport string
+from libcpp.utility cimport pair
 from libcpp cimport bool
 from libc.string cimport memcpy
 
@@ -104,6 +105,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
 
         void set_cached(bool)
 
+        matrix_wrapper as_factor(int num_levels) const
         matrix_wrapper as_vector() const
         matrix_wrapper as_matrix() const
 
@@ -147,6 +149,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper agg_row(agg_op_idx_t op) const
         matrix_wrapper agg_col(agg_op_idx_t op) const
         matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const
+        pair[matrix_wrapper, matrix_wrapper] groupby(agg_op_idx_t op, bool with_val) const
         matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const
         matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
@@ -600,6 +603,12 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
+    def as_factor(self, num_levels = -1):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.as_factor(num_levels)
+        ret.init_attr()
+        return ret
+
     def as_vector(self):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.as_vector()
@@ -700,8 +709,30 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
-#        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
-#        matrix_wrapper groupby_row(matrix_wrapper labels, bulk_op_idx_t op) const
+    def groupby(self, op, with_val = True):
+        cdef PyMatrix agg = PyMatrix()
+        cdef PyMatrix val = PyMatrix()
+        cdef pair[matrix_wrapper, matrix_wrapper] res = self.mat.groupby(op,
+                with_val)
+        if (with_val):
+            agg.mat = res.first
+            val.mat = res.second
+            agg.init_attr()
+            val.init_attr()
+            return (agg, val)
+        else:
+            agg.mat = res.first
+            agg.init_attr()
+            return agg
+
+    def groupby_row(self, labels, op):
+        if (not isinstance(labels, PyMatrix)):
+            raise ValueError("The labels isn't a PyMatrix")
+        cdef PyMatrix label_mat = labels
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.groupby_row(label_mat.mat, op)
+        ret.init_attr()
+        return ret
 
 def array(arr, dtype=None, copy=True, order='K'):
     cdef np.ndarray ndarr
