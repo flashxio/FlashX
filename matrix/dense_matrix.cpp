@@ -1537,7 +1537,7 @@ dense_matrix::ptr dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 dense_matrix::ptr dense_matrix::get_cols(size_t start, size_t end,
 		size_t step) const
 {
-	if (end >= get_num_cols() || start >= get_num_cols() || start >= end) {
+	if (end > get_num_cols() || start >= get_num_cols() || start >= end) {
 		BOOST_LOG_TRIVIAL(error) << "column index is out of the range";
 		return dense_matrix::ptr();
 	}
