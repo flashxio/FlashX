@@ -44,11 +44,8 @@ col_vec::ptr col_vec::create(detail::matrix_store::const_ptr store)
 col_vec::ptr col_vec::create(dense_matrix::ptr mat)
 {
 	if (mat->get_num_cols() > 1 && mat->get_num_rows() > 1) {
-		printf("the input matrix has %ld rows and %ld cols\n",
-				mat->get_num_rows(), mat->get_num_cols());
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't convert a matrix with multiple cols&rows to a vector";
-		assert(0);
 		return ptr();
 	}
 	if (mat->get_num_cols() > 1)
