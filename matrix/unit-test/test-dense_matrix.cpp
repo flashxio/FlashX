@@ -2382,6 +2382,81 @@ void test_get_rowcols(int num_nodes)
 	block_size = 0;
 }
 
+void test_set_rowcols()
+{
+	detail::mem_col_matrix_store::ptr data = detail::mem_col_matrix_store::create(
+			long_dim, 32, get_scalar_type<double>());
+	detail::mem_col_matrix_store::ptr res = detail::mem_col_matrix_store::create(
+			long_dim, 32, get_scalar_type<double>());
+	detail::mem_col_matrix_store::ptr new_data = detail::mem_col_matrix_store::create(
+			long_dim, 10, get_scalar_type<double>());
+	data->init_randu<double>(0, 1);
+	new_data->init_randu<double>(0, 1);
+
+	std::vector<off_t> idxs(new_data->get_num_cols());
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = 5 + i;
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(res->get_col(idxs[i]), new_data->get_col(i),
+				data->get_num_rows() * data->get_entry_size());
+
+	dense_matrix::ptr res_mat = dense_matrix::create(res);
+	dense_matrix::ptr m1 = dense_matrix::create(data);
+	dense_matrix::ptr m2 = dense_matrix::create(new_data);
+	dense_matrix::ptr res1 = m1->set_cols(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 2; i < 22; i += 2)
+		memcpy(res->get_col(i), new_data->get_col((i - 2)/2),
+				data->get_num_rows() * data->get_entry_size());
+
+	res_mat = dense_matrix::create(res);
+	m1 = dense_matrix::create(data);
+	m2 = dense_matrix::create(new_data);
+	res1 = m1->set_cols(2, 22, 2, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	idxs[0] = 3;
+	idxs[1] = 4;
+	idxs[2] = 5;
+	idxs[3] = 10;
+	idxs[4] = 11;
+	idxs[5] = 12;
+	idxs[6] = 13;
+	idxs[7] = 14;
+	idxs[8] = 20;
+	idxs[9] = 21;
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(res->get_col(idxs[i]), new_data->get_col(i),
+				data->get_num_rows() * data->get_entry_size());
+
+	res_mat = dense_matrix::create(res);
+	m1 = dense_matrix::create(data);
+	m2 = dense_matrix::create(new_data);
+	res1 = m1->set_cols(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % data->get_num_cols();
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(res->get_col(idxs[i]), new_data->get_col(i),
+				data->get_num_rows() * data->get_entry_size());
+
+	res_mat = dense_matrix::create(res);
+	m1 = dense_matrix::create(data);
+	m2 = dense_matrix::create(new_data);
+	res1 = m1->set_cols(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+}
+
 void _test_repeat_rowcols(dense_matrix::ptr mat, size_t long_dim)
 {
 	col_vec::ptr idxs = col_vec::create(dense_matrix::create_randu<size_t>(0,
@@ -3306,6 +3381,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_set_rowcols();
 	test_cross_prod();
 	test_factor();
 	test_share_data();

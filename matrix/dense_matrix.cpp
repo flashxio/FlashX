@@ -3307,10 +3307,25 @@ static inline bool is_sorted_conti(const std::vector<off_t> &idxs)
 }
 
 dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
-			dense_matrix::ptr cols)
+			dense_matrix::ptr cols) const
 {
 	if (is_wide())
 		return dense_matrix::ptr();
+	if (idxs.size() != cols->get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The number of new columns doesn't match the col index";
+		return dense_matrix::ptr();
+	}
+	if (get_num_rows() != cols->get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "#rows in the new matrix doesn't match the one in this matrix";
+		return dense_matrix::ptr();
+	}
+	for (size_t i = 0; i < idxs.size(); i++)
+		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error) << "The col index is out of range";
+			return dense_matrix::ptr();
+		}
 
 	detail::matrix_store::const_ptr col_store;
 	if (store_layout() == matrix_layout_t::L_COL)
@@ -3319,6 +3334,8 @@ dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 		dense_matrix::ptr tmp = conv2(matrix_layout_t::L_COL);
 		col_store = tmp->get_raw_store();
 	}
+	dense_matrix::ptr col_mat = dense_matrix::create(col_store);
+	cols = cols->conv2(matrix_layout_t::L_COL);
 
 	if (is_sorted_conti(idxs)) {
 		std::vector<detail::matrix_store::const_ptr> sub_mats;
@@ -3341,16 +3358,64 @@ dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 			return dense_matrix::ptr();
 		return dense_matrix::create(new_store);
 	}
+	else if (std::is_sorted(idxs.begin(), idxs.end())) {
+		// We need to find out which ranges of columns need to be set.
+		std::vector<std::pair<off_t, off_t> > set_ranges;
+		set_ranges.push_back(std::pair<off_t, off_t>(idxs.front(),
+					idxs.front() + 1));
+		for (size_t i = 1; i < idxs.size(); i++) {
+			if (set_ranges.back().second == idxs[i])
+				set_ranges.back().second++;
+			else
+				set_ranges.push_back(std::pair<off_t, off_t>(idxs[i],
+							idxs[i] + 1));
+		}
+		// Collect all sub-matrices.
+		std::vector<dense_matrix::ptr> subs;
+		if (set_ranges.front().first > 0)
+			subs.push_back(col_mat->get_cols(0, set_ranges.front().first, 1));
+		off_t curr_col = 0;
+		for (size_t i = 0; i < set_ranges.size(); i++) {
+			size_t num_cols = set_ranges[i].second - set_ranges[i].first;
+			subs.push_back(cols->get_cols(curr_col, curr_col + num_cols, 1));
+			curr_col += num_cols;
+			if (i < set_ranges.size() - 1)
+				subs.push_back(col_mat->get_cols(set_ranges[i].second,
+							set_ranges[i + 1].first, 1));
+			else if ((size_t) set_ranges[i].second < get_num_cols())
+				subs.push_back(col_mat->get_cols(set_ranges[i].second,
+							get_num_cols(), 1));
+		}
+		return dense_matrix::cbind(subs);
+	}
 	else {
-		// TODO we need to finish this.
-		printf("To be handled\n");
-		return dense_matrix::ptr();
+		std::vector<dense_matrix::ptr> col_vec(get_num_cols());
+		for (size_t i = 0; i < get_num_cols(); i++)
+			col_vec[i] = col_mat->get_col(i);
+		for (size_t i = 0; i < idxs.size(); i++)
+			col_vec[idxs[i]] = cols->get_col(i);
+		return dense_matrix::cbind(col_vec);
 	}
 }
 
-dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
-			dense_matrix::ptr rows)
+dense_matrix::ptr dense_matrix::set_cols(size_t start, size_t stop, size_t step,
+			dense_matrix::ptr cols) const
 {
+	std::vector<off_t> idxs;
+	for (size_t i = start; i < stop; i += step)
+		idxs.push_back(i);
+	return set_cols(idxs, cols);
+}
+
+dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
+			dense_matrix::ptr rows) const
+{
+	if (idxs.size() != rows->get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The number of new rows doesn't match the row index";
+		return dense_matrix::ptr();
+	}
+
 	dense_matrix::ptr tmp = transpose();
 	if (tmp == NULL)
 		return dense_matrix::ptr();
@@ -3358,6 +3423,27 @@ dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
 	if (cols == NULL)
 		return dense_matrix::ptr();
 	tmp = set_cols(idxs, cols);
+	if (tmp == NULL)
+		return dense_matrix::ptr();
+	return tmp->transpose();
+}
+
+dense_matrix::ptr dense_matrix::set_rows(size_t start, size_t stop, size_t step,
+			dense_matrix::ptr rows) const
+{
+	if ((stop - start) / step != rows->get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The number of new rows doesn't match the row index";
+		return dense_matrix::ptr();
+	}
+
+	dense_matrix::ptr tmp = transpose();
+	if (tmp == NULL)
+		return dense_matrix::ptr();
+	dense_matrix::ptr cols = rows->transpose();
+	if (cols == NULL)
+		return dense_matrix::ptr();
+	tmp = set_cols(start, stop, step, cols);
 	if (tmp == NULL)
 		return dense_matrix::ptr();
 	return tmp->transpose();

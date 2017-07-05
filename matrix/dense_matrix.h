@@ -253,14 +253,23 @@ public:
 	 * on a wide matrix.
 	 */
 	virtual dense_matrix::ptr set_cols(const std::vector<off_t> &idxs,
-			dense_matrix::ptr cols);
+			dense_matrix::ptr cols) const;
 	/*
 	 * This method creates a new matrix whose rows specified by `idxs' are
 	 * replaced by `rows'. This works only for a wide matrix. It returns NULL
 	 * on a tall matrix.
 	 */
 	virtual dense_matrix::ptr set_rows(const std::vector<off_t> &idxs,
-			dense_matrix::ptr rows);
+			dense_matrix::ptr rows) const;
+
+	/*
+	 * This method set rows/cols in a range. As the methods above,
+	 * they return a new matrix that contains the new value.
+	 */
+	virtual dense_matrix::ptr set_cols(size_t start, size_t end,
+			size_t step, dense_matrix::ptr cols) const;
+	virtual dense_matrix::ptr set_rows(size_t start, size_t end,
+			size_t step, dense_matrix::ptr rows) const;
 
 	/*
 	 * Clone the matrix.
