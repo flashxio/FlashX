@@ -3296,16 +3296,6 @@ dense_matrix::ptr dense_matrix::scale_rows(col_vec::const_ptr vals) const
 	}
 }
 
-static inline bool is_sorted_conti(const std::vector<off_t> &idxs)
-{
-	if (idxs.size() <= 1)
-		return true;
-	for (size_t i = 1; i < idxs.size(); i++)
-		if (idxs[i] != idxs[i - 1] + 1)
-			return false;
-	return true;
-}
-
 dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 			dense_matrix::ptr cols) const
 {
@@ -3337,28 +3327,7 @@ dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 	dense_matrix::ptr col_mat = dense_matrix::create(col_store);
 	cols = cols->conv2(matrix_layout_t::L_COL);
 
-	if (is_sorted_conti(idxs)) {
-		std::vector<detail::matrix_store::const_ptr> sub_mats;
-		if (idxs.front() > 0) {
-			std::vector<off_t> col_idxs(idxs.front());
-			for (size_t i = 0; i < col_idxs.size(); i++)
-				col_idxs[i] = i;
-			sub_mats.push_back(col_store->get_cols(col_idxs));
-		}
-		sub_mats.push_back(cols->get_raw_store());
-		if ((size_t) idxs.back() < get_num_cols() - 1) {
-			std::vector<off_t> col_idxs(get_num_cols() - 1 - idxs.back());
-			for (size_t i = 0; i < col_idxs.size(); i++)
-				col_idxs[i] = i + idxs.back() + 1;
-			sub_mats.push_back(col_store->get_cols(col_idxs));
-		}
-		auto new_store = detail::combined_matrix_store::create(sub_mats,
-				store_layout());
-		if (new_store == NULL)
-			return dense_matrix::ptr();
-		return dense_matrix::create(new_store);
-	}
-	else if (std::is_sorted(idxs.begin(), idxs.end())) {
+	if (std::is_sorted(idxs.begin(), idxs.end())) {
 		// We need to find out which ranges of columns need to be set.
 		std::vector<std::pair<off_t, off_t> > set_ranges;
 		set_ranges.push_back(std::pair<off_t, off_t>(idxs.front(),
@@ -3422,7 +3391,7 @@ dense_matrix::ptr dense_matrix::set_rows(const std::vector<off_t> &idxs,
 	dense_matrix::ptr cols = rows->transpose();
 	if (cols == NULL)
 		return dense_matrix::ptr();
-	tmp = set_cols(idxs, cols);
+	tmp = tmp->set_cols(idxs, cols);
 	if (tmp == NULL)
 		return dense_matrix::ptr();
 	return tmp->transpose();
@@ -3443,7 +3412,7 @@ dense_matrix::ptr dense_matrix::set_rows(size_t start, size_t stop, size_t step,
 	dense_matrix::ptr cols = rows->transpose();
 	if (cols == NULL)
 		return dense_matrix::ptr();
-	tmp = set_cols(start, stop, step, cols);
+	tmp = tmp->set_cols(start, stop, step, cols);
 	if (tmp == NULL)
 		return dense_matrix::ptr();
 	return tmp->transpose();
