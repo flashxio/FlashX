@@ -157,6 +157,7 @@ bool matrix_wrapper::is_vector() const
 
 std::string matrix_wrapper::get_type_str() const
 {
+	check_mat();
 	if (fm2py.empty())
 		init_map();
 	return fm2py[mat->get_type().get_type()].name;
@@ -164,6 +165,7 @@ std::string matrix_wrapper::get_type_str() const
 
 enum NPY_TYPES matrix_wrapper::get_type_py() const
 {
+	check_mat();
 	if (fm2py.empty())
 		init_map();
 	return fm2py[mat->get_type().get_type()].type;
