@@ -30,20 +30,55 @@ logistic.hessian <- function(X, y, w)
 logistic.cost <- function(X, y, w)
 {
 	xw <- X %*% t(w)
-	sum(y*(-xw) + log(1 + exp(xw)))
+	exw <- exp(xw)
+	sum(y*(-xw) + ifelse(is.finite(exw), log(1 + exw), xw))
 }
 
 logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uniform", "LBFGS"),
 								hessian_size=0.1, max.iters=500)
 {
-	if (method == "GD" || method == "LBFGS")
-		get.hessian <- NULL
-	else
+	if (method == "Newton" || method == "LS"
+		|| method == "RNS" || method == "Uniform")
 		get.hessian <- logistic.hessian
+	else
+		get.hessian <- NULL
 	params <- list(c=0.5, ro=0.2, linesearch=is.null(get.hessian),
-				   num.iters=max.iters, out.path=FALSE, method=method, hessian_size=hessian_size,
-				   L=ncol(X))
-	gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
+				   num.iters=max.iters, out.path=FALSE, method=method,
+				   hessian_size=hessian_size, L=ncol(X))
+
+	if (method == "L-BFGS-B" || method == "BFGS") {
+		W <- NULL
+		C <- NULL
+		G <- NULL
+		comp.cost_grad <- function(w) {
+			c <- logistic.cost(X, y, t(w))
+			g <- logistic.grad(X, y, t(w))
+			c <- as.vector(c)/length(y)
+			g <- as.vector(g)/length(y)
+			W <<- w
+			C <<- c
+			G <<- g
+			print(sum(w))
+			print(paste("cost=", C, ", grad=", sqrt(sum(G*G)), sep=""))
+		}
+		cost <- function(w) {
+			if (is.null(W) || any(W != w))
+				comp.cost_grad(w)
+			C
+		}
+		grad <- function(w) {
+			if (is.null(W) || any(W != w))
+				comp.cost_grad(w)
+			G
+		}
+		params$num.iters = 3
+		params$method = "GD"
+		g <- gradient.descent(X, y, logistic.grad, NULL, cost=logistic.cost, params)
+		res = optim(as.vector(g), cost, gr=grad, method=method)
+		res$value
+	}
+	else
+		gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
 }
 
 hinge.grad <- function(X, y, w)
