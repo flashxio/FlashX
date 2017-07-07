@@ -27,7 +27,7 @@
 # y - previous step sizes (p by k)
 # g - gradient (p by 1)
 # H0 - value of initial Hessian diagonal elements (scalar)
-lbfgs <- function(g, s, y, H0)
+lbfgs.H <- function(g, s, y, H0)
 {
 	k <- ncol(s)
 	print(k)
@@ -139,7 +139,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 				S <- matrix(prev.step, length(prev.step), 1)
 				Y <- matrix(g - prev.g, length(g), 1)
 			}
-			z <- -lbfgs(g, S, Y, 1)
+			z <- -lbfgs.H(g, S, Y, 1)
 		}
 		else {
 			params$linesearch <- TRUE
