@@ -26,36 +26,29 @@
 # s - previous search directions (p by k)
 # y - previous step sizes (p by k)
 # g - gradient (p by 1)
-# Hdiag - value of initial Hessian diagonal elements (scalar)
-lbfgs <- function(g, s, y, Hdiag)
+# H0 - value of initial Hessian diagonal elements (scalar)
+lbfgs <- function(g, s, y, H0)
 {
-	p <- nrow(s)
 	k <- ncol(s)
+	print(k)
 
-	ro <- rep(0, k)
-	for (i in 1:k)
-		ro[i] <- 1/(t(y[,i]) %*% s[,i])
-
-	q <- matrix(rep(0, p * (k+1)), p, k+1)
-	r <- matrix(rep(0, p * (k+1)), p, k+1)
+	ro <- 1/colSums(y * s)
 	al <- rep(0, k)
 	be <- rep(0, k)
 
-	q[,k+1] <- g
-
+	q1 <- as.vector(g)
 	for (i in k:1) {
-		al[i] <- ro[i]*(t(s[,i]) %*% q[,i+1])
-		q[,i] <- q[,i+1]-al[i]*y[,i]
+		al[i] <- ro[i]*(t(s[,i]) %*% q1)
+		q1 <- q1-al[i]*y[,i]
 	}
 
 	# Multiply by Initial Hessian
-	r[,1] <- Hdiag * q[,1]
-
+	r1 <- H0 * q1
 	for (i in 1:k) {
-		be[i] <- ro[i]*(t(y[,i]) %*% r[,i])
-		r[,i+1] <- r[,i] + s[,i]*(al[i]-be[i]);
+		be[i] <- ro[i]*(t(y[,i]) %*% r1)
+		r1 <- r1 + s[,i]*(al[i]-be[i]);
 	}
-	d <- r[,k+1]
+	r1
 }
 
 gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
