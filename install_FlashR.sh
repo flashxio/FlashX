@@ -35,4 +35,6 @@ if [ -n "$path" ]; then
 else
 	FG_DIR=`pwd` FG_LIB=$fg_lib R CMD INSTALL --no-configure FlashR_0.1-0.tar.gz
 fi
+ret=$?
 rm FlashR_0.1-0.tar.gz
+exit $ret
