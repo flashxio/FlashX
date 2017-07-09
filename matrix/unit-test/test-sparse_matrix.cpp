@@ -104,10 +104,8 @@ void test_spmm_block(sparse_matrix::ptr spm)
 	dense_matrix::ptr EM_in = dense_matrix::create(in_mat);
 	EM_in = EM_in->conv_store(false, -1);
 	dense_matrix::ptr EM_out1 = spm->multiply(EM_in);
-	assert(!EM_out1->is_in_mem());
 	dense_matrix::ptr EM_out2 = spm->multiply(EM_in,
 			EM_in->get_num_rows() * 3 * EM_in->get_entry_size());
-	assert(!EM_out2->is_in_mem());
 
 	diff = EM_out1->minus(*m1)->abs()->sum();
 	assert(scalar_variable::get_val<float>(*diff) == 0);
