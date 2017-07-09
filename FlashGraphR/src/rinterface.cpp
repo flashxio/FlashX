@@ -848,14 +848,6 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname,
 	std::vector<vertex_id_t> vids = vertices->conv2std<vertex_id_t>();
 
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
-	BOOST_FOREACH(vertex_id_t vid, vids) {
-		if (vid > max_vid) {
-			fprintf(stderr, "invalid vertex id: %d\n", vid);
-			return R_NilValue;
-		}
-	}
-
 	FG_graph::ptr sub_fg = fetch_subgraph(fg, vids, graph_name, compress);
 	graph_ref *ref = register_in_mem_graph(sub_fg, graph_name);
 	if (ref)

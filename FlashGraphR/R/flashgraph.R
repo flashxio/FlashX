@@ -553,8 +553,13 @@ fg.fetch.subgraph <- function(graph, vertices,
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	ret <- .Call("R_FG_fetch_subgraph", graph, fm.as.vector(vertices), name, compress,
-				 PACKAGE="FlashGraphR")
+	vertices <- fm.as.vector(vertices)
+	r <- range(vertices)
+	stopifnot(r[1] >= 1)
+	stopifnot(r[2] <= fg.vcount(graph))
+	# In FlashGraph, vertex Id starts with 0.
+	ret <- .Call("R_FG_fetch_subgraph", graph, vertices - 1, as.character(name),
+				 as.logical(compress), PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
 	else
