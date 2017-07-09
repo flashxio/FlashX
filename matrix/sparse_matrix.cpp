@@ -771,6 +771,8 @@ dense_matrix::ptr sparse_matrix::multiply(dense_matrix::ptr right_mat,
 	bool out_in_mem = right_mat->is_in_mem();
 	size_t in_size = right_mat->get_num_rows() * right_mat->get_num_cols()
 		* right_mat->get_entry_size();
+	size_t out_size = get_num_rows() * right_mat->get_num_cols()
+		* right_mat->get_entry_size();
 	// If the right matrix is in memory or the memory is large enough to keep
 	// the entire input dense matrix.
 	if (right_mat->is_in_mem() || mem_size >= in_size) {
@@ -778,6 +780,7 @@ dense_matrix::ptr sparse_matrix::multiply(dense_matrix::ptr right_mat,
 		if (!right_mat->is_in_mem() && mem_size >= in_size)
 			right_mat = right_mat->conv_store(true, matrix_conf.get_num_nodes());
 
+		out_in_mem = mem_size > in_size + out_size;
 		detail::matrix_store::ptr out_mat = detail::matrix_store::create(
 				this->get_num_rows(), right_mat->get_num_cols(),
 				matrix_layout_t::L_ROW, right_mat->get_type(),
