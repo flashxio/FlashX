@@ -7,7 +7,7 @@ before_install:
 - gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9
 - gpg -a --export E084DAB9 | sudo apt-key add -
 - sudo apt-get update
-- sudo apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libaio-dev libatlas-base-dev zlib1g-dev
+- sudo apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev
 - sudo apt-get install -y r-base-core
 compiler:
 - g++
