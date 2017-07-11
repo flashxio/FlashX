@@ -2382,8 +2382,9 @@ void test_get_rowcols(int num_nodes)
 	block_size = 0;
 }
 
-void test_set_rowcols()
+void test_set_cols_tall()
 {
+	printf("test set cols in a tall matrix\n");
 	detail::mem_col_matrix_store::ptr data = detail::mem_col_matrix_store::create(
 			long_dim, 32, get_scalar_type<double>());
 	detail::mem_col_matrix_store::ptr res = detail::mem_col_matrix_store::create(
@@ -2393,6 +2394,7 @@ void test_set_rowcols()
 	data->init_randu<double>(0, 1);
 	new_data->init_randu<double>(0, 1);
 
+	// Set cols in a contiguous range in a tall matrix.
 	std::vector<off_t> idxs(new_data->get_num_cols());
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = 5 + i;
@@ -2408,6 +2410,7 @@ void test_set_rowcols()
 	dense_matrix::ptr res1 = m1->set_cols(idxs, m2);
 	verify_result(*res1, *res_mat, equal_func<double>());
 
+	// Set cols in a range with gaps in a tall matrix.
 	memcpy(res->get_raw_arr(), data->get_raw_arr(),
 			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
 	for (size_t i = 2; i < 22; i += 2)
@@ -2420,6 +2423,7 @@ void test_set_rowcols()
 	res1 = m1->set_cols(2, 22, 2, m2);
 	verify_result(*res1, *res_mat, equal_func<double>());
 
+	// Set individual cols in a sorted order in a tall matrix.
 	idxs[0] = 3;
 	idxs[1] = 4;
 	idxs[2] = 5;
@@ -2442,6 +2446,7 @@ void test_set_rowcols()
 	res1 = m1->set_cols(idxs, m2);
 	verify_result(*res1, *res_mat, equal_func<double>());
 
+	// Set cols in a random order in a tall matrix.
 	for (size_t i = 0; i < idxs.size(); i++)
 		idxs[i] = random() % data->get_num_cols();
 	memcpy(res->get_raw_arr(), data->get_raw_arr(),
@@ -2455,6 +2460,82 @@ void test_set_rowcols()
 	m2 = dense_matrix::create(new_data);
 	res1 = m1->set_cols(idxs, m2);
 	verify_result(*res1, *res_mat, equal_func<double>());
+}
+
+void test_set_rows_tall()
+{
+	printf("test set rows in a tall matrix\n");
+	detail::mem_row_matrix_store::ptr data = detail::mem_row_matrix_store::create(
+			long_dim, 32, get_scalar_type<double>());
+	detail::mem_row_matrix_store::ptr res = detail::mem_row_matrix_store::create(
+			long_dim, 32, get_scalar_type<double>());
+	detail::mem_row_matrix_store::ptr new_data = detail::mem_row_matrix_store::create(
+			long_dim / 100, 32, get_scalar_type<double>());
+	data->init_randu<double>(0, 1);
+	new_data->init_randu<double>(0, 1);
+
+	// Set rows in a sorted order in a tall matrix.
+	std::vector<off_t> idxs(new_data->get_num_rows());
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % data->get_num_rows();
+	std::sort(idxs.begin(), idxs.end());
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(res->get_row(idxs[i]), new_data->get_row(i),
+				data->get_num_cols() * data->get_entry_size());
+
+	dense_matrix::ptr res_mat = dense_matrix::create(res);
+	dense_matrix::ptr m1 = dense_matrix::create(data);
+	dense_matrix::ptr m2 = dense_matrix::create(new_data);
+	dense_matrix::ptr res1 = m1->set_rows(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	// Set rows in a random order in a tall matrix.
+	for (size_t i = 0; i < idxs.size(); i++)
+		idxs[i] = random() % data->get_num_rows();
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < idxs.size(); i++)
+		memcpy(res->get_row(idxs[i]), new_data->get_row(i),
+				data->get_num_cols() * data->get_entry_size());
+
+	res_mat = dense_matrix::create(res);
+	m1 = dense_matrix::create(data);
+	m2 = dense_matrix::create(new_data);
+	res1 = m1->set_rows(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	// Set rows in a tall col matrix
+	res_mat = dense_matrix::create(res);
+	m1 = dense_matrix::create(data);
+	m1 = m1->conv2(matrix_layout_t::L_COL);
+	m2 = dense_matrix::create(new_data);
+	m2 = m2->conv2(matrix_layout_t::L_COL);
+	res1 = m1->set_rows(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	// Set cols in a random order in a wide matrix.
+	res_mat = dense_matrix::create(res->transpose());
+	m1 = dense_matrix::create(data->transpose());
+	m2 = dense_matrix::create(new_data->transpose());
+	res1 = m1->set_cols(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	// Set rows in a tall col matrix
+	res_mat = dense_matrix::create(res->transpose());
+	m1 = dense_matrix::create(data->transpose());
+	m1 = m1->conv2(matrix_layout_t::L_ROW);
+	m2 = dense_matrix::create(new_data->transpose());
+	m2 = m2->conv2(matrix_layout_t::L_ROW);
+	res1 = m1->set_cols(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+}
+
+void test_set_rowcols()
+{
+	test_set_cols_tall();
+	test_set_rows_tall();
 }
 
 void _test_repeat_rowcols(dense_matrix::ptr mat, size_t long_dim)

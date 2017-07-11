@@ -44,6 +44,7 @@
 #include "data_frame.h"
 #include "project_matrix_store.h"
 #include "set_data_matrix_store.h"
+#include "set_rc_matrix_store.h"
 
 namespace fm
 {
@@ -3315,11 +3316,24 @@ dense_matrix::ptr dense_matrix::scale_rows(col_vec::const_ptr vals) const
 	}
 }
 
+namespace
+{
+struct comp_pair_second
+{
+	bool operator()(const std::pair<off_t, off_t> &p1,
+			const std::pair<off_t, off_t> &p2) const {
+		if (p1.second == p2.second)
+			return p1.first < p2.first;
+		else
+			return p1.second < p2.second;
+	}
+};
+
+}
+
 dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 			dense_matrix::ptr cols) const
 {
-	if (is_wide())
-		return dense_matrix::ptr();
 	if (idxs.size() != cols->get_num_cols()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The number of new columns doesn't match the col index";
@@ -3330,11 +3344,51 @@ dense_matrix::ptr dense_matrix::set_cols(const std::vector<off_t> &idxs,
 			<< "#rows in the new matrix doesn't match the one in this matrix";
 		return dense_matrix::ptr();
 	}
+	if (cols->get_type() != get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "new cols has a different type";
+		return dense_matrix::ptr();
+	}
 	for (size_t i = 0; i < idxs.size(); i++)
 		if (idxs[i] < 0 || (size_t) idxs[i] >= get_num_cols()) {
 			BOOST_LOG_TRIVIAL(error) << "The col index is out of range";
 			return dense_matrix::ptr();
 		}
+
+	if (is_wide()) {
+		cols = cols->conv2(matrix_layout_t::L_COL);
+		cols = cols->conv_store(true, -1);
+
+		std::shared_ptr<std::vector<off_t> > idx_ptr(new std::vector<off_t>());
+		if (std::is_sorted(idxs.begin(), idxs.end()))
+			*idx_ptr = idxs;
+		else {
+			std::vector<std::pair<off_t, off_t> > p(idxs.size());
+			for (size_t i = 0; i < p.size(); i++) {
+				p[i].first = i;
+				p[i].second = idxs[i];
+			}
+			std::sort(p.begin(), p.end(), comp_pair_second());
+			idx_ptr = std::shared_ptr<std::vector<off_t> >(
+					new std::vector<off_t>(idxs.size()));
+			std::vector<off_t> locs(idxs.size());
+			for (size_t i = 0; i < p.size(); i++) {
+				locs[i] = p[i].first;
+				idx_ptr->at(i) = p[i].second;
+			}
+			cols = cols->get_cols(locs);
+		}
+		auto col_store
+			= std::dynamic_pointer_cast<const detail::mem_col_matrix_store>(
+					cols->get_raw_store());
+		detail::portion_mapply_op::const_ptr op(new detail::set_col_mapply_op(
+					idx_ptr, col_store, get_num_rows(), get_num_cols(),
+					get_type()));
+
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = get_raw_store();
+		return dense_matrix::create(detail::mapply_matrix_store::const_ptr(
+					new detail::mapply_matrix_store(ins, op, store_layout())));
+	}
 
 	detail::matrix_store::const_ptr col_store;
 	if (store_layout() == matrix_layout_t::L_COL)
