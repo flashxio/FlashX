@@ -1429,7 +1429,12 @@ setMethod("[", signature(x="fm"), function(x, i, j, drop=TRUE) {
 setMethod("[", signature(x="fmV"), function(x, i) fm.get.eles.vec(x, i))
 #' @rdname Extract
 setMethod("[<-", signature(x="fm", j="missing"),
-		  function(x, i, j, value) fm.set.rows(x, i, value))
+		  function(x, i, j, value) {
+			  if (fm.is.matrix(i) && ncol(i) == 2)
+				  fm.set.eles(x, i, value)
+			  else
+				  fm.set.rows(x, i, value)
+		  })
 #' @rdname Extract
 setMethod("[<-", signature(x="fm", i="missing"),
 		  function(x, i, j, value) fm.set.cols(x, j, value))

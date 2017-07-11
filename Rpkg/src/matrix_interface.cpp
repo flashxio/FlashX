@@ -1815,6 +1815,22 @@ RcppExport SEXP R_FM_get_submat(SEXP pmat, SEXP pmargin, SEXP pidxs)
 		return create_FMR_matrix(sub_m, FM_get_Rtype(pmat), "");
 }
 
+RcppExport SEXP R_FM_set_eles(SEXP pmat, SEXP pidxs, SEXP pdata)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr idx = get_matrix<dense_matrix>(pidxs);
+	idx = idx->cast_ele_type(get_scalar_type<off_t>());
+	dense_matrix::ptr data = get_matrix<dense_matrix>(pdata);;
+	col_vec::ptr vals = col_vec::create(data);
+	dense_matrix::ptr res = mat->set_eles(idx, vals);
+	if (res == NULL)
+		return R_NilValue;
+	else {
+		set_matrix<dense_matrix>(pmat, res);
+		return create_FMR_matrix(res, FM_get_Rtype(pmat), "");
+	}
+}
+
 RcppExport SEXP R_FM_set_submat(SEXP pmat, SEXP pmargin, SEXP pidxs, SEXP pdata)
 {
 	if (is_sparse(pmat)) {
