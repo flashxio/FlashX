@@ -69,8 +69,10 @@ init.params <- function(X, k, reg.covar, method, cov.type)
 {
 	N <- nrow(X)
 	if (method == "kmeans") {
-		res <- kmeans(X, k)
-		resp <- fm.as.sparse.matrix(fm.as.factor(res$cluster))
+		res <- fm.kmeans(X, k, 100)
+		resp <- fm.matrix(0, nrow(X), k)
+		idx <- cbind(fm.seq.int(1, nrow(X), 1), res$cluster)
+		resp[idx] <- 1
 	}
 	else if (method == "random") {
 		resp <- fm.runif.matrix(N, k, in.mem=fm.in.mem(X))
