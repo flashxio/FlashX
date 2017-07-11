@@ -62,6 +62,7 @@ add_library(FMatrix STATIC
 	sub_matrix_store.cpp
 	set_data_matrix_store.cpp
 	fm_utils.cpp
+	set_rc_matrix_store.cpp
 )
 
 if(ENABLE_TRILINOS)
