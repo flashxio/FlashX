@@ -1693,6 +1693,23 @@ fm.get.rows <- function(fm, idxs)
 	.new.fm(ret)
 }
 
+fm.set.eles <- function(fm, idxs, vals)
+{
+	stopifnot(!is.null(fm) && class(fm) == "fm")
+	stopifnot(!is.null(idxs) && class(idxs) == "fm")
+	# index starts with 0 in C/C++
+	idxs = idxs - 1
+	stopifnot(!is.null(vals))
+	if (is.atomic(vals) && length(vals) == 1)
+		vals <- fm.matrix(vals, nrow(fm), 1)
+	else
+		vals <- fm.as.vector(vals)
+	stopifnot(ncol(idxs) == 2)
+	stopifnot(ncol(vals) == 1)
+	ret <- .Call("R_FM_set_eles", fm, idxs, vals, PACKAGE="FlashR")
+	.new.fm(ret)
+}
+
 fm.set.rows <- function(fm, idxs, rows)
 {
 	stopifnot(!is.null(fm) && class(fm) == "fm")
