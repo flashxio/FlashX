@@ -367,7 +367,7 @@ std::shared_ptr<char> local_file_io::read_bytes(
 	read_complete(fd, (char *) addr, buf_size, expected_size);
 
 	char *buf = ((char *) addr) + local_off;
-	read_bytes = expected_size - local_off;
+	read_bytes = std::min(wanted_bytes, (size_t) (file_size - curr_off));
 	curr_off += read_bytes;
 	assert(curr_off <= file_size);
 	return std::shared_ptr<char>(buf, del_off_ptr(addr));

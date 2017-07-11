@@ -203,7 +203,6 @@ GMM.fit <- function(X, k, max.iter=100, tol=1e-3, reg.covar=1e-6,
 		eret <- fm.estep(X, params, cov.type)
 		params <- fm.mstep(X, eret$resp, reg.covar, cov.type)
 		lb <- compute.lower.bound(eret$resp, eret$norm)
-		print(lb)
 		if (i > 5 && abs(lb - prev.lb) < tol)
 			break
 		prev.lb <- lb

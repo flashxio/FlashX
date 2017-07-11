@@ -53,10 +53,14 @@
 #'   about the performed calculation, including an ARPACK exit code.}
 #' @name fm.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.spectral.embedding <- function(fm, nev, which=c("A, Aug, L, nL"),
+fg.spectral.embedding <- function(fg, nev, which=c("A, Aug, L, nL"),
 								  c=1/nrow(fm), ncv=2*nev, tol=1.0e-12)
 {
-	stopifnot(!is.null(fm))
+	stopifnot(!is.null(fg))
+	if (class(fg) == "fg")
+		fm <- fg.get.sparse.matrix(fg)
+	else
+		fm <- fg
 	stopifnot(class(fm) == "fm")
 	# multiply function for eigen on the adjacency matrix
 	# this is the default setting.

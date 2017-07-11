@@ -137,10 +137,14 @@ factor_col_vector::ptr factor_col_vector::create(dense_matrix::ptr mat)
 	// but we don't need these values to be sorted in a particular order.
 	data_frame::ptr df = cvec->groupby(count, true, false);
 	factor_map::ptr map;
+	detail::vec_store::ptr val_vec = df->get_vec(0);
+	// We should sort the values so that smaller values will be assigned
+	// smaller Id.
+	val_vec->sort();
 	if (df->get_vec(0)->get_type().is_floating_point())
-		map = factor_map_impl<double>::create(df->get_vec(0));
+		map = factor_map_impl<double>::create(val_vec);
 	else
-		map = factor_map_impl<long>::create(df->get_vec(0));
+		map = factor_map_impl<long>::create(val_vec);
 
 	// Construct the matrix with data mapped automatically.
 	std::vector<detail::matrix_store::const_ptr> in_mats(1,

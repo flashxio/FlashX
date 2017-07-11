@@ -15,6 +15,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# BFGS Search Direction
+#
+# This function returns the (L-BFGS) approximate inverse Hessian,
+# multiplied by the gradient
+#
+# If you pass in all previous directions/sizes, it will be the same as full BFGS
+# If you truncate to the k most recent directions/sizes, it will be L-BFGS
+#
+# s - previous search directions (p by k)
+# y - previous step sizes (p by k)
+# g - gradient (p by 1)
+# H0 - value of initial Hessian diagonal elements (scalar)
+lbfgs.H <- function(g, s, y, H0)
+{
+	k <- ncol(s)
+	print(k)
+
+	ro <- 1/colSums(y * s)
+	al <- rep(0, k)
+	be <- rep(0, k)
+
+	q1 <- as.vector(g)
+	for (i in k:1) {
+		al[i] <- ro[i]*(t(s[,i]) %*% q1)
+		q1 <- q1-al[i]*y[,i]
+	}
+
+	# Multiply by Initial Hessian
+	r1 <- H0 * q1
+	for (i in 1:k) {
+		be[i] <- ro[i]*(t(y[,i]) %*% r1)
+		r1 <- r1 + s[,i]*(al[i]-be[i]);
+	}
+	r1
+}
+
 gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 {
 	# Add x_0 = 1 as the first column
@@ -37,6 +73,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 	eta.est <- 1
 	# Look at the values over each iteration
 	theta.path <- theta
+	prev.g <- NULL
 	for (i in 1:params$num.iters) {
 		print(paste("iter:", i))
 		g <- get.grad(X, y, theta)
@@ -80,10 +117,29 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 			h.max <- max(abs(H[H != 0]))
 			if (h.max > 1)
 				H <- H / h.max
-			g <- as.matrix(g / length(y))
+			g <- as.matrix(g) / length(y)
 			z <- pcg(H, as.vector(-g), maxiter=1000, tol=1e-06)
 			z <- as.matrix(t(z))
 			params$linesearch <- TRUE
+		}
+		else if (method == "LBFGS" && !is.null(prev.g)) {
+			params$linesearch <- TRUE
+			g <- as.matrix(g / length(y))
+			if (exists("S") && ncol(S) > params$L) {
+				S[, 1:(params$L - 1)] <- S[, 2:params$L]
+				Y[, 1:(params$L - 1)] <- Y[, 2:params$L]
+				S[, params$L] <- as.vector(prev.step)
+				Y[, params$L] <- as.vector(g - prev.g)
+			}
+			else if (exists("S")) {
+				S <- cbind(S, as.vector(prev.step))
+				Y <- cbind(Y, as.vector(g - prev.g))
+			}
+			else {
+				S <- matrix(prev.step, length(prev.step), 1)
+				Y <- matrix(g - prev.g, length(g), 1)
+			}
+			z <- -lbfgs.H(g, S, Y, 1)
 		}
 		else {
 			params$linesearch <- TRUE
@@ -92,6 +148,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 		}
 		l <- as.vector(l)/length(y)
 		cat(i,  ": L2(g) =", L2(g), ", cost:", l, "\n")
+		prev.g <- g
 
 		eta <- eta.est
 		if (params$linesearch) {
@@ -110,6 +167,7 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 		if (eta == 1)
 			params$linesearch <- FALSE
 
+		prev.step <- z * eta
 		theta <- theta + z * eta
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
