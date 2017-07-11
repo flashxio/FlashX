@@ -2532,8 +2532,48 @@ void test_set_rows_tall()
 	verify_result(*res1, *res_mat, equal_func<double>());
 }
 
+void test_set_eles()
+{
+	detail::mem_matrix_store::ptr data = detail::mem_row_matrix_store::create(
+			1000, 32, get_scalar_type<double>());
+	detail::mem_matrix_store::ptr col_idx = detail::mem_col_matrix_store::create(
+			1000, 1, get_scalar_type<off_t>());
+	detail::mem_matrix_store::ptr new_data = detail::mem_row_matrix_store::create(
+			1000, 1, get_scalar_type<double>());
+	detail::mem_matrix_store::ptr res = detail::mem_row_matrix_store::create(
+			1000, 32, get_scalar_type<double>());
+	data->init_randu<double>(0, 1);
+	col_idx->init_randu<off_t>(0, data->get_num_cols() - 1);
+	new_data->init_randu<double>(0, 1);
+
+	memcpy(res->get_raw_arr(), data->get_raw_arr(),
+			data->get_num_rows() * data->get_num_cols() * data->get_entry_size());
+	for (size_t i = 0; i < data->get_num_rows(); i++) {
+		off_t idx = *(off_t *) col_idx->get(i, 0);
+		memcpy(res->get(i, idx), new_data->get(i, 0), res->get_type().get_size());
+	}
+
+	printf("test set elements on a tall matrix\n");
+	std::vector<dense_matrix::ptr> idx_vec(2);
+	idx_vec[0] = dense_matrix::create_seq<off_t>(0, 1,
+			data->get_num_rows(), 1, matrix_layout_t::L_COL, false);
+	idx_vec[1] = dense_matrix::create(col_idx);
+	dense_matrix::ptr idxs = dense_matrix::cbind(idx_vec);
+	dense_matrix::ptr res_mat = dense_matrix::create(res);
+	dense_matrix::ptr m1 = dense_matrix::create(data);
+	col_vec::ptr m2 = col_vec::create(new_data);
+	dense_matrix::ptr res1 = m1->set_eles(idxs, m2);
+	verify_result(*res1, *res_mat, equal_func<double>());
+
+	printf("test set elements on a wide matrix\n");
+	res1 = m1->set_eles(idxs, m2);
+	res1 = res1->transpose();
+	verify_result(*res1, *res_mat->transpose(), equal_func<double>());
+}
+
 void test_set_rowcols()
 {
+	test_set_eles();
 	test_set_cols_tall();
 	test_set_rows_tall();
 }

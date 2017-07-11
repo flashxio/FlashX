@@ -274,6 +274,14 @@ public:
 			size_t step, dense_matrix::ptr rows) const;
 
 	/*
+	 * This method sets individual elements in a matrix. The index matrix
+	 * contains two columns and each row specifies the coordinate of the element
+	 * to be modified.
+	 */
+	virtual dense_matrix::ptr set_eles(dense_matrix::ptr idx,
+			std::shared_ptr<col_vec> vals) const;
+
+	/*
 	 * Clone the matrix.
 	 * The class can't modify the matrix data that it points to, but it
 	 * can modify the pointer. If someone changes in the pointer in the cloned

@@ -215,4 +215,10 @@ data_frame::ptr col_vec::groupby(agg_operate::const_ptr op, bool with_val,
 	return ret;
 }
 
+bool col_vec::is_seq() const
+{
+	// TODO
+	return true;
+}
+
 }
