@@ -3472,6 +3472,48 @@ dense_matrix::ptr dense_matrix::set_rows(size_t start, size_t stop, size_t step,
 	return tmp->transpose();
 }
 
+dense_matrix::ptr dense_matrix::set_eles(dense_matrix::ptr idx,
+		col_vec::ptr vals) const
+{
+	if (idx->get_num_cols() != 2) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The index matrix should have two cols";
+		return dense_matrix::ptr();
+	}
+	if (idx->get_type() != get_scalar_type<off_t>()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The index matrix should have type 'off_t'";
+		return dense_matrix::ptr();
+	}
+	idx = idx->conv2(matrix_layout_t::L_COL);
+	if (idx->get_num_rows() != get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "We only support replacing one element in every row";
+		return dense_matrix::ptr();
+	}
+	col_vec::ptr row_idx = col_vec::create(idx->get_col(0));
+	if (!row_idx->is_seq()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "We only support replacing one element in every row";
+		return dense_matrix::ptr();
+	}
+
+	if (is_wide()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "We only support replacing elements on tall matrices";
+		return dense_matrix::ptr();
+	}
+
+	std::vector<detail::matrix_store::const_ptr> ins(3);
+	ins[0] = get_raw_store();
+	ins[1] = idx->get_col(1)->get_raw_store();
+	ins[2] = vals->get_raw_store();
+	detail::portion_mapply_op::const_ptr op(new detail::set_ele_seq_mapply_op(
+				true, get_num_rows(), get_num_cols(), get_type()));
+	return dense_matrix::create(detail::mapply_matrix_store::const_ptr(
+				new detail::mapply_matrix_store(ins, op, store_layout())));
+}
+
 dense_matrix::ptr mapply_ele(const std::vector<dense_matrix::const_ptr> &mats,
 		detail::portion_mapply_op::const_ptr op, matrix_layout_t out_layout,
 		bool par_access)

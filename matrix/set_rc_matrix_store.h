@@ -91,6 +91,45 @@ public:
 	}
 };
 
+/*
+ * This class is passed to mapply_matrix_store to replace individual
+ * elements in a matrix. The class is specifically optimized for replacing
+ * one element in each row/col of a matrix.
+ */
+class set_ele_seq_mapply_op: public portion_mapply_op
+{
+	// This indicates whether we replace one element in every row or
+	// every column.
+	bool onrow;
+	volatile bool success;
+public:
+	set_ele_seq_mapply_op(bool onrow, size_t num_rows, size_t num_cols,
+			const scalar_type &type): portion_mapply_op(num_rows, num_cols,
+				type) {
+		this->onrow = onrow;
+		this->success = true;
+	}
+
+	virtual portion_mapply_op::const_ptr transpose() const {
+		return portion_mapply_op::const_ptr(new set_ele_seq_mapply_op(!onrow,
+					get_out_num_cols(), get_out_num_rows(), get_output_type()));
+	}
+
+	virtual void run(
+			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+			local_matrix_store &out) const;
+
+	virtual bool is_success() const {
+		return success;
+	}
+
+	virtual std::string to_string(
+			const std::vector<matrix_store::const_ptr> &mats) const {
+		return mats[0]->get_name() + "[" + mats[1]->get_name()
+			+ "]=" + mats[2]->get_name();
+	}
+};
+
 }
 
 }

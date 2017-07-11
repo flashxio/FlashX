@@ -97,6 +97,8 @@ public:
 		return ret;
 	}
 
+	bool is_seq() const;
+
 	size_t get_length() const {
 		return get_num_rows();
 	}

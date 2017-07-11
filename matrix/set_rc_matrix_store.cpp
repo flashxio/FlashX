@@ -126,6 +126,47 @@ void set_col_mapply_op::run(
 	}
 }
 
+void set_ele_seq_mapply_op::run(
+		const std::vector<local_matrix_store::const_ptr> &ins,
+		local_matrix_store &out) const
+{
+	auto in = ins[0];
+	auto idx_col = ins[1];
+	auto val = ins[2];
+	assert(in->get_type() == val->get_type());
+	assert(idx_col->get_type() == get_scalar_type<off_t>());
+	assert(idx_col->get_raw_arr() != NULL);
+	const off_t *idx = reinterpret_cast<const off_t *>(idx_col->get_raw_arr());
+	size_t entry_size = out.get_type().get_size();
+	set_ele_seq_mapply_op *mutable_this
+		= const_cast<set_ele_seq_mapply_op *>(this);
+	out.copy_from(*in);
+	if (onrow) {
+		for (size_t i = 0; i < out.get_num_rows(); i++) {
+			if ((size_t) idx[i] >= out.get_num_cols()) {
+				BOOST_LOG_TRIVIAL(error)
+					<< boost::format("out of range: idx: %1%, #cols: %2%")
+					% idx[i] % out.get_num_cols();
+				mutable_this->success = false;
+			}
+			else
+				memcpy(out.get(i, idx[i]), val->get(i, 0), entry_size);
+		}
+	}
+	else {
+		for (size_t i = 0; i < out.get_num_cols(); i++) {
+			if ((size_t) idx[i] >= out.get_num_rows()) {
+				BOOST_LOG_TRIVIAL(error)
+					<< boost::format("out of range: idx: %1%, #rows: %2%")
+					% idx[i] % out.get_num_cols();
+				mutable_this->success = false;
+			}
+			else
+				memcpy(out.get(idx[i], i), val->get(0, i), entry_size);
+		}
+	}
+}
+
 }
 
 }
