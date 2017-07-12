@@ -368,6 +368,20 @@ cdef class PyMatrix:
 
     # These are functions in numpy
 
+    def ravel(self, order='C'):
+        if (self.ndim == 1):
+            return self
+        elif (self.shape[0] == 1 or self.shape[1] == 1):
+            return self.as_vector()
+        else:
+            return None
+
+    def copy(self, order='K'):
+        if (order == 'K'):
+            return self
+        else:
+            return self.conv_layout(order)
+
     def astype(self, string dtype, order='K', casting='unsafe', subok=True, copy=True):
         # TODO I need to check casting
         arr = self.cast_ele_type(dtype)
