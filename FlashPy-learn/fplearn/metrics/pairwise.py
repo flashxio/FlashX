@@ -17,7 +17,7 @@ from scipy.spatial import distance
 from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
 
-import FlashPy as fp
+import flashpy as fp
 
 #from ..utils import check_array
 #from ..utils import gen_even_slices

@@ -16,9 +16,9 @@ import warnings
 
 import numpy as np
 from scipy import linalg
-from sparse import issparse
 
-import FlashPy as fp
+import flashpy as fp
+from flashpy.sparse import issparse
 
 #from . import check_random_state, deprecated
 #from .fixes import np_version

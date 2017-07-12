@@ -14,12 +14,11 @@ import warnings
 
 import numpy as np
 from scipy import linalg
-#from scipy import sparse
 from scipy.sparse import linalg as sp_linalg
 
-import sparse
-import linalg as fp_linalg
-import FlashPy as fp
+from flashpy import sparse
+from flashpy import linalg as fp_linalg
+import flashpy as fp
 
 #from .base import LinearClassifierMixin, LinearModel, _rescale_data
 #from .sag import sag_solver

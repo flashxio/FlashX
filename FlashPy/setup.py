@@ -18,15 +18,15 @@ ext_modules = cythonize(Extension(
 setup(
     name="flashpy",
     version="0.0.1",
-    description="A parallel and scalable machine learning library",
+    description="A parallel and scalable library for matrix operations",
     long_description="FlashPy parallelizes and scales the API in NumPy, " +\
-            "and the algorithms in SciPy and Scikit-learn. It extends " +\
+            "and the algorithms in SciPy. It extends " +\
             "memory capacity with SSDs and is optimized for NUMA machines",
     url="https://github.com/flashxio/FlashX",
     author="Da Zheng",
     author_email="dzheng5@jhu.edu",
     license="Apache License, Version 2.0",
-    keywords="parallel scalable machine-learning NumPy SciPy Scikit-learn",
+    keywords="parallel scalable machine-learning NumPy SciPy",
     install_requires=[
         "numpy",
         "Cython==0.23.5",

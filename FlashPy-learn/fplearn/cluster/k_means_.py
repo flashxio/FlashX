@@ -15,27 +15,24 @@ import warnings
 
 import numpy as np
 
-import sparse as sp
+import flashpy as fp
+from flashpy import sparse as sp
+from flashpy.mat import agg_sum as fp_agg_sum
+from flashpy.mat import agg_count as fp_agg_count
 
 #from ..base import BaseEstimator, ClusterMixin, TransformerMixin
-#from ..metrics.pairwise import euclidean_distances
-#from ..metrics.pairwise import pairwise_distances_argmin_min
-#from ..utils.extmath import row_norms, squared_norm, stable_cumsum
+from ..metrics.pairwise import euclidean_distances
+from ..metrics.pairwise import pairwise_distances_argmin_min
+from ..utils.extmath import row_norms, squared_norm, stable_cumsum
 #from ..utils.sparsefuncs_fast import assign_rows_csr
 #from ..utils.sparsefuncs import mean_variance_axis
 #from ..utils import check_array
-#from ..utils import check_random_state
+from ..utils import check_random_state
 #from ..utils import as_float_array
 #from ..utils import gen_batches
 #from ..utils.validation import check_is_fitted
 #from ..utils.validation import FLOAT_DTYPES
-#from ..externals.joblib import Parallel
-#from ..externals.joblib import delayed
-#from ..externals.six import string_types
-
-#from . import _k_means
-#from ._k_means_elkan import k_means_elkan
-
+from ..externals.six import string_types
 
 ###############################################################################
 # Initialization heuristic
@@ -171,8 +168,8 @@ def _centers_sparse(X, labels, n_clusters, distances):
 def _centers_dense(X, labels, n_clusters, distances):
     # TODO I need to handle empty clusters.
     labels = labels.as_factor(n_clusters)
-    centers = X.groupby_row(labels, fp.agg_sum)
-    cnts = labels.groupby(fp.agg_count, with_val=False)
+    centers = X.groupby_row(labels, fp_agg_sum)
+    cnts = labels.groupby(fp_agg_count, with_val=False)
     cnts = cnts[:,np.newaxis]
     centers /= cnts
     return centers
@@ -340,11 +337,12 @@ def k_means(X, n_clusters, init='k-means++', precompute_distances='auto',
         # the right result.
         algorithm = "full"
     if algorithm == "auto":
-        algorithm = "full" if sp.issparse(X) else 'elkan'
+        algorithm = "full" if sp.issparse(X) else 'full'
     if algorithm == "full":
         kmeans_single = _kmeans_single_lloyd
-    elif algorithm == "elkan":
-        kmeans_single = _kmeans_single_elkan
+#    elif algorithm == "elkan":
+#        kmeans_single = 
+#        kmeans_single = _kmeans_single_elkan
     else:
         raise ValueError("Algorithm must be 'auto', 'full' or 'elkan', got"
                          " %s" % str(algorithm))
@@ -391,29 +389,6 @@ def k_means(X, n_clusters, init='k-means++', precompute_distances='auto',
         return best_centers, best_labels, best_inertia, best_n_iter
     else:
         return best_centers, best_labels, best_inertia
-
-
-def _kmeans_single_elkan(X, n_clusters, max_iter=300, init='k-means++',
-                         verbose=False, x_squared_norms=None,
-                         random_state=None, tol=1e-4,
-                         precompute_distances=True):
-    if sp.issparse(X):
-        raise ValueError("algorithm='elkan' not supported for sparse input X")
-    X = check_array(X, order="C")
-    random_state = check_random_state(random_state)
-    if x_squared_norms is None:
-        x_squared_norms = row_norms(X, squared=True)
-    # init
-    centers = _init_centroids(X, n_clusters, init, random_state=random_state,
-                              x_squared_norms=x_squared_norms)
-    centers = np.ascontiguousarray(centers)
-    if verbose:
-        print('Initialization complete')
-    centers, labels, n_iter = k_means_elkan(X, n_clusters, centers, tol=tol,
-                                            max_iter=max_iter, verbose=verbose)
-    inertia = np.sum((X - centers[labels]) ** 2, dtype=np.float64)
-    return labels, inertia, centers, n_iter
-
 
 def _kmeans_single_lloyd(X, n_clusters, max_iter=300, init='k-means++',
                          verbose=False, x_squared_norms=None,
