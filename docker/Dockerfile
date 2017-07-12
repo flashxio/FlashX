@@ -17,13 +17,15 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so
 #https://github.com/icoming/FlashX/wiki/FlashX-Quick-Start-Guide
 #https://github.com/wking/dockerfile
 
+RUN echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/apt/sources.list
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9
 RUN apt-get update
 RUN apt-get install -y git cmake g++
 RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libaio-dev libatlas-base-dev zlib1g-dev
 RUN apt-get install -y numactl
 RUN if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then apt-get install -y libnuma-dev libhwloc-dev; fi
 #wget is for trilinos
-RUN apt-get install wget
+RUN apt-get install -y wget vim
 
 RUN git clone https://github.com/flashxio/FlashX.git
 
@@ -36,7 +38,7 @@ RUN make -j4
 
 ####Install and compile R
 #https://www.digitalocean.com/community/tutorials/how-to-set-up-r-on-ubuntu-14-04
-RUN apt-get -y install r-base
+RUN apt-get install -y r-base
 
 #run R >> intstall igraph install.packages("igraph")
 RUN R -e "install.packages('Rcpp', repos = 'http://cran.rstudio.com/')"
