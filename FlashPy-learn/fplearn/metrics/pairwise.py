@@ -22,7 +22,7 @@ import flashpy as fp
 #from ..utils import check_array
 #from ..utils import gen_even_slices
 #from ..utils import gen_batches
-#from sklearn.utils import row_norms, safe_sparse_dot
+from ..utils import row_norms, safe_sparse_dot
 #from ..preprocessing import normalize
 #from ..externals.joblib import Parallel
 #from ..externals.joblib import delayed
@@ -232,7 +232,6 @@ def euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False,
                 "Incompatible dimensions for X and X_norm_squared")
     else:
         XX = row_norms(X, squared=True)[:, np.newaxis]
-        print(XX.shape)
 
     if X is Y:  # shortcut in the common case euclidean_distances(X, X)
         YY = XX.T
