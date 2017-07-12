@@ -33,7 +33,7 @@ setup(
         "cython==0.23.5",
         ],
     package_dir = {"flashpy": os.path.join(".")},
-    packages=["flashpy"],
+    packages=["flashpy", "flashpy.linalg", "flashpy.sparse"],
 #    libraries =libraries,
 #    cmdclass = {'build_clib': flashpy_clib, 'build_ext': build_ext},
     ext_modules = ext_modules,

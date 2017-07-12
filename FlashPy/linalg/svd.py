@@ -1,13 +1,15 @@
-import numpy as np
-import FlashPy as fp
+from numpy import array as np_array
+from numpy import where as np_where
+from numpy import sqrt as np_sqrt
 from scipy import linalg
 from scipy.sparse.linalg import eigsh
 from scipy.sparse.linalg import LinearOperator
 
-#from ..sparse import issparse
-
-def issparse(a):
-    return False
+from ..sparse import issparse
+from .. import sqrt as fp_sqrt
+from .. import array as fp_array
+from .. import sum as fp_sum
+from ..mat import bop_div as fp_bop_div
 
 def svds(a, k=6, tol=0):
     if a.ndim != 2:
@@ -38,7 +40,7 @@ def svds(a, k=6, tol=0):
                 shape=(n, n))
 
     if (x_prod is not None and (size < 100 or k >= size / 2)):
-        x_prod = np.array(x_prod)
+        x_prod = np_array(x_prod)
         vals, vecs = linalg.eigh(x_prod)
         vals = vals[::-1][0:k]
         vecs = vecs[:,::-1][:,0:k]
@@ -47,14 +49,14 @@ def svds(a, k=6, tol=0):
 
     def rescale(x):
         x.set_cached(True)
-        scal = fp.sqrt(fp.sum(x * x, axis=0))
-        return x.mapply_rows(scal, fp.bop_div)
+        scal = fp_sqrt(fp_sum(x * x, axis=0))
+        return x.mapply_rows(scal, fp_bop_div)
 
     if (comp_right):
-        v = fp.array(vecs)
+        v = fp_array(vecs)
         u = rescale(a.dot(vecs))
     else:
-        u = fp.array(vecs)
+        u = fp_array(vecs)
         v = rescale(a.T.dot(vecs))
-    s = np.where(vals > 0, np.sqrt(vals), 0)
+    s = np_where(vals > 0, np_sqrt(vals), 0)
     return u, s, v.T
