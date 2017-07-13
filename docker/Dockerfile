@@ -53,10 +53,10 @@ RUN ./install_FlashGraphR.sh
 
 ####R finished####
 
-RUN apt-get install -y python3-pip
+RUN apt-get install -y python-pip
 RUN apt-get install -y libcurl4-openssl-dev libssl-dev
-RUN pip3 install --upgrade pip
-RUN pip3 install jupyter
+RUN pip install --upgrade pip
+RUN pip install jupyter
 RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos = 'http://cran.rstudio.com/')"
 RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
