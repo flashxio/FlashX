@@ -9,7 +9,7 @@ Ridge regression
 # License: BSD 3 clause
 
 
-#from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod
 import warnings
 
 import numpy as np
@@ -20,11 +20,11 @@ from flashpy import sparse
 from flashpy import linalg as fp_linalg
 import flashpy as fp
 
-#from .base import LinearClassifierMixin, LinearModel, _rescale_data
+from .base import LinearClassifierMixin, LinearModel, _rescale_data
 #from .sag import sag_solver
-#from ..base import RegressorMixin
+from ..base import RegressorMixin
 #from ..utils.extmath import safe_sparse_dot
-#from ..utils.extmath import row_norms
+from ..utils.extmath import row_norms
 #from ..utils import check_X_y
 #from ..utils import check_array
 #from ..utils import check_consistent_length
@@ -32,7 +32,7 @@ import flashpy as fp
 #from ..utils import column_or_1d
 #from ..preprocessing import LabelBinarizer
 #from ..model_selection import GridSearchCV
-#from ..externals import six
+from ..externals import six
 #from ..metrics.scorer import check_scoring
 
 """
@@ -457,4 +457,212 @@ def ridge_regression(X, y, alpha, sample_weight=None, solver='auto',
         return coef, n_iter
     else:
         return coef
+
+class _BaseRidge(six.with_metaclass(ABCMeta, LinearModel)):
+
+    @abstractmethod
+    def __init__(self, alpha=1.0, fit_intercept=True, normalize=False,
+                 copy_X=True, max_iter=None, tol=1e-3, solver="auto",
+                 random_state=None):
+        self.alpha = alpha
+        self.fit_intercept = fit_intercept
+        self.normalize = normalize
+        self.copy_X = copy_X
+        self.max_iter = max_iter
+        self.tol = tol
+        self.solver = solver
+        self.random_state = random_state
+
+    def fit(self, X, y, sample_weight=None):
+
+        if self.solver in ('sag', 'saga'):
+            _dtype = np.float64
+        else:
+            # all other solvers work at both float precision levels
+            _dtype = [np.float64, np.float32]
+
+#        X, y = check_X_y(X, y, ['csr', 'csc', 'coo'], dtype=_dtype,
+#                         multi_output=True, y_numeric=True)
+
+        if ((sample_weight is not None) and
+                np.atleast_1d(sample_weight).ndim > 1):
+            raise ValueError("Sample weights must be 1D array or scalar")
+
+        X, y, X_offset, y_offset, X_scale = self._preprocess_data(
+            X, y, self.fit_intercept, self.normalize, self.copy_X,
+            sample_weight=sample_weight)
+
+        # temporary fix for fitting the intercept with sparse data using 'sag'
+        if sparse.issparse(X) and self.fit_intercept:
+            self.coef_, self.n_iter_, self.intercept_ = ridge_regression(
+                X, y, alpha=self.alpha, sample_weight=sample_weight,
+                max_iter=self.max_iter, tol=self.tol, solver=self.solver,
+                random_state=self.random_state, return_n_iter=True,
+                return_intercept=True)
+            self.intercept_ += y_offset
+        else:
+            self.coef_, self.n_iter_ = ridge_regression(
+                X, y, alpha=self.alpha, sample_weight=sample_weight,
+                max_iter=self.max_iter, tol=self.tol, solver=self.solver,
+                random_state=self.random_state, return_n_iter=True,
+                return_intercept=False)
+            self._set_intercept(X_offset, y_offset, X_scale)
+
+        return self
+
+
+class Ridge(_BaseRidge, RegressorMixin):
+    """Linear least squares with l2 regularization.
+
+    This model solves a regression model where the loss function is
+    the linear least squares function and regularization is given by
+    the l2-norm. Also known as Ridge Regression or Tikhonov regularization.
+    This estimator has built-in support for multi-variate regression
+    (i.e., when y is a 2d-array of shape [n_samples, n_targets]).
+
+    Read more in the :ref:`User Guide <ridge_regression>`.
+
+    Parameters
+    ----------
+    alpha : {float, array-like}, shape (n_targets)
+        Regularization strength; must be a positive float. Regularization
+        improves the conditioning of the problem and reduces the variance of
+        the estimates. Larger values specify stronger regularization.
+        Alpha corresponds to ``C^-1`` in other linear models such as
+        LogisticRegression or LinearSVC. If an array is passed, penalties are
+        assumed to be specific to the targets. Hence they must correspond in
+        number.
+
+    copy_X : boolean, optional, default True
+        If True, X will be copied; else, it may be overwritten.
+
+    fit_intercept : boolean
+        Whether to calculate the intercept for this model. If set
+        to false, no intercept will be used in calculations
+        (e.g. data is expected to be already centered).
+
+    max_iter : int, optional
+        Maximum number of iterations for conjugate gradient solver.
+        For 'sparse_cg' and 'lsqr' solvers, the default value is determined
+        by scipy.sparse.linalg. For 'sag' solver, the default value is 1000.
+
+    normalize : boolean, optional, default False
+        This parameter is ignored when ``fit_intercept`` is set to False.
+        If True, the regressors X will be normalized before regression by
+        subtracting the mean and dividing by the l2-norm.
+        If you wish to standardize, please use
+        :class:`sklearn.preprocessing.StandardScaler` before calling ``fit``
+        on an estimator with ``normalize=False``.
+
+    solver : {'auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'}
+        Solver to use in the computational routines:
+
+        - 'auto' chooses the solver automatically based on the type of data.
+
+        - 'svd' uses a Singular Value Decomposition of X to compute the Ridge
+          coefficients. More stable for singular matrices than
+          'cholesky'.
+
+        - 'cholesky' uses the standard scipy.linalg.solve function to
+          obtain a closed-form solution.
+
+        - 'sparse_cg' uses the conjugate gradient solver as found in
+          scipy.sparse.linalg.cg. As an iterative algorithm, this solver is
+          more appropriate than 'cholesky' for large-scale data
+          (possibility to set `tol` and `max_iter`).
+
+        - 'lsqr' uses the dedicated regularized least-squares routine
+          scipy.sparse.linalg.lsqr. It is the fastest but may not be available
+          in old scipy versions. It also uses an iterative procedure.
+
+        - 'sag' uses a Stochastic Average Gradient descent, and 'saga' uses
+          its improved, unbiased version named SAGA. Both methods also use an
+          iterative procedure, and are often faster than other solvers when
+          both n_samples and n_features are large. Note that 'sag' and
+          'saga' fast convergence is only guaranteed on features with
+          approximately the same scale. You can preprocess the data with a
+          scaler from sklearn.preprocessing.
+
+        All last five solvers support both dense and sparse data. However,
+        only 'sag' and 'saga' supports sparse input when `fit_intercept` is
+        True.
+
+        .. versionadded:: 0.17
+           Stochastic Average Gradient descent solver.
+        .. versionadded:: 0.19
+           SAGA solver.
+
+    tol : float
+        Precision of the solution.
+
+    random_state : int, RandomState instance or None, optional, default None
+        The seed of the pseudo random number generator to use when shuffling
+        the data.  If int, random_state is the seed used by the random number
+        generator; If RandomState instance, random_state is the random number
+        generator; If None, the random number generator is the RandomState
+        instance used by `np.random`. Used when ``solver`` == 'sag'.
+
+        .. versionadded:: 0.17
+           *random_state* to support Stochastic Average Gradient.
+
+    Attributes
+    ----------
+    coef_ : array, shape (n_features,) or (n_targets, n_features)
+        Weight vector(s).
+
+    intercept_ : float | array, shape = (n_targets,)
+        Independent term in decision function. Set to 0.0 if
+        ``fit_intercept = False``.
+
+    n_iter_ : array or None, shape (n_targets,)
+        Actual number of iterations for each target. Available only for
+        sag and lsqr solvers. Other solvers will return None.
+
+        .. versionadded:: 0.17
+
+    See also
+    --------
+    RidgeClassifier, RidgeCV, :class:`sklearn.kernel_ridge.KernelRidge`
+
+    Examples
+    --------
+    >>> from sklearn.linear_model import Ridge
+    >>> import numpy as np
+    >>> n_samples, n_features = 10, 5
+    >>> np.random.seed(0)
+    >>> y = np.random.randn(n_samples)
+    >>> X = np.random.randn(n_samples, n_features)
+    >>> clf = Ridge(alpha=1.0)
+    >>> clf.fit(X, y) # doctest: +NORMALIZE_WHITESPACE
+    Ridge(alpha=1.0, copy_X=True, fit_intercept=True, max_iter=None,
+          normalize=False, random_state=None, solver='auto', tol=0.001)
+
+    """
+    def __init__(self, alpha=1.0, fit_intercept=True, normalize=False,
+                 copy_X=True, max_iter=None, tol=1e-3, solver="auto",
+                 random_state=None):
+        super(Ridge, self).__init__(alpha=alpha, fit_intercept=fit_intercept,
+                                    normalize=normalize, copy_X=copy_X,
+                                    max_iter=max_iter, tol=tol, solver=solver,
+                                    random_state=random_state)
+
+    def fit(self, X, y, sample_weight=None):
+        """Fit Ridge regression model
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix}, shape = [n_samples, n_features]
+            Training data
+
+        y : array-like, shape = [n_samples] or [n_samples, n_targets]
+            Target values
+
+        sample_weight : float or numpy array of shape [n_samples]
+            Individual weights for each sample
+
+        Returns
+        -------
+        self : returns an instance of self.
+        """
+        return super(Ridge, self).fit(X, y, sample_weight=sample_weight)
 
