@@ -282,6 +282,13 @@ cdef class PyMatrix:
             x = array(x)
         return x.mapply2(y, OP_DIV)
 
+    def __truediv__(x, y):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
+        return x.mapply2(y, OP_DIV)
+
     def __floordiv__(x, y):
         if (np.isscalar(x)):
             x = create_const(x, y.shape)
