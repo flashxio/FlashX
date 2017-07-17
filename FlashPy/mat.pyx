@@ -90,23 +90,23 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper()
         # create a vector with data from "data_addr".
         matrix_wrapper(intptr_t data_addr, size_t length,
-                const string &t)
+                const string &t) except+
         # create a matrix with data from "data_addr".
         matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
-                const string &t, const string layout)
+                const string &t, const string layout) except+
         # create an empty vector with the specified size
-        matrix_wrapper(size_t length, string t)
+        matrix_wrapper(size_t length, string t) except+
         # create an empty matrix with the specified size
-        matrix_wrapper(size_t nrow, size_t ncol, string t, string layout)
+        matrix_wrapper(size_t nrow, size_t ncol, string t, string layout) except+
 
         void init_seq[T](T start, T stride, bool byrow)
-        void init_const_float(double val)
-        void init_const_int(long val)
+        void init_const_float(double val) except+
+        void init_const_int(long val) except+
 
         void set_cached(bool)
 
-        matrix_wrapper as_factor(int num_levels) const
-        matrix_wrapper as_vector() const
+        matrix_wrapper as_factor(int num_levels) except+
+        matrix_wrapper as_vector() except+
         matrix_wrapper as_matrix() const
 
         size_t get_num_rows() const
@@ -123,7 +123,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         bool is_valid() const
 
         bool materialize_self() const
-        matrix_wrapper cast_ele_type(string dtyp) const
+        matrix_wrapper cast_ele_type(string dtyp) except+
 
         matrix_wrapper get_col(long idx) const
         matrix_wrapper get_row(long idx) const
@@ -143,18 +143,18 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper conv_store(bool in_mem, int num_nodes) const
         matrix_wrapper conv_layout(const string layout) const
         matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
-                bulk_op_idx_t right_op) const
-        matrix_wrapper multiply(matrix_wrapper m) const
+                bulk_op_idx_t right_op) except+
+        matrix_wrapper multiply(matrix_wrapper m) except+
         matrix_wrapper aggregate(agg_op_idx_t op)
         matrix_wrapper agg_row(agg_op_idx_t op) const
         matrix_wrapper agg_col(agg_op_idx_t op) const
-        matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const
+        matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) except+
         pair[matrix_wrapper, matrix_wrapper] groupby(agg_op_idx_t op, bool with_val) const
-        matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) const
-        matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) const
-        matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) const
+        matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) except+
+        matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) except+
+        matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) except+
         matrix_wrapper sapply(bulk_uop_idx_t op) const
-        matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) const
+        matrix_wrapper apply_scalar(scalar_wrapper var, bulk_op_idx_t op) except+
         matrix_wrapper ifelse(matrix_wrapper x, matrix_wrapper y) const
 
 def is_idx_range_all(idxs):
