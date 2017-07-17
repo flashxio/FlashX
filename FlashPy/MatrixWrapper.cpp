@@ -533,4 +533,122 @@ std::pair<matrix_wrapper, matrix_wrapper> matrix_wrapper::groupby(
 	}
 }
 
+matrix_wrapper matrix_wrapper::get_col(long idx) const
+{
+	check_mat();
+	auto vec = mat->get_col(idx);
+	if (vec == NULL)
+		throw std::invalid_argument("can't get a col");
+	return matrix_wrapper(col_vec::create(vec));
+}
+
+matrix_wrapper matrix_wrapper::get_row(long idx) const
+{
+	check_mat();
+	auto vec = mat->get_row(idx);
+	if (vec == NULL)
+		throw std::invalid_argument("can't get a row");
+	return matrix_wrapper(col_vec::create(vec));
+}
+
+matrix_wrapper matrix_wrapper::get_cols(const std::vector<off_t> &idxs) const
+{
+	check_mat();
+	auto ret = mat->get_cols(idxs);
+	if (ret == NULL)
+		throw std::invalid_argument("can't get cols");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::get_rows(const std::vector<off_t> &idxs) const
+{
+	check_mat();
+	auto ret = mat->get_rows(idxs);
+	if (ret == NULL)
+		throw std::invalid_argument("can't get rows");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::get_cols(matrix_wrapper idxs) const
+{
+	check_mat();
+	idxs.check_mat();
+	auto ret = mat->get_cols(get_vec(idxs.mat));
+	if (ret == NULL)
+		throw std::invalid_argument("can't get cols");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::get_rows(matrix_wrapper idxs) const
+{
+	check_mat();
+	idxs.check_mat();
+	auto ret = mat->get_rows(get_vec(idxs.mat));
+	if (ret == NULL)
+		throw std::invalid_argument("can't get rows");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::get_cols(size_t start, size_t end, long step) const
+{
+	check_mat();
+	auto ret = mat->get_cols(start, end, step);
+	if (ret == NULL)
+		throw std::invalid_argument("can't get cols");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::get_rows(size_t start, size_t end, long step) const
+{
+	check_mat();
+	auto ret = mat->get_rows(start, end, step);
+	if (ret == NULL)
+		throw std::invalid_argument("can't get rows");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::set_cols(const std::vector<off_t> &idxs,
+		matrix_wrapper cols)
+{
+	check_mat();
+	auto ret = mat->set_cols(idxs, cols.mat);
+	if (ret == NULL)
+		throw std::invalid_argument("can't set cols");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::set_rows(const std::vector<off_t> &idxs,
+		matrix_wrapper rows)
+{
+	check_mat();
+	auto ret = mat->set_rows(idxs, rows.mat);
+	if (ret == NULL)
+		throw std::invalid_argument("can't set rows");
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
 }

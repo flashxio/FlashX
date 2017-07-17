@@ -227,58 +227,22 @@ public:
 
 	matrix_wrapper cast_ele_type(std::string dtyp) const;
 
-	matrix_wrapper get_col(long idx) const {
-		check_mat();
-		return matrix_wrapper(mat->get_col(idx));
-	}
+	matrix_wrapper get_col(long idx) const;
+	matrix_wrapper get_row(long idx) const;
 
-	matrix_wrapper get_row(long idx) const {
-		check_mat();
-		return matrix_wrapper(mat->get_row(idx));
-	}
+	matrix_wrapper get_cols(const std::vector<off_t> &idxs) const;
+	matrix_wrapper get_rows(const std::vector<off_t> &idxs) const;
 
-	matrix_wrapper get_cols(const std::vector<off_t> &idxs) const {
-		check_mat();
-		return matrix_wrapper(mat->get_cols(idxs));
-	}
+	matrix_wrapper get_cols(matrix_wrapper idxs) const;
+	matrix_wrapper get_rows(matrix_wrapper idxs) const;
 
-	matrix_wrapper get_rows(const std::vector<off_t> &idxs) const {
-		check_mat();
-		return matrix_wrapper(mat->get_rows(idxs));
-	}
-
-	matrix_wrapper get_cols(matrix_wrapper idxs) const {
-		check_mat();
-		idxs.check_mat();
-		return matrix_wrapper(mat->get_cols(get_vec(idxs.mat)));
-	}
-
-	matrix_wrapper get_rows(matrix_wrapper idxs) const {
-		check_mat();
-		idxs.check_mat();
-		return matrix_wrapper(mat->get_rows(get_vec(idxs.mat)));
-	}
-
-	matrix_wrapper get_cols(size_t start, size_t end, long step) const {
-		check_mat();
-		return matrix_wrapper(mat->get_cols(start, end, step));
-	}
-
-	matrix_wrapper get_rows(size_t start, size_t end, long step) const {
-		check_mat();
-		return matrix_wrapper(mat->get_rows(start, end, step));
-	}
+	matrix_wrapper get_cols(size_t start, size_t end, long step) const;
+	matrix_wrapper get_rows(size_t start, size_t end, long step) const;
 
 	matrix_wrapper set_cols(const std::vector<off_t> &idxs,
-			matrix_wrapper cols) {
-		check_mat();
-		return matrix_wrapper(mat->set_cols(idxs, cols.mat));
-	}
+			matrix_wrapper cols);
 	matrix_wrapper set_rows(const std::vector<off_t> &idxs,
-			matrix_wrapper rows) {
-		check_mat();
-		return matrix_wrapper(mat->set_rows(idxs, rows.mat));
-	}
+			matrix_wrapper rows);
 
 	matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols) {
 		check_mat();
