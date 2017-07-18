@@ -494,7 +494,18 @@ bool init_flashpy_c(const std::string &conf_file)
 matrix_wrapper matrix_wrapper::ifelse(matrix_wrapper x, matrix_wrapper y) const
 {
 	check_mat();
-	return matrix_wrapper(mat->ifelse(*x.mat, *y.mat));
+	dense_matrix::ptr left, right;
+	if (x.mat->get_type() == y.mat->get_type()) {
+		left = x.mat;
+		right = y.mat;
+	}
+	else {
+		const scalar_type &common_type = get_larger_type(x.mat->get_type(),
+				y.mat->get_type());
+		left = x.mat->cast_ele_type(common_type);
+		right = y.mat->cast_ele_type(common_type);
+	}
+	return matrix_wrapper(mat->ifelse(*left, *right));
 }
 
 static inline std::shared_ptr<fm::factor_col_vector> get_factor(
