@@ -186,7 +186,7 @@ cdef class PyMatrix:
     cdef matrix_wrapper mat      # hold a C++ instance which we're wrapping
     cdef readonly int ndim
     cdef readonly object shape
-    cdef readonly string dtype
+    cdef readonly object dtype
     cdef readonly object flags
     cdef readonly long size
     cdef readonly long itemsize
@@ -202,6 +202,7 @@ cdef class PyMatrix:
         self.flags = flagsobj()
 
     def __array__(self, dtype = None):
+        cdef PyMatrix arr
         if (dtype is None):
             arr = self
         else:
@@ -333,8 +334,7 @@ cdef class PyMatrix:
         return self.sapply(UOP_ABS)
 
     def __invert__(self):
-        cdef object dtype = self.dtype
-        if (dtype == "b"):
+        if (self.dtype == np.dtype('b')):
             return self.sapply(UOP_NOT)
         # TODO I need to a specialized operator for this.
         elif (self.mat.is_floating_point()):
@@ -382,7 +382,7 @@ cdef class PyMatrix:
         else:
             self.shape = (self.mat.get_num_rows(), self.mat.get_num_cols())
             self.ndim = 2
-        self.dtype = self.mat.get_type_str()
+        self.dtype = np.dtype(self.mat.get_type_str())
         self.flags.set_layout(self.mat.get_layout())
         self.size = self.mat.get_num_rows() * self.mat.get_num_cols()
         self.itemsize = self.mat.get_entry_size()
@@ -431,7 +431,7 @@ cdef class PyMatrix:
         else:
             return self.conv_layout(order)
 
-    def astype(self, string dtype, order='K', casting='unsafe', subok=True, copy=True):
+    def astype(self, dtype, order='K', casting='unsafe', subok=True, copy=True):
         # TODO I need to check casting
         arr = self.cast_ele_type(dtype)
         if (order == 'C' or order == 'F'):
@@ -661,9 +661,14 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
-    def cast_ele_type(self, string dtype):
+    def cast_ele_type(self, dtype):
+        if (not isinstance(dtype, np.dtype)):
+            dtype = np.dtype(dtype)
         cdef PyMatrix ret = PyMatrix()
-        ret.mat = self.mat.cast_ele_type(dtype)
+        if (isinstance(dtype, np.dtype)):
+            ret.mat = self.mat.cast_ele_type(dtype.char)
+        else:
+            ret.mat = self.mat.cast_ele_type(dtype.char)
         ret.init_attr()
         return ret
 
@@ -855,6 +860,8 @@ def empty_like(a, dtype=None, order='K', subok=True):
     shape = a.shape
     if (dtype is None):
         dtype = a.dtype
+    elif (not isinstance(dtype, np.dtype)):
+        dtype = np.dtype(dtype)
 
     # TODO what is the input array isn't contiguous.
     if (order == 'K' and a.flags.c_contiguous):
@@ -865,9 +872,9 @@ def empty_like(a, dtype=None, order='K', subok=True):
         order = 'C'
 
     if (len(shape) == 1):
-        ret.mat = matrix_wrapper(shape[0], dtype)
+        ret.mat = matrix_wrapper(shape[0], dtype.char)
     elif (len(shape) == 2):
-        ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
+        ret.mat = matrix_wrapper(shape[0], shape[1], dtype.char, order)
     else:
         raise ValueError("don't support more than 2 dimensions")
     ret.init_attr()
@@ -875,30 +882,32 @@ def empty_like(a, dtype=None, order='K', subok=True):
 
 def empty(shape, dtype='f', order='C'):
     cdef PyMatrix ret = PyMatrix()
+    if (not isinstance(dtype, np.dtype)):
+        dtype = np.dtype(dtype)
     if (np.isscalar(shape)):
-        ret.mat = matrix_wrapper(shape, dtype)
+        ret.mat = matrix_wrapper(shape, dtype.char)
     elif (len(shape) == 1):
-        ret.mat = matrix_wrapper(shape[0], dtype)
+        ret.mat = matrix_wrapper(shape[0], dtype.char)
     elif (len(shape) == 2):
-        ret.mat = matrix_wrapper(shape[0], shape[1], dtype, order)
+        ret.mat = matrix_wrapper(shape[0], shape[1], dtype.char, order)
     else:
         raise ValueError("don't support more than 2 dimensions")
     ret.init_attr()
     return ret
 
 def init_val(PyMatrix data, dtype, val):
-    if (dtype == 'f' or dtype == 'd' or dtype == 'g'):
+    if (np.issubdtype(dtype, float)):
         data.mat.init_const_float(val)
     else:
         data.mat.init_const_int(val)
 
 def create_const(x, shape, order='C'):
     if (isinstance(x, float)):
-        dtype = 'd'
+        dtype = np.dtype('d')
     elif (isinstance(x, long)):
-        dtype = 'l'
+        dtype = np.dtype('l')
     elif (isinstance(x, int)):
-        dtype = 'i'
+        dtype = np.dtype('i')
     else:
         raise ValueError("a scalar with unknown type")
     ret = empty(shape, dtype, order)
