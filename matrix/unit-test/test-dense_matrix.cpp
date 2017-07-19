@@ -376,6 +376,33 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 	}
 }
 
+void test_mapply_sink(dense_matrix::ptr sink)
+{
+	// Mapply on a sink matrix.
+	printf("Test mapply on a sink matrix\n");
+	assert(sink->get_raw_store()->is_sink());
+	sink = sink->cast_ele_type(get_scalar_type<double>());
+	dense_matrix tmp = *sink + *sink;
+	tmp = tmp * 0.5;
+	tmp.materialize_self();
+	sink->materialize_self();
+	verify_result(*sink, tmp, equal_func<double>());
+}
+
+void test_mapply_sink_t(dense_matrix::ptr sink)
+{
+	printf("Test mapply on a sink matrix and transpose\n");
+	assert(sink->get_raw_store()->is_sink());
+	sink = sink->cast_ele_type(get_scalar_type<double>());
+	dense_matrix tmp = *sink + *sink;
+	tmp = tmp * 0.5;
+	sink = sink->transpose();
+	dense_matrix::ptr tmp1 = tmp.transpose();
+	tmp1->materialize_self();
+	sink->materialize_self();
+	verify_result(*sink, *tmp1, equal_func<double>());
+}
+
 void test_multiply_scalar(int num_nodes)
 {
 	printf("Test scalar multiplication\n");
@@ -439,6 +466,11 @@ void test_multiply(int num_nodes)
 	correct = blas_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
+
+	res = m1->multiply(*m2);
+	test_mapply_sink(res);
+	res = m1->multiply(*m2);
+	test_mapply_sink_t(res);
 
 	printf("Test transpose of self cross prod\n");
 	res = m1->multiply(*m2);
@@ -754,6 +786,13 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
+
+	// Mapply on a sink matrix.
+	printf("Test mapply on an agg matrix\n");
+	dense_matrix::ptr sink = m1->aggregate(matrix_margin::MAR_COL, agg_operate::create(op));
+	test_mapply_sink(sink);
+	sink = m1->aggregate(matrix_margin::MAR_COL, agg_operate::create(op));
+	test_mapply_sink_t(sink);
 }
 
 void test_agg_sub_col(int num_nodes)
@@ -2136,6 +2175,14 @@ void _test_groupby(dense_matrix::ptr mat)
 	dense_matrix::ptr diff = group_sum_t->minus(*group_sum1);
 	scalar_variable::ptr sum = diff->sum();
 	assert(scalar_variable::get_val<int>(*sum) == 0);
+
+	// Test mapply on groupby matrix.
+	dense_matrix::ptr sink = mat->groupby_row(rand_factors, add);
+	if (sink->get_raw_store()->is_sink()) {
+		test_mapply_sink(sink);
+		sink = mat->groupby_row(rand_factors, add);
+		test_mapply_sink_t(sink);
+	}
 }
 
 dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)

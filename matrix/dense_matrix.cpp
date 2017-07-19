@@ -925,10 +925,15 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 		return dense_matrix::ptr();
 
 	// If input matrices are sink matrices, we materialize them first.
-	if (store->is_sink())
-		materialize_self();
-	if (m.store->is_sink())
-		m.materialize_self();
+	if (store->is_sink() || m.store->is_sink()) {
+		std::vector<detail::matrix_store::const_ptr> stores(2);
+		stores[0] = get_raw_store();
+		stores[1] = m.get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(new mapply2_op(op,
+					get_num_rows(), get_num_cols()));
+		return dense_matrix::create(detail::mapply_sink_store::create(
+					stores, portion_op));
+	}
 
 	std::vector<detail::matrix_store::const_ptr> ins(2);
 	ins[0] = this->get_raw_store();
@@ -1025,8 +1030,14 @@ dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 	}
 
 	// If the input matrix is a sink matrix, we materialize it first.
-	if (store->is_sink())
-		materialize_self();
+	if (store->is_sink()) {
+		std::vector<detail::matrix_store::const_ptr> stores(1);
+		stores[0] = get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(new sapply_op(op,
+					get_num_rows(), get_num_cols()));
+		return dense_matrix::create(detail::mapply_sink_store::create(
+					stores, portion_op));
+	}
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
