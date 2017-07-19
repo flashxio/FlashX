@@ -59,6 +59,10 @@ public:
 	static ptr create(const std::vector<detail::matrix_store::const_ptr> &mats,
 			size_t num_cols);
 
+	virtual bool has_materialized() const {
+		return merged_mat != NULL;
+	}
+
 	virtual size_t get_data_id() const {
 		return fm::detail::INVALID_MAT_ID;
 	}

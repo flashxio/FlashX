@@ -84,6 +84,9 @@ public:
 		return ptr(new set_data_matrix_store(row_op, col_op, nrow, ncol,
 					layout, num_nodes));
 	}
+	virtual bool has_materialized() const {
+		return false;
+	}
 	virtual size_t get_data_id() const {
 		return data_id;
 	}

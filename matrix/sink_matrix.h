@@ -70,8 +70,6 @@ public:
 		return INVALID_MAT_ID;
 	}
 
-	// The class has been materialized.
-	virtual bool has_materialized() const = 0;
 	// This returns the materialized result of the sink matrix.
 	virtual matrix_store::const_ptr get_result() const = 0;
 	// This returns a set of computation matrix that can be used for

@@ -62,6 +62,10 @@ public:
 				% orig_store->get_num_rows() % idxs.size()).str();
 	}
 
+	virtual bool has_materialized() const {
+		return materialized != NULL;
+	}
+
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		return orig_store->get_underlying_mats();
 	}
@@ -172,6 +176,10 @@ public:
 
 	const std::vector<double> get_col_dot_prods() const {
 		return col_dot_prods;
+	}
+
+	virtual bool has_materialized() const {
+		return false;
 	}
 	virtual size_t get_data_id() const {
 		return fm::detail::INVALID_MAT_ID;

@@ -83,7 +83,7 @@ public:
 		return tall_res->is_in_mem();
 	}
 
-	bool is_materialized() const {
+	bool has_materialized() const {
 		size_t num_eles = get_num_rows() * get_num_cols();
 		size_t count = num_res_avails.get();
 		assert(num_eles >= count);
@@ -100,7 +100,7 @@ public:
 	}
 
 	void print_state() const {
-		if (is_materialized())
+		if (has_materialized())
 			BOOST_LOG_TRIVIAL(info) << "is fully materialized";
 		else
 			BOOST_LOG_TRIVIAL(info) << boost::format(
@@ -251,7 +251,7 @@ public:
 		}
 	}
 
-	bool is_materialized() const {
+	bool has_materialized() const {
 		// If the whole portion is materialized, it always returns true.
 		if (whole_res
 				// If the current part is materialized.
@@ -701,7 +701,7 @@ public:
 				local_start_col, num_rows, num_cols);
 	}
 	virtual void materialize_self() const {
-		if (!store.is_materialized())
+		if (!store.has_materialized())
 			store.materialize();
 	}
 };
@@ -770,7 +770,7 @@ public:
 				local_start_col, num_rows, num_cols);
 	}
 	virtual void materialize_self() const {
-		if (!store.is_materialized())
+		if (!store.has_materialized())
 			store.materialize();
 	}
 };
@@ -928,9 +928,9 @@ mapply_matrix_store::mapply_matrix_store(
 		assert(in_mats[0]->is_wide() == in_mats[i]->is_wide());
 }
 
-bool mapply_matrix_store::is_materialized() const
+bool mapply_matrix_store::has_materialized() const
 {
-	return res != NULL && res->is_materialized();
+	return res != NULL && res->has_materialized();
 }
 
 void mapply_matrix_store::set_materialize_level(materialize_level level,
@@ -938,7 +938,7 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 {
 	virtual_matrix_store::set_materialize_level(level, materialize_buf);
 	if (level != materialize_level::MATER_FULL) {
-		if (!is_materialized())
+		if (!has_materialized())
 			res = NULL;
 		return;
 	}
@@ -980,7 +980,7 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 void mapply_matrix_store::materialize_self() const
 {
 	// Materialize the matrix store if it hasn't.
-	if (is_materialized())
+	if (has_materialized())
 		return;
 
 	matrix_store::const_ptr materialized = __mapply_portion(in_mats, op,
@@ -998,7 +998,7 @@ void mapply_matrix_store::materialize_self() const
 matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	if (is_materialized())
+	if (has_materialized())
 		// The input arguments only provide some guidance for where
 		// the materialized data should be stored. If the matrix has been
 		// materialized, we don't need to move the data.
@@ -1011,7 +1011,7 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 matrix_store::const_ptr mapply_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_res(store_layout())->get_rows(idxs);
 	if (is_wide()) {
 		// We rely on get_rows in dense_matrix to materialize the matrix
@@ -1113,7 +1113,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// the portion from the materialized store directly.
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_portion(
 				start_row, start_col, num_rows, num_cols);
 
@@ -1195,7 +1195,7 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	// the portion from the materialized store directly.
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_portion_async(
 				start_row, start_col, num_rows, num_cols, orig_compute);
 
@@ -1338,7 +1338,7 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 {
 	// If the matrix has been materialized and it's stored on disks,
-	if (is_materialized() && !res->is_in_mem()) {
+	if (has_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
 				res->get_materialize_res(store_layout()).get());
 		assert(obj);
@@ -1355,7 +1355,7 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 			ret.insert(ret.end(), tmp.begin(), tmp.end());
 		}
 	}
-	if (res && !res->is_materialized() && !res->is_in_mem()) {
+	if (res && !res->has_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
 				res->get_materialize_res(store_layout()).get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
@@ -1366,7 +1366,7 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 
 std::string mapply_matrix_store::get_name() const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return this->res->get_materialize_res(store_layout())->get_name();
 	else
 		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id
@@ -1377,7 +1377,7 @@ std::string mapply_matrix_store::get_name() const
 
 std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_underlying_mats();
 
 	std::unordered_map<size_t, size_t> final_res;

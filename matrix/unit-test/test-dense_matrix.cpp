@@ -2651,7 +2651,7 @@ void test_materialize(int num_nodes)
 		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
 				tmp->get_raw_store());
 	assert(vstore);
-	assert(vstore->is_materialized());
+	assert(vstore->has_materialized());
 	dense_matrix::ptr materialize_res = dense_matrix::create(vstore->materialize(
 			vstore->is_in_mem(), vstore->get_num_nodes()));
 	res = materialize_res->sum();
@@ -2670,7 +2670,7 @@ void test_materialize(int num_nodes)
 	vstore = std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
 				tmp->get_raw_store());
 	assert(vstore);
-	assert(vstore->is_materialized());
+	assert(vstore->has_materialized());
 	materialize_res = dense_matrix::create(vstore->materialize(
 			vstore->is_in_mem(), vstore->get_num_nodes()));
 	res = materialize_res->sum();
@@ -2699,7 +2699,7 @@ void test_materialize(int num_nodes)
 				== detail::EM_matrix_store::CHUNK_SIZE);
 		assert(vstore);
 		assert(!vstore->is_in_mem());
-		assert(vstore->is_materialized());
+		assert(vstore->has_materialized());
 		materialize_res = dense_matrix::create(vstore->materialize(
 					vstore->is_in_mem(), vstore->get_num_nodes()));
 		res = materialize_res->sum();
@@ -2725,7 +2725,7 @@ void test_materialize(int num_nodes)
 				== detail::EM_matrix_store::CHUNK_SIZE);
 		assert(vstore);
 		assert(!vstore->is_in_mem());
-		assert(vstore->is_materialized());
+		assert(vstore->has_materialized());
 		materialize_res = dense_matrix::create(vstore->materialize(
 					vstore->is_in_mem(), vstore->get_num_nodes()));
 		res = materialize_res->sum();

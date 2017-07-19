@@ -84,7 +84,7 @@ public:
 		return in_mats;
 	}
 
-	bool is_materialized() const;
+	virtual bool has_materialized() const;
 	virtual size_t get_data_id() const {
 		return data_id;
 	}
