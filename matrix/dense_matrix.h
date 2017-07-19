@@ -469,8 +469,6 @@ dense_matrix operator*(const dense_matrix &m, T val)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -479,8 +477,6 @@ dense_matrix operator*(T val, const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -488,8 +484,6 @@ inline dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -497,8 +491,6 @@ inline dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.add(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -506,8 +498,6 @@ inline dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.minus(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
