@@ -201,14 +201,18 @@ cdef class PyMatrix:
         self.shape = (0, 0)
         self.flags = flagsobj()
 
-    def __array__(self):
+    def __array__(self, dtype = None):
+        if (dtype is None):
+            arr = self
+        else:
+            arr = self.cast_ele_type(dtype)
         cdef np.npy_intp shape[2]
-        shape[0] = self.shape[0]
-        if (self.ndim >= 2):
-            shape[1] = self.shape[1]
-        tmp = np.PyArray_SimpleNew(self.ndim, shape, self.mat.get_type_py())
-        self.mat.copy_rows_to(np.PyArray_BYTES(tmp),
-                self.mat.get_num_rows() * self.mat.get_num_cols() * self.mat.get_entry_size())
+        shape[0] = arr.shape[0]
+        if (arr.ndim >= 2):
+            shape[1] = arr.shape[1]
+        tmp = np.PyArray_SimpleNew(arr.ndim, shape, arr.mat.get_type_py())
+        arr.mat.copy_rows_to(np.PyArray_BYTES(tmp),
+                arr.mat.get_num_rows() * arr.mat.get_num_cols() * arr.mat.get_entry_size())
         return tmp
 
     # Special Methods Table
