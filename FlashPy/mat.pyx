@@ -315,11 +315,28 @@ cdef class PyMatrix:
         else:
             return y.mapply2(x, OP_OR)
 
+    def __pow__(x, y, z):
+        if (np.isscalar(x)):
+            x = create_const(x, y.shape)
+        elif (isinstance(x, np.ndarray)):
+            x = array(x)
+        return x.mapply2(y, OP_POW)
+
     def __neg__(self):
         return self.sapply(UOP_NEG)
 
     def __abs__(self):
         return self.sapply(UOP_ABS)
+
+    def __invert__(self):
+        cdef object dtype = self.dtype
+        if (dtype == "b"):
+            return self.sapply(UOP_NOT)
+        # TODO I need to a specialized operator for this.
+        elif (self.mat.is_floating_point()):
+            raise TypeError("invert not supprted for floating points.")
+        else:
+            return -self-1
 
     def __len__(self):
         return self.mat.get_num_rows()
