@@ -938,9 +938,23 @@ def sqrt(PyMatrix x, out=None):
 def absolute(PyMatrix x):
     return x.sapply(UOP_ABS)
 
-def where(PyMatrix condition, PyMatrix x, PyMatrix y):
+def where(PyMatrix condition, x, y):
     cdef PyMatrix ret = PyMatrix()
-    ret.mat = condition.mat.ifelse(x.mat, y.mat)
+    cdef PyMatrix xmat
+    cdef PyMatrix ymat
+    if (np.isscalar(x)):
+        xmat = create_const(x, condition.shape)
+    elif (isinstance(x, np.ndarray)):
+        xmat = array(x)
+    else:
+        xmat = x
+    if (np.isscalar(y)):
+        ymat = create_const(y, condition.shape)
+    elif (isinstance(y, np.ndarray)):
+        ymat = array(y)
+    else:
+        ymat = y
+    ret.mat = condition.mat.ifelse(xmat.mat, ymat.mat)
     ret.init_attr()
     return ret
 
