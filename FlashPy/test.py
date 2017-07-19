@@ -374,50 +374,50 @@ print("test sum")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = fp.array(np_mat1, dtype="l")
 np_mat1 = np.array(np_mat1, dtype="l")
-fp_res = fp.sum(fp_mat1)
+fp_res = np.sum(fp_mat1)
 np_res = np.sum(np_mat1)
 tmp = np.array(fp_res, copy=True)
 assert abs(tmp - np_res) < 1e-13
 
-fp_res = fp.sum(fp_mat1, axis=0)
+fp_res = np.sum(fp_mat1, axis=0)
 np_res = np.sum(np_mat1, axis=0)
 verify(fp_res, np_res)
 
-fp_res = fp.sum(fp_mat1, axis=0, dtype="d")
+fp_res = np.sum(fp_mat1, axis=0, dtype="d")
 np_res = np.sum(np_mat1, axis=0, dtype="d")
 verify(fp_res, np_res)
 
-fp_res = fp.sum(fp_mat1, axis=1)
+fp_res = np.sum(fp_mat1, axis=1)
 np_res = np.sum(np_mat1, axis=1)
 verify(fp_res, np_res)
 
 print("test mean")
-fp_res = fp.mean(fp_mat1)
+fp_res = np.mean(fp_mat1)
 np_res = np.mean(np_mat1)
 tmp = np.array(fp_res, copy=True)
 assert abs(tmp[0] - np_res) < 1e-14
 
-fp_res = fp.mean(fp_mat1, axis=0)
+fp_res = np.mean(fp_mat1, axis=0)
 np_res = np.mean(np_mat1, axis=0)
 verify(fp_res, np_res)
 
-fp_res = fp.mean(fp_mat1, axis=1)
+fp_res = np.mean(fp_mat1, axis=1)
 np_res = np.mean(np_mat1, axis=1)
 verify(fp_res, np_res)
 
 print("test var")
-fp_res = fp_mat1.var()
-np_res = np_mat1.var()
+fp_res = np.var(fp_mat1)
+np_res = np.var(np_mat1)
 tmp = np.array(fp_res, copy=True)
 print(tmp[0] - np_res)
 assert abs((tmp[0] - np_res) / np_res) < 1e-14
 
-fp_res = fp_mat1.var(axis=0)
-np_res = np_mat1.var(axis=0)
+fp_res = np.var(fp_mat1, axis=0)
+np_res = np.var(np_mat1, axis=0)
 verify(fp_res, np_res, rescale=True)
 
-fp_res = fp_mat1.var(axis=1)
-np_res = np_mat1.var(axis=1)
+fp_res = np.var(fp_mat1, axis=1)
+np_res = np.var(np_mat1, axis=1)
 verify(fp_res, np_res, rescale=True)
 
 print("test min/max")

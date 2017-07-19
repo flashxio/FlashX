@@ -926,22 +926,13 @@ def arange(start, stop, step=1, dtype=None):
     ret.init_attr()
     return ret
 
-def sum(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    return a.sum(axis, dtype, out, keepdims)
-
-def prod(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    return a.prod(axis, dtype, out, keepdims)
-
-def mean(PyMatrix a, axis=None, dtype=None, out=None, keepdims=False):
-    return a.mean(axis, dtype, out, keepdims)
-
 def average(PyMatrix a, axis=None, weights=None, returned=False):
     if weights is not None and axis is None:
         if (a.shape != weights.shape):
             raise ValueError("weights need to have the same shape as a")
         else:
             a = a * weights
-            wsum = sum(weights)
+            wsum = np.sum(weights)
     elif weights is not None:
         if (weights.ndim > 1):
             raise ValueError("weights need to be a 1D array")
@@ -951,15 +942,15 @@ def average(PyMatrix a, axis=None, weights=None, returned=False):
             a = a.mapply_rows(weights, OP_MUL)
         else:
             raise ValueError("invalid axis")
-        wsum = sum(weights)
+        wsum = np.sum(weights)
     elif axis is None:
         wsum = a.mat.get_num_rows() * a.mat.get_num_cols()
     else:
         wsum = a.shape[axis]
     if (returned):
-        return (sum(a, axis)/wsum, wsum)
+        return (np.sum(a, axis)/wsum, wsum)
     else:
-        return sum(a, axis)/wsum
+        return np.sum(a, axis)/wsum
 
 def dot(a, b, out=None):
     if (isinstance(a, PyMatrix)):

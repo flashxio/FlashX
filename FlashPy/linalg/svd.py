@@ -1,6 +1,7 @@
 from numpy import array as np_array
 from numpy import where as np_where
 from numpy import sqrt as np_sqrt
+from numpy import sum as np_sum
 from scipy import linalg
 from scipy.sparse.linalg import eigsh
 from scipy.sparse.linalg import LinearOperator
@@ -8,7 +9,6 @@ from scipy.sparse.linalg import LinearOperator
 from ..sparse import issparse
 from .. import sqrt as fp_sqrt
 from .. import array as fp_array
-from .. import sum as fp_sum
 from ..mat import bop_div as fp_bop_div
 
 def svds(a, k=6, tol=0):
@@ -49,7 +49,7 @@ def svds(a, k=6, tol=0):
 
     def rescale(x):
         x.set_cached(True)
-        scal = fp_sqrt(fp_sum(x * x, axis=0))
+        scal = fp_sqrt(np_sum(x * x, axis=0))
         return x.mapply_rows(scal, fp_bop_div)
 
     if (comp_right):
