@@ -392,6 +392,27 @@ cdef class PyMatrix:
 
     # These are functions in numpy
 
+    def reshape(self, shape, order='C'):
+        shape = np.array(shape)
+        if (shape[0] == -1):
+            shape[0] = self.shape[0]
+        if (len(shape) >= 2 and shape[1] == -1 and len(self.shape) >= 2):
+            shape[1] = self.shape[1]
+
+        if (len(self) != np.prod(shape)):
+            raise ValueError("incompatible shape")
+        if (len(shape) == 1):
+            return self.as_vector()
+        elif (len(shape) == 2 and self.ndim == 1):
+            if (shape[1] == 1):
+                return self.as_matrix()
+            elif (shape[2] == 1):
+                return self.as_matrix().T
+            else:
+                raise NotImplementedError("Can't convert a vector to a matrix")
+        else:
+            raise NotImplementedError("Can't conversion on multi-dimensional")
+
     def ravel(self, order='C'):
         if (self.ndim == 1):
             return self
