@@ -85,8 +85,10 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_layout_t store_layout() const {
-		// TODO what is the right layout?
-		return data->store_layout();
+		if (is_wide())
+			return matrix_layout_t::L_ROW;
+		else
+			return matrix_layout_t::L_COL;
 	}
 
 	virtual std::string get_name() const;
