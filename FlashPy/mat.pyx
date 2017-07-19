@@ -453,6 +453,7 @@ cdef class PyMatrix:
         return self.mat.materialize_self()
 
     def get_rows(self, idxs):
+        cdef PyMatrix idx_mat
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
@@ -473,6 +474,9 @@ cdef class PyMatrix:
             addr = <long *>np.PyArray_DATA(idxs)
             cidxs.assign(addr, addr + len(idxs))
             ret.mat = self.mat.get_rows(cidxs)
+        elif (isinstance(idxs, PyMatrix)):
+            idx_mat = idxs
+            ret.mat = self.mat.get_rows(idx_mat.mat)
         elif (idxs is None):
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
@@ -484,6 +488,7 @@ cdef class PyMatrix:
         return ret
 
     def get_cols(self, idxs):
+        cdef PyMatrix idx_mat
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
@@ -504,6 +509,9 @@ cdef class PyMatrix:
             addr = <long *>np.PyArray_DATA(idxs)
             cidxs.assign(addr, addr + len(idxs))
             ret.mat = self.mat.get_cols(cidxs)
+        elif (isinstance(idxs, PyMatrix)):
+            idx_mat = idxs
+            ret.mat = self.mat.get_cols(idx_mat.mat)
         elif (idxs is None):
             if (self.ndim >= 2):
                 raise IndexError("doesn't support high dimensional array")
