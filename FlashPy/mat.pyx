@@ -439,6 +439,14 @@ cdef class PyMatrix:
         else:
             return s/a.shape[axis]
 
+    def var(self, axis=None, dtype=None, out=None, ddof=0, keepdims=False):
+        cdef PyMatrix a = self
+        if (not a.mat.is_floating_point()):
+            a = a.cast_ele_type("d")
+        e1 = (a * a).mean(axis, dtype, out, keepdims)
+        e2 = a.mean(axis, dtype, out, keepdims)
+        return e1 - e2 * e2
+
     def min(self, axis=None, out=None, keepdims=False):
         return self.aggregate_(AGG_MIN, axis, None, out, keepdims)
 

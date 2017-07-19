@@ -6,14 +6,17 @@ import sparse as fp_sparse
 
 fp.init_flashpy()
 
-def verify(fp_arr, np_arr):
+def verify(fp_arr, np_arr, rescale=False):
     assert fp_arr.ndim == np_arr.ndim
     assert fp_arr.shape == np_arr.shape
     assert fp_arr.size == np_arr.size
     assert fp_arr.itemsize == np_arr.itemsize
     assert fp_arr.nbytes == np_arr.nbytes
     tmp = np.array(fp_arr, copy=True)
-    assert np.all(np.absolute(tmp - np_arr) < 1e-12)
+    if (rescale):
+        assert np.all(np.absolute((tmp - np_arr) / np.where(np_arr == 0, 1, np_arr)) < 1e-12)
+    else:
+        assert np.all(np.absolute(tmp - np_arr) < 1e-12)
 
 def verify_init(dtype):
     print("verify " + dtype)
@@ -401,6 +404,21 @@ verify(fp_res, np_res)
 fp_res = fp.mean(fp_mat1, axis=1)
 np_res = np.mean(np_mat1, axis=1)
 verify(fp_res, np_res)
+
+print("test var")
+fp_res = fp_mat1.var()
+np_res = np_mat1.var()
+tmp = np.array(fp_res, copy=True)
+print(tmp[0] - np_res)
+assert abs((tmp[0] - np_res) / np_res) < 1e-14
+
+fp_res = fp_mat1.var(axis=0)
+np_res = np_mat1.var(axis=0)
+verify(fp_res, np_res, rescale=True)
+
+fp_res = fp_mat1.var(axis=1)
+np_res = np_mat1.var(axis=1)
+verify(fp_res, np_res, rescale=True)
 
 print("test min/max")
 fp_res = fp_mat1.min()
