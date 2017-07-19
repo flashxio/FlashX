@@ -505,7 +505,11 @@ matrix_wrapper matrix_wrapper::ifelse(matrix_wrapper x, matrix_wrapper y) const
 		left = x.mat->cast_ele_type(common_type);
 		right = y.mat->cast_ele_type(common_type);
 	}
-	return matrix_wrapper(mat->ifelse(*left, *right));
+	auto ret = mat->ifelse(*left, *right);
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
 }
 
 static inline std::shared_ptr<fm::factor_col_vector> get_factor(
