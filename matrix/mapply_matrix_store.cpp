@@ -925,7 +925,8 @@ mapply_matrix_store::mapply_matrix_store(
 	this->op = op;
 	this->num_nodes = is_in_mem() ? fm::detail::get_num_nodes(in_mats) : -1;
 	for (size_t i = 1; i < in_mats.size(); i++)
-		assert(in_mats[0]->is_wide() == in_mats[i]->is_wide());
+		assert(in_mats[0]->get_num_rows() == in_mats[i]->get_num_rows()
+				|| in_mats[0]->get_num_cols() == in_mats[i]->get_num_cols());
 }
 
 bool mapply_matrix_store::is_materialized() const
@@ -985,6 +986,10 @@ void mapply_matrix_store::materialize_self() const
 
 	matrix_store::const_ptr materialized = __mapply_portion(in_mats, op,
 			layout, is_in_mem(), get_num_nodes(), par_access);
+	if (materialized == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "fail to materialize self";
+		return;
+	}
 	if (res)
 		res->set_materialized(materialized);
 	else {
