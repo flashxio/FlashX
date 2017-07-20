@@ -373,6 +373,9 @@ cdef class PyMatrix:
         else:
             self.set_rows(key, val)
 
+    def __str__(self):
+        return str(np.array(self))
+
     def init_attr(self, T=None):
         if (not self.mat.is_valid()):
             raise ValueError("invalid matrix")
