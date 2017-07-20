@@ -822,6 +822,8 @@ def array(arr, dtype=None, copy=True, order='K'):
     cdef np.ndarray ndarr
     cdef PyMatrix ret = PyMatrix()
 
+    if (order is None):
+        order = 'K'
     if (isinstance(arr, PyMatrix)):
         if (dtype is not None):
             arr = arr.cast_ele_type(dtype)
