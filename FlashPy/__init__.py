@@ -12,5 +12,9 @@ from mat import where
 from mat import maximum
 from mat import minimum
 from mat import init_flashpy
+from mat import atleast_2d
+from mat import atleast_1d
+from mat import asanyarray
+from mat import asarray
 import linalg
 import sparse

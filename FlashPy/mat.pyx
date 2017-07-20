@@ -1039,5 +1039,21 @@ def minimum(x1, x2, out=None):
         out.assign(res)
     return res
 
+def atleast_1d(arr):
+    return array(arr)
+
+def atleast_2d(arr):
+    arr = array(arr)
+    if (arr.ndim < 2):
+        return arr.as_matrix()
+    else:
+        return arr
+
+def asanyarray(a, dtype=None, order=None):
+    return array(a, dtype=dtype, order=order)
+
+def asarray(a, dtype=None, order=None):
+    return array(a, dtype=dtype, order=order)
+
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
