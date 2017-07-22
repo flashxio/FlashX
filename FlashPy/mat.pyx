@@ -103,6 +103,11 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         void init_const_float(double val) except+
         void init_const_int(long val) except+
 
+        @staticmethod
+        matrix_wrapper cbind(vector[matrix_wrapper] &mats)
+        @staticmethod
+        matrix_wrapper rbind(vector[matrix_wrapper] &mats)
+
         void set_cached(bool)
 
         matrix_wrapper as_factor(int num_levels) except+
@@ -1057,6 +1062,22 @@ def asanyarray(a, dtype=None, order=None):
 
 def asarray(a, dtype=None, order=None):
     return array(a, dtype=dtype, order=order)
+
+def concatenate(arrs, axis=0):
+    cdef vector[matrix_wrapper] mats
+    cdef PyMatrix mat
+    for arr in list(arrs):
+        mat = asarray(arr)
+        mats.push_back(mat.mat)
+    cdef PyMatrix ret = PyMatrix()
+    if (axis == 0):
+        ret.mat = matrix_wrapper.rbind(mats)
+    elif (axis == 1):
+        ret.mat = matrix_wrapper.cbind(mats)
+    else:
+        raise ValueError("don't support axis > 2")
+    ret.init_attr()
+    return ret
 
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)

@@ -126,6 +126,8 @@ class matrix_wrapper
 	}
 
 public:
+	static matrix_wrapper cbind(const std::vector<matrix_wrapper> &mats);
+	static matrix_wrapper rbind(const std::vector<matrix_wrapper> &mats);
 	matrix_wrapper() {
 	}
 

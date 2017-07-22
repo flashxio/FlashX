@@ -666,4 +666,27 @@ matrix_wrapper matrix_wrapper::set_rows(const std::vector<off_t> &idxs,
 		return matrix_wrapper(ret);
 }
 
+matrix_wrapper matrix_wrapper::cbind(const std::vector<matrix_wrapper> &mats)
+{
+	std::vector<dense_matrix::ptr> tmp(mats.size());
+	for (size_t i = 0; i < tmp.size(); i++)
+		tmp[i] = mats[i].mat;
+	return matrix_wrapper(dense_matrix::cbind(tmp));
+}
+
+matrix_wrapper matrix_wrapper::rbind(const std::vector<matrix_wrapper> &mats)
+{
+	std::vector<dense_matrix::ptr> tmp(mats.size());
+	bool is_vec = mats[0].is_vector();
+	for (size_t i = 0; i < tmp.size(); i++) {
+		tmp[i] = mats[i].mat;
+		is_vec = is_vec && mats[i].is_vector();
+	}
+	dense_matrix::ptr ret = dense_matrix::rbind(tmp);
+	if (is_vec)
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
 }

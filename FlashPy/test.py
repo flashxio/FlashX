@@ -138,8 +138,33 @@ verify(fp_mat1, np_mat1)
 np_mat1 = np_mat1.T
 fp_mat1 = fp_mat1.T
 
+print("test concatenate")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = fp.array(np_mat1)
+np_mat2 = np.random.normal(scale=100, size=[25, 10])
+fp_mat2 = fp.array(np_mat2)
+fp_res = fp.concatenate((fp_mat1, fp_mat2), axis=0)
+np_res = np.concatenate((np_mat1, np_mat2), axis=0)
+verify(fp_res, np_res)
+fp_res = fp.concatenate((fp_mat1, fp_mat2), axis=1)
+np_res = np.concatenate((np_mat1, np_mat2), axis=1)
+verify(fp_res, np_res)
+
+np_mat1 = np.random.normal(scale=100, size=[10, 25])
+fp_mat1 = fp.array(np_mat1)
+np_mat2 = np.random.normal(scale=100, size=[10, 25])
+fp_mat2 = fp.array(np_mat2)
+fp_res = fp.concatenate((fp_mat1, fp_mat2), axis=0)
+np_res = np.concatenate((np_mat1, np_mat2), axis=0)
+verify(fp_res, np_res)
+fp_res = fp.concatenate((fp_mat1, fp_mat2), axis=1)
+np_res = np.concatenate((np_mat1, np_mat2), axis=1)
+verify(fp_res, np_res)
+
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = fp.array(np_mat1)
+np_mat2 = np.random.normal(scale=100, size=[25, 10])
+fp_mat2 = fp.array(np_mat2)
 print("test +")
 fp_res = fp_mat1 + fp_mat2
 np_res = np_mat1 + np_mat2

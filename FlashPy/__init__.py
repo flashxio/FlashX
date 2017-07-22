@@ -16,5 +16,6 @@ from mat import atleast_2d
 from mat import atleast_1d
 from mat import asanyarray
 from mat import asarray
+from mat import concatenate
 import linalg
 import sparse
