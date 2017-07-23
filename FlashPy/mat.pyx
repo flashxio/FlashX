@@ -341,7 +341,7 @@ cdef class PyMatrix:
         return self.sapply(UOP_ABS)
 
     def __invert__(self):
-        if (self.dtype == np.dtype('b')):
+        if (self.dtype == np.dtype(np.bool)):
             return self.sapply(UOP_NOT)
         # TODO I need to a specialized operator for this.
         elif (self.mat.is_floating_point()):
