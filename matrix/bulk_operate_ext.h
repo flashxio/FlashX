@@ -110,6 +110,8 @@ public:
 		MAX,
 		SUM,
 		PROD,
+		AND,
+		OR,
 		NUM_OPS,
 	};
 

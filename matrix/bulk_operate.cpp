@@ -906,6 +906,20 @@ public:
 				*get_scalar_type<InType>().get_basic_ops().get_op(
 					basic_ops::op_idx::MUL));
 		ops[PROD] = agg_operate::create(mul, mul);
+		auto agg_and = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::AND));
+		auto combine_and = bulk_operate::conv2ptr(
+				*get_scalar_type<bool>().get_basic_ops().get_op(
+					basic_ops::op_idx::AND));
+		ops[AND] = agg_operate::create(agg_and, combine_and);
+		auto agg_or = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::OR));
+		auto combine_or = bulk_operate::conv2ptr(
+				*get_scalar_type<bool>().get_basic_ops().get_op(
+					basic_ops::op_idx::OR));
+		ops[OR] = agg_operate::create(agg_or, combine_or);
 	}
 };
 
