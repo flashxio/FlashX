@@ -62,7 +62,7 @@ uop_log10 = UOP_LOG10
 
 cdef enum agg_op_idx_t:
     AGG_COUNT, AGG_FIND_NEXT, AGG_FIND_PREV, AGG_ARGMIN, AGG_ARGMAX,
-    AGG_MIN, AGG_MAX, AGG_SUM, AGG_PROD
+    AGG_MIN, AGG_MAX, AGG_SUM, AGG_PROD, AGG_AND, AGG_OR
 
 agg_count = AGG_COUNT
 agg_find_next = AGG_FIND_NEXT
@@ -73,6 +73,8 @@ agg_min = AGG_MIN
 agg_max = AGG_MAX
 agg_sum = AGG_SUM
 agg_prod = AGG_PROD
+agg_and = AGG_AND
+agg_or = AGG_OR
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef bool init_flashpy_c(const string file)
@@ -495,6 +497,14 @@ cdef class PyMatrix:
         cdef PyMatrix ret = self.aggregate_(AGG_ARGMAX, axis, None, out, False)
         # ARGMIN return int32, but we want int64 to match NumPy
         return ret.cast_ele_type("l")
+
+    def all(self, axis=None, out=None, keepdims=False):
+        new_arr = self.cast_ele_type(np.bool)
+        return new_arr.aggregate_(AGG_AND, axis, None, out, keepdims)
+
+    def any(self, axis=None, out=None, keepdims=False):
+        new_arr = self.cast_ele_type(np.bool)
+        return new_arr.aggregate_(AGG_OR, axis, None, out, keepdims)
 
     # These are specific for FlashMatrix.
 
@@ -1078,6 +1088,14 @@ def concatenate(arrs, axis=0):
         raise ValueError("don't support axis > 2")
     ret.init_attr()
     return ret
+
+def all(arr, axis=None, out=None, keepdims=False):
+    arr = asarray(arr)
+    return arr.all(axis, out, keepdims)
+
+def any(arr, axis=None, out=None, keepdims=False):
+    arr = asarray(arr)
+    return arr.any(axis, out, keepdims)
 
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)

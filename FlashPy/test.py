@@ -395,6 +395,36 @@ verify_cast("d", "f")
 verify_cast("b", "h")
 verify_cast("i", "l")
 
+print("test all")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = fp.array(np_mat1)
+fp_res = fp.all(fp_mat1)
+np_res = np.all(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp == np_res
+
+np_mat1 = np.random.normal(scale=100, size=[25, 10]) > 50
+fp_mat1 = fp.array(np_mat1)
+fp_res = fp.all(fp_mat1)
+np_res = np.all(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp == np_res
+
+print("test any")
+np_mat1 = np.random.normal(scale=100, size=[25, 10])
+fp_mat1 = fp.array(np_mat1)
+fp_res = fp.any(fp_mat1)
+np_res = np.any(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp == np_res
+
+np_mat1 = np.random.normal(scale=100, size=[25, 10]) > 50
+fp_mat1 = fp.array(np_mat1)
+fp_res = fp.any(fp_mat1)
+np_res = np.any(np_mat1)
+tmp = np.array(fp_res, copy=True)
+assert tmp == np_res
+
 print("test sum")
 np_mat1 = np.random.normal(scale=100, size=[25, 10])
 fp_mat1 = fp.array(np_mat1, dtype="l")

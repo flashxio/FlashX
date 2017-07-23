@@ -17,5 +17,7 @@ from mat import atleast_1d
 from mat import asanyarray
 from mat import asarray
 from mat import concatenate
+from mat import all
+from mat import any
 import linalg
 import sparse

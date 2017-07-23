@@ -67,7 +67,9 @@ static std::vector<py_type_info> fm2py;
 
 static void init_map()
 {
-	// TODO support boolean and unsigned char.
+	// TODO support unsigned char.
+	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("?",
+				&fm::get_scalar_type<bool>()));
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("b",
 				&fm::get_scalar_type<char>()));
 	py2fm.insert(std::pair<std::string, const fm::scalar_type *>("h",
@@ -96,6 +98,7 @@ static void init_map()
 				&fm::get_scalar_type<long double>()));
 
 	fm2py.resize(fm::prim_type::NUM_TYPES);
+	fm2py[fm::prim_type::P_BOOL] = py_type_info(NPY_BOOL, "?");
 	fm2py[fm::prim_type::P_CHAR] = py_type_info(NPY_BYTE, "b");
 	fm2py[fm::prim_type::P_SHORT] = py_type_info(NPY_SHORT, "h");
 	fm2py[fm::prim_type::P_USHORT] = py_type_info(NPY_USHORT, "H");
