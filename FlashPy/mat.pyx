@@ -1086,6 +1086,10 @@ def asarray(a, dtype=None, order=None):
 def concatenate(arrs, axis=0):
     cdef vector[matrix_wrapper] mats
     cdef PyMatrix mat
+    if (isinstance(arrs, PyMatrix)):
+        return arrs
+    if (len(arrs) == 1):
+        return arrs[0]
     for arr in list(arrs):
         mat = asarray(arr)
         mats.push_back(mat.mat)
