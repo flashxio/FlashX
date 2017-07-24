@@ -30,12 +30,12 @@ def svds(a, k=6, tol=0):
                 shape=(n, n))
     elif (comp_right):
         size = p
-        x_prod = a.T.dot(a)
+        x_prod = np_array(a.T.dot(a))
         multiply = LinearOperator(matvec=lambda v: x_prod.dot(v),
                 shape=(p, p))
     else:
         size = n
-        x_prod = a.dot(a.T)
+        x_prod = np_array(a.dot(a.T))
         multiply = LinearOperator(matvec=lambda v: x_prod.dot(v),
                 shape=(n, n))
 
