@@ -41,9 +41,13 @@ RUN make -j4
 RUN apt-get install -y r-base
 
 #run R >> intstall igraph install.packages("igraph")
+
+RUN apt-get install -y libcurl4-openssl-dev libssl-dev
+RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos = 'http://cran.rstudio.com/')"
 RUN R -e "install.packages('Rcpp', repos = 'http://cran.rstudio.com/')"
 RUN R -e "install.packages('RSpectra', repos = 'http://cran.rstudio.com/')"
-RUN R -e "install.packages('igraph', repos = 'http://cran.rstudio.com/')"
+RUN R -e "require(devtools); install_version('igraph', version='1.0.1', repos='https://cran.rstudio.org/')"
+
 
 WORKDIR /FlashX
 RUN ./install_FlashR.sh
@@ -54,15 +58,12 @@ RUN ./install_FlashGraphR.sh
 ####R finished####
 
 RUN apt-get install -y python-pip
-RUN apt-get install -y libcurl4-openssl-dev libssl-dev
 RUN pip install --upgrade pip
 RUN pip install jupyter
-RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos = 'http://cran.rstudio.com/')"
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
 RUN R -e "IRkernel::installspec(user = FALSE)"
-
-RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 ###FLASHX CONF END ###
 
