@@ -132,19 +132,19 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         bool materialize_self() const
         matrix_wrapper cast_ele_type(string dtyp) except+
 
-        matrix_wrapper get_col(long idx) const
-        matrix_wrapper get_row(long idx) const
-        matrix_wrapper get_cols(const vector[long] &idxs) const
-        matrix_wrapper get_rows(const vector[long] &idxs) const
-        matrix_wrapper get_cols(long start, long stop, long step) const
-        matrix_wrapper get_rows(long start, long stop, long step) const
-        matrix_wrapper get_cols(matrix_wrapper idxs) const
-        matrix_wrapper get_rows(matrix_wrapper idxs) const
+        matrix_wrapper get_col(long idx) except+
+        matrix_wrapper get_row(long idx) except+
+        matrix_wrapper get_cols(const vector[long] &idxs) except+
+        matrix_wrapper get_rows(const vector[long] &idxs) except+
+        matrix_wrapper get_cols(long start, long stop, long step) except+
+        matrix_wrapper get_rows(long start, long stop, long step) except+
+        matrix_wrapper get_cols(matrix_wrapper idxs) except+
+        matrix_wrapper get_rows(matrix_wrapper idxs) except+
 
-        matrix_wrapper set_cols(const vector[long] &idxs, matrix_wrapper cols)
-        matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows)
-        matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols)
-        matrix_wrapper set_rows(long start, long stop, long step, matrix_wrapper rows)
+        matrix_wrapper set_cols(const vector[long] &idxs, matrix_wrapper cols) except+
+        matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows) except+
+        matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols) except+
+        matrix_wrapper set_rows(long start, long stop, long step, matrix_wrapper rows) except+
         bool copy_rows_to(char *arr, size_t len) const
         matrix_wrapper transpose() const
         matrix_wrapper conv_store(bool in_mem, int num_nodes) const
