@@ -622,3 +622,34 @@ np_weights = np.array(fp_weights, copy=True)
 fp_res = fp.average(fp_mat1, axis=0, weights=fp_weights)
 np_res = np.average(np_mat1, axis=0, weights=np_weights)
 verify(fp_res, np_res)
+
+print("test norm")
+np_vec1 = np.random.normal(scale=100, size=1000)
+fp_vec1 = fp.array(np_vec1)
+def verify_norm(ord):
+    fp_res = fp.linalg.norm(fp_vec1, ord=ord)
+    np_res = np.linalg.norm(np_vec1, ord=ord)
+    assert abs((np.array(fp_res)[0] - np_res) / np_res) < 1e-13
+    fp_res = fp.linalg.norm(fp_mat1, ord=ord)
+    np_res = np.linalg.norm(np_mat1, ord=ord)
+    if (isinstance(fp_res, fp.mat.PyMatrix)):
+        fp_res = np.array(fp_res)[0]
+    assert abs((fp_res - np_res) / np_res) < 1e-13
+    fp_res = fp.linalg.norm(fp_mat1, ord=ord, axis=0)
+    np_res = np.linalg.norm(np_mat1, ord=ord, axis=0)
+    verify(fp_res, np_res, rescale=True)
+    fp_res = fp.linalg.norm(fp_mat1, ord=ord, axis=1)
+    np_res = np.linalg.norm(np_mat1, ord=ord, axis=1)
+    verify(fp_res, np_res, rescale=True)
+
+verify_norm(ord=None)
+verify_norm(ord=np.inf)
+verify_norm(ord=-np.inf)
+verify_norm(ord=1)
+verify_norm(ord=-1)
+verify_norm(ord=2)
+#verify_norm(ord=-2)
+
+fp_res = fp.linalg.norm(fp_vec1, ord=0)
+np_res = np.linalg.norm(np_vec1, ord=0)
+assert abs((np.array(fp_res)[0] - np_res) / np_res) < 1e-13
