@@ -459,13 +459,21 @@ cdef class PyMatrix:
         return res
 
     def sum(self, axis=None, dtype=None, out=None, keepdims=False):
-        return self.aggregate_(AGG_SUM, axis, dtype, out, keepdims)
+        arr = self
+        if (arr.dtype == np.bool):
+            arr = arr.cast_ele_type(np.int)
+        return arr.aggregate_(AGG_SUM, axis, dtype, out, keepdims)
 
     def prod(self, axis=None, dtype=None, out=None, keepdims=False):
-        return self.aggregate_(AGG_PROD, axis, dtype, out, keepdims)
+        arr = self
+        if (arr.dtype == np.bool):
+            arr = arr.cast_ele_type(np.int)
+        return arr.aggregate_(AGG_PROD, axis, dtype, out, keepdims)
 
     def mean(self, axis=None, dtype=None, out=None, keepdims=False):
         cdef PyMatrix a = self
+        if (a.dtype == np.bool):
+            a = a.cast_ele_type(np.int)
         if (not a.mat.is_floating_point()):
             a = a.cast_ele_type("d")
         s = a.sum(axis, dtype, out, keepdims)
@@ -476,6 +484,8 @@ cdef class PyMatrix:
 
     def var(self, axis=None, dtype=None, out=None, ddof=0, keepdims=False):
         cdef PyMatrix a = self
+        if (a.dtype == np.bool):
+            a = a.cast_ele_type(np.int)
         if (not a.mat.is_floating_point()):
             a = a.cast_ele_type("d")
         e1 = (a * a).mean(axis, dtype, out, keepdims)
