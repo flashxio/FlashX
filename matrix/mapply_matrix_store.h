@@ -45,7 +45,7 @@ class mapply_matrix_store: public virtual_matrix_store, public EM_object
 {
 	// This identifies the data in a matrix.
 	// So when a matrix is transposed, it should share the same data id.
-	const size_t data_id;
+	const data_id_t::ptr data_id;
 
 	/*
 	 * This indicates whether the input matrices are accessed in parallel
@@ -69,7 +69,8 @@ public:
 	mapply_matrix_store(
 			const std::vector<matrix_store::const_ptr> &in_mats,
 			portion_mapply_op::const_ptr op,
-			matrix_layout_t layout, size_t data_id = mat_counter++);
+			matrix_layout_t layout,
+			data_id_t::ptr data_id = data_id_t::create(mat_counter++));
 
 	bool is_wide() const {
 		// We handle matrices with different shapes differently
@@ -86,6 +87,9 @@ public:
 
 	virtual bool has_materialized() const;
 	virtual size_t get_data_id() const {
+		return data_id->get_id();
+	}
+	data_id_t::ptr get_id_ptr() const {
 		return data_id;
 	}
 

@@ -40,7 +40,7 @@ class combined_matrix_store: public mapply_matrix_store
 	std::vector<matrix_store::const_ptr> mats;
 
 	combined_matrix_store(const std::vector<matrix_store::const_ptr> &mats,
-			matrix_layout_t layout, size_t data_id);
+			matrix_layout_t layout, data_id_t::ptr data_id);
 protected:
 	combined_matrix_store(const std::vector<matrix_store::const_ptr> &mats,
 			matrix_layout_t layout);

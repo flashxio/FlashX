@@ -49,11 +49,11 @@ namespace detail
 
 class NUMA_matrix_store: public mem_matrix_store
 {
-	const size_t data_id;
 protected:
+	const data_id_t::ptr data_id;
 	NUMA_matrix_store(size_t nrow, size_t ncol, const scalar_type &type,
-			size_t _data_id): mem_matrix_store(nrow, ncol,
-				type), data_id(_data_id) {
+			data_id_t::ptr id = data_id_t::create(mat_counter++)): mem_matrix_store(
+			nrow, ncol, type), data_id(id) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_matrix_store> ptr;
@@ -66,7 +66,7 @@ public:
 			matrix_layout_t layout, const scalar_type &type);
 
 	virtual size_t get_data_id() const {
-		return data_id;
+		return data_id->get_id();
 	}
 	virtual bool share_data(const matrix_store &store) const {
 		return matrix_store::share_data(store);
@@ -74,7 +74,7 @@ public:
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
-		ret.insert(std::pair<size_t, size_t>(data_id,
+		ret.insert(std::pair<size_t, size_t>(data_id->get_id(),
 					get_num_rows() * get_num_cols()));
 		return ret;
 	}
@@ -189,7 +189,7 @@ class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 	NUMA_col_tall_matrix_store(
 			const NUMA_col_tall_matrix_store &mat): NUMA_matrix_store(
 			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
-			mat.get_data_id()), mapper(mat.mapper) {
+			mat.data_id), mapper(mat.mapper) {
 		this->data = mat.data;
 	}
 
@@ -198,8 +198,8 @@ class NUMA_col_tall_matrix_store: public NUMA_matrix_store
 	NUMA_col_tall_matrix_store(
 			const std::vector<detail::chunked_raw_array>& data,
 			size_t nrow, size_t ncol, const NUMA_mapper &_mapper,
-			const scalar_type &type): NUMA_matrix_store(
-				nrow, ncol, type, mat_counter++), mapper(_mapper) {
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol, type),
+			mapper(_mapper) {
 		this->data = data;
 	}
 public:
@@ -257,8 +257,8 @@ class NUMA_row_wide_matrix_store: public NUMA_matrix_store
 	NUMA_col_tall_matrix_store store;
 
 	NUMA_row_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
-				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol, type),
+			store(ncol, nrow, num_nodes, type) {
 	}
 
 	/*
@@ -267,7 +267,7 @@ class NUMA_row_wide_matrix_store: public NUMA_matrix_store
 	NUMA_row_wide_matrix_store(
 			const NUMA_col_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
-				_store.get_type(), _store.get_data_id()), store(_store) {
+				_store.get_type(), _store.data_id), store(_store) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_row_wide_matrix_store> ptr;
@@ -337,8 +337,8 @@ class NUMA_col_wide_matrix_store: public NUMA_matrix_store
 	NUMA_row_tall_matrix_store store;
 
 	NUMA_col_wide_matrix_store(size_t nrow, size_t ncol, int num_nodes,
-			const scalar_type &type): NUMA_matrix_store(nrow, ncol,
-				type, mat_counter++), store(ncol, nrow, num_nodes, type) {
+			const scalar_type &type): NUMA_matrix_store(nrow, ncol, type), store(
+				ncol, nrow, num_nodes, type) {
 	}
 
 	/*
@@ -347,7 +347,7 @@ class NUMA_col_wide_matrix_store: public NUMA_matrix_store
 	NUMA_col_wide_matrix_store(
 			const NUMA_row_tall_matrix_store &_store): NUMA_matrix_store(
 				_store.get_num_cols(), _store.get_num_rows(),
-				_store.get_type(), _store.get_data_id()), store(_store) {
+				_store.get_type(), _store.data_id), store(_store) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_col_wide_matrix_store> ptr;

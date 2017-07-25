@@ -211,7 +211,7 @@ async_cres_t sub_col_matrix_store::get_EM_portion_async(
 
 	// Fetch the portion from the cache.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 
 	bool match = false;
 	bool match_trans = false;
@@ -295,7 +295,7 @@ async_cres_t sub_col_matrix_store::get_EM_portion_async(
 	for (size_t i = 0; i < num_ready; i++)
 		collect_compute->run(NULL, 0);
 	if (get_orig().is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 
 	bool ready = num_ready == bufs.size();
 	if (num_fetched_rows == num_rows)
@@ -358,7 +358,7 @@ async_cres_t sub_row_matrix_store::get_EM_portion_async(
 
 	// Fetch the portion from the cache.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	bool match = false;
 	bool match_trans = false;
 	if (ret1) {
@@ -438,7 +438,7 @@ async_cres_t sub_row_matrix_store::get_EM_portion_async(
 	for (size_t i = 0; i < num_ready; i++)
 		collect_compute->run(NULL, 0);
 	if (get_orig().is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 
 	bool ready = num_ready == bufs.size();
 	if (num_fetched_cols == num_cols)

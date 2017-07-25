@@ -915,7 +915,7 @@ static inline int get_num_nodes(
 mapply_matrix_store::mapply_matrix_store(
 		const std::vector<matrix_store::const_ptr> &_in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
-		size_t _data_id): virtual_matrix_store(op->get_out_num_rows(),
+		data_id_t::ptr _data_id): virtual_matrix_store(op->get_out_num_rows(),
 			op->get_out_num_cols(), is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
@@ -1086,7 +1086,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	bool same_portion = false;
 	bool trans_portion = false;
 	if (ret) {
@@ -1144,7 +1144,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 					start_row, start_col, num_rows, num_cols, get_type(),
 					parts.front()->get_node_id()));
 	if (is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 	return ret;
 }
 
@@ -1202,7 +1202,7 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	// If it's in the same portion.
 	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
 					&& (size_t) ret1->get_global_start_col() == start_col
@@ -1297,7 +1297,7 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
 	if (is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 	// If all parts are from the in-mem matrix store or have been cached by
 	// the underlying matrices, the data in the returned portion is immediately
 	// accessible.
@@ -1369,7 +1369,7 @@ std::string mapply_matrix_store::get_name() const
 	if (has_materialized())
 		return this->res->get_materialize_res(store_layout())->get_name();
 	else
-		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id
+		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id->get_id()
 				% get_num_rows() % get_num_cols()
 				% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str()
 			+ op->to_string(in_mats);
