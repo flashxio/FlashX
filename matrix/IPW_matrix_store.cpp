@@ -918,6 +918,8 @@ void multiply_wide_op::run_part_dense(
 		}
 	}
 	part_res->acc_part_res(thread_id, *tmp_bufs[thread_id]);
+	for (size_t i = 0; i < ins.size(); i++)
+		ins[i]->complete();
 }
 
 }

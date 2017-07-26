@@ -715,6 +715,8 @@ static void _inner_prod(const local_matrix_store &m1,
 			= static_cast<local_col_matrix_store &>(res);
 		inner_prod_col(col_m1, m2, left_op, right_op, col_res, tmp_buf);
 	}
+	m1.complete();
+	m2.complete();
 }
 
 void inner_prod_wide(const local_matrix_store &left, const local_matrix_store &right,
@@ -986,6 +988,7 @@ static void _aggregate(const local_matrix_store &store, const agg_operate &op,
 				"aggregate on an unknown margin %1%") % margin;
 		assert(0);
 	}
+	store.complete();
 }
 
 void aggregate(const local_matrix_store &store, const agg_operate &op,
@@ -1117,6 +1120,8 @@ static void _mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			op.runAA(nrow, col_m1.get_col(i), col_m2.get_col(i),
 					col_res.get_col(i));
 	}
+	m1.complete();
+	m2.complete();
 }
 
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
@@ -1224,6 +1229,7 @@ static void _sapply(const local_matrix_store &store, const bulk_uoperate &op,
 		for (size_t i = 0; i < ncol; i++)
 			op.runA(nrow, col_store.get_col(i), col_res.get_col(i));
 	}
+	store.complete();
 }
 
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,
@@ -1348,6 +1354,7 @@ void apply(int margin, const arr_apply_operate &op,
 			op.run(in_vec, out_vec);
 		}
 	}
+	in_mat.complete();
 }
 
 namespace
@@ -1438,6 +1445,8 @@ void mapply_rows(const local_matrix_store &store, const local_vec_store &vals,
 			op->runAE(nrow, col_store.get_col(i), vals.get(i),
 					col_res.get_col(i));
 	}
+	store.complete();
+	// TODO we should split the matrix
 }
 
 void mapply_cols(const local_matrix_store &store, const local_vec_store &vals,
@@ -1471,6 +1480,8 @@ void mapply_cols(const local_matrix_store &store, const local_vec_store &vals,
 			op->runAA(nrow, col_store.get_col(i), vals.get_raw_arr(),
 					col_res.get_col(i));
 	}
+	store.complete();
+	// TODO we should split the matrix
 }
 
 static bool _groupby(const detail::local_matrix_store &labels,
@@ -1536,6 +1547,8 @@ static bool _groupby(const detail::local_matrix_store &labels,
 			bit = true;
 		}
 	}
+	labels.complete();
+	mat.complete();
 	return true;
 }
 
@@ -1985,6 +1998,8 @@ void _matrix_tall_multiply(const local_matrix_store &Astore,
 
 	if (out.get_raw_arr() == NULL)
 		out.copy_from(*bufs.second);
+	Astore.complete();
+	Bstore.complete();
 }
 
 void matrix_tall_multiply(const local_matrix_store &Astore,
@@ -2041,6 +2056,7 @@ void matrix_wide_multiply(const local_matrix_store &left,
 		const local_matrix_store &right, local_matrix_store &out,
 		std::pair<local_matrix_store::ptr, local_matrix_store::ptr> &bufs)
 {
+	// TODO we should split the matrix
 }
 
 void materialize_tall(
