@@ -201,6 +201,9 @@ public:
 		return INVALID_MAT_ID;
 	}
 
+	virtual void inc_dag_ref(size_t id);
+	virtual void reset_dag_ref();
+
 	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;
 	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const;
@@ -248,6 +251,9 @@ public:
 	virtual size_t get_data_id() const {
 		return INVALID_MAT_ID;
 	}
+
+	virtual void inc_dag_ref(size_t id);
+	virtual void reset_dag_ref();
 
 	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;

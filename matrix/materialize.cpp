@@ -1392,6 +1392,13 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access,
 	if (mats.empty())
 		return true;
 
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).reset_dag_ref();
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).inc_dag_ref(
+				detail::INVALID_MAT_ID);
+
+	bool ret = true;
 	try {
 		vmat_levels::ptr levels(new vmat_levels());
 		for (size_t i = 0; i < mats.size(); i++) {
@@ -1407,23 +1414,22 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access,
 			for (size_t j = 0; j < vmats.size(); j++)
 				levels->add(underlying_mat_set::create(vmats[j]));
 		}
-		if (levels->is_empty())
-			return true;
-
-		levels->materialize(par_access);
-
-		// Now all virtual matrices contain the materialized results.
-		bool ret = true;
-		if (mater_self) {
-			for (size_t i = 0; i < mats.size(); i++)
-				ret = ret && mats[i]->materialize_self();
+		if (!levels->is_empty()) {
+			levels->materialize(par_access);
+			// Now all virtual matrices contain the materialized results.
+			if (mater_self) {
+				for (size_t i = 0; i < mats.size(); i++)
+					ret = ret && mats[i]->materialize_self();
+			}
 		}
-		return ret;
 	} catch (std::exception &e) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"fail to materialize multiple matrices: %1%") % e.what();
-		return false;
+		ret = false;
 	}
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).reset_dag_ref();
+	return ret;
 }
 
 }

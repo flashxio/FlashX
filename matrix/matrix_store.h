@@ -168,6 +168,14 @@ public:
 		return -1;
 	}
 
+	virtual void inc_dag_ref(size_t data_id) {
+	}
+	virtual void reset_dag_ref() {
+	}
+	virtual size_t get_dag_ref() const {
+		return 0;
+	}
+
 	/*
 	 * The shape of a matrix: a tall matrix or a wide matrix.
 	 * We care about the shape of a large matrix. We deal with a tall matrix

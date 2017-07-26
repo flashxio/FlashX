@@ -72,6 +72,12 @@ public:
 			matrix_layout_t layout,
 			data_id_t::ptr data_id = data_id_t::create(mat_counter++));
 
+	virtual void inc_dag_ref(size_t data_id);
+	virtual void reset_dag_ref();
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
+
 	bool is_wide() const {
 		// We handle matrices with different shapes differently
 		// We rely on this method to tell if a matrix is wide or tall.

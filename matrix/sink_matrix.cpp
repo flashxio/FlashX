@@ -818,6 +818,38 @@ std::unordered_map<size_t, size_t> mapply_sink_store::get_underlying_mats() cons
 	return ret;
 }
 
+void block_sink_store::inc_dag_ref(size_t id)
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<sink_store &>(*stores[i]).inc_dag_ref(get_data_id());
+	// We don't need to increase the ref count of a sink matrix
+	// because we never get a portion from a sink matrix.
+}
+
+void block_sink_store::reset_dag_ref()
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<sink_store &>(*stores[i]).reset_dag_ref();
+}
+
+void mapply_sink_store::inc_dag_ref(size_t id)
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<matrix_store &>(*stores[i]).inc_dag_ref(get_data_id());
+	// We don't need to increase the ref count of a sink matrix
+	// because we never get a portion from a sink matrix.
+}
+
+void mapply_sink_store::reset_dag_ref()
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<matrix_store &>(*stores[i]).reset_dag_ref();
+}
+
 }
 
 }

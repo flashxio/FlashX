@@ -128,6 +128,17 @@ public:
 					get_num_rows(), get_num_cols(), orig_num_rows, orig_num_cols,
 					store_layout(), get_type(), data_id));
 	}
+
+	virtual void inc_dag_ref(size_t id) {
+		data_id->inc_ref(id);
+	}
+	virtual void reset_dag_ref() {
+		data_id->reset_ref();
+	}
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
+
 	virtual size_t get_data_id() const {
 		return data_id->get_id();
 	}

@@ -1410,6 +1410,20 @@ void mapply_matrix_store::set_cache_portion(bool cache_portion)
 		const_cast<matrix_store &>(*in_mats[i]).set_cache_portion(cache_portion);
 }
 
+void mapply_matrix_store::inc_dag_ref(size_t id)
+{
+	data_id->inc_ref(id);
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).inc_dag_ref(data_id->get_id());
+}
+
+void mapply_matrix_store::reset_dag_ref()
+{
+	data_id->reset_ref();
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).reset_dag_ref();
+}
+
 }
 
 }
