@@ -137,9 +137,6 @@ public:
 		return false;
 	}
 
-	virtual size_t get_data_id() const {
-		return INVALID_MAT_ID;
-	}
 	virtual bool share_data(const matrix_store &store) const {
 		return false;
 	}

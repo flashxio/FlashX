@@ -511,7 +511,7 @@ matrix_store::const_ptr agg_matrix_store::transpose() const
 
 class agg_compute_store: public sink_compute_store, public EM_object
 {
-	portion_mapply_op::const_ptr portion_op;
+	matrix_long_agg_op::const_ptr portion_op;
 	matrix_store::const_ptr data;
 public:
 	agg_compute_store(matrix_store::const_ptr data,
@@ -519,7 +519,12 @@ public:
 				data->get_num_rows(), data->get_num_cols(), data->is_in_mem(),
 				portion_op->get_output_type()) {
 		this->data = data;
-		this->portion_op = portion_op;
+		this->portion_op
+			= std::dynamic_pointer_cast<const matrix_long_agg_op>(portion_op);
+		assert(this->portion_op);
+	}
+	virtual size_t get_data_id() const {
+		return portion_op->get_data_id();
 	}
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
@@ -613,11 +618,9 @@ std::vector<virtual_matrix_store::const_ptr> agg_matrix_store::get_compute_matri
 		return std::vector<virtual_matrix_store::const_ptr>();
 	else if (data->is_wide()) {
 		portion_mapply_op::const_ptr top = agg_op->transpose();
-		matrix_long_agg_op::const_ptr tagg_op
-			= std::dynamic_pointer_cast<const matrix_long_agg_op>(top);
 		return std::vector<virtual_matrix_store::const_ptr>(1,
 				virtual_matrix_store::const_ptr(new agg_compute_store(
-						data->transpose(), tagg_op)));
+						data->transpose(), top)));
 	}
 	else
 		return std::vector<virtual_matrix_store::const_ptr>(1,

@@ -1349,13 +1349,16 @@ class IPW_compute_store: public sink_compute_store, public EM_object
 	matrix_store::const_ptr right_mat;
 	bulk_operate::const_ptr left_op;
 	bulk_operate::const_ptr right_op;
-	portion_mapply_op::const_ptr portion_op;
+	std::shared_ptr<const combine_op> portion_op;
 	matrix_layout_t layout;
 public:
 	IPW_compute_store(matrix_store::const_ptr left_mat,
 			matrix_store::const_ptr right_mat, bulk_operate::const_ptr left_op,
 			bulk_operate::const_ptr right_op,
 			portion_mapply_op::const_ptr portion_op, matrix_layout_t layout);
+	virtual size_t get_data_id() const {
+		return portion_op->get_data_id();
+	}
 	using virtual_matrix_store::get_portion;
 	virtual std::shared_ptr<const local_matrix_store> get_portion(
 			size_t start_row, size_t start_col, size_t num_rows,
@@ -1438,7 +1441,8 @@ IPW_compute_store::IPW_compute_store(matrix_store::const_ptr left_mat,
 		assert(left_mat->get_num_rows() == right_mat->get_num_rows());
 	this->left_op = left_op;
 	this->right_op = right_op;
-	this->portion_op = portion_op;
+	this->portion_op = std::dynamic_pointer_cast<const combine_op>(portion_op);
+	assert(this->portion_op);
 	this->layout = layout;
 }
 
