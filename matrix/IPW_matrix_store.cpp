@@ -386,8 +386,6 @@ public:
 
 class multiply_wide_op: public combine_op
 {
-	std::vector<detail::local_matrix_store::ptr> Abufs;
-	std::vector<detail::local_matrix_store::ptr> Bbufs;
 	// The number of times we have accumulated the computation results
 	// on a portion in the tmp_buf. This is only useful for sparse matrix
 	// multiplication.
@@ -405,8 +403,6 @@ public:
 	multiply_wide_op(size_t num_threads, size_t out_num_rows, size_t out_num_cols,
 			matrix_layout_t required_layout, const scalar_type &type,
 			bool is_sparse, bool is_sym): combine_op(0, 0, type) {
-		Abufs.resize(num_threads);
-		Bbufs.resize(num_threads);
 		tmp_bufs.resize(num_threads);
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
@@ -444,9 +440,7 @@ public:
 
 	virtual detail::portion_mapply_op::const_ptr transpose() const {
 		multiply_wide_op *ret = new multiply_wide_op(*this);
-		for (size_t i = 0; i < ret->Abufs.size(); i++) {
-			ret->Abufs[i] = NULL;
-			ret->Bbufs[i] = NULL;
+		for (size_t i = 0; i < ret->num_tmp_accs.size(); i++) {
 			ret->num_tmp_accs[i] = 0;
 			ret->tmp_bufs[i] = NULL;
 		}
@@ -797,30 +791,27 @@ void multiply_wide_op::run_part_dense(
 {
 	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
 
+	detail::local_matrix_store::ptr Atmp, Btmp;
 	multiply_wide_op *mutable_this = const_cast<multiply_wide_op *>(this);
 	detail::local_matrix_store::const_ptr Astore = ins[0];
 	const void *Amat = Astore->get_raw_arr();
 	// We will transpose A later. So, if A has the expected layout, we actually
 	// need to convert the layout of A.
 	if (Amat == NULL || Astore->store_layout() == Alayout) {
-		if (Abufs[thread_id] == NULL
-				|| Astore->get_num_rows() != Abufs[thread_id]->get_num_rows()
-				|| Astore->get_num_cols() != Abufs[thread_id]->get_num_cols()) {
-			// If we expect a col-major layout, we should have the data stored in
-			// row-major order.
-			if (Alayout == matrix_layout_t::L_COL)
-				mutable_this->Abufs[thread_id] = detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_row_matrix_store(0, 0,
-							Astore->get_num_rows(), Astore->get_num_cols(),
-							Astore->get_type(), -1));
-			else
-				mutable_this->Abufs[thread_id] = detail::local_matrix_store::ptr(
-						new fm::detail::local_buf_col_matrix_store(0, 0,
-							Astore->get_num_rows(), Astore->get_num_cols(),
-							Astore->get_type(), -1));
-		}
-		Abufs[thread_id]->copy_from(*Astore);
-		Amat = Abufs[thread_id]->get_raw_arr();
+		// If we expect a col-major layout, we should have the data stored in
+		// row-major order.
+		if (Alayout == matrix_layout_t::L_COL)
+			Atmp = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_row_matrix_store(0, 0,
+						Astore->get_num_rows(), Astore->get_num_cols(),
+						Astore->get_type(), -1));
+		else
+			Atmp = detail::local_matrix_store::ptr(
+					new fm::detail::local_buf_col_matrix_store(0, 0,
+						Astore->get_num_rows(), Astore->get_num_cols(),
+						Astore->get_type(), -1));
+		Atmp->copy_from(*Astore);
+		Amat = Atmp->get_raw_arr();
 	}
 	assert(Amat);
 
@@ -830,22 +821,18 @@ void multiply_wide_op::run_part_dense(
 		Bstore = ins[1];
 		Bmat = Bstore->get_raw_arr();
 		if (Bmat == NULL || Bstore->store_layout() != Blayout) {
-			if (Bbufs[thread_id] == NULL
-					|| Bstore->get_num_rows() != Bbufs[thread_id]->get_num_rows()
-					|| Bstore->get_num_cols() != Bbufs[thread_id]->get_num_cols()) {
-				if (Blayout == matrix_layout_t::L_COL)
-					mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_col_matrix_store(0, 0,
-								Bstore->get_num_rows(), Bstore->get_num_cols(),
-								Bstore->get_type(), -1));
-				else
-					mutable_this->Bbufs[thread_id] = detail::local_matrix_store::ptr(
-							new fm::detail::local_buf_row_matrix_store(0, 0,
-								Bstore->get_num_rows(), Bstore->get_num_cols(),
-								Bstore->get_type(), -1));
-			}
-			Bbufs[thread_id]->copy_from(*Bstore);
-			Bmat = Bbufs[thread_id]->get_raw_arr();
+			if (Blayout == matrix_layout_t::L_COL)
+				Btmp = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_col_matrix_store(0, 0,
+							Bstore->get_num_rows(), Bstore->get_num_cols(),
+							Bstore->get_type(), -1));
+			else
+				Btmp = detail::local_matrix_store::ptr(
+						new fm::detail::local_buf_row_matrix_store(0, 0,
+							Bstore->get_num_rows(), Bstore->get_num_cols(),
+							Bstore->get_type(), -1));
+			Btmp->copy_from(*Bstore);
+			Bmat = Btmp->get_raw_arr();
 		}
 	}
 
