@@ -274,6 +274,11 @@ public:
 			size_t step, dense_matrix::ptr rows) const;
 
 	/*
+	 * This method gets individual elements in a matrix. The index matrix
+	 * contains two columns and each row specifies the coordinate of the element.
+	 */
+	virtual std::shared_ptr<col_vec> get_eles(dense_matrix::ptr idx) const;
+	/*
 	 * This method sets individual elements in a matrix. The index matrix
 	 * contains two columns and each row specifies the coordinate of the element
 	 * to be modified.

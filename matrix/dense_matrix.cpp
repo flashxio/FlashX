@@ -1998,6 +1998,48 @@ dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
 	}
 }
 
+col_vec::ptr dense_matrix::get_eles(dense_matrix::ptr idx) const
+{
+	if (idx->get_num_cols() != 2) {
+		BOOST_LOG_TRIVIAL(error) << "The index matrix has to have two columns";
+		return col_vec::ptr();
+	}
+
+	// This is useful to get a small number of elements from a matrix.
+	// TODO we need to optimize for many other cases.
+	detail::mem_matrix_store::const_ptr mem_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				get_raw_store());
+	if (mem_store == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "Can't get elements from an EM matrix";
+		return col_vec::ptr();
+	}
+
+	idx = idx->cast_ele_type(get_scalar_type<off_t>());
+	idx = idx->conv2(matrix_layout_t::L_COL);
+	idx = idx->conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr idx_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				idx->get_raw_store());
+	assert(idx_store);
+
+	detail::mem_matrix_store::ptr vec = detail::mem_matrix_store::create(
+			idx->get_num_rows(), 1, matrix_layout_t::L_COL, get_type(), -1);
+	size_t entry_size = mem_store->get_type().get_size();
+	for (size_t i = 0; i < idx_store->get_num_rows(); i++) {
+		const off_t *ridx_arr
+			= reinterpret_cast<const off_t *>(idx_store->get_col(0));
+		const off_t *cidx_arr
+			= reinterpret_cast<const off_t *>(idx_store->get_col(1));
+		assert(ridx_arr);
+		assert(cidx_arr);
+		off_t row_idx = ridx_arr[i];
+		off_t col_idx = cidx_arr[i];
+		memcpy(vec->get(i, 0), mem_store->get(row_idx, col_idx), entry_size);
+	}
+	return col_vec::create(vec);
+}
+
 ////////////////////////////// Inner product //////////////////////////////////
 
 dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
