@@ -447,6 +447,12 @@ static inline bool is_floating_point(const scalar_type &type)
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
+	if (get_num_cols() != mat.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Matrix multiply: #cols of mat1 should be the same as #rows of mat2";
+		return dense_matrix::ptr();
+	}
+
 	// If input matrices are sink matrices, we materialize them first.
 	if (store->is_sink())
 		materialize_self();
