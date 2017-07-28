@@ -520,11 +520,19 @@ cdef class PyMatrix:
         return self.aggregate_(AGG_MAX, axis, None, out, keepdims)
 
     def argmin(self, axis=None, out=None):
+        # TODO this is a bad way of implementing this.
+        if ((self.shape[0] > self.shape[1] and axis == 0)
+                or (self.shape[0] < self.shape[1] and axis == 1)):
+            return np.argmin(np.array(self), axis, out)
         cdef PyMatrix ret = self.aggregate_(AGG_ARGMIN, axis, None, out, False)
         # ARGMIN return int32, but we want int64 to match NumPy
         return ret.cast_ele_type("l")
 
     def argmax(self, axis=None, out=None):
+        # TODO this is a bad way of implementing this.
+        if ((self.shape[0] > self.shape[1] and axis == 0)
+                or (self.shape[0] < self.shape[1] and axis == 1)):
+            return np.argmax(np.array(self), axis, out)
         cdef PyMatrix ret = self.aggregate_(AGG_ARGMAX, axis, None, out, False)
         # ARGMIN return int32, but we want int64 to match NumPy
         return ret.cast_ele_type("l")
