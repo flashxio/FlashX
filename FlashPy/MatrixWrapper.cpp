@@ -683,7 +683,10 @@ matrix_wrapper matrix_wrapper::cbind(const std::vector<matrix_wrapper> &mats)
 	std::vector<dense_matrix::ptr> tmp(mats.size());
 	for (size_t i = 0; i < tmp.size(); i++)
 		tmp[i] = mats[i].mat;
-	return matrix_wrapper(dense_matrix::cbind(tmp));
+	auto ret = dense_matrix::cbind(tmp);
+	if (ret == NULL)
+		throw std::invalid_argument("can't cbind the matrices");
+	return matrix_wrapper(ret);
 }
 
 matrix_wrapper matrix_wrapper::rbind(const std::vector<matrix_wrapper> &mats)
@@ -695,6 +698,8 @@ matrix_wrapper matrix_wrapper::rbind(const std::vector<matrix_wrapper> &mats)
 		is_vec = is_vec && mats[i].is_vector();
 	}
 	dense_matrix::ptr ret = dense_matrix::rbind(tmp);
+	if (ret == NULL)
+		throw std::invalid_argument("can't rbind the matrices");
 	if (is_vec)
 		return matrix_wrapper(col_vec::create(ret));
 	else

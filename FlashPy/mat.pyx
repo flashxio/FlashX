@@ -108,9 +108,9 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         void init_const_int(long val) except+
 
         @staticmethod
-        matrix_wrapper cbind(vector[matrix_wrapper] &mats)
+        matrix_wrapper cbind(vector[matrix_wrapper] &mats) except+
         @staticmethod
-        matrix_wrapper rbind(vector[matrix_wrapper] &mats)
+        matrix_wrapper rbind(vector[matrix_wrapper] &mats) except+
 
         void set_cached(bool)
 
