@@ -98,9 +98,9 @@ verify(fp_mat1[1:3], np_mat1[1:3])
 verify(fp_mat1[1:7:2], np_mat1[1:7:2])
 verify(fp_mat1[1:3, 1:3], np_mat1[1:3, 1:3])
 verify(fp_mat1[1:7:2, 1:7:2], np_mat1[1:7:2, 1:7:2])
-idx = [1, 3, 5]
+idx = [3, 1, 5]
 verify(fp_mat1[idx], np_mat1[idx])
-#verify(fp_mat1[idx, idx], np_mat1[idx, idx])
+verify(fp_mat1[idx, idx], np_mat1[idx, idx])
 
 print("test indexing (set)")
 np_mat1[:] = np_mat2

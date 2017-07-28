@@ -643,6 +643,15 @@ matrix_wrapper matrix_wrapper::get_rows(size_t start, size_t end, long step) con
 		return matrix_wrapper(ret);
 }
 
+matrix_wrapper matrix_wrapper::get_eles(matrix_wrapper idxs) const
+{
+	check_mat();
+	auto ret = mat->get_eles(idxs.mat);
+	if (ret == NULL)
+		throw std::invalid_argument("can't get eles");
+	return matrix_wrapper(ret);
+}
+
 matrix_wrapper matrix_wrapper::set_cols(const std::vector<off_t> &idxs,
 		matrix_wrapper cols)
 {

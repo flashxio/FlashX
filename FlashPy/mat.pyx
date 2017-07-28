@@ -140,6 +140,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper get_rows(long start, long stop, long step) except+
         matrix_wrapper get_cols(matrix_wrapper idxs) except+
         matrix_wrapper get_rows(matrix_wrapper idxs) except+
+        matrix_wrapper get_eles(matrix_wrapper idxs) except+
 
         matrix_wrapper set_cols(const vector[long] &idxs, matrix_wrapper cols) except+
         matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows) except+
@@ -169,6 +170,21 @@ def is_idx_range_all(idxs):
         if (idxs.start is None and idxs.stop is None and idxs.step is None):
             return True
     return False
+
+def normalize_idxs(slice idxs, max_len):
+    if (idxs.start is None):
+        start = 0
+    else:
+        start = idxs.start
+    if (idxs.stop is None):
+        stop = max_len
+    else:
+        stop = idxs.stop
+    if (idxs.step is None):
+        step = 1
+    else:
+        step = idxs.step
+    return slice(start, stop, step)
 
 class flagsobj:
     def __init__(self):
@@ -357,12 +373,15 @@ cdef class PyMatrix:
         if (isinstance(key, tuple) and len(key) >= 2):
             if (len(key) > 2):
                 raise IndexError("too many indices for array")
-            if (self.ndim == 1 or self.shape[0] > self.shape[1]):
-                ret = self.get_cols(key[1])
-                ret = ret.get_rows(key[0])
+            if (isinstance(key[0], slice) or isinstance(key[1], slice)):
+                if (self.ndim == 1 or self.shape[0] > self.shape[1]):
+                    ret = self.get_cols(key[1])
+                    ret = ret.get_rows(key[0])
+                else:
+                    ret = self.get_rows(key[0])
+                    ret = self.get_cols(key[1])
             else:
-                ret = self.get_rows(key[0])
-                ret = self.get_cols(key[1])
+                ret = self.get_eles(key[0], key[1])
         else:
             ret = self.get_rows(key)
         return ret
@@ -543,9 +562,8 @@ cdef class PyMatrix:
         elif (isinstance(idxs, slice)):
             if (is_idx_range_all(idxs)):
                 ret.mat = self.mat
-            elif (idxs.step is None):
-                ret.mat = self.mat.get_rows(idxs.start, idxs.stop, 1)
             else:
+                idxs = normalize_idxs(idxs, self.shape[0])
                 ret.mat = self.mat.get_rows(idxs.start, idxs.stop, idxs.step)
         elif (isinstance(idxs, np.ndarray)):
             idxs = np.array(idxs, dtype='l')
@@ -578,9 +596,8 @@ cdef class PyMatrix:
         elif (isinstance(idxs, slice)):
             if (is_idx_range_all(idxs)):
                 ret.mat = self.mat
-            elif (idxs.step is None):
-                ret.mat = self.mat.get_cols(idxs.start, idxs.stop, 1)
             else:
+                idxs = normalize_idxs(idxs, self.shape[1])
                 ret.mat = self.mat.get_cols(idxs.start, idxs.stop, idxs.step)
         elif (isinstance(idxs, np.ndarray)):
             idxs = np.array(idxs, dtype='l')
@@ -621,9 +638,8 @@ cdef class PyMatrix:
                     self.assign(rows)
                 else:
                     raise ValueError("vals doesn't match the shape of this matrix")
-            elif (idxs.step is None):
-                self.mat = self.mat.set_rows(idxs.start, idxs.stop, 1, rows.mat)
             else:
+                idxs = normalize_idxs(idxs, self.shape[0])
                 self.mat = self.mat.set_rows(idxs.start, idxs.stop, idxs.step, rows.mat)
         elif (isinstance(idxs, np.ndarray)):
             idxs = np.array(idxs, dtype='l')
@@ -655,9 +671,8 @@ cdef class PyMatrix:
                     self.assign(cols)
                 else:
                     raise ValueError("vals doesn't match the shape of this matrix")
-            elif (idxs.step is None):
-                self.mat = self.mat.set_cols(idxs.start, idxs.stop, 1, cols.mat)
             else:
+                idxs = normalize_idxs(idxs, self.shape[1])
                 self.mat = self.mat.set_cols(idxs.start, idxs.stop, idxs.step, cols.mat)
         elif (isinstance(idxs, np.ndarray)):
             idxs = np.array(idxs, dtype='l')
@@ -667,6 +682,23 @@ cdef class PyMatrix:
         else:
             raise ValueError("invalid index")
         self.init_attr()
+
+    def get_eles(self, row_idxs, col_idxs):
+        cdef PyMatrix ret = PyMatrix()
+        cdef PyMatrix idxs, arr
+        row_idxs = array(row_idxs)
+        col_idxs = array(col_idxs)
+        # TODO this may not necessary if we have a complete
+        # implementation of get_eles().
+        if (self.shape[0] > self.shape[1]):
+            arr = self.get_rows(row_idxs)
+            idxs = concatenate((range(0, len(row_idxs)), col_idxs), axis=1)
+        else:
+            arr = self.get_cols(col_idxs)
+            idxs = concatenate((row_idxs, range(0, len(row_idxs))), axis=1)
+        ret.mat = arr.mat.get_eles(idxs.mat)
+        ret.init_attr()
+        return ret
 
     def transpose(self):
         if (self.ndim < 2):
