@@ -19,5 +19,6 @@ from mat import asarray
 from mat import concatenate
 from mat import all
 from mat import any
+from mat import sign
 import linalg
 import sparse

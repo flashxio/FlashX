@@ -46,7 +46,8 @@ bop_idiv = OP_IDIV
 cdef enum bulk_uop_idx_t:
     UOP_NEG, UOP_SQRT, UOP_ABS, UOP_NOT, UOP_SQ,
     UOP_CEIL, UOP_FLOOR, UOP_ROUND,
-    UOP_LOG, UOP_LOG2, UOP_LOG10
+    UOP_LOG, UOP_LOG2, UOP_LOG10,
+    UOP_SIGN
 
 uop_neg = UOP_NEG
 uop_sqrt = UOP_SQRT
@@ -59,6 +60,7 @@ uop_round = UOP_ROUND
 uop_log = UOP_LOG
 uop_log2 = UOP_LOG2
 uop_log10 = UOP_LOG10
+uop_sign = UOP_SIGN
 
 cdef enum agg_op_idx_t:
     AGG_COUNT, AGG_FIND_NEXT, AGG_FIND_PREV, AGG_ARGMIN, AGG_ARGMAX,
@@ -1154,6 +1156,13 @@ def all(arr, axis=None, out=None, keepdims=False):
 def any(arr, axis=None, out=None, keepdims=False):
     arr = asarray(arr)
     return arr.any(axis, out, keepdims)
+
+def sign(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    x = asarray(x)
+    x = x.sapply(UOP_SIGN)
+    if (dtype is not None):
+        x = x.cast_ele_type(dtype)
+    return x.copy(order)
 
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
