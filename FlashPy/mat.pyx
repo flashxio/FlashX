@@ -554,6 +554,9 @@ cdef class PyMatrix:
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
+        if (isinstance(idxs, xrange)):
+            # TODO This isn't a good way of handling xrange.
+            idxs = np.array(idxs)
         if (np.isscalar(idxs)):
             ret.mat = self.mat.get_row(idxs)
         elif (isinstance(idxs, list)):
@@ -588,6 +591,9 @@ cdef class PyMatrix:
         cdef PyMatrix ret = PyMatrix()
         cdef long *addr
         cdef vector[long] cidxs
+        if (isinstance(idxs, xrange)):
+            # TODO This isn't a good way of handling xrange.
+            idxs = np.array(idxs)
         if (np.isscalar(idxs)):
             ret.mat = self.mat.get_col(idxs)
         elif (isinstance(idxs, list)):
@@ -620,7 +626,10 @@ cdef class PyMatrix:
     def set_rows(self, idxs, vals):
         cdef long *addr
         cdef vector[long] cidxs
-        if (np.isscalar(idxs)):
+        if (isinstance(idxs, xrange)):
+            # TODO This isn't a good way of handling xrange.
+            idxs = np.array(idxs)
+        elif (np.isscalar(idxs)):
             idxs = [idxs]
 
         cdef PyMatrix rows
@@ -653,7 +662,10 @@ cdef class PyMatrix:
     def set_cols(self, idxs, vals):
         cdef long *addr
         cdef vector[long] cidxs
-        if (np.isscalar(idxs)):
+        if (isinstance(idxs, xrange)):
+            # TODO This isn't a good way of handling xrange.
+            idxs = np.array(idxs)
+        elif (np.isscalar(idxs)):
             idxs = [idxs]
 
         cdef PyMatrix cols
