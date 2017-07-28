@@ -614,7 +614,7 @@ fp_weights = fp.array(np_weights, dtype="l")
 np_weights = np.array(fp_weights, copy=True)
 fp_res = fp.average(fp_mat1, axis=1, weights=fp_weights, returned=True)
 np_res = np.average(np_mat1, axis=1, weights=np_weights, returned=True)
-verify(fp_res[0], np_res[0])
+verify(fp_res[0], np_res[0], rescale=True)
 
 np_weights = np.random.normal(scale=100, size=fp_mat1.shape[0])
 fp_weights = fp.array(np_weights, dtype="l")
