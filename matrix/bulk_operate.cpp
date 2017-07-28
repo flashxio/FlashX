@@ -160,6 +160,20 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct sign {
+		static std::string get_name() {
+			return "sign";
+		}
+		OutType operator()(const InType &e) const {
+			if (e > 0)
+				return 1;
+			else if (e < 0)
+				return -1;
+			else
+				return 0;
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
@@ -171,6 +185,7 @@ class basic_uops_impl: public basic_uops
 	bulk_uoperate_impl<log, InType, OutType> log_op;
 	bulk_uoperate_impl<log2, InType, OutType> log2_op;
 	bulk_uoperate_impl<log10, InType, OutType> log10_op;
+	bulk_uoperate_impl<sign, InType, OutType> sign_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -186,6 +201,7 @@ public:
 		ops.push_back(&log_op);
 		ops.push_back(&log2_op);
 		ops.push_back(&log10_op);
+		ops.push_back(&sign_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {

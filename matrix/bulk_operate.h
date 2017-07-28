@@ -150,6 +150,7 @@ public:
 		LOG,
 		LOG2,
 		LOG10,
+		SIGN,
 		NUM_OPS,
 	};
 
