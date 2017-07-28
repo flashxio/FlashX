@@ -655,7 +655,13 @@ np_res = np.linalg.norm(np_vec1, ord=0)
 assert abs((np.array(fp_res)[0] - np_res) / np_res) < 1e-13
 
 fp_res = fp.linalg.qr(fp_mat1)
-np_res = np.linalg.qr(np_mat1)
+np_res = linalg.qr(np_mat1, mode='economic')
 assert len(fp_res) == 2
 verify(abs(fp_res[0]), abs(np_res[0]))
 verify(abs(fp_res[1]), abs(np_res[1]), rescale=True)
+
+P = np.random.normal(size=[10, 15])
+fp_res = fp.linalg.qr(fp.dot(fp_mat1, P))
+np_res = linalg.qr(np.dot(np_mat1, P), mode='economic')
+assert len(fp_res) == 2
+verify(abs(fp_res[0]), abs(np_res[0][:,0:10]))
