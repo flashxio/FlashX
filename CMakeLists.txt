@@ -31,7 +31,7 @@ configure_file (
 
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -fPIC" )
 
-execute_process(COMMAND sh ${PROJECT_SOURCE_DIR}/get_num_nodes.sh OUTPUT_VARIABLE num_nodes)
+execute_process(COMMAND bash ${PROJECT_SOURCE_DIR}/get_num_nodes.sh OUTPUT_VARIABLE num_nodes)
 message("#node: ${num_nodes}")
 
 find_package(OpenMP)
