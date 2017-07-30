@@ -328,6 +328,8 @@ text_io::ptr text_io::create(const std::string &file_name)
 file_io::ptr local_file_io::create(const std::string file)
 {
 	int fd = open(file.c_str(), O_RDONLY | O_DIRECT);
+	if (fd < 0)
+		fd = open(file.c_str(), O_RDONLY);
 	if (fd < 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("fail to open %1%: %2%") % file % strerror(errno);
