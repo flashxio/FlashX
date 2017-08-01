@@ -5,6 +5,8 @@ from .. import dot
 from .. import concatenate
 
 def gram_schmidt(mat):
+    mat = mat.copy(order='F')
+    mat.materialize_self()
     basis = []
     ncol = mat.shape[1]
     r = np.zeros(shape=[ncol, ncol])
