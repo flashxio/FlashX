@@ -580,8 +580,7 @@ std::pair<matrix_wrapper, matrix_wrapper> matrix_wrapper::groupby(
 		agg_op_idx_t op, bool with_val) const
 {
 	check_mat();
-	col_vec::ptr vec = col_vec::create(mat);
-	auto ret = vec->groupby(get_agg(mat->get_type(), op), with_val);
+	auto ret = mat->groupby(get_agg(mat->get_type(), op), with_val);
 	if (with_val) {
 		matrix_wrapper agg(col_vec::create(vector::create(ret->get_vec("agg"))));
 		matrix_wrapper val(col_vec::create(vector::create(ret->get_vec("val"))));
