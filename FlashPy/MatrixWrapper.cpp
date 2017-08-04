@@ -131,6 +131,20 @@ fm::scalar_variable::ptr scalar_wrapper::get_var(const fm::scalar_type *type) co
 		return var->cast_type(*type);
 }
 
+static size_t small_portion = 16 * 1024;
+
+static int get_num_nodes(size_t nrow, size_t ncol)
+{
+	int num_nodes = matrix_conf.get_num_nodes();
+	// When there is only one NUMA node, it's better to use SMP vector.
+	if (num_nodes == 1)
+		num_nodes = -1;
+	// If the matrix is small, we should put it in non-NUMA matrix.
+	if (nrow < small_portion && ncol < small_portion)
+		num_nodes = -1;
+	return num_nodes;
+}
+
 matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t length,
 		const std::string &t)
 {
@@ -138,7 +152,14 @@ matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t length,
 			length, 1, matrix_layout_t::L_COL, convT_py2fm(t), -1);
 	memcpy(store->get_raw_arr(), (void *) data_ptr,
 			length * store->get_type().get_size());
-	this->mat = col_vec::create(store);
+	int num_nodes = get_num_nodes(length, 1);
+	if (num_nodes < 0)
+		this->mat = col_vec::create(store);
+	else {
+		auto mat = dense_matrix::create(store);
+		mat = mat->conv_store(true, num_nodes);
+		this->mat = col_vec::create(mat);
+	}
 }
 
 matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t nrow, size_t ncol,
@@ -148,7 +169,28 @@ matrix_wrapper::matrix_wrapper(intptr_t data_ptr, size_t nrow, size_t ncol,
 			nrow, ncol, get_layout(layout), convT_py2fm(t), -1);
 	memcpy(store->get_raw_arr(), (void *) data_ptr,
 			nrow * ncol * store->get_type().get_size());
-	this->mat = dense_matrix::create(store);
+	int num_nodes = get_num_nodes(nrow, ncol);
+	if (num_nodes < 0)
+		this->mat = dense_matrix::create(store);
+	else {
+		auto mat = dense_matrix::create(store);
+		this->mat = mat->conv_store(true, num_nodes);
+	}
+}
+
+matrix_wrapper::matrix_wrapper(size_t length, std::string &t)
+{
+	auto data = fm::dense_matrix::create(length, 1,
+			fm::matrix_layout_t::L_COL, convT_py2fm(t),
+			get_num_nodes(length, 1));
+	mat = fm::col_vec::create(data);
+}
+
+matrix_wrapper::matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
+		const std::string layout)
+{
+	mat = fm::dense_matrix::create(nrow, ncol, get_layout(layout),
+			convT_py2fm(t), get_num_nodes(nrow, ncol));
 }
 
 bool matrix_wrapper::is_vector() const

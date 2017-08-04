@@ -132,21 +132,11 @@ public:
 	}
 
 	matrix_wrapper(intptr_t data_addr, size_t length, const std::string &t);
-
 	matrix_wrapper(intptr_t data_addr, size_t nrow, size_t ncol,
 			const std::string &t, const std::string layout);
-
-	matrix_wrapper(size_t length, std::string &t) {
-		auto data = fm::dense_matrix::create(length, 1,
-				fm::matrix_layout_t::L_COL, convT_py2fm(t));
-		mat = fm::col_vec::create(data);
-	}
-
+	matrix_wrapper(size_t length, std::string &t);
 	matrix_wrapper(size_t nrow, size_t ncol, const std::string &t,
-			const std::string layout) {
-		mat = fm::dense_matrix::create(nrow, ncol, get_layout(layout),
-				convT_py2fm(t));
-	}
+			const std::string layout);
 
 	matrix_wrapper(fm::dense_matrix::ptr mat) {
 		this->mat = mat;
