@@ -9,7 +9,7 @@ from libc.stdint cimport intptr_t
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.utility cimport pair
-from libcpp cimport bool
+from libcpp cimport bool as cbool
 from libc.string cimport memcpy
 
 from cpython cimport array
@@ -79,7 +79,7 @@ agg_and = AGG_AND
 agg_or = AGG_OR
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
-    cdef bool init_flashpy_c(const string file)
+    cdef cbool init_flashpy_c(const string file)
 
 cdef extern from "MatrixWrapper.h" namespace "flashpy":
     cdef cppclass scalar_wrapper:
@@ -103,7 +103,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         # create an empty matrix with the specified size
         matrix_wrapper(size_t nrow, size_t ncol, string t, string layout) except+
 
-        void init_seq[T](T start, T stride, bool byrow)
+        void init_seq[T](T start, T stride, cbool byrow)
         void init_const_float(double val) except+
         void init_const_int(long val) except+
 
@@ -112,7 +112,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         @staticmethod
         matrix_wrapper rbind(vector[matrix_wrapper] &mats) except+
 
-        void set_cached(bool)
+        void set_cached(cbool)
 
         matrix_wrapper as_factor(int num_levels) except+
         matrix_wrapper as_vector() except+
@@ -125,13 +125,13 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         np.NPY_TYPES get_type_py() const
         string get_layout() const
 
-        bool is_floating_point() const
-        bool is_in_mem() const
-        bool is_virtual() const
-        bool is_vector() const
-        bool is_valid() const
+        cbool is_floating_point() const
+        cbool is_in_mem() const
+        cbool is_virtual() const
+        cbool is_vector() const
+        cbool is_valid() const
 
-        bool materialize_self() const
+        cbool materialize_self() const
         matrix_wrapper cast_ele_type(string dtyp) except+
 
         matrix_wrapper get_col(long idx) except+
@@ -148,9 +148,9 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper set_rows(const vector[long] &idxs, matrix_wrapper rows) except+
         matrix_wrapper set_cols(long start, long stop, long step, matrix_wrapper cols) except+
         matrix_wrapper set_rows(long start, long stop, long step, matrix_wrapper rows) except+
-        bool copy_rows_to(char *arr, size_t len) const
+        cbool copy_rows_to(char *arr, size_t len) const
         matrix_wrapper transpose() const
-        matrix_wrapper conv_store(bool in_mem, int num_nodes) const
+        matrix_wrapper conv_store(cbool in_mem, int num_nodes) const
         matrix_wrapper conv_layout(const string layout) const
         matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
                 bulk_op_idx_t right_op) except+
@@ -159,7 +159,7 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper agg_row(agg_op_idx_t op) const
         matrix_wrapper agg_col(agg_op_idx_t op) const
         matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) except+
-        pair[matrix_wrapper, matrix_wrapper] groupby(agg_op_idx_t op, bool with_val) const
+        pair[matrix_wrapper, matrix_wrapper] groupby(agg_op_idx_t op, cbool with_val) const
         matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) except+
         matrix_wrapper mapply_rows(matrix_wrapper vals, bulk_op_idx_t op) except+
         matrix_wrapper mapply2(matrix_wrapper m, bulk_op_idx_t op) except+
