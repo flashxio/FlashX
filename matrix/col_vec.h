@@ -30,6 +30,11 @@ namespace fm
 
 class vector;
 
+namespace detail
+{
+class vec_store;
+}
+
 /*
  * This represents a vector with a one-col matrix.
  * As such, a vector can contain data that doesn't physically exist.
@@ -45,6 +50,7 @@ public:
 	typedef std::shared_ptr<const col_vec> const_ptr;
 
 	static ptr create(std::shared_ptr<const vector> vec);
+	static ptr create(std::shared_ptr<const detail::vec_store> store);
 
 	template<class T>
 	static ptr create_randn(size_t len) {

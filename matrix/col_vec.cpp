@@ -41,6 +41,12 @@ col_vec::ptr col_vec::create(detail::matrix_store::const_ptr store)
 	return ptr(new col_vec(mat->get_raw_store()));
 }
 
+col_vec::ptr col_vec::create(detail::vec_store::const_ptr store)
+{
+	auto mat = store->conv2mat(store->get_length(), 1, false);
+	return col_vec::create(mat);
+}
+
 col_vec::ptr col_vec::create(dense_matrix::ptr mat)
 {
 	if (mat->get_num_cols() > 1 && mat->get_num_rows() > 1) {
