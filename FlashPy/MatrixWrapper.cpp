@@ -523,7 +523,7 @@ bool init_flashpy_c(const std::string &conf_file)
 {
 	try {
 		if (conf_file.empty())
-			init_flash_matrix(NULL);
+			init_flash_matrix(config_map::create());
 		else {
 			config_map::ptr configs = config_map::create(conf_file);
 			configs->add_options("writable=1");
