@@ -857,9 +857,8 @@ cdef class PyMatrix:
                 var = create_scalar_wrapper[long](obj)
             elif (isinstance(obj, int)):
                 var = create_scalar_wrapper[int](obj)
-            # TODO handle boolean.
-            #elif (isinstance(obj, bool)):
-            #    var = create_scalar_wrapper[bool](obj)
+            elif (type(obj) == type(True) or type(obj) == np.bool_):
+                var = create_scalar_wrapper[cbool](bool(obj))
             else:
                 raise ValueError("invalid scalar type")
             ret.mat = self.mat.apply_scalar(var, op)
