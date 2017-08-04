@@ -665,3 +665,13 @@ fp_res = fp.linalg.qr(fp.dot(fp_mat1, P))
 np_res = linalg.qr(np.dot(np_mat1, P), mode='economic')
 assert len(fp_res) == 2
 verify(abs(fp_res[0]), abs(np_res[0][:,0:10]))
+
+print("test unique")
+np_res = np.unique(np_mat1)
+fp_res = fp.unique(fp_mat1)
+verify(fp_res, np_res)
+
+np_res1, np_res2 = np.unique(np_mat1, return_counts=True)
+fp_res1, fp_res2 = fp.unique(fp_mat1, return_counts=True)
+verify(fp_res1, np_res1)
+verify(fp_res2, np_res2)

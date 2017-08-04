@@ -1171,5 +1171,28 @@ def sign(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
         x = x.cast_ele_type(dtype)
     return x.copy(order)
 
+def unique(arr, return_index=False, return_inverse=False, return_counts=False, axis=None):
+    cdef PyMatrix x = asarray(arr)
+    if (return_index):
+        raise NotImplementedError("Not support return index yet")
+    if (return_inverse):
+        raise NotImplementedError("Not support return inverse yet")
+    if (axis is not None):
+        raise NotImplementedError("Only support computing unique elements")
+
+    cdef pair[matrix_wrapper, matrix_wrapper] mats = x.mat.groupby(AGG_COUNT, True)
+    cdef PyMatrix ret1 = PyMatrix()
+    cdef PyMatrix ret2 = PyMatrix()
+    if (return_counts):
+        ret1.mat = mats.second
+        ret1.init_attr()
+        ret2.mat = mats.first
+        ret2.init_attr()
+        return ret1, ret2
+    else:
+        ret1.mat = mats.second
+        ret1.init_attr()
+        return ret1
+
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
