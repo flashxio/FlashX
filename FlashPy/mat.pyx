@@ -1171,6 +1171,10 @@ def sign(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
         x = x.cast_ele_type(dtype)
     return x.copy(order)
 
+def ravel(x, order='C'):
+    x = asarray(x)
+    return x.ravel(order)
+
 def unique(arr, return_index=False, return_inverse=False, return_counts=False, axis=None):
     cdef PyMatrix x = asarray(arr)
     if (return_index):

@@ -18,6 +18,7 @@ from mat import asanyarray
 from mat import asarray
 from mat import concatenate
 from mat import unique
+from mat import ravel
 from mat import all
 from mat import any
 from mat import sign
