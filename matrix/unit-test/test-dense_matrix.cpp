@@ -1848,13 +1848,13 @@ void test_setdata(int num_nodes)
 	}
 }
 
-void _test_vec_groupby();
+void _test_groupby_eles();
 void _test_groupby(dense_matrix::ptr mat);
 
 void test_groupby()
 {
 	dense_matrix::ptr mat;
-	_test_vec_groupby();
+	_test_groupby_eles();
 
 	mat = create_matrix(10, long_dim, matrix_layout_t::L_ROW,
 			-1, get_scalar_type<int>());
@@ -2047,29 +2047,27 @@ public:
 	}
 };
 
-void _test_vec_groupby()
+void _test_groupby_eles()
 {
 	dense_matrix::ptr mat = dense_matrix::create_randu<int>(0, 1000, long_dim,
-			1, matrix_layout_t::L_COL);
-	printf("test groupby on a vector\n");
-	assert(mat->get_num_rows() == 1 || mat->get_num_cols() == 1);
-	col_vec::ptr vec = col_vec::create(mat);
-	assert(vec);
-	agg_operate::const_ptr count_agg = vec->get_type().get_agg_ops().get_count();
-	data_frame::ptr res = vec->groupby(count_agg, true);
+			10, matrix_layout_t::L_COL);
+	printf("test groupby elements\n");
+	agg_operate::const_ptr count_agg = mat->get_type().get_agg_ops().get_count();
+	data_frame::ptr res = mat->groupby(count_agg, true);
 	printf("#entries in res: %ld\n", res->get_num_entries());
 
 	std::map<int, size_t> ele_counts;
 	const detail::mem_matrix_store &vstore
-		= dynamic_cast<const detail::mem_matrix_store &>(vec->get_data());
-	for (size_t i = 0; i < vec->get_length(); i++) {
-		int val = vstore.get<int>(i, 0);
-		auto it = ele_counts.find(val);
-		if (it == ele_counts.end())
-			ele_counts.insert(std::pair<int, size_t>(val, 1));
-		else
-			it->second++;
-	}
+		= dynamic_cast<const detail::mem_matrix_store &>(mat->get_data());
+	for (size_t i = 0; i < mat->get_num_rows(); i++)
+		for (size_t j = 0; j < mat->get_num_cols(); j++) {
+			int val = vstore.get<int>(i, j);
+			auto it = ele_counts.find(val);
+			if (it == ele_counts.end())
+				ele_counts.insert(std::pair<int, size_t>(val, 1));
+			else
+				it->second++;
+		}
 
 	detail::smp_vec_store::ptr vals = detail::smp_vec_store::cast(
 			res->get_vec("val"));

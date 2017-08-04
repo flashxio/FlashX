@@ -108,19 +108,6 @@ public:
 		assign(mat);
 		return *this;
 	}
-
-	/*
-	 * This version of groupby runs aggregation on each group. It only needs
-	 * to scan the vector once. If `with_val' is true, this method returns
-	 * a data frame with two columns: the first column is a vector of unique
-	 * values in the vector; the second column is a vector of aggregation
-	 * result for each unique value in the first column.
-	 * If `with_val' is false, this method returns a data frame with only
-	 * one column, which contains the aggregation result for each unique value.
-	 */
-	std::shared_ptr<data_frame> groupby(
-			std::shared_ptr<const agg_operate> op, bool with_val,
-			bool sorted=true) const;
 };
 
 }

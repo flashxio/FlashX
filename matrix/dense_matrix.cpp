@@ -45,6 +45,8 @@
 #include "project_matrix_store.h"
 #include "set_data_matrix_store.h"
 #include "set_rc_matrix_store.h"
+#include "generic_hashtable.h"
+#include "local_vec_store.h"
 
 namespace fm
 {
@@ -3734,6 +3736,141 @@ dense_matrix::ptr dense_matrix::ifelse(const dense_matrix &yes,
 	mats[1] = yes_mat;
 	mats[2] = no_mat;
 	return mapply_ele(mats, op, test_mat->store_layout());
+}
+
+namespace
+{
+
+class groupby_ele_portion_op: public detail::portion_mapply_op
+{
+	agg_operate::const_ptr find_next;
+	agg_operate::const_ptr agg_op;
+	std::vector<generic_hashtable::ptr> tables;
+public:
+	groupby_ele_portion_op(agg_operate::const_ptr agg_op): detail::portion_mapply_op(
+			0, 0, agg_op->get_output_type()) {
+		this->find_next = agg_op->get_input_type().get_agg_ops().get_find_next();
+		this->agg_op = agg_op;
+		size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
+		tables.resize(nthreads);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "";
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+
+	generic_hashtable::ptr get_agg() const;
+};
+
+void groupby_ele_portion_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	groupby_ele_portion_op *mutable_this = const_cast<groupby_ele_portion_op *>(this);
+	if (tables[thread_id] == NULL)
+		mutable_this->tables[thread_id] = ins[0]->get_type().create_hashtable(
+				agg_op->get_output_type());
+	generic_hashtable::ptr ltable = tables[thread_id];
+	assert(ltable);
+
+	size_t llength = ins[0]->get_num_rows() * ins[0]->get_num_cols();
+	detail::local_matrix_store::ptr lmat;
+	if (ins[0]->store_layout() == matrix_layout_t::L_COL)
+		lmat = detail::local_matrix_store::ptr(
+			new detail::local_buf_col_matrix_store(0, 0, ins[0]->get_num_rows(),
+				ins[0]->get_num_cols(), ins[0]->get_type(), -1));
+	else
+		lmat = detail::local_matrix_store::ptr(
+			new detail::local_buf_row_matrix_store(0, 0, ins[0]->get_num_rows(),
+				ins[0]->get_num_cols(), ins[0]->get_type(), -1));
+	lmat->copy_from(*ins[0]);
+	lmat->get_type().get_sorter().serial_sort(lmat->get_raw_arr(), llength,
+			false);
+
+	local_vec_store::ptr lkeys(new local_buf_vec_store(0, llength,
+				ins[0]->get_type(), -1));
+	local_vec_store::ptr laggs(new local_buf_vec_store( 0, llength,
+				agg_op->get_output_type(), -1));
+
+	// Start to aggregate on the values.
+	const char *arr = lmat->get_raw_arr();
+	size_t key_idx = 0;
+	while (llength > 0) {
+		size_t num_same = 0;
+		find_next->runAgg(llength, arr, &num_same);
+		assert(num_same <= llength);
+		memcpy(lkeys->get(key_idx), arr, lmat->get_entry_size());
+		agg_op->runAgg(num_same, arr, laggs->get(key_idx));
+
+		key_idx++;
+		arr += num_same * lmat->get_entry_size();
+		llength -= num_same;
+	}
+	ltable->insert(key_idx, lkeys->get_raw_arr(), laggs->get_raw_arr(), *agg_op);
+}
+
+generic_hashtable::ptr groupby_ele_portion_op::get_agg() const
+{
+	generic_hashtable::ptr ret;
+	size_t i;
+	// Find a local table.
+	for (i = 0; i < tables.size(); i++) {
+		if (tables[i]) {
+			ret = tables[i];
+			break;
+		}
+	}
+	// We need to move to the next local table.
+	i++;
+	// Merge with other local tables if they exist.
+	for (; i < tables.size(); i++)
+		if (tables[i])
+			ret->merge(*tables[i], *agg_op);
+	return ret;
+}
+
+}
+
+data_frame::ptr dense_matrix::groupby(agg_operate::const_ptr op, bool with_val,
+		bool sorted) const
+{
+	std::vector<detail::matrix_store::const_ptr> stores(1);
+	stores[0] = get_raw_store();
+	groupby_ele_portion_op *_portion_op = new groupby_ele_portion_op(op);
+	detail::portion_mapply_op::const_ptr portion_op(_portion_op);
+	detail::__mapply_portion(stores, portion_op, matrix_layout_t::L_COL);
+	generic_hashtable::ptr agg_res = _portion_op->get_agg();
+
+	// The key-value pairs got from the hashtable aren't in any order.
+	// We need to sort them before returning them.
+	data_frame::ptr ret = data_frame::create();
+	data_frame::ptr df = agg_res->conv2df();
+	if (sorted) {
+		vector::ptr keys = vector::create(df->get_vec(0));
+		data_frame::ptr sorted_keys = keys->sort_with_index();
+		detail::smp_vec_store::const_ptr idx_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(
+					sorted_keys->get_vec("idx"));
+		detail::smp_vec_store::const_ptr agg_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(df->get_vec(1));
+		if (with_val)
+			ret->add_vec("val", sorted_keys->get_vec("val"));
+		ret->add_vec("agg", agg_store->get(*idx_store));
+	}
+	else {
+		if (with_val)
+			ret->add_vec("val", df->get_vec(0));
+		ret->add_vec("agg", df->get_vec(1));
+	}
+	return ret;
 }
 
 }

@@ -354,6 +354,19 @@ public:
 			std::shared_ptr<const factor_col_vector> labels,
 			bulk_operate::const_ptr) const;
 
+	/*
+	 * This version of groupby runs aggregation on each group. It only needs
+	 * to scan the matrix once. If `with_val' is true, this method returns
+	 * a data frame with two columns: the first column is a vector of unique
+	 * values in the vector; the second column is a vector of aggregation
+	 * result for each unique value in the first column.
+	 * If `with_val' is false, this method returns a data frame with only
+	 * one column, which contains the aggregation result for each unique value.
+	 */
+	std::shared_ptr<data_frame> groupby(
+			std::shared_ptr<const agg_operate> op, bool with_val,
+			bool sorted=true) const;
+
 	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const col_vec> vals,
 			bulk_operate::const_ptr op) const;
 	virtual dense_matrix::ptr mapply_rows(std::shared_ptr<const col_vec> vals,
