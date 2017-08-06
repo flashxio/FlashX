@@ -169,6 +169,10 @@ print("test +")
 fp_res = fp_mat1 + fp_mat2
 np_res = np_mat1 + np_mat2
 verify(fp_res, np_res)
+fp_res = fp_mat1 + np_mat2
+verify(fp_res, np_res)
+fp_res = np_mat1 + fp_mat2
+verify(fp_res, np_res)
 fp_res = fp_mat1 + 1
 np_res = np_mat1 + 1
 verify(fp_res, np_res)
