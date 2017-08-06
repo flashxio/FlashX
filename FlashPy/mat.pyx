@@ -1164,9 +1164,44 @@ def any(arr, axis=None, out=None, keepdims=False):
     arr = asarray(arr)
     return arr.any(axis, out, keepdims)
 
-def sign(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+def sapply(x, uop, out=None, where=True, casting='same_kind', order='K', dtype=None):
     x = asarray(x)
-    x = x.sapply(UOP_SIGN)
+    x = x.sapply(uop)
+    if (out is not None):
+        out.assign(x)
+    if (dtype is not None):
+        x = x.cast_ele_type(dtype)
+    return x.copy(order)
+
+def sign(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    return sapply(x, UOP_SIGN, out, where, casting, order, dtype)
+
+def log(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    return sapply(x, UOP_LOG, out, where, casting, order, dtype)
+
+def log10(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    return sapply(x, UOP_LOG10, out, where, casting, order, dtype)
+
+def log2(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    return sapply(x, UOP_LOG2, out, where, casting, order, dtype)
+
+def log1p(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    return sapply(x + 1, UOP_LOG, out, where, casting, order, dtype)
+
+def exp(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    x = asarray(x)
+    x = pow(create_const(np.exp(1), x.shape), x)
+    if (out is not None):
+        out.assign(x)
+    if (dtype is not None):
+        x = x.cast_ele_type(dtype)
+    return x.copy(order)
+
+def exp2(x, out=None, where=True, casting='same_kind', order='K', dtype=None):
+    x = asarray(x)
+    x = pow(create_const(2, x.shape), x)
+    if (out is not None):
+        out.assign(x)
     if (dtype is not None):
         x = x.cast_ele_type(dtype)
     return x.copy(order)

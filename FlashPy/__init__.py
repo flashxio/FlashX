@@ -22,5 +22,10 @@ from mat import ravel
 from mat import all
 from mat import any
 from mat import sign
+from mat import log
+from mat import log10
+from mat import log2
+from mat import exp
+from mat import exp2
 import linalg
 import sparse
