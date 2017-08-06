@@ -71,6 +71,21 @@ public:
 	}
 	virtual size_t get_data_id() const;
 
+	virtual void inc_dag_ref(size_t id) {
+		if (left_mat)
+			const_cast<matrix_store &>(*left_mat).inc_dag_ref(get_data_id());
+		if (right_mat)
+			const_cast<matrix_store &>(*right_mat).inc_dag_ref(get_data_id());
+		// We don't need to increase the ref count of a sink matrix
+		// because we never get a portion from a sink matrix.
+	}
+	virtual void reset_dag_ref() {
+		if (left_mat)
+			const_cast<matrix_store &>(*left_mat).reset_dag_ref();
+		if (right_mat)
+			const_cast<matrix_store &>(*right_mat).reset_dag_ref();
+	}
+
 	virtual bool has_materialized() const;
 
 	virtual void materialize_self() const;

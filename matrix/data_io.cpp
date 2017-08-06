@@ -413,8 +413,13 @@ class data_frame_set
 	pthread_cond_t fetch_cond;
 	pthread_cond_t add_cond;
 	size_t max_queue_size;
+	// This is a producer-consumer model. There are multiple producers
+	// but only one consumer. When the queue is full and the consumer
+	// isn't waiting (wait_for_fetch=false), a producer needs to go to
+	// sleep and increase wait_for_add by 1. When wait_for_add isn't 0,
+	// it means there is at least one consumer is sleeping.
+	size_t wait_for_add;
 	bool wait_for_fetch;
-	bool wait_for_add;
 public:
 	data_frame_set(size_t max_queue_size) {
 		this->max_queue_size = max_queue_size;
@@ -424,7 +429,7 @@ public:
 		tot_num_dfs = 0;
 		num_dfs = 0;
 		wait_for_fetch = false;
-		wait_for_add = false;
+		wait_for_add = 0;
 	}
 	~data_frame_set() {
 		pthread_mutex_destroy(&lock);
@@ -449,22 +454,21 @@ public:
 void data_frame_set::add(off_t seq_id, data_frame::ptr df)
 {
 	pthread_mutex_lock(&lock);
-	while (dfs.size() >= max_queue_size) {
-		// If the consumer thread is wait for adding new data frames, we
-		// should wake them up before going to sleep. There is only
-		// one thread waiting for fetching data frames, so we only need
-		// to signal one thread.
-		if (wait_for_fetch)
-			pthread_cond_signal(&fetch_cond);
-		wait_for_add = true;
+	// If the consumer thread isn't sleeping and the queue is full,
+	// the producer thread needs to sleep.
+	while (!wait_for_fetch && dfs.size() >= max_queue_size) {
+		wait_for_add++;
 		pthread_cond_wait(&add_cond, &lock);
-		wait_for_add = false;
+		wait_for_add--;
 	}
+	// If the consumer is sleeping, the producer adds the new data
+	// to the queue regardless the status of the queue.
 	if (seq_id < 0)
 		seq_id = tot_num_dfs;
 	dfs.insert(std::pair<off_t, data_frame::ptr>(seq_id, df));
 	tot_num_dfs++;
 	num_dfs++;
+	// If the consumer thread is sleeping, we need to wake it up.
 	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&fetch_cond);
 }
@@ -479,7 +483,7 @@ std::vector<data_frame::ptr> data_frame_set::fetch_data_frames(bool sequential,
 		// wake them up before going to sleep. Potentially, there are
 		// multiple threads waiting at the same time, we should wake
 		// all of them up.
-		if (wait_for_add)
+		if (wait_for_add > 0)
 			pthread_cond_broadcast(&add_cond);
 		wait_for_fetch = true;
 		pthread_cond_wait(&fetch_cond, &lock);
@@ -492,9 +496,9 @@ std::vector<data_frame::ptr> data_frame_set::fetch_data_frames(bool sequential,
 		// We first need to make sure the first sequence number in
 		// the map is the one we expect. If not, we have to wait.
 		while (it->first != seq_start) {
-			if (wait_for_add)
-				pthread_cond_broadcast(&add_cond);
 			wait_for_fetch = true;
+			if (wait_for_add > 0)
+				pthread_cond_broadcast(&add_cond);
 			pthread_cond_wait(&fetch_cond, &lock);
 			wait_for_fetch = false;
 			it = dfs.begin();

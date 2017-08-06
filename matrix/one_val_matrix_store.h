@@ -41,6 +41,11 @@ public:
 	one_val_matrix_store(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
 
+	virtual bool has_materialized() const {
+		// We never need to materialize this matrix.
+		return false;
+	}
+
 	virtual size_t get_data_id() const {
 		return INVALID_MAT_ID;
 	}

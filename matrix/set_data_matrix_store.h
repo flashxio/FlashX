@@ -40,7 +40,7 @@ namespace detail
 class set_data_matrix_store: public virtual_matrix_store
 {
 	const size_t mat_id;
-	const size_t data_id;
+	const data_id_t::ptr data_id;
 	set_operate::const_ptr row_op;
 	set_operate::const_ptr col_op;
 	matrix_layout_t layout;
@@ -51,7 +51,7 @@ class set_data_matrix_store: public virtual_matrix_store
 			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes): virtual_matrix_store(nrow,
 				ncol, true, row_op->get_type()), mat_id(mat_counter++),
-			data_id(mat_id) {
+			data_id(data_id_t::create(mat_id)) {
 		this->row_op = row_op;
 		this->col_op = col_op;
 		this->layout = layout;
@@ -63,7 +63,7 @@ class set_data_matrix_store: public virtual_matrix_store
 	set_data_matrix_store(set_operate::const_ptr row_op,
 			set_operate::const_ptr col_op, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes,
-			size_t _data_id): virtual_matrix_store(nrow, ncol, true,
+			data_id_t::ptr _data_id): virtual_matrix_store(nrow, ncol, true,
 				row_op->get_type()), mat_id(mat_counter++), data_id(_data_id) {
 		this->row_op = row_op;
 		this->col_op = col_op;
@@ -84,8 +84,22 @@ public:
 		return ptr(new set_data_matrix_store(row_op, col_op, nrow, ncol,
 					layout, num_nodes));
 	}
+
+	virtual void inc_dag_ref(size_t id) {
+		data_id->inc_ref(id);
+	}
+	virtual void reset_dag_ref() {
+		data_id->reset_ref();
+	}
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
+
+	virtual bool has_materialized() const {
+		return false;
+	}
 	virtual size_t get_data_id() const {
-		return data_id;
+		return data_id->get_id();
 	}
 
 	virtual std::string get_name() const {

@@ -151,8 +151,9 @@ fm.estep <- function(X, params, cov.type)
 											 params$weights)
 	logprob.norm <- logsumexp(weighted.logprob)
 	log.resp <- weighted.logprob - logprob.norm
-	fm.materialize(log.resp, logprob.norm)
-	list(norm=as.vector(mean(logprob.norm)), resp=log.resp)
+	norm <- mean(logprob.norm)
+	fm.materialize(log.resp, logprob.norm, norm)
+	list(norm=as.vector(norm), resp=log.resp)
 }
 
 # This estimate the parameters.

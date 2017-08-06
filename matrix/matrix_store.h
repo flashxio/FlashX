@@ -45,6 +45,47 @@ typedef std::pair<bool, std::shared_ptr<const local_matrix_store> > async_cres_t
 
 const size_t INVALID_MAT_ID = std::numeric_limits<size_t>::max();
 
+class data_id_t
+{
+	size_t id;
+	/*
+	 * This counts the number of other virtual matrices that take this matrix
+	 * as the direct input in the DAG.
+	 * Multiple matrix_store may reference to the same matrix or the same matrix
+	 * data, so we should keep the reference in this data structure instead of
+	 * in matrix_store directly.
+	 * The reference set contains data id of other virtual matrices. The reference
+	 * counts how many times this matrix is needed to create the data of other
+	 * matrices.
+	 */
+	std::set<size_t> refs;
+
+	data_id_t(size_t id) {
+		this->id = id;
+	}
+public:
+	typedef std::shared_ptr<data_id_t> ptr;
+
+	static ptr create(size_t id) {
+		return ptr(new data_id_t(id));
+	}
+
+	size_t get_id() const {
+		return id;
+	}
+
+	void inc_ref(size_t data_id) {
+		if (data_id != INVALID_MAT_ID)
+			refs.insert(data_id);
+	}
+	void reset_ref() {
+		refs.clear();
+	}
+	size_t get_ref() const {
+		return refs.size();
+	}
+};
+
 class matrix_store
 {
 	size_t nrow;
@@ -125,6 +166,14 @@ public:
 
 	virtual int get_num_nodes() const {
 		return -1;
+	}
+
+	virtual void inc_dag_ref(size_t data_id) {
+	}
+	virtual void reset_dag_ref() {
+	}
+	virtual size_t get_dag_ref() const {
+		return 0;
 	}
 
 	/*

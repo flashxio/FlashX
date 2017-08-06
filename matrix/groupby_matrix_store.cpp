@@ -489,7 +489,7 @@ matrix_store::const_ptr groupby_matrix_store::transpose() const
 
 class groupby_compute_store: public sink_compute_store, public EM_object
 {
-	std::shared_ptr<portion_mapply_op> portion_op;
+	std::shared_ptr<groupby_op> portion_op;
 	matrix_store::const_ptr data;
 	matrix_store::const_ptr label_store;
 	matrix_margin margin;
@@ -503,8 +503,12 @@ public:
 				portion_op->get_output_type()) {
 		this->data = data;
 		this->label_store = label_store;
-		this->portion_op = portion_op;
+		this->portion_op = std::dynamic_pointer_cast<groupby_op>(portion_op);
+		assert(this->portion_op);
 		this->margin = margin;
+	}
+	virtual size_t get_data_id() const {
+		return portion_op->get_data_id();
 	}
 
 	using virtual_matrix_store::get_portion;

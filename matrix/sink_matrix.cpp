@@ -701,6 +701,155 @@ matrix_store::const_ptr block_sink_store::get_store(size_t i, size_t j) const
 		return matrix_store::const_ptr();
 }
 
+static bool is_all_in_mem(
+		const std::vector<detail::matrix_store::const_ptr> &stores) {
+	for (size_t i = 0; i < stores.size(); i++)
+		if (!stores[i]->is_in_mem())
+			return false;
+	return true;
+}
+
+mapply_sink_store::mapply_sink_store(
+		const std::vector<matrix_store::const_ptr> &stores,
+		portion_mapply_op::const_ptr op): sink_store(
+			stores[0]->get_num_rows(), stores[0]->get_num_cols(),
+			is_all_in_mem(stores), op->get_output_type())
+{
+	this->stores = stores;
+	this->op = op;
+}
+
+mapply_sink_store::ptr mapply_sink_store::create(
+		const std::vector<matrix_store::const_ptr> &stores,
+		portion_mapply_op::const_ptr op)
+{
+	for (size_t i = 1; i < stores.size(); i++) {
+		if (stores[0]->get_num_rows() != stores[i]->get_num_rows()
+				|| stores[0]->get_num_cols() != stores[i]->get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "The input matrices don't have the same shape";
+			return mapply_sink_store::ptr();
+		}
+	}
+	return ptr(new mapply_sink_store(stores, op));
+}
+
+bool mapply_sink_store::has_materialized() const
+{
+	for (size_t i = 0; i < stores.size(); i++) {
+		if (!stores[i]->is_virtual())
+			continue;
+		auto vmat = std::dynamic_pointer_cast<const virtual_matrix_store>(stores[i]);
+		assert(vmat);
+		if (!vmat->has_materialized())
+			return false;
+	}
+	return true;
+}
+
+matrix_store::const_ptr mapply_sink_store::get_result() const
+{
+	if (result)
+		return result;
+	materialize_self();
+	return result;
+}
+
+std::vector<virtual_matrix_store::const_ptr> mapply_sink_store::get_compute_matrices() const
+{
+	std::vector<virtual_matrix_store::const_ptr> ret;
+	for (size_t i = 0; i < stores.size(); i++) {
+		if (stores[i]->is_virtual()) {
+			auto smat = std::dynamic_pointer_cast<const sink_store>(stores[i]);
+			if (smat == NULL)
+				continue;
+			auto tmp = smat->get_compute_matrices();
+			ret.insert(ret.end(), tmp.begin(), tmp.end());
+		}
+	}
+	return ret;
+}
+
+void mapply_sink_store::materialize_self() const
+{
+	if (result)
+		return;
+
+	mem_matrix_store::ptr ret = mem_matrix_store::create(
+			get_num_rows(), get_num_cols(), store_layout(), get_type(), -1);
+	std::vector<local_matrix_store::const_ptr> ins(stores.size());
+	for (size_t i = 0; i < ins.size(); i++) {
+		ins[i] = stores[i]->get_portion(0);
+		assert(ins[i]->get_num_rows() == stores[i]->get_num_rows());
+		assert(ins[i]->get_num_cols() == stores[i]->get_num_cols());
+	}
+	local_matrix_store::ptr out = ret->get_portion(0);
+	assert(out->get_num_rows() == ret->get_num_rows());
+	assert(out->get_num_cols() == ret->get_num_cols());
+	op->run(ins, *out);
+	const_cast<mapply_sink_store *>(this)->result = ret;
+}
+
+matrix_store::const_ptr mapply_sink_store::materialize(bool in_mem, int num_nodes) const
+{
+	materialize_self();
+	return result;
+}
+
+matrix_store::const_ptr mapply_sink_store::transpose() const
+{
+	if (result)
+		return result->transpose();
+
+	std::vector<matrix_store::const_ptr> tstores(stores.size());
+	for (size_t i = 0; i < stores.size(); i++)
+		tstores[i] = stores[i]->transpose();
+	portion_mapply_op::const_ptr top = op->transpose();
+	return mapply_sink_store::create(tstores, top);
+}
+
+std::unordered_map<size_t, size_t> mapply_sink_store::get_underlying_mats() const
+{
+	auto ret = stores[0]->get_underlying_mats();
+	for (size_t i = 1; i < stores.size(); i++) {
+		auto tmp = stores[i]->get_underlying_mats();
+		ret.insert(tmp.begin(), tmp.end());
+	}
+	return ret;
+}
+
+void block_sink_store::inc_dag_ref(size_t id)
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<sink_store &>(*stores[i]).inc_dag_ref(get_data_id());
+	// We don't need to increase the ref count of a sink matrix
+	// because we never get a portion from a sink matrix.
+}
+
+void block_sink_store::reset_dag_ref()
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<sink_store &>(*stores[i]).reset_dag_ref();
+}
+
+void mapply_sink_store::inc_dag_ref(size_t id)
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<matrix_store &>(*stores[i]).inc_dag_ref(get_data_id());
+	// We don't need to increase the ref count of a sink matrix
+	// because we never get a portion from a sink matrix.
+}
+
+void mapply_sink_store::reset_dag_ref()
+{
+	for (size_t i = 0; i < stores.size(); i++)
+		if (stores[i])
+			const_cast<matrix_store &>(*stores[i]).reset_dag_ref();
+}
+
 }
 
 }

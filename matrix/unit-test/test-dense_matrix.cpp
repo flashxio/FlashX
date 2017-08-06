@@ -376,6 +376,33 @@ dense_matrix::ptr create_matrix(size_t nrow, size_t ncol,
 	}
 }
 
+void test_mapply_sink(dense_matrix::ptr sink)
+{
+	// Mapply on a sink matrix.
+	printf("Test mapply on a sink matrix\n");
+	assert(sink->get_raw_store()->is_sink());
+	sink = sink->cast_ele_type(get_scalar_type<double>());
+	dense_matrix tmp = *sink + *sink;
+	tmp = tmp * 0.5;
+	tmp.materialize_self();
+	sink->materialize_self();
+	verify_result(*sink, tmp, equal_func<double>());
+}
+
+void test_mapply_sink_t(dense_matrix::ptr sink)
+{
+	printf("Test mapply on a sink matrix and transpose\n");
+	assert(sink->get_raw_store()->is_sink());
+	sink = sink->cast_ele_type(get_scalar_type<double>());
+	dense_matrix tmp = *sink + *sink;
+	tmp = tmp * 0.5;
+	sink = sink->transpose();
+	dense_matrix::ptr tmp1 = tmp.transpose();
+	tmp1->materialize_self();
+	sink->materialize_self();
+	verify_result(*sink, *tmp1, equal_func<double>());
+}
+
 void test_multiply_scalar(int num_nodes)
 {
 	printf("Test scalar multiplication\n");
@@ -439,6 +466,11 @@ void test_multiply(int num_nodes)
 	correct = blas_multiply(*m1, *m2);
 	res = m1->multiply(*m2);
 	verify_result(*res, *correct, approx_equal_func<T>());
+
+	res = m1->multiply(*m2);
+	test_mapply_sink(res);
+	res = m1->multiply(*m2);
+	test_mapply_sink_t(res);
 
 	printf("Test transpose of self cross prod\n");
 	res = m1->multiply(*m2);
@@ -754,6 +786,13 @@ void test_agg(int num_nodes, matrix_layout_t layout)
 		assert(sum == m1->get_num_rows() * m1->get_num_cols());
 	else if (matrix_val_t::SEQ)
 		assert(sum == (num_eles - 1) * num_eles / 2);
+
+	// Mapply on a sink matrix.
+	printf("Test mapply on an agg matrix\n");
+	dense_matrix::ptr sink = m1->aggregate(matrix_margin::MAR_COL, agg_operate::create(op));
+	test_mapply_sink(sink);
+	sink = m1->aggregate(matrix_margin::MAR_COL, agg_operate::create(op));
+	test_mapply_sink_t(sink);
 }
 
 void test_agg_sub_col(int num_nodes)
@@ -2134,6 +2173,14 @@ void _test_groupby(dense_matrix::ptr mat)
 	dense_matrix::ptr diff = group_sum_t->minus(*group_sum1);
 	scalar_variable::ptr sum = diff->sum();
 	assert(scalar_variable::get_val<int>(*sum) == 0);
+
+	// Test mapply on groupby matrix.
+	dense_matrix::ptr sink = mat->groupby_row(rand_factors, add);
+	if (sink->get_raw_store()->is_sink()) {
+		test_mapply_sink(sink);
+		sink = mat->groupby_row(rand_factors, add);
+		test_mapply_sink_t(sink);
+	}
 }
 
 dense_matrix::ptr _test_get_rows(dense_matrix::ptr mat, size_t get_nrow)
@@ -2649,7 +2696,7 @@ void test_materialize(int num_nodes)
 		= std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
 				tmp->get_raw_store());
 	assert(vstore);
-	assert(vstore->is_materialized());
+	assert(vstore->has_materialized());
 	dense_matrix::ptr materialize_res = dense_matrix::create(vstore->materialize(
 			vstore->is_in_mem(), vstore->get_num_nodes()));
 	res = materialize_res->sum();
@@ -2668,7 +2715,7 @@ void test_materialize(int num_nodes)
 	vstore = std::dynamic_pointer_cast<const detail::mapply_matrix_store>(
 				tmp->get_raw_store());
 	assert(vstore);
-	assert(vstore->is_materialized());
+	assert(vstore->has_materialized());
 	materialize_res = dense_matrix::create(vstore->materialize(
 			vstore->is_in_mem(), vstore->get_num_nodes()));
 	res = materialize_res->sum();
@@ -2697,7 +2744,7 @@ void test_materialize(int num_nodes)
 				== detail::EM_matrix_store::CHUNK_SIZE);
 		assert(vstore);
 		assert(!vstore->is_in_mem());
-		assert(vstore->is_materialized());
+		assert(vstore->has_materialized());
 		materialize_res = dense_matrix::create(vstore->materialize(
 					vstore->is_in_mem(), vstore->get_num_nodes()));
 		res = materialize_res->sum();
@@ -2723,7 +2770,7 @@ void test_materialize(int num_nodes)
 				== detail::EM_matrix_store::CHUNK_SIZE);
 		assert(vstore);
 		assert(!vstore->is_in_mem());
-		assert(vstore->is_materialized());
+		assert(vstore->has_materialized());
 		materialize_res = dense_matrix::create(vstore->materialize(
 					vstore->is_in_mem(), vstore->get_num_nodes()));
 		res = materialize_res->sum();
@@ -3488,6 +3535,60 @@ void test_cross_prod()
 	printf("complete crossprod\n");
 }
 
+void test_ref_cnts(int num_nodes)
+{
+	std::vector<dense_matrix::ptr> mats;
+
+	dense_matrix::ptr mat1 = dense_matrix::create_randu<double>(1, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, num_nodes);
+	dense_matrix::ptr mat2 = dense_matrix::create_randu<double>(1, 1000,
+			long_dim, 10, matrix_layout_t::L_COL, num_nodes);
+	dense_matrix::ptr mat3 = mat1->add(*mat2);
+	printf("mat3: %s\n", mat3->get_data().get_name().c_str());
+	mats.push_back(mat1);
+	mats.push_back(mat2);
+	mats.push_back(mat3);
+
+	std::vector<dense_matrix::ptr> tmp;
+	tmp.resize(3);
+	tmp[0] = mat1;
+	tmp[1] = mat2;
+	tmp[2] = mat3;
+	dense_matrix::ptr mat4 = dense_matrix::cbind(tmp);
+	printf("mat4: %s\n", mat4->get_data().get_name().c_str());
+	mats.push_back(mat4);
+
+	dense_matrix::ptr mat5 = mat4->row_sum();
+	printf("mat5: %s\n", mat5->get_data().get_name().c_str());
+	mats.push_back(mat5);
+	const_cast<detail::matrix_store &>(mat5->get_data()).inc_dag_ref(
+			detail::INVALID_MAT_ID);
+
+	dense_matrix::ptr mat6 = mat4->col_sum();
+	const_cast<detail::matrix_store &>(mat6->get_data()).inc_dag_ref(
+			detail::INVALID_MAT_ID);
+	dense_matrix::ptr mat7 = mat1->col_sum();
+	const_cast<detail::matrix_store &>(mat7->get_data()).inc_dag_ref(
+			detail::INVALID_MAT_ID);
+	for (size_t i = 0; i < mats.size(); i++)
+		printf("mat %ld: %ld (%s)\n", i, mats[i]->get_data().get_dag_ref(),
+				mats[i]->get_data().get_name().c_str());
+	assert(mat1->get_data().get_dag_ref() == 3);
+	assert(mat2->get_data().get_dag_ref() == 2);
+	assert(mat3->get_data().get_dag_ref() == 1);
+	assert(mat4->get_data().get_dag_ref() == 2);
+	assert(mat5->get_data().get_dag_ref() == 0);
+
+	const_cast<detail::matrix_store &>(mat6->get_data()).reset_dag_ref();
+	for (size_t i = 0; i < mats.size(); i++)
+		printf("mat %ld: %ld\n", i, mats[i]->get_data().get_dag_ref());
+	assert(mat1->get_data().get_dag_ref() == 0);
+	assert(mat2->get_data().get_dag_ref() == 0);
+	assert(mat3->get_data().get_dag_ref() == 0);
+	assert(mat4->get_data().get_dag_ref() == 0);
+	assert(mat5->get_data().get_dag_ref() == 0);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -3500,6 +3601,7 @@ int main(int argc, char *argv[])
 	init_flash_matrix(configs);
 	int num_nodes = matrix_conf.get_num_nodes();
 
+	test_ref_cnts(num_nodes);
 	test_set_rowcols();
 	test_cross_prod();
 	test_factor();

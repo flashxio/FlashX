@@ -235,6 +235,13 @@ public:
 	virtual size_t get_all_rows(std::vector<char *> &rows);
 	virtual size_t get_all_cols(std::vector<char *> &cols);
 
+	/*
+	 * This method is mainly used by local virtual matrix,
+	 * to indicate that the computation on the local matrix is complete.
+	 */
+	virtual void complete() const {
+	}
+
 	virtual bool hold_orig_data() const = 0;
 	virtual const local_raw_array &get_data_ref() const = 0;
 
