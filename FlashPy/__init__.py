@@ -29,3 +29,4 @@ from mat import exp
 from mat import exp2
 import linalg
 import sparse
+import special
