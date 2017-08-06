@@ -27,6 +27,7 @@ from mat import log10
 from mat import log2
 from mat import exp
 from mat import exp2
+from mat import squeeze
 import linalg
 import sparse
 import special

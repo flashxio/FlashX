@@ -1233,5 +1233,11 @@ def unique(arr, return_index=False, return_inverse=False, return_counts=False, a
         ret1.init_attr()
         return ret1
 
+def squeeze(a, axis=None):
+    a = asarray(a)
+    # If this is a one-row or one-col matrix, we should convert it to
+    # a vector.
+    return a.ravel()
+
 def init_flashpy(conf_file=""):
     return init_flashpy_c(conf_file)
