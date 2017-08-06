@@ -202,6 +202,10 @@ public:
 			const void *right_arr, void *output_arr) const {
 		assert(0);
 	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		assert(0);
+	}
 
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<long double>();
@@ -2376,6 +2380,70 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 	res->set_raw(dynamic_cast<const detail::mem_matrix_store &>(
 				*_res).get_raw_arr(), res->get_size());
 	return res;
+}
+
+namespace
+{
+
+class cum_short_dim_op: public detail::portion_mapply_op
+{
+	matrix_margin margin;
+	agg_operate::const_ptr op;
+public:
+	cum_short_dim_op(matrix_margin margin, agg_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
+		this->margin = margin;
+		this->op = op;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		if (margin == matrix_margin::MAR_ROW)
+			// We can only resize the number of the rows in this operation.
+			return local_num_cols == get_out_num_cols();
+		else
+			// We can only resize the number of the cols in this operation.
+			return local_num_rows == get_out_num_rows();
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
+			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+		detail::cum(*ins[0], NULL, *op, margin, dim, out);
+	}
+	virtual portion_mapply_op::const_ptr transpose() const {
+		matrix_margin new_margin = this->margin == matrix_margin::MAR_ROW ?
+			matrix_margin::MAR_COL : matrix_margin::MAR_ROW;
+		return portion_mapply_op::const_ptr(new cum_short_dim_op(
+					new_margin, op, get_out_num_cols(), get_out_num_rows()));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("cum(") + mats[0]->get_name() + ")";
+	}
+};
+
+}
+
+dense_matrix::ptr dense_matrix::cum(matrix_margin margin,
+		agg_operate::const_ptr op) const
+{
+	if ((margin == matrix_margin::MAR_ROW && !is_wide())
+			|| (margin == matrix_margin::MAR_COL && is_wide())) {
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = this->get_raw_store();
+		cum_short_dim_op::const_ptr apply_op(new cum_short_dim_op(
+					margin, op, get_num_rows(), get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+				apply_op, store_layout());
+		return dense_matrix::create(ret);
+	}
+	else {
+		return dense_matrix::ptr();
+	}
 }
 
 namespace

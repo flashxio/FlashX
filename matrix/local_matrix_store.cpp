@@ -1092,6 +1092,213 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 	}
 }
 
+static void copy_last_col(const local_matrix_store &store, local_vec_store &vec)
+{
+	assert(store.get_num_rows() == vec.get_length());
+	if (store.store_layout() == matrix_layout_t::L_COL) {
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		memcpy(vec.get_raw_arr(), col_store.get_col(store.get_num_cols() - 1),
+				store.get_num_rows() * store.get_type().get_size());
+	}
+	else {
+		size_t entry_size = store.get_type().get_size();
+		for (size_t i = 0; i < store.get_num_rows(); i++)
+			memcpy(vec.get(i), store.get(i, store.get_num_cols() - 1), entry_size);
+	}
+}
+
+static void copy_last_row(const local_matrix_store &store, local_vec_store &vec)
+{
+	assert(store.get_num_cols() == vec.get_length());
+	if (store.store_layout() == matrix_layout_t::L_ROW) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		memcpy(vec.get_raw_arr(), row_store.get_row(store.get_num_rows() - 1),
+				store.get_num_cols() * store.get_type().get_size());
+	}
+	else {
+		size_t entry_size = store.get_type().get_size();
+		for (size_t i = 0; i < store.get_num_cols(); i++)
+			memcpy(vec.get(i), store.get(store.get_num_rows() - 1, i), entry_size);
+	}
+}
+
+static void _cum(const local_matrix_store &store, const local_vec_store *prev_res,
+		const agg_operate &op, int margin, local_matrix_store &res)
+{
+	assert(store.store_layout() == res.store_layout());
+	assert(store.get_num_rows() == res.get_num_rows());
+	assert(store.get_num_cols() == res.get_num_cols());
+	if (prev_res)
+		assert((prev_res->get_length() == store.get_num_rows()
+					&& margin == matrix_margin::MAR_ROW)
+				|| (prev_res->get_length() == store.get_num_cols()
+					&& margin == matrix_margin::MAR_COL));
+	// If accumulate on rows and the matrix is stored in row major.
+	if (margin == matrix_margin::MAR_ROW
+			&& store.store_layout() == matrix_layout_t::L_ROW) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		local_row_matrix_store &row_res
+			= static_cast<local_row_matrix_store &>(res);
+		for (size_t i = 0; i < store.get_num_rows(); i++) {
+			const char *prev = NULL;
+			if (prev_res)
+				prev = prev_res->get(i);
+			op.get_agg().runCum(row_store.get_num_cols(),
+					row_store.get_row(i), prev, row_res.get_row(i));
+		}
+	}
+	// If accumulate on rows and the matrix is stored in col major.
+	else if (margin == matrix_margin::MAR_ROW
+			&& store.store_layout() == matrix_layout_t::L_COL) {
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		local_col_matrix_store &col_res
+			= static_cast<local_col_matrix_store &>(res);
+		if (prev_res)
+			op.get_agg().runAA(store.get_num_rows(), prev_res->get_raw_arr(),
+					col_store.get_col(0), col_res.get_col(0));
+		else
+			memcpy(col_res.get_col(0), col_store.get_col(0),
+					store.get_num_rows() * store.get_type().get_size());
+		for (size_t i = 1; i < store.get_num_cols(); i++)
+			op.get_agg().runAA(store.get_num_rows(), col_store.get_col(i),
+					col_res.get_col(i - 1), col_res.get_col(i));
+	}
+	// If accumulate on cols and the matrix is stored in row major.
+	else if (margin == matrix_margin::MAR_COL
+			&& store.store_layout() == matrix_layout_t::L_ROW) {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		local_row_matrix_store &row_res
+			= static_cast<local_row_matrix_store &>(res);
+		if (prev_res)
+			op.get_agg().runAA(store.get_num_cols(), prev_res->get_raw_arr(),
+					row_store.get_row(0), row_res.get_row(0));
+		else
+			memcpy(row_res.get_row(0), row_store.get_row(0),
+					store.get_num_cols() * store.get_type().get_size());
+		for (size_t i = 1; i < store.get_num_rows(); i++)
+			op.get_agg().runAA(store.get_num_cols(), row_store.get_row(i),
+					row_res.get_row(i - 1), row_res.get_row(i));
+	}
+	// If accumulate on cols and the matrix is stored in col major.
+	else {
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		local_col_matrix_store &col_res
+			= static_cast<local_col_matrix_store &>(res);
+		for (size_t i = 0; i < store.get_num_cols(); i++) {
+			const char *prev = NULL;
+			if (prev_res)
+				prev = prev_res->get(i);
+			op.get_agg().runCum(col_store.get_num_rows(),
+					col_store.get_col(i), prev, col_res.get_col(i));
+		}
+	}
+}
+
+void cum(const local_matrix_store &store, const local_vec_store *prev_res,
+		const agg_operate &op, int margin, part_dim_t dim,
+		local_matrix_store &res)
+{
+	const size_t part_len = get_part_dim_len(store, dim);
+	local_vec_store::ptr prev_res_buf;
+	// resize the wide matrix.
+	if (store.is_virtual() && dim == part_dim_t::PART_DIM2
+			&& store.get_num_cols() > part_len
+			// both input matrices haven't been resized.
+			&& store.is_whole()) {
+		if (prev_res) {
+			prev_res_buf = local_vec_store::ptr(new local_buf_vec_store(0,
+						prev_res->get_length(), prev_res->get_type(), -1));
+			memcpy(prev_res_buf->get_raw_arr(), prev_res->get_raw_arr(),
+					prev_res->get_length() * prev_res->get_type().get_size());
+		}
+		size_t orig_num_cols = store.get_num_cols();
+		local_matrix_store::exposed_area orig_store = store.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(store);
+		bool success = true;
+		for (size_t col_idx = 0; col_idx < orig_num_cols;
+				col_idx += part_len) {
+			size_t llen = std::min(orig_num_cols - col_idx, part_len);
+			success = mutable_store.resize(orig_store.local_start_row,
+					orig_store.local_start_col + col_idx, store.get_num_rows(), llen);
+			if (success)
+				success = res.resize(orig_res.local_start_row,
+						orig_res.local_start_col + col_idx, res.get_num_rows(),
+						llen);
+			if (!success) {
+				assert(col_idx == 0);
+				break;
+			}
+			_cum(store, prev_res_buf.get(), op, margin, res);
+			// If we perform cumulative computation on rows, we need to
+			// get the last col from the previous computation.
+			if (margin == matrix_margin::MAR_ROW) {
+				if (prev_res_buf == NULL)
+					prev_res_buf = local_vec_store::ptr(new local_buf_vec_store(
+								0, store.get_num_rows(), store.get_type(), -1));
+				copy_last_col(res, *prev_res_buf);
+			}
+		}
+		mutable_store.restore_size(orig_store);
+		res.restore_size(orig_res);
+		if (!success)
+			_cum(store, prev_res, op, margin, res);
+	}
+	// resize the tall matrix
+	else if (store.is_virtual() && dim == part_dim_t::PART_DIM1
+			&& store.get_num_rows() > part_len
+			// both input matrices haven't been resized.
+			&& store.is_whole()) {
+		if (prev_res) {
+			prev_res_buf = local_vec_store::ptr(new local_buf_vec_store(0,
+						prev_res->get_length(), prev_res->get_type(), -1));
+			memcpy(prev_res_buf->get_raw_arr(), prev_res->get_raw_arr(),
+					prev_res->get_length() * prev_res->get_type().get_size());
+		}
+		size_t orig_num_rows = store.get_num_rows();
+		local_matrix_store::exposed_area orig_store = store.get_exposed_area();
+		local_matrix_store::exposed_area orig_res = res.get_exposed_area();
+		local_matrix_store &mutable_store = const_cast<local_matrix_store &>(store);
+		bool success = true;
+		for (size_t row_idx = 0; row_idx < orig_num_rows; row_idx += part_len) {
+			size_t llen = std::min(orig_num_rows - row_idx, part_len);
+			success = mutable_store.resize(orig_store.local_start_row + row_idx,
+					orig_store.local_start_col, llen, store.get_num_cols());
+			if (success)
+				success = res.resize(orig_res.local_start_row + row_idx,
+						orig_res.local_start_col, llen, res.get_num_cols());
+			if (!success) {
+				assert(row_idx == 0);
+				break;
+			}
+			_cum(store, prev_res_buf.get(), op, margin, res);
+			// If we perform cumulative computation on rows, we need to
+			// get the last col from the previous computation.
+			if (margin == matrix_margin::MAR_COL) {
+				if (prev_res_buf == NULL)
+					prev_res_buf = local_vec_store::ptr(new local_buf_vec_store(
+								0, store.get_num_cols(), store.get_type(), -1));
+				copy_last_row(res, *prev_res_buf);
+			}
+		}
+		mutable_store.restore_size(orig_store);
+		res.restore_size(orig_res);
+		if (!success)
+			_cum(store, prev_res, op, margin, res);
+	}
+	else {
+		// If the local matrix isn't virtual, we don't need to resize it
+		// to increase CPU cache hits.
+		_cum(store, prev_res, op, margin, res);
+	}
+}
+
 static void _mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, local_matrix_store &res)
 {
@@ -1393,6 +1600,10 @@ public:
 	}
 	virtual void runAgg(size_t num_eles, const void *left_arr,
 			void *output) const {
+		assert(0);
+	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
 		assert(0);
 	}
 
