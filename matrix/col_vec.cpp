@@ -78,10 +78,4 @@ bool col_vec::is_seq() const
 	return true;
 }
 
-bool col_vec::is_seq() const
-{
-	// TODO
-	return true;
-}
-
 }
