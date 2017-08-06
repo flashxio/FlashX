@@ -265,11 +265,7 @@ public:
 
 	matrix_wrapper inner_prod(matrix_wrapper m, bulk_op_idx_t left_op,
 			bulk_op_idx_t right_op) const;
-	matrix_wrapper multiply(matrix_wrapper m) const {
-		check_mat();
-		m.check_mat();
-		return matrix_wrapper(mat->multiply(*m.mat));
-	}
+	matrix_wrapper multiply(matrix_wrapper m) const;
 
 	matrix_wrapper aggregate(agg_op_idx_t op) const {
 		check_mat();

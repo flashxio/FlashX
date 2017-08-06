@@ -332,6 +332,17 @@ matrix_wrapper matrix_wrapper::inner_prod(matrix_wrapper m, bulk_op_idx_t left_o
 	}
 }
 
+matrix_wrapper matrix_wrapper::multiply(matrix_wrapper m) const
+{
+	check_mat();
+	m.check_mat();
+	auto res = mat->multiply(*m.mat);
+	if (m.is_vector())
+		return matrix_wrapper(fm::col_vec::create(res));
+	else
+		return matrix_wrapper(res);
+}
+
 matrix_wrapper matrix_wrapper::mapply_cols(matrix_wrapper vals,
 		bulk_op_idx_t op) const
 {
