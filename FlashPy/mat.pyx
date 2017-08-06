@@ -398,6 +398,11 @@ cdef class PyMatrix:
                 self.set_rows(key[0], val)
             else:
                 raise IndexError("can't set individual elements")
+        elif ((isinstance(key, np.ndarray) or isinstance(key, PyMatrix))
+                and key.dtype == np.bool):
+            key = asarray(key)
+            # TODO what if val isn't a scalar.
+            self.assign(where(key, self, val))
         else:
             self.set_rows(key, val)
 
