@@ -19,7 +19,10 @@ def gram_schmidt(mat):
             B = atleast_2d(B)
             bv = np.array(dot(B.T, v))
             w = v - dot(B, bv)
-            w.set_cached(True)
+            w.materialize_self()
+            # TODO somehow caching the data has much worse performance.
+            # I need to fix it.
+            #w.set_cached(True)
         else:
             w = v
         if (np.array(abs(w).max())[0] > 1e-10):
