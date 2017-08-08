@@ -3,6 +3,7 @@ import numpy as np
 from .norm import norm
 from .. import dot
 from .. import concatenate
+from .. import atleast_2d
 
 def gram_schmidt(mat):
     mat = mat.copy(order='F')
@@ -15,6 +16,7 @@ def gram_schmidt(mat):
         bv = None
         if (len(basis) > 0):
             B = concatenate(basis, axis=1)
+            B = atleast_2d(B)
             bv = np.array(dot(B.T, v))
             w = v - dot(B, bv)
             w.set_cached(True)
