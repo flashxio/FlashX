@@ -736,7 +736,7 @@ cdef class PyMatrix:
         ret.init_attr(self)
         return ret
 
-    def conv_store(self, bool in_mem, int num_nodes):
+    def conv_store(self, in_mem, int num_nodes):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.conv_store(in_mem, num_nodes)
         ret.init_attr()
