@@ -8,6 +8,7 @@ from mat import average
 from mat import dot
 from mat import sqrt
 from mat import absolute
+from mat import absolute as abs
 from mat import where
 from mat import maximum
 from mat import minimum
