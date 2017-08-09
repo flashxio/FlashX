@@ -45,6 +45,7 @@
 #include "project_matrix_store.h"
 #include "set_data_matrix_store.h"
 #include "set_rc_matrix_store.h"
+#include "cum_matrix.h"
 
 namespace fm
 {
@@ -2442,7 +2443,15 @@ dense_matrix::ptr dense_matrix::cum(matrix_margin margin,
 		return dense_matrix::create(ret);
 	}
 	else {
-		return dense_matrix::ptr();
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = this->get_raw_store();
+		auto portion_size = store->get_portion_size();
+		detail::cum_long_dim_op::const_ptr apply_op(new detail::cum_long_dim_op(
+					margin, op, portion_size.first * portion_size.second,
+					get_num_rows(), get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+				apply_op, store_layout());
+		return dense_matrix::create(ret);
 	}
 }
 

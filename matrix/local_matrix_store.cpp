@@ -1092,7 +1092,7 @@ void aggregate(const local_matrix_store &store, const agg_operate &op,
 	}
 }
 
-static void copy_last_col(const local_matrix_store &store, local_vec_store &vec)
+void copy_last_col(const local_matrix_store &store, local_vec_store &vec)
 {
 	assert(store.get_num_rows() == vec.get_length());
 	if (store.store_layout() == matrix_layout_t::L_COL) {
@@ -1108,7 +1108,7 @@ static void copy_last_col(const local_matrix_store &store, local_vec_store &vec)
 	}
 }
 
-static void copy_last_row(const local_matrix_store &store, local_vec_store &vec)
+void copy_last_row(const local_matrix_store &store, local_vec_store &vec)
 {
 	assert(store.get_num_cols() == vec.get_length());
 	if (store.store_layout() == matrix_layout_t::L_ROW) {

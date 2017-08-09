@@ -1962,9 +1962,13 @@ void test_cum(int num_nodes)
 	printf("test cum on rows\n");
 	dense_matrix::ptr res = mat1->cum(matrix_margin::MAR_ROW, op);
 	verify_cum(res, mat1, true);
+	res = mat1->cum(matrix_margin::MAR_COL, op);
+	verify_cum(res, mat1, false);
 
 	printf("test cum on cols\n");
 	mat1 = mat1->transpose();
+	res = mat1->cum(matrix_margin::MAR_ROW, op);
+	verify_cum(res, mat1, true);
 	res = mat1->cum(matrix_margin::MAR_COL, op);
 	verify_cum(res, mat1, false);
 }

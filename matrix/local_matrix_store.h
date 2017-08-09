@@ -1280,6 +1280,9 @@ size_t get_long_dim_len(const local_matrix_store &mat);
 size_t get_long_dim_len(const local_matrix_store &mat1,
 		const local_matrix_store &mat2);
 
+void copy_last_col(const local_matrix_store &store, local_vec_store &vec);
+void copy_last_row(const local_matrix_store &store, local_vec_store &vec);
+
 }
 
 }
