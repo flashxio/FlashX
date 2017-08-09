@@ -158,6 +158,8 @@ cdef extern from "MatrixWrapper.h" namespace "flashpy":
         matrix_wrapper aggregate(agg_op_idx_t op)
         matrix_wrapper agg_row(agg_op_idx_t op) const
         matrix_wrapper agg_col(agg_op_idx_t op) const
+        matrix_wrapper cum_row(agg_op_idx_t op) const
+        matrix_wrapper cum_col(agg_op_idx_t op) const
         matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) except+
         pair[matrix_wrapper, matrix_wrapper] groupby(agg_op_idx_t op, cbool with_val) const
         matrix_wrapper mapply_cols(matrix_wrapper vals, bulk_op_idx_t op) except+
@@ -550,6 +552,12 @@ cdef class PyMatrix:
         new_arr = self.cast_ele_type(np.bool)
         return new_arr.aggregate_(AGG_OR, axis, None, out, keepdims)
 
+    def cumprod(self, axis=None, dtype=None, out=None):
+        return self.cum_(AGG_PROD, axis, dtype, out)
+
+    def cumsum(self, axis=None, dtype=None, out=None):
+        return self.cum_(AGG_SUM, axis, dtype, out)
+
     # These are specific for FlashMatrix.
 
     def set_cached(self, cached):
@@ -792,6 +800,23 @@ cdef class PyMatrix:
         ret.init_attr()
         return ret
 
+    def cum_(self, op, axis=None, dtype=None, out=None):
+        cdef PyMatrix ret = PyMatrix()
+        cdef PyMatrix a = self
+        if dtype is not None:
+            a = a.cast_ele_type(dtype)
+        if axis is None:
+            raise ValueError("Not support on all elements yet.")
+        elif (axis == 0):
+            ret = a.cum_col(op)
+        elif (axis == 1):
+            ret = a.cum_row(op)
+        else:
+            raise ValueError("invalid axis")
+        if out is not None:
+            out.assign(ret)
+        return ret
+
     def aggregate_(self, op, axis=None, dtype=None, out=None, keepdims=False):
         cdef PyMatrix ret = PyMatrix()
         cdef PyMatrix a = self
@@ -833,6 +858,18 @@ cdef class PyMatrix:
     def agg_col(self, op):
         cdef PyMatrix ret = PyMatrix()
         ret.mat = self.mat.agg_col(op)
+        ret.init_attr()
+        return ret
+
+    def cum_row(self, op):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.cum_row(op)
+        ret.init_attr()
+        return ret
+
+    def cum_col(self, op):
+        cdef PyMatrix ret = PyMatrix()
+        ret.mat = self.mat.cum_col(op)
         ret.init_attr()
         return ret
 

@@ -284,6 +284,9 @@ public:
 					get_agg(mat->get_type(), op)));
 	}
 
+	matrix_wrapper cum_row(agg_op_idx_t op) const;
+	matrix_wrapper cum_col(agg_op_idx_t op) const;
+
 	matrix_wrapper groupby_row(matrix_wrapper labels, agg_op_idx_t op) const;
 	// TODO we should return data_frame later.
 	std::pair<matrix_wrapper, matrix_wrapper> groupby(agg_op_idx_t op,

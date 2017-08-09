@@ -502,6 +502,24 @@ fp_res = fp_mat1.argmax(axis=1)
 np_res = np_mat1.argmax(axis=1)
 verify(fp_res, np_res)
 
+print("test cumsum")
+fp_res = fp_mat1.cumsum(axis=1)
+np_res = np_mat1.cumsum(axis=1)
+verify(fp_res, np_res)
+
+fp_res = fp_mat1.T.cumsum(axis=0)
+np_res = np_mat1.T.cumsum(axis=0)
+verify(fp_res, np_res)
+
+print("test cumprod")
+fp_res = fp_mat1.cumprod(axis=1)
+np_res = np_mat1.cumprod(axis=1)
+verify(fp_res, np_res)
+
+fp_res = fp_mat1.T.cumprod(axis=0)
+np_res = np_mat1.T.cumprod(axis=0)
+verify(fp_res, np_res)
+
 print("test minimum/maximum")
 fp_res = fp.minimum(fp_mat1, fp_mat2)
 np_res = np.minimum(np_mat1, np_mat2)

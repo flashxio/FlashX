@@ -758,4 +758,26 @@ matrix_wrapper matrix_wrapper::rbind(const std::vector<matrix_wrapper> &mats)
 		return matrix_wrapper(ret);
 }
 
+matrix_wrapper matrix_wrapper::cum_row(agg_op_idx_t op) const
+{
+	check_mat();
+	auto ret = mat->cum(fm::matrix_margin::MAR_ROW,
+			get_agg(mat->get_type(), op));
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
+matrix_wrapper matrix_wrapper::cum_col(agg_op_idx_t op) const
+{
+	check_mat();
+	auto ret = mat->cum(fm::matrix_margin::MAR_COL,
+			get_agg(mat->get_type(), op));
+	if (is_vector())
+		return matrix_wrapper(col_vec::create(ret));
+	else
+		return matrix_wrapper(ret);
+}
+
 }
