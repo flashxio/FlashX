@@ -1210,6 +1210,8 @@ enum part_dim_t
  */
 void aggregate(const local_matrix_store &store, const agg_operate &op,
 		int margin, part_dim_t dim, local_matrix_store &res);
+void cum(const local_matrix_store &store, const local_vec_store *prev_res,
+		const agg_operate &op, int margin, part_dim_t dim, local_matrix_store &res);
 void mapply2(const local_matrix_store &m1, const local_matrix_store &m2,
 			const bulk_operate &op, part_dim_t dim, local_matrix_store &res);
 void sapply(const local_matrix_store &store, const bulk_uoperate &op,

@@ -358,6 +358,19 @@ public:
 		*(Type *) output = res;
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr1,
+			const void *prev1, void *output_arr1) const {
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *prev = (const Type *) prev1;
+		Type *output_arr = (Type *) output_arr1;
+		if (prev1)
+			output_arr[0] = left_arr[0] + *prev;
+		else
+			output_arr[0] = *prev;
+		for (size_t i = 1; i < num_eles; i++)
+			output_arr[i] = left_arr[i] + output_arr[i - 1];
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<Type>();
 	}
@@ -414,6 +427,19 @@ public:
 		for (size_t i = 1; i < LEN; i++)
 			res = left_arr[i] * res;
 		*(Type *) output = res;
+	}
+
+	virtual void runCum(size_t num_eles, const void *left_arr1,
+			const void *prev1, void *output_arr1) const {
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *prev = (const Type *) prev1;
+		Type *output_arr = (Type *) output_arr1;
+		if (prev1)
+			output_arr[0] = left_arr[0] * *prev;
+		else
+			output_arr[0] = *prev;
+		for (size_t i = 1; i < num_eles; i++)
+			output_arr[i] = left_arr[i] * output_arr[i - 1];
 	}
 
 	virtual const scalar_type &get_left_type() const {
