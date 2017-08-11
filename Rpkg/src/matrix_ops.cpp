@@ -1769,6 +1769,10 @@ public:
 		double *t_out = (double *) output;
 		t_out[0] = num_eles;
 	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
 
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
@@ -1817,6 +1821,10 @@ public:
 		}
 		t_out[0] = idx + 1;
 	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
 
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
@@ -1864,6 +1872,10 @@ public:
 		}
 		t_out[0] = idx + 1;
 	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
 
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
@@ -1909,6 +1921,10 @@ public:
 	}
 
 	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
+		throw unsupported_exception();
+	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
 		throw unsupported_exception();
 	}
 
