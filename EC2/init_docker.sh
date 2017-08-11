@@ -9,6 +9,7 @@ do
 	mkdir -p /mnt/ssd$i
 	mount $file /mnt/ssd$i
 	echo "0:/mnt/ssd$i" >> /FlashX/data_files.txt
+	i=$((i+1))
 done
 
 jupyter notebook --ip=0.0.0.0 --no-browser --allow-root

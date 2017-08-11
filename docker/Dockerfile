@@ -33,7 +33,7 @@ WORKDIR /FlashX
 RUN mkdir build
 WORKDIR build
 RUN cmake ..
-RUN make -j4
+RUN make
 
 
 ####Install and compile R
