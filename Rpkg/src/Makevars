@@ -39,8 +39,8 @@ endif
 ifdef FG_EIGEN
 PKG_CXXFLAGS += -DUSE_EIGEN
 endif
-ifdef ENABLE_PROFILER
+#ifdef ENABLE_PROFILER
 PKG_LIBS += -lprofiler
 PKG_CXXFLAGS += -DUSE_PROFILER
-endif
+#endif
 PKG_CPPFLAGS = $(CXXFLAGS)

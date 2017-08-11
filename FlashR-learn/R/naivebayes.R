@@ -20,21 +20,18 @@ naiveBayes.train <- function(x, y)
 	# For the training process, we need to estimate the mean and
 	# standard deviation of each feature.
 	y <- fm.as.factor(y)
-	fm.set.test.na(FALSE)
 	gsum <- fm.groupby(x, 2, y, fm.bo.add)
 	gsum2 <- fm.groupby(x * x, 2, y, fm.bo.add)
 	fm.materialize(gsum, gsum2)
 	cnt <- fm.table(y)
 	gmean <- gsum / cnt@Freq
 	gsd <- sqrt((gsum2 - cnt@Freq * gmean ^ 2) / (cnt@Freq - 1))
-	fm.set.test.na(TRUE)
 	list(apriori=as.vector(cnt@Freq), mean=as.matrix(gmean),
 		 sd=as.matrix(gsd))
 }
 
 naiveBayes.predict <- function(object, newdata)
 {
-	fm.set.test.na(FALSE)
 	apriori <- object$apriori
 	mean <- object$mean
 	sd <- object$sd
@@ -48,7 +45,5 @@ naiveBayes.predict <- function(object, newdata)
 		loglikely <- c(loglikely, log(apriori[i]) - sum(log(sqrt(2 * pi * sd[i, ]^2))) - rowSums(x))
 	}
 	loglikely <- fm.cbind.list(loglikely)
-	cls <- fm.materialize(fm.agg.mat(loglikely, 1, fm.bo.which.max))
-	fm.set.test.na(TRUE)
-	cls
+	fm.materialize(fm.agg.mat(loglikely, 1, fm.bo.which.max))
 }
