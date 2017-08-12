@@ -162,12 +162,13 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 			}
 			print(eta)
 		}
-		eta.est <- eta * 10
-		if (eta == 1)
-			params$linesearch <- FALSE
+#		if (eta == 1)
+#			params$linesearch <- FALSE
 
 		prev.step <- z * eta
 		theta <- theta + z * eta
+		if (params$linesearch)
+			eta.est <- min(eta * 10, 10)
 		if(all(is.na(theta))) break
 		theta.path <- rbind(theta.path, theta)
 	}
