@@ -195,6 +195,19 @@ public:
 		}
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr1,
+			const void *prev1, void *output_arr1) const {
+		const LeftType *left_arr = (const LeftType *) left_arr1;
+		const RightType *prev = (const RightType *) prev1;
+		ResType *output_arr = (ResType *) output_arr1;
+		if (prev1)
+			output_arr[0] = op(left_arr[0], *prev);
+		else
+			output_arr[0] = left_arr[0];
+		for (size_t i = 1; i < num_eles; i++)
+			output_arr[i] = op(left_arr[i], output_arr[i - 1]);
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<LeftType>();
 	}

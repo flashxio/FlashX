@@ -1916,6 +1916,63 @@ void test_groupby()
 	_test_groupby(mat);
 }
 
+void verify_cum(dense_matrix::ptr res, dense_matrix::ptr mat, bool byrow)
+{
+	assert(res->get_num_rows() == mat->get_num_rows());
+	assert(res->get_num_cols() == mat->get_num_cols());
+	assert(res->get_type() == mat->get_type());
+	res = dense_matrix::create(res->get_raw_store());
+	mat = dense_matrix::create(mat->get_raw_store());
+	res = res->conv_store(true, -1);
+	mat = mat->conv_store(true, -1);
+	assert(mat->is_in_mem());
+	assert(res->is_in_mem());
+
+	detail::mem_matrix_store::const_ptr mem_mat
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				mat->get_raw_store());
+	detail::mem_matrix_store::const_ptr mem_res
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				res->get_raw_store());
+	assert(mem_mat);
+	assert(mem_res);
+	if (byrow) {
+		for (size_t i = 0; i < res->get_num_rows(); i++) {
+			assert(mem_res->get<int>(i, 0) == mem_mat->get<int>(i, 0));
+			for (size_t j = 1; j < res->get_num_cols(); j++)
+				assert(mem_res->get<int>(i, j) - mem_res->get<int>(i, j - 1)
+						== mem_mat->get<int>(i, j));
+		}
+	}
+	else {
+		for (size_t j = 0; j < res->get_num_cols(); j++) {
+			assert(mem_res->get<int>(0, j) == mem_mat->get<int>(0, j));
+			for (size_t i = 1; i < res->get_num_rows(); i++)
+				assert(mem_res->get<int>(i, j) - mem_res->get<int>(i - 1, j)
+						== mem_mat->get<int>(i, j));
+		}
+	}
+}
+
+void test_cum(int num_nodes)
+{
+	dense_matrix::ptr mat1 = create_matrix(long_dim, 10,
+			matrix_layout_t::L_COL, num_nodes, get_scalar_type<int>());
+	auto op = mat1->get_type().get_agg_ops().get_op(agg_ops::op_idx::SUM);
+	printf("test cum on rows\n");
+	dense_matrix::ptr res = mat1->cum(matrix_margin::MAR_ROW, op);
+	verify_cum(res, mat1, true);
+	res = mat1->cum(matrix_margin::MAR_COL, op);
+	verify_cum(res, mat1, false);
+
+	printf("test cum on cols\n");
+	mat1 = mat1->transpose();
+	res = mat1->cum(matrix_margin::MAR_ROW, op);
+	verify_cum(res, mat1, true);
+	res = mat1->cum(matrix_margin::MAR_COL, op);
+	verify_cum(res, mat1, false);
+}
+
 void _test_EM_matrix()
 {
 	if (!safs::is_safs_init())
@@ -1924,6 +1981,7 @@ void _test_EM_matrix()
 	printf("test EM matrix\n");
 	in_mem = false;
 
+	test_cum(-1);
 	test_groupby();
 	test_agg(-1, matrix_layout_t::L_ROW);
 	test_agg(-1, matrix_layout_t::L_COL);
@@ -1969,6 +2027,8 @@ void _test_mem_matrix(int num_nodes)
 	printf("test mem matrix\n");
 	in_mem = true;
 
+	test_cum(-1);
+	test_cum(num_nodes);
 	test_groupby();
 	test_agg(-1, matrix_layout_t::L_COL);
 	test_agg(num_nodes, matrix_layout_t::L_COL);

@@ -14,7 +14,7 @@ except botocore.exceptions.ClientError as e:
     sg = client.describe_security_groups(GroupNames=['jupyter'])
     print("the security group exist")
 
-o = ec2.create_instances(ImageId='ami-e36637f5', MinCount=1, MaxCount=1, InstanceType='i3.xlarge', SecurityGroups=['jupyter'])
+o = ec2.create_instances(ImageId='ami-622a0119', MinCount=1, MaxCount=1, InstanceType='i3.8xlarge', SecurityGroups=['jupyter'])
 print_res = False
 while (not print_res):
     time.sleep(1)

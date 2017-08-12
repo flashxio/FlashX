@@ -341,6 +341,12 @@ public:
 			bulk_operate::const_ptr op) const;
 
 	/*
+	 * This performs accumulative computation on a matrix.
+	 */
+	virtual dense_matrix::ptr cum(matrix_margin margin,
+			agg_operate::const_ptr op) const;
+
+	/*
 	 * This operator groups rows based on the labels in the factor vector
 	 * and aggregate the elements of each column.
 	 * It outputs a dense matrix whose #cols == this->#cols and #rows == #levels.

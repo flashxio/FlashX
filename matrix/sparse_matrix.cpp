@@ -428,7 +428,7 @@ bool spm_dispatcher::issue_task()
 
 }
 
-void sparse_matrix::compute(detail::task_creator::ptr creator,
+bool sparse_matrix::compute(detail::task_creator::ptr creator,
 		const detail::matrix_store &in) const
 {
 	// We might have kept the memory buffers to avoid the overhead of memory
@@ -438,6 +438,10 @@ void sparse_matrix::compute(detail::task_creator::ptr creator,
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int num_workers = threads->get_num_threads();
 	matrix_io_generator::ptr io_gen = create_io_gen(in);
+	if (io_gen == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "Cannot generate I/O gen";
+		return false;
+	}
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
@@ -465,6 +469,7 @@ void sparse_matrix::compute(detail::task_creator::ptr creator,
 		ProfilerStop();
 #endif
 	detail::local_mem_buffer::clear_bufs();
+	return true;
 }
 
 
@@ -731,7 +736,7 @@ bool sparse_matrix::multiply(detail::matrix_store::const_ptr in,
 	}
 	bool ret = create->set_data(in, out, get_block_size());
 	if (ret)
-		compute(create, *in);
+		ret = compute(create, *in);
 	return ret;
 }
 

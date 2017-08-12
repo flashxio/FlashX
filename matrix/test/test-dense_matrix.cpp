@@ -358,6 +358,19 @@ public:
 		*(Type *) output = res;
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr1,
+			const void *prev1, void *output_arr1) const {
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *prev = (const Type *) prev1;
+		Type *output_arr = (Type *) output_arr1;
+		if (prev1)
+			output_arr[0] = left_arr[0] + *prev;
+		else
+			output_arr[0] = *prev;
+		for (size_t i = 1; i < num_eles; i++)
+			output_arr[i] = left_arr[i] + output_arr[i - 1];
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<Type>();
 	}
@@ -414,6 +427,19 @@ public:
 		for (size_t i = 1; i < LEN; i++)
 			res = left_arr[i] * res;
 		*(Type *) output = res;
+	}
+
+	virtual void runCum(size_t num_eles, const void *left_arr1,
+			const void *prev1, void *output_arr1) const {
+		const Type *left_arr = (const Type *) left_arr1;
+		const Type *prev = (const Type *) prev1;
+		Type *output_arr = (Type *) output_arr1;
+		if (prev1)
+			output_arr[0] = left_arr[0] * *prev;
+		else
+			output_arr[0] = *prev;
+		for (size_t i = 1; i < num_eles; i++)
+			output_arr[i] = left_arr[i] * output_arr[i - 1];
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -925,6 +951,57 @@ void test_crossprod()
 	}
 }
 
+void test_cumprod()
+{
+	size_t height = 1000000000;
+	size_t width = 32;
+	set_operate::const_ptr init_op = create_nrand_init<double>(1, 1);
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_COL, get_scalar_type<double>(), *init_op,
+			matrix_conf.get_num_nodes(), true);
+	auto op = mat->get_type().get_agg_ops().get_op(agg_ops::op_idx::PROD);
+
+	struct timeval start, end;
+	printf("test cumprod on rows\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->cum(matrix_margin::MAR_ROW, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+	printf("test cumprod on cols\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->cum(matrix_margin::MAR_COL, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	dense_matrix::ptr small_mat = dense_matrix::create(width, width,
+			matrix_layout_t::L_ROW, get_scalar_type<double>(),
+			*init_op, -1);
+	printf("test matmul + cumprod on rows\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr tmp = mat->multiply(*small_mat);
+		dense_matrix::ptr res = tmp->cum(matrix_margin::MAR_ROW, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+	printf("test matmul + cumprod on cols\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr tmp = mat->multiply(*small_mat);
+		dense_matrix::ptr res = tmp->cum(matrix_margin::MAR_COL, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
@@ -970,6 +1047,8 @@ int main(int argc, char *argv[])
 		test_VUDF();
 	else if (test_name == "crossprod")
 		test_crossprod();
+	else if (test_name == "cumprod")
+		test_cumprod();
 	else {
 		fprintf(stderr, "unknow test\n");
 		return -1;
