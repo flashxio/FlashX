@@ -107,10 +107,9 @@ gradient.descent <- function(X, y, get.grad, get.hessian, cost, params)
 				H <- t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub / p.sub), FUN="*")
 			}
 			else if (method == "Uniform") {
-				# TODO we need to fix this.
-				idx <- which(fm.conv.FM2R(fm.runif(n) < s/n))
-				X.sub <- X[idx, ]
-				D2.sub <- get.hessian(X.sub, y[idx], theta)
+				X.sub <- X[fm.runif(n) < s/n, ]
+				y.sub <- y[fm.runif(n) < s/n]
+				D2.sub <- get.hessian(X.sub, y.sub, theta)
 				H <- t(X.sub) %*% sweep(X.sub, 1, fm.as.vector(D2.sub * n), FUN="*") / s
 			}
 			H <- as.matrix(H)
