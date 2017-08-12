@@ -34,7 +34,8 @@ logistic.cost <- function(X, y, w)
 	sum(y*(-xw) + ifelse(is.finite(exw), log(1 + exw), xw))
 }
 
-logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uniform", "LBFGS"),
+logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS",
+											   "Uniform", "LBFGS", "L-BFGS-B", "BFGS"),
 								hessian_size=0.1, max.iters=500)
 {
 	if (method == "Newton" || method == "LS"
@@ -60,7 +61,6 @@ logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uni
 			W <<- w
 			C <<- c
 			G <<- g
-			print(sum(w))
 			print(paste("cost=", C, ", grad=", sqrt(sum(G*G)), sep=""))
 		}
 		cost <- function(w) {
@@ -73,11 +73,16 @@ logistic.regression <- function(X, y, method=c("GD", "Newton", "LS", "RNS", "Uni
 				comp.cost_grad(w)
 			G
 		}
-		params$num.iters = 3
-		params$method = "GD"
-		g <- gradient.descent(X, y, logistic.grad, NULL, cost=logistic.cost, params)
-		res = optim(as.vector(g), cost, gr=grad, method=method)
-		res$value
+		# It seems lbfgs package can optimize the problem better.
+		if (method == "L-BFGS-B") {
+			res <- lbfgs::lbfgs(cost, grad, rep(0, ncol(X)), max_iterations = max.iters)
+			res$par
+		}
+		else {
+			res = optim(rep(0, ncol(X)), cost, gr=grad, method=method,
+						control = list(trace=1, maxit=max.iters))
+			res$value
+		}
 	}
 	else
 		gradient.descent(X, y, logistic.grad, get.hessian, cost=logistic.cost, params)
