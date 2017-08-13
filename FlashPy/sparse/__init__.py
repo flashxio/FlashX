@@ -1,1 +1,0 @@
-from sparse import issparse
