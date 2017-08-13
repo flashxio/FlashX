@@ -73,18 +73,31 @@ init.params <- function(X, k, reg.covar, method, cov.type)
 		resp <- fm.matrix(0, nrow(X), k)
 		idx <- cbind(fm.seq.int(1, nrow(X), 1), res$cluster)
 		resp[idx] <- 1
+		# Estimate weights, means and covariances
+		params <- esti.gaussian.params(X, resp, reg.covar, cov.type)
+		list(weights=params$weights, means=params$means, covs=params$covs)
 	}
 	else if (method == "random") {
 		resp <- fm.runif.matrix(N, k, in.mem=fm.in.mem(X))
 		# each row needs to sum up to 1.
 		resp <- resp / rowSums(resp)
+		# Estimate weights, means and covariances
+		params <- esti.gaussian.params(X, resp, reg.covar, cov.type)
+		list(weights=params$weights, means=params$means, covs=params$covs)
+	}
+	else if (method == "random_params") {
+		m <- dim(X)[1]
+		rand.k <- floor(runif(k, 1, m))
+		mus <- X[rand.k,]
+		init.covar <- cov(X)
+		covars <- list()
+		for (i in 1:k)
+			covars[[i]] <- init.covar
+		phi <- rep.int(1/m, k)
+		list(weights=phi, means=mus, covs=covars)
 	}
 	else
 		stop("unknown init method")
-
-	# Estimate weights, means and covariances
-	params <- esti.gaussian.params(X, resp, reg.covar, cov.type)
-	list(weights=params$weights, means=params$means, covs=params$covs)
 }
 
 est.logprob <- function(X, means, covars, cov.type)
@@ -196,7 +209,7 @@ compute.lower.bound <- function(log.resp, log.norm)
 #             \item{covs}{a list of matrices, a matrix or a vector, depending on \code{cov.type}}}
 #        }
 GMM.fit <- function(X, k, max.iter=100, tol=1e-3, reg.covar=1e-6,
-					method=c("random", "kmeans"),
+					method=c("random", "random_params", "kmeans"),
 					cov.type=c("full", "tied", "diag", "spherical"))
 {
 	method <- match.arg(method)

@@ -46,6 +46,8 @@ public:
 		this->out_num_rows = out_num_rows;
 		this->out_num_cols = out_num_cols;
 	}
+	virtual ~portion_mapply_op() {
+	}
 
 	virtual portion_mapply_op::const_ptr transpose() const = 0;
 

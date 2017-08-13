@@ -951,6 +951,57 @@ void test_crossprod()
 	}
 }
 
+void test_cumprod()
+{
+	size_t height = 1000000000;
+	size_t width = 32;
+	set_operate::const_ptr init_op = create_nrand_init<double>(1, 1);
+	dense_matrix::ptr mat = dense_matrix::create(height, width,
+			matrix_layout_t::L_COL, get_scalar_type<double>(), *init_op,
+			matrix_conf.get_num_nodes(), true);
+	auto op = mat->get_type().get_agg_ops().get_op(agg_ops::op_idx::PROD);
+
+	struct timeval start, end;
+	printf("test cumprod on rows\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->cum(matrix_margin::MAR_ROW, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+	printf("test cumprod on cols\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr res = mat->cum(matrix_margin::MAR_COL, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+
+	dense_matrix::ptr small_mat = dense_matrix::create(width, width,
+			matrix_layout_t::L_ROW, get_scalar_type<double>(),
+			*init_op, -1);
+	printf("test matmul + cumprod on rows\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr tmp = mat->multiply(*small_mat);
+		dense_matrix::ptr res = tmp->cum(matrix_margin::MAR_ROW, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+	printf("test matmul + cumprod on cols\n");
+	for (size_t i = 0; i < 5; i++) {
+		gettimeofday(&start, NULL);
+		dense_matrix::ptr tmp = mat->multiply(*small_mat);
+		dense_matrix::ptr res = tmp->cum(matrix_margin::MAR_COL, op);
+		res->materialize_self();
+		gettimeofday(&end, NULL);
+		printf("it takes %.3f seconds\n", time_diff(start, end));
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
@@ -996,6 +1047,8 @@ int main(int argc, char *argv[])
 		test_VUDF();
 	else if (test_name == "crossprod")
 		test_crossprod();
+	else if (test_name == "cumprod")
+		test_cumprod();
 	else {
 		fprintf(stderr, "unknow test\n");
 		return -1;

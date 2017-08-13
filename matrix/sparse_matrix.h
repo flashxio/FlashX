@@ -547,7 +547,7 @@ public:
 	 * from the external memory. matrix_io_generator defines data access
 	 * and compute_task defines the computation.
 	 */
-	void compute(detail::task_creator::ptr creator,
+	bool compute(detail::task_creator::ptr creator,
 			const detail::matrix_store &in) const;
 	/*
 	 * This method defines how data in the matrix is accessed.
