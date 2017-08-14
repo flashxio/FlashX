@@ -228,10 +228,18 @@ void verify_result(const dense_matrix &_m1, const dense_matrix &_m2,
 		mem_m2 = detail::mem_matrix_store::cast(mem_mat->get_raw_store());
 	}
 
+	bool success = true;
 #pragma omp parallel for
 	for (size_t i = 0; i < m1->get_num_rows(); i++)
 		for (size_t j = 0; j < m1->get_num_cols(); j++)
-			assert(func(mem_m1->get(i, j), mem_m2->get(i, j)));
+			if (!func(mem_m1->get(i, j), mem_m2->get(i, j))) {
+				success = false;
+				break;
+			}
+	if (!success) {
+		m1->print();
+		m2->print();
+	}
 }
 
 enum matrix_val_t
