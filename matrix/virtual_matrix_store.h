@@ -83,6 +83,9 @@ public:
 		return true;
 	}
 
+	// The class has been materialized.
+	virtual bool has_materialized() const = 0;
+
 	/*
 	 * When we materialize the matrix, we can specify where the materialized
 	 * matrix is stored. However, the input arguments only provide guidance

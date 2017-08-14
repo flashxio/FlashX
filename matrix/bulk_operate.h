@@ -112,6 +112,13 @@ public:
 	virtual void runAgg(size_t num_eles, const void *left_arr,
 			void *output) const = 0;
 
+	/*
+	 * This performs accumulation on the input array. Potentially, it accumulates
+	 * based on the previous value.
+	 */
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const = 0;
+
 	virtual const scalar_type &get_left_type() const = 0;
 	virtual const scalar_type &get_right_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
@@ -150,6 +157,7 @@ public:
 		LOG,
 		LOG2,
 		LOG10,
+		SIGN,
 		NUM_OPS,
 	};
 

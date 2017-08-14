@@ -22,7 +22,7 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9
 RUN apt-get update
 RUN apt-get install -y git cmake g++
 RUN apt-get install -y libboost-dev libboost-system-dev libboost-filesystem-dev libaio-dev libatlas-base-dev zlib1g-dev
-RUN apt-get install -y numactl
+RUN apt-get install -y numactl xfsprogs
 RUN if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then apt-get install -y libnuma-dev libhwloc-dev; fi
 #wget is for trilinos
 RUN apt-get install -y wget vim

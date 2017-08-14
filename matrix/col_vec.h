@@ -30,6 +30,11 @@ namespace fm
 
 class vector;
 
+namespace detail
+{
+class vec_store;
+}
+
 /*
  * This represents a vector with a one-col matrix.
  * As such, a vector can contain data that doesn't physically exist.
@@ -45,6 +50,7 @@ public:
 	typedef std::shared_ptr<const col_vec> const_ptr;
 
 	static ptr create(std::shared_ptr<const vector> vec);
+	static ptr create(std::shared_ptr<const detail::vec_store> store);
 
 	template<class T>
 	static ptr create_randn(size_t len) {
@@ -108,19 +114,6 @@ public:
 		assign(mat);
 		return *this;
 	}
-
-	/*
-	 * This version of groupby runs aggregation on each group. It only needs
-	 * to scan the vector once. If `with_val' is true, this method returns
-	 * a data frame with two columns: the first column is a vector of unique
-	 * values in the vector; the second column is a vector of aggregation
-	 * result for each unique value in the first column.
-	 * If `with_val' is false, this method returns a data frame with only
-	 * one column, which contains the aggregation result for each unique value.
-	 */
-	std::shared_ptr<data_frame> groupby(
-			std::shared_ptr<const agg_operate> op, bool with_val,
-			bool sorted=true) const;
 };
 
 }

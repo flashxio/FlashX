@@ -1,6 +1,0 @@
-useDynLib(FlashGraphR)
-
-import(Rcpp)
-importFrom(methods, new)
-
-exportPattern("^[^\\.]")

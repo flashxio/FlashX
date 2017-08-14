@@ -1128,7 +1128,7 @@ class underlying_mat_set
 {
 	std::unordered_set<size_t> under_mat_set;
 	mat_id_set under_mats;
-	std::vector<detail::virtual_matrix_store::const_ptr> vmats;
+	std::unordered_map<size_t, detail::virtual_matrix_store::const_ptr> vmats;
 
 	underlying_mat_set(detail::virtual_matrix_store::const_ptr mat) {
 		// TODO If this is a set of mixed IM and EM matrices, we might want to
@@ -1143,7 +1143,8 @@ class underlying_mat_set
 		}
 		std::sort(under_mats.begin(), under_mats.end());
 		this->under_mat_set.insert(under_mats.begin(), under_mats.end());
-		vmats.push_back(mat);
+		vmats.insert(std::pair<size_t, detail::virtual_matrix_store::const_ptr>(
+					mat->get_data_id(), mat));
 	}
 public:
 	typedef std::shared_ptr<underlying_mat_set> ptr;
@@ -1175,7 +1176,7 @@ public:
 		// the subset of the other.
 		if (!set.is_subset_of(*this))
 			return false;
-		vmats.insert(vmats.end(), set.vmats.begin(), set.vmats.end());
+		vmats.insert(set.vmats.begin(), set.vmats.end());
 		return true;
 	}
 
@@ -1188,14 +1189,15 @@ void underlying_mat_set::materialize(bool par_access)
 	// some are wide. It's better to materialize tall and wide matrices together.
 	std::vector<detail::matrix_store::const_ptr> wide_vmats;
 	std::vector<detail::matrix_store::const_ptr> tall_vmats;
-	for (size_t i = 0; i < vmats.size(); i++) {
-		if (vmats[i]->is_wide()) {
-			wide_vmats.push_back(vmats[i]);
+	for (auto it = vmats.begin(); it != vmats.end(); it++) {
+		auto vmat = it->second;
+		if (vmat->is_wide()) {
+			wide_vmats.push_back(vmat);
 			assert(wide_vmats.front()->get_num_cols()
 					== wide_vmats.back()->get_num_cols());
 		}
 		else {
-			tall_vmats.push_back(vmats[i]);
+			tall_vmats.push_back(vmat);
 			assert(tall_vmats.front()->get_num_rows()
 					== tall_vmats.back()->get_num_rows());
 		}
@@ -1392,6 +1394,13 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access,
 	if (mats.empty())
 		return true;
 
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).reset_dag_ref();
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).inc_dag_ref(
+				detail::INVALID_MAT_ID);
+
+	bool ret = true;
 	try {
 		vmat_levels::ptr levels(new vmat_levels());
 		for (size_t i = 0; i < mats.size(); i++) {
@@ -1407,23 +1416,22 @@ bool materialize(std::vector<dense_matrix::ptr> &mats, bool par_access,
 			for (size_t j = 0; j < vmats.size(); j++)
 				levels->add(underlying_mat_set::create(vmats[j]));
 		}
-		if (levels->is_empty())
-			return true;
-
-		levels->materialize(par_access);
-
-		// Now all virtual matrices contain the materialized results.
-		bool ret = true;
-		if (mater_self) {
-			for (size_t i = 0; i < mats.size(); i++)
-				ret = ret && mats[i]->materialize_self();
+		if (!levels->is_empty()) {
+			levels->materialize(par_access);
+			// Now all virtual matrices contain the materialized results.
+			if (mater_self) {
+				for (size_t i = 0; i < mats.size(); i++)
+					ret = ret && mats[i]->materialize_self();
+			}
 		}
-		return ret;
 	} catch (std::exception &e) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"fail to materialize multiple matrices: %1%") % e.what();
-		return false;
+		ret = false;
 	}
+	for (size_t i = 0; i < mats.size(); i++)
+		const_cast<detail::matrix_store &>(mats[i]->get_data()).reset_dag_ref();
+	return ret;
 }
 
 }

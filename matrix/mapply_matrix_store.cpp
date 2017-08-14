@@ -83,7 +83,7 @@ public:
 		return tall_res->is_in_mem();
 	}
 
-	bool is_materialized() const {
+	bool has_materialized() const {
 		size_t num_eles = get_num_rows() * get_num_cols();
 		size_t count = num_res_avails.get();
 		assert(num_eles >= count);
@@ -100,7 +100,7 @@ public:
 	}
 
 	void print_state() const {
-		if (is_materialized())
+		if (has_materialized())
 			BOOST_LOG_TRIVIAL(info) << "is fully materialized";
 		else
 			BOOST_LOG_TRIVIAL(info) << boost::format(
@@ -173,6 +173,9 @@ class mapply_store
 	size_t orig_num_rows;
 	size_t orig_num_cols;
 
+	size_t num_use;
+	size_t expect_use;
+
 	bool is_right_part(const local_matrix_store &part) const {
 		return part.get_global_start_row() == lstore->get_global_start_row()
 			&& part.get_global_start_col() == lstore->get_global_start_col()
@@ -191,7 +194,8 @@ class mapply_store
 public:
 	mapply_store(const std::vector<local_matrix_store::const_ptr> &ins,
 			const portion_mapply_op &_op, materialized_mapply_tall_store *global_res,
-			local_matrix_store *lstore, materialize_level mater_level): op(_op) {
+			local_matrix_store *lstore, materialize_level mater_level,
+			size_t expect_use): op(_op) {
 		this->global_res = global_res;
 		this->mater_level = mater_level;
 		this->lstore = lstore;
@@ -212,6 +216,9 @@ public:
 		else
 			part_size = lstore->get_num_rows();
 		num_materialized_eles = 0;
+
+		this->num_use = 0;
+		this->expect_use = expect_use;
 	}
 
 	const char *get_raw_arr() const {
@@ -228,6 +235,9 @@ public:
 				&& is_right_part(*res_bufs[0])) {
 			ret = res_bufs[0]->get_raw_arr();
 		}
+		if (mater_level == materialize_level::MATER_CPU
+				&& !lstore->is_whole() && num_use > 0)
+			assert(res_bufs[0]);
 		return ret;
 	}
 
@@ -236,6 +246,9 @@ public:
 	}
 
 	const local_matrix_store &get_materialized_res() const {
+		if (mater_level == materialize_level::MATER_CPU
+				&& !lstore->is_whole() && num_use > 0)
+			assert(res_bufs[0]);
 		// No matter we are in the resized subchunk or in the whole portion,
 		// whole_res always has the right data if whole_res exists.
 		if (whole_res)
@@ -251,7 +264,7 @@ public:
 		}
 	}
 
-	bool is_materialized() const {
+	bool has_materialized() const {
 		// If the whole portion is materialized, it always returns true.
 		if (whole_res
 				// If the current part is materialized.
@@ -271,10 +284,23 @@ public:
 	bool resize(off_t local_start_row, off_t local_start_col,
 			size_t local_num_rows, size_t local_num_cols);
 	void reset_size();
+	void complete() {
+		num_use++;
+		if (whole_res)
+			return;
+		// If the data is used the expected times, we should free
+		// the buffer, so the buffer is recycled.
+		if (mater_level == materialize_level::MATER_CPU
+				&& !lstore->is_whole() && num_use == expect_use)
+			res_bufs[0] = NULL;
+	}
 };
 
 void mapply_store::reset_size()
 {
+	// Whenever the local portion is resize, we should reset num_use.
+	num_use = 0;
+
 	for (size_t i = 0; i < ins.size(); i++)
 		const_cast<local_matrix_store *>(ins[i].get())->reset_size();
 
@@ -301,6 +327,9 @@ bool mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	if (!op.is_resizable(local_start_row, local_start_col, local_num_rows,
 				local_num_cols))
 		return false;
+
+	// Whenever the local portion is resize, we should reset num_use.
+	num_use = 0;
 
 	// We can either resize rows.
 	assert((local_start_row == 0 && local_num_rows == lstore->get_num_rows())
@@ -643,6 +672,7 @@ class lmapply_col_matrix_store: public lvirtual_col_matrix_store
 	mapply_store store;
 public:
 	lmapply_col_matrix_store(materialize_level mater_level,
+			size_t expect_use,
 			const std::vector<local_matrix_store::const_ptr> &ins,
 			const portion_mapply_op &op,
 			materialized_mapply_tall_store *res,
@@ -651,7 +681,7 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_col_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id),
-			store(ins, op, res, this, mater_level) {
+			store(ins, op, res, this, mater_level, expect_use) {
 		this->collect_compute = collect_compute;
 	}
 
@@ -701,8 +731,11 @@ public:
 				local_start_col, num_rows, num_cols);
 	}
 	virtual void materialize_self() const {
-		if (!store.is_materialized())
+		if (!store.has_materialized())
 			store.materialize();
+	}
+	virtual void complete() const {
+		const_cast<mapply_store &>(store).complete();
 	}
 };
 
@@ -712,6 +745,7 @@ class lmapply_row_matrix_store: public lvirtual_row_matrix_store
 	mapply_store store;
 public:
 	lmapply_row_matrix_store(materialize_level mater_level,
+			size_t expect_use,
 			const std::vector<local_matrix_store::const_ptr> &ins,
 			const portion_mapply_op &op,
 			materialized_mapply_tall_store *res,
@@ -720,7 +754,7 @@ public:
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): lvirtual_row_matrix_store(global_start_row,
 				global_start_col, nrow, ncol, type, node_id),
-			store(ins, op, res, this, mater_level) {
+			store(ins, op, res, this, mater_level, expect_use) {
 		this->collect_compute = collect_compute;
 	}
 
@@ -770,8 +804,11 @@ public:
 				local_start_col, num_rows, num_cols);
 	}
 	virtual void materialize_self() const {
-		if (!store.is_materialized())
+		if (!store.has_materialized())
 			store.materialize();
+	}
+	virtual void complete() const {
+		const_cast<mapply_store &>(store).complete();
 	}
 };
 
@@ -829,6 +866,9 @@ public:
 	virtual void materialize_self() const {
 		store->materialize_self();
 	}
+	virtual void complete() const {
+		store->complete();
+	}
 };
 
 /*
@@ -885,6 +925,9 @@ public:
 	virtual void materialize_self() const {
 		store->materialize_self();
 	}
+	virtual void complete() const {
+		store->complete();
+	}
 };
 
 }
@@ -915,7 +958,7 @@ static inline int get_num_nodes(
 mapply_matrix_store::mapply_matrix_store(
 		const std::vector<matrix_store::const_ptr> &_in_mats,
 		portion_mapply_op::const_ptr op, matrix_layout_t layout,
-		size_t _data_id): virtual_matrix_store(op->get_out_num_rows(),
+		data_id_t::ptr _data_id): virtual_matrix_store(op->get_out_num_rows(),
 			op->get_out_num_cols(), is_all_in_mem(_in_mats), op->get_output_type()),
 		data_id(_data_id), in_mats(_in_mats)
 {
@@ -925,12 +968,13 @@ mapply_matrix_store::mapply_matrix_store(
 	this->op = op;
 	this->num_nodes = is_in_mem() ? fm::detail::get_num_nodes(in_mats) : -1;
 	for (size_t i = 1; i < in_mats.size(); i++)
-		assert(in_mats[0]->is_wide() == in_mats[i]->is_wide());
+		assert(in_mats[0]->get_num_rows() == in_mats[i]->get_num_rows()
+				|| in_mats[0]->get_num_cols() == in_mats[i]->get_num_cols());
 }
 
-bool mapply_matrix_store::is_materialized() const
+bool mapply_matrix_store::has_materialized() const
 {
-	return res != NULL && res->is_materialized();
+	return res != NULL && res->has_materialized();
 }
 
 void mapply_matrix_store::set_materialize_level(materialize_level level,
@@ -938,7 +982,7 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 {
 	virtual_matrix_store::set_materialize_level(level, materialize_buf);
 	if (level != materialize_level::MATER_FULL) {
-		if (!is_materialized())
+		if (!has_materialized())
 			res = NULL;
 		return;
 	}
@@ -980,11 +1024,15 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 void mapply_matrix_store::materialize_self() const
 {
 	// Materialize the matrix store if it hasn't.
-	if (is_materialized())
+	if (has_materialized())
 		return;
 
 	matrix_store::const_ptr materialized = __mapply_portion(in_mats, op,
 			layout, is_in_mem(), get_num_nodes(), par_access);
+	if (materialized == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "fail to materialize self";
+		return;
+	}
 	if (res)
 		res->set_materialized(materialized);
 	else {
@@ -998,7 +1046,7 @@ void mapply_matrix_store::materialize_self() const
 matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 			int num_nodes) const
 {
-	if (is_materialized())
+	if (has_materialized())
 		// The input arguments only provide some guidance for where
 		// the materialized data should be stored. If the matrix has been
 		// materialized, we don't need to move the data.
@@ -1011,7 +1059,7 @@ matrix_store::const_ptr mapply_matrix_store::materialize(bool in_mem,
 matrix_store::const_ptr mapply_matrix_store::get_rows(
 		const std::vector<off_t> &idxs) const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_res(store_layout())->get_rows(idxs);
 	if (is_wide()) {
 		// We rely on get_rows in dense_matrix to materialize the matrix
@@ -1086,7 +1134,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	bool same_portion = false;
 	bool trans_portion = false;
 	if (ret) {
@@ -1113,7 +1161,7 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 	// the portion from the materialized store directly.
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_portion(
 				start_row, start_col, num_rows, num_cols);
 
@@ -1135,16 +1183,16 @@ local_matrix_store::const_ptr mapply_matrix_store::get_portion(
 
 	if (store_layout() == matrix_layout_t::L_ROW)
 		ret = local_matrix_store::const_ptr(new lmapply_row_matrix_store(
-					get_materialize_level(), parts, *op, res.get(), NULL,
-					start_row, start_col, num_rows, num_cols, get_type(),
-					parts.front()->get_node_id()));
+					get_materialize_level(), data_id->get_ref(), parts, *op,
+					res.get(), NULL, start_row, start_col, num_rows, num_cols,
+					get_type(), parts.front()->get_node_id()));
 	else
 		ret = local_matrix_store::const_ptr(new lmapply_col_matrix_store(
-					get_materialize_level(), parts, *op, res.get(), NULL,
-					start_row, start_col, num_rows, num_cols, get_type(),
-					parts.front()->get_node_id()));
+					get_materialize_level(), data_id->get_ref(), parts, *op,
+					res.get(), NULL, start_row, start_col, num_rows, num_cols,
+					get_type(), parts.front()->get_node_id()));
 	if (is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 	return ret;
 }
 
@@ -1195,14 +1243,14 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	// the portion from the materialized store directly.
 	// If the materialized matrix store is external memory, it should cache
 	// the portion itself.
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_portion_async(
 				start_row, start_col, num_rows, num_cols, orig_compute);
 
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	// If it's in the same portion.
 	if (ret1 && (((size_t) ret1->get_global_start_row() == start_row
 					&& (size_t) ret1->get_global_start_col() == start_col
@@ -1286,18 +1334,18 @@ async_cres_t mapply_matrix_store::get_portion_async(
 	local_matrix_store::ptr ret;
 	if (store_layout() == matrix_layout_t::L_ROW)
 		ret = local_matrix_store::ptr(new lmapply_row_matrix_store(
-					get_materialize_level(), parts, *op, res.get(),
-					collect_compute, start_row, start_col, num_rows,
+					get_materialize_level(), data_id->get_ref(), parts, *op,
+					res.get(), collect_compute, start_row, start_col, num_rows,
 					num_cols, get_type(), parts.front()->get_node_id()));
 	else
 		ret = local_matrix_store::ptr(new lmapply_col_matrix_store(
-					get_materialize_level(), parts, *op, res.get(),
-					collect_compute, start_row, start_col, num_rows,
+					get_materialize_level(), data_id->get_ref(), parts, *op,
+					res.get(), collect_compute, start_row, start_col, num_rows,
 					num_cols, get_type(), parts.front()->get_node_id()));
 	if (collect_compute)
 		collect_compute->set_res_part(ret);
 	if (is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, ret);
+		local_mem_buffer::cache_portion(data_id->get_id(), ret);
 	// If all parts are from the in-mem matrix store or have been cached by
 	// the underlying matrices, the data in the returned portion is immediately
 	// accessible.
@@ -1338,7 +1386,7 @@ matrix_store::const_ptr mapply_matrix_store::transpose() const
 std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 {
 	// If the matrix has been materialized and it's stored on disks,
-	if (is_materialized() && !res->is_in_mem()) {
+	if (has_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
 				res->get_materialize_res(store_layout()).get());
 		assert(obj);
@@ -1355,7 +1403,7 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 			ret.insert(ret.end(), tmp.begin(), tmp.end());
 		}
 	}
-	if (res && !res->is_materialized() && !res->is_in_mem()) {
+	if (res && !res->has_materialized() && !res->is_in_mem()) {
 		const EM_object *obj = dynamic_cast<const EM_object *>(
 				res->get_materialize_res(store_layout()).get());
 		std::vector<safs::io_interface::ptr> tmp = obj->create_ios();
@@ -1366,10 +1414,10 @@ std::vector<safs::io_interface::ptr> mapply_matrix_store::create_ios() const
 
 std::string mapply_matrix_store::get_name() const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return this->res->get_materialize_res(store_layout())->get_name();
 	else
-		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id
+		return (boost::format("vmat-%1%(%2%,%3%,%4%)=") % data_id->get_id()
 				% get_num_rows() % get_num_cols()
 				% (store_layout() == matrix_layout_t::L_ROW ? "row" : "col")).str()
 			+ op->to_string(in_mats);
@@ -1377,7 +1425,7 @@ std::string mapply_matrix_store::get_name() const
 
 std::unordered_map<size_t, size_t> mapply_matrix_store::get_underlying_mats() const
 {
-	if (is_materialized())
+	if (has_materialized())
 		return res->get_materialize_ref(store_layout()).get_underlying_mats();
 
 	std::unordered_map<size_t, size_t> final_res;
@@ -1408,6 +1456,20 @@ void mapply_matrix_store::set_cache_portion(bool cache_portion)
 	matrix_store::set_cache_portion(cache_portion);
 	for (size_t i = 0; i < in_mats.size(); i++)
 		const_cast<matrix_store &>(*in_mats[i]).set_cache_portion(cache_portion);
+}
+
+void mapply_matrix_store::inc_dag_ref(size_t id)
+{
+	data_id->inc_ref(id);
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).inc_dag_ref(data_id->get_id());
+}
+
+void mapply_matrix_store::reset_dag_ref()
+{
+	data_id->reset_ref();
+	for (size_t i = 0; i < in_mats.size(); i++)
+		const_cast<matrix_store &>(*in_mats[i]).reset_dag_ref();
 }
 
 }

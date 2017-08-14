@@ -66,6 +66,15 @@ public:
 		return ret;
 	}
 
+	virtual void inc_dag_ref(size_t id) {
+		const_cast<matrix_store &>(*data).inc_dag_ref(get_data_id());
+		// We don't need to increase the ref count of a sink matrix
+		// because we never get a portion from a sink matrix.
+	}
+	virtual void reset_dag_ref() {
+		const_cast<matrix_store &>(*data).reset_dag_ref();
+	}
+
 	virtual bool has_materialized() const;
 
 	virtual void materialize_self() const;
@@ -85,8 +94,10 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_layout_t store_layout() const {
-		// TODO what is the right layout?
-		return data->store_layout();
+		if (is_wide())
+			return matrix_layout_t::L_ROW;
+		else
+			return matrix_layout_t::L_COL;
 	}
 
 	virtual std::string get_name() const;

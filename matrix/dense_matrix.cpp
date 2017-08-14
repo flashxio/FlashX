@@ -45,6 +45,9 @@
 #include "project_matrix_store.h"
 #include "set_data_matrix_store.h"
 #include "set_rc_matrix_store.h"
+#include "generic_hashtable.h"
+#include "local_vec_store.h"
+#include "cum_matrix.h"
 
 namespace fm
 {
@@ -200,6 +203,10 @@ public:
 
 	virtual void runEA(size_t num_eles, const void *left,
 			const void *right_arr, void *output_arr) const {
+		assert(0);
+	}
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
 		assert(0);
 	}
 
@@ -447,6 +454,12 @@ static inline bool is_floating_point(const scalar_type &type)
 dense_matrix::ptr dense_matrix::multiply(const dense_matrix &mat,
 		matrix_layout_t out_layout) const
 {
+	if (get_num_cols() != mat.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Matrix multiply: #cols of mat1 should be the same as #rows of mat2";
+		return dense_matrix::ptr();
+	}
+
 	// If input matrices are sink matrices, we materialize them first.
 	if (store->is_sink())
 		materialize_self();
@@ -925,10 +938,15 @@ dense_matrix::ptr dense_matrix::mapply2(const dense_matrix &m,
 		return dense_matrix::ptr();
 
 	// If input matrices are sink matrices, we materialize them first.
-	if (store->is_sink())
-		materialize_self();
-	if (m.store->is_sink())
-		m.materialize_self();
+	if (store->is_sink() || m.store->is_sink()) {
+		std::vector<detail::matrix_store::const_ptr> stores(2);
+		stores[0] = get_raw_store();
+		stores[1] = m.get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(new mapply2_op(op,
+					get_num_rows(), get_num_cols()));
+		return dense_matrix::create(detail::mapply_sink_store::create(
+					stores, portion_op));
+	}
 
 	std::vector<detail::matrix_store::const_ptr> ins(2);
 	ins[0] = this->get_raw_store();
@@ -1025,8 +1043,14 @@ dense_matrix::ptr dense_matrix::sapply(bulk_uoperate::const_ptr op) const
 	}
 
 	// If the input matrix is a sink matrix, we materialize it first.
-	if (store->is_sink())
-		materialize_self();
+	if (store->is_sink()) {
+		std::vector<detail::matrix_store::const_ptr> stores(1);
+		stores[0] = get_raw_store();
+		detail::portion_mapply_op::const_ptr portion_op(new sapply_op(op,
+					get_num_rows(), get_num_cols()));
+		return dense_matrix::create(detail::mapply_sink_store::create(
+					stores, portion_op));
+	}
 
 	std::vector<detail::matrix_store::const_ptr> ins(1);
 	ins[0] = this->get_raw_store();
@@ -1998,6 +2022,48 @@ dense_matrix::ptr dense_matrix::get_rows(col_vec::ptr idxs) const
 	}
 }
 
+col_vec::ptr dense_matrix::get_eles(dense_matrix::ptr idx) const
+{
+	if (idx->get_num_cols() != 2) {
+		BOOST_LOG_TRIVIAL(error) << "The index matrix has to have two columns";
+		return col_vec::ptr();
+	}
+
+	// This is useful to get a small number of elements from a matrix.
+	// TODO we need to optimize for many other cases.
+	detail::mem_matrix_store::const_ptr mem_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				get_raw_store());
+	if (mem_store == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "Can't get elements from an EM matrix";
+		return col_vec::ptr();
+	}
+
+	idx = idx->cast_ele_type(get_scalar_type<off_t>());
+	idx = idx->conv2(matrix_layout_t::L_COL);
+	idx = idx->conv_store(true, -1);
+	detail::mem_matrix_store::const_ptr idx_store
+		= std::dynamic_pointer_cast<const detail::mem_matrix_store>(
+				idx->get_raw_store());
+	assert(idx_store);
+
+	detail::mem_matrix_store::ptr vec = detail::mem_matrix_store::create(
+			idx->get_num_rows(), 1, matrix_layout_t::L_COL, get_type(), -1);
+	size_t entry_size = mem_store->get_type().get_size();
+	for (size_t i = 0; i < idx_store->get_num_rows(); i++) {
+		const off_t *ridx_arr
+			= reinterpret_cast<const off_t *>(idx_store->get_col(0));
+		const off_t *cidx_arr
+			= reinterpret_cast<const off_t *>(idx_store->get_col(1));
+		assert(ridx_arr);
+		assert(cidx_arr);
+		off_t row_idx = ridx_arr[i];
+		off_t col_idx = cidx_arr[i];
+		memcpy(vec->get(i, 0), mem_store->get(row_idx, col_idx), entry_size);
+	}
+	return col_vec::create(vec);
+}
+
 ////////////////////////////// Inner product //////////////////////////////////
 
 dense_matrix::ptr dense_matrix::inner_prod(const dense_matrix &m,
@@ -2365,6 +2431,78 @@ scalar_variable::ptr dense_matrix::aggregate(agg_operate::const_ptr op) const
 	res->set_raw(dynamic_cast<const detail::mem_matrix_store &>(
 				*_res).get_raw_arr(), res->get_size());
 	return res;
+}
+
+namespace
+{
+
+class cum_short_dim_op: public detail::portion_mapply_op
+{
+	matrix_margin margin;
+	agg_operate::const_ptr op;
+public:
+	cum_short_dim_op(matrix_margin margin, agg_operate::const_ptr op,
+			size_t out_num_rows, size_t out_num_cols): detail::portion_mapply_op(
+				out_num_rows, out_num_cols, op->get_output_type()) {
+		this->margin = margin;
+		this->op = op;
+	}
+
+	virtual bool is_resizable(size_t local_start_row, size_t local_start_col,
+			size_t local_num_rows, size_t local_num_cols) const {
+		if (margin == matrix_margin::MAR_ROW)
+			// We can only resize the number of the rows in this operation.
+			return local_num_cols == get_out_num_cols();
+		else
+			// We can only resize the number of the cols in this operation.
+			return local_num_rows == get_out_num_rows();
+	}
+
+	virtual void run(const std::vector<detail::local_matrix_store::const_ptr> &ins,
+			detail::local_matrix_store &out) const {
+		detail::part_dim_t dim = margin == matrix_margin::MAR_ROW
+			? detail::part_dim_t::PART_DIM1 : detail::part_dim_t::PART_DIM2;
+		detail::cum(*ins[0], NULL, *op, margin, dim, out);
+	}
+	virtual portion_mapply_op::const_ptr transpose() const {
+		matrix_margin new_margin = this->margin == matrix_margin::MAR_ROW ?
+			matrix_margin::MAR_COL : matrix_margin::MAR_ROW;
+		return portion_mapply_op::const_ptr(new cum_short_dim_op(
+					new_margin, op, get_out_num_cols(), get_out_num_rows()));
+	}
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		assert(mats.size() == 1);
+		return std::string("cum(") + mats[0]->get_name() + ")";
+	}
+};
+
+}
+
+dense_matrix::ptr dense_matrix::cum(matrix_margin margin,
+		agg_operate::const_ptr op) const
+{
+	if ((margin == matrix_margin::MAR_ROW && !is_wide())
+			|| (margin == matrix_margin::MAR_COL && is_wide())) {
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = this->get_raw_store();
+		cum_short_dim_op::const_ptr apply_op(new cum_short_dim_op(
+					margin, op, get_num_rows(), get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+				apply_op, store_layout());
+		return dense_matrix::create(ret);
+	}
+	else {
+		std::vector<detail::matrix_store::const_ptr> ins(1);
+		ins[0] = this->get_raw_store();
+		auto portion_size = store->get_portion_size();
+		detail::cum_long_dim_op::const_ptr apply_op(new detail::cum_long_dim_op(
+					margin, op, portion_size.first * portion_size.second,
+					get_num_rows(), get_num_cols()));
+		detail::matrix_store::ptr ret = __mapply_portion_virtual(ins,
+				apply_op, store_layout());
+		return dense_matrix::create(ret);
+	}
 }
 
 namespace
@@ -3686,6 +3824,141 @@ dense_matrix::ptr dense_matrix::ifelse(const dense_matrix &yes,
 	mats[1] = yes_mat;
 	mats[2] = no_mat;
 	return mapply_ele(mats, op, test_mat->store_layout());
+}
+
+namespace
+{
+
+class groupby_ele_portion_op: public detail::portion_mapply_op
+{
+	agg_operate::const_ptr find_next;
+	agg_operate::const_ptr agg_op;
+	std::vector<generic_hashtable::ptr> tables;
+public:
+	groupby_ele_portion_op(agg_operate::const_ptr agg_op): detail::portion_mapply_op(
+			0, 0, agg_op->get_output_type()) {
+		this->find_next = agg_op->get_input_type().get_agg_ops().get_find_next();
+		this->agg_op = agg_op;
+		size_t nthreads = detail::mem_thread_pool::get_global_num_threads();
+		tables.resize(nthreads);
+	}
+
+	virtual detail::portion_mapply_op::const_ptr transpose() const {
+		return detail::portion_mapply_op::const_ptr();
+	}
+
+	virtual std::string to_string(
+			const std::vector<detail::matrix_store::const_ptr> &mats) const {
+		return "";
+	}
+
+	virtual void run(
+			const std::vector<detail::local_matrix_store::const_ptr> &ins) const;
+
+	generic_hashtable::ptr get_agg() const;
+};
+
+void groupby_ele_portion_op::run(
+		const std::vector<detail::local_matrix_store::const_ptr> &ins) const
+{
+	int thread_id = detail::mem_thread_pool::get_curr_thread_id();
+	groupby_ele_portion_op *mutable_this = const_cast<groupby_ele_portion_op *>(this);
+	if (tables[thread_id] == NULL)
+		mutable_this->tables[thread_id] = ins[0]->get_type().create_hashtable(
+				agg_op->get_output_type());
+	generic_hashtable::ptr ltable = tables[thread_id];
+	assert(ltable);
+
+	size_t llength = ins[0]->get_num_rows() * ins[0]->get_num_cols();
+	detail::local_matrix_store::ptr lmat;
+	if (ins[0]->store_layout() == matrix_layout_t::L_COL)
+		lmat = detail::local_matrix_store::ptr(
+			new detail::local_buf_col_matrix_store(0, 0, ins[0]->get_num_rows(),
+				ins[0]->get_num_cols(), ins[0]->get_type(), -1));
+	else
+		lmat = detail::local_matrix_store::ptr(
+			new detail::local_buf_row_matrix_store(0, 0, ins[0]->get_num_rows(),
+				ins[0]->get_num_cols(), ins[0]->get_type(), -1));
+	lmat->copy_from(*ins[0]);
+	lmat->get_type().get_sorter().serial_sort(lmat->get_raw_arr(), llength,
+			false);
+
+	local_vec_store::ptr lkeys(new local_buf_vec_store(0, llength,
+				ins[0]->get_type(), -1));
+	local_vec_store::ptr laggs(new local_buf_vec_store( 0, llength,
+				agg_op->get_output_type(), -1));
+
+	// Start to aggregate on the values.
+	const char *arr = lmat->get_raw_arr();
+	size_t key_idx = 0;
+	while (llength > 0) {
+		size_t num_same = 0;
+		find_next->runAgg(llength, arr, &num_same);
+		assert(num_same <= llength);
+		memcpy(lkeys->get(key_idx), arr, lmat->get_entry_size());
+		agg_op->runAgg(num_same, arr, laggs->get(key_idx));
+
+		key_idx++;
+		arr += num_same * lmat->get_entry_size();
+		llength -= num_same;
+	}
+	ltable->insert(key_idx, lkeys->get_raw_arr(), laggs->get_raw_arr(), *agg_op);
+}
+
+generic_hashtable::ptr groupby_ele_portion_op::get_agg() const
+{
+	generic_hashtable::ptr ret;
+	size_t i;
+	// Find a local table.
+	for (i = 0; i < tables.size(); i++) {
+		if (tables[i]) {
+			ret = tables[i];
+			break;
+		}
+	}
+	// We need to move to the next local table.
+	i++;
+	// Merge with other local tables if they exist.
+	for (; i < tables.size(); i++)
+		if (tables[i])
+			ret->merge(*tables[i], *agg_op);
+	return ret;
+}
+
+}
+
+data_frame::ptr dense_matrix::groupby(agg_operate::const_ptr op, bool with_val,
+		bool sorted) const
+{
+	std::vector<detail::matrix_store::const_ptr> stores(1);
+	stores[0] = get_raw_store();
+	groupby_ele_portion_op *_portion_op = new groupby_ele_portion_op(op);
+	detail::portion_mapply_op::const_ptr portion_op(_portion_op);
+	detail::__mapply_portion(stores, portion_op, matrix_layout_t::L_COL);
+	generic_hashtable::ptr agg_res = _portion_op->get_agg();
+
+	// The key-value pairs got from the hashtable aren't in any order.
+	// We need to sort them before returning them.
+	data_frame::ptr ret = data_frame::create();
+	data_frame::ptr df = agg_res->conv2df();
+	if (sorted) {
+		vector::ptr keys = vector::create(df->get_vec(0));
+		data_frame::ptr sorted_keys = keys->sort_with_index();
+		detail::smp_vec_store::const_ptr idx_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(
+					sorted_keys->get_vec("idx"));
+		detail::smp_vec_store::const_ptr agg_store
+			= std::dynamic_pointer_cast<const detail::smp_vec_store>(df->get_vec(1));
+		if (with_val)
+			ret->add_vec("val", sorted_keys->get_vec("val"));
+		ret->add_vec("agg", agg_store->get(*idx_store));
+	}
+	else {
+		if (with_val)
+			ret->add_vec("val", df->get_vec(0));
+		ret->add_vec("agg", df->get_vec(1));
+	}
+	return ret;
 }
 
 }

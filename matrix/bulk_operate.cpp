@@ -160,6 +160,20 @@ class basic_uops_impl: public basic_uops
 		}
 	};
 
+	struct sign {
+		static std::string get_name() {
+			return "sign";
+		}
+		OutType operator()(const InType &e) const {
+			if (e > 0)
+				return 1;
+			else if (e < 0)
+				return -1;
+			else
+				return 0;
+		}
+	};
+
 	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
 	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
 	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
@@ -171,6 +185,7 @@ class basic_uops_impl: public basic_uops
 	bulk_uoperate_impl<log, InType, OutType> log_op;
 	bulk_uoperate_impl<log2, InType, OutType> log2_op;
 	bulk_uoperate_impl<log10, InType, OutType> log10_op;
+	bulk_uoperate_impl<sign, InType, OutType> sign_op;
 
 	std::vector<bulk_uoperate *> ops;
 public:
@@ -186,6 +201,7 @@ public:
 		ops.push_back(&log_op);
 		ops.push_back(&log2_op);
 		ops.push_back(&log10_op);
+		ops.push_back(&sign_op);
 	}
 
 	virtual const bulk_uoperate *get_op(op_idx idx) const {
@@ -670,6 +686,11 @@ public:
 		*(size_t *) output = loc;
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
 	}
@@ -723,6 +744,11 @@ public:
 		*(size_t *) output = ((const T *) arr_end) - curr;
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
 	}
@@ -757,6 +783,11 @@ public:
 	virtual void runAgg(size_t num_eles, const void *in, void *output) const {
 		size_t *t_out = (size_t *) output;
 		t_out[0] = num_eles;
+	}
+
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -806,6 +837,11 @@ public:
 		t_out[0] = idx;
 	}
 
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
+	}
+
 	virtual const scalar_type &get_left_type() const {
 		return get_scalar_type<T>();
 	}
@@ -851,6 +887,11 @@ public:
 			}
 		}
 		t_out[0] = idx;
+	}
+
+	virtual void runCum(size_t num_eles, const void *left_arr,
+			const void *prev, void *output) const {
+		throw unsupported_exception();
 	}
 
 	virtual const scalar_type &get_left_type() const {
@@ -906,6 +947,20 @@ public:
 				*get_scalar_type<InType>().get_basic_ops().get_op(
 					basic_ops::op_idx::MUL));
 		ops[PROD] = agg_operate::create(mul, mul);
+		auto agg_and = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::AND));
+		auto combine_and = bulk_operate::conv2ptr(
+				*get_scalar_type<bool>().get_basic_ops().get_op(
+					basic_ops::op_idx::AND));
+		ops[AND] = agg_operate::create(agg_and, combine_and);
+		auto agg_or = bulk_operate::conv2ptr(
+				*get_scalar_type<InType>().get_basic_ops().get_op(
+					basic_ops::op_idx::OR));
+		auto combine_or = bulk_operate::conv2ptr(
+				*get_scalar_type<bool>().get_basic_ops().get_op(
+					basic_ops::op_idx::OR));
+		ops[OR] = agg_operate::create(agg_or, combine_or);
 	}
 };
 

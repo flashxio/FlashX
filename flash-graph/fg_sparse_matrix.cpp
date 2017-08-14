@@ -474,7 +474,12 @@ public:
 
 	virtual fm::matrix_io_generator::ptr create_io_gen(
 			const fm::detail::matrix_store &in) const {
-		assert(!in.is_wide());
+		if (in.is_wide()) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"The input matrix has unexpected shape: %1% x %2%")
+				% in.get_num_rows() % in.get_num_cols();
+			return fm::matrix_io_generator::ptr();
+		}
 		size_t num_rows = in.get_portion_size().first;
 		size_t num_brows = std::min((size_t) fm::matrix_conf.get_rb_io_size(),
 				num_rows / fm::matrix_conf.get_row_block_size());

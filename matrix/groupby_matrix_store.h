@@ -71,6 +71,17 @@ public:
 	}
 	virtual size_t get_data_id() const;
 
+	virtual void inc_dag_ref(size_t id) {
+		const_cast<matrix_store &>(*data).inc_dag_ref(get_data_id());
+		const_cast<matrix_store &>(*label_store).inc_dag_ref(get_data_id());
+		// We don't need to increase the ref count of a sink matrix
+		// because we never get a portion from a sink matrix.
+	}
+	virtual void reset_dag_ref() {
+		const_cast<matrix_store &>(*data).reset_dag_ref();
+		const_cast<matrix_store &>(*label_store).reset_dag_ref();
+	}
+
 	virtual bool has_materialized() const;
 
 	virtual void materialize_self() const;

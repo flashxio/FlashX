@@ -274,6 +274,11 @@ public:
 			size_t step, dense_matrix::ptr rows) const;
 
 	/*
+	 * This method gets individual elements in a matrix. The index matrix
+	 * contains two columns and each row specifies the coordinate of the element.
+	 */
+	virtual std::shared_ptr<col_vec> get_eles(dense_matrix::ptr idx) const;
+	/*
 	 * This method sets individual elements in a matrix. The index matrix
 	 * contains two columns and each row specifies the coordinate of the element
 	 * to be modified.
@@ -336,6 +341,12 @@ public:
 			bulk_operate::const_ptr op) const;
 
 	/*
+	 * This performs accumulative computation on a matrix.
+	 */
+	virtual dense_matrix::ptr cum(matrix_margin margin,
+			agg_operate::const_ptr op) const;
+
+	/*
 	 * This operator groups rows based on the labels in the factor vector
 	 * and aggregate the elements of each column.
 	 * It outputs a dense matrix whose #cols == this->#cols and #rows == #levels.
@@ -348,6 +359,19 @@ public:
 	virtual dense_matrix::ptr groupby_row(
 			std::shared_ptr<const factor_col_vector> labels,
 			bulk_operate::const_ptr) const;
+
+	/*
+	 * This version of groupby runs aggregation on each group. It only needs
+	 * to scan the matrix once. If `with_val' is true, this method returns
+	 * a data frame with two columns: the first column is a vector of unique
+	 * values in the vector; the second column is a vector of aggregation
+	 * result for each unique value in the first column.
+	 * If `with_val' is false, this method returns a data frame with only
+	 * one column, which contains the aggregation result for each unique value.
+	 */
+	std::shared_ptr<data_frame> groupby(
+			std::shared_ptr<const agg_operate> op, bool with_val,
+			bool sorted=true) const;
 
 	virtual dense_matrix::ptr mapply_cols(std::shared_ptr<const col_vec> vals,
 			bulk_operate::const_ptr op) const;
@@ -469,8 +493,6 @@ dense_matrix operator*(const dense_matrix &m, T val)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -479,8 +501,6 @@ dense_matrix operator*(T val, const dense_matrix &m)
 {
 	dense_matrix::ptr ret = m.multiply_scalar<T>(val);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -488,8 +508,6 @@ inline dense_matrix operator*(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.multiply(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -497,8 +515,6 @@ inline dense_matrix operator+(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.add(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 
@@ -506,8 +522,6 @@ inline dense_matrix operator-(const dense_matrix &m1, const dense_matrix &m2)
 {
 	dense_matrix::ptr ret = m1.minus(m2);
 	assert(ret);
-	// TODO I shouldn't materialize immediately.
-	ret->materialize_self();
 	return *ret;
 }
 

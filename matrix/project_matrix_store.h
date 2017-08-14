@@ -141,6 +141,11 @@ public:
 
 	static ptr create_sparse_rand(size_t nrow, size_t ncol,
 			matrix_layout_t layout, const scalar_type &type, double density);
+
+	virtual bool has_materialized() const {
+		return false;
+	}
+
 	virtual size_t get_data_id() const {
 		// TODO I should return a real data id.
 		return INVALID_MAT_ID;

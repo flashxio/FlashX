@@ -221,7 +221,7 @@ combined_matrix_store::combined_matrix_store(
 
 combined_matrix_store::combined_matrix_store(
 		const std::vector<matrix_store::const_ptr> &mats,
-		matrix_layout_t layout, size_t data_id): mapply_matrix_store(
+		matrix_layout_t layout, data_id_t::ptr data_id): mapply_matrix_store(
 			mats, get_combine_op(mats), layout, data_id)
 {
 	this->mats = mats;
@@ -247,7 +247,7 @@ matrix_store::const_ptr combined_matrix_store::transpose() const
 	else
 		layout = matrix_layout_t::L_ROW;
 	return matrix_store::const_ptr(new combined_matrix_store(tmp, layout,
-				get_data_id()));
+				get_id_ptr()));
 }
 
 /*

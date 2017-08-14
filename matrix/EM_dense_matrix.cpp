@@ -95,7 +95,7 @@ EM_matrix_store::ptr EM_matrix_store::create(size_t nrow, size_t ncol,
 EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 		size_t nrow, size_t ncol, matrix_layout_t layout, const scalar_type &type,
 		safs::safs_file_group::ptr group): matrix_store(nrow, ncol, false,
-			type), mat_id(mat_counter++), data_id(mat_id)
+			type), mat_id(mat_counter++), data_id(data_id_t::create(mat_id))
 {
 	this->num_prefetches = 1;
 	this->orig_num_rows = nrow;
@@ -108,7 +108,7 @@ EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 EM_matrix_store::EM_matrix_store(file_holder::ptr holder, io_set::ptr ios,
 		size_t nrow, size_t ncol, size_t orig_nrow, size_t orig_ncol,
 		matrix_layout_t layout, const scalar_type &type,
-		size_t _data_id): matrix_store(nrow, ncol, false, type), mat_id(
+		data_id_t::ptr _data_id): matrix_store(nrow, ncol, false, type), mat_id(
 			mat_counter++), data_id(_data_id)
 {
 	this->num_prefetches = 1;
@@ -157,7 +157,7 @@ EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 				header->get_num_rows(), header->get_num_cols(),
 				header->get_num_rows(), header->get_num_cols(),
 				// TODO we should save the data Id in the matrix header.
-				header->get_layout(), header->get_data_type(), mat_counter++));
+				header->get_layout(), header->get_data_type()));
 	return ret_mat;
 }
 
@@ -416,7 +416,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 	// We should try to get the portion from the local thread memory buffer
 	// first.
 	local_matrix_store::const_ptr ret1 = local_mem_buffer::get_mat_portion(
-			data_id);
+			data_id->get_id());
 	// If it's in the same portion.
 	if (ret1 && (((size_t) ret1->get_global_start_row() == fetch_start_row
 					&& (size_t) ret1->get_global_start_col() == fetch_start_col
@@ -481,7 +481,7 @@ async_cres_t EM_matrix_store::get_portion_async(
 			buf->get_num_rows() * buf->get_num_cols() * get_entry_size(), false);
 
 	if (is_cache_portion())
-		local_mem_buffer::cache_portion(data_id, buf);
+		local_mem_buffer::cache_portion(data_id->get_id(), buf);
 	local_matrix_store::const_ptr ret = get_portion_cached(buf, is_wide(),
 			get_portion_size(), start_row, start_col, num_rows, num_cols);
 	return async_cres_t(false, ret);

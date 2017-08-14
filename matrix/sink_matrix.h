@@ -70,8 +70,6 @@ public:
 		return INVALID_MAT_ID;
 	}
 
-	// The class has been materialized.
-	virtual bool has_materialized() const = 0;
 	// This returns the materialized result of the sink matrix.
 	virtual matrix_store::const_ptr get_result() const = 0;
 	// This returns a set of computation matrix that can be used for
@@ -139,9 +137,6 @@ public:
 		return false;
 	}
 
-	virtual size_t get_data_id() const {
-		return INVALID_MAT_ID;
-	}
 	virtual bool share_data(const matrix_store &store) const {
 		return false;
 	}
@@ -203,6 +198,9 @@ public:
 		return INVALID_MAT_ID;
 	}
 
+	virtual void inc_dag_ref(size_t id);
+	virtual void reset_dag_ref();
+
 	virtual bool has_materialized() const;
 	virtual matrix_store::const_ptr get_result() const;
 	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const;
@@ -230,6 +228,48 @@ public:
 	size_t get_num_block_cols() const {
 		return ncol_in_blocks.size();
 	}
+};
+
+class portion_mapply_op;
+
+class mapply_sink_store: public sink_store
+{
+	// One of the input matrix must be a sink matrix.
+	std::vector<matrix_store::const_ptr> stores;
+	std::shared_ptr<const portion_mapply_op> op;
+	matrix_store::ptr result;
+
+	mapply_sink_store(const std::vector<matrix_store::const_ptr> &stores,
+			std::shared_ptr<const portion_mapply_op> op);
+public:
+	static ptr create(const std::vector<matrix_store::const_ptr> &stores,
+			std::shared_ptr<const portion_mapply_op> op);
+
+	virtual size_t get_data_id() const {
+		return INVALID_MAT_ID;
+	}
+
+	virtual void inc_dag_ref(size_t id);
+	virtual void reset_dag_ref();
+
+	virtual bool has_materialized() const;
+	virtual matrix_store::const_ptr get_result() const;
+	virtual std::vector<virtual_matrix_store::const_ptr> get_compute_matrices() const;
+	virtual void materialize_self() const;
+	virtual matrix_store::const_ptr materialize(bool in_mem, int num_nodes) const;
+	virtual matrix_store::const_ptr transpose() const;
+
+	virtual matrix_layout_t store_layout() const {
+		return stores[0]->store_layout();
+	}
+
+	virtual std::string get_name() const {
+		std::string str = stores[0]->get_name();
+		for (size_t i = 1; i < stores.size(); i++)
+			str += "," + stores[i]->get_name();
+		return (boost::format("sink_mapply(%1%)") % str).str();
+	}
+	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const;
 };
 
 }

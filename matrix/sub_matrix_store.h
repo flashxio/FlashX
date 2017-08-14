@@ -98,12 +98,12 @@ public:
 class sub_col_matrix_store: public sub_matrix_store
 {
 	const size_t mat_id;
-	const size_t data_id;
+	const data_id_t::ptr data_id;
 	std::vector<off_t> rc_idxs;
 
 public:
 	sub_col_matrix_store(const std::vector<off_t> idxs,
-			matrix_store::const_ptr store, size_t _data_id): sub_matrix_store(
+			matrix_store::const_ptr store, data_id_t::ptr _data_id): sub_matrix_store(
 				store, store->get_num_rows(), idxs.size()),
 			mat_id(mat_counter++), data_id(_data_id) {
 		this->rc_idxs = idxs;
@@ -116,13 +116,23 @@ public:
 				store->get_num_rows(), idxs.size()), mat_id(
 				// The sub matrix has a different matrix ID and data ID from
 				// its parent matrix.
-				mat_counter++), data_id(mat_id) {
+				mat_counter++), data_id(data_id_t::create(mat_id)) {
 		this->rc_idxs = idxs;
 		assert(!store->is_wide());
 		assert(idxs.size() > 0);
 	}
+
+	virtual void inc_dag_ref(size_t id) {
+		data_id->inc_ref(id);
+	}
+	virtual void reset_dag_ref() {
+		data_id->reset_ref();
+	}
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
 	virtual size_t get_data_id() const {
-		return data_id;
+		return data_id->get_id();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
@@ -157,12 +167,12 @@ public:
 class sub_row_matrix_store: public sub_matrix_store
 {
 	const size_t mat_id;
-	const size_t data_id;
+	const data_id_t::ptr data_id;
 	std::vector<off_t> rc_idxs;
 
 public:
 	sub_row_matrix_store(const std::vector<off_t> idxs,
-			matrix_store::const_ptr store, size_t _data_id): sub_matrix_store(
+			matrix_store::const_ptr store, data_id_t::ptr _data_id): sub_matrix_store(
 				store, idxs.size(), store->get_num_cols()),
 			mat_id(mat_counter++), data_id(_data_id) {
 		this->rc_idxs = idxs;
@@ -175,13 +185,23 @@ public:
 				idxs.size(), store->get_num_cols()), mat_id(
 				// The sub matrix has a different matrix ID and data ID from
 				// its parent matrix.
-				mat_counter++), data_id(mat_id) {
+				mat_counter++), data_id(data_id_t::create(mat_id)) {
 		this->rc_idxs = idxs;
 		assert(store->is_wide());
 		assert(idxs.size() > 0);
 	}
+
+	virtual void inc_dag_ref(size_t id) {
+		data_id->inc_ref(id);
+	}
+	virtual void reset_dag_ref() {
+		data_id->reset_ref();
+	}
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
 	virtual size_t get_data_id() const {
-		return data_id;
+		return data_id->get_id();
 	}
 
 	virtual matrix_store::const_ptr transpose() const;

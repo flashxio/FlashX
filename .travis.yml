@@ -12,13 +12,10 @@ before_install:
 compiler:
 - g++
 script:
-- sudo Rscript release-test/install_Rpkgs.R
 - mkdir -p build && cd build && cmake .. && make && cd ..
-- sudo ./install_FlashR.sh
 - make clean; make
 - cd libsafs/unit-test && make test && cd ../..
 - cd flash-graph/unit-test && make test
 - cd ../release-test/ && ./run_release_test.sh
 - cd ../..
 - cd matrix/unit-test && make test && cd ../..
-- Rscript release-test/test_FlashR.R

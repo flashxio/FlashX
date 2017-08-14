@@ -1746,8 +1746,106 @@ void test_resize_compute()
 	test_resize_compute_groupby();
 }
 
+void test_cum1(std::shared_ptr<local_matrix_store> store)
+{
+	printf("test cum on %ldx%ld matrix, layout: %s\n", store->get_num_rows(),
+			store->get_num_cols(),
+			store->store_layout() == matrix_layout_t::L_COL ? "col" : "row");
+	std::shared_ptr<local_matrix_store> res;
+	if (store->store_layout() == matrix_layout_t::L_COL) {
+		store->set_data(set_col_operate<int>(store->get_num_cols()));
+		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+				0, 0, store->get_num_rows(), store->get_num_cols(),
+				store->get_type(), -1));
+	}
+	else {
+		store->set_data(set_row_operate<int>(store->get_num_cols()));
+		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+				0, 0, store->get_num_rows(), store->get_num_cols(),
+				store->get_type(), -1));
+	}
+
+	const agg_operate &op = *store->get_type().get_agg_ops().get_op(
+			agg_ops::op_idx::SUM);
+	cum(*store, NULL, op, matrix_margin::MAR_ROW,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
+	for (size_t i = 0; i < store->get_num_rows(); i++) {
+		for (size_t j = 1; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == res->get<int>(i, j) - res->get<int>(i, j - 1));
+		assert(store->get<int>(i, 0) == res->get<int>(i, 0));
+	}
+
+	cum(*store, NULL, op, matrix_margin::MAR_COL,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
+	for (size_t j = 0; j < store->get_num_cols(); j++) {
+		for (size_t i = 1; i < store->get_num_rows(); i++)
+			assert(store->get<int>(i, j) == res->get<int>(i, j) - res->get<int>(i - 1, j));
+		assert(store->get<int>(0, j) == res->get<int>(0, j));
+	}
+
+	// Test on virtual local matrix
+	if (store->store_layout() == matrix_layout_t::L_COL)
+		store = local_matrix_store::ptr(new ltest_col_matrix_store(
+					local_col_matrix_store::cast(store)));
+	else
+		store = local_matrix_store::ptr(new ltest_row_matrix_store(
+					local_row_matrix_store::cast(store)));
+	cum(*store, NULL, op, matrix_margin::MAR_ROW,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
+	for (size_t i = 0; i < store->get_num_rows(); i++) {
+		for (size_t j = 1; j < store->get_num_cols(); j++)
+			assert(store->get<int>(i, j) == res->get<int>(i, j) - res->get<int>(i, j - 1));
+		assert(store->get<int>(i, 0) == res->get<int>(i, 0));
+	}
+
+	cum(*store, NULL, op, matrix_margin::MAR_COL,
+			store->is_wide() ? detail::part_dim_t::PART_DIM2 : detail::part_dim_t::PART_DIM1,
+			*res);
+	for (size_t j = 0; j < store->get_num_cols(); j++) {
+		for (size_t i = 1; i < store->get_num_rows(); i++)
+			assert(store->get<int>(i, j) == res->get<int>(i, j) - res->get<int>(i - 1, j));
+		assert(store->get<int>(0, j) == res->get<int>(0, j));
+	}
+}
+
+void test_cum(size_t long_dim)
+{
+	printf("test cumsum on local matrix, long dim: %ld\n", long_dim);
+	// Test on local buffer matrix.
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1)));
+
+	// Test on local reference matrix to a matrix stored non-contiguously.
+	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	std::vector<char *> cols(col_store->get_num_cols());
+	for (size_t i = 0; i < cols.size(); i++)
+		cols[i] = col_store->get_col(i);
+	std::vector<char *> rows(row_store->get_num_rows());
+	for (size_t i = 0; i < rows.size(); i++)
+		rows[i] = row_store->get_row(i);
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_ref_col_matrix_store(
+					cols, 0, 0, col_store->get_num_rows(), cols.size(),
+					get_scalar_type<int>(), -1)));
+	test_cum1(std::shared_ptr<local_matrix_store>(new local_ref_row_matrix_store(
+					rows, 0, 0, rows.size(), row_store->get_num_cols(),
+					get_scalar_type<int>(), -1)));
+}
+
 int main()
 {
+	test_cum(10000);
 	test_resize(10000);
 	test_resize_compute();
 	test_multiply(1000);

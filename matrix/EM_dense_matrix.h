@@ -51,7 +51,7 @@ class EM_matrix_store: public matrix_store, public EM_object
 	 * the same data id.
 	 */
 	const size_t mat_id;
-	const size_t data_id;
+	const data_id_t::ptr data_id;
 
 	matrix_layout_t layout;
 	file_holder::ptr holder;
@@ -84,7 +84,8 @@ class EM_matrix_store: public matrix_store, public EM_object
 			safs::safs_file_group::ptr group);
 	EM_matrix_store(file_holder::ptr holder, io_set::ptr ios, size_t nrow,
 			size_t ncol, size_t orig_nrow, size_t orig_ncol,
-			matrix_layout_t layout, const scalar_type &type, size_t _data_id);
+			matrix_layout_t layout, const scalar_type &type,
+			data_id_t::ptr data_id = data_id_t::create(mat_counter++));
 	void _write_portion_async(
 			std::shared_ptr<const local_matrix_store> portion,
 			off_t start_row, off_t start_col);
@@ -100,7 +101,7 @@ public:
 			size_t ncol, matrix_layout_t layout, const scalar_type &type,
 			safs::safs_file_group::ptr group = NULL) {
 		return ptr(new EM_matrix_store(holder, ios, nrow, ncol, nrow, ncol,
-					layout, type, mat_counter++));
+					layout, type));
 	}
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
@@ -127,8 +128,19 @@ public:
 					get_num_rows(), get_num_cols(), orig_num_rows, orig_num_cols,
 					store_layout(), get_type(), data_id));
 	}
+
+	virtual void inc_dag_ref(size_t id) {
+		data_id->inc_ref(id);
+	}
+	virtual void reset_dag_ref() {
+		data_id->reset_ref();
+	}
+	virtual size_t get_dag_ref() const {
+		return data_id->get_ref();
+	}
+
 	virtual size_t get_data_id() const {
-		return data_id;
+		return data_id->get_id();
 	}
 
 	virtual void set_prefetches(size_t num, std::pair<size_t, size_t> range) {
@@ -138,7 +150,7 @@ public:
 
 	virtual std::unordered_map<size_t, size_t> get_underlying_mats() const {
 		std::unordered_map<size_t, size_t> ret;
-		ret.insert(std::pair<size_t, size_t>(data_id,
+		ret.insert(std::pair<size_t, size_t>(data_id->get_id(),
 					get_num_rows() * get_num_cols()));
 		return ret;
 	}
