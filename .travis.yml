@@ -13,7 +13,6 @@ compiler:
 - g++
 script:
 - mkdir -p build && cd build && cmake .. && make && cd ..
-- sudo ./install_FlashR.sh
 - make clean; make
 - cd libsafs/unit-test && make test && cd ../..
 - cd flash-graph/unit-test && make test
