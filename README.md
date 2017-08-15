@@ -1,9 +1,9 @@
-FlashX is a collection of big data analytics tools that perform data analytics
-in the form of graphs and matrices. As such, FlashX covers a large range of
-data analysis tasks. They utilize solid-state drives (SSDs) to
+This repo contains the core of the FlashX project, which provides big data analytics tools
+that perform data analytics in the form of graphs and matrices. As such, FlashX covers
+a large range of data analysis tasks. All tools in FlashX utilize solid-state drives (SSDs) to
 scale data analysis to large datasets in a single machine, while achieving
 lightning speed (SSD-based solutions run almost as fast as in-memory solutions).
-It has three main components: FlashGraph, FlashMatrix and FlashR.
+The main components in FlashX are FlashGraph and FlashMatrix.
 
 FlashGraph
 ===========
@@ -27,17 +27,6 @@ generalized matrix operations on sparse matrices and dense matrices to express
 varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
-
-FlashR
-===========
-
-FlashR enhances the R framework to analyze data at the lightning speed and
-at a scale of terabytes. It provides parallelized versions of the matrix functions
-in the R framework (mainly the ones in the base package). As such, R users
-can execute existing R code in FlashR with almost no modification and get
-performance comparable to optimized C implementations.
-The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
-shows all of the features in FlashR.
 
 [Documentation](https://flashxio.github.io/FlashX-doc/)
 ========
