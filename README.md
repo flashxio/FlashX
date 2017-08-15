@@ -28,6 +28,18 @@ varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
 
+Programming interface
+===========
+FlashX exposes C++, R and Python programming interface. The R and Python programming interface
+is highly compatible with the R base package and NumPy. As such, users can execute
+R and Python machine learning code on FlashX with little or no modification. Our goal is to
+eventually make the R and Python interface fully compatible with the ones in native R and NumPy.
+
+* [FlashR](https://github.com/flashxio/FlashR) provides many matrix operations in the R base package.
+* [FlashGraphR](https://github.com/flashxio/FlashGraphR) exposes many graph algorithms in FlashGraph to R.
+* [FlashR-learn](https://github.com/flashxio/FlashR-learn) is a machine learning library implemented completely with FlashR.
+* [FlashPy](https://github.com/flashxio/FlashPy) provides many array operations in NumPy.
+
 [Documentation](https://flashxio.github.io/FlashX-doc/)
 ========
 
