@@ -13,7 +13,7 @@ fi
 make
 cd ..
 
-R CMD build Rpkg
+R CMD build FlashR
 version=`R --version | grep "R version" | awk '{print $3}' | awk -F. '{print $1 "." $2}'`
 if [ -d ~/R ]; then
 	path=`find ~/R -name Rcpp.h | grep ${version}`
