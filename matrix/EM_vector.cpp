@@ -271,6 +271,9 @@ bool EM_vec_store::reserve(size_t num_eles)
 	// The only problem is that the data will be scattered across the disks
 	// if we don't allocate space in advance.
 	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
+	// TODO there is a bug if we resize the physical files.
+	// We don't have to physically resize the file. Maybe it's a little slower.
+#if 0
 	bool ret = f.resize(new_size);
 	if (!ret)
 		return false;
@@ -278,6 +281,9 @@ bool EM_vec_store::reserve(size_t num_eles)
 		file_size = new_size;
 		return true;
 	}
+#endif
+	file_size = new_size;
+	return true;
 }
 
 bool EM_vec_store::resize(size_t new_length)
