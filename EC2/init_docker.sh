@@ -2,6 +2,7 @@
 
 dev_files=`ls /dev/nvme*n1`
 i=1
+rm -f /FlashX/data_files.txt
 for file in $dev_files
 do
 	echo $file

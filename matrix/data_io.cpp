@@ -305,7 +305,11 @@ file_io::ptr file_io::create_local(const std::string name)
 
 file_io::ptr file_io::create_gz(const std::string name)
 {
+#ifdef USE_GZIP
 	return gz_file_io::create(name);
+#else
+	return file_io::ptr();
+#endif
 }
 
 text_io::ptr text_io::create(const std::string &file_name)

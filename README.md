@@ -1,9 +1,9 @@
-FlashX is a collection of big data analytics tools that perform data analytics
-in the form of graphs and matrices. As such, FlashX covers a large range of
-data analysis tasks. They utilize solid-state drives (SSDs) to
+This repo contains the core of the FlashX project, which provides big data analytics tools
+that perform data analytics in the form of graphs and matrices. As such, FlashX covers
+a large range of data analysis tasks. All tools in FlashX utilize solid-state drives (SSDs) to
 scale data analysis to large datasets in a single machine, while achieving
 lightning speed (SSD-based solutions run almost as fast as in-memory solutions).
-It has three main components: FlashGraph, FlashMatrix and FlashR.
+The main components in FlashX are FlashGraph and FlashMatrix.
 
 FlashGraph
 ===========
@@ -28,16 +28,17 @@ varieties of data mining and machine learning algorithms. For certain graph
 algorithms such as PageRank, which can be formulated as sparse matrix
 multiplication, FlashMatrix is able to significantly outperform FlashGraph.
 
-FlashR
+Programming interface
 ===========
+FlashX exposes C++, R and Python programming interface. The R and Python programming interface
+is highly compatible with the R base package and NumPy. As such, users can execute
+R and Python machine learning code on FlashX with little or no modification. Our goal is to
+eventually make the R and Python interface fully compatible with the ones in native R and NumPy.
 
-FlashR enhances the R framework to analyze data at the lightning speed and
-at a scale of terabytes. It provides parallelized versions of the matrix functions
-in the R framework (mainly the ones in the base package). As such, R users
-can execute existing R code in FlashR with almost no modification and get
-performance comparable to optimized C implementations.
-The [programming tutorial](https://github.com/icoming/FlashX/wiki/FlashR-programming-tutorial)
-shows all of the features in FlashR.
+* [FlashR](https://github.com/flashxio/FlashR) provides many matrix operations in the R base package.
+* [FlashGraphR](https://github.com/flashxio/FlashGraphR) exposes many graph algorithms in FlashGraph to R.
+* [FlashR-learn](https://github.com/flashxio/FlashR-learn) is a machine learning library implemented completely with FlashR.
+* [FlashPy](https://github.com/flashxio/FlashPy) provides many array operations in NumPy.
 
 [Documentation](https://flashxio.github.io/FlashX-doc/)
 ========
