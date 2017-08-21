@@ -28,6 +28,8 @@ RUN if [ `numactl -H | grep "nodes" | awk '{print $2}'` -gt 1 ]; then apt-get in
 RUN apt-get install -y wget vim
 
 RUN git clone https://github.com/flashxio/FlashX.git
+RUN git clone https://github.com/flashxio/FlashR.git
+RUN git clone https://github.com/flashxio/FlashGraphR.git
 
 WORKDIR /FlashX
 RUN mkdir build
@@ -38,32 +40,42 @@ RUN make
 
 ####Install and compile R
 #https://www.digitalocean.com/community/tutorials/how-to-set-up-r-on-ubuntu-14-04
+RUN apt-get update
 RUN apt-get install -y r-base
 
-#run R >> intstall igraph install.packages("igraph")
-
+# Install Dependency
 RUN apt-get install -y libcurl4-openssl-dev libssl-dev
 RUN R -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos = 'http://cran.rstudio.com/')"
 RUN R -e "install.packages('Rcpp', repos = 'http://cran.rstudio.com/')"
 RUN R -e "install.packages('RSpectra', repos = 'http://cran.rstudio.com/')"
 RUN R -e "require(devtools); install_version('igraph', version='1.0.1', repos='https://cran.rstudio.org/')"
 
-
+# Install R packages in FlashX
 WORKDIR /FlashX
+RUN ln -sf ../FlashR FlashR
+RUN ln -sf ../FlashGraphR FlashGraphR
 RUN ./install_FlashR.sh
 RUN ./install_FlashGraphR.sh
+RUN R -e "install.packages('lbfgs', repos = 'http://cran.rstudio.com/')"
+RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 
 #check to see if it's there ^^^?
 
-####R finished####
-
-RUN apt-get install -y python-pip
+# Install Python packages.
+RUN apt-get install -y python-pip python-numpy python-scipy cython
 RUN pip install --upgrade pip
 RUN pip install jupyter
-RUN R -e "devtools::install_github('flashxio/FlashR-learn')"
 RUN R -e "devtools::install_github('IRkernel/IRkernel')"
 RUN R -e "IRkernel::installspec()"
 RUN R -e "IRkernel::installspec(user = FALSE)"
+
+RUN git clone https://github.com/flashxio/FlashPy.git
+WORKDIR /FlashX/FlashPy
+RUN python setup_sep.py install
+WORKDIR /FlashX
+
+RUN git clone https://github.com/flashxio/scikit-learn.git
+RUN mv scikit-learn/fplearn/ /usr/local/lib/python2.7/dist-packages/
 
 ###FLASHX CONF END ###
 
