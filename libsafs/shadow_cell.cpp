@@ -169,4 +169,3 @@ void embedded_queue<T, SIZE>::remove(int idx)
 template class embedded_queue<shadow_page, NUM_SHADOW_PAGES>;
 
 #endif
-

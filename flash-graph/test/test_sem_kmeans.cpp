@@ -22,8 +22,8 @@
 #include "../../../../libkcommon/clusters.hpp"
 #include "../../../../libkcommon/io.hpp"
 
-namespace kpmbase = kpmeans::base;
-namespace kpmprune = kpmeans::prune;
+namespace kpmbase = knor::base;
+namespace kpmprune = knor::prune;
 
 static kpmbase::prune_clusters::ptr g_clusters;
 constexpr unsigned NCOL = 5;

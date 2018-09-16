@@ -21,8 +21,8 @@
 #include "../../../../libkcommon/io.hpp"
 #include "knors_index.h"
 
-namespace kpmbase = kpmeans::base;
-namespace kpmeans { namespace utils {
+namespace kpmbase = knor::base;
+namespace knor { namespace utils {
 
 format_converter::format_converter(const std::string infile,
         const layout inlayout, size_t nrow, size_t ncol) {
@@ -130,4 +130,4 @@ void format_converter::write(const std::string outfile,
     }
     of.close();
 }
-} } // End namespace kpmeans::util
+} } // End namespace knor::util

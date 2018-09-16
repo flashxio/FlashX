@@ -19,7 +19,7 @@
 
 #include "convert.hpp"
 
-namespace kpmutil = kpmeans::utils;
+namespace kpmutil = knor::utils;
 
 int main(int argc, char* argv[]) {
     if (argc < 7) {

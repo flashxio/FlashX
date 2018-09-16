@@ -47,8 +47,8 @@
 
 using namespace fg;
 
-namespace kpmbase = kpmeans::base;
-namespace kpmprune = kpmeans::prune;
+namespace kpmbase = knor::base;
+namespace kpmprune = knor::prune;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;

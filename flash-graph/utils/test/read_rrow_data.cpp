@@ -49,7 +49,7 @@ int main(int argc, char* argv []) {
         assert(fread(&(in[0]), sizeof(double), num_cols, f));
 
         printf("Row: %lu ==> ", i);
-        kpmeans::base::print_arr<double>(in, num_cols);
+        knor::base::print_arr<double>(in, num_cols);
     }
     fclose(f);
 

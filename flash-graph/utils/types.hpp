@@ -20,8 +20,8 @@
 #ifndef __KPM_UTILS_TYPES_HPP__
 #define __KPM_UTILS_TYPES_HPP__
 
-namespace kpmeans { namespace utils {
+namespace knor { namespace utils {
 enum layout{ BIN_RM, BIN_CM, TEXT, SEM, INVALID }; // RM=Row Major, CM=Col Major
 
-} } // End namespace kpmeans::utils
+} } // End namespace knor::utils
 #endif

@@ -24,7 +24,7 @@
 #include <string>
 #include "types.hpp"
 
-namespace kpmeans { namespace utils {
+namespace knor { namespace utils {
 
 class format_converter {
 

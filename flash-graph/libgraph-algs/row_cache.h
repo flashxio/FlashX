@@ -33,7 +33,7 @@
 #include "../../../../libkcommon/util.hpp"
 #include "../../../../libkcommon/io.hpp"
 
-namespace kpmbase = kpmeans::base;
+namespace kpmbase = knor::base;
 
 namespace {
     template <typename T>

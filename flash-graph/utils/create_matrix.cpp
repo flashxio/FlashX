@@ -30,7 +30,7 @@
 #include "types.hpp"
 #include "knors_index.h"
 
-namespace kpmutil = kpmeans::utils;
+namespace kpmutil = knor::utils;
 constexpr unsigned rand_min = 1;
 constexpr unsigned rand_max = 5;
 
