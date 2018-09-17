@@ -22,10 +22,10 @@
 #include "../../../../libkcommon/clusters.hpp"
 #include "../../../../libkcommon/io.hpp"
 
-namespace kpmbase = knor::base;
-namespace kpmprune = knor::prune;
+namespace kbase = knor::base;
+namespace kprune = knor::prune;
 
-static kpmbase::prune_clusters::ptr g_clusters;
+static kbase::prune_clusters::ptr g_clusters;
 constexpr unsigned NCOL = 5;
 
 std::vector<double> test_init_g_clusters(const size_t k=4) {
@@ -39,16 +39,16 @@ std::vector<double> test_init_g_clusters(const size_t k=4) {
 
     const std::vector<double> v {1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
         6E-12, -23423.7, .82342342432, 93., 10, -.2342, -23.342, -.000003232, -3.234232, 1};
-    g_clusters = kpmbase::prune_clusters::create(k, NCOL, v); // ctor & init
+    g_clusters = kbase::prune_clusters::create(k, NCOL, v); // ctor & init
 
     printf("Set clusters: \n");
     g_clusters->print_means();
 
     for (size_t cl = 0; cl < k; cl++) {
         printf("c:%lu =>\n", cl);
-        kpmbase::print_arr(&(v[cl*NCOL]), NCOL);
+        kbase::print_arr(&(v[cl*NCOL]), NCOL);
 
-        assert(kpmbase::eq_all<double>(&v[0], &(g_clusters->get_means()[0]), NCOL*k));
+        assert(kbase::eq_all<double>(&v[0], &(g_clusters->get_means()[0]), NCOL*k));
     }
     printf("Exiting test_init_g_clusters!\n");
     return v;
@@ -58,32 +58,32 @@ void test_eucl() {
     // Positive
     std::vector<double> v1 {1, 2, 3, 4, 5};
     std::vector<double> v2 {6, 7, 8, 9, 10};
-    assert(kpmbase::eucl_dist(&v1[0], &v2[0], NCOL) == sqrt(125.0));
-    assert(kpmbase::eucl_dist(&v2[0], &v1[0], NCOL) == sqrt(125.0));
+    assert(kbase::eucl_dist(&v1[0], &v2[0], NCOL) == sqrt(125.0));
+    assert(kbase::eucl_dist(&v2[0], &v1[0], NCOL) == sqrt(125.0));
 
     // Neg-pos, Pos-neg
     std::vector<double> v3 {6E-12, -23423.7, .82342342432, 93., 10};
-    assert(ceil(kpmbase::eucl_dist(&v1[0], &v3[0], NCOL)) ==
+    assert(ceil(kbase::eucl_dist(&v1[0], &v3[0], NCOL)) ==
             ceil(sqrt(548771372.227)));
-    assert(ceil(kpmbase::eucl_dist(&v3[0], &v1[0], NCOL))
+    assert(ceil(kbase::eucl_dist(&v3[0], &v1[0], NCOL))
             == ceil(sqrt(548771372.227)));
 
     // No-op
     std::vector<double> v4 {0, 0, 0, 0, 0};
-    assert(kpmbase::eucl_dist(&v1[0], &v4[0], NCOL) ==
-            kpmbase::eucl_dist(&v4[0], &v1[0], NCOL));
-    assert(kpmbase::eucl_dist(&v4[0], &v1[0], NCOL) == sqrt(55));
+    assert(kbase::eucl_dist(&v1[0], &v4[0], NCOL) ==
+            kbase::eucl_dist(&v4[0], &v1[0], NCOL));
+    assert(kbase::eucl_dist(&v4[0], &v1[0], NCOL) == sqrt(55));
 
     // Neg-neg
     std::vector<double> v5 {-.2342, -23.342, -.000003232, -3.234232, 1};
-    assert(ceil(kpmbase::eucl_dist(&v5[0], &v3[0], NCOL))
+    assert(ceil(kbase::eucl_dist(&v5[0], &v3[0], NCOL))
             == ceil(sqrt(547586097.2884537)));
-    assert(ceil(kpmbase::eucl_dist(&v3[0], &v5[0], NCOL))
+    assert(ceil(kbase::eucl_dist(&v3[0], &v5[0], NCOL))
             == ceil(sqrt(547586097.2884537)));
 
     double arr1[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     double arr2[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    assert(kpmbase::eucl_dist(&arr1[0], &arr2[5], NCOL) == sqrt(125));
+    assert(kbase::eucl_dist(&arr1[0], &arr2[5], NCOL) == sqrt(125));
 
     printf("Exiting test_eucl ==> ");
 }
@@ -91,7 +91,7 @@ void test_eucl() {
 void test_dist_matrix() {
     constexpr unsigned k = 4;
     test_init_g_clusters();
-    kpmprune::dist_matrix::ptr dm = kpmprune::dist_matrix::create(k);
+    kprune::dist_matrix::ptr dm = kprune::dist_matrix::create(k);
 
     /* Test compute_dist */
     dm->compute_dist(g_clusters, NCOL);

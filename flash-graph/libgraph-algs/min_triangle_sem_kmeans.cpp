@@ -32,28 +32,28 @@ using namespace fg;
 namespace {
 
 #if KM_TEST
-    static kpmbase::prune_stats::ptr g_prune_stats;
+    static kbase::prune_stats::ptr g_prune_stats;
     static std::vector<double> g_gb_req_iter; // GB req per iter
     static std::vector<size_t> g_gb_obt_iter; // GB data obtained / iter
     static std::vector<size_t> g_cache_hits_iter; // cache hits / iter
-    static kpmbase::activation_counter::ptr acntr; // How many are active per iteration
-    static kpmbase::active_counter::ptr ac;
+    static kbase::activation_counter::ptr acntr; // How many are active per iteration
+    static kbase::active_counter::ptr ac;
 #endif
     static size_t g_io_reqs = 0;
 
     static bool g_prune_init = false;
-    static kpmprune::dist_matrix::ptr g_cluster_dist;
-    static kpmbase::prune_clusters::ptr g_clusters; // cluster means/centers
+    static kprune::dist_matrix::ptr g_cluster_dist;
+    static kbase::prune_clusters::ptr g_clusters; // cluster means/centers
 
     static unsigned NUM_ROWS;
     static unsigned g_num_changed = 0;
     static struct timeval start, end;
-    static kpmbase::init_type_t g_init; // May have to use
+    static kbase::init_type_t g_init; // May have to use
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kpmbase::kms_stage_t g_stage; // What phase of the algo we're in
-    static kpmbase::dist_type_t g_dist_type;
+    static kbase::kms_stage_t g_stage; // What phase of the algo we're in
+    static kbase::dist_type_t g_dist_type;
     static unsigned g_iter;
 
     static partition_cache<double>::ptr g_row_cache = nullptr;
@@ -93,10 +93,10 @@ namespace {
 
         void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
-                case kpmbase::kms_stage_t::INIT:
+                case kbase::kms_stage_t::INIT:
                     run_init(prog, vertex, g_init);
                     break;
-                case kpmbase::kms_stage_t::ESTEP:
+                case kbase::kms_stage_t::ESTEP:
                     run_distance(prog, vertex);
                     break;
                 default:
@@ -109,9 +109,9 @@ namespace {
 
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex,
-                kpmbase::init_type_t init);
+                kbase::init_type_t init);
         void run_init(vertex_program& prog, const double* row,
-                kpmbase::init_type_t init);
+                kbase::init_type_t init);
 
 
         void run_distance(vertex_program& prog, const page_vertex& vertex);
@@ -119,13 +119,13 @@ namespace {
     };
 
     class kmeans_vertex_program:
-        public base_kmeans_vertex_program<kmeans_vertex, kpmbase::clusters> {
+        public base_kmeans_vertex_program<kmeans_vertex, kbase::clusters> {
 
         private:
         graph_engine::ptr mat;
         unsigned num_reqs;
 #if KM_TEST
-        kpmbase::prune_stats::ptr pt_ps;
+        kbase::prune_stats::ptr pt_ps;
 #endif
 
         public:
@@ -135,7 +135,7 @@ namespace {
             this->mat = mat;
             this->num_reqs = 0;
 #if KM_TEST
-            pt_ps = kpmbase::prune_stats::create(NUM_ROWS, K);
+            pt_ps = kbase::prune_stats::create(NUM_ROWS, K);
 #endif
         }
 
@@ -158,7 +158,7 @@ namespace {
         }
 
 #if KM_TEST
-        kpmbase::prune_stats::ptr get_ps() { return pt_ps; }
+        kbase::prune_stats::ptr get_ps() { return pt_ps; }
 #endif
         void num_requests_pp() {
             num_reqs++;
@@ -193,7 +193,7 @@ namespace {
                     g_clusters->print_means();
 #endif
 
-                    kpmbase::print_vector(g_num_members_v);
+                    kbase::print_vector(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                         << g_num_changed << " **\n";
@@ -323,7 +323,7 @@ namespace {
                     pt_cuml_sum_peq(get_dist());
                 return;
             }
-        } else if (g_stage != kpmbase::kms_stage_t::INIT) { // Always get here when not INIT
+        } else if (g_stage != kbase::kms_stage_t::INIT) { // Always get here when not INIT
 
             if (!g_converged && (g_iter < g_max_iters))
                 prog.activate_vertices(&id, 1); // Activate for next iter
@@ -357,10 +357,10 @@ namespace {
 #endif
             if (row) { // row == NULL is a cache miss
                 switch (g_stage) {
-                    case kpmbase::kms_stage_t::INIT:
+                    case kbase::kms_stage_t::INIT:
                         run_init(prog, row, g_init);
                         break;
-                    case kpmbase::kms_stage_t::ESTEP:
+                    case kbase::kms_stage_t::ESTEP:
                         run_distance(prog, row);
                         break;
                     default:
@@ -370,7 +370,7 @@ namespace {
             }
         }
 
-        if (g_stage != kpmbase::kms_stage_t::INIT)
+        if (g_stage != kbase::kms_stage_t::INIT)
             ((kmeans_vertex_program&) prog).num_requests_pp();
 
         request_vertices(&id, 1);
@@ -406,9 +406,9 @@ namespace {
     }
 
     void kmeans_vertex::run_init(vertex_program& prog, const double* row,
-            kpmbase::init_type_t init) {
+            kbase::init_type_t init) {
         switch (g_init) {
-            case kpmbase::init_type_t::RANDOM:
+            case kbase::init_type_t::RANDOM:
                 {
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
                     unsigned new_cluster_id = random() % K;
@@ -420,7 +420,7 @@ namespace {
                     vprog.add_member(get_cluster_id(), row);
                 }
                 break;
-            case kpmbase::init_type_t::FORGY:
+            case kbase::init_type_t::FORGY:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
 #if KM_TEST
@@ -429,7 +429,7 @@ namespace {
                     g_clusters->set_mean(row, g_init_hash[my_id]);
                 }
                 break;
-            case kpmbase::init_type_t::PLUSPLUS:
+            case kbase::init_type_t::PLUSPLUS:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
                     if (g_kmspp_stage == ADDMEAN) {
@@ -451,7 +451,7 @@ namespace {
                                     get_cluster_id())) {
 
                         } else {
-                            double _dist = kpmbase::dist_comp_raw(
+                            double _dist = kbase::dist_comp_raw(
                                     row, &(g_clusters->get_means()
                                         [g_kmspp_cluster_idx*NUM_COLS]),
                                     NUM_COLS, g_dist_type);
@@ -488,9 +488,9 @@ namespace {
 #endif
 
     void kmeans_vertex::run_init(vertex_program& prog,
-            const page_vertex &vertex, kpmbase::init_type_t init) {
+            const page_vertex &vertex, kbase::init_type_t init) {
         switch (g_init) {
-            case kpmbase::init_type_t::RANDOM:
+            case kbase::init_type_t::RANDOM:
                 {
                     unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
@@ -504,7 +504,7 @@ namespace {
                     vprog.add_member(get_cluster_id(), count_it);
                 }
                 break;
-            case kpmbase::init_type_t::FORGY:
+            case kbase::init_type_t::FORGY:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
 #if KM_TEST
@@ -515,7 +515,7 @@ namespace {
                     g_clusters->set_mean(count_it, g_init_hash[my_id]);
                 }
                 break;
-            case kpmbase::init_type_t::PLUSPLUS:
+            case kbase::init_type_t::PLUSPLUS:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
                     data_seq_iter count_it = ((const page_row&)vertex).
@@ -572,7 +572,7 @@ namespace {
 
         if (g_prune_init) {
             for (unsigned cl = 0; cl < K; cl++) {
-                double udist = kpmbase::dist_comp_raw(
+                double udist = kbase::dist_comp_raw(
                         row, &(g_clusters->get_means()[cl*NUM_COLS]),
                         NUM_COLS, g_dist_type);
                 if (udist < get_dist()) {
@@ -591,7 +591,7 @@ namespace {
 
                 // If not recalculated to my current cluster .. do so to tighten bounds
                 if (!recalculated) {
-                    double udist = kpmbase::dist_comp_raw(row, &(g_clusters->get_means()
+                    double udist = kbase::dist_comp_raw(row, &(g_clusters->get_means()
                                 [get_cluster_id()*NUM_COLS]), NUM_COLS, g_dist_type);
                     set_dist(udist);
                     recalculated = true;
@@ -605,7 +605,7 @@ namespace {
                 }
 
                 // Track 5
-                double jdist = kpmbase::dist_comp_raw(
+                double jdist = kbase::dist_comp_raw(
                         row, &(g_clusters->get_means()[cl*NUM_COLS]),
                         NUM_COLS, g_dist_type);
                 if (jdist < get_dist()) {
@@ -747,7 +747,7 @@ namespace {
                 g_clusters->unfinalize(cl);
 #if VERBOSE
                 std::cout << "Unfinalized g_clusters[thd] ==> ";
-                kpmbase::print_vector<double>(g_clusters[cl]->get_mean());
+                kbase::print_vector<double>(g_clusters[cl]->get_mean());
 #endif
             }
         }
@@ -791,7 +791,7 @@ namespace {
         for (unsigned thd = 0; thd < kms_clust_progs.size(); thd++) {
             kmeans_vertex_program::ptr kms_prog =
                 kmeans_vertex_program::cast2(kms_clust_progs[thd]);
-            kpmbase::clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
+            kbase::clusters::ptr pt_clusters = kms_prog->get_pt_clusters();
             g_num_changed += kms_prog->get_pt_changed();
 
             g_io_reqs += kms_prog->get_num_reqs();
@@ -811,7 +811,7 @@ namespace {
             g_clusters->finalize(cl);
             num_members_v[cl] = g_clusters->get_num_members(cl);
 
-            g_clusters->set_prev_dist(kpmbase::eucl_dist(&(
+            g_clusters->set_prev_dist(kbase::eucl_dist(&(
                             g_clusters->get_means()[cl*NUM_COLS]),
                         &(g_clusters->get_prev_means()[cl*NUM_COLS]),
                         NUM_COLS), cl);
@@ -922,7 +922,7 @@ namespace fg
 {
     void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
-            kpmbase::kmeans_t& ret,
+            kbase::kmeans_t& ret,
             const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers,
             const double cache_size_gb, const unsigned rc_update_start_interval) {
 #ifdef PROFILER
@@ -966,15 +966,15 @@ namespace fg
         BOOST_LOG_TRIVIAL(info) << "Matrix has rows = " << NUM_ROWS << ", cols = " <<
             NUM_COLS;
 #if KM_TEST
-        g_prune_stats = kpmbase::prune_stats::create(NUM_ROWS, K);
-        acntr = kpmbase::activation_counter::create(g_nthread);
+        g_prune_stats = kbase::prune_stats::create(NUM_ROWS, K);
+        acntr = kbase::activation_counter::create(g_nthread);
 #endif
 #if VERBOSE
         ac = active_counter::create(NUM_ROWS);
 #endif
 
         /*** Begin VarInit of data structures ***/
-        g_dist_type = kpmbase::dist_type_t::EUCL; // TODO: Add to params
+        g_dist_type = kbase::dist_type_t::EUCL; // TODO: Add to params
 
         if (cache_size_gb > 0) {
             g_row_cache_size = (cache_size_gb*(1024*1024*1024))/
@@ -994,7 +994,7 @@ namespace fg
           g_data.resize(NUM_ROWS);*/
         // End caching
 
-        g_clusters = kpmbase::prune_clusters::create(K, NUM_COLS);
+        g_clusters = kbase::prune_clusters::create(K, NUM_COLS);
         if (centers)
             g_clusters->set_mean(*centers);
 
@@ -1002,15 +1002,15 @@ namespace fg
 
         BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
         // Distance to everyone other than yourself
-        g_cluster_dist = kpmprune::dist_matrix::create(K);
+        g_cluster_dist = kprune::dist_matrix::create(K);
         /*** End VarInit ***/
 
         if (!centers) {
-            g_stage = kpmbase::kms_stage_t::INIT;
+            g_stage = kbase::kms_stage_t::INIT;
 
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
-                g_init = kpmbase::init_type_t::RANDOM;
+                g_init = kbase::init_type_t::RANDOM;
 
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(
@@ -1025,7 +1025,7 @@ namespace fg
             }
             if (init == "forgy") {
                 BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
-                g_init = kpmbase::init_type_t::FORGY;
+                g_init = kbase::init_type_t::FORGY;
 
                 std::uniform_int_distribution<vertex_id_t>
                                 distribution(0, NUM_ROWS-1);
@@ -1045,7 +1045,7 @@ namespace fg
                 // FIXME: Wasteful
                 all_vertices.resize(NUM_ROWS);
                 std::iota(all_vertices.begin(), all_vertices.end(), 0);
-                g_init = kpmbase::init_type_t::PLUSPLUS;
+                g_init = kbase::init_type_t::PLUSPLUS;
 
                 // Init g_kmspp_distance to max distance
                 g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
@@ -1091,7 +1091,7 @@ namespace fg
         if (init == "forgy" || init == "kmeanspp" || centers)
             g_prune_init = true; // set
 
-        g_stage = kpmbase::kms_stage_t::ESTEP;
+        g_stage = kbase::kms_stage_t::ESTEP;
         if (max_iters > 0) {
             mat->start_all(vertex_initializer::ptr(),
                     vertex_program_creater::ptr(
@@ -1106,18 +1106,18 @@ namespace fg
 #if KM_TEST
         g_prune_stats->get_stats();
         BOOST_LOG_TRIVIAL(info) << "\nGBytes requested per iteration: ";
-        kpmbase::print_vector<double>(g_gb_req_iter, 200);
+        kbase::print_vector<double>(g_gb_req_iter, 200);
 
         std::vector<double> v = per_iter_from_agg_io(g_gb_obt_iter);
         BOOST_LOG_TRIVIAL(info) << "\nGBytes obtained per iteration: ";
-        kpmbase::print_vector<double>(v, 200);
+        kbase::print_vector<double>(v, 200);
 
         std::vector<size_t> cv = per_iter_from_agg_cache(g_cache_hits_iter);
         BOOST_LOG_TRIVIAL(info) << "\nRow-Cache hits per iteration: ";
-        kpmbase::print_vector<size_t>(cv, 200);
+        kbase::print_vector<size_t>(cv, 200);
 
         BOOST_LOG_TRIVIAL(info) << "\nActive count per iteration: ";
-        kpmbase::print_vector<size_t>(acntr->get_active_count_per_iter(), 200);
+        kbase::print_vector<size_t>(acntr->get_active_count_per_iter(), 200);
 #endif
 #if VERBOSE
         ac->write_consolidated("consol_activation_by_iter.csv", NUM_ROWS);
@@ -1143,7 +1143,7 @@ namespace fg
         }
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-        kpmbase::print_vector(g_num_members_v);
+        kbase::print_vector(g_num_members_v);
 
         std::vector<unsigned> mv(NUM_ROWS);
         get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);

@@ -98,11 +98,11 @@ void run_sem_kmeans(FG_graph::ptr graph, const unsigned k,
         BOOST_LOG_TRIVIAL(info) << "\nReading centers from disk at loc '" << init_centers_fn
             << "' ...";
         BOOST_VERIFY(centers = new std::vector<double>(k*graph->get_dim()));
-        kpmbase::bin_io<double> br(init_centers_fn, k, graph->get_dim());
+        kbase::bin_io<double> br(init_centers_fn, k, graph->get_dim());
         br.read(centers);
     }
 
-    kpmbase::kmeans_t ret;
+    kbase::kmeans_t ret;
 
     if (no_prune) {
          compute_sem_kmeans(graph, k, init, max_iters, tolerance,

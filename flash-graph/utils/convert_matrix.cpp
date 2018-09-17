@@ -19,7 +19,7 @@
 
 #include "convert.hpp"
 
-namespace kpmutil = knor::utils;
+namespace kutil = knor::utils;
 
 int main(int argc, char* argv[]) {
     if (argc < 7) {
@@ -37,25 +37,25 @@ int main(int argc, char* argv[]) {
     size_t nrow = atol(argv[5]);
     size_t ncol = atol(argv[6]);
 
-    kpmutil::layout in_layout =
-        in_format == "knori" ? kpmutil::BIN_RM :
-        in_format == "knord" ? kpmutil::BIN_RM :
-        in_format == "knors" ? kpmutil::SEM :
-        in_format == "text" ? kpmutil::TEXT : kpmutil::INVALID;
+    kutil::layout in_layout =
+        in_format == "knori" ? kutil::BIN_RM :
+        in_format == "knord" ? kutil::BIN_RM :
+        in_format == "knors" ? kutil::SEM :
+        in_format == "text" ? kutil::TEXT : kutil::INVALID;
 
-    kpmutil::layout out_layout =
-        out_format == "knori" ? kpmutil::BIN_RM :
-        out_format == "knord" ? kpmutil::BIN_RM :
-        out_format == "knors" ? kpmutil::SEM :
-        out_format == "text" ? kpmutil::TEXT : kpmutil::INVALID;
+    kutil::layout out_layout =
+        out_format == "knori" ? kutil::BIN_RM :
+        out_format == "knord" ? kutil::BIN_RM :
+        out_format == "knors" ? kutil::SEM :
+        out_format == "text" ? kutil::TEXT : kutil::INVALID;
 
-    if (in_layout != kpmutil::TEXT && argc != 7) {
+    if (in_layout != kutil::TEXT && argc != 7) {
         fprintf(stderr, "Must provide `nrow` and `ncol` for "
                 " format %s\n", in_format.c_str());
         exit(-1);
     }
 
-    kpmutil::format_converter fc (infile, in_layout, nrow, ncol);
+    kutil::format_converter fc (infile, in_layout, nrow, ncol);
     fc.write(out_filename, out_layout);
     return EXIT_SUCCESS;
 }

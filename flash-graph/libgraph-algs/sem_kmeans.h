@@ -47,8 +47,8 @@
 
 using namespace fg;
 
-namespace kpmbase = knor::base;
-namespace kpmprune = knor::prune;
+namespace kbase = knor::base;
+namespace kprune = knor::prune;
 
 namespace {
     typedef safs::page_byte_array::seq_const_iterator<double> data_seq_iter;
@@ -184,7 +184,7 @@ namespace {
         }
 
         printf("V%u's vector: \n", my_id);
-        kpmbase::print_vector<std::string>(v);
+        kbase::print_vector<std::string>(v);
     }
 
     std::string s (const double d) {
@@ -273,7 +273,7 @@ namespace fg
      */
     void compute_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters,
-            const double tolerance, kpmbase::kmeans_t& ret,
+            const double tolerance, kbase::kmeans_t& ret,
             const unsigned num_rows=0, const unsigned num_cols=0,
             std::vector<double>* centers=NULL);
 
@@ -284,7 +284,7 @@ namespace fg
      */
     void compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters,
-            const double tolerance, kpmbase::kmeans_t& ret,
+            const double tolerance, kbase::kmeans_t& ret,
             const unsigned num_rows=0, const unsigned num_cols=0,
             std::vector<double>* centers=NULL);
 
@@ -296,7 +296,7 @@ namespace fg
      */
     void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
-            kpmbase::kmeans_t& ret,
+            kbase::kmeans_t& ret,
             const unsigned num_rows, const unsigned num_cols,
             std::vector<double>* centers=NULL, const double cache_size_gb=0,
             const unsigned rc_update_start_interval=5);

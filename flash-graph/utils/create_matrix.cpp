@@ -30,7 +30,7 @@
 #include "types.hpp"
 #include "knors_index.h"
 
-namespace kpmutil = knor::utils;
+namespace kutil = knor::utils;
 constexpr unsigned rand_min = 1;
 constexpr unsigned rand_max = 5;
 
@@ -84,20 +84,20 @@ int main (int argc, char* argv[]) {
 	std::string outfn = "matrix_r"+ std::to_string(nrow)+"_c"+std::to_string(ncol);
 	std::string in_format = std::string(argv[3]);
 
-    kpmutil::layout lay =
-        in_format == "knori" ? kpmutil::BIN_RM :
-        in_format == "knord" ? kpmutil::BIN_RM :
-        in_format == "knors" ? kpmutil::SEM :
-        in_format == "text" ? kpmutil::TEXT : kpmutil::INVALID;
+    kutil::layout lay =
+        in_format == "knori" ? kutil::BIN_RM :
+        in_format == "knord" ? kutil::BIN_RM :
+        in_format == "knors" ? kutil::SEM :
+        in_format == "text" ? kutil::TEXT : kutil::INVALID;
 
     std::ofstream outfile;
 
     switch (lay) {
-        case kpmutil::layout::BIN_RM:
+        case kutil::layout::BIN_RM:
             outfile.open(outfn+".dat", std::ios::binary | std::ios::out);
             append_bin<double>(nrow, ncol, outfile);
             break;
-        case kpmutil::layout::SEM:
+        case kutil::layout::SEM:
             {
                 outfile.open(outfn+".adj", std::ios::binary | std::ios::out);
                 graph_header header = make_graph_header(nrow, ncol);
@@ -105,12 +105,12 @@ int main (int argc, char* argv[]) {
                 append_bin<double>(nrow, ncol, outfile);
             }
             break;
-        case kpmutil::layout::TEXT:
+        case kutil::layout::TEXT:
             outfile.open(outfn+".txt", std::ios::out | std::ios::app);
             append_text<double>(nrow, ncol, outfile);
             outfile.close();
             break;
-        case kpmutil::layout::INVALID:
+        case kutil::layout::INVALID:
         fprintf(stderr, "Unknown format/layout '%s\n', in_format",
                 in_format.c_str());
             break;

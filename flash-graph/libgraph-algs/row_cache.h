@@ -33,7 +33,7 @@
 #include "../../../../libkcommon/util.hpp"
 #include "../../../../libkcommon/io.hpp"
 
-namespace kpmbase = knor::base;
+namespace kbase = knor::base;
 
 namespace {
     template <typename T>
@@ -113,7 +113,7 @@ namespace {
 
                     for (; it != pt_data[thd].end(); ++it) {
                         printf("row: %u ==> ", it->first);
-                        kpmbase::print_vector<T>(it->second);
+                        kbase::print_vector<T>(it->second);
                     }
                 }
             }
