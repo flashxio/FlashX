@@ -52,8 +52,8 @@ namespace {
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kbase::kms_stage_t g_stage; // What phase of the algo we're in
-    static kbase::dist_type_t g_dist_type;
+    static kbase::stage_t g_stage; // What phase of the algo we're in
+    static kbase::dist_t g_dist_type;
     static unsigned g_iter;
 
     static partition_cache<double>::ptr g_row_cache = nullptr;
@@ -93,10 +93,10 @@ namespace {
 
         void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
-                case kbase::kms_stage_t::INIT:
+                case kbase::stage_t::INIT:
                     run_init(prog, vertex, g_init);
                     break;
-                case kbase::kms_stage_t::ESTEP:
+                case kbase::stage_t::ESTEP:
                     run_distance(prog, vertex);
                     break;
                 default:
@@ -323,7 +323,7 @@ namespace {
                     pt_cuml_sum_peq(get_dist());
                 return;
             }
-        } else if (g_stage != kbase::kms_stage_t::INIT) { // Always get here when not INIT
+        } else if (g_stage != kbase::stage_t::INIT) { // Always get here when not INIT
 
             if (!g_converged && (g_iter < g_max_iters))
                 prog.activate_vertices(&id, 1); // Activate for next iter
@@ -357,10 +357,10 @@ namespace {
 #endif
             if (row) { // row == NULL is a cache miss
                 switch (g_stage) {
-                    case kbase::kms_stage_t::INIT:
+                    case kbase::stage_t::INIT:
                         run_init(prog, row, g_init);
                         break;
-                    case kbase::kms_stage_t::ESTEP:
+                    case kbase::stage_t::ESTEP:
                         run_distance(prog, row);
                         break;
                     default:
@@ -370,7 +370,7 @@ namespace {
             }
         }
 
-        if (g_stage != kbase::kms_stage_t::INIT)
+        if (g_stage != kbase::stage_t::INIT)
             ((kmeans_vertex_program&) prog).num_requests_pp();
 
         request_vertices(&id, 1);
@@ -974,7 +974,7 @@ namespace fg
 #endif
 
         /*** Begin VarInit of data structures ***/
-        g_dist_type = kbase::dist_type_t::EUCL; // TODO: Add to params
+        g_dist_type = kbase::dist_t::EUCL; // TODO: Add to params
 
         if (cache_size_gb > 0) {
             g_row_cache_size = (cache_size_gb*(1024*1024*1024))/
@@ -1006,7 +1006,7 @@ namespace fg
         /*** End VarInit ***/
 
         if (!centers) {
-            g_stage = kbase::kms_stage_t::INIT;
+            g_stage = kbase::stage_t::INIT;
 
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
@@ -1091,7 +1091,7 @@ namespace fg
         if (init == "forgy" || init == "kmeanspp" || centers)
             g_prune_init = true; // set
 
-        g_stage = kbase::kms_stage_t::ESTEP;
+        g_stage = kbase::stage_t::ESTEP;
         if (max_iters > 0) {
             mat->start_all(vertex_initializer::ptr(),
                     vertex_program_creater::ptr(

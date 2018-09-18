@@ -41,7 +41,7 @@ namespace {
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kbase::kms_stage_t g_stage; // What phase of the algo we're in
+    static kbase::stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
     static std::vector<vertex_id_t> all_vertices;
     static barrier::ptr iter_barrier;
@@ -63,10 +63,10 @@ namespace {
         void run(vertex_program &prog) {
             vertex_id_t id = prog.get_vertex_id(*this);
             switch (g_stage) {
-                case kbase::kms_stage_t::INIT:
+                case kbase::stage_t::INIT:
                     request_vertices(&id, 1);
                     break;
-                case kbase::kms_stage_t::ESTEP:
+                case kbase::stage_t::ESTEP:
                     if (!g_converged && (g_iter < g_max_iters)) {
                         prog.activate_vertices(&id, 1); // Activate for next iter
                         request_vertices(&id, 1);
@@ -81,10 +81,10 @@ namespace {
 
         void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
-                case kbase::kms_stage_t::INIT:
+                case kbase::stage_t::INIT:
                     run_init(prog, vertex, g_init);
                     break;
-                case kbase::kms_stage_t::ESTEP:
+                case kbase::stage_t::ESTEP:
                     run_distance(prog, vertex);
                     break;
                 default:
@@ -490,7 +490,7 @@ namespace {
             /*** End VarInit ***/
 
             if (!centers) {
-                g_stage = kbase::kms_stage_t::INIT;
+                g_stage = kbase::stage_t::INIT;
 
                 if (init == "random") {
                     BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
@@ -552,7 +552,7 @@ namespace {
             } else
                 g_clusters->print_means();
 
-            g_stage = kbase::kms_stage_t::ESTEP;
+            g_stage = kbase::stage_t::ESTEP;
             BOOST_LOG_TRIVIAL(info) << "knors No Pruning starting ...";
             std::string str_iters = g_max_iters == std::numeric_limits<unsigned>::max() ?
                 "until convergence ...":

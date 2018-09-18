@@ -40,7 +40,7 @@
 #include "../../../../libkcommon/io.hpp"
 #include "../../../../libkcommon/prune_stats.hpp"
 #include "../../../../libkcommon/dist_matrix.hpp"
-#include "../../../../libkcommon/kmeans_types.hpp"
+#include "../../../../libkcommon/types.hpp"
 
 #define KM_TEST 0
 #define VERBOSE 0

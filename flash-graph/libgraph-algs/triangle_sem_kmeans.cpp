@@ -45,7 +45,7 @@ namespace {
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
-    static kbase::kms_stage_t g_stage; // What phase of the algo we're in
+    static kbase::stage_t g_stage; // What phase of the algo we're in
     static unsigned g_iter;
 
     static std::default_random_engine generator;
@@ -70,10 +70,10 @@ namespace {
 
         void run(vertex_program& prog, const page_vertex &vertex) {
             switch (g_stage) {
-                case kbase::kms_stage_t::INIT:
+                case kbase::stage_t::INIT:
                     run_init(prog, vertex, g_init);
                     break;
-                case kbase::kms_stage_t::ESTEP:
+                case kbase::stage_t::ESTEP:
                     run_distance(prog, vertex);
                     break;
                 default:
@@ -182,7 +182,7 @@ namespace {
                     return;
                 }
             }
-        } else if (g_stage != kbase::kms_stage_t::INIT) {
+        } else if (g_stage != kbase::stage_t::INIT) {
             recalculated = false;
             if (!g_prune_init) {
                 for (unsigned cl = 0; cl < K; cl++) {
@@ -543,7 +543,7 @@ namespace {
             /*** End VarInit ***/
 
             if (!centers) {
-                g_stage = kbase::kms_stage_t::INIT;
+                g_stage = kbase::stage_t::INIT;
 
                 if (init == "random") {
                     BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
@@ -619,7 +619,7 @@ namespace {
 
             if (init == "forgy" || init == "kmeanspp" || centers) {
                 g_prune_init = true; // set
-                g_stage = kbase::kms_stage_t::ESTEP;
+                g_stage = kbase::stage_t::ESTEP;
                 BOOST_LOG_TRIVIAL(info) << "Init: Computing cluster distance matrix ...";
                 g_cluster_dist->compute_dist(g_clusters, NUM_COLS);
 #if KM_TEST
@@ -651,7 +651,7 @@ namespace {
                 g_num_changed = 0; // reset
             }
 
-            g_stage = kbase::kms_stage_t::ESTEP;
+            g_stage = kbase::stage_t::ESTEP;
             BOOST_LOG_TRIVIAL(info) << "SEM-K||means starting ...";
 
             bool converged = false;
