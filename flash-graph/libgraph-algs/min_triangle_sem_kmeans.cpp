@@ -48,7 +48,7 @@ namespace {
     static unsigned NUM_ROWS;
     static unsigned g_num_changed = 0;
     static struct timeval start, end;
-    static kbase::init_type_t g_init; // May have to use
+    static kbase::init_t g_init; // May have to use
     static unsigned  g_kmspp_cluster_idx; // Used for kmeans++ init
     static unsigned g_kmspp_next_cluster; // Sample row selected as next cluster
     static kmspp_stage_t g_kmspp_stage; // Either adding a mean / computing dist
@@ -109,9 +109,9 @@ namespace {
 
         void run_on_message(vertex_program& prog, const vertex_message& msg) { }
         void run_init(vertex_program& prog, const page_vertex &vertex,
-                kbase::init_type_t init);
+                kbase::init_t init);
         void run_init(vertex_program& prog, const double* row,
-                kbase::init_type_t init);
+                kbase::init_t init);
 
 
         void run_distance(vertex_program& prog, const page_vertex& vertex);
@@ -406,9 +406,9 @@ namespace {
     }
 
     void kmeans_vertex::run_init(vertex_program& prog, const double* row,
-            kbase::init_type_t init) {
+            kbase::init_t init) {
         switch (g_init) {
-            case kbase::init_type_t::RANDOM:
+            case kbase::init_t::RANDOM:
                 {
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
                     unsigned new_cluster_id = random() % K;
@@ -420,7 +420,7 @@ namespace {
                     vprog.add_member(get_cluster_id(), row);
                 }
                 break;
-            case kbase::init_type_t::FORGY:
+            case kbase::init_t::FORGY:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
 #if KM_TEST
@@ -429,7 +429,7 @@ namespace {
                     g_clusters->set_mean(row, g_init_hash[my_id]);
                 }
                 break;
-            case kbase::init_type_t::PLUSPLUS:
+            case kbase::init_t::PLUSPLUS:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
                     if (g_kmspp_stage == ADDMEAN) {
@@ -488,9 +488,9 @@ namespace {
 #endif
 
     void kmeans_vertex::run_init(vertex_program& prog,
-            const page_vertex &vertex, kbase::init_type_t init) {
+            const page_vertex &vertex, kbase::init_t init) {
         switch (g_init) {
-            case kbase::init_type_t::RANDOM:
+            case kbase::init_t::RANDOM:
                 {
                     unsigned new_cluster_id = random() % K;
                     kmeans_vertex_program& vprog = (kmeans_vertex_program&) prog;
@@ -504,7 +504,7 @@ namespace {
                     vprog.add_member(get_cluster_id(), count_it);
                 }
                 break;
-            case kbase::init_type_t::FORGY:
+            case kbase::init_t::FORGY:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
 #if KM_TEST
@@ -515,7 +515,7 @@ namespace {
                     g_clusters->set_mean(count_it, g_init_hash[my_id]);
                 }
                 break;
-            case kbase::init_type_t::PLUSPLUS:
+            case kbase::init_t::PLUSPLUS:
                 {
                     vertex_id_t my_id = prog.get_vertex_id(*this);
                     data_seq_iter count_it = ((const page_row&)vertex).
@@ -1010,7 +1010,7 @@ namespace fg
 
             if (init == "random") {
                 BOOST_LOG_TRIVIAL(info) << "Running init: '"<< init <<"' ...";
-                g_init = kbase::init_type_t::RANDOM;
+                g_init = kbase::init_t::RANDOM;
 
                 mat->start_all(vertex_initializer::ptr(),
                         vertex_program_creater::ptr(
@@ -1025,7 +1025,7 @@ namespace fg
             }
             if (init == "forgy") {
                 BOOST_LOG_TRIVIAL(info) << "Deterministic Init is: '"<< init <<"'";
-                g_init = kbase::init_type_t::FORGY;
+                g_init = kbase::init_t::FORGY;
 
                 std::uniform_int_distribution<vertex_id_t>
                                 distribution(0, NUM_ROWS-1);
@@ -1045,7 +1045,7 @@ namespace fg
                 // FIXME: Wasteful
                 all_vertices.resize(NUM_ROWS);
                 std::iota(all_vertices.begin(), all_vertices.end(), 0);
-                g_init = kbase::init_type_t::PLUSPLUS;
+                g_init = kbase::init_t::PLUSPLUS;
 
                 // Init g_kmspp_distance to max distance
                 g_kmspp_distance.assign(NUM_ROWS, std::numeric_limits<double>::max());
