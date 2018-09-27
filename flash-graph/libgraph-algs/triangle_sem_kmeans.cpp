@@ -488,7 +488,7 @@ namespace {
     {
         void compute_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
                 const std::string init, const unsigned max_iters,
-                const double tolerance, kbase::kmeans_t& ret,
+                const double tolerance, kbase::cluster_t& ret,
                 const unsigned num_rows, const unsigned num_cols,
                 std::vector<double>* centers) {
 #ifdef PROFILER

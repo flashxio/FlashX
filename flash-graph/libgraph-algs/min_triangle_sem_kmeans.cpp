@@ -922,7 +922,7 @@ namespace fg
 {
     void compute_min_triangle_sem_kmeans(FG_graph::ptr fg, const unsigned k,
             const std::string init, const unsigned max_iters, const double tolerance,
-            kbase::kmeans_t& ret,
+            kbase::cluster_t& ret,
             const unsigned num_rows, const unsigned num_cols, std::vector<double>* centers,
             const double cache_size_gb, const unsigned rc_update_start_interval) {
 #ifdef PROFILER

@@ -102,7 +102,7 @@ void run_sem_kmeans(FG_graph::ptr graph, const unsigned k,
         br.read(centers);
     }
 
-    kbase::kmeans_t ret;
+    kbase::cluster_t ret;
 
     if (no_prune) {
          compute_sem_kmeans(graph, k, init, max_iters, tolerance,
