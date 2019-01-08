@@ -275,7 +275,7 @@ std::shared_ptr<char> gz_file_io::read_bytes(
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
 				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
-				return std::unique_ptr<char[]>();
+                return std::unique_ptr<char>();
 			}
 		}
 		read_bytes += ret;
@@ -402,7 +402,7 @@ static size_t parse_lines(std::shared_ptr<char> line_buf, size_t size,
 	}
 	if (line - buf_start < (ssize_t) size)
 		lines.push_back(std::string(line));
-	
+
 	return parser.parse(lines, df);
 }
 
